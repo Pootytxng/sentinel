@@ -1,4 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   SessionSummary,
@@ -17,6 +19,7 @@ import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grad
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { readDisplayRefreshHz } from "../design/theme";
 import { useExpertView } from "../design/use-expert-view";
+import "../i18n";
 
 // Session debrief cluster — extracted verbatim from App.tsx so it can render in place inside Play
 // (halfway-home §1, owner-greenlit). Locked copy unchanged. Styles are global (App.css / arc).
@@ -56,6 +59,7 @@ function ComparisonCard({
   reverting: boolean;
   arcV2?: boolean;
 }) {
+  const { t } = useTranslation();
   const sign = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
   // Only these verdicts are a fair measured comparison — confounded/expired show no numbers.
   const isMeasured =
@@ -66,64 +70,69 @@ function ComparisonCard({
   const dFps = (d: number) => (expert ? Number(d.toFixed(1)) : Math.round(d));
   const dAvgFps = dFps(r.after_avg_fps - r.baseline_avg_fps);
   const dLowFps = dFps(r.after_low1_fps - r.baseline_low1_fps);
-  const deltaLine = `Δ avg ${sign(dAvgFps)} FPS (${sign(r.delta_avg_pct)}%) · 1% low ${sign(
-    dLowFps,
-  )} FPS (${sign(r.delta_low1_pct)}%) — ${
-    r.verdict === "no-change" ? "inside" : "outside"
-  } the ±${r.noise_floor_pct}% noise floor`;
+  const deltaLine = t("monitor.sessionDebrief.deltaLine", {
+    avgSign: sign(dAvgFps),
+    avgPct: sign(r.delta_avg_pct),
+    lowSign: sign(dLowFps),
+    lowPct: sign(r.delta_low1_pct),
+    inOut:
+      r.verdict === "no-change"
+        ? t("monitor.sessionDebrief.insideNoiseFloor")
+        : t("monitor.sessionDebrief.outsideNoiseFloor"),
+    noiseFloor: r.noise_floor_pct,
+  });
 
   return (
     <div className={`cmp cmp-${r.verdict}${arcV2 ? " arc-v2" : ""}`}>
       <div className="cmp-head">
-        <span>COMPARISON · {r.rec_title} · two {prettyGameName(r.game)} sessions</span>
-        <span className="cmp-nf">noise floor ±{r.noise_floor_pct}%</span>
+        <span>{t("monitor.sessionDebrief.comparisonHeader", { title: r.rec_title, game: prettyGameName(r.game) })}</span>
+        <span className="cmp-nf">{t("monitor.sessionDebrief.noiseFloor", { pct: r.noise_floor_pct })}</span>
       </div>
 
       {r.verdict === "no-change" && (
         <>
-          <h2 className="cmp-headline">No measurable change</h2>
+          <h2 className="cmp-headline">{t("monitor.sessionDebrief.noMeasurableChange")}</h2>
           <p className="cmp-sub">
-            The difference is smaller than this rig's own session-to-session noise. Claiming a win
-            here would be lying.
+            {t("monitor.sessionDebrief.noChangeSub")}
           </p>
         </>
       )}
       {r.verdict === "improved" && (
         <>
           <h2 className="cmp-headline cmp-win">
-            Measured improvement — {sign(r.delta_low1_pct)}% on your{" "}
-            <Term id="one-percent-lows">1% low</Term>
+            {t("monitor.sessionDebrief.improvedHeadlinePre", { pct: sign(r.delta_low1_pct) })}
+            <Term id="one-percent-lows">{t("monitor.sessionDebrief.improvedHeadlineEmph")}</Term>
           </h2>
           <p className="cmp-sub">
-            Measured on this rig, in {prettyGameName(r.game)}, above its own noise across these two sessions — a real
-            signal, not a guarantee for every game or session. You applied it; Compy measured it.
+            {t("monitor.sessionDebrief.improvedSub", { game: prettyGameName(r.game) })}
           </p>
         </>
       )}
       {r.verdict === "regressed" && (
         <>
-          <h2 className="cmp-headline cmp-bad">This made it worse here</h2>
+          <h2 className="cmp-headline cmp-bad">{t("monitor.sessionDebrief.regressedHeadline")}</h2>
           <p className="cmp-sub">
-            Your <Term id="one-percent-lows">1% low</Term> dropped past the{" "}
-            <Term id="noise-floor">noise floor</Term> in {prettyGameName(r.game)}. No spin — take it back.
+            {t("monitor.sessionDebrief.regressedSubPre")}
+            <Term id="one-percent-lows">{t("monitor.sessionDebrief.regressedSubEmph1")}</Term>
+            {t("monitor.sessionDebrief.regressedSubMid")}
+            <Term id="noise-floor">{t("monitor.sessionDebrief.regressedSubEmph2")}</Term>
+            {t("monitor.sessionDebrief.regressedSubPost", { game: prettyGameName(r.game) })}
           </p>
         </>
       )}
       {r.verdict === "confounded" && (
         <>
-          <h2 className="cmp-headline">Can't call this one</h2>
+          <h2 className="cmp-headline">{t("monitor.sessionDebrief.confoundedHeadline")}</h2>
           <p className="cmp-sub">
-            Other changes landed between these two sessions — this delta can't be honestly attributed
-            to {r.rec_title}. No credit either way.
+            {t("monitor.sessionDebrief.confoundedSub", { title: r.rec_title })}
           </p>
         </>
       )}
       {r.verdict === "expired" && (
         <>
-          <h2 className="cmp-headline">Baseline too old to compare</h2>
+          <h2 className="cmp-headline">{t("monitor.sessionDebrief.expiredHeadline")}</h2>
           <p className="cmp-sub">
-            This was armed too long ago to compare fairly — drivers, games, and Windows move on.
-            Re-arm fresh from a new debrief.
+            {t("monitor.sessionDebrief.expiredSub")}
           </p>
         </>
       )}
@@ -131,8 +140,8 @@ function ComparisonCard({
       {isMeasured && (
         <>
           <div className="cmp-receipts">
-            <CmpReceipt label="Avg FPS" before={r.baseline_avg_fps} after={r.after_avg_fps} />
-            <CmpReceipt label="1% low" before={r.baseline_low1_fps} after={r.after_low1_fps} />
+            <CmpReceipt label={t("monitor.sessionDebrief.avgFpsLabel")} before={r.baseline_avg_fps} after={r.after_avg_fps} />
+            <CmpReceipt label={t("monitor.sessionDebrief.oneLowLabel")} before={r.baseline_low1_fps} after={r.after_low1_fps} />
           </div>
           <p className="cmp-delta">{deltaLine}</p>
         </>
@@ -140,31 +149,30 @@ function ComparisonCard({
 
       {r.verdict === "no-change" && (
         <div className="cmp-means">
-          That's a real answer, not a failure — a lesser tool would have called this a win. One
-          suspect cleared: <strong>your dips aren't {r.rec_title.toLowerCase()}.</strong> It didn't
-          help this game; it may still help heavier ones. Keep it or take it back — one click either
-          way.
+          {t("monitor.sessionDebrief.noChangeMeansPre")}
+          <strong>{t("monitor.sessionDebrief.noChangeMeansEmph", { title: r.rec_title.toLowerCase() })}</strong>
+          {t("monitor.sessionDebrief.noChangeMeansPost")}
         </div>
       )}
 
       <div className="cmp-actions">
         {nextSuspect && (
           <button className="btn-small" onClick={onDismiss}>
-            Chase suspect #2 — {nextSuspect}
+            {t("monitor.sessionDebrief.chaseSuspect", { suspect: nextSuspect })}
           </button>
         )}
         {r.verdict === "improved" ? (
           <button className="btn-small btn-small-on" onClick={onDismiss}>
-            Keep it — measured win, logged
+            {t("monitor.sessionDebrief.keepIt")}
           </button>
         ) : (
           <button className="btn-small" disabled={reverting} onClick={onRevert}>
-            {reverting ? "Reverting…" : "Revert it — no shame"}
+            {reverting ? t("monitor.sessionDebrief.reverting") : t("monitor.sessionDebrief.revertIt")}
           </button>
         )}
       </div>
 
-      <div className="cmp-tally">honest answers: 1 · fake wins sold: 0</div>
+      <div className="cmp-tally">{t("monitor.sessionDebrief.honestTally")}</div>
     </div>
   );
 }
@@ -172,21 +180,21 @@ function ComparisonCard({
 // Moment 3 verdict bands from the 1%-low/avg ratio. The ~0.60 band copy is verbatim from the spec;
 // the others are conservative extrapolations (tunable) — see the spec's "conservative, tunable" note.
 // Owner-tunable bands (set 2026-06-04). The middle subtitle is the spec's verbatim line.
-function verdictBand(ratio: number): { h: string; sub: string } {
+function verdictBand(t: TFunction, ratio: number): { h: string; sub: string } {
   const pct = Math.round(ratio * 100);
   if (ratio >= 0.75)
     return {
-      h: "Smooth session",
-      sub: `Even your worst moments held at ${pct}% of your average — steady.`,
+      h: t("monitor.sessionDebrief.verdict.smooth.headline"),
+      sub: t("monitor.sessionDebrief.verdict.smooth.sub", { pct }),
     };
   if (ratio >= 0.55)
     return {
-      h: "Mostly smooth — dips under pressure",
-      sub: `High average, but your worst moments ran at ${pct}% of it. That gap is what stutter feels like.`,
+      h: t("monitor.sessionDebrief.verdict.dips.headline"),
+      sub: t("monitor.sessionDebrief.verdict.dips.sub", { pct }),
     };
   return {
-    h: "Rough — frequent stutter",
-    sub: `Your worst moments dropped to ${pct}% of your average — that gap is felt as stutter.`,
+    h: t("monitor.sessionDebrief.verdict.rough.headline"),
+    sub: t("monitor.sessionDebrief.verdict.rough.sub", { pct }),
   };
 }
 
@@ -220,6 +228,7 @@ export function SessionDebrief({
   vendor?: GpuVendor;
   sessions?: SessionSummary[];
 }) {
+  const { t } = useTranslation();
   const [ctxOpen, setCtxOpen] = useState(false);
   const [comparison, setComparison] = useState<ComparisonResult | null>(null);
   const [reverting, setReverting] = useState(false);
@@ -241,7 +250,7 @@ export function SessionDebrief({
       .catch(() => {});
   }, [s.process_name]);
   const ratio = s.avg_fps > 0 ? Math.min(1, s.low1_fps_est / s.avg_fps) : 1;
-  const v = verdictBand(ratio);
+  const v = verdictBand(t, ratio);
 
   const fmtDur = (sec: number) => {
     const h = Math.floor(sec / 3600);
@@ -260,9 +269,12 @@ export function SessionDebrief({
   const gpuLoafed = s.peak_gpu_usage_pct != null && s.peak_gpu_usage_pct < 70 && ratio < 0.7;
   let insight: string | null = null;
   if (gpuLoafed) {
-    insight = `Your GPU only reached ${s.peak_gpu_usage_pct}% at its peak while frames dipped — so the GPU probably isn't the bottleneck here. Prime suspect: a CPU or system limiter.`;
+    insight = t("monitor.sessionDebrief.gpuLoafedInsight", { pct: s.peak_gpu_usage_pct });
   } else if (topLimiter && ratio < 0.75) {
-    insight = `Prime suspect: ${topLimiter.title.toLowerCase()}. ${topLimiter.reason}`;
+    insight = t("monitor.sessionDebrief.primeSuspectInsight", {
+      limiter: topLimiter.title.toLowerCase(),
+      reason: topLimiter.reason,
+    });
   }
   // A concrete stutter correlation outranks the generic insight for the single "one thing" slot.
   const shownInsight = s.stutter_insight || insight;
@@ -292,10 +304,10 @@ export function SessionDebrief({
     <div className={`debrief${arcV2 ? " arc-v2" : ""}`}>
       <div className="debrief-head">
         <span className="debrief-title">
-          {prettyGameName(s.process_name) || "Last session"} · {fmtDur(s.duration_secs)} · {range}
+          {prettyGameName(s.process_name) || t("monitor.sessionDebrief.lastSessionFallback")} · {fmtDur(s.duration_secs)} · {range}
         </span>
         <button className="btn-small" onClick={onExport}>
-          Share
+          {t("monitor.sessionDebrief.share")}
         </button>
       </div>
 
@@ -304,23 +316,23 @@ export function SessionDebrief({
 
       <div className="debrief-tiles">
         <DebriefTile
-          label={<Term id="hz-vs-fps">Avg FPS</Term>}
+          label={<Term id="hz-vs-fps">{t("monitor.sessionDebrief.avgFpsLabel")}</Term>}
           value={fmtFps(s.avg_fps)}
           grade={gradeFps(s.avg_fps, { refreshHz: readDisplayRefreshHz() })}
         />
         <DebriefTile
-          label={<Term id="one-percent-lows">1% low</Term>}
+          label={<Term id="one-percent-lows">{t("monitor.sessionDebrief.oneLowLabel")}</Term>}
           value={fmtFps(s.low1_fps_est)}
-          note="estimate"
+          note={t("monitor.sessionDebrief.estimateNote")}
           grade={gradeLow1(s.low1_fps_est, s.avg_fps)}
         />
         {/* Peak GPU is utilization — left neutral on purpose (high is good while gaming). */}
         <DebriefTile
-          label="Peak GPU"
+          label={t("monitor.sessionDebrief.peakGpuLabel")}
           value={s.peak_gpu_usage_pct == null ? "—" : `${s.peak_gpu_usage_pct}%`}
         />
         <DebriefTile
-          label="Peak temp"
+          label={t("monitor.sessionDebrief.peakTempLabel")}
           value={s.peak_gpu_temp_c == null ? "—" : `${s.peak_gpu_temp_c}°C`}
           grade={tempGrade(s.peak_gpu_temp_c)}
         />
@@ -338,7 +350,7 @@ export function SessionDebrief({
       ) : (
         shownInsight && (
           <div className="debrief-insight">
-            <div className="debrief-insight-tag">THE ONE THING WORTH KNOWING</div>
+            <div className="debrief-insight-tag">{t("monitor.sessionDebrief.oneThingTag")}</div>
             <p>{shownInsight}</p>
           </div>
         )
@@ -362,22 +374,22 @@ export function SessionDebrief({
           onClick={() => setCtxOpen((o) => !o)}
           aria-expanded={ctxOpen}
         >
-          <span>During this session: {s.compy_changes_active} Compy changes active</span>
+          <span>{t("monitor.sessionDebrief.changesActive", { count: s.compy_changes_active })}</span>
           <span>{ctxOpen ? "▾" : "▸"}</span>
         </button>
         {ctxOpen && (
           <div className="debrief-ctx-body">
             <div>
-              capture · <Term id="etw">ETW</Term>, external — no injection
+              {t("monitor.sessionDebrief.captureLinePre")}<Term id="etw">{t("monitor.sessionDebrief.captureLineEmph")}</Term>{t("monitor.sessionDebrief.captureLinePost")}
             </div>
             {s.hw_fingerprint && (
               <div>
-                rig · {s.hw_fingerprint.gpu || "GPU —"} · {s.hw_fingerprint.ram_gb}GB
+                {t("monitor.sessionDebrief.rigLinePrefix")}{s.hw_fingerprint.gpu || t("monitor.sessionDebrief.gpuFallback")} · {s.hw_fingerprint.ram_gb}GB
                 {s.hw_fingerprint.display ? ` · ${s.hw_fingerprint.display}` : ""}
               </div>
             )}
             {s.compy_changes_active === 0 && (
-              <div>0 changes active — you played on stock settings (an honest baseline).</div>
+              <div>{t("monitor.sessionDebrief.zeroChangesActive")}</div>
             )}
           </div>
         )}
@@ -399,11 +411,12 @@ export function SessionDebrief({
               (existing.rec_id !== topRec.id || existing.game !== s.process_name)
             ) {
               const ok = await confirm({
-                title: "Replace the armed comparison?",
-                body:
-                  `A comparison is already armed (${existing.rec_title} · ${prettyGameName(existing.game)}). ` +
-                  "Applying this replaces that baseline with a fresh one.",
-                confirmLabel: "Replace & apply",
+                title: t("monitor.sessionDebrief.replaceComparisonTitle"),
+                body: t("monitor.sessionDebrief.replaceComparisonBody", {
+                  title: existing.rec_title,
+                  game: prettyGameName(existing.game),
+                }),
+                confirmLabel: t("monitor.sessionDebrief.replaceComparisonConfirm"),
               });
               if (!ok) return; // keep the pending comparison; don't apply a confounding change
             }
@@ -418,10 +431,10 @@ export function SessionDebrief({
             }).catch(() => {});
           }}
         >
-          {busyId === topRec.id ? "Applying…" : "Apply the #1 fix — compare next session"}
+          {busyId === topRec.id ? t("monitor.sessionDebrief.applying") : t("monitor.sessionDebrief.applyFix")}
         </button>
       ) : cleanSession ? (
-        <p className="debrief-clean">Good session, good rig. Nothing worth changing.</p>
+        <p className="debrief-clean">{t("monitor.sessionDebrief.cleanSession")}</p>
       ) : null}
     </div>
   );

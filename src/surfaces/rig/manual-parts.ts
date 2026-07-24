@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { TFunction } from "i18next";
 import type { Vec3, RigPartKind } from "./rig-parts";
 
 // User-added parts — the manual fallback for hardware Compy can't read in software (PSU, cooler
@@ -19,6 +20,15 @@ export const MANUAL_KINDS: { value: ManualKind; label: string }[] = [
   { value: "storage", label: "Drive" },
   { value: "other", label: "Other" },
 ];
+
+// Language-aware DISPLAY accessor for a manual kind's label — MANUAL_KINDS above stays the frozen
+// English source of truth (its `.value`s are still enumerated directly for the kind list / form
+// options); components render text through this instead of reading `.label` off MANUAL_KINDS.
+export function manualKindLabel(kind: ManualKind, t?: TFunction): string {
+  const fallback = MANUAL_KINDS.find((k) => k.value === kind)?.label ?? kind;
+  if (!t) return fallback;
+  return t(`gaming.rigViewer.manualKinds.${kind}`, { defaultValue: fallback });
+}
 
 const KEY = "compy_rig_manual_parts";
 

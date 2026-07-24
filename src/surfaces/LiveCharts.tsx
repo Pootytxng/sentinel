@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
+import "../i18n";
 import "./DashboardV2.css";
 import "./LiveCharts.css";
 import { gradeRamPct, gradeColor } from "../data/metric-grade";
@@ -39,6 +41,7 @@ function Area({ values, id }: { values: number[]; id: string }) {
 }
 
 export function LiveCharts() {
+  const { t } = useTranslation();
   const [cpu, setCpu] = useState<CpuSnap | null>(null);
   const [gpu, setGpu] = useState<GpuSnap | null>(null);
   const cpuH = useRef<number[]>([]);
@@ -86,17 +89,17 @@ export function LiveCharts() {
   return (
     <div className="lc-grid">
       <section className="d2-card d2-live">
-        <div className="d2-live-head"><span className="d2-eyebrow">CPU</span><span className="d2-live-sub">{cpu ? `${(cpu.frequency_mhz / 1000).toFixed(2)} GHz` : ""}</span></div>
+        <div className="d2-live-head"><span className="d2-eyebrow">{t("monitor.liveCharts.cpu")}</span><span className="d2-live-sub">{cpu ? `${(cpu.frequency_mhz / 1000).toFixed(2)} GHz` : ""}</span></div>
         <div className="d2-live-value"><span className="d2-num">{cpu ? <AnimatedNumber value={cpu.usage_overall_pct} /> : "—"}</span><span className="d2-unit">%</span></div>
         <Area values={cpuH.current} id="cpu" />
       </section>
       <section className="d2-card d2-live">
-        <div className="d2-live-head"><span className="d2-eyebrow">GPU</span><span className="d2-live-sub" style={gpuTempColor ? { color: gpuTempColor } : undefined}>{gpu?.temperature_c != null ? `${gpu.temperature_c.toFixed(0)}°C` : ""}</span></div>
+        <div className="d2-live-head"><span className="d2-eyebrow">{t("monitor.liveCharts.gpu")}</span><span className="d2-live-sub" style={gpuTempColor ? { color: gpuTempColor } : undefined}>{gpu?.temperature_c != null ? `${gpu.temperature_c.toFixed(0)}°C` : ""}</span></div>
         <div className="d2-live-value"><span className="d2-num">{gpu?.utilization_gpu_pct != null ? <AnimatedNumber value={gpu.utilization_gpu_pct} /> : "—"}</span><span className="d2-unit">%</span></div>
         <Area values={gpuH.current} id="gpu" />
       </section>
       <section className="d2-card d2-live">
-        <div className="d2-live-head"><span className="d2-eyebrow">Memory</span><span className="d2-live-sub">{cpu ? `${(cpu.ram_used_bytes / 1024 ** 3).toFixed(1)} / ${(cpu.ram_total_bytes / 1024 ** 3).toFixed(0)} GB` : ""}</span></div>
+        <div className="d2-live-head"><span className="d2-eyebrow">{t("monitor.liveCharts.memory")}</span><span className="d2-live-sub">{cpu ? `${(cpu.ram_used_bytes / 1024 ** 3).toFixed(1)} / ${(cpu.ram_total_bytes / 1024 ** 3).toFixed(0)} GB` : ""}</span></div>
         <div className="d2-live-value"><span className="d2-num" style={ramColor ? { color: ramColor } : undefined}>{ramPct != null ? <AnimatedNumber value={ramPct} /> : "—"}</span><span className="d2-unit">%</span></div>
         <Area values={ramH.current} id="ram" />
       </section>

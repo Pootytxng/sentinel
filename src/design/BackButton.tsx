@@ -1,15 +1,20 @@
+import { useTranslation } from "react-i18next";
+// Side-effect import: guarantees the i18next instance is initialized before this file's t() calls run.
+import "../i18n";
+
 // 24/7 Back control (wayfinding §1) — a quiet chevron-ghost pinned to the far-left of every surface
 // header. Visible always; DISABLED (not hidden) when there's nowhere to go back to. One press pops one
 // location in exact reverse order. Shared so the shell, Home, and Settings render the identical control.
 export function BackButton({ onBack, canGoBack }: { onBack: () => void; canGoBack: boolean }) {
+  const { t } = useTranslation();
   return (
     <button
       type="button"
       className="back-btn"
       onClick={onBack}
       disabled={!canGoBack}
-      title="Back (Alt+Left)"
-      aria-label="Back"
+      title={t("common.backButton.backTitle")}
+      aria-label={t("common.backButton.back")}
     >
       <svg
         viewBox="0 0 24 24"
@@ -38,14 +43,15 @@ export function ForwardButton({
   onForward: () => void;
   canGoForward: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <button
       type="button"
       className="back-btn"
       onClick={onForward}
       disabled={!canGoForward}
-      title="Forward (Alt+Right)"
-      aria-label="Forward"
+      title={t("common.backButton.forwardTitle")}
+      aria-label={t("common.backButton.forward")}
     >
       <svg
         viewBox="0 0 24 24"

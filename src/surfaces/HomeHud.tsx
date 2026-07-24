@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
 import { RoomShell } from "../design/room-shell";
@@ -147,6 +148,7 @@ export function HomeHud({
   onSeeInFix,
   fixRoomLabel = "Optimize",
 }: Props) {
+  const { t } = useTranslation();
   const reduced = useReducedMotion();
   const accent = useV2Accent();
 
@@ -224,8 +226,8 @@ export function HomeHud({
   };
 
   // ── measured derivations (all real, all honestly empty when absent — HomeV2's exact logic) ──
-  const posture = postureLine(readiness, priorities, activeChangeCount(changes));
-  const strip = liveStrip(sessions);
+  const posture = postureLine(readiness, priorities, activeChangeCount(changes), t);
+  const strip = liveStrip(sessions, t);
   const rig = { refreshHz: hw.display?.current_refresh_rate_hz ?? null };
   const fpsGrade: Grade = strip.kind === "data" ? gradeFps(strip.avgFps, rig) : "neutral";
   const low1Grade: Grade =
@@ -241,7 +243,10 @@ export function HomeHud({
   // only the part that ADDS information; a fully-redundant sentence is omitted (the readout
   // strip still carries provenance). Text is still postureLine's real output — trimmed,
   // never rewritten.
-  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, "").trim();
+  // i18n note: Unicode-aware (\p{L}\p{N}, not a-z0-9) so this comparison still works once
+  // posture.headline/sentence are Chinese — the old ASCII-only class stripped CJK text down to
+  // "", which made every zh-CN dek compare as spuriously redundant (identical for English).
+  const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N} ]+/gu, "").trim();
   const headNorm = norm(posture.headline).replace(/^youre /, "");
   const sentNorm = norm(posture.sentence).replace(/^youre /, "");
   const dek = sentNorm.startsWith(headNorm)
@@ -285,7 +290,8 @@ export function HomeHud({
     drifts
       .slice(0, 2)
       .map((d) => d.label)
-      .join(" · ") + (drifts.length > 2 ? ` · and ${drifts.length - 2} more` : "");
+      .join(" · ") +
+    (drifts.length > 2 ? t("home.homeHud.ledger.driftMore", { count: drifts.length - 2 }) : "");
   const smartDrives = (hw.disk_health ?? []).filter((d) => d.health !== "Unknown");
   const flaggedDrives = smartDrives.filter((d) => d.health !== "Healthy");
 
@@ -324,7 +330,9 @@ export function HomeHud({
       <span className="hud-corner hud-c-br" aria-hidden="true" />
       {checking && !reduced && <div className="hud-sweep" aria-hidden="true" />}
       {rig3d ? (
-        <Suspense fallback={<div className="hud-stage-loading">Loading your rig in 3D…</div>}>
+        <Suspense
+          fallback={<div className="hud-stage-loading">{t("home.homeHud.stage.loading3d")}</div>}
+        >
           <RigHologram
             hw={hw}
             exploded={exploded}
@@ -347,7 +355,7 @@ export function HomeHud({
           <div className="hud-callouts hud-callouts-left">
             <Callout
               tone={mem ? gradeTone(mem.level === "ok" ? "good" : "bad") : null}
-              name="RAM"
+              name={t("home.homeHud.callout.ram")}
               value={
                 mem
                   ? `${fmtGB1(mem.used)} / ${fmtGB1(mem.total)} GB`
@@ -358,8 +366,8 @@ export function HomeHud({
             {diskPct != null && (
               <Callout
                 tone={diskPct >= 90 ? "warn" : "ok"}
-                name="Storage"
-                value={`C: ${diskPct}% full`}
+                name={t("home.homeHud.callout.storage")}
+                value={t("home.homeHud.callout.diskFull", { pct: diskPct })}
                 valueTone={diskPct >= 90 ? "warn" : "ok"}
               />
             )}
@@ -367,22 +375,20 @@ export function HomeHud({
           <div className="hud-callouts hud-callouts-right">
             <Callout
               tone={gradeTone(gpuGrade)}
-              name="GPU"
+              name={t("home.homeHud.callout.gpu")}
               detail={shortModel(hw.gpus[0]?.name)}
               value={gpuTemp != null ? `${Math.round(gpuTemp)}°C` : undefined}
               valueTone={gradeTone(gpuGrade)}
             />
             <Callout
               tone={null}
-              name="CPU"
+              name={t("home.homeHud.callout.cpu")}
               detail={hw.cpu_arch?.family_label || undefined}
-              value="no temp — Compy won't ship a kernel driver"
+              value={t("home.homeHud.callout.cpuNoTemp")}
               mono={false}
             />
           </div>
-          <div className="hud-stage-hint">
-            Drag to orbit · click a part for its live specs
-          </div>
+          <div className="hud-stage-hint">{t("home.homeHud.stage.hint")}</div>
         </>
       )}
     </div>
@@ -395,7 +401,7 @@ export function HomeHud({
         <>
           <span className="hud-masthead-eyebrow">
             <span className={`hud-led hud-led-${ledState}`} aria-hidden="true" />
-            Rig diagnostic <span className="hud-eyebrow-sep">·</span>{" "}
+            {t("home.homeHud.masthead.eyebrow")} <span className="hud-eyebrow-sep">·</span>{" "}
             <span className="hud-mono">{dateline}</span>
           </span>
           <span className="hud-headline" key={posture.headline}>
@@ -406,27 +412,28 @@ export function HomeHud({
       sub={dekRedundant ? undefined : dek}
       measured={
         checking ? (
-          <span className="hud-readout-seg">running checks…</span>
+          <span className="hud-readout-seg">{t("home.homeHud.readout.running")}</span>
         ) : (
           <>
             <span className="hud-readout-seg">
-              checks{" "}
+              {t("home.homeHud.readout.checksPre")}{" "}
               <span className="hud-mono">
                 {readiness!.checks.length - readiness!.unknown_count}/{readiness!.checks.length}
               </span>{" "}
-              measured
+              {t("home.homeHud.readout.checksPost")}
             </span>
             <span
               className={`hud-readout-seg${(readiness!.attention_count ?? 0) > 0 ? " hud-readout-warn" : ""}`}
             >
-              attention <span className="hud-mono">{readiness!.attention_count}</span>
+              {t("home.homeHud.readout.attentionLabel")}{" "}
+              <span className="hud-mono">{readiness!.attention_count}</span>
             </span>
           </>
         )
       }
       primaryAction={
         <button type="button" className="hud-btn" onClick={onRunCheck}>
-          Re-run check
+          {t("home.homeHud.actions.rerun")}
         </button>
       }
     >
@@ -434,9 +441,9 @@ export function HomeHud({
         {/* ── Instrument bay — the real hologram in a bracketed, ruled HUD frame ── */}
         <section className="hud-bay">
           <header className="hud-bay-head">
-            <span className="hud-eyebrow">Your rig</span>
+            <span className="hud-eyebrow">{t("home.homeHud.bay.title")}</span>
             <div className="hud-bay-controls">
-              <div className="hud-seg-group" role="tablist" aria-label="Rig view">
+              <div className="hud-seg-group" role="tablist" aria-label={t("home.homeHud.bay.rigViewAria")}>
                 <button
                   type="button"
                   role="tab"
@@ -444,7 +451,7 @@ export function HomeHud({
                   className={`hud-seg ${rig3d ? "hud-seg-on" : ""}`}
                   onClick={() => chooseRig3d(true)}
                 >
-                  3D
+                  {t("home.homeHud.bay.view3d")}
                 </button>
                 <button
                   type="button"
@@ -453,7 +460,7 @@ export function HomeHud({
                   className={`hud-seg ${!rig3d ? "hud-seg-on" : ""}`}
                   onClick={() => chooseRig3d(false)}
                 >
-                  Cards
+                  {t("home.homeHud.bay.viewCards")}
                 </button>
               </div>
               {rig3d && (
@@ -463,7 +470,7 @@ export function HomeHud({
                     className={`hud-seg ${exploded ? "hud-seg-on" : ""}`}
                     onClick={() => setExploded((v) => !v)}
                   >
-                    {exploded ? "Reassemble" : "Exploded"}
+                    {exploded ? t("home.homeHud.bay.reassemble") : t("home.homeHud.bay.exploded")}
                   </button>
                   <button
                     type="button"
@@ -471,7 +478,7 @@ export function HomeHud({
                     onClick={() => setAutoRotate((v) => !v)}
                     aria-pressed={autoRotate}
                   >
-                    Orbit
+                    {t("home.homeHud.bay.orbit")}
                   </button>
                 </div>
               )}
@@ -491,7 +498,11 @@ export function HomeHud({
         {/* ── Telemetry column — numbers are the heroes; every one measured or absent ── */}
         <aside className="hud-ledger">
           <Module
-            label={strip.kind === "data" ? `Last session — ${strip.game}` : "Last session"}
+            label={
+              strip.kind === "data"
+                ? t("home.homeHud.ledger.lastSessionGame", { game: strip.game })
+                : t("home.homeHud.ledger.lastSession")
+            }
           >
             {strip.kind === "data" ? (
               <>
@@ -503,7 +514,9 @@ export function HomeHud({
                         color={gradeColor(fpsGrade)}
                         pct={Math.round(ringFrac * 100)}
                       />
-                      <span className="hud-ring-cap">vs {rig.refreshHz} Hz</span>
+                      <span className="hud-ring-cap">
+                        {t("home.homeHud.ledger.vsHz", { hz: rig.refreshHz })}
+                      </span>
                     </div>
                   )}
                   <div className="hud-hero-num">
@@ -517,16 +530,16 @@ export function HomeHud({
                         <CountUp to={Math.round(strip.avgFps)} duration={0.9} />
                       )}
                     </span>
-                    <span className="hud-unit">fps avg</span>
+                    <span className="hud-unit">{t("home.homeHud.ledger.fpsAvg")}</span>
                     <span className="hud-note">
-                      1% low{" "}
+                      {t("home.homeHud.ledger.onePercentLowLabel")}{" "}
                       <span
                         className={`hud-mono${gradeClass(low1Grade)}`}
                         style={gradeInk(low1Grade)}
                       >
                         {Math.round(strip.low1Est)}
                       </span>{" "}
-                      (estimate)
+                      {t("home.homeHud.ledger.estimateSuffix")}
                     </span>
                   </div>
                 </div>
@@ -534,71 +547,69 @@ export function HomeHud({
                   <div className="hud-trace">
                     <Sparkline values={sparkValues} height={30} stroke="var(--v2-accent)" />
                     <span className="hud-trace-cap">
-                      avg fps · last {sparkValues.length} sessions
+                      {t("home.homeHud.ledger.traceCaption", { count: sparkValues.length })}
                     </span>
                   </div>
                 )}
               </>
             ) : (
-              <span className="hud-note">
-                Nothing on the books yet — play a session and Compy captures it from outside the
-                game.
-              </span>
+              <span className="hud-note">{t("home.homeHud.ledger.noSession")}</span>
             )}
           </Module>
 
-          <Module label="Active changes">
+          <Module label={t("home.homeHud.ledger.activeChangesLabel")}>
             <span className="hud-reading hud-mono">
               {reduced ? activeCount : <CountUp to={activeCount} duration={0.9} />}
             </span>
-            <span className="hud-note">every one reversible from the ledger</span>
+            <span className="hud-note">{t("home.homeHud.ledger.activeChangesNote")}</span>
           </Module>
 
-          <Module label="Trust ledger">
+          <Module label={t("home.homeHud.ledger.trustLedgerLabel")}>
             <span className="hud-reading hud-mono">
               {reduced ? changes.length : <CountUp to={changes.length} duration={0.9} />}
-              <span className="hud-unit">change{changes.length === 1 ? "" : "s"} tracked</span>
+              <span className="hud-unit">
+                {t("home.homeHud.ledger.changesTracked", { count: changes.length })}
+              </span>
             </span>
             {latest ? (
               <span className="hud-note hud-note-clip" title={latest.rec_title}>
-                latest: {latest.rec_title} <span className="hud-mono">· {latestTime}</span>
+                {t("home.homeHud.ledger.latest", { title: latest.rec_title })}{" "}
+                <span className="hud-mono">· {latestTime}</span>
               </span>
             ) : (
-              <span className="hud-note">nothing applied yet — your PC is untouched</span>
+              <span className="hud-note">{t("home.homeHud.ledger.nothingApplied")}</span>
             )}
           </Module>
 
-          <Module label="Drift watch">
+          <Module label={t("home.homeHud.ledger.driftWatchLabel")}>
             {readiness == null ? (
-              <span className="hud-note">drift status lands with the current check</span>
+              <span className="hud-note">{t("home.homeHud.ledger.driftPending")}</span>
             ) : drifts.length === 0 ? (
               <span className="hud-note">
-                <span className="hud-led hud-led-ok" aria-hidden="true" /> nothing's drifted —
-                every applied change is still holding
-              </span>
-            ) : (
-              <span className="hud-note hud-note-warn">
-                <span className="hud-led hud-led-warn" aria-hidden="true" /> {drifts.length}{" "}
-                setting{drifts.length === 1 ? "" : "s"} drifted off · {driftNames}
-              </span>
-            )}
-          </Module>
-
-          <Module label="Drive health">
-            {smartDrives.length === 0 ? (
-              <span className="hud-note">
-                no SMART reading from this rig — Compy won't guess drive health
-              </span>
-            ) : flaggedDrives.length === 0 ? (
-              <span className="hud-note">
-                <span className="hud-led hud-led-ok" aria-hidden="true" /> {smartDrives.length}{" "}
-                drive{smartDrives.length === 1 ? "" : "s"} · SMART OK
+                <span className="hud-led hud-led-ok" aria-hidden="true" />{" "}
+                {t("home.homeHud.ledger.driftNone")}
               </span>
             ) : (
               <span className="hud-note hud-note-warn">
                 <span className="hud-led hud-led-warn" aria-hidden="true" />{" "}
-                {flaggedDrives[0].friendly_name} — {flaggedDrives[0].health} · back up important
-                data
+                {t("home.homeHud.ledger.driftCount", { count: drifts.length, names: driftNames })}
+              </span>
+            )}
+          </Module>
+
+          <Module label={t("home.homeHud.ledger.driveHealthLabel")}>
+            {smartDrives.length === 0 ? (
+              <span className="hud-note">{t("home.homeHud.ledger.driveHealthUnknown")}</span>
+            ) : flaggedDrives.length === 0 ? (
+              <span className="hud-note">
+                <span className="hud-led hud-led-ok" aria-hidden="true" />{" "}
+                {t("home.homeHud.ledger.driveCountOk", { count: smartDrives.length })}
+              </span>
+            ) : (
+              <span className="hud-note hud-note-warn">
+                <span className="hud-led hud-led-warn" aria-hidden="true" />{" "}
+                {flaggedDrives[0].friendly_name} — {flaggedDrives[0].health}
+                {t("home.homeHud.ledger.driveFlaggedSuffix")}
               </span>
             )}
           </Module>
@@ -607,8 +618,8 @@ export function HomeHud({
         {/* ── Priority queue — ranked for THIS hardware; rank numerals are real order ── */}
         <section className="hud-docket">
           <header className="hud-docket-head">
-            <span className="hud-eyebrow">Priority queue</span>
-            <span className="hud-docket-note">ranked for your hardware</span>
+            <span className="hud-eyebrow">{t("home.homeHud.docket.title")}</span>
+            <span className="hud-docket-note">{t("home.homeHud.docket.note")}</span>
           </header>
           {priorities == null ? (
             <div className="hud-docket-rows">
@@ -624,7 +635,7 @@ export function HomeHud({
           ) : limiters.length === 0 ? (
             <div className="hud-docket-rows">
               <div className="hud-docket-row hud-docket-clear">
-                Nothing worth changing today — measured clean on this rig.
+                {t("home.homeHud.docket.clean")}
               </div>
             </div>
           ) : (
@@ -639,10 +650,12 @@ export function HomeHud({
                   <span
                     className={`hud-pill hud-pill-${i === 0 ? "warn" : (statusTone[l.status] ?? "info")}`}
                   >
-                    {i === 0 ? "biggest limiter" : `${l.confidence} confidence`}
+                    {i === 0
+                      ? t("home.homeHud.docket.biggestLimiter")
+                      : t("home.homeHud.docket.confidenceTag", { level: l.confidence })}
                   </span>
                   <button type="button" className="hud-btn hud-btn-ghost" onClick={onSeeInFix}>
-                    See in {fixRoomLabel}
+                    {t("home.homeHud.docket.seeIn", { room: fixRoomLabel })}
                   </button>
                 </div>
               ))}

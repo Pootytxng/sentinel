@@ -1,0 +1,328 @@
+{
+  "verdictGlossary": {
+    "real": {
+      "chip": "Real",
+      "definition": "It actually does something. A measurable or well-proven effect on your games — worth doing."
+    },
+    "placebo": {
+      "chip": "Placebo",
+      "definition": "All hype, no effect. Popular online, but it changes nothing you can measure. We skip these so you don't waste time chasing them."
+    },
+    "risky": {
+      "chip": "Risky — refused",
+      "definition": "Not worth the downside. It might do something, but it brings real tradeoffs — instability, a security hole, or things breaking — so Compy refuses it, or lets you decide with eyes open."
+    }
+  },
+  "blackbookV2": {
+    "faces": {
+      "logbook": "Logbook",
+      "guide": "Field guide"
+    },
+    "faceToggleAriaLabel": "Blackbook view",
+    "guideLede": "The Field Guide is Compy's library: every tweak and myth, graded by the measured record — hardware-aware for this rig.",
+    "fieldRecordsLabel": "Field records",
+    "verdict": {
+      "noRecordHeadline": "Heard a tweak online? Look it up here before you try it.",
+      "noRecordSub": "We only answer what's been verified — search the Blackbook, or paste a whole guide and get every claim graded.",
+      "gradedNoTweaksHeadline_one": "You've fact-checked {{count}} guide here.",
+      "gradedNoTweaksHeadline_other": "You've fact-checked {{count}} guides here.",
+      "scamFlaggedSoFar_one": "{{count}} known scam pattern flagged so far.",
+      "scamFlaggedSoFar_other": "{{count}} known scam patterns flagged so far.",
+      "unratedClaimsSingular": "Its claims weren't tweaks we've verified, so no grades — we never guess.",
+      "unratedClaimsPlural": "Their claims weren't tweaks we've verified, so no grades — we never guess.",
+      "scamFlaggedInline_one": " · {{count}} known scam pattern flagged",
+      "scamFlaggedInline_other": " · {{count}} known scam patterns flagged",
+      "gradedHeadline_one": "You've fact-checked {{count}} guide — {{pct}}% of its tweaks were real.",
+      "gradedHeadline_other": "You've fact-checked {{count}} guides — {{pct}}% of their tweaks were real.",
+      "recognizedBreakdown": "Of the tweaks we recognized: {{real}} real · {{placebo}} placebo · {{risky}} risky{{scamPart}}."
+    }
+  },
+  "blackbookConsole": {
+    "typeLabel": {
+      "guide": "Guide",
+      "tweak": "Tweak",
+      "term": "Term",
+      "trick": "Scam pattern"
+    },
+    "kindTag": {
+      "change": "Change",
+      "session": "Session",
+      "autopsy": "Guide check",
+      "observed": "Observed"
+    },
+    "filterNoun": {
+      "change": "changes",
+      "session": "sessions",
+      "autopsy": "guide checks",
+      "observed": "observed"
+    },
+    "stripAriaLabel": "What Blackbook records",
+    "tiles": {
+      "changesTitle": "Changes to this PC",
+      "changesNone": "nothing changed yet",
+      "changesActive": "{{count}} still on · every one undoable",
+      "changesInactive": "none active now · every one undoable",
+      "sessionsTitle": "Gaming sessions",
+      "sessionsNone": "none watched yet",
+      "sessionsSome": "measured, not guessed",
+      "autopsyTitle": "Guides fact-checked",
+      "autopsyNone": "none checked yet",
+      "autopsySome": "every claim graded",
+      "observedTitle": "Changed outside Compy",
+      "observedSub": "drivers · Windows · hardware · power"
+    },
+    "scamFlagged_one": "{{count}} scam pattern flagged",
+    "scamFlagged_other": "{{count}} scam patterns flagged",
+    "empty": {
+      "title": "No record yet",
+      "sub": "Compy logs changes, gaming sessions and guide checks here as they happen."
+    },
+    "sectionHead": {
+      "record": "The record",
+      "since": "everything Compy has done on this PC · since "
+    },
+    "changeBody": {
+      "titlePre": "Compy applied ",
+      "stillOn": "still on",
+      "rolledBack": "rolled back",
+      "noLongerActive": "no longer active",
+      "restoresPre": "undo returns to "
+    },
+    "sessionBody": {
+      "titlePre": "You played ",
+      "unknownGame": "an unknown game",
+      "titlePost": " for ",
+      "oneLow": "1% low",
+      "delta": "{{arrow}} {{sign}}{{value}} fps vs last",
+      "changesOn_one": "{{count}} change on",
+      "changesOn_other": "{{count}} changes on"
+    },
+    "autopsyBody": {
+      "title": "You fact-checked a guide",
+      "real": "real",
+      "placebo": "placebo",
+      "risky": "risky",
+      "noClaims": "no claims we recognized — we never guess"
+    },
+    "observedBody": {
+      "betweenPre": "between ",
+      "betweenMid": " and ",
+      "noDetail": "Noticed between two Compy readings."
+    },
+    "tapeMore_one": "show {{count}} older record",
+    "tapeMore_other": "show {{count}} older records",
+    "manageJump_one": "{{count}} change still active — roll back in the Lab",
+    "manageJump_other": "{{count}} changes still active — roll back in the Lab",
+    "library": {
+      "eyebrow": "The field guide",
+      "scent": "Heard a tweak online? Look it up before you try it — every claim graded.",
+      "openAll": "Open the field guide"
+    }
+  },
+  "patternsTile": {
+    "confidenceLevel": {
+      "unknown": "unknown",
+      "low": "low",
+      "medium": "medium",
+      "high": "high"
+    },
+    "confidenceLabel": "{{level}} confidence",
+    "hideTheWorking": "Hide the working",
+    "whyWeThinkSo": "Why we think so",
+    "evidenceLabel": "Evidence",
+    "raisesConfidenceLabel": "What would make this clearer",
+    "nextTestLabel": "Next test",
+    "sectionTitle": "Patterns across your sessions",
+    "fromSessions_one": "from {{count}} session",
+    "fromSessions_other": "from {{count}} sessions",
+    "andGames_one": " · {{count}} game",
+    "andGames_other": " · {{count}} games",
+    "none": "No clear cross-session pattern yet — nothing has moved past what normal variation explains.",
+    "coverageLabel": "What Compy couldn't judge yet"
+  },
+  "learn": {
+    "tagline": "What actually works — measured. Look up any tweak, term, or scam you heard online; we only answer what we've verified.",
+    "close": "Close",
+    "modeAriaLabel": "Blackbook mode",
+    "modes": {
+      "browse": "Look it up",
+      "autopsy": "Autopsy a guide"
+    },
+    "autopsyHint": "Got a guide to fact-check? Try Autopsy",
+    "searchAriaLabel": "Search the knowledge library",
+    "searchPlaceholder": "try \"{{example}}\"…",
+    "filterByTypeAriaLabel": "Filter by type",
+    "filters": {
+      "all": "All",
+      "tweak": "Tweaks",
+      "term": "Terms",
+      "trick": "Tricks",
+      "guide": "Guides"
+    },
+    "moreFilters": "More filters ▸",
+    "fewerFilters": "Fewer filters ▾",
+    "verdictFilterAriaLabel": "Filter tweaks by verdict",
+    "gradeLabel": "Grade:",
+    "anyVerdict": "Any verdict",
+    "verdictFilters": {
+      "real": "Real",
+      "placebo": "Placebo",
+      "risky": "Risky"
+    },
+    "topicFilterAriaLabel": "Filter by topic",
+    "topicLabel": "Topic:",
+    "anyTopic": "Any topic",
+    "fitsFilterAriaLabel": "Filter by what fits your rig",
+    "fitsLabel": "Fits:",
+    "anyRig": "Any rig",
+    "topicLabels": {
+      "display": "Display & monitor",
+      "input": "Mouse & keyboard",
+      "network": "Network",
+      "cpu": "CPU",
+      "gpu": "GPU",
+      "memory": "Memory (RAM)",
+      "storage": "Storage",
+      "windows": "Windows & system",
+      "power": "Power & cooling",
+      "general": "General"
+    },
+    "applicabilityLabels": {
+      "amd": "AMD",
+      "nvidia": "NVIDIA",
+      "intel": "Intel",
+      "laptop": "Laptop",
+      "desktop": "Desktop"
+    },
+    "howWeGrade": "How we grade",
+    "goldenRules": "One change at a time · restore point first · measure, don't vibe",
+    "empty": "No entry for that yet — we only answer what we've verified. If you're unsure about a tweak that isn't here, measure it with Compy's benchmark instead of trusting a forum.",
+    "startHere": "Start here",
+    "typeLabel": {
+      "guide": "Guide",
+      "tweak": "Tweak",
+      "term": "Term",
+      "trick": "Scam pattern"
+    },
+    "typeLabelPlural": {
+      "guide": "Guides",
+      "tweak": "Tweaks",
+      "term": "Terms",
+      "trick": "Scam patterns"
+    },
+    "typeDesc": {
+      "guide": "Step-by-step setups, fact-checked claim by claim",
+      "tweak": "Single settings, each graded Real, Placebo, or Risky",
+      "term": "The jargon, translated into plain English",
+      "trick": "The tricks fake optimizers pull — spot them before they cost you"
+    },
+    "guideSafePill": "Guide · safe",
+    "entryTypeBody": {
+      "spotIt": "Spot it:",
+      "honestVersion": "The honest version:",
+      "undo": "Undo:"
+    },
+    "related": "Related",
+    "showMeTheWay": "Show me the way",
+    "dateNote": {
+      "addedPre": "Added ",
+      "updatedMid": " · Updated "
+    },
+    "superseded": {
+      "warning": "⚠ Superseded",
+      "seeLinkPre": " — see ",
+      "afterLink": ". Kept for reference; the current guidance has moved on.",
+      "replacedSteps": "Replaced in steps: ",
+      "arrow": " → ",
+      "outdated": "⚠ Outdated — kept for reference; this guidance is no longer current."
+    },
+    "applicableTitle": "Relevant to {{label}} rigs",
+    "autopsy": {
+      "subLede": "Paste a tweak guide — a forum post, a video description, a \"do these 10 things\" list — and get the autopsy. Nothing leaves your PC; it's matched against this library, offline.",
+      "recordTitle": "Your autopsy record",
+      "recordGuides_one": "{{count}} guide graded",
+      "recordGuides_other": "{{count}} guides graded",
+      "recordBreakdownPre": " — of the tweaks recognized: ",
+      "recordRealPct": "{{pct}}% real",
+      "recordPlaceboPct": "{{pct}}% placebo",
+      "recordRiskyPct": "{{pct}}% risky",
+      "recordScamPre": " · ",
+      "recordScam_one": "{{count}} snake-oil trick flagged",
+      "recordScam_other": "{{count}} snake-oil tricks flagged",
+      "textareaAriaLabel": "Paste a tweak guide to autopsy",
+      "textareaPlaceholder": "Paste the guide here…",
+      "gradeButton": "Grade this guide",
+      "clear": "Clear",
+      "urlLead": "That's a link — and Compy never fetches the internet (nothing leaves your PC; that's the deal). Bring me the words instead:",
+      "urlHowYoutube": "Open the video's transcript (⋯ menu → Show transcript) → copy → paste here.",
+      "urlHowWebpage": "Open the page → Ctrl+A, Ctrl+C → paste here. I'll grade every claim.",
+      "resultEmpty": "We didn't spot anything we recognize in that. Paste a guide that actually names tweaks or settings and we'll grade each one.",
+      "clearAndPasteAnother": "Clear & paste another",
+      "stickyPrefix": "Autopsy: ",
+      "claimsGraded_one": "{{count}} claim graded",
+      "claimsGraded_other": "{{count}} claims graded",
+      "gradePrefix": "This guide: ",
+      "real": "real",
+      "placebo": "placebo",
+      "risky": "risky",
+      "unrecognized_one": "{{count}} thing we don't recognize",
+      "unrecognized_other": "{{count}} things we don't recognize",
+      "scamFlags_one": "{{count}} known scam pattern in here — open the flagged rows below.",
+      "scamFlags_other": "{{count}} known scam patterns in here — open the flagged rows below.",
+      "resultNote": "Anything we don't recognize gets no verdict — we won't guess. Tap a row to read it right here.",
+      "openFullEntry": "Open full entry →",
+      "safeHowTo": "Safe how-to available →",
+      "truncated": "We graded the first {{chars}} characters of a longer paste."
+    }
+  },
+  "tuningDebrief": {
+    "confirmReplace": {
+      "title": "Replace the armed comparison?",
+      "body": "Something is already armed ({{title}} · {{game}}). Arming this undervolt check replaces that baseline.",
+      "confirmLabel": "Replace & arm"
+    },
+    "arm": {
+      "title": "Undervolted since this session? Measure it.",
+      "sub": "Undervolted in Adrenalin since this session? Arm an undervolt check and Compy measures your next sessions — did temps drop and frames hold? It never touches your voltage.",
+      "button": "I undervolted — measure it"
+    },
+    "measure": {
+      "title": "{{label}} check · {{game}}",
+      "reset": "I reset / re-tuned"
+    },
+    "crash": {
+      "question": "Did it crash, hang, or show artifacts this session? Compy can't see a black-screen reset.",
+      "button": "Yes — too aggressive"
+    }
+  },
+  "tuningGuide": {
+    "normalNumber": "A \"normal\" number?",
+    "discretion": "Discretion:",
+    "undo": "Undo:"
+  },
+  "tuningInstrument": {
+    "qualifiesMark": "Why this rig qualifies:",
+    "qualifiesConnector": " measured here — ",
+    "notForRigMark": "Not for this rig right now:",
+    "notForRigRest": ". Compy only suggests tuning when your own sessions show it would help — the full guide stays in the Blackbook (search “undervolt”) if you're curious.",
+    "readoutHead": "Stability & thermal",
+    "readoutEmpty": "No tune measured yet. Undervolt in Adrenalin, then arm a baseline from a Monitor debrief — Compy measures whether temps dropped and frames held, judged over time.",
+    "recentLabel": "Recent sessions — peak temp & consistency",
+    "showMeTheWay": "Show me the way",
+    "unknownGame": "Unknown",
+    "smoothness": {
+      "smooth": "smooth",
+      "someDips": "some dips",
+      "rough": "rough"
+    },
+    "gaugeFoot": "A gauge, not a control — Compy never touches your voltage. ",
+    "gaugeFootSuffix": " + GPU sensors, external · no injection."
+  },
+  "tuningVerdict": {
+    "peakTemp": "Peak temp ",
+    "oneLow": "1% low",
+    "vsBaseline": " vs baseline",
+    "sessionsSinceTune_one": "{{count}} session since the tune",
+    "sessionsSinceTune_other": "{{count}} sessions since the tune"
+  }
+}

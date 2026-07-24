@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 // The visible app version is the SAME canonical string the installer + all three manifests carry
 // (package.json === tauri.conf.json === Cargo.toml === Cargo.lock, pinned equal by
 // scripts/version-drift-guard.test.mjs Guard A). Importing it here, rather than hardcoding a
 // literal, is what keeps the rail from silently drifting from the shipped build — Guard D pins it.
 import pkg from "../package.json";
+// i18next init (side-effect import): guarantees the translator is ready before first render even
+// when this module is imported directly (e.g. by ReportModal.test.tsx), not just via main.tsx's
+// own "./i18n" import — same convention main.tsx documents at its own import site.
+import "./i18n";
 import { ONBOARDED_KEY } from "./Onboarding";
 import FirstCheck, { FIRST_CHECK_KEY } from "./surfaces/FirstCheck";
 import { SetupTour, SETUP_TOUR_KEY } from "./surfaces/setup/SetupTour";
@@ -366,6 +371,7 @@ export function ReportModal({
   onOpenFolder: () => void;
   onReexport: (feedback: string | null) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   // Structured feedback capture (spec 2026-06-11): three OPTIONAL prompts, formatted into the
   // report ONLY when filled and ONLY when the user clicks re-export (never on keystroke, never
   // pre-filled, never auto-sent — the answers exist solely in the file the user chooses to share).
@@ -423,34 +429,35 @@ export function ReportModal({
         aria-labelledby="export-modal-title"
       >
         <div className="modal-head">
-          <h2 id="export-modal-title">Report exported</h2>
+          <h2 id="export-modal-title">{t("app.reportModal.title")}</h2>
           <button className="btn btn-small" onClick={onClose}>
-            Close
+            {t("app.reportModal.close")}
           </button>
         </div>
-        <p className="muted modal-path">Saved to {report.path}</p>
+        <p className="muted modal-path">{t("app.reportModal.savedTo", { path: report.path })}</p>
         <div className="export-feedback">
           <div className="export-feedback-head">
-            Before you share — help us improve <span className="muted">(optional)</span>
+            {t("app.reportModal.feedbackHeadPre")} <span className="muted">{t("app.reportModal.feedbackHeadOptional")}</span>
           </div>
           {/* One reconciled feature, two entry points (self-review 2026-07-23): this modal captures
               guided feedback at the moment you export; Settings → Feedback & help is the always-on
               home that also emails your note straight to the team. Pointer so they don't read as two
               unrelated surfaces. */}
           <p className="export-feedback-pointer muted">
-            Want it to reach us directly? <strong>Settings → Feedback &amp; help</strong> emails your
-            note and report in one click.
+            {t("app.reportModal.feedbackPointerPre")}
+            <strong>{t("app.reportModal.feedbackPointerBold")}</strong>
+            {t("app.reportModal.feedbackPointerPost")}
           </p>
           <label className="export-feedback-field">
-            <span>In one sentence, what is Compy to you?</span>
+            <span>{t("app.reportModal.whatLabel")}</span>
             <textarea rows={2} value={fbWhat} onChange={(e) => setFbWhat(e.target.value)} />
           </label>
           <label className="export-feedback-field">
-            <span>Anything confuse you or feel off?</span>
+            <span>{t("app.reportModal.confusingLabel")}</span>
             <textarea rows={2} value={fbConfusing} onChange={(e) => setFbConfusing(e.target.value)} />
           </label>
           <label className="export-feedback-field">
-            <span>What would you want next?</span>
+            <span>{t("app.reportModal.nextLabel")}</span>
             <textarea rows={2} value={fbNext} onChange={(e) => setFbNext(e.target.value)} />
           </label>
           <div className="export-feedback-actions">
@@ -460,12 +467,12 @@ export function ReportModal({
               disabled={fbState === "busy" || feedbackBlock() === null}
             >
               {fbState === "busy"
-                ? "Re-exporting…"
+                ? t("app.reportModal.reexporting")
                 : fbState === "added"
-                  ? "Feedback added ✓"
+                  ? t("app.reportModal.feedbackAdded")
                   : fbState === "failed"
-                    ? "Failed — try again"
-                    : "Add my feedback & re-export"}
+                    ? t("app.reportModal.feedbackFailed")
+                    : t("app.reportModal.addFeedback")}
             </button>
           </div>
         </div>
@@ -477,16 +484,16 @@ export function ReportModal({
         )}
         <div className="modal-actions">
           <button className="btn" onClick={onOpenFolder}>
-            Open folder
+            {t("app.reportModal.openFolder")}
           </button>
           <button className="btn" onClick={() => copy("full")}>
-            {copied === "full" ? "Copied!" : "Copy full report"}
+            {copied === "full" ? t("app.reportModal.copied") : t("app.reportModal.copyFull")}
           </button>
           <button className="btn" onClick={() => copy("summary")}>
-            {copied === "summary" ? "Copied!" : "Copy summary card"}
+            {copied === "summary" ? t("app.reportModal.copied") : t("app.reportModal.copySummary")}
           </button>
           <button className="btn btn-small" onClick={onClose}>
-            Close
+            {t("app.reportModal.close")}
           </button>
         </div>
       </div>
@@ -522,6 +529,7 @@ type Priorities = {
 const APP_VERSION = pkg.version;
 
 function App() {
+  const { t } = useTranslation();
   const [hw, setHw] = useState<HardwareInfo | null>(null);
   const [recs, setRecs] = useState<Recommendation[] | null>(null);
   const [changes, setChanges] = useState<AppliedChange[]>([]);
@@ -691,12 +699,12 @@ function App() {
     try {
       await invoke("recover_gaming_session", { confirm: true });
       setGamingRecovery(null); // cleared only once restore confirms
-      setGamingRestored(restoredSummary(changes)); // backend confirmed: every change restored
+      setGamingRestored(restoredSummary(changes, t)); // backend confirmed: every change restored
       setGamingResumed(null); // one confirmation at a time — restore supersedes a stale resume
       window.dispatchEvent(new Event(GAMING_SESSION_RESOLVED_EVENT)); // clear the pane's prompts
     } catch (e) {
       // leave the banner up so the user can retry / Review
-      fail("Couldn't finish restoring your settings just now — try again, or use Review.", e);
+      fail(t("app.errors.recoverGamingFailed"), e);
     } finally {
       setGamingRestoring(false);
     }
@@ -741,7 +749,7 @@ function App() {
       await invoke("recover_gaming_session", { confirm: true });
     } catch (e) {
       // Restore leg failed → the banner stays up so every option is still one click away.
-      fail("Couldn't finish restoring your settings just now — try again, or use Review.", e);
+      fail(t("app.errors.recoverGamingFailed"), e);
       setGamingResuming(false);
       return;
     }
@@ -749,15 +757,15 @@ function App() {
     window.dispatchEvent(new Event(GAMING_SESSION_RESOLVED_EVENT)); // clear the pane's prompts
     try {
       const file = await invoke<GamingSessionFile>("start_gaming_session", { opts });
-      setGamingResumed(summarizeChanges(file.changes).line);
+      setGamingResumed(summarizeChanges(file.changes, t).line);
       setGamingRestored(null); // one confirmation at a time — the live session supersedes it
     } catch (e) {
       // Start leg failed AFTER a confirmed restore — settings are safely back; say exactly
       // that, and point at the one door to try again (never a vague "resume failed").
       fail(
-        `Your settings were restored, but Gaming Mode couldn't start again — turn it on from ${
-          labGround ? "the Lab" : "Optimize"
-        } when you're ready.`,
+        labGround
+          ? t("app.errors.gamingResumeFailedGround", { room: t("common.rail.lab") })
+          : t("app.errors.gamingResumeFailedMerged", { room: t("common.rail.optimize") }),
         e,
       );
     } finally {
@@ -772,7 +780,7 @@ function App() {
       setReport(await invoke<ExportResult>("export_report", { feedback: null }));
       bumpLocalStat("reportsExported"); // R3 Lane D — local-only counter, best-effort
     } catch (e) {
-      fail("Couldn't build the report just now — try again in a moment.", e);
+      fail(t("app.errors.exportFailed"), e);
     } finally {
       setExporting(false);
     }
@@ -795,7 +803,7 @@ function App() {
           return v;
         })
         .catch((e) => {
-          fail("Couldn't read some of your system info just now — try again in a moment.", e);
+          fail(t("app.errors.readInfoFailed"), e);
           return undefined;
         });
     // readiness/recs/startup/sessions feed BOTH their own state AND the priority ranking — compute
@@ -827,7 +835,7 @@ function App() {
         }).then(setPriorities);
       })
       // Only a genuine priorities_from failure (all four present, ranking itself failed) reaches here.
-      .catch((e) => fail("Couldn't rank your priorities just now — try again in a moment.", e));
+      .catch((e) => fail(t("app.errors.rankPrioritiesFailed"), e));
     await Promise.all([
       run<HardwareInfo>("get_hardware_info", (info) => {
         setHw(info);
@@ -858,7 +866,7 @@ function App() {
         prev.map((e) => (e.name === entry.name ? { ...e, enabled: !e.enabled } : e))
       );
     } catch (e) {
-      fail("Couldn't change that startup item just now — try again.", e);
+      fail(t("app.errors.startupToggleFailed"), e);
     } finally {
       setBusyId(null);
     }
@@ -867,11 +875,11 @@ function App() {
   const confirm = useConfirm();
 
   const apply = async (rec: Recommendation) => {
-    const tradeoff = rec.downside ? ` Tradeoff: ${rec.downside}` : "";
+    const tradeoff = rec.downside ? t("app.dialogs.applyTradeoff", { downside: rec.downside }) : "";
     const ok = await confirm({
-      title: `Apply "${rec.title}"?`,
-      body: `${rec.description}${tradeoff} Compy snapshots the prior state so you can roll this back anytime.`,
-      confirmLabel: "Apply",
+      title: t("app.dialogs.applyTitle", { title: rec.title }),
+      body: t("app.dialogs.applyBody", { description: rec.description, tradeoff }),
+      confirmLabel: t("app.dialogs.apply"),
     });
     if (!ok) return;
     setBusyId(rec.id);
@@ -887,10 +895,7 @@ function App() {
       window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
       await refresh();
     } catch (e) {
-      fail(
-        "Couldn't apply that change — it may need an admin OK, or the prompt was cancelled. Nothing was changed; try again.",
-        e,
-      );
+      fail(t("app.errors.applyFailed"), e);
     } finally {
       setBusyId(null);
     }
@@ -929,11 +934,13 @@ function App() {
   };
 
   const rollback = async (change: AppliedChange) => {
-    const dest = change.restores_label ? ` It'll return to ${change.restores_label}.` : "";
+    const dest = change.restores_label
+      ? t("app.dialogs.rollbackDest", { label: change.restores_label })
+      : "";
     const ok = await confirm({
-      title: `Roll back "${change.rec_title}"?`,
-      body: `Compy restores the setting to how it was before.${dest}`,
-      confirmLabel: "Roll back",
+      title: t("app.dialogs.rollbackTitle", { title: change.rec_title }),
+      body: t("app.dialogs.rollbackBody", { dest }),
+      confirmLabel: t("app.dialogs.rollback"),
     });
     if (!ok) return;
     setBusyId(change.id);
@@ -944,7 +951,7 @@ function App() {
       window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
       await refresh();
     } catch (e) {
-      fail("Couldn't undo that change just now — try again, or undo it from the Trust Ledger.", e);
+      fail(t("app.errors.rollbackFailed"), e);
     } finally {
       setBusyId(null);
     }
@@ -970,9 +977,7 @@ function App() {
       if (!active) {
         // Toggle UI says ON but Compy has no rollback record for this
         // setting — it was applied outside Compy before we started watching.
-        setError(
-          `"${rec.title}" is currently on but Compy didn't apply it, so there's no rollback record. Toggle it off in the original Windows location instead.`,
-        );
+        setError(t("app.errors.recAppliedExternally", { title: rec.title }));
         return;
       }
       await rollback(active);
@@ -1031,10 +1036,10 @@ function App() {
   // appear once signed remote rules are live.
   const rulesSourceLabel =
     rulesSource === "remote"
-      ? "Rules: Remote (signed)"
+      ? t("app.status.rulesRemote")
       : rulesSource === "cached"
-      ? "Rules: Cached (last-known-good)"
-      : "Rules: Built-in";
+      ? t("app.status.rulesCached")
+      : t("app.status.rulesBuiltin");
 
   // Six-home rail (one-rail §1b) — the ShellV2 rail renders from HOME_RAIL. navHome maps a home id
   // to its tab; HOME_FOR_TAB maps the active tab back to its home so the right rail item highlights.
@@ -1205,10 +1210,10 @@ function App() {
   // Detected-hardware lines for the intro/tour rig step (shimmer until hardware is read).
   const rigLines = hw
     ? [
-        { label: "GPU", value: hw.gpus[0]?.name ?? "No GPU detected" },
-        { label: "CPU", value: hw.cpu_arch?.family_label || hw.cpu_brand },
-        { label: "RAM", value: fmtGB(hw.ram_total_bytes) },
-        { label: "OS", value: hw.windows_version?.product_name || `${hw.os_name} ${hw.os_version}` },
+        { label: t("app.rig.gpu"), value: hw.gpus[0]?.name ?? t("app.rig.noGpu") },
+        { label: t("app.rig.cpu"), value: hw.cpu_arch?.family_label || hw.cpu_brand },
+        { label: t("app.rig.ram"), value: fmtGB(hw.ram_total_bytes) },
+        { label: t("app.rig.os"), value: hw.windows_version?.product_name || `${hw.os_name} ${hw.os_version}` },
       ]
     : [];
 
@@ -1394,7 +1399,7 @@ function App() {
           report={report}
           onClose={() => setReport(null)}
           onOpenFolder={() => {
-            invoke("open_export_folder").catch((e) => fail("Couldn't open the exports folder.", e));
+            invoke("open_export_folder").catch((e) => fail(t("app.errors.openExportsFolderFailed"), e));
           }}
           onReexport={async (feedback) => {
             setReport(await invoke<ExportResult>("export_report", { feedback }));
@@ -1411,7 +1416,7 @@ function App() {
             type="button"
             className="error-dismiss"
             onClick={() => setError(null)}
-            aria-label="Dismiss"
+            aria-label={t("app.errorBanner.dismiss")}
           >
             ×
           </button>
@@ -1437,17 +1442,16 @@ function App() {
               type="button"
               className="gaming-toast-dismiss"
               onClick={() => setRecoveryToastHidden(true)}
-              aria-label="Hide this reminder — you can still restore from the Gaming panel"
-              title="Hide — you can still restore from the Gaming panel"
+              aria-label={t("app.gamingToast.hideRecoveryAria")}
+              title={t("app.gamingToast.hideRecoveryTitle")}
             >
               ×
             </button>
             {/* Protection-first framing (consumer-panel Q4, owner-directed exploration
                 2026-07-11): the honest state is "recoverable, nothing at risk". */}
             <p className="gaming-toast-msg">
-              <strong>Nothing&apos;s lost</strong> — a Gaming Mode session was interrupted (
-              {statusLabel(gamingRecovery.status)}) and Compy kept the full restore receipt.
-              Resume it, or restore your settings now?
+              <strong>{t("app.gamingToast.recoveryEmph")}</strong>{" "}
+              {t("app.gamingToast.recoveryBody", { status: statusLabel(gamingRecovery.status, t) })}
             </p>
             <div className="gaming-toast-actions">
               <button
@@ -1455,14 +1459,14 @@ function App() {
                 disabled={gamingRestoring || gamingResuming}
                 onClick={resumeGaming}
               >
-                {gamingResuming ? "Resuming…" : "Resume Gaming Mode"}
+                {gamingResuming ? t("app.gamingToast.resuming") : t("app.gamingToast.resumeAction")}
               </button>
               <button
                 className="btn-small"
                 disabled={gamingRestoring || gamingResuming}
                 onClick={() => recoverGaming(true)}
               >
-                {gamingRestoring ? "Restoring…" : "Restore now"}
+                {gamingRestoring ? t("app.gamingToast.restoring") : t("app.gamingToast.restoreNow")}
               </button>
               <button
                 className="btn-small"
@@ -1476,7 +1480,7 @@ function App() {
                   setActiveTab(labGround ? "Lab" : "Optimize");
                 }}
               >
-                Review
+                {t("app.gamingToast.review")}
               </button>
             </div>
           </div>
@@ -1489,12 +1493,14 @@ function App() {
           gamingResumed && (
           <div className="gaming-toast gaming-toast-ready" role="status">
             <p className="gaming-toast-msg">
-              <strong>✓ Gaming Mode is back on.</strong> {gamingResumed} — stop it from{" "}
-              {labGround ? "the Lab" : "Optimize"} when you're done.
+              <strong>{t("app.gamingToast.resumedHeadline")}</strong>{" "}
+              {labGround
+                ? t("app.gamingToast.resumedBodyGround", { summary: gamingResumed, room: t("common.rail.lab") })
+                : t("app.gamingToast.resumedBodyMerged", { summary: gamingResumed, room: t("common.rail.optimize") })}
             </p>
             <div className="gaming-toast-actions">
               <button className="btn-small" onClick={() => setGamingResumed(null)}>
-                Done
+                {t("app.gamingToast.done")}
               </button>
             </div>
           </div>
@@ -1514,7 +1520,7 @@ function App() {
             </p>
             <div className="gaming-toast-actions">
               <button className="btn-small" onClick={() => setGamingRestored(null)}>
-                Done
+                {t("app.gamingToast.done")}
               </button>
             </div>
           </div>
@@ -1603,14 +1609,22 @@ function App() {
               changes={changes}
               onRunCheck={() => setShowFirstCheck(true)}
               onSeeInFix={() => setActiveTab(labGround ? "Lab" : "Optimize")}
-              fixRoomLabel={labGround ? "Lab" : "Optimize"}
+              fixRoomLabel={labGround ? t("common.rail.lab") : t("common.rail.optimize")}
               // Console-only (compy_home_console): the Home dock's doors are the rail the app
               // actually shows (railFor — the 4-room ground rail at default-ON) minus Home
               // itself, navigating through the SAME navHome mapping the rail uses.
               onNavigate={(k) => navHome(k as HomeRailId)}
               rooms={railFor(optimizeMerged, labGround)
                 .filter((r) => r.id !== "home")
-                .map((r) => ({ key: r.id, name: r.label }))}
+                .map((r) => ({
+                  key: r.id,
+                  // r.label is HOME_RAIL's English literal (homeRail.ts is guard-pinned, out of
+                  // scope) — re-derive the DISPLAY name from common.rail instead of using it
+                  // directly, so this list localizes too. "fix" is special: when the Optimize
+                  // merge relabels it to "Optimize" (railFor's own re-point), route through
+                  // common.rail.optimize rather than common.rail.fix ("Tune") to match.
+                  name: r.id === "fix" && optimizeMerged ? t("common.rail.optimize") : t(`common.rail.${r.id}`),
+                }))}
               // Console intake band only (compy_home_intake, BACKLOG:916): the one-tap fast path
               // derives its safe stack from the SAME recs + allowlist Optimize uses, and applies
               // through the SAME audited one-UAC batch primitive — no new mutation boundary.
@@ -1715,13 +1729,13 @@ function App() {
           <Wordmark size={30} />
           {error ? (
             <>
-              <p className="app-booting-line">Couldn't read your hardware just now.</p>
+              <p className="app-booting-line">{t("app.booting.readFailed")}</p>
               <button className="btn btn-primary app-booting-retry" onClick={() => void refresh()}>
-                Try again
+                {t("app.booting.retry")}
               </button>
             </>
           ) : (
-            <p className="app-booting-line">Reading your hardware…</p>
+            <p className="app-booting-line">{t("app.booting.reading")}</p>
           )}
         </div>
       )}
@@ -1743,6 +1757,7 @@ const MONITORING_POLL_MS = 1000;
 const MONITORING_WINDOW = 60;
 
 function MonitoringTab({ active, embedded = false }: { active: boolean; embedded?: boolean }) {
+  const { t } = useTranslation();
   // Summary-first domain cards (T3, default ON; classic panel stack is the failsafe). Live-synced
   // so flipping the Settings toggle re-lays this tab without a reload (same pattern as useHudFlag).
   const [cards, setCards] = useState(readMonitorCards);
@@ -1871,17 +1886,17 @@ function MonitoringTab({ active, embedded = false }: { active: boolean; embedded
       {!embedded && (
       <>
       <div className="section-header">
-        <h2 className="section-title">Monitoring</h2>
+        <h2 className="section-title">{t("app.monitoring.title")}</h2>
         <div className="section-header-actions">
           <button
             className={`btn-small ${overlayOn ? "btn-small-on" : ""}`}
             onClick={toggleOverlay}
-            title="Show a compact always-on-top HUD over borderless/windowed games"
+            title={t("app.monitoring.overlayToggleTitle")}
           >
-            {overlayOn ? "Hide overlay" : "Show overlay"}
+            {overlayOn ? t("app.monitoring.hideOverlay") : t("app.monitoring.showOverlay")}
           </button>
           {overlayOn && (
-            <div style={{ display: "flex", gap: 4 }} title="Move the overlay to a screen corner">
+            <div style={{ display: "flex", gap: 4 }} title={t("app.monitoring.moveOverlayTitle")}>
               {(
                 [
                   ["top-left", "↖"],
@@ -1894,8 +1909,8 @@ function MonitoringTab({ active, embedded = false }: { active: boolean; embedded
                   key={corner}
                   className={`btn-small ${overlayCorner === corner ? "btn-small-on" : ""}`}
                   onClick={() => chooseCorner(corner)}
-                  title={corner.replace("-", " ")}
-                  aria-label={`Move the overlay to the ${corner.replace("-", " ")} corner`}
+                  title={t(`app.monitoring.corners.${corner}`)}
+                  aria-label={t("app.monitoring.moveOverlayAria", { corner: t(`app.monitoring.corners.${corner}`) })}
                   aria-pressed={overlayCorner === corner}
                 >
                   {glyph}
@@ -1905,18 +1920,19 @@ function MonitoringTab({ active, embedded = false }: { active: boolean; embedded
           )}
           <div className="read-only-pill">
             {!haveAnything
-              ? "Starting…"
-              : `${cpuSamples.length}s history · 1 Hz`}
+              ? t("app.monitoring.starting")
+              : t("app.monitoring.historyDuration", { seconds: cpuSamples.length })}
           </div>
         </div>
       </div>
       <p className="section-help">
-        Live system telemetry. CPU usage via Windows PDH (built-in, no
-        driver). GPU sensors via vendor libraries (NVML / ADLX). FPS &
-        <Term id="frametime">frametime</Term> via <Term id="etw">ETW</Term>. No injection into your
-        games, no <Term id="kernel-driver">kernel driver</Term> —
-        anti-cheat compatible. The overlay draws over borderless/windowed
-        games (not exclusive fullscreen). Charts show the last minute.
+        {t("app.monitoring.helpPre")}
+        <Term id="frametime">{t("app.monitoring.frametimeTerm")}</Term>
+        {t("app.monitoring.helpMid1")}
+        <Term id="etw">{t("app.monitoring.etwTerm")}</Term>
+        {t("app.monitoring.helpMid2")}
+        <Term id="kernel-driver">{t("app.monitoring.kernelDriverTerm")}</Term>
+        {t("app.monitoring.helpPost")}
       </p>
       </>
       )}
@@ -1987,31 +2003,26 @@ function MonitoringTab({ active, embedded = false }: { active: boolean; embedded
       {/* GPU sensors missing — same honest explanation in both layouts. */}
       {hasGpu === false && (
         <div className="empty">
-          GPU sensors unavailable. Compy reads GPU telemetry from NVML,
-          which ships with the NVIDIA driver. AMD (ADLX) and Intel (GPA)
-          support is on the roadmap — your GPU will get its own panel here
-          once that lands.
+          {t("app.monitoring.gpuSensorsUnavailable")}
         </div>
       )}
 
       {!haveAnything && (
-        <div className="empty">Collecting first sample…</div>
+        <div className="empty">{t("app.monitoring.collectingFirstSample")}</div>
       )}
     </section>
   );
 }
 
 function DiagnosticsTab({ sections }: { sections: DiagnosticSection[] }) {
+  const { t } = useTranslation();
   return (
     <section className="tab-pane">
       <div className="section-header">
-        <h2 className="section-title">Diagnostics</h2>
+        <h2 className="section-title">{t("app.diagnostics.title")}</h2>
       </div>
       <p className="section-help">
-        Compy's raw view of your PC. These are the observations the
-        recommendation engine reads to decide what to surface. If a rec you
-        expect doesn't show up — or one you don't expect does — the answer
-        usually lives here.
+        {t("app.diagnostics.help")}
       </p>
       <div className="diag-sections">
         {sections.map((section) => (

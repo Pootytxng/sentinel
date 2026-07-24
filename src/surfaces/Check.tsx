@@ -1,18 +1,23 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import type { PriorityItem, SessionSummary, StartupEntry } from "../types";
 import { TrustSwitch } from "../design/TrustSwitch";
 import { WhatsThis } from "../design/WhatsThis";
 import { useConfirm } from "../design/ConfirmDialog";
 import { Walkthrough } from "../design/Walkthrough";
-import { walkthroughForKey, gpuVendor, type GpuVendor } from "./walkthroughs";
-import { tuningGuideForVendor } from "../data/tuning-guides";
+import { walkthroughForKeyForLanguage, gpuVendor, type GpuVendor } from "./walkthroughs";
+import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
 import { gpuRunningHot } from "../data/tuning-measure";
 import { useHardwareChange, summarizeHardwareChanges } from "../hooks/use-hardware-change";
 import { useScan, buildSetupSummary, rowVerdict } from "./use-scan";
 import { useExpertView } from "../design/use-expert-view";
 import { ScanStream } from "./ScanStream";
 import { SidePileItem, SIDE_PILE_ORDER } from "./side-pile";
+// Side-effect import: guarantees the i18next singleton is initialized even when this component
+// is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
+import "../i18n";
 import "./Check.css";
 
 // Structural subset of App's GpuInfo — driver freshness needs only name + age (object covariance).
@@ -66,24 +71,30 @@ const NIC_SUPPORT: Record<string, { label: string; url: string }> = {
 // know the latest driver without the network (remote fetch is gated off), so never "out of date",
 // never a version claim. Unreadable date → neutral skip, no alarm. Vendor comes from the GPU's own
 // name (not the app-level vendor prop) so the advisory names the right driver on mixed rigs.
-function driverFreshness(gpus: GpuDriverInfo[]):
+function driverFreshness(
+  gpus: GpuDriverInfo[],
+  t: TFunction,
+):
   | { tone: "skip" | "pass"; message: string; url?: undefined; label?: undefined }
   | { tone: "advisory"; message: string; label: string; url: string | null } {
   const gpu = gpus.find((g) => g.driver_age_days != null);
   if (!gpu)
     return {
       tone: "skip",
-      message: "Couldn't read your graphics driver's date this time — nothing to check, and nothing wrong.",
+      message: t("optimize.check.driverUnreadable"),
     };
   const age = gpu.driver_age_days as number;
-  if (age <= 90) return { tone: "pass", message: `Driver is recent — ${age} days old.` };
+  if (age <= 90) return { tone: "pass", message: t("optimize.check.driverRecent", { days: age }) };
   const v = VENDOR_SUPPORT[gpuVendor(gpu.name)];
   // The row states the FACT only; the card's single shared note carries the one "newer may be
   // available" maybe for every stale driver (P5.5: no duplicated paragraphs per device).
   return {
     tone: "advisory",
-    message: `Your ${v?.label ?? "GPU"} graphics driver is ${age} days old.`,
-    label: v?.label ?? "vendor",
+    message: t("optimize.check.driverStale", {
+      vendor: v?.label ?? t("optimize.check.driverVendorFallbackGpu"),
+      days: age,
+    }),
+    label: v?.label ?? t("optimize.check.driverVendorFallbackGeneric"),
     url: v?.url ?? null,
   };
 }
@@ -94,15 +105,15 @@ function driverFreshness(gpus: GpuDriverInfo[]):
 // outside-Compy is detected. Self-contained via useScan + its own apply (existing command); onChanged
 // lets App re-sync its other surfaces. Zero new IPC.
 
-function ago(iso: string): string {
+function ago(iso: string, t: TFunction): string {
   const then = new Date(iso).getTime();
-  if (!then) return "recently";
+  if (!then) return t("optimize.check.agoRecently");
   const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
-  if (mins < 60) return mins <= 1 ? "just now" : `${mins} min ago`;
+  if (mins < 60) return mins <= 1 ? t("optimize.check.agoJustNow") : t("optimize.check.agoMinAgo", { mins });
   const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) return t("optimize.check.agoHoursAgo", { hrs });
   const days = Math.round(hrs / 24);
-  return days === 1 ? "yesterday" : `${days} days ago`;
+  return days === 1 ? t("optimize.check.agoYesterday") : t("optimize.check.agoDaysAgo", { days });
 }
 
 export default function Check({
@@ -138,6 +149,7 @@ export default function Check({
   // there is actually something stale to say, and the upgrade path is labeled early.
   v2Ia?: boolean;
 }) {
+  const { t, i18n } = useTranslation();
   // cache: true — Optimize/Fixes is the PERMANENT surface (vs the first-run FirstCheck/Tour arcs), so
   // re-opening it serves the last verdict instantly instead of replaying the scan + 280ms/row reveal
   // every visit. The cache clears on any apply/rollback; "Re-run check" still does a full fresh scan.
@@ -174,9 +186,9 @@ export default function Check({
     const r = linkedRec(lim);
     if (!r) return;
     const ok = await confirm({
-      title: `Apply "${r.title}"?`,
-      body: "Compy snapshots the prior state so you can roll this back anytime.",
-      confirmLabel: "Apply",
+      title: t("optimize.check.applyTitle", { title: r.title }),
+      body: t("optimize.check.snapshotConfirmBody"),
+      confirmLabel: t("optimize.check.applyConfirmLabel"),
     });
     if (!ok) return;
     setApplyingId(r.id);
@@ -189,9 +201,9 @@ export default function Check({
       // Don't fail silently — a declined UAC prompt or a refused apply must TELL the user it
       // didn't happen, not leave them guessing until the next scan re-derives state.
       await confirm({
-        title: "Couldn't apply that fix",
+        title: t("optimize.check.applyFailedTitle"),
         body: String(e),
-        confirmLabel: "OK",
+        confirmLabel: t("optimize.check.ok"),
         acknowledge: true,
       });
     } finally {
@@ -203,9 +215,9 @@ export default function Check({
   // instead of "1 setting(s) — go to Optimize/Ledger". Re-applies via the snapshotted apply path.
   const applyReverted = async (rev: { rec_id: string; title: string }) => {
     const ok = await confirm({
-      title: `Turn "${rev.title}" back on?`,
-      body: "Compy snapshots the prior state so you can roll this back anytime.",
-      confirmLabel: "Turn it on",
+      title: t("optimize.check.turnOnTitle", { title: rev.title }),
+      body: t("optimize.check.snapshotConfirmBody"),
+      confirmLabel: t("optimize.check.turnItOn"),
     });
     if (!ok) return;
     setApplyingId(rev.rec_id);
@@ -216,9 +228,9 @@ export default function Check({
     } catch (e) {
       setApplyingId(null);
       await confirm({
-        title: "Couldn't turn that back on",
+        title: t("optimize.check.turnOnFailedTitle"),
         body: String(e),
-        confirmLabel: "OK",
+        confirmLabel: t("optimize.check.ok"),
         acknowledge: true,
       });
     } finally {
@@ -256,9 +268,9 @@ export default function Check({
     } catch (e) {
       setTogglingStartup(null);
       await confirm({
-        title: "Couldn't change that startup item",
+        title: t("optimize.check.startupChangeFailedTitle"),
         body: String(e),
-        confirmLabel: "OK",
+        confirmLabel: t("optimize.check.ok"),
         acknowledge: true,
       });
     } finally {
@@ -295,7 +307,7 @@ export default function Check({
   // (bathroom law: signposted at the moment of need, never a standing "try undervolting!" banner).
   // AMD-only in v1 (the guide is AMD). It's a named-place link to the Learn guide (deliberate travel),
   // not a one-click fix (doorknob) — Compy never tunes the voltage for you.
-  const tuningGuide = tuningGuideForVendor(vendor);
+  const tuningGuide = tuningGuideForVendorForLanguage(vendor, i18n.language);
   const hot = tuningGuide ? gpuRunningHot(sessions) : null;
 
   // Leftovers v1 — strictly ON-DEMAND (charter: no scan on launch, no background scanning).
@@ -310,7 +322,7 @@ export default function Check({
       setLeftovers(await invoke<LeftoversReport>("get_leftovers"));
     } catch {
       // Tell the user it didn't finish (was silently swallowed → looked identical to not-yet-run).
-      setLeftoversErr("Couldn't finish the past-tweaks check just now — try again in a moment.");
+      setLeftoversErr(t("optimize.check.leftoversFailedError"));
     } finally {
       setLeftoversBusy(false);
     }
@@ -318,7 +330,7 @@ export default function Check({
 
   // Driver freshness (read-only advisory) — only rendered when the caller wires hardware in,
   // so surfaces/tests that don't pass gpus see nothing rather than a spurious "unreadable".
-  const driver = gpus.length > 0 ? driverFreshness(gpus) : null;
+  const driver = gpus.length > 0 ? driverFreshness(gpus, t) : null;
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const copyDriverUrl = async (url: string) => {
     try {
@@ -362,7 +374,7 @@ export default function Check({
   // Exportable setup summary (A5) — a plain-English, paste-ready restatement of what this scan
   // measured, so the user can share their setup with a friend/forum. Read-only: it's clipboard-copy
   // of already-measured facts (no IPC, no launch, no mutation); buildSetupSummary never fabricates.
-  const setupSummary = buildSetupSummary(readiness, priorities);
+  const setupSummary = buildSetupSummary(readiness, priorities, t);
   const [copiedSummary, setCopiedSummary] = useState(false);
   const copySetupSummary = async () => {
     try {
@@ -378,23 +390,27 @@ export default function Check({
     <section className="check-root">
       <header className="check-head">
         <div>
-          {!embedded && <h2 className="check-title">Check</h2>}
+          {!embedded && <h2 className="check-title">{t("common.rail.check")}</h2>}
           {/* V2-4b: settled, the RoomShell verdict + confidence chips own the summary — this line
               would stack a third restatement. It still narrates the scan while one is running. */}
           {(!v2Ia || running) && (
           <p className="check-sub">
             {running
-              ? "Scanning your rig…"
+              ? t("optimize.check.scanningYourRig")
               : livingPreview
                 ? limiters.length === 0
-                  ? "Measured clean — every check came back right on this rig."
-                  : `${limiters.length} ${limiters.length === 1 ? "thing" : "things"} worth a look — the rest came back clean.`
-                : `${checks.length} checks · ${elapsed?.toFixed(1) ?? "—"}s · ${limiters.length} worth fixing`}
+                  ? t("optimize.check.measuredCleanRig")
+                  : t("optimize.check.livingWorthLook", { count: limiters.length })
+                : t("optimize.check.classicSummary", {
+                    checks: checks.length,
+                    elapsed: elapsed?.toFixed(1) ?? "—",
+                    limiters: limiters.length,
+                  })}
           </p>
           )}
         </div>
         <button className="check-rerun" disabled={running} onClick={() => rerun()}>
-          {running ? "Scanning…" : "Re-run check"}
+          {running ? t("optimize.check.scanningEllipsis") : t("optimize.check.rerunCheck")}
         </button>
       </header>
 
@@ -402,25 +418,29 @@ export default function Check({
           green/neutral/red read of where the rig stands. Reuses the counts already computed by
           get_game_readiness; each chip hidden when its count is 0 (a clean rig shows just "N ready"). */}
       {phase === "verdict" && readiness && (
-        <div className="check-confidence" role="status" aria-label="Readiness breakdown">
+        <div className="check-confidence" role="status" aria-label={t("optimize.check.readinessBreakdownAria")}>
           {/* "look good" not "ready" — the room verdict already uses "ready" for appliable
               FIXES; these chips count CHECKS. One word per meaning (V2-9 punch f), and the
               copy branches properly — never "1 need attention" (punch e). */}
           {readiness.ready_count > 0 && (
             <span className="cc-chip cc-chip-ready">
-              {readiness.ready_count} look{readiness.ready_count === 1 ? "s" : ""} good
+              {t("optimize.check.chipLooksGood", { count: readiness.ready_count })}
             </span>
           )}
           {readiness.advisory_count > 0 && (
-            <span className="cc-chip cc-chip-advisory">{readiness.advisory_count} advisory</span>
+            <span className="cc-chip cc-chip-advisory">
+              {t("optimize.check.chipAdvisory", { count: readiness.advisory_count })}
+            </span>
           )}
           {readiness.attention_count > 0 && (
             <span className="cc-chip cc-chip-attention">
-              {readiness.attention_count} need{readiness.attention_count === 1 ? "s" : ""} attention
+              {t("optimize.check.chipNeedsAttention", { count: readiness.attention_count })}
             </span>
           )}
           {readiness.unknown_count > 0 && (
-            <span className="cc-chip cc-chip-unknown">{readiness.unknown_count} unknown</span>
+            <span className="cc-chip cc-chip-unknown">
+              {t("optimize.check.chipUnknown", { count: readiness.unknown_count })}
+            </span>
           )}
         </div>
       )}
@@ -439,7 +459,7 @@ export default function Check({
               onClick={() => setShowAllChecks((o) => !o)}
               aria-expanded={showAllChecks}
             >
-              <span>All {readiness.checks.length} checks</span>
+              <span>{t("optimize.check.allChecks", { count: readiness.checks.length })}</span>
               <span>{showAllChecks ? "▾" : "▸"}</span>
             </button>
             {/* P5.5 (owner critique 2026-07-02): the expanded receipt is proper rows — status mark ·
@@ -452,7 +472,11 @@ export default function Check({
                   const result =
                     c.detail.trim() ||
                     c.value ||
-                    (v === "ok" ? "came back fine" : v === "fix" ? "worth fixing" : "couldn't read");
+                    (v === "ok"
+                      ? t("optimize.check.resultOk")
+                      : v === "fix"
+                        ? t("optimize.check.resultFix")
+                        : t("optimize.check.resultUnknown"));
                   return (
                     <li key={c.id} className={`check-all-row check-all-${v}`}>
                       <span className="check-all-mark" aria-hidden="true">
@@ -477,20 +501,20 @@ export default function Check({
           {hwChange?.changed && hwChange.changes.length > 0 && (
             <div className="check-drift check-hwchange" role="status">
               <div className="check-drift-head">
-                <span className="check-drift-label">Your hardware changed since last setup</span>
+                <span className="check-drift-label">{t("optimize.check.hwChangedLabel")}</span>
               </div>
               <p className="check-drift-detail">
                 {[...hwSummary.visible, ...(hwSummary.overflowLabel ? [hwSummary.overflowLabel] : [])].join(
                   " · ",
                 )}{" "}
-                — new parts can want different settings, so it's worth a re-check.
+                {t("optimize.check.hwChangeSuffix")}
               </p>
               <div className="check-drift-actions">
                 <button className="btn btn-small" disabled={running} onClick={() => rerun()}>
-                  Re-check my setup
+                  {t("optimize.check.recheckMySetup")}
                 </button>
                 <button className="btn btn-small" disabled={ackingHw} onClick={acknowledgeHwChange}>
-                  {ackingHw ? "Saving…" : "This is my rig now"}
+                  {ackingHw ? t("optimize.check.saving") : t("optimize.check.thisIsMyRigNow")}
                 </button>
               </div>
             </div>
@@ -507,7 +531,9 @@ export default function Check({
             <div key={d.id} className="check-drift">
               <div className="check-drift-head">
                 <span className="check-drift-label">{d.label}</span>
-                <span className="check-drift-when">changed since it was last good · noticed {ago(d.noticed_at)}</span>
+                <span className="check-drift-when">
+                  {t("optimize.check.driftChangedNoticed", { when: ago(d.noticed_at, t) })}
+                </span>
               </div>
               <p className="check-drift-detail">{d.detail}</p>
             </div>
@@ -517,14 +543,13 @@ export default function Check({
           {hot && tuningGuide && (
             <div className="check-nudge">
               <div className="check-nudge-main">
-                <span className="check-nudge-title">Your GPU's been running warm</span>
+                <span className="check-nudge-title">{t("optimize.check.gpuRunningWarmTitle")}</span>
                 <p className="check-nudge-reason">
-                  Peaked at {hot.peakC}°C across your last {hot.sessions} sessions — an undervolt
-                  usually drops that for free, cooler and quieter, with frames held.
+                  {t("optimize.check.gpuWarmReason", { peakC: hot.peakC, sessions: hot.sessions })}
                 </p>
               </div>
               <button className="check-nudge-link" onClick={() => onOpenLibrary(tuningGuide.id)}>
-                Cooler &amp; quieter — undervolt guide →
+                {t("optimize.check.coolerQuieterGuide")}
               </button>
             </div>
           )}
@@ -541,18 +566,20 @@ export default function Check({
           {driver && (!v2Ia || driver.tone === "advisory" || staleNics.length > 0) && (
             <div className={`check-driver check-driver-${driver.tone}`}>
               <div className="check-row-head">
-                <span className="check-row-title">Driver freshness</span>
+                <span className="check-row-title">{t("optimize.check.driverFreshnessTitle")}</span>
                 {(driver.tone === "advisory" || staleNics.length > 0) && (
-                  <span className="check-advisory">advisory</span>
+                  <span className="check-advisory">{t("optimize.check.advisoryBadge")}</span>
                 )}
               </div>
               <ul className="check-driver-list">
                 <li className="check-driver-row">
-                  <span className="check-driver-kind">GPU</span>
+                  <span className="check-driver-kind">{t("optimize.check.kindGpu")}</span>
                   <span className="check-driver-fact">{driver.message}</span>
                   {driver.tone === "advisory" && driver.url && (
                     <button className="check-driver-copy" onClick={() => copyDriverUrl(driver.url!)}>
-                      {copiedUrl === driver.url ? "Copied ✓" : `Copy ${driver.label} link`}
+                      {copiedUrl === driver.url
+                        ? t("optimize.check.copiedCheckmark")
+                        : t("optimize.check.copyLink", { label: driver.label })}
                     </button>
                   )}
                 </li>
@@ -562,17 +589,22 @@ export default function Check({
                   const support = NIC_SUPPORT[n.vendor];
                   return (
                     <li key={n.name} className="check-driver-row">
-                      <span className="check-driver-kind">Network</span>
+                      <span className="check-driver-kind">{t("optimize.check.kindNetwork")}</span>
                       <span className="check-driver-fact">
-                        Your {support?.label ?? "network"} driver ({n.name}) is {n.driver_age_days}{" "}
-                        days old.
+                        {t("optimize.check.nicDriverFact", {
+                          vendor: support?.label ?? t("optimize.check.networkFallback"),
+                          name: n.name,
+                          days: n.driver_age_days,
+                        })}
                       </span>
                       {support && (
                         <button
                           className="check-driver-copy"
                           onClick={() => copyDriverUrl(support.url)}
                         >
-                          {copiedUrl === support.url ? "Copied ✓" : `Copy ${support.label} link`}
+                          {copiedUrl === support.url
+                            ? t("optimize.check.copiedCheckmark")
+                            : t("optimize.check.copyLink", { label: support.label })}
                         </button>
                       )}
                     </li>
@@ -580,10 +612,7 @@ export default function Check({
                 })}
               </ul>
               {(driver.tone === "advisory" || staleNics.length > 0) && (
-                <p className="check-driver-note">
-                  Newer ones may be available — Compy can't know without going online, so that
-                  stays a maybe. Copy a link and check the vendor's page in your browser.
-                </p>
+                <p className="check-driver-note">{t("optimize.check.newerMayBeAvailable")}</p>
               )}
               {/* The quiet pass line claims "recent" ONLY when every NIC date was readable —
                   a partial read stays silent rather than overclaiming. */}
@@ -592,8 +621,7 @@ export default function Check({
                 staleNics.length === 0 &&
                 nicDrivers.every((n) => n.driver_age_days != null) && (
                   <p className="check-row-reason check-leftover-note">
-                    Network driver{nicDrivers.length === 1 ? " is" : "s are"} recent too — nothing
-                    worth chasing.
+                    {t("optimize.check.networkDriverRecent", { count: nicDrivers.length })}
                   </p>
                 )}
             </div>
@@ -604,13 +632,11 @@ export default function Check({
               false while the rec rows below still offer changes. */}
           {v2Ia && limiters.length === 0 ? null : (
           <>
-          <div className="check-section-label">Biggest limiters</div>
+          <div className="check-section-label">{t("optimize.check.biggestLimiters")}</div>
           {limiters.length === 0 ? (
             // Deliberately NOT "measured clean" — the scan subtitle above already says it (the
             // same double-saying the P5 taste catch flagged on Home). One phrase, one owner.
-            <p className="check-clear">
-              No limiter stands out on this rig — nothing to change today.
-            </p>
+            <p className="check-clear">{t("optimize.check.noLimiterStandsOut")}</p>
           ) : (
             <ul className="check-list">
               {limiters.map((lim) => {
@@ -623,16 +649,16 @@ export default function Check({
                         <div className="check-row-head">
                           <span className="check-row-title">
                             {reverted.length === 1
-                              ? `“${reverted[0].title}” turned itself back off`
-                              : `${reverted.length} settings you applied turned back off`}
+                              ? t("optimize.check.revertedSingleTitle", { title: reverted[0].title })
+                              : t("optimize.check.revertedMultiCount", { count: reverted.length })}
                           </span>
                         </div>
                         <p className="check-row-reason">
                           {reverted.length === 1
-                            ? "You turned this on with Compy, but something outside Compy switched it back. Turn it back on right here — or leave it, your call."
-                            : `You turned these on with Compy, but they're off now: ${reverted
-                                .map((r) => r.title)
-                                .join(", ")}. Turn them back on right here.`}
+                            ? t("optimize.check.revertedReasonSingle")
+                            : t("optimize.check.revertedReasonMulti", {
+                                titles: reverted.map((r) => r.title).join(", "),
+                              })}
                         </p>
                         <div className="check-drift-actions">
                           {reverted.map((rev) => (
@@ -643,19 +669,15 @@ export default function Check({
                               onClick={() => applyReverted(rev)}
                             >
                               {applyingId === rev.rec_id
-                                ? "Turning on…"
+                                ? t("optimize.check.turningOnEllipsis")
                                 : reverted.length === 1
-                                  ? "Turn it back on"
-                                  : `Turn “${rev.title}” on`}
+                                  ? t("optimize.check.turnItBackOn")
+                                  : t("optimize.check.turnTitleOn", { title: rev.title })}
                             </button>
                           ))}
                         </div>
                         {gameModeDrifted && (
-                          <p className="check-drift-note">
-                            Heads-up: Game Mode keeps switching off because your recording software
-                            (AMD Adrenalin) resets it at every restart — turning it on works, but it
-                            won't stick.
-                          </p>
+                          <p className="check-drift-note">{t("optimize.check.gameModeDriftedNote")}</p>
                         )}
                       </div>
                     </li>
@@ -669,13 +691,11 @@ export default function Check({
                       <div className="check-row-main">
                         <div className="check-row-head">
                           <span className="check-row-title">{lim.title}</span>
-                          <span className="check-conf">{cap(lim.confidence)} confidence</span>
+                          <span className="check-conf">
+                            {t("optimize.check.confidenceTag", { level: cap(lim.confidence) })}
+                          </span>
                         </div>
-                        <p className="check-row-reason">
-                          These launch with Windows and use memory and CPU before a game ever opens.
-                          Turn off the ones you don't need — nothing gets uninstalled, they just stop
-                          auto-starting. Reversible anytime.
-                        </p>
+                        <p className="check-row-reason">{t("optimize.check.startupLimiterReason")}</p>
                         {enabled.length > 0 && (
                           <ul className="check-startup-list">
                             {enabled.map((s) => (
@@ -689,7 +709,9 @@ export default function Check({
                                   disabled={togglingStartup !== null}
                                   onClick={() => disableStartup(s)}
                                 >
-                                  {togglingStartup === s.name ? "Turning off…" : "Turn off at startup"}
+                                  {togglingStartup === s.name
+                                    ? t("optimize.check.turningOffEllipsis")
+                                    : t("optimize.check.turnOffAtStartup")}
                                 </button>
                               </li>
                             ))}
@@ -704,16 +726,18 @@ export default function Check({
                     <div className="check-row-main">
                       <div className="check-row-head">
                         <span className="check-row-title">{lim.title}</span>
-                        <span className="check-conf">{cap(lim.confidence)} confidence</span>
+                        <span className="check-conf">
+                          {t("optimize.check.confidenceTag", { level: cap(lim.confidence) })}
+                        </span>
                       </div>
                       <p className="check-row-reason">{lim.reason}</p>
                       {/* Advisory checks that need action outside Compy finally show the way
                           (walkthroughs §3) — the readiness check is no longer a dead "verify it yourself". */}
-                      {!canApply(lim) && walkthroughForKey(lim.linked ?? lim.id) && (
+                      {!canApply(lim) && walkthroughForKeyForLanguage(lim.linked ?? lim.id, i18n.language) && (
                         <details className="fix-walkthrough">
-                          <summary>Show me the way</summary>
+                          <summary>{t("optimize.check.showMeTheWay")}</summary>
                           <Walkthrough
-                            walkthrough={walkthroughForKey(lim.linked ?? lim.id)!}
+                            walkthrough={walkthroughForKeyForLanguage(lim.linked ?? lim.id, i18n.language)!}
                             vendor={vendor}
                           />
                         </details>
@@ -724,10 +748,10 @@ export default function Check({
                         applied={false}
                         busy={applyingId === (lim.linked ?? lim.id)}
                         onToggle={() => applyLimiter(lim)}
-                        ariaLabel={`Apply ${lim.title}`}
+                        ariaLabel={t("optimize.check.applyAriaLabel", { title: lim.title })}
                       />
                     ) : (
-                      <span className="check-advisory">advisory</span>
+                      <span className="check-advisory">{t("optimize.check.advisoryBadge")}</span>
                     )}
                   </li>
                 );
@@ -744,7 +768,7 @@ export default function Check({
               OptimizeV2 renders its labeled-early card BELOW the action groups instead. */}
           {!v2Ia && priorities?.upgrade_path && (
             <div className="check-upgrade">
-              <div className="check-section-label">Upgrade path (advisory)</div>
+              <div className="check-section-label">{t("optimize.check.upgradePathTitle")}</div>
               {priorities.upgrade_path.items.map((item) => (
                 <div key={item.kind} className="check-upgrade-item">
                   <span className="check-upgrade-title">{item.title}</span>
@@ -754,12 +778,12 @@ export default function Check({
                       <button
                         key={l.retailer}
                         className="btn btn-small"
-                        title={`Copies a plain ${l.retailer} search link to open in your browser. No affiliate tag today.`}
+                        title={t("optimize.check.copyRetailLinkTitle", { retailer: l.retailer })}
                         onClick={() => copyRetailLink(`${item.kind}-${l.retailer}`, l.url)}
                       >
                         {copiedRetail === `${item.kind}-${l.retailer}`
-                          ? "Copied!"
-                          : `Copy ${l.retailer} search link`}
+                          ? t("optimize.check.copiedExclaim")
+                          : t("optimize.check.copyRetailSearchLink", { retailer: l.retailer })}
                       </button>
                     ))}
                   </div>
@@ -772,8 +796,7 @@ export default function Check({
                   swap point. Swap back to {priorities.upgrade_path.disclosure} in the SAME commit
                   that arms tags — the Check guard test pins this. */}
               <p className="check-upgrade-disclosure">
-                Compy earns nothing from these links today — they're plain searches with no
-                affiliate tag. What you buy never affects verdicts.
+                {t("optimize.check.upgradeDisclosure")}
               </p>
             </div>
           )}
@@ -789,7 +812,7 @@ export default function Check({
                 onClick={() => setFineOpen((o) => !o)}
                 aria-expanded={fineOpen}
               >
-                <span>{alreadyFine.length} measured fine — confirmed right on this rig</span>
+                <span>{t("optimize.check.measuredFineCount", { count: alreadyFine.length })}</span>
                 <span>{fineOpen ? "▾" : "▸"}</span>
               </button>
               {fineOpen && (
@@ -814,7 +837,7 @@ export default function Check({
                 onClick={() => setNotWorthOpen((o) => !o)}
                 aria-expanded={notWorthOpen}
               >
-                <span>{notWorth.length} not worth touching</span>
+                <span>{t("optimize.check.notWorthCount", { count: notWorth.length })}</span>
                 <span aria-hidden="true">{notWorthOpen ? "▾" : "▸"}</span>
               </button>
               {notWorthOpen && (
@@ -865,7 +888,7 @@ export default function Check({
                 }}
               >
                 <span className="check-section-label" style={{ margin: 0 }}>
-                  Setup summary
+                  {t("optimize.check.setupSummaryTitle")}
                 </span>
                 <span style={{ display: "inline-flex", gap: 8 }}>
                   {/* Export lives HERE — with the proof — instead of the app header. Same
@@ -877,11 +900,11 @@ export default function Check({
                       onClick={onExport}
                       disabled={exporting}
                     >
-                      {exporting ? "Exporting…" : "Export full report"}
+                      {exporting ? t("optimize.check.exportingEllipsis") : t("optimize.check.exportFullReport")}
                     </button>
                   )}
                   <button type="button" className="btn btn-small" onClick={copySetupSummary}>
-                    {copiedSummary ? "Copied ✓" : "Copy summary"}
+                    {copiedSummary ? t("optimize.check.copiedCheckmark") : t("optimize.check.copySummary")}
                   </button>
                 </span>
               </div>
@@ -889,10 +912,10 @@ export default function Check({
                 className="check-row-reason"
                 style={{ margin: "6px 0 10px", color: "var(--ix-text-2)" }}
               >
-                A plain-English recap of what this check measured — copy it to share your setup.
+                {t("optimize.check.setupSummaryBlurb")}
               </p>
               <pre
-                aria-label="Setup summary text"
+                aria-label={t("optimize.check.setupSummaryTextAria")}
                 style={{
                   margin: 0,
                   padding: "10px 12px",
@@ -927,14 +950,13 @@ export default function Check({
           live-UAC QA; this surface doesn't call it yet — the restore UI is its own later train. */}
       <div className="check-leftovers">
         <div className="check-section-label">
-          Optimization Cleanup <WhatsThis id="leftovers" onOpen={onOpenLibrary} />
+          {t("optimize.check.optimizationCleanupTitle")} <WhatsThis id="leftovers" onOpen={onOpenLibrary} />
         </div>
         <p className="check-leftovers-blurb">
-          Tweaks an old guide or optimizer tool may have left on this PC before Compy existed —
-          found, named, and explained. Read-only — checking changes nothing.
+          {t("optimize.check.leftoversBlurb")}
         </p>
         <button className="check-leftovers-run" disabled={leftoversBusy} onClick={runLeftovers}>
-          {leftoversBusy ? "Checking…" : "Check this PC for old tweaks"}
+          {leftoversBusy ? t("optimize.check.leftoversCheckingEllipsis") : t("optimize.check.checkThisPcForOldTweaks")}
         </button>
         {leftoversErr && (
           <p className="check-leftovers-clean" role="status">
@@ -944,34 +966,43 @@ export default function Check({
         {leftovers && leftovers.findings.length === 0 && (
           <p className="check-leftovers-clean" role="status">
             {leftovers.unavailable.length === 0
-              ? "Nothing to clean up — your Windows config matches stock where it matters."
-              : `Nothing to clean up in the ${leftovers.checked} setting${
-                  leftovers.checked === 1 ? "" : "s"
-                } we could read — ${leftovers.unavailable.length} couldn't be read, so nothing is claimed about ${
-                  leftovers.unavailable.length === 1 ? "it" : "them"
-                }.`}
+              ? t("optimize.check.leftoversAllClean")
+              : t("optimize.check.leftoversPartialClean", {
+                  count: leftovers.checked,
+                  unavailable: leftovers.unavailable.length,
+                  itemWord: t(
+                    leftovers.unavailable.length === 1
+                      ? "optimize.check.pronounIt"
+                      : "optimize.check.pronounThem",
+                  ),
+                })}
           </p>
         )}
         {leftovers && leftovers.findings.length > 0 && (
-          <ul className="check-list" aria-label="Old tweaks found on this PC">
+          <ul className="check-list" aria-label={t("optimize.check.oldTweaksFoundAria")}>
             {leftovers.findings.map((f) => (
               <li key={f.id} className="check-row check-row-info check-leftover-row">
                 <div className="check-row-main">
                   <div className="check-row-head">
-                    <span className="check-row-title">Past tweak · {f.title}</span>
+                    <span className="check-row-title">{t("optimize.check.pastTweakPrefix", { title: f.title })}</span>
                     <WhatsThis id={LEFTOVER_LEARN_ID[f.id] ?? f.id} onOpen={onOpenLibrary} />
-                    <span className="check-advisory">advisory</span>
+                    <span className="check-advisory">{t("optimize.check.advisoryBadge")}</span>
                   </div>
                   <p className="check-row-reason">
-                    Found: {f.current_value} · Windows default: {f.stock_default}
+                    {t("optimize.check.foundVsDefault", {
+                      current: f.current_value,
+                      stockDefault: f.stock_default,
+                    })}
                   </p>
                   <p className="check-row-reason">
                     {f.mechanism_cost} {f.verdict}
                   </p>
                   <p className="check-row-reason check-leftover-note">
-                    Matches: {f.matched_tweak}. {f.restore_note}
-                    {f.uncertain_source &&
-                      " If you set this on purpose, it's yours to keep — Compy can't tell who set it."}
+                    {t("optimize.check.matchesPrefix")}
+                    {f.matched_tweak}
+                    {t("optimize.check.matchesMid")}
+                    {f.restore_note}
+                    {f.uncertain_source && t("optimize.check.uncertainSourceNote")}
                   </p>
                 </div>
               </li>
@@ -987,20 +1018,22 @@ export default function Check({
         {leftovers && leftovers.unavailable.length > 0 && (
           <div className="check-leftover-unchecked">
             <p className="check-unchecked-head">
-              {leftovers.unavailable.length === 1
-                ? "1 setting couldn't be read this pass — no guesses made about it:"
-                : `${leftovers.unavailable.length} settings couldn't be read this pass — no guesses made about them:`}
+              {t("optimize.check.uncheckedHead", { count: leftovers.unavailable.length })}
             </p>
             <ul className="check-unchecked-list">
               {leftovers.unavailable.map((u) => (
                 <li key={u.id}>
-                  Couldn't check {u.title} — {u.reason}.
+                  {t("optimize.check.couldntCheckPre")}
+                  {u.title}
+                  {t("optimize.check.couldntCheckMid")}
+                  {u.reason}
+                  {t("optimize.check.couldntCheckPost")}
                 </li>
               ))}
             </ul>
             {leftovers.unavailable.some((u) => /admin/i.test(u.reason)) && (
               <p className="check-unchecked-note">
-                Reading those needs admin rights — Compy doesn't ask for them just to look.
+                {t("optimize.check.adminRightsNote")}
               </p>
             )}
           </div>

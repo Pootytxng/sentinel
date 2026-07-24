@@ -1,4 +1,6 @@
 import { useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import "../i18n";
 import Lab from "./Lab";
 import { RoomShell } from "../design/room-shell";
 import { useReducedMotion } from "../design/use-motion";
@@ -43,6 +45,7 @@ export function LabV2({
   // change's win from a stack's combined effect (panel-review brief 2026-07-15 §2).
   changes?: AppliedChange[];
 }) {
+  const { t } = useTranslation();
   const reduced = useReducedMotion();
   const hud = useHudFlag();
   // Seeded from the probe cache (same key Lab reads) so a re-visit paints the verdict
@@ -50,7 +53,7 @@ export function LabV2({
   const [bench, setBench] = useState<BenchmarkState | null>(
     () => peekProbe("benchmark-state") ?? null,
   );
-  const verdict = labVerdict(bench, changes);
+  const verdict = labVerdict(bench, changes, t);
 
   return (
     <RoomShell
@@ -77,8 +80,8 @@ export function LabV2({
         // stationReading source). No LED: the instruments below own their own states.
         return (
           <>
-            <HudMasthead label="Test bench" />
-            <span className="hud-headline">Lab</span>
+            <HudMasthead label={t("lab.labV2.masthead")} />
+            <span className="hud-headline">{t("common.rail.lab", "Lab")}</span>
           </>
         );
       })()}

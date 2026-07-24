@@ -1,12 +1,15 @@
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import type { SessionSummary } from "../types";
 import type { TuningGuide } from "../data/tuning-guides";
 import type { TuningMeasurement, TuningEvidence } from "../data/tuning-measure";
 import { Term } from "../design/Term";
 import { Walkthrough } from "../design/Walkthrough";
-import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
+import { walkthroughForKeyForLanguage, type GpuVendor } from "./walkthroughs";
 import { prettyGameName } from "./game-name";
 import { TuningGuideBody } from "./TuningGuide";
 import { TuningVerdictCard } from "./TuningVerdict";
+import "../i18n";
 import "./TuningInstrument.css";
 
 // The Lab "Tuning" instrument body (spec 2026-06-08) — the guide (shared single source) PLUS the
@@ -16,11 +19,11 @@ import "./TuningInstrument.css";
 // comparison) — zero new IPC. Presentational: the measurement is computed by the shared
 // honest-measurement module and passed in, so this can't drift from the Play debrief's verdict.
 
-function smoothness(s: SessionSummary): string {
+function smoothness(s: SessionSummary, t: TFunction): string {
   const ratio = s.avg_fps > 0 ? s.low1_fps_est / s.avg_fps : 1;
-  if (ratio >= 0.75) return "smooth";
-  if (ratio >= 0.55) return "some dips";
-  return "rough";
+  if (ratio >= 0.75) return t("blackbook.tuningInstrument.smoothness.smooth");
+  if (ratio >= 0.55) return t("blackbook.tuningInstrument.smoothness.someDips");
+  return t("blackbook.tuningInstrument.smoothness.rough");
 }
 
 export function TuningInstrument({
@@ -39,63 +42,65 @@ export function TuningInstrument({
    *  not-for-this-rig state below — the guide itself stays free in Learn. */
   evidence: TuningEvidence;
 }) {
-  const walkthrough = walkthroughForKey(guide.id);
+  const { t, i18n } = useTranslation();
+  const walkthrough = walkthroughForKeyForLanguage(guide.id, i18n.language);
 
   return (
     <div className="tg-instrument">
       {evidence.qualifies ? (
         <>
           <p className="tg-evidence">
-            <span className="tg-evidence-mark">Why this rig qualifies:</span> measured here —{" "}
+            <span className="tg-evidence-mark">{t("blackbook.tuningInstrument.qualifiesMark")}</span>
+            {t("blackbook.tuningInstrument.qualifiesConnector")}
             {evidence.reason}.
           </p>
           <TuningGuideBody guide={guide} />
           {walkthrough && (
             <details className="tg-walkthrough">
-              <summary>Show me the way</summary>
+              <summary>{t("blackbook.tuningInstrument.showMeTheWay")}</summary>
               <Walkthrough walkthrough={walkthrough} vendor={vendor} />
             </details>
           )}
         </>
       ) : (
         <p className="tg-not-for-rig">
-          <span className="tg-evidence-mark">Not for this rig right now:</span> {evidence.reason}.
-          Compy only suggests tuning when your own sessions show it would help — the full guide
-          stays in the Blackbook (search “undervolt”) if you're curious.
+          <span className="tg-evidence-mark">{t("blackbook.tuningInstrument.notForRigMark")}</span>{" "}
+          {evidence.reason}
+          {t("blackbook.tuningInstrument.notForRigRest")}
         </p>
       )}
 
       <div className="tg-readout">
-        <div className="tg-readout-head">Stability &amp; thermal</div>
+        <div className="tg-readout-head">{t("blackbook.tuningInstrument.readoutHead")}</div>
 
         {measurement ? (
           <TuningVerdictCard m={measurement} />
         ) : (
-          <p className="tg-readout-empty">
-            No tune measured yet. Undervolt in Adrenalin, then arm a baseline from a Monitor debrief —
-            Compy measures whether temps dropped and frames held, judged over time.
-          </p>
+          <p className="tg-readout-empty">{t("blackbook.tuningInstrument.readoutEmpty")}</p>
         )}
 
         {recentSessions.length > 0 && (
           <div className="tg-recent">
-            <div className="tg-recent-label">Recent sessions — peak temp &amp; consistency</div>
+            <div className="tg-recent-label">{t("blackbook.tuningInstrument.recentLabel")}</div>
             <ul className="tg-recent-list">
               {recentSessions.map((s, i) => (
                 <li key={`${s.started_at}-${i}`} className="tg-recent-row">
-                  <span className="tg-recent-game">{prettyGameName(s.process_name) || "Unknown"}</span>
+                  <span className="tg-recent-game">
+                    {prettyGameName(s.process_name) || t("blackbook.tuningInstrument.unknownGame")}
+                  </span>
                   <span className="tg-recent-temp">
                     {s.peak_gpu_temp_c == null ? "— °C" : `${s.peak_gpu_temp_c}°C`}
                   </span>
-                  <span className="tg-recent-smooth">{smoothness(s)}</span>
+                  <span className="tg-recent-smooth">{smoothness(s, t)}</span>
                 </li>
               ))}
             </ul>
           </div>
         )}
         <p className="tg-readout-foot">
-          A gauge, not a control — Compy never touches your voltage.{" "}
-          <Term id="etw">ETW</Term> + GPU sensors, external · no injection.
+          {t("blackbook.tuningInstrument.gaugeFoot")}
+          <Term id="etw">ETW</Term>
+          {t("blackbook.tuningInstrument.gaugeFootSuffix")}
         </p>
       </div>
     </div>

@@ -1,7 +1,9 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import {
-  KNOWLEDGE,
-  KNOWLEDGE_BY_ID,
+  knowledgeForLanguage,
+  knowledgeByIdForLanguage,
   relatedIds,
   formatEntryDate,
   supersessionChain,
@@ -29,9 +31,10 @@ import {
 import { Icon } from "../design";
 import { useReducedMotion } from "../design/use-motion";
 import { Walkthrough } from "../design/Walkthrough";
-import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
-import { TUNING_GUIDE_BY_ID } from "../data/tuning-guides";
+import { walkthroughForKeyForLanguage, type GpuVendor } from "./walkthroughs";
+import { tuningGuideByIdForLanguage } from "../data/tuning-guides";
 import { TuningGuideBody } from "./TuningGuide";
+import "../i18n";
 import "./Learn.css";
 
 // Learn — the Instrument reskin of the knowledge library (Library + Guide Autopsy). RESKIN ONLY:
@@ -43,22 +46,9 @@ import "./Learn.css";
 type Filter = "all" | KnowledgeType;
 type Mode = "browse" | "autopsy";
 
-const TYPE_LABEL: Record<KnowledgeType, string> = {
-  tweak: "Tweak",
-  term: "Term",
-  trick: "Scam pattern",
-  guide: "Guide",
-};
-
-// One-line scent for each browse category bar (V2-9 punch i: title + count alone left the bars
-// tall and empty — a reader couldn't tell a Term from a Trick without opening one). Descriptions
-// state what the entries ARE; the grading claims stay with the entries themselves.
-const TYPE_DESC: Record<KnowledgeType, string> = {
-  guide: "Step-by-step setups, fact-checked claim by claim",
-  tweak: "Single settings, each graded Real, Placebo, or Risky",
-  term: "The jargon, translated into plain English",
-  trick: "The tricks fake optimizers pull — spot them before they cost you",
-};
+// Type labels (chip/badge text) and one-line category descriptions are resolved via
+// t("blackbook.learn.typeLabel.*" / "typeLabelPlural.*" / "typeDesc.*") at each call site, keyed
+// by the same KnowledgeType strings (module scope can't call the translation hook).
 
 // Verdict chip labels + their meanings come from the shared verdict-glossary (single source — the
 // visible "How we grade" key, these chips' hover tooltips, and the Learn entry all read the same
@@ -68,15 +58,16 @@ const TYPE_DESC: Record<KnowledgeType, string> = {
 // behind hover. Rendered at the top of browse (giving the verdict filter chips meaning), above the
 // Autopsy claims, and AS the "How Compy grades things" entry's body. One component, one source.
 function GradeKey() {
+  const { t } = useTranslation();
   return (
-    <div className="lx-gradekey" role="group" aria-label="How we grade">
-      <span className="lx-gradekey-title">How we grade</span>
+    <div className="lx-gradekey" role="group" aria-label={t("blackbook.learn.howWeGrade")}>
+      <span className="lx-gradekey-title">{t("blackbook.learn.howWeGrade")}</span>
       {VERDICT_GLOSSARY.map((r) => (
         <div key={r.verdict} className="lx-gradekey-row">
-          <span className={`lx-verdict lx-verdict-${r.verdict}`} title={r.definition}>
-            {r.chip}
+          <span className={`lx-verdict lx-verdict-${r.verdict}`} title={verdictDefinition(r.verdict, t)}>
+            {verdictChip(r.verdict, t)}
           </span>
-          <span className="lx-gradekey-def">{r.definition}</span>
+          <span className="lx-gradekey-def">{verdictDefinition(r.verdict, t)}</span>
         </div>
       ))}
     </div>
@@ -99,6 +90,7 @@ function readGradeKeySeen(): boolean {
 // Browse-mode "How we grade" key: full on first view, a re-openable toggle thereafter. The "seen"
 // flag is written once the full key has been shown, so later visits open collapsed.
 function CollapsibleGradeKey() {
+  const { t } = useTranslation();
   const [seen] = useState(readGradeKeySeen);
   const [open, setOpen] = useState(!seen);
   useEffect(() => {
@@ -118,7 +110,7 @@ function CollapsibleGradeKey() {
             aria-expanded={true}
             onClick={() => setOpen(false)}
           >
-            How we grade
+            {t("blackbook.learn.howWeGrade")}
             <span className="cmp-door-chevron" aria-hidden="true">▸</span>
           </button>
         )}
@@ -132,23 +124,20 @@ function CollapsibleGradeKey() {
       aria-expanded={false}
       onClick={() => setOpen(true)}
     >
-      How we grade
+      {t("blackbook.learn.howWeGrade")}
       <span className="cmp-door-chevron" aria-hidden="true">▸</span>
     </button>
   );
 }
 
-const GOLDEN_RULES = "One change at a time · restore point first · measure, don't vibe";
+// The golden-rules tip line preceding a guide's steps — resolved via
+// t("blackbook.learn.goldenRules") at its one call site (entryTypeBody).
 
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "tweak", label: "Tweaks" },
-  { key: "term", label: "Terms" },
-  { key: "trick", label: "Tricks" },
-  { key: "guide", label: "Guides" },
-];
+const FILTER_KEYS: Filter[] = ["all", "tweak", "term", "trick", "guide"];
 
-// Cycling placeholder examples (spec §2). Static first example under prefers-reduced-motion.
+// Cycling placeholder examples (spec §2). Static first example under prefers-reduced-motion. Kept
+// in English deliberately — these are literal example search terms from the (English) knowledge
+// corpus, not sentence-level UI chrome; see i18n handoff notes.
 const PLACEHOLDERS = ['xmp', 'frame gen', 'tiny11', 'deep scan', '1% lows'];
 
 // §5 de-overload — a one-line summary for the COLLAPSED row (the full body shows on expand).
@@ -166,11 +155,7 @@ function oneLiner(entry: KnowledgeEntry): string {
 }
 
 // §5 verdict filter chips — narrow tweaks by our verdict, alongside the type filters + search.
-const VERDICT_FILTERS: { key: TweakVerdict; label: string }[] = [
-  { key: "real", label: "Real" },
-  { key: "placebo", label: "Placebo" },
-  { key: "risky", label: "Risky" },
-];
+const VERDICT_FILTER_KEYS: TweakVerdict[] = ["real", "placebo", "risky"];
 
 // §5 category order for the collapsed browse sections (guides first — they're the "start here" doers).
 const CATEGORY_ORDER: KnowledgeType[] = ["guide", "tweak", "term", "trick"];
@@ -189,6 +174,7 @@ function detectUrlPaste(text: string): "youtube" | "webpage" | null {
 }
 
 function EntryBody({ entry, onNavigate }: { entry: KnowledgeEntry; onNavigate: (id: string) => void }) {
+  const { t, i18n } = useTranslation();
   // The "How Compy grades things" entry renders the visible key as its body (same single source).
   if (entry.id === VERDICT_GLOSSARY_ENTRY_ID && entry.type === "term") {
     return (
@@ -200,12 +186,12 @@ function EntryBody({ entry, onNavigate }: { entry: KnowledgeEntry; onNavigate: (
   }
   // Tuning guides render their rich advisory body (goal/tool/steps/range/discretion/undo) from the
   // shared single source — same component the Lab Tuning instrument uses, so they can't drift.
-  const tuning = TUNING_GUIDE_BY_ID.get(entry.id);
+  const tuning = tuningGuideByIdForLanguage(i18n.language).get(entry.id);
   if (tuning) return <TuningGuideBody guide={tuning} />;
   return (
     <>
       {entry.status && <SupersededNote entry={entry} onNavigate={onNavigate} />}
-      {entryTypeBody(entry)}
+      {entryTypeBody(entry, t)}
     </>
   );
 }
@@ -222,16 +208,19 @@ function SupersededNote({
   entry: KnowledgeEntry;
   onNavigate: (id: string) => void;
 }) {
+  const { t, i18n } = useTranslation();
   const chain =
-    entry.status === "superseded" ? supersessionChain(entry, KNOWLEDGE_BY_ID) : [];
+    entry.status === "superseded" ? supersessionChain(entry, knowledgeByIdForLanguage(i18n.language)) : [];
   const target = chain.length > 0 ? chain[chain.length - 1] : undefined;
+  const arrow = t("blackbook.learn.superseded.arrow");
   return (
     <p className="lx-superseded" role="note">
       {entry.status === "superseded" ? (
         <>
-          ⚠ Superseded{target ? (
+          {t("blackbook.learn.superseded.warning")}
+          {target ? (
             <>
-              {" "}— see{" "}
+              {t("blackbook.learn.superseded.seeLinkPre")}
               <button
                 type="button"
                 className="lx-superseded-link"
@@ -240,21 +229,25 @@ function SupersededNote({
                 {target.name}
               </button>
             </>
-          ) : null}. Kept for reference; the current guidance has moved on.
+          ) : null}
+          {t("blackbook.learn.superseded.afterLink")}
           {chain.length > 1 && (
             <span className="lx-superseded-chain">
-              Replaced in steps: {entry.name} → {chain.map((c) => c.name).join(" → ")}
+              {t("blackbook.learn.superseded.replacedSteps")}
+              {entry.name}
+              {arrow}
+              {chain.map((c) => c.name).join(arrow)}
             </span>
           )}
         </>
       ) : (
-        <>⚠ Outdated — kept for reference; this guidance is no longer current.</>
+        <>{t("blackbook.learn.superseded.outdated")}</>
       )}
     </p>
   );
 }
 
-function entryTypeBody(entry: KnowledgeEntry) {
+function entryTypeBody(entry: KnowledgeEntry, t: TFunction) {
   switch (entry.type) {
     case "tweak":
       return (
@@ -262,9 +255,9 @@ function entryTypeBody(entry: KnowledgeEntry) {
           <div className="lx-row">
             <span
               className={`lx-verdict lx-verdict-${entry.verdict}`}
-              title={verdictDefinition(entry.verdict)}
+              title={verdictDefinition(entry.verdict, t)}
             >
-              {verdictChip(entry.verdict)}
+              {verdictChip(entry.verdict, t)}
             </span>
           </div>
           <p className="lx-what">{entry.what}</p>
@@ -283,17 +276,17 @@ function entryTypeBody(entry: KnowledgeEntry) {
         <>
           <p className="lx-what">{entry.pattern}</p>
           <p className="lx-line">
-            <b>Spot it:</b> {entry.tell}
+            <b>{t("blackbook.learn.entryTypeBody.spotIt")}</b> {entry.tell}
           </p>
           <p className="lx-line lx-honest">
-            <b>The honest version:</b> {entry.honest_version}
+            <b>{t("blackbook.learn.entryTypeBody.honestVersion")}</b> {entry.honest_version}
           </p>
         </>
       );
     case "guide":
       return (
         <>
-          <div className="lx-golden">{GOLDEN_RULES}</div>
+          <div className="lx-golden">{t("blackbook.learn.goldenRules")}</div>
           <p className="lx-what">{entry.goal}</p>
           <ol className="lx-steps">
             {entry.steps.map((s, i) => (
@@ -301,16 +294,18 @@ function entryTypeBody(entry: KnowledgeEntry) {
             ))}
           </ol>
           <p className="lx-line lx-undo">
-            <b>Undo:</b> {entry.undo}
+            <b>{t("blackbook.learn.entryTypeBody.undo")}</b> {entry.undo}
           </p>
         </>
       );
   }
 }
 
-// Per-type pill label (matches TYPE_LABEL but "guide" reads "Guide · safe" per the mock).
-function typePill(type: KnowledgeType): string {
-  return type === "guide" ? "Guide · safe" : TYPE_LABEL[type];
+// Per-type pill label (matches typeLabel but "guide" reads "Guide · safe" per the mock).
+function typePill(type: KnowledgeType, t: TFunction): string {
+  return type === "guide"
+    ? t("blackbook.learn.guideSafePill")
+    : t(`blackbook.learn.typeLabel.${type}`);
 }
 
 function EntryCard({
@@ -326,25 +321,29 @@ function EntryCard({
   registerRef: (el: HTMLDivElement | null) => void;
   vendor: GpuVendor;
 }) {
+  const { t, i18n } = useTranslation();
   // §5 de-overload: rows are COMPRESSED to name + kind + one-liner and expand IN PLACE (the same
   // expand grammar the autopsy uses). Deep-linked entries open by default. Zero copy changes.
   const [open, setOpen] = useState(defaultOpen);
-  const related = relatedIds(entry, KNOWLEDGE);
-  const walkthrough = walkthroughForKey(entry.id);
+  const related = relatedIds(entry, knowledgeForLanguage(i18n.language));
+  const walkthrough = walkthroughForKeyForLanguage(entry.id, i18n.language);
   // Tweak cards take the verdict color on their edge; other types take their kind color.
   const accent = entry.type === "tweak" ? `lx-card-${entry.verdict}` : `lx-card-${entry.type}`;
   return (
     <div ref={registerRef} className={`lx-card ${accent} ${open ? "lx-card-open" : ""}`} data-kl-id={entry.id}>
       <button className="lx-card-head cmp-door" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <span className="lx-name">{entry.name}</span>
-        <span className={`lx-typepill lx-typepill-${entry.type}`}>{typePill(entry.type)}</span>
+        <span className={`lx-typepill lx-typepill-${entry.type}`}>{typePill(entry.type, t)}</span>
         {/* Hardware applicability — small honest "fits these rigs" tags; absent = applies to every rig.
             Reuses the existing typepill style (no new CSS) so it reads as a quiet metadata pill. */}
-        {entry.applies?.map((a) => (
-          <span key={a} className="lx-typepill" title={`Relevant to ${APPLICABILITY_LABELS[a]} rigs`}>
-            {APPLICABILITY_LABELS[a]}
-          </span>
-        ))}
+        {entry.applies?.map((a) => {
+          const label = t(`blackbook.learn.applicabilityLabels.${a}`, APPLICABILITY_LABELS[a]);
+          return (
+            <span key={a} className="lx-typepill" title={t("blackbook.learn.applicableTitle", { label })}>
+              {label}
+            </span>
+          );
+        })}
         {!open && <span className="lx-oneliner">{oneLiner(entry)}</span>}
         <span className="cmp-door-chevron cmp-door-chevron-end" aria-hidden="true">▸</span>
       </button>
@@ -353,16 +352,16 @@ function EntryCard({
           <EntryBody entry={entry} onNavigate={onNavigate} />
           {walkthrough && (
             <details className="lx-walkthrough">
-              <summary>Show me the way</summary>
+              <summary>{t("blackbook.learn.showMeTheWay")}</summary>
               <Walkthrough walkthrough={walkthrough} vendor={vendor} />
             </details>
           )}
           {related.length > 0 && (
             <div className="lx-related">
-              <span className="lx-related-label">Related</span>
+              <span className="lx-related-label">{t("blackbook.learn.related")}</span>
               {related.map((id) => (
                 <button key={id} className="lx-chip" onClick={() => onNavigate(id)}>
-                  {KNOWLEDGE_BY_ID.get(id)!.name}
+                  {knowledgeByIdForLanguage(i18n.language).get(id)!.name}
                 </button>
               ))}
             </div>
@@ -379,6 +378,7 @@ function EntryCard({
 // rather than a fabricated date. "Updated" is only shown when it differs from "Added" (no redundant
 // "Added Jun 2026 · Updated Jun 2026"). Read-only organizational metadata; never a verdict.
 function EntryDateNote({ entry }: { entry: KnowledgeEntry }) {
+  const { t } = useTranslation();
   const added = formatEntryDate(entry.added);
   if (!added) return null;
   const updated = entry.updated && entry.updated !== entry.added ? formatEntryDate(entry.updated) : null;
@@ -388,16 +388,22 @@ function EntryDateNote({ entry }: { entry: KnowledgeEntry }) {
       role="note"
       style={{ margin: "10px 0 0", fontSize: "11px", color: "var(--ix-text-3)" }}
     >
-      Added {added}
-      {updated ? <> · Updated {updated}</> : null}
+      {t("blackbook.learn.dateNote.addedPre")}
+      {added}
+      {updated ? (
+        <>
+          {t("blackbook.learn.dateNote.updatedMid")}
+          {updated}
+        </>
+      ) : null}
     </p>
   );
 }
 
-function hitPill(h: AutopsyHit): { label: string; cls: string } {
-  if (h.type === "tweak" && h.verdict) return { label: verdictChip(h.verdict), cls: `lx-verdict-${h.verdict}` };
-  if (h.type === "trick") return { label: "Scam pattern", cls: "lx-verdict-risky" };
-  return { label: TYPE_LABEL[h.type], cls: "lx-verdict-info" };
+function hitPill(h: AutopsyHit, t: TFunction): { label: string; cls: string } {
+  if (h.type === "tweak" && h.verdict) return { label: verdictChip(h.verdict, t), cls: `lx-verdict-${h.verdict}` };
+  if (h.type === "trick") return { label: t("blackbook.learn.typeLabel.trick"), cls: "lx-verdict-risky" };
+  return { label: t(`blackbook.learn.typeLabel.${h.type}`), cls: "lx-verdict-info" };
 }
 
 function AutopsyResultView({
@@ -411,6 +417,7 @@ function AutopsyResultView({
   onNavigate: (id: string) => void;
   onClear: () => void;
 }) {
+  const { t, i18n } = useTranslation();
   const { grade, hits, scamFlags, truncated } = result;
   const recognizedNothing = hits.length === 0 && grade.unknown === 0;
   // Expand a graded row IN PLACE (continuity §3) instead of redirecting away from the autopsy.
@@ -419,12 +426,9 @@ function AutopsyResultView({
   if (recognizedNothing) {
     return (
       <div className="lx-result">
-        <p className="lx-result-empty">
-          We didn't spot anything we recognize in that. Paste a guide that actually names tweaks or
-          settings and we'll grade each one.
-        </p>
+        <p className="lx-result-empty">{t("blackbook.learn.autopsy.resultEmpty")}</p>
         <button className="lx-btn lx-btn-ghost" onClick={onClear}>
-          Clear &amp; paste another
+          {t("blackbook.learn.autopsy.clearAndPasteAnother")}
         </button>
       </div>
     );
@@ -439,41 +443,41 @@ function AutopsyResultView({
       {/* Sticky context header — the read-through you're in, always endable on purpose (continuity §3). */}
       <div className="lx-autopsy-sticky">
         <span className="lx-autopsy-sticky-label" title={trimmed}>
-          Autopsy: {preview}
+          {t("blackbook.learn.autopsy.stickyPrefix")}
+          {preview}
           {trimmed.length > 40 ? "…" : ""}
         </span>
         <span className="lx-autopsy-sticky-count">
-          {claims} claim{claims === 1 ? "" : "s"} graded
+          {t("blackbook.learn.autopsy.claimsGraded", { count: claims })}
         </span>
         <button className="lx-btn lx-btn-ghost lx-autopsy-sticky-clear" onClick={onClear}>
-          Clear
+          {t("blackbook.learn.autopsy.clear")}
         </button>
       </div>
       <div className="lx-grade">
-        This guide: <span className="lx-g-real">{`${grade.real} real`}</span> ·{" "}
-        <span className="lx-g-placebo">{`${grade.placebo} placebo`}</span> ·{" "}
-        <span className="lx-g-risky">{`${grade.risky} risky`}</span> ·{" "}
+        {t("blackbook.learn.autopsy.gradePrefix")}{" "}
+        <span className="lx-g-real">{`${grade.real} ${t("blackbook.learn.autopsy.real")}`}</span> ·{" "}
+        <span className="lx-g-placebo">{`${grade.placebo} ${t("blackbook.learn.autopsy.placebo")}`}</span> ·{" "}
+        <span className="lx-g-risky">{`${grade.risky} ${t("blackbook.learn.autopsy.risky")}`}</span> ·{" "}
         <span className="lx-g-unknown">
-          {`${grade.unknown} thing${grade.unknown === 1 ? "" : "s"} we don't recognize`}
+          {t("blackbook.learn.autopsy.unrecognized", { count: grade.unknown })}
         </span>
       </div>
       {scamFlags > 0 && (
         <div className="lx-scamflag">
           <Icon name="alert" size={15} />
-          {scamFlags} known scam pattern{scamFlags > 1 ? "s" : ""} in here — open the flagged rows below.
+          {t("blackbook.learn.autopsy.scamFlags", { count: scamFlags })}
         </div>
       )}
-      <p className="lx-result-note">
-        Anything we don't recognize gets no verdict — we won't guess. Tap a row to read it right here.
-      </p>
+      <p className="lx-result-note">{t("blackbook.learn.autopsy.resultNote")}</p>
       {/* Visible key above the graded claims, so the verdict chips below read in context (foam-pit). */}
       {hits.length > 0 && <GradeKey />}
       {hits.length > 0 && (
         <ul className="lx-hitlist">
           {hits.map((h) => {
-            const pill = hitPill(h);
+            const pill = hitPill(h, t);
             const open = openId === h.id;
-            const entry = KNOWLEDGE_BY_ID.get(h.id);
+            const entry = knowledgeByIdForLanguage(i18n.language).get(h.id);
             return (
               <li key={h.id}>
                 <button
@@ -484,7 +488,7 @@ function AutopsyResultView({
                   <span className="lx-hitname">{h.name}</span>
                   <span
                     className={`lx-verdict ${pill.cls}`}
-                    title={h.type === "tweak" && h.verdict ? verdictDefinition(h.verdict) : undefined}
+                    title={h.type === "tweak" && h.verdict ? verdictDefinition(h.verdict, t) : undefined}
                   >
                     {pill.label}
                   </span>
@@ -495,7 +499,7 @@ function AutopsyResultView({
                     <EntryBody entry={entry} onNavigate={onNavigate} />
                     {/* Deliberate travel only — the quiet full-entry link, per the continuity law. */}
                     <button className="lx-howto" onClick={() => onNavigate(h.id)}>
-                      Open full entry →
+                      {t("blackbook.learn.autopsy.openFullEntry")}
                     </button>
                   </div>
                 )}
@@ -503,7 +507,7 @@ function AutopsyResultView({
                   <div className="lx-howtos">
                     {h.howTos.map((gid) => (
                       <button key={gid} className="lx-howto" onClick={() => onNavigate(gid)}>
-                        Safe how-to available →
+                        {t("blackbook.learn.autopsy.safeHowTo")}
                       </button>
                     ))}
                   </div>
@@ -514,7 +518,9 @@ function AutopsyResultView({
         </ul>
       )}
       {truncated && (
-        <p className="lx-result-note">We graded the first {AUTOPSY_MAX_CHARS.toLocaleString()} characters of a longer paste.</p>
+        <p className="lx-result-note">
+          {t("blackbook.learn.autopsy.truncated", { chars: AUTOPSY_MAX_CHARS.toLocaleString() })}
+        </p>
       )}
     </div>
   );
@@ -553,12 +559,13 @@ function AutopsyPanel({
   hideRecord?: boolean;
   onRecorded?: (ledger: AutopsyLedgerEntry[]) => void;
 }) {
+  const { t, i18n } = useTranslation();
   const [text, setText] = useState(readAutopsyText);
   const [result, setResult] = useState<AutopsyResult | null>(() => {
     try {
       if (sessionStorage.getItem(AUTOPSY_GRADED_KEY) === "1") {
-        const t = readAutopsyText();
-        return t.trim() ? autopsyScan(t) : null;
+        const pasted = readAutopsyText();
+        return pasted.trim() ? autopsyScan(pasted, knowledgeForLanguage(i18n.language)) : null;
       }
     } catch {
       /* ignore */
@@ -581,31 +588,30 @@ function AutopsyPanel({
 
   return (
     <div className="lx-autopsy">
-      <p className="lx-sub">
-        Paste a tweak guide — a forum post, a video description, a "do these 10 things" list — and get
-        the autopsy. Nothing leaves your PC; it's matched against this library, offline.
-      </p>
+      <p className="lx-sub">{t("blackbook.learn.autopsy.subLede")}</p>
       {/* A3.8 — your local autopsy record: a running tally of what the guides you've graded turned out
           to be. Counts only, stored on this PC. Shown once you've graded at least one guide. */}
       {!hideRecord && stats.count > 0 && (
         <div className="lx-autopsy-record" role="status">
-          <span className="lx-autopsy-record-title">Your autopsy record</span>
+          <span className="lx-autopsy-record-title">{t("blackbook.learn.autopsy.recordTitle")}</span>
           <span className="lx-autopsy-record-line">
-            {stats.count} guide{stats.count === 1 ? "" : "s"} graded
+            {t("blackbook.learn.autopsy.recordGuides", { count: stats.count })}
             {stats.gradedTweaks > 0 && (
               <>
-                {" — of the tweaks recognized: "}
-                <b className="lx-rec-real">{stats.realPct}% real</b>
+                {t("blackbook.learn.autopsy.recordBreakdownPre")}
+                <b className="lx-rec-real">{t("blackbook.learn.autopsy.recordRealPct", { pct: stats.realPct })}</b>
                 {" · "}
-                <b className="lx-rec-placebo">{stats.placeboPct}% placebo</b>
+                <b className="lx-rec-placebo">
+                  {t("blackbook.learn.autopsy.recordPlaceboPct", { pct: stats.placeboPct })}
+                </b>
                 {" · "}
-                <b className="lx-rec-risky">{stats.riskyPct}% risky</b>
+                <b className="lx-rec-risky">{t("blackbook.learn.autopsy.recordRiskyPct", { pct: stats.riskyPct })}</b>
               </>
             )}
             {stats.scamFlags > 0 && (
               <>
-                {" · "}
-                {stats.scamFlags} snake-oil trick{stats.scamFlags === 1 ? "" : "s"} flagged
+                {t("blackbook.learn.autopsy.recordScamPre")}
+                {t("blackbook.learn.autopsy.recordScam", { count: stats.scamFlags })}
               </>
             )}
           </span>
@@ -614,8 +620,8 @@ function AutopsyPanel({
       <textarea
         className="lx-paste"
         rows={7}
-        aria-label="Paste a tweak guide to autopsy"
-        placeholder="Paste the guide here…"
+        aria-label={t("blackbook.learn.autopsy.textareaAriaLabel")}
+        placeholder={t("blackbook.learn.autopsy.textareaPlaceholder")}
         value={text}
         onChange={(e) => {
           setText(e.target.value);
@@ -628,7 +634,7 @@ function AutopsyPanel({
           className="lx-btn"
           disabled={!text.trim() || !!urlKind}
           onClick={() => {
-            const r = autopsyScan(text);
+            const r = autopsyScan(text, knowledgeForLanguage(i18n.language));
             setResult(r);
             persistAutopsy(text, true);
             const next = recordAutopsy(r);
@@ -636,11 +642,11 @@ function AutopsyPanel({
             onRecorded?.(next);
           }}
         >
-          Grade this guide
+          {t("blackbook.learn.autopsy.gradeButton")}
         </button>
         {text && !result && (
           <button className="lx-btn lx-btn-ghost" onClick={clear}>
-            Clear
+            {t("blackbook.learn.autopsy.clear")}
           </button>
         )}
       </div>
@@ -648,14 +654,11 @@ function AutopsyPanel({
           moment it costs the user something. NO fetch, NO domain/title grading of unread pages. */}
       {urlKind ? (
         <div className="lx-urlcard" role="status">
-          <p className="lx-urlcard-lead">
-            That's a link — and Compy never fetches the internet (nothing leaves your PC; that's the
-            deal). Bring me the words instead:
-          </p>
+          <p className="lx-urlcard-lead">{t("blackbook.learn.autopsy.urlLead")}</p>
           <p className="lx-urlcard-how">
             {urlKind === "youtube"
-              ? "Open the video's transcript (⋯ menu → Show transcript) → copy → paste here."
-              : "Open the page → Ctrl+A, Ctrl+C → paste here. I'll grade every claim."}
+              ? t("blackbook.learn.autopsy.urlHowYoutube")
+              : t("blackbook.learn.autopsy.urlHowWebpage")}
           </p>
         </div>
       ) : (
@@ -692,6 +695,7 @@ export default function Learn({
   keepRecord?: boolean;
   onAutopsyRecorded?: (ledger: AutopsyLedgerEntry[]) => void;
 }) {
+  const { t, i18n } = useTranslation();
   // The room (asPanel) restores its last mode so returning mid-autopsy isn't an empty browse view
   // (continuity §3). A deep-link (focusId) always lands in browse; the cross-link modal doesn't persist.
   const [mode, setMode] = useState<Mode>(() => {
@@ -735,10 +739,10 @@ export default function Learn({
       setVerdict("all");
       setTopic("all");
       setFits("all");
-      const e = KNOWLEDGE_BY_ID.get(focusId);
+      const e = knowledgeByIdForLanguage(i18n.language).get(focusId);
       if (e) setOpenCats((prev) => new Set(prev).add(e.type)); // expand its category so it's reachable
     }
-  }, [focusId]);
+  }, [focusId, i18n.language]);
 
   // Persist the room's mode so the autopsy survives leaving + returning (continuity §3); modal excluded.
   useEffect(() => {
@@ -758,7 +762,7 @@ export default function Learn({
   }, [reducedMotion]);
 
   const results = useMemo(() => {
-    let hits = searchKnowledge(deferredQ);
+    let hits = searchKnowledge(deferredQ, knowledgeForLanguage(i18n.language));
     if (filter !== "all") hits = hits.filter((e) => e.type === filter);
     if (verdict !== "all") hits = hits.filter((e) => e.type === "tweak" && e.verdict === verdict);
     if (topic !== "all") hits = hits.filter((e) => e.topic === topic);
@@ -766,10 +770,13 @@ export default function Learn({
     // matches only when it lists the chosen rig. So a "Fits: NVIDIA" view shows universal + NVIDIA entries.
     if (fits !== "all") hits = hits.filter((e) => !e.applies || e.applies.includes(fits));
     return hits;
-  }, [deferredQ, filter, verdict, topic, fits]);
+  }, [deferredQ, filter, verdict, topic, fits, i18n.language]);
 
   // §5 "Start here" — the guides are the actionable entry points (capped). Shown only in pure browse.
-  const startHere = useMemo(() => KNOWLEDGE.filter((e) => e.type === "guide").slice(0, 5), []);
+  const startHere = useMemo(
+    () => knowledgeForLanguage(i18n.language).filter((e) => e.type === "guide").slice(0, 5),
+    [i18n.language],
+  );
 
   // Scroll the focused entry into view and flash it once it's in the rendered list. `openCats`
   // must be a dependency (owner-catch chain 2026-07-13): on a deep-link the sibling effect expands
@@ -787,7 +794,8 @@ export default function Learn({
   }, [focused, results, mode, openCats]);
 
   const navigateTo = (id: string) => {
-    if (!KNOWLEDGE_BY_ID.has(id)) return;
+    const byId = knowledgeByIdForLanguage(i18n.language);
+    if (!byId.has(id)) return;
     setMode("browse");
     setQ("");
     setFilter("all");
@@ -795,7 +803,7 @@ export default function Learn({
     setTopic("all");
     setFits("all");
     setFocused(id);
-    const e = KNOWLEDGE_BY_ID.get(id);
+    const e = byId.get(id);
     if (e) setOpenCats((prev) => new Set(prev).add(e.type)); // expand its category
   };
 
@@ -817,16 +825,13 @@ export default function Learn({
           {!v2 && (
             <div className="lx-head">
               <div>
-                <h2 className="lx-title" id="lx-modal-title">Blackbook</h2>
-                <p className="lx-tagline">
-                  What actually works — measured. Look up any tweak, term, or scam you heard online;
-                  we only answer what we've verified.
-                </p>
+                <h2 className="lx-title" id="lx-modal-title">{t("common.rail.learn", "Blackbook")}</h2>
+                <p className="lx-tagline">{t("blackbook.learn.tagline")}</p>
               </div>
               {/* As a rail room there's no "Close" (you leave via the rail); only the modal form has it. */}
               {!asPanel && (
                 <button className="lx-btn lx-btn-ghost" onClick={onClose}>
-                  Close
+                  {t("blackbook.learn.close")}
                 </button>
               )}
             </div>
@@ -839,19 +844,19 @@ export default function Learn({
               returns as the coaching's one home. */}
           {mode === "browse" && (!v2 || keepRecord) && (
             <button className="lx-autopsy-hint cmp-door" onClick={() => setMode("autopsy")}>
-              Got a guide to fact-check? Try Autopsy
+              {t("blackbook.learn.autopsyHint")}
               <span className="cmp-door-chevron" aria-hidden="true">→</span>
             </button>
           )}
 
-          <div className="lx-modes" role="tablist" aria-label="Blackbook mode">
+          <div className="lx-modes" role="tablist" aria-label={t("blackbook.learn.modeAriaLabel")}>
             <button
               role="tab"
               aria-selected={mode === "browse"}
               className={`lx-mode ${mode === "browse" ? "lx-mode-on" : ""}`}
               onClick={() => setMode("browse")}
             >
-              Look it up
+              {t("blackbook.learn.modes.browse")}
             </button>
             <button
               role="tab"
@@ -859,7 +864,7 @@ export default function Learn({
               className={`lx-mode ${mode === "autopsy" ? "lx-mode-on" : ""}`}
               onClick={() => setMode("autopsy")}
             >
-              Autopsy a guide
+              {t("blackbook.learn.modes.autopsy")}
             </button>
           </div>
 
@@ -874,23 +879,23 @@ export default function Learn({
               <input
                 className="lx-search"
                 autoFocus
-                aria-label="Search the knowledge library"
-                placeholder={`try "${PLACEHOLDERS[phIdx]}"…`}
+                aria-label={t("blackbook.learn.searchAriaLabel")}
+                placeholder={t("blackbook.learn.searchPlaceholder", { example: PLACEHOLDERS[phIdx] })}
                 value={q}
                 onChange={(e) => {
                   setQ(e.target.value);
                   setFocused(null);
                 }}
               />
-              <div className="lx-filters" role="group" aria-label="Filter by type">
-                {FILTERS.map((f) => (
+              <div className="lx-filters" role="group" aria-label={t("blackbook.learn.filterByTypeAriaLabel")}>
+                {FILTER_KEYS.map((key) => (
                   <button
-                    key={f.key}
-                    className={`lx-filter ${filter === f.key ? "lx-filter-on" : ""}`}
-                    aria-pressed={filter === f.key}
-                    onClick={() => setFilter(f.key)}
+                    key={key}
+                    className={`lx-filter ${filter === key ? "lx-filter-on" : ""}`}
+                    aria-pressed={filter === key}
+                    onClick={() => setFilter(key)}
                   >
-                    {f.label}
+                    {t(`blackbook.learn.filters.${key}`)}
                   </button>
                 ))}
               </div>
@@ -900,7 +905,7 @@ export default function Learn({
                 aria-expanded={moreFilters}
                 onClick={() => setMoreFilters((o) => !o)}
               >
-                {moreFilters ? "Fewer filters ▾" : "More filters ▸"}
+                {moreFilters ? t("blackbook.learn.fewerFilters") : t("blackbook.learn.moreFilters")}
                 {!moreFilters && activeSecondary > 0 && (
                   <span className="lx-morefilters-count">{activeSecondary}</span>
                 )}
@@ -909,61 +914,61 @@ export default function Learn({
                 <>
               {/* §5 verdict chips — narrow tweaks by our verdict, alongside the type filters. The
                   inline "Grade:" label names the axis so this row doesn't read as a second type filter. */}
-              <div className="lx-filters lx-vfilters" role="group" aria-label="Filter tweaks by verdict">
-                <span className="lx-vfilter-label" aria-hidden="true">Grade:</span>
+              <div className="lx-filters lx-vfilters" role="group" aria-label={t("blackbook.learn.verdictFilterAriaLabel")}>
+                <span className="lx-vfilter-label" aria-hidden="true">{t("blackbook.learn.gradeLabel")}</span>
                 <button
                   className={`lx-filter ${verdict === "all" ? "lx-filter-on" : ""}`}
                   aria-pressed={verdict === "all"}
                   onClick={() => setVerdict("all")}
                 >
-                  Any verdict
+                  {t("blackbook.learn.anyVerdict")}
                 </button>
-                {VERDICT_FILTERS.map((v) => (
+                {VERDICT_FILTER_KEYS.map((key) => (
                   <button
-                    key={v.key}
-                    className={`lx-filter lx-vfilter-${v.key} ${verdict === v.key ? "lx-filter-on" : ""}`}
-                    aria-pressed={verdict === v.key}
-                    onClick={() => setVerdict(v.key)}
-                    title={verdictDefinition(v.key)}
+                    key={key}
+                    className={`lx-filter lx-vfilter-${key} ${verdict === key ? "lx-filter-on" : ""}`}
+                    aria-pressed={verdict === key}
+                    onClick={() => setVerdict(key)}
+                    title={verdictDefinition(key, t)}
                   >
-                    {v.label}
+                    {t(`blackbook.learn.verdictFilters.${key}`)}
                   </button>
                 ))}
               </div>
               {/* A3 topic filter — narrow the library by what an entry is ABOUT (display, GPU,
                   network…), orthogonal to the type + verdict axes. Labelled so the row reads as its
                   own axis, not a third type filter. */}
-              <div className="lx-filters lx-vfilters" role="group" aria-label="Filter by topic">
-                <span className="lx-vfilter-label" aria-hidden="true">Topic:</span>
+              <div className="lx-filters lx-vfilters" role="group" aria-label={t("blackbook.learn.topicFilterAriaLabel")}>
+                <span className="lx-vfilter-label" aria-hidden="true">{t("blackbook.learn.topicLabel")}</span>
                 <button
                   className={`lx-filter ${topic === "all" ? "lx-filter-on" : ""}`}
                   aria-pressed={topic === "all"}
                   onClick={() => setTopic("all")}
                 >
-                  Any topic
+                  {t("blackbook.learn.anyTopic")}
                 </button>
-                {TOPICS.map((t) => (
+                {TOPICS.map((tp) => (
                   <button
-                    key={t}
-                    className={`lx-filter ${topic === t ? "lx-filter-on" : ""}`}
-                    aria-pressed={topic === t}
-                    onClick={() => setTopic(t)}
+                    key={tp}
+                    className={`lx-filter ${topic === tp ? "lx-filter-on" : ""}`}
+                    aria-pressed={topic === tp}
+                    onClick={() => setTopic(tp)}
                   >
-                    {TOPIC_LABELS[t]}
+                    {t(`blackbook.learn.topicLabels.${tp}`, TOPIC_LABELS[tp])}
                   </button>
                 ))}
               </div>
               {/* Hardware applicability filter — narrow to entries that fit a chosen rig (AMD / NVIDIA /
                   Intel / laptop / desktop). Universal entries (no tags) always show; only rig-specific
                   ones are hidden when they don't match. Labelled so the row reads as its own axis. */}
-              <div className="lx-filters lx-vfilters" role="group" aria-label="Filter by what fits your rig">
-                <span className="lx-vfilter-label" aria-hidden="true">Fits:</span>
+              <div className="lx-filters lx-vfilters" role="group" aria-label={t("blackbook.learn.fitsFilterAriaLabel")}>
+                <span className="lx-vfilter-label" aria-hidden="true">{t("blackbook.learn.fitsLabel")}</span>
                 <button
                   className={`lx-filter ${fits === "all" ? "lx-filter-on" : ""}`}
                   aria-pressed={fits === "all"}
                   onClick={() => setFits("all")}
                 >
-                  Any rig
+                  {t("blackbook.learn.anyRig")}
                 </button>
                 {APPLICABILITY.map((a) => (
                   <button
@@ -972,7 +977,7 @@ export default function Learn({
                     aria-pressed={fits === a}
                     onClick={() => setFits(a)}
                   >
-                    {APPLICABILITY_LABELS[a]}
+                    {t(`blackbook.learn.applicabilityLabels.${a}`, APPLICABILITY_LABELS[a])}
                   </button>
                 ))}
               </div>
@@ -983,15 +988,12 @@ export default function Learn({
                   re-openable toggle thereafter so it stops re-claiming a block every visit. */}
               <CollapsibleGradeKey />
               {results.length === 0 ? (
-                <div className="lx-empty">
-                  No entry for that yet — we only answer what we've verified. If you're unsure about a
-                  tweak that isn't here, measure it with Compy's benchmark instead of trusting a forum.
-                </div>
+                <div className="lx-empty">{t("blackbook.learn.empty")}</div>
               ) : !deferredQ.trim() && filter === "all" && verdict === "all" && topic === "all" && fits === "all" ? (
                 // §5 PURE BROWSE — "Start here" strip + collapsed category sections (the calm open).
                 <>
                   <div className="lx-starthere">
-                    <span className="lx-starthere-label">Start here</span>
+                    <span className="lx-starthere-label">{t("blackbook.learn.startHere")}</span>
                     <div className="lx-starthere-row">
                       {startHere.map((e) => (
                         <button key={e.id} className="lx-starthere-chip" onClick={() => navigateTo(e.id)}>
@@ -1019,8 +1021,8 @@ export default function Learn({
                           }
                         >
                           <span className="lx-cat-text">
-                            <span className="lx-cat-title">{TYPE_LABEL[type]}s</span>
-                            <span className="lx-cat-desc">{TYPE_DESC[type]}</span>
+                            <span className="lx-cat-title">{t(`blackbook.learn.typeLabelPlural.${type}`)}</span>
+                            <span className="lx-cat-desc">{t(`blackbook.learn.typeDesc.${type}`)}</span>
                           </span>
                           <span className="lx-cat-count">{items.length}</span>
                           <span className="cmp-door-chevron cmp-door-chevron-end" aria-hidden="true">▸</span>

@@ -5,7 +5,11 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(null)) }));
 
 import Lab from "./Lab";
-import { LAB_ROUTER } from "./lab-guided-data";
+import { labRouter } from "./lab-guided-data";
+// i18n update (2026-07-23): labRouter now takes a TFunction as its last param (Simplified
+// Chinese translation pass) instead of returning literal English strings. Resolved through the
+// real i18next instance (English is the default language, matching the assertion below).
+import i18n from "../i18n";
 
 // Guards for the guided Lab bench (spec 2026-07-05-lab-linear-guided-bench).
 // The redesign is behind compy_lab_guided, DEFAULT OFF — these tests pin the reversibility
@@ -123,7 +127,7 @@ describe("guided bench stations (§B)", () => {
 
 describe("'Which tool do I need?' router (§A)", () => {
   it("pins the symptom→station map literally (the spec's copy, word for word)", () => {
-    expect(LAB_ROUTER).toEqual([
+    expect(labRouter(i18n.t)).toEqual([
       {
         symptom: "My aim/clicks feel a beat behind",
         station: "latency",

@@ -1,5 +1,7 @@
+import { useTranslation } from "react-i18next";
 import { fmtGB, fmtGHz } from "./hardware-format";
 import { prettyGameName } from "./game-name";
+import "../i18n";
 
 // The deep Monitoring panels — moved VERBATIM out of App.tsx (T3, spec
 // 2026-07-06-firstcheck-monitor-mvp-train) so the summary-first MonitorDomainCards can reuse
@@ -72,6 +74,7 @@ export function FpsPanel({
   onEnable: () => void;
   onStop: () => void;
 }) {
+  const { t } = useTranslation();
   const active = fps?.active ?? false;
   const sample = fps?.sample ?? null;
   const declined = fps?.status === "declined";
@@ -82,22 +85,19 @@ export function FpsPanel({
     return (
       <div className="monitor-panel fps-panel">
         <div className="monitor-panel-head">
-          <div className="monitor-panel-name">FPS &amp; frametime</div>
-          <div className="monitor-panel-sub">ETW · DX11/DX12</div>
+          <div className="monitor-panel-name">{t("monitor.monitorPanels.fpsAndFrametime")}</div>
+          <div className="monitor-panel-sub">{t("monitor.monitorPanels.etwDx11Dx12")}</div>
         </div>
         <p className="fps-intro">
-          Measures frame rate and per-frame timing by observing your game from
-          the outside — no injection, no kernel driver, anti-cheat safe. It
-          needs Administrator once to start the capture session.
+          {t("monitor.monitorPanels.fpsIntro")}
         </p>
         {declined && (
           <p className="fps-declined">
-            Administrator permission was declined. FPS capture can't start
-            without it.
+            {t("monitor.monitorPanels.fpsDeclined")}
           </p>
         )}
         <button className="btn btn-primary" onClick={onEnable} disabled={busy}>
-          {busy ? "Starting…" : "Enable FPS monitoring (admin)"}
+          {busy ? t("monitor.monitorPanels.starting") : t("monitor.monitorPanels.enableFpsMonitoring")}
         </button>
       </div>
     );
@@ -108,15 +108,13 @@ export function FpsPanel({
     return (
       <div className="monitor-panel fps-panel">
         <div className="monitor-panel-head">
-          <div className="monitor-panel-name">FPS &amp; frametime</div>
+          <div className="monitor-panel-name">{t("monitor.monitorPanels.fpsAndFrametime")}</div>
           <button className="btn btn-small" onClick={onStop} disabled={busy}>
-            Stop
+            {t("monitor.monitorPanels.stop")}
           </button>
         </div>
         <p className="fps-intro">
-          Capturing… launch or focus a DX11/DX12 game to see frames. (Accept
-          the admin prompt if it's still showing. Vulkan/OpenGL titles aren't
-          counted yet.)
+          {t("monitor.monitorPanels.fpsWaiting")}
         </p>
       </div>
     );
@@ -126,41 +124,38 @@ export function FpsPanel({
     <div className="monitor-panel fps-panel">
       <div className="monitor-panel-head">
         <div className="monitor-panel-name">
-          FPS &amp; frametime
-          <span className="fps-proc">{prettyGameName(sample.process_name) || `pid ${sample.pid}`}</span>
+          {t("monitor.monitorPanels.fpsAndFrametime")}
+          <span className="fps-proc">{prettyGameName(sample.process_name) || t("monitor.monitorPanels.pidFallback", { pid: sample.pid })}</span>
         </div>
         <button className="btn btn-small" onClick={onStop} disabled={busy}>
-          Stop
+          {t("monitor.monitorPanels.stop")}
         </button>
       </div>
       <div className="fps-readout">
         <div className="fps-big">
           <div className="fps-big-value">{Math.round(sample.fps)}</div>
-          <div className="fps-big-label">FPS</div>
+          <div className="fps-big-label">{t("monitor.monitorPanels.fpsBigLabel")}</div>
         </div>
         <div className="fps-stats">
           <div className="fps-stat">
-            <span className="fps-stat-label">Frametime</span>
+            <span className="fps-stat-label">{t("monitor.monitorPanels.frametimeStatLabel")}</span>
             <span className="fps-stat-value">
               {sample.avg_frametime_ms.toFixed(1)} ms
             </span>
           </div>
           <div className="fps-stat">
-            <span className="fps-stat-label">1% low</span>
+            <span className="fps-stat-label">{t("monitor.monitorPanels.oneLowStatLabel")}</span>
             <span className="fps-stat-value">~{Math.round(sample.low1_fps)} FPS</span>
           </div>
           <div className="fps-stat">
-            <span className="fps-stat-label">Frames/s</span>
+            <span className="fps-stat-label">{t("monitor.monitorPanels.framesPerSecLabel")}</span>
             <span className="fps-stat-value">{sample.frames_last_sec}</span>
           </div>
         </div>
       </div>
       <FrametimeGraph data={sample.recent_frametimes_ms} />
       <p className="fps-disclaimer">
-        Live estimates from DirectX present events (not injected). FPS and
-        average frametime track closely; <strong>1% low is a session signal</strong>,
-        not a benchmark-grade figure — Compy isn't a CapFrameX/PresentMon
-        replacement.
+        {t("monitor.monitorPanels.fpsDisclaimerPre")}<strong>{t("monitor.monitorPanels.fpsDisclaimerEmph")}</strong>{t("monitor.monitorPanels.fpsDisclaimerPost")}
       </p>
     </div>
   );
@@ -170,6 +165,7 @@ export function FpsPanel({
 // (stutter) show as upward spikes. Lower and flatter is better. Faint
 // reference lines mark common frame budgets (16.7 ms = 60 FPS, 8.3 ms = 120).
 export function FrametimeGraph({ data }: { data: number[] }) {
+  const { t } = useTranslation();
   const width = 680;
   const height = 130;
   const pad = 4;
@@ -212,7 +208,7 @@ export function FrametimeGraph({ data }: { data: number[] }) {
             className="frametime-ref"
           />
           <text x={width - pad - 2} y={yOf(r) - 3} className="frametime-ref-label">
-            {r === 16.7 ? "60 FPS" : "120 FPS"}
+            {r === 16.7 ? t("monitor.monitorPanels.sixtyFps") : t("monitor.monitorPanels.oneTwentyFps")}
           </text>
         </g>
       ))}
@@ -225,12 +221,13 @@ export function FrametimeGraph({ data }: { data: number[] }) {
 // when RAM is tight/critical, which is the invisible cause of a lot of in-game
 // stutter. Shows what's eating RAM so the user knows what to close.
 export function MemoryPressureBanner({ mem }: { mem: MemoryPressure }) {
+  const { t } = useTranslation();
   if (mem.level === "ok") return null;
   return (
     <div className={`mem-banner mem-${mem.level}`}>
       <div className="mem-banner-head">
         <strong>
-          {mem.level === "critical" ? "RAM almost full" : "RAM getting tight"}
+          {mem.level === "critical" ? t("monitor.monitorPanels.ramAlmostFull") : t("monitor.monitorPanels.ramGettingTight")}
         </strong>
         <span className="mem-banner-pct">
           {mem.used_pct}% · {fmtGB(mem.used_bytes)} / {fmtGB(mem.total_bytes)}
@@ -260,6 +257,7 @@ export function CpuMonitorPanel({
   history: CpuSensorSnapshot[];
   cpuTemp: CpuTemp | null;
 }) {
+  const { t } = useTranslation();
   const coreCount = cpu.usage_per_core_pct.length;
   // First call after process start returns 0% across the board because
   // sysinfo needs two samples to compute a delta. Surface this honestly:
@@ -271,37 +269,37 @@ export function CpuMonitorPanel({
   return (
     <div className="monitor-panel">
       <div className="monitor-panel-head">
-        <div className="monitor-panel-name">CPU</div>
+        <div className="monitor-panel-name">{t("monitor.monitorPanels.cpuPanelName")}</div>
         <div className="monitor-panel-sub">
-          {coreCount} logical core{coreCount === 1 ? "" : "s"}
+          {t("monitor.monitorPanels.logicalCore", { count: coreCount })}
           {cpu.frequency_mhz > 0 && ` · ${fmtGHz(cpu.frequency_mhz)}`}
         </div>
       </div>
       <div className="monitor-metrics">
         <MetricRow
-          label="Overall CPU usage"
+          label={t("monitor.monitorPanels.overallCpuUsage")}
           value={warmingUp ? null : Math.round(cpu.usage_overall_pct)}
           unit="%"
           history={history.map((s) => Math.round(s.usage_overall_pct))}
           min={0}
           max={100}
           color="#6aa9ff"
-          sublabel={warmingUp ? "Warming up — first delta in 1 s" : undefined}
+          sublabel={warmingUp ? t("monitor.monitorPanels.warmingUpSublabel") : undefined}
         />
         {cpu.frequency_mhz > 0 && (
           <MetricRow
-            label="Clock speed"
+            label={t("monitor.monitorPanels.clockSpeedLabel")}
             value={Math.round(cpu.frequency_mhz)}
             unit=" MHz"
             history={history.map((s) => Math.round(s.frequency_mhz))}
             min={0}
             max={7000}
             color="#34d399"
-            sublabel="Live current clock — rises under boost, drops when idle/parked"
+            sublabel={t("monitor.monitorPanels.clockSpeedSublabel")}
           />
         )}
         <MetricRow
-          label="CPU temperature"
+          label={t("monitor.monitorPanels.cpuTemperatureLabel")}
           value={cpuTemp ? Math.round(cpuTemp.temp_c) : null}
           unit="°C"
           history={[cpuTemp ? Math.round(cpuTemp.temp_c) : 0]}
@@ -310,13 +308,13 @@ export function CpuMonitorPanel({
           color="#f5a35c"
           sublabel={
             cpuTemp
-              ? `${cpuTemp.label} · via ${cpuTemp.source}`
-              : "Run HWiNFO (Shared Memory Support on) or LibreHardwareMonitor to show CPU temp"
+              ? t("monitor.monitorPanels.cpuTempVia", { label: cpuTemp.label, source: cpuTemp.source })
+              : t("monitor.monitorPanels.cpuTempFallback")
           }
         />
         {cpu.ram_total_bytes > 0 && (
           <MetricRow
-            label="Memory used"
+            label={t("monitor.monitorPanels.memoryUsedLabel")}
             value={Math.round((cpu.ram_used_bytes / cpu.ram_total_bytes) * 100)}
             unit="%"
             history={history.map((s) =>
@@ -341,17 +339,18 @@ export function CpuMonitorPanel({
       </div>
       <div className="monitor-note">
         {cpuTemp
-          ? "CPU temperature here is read driver-free from a sensor tool you're already running — Compy installs no kernel driver of its own. GPU temperature comes straight from the vendor's user-mode library."
-          : "Compy won't install a kernel driver, so it doesn't read CPU temperature on its own — it shows only what a sensor app you run publishes, driver-free (see the row above). GPU temperature comes straight from the vendor's user-mode library, so it always shows."}
+          ? t("monitor.monitorPanels.kernelDriverNoteWithTemp")
+          : t("monitor.monitorPanels.kernelDriverNoteNoTemp")}
       </div>
     </div>
   );
 }
 
 export function CoreBar({ index, percent }: { index: number; percent: number }) {
+  const { t } = useTranslation();
   const clamped = Math.max(0, Math.min(100, percent));
   return (
-    <div className="cpu-core" title={`Core ${index}: ${Math.round(percent)}%`}>
+    <div className="cpu-core" title={t("monitor.monitorPanels.coreTooltip", { index, percent: Math.round(percent) })}>
       <div className="cpu-core-bar">
         <div className="cpu-core-fill" style={{ transform: `scaleX(${clamped / 100})` }} />
       </div>
@@ -367,6 +366,7 @@ export function GpuMonitorPanel({
   gpu: GpuSensorSnapshot;
   history: (GpuSensorSnapshot | null)[];
 }) {
+  const { t } = useTranslation();
   const vramUsedPct =
     gpu.vram_used_bytes && gpu.vram_total_bytes
       ? Math.round((gpu.vram_used_bytes / gpu.vram_total_bytes) * 100)
@@ -385,22 +385,22 @@ export function GpuMonitorPanel({
           {gpu.vendor.toUpperCase() === "NVIDIA" && (
             <span
               className="gpu-unverified"
-              title="NVIDIA sensor readings come from NVML but haven't been verified on real NVIDIA hardware yet. Treat values as provisional."
+              title={t("monitor.monitorPanels.nvidiaUnverifiedTitle")}
             >
-              unverified
+              {t("monitor.monitorPanels.unverified")}
             </span>
           )}
         </div>
         <div className="monitor-panel-sub">
           {gpu.vram_total_bytes
-            ? `${fmtGB(gpu.vram_total_bytes)} VRAM`
-            : "Adapter " + gpu.index}
+            ? `${fmtGB(gpu.vram_total_bytes)}${t("monitor.monitorPanels.vramSuffix")}`
+            : t("monitor.monitorPanels.adapterLabel", { index: gpu.index })}
         </div>
       </div>
       <div className="monitor-metrics">
         {gpu.temperature_c !== null && (
           <MetricRow
-            label="GPU temperature"
+            label={t("monitor.monitorPanels.gpuTemperatureLabel")}
             value={gpu.temperature_c}
             unit="°C"
             history={history.map((s) => s?.temperature_c ?? null)}
@@ -411,19 +411,19 @@ export function GpuMonitorPanel({
         )}
         {gpu.hotspot_temperature_c !== null && (
           <MetricRow
-            label="Hotspot (junction)"
+            label={t("monitor.monitorPanels.hotspotLabel")}
             value={gpu.hotspot_temperature_c}
             unit="°C"
             history={history.map((s) => s?.hotspot_temperature_c ?? null)}
             min={20}
             max={110}
             color="#fb923c"
-            sublabel="Hottest on-die sensor"
+            sublabel={t("monitor.monitorPanels.hotspotSublabel")}
           />
         )}
         {gpu.utilization_gpu_pct !== null && (
           <MetricRow
-            label="GPU utilization"
+            label={t("monitor.monitorPanels.gpuUtilizationLabel")}
             value={gpu.utilization_gpu_pct}
             unit="%"
             history={history.map((s) => s?.utilization_gpu_pct ?? null)}
@@ -434,7 +434,7 @@ export function GpuMonitorPanel({
         )}
         {gpu.vram_used_bytes !== null && (
           <MetricRow
-            label="VRAM used"
+            label={t("monitor.monitorPanels.vramUsedLabel")}
             value={vramUsedPct}
             unit={vramUsedPct !== null ? "%" : ""}
             history={history.map((s) =>
@@ -449,14 +449,14 @@ export function GpuMonitorPanel({
               gpu.vram_used_bytes && gpu.vram_total_bytes
                 ? `${fmtGB(gpu.vram_used_bytes)} / ${fmtGB(gpu.vram_total_bytes)}`
                 : gpu.vram_used_bytes
-                ? `${fmtGB(gpu.vram_used_bytes)} used`
+                ? t("monitor.monitorPanels.usedSuffix", { gb: fmtGB(gpu.vram_used_bytes) })
                 : undefined
             }
           />
         )}
         {gpu.power_draw_w !== null && (
           <MetricRow
-            label="Power draw"
+            label={t("monitor.monitorPanels.powerDrawLabel")}
             value={Math.round(gpu.power_draw_w)}
             unit="W"
             history={history.map((s) =>
@@ -471,7 +471,7 @@ export function GpuMonitorPanel({
         )}
         {gpu.graphics_clock_mhz !== null && (
           <MetricRow
-            label="Graphics clock"
+            label={t("monitor.monitorPanels.graphicsClockLabel")}
             value={gpu.graphics_clock_mhz}
             unit=" MHz"
             history={history.map((s) => s?.graphics_clock_mhz ?? null)}
@@ -482,7 +482,7 @@ export function GpuMonitorPanel({
         )}
         {gpu.memory_clock_mhz !== null && (
           <MetricRow
-            label="Memory clock"
+            label={t("monitor.monitorPanels.memoryClockLabel")}
             value={gpu.memory_clock_mhz}
             unit=" MHz"
             history={history.map((s) => s?.memory_clock_mhz ?? null)}
@@ -493,7 +493,7 @@ export function GpuMonitorPanel({
         )}
         {(gpu.fan_speed_rpm !== null || gpu.fan_speed_pct !== null) && (
           <MetricRow
-            label="Fan speed"
+            label={t("monitor.monitorPanels.fanSpeedLabel")}
             value={fanIsRpm ? gpu.fan_speed_rpm : gpu.fan_speed_pct}
             unit={fanIsRpm ? " RPM" : "%"}
             history={history.map((s) =>

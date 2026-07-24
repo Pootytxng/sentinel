@@ -9,7 +9,11 @@
 // overclock chapter are gated follow-ups, each on its own verified-sensor path.
 
 import raw from "./tuning-guides.json";
+// i18n (2026-07-23): the zh-CN sibling carries translated text fields only (no `walkthrough` — its
+// steps' Chinese captions are hand-authored below, same reasoning as knowledge.ts's injected entries).
+import rawZhCN from "./tuning-guides.zh-CN.json";
 import type { GuideEntry } from "./knowledge";
+import { deepMergeLocale } from "./locale-merge";
 import type { Walkthrough } from "../surfaces/walkthroughs";
 import { TOPIC_BY_ID } from "./knowledge-topics";
 
@@ -68,3 +72,70 @@ export function toGuideEntry(g: TuningGuide): GuideEntry {
 
 export const TUNING_GUIDE_ENTRIES: GuideEntry[] = TUNING_GUIDES.map(toGuideEntry);
 export const TUNING_WALKTHROUGHS: Walkthrough[] = TUNING_GUIDES.map((g) => g.walkthrough);
+
+// ---------------------------------------------------------------------------------------------
+// Simplified Chinese overlay (i18n, 2026-07-23) — same additive pattern as knowledge.ts: the exports
+// above stay frozen/English (tuning-guides.test.ts pins them), and language-aware reads go through
+// the functions below instead. tuning-guides.zh-CN.json has no `walkthrough` field of its own (the
+// schematic's hotspot coordinates/labels are vendor-tool chrome, not sentence prose), so the one
+// walkthrough's title + step captions are hand-translated here, matching the pattern already used by
+// the standalone data/walkthroughs.zh-CN.json siblings (translate title/caption, keep everything else
+// — group, pairsWith, x/y, hotspot label — as the English schematic defines it).
+const TUNING_WALKTHROUGH_ZH_CN: Record<string, Partial<Walkthrough>> = {
+  "amd-gpu-undervolt": {
+    title: "给你的 Radeon 显卡降压(Adrenalin)",
+    variants: [
+      {
+        vendor: "amd",
+        label: "AMD Adrenalin",
+        steps: [
+          { caption: "Adrenalin → Performance(性能)", x: 14, y: 20, label: "Performance" },
+          { caption: "Tuning(调校)→ Custom(自定义)", x: 42, y: 22, label: "Tuning · Custom" },
+          { caption: "打开 GPU Tuning,电压切换到 Manual(手动)", x: 40, y: 54, label: "Manual mV" },
+          { caption: "把最大电压调低 25–50 mV,点击 Apply(应用)", x: 70, y: 54, label: "Lower mV" },
+          { caption: "压力测试 20–30 分钟,留意是否重置", x: 70, y: 82, label: "Stress test" },
+        ],
+      },
+    ],
+  },
+};
+
+const TUNING_GUIDES_ZH_CN: TuningGuide[] = TUNING_GUIDES.map((g) => {
+  const zhText = (rawZhCN as Record<string, unknown>[]).find((z) => String(z.id) === g.id);
+  const merged = zhText ? deepMergeLocale(g, zhText) : g;
+  const zhWalkthrough = TUNING_WALKTHROUGH_ZH_CN[g.id];
+  return zhWalkthrough ? deepMergeLocale(merged, { walkthrough: zhWalkthrough }) : merged;
+});
+
+const TUNING_GUIDE_ENTRIES_ZH_CN: GuideEntry[] = TUNING_GUIDES_ZH_CN.map(toGuideEntry);
+const TUNING_WALKTHROUGHS_ZH_CN: Walkthrough[] = TUNING_GUIDES_ZH_CN.map((g) => g.walkthrough);
+
+/** TUNING_GUIDES in the given app language — see knowledge.ts's knowledgeForLanguage() for the same
+ * pattern applied to the main corpus. "en" returns the frozen English array unchanged. */
+export function tuningGuidesForLanguage(lang: string): TuningGuide[] {
+  return lang === "zh-CN" ? TUNING_GUIDES_ZH_CN : TUNING_GUIDES;
+}
+
+/** TUNING_GUIDE_ENTRIES in the given app language. */
+export function tuningGuideEntriesForLanguage(lang: string): GuideEntry[] {
+  return lang === "zh-CN" ? TUNING_GUIDE_ENTRIES_ZH_CN : TUNING_GUIDE_ENTRIES;
+}
+
+/** TUNING_WALKTHROUGHS in the given app language. */
+export function tuningWalkthroughsForLanguage(lang: string): Walkthrough[] {
+  return lang === "zh-CN" ? TUNING_WALKTHROUGHS_ZH_CN : TUNING_WALKTHROUGHS;
+}
+
+const TUNING_GUIDE_BY_ID_ZH_CN: Map<string, TuningGuide> = new Map(
+  TUNING_GUIDES_ZH_CN.map((g) => [g.id, g]),
+);
+
+/** TUNING_GUIDE_BY_ID in the given app language. */
+export function tuningGuideByIdForLanguage(lang: string): Map<string, TuningGuide> {
+  return lang === "zh-CN" ? TUNING_GUIDE_BY_ID_ZH_CN : TUNING_GUIDE_BY_ID;
+}
+
+/** tuningGuideForVendor, resolved in the given app language. */
+export function tuningGuideForVendorForLanguage(vendor: string, lang: string): TuningGuide | null {
+  return tuningGuidesForLanguage(lang).find((g) => g.vendor === vendor) ?? null;
+}

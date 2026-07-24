@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+
 export type Status = "ready" | "attention" | "danger" | "protected" | "scanning" | "info" | "unknown";
 
 export type StatusMeta = {
@@ -17,6 +19,21 @@ const MAP: Record<Status, StatusMeta> = {
   unknown:   { label: "Unavailable", colorVar: "var(--status-unknown)",    softVar: "transparent",                   lineVar: "var(--border-strong)" },
 };
 
-export function statusMeta(status: Status): StatusMeta {
-  return MAP[status] ?? MAP.unknown;
+// i18n key per status (2026-07-23) — `t` optional/trailing; omitting it returns `meta` completely
+// unchanged (byte-identical to today), which is what the identity-pinning statusMeta tests rely on.
+const STATUS_KEY: Record<Status, string> = {
+  ready: "ready",
+  attention: "attention",
+  danger: "critical",
+  protected: "protected",
+  scanning: "scanning",
+  info: "info",
+  unknown: "unavailable",
+};
+
+export function statusMeta(status: Status, t?: TFunction): StatusMeta {
+  const meta = MAP[status] ?? MAP.unknown;
+  if (!t) return meta;
+  const key = STATUS_KEY[status] ?? STATUS_KEY.unknown;
+  return { ...meta, label: t(`common.status.${key}`, { defaultValue: meta.label }) };
 }

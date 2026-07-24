@@ -1,8 +1,12 @@
 import { lazy, memo, Suspense, useEffect, useState, type FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { useTranslation } from "react-i18next";
+// Side-effect import: guarantees the i18next singleton is initialized even when this component
+// is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
+import "../../i18n";
 import type { HardwareInfo } from "../../App";
-import { useManualParts, MANUAL_KINDS, type ManualKind } from "./manual-parts";
+import { useManualParts, MANUAL_KINDS, manualKindLabel, type ManualKind } from "./manual-parts";
 import { readHologramV2 } from "../../design/theme";
 import "./RigViewer.css";
 
@@ -32,6 +36,7 @@ export const RigViewer = memo(function RigViewer({
   // parts still render in the model; only the management CHROME is hidden.
   chromeless?: boolean;
 }) {
+  const { t } = useTranslation();
   const [exploded, setExploded] = useState(false);
   // Hologram bay v2 (T4d): idle GPU ~0 — the bay rests on frameloop "demand", so continuous
   // orbit is an explicit opt-in (the Orbit button) instead of the default. V1 (flag off)
@@ -81,23 +86,25 @@ export const RigViewer = memo(function RigViewer({
             className={`btn-small ${exploded ? "btn-small-on" : ""}`}
             onClick={() => setExploded((v) => !v)}
           >
-            {exploded ? "Reassemble" : "Exploded view"}
+            {exploded
+              ? t("gaming.rigViewer.reassembleButton")
+              : t("gaming.rigViewer.explodedViewButton")}
           </button>
           <button
             type="button"
             className={`btn-small ${autoRotate ? "btn-small-on" : ""}`}
             onClick={() => setAutoRotate((v) => !v)}
             aria-pressed={autoRotate}
-            title="Toggle auto-rotate"
+            title={t("gaming.rigViewer.toggleAutoRotateTitle")}
           >
-            Orbit
+            {t("gaming.rigViewer.orbitButton")}
           </button>
-          <span className="rig-hint">Drag to orbit · hover or click a part for its live specs</span>
+          <span className="rig-hint">{t("gaming.rigViewer.dragHint")}</span>
         </div>
       )}
 
       <div className="rig-canvas">
-        <Suspense fallback={<div className="rig-loading">Initializing hologram…</div>}>
+        <Suspense fallback={<div className="rig-loading">{t("gaming.rigViewer.initializingHologram")}</div>}>
           <RigHologram
             hw={hw}
             exploded={exploded}
@@ -113,19 +120,15 @@ export const RigViewer = memo(function RigViewer({
 
       {!chromeless && (
         <>
-      <p className="rig-honesty">
-        Tailored to your rig — parts and specs read live from your PC. Fans spin at their real RPM
-        when HWiNFO or LibreHardwareMonitor is running; without one they stay faint placeholders. A
-        PSU and the cooler model have no software identity, so they remain ghosts rather than guesses.
-      </p>
+      <p className="rig-honesty">{t("gaming.rigViewer.honestyNote")}</p>
 
       {noMonitor && (
         <div className="rig-nudge">
-          <div className="rig-nudge-title">Light up your fans &amp; temperatures</div>
+          <div className="rig-nudge-title">{t("gaming.rigViewer.nudgeTitle")}</div>
           <p className="rig-nudge-body">
-            Your fans show as ghosts because Compy stays <strong>driver-free</strong> (anti-cheat-safe)
-            — it reads live RPM and temps from a free monitor you run, instead of shipping a driver of
-            its own. Install either (Compy reads both automatically):
+            {t("gaming.rigViewer.nudgeBodyPre")}{" "}
+            <strong>{t("gaming.rigViewer.nudgeBodyEmph")}</strong>{" "}
+            {t("gaming.rigViewer.nudgeBodyPost")}
           </p>
           <div className="rig-nudge-opt">
             <button
@@ -137,12 +140,9 @@ export const RigViewer = memo(function RigViewer({
                 });
               }}
             >
-              LibreHardwareMonitor
+              {t("gaming.rigViewer.libreHardwareMonitorButton")}
             </button>
-            <span className="rig-nudge-opt-note">
-              Open-source · runs persistently, no time limit, no setup. Heads-up: its low-level driver
-              can trip strict anti-cheat (Valorant/Vanguard) — close it before those games.
-            </span>
+            <span className="rig-nudge-opt-note">{t("gaming.rigViewer.lhmNote")}</span>
           </div>
           <div className="rig-nudge-opt">
             <button
@@ -154,28 +154,25 @@ export const RigViewer = memo(function RigViewer({
                 });
               }}
             >
-              HWiNFO
+              {t("gaming.rigViewer.hwinfoButton")}
             </button>
-            <span className="rig-nudge-opt-note">
-              Gamer-trusted · turn on “Shared Memory Support” (the free version resets it about every
-              12 hours).
-            </span>
+            <span className="rig-nudge-opt-note">{t("gaming.rigViewer.hwinfoNote")}</span>
           </div>
         </div>
       )}
 
       <div className="rig-manual">
         <form className="rig-manual-form" onSubmit={onAdd}>
-          <span className="rig-manual-label">Add a part Compy can't detect:</span>
+          <span className="rig-manual-label">{t("gaming.rigViewer.addPartLabel")}</span>
           <select
             className="rig-manual-select"
             value={kind}
             onChange={(e) => setKind(e.target.value as ManualKind)}
-            aria-label="Component type"
+            aria-label={t("gaming.rigViewer.componentTypeAriaLabel")}
           >
             {MANUAL_KINDS.map((k) => (
               <option key={k.value} value={k.value}>
-                {k.label}
+                {manualKindLabel(k.value, t)}
               </option>
             ))}
           </select>
@@ -183,12 +180,12 @@ export const RigViewer = memo(function RigViewer({
             className="rig-manual-input"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Corsair RM850x"
+            placeholder={t("gaming.rigViewer.addPartPlaceholder")}
             maxLength={48}
-            aria-label="Component name"
+            aria-label={t("gaming.rigViewer.componentNameAriaLabel")}
           />
           <button type="submit" className="btn-small btn-small-on" disabled={!name.trim()}>
-            Add
+            {t("gaming.rigViewer.addButton")}
           </button>
         </form>
         {manualParts.length > 0 && (
@@ -196,12 +193,12 @@ export const RigViewer = memo(function RigViewer({
             {manualParts.map((p) => (
               <li key={p.id} className="rig-manual-item">
                 <span className="rig-manual-item-name">{p.name}</span>
-                <span className="rig-manual-item-tag">user-added</span>
+                <span className="rig-manual-item-tag">{t("gaming.rigViewer.userAddedTag")}</span>
                 <button
                   type="button"
                   className="rig-manual-remove"
                   onClick={() => remove(p.id)}
-                  aria-label={`Remove ${p.name}`}
+                  aria-label={t("gaming.rigViewer.removePartAriaLabel", { name: p.name })}
                 >
                   ×
                 </button>

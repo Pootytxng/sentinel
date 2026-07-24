@@ -1,0 +1,124 @@
+{
+  "reportModal": {
+    "title": "Report exported",
+    "close": "Close",
+    "savedTo": "Saved to {{path}}",
+    "feedbackHeadPre": "Before you share — help us improve",
+    "feedbackHeadOptional": "(optional)",
+    "whatLabel": "In one sentence, what is Compy to you?",
+    "confusingLabel": "Anything confuse you or feel off?",
+    "nextLabel": "What would you want next?",
+    "reexporting": "Re-exporting…",
+    "feedbackAdded": "Feedback added ✓",
+    "feedbackFailed": "Failed — try again",
+    "addFeedback": "Add my feedback & re-export",
+    "openFolder": "Open folder",
+    "copyFull": "Copy full report",
+    "copySummary": "Copy summary card",
+    "copied": "Copied!",
+    "feedbackPointerPre": "Want it to reach us directly? ",
+    "feedbackPointerBold": "Settings → Feedback & help",
+    "feedbackPointerPost": " emails your note and report in one click."
+  },
+  "dialogs": {
+    "applyTitle": "Apply \"{{title}}\"?",
+    "applyTradeoff": " Tradeoff: {{downside}}",
+    "applyBody": "{{description}}{{tradeoff}} Compy snapshots the prior state so you can roll this back anytime.",
+    "apply": "Apply",
+    "rollbackTitle": "Roll back \"{{title}}\"?",
+    "rollbackDest": " It'll return to {{label}}.",
+    "rollbackBody": "Compy restores the setting to how it was before.{{dest}}",
+    "rollback": "Roll back"
+  },
+  "errors": {
+    "recoverGamingFailed": "Couldn't finish restoring your settings just now — try again, or use Review.",
+    "gamingResumeFailedGround": "Your settings were restored, but Gaming Mode couldn't start again — turn it on from the {{room}} when you're ready.",
+    "gamingResumeFailedMerged": "Your settings were restored, but Gaming Mode couldn't start again — turn it on from {{room}} when you're ready.",
+    "exportFailed": "Couldn't build the report just now — try again in a moment.",
+    "readInfoFailed": "Couldn't read some of your system info just now — try again in a moment.",
+    "rankPrioritiesFailed": "Couldn't rank your priorities just now — try again in a moment.",
+    "startupToggleFailed": "Couldn't change that startup item just now — try again.",
+    "applyFailed": "Couldn't apply that change — it may need an admin OK, or the prompt was cancelled. Nothing was changed; try again.",
+    "rollbackFailed": "Couldn't undo that change just now — try again, or undo it from the Trust Ledger.",
+    "recAppliedExternally": "\"{{title}}\" is currently on but Compy didn't apply it, so there's no rollback record. Toggle it off in the original Windows location instead.",
+    "openExportsFolderFailed": "Couldn't open the exports folder."
+  },
+  "status": {
+    "rulesRemote": "Rules: Remote (signed)",
+    "rulesCached": "Rules: Cached (last-known-good)",
+    "rulesBuiltin": "Rules: Built-in"
+  },
+  "errorBanner": {
+    "dismiss": "Dismiss"
+  },
+  "gamingToast": {
+    "hideRecoveryAria": "Hide this reminder — you can still restore from the Gaming panel",
+    "hideRecoveryTitle": "Hide — you can still restore from the Gaming panel",
+    "recoveryEmph": "Nothing's lost",
+    "recoveryBody": "— a Gaming Mode session was interrupted ({{status}}) and Compy kept the full restore receipt. Resume it, or restore your settings now?",
+    "resuming": "Resuming…",
+    "resumeAction": "Resume Gaming Mode",
+    "restoring": "Restoring…",
+    "restoreNow": "Restore now",
+    "review": "Review",
+    "resumedHeadline": "✓ Gaming Mode is back on.",
+    "resumedBodyGround": "{{summary}} — stop it from the {{room}} when you're done.",
+    "resumedBodyMerged": "{{summary}} — stop it from {{room}} when you're done.",
+    "done": "Done"
+  },
+  "rig": {
+    "gpu": "GPU",
+    "cpu": "CPU",
+    "ram": "RAM",
+    "os": "OS",
+    "noGpu": "No GPU detected"
+  },
+  "booting": {
+    "readFailed": "Couldn't read your hardware just now.",
+    "retry": "Try again",
+    "reading": "Reading your hardware…"
+  },
+  "monitoring": {
+    "title": "Monitoring",
+    "overlayToggleTitle": "Show a compact always-on-top HUD over borderless/windowed games",
+    "hideOverlay": "Hide overlay",
+    "showOverlay": "Show overlay",
+    "moveOverlayTitle": "Move the overlay to a screen corner",
+    "moveOverlayAria": "Move the overlay to the {{corner}} corner",
+    "corners": {
+      "top-left": "top left",
+      "top-right": "top right",
+      "bottom-left": "bottom left",
+      "bottom-right": "bottom right"
+    },
+    "starting": "Starting…",
+    "historyDuration": "{{seconds}}s history · 1 Hz",
+    "helpPre": "Live system telemetry. CPU usage via Windows PDH (built-in, no driver). GPU sensors via vendor libraries (NVML / ADLX). FPS &",
+    "frametimeTerm": "frametime",
+    "helpMid1": " via ",
+    "etwTerm": "ETW",
+    "helpMid2": ". No injection into your games, no ",
+    "kernelDriverTerm": "kernel driver",
+    "helpPost": " — anti-cheat compatible. The overlay draws over borderless/windowed games (not exclusive fullscreen). Charts show the last minute.",
+    "gpuSensorsUnavailable": "GPU sensors unavailable. Compy reads GPU telemetry from NVML, which ships with the NVIDIA driver. AMD (ADLX) and Intel (GPA) support is on the roadmap — your GPU will get its own panel here once that lands.",
+    "collectingFirstSample": "Collecting first sample…"
+  },
+  "diagnostics": {
+    "title": "Diagnostics",
+    "help": "Compy's raw view of your PC. These are the observations the recommendation engine reads to decide what to surface. If a rec you expect doesn't show up — or one you don't expect does — the answer usually lives here."
+  },
+  "overlay": {
+    "fpsUnit": "fps",
+    "lowLabel": "1% low",
+    "est": "est",
+    "cpuLabel": "cpu",
+    "gpuLabel": "gpu",
+    "classic": {
+      "fps": "FPS",
+      "frametime": "frametime",
+      "gpu": "GPU",
+      "cpu": "CPU",
+      "ram": "RAM"
+    }
+  }
+}

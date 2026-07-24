@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import type { SessionSummary } from "../types";
 import { prettyGameName } from "./game-name";
 import { shortVerdict, fmtDur } from "./Play";
@@ -13,15 +14,21 @@ import { shortVerdict, fmtDur } from "./Play";
 
 export type MonitorVerdictLine = { headline: string; sub?: string };
 
-export function monitorVerdict(sessions: SessionSummary[]): MonitorVerdictLine {
+// i18n note: `t` is threaded through as the LAST param (this is a plain data module, not a
+// component — it can't call useTranslation() itself) — every call site passes its own `t` from
+// useTranslation(). Mirrors ago()/smoothness() elsewhere in this codebase. NOTE: shortVerdict()
+// itself keeps returning the literal English "Smooth" / "Rough" / "Some dips" strings unchanged
+// (Play.tsx pins that contract) — only the composed sentences below are translated.
+export function monitorVerdict(sessions: SessionSummary[], t: TFunction): MonitorVerdictLine {
   const latest = sessions[0];
   if (!latest) {
     return {
-      headline: "No game sessions measured yet.",
-      sub: "Start capture and play — the debrief lands here when the session ends.",
+      headline: t("monitor.monitorV2.verdict.noSessionsHeadline"),
+      sub: t("monitor.monitorV2.verdict.noSessionsSub"),
     };
   }
-  const game = prettyGameName(latest.process_name) || "your last game";
+  const game =
+    prettyGameName(latest.process_name) || t("monitor.monitorV2.verdict.lastGameFallback");
   const fps = Math.round(latest.avg_fps);
   const low = Math.round(latest.low1_fps_est);
   const grade = shortVerdict(latest);
@@ -31,14 +38,17 @@ export function monitorVerdict(sessions: SessionSummary[]): MonitorVerdictLine {
   // that the lows are estimated.
   const headline =
     grade === "Smooth"
-      ? `Last session ran smooth — ${game} at ${fps} fps average.`
+      ? t("monitor.monitorV2.verdict.smoothHeadline", { game, fps })
       : grade === "Some dips"
-        ? `Last session had some dips — ${game}'s 1% lows fell to ${low} fps against a ${fps} fps average.`
-        : `Last session ran rough — ${game}'s 1% lows fell to ${low} fps against a ${fps} fps average.`;
+        ? t("monitor.monitorV2.verdict.someDipsHeadline", { game, low, fps })
+        : t("monitor.monitorV2.verdict.roughHeadline", { game, low, fps });
   return {
     // "live estimate, not benchmark-grade" is the F3 honesty framing, kept on the room's
     // answer line so the verdict never overclaims what a 1 Hz sampler can prove.
-    sub: `Measured over ${fmtDur(latest.duration_secs)} · ${latest.samples.toLocaleString()} samples · a live estimate, not a benchmark.`,
+    sub: t("monitor.monitorV2.verdict.sub", {
+      duration: fmtDur(latest.duration_secs),
+      samples: latest.samples.toLocaleString(),
+    }),
     headline,
   };
 }

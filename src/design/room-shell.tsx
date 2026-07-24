@@ -15,6 +15,7 @@
 //                 door is the reward for finishing, not a bypass); Monitor closes it during a
 //                 live capture session. Rooms still never pick the destination or label.
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import type { HomeRailId } from "./homeRail";
 import { useV2Nav } from "./ShellV2";
 import { useLabGroundFlag } from "./use-hud";
@@ -74,6 +75,13 @@ export function RoomShell({
 }) {
   const ground = useLabGroundFlag();
   const door = doorOpen ? doorFor(room, ground) : null;
+  // door.label (DOOR_MAP/doorFor, above) is the literal English source of truth — pinned verbatim
+  // by room-shell.test.tsx, so it stays untranslated there. The door's copy depends only on the
+  // ORIGIN room (ground mode still shows "Find what's worth fixing" for home, just a different
+  // destination), so a room-keyed lookup here — with the pinned English as its fallback — localizes
+  // the rendered text without touching that pinned constant.
+  const { t } = useTranslation();
+  const doorLabel = door ? t(`common.roomShell.door.${room}`, door.label) : null;
   return (
     <section className="v2-room" data-room={room}>
       <header className="v2-verdict">
@@ -84,7 +92,7 @@ export function RoomShell({
       {measured != null && <div className="v2-measured">{measured}</div>}
       <div className="v2-room-body">{children}</div>
       {quiet != null && <div className="v2-quiet-slot">{quiet}</div>}
-      {door && <ForwardDoor to={door.to} label={door.label} />}
+      {door && <ForwardDoor to={door.to} label={doorLabel!} />}
     </section>
   );
 }

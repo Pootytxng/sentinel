@@ -5,6 +5,7 @@
 // the anti-snake-oil ethos turned inward. Owner-voice, plain + honest (THE VOICE). Read-only copy.
 
 import type { TweakVerdict } from "./knowledge";
+import type { TFunction } from "i18next";
 
 export type VerdictGlossaryRow = {
   verdict: TweakVerdict;
@@ -48,7 +49,16 @@ const BY_VERDICT = VERDICT_GLOSSARY.reduce(
   {} as Record<TweakVerdict, VerdictGlossaryRow>,
 );
 
+// i18n (2026-07-23): `t` is OPTIONAL and trailing so every existing call site (and the pinned
+// verdict-glossary.test.ts, which calls these with one arg) keeps working unchanged — omitting it
+// returns the English chip/definition below, same as before. Pass `t` (from useTranslation(), or
+// threaded through like Learn.tsx's hitPill(h, t) for module-scope helpers) to get the localized
+// string, keyed off this same English text as the defaultValue so a missing translation degrades to
+// English rather than a raw key. The "Real"/"Placebo"/"Risky — refused" chips are Compy's own coined
+// vocabulary (see file header) and are deliberately NOT translated in zh-CN — only `definition` is.
 /** Chip label for a verdict — the single source that replaces Learn's old local VERDICT_LABEL. */
-export const verdictChip = (v: TweakVerdict): string => BY_VERDICT[v].chip;
+export const verdictChip = (v: TweakVerdict, t?: TFunction): string =>
+  t ? t(`blackbook.verdictGlossary.${v}.chip`, BY_VERDICT[v].chip) : BY_VERDICT[v].chip;
 /** Plain-English definition for a verdict — used by the visible key and the hover tooltips. */
-export const verdictDefinition = (v: TweakVerdict): string => BY_VERDICT[v].definition;
+export const verdictDefinition = (v: TweakVerdict, t?: TFunction): string =>
+  t ? t(`blackbook.verdictGlossary.${v}.definition`, BY_VERDICT[v].definition) : BY_VERDICT[v].definition;

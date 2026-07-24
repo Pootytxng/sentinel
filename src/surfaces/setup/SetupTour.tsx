@@ -1,5 +1,6 @@
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import { IconCpuOff, IconShieldCheck, IconWifiOff } from "@tabler/icons-react";
 import type { HardwareInfo } from "../../App";
 import type { PriorityItem } from "../../types";
@@ -16,6 +17,9 @@ import { useReducedMotion } from "../../design/use-motion";
 import { useScan, type ScanRecLite } from "../use-scan";
 import { buildRigParts } from "../rig/rig-parts";
 import { buildSetupSteps, type SetupStep } from "./setup-steps";
+// Side-effect import: guarantees the i18next singleton is initialized even when this component
+// is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
+import "../../i18n";
 import "./SetupTour.css";
 
 // The combined "Compy Setup & Tour" — a re-runnable, contained HoloLens console. A centered card with
@@ -37,6 +41,7 @@ const HardwareTourScene = lazy(() =>
 );
 
 export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[]; onDone: () => void }) {
+  const { t } = useTranslation();
   // The tour follows the rail the user actually has (P6 §4 alignment): ground (the default) = the
   // four-room proving-ground rail; merged = the five-room journey recap; the compy_optimize="0"
   // escape hatch keeps the classic six-room tour.
@@ -127,7 +132,7 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
 
   const focusId = step.kind === "lesson" ? (step.focusId ?? null) : null;
   const isLast = i === steps.length - 1;
-  const legLabel = step.leg === "setup" ? "Guided setup" : "Hardware tour";
+  const legLabel = step.leg === "setup" ? t("home.setupTour.leg.setup") : t("home.setupTour.leg.tour");
 
   return (
     <div
@@ -136,7 +141,7 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
       tabIndex={-1}
       role="dialog"
       aria-modal="true"
-      aria-label="Compy setup and tour"
+      aria-label={t("home.setupTour.dialogAria")}
     >
       <div className="st-console">
         <header className="st-head">
@@ -144,8 +149,8 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
             <Wordmark size={19} />
           </span>
           <span className="st-leg">{legLabel}</span>
-          <button className="st-skip" onClick={finish} aria-label="Skip setup and tour">
-            Skip ✕
+          <button className="st-skip" onClick={finish} aria-label={t("home.setupTour.skipAria")}>
+            {t("home.setupTour.skip")}
           </button>
         </header>
 
@@ -153,7 +158,7 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
           {/* Contained 3D stage — the user's real hardware (camera centred, generous margin).
               Decorative: the text panel carries the meaning, so hide the canvas from the a11y tree. */}
           <div className="st-stage" aria-hidden="true">
-            <Suspense fallback={<div className="st-loading">Initializing hologram…</div>}>
+            <Suspense fallback={<div className="st-loading">{t("home.setupTour.stageLoading")}</div>}>
               <HardwareTourScene hw={hw} focusId={focusId} reduced={reduced} paused={false} />
             </Suspense>
           </div>
@@ -199,18 +204,18 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
           )}
           <div className="st-nav">
             <button className="btn-small" onClick={back} disabled={i === 0}>
-              Back
+              {t("home.setupTour.footer.back")}
             </button>
             <span
               className="st-count"
               role="status"
               aria-live="polite"
-              aria-label={`Step ${i + 1} of ${steps.length}`}
+              aria-label={t("home.setupTour.footer.stepAria", { current: i + 1, total: steps.length })}
             >
-              {i + 1} / {steps.length}
+              {t("home.setupTour.footer.stepCount", { current: i + 1, total: steps.length })}
             </span>
             <button className="btn" ref={nextRef} onClick={next}>
-              {isLast ? "Finish" : "Next"}
+              {isLast ? t("home.setupTour.footer.finish") : t("home.setupTour.footer.next")}
             </button>
           </div>
         </footer>
@@ -222,10 +227,11 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
 // ── Leg 1 steps ──────────────────────────────────────────────────────────────
 
 function StepRig({ rig }: { rig: RigLine[] }) {
+  const { t } = useTranslation();
   return (
     <>
-      <div className="st-tag">YOUR RIG</div>
-      <h2 className="st-title">Compy just read your machine</h2>
+      <div className="st-tag">{t("home.setupTour.rig.tag")}</div>
+      <h2 className="st-title">{t("home.setupTour.rig.title")}</h2>
       <div className="st-detect">
         {rig.length === 0
           ? [0, 1, 2, 3].map((n) => <div key={n} className="st-detect-row st-shimmer" />)
@@ -238,57 +244,58 @@ function StepRig({ rig }: { rig: RigLine[] }) {
             ))}
       </div>
       <p className="st-body-text">
-        Every suggestion you'll see was picked for <strong>this exact hardware</strong> — nothing
-        generic, nothing it can't undo.
+        {t("home.setupTour.rig.bodyPre")} <strong>{t("home.setupTour.rig.bodyEmph")}</strong>{" "}
+        {t("home.setupTour.rig.bodyPost")}
       </p>
     </>
   );
 }
 
 function StepSeatbelt({ fixLabel }: { fixLabel: string }) {
+  const { t } = useTranslation();
   const [applied, setApplied] = useState(false);
   return (
     <>
-      <div className="st-tag">THE SEATBELT</div>
-      <h2 className="st-title">One click to apply. One click to take it back.</h2>
+      <div className="st-tag">{t("home.setupTour.seatbelt.tag")}</div>
+      <h2 className="st-title">{t("home.setupTour.seatbelt.title")}</h2>
       <div className="st-demo">
         <div className="st-demo-row">
           <div>
-            <div className="st-demo-name">Power plan</div>
-            <div className="st-demo-sub">Recommended: High performance · Current: Balanced</div>
+            <div className="st-demo-name">{t("home.setupTour.seatbelt.demoName")}</div>
+            <div className="st-demo-sub">{t("home.setupTour.seatbelt.demoSub")}</div>
           </div>
           <TrustSwitch
             applied={applied}
             busy={false}
             onToggle={() => setApplied((a) => !a)}
-            ariaLabel={applied ? "Undo power plan (demo)" : "Apply power plan (demo)"}
+            ariaLabel={
+              applied
+                ? t("home.setupTour.seatbelt.undoAria")
+                : t("home.setupTour.seatbelt.applyAria")
+            }
           />
         </div>
-        {applied && (
-          <div className="st-demo-ledger">
-            Trust Ledger — power plan · Balanced → High performance · just now
-          </div>
-        )}
+        {applied && <div className="st-demo-ledger">{t("home.setupTour.seatbelt.ledger")}</div>}
       </div>
       <p className="st-body-text">
-        Try it — the switch is live (and changes nothing here). Every real change lands in the{" "}
-        <strong>{fixLabel}</strong> tab's ledger with its before-state. Undoable today, undoable in six
-        months.
+        {t("home.setupTour.seatbelt.bodyPre")} <strong>{fixLabel}</strong>{" "}
+        {t("home.setupTour.seatbelt.bodyPost")}
       </p>
     </>
   );
 }
 
 function StepRules() {
+  const { t } = useTranslation();
   const rules = [
-    { Icon: IconCpuOff, text: "No kernel driver — stays in user space" },
-    { Icon: IconShieldCheck, text: "No game injection — anti-cheat safe by design" },
-    { Icon: IconWifiOff, text: "Nothing leaves your PC — no account, no telemetry" },
+    { Icon: IconCpuOff, text: t("home.setupTour.rules.noKernelDriver") },
+    { Icon: IconShieldCheck, text: t("home.setupTour.rules.noInjection") },
+    { Icon: IconWifiOff, text: t("home.setupTour.rules.wifiOff") },
   ];
   return (
     <>
-      <div className="st-tag">HOUSE RULES</div>
-      <h2 className="st-title">What Compy refuses to do</h2>
+      <div className="st-tag">{t("home.setupTour.rules.tag")}</div>
+      <h2 className="st-title">{t("home.setupTour.rules.title")}</h2>
       <div className="st-rules">
         {rules.map((r) => (
           <div key={r.text} className="st-rule">
@@ -298,13 +305,14 @@ function StepRules() {
         ))}
       </div>
       <p className="st-body-text st-kicker">
-        The sketchy tweaks aren't missing. <strong>They're refused.</strong>
+        {t("home.setupTour.rules.kickerPre")} <strong>{t("home.setupTour.rules.kickerEmph")}</strong>
       </p>
     </>
   );
 }
 
 function StepCheck() {
+  const { t } = useTranslation();
   const { readiness, priorities, recs, reverted, running, elapsed, phase, rerun } = useScan();
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const confirm = useConfirm();
@@ -320,9 +328,9 @@ function StepCheck() {
     const rec = recFor(lim);
     if (!rec) return;
     const ok = await confirm({
-      title: `Apply "${rec.title}"?`,
-      body: "Compy snapshots the prior state so you can roll this back anytime.",
-      confirmLabel: "Apply",
+      title: t("home.setupTour.check.applyConfirmTitle", { title: rec.title }),
+      body: t("home.setupTour.check.confirmBody"),
+      confirmLabel: t("home.setupTour.check.applyLabel"),
     });
     if (!ok) return;
     setApplyingId(rec.id);
@@ -334,9 +342,9 @@ function StepCheck() {
       // Tell the user it didn't apply (e.g. a declined UAC prompt) instead of silently swallowing it
       // — mirrors FirstCheck's acknowledge-only NOTICE so the tour never lies about a no-op.
       await confirm({
-        title: "Couldn't apply that fix",
+        title: t("home.setupTour.check.applyFailedTitle"),
         body: String(e),
-        confirmLabel: "OK",
+        confirmLabel: t("home.setupTour.check.ok"),
         acknowledge: true,
       });
     } finally {
@@ -348,9 +356,9 @@ function StepCheck() {
   // exact rec the ledger says drifted; the apply path snapshots prior state so it stays reversible.
   const applyReverted = async (rev: { rec_id: string; title: string }) => {
     const ok = await confirm({
-      title: `Turn "${rev.title}" back on?`,
-      body: "Compy snapshots the prior state so you can roll this back anytime.",
-      confirmLabel: "Turn it on",
+      title: t("home.setupTour.check.turnOnConfirmTitle", { title: rev.title }),
+      body: t("home.setupTour.check.confirmBody"),
+      confirmLabel: t("home.setupTour.check.turnOn"),
     });
     if (!ok) return;
     setApplyingId(rev.rec_id);
@@ -361,9 +369,9 @@ function StepCheck() {
       setApplyingId(null);
       // Surface the failure (e.g. declined UAC) rather than silently swallowing it — same NOTICE as above.
       await confirm({
-        title: "Couldn't turn that back on",
+        title: t("home.setupTour.check.turnOnFailedTitle"),
         body: String(e),
-        confirmLabel: "OK",
+        confirmLabel: t("home.setupTour.check.ok"),
         acknowledge: true,
       });
     } finally {
@@ -383,39 +391,44 @@ function StepCheck() {
   if (running || phase !== "verdict") {
     return (
       <>
-        <div className="st-tag">FIRST CHECK</div>
-        <h2 className="st-title">Reading your rig…</h2>
+        <div className="st-tag">{t("home.setupTour.check.tag")}</div>
+        <h2 className="st-title">{t("home.setupTour.check.readingTitle")}</h2>
         <div className="st-scanning">
           <span className="st-scan-pulse" />
-          <span>Running real checks{elapsed ? ` · ${elapsed.toFixed(1)}s` : "…"}</span>
+          <span>
+            {t("home.setupTour.check.runningChecks")}
+            {elapsed
+              ? t("home.setupTour.check.elapsedSuffix", { elapsed: elapsed.toFixed(1) })
+              : t("home.setupTour.check.elapsedPending")}
+          </span>
         </div>
-        <p className="st-body-text">No guessing — Compy measures this machine, then tells you the truth.</p>
+        <p className="st-body-text">{t("home.setupTour.check.noGuessing")}</p>
       </>
     );
   }
 
   return (
     <>
-      <div className="st-tag">FIRST CHECK</div>
+      <div className="st-tag">{t("home.setupTour.check.tag")}</div>
       <h2 className="st-title">
         {fixCount === 0
-          ? "Ready to play — this rig measured clean"
-          : `Ready to play — ${fixCount} thing${fixCount === 1 ? "" : "s"} worth fixing`}
+          ? t("home.setupTour.check.readyClean")
+          : t("home.setupTour.check.readyFixing", { count: fixCount })}
       </h2>
       {driftTop ? (
         <div className="st-spotlight">
-          <div className="st-spotlight-tag">#1 biggest limiter</div>
+          <div className="st-spotlight-tag">{t("home.setupTour.check.spotlightTag")}</div>
           <div className="st-spotlight-title">
-            {reverted.length === 1
-              ? `“${reverted[0].title}” turned itself back off`
-              : `${reverted.length} settings you applied turned back off`}
+            {t("home.setupTour.check.revertedTitle", {
+              count: reverted.length,
+              title: reverted[0]?.title,
+            })}
           </div>
           <p className="st-spotlight-reason">
-            {reverted.length === 1
-              ? "You turned this on with Compy, but something outside Compy switched it back. Turn it back on right here — or leave it, your call."
-              : `You turned these on with Compy, but they're off now: ${reverted
-                  .map((r) => r.title)
-                  .join(", ")}. Turn them back on right here.`}
+            {t("home.setupTour.check.revertedReason", {
+              count: reverted.length,
+              names: reverted.map((r) => r.title).join(", "),
+            })}
           </p>
           <div className="st-spotlight-foot st-spotlight-actions">
             {reverted.map((rev) => (
@@ -426,23 +439,18 @@ function StepCheck() {
                 onClick={() => applyReverted(rev)}
               >
                 {applyingId === rev.rec_id
-                  ? "Turning on…"
+                  ? t("home.setupTour.check.turningOn")
                   : reverted.length === 1
-                    ? "Turn it back on"
-                    : `Turn “${rev.title}” on`}
+                    ? t("home.setupTour.check.turnBackOn")
+                    : t("home.setupTour.check.turnTitleOn", { title: rev.title })}
               </button>
             ))}
           </div>
-          {gameModeDrifted && (
-            <p className="st-note">
-              Heads-up: Game Mode keeps switching off because your recording software (AMD Adrenalin)
-              resets it at every restart — turning it on works, but it won't stick.
-            </p>
-          )}
+          {gameModeDrifted && <p className="st-note">{t("home.setupTour.check.gameModeNote")}</p>}
         </div>
       ) : top ? (
         <div className="st-spotlight">
-          <div className="st-spotlight-tag">#1 biggest limiter</div>
+          <div className="st-spotlight-tag">{t("home.setupTour.check.spotlightTag")}</div>
           <div className="st-spotlight-title">{top.title}</div>
           <p className="st-spotlight-reason">{top.reason}</p>
           <div className="st-spotlight-foot">
@@ -452,19 +460,21 @@ function StepCheck() {
                 disabled={applyingId !== null}
                 onClick={() => applyLimiter(top)}
               >
-                {applyingId === recFor(top)?.id ? "Applying…" : "Apply this fix"}
+                {applyingId === recFor(top)?.id
+                  ? t("home.setupTour.check.applying")
+                  : t("home.setupTour.check.applyFix")}
               </button>
             ) : (
-              <span className="st-chip-muted">advisory — no one-click change</span>
+              <span className="st-chip-muted">{t("home.setupTour.check.advisory")}</span>
             )}
           </div>
         </div>
       ) : (
         <p className="st-body-text">
-          {checks.length} checks came back right — measured on this rig, not assumed.
+          {t("home.setupTour.check.checksClean", { count: checks.length })}
         </p>
       )}
-      <p className="st-body-text">Reversible, every one. Next, a quick tour of your rig — tap Next.</p>
+      <p className="st-body-text">{t("home.setupTour.check.reversibleFooter")}</p>
     </>
   );
 }
@@ -472,6 +482,7 @@ function StepCheck() {
 // ── Leg 2 — hardware lesson (role · metric · real tweaks · the tab that manages them) ──────────────
 
 function StepLesson({ step }: { step: SetupStep }) {
+  const { t } = useTranslation();
   const l = step.lesson;
   if (!l) return null;
   return (
@@ -480,22 +491,19 @@ function StepLesson({ step }: { step: SetupStep }) {
       <h2 className="st-title">{step.title}</h2>
       <p className="st-body-text">{l.role}</p>
       <div className="st-affects">
-        <span className="st-affects-key">Drives</span> {l.affects}
+        <span className="st-affects-key">{t("home.setupTour.lesson.drivesLabel")}</span> {l.affects}
       </div>
       <div className="st-tweaks">
         {/* "can tune" + the fine line (tester Matthew 2026-07-22: the old "tunes here" present
             tense read like the tour was applying things — "I was like 'ight bet I'm down'").
             The tour is read-only; expectation is now set where it formed. */}
-        <div className="st-tweaks-head">Settings Compy can tune here</div>
+        <div className="st-tweaks-head">{t("home.setupTour.lesson.tweaksHead")}</div>
         <ul className="st-tweaks-list">
-          {l.tweaks.map((t) => (
-            <li key={t}>{t}</li>
+          {l.tweaks.map((tw) => (
+            <li key={tw}>{tw}</li>
           ))}
         </ul>
-        <p className="st-tweaks-fine">
-          Nothing changes during the tour — every tweak applies only when you click it, and undoes
-          from the ledger.
-        </p>
+        <p className="st-tweaks-fine">{t("home.setupTour.lesson.tweaksFine")}</p>
       </div>
       <div className="st-tabchip">
         <span className="st-tabchip-ico">
@@ -511,22 +519,23 @@ function StepLesson({ step }: { step: SetupStep }) {
 // ── Leg 2 finale — the six-tab recap ───────────────────────────────────────────────────────────────
 
 function StepTabMap({ step }: { step: SetupStep }) {
+  const { t } = useTranslation();
   const tabs = step.tabs ?? [];
   return (
     <>
-      <div className="st-tag">THE TOUR</div>
+      <div className="st-tag">{t("home.setupTour.tabMap.tag")}</div>
       <h2 className="st-title">{step.title}</h2>
       <p className="st-body-text">{step.body}</p>
       <div className="st-tabgrid">
-        {tabs.map((t) => (
+        {tabs.map((tab) => (
           // No single room is highlighted — this recap is a neutral "here's where everything lives".
-          <div key={t.id} className="st-tabcard">
+          <div key={tab.id} className="st-tabcard">
             <span className="st-tabcard-ico">
-              <NavGlyph name={t.icon} />
+              <NavGlyph name={tab.icon} />
             </span>
             <div className="st-tabcard-text">
-              <div className="st-tabcard-name">{t.label}</div>
-              <div className="st-tabcard-blurb">{t.blurb}</div>
+              <div className="st-tabcard-name">{tab.label}</div>
+              <div className="st-tabcard-blurb">{tab.blurb}</div>
             </div>
           </div>
         ))}

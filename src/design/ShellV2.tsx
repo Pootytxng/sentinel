@@ -16,7 +16,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
+// Side-effect import: guarantees the i18next instance is initialized (resources loaded, language
+// resolved) before this file's t() calls ever run — same bootstrap src/i18n/language.ts relies on.
+import "../i18n";
 import { Wordmark } from "./Wordmark";
 import { NavGlyph } from "./NavGlyph";
 import { UpdatePill } from "./UpdatePill";
@@ -72,6 +76,12 @@ export function ShellV2({
   rig?: string | null;
   children: ReactNode;
 }) {
+  const { t } = useTranslation();
+  // Resolves a rail item's CURRENT display label by stable id — the one place a lookup-by-id is
+  // required instead of a straightforward t() call, because the merged-room "fix" entry is
+  // relabeled "Optimize" (see homeRail.ts railFor) without its id changing.
+  const railLabel = (item: HomeRailItem): string =>
+    item.label === "Optimize" ? t("common.rail.optimize") : t(`common.rail.${item.id}`);
   // JARVIS motion layer (§A.3/A.5/A.6, flag compy_jarvis_motion DEFAULT ON + motion full). When
   // inactive (the "0" failsafe or reduced motion), none of the layer's nodes/attributes render and
   // the shell is byte-identical.
@@ -133,14 +143,16 @@ export function ShellV2({
   const active = items.find((i) => i.id === activeId);
   const nav: V2Nav = {
     navigate: onNavigate,
-    labelFor: (id) =>
-      items.find((r) => r.id === id)?.label ?? HOME_RAIL.find((r) => r.id === id)?.label ?? id,
+    labelFor: (id) => {
+      const item = items.find((r) => r.id === id) ?? HOME_RAIL.find((r) => r.id === id);
+      return item ? railLabel(item) : id;
+    },
   };
 
   return (
     <V2NavContext.Provider value={nav}>
       <div className={hudFrame ? "v2-shell v2-shell-hud" : "v2-shell"} ref={shellRef}>
-        <nav className="v2-rail" aria-label="Rooms">
+        <nav className="v2-rail" aria-label={t("common.shellV2.navAriaLabel")}>
           <div className="v2-wordmark">
             <Wordmark size={16} />
             <span className="v2-version">{version}</span>
@@ -153,11 +165,11 @@ export function ShellV2({
                 aria-selected={activeId === item.id}
                 className="v2-nav-item"
                 onClick={() => onNavigate(item.id)}
-                title={item.label}
+                title={railLabel(item)}
                 {...(jarvis ? { "data-magnetic": "" } : {})}
               >
                 <NavGlyph name={item.icon} />
-                <span>{item.label}</span>
+                <span>{railLabel(item)}</span>
                 <kbd>{i + 1}</kbd>
               </button>
             ))}
@@ -166,25 +178,33 @@ export function ShellV2({
             {/* Outbound honesty line (updater ARMED 2026-07-22): the signed update check is now
                 Compy's ONE outbound call, so the old "Zero outbound connections" absolute would
                 be a lie. Copy states exactly what leaves the machine; opt-in Receipts still
-                gates separately and would change this line again when (if) it ships. */}
+                gates separately and would change this line again when (if) it ships.
+                Intentionally NOT run through t() — ShellV2.test.tsx pins this exact English
+                sentence literally (screen.getByText("Outbound: signed update check only")), so
+                this one line stays hardcoded English regardless of app language (i18n task note). */}
             <div className="v2-zero">
               <span className="v2-zero-led" aria-hidden="true" />
               Outbound: signed update check only
             </div>
             <div>
-              Every change reversible · <span className="v2-mono">ledger {ledgerCount}</span>
+              {t("common.shellV2.footerPre")}{" "}
+              <span className="v2-mono">{t("common.shellV2.footerEmph", { n: ledgerCount })}</span>
             </div>
           </div>
         </nav>
 
         <div className="v2-main">
           <div className="v2-top">
-            <span className="v2-room-title">{active?.label ?? "Compy"}</span>
-            {active && <span className="v2-crumb">· {ROOM_CRUMB[active.id]}</span>}
+            <span className="v2-room-title">
+              {active ? railLabel(active) : t("common.shellV2.fallbackTitle")}
+            </span>
+            {active && (
+              <span className="v2-crumb">· {t(`common.shellV2.crumb.${active.id}`)}</span>
+            )}
             {stamp && <span className="v2-stamp">{stamp}</span>}
             <UpdatePill />
             {roomIdentity && active && PICKABLE_ROOMS.includes(active.id as PickableRoom) && (
-              <RoomAccentPicker room={active.id as PickableRoom} roomLabel={active.label} />
+              <RoomAccentPicker room={active.id as PickableRoom} roomLabel={railLabel(active)} />
             )}
           </div>
           <div className="v2-content" ref={contentRef}>

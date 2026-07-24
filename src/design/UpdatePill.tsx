@@ -4,9 +4,13 @@
 // up-to-date build shows zero update chrome (no fake affordances, no "up to date"
 // claims). Consent-first: the pill downloads nothing until "Update now" is clicked.
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+// Side-effect import: guarantees the i18next instance is initialized before this file's t() calls run.
+import "../i18n";
 import { useUpdate } from "./use-update";
 
 export function UpdatePill() {
+  const { t } = useTranslation();
   const { phase, dismissed, install, dismiss } = useUpdate();
   const [open, setOpen] = useState(false);
 
@@ -16,12 +20,14 @@ export function UpdatePill() {
   if (phase.kind === "downloading") {
     return (
       <span className="v2-update v2-update-busy">
-        updating · {phase.pct != null ? `${phase.pct}%` : "starting"}
+        {phase.pct != null
+          ? t("common.updatePill.updatingPct", { pct: phase.pct })
+          : t("common.updatePill.updatingStarting")}
       </span>
     );
   }
   if (phase.kind === "installing") {
-    return <span className="v2-update v2-update-busy">installing — Compy restarts itself</span>;
+    return <span className="v2-update v2-update-busy">{t("common.updatePill.installing")}</span>;
   }
   if (phase.kind === "error") {
     return (
@@ -31,7 +37,7 @@ export function UpdatePill() {
         onClick={install}
         title={phase.message}
       >
-        update failed · retry
+        {t("common.updatePill.updateFailedRetry")}
       </button>
     );
   }
@@ -69,11 +75,17 @@ export function UpdatePill() {
         aria-expanded={open}
       >
         <span className="v2-update-led" aria-hidden="true" />
-        update ready · v{phase.version}
+        {t("common.updatePill.updateReady", { version: phase.version })}
       </button>
       {open && (
-        <div className="v2-update-panel" role="dialog" aria-label="Update details">
-          <div className="v2-update-title">Compy v{phase.version}</div>
+        <div
+          className="v2-update-panel"
+          role="dialog"
+          aria-label={t("common.updatePill.detailsAriaLabel")}
+        >
+          <div className="v2-update-title">
+            {t("common.updatePill.versionTitle", { version: phase.version })}
+          </div>
           {phase.notes ? <div className="v2-update-notes">{phase.notes}</div> : null}
           <div className="v2-update-row">
             <button
@@ -84,7 +96,7 @@ export function UpdatePill() {
                 install();
               }}
             >
-              Update now
+              {t("common.updatePill.updateNow")}
             </button>
             <button
               type="button"
@@ -94,12 +106,10 @@ export function UpdatePill() {
                 dismiss();
               }}
             >
-              Later
+              {t("common.updatePill.later")}
             </button>
           </div>
-          <div className="v2-update-fine">
-            Signature-verified before install · Compy restarts itself
-          </div>
+          <div className="v2-update-fine">{t("common.updatePill.fineprint")}</div>
         </div>
       )}
     </span>

@@ -1,0 +1,312 @@
+{
+  "verdictGlossary": {
+    "real": {
+      "chip": "Real",
+      "definition": "它真的有用。对你的游戏有可衡量、有据可查的效果——值得一做。"
+    },
+    "placebo": {
+      "chip": "Placebo",
+      "definition": "纯属炒作,没有效果。网上很火,但改变不了任何可衡量的东西。我们跳过这些,免得你浪费时间去追它们。"
+    },
+    "risky": {
+      "chip": "Risky — refused",
+      "definition": "代价不值得。它可能确实有点作用,但会带来实打实的代价——不稳定、安全漏洞,或者干脆把东西搞坏——所以 Compy 拒绝执行它,或者把决定权交给你,让你清楚利弊后自己选。"
+    }
+  },
+  "blackbookV2": {
+    "faces": {
+      "logbook": "日志",
+      "guide": "指南库"
+    },
+    "faceToggleAriaLabel": "小黑本(Blackbook)视图",
+    "guideLede": "指南库是 Compy 的资料库:收录每一个优化项和坊间传言,并按实测记录评级——针对这台设备量身参考。",
+    "fieldRecordsLabel": "现场记录",
+    "verdict": {
+      "noRecordHeadline": "在网上听说了什么优化技巧?先在这里查一查再尝试。",
+      "noRecordSub": "我们只回答已经验证过的内容——搜索小黑本,或粘贴整份指南,获取每条说法的评级。",
+      "gradedNoTweaksHeadline_other": "你已在这里核查了 {{count}} 份指南。",
+      "scamFlaggedSoFar_other": "目前已标记 {{count}} 个诈骗套路。",
+      "unratedClaimsSingular": "其中的说法不属于我们已验证的优化项,因此没有评级——我们从不瞎猜。",
+      "unratedClaimsPlural": "其中的说法不属于我们已验证的优化项,因此没有评级——我们从不瞎猜。",
+      "scamFlaggedInline_other": " · 已标记 {{count}} 个诈骗套路",
+      "gradedHeadline_other": "你已核查了 {{count}} 份指南——其中 {{pct}}% 的优化项是真实有效的。",
+      "recognizedBreakdown": "在我们识别的优化项中:{{real}} 项 real · {{placebo}} 项 placebo · {{risky}} 项 risky{{scamPart}}。"
+    }
+  },
+  "blackbookConsole": {
+    "typeLabel": {
+      "guide": "指南",
+      "tweak": "优化项",
+      "term": "术语",
+      "trick": "诈骗套路"
+    },
+    "kindTag": {
+      "change": "变更",
+      "session": "对局",
+      "autopsy": "指南核查",
+      "observed": "观测"
+    },
+    "filterNoun": {
+      "change": "变更",
+      "session": "对局",
+      "autopsy": "核查记录",
+      "observed": "观测记录"
+    },
+    "stripAriaLabel": "小黑本记录的内容",
+    "tiles": {
+      "changesTitle": "这台电脑上的变更",
+      "changesNone": "还没有任何变更",
+      "changesActive": "{{count}} 项生效中 · 每一项都可撤销",
+      "changesInactive": "当前没有生效中的变更 · 但每一项都可撤销",
+      "sessionsTitle": "游戏对局",
+      "sessionsNone": "还没有记录",
+      "sessionsSome": "实测数据,从不猜测",
+      "autopsyTitle": "已核查的指南",
+      "autopsyNone": "还没有核查过",
+      "autopsySome": "每条说法都已评级",
+      "observedTitle": "Compy 之外发生的变化",
+      "observedSub": "驱动 · Windows · 硬件 · 电源"
+    },
+    "scamFlagged_other": "{{count}} 个诈骗套路被标记",
+    "empty": {
+      "title": "暂无记录",
+      "sub": "Compy 会在这里实时记录每一次变更、每一局游戏和每一次指南核查。"
+    },
+    "sectionHead": {
+      "record": "记录",
+      "since": "Compy 在这台电脑上做过的一切 · 自 "
+    },
+    "changeBody": {
+      "titlePre": "Compy 应用了",
+      "stillOn": "仍在生效",
+      "rolledBack": "已撤销",
+      "noLongerActive": "已不再生效",
+      "restoresPre": "撤销后将恢复为"
+    },
+    "sessionBody": {
+      "titlePre": "你玩了",
+      "unknownGame": "未知游戏",
+      "titlePost": ",时长 ",
+      "oneLow": "1% 最低帧",
+      "delta": "{{arrow}} 较上次 {{sign}}{{value}} fps",
+      "changesOn_other": "{{count}} 项优化生效中"
+    },
+    "autopsyBody": {
+      "title": "你核查了一份指南",
+      "real": "real",
+      "placebo": "placebo",
+      "risky": "risky",
+      "noClaims": "没有我们能识别的说法——我们从不瞎猜"
+    },
+    "observedBody": {
+      "betweenPre": "介于 ",
+      "betweenMid": " 至 ",
+      "noDetail": "在两次 Compy 读数之间发现的变化。"
+    },
+    "tapeMore_other": "显示 {{count}} 条更早的记录",
+    "manageJump_other": "{{count}} 项优化仍在生效——前往实验室撤销",
+    "library": {
+      "eyebrow": "指南库",
+      "scent": "在网上看到什么优化技巧?先查一查再动手——每一条说法都经过评级。",
+      "openAll": "打开指南库"
+    }
+  },
+  "patternsTile": {
+    "confidenceLevel": {
+      "unknown": "未知",
+      "low": "低",
+      "medium": "中",
+      "high": "高"
+    },
+    "confidenceLabel": "{{level}}置信度",
+    "hideTheWorking": "收起推理过程",
+    "whyWeThinkSo": "我们为什么这么判断",
+    "evidenceLabel": "依据",
+    "raisesConfidenceLabel": "怎样能让判断更明确",
+    "nextTestLabel": "下一步验证",
+    "sectionTitle": "跨对局的规律",
+    "fromSessions_other": "来自 {{count}} 场对局",
+    "andGames_other": " · {{count}} 款游戏",
+    "none": "目前还没有明确的跨对局规律——一切都还在正常波动范围内。",
+    "coverageLabel": "Compy 目前还无法判断的部分"
+  },
+  "learn": {
+    "tagline": "什么才是真正有用的——用实测说话。查一查你在网上听说的任何优化项、术语或骗局;我们只回答已经验证过的内容。",
+    "close": "关闭",
+    "modeAriaLabel": "小黑本模式",
+    "modes": {
+      "browse": "查一查",
+      "autopsy": "解剖指南"
+    },
+    "autopsyHint": "有指南想核实?试试解剖",
+    "searchAriaLabel": "搜索知识库",
+    "searchPlaceholder": "试试“{{example}}”…",
+    "filterByTypeAriaLabel": "按类型筛选",
+    "filters": {
+      "all": "全部",
+      "tweak": "优化项",
+      "term": "术语",
+      "trick": "诈骗套路",
+      "guide": "指南"
+    },
+    "moreFilters": "更多筛选 ▸",
+    "fewerFilters": "收起筛选 ▾",
+    "verdictFilterAriaLabel": "按结论筛选优化项",
+    "gradeLabel": "结论:",
+    "anyVerdict": "不限结论",
+    "verdictFilters": {
+      "real": "Real",
+      "placebo": "Placebo",
+      "risky": "Risky"
+    },
+    "topicFilterAriaLabel": "按主题筛选",
+    "topicLabel": "主题:",
+    "anyTopic": "不限主题",
+    "fitsFilterAriaLabel": "按适配设备筛选",
+    "fitsLabel": "适配:",
+    "anyRig": "不限设备",
+    "topicLabels": {
+      "display": "显示器",
+      "input": "鼠标与键盘",
+      "network": "网络",
+      "cpu": "CPU",
+      "gpu": "GPU",
+      "memory": "内存(RAM)",
+      "storage": "存储",
+      "windows": "Windows 与系统",
+      "power": "电源与散热",
+      "general": "通用"
+    },
+    "applicabilityLabels": {
+      "amd": "AMD",
+      "nvidia": "NVIDIA",
+      "intel": "Intel",
+      "laptop": "笔记本",
+      "desktop": "台式机"
+    },
+    "howWeGrade": "我们如何评级",
+    "goldenRules": "一次只改一项 · 先建还原点 · 用实测说话,而非凭感觉",
+    "empty": "还没有相关词条——我们只回答已经验证过的内容。如果你不确定某个不在这里的优化项,不妨用 Compy 的基准测试实测一下,而不是轻信论坛帖子。",
+    "startHere": "从这里开始",
+    "typeLabel": {
+      "guide": "指南",
+      "tweak": "优化项",
+      "term": "术语",
+      "trick": "诈骗套路"
+    },
+    "typeLabelPlural": {
+      "guide": "指南",
+      "tweak": "优化项",
+      "term": "术语",
+      "trick": "诈骗套路"
+    },
+    "typeDesc": {
+      "guide": "手把手的操作流程,每一条说法都经过逐条核查",
+      "tweak": "单项设置,每一项都被评为 Real、Placebo 或 Risky",
+      "term": "把行话黑话,翻译成大白话",
+      "trick": "假优化工具惯用的套路——在被坑之前先认出它们"
+    },
+    "guideSafePill": "指南 · 安全",
+    "entryTypeBody": {
+      "spotIt": "识别方法:",
+      "honestVersion": "真实情况:",
+      "undo": "撤销方法:"
+    },
+    "related": "相关内容",
+    "showMeTheWay": "带我看看怎么做",
+    "dateNote": {
+      "addedPre": "收录于 ",
+      "updatedMid": " · 更新于 "
+    },
+    "superseded": {
+      "warning": "⚠ 已被替代",
+      "seeLinkPre": " ——参见 ",
+      "afterLink": "。仅作参考保留;当前指导已有更新。",
+      "replacedSteps": "替代路径:",
+      "arrow": " → ",
+      "outdated": "⚠ 已过时——仅作参考保留,该指导已不再适用。"
+    },
+    "applicableTitle": "适用于 {{label}} 平台",
+    "autopsy": {
+      "subLede": "粘贴一份优化指南——一篇论坛帖子、一段视频简介,或者一份“照做这10件事”的清单——就能得到解剖结果。内容不会离开你的电脑;全部在本地离线比对这个知识库。",
+      "recordTitle": "你的解剖记录",
+      "recordGuides_other": "已评级 {{count}} 份指南",
+      "recordBreakdownPre": "——其中被识别的优化项:",
+      "recordRealPct": "{{pct}}% real",
+      "recordPlaceboPct": "{{pct}}% placebo",
+      "recordRiskyPct": "{{pct}}% risky",
+      "recordScamPre": " · ",
+      "recordScam_other": "{{count}} 个诈骗套路被标记",
+      "textareaAriaLabel": "粘贴一份优化指南进行解剖",
+      "textareaPlaceholder": "在此粘贴指南…",
+      "gradeButton": "开始评级",
+      "clear": "清空",
+      "urlLead": "这是一个链接——而 Compy 从不联网抓取内容(什么都不会离开你的电脑,这是我们的原则)。把文字内容直接给我吧:",
+      "urlHowYoutube": "打开视频的文字记录(⋯ 菜单 → 显示文字记录)→ 复制 → 粘贴到这里。",
+      "urlHowWebpage": "打开网页 → Ctrl+A、Ctrl+C → 粘贴到这里。我会为每一条说法评级。",
+      "resultEmpty": "这段内容里我们没有识别出任何认识的东西。粘贴一份真正提到具体优化项或设置的指南,我们会逐条评级。",
+      "clearAndPasteAnother": "清空并粘贴另一份",
+      "stickyPrefix": "解剖:",
+      "claimsGraded_other": "已评级 {{count}} 条说法",
+      "gradePrefix": "这份指南:",
+      "real": "real",
+      "placebo": "placebo",
+      "risky": "risky",
+      "unrecognized_other": "{{count}} 项我们无法识别的内容",
+      "scamFlags_other": "这里有 {{count}} 个已知诈骗套路——展开下方标记的行查看详情。",
+      "resultNote": "无法识别的内容不会给出结论——我们绝不瞎猜。点击任意一行即可在此查看详情。",
+      "openFullEntry": "查看完整词条 →",
+      "safeHowTo": "有安全的操作方法 →",
+      "truncated": "内容过长,我们只对前 {{chars}} 个字符做了评级。"
+    }
+  },
+  "tuningDebrief": {
+    "confirmReplace": {
+      "title": "替换已启用的对比?",
+      "body": "已经启用了一项对比({{title}} · {{game}})。启用这次降压检测将替换该基线。",
+      "confirmLabel": "替换并启用"
+    },
+    "arm": {
+      "title": "这次会话之后降压了吗?来测一测。",
+      "sub": "这次会话之后在 Adrenalin 里降压了吗?启用一次降压检测,Compy 会在接下来的对局里帮你测量——温度有没有下降、帧数有没有保住?Compy 绝不会修改你的电压设置。",
+      "button": "我降压了——开始测量"
+    },
+    "measure": {
+      "title": "{{label}}检测 · {{game}}",
+      "reset": "我已重置或重新调校"
+    },
+    "crash": {
+      "question": "这次对局有没有崩溃、卡死,或者出现画面异常?黑屏重启的情况 Compy 是看不到的。",
+      "button": "有——太激进了"
+    }
+  },
+  "tuningGuide": {
+    "normalNumber": "什么样的数值算“正常”?",
+    "discretion": "取舍建议:",
+    "undo": "撤销方法:"
+  },
+  "tuningInstrument": {
+    "qualifiesMark": "这台设备符合条件的原因:",
+    "qualifiesConnector": " 实测依据——",
+    "notForRigMark": "这台设备目前不符合条件:",
+    "notForRigRest": "。Compy 只会在你自己的实测结果显示确实有帮助时才建议调校——如果你好奇,完整指南仍然保留在小黑本里(搜索“undervolt”即可找到)。",
+    "readoutHead": "稳定性和散热",
+    "readoutEmpty": "还没有调校数据。先在 Adrenalin 里降压,然后在「监测」的对局总结里启用一条基线——Compy 会持续观察温度有没有下降、帧数有没有保住。",
+    "recentLabel": "近期对局——峰值温度与稳定性",
+    "showMeTheWay": "带我看看怎么做",
+    "unknownGame": "未知",
+    "smoothness": {
+      "smooth": "流畅",
+      "someDips": "偶有卡顿",
+      "rough": "不稳定"
+    },
+    "gaugeFoot": "只是仪表,不是控制开关——Compy 绝不会修改你的电压设置。 ",
+    "gaugeFootSuffix": " + GPU 传感器,外部读取 · 不做任何注入。"
+  },
+  "tuningVerdict": {
+    "peakTemp": "峰值温度 ",
+    "oneLow": "1% 最低帧",
+    "vsBaseline": " 相比基线",
+    "sessionsSinceTune_other": "调校后已进行 {{count}} 场对局"
+  }
+}

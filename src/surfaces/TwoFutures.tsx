@@ -1,4 +1,8 @@
 import { lazy, Suspense } from "react";
+import { useTranslation } from "react-i18next";
+// Side-effect import: guarantees the i18next singleton is initialized even when this component
+// is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
+import "../i18n";
 import { Card, SectionHeader, StatusPill } from "../design";
 import { changeAttribution, componentLabel, verdictLabel, verdictTone, fmtDelta } from "./benchmark-view";
 import { hasMeasuredPair } from "./two-futures-view";
@@ -24,31 +28,26 @@ export function TwoFutures({
       carried (this card subsumes it when the flag is on, so the line moves here). */
   changes?: AppliedChange[];
 }) {
+  const { t } = useTranslation();
   if (!hasMeasuredPair(bench)) {
     return (
       <Card>
-        <SectionHeader title="Two futures" />
+        <SectionHeader title={t("gaming.twoFutures.heading")} />
         <div data-testid="two-futures-empty">
-          <p className="bench-muted">
-            Run a benchmark before and after a fix to earn this view: your rig as it measured
-            at the baseline, next to how it measures now.
-          </p>
-          <p className="bench-fine">
-            Set a baseline above, change one thing, then re-measure — the split renders only
-            from those two real runs.
-          </p>
+          <p className="bench-muted">{t("gaming.twoFutures.emptyIntro")}</p>
+          <p className="bench-fine">{t("gaming.twoFutures.emptyHint")}</p>
         </div>
       </Card>
     );
   }
 
   const eff = bench.efficacy;
-  const attr = changeAttribution(changes.length);
+  const attr = changeAttribution(changes.length, t);
   return (
     <Card>
       <SectionHeader
-        title="Two futures"
-        right={<StatusPill status={verdictTone(eff.overall)} label={verdictLabel(eff.overall)} />}
+        title={t("gaming.twoFutures.heading")}
+        right={<StatusPill status={verdictTone(eff.overall)} label={verdictLabel(eff.overall, t)} />}
       />
       <div data-testid="two-futures-split">
         <p className="bench-change">
@@ -58,22 +57,22 @@ export function TwoFutures({
               {attr.caveat ? ` ${attr.caveat}` : ""}
             </>
           ) : (
-            <>No Compy changes recorded since the baseline — this reflects manual or ambient changes.</>
+            <>{t("gaming.twoFutures.noChangesRecorded")}</>
           )}
         </p>
         <div className="tf-heads">
           <div className="tf-head">
-            <span className="tf-eyebrow">Baseline</span>
+            <span className="tf-eyebrow">{t("gaming.twoFutures.baselineLabel")}</span>
             <span className="tf-date">{fmtWhen(bench.baseline_at)}</span>
           </div>
           <div className="tf-head tf-head-now">
-            <span className="tf-eyebrow">Now</span>
+            <span className="tf-eyebrow">{t("gaming.twoFutures.nowLabel")}</span>
             <span className="tf-date">{fmtWhen(bench.latest_at)}</span>
           </div>
         </div>
         {hw && (
           <div className="tf-stage">
-            <Suspense fallback={<div className="tf-loading">Loading the split…</div>}>
+            <Suspense fallback={<div className="tf-loading">{t("gaming.twoFutures.loadingSplit")}</div>}>
               <TwoFuturesScene hw={hw} efficacy={eff} />
             </Suspense>
           </div>
@@ -81,20 +80,19 @@ export function TwoFutures({
         <div className="tf-rail">
           {eff.per_component.map((c) => (
             <div className="tf-row" key={c.component}>
-              <span className="tf-label">{componentLabel(c.component)}</span>
+              <span className="tf-label">{componentLabel(c.component, t)}</span>
               <span className="tf-pair">
                 {c.before} <span className="tf-arrow">→</span> {c.after}
               </span>
               <span className={`bench-eff-delta is-${verdictTone(c.verdict)}`}>
                 {fmtDelta(c.delta_pct)}
               </span>
-              <StatusPill status={verdictTone(c.verdict)} label={verdictLabel(c.verdict)} />
+              <StatusPill status={verdictTone(c.verdict)} label={verdictLabel(c.verdict, t)} />
             </div>
           ))}
         </div>
         <p className="bench-fine">
-          Relative scores (0–100) from your own two runs — changes within ±{eff.noise_floor_pct}%
-          read as “no measurable change”.
+          {t("gaming.twoFutures.scoresNote", { pct: eff.noise_floor_pct })}
         </p>
       </div>
     </Card>

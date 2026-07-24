@@ -1,6 +1,8 @@
+import { useTranslation } from "react-i18next";
 import type { SessionSummary } from "../types";
 import { computeSessionTrends } from "../data/sessionTrends";
 import { ProGate } from "./ProGate";
+import "../i18n";
 import "./SessionTrends.css";
 
 // Compy Pro — long-term history & trends over the full retained session set (the free list above shows
@@ -17,28 +19,40 @@ export function SessionTrends({
   sessions: SessionSummary[];
   hideCount?: boolean;
 }) {
-  const t = computeSessionTrends(sessions);
-  if (t.total < 2) return null; // nothing to trend yet
+  const { t: translate } = useTranslation();
+  const trends = computeSessionTrends(sessions);
+  if (trends.total < 2) return null; // nothing to trend yet
   const arrow =
-    t.trend === "up" ? "▲ trending up" : t.trend === "down" ? "▼ trending down" : t.trend === "flat" ? "→ steady" : "";
+    trends.trend === "up"
+      ? translate("monitor.sessionTrends.trendUp")
+      : trends.trend === "down"
+        ? translate("monitor.sessionTrends.trendDown")
+        : trends.trend === "flat"
+          ? translate("monitor.sessionTrends.trendFlat")
+          : "";
   const subParts = [
-    ...(hideCount ? [] : [`${t.total} sessions kept`]),
+    ...(hideCount ? [] : [translate("monitor.sessionTrends.sessionsKept", { count: trends.total })]),
     ...(arrow ? [arrow] : []),
-    ...(t.overallBestFps > 0 ? [`best ${t.overallBestFps.toFixed(0)} fps`] : []),
+    ...(trends.overallBestFps > 0
+      ? [translate("monitor.sessionTrends.bestFps", { fps: trends.overallBestFps.toFixed(0) })]
+      : []),
   ];
   return (
-    <ProGate feature="Long-term history & trends">
+    <ProGate feature={translate("monitor.sessionTrends.proGateFeature")}>
       <section className="strends">
         <header className="strends-head">
-          <span className="strends-title">History &amp; trends</span>
+          <span className="strends-title">{translate("monitor.sessionTrends.historyAndTrends")}</span>
           <span className="strends-sub">{subParts.join(" · ")}</span>
         </header>
         <ul className="strends-games">
-          {t.games.slice(0, 6).map((g) => (
+          {trends.games.slice(0, 6).map((g) => (
             <li key={g.game} className="strends-game">
               <span className="strends-game-name">{g.game}</span>
               <span className="strends-game-stat">
-                {g.sessions} session{g.sessions === 1 ? "" : "s"} · best {g.bestAvgFps.toFixed(0)} fps
+                {translate("monitor.sessionTrends.gameStat", {
+                  count: g.sessions,
+                  fps: g.bestAvgFps.toFixed(0),
+                })}
               </span>
             </li>
           ))}

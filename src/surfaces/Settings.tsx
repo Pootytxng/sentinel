@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import {
   type InstrumentTheme,
@@ -21,6 +22,7 @@ import { Wordmark } from "../design/Wordmark";
 import { BackButton, ForwardButton } from "../design/BackButton";
 import { readMotionPref, setMotionPref, type MotionPref } from "../design/use-motion";
 import { readExpertView, setExpertView } from "../design/use-expert-view";
+import { APP_LANGUAGES, readLanguage, applyLanguage, type AppLanguage } from "../i18n/language";
 import ReceiptsConsent from "./ReceiptsConsent";
 import { LicensePanel } from "./LicensePanel";
 import { FeedbackExport } from "./FeedbackExport";
@@ -32,19 +34,17 @@ import "./Settings.css";
 
 // Theme identity swatches — a theme PICKER must show each theme's real colors, so these literal
 // kernel values are the justified exception to "tokens-only" (same pattern as the classic picker).
-const THEME_CARDS: { id: InstrumentTheme; label: string; swatch: [string, string, string] }[] = [
-  { id: "midnight", label: "Midnight", swatch: ["#090b12", "#2ee6c0", "#7c9cff"] },
-  { id: "violet", label: "Violet", swatch: ["#0c0a14", "#b366ff", "#ff77c8"] },
-  { id: "crimson", label: "Crimson", swatch: ["#120a0c", "#fb3b53", "#ff6b81"] },
-  { id: "emerald", label: "Emerald", swatch: ["#080f0b", "#27e08a", "#a8e85a"] },
-  { id: "hearth", label: "Hearth", swatch: ["#15100a", "#f0b878", "#b65f54"] },
+// Labels are translation keys (settings.appearance.themes.<id>), not literals — theme.ts owns the
+// canonical id list; this file only owns how each id is *shown*.
+const THEME_CARDS: { id: InstrumentTheme; swatch: [string, string, string] }[] = [
+  { id: "midnight", swatch: ["#090b12", "#2ee6c0", "#7c9cff"] },
+  { id: "violet", swatch: ["#0c0a14", "#b366ff", "#ff77c8"] },
+  { id: "crimson", swatch: ["#120a0c", "#fb3b53", "#ff6b81"] },
+  { id: "emerald", swatch: ["#080f0b", "#27e08a", "#a8e85a"] },
+  { id: "hearth", swatch: ["#15100a", "#f0b878", "#b65f54"] },
 ];
 
-const DENSITIES: { id: OverlayDensity; label: string }[] = [
-  { id: "minimal", label: "Minimal" },
-  { id: "standard", label: "Standard" },
-  { id: "full", label: "Full" },
-];
+const DENSITIES: OverlayDensity[] = ["minimal", "standard", "full"];
 
 function Toggle({
   on,
@@ -71,6 +71,7 @@ function Toggle({
 
 // A small static preview reflecting the live theme (via --ix tokens).
 function LivePreview() {
+  const { t } = useTranslation();
   const streaks = 3;
   return (
     <div className="set-preview" aria-hidden="true">
@@ -90,7 +91,7 @@ function LivePreview() {
           transform="rotate(-90 30 30)"
         />
       </svg>
-      <span className="set-preview-label">Live preview</span>
+      <span className="set-preview-label">{t("settings.appearance.livePreview")}</span>
     </div>
   );
 }
@@ -114,6 +115,7 @@ export default function Settings({
   onRerunSetup: () => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const [itheme, setITheme] = useState<InstrumentTheme>(readInstrumentTheme);
   const [monitorConsole, setMonitorConsole] = useState<boolean>(readMonitorConsole);
   const [jarvisMotion, setJarvisMotion] = useState<boolean>(readJarvisMotion);
@@ -122,6 +124,9 @@ export default function Settings({
   const [backdrop, setBackdrop] = useState<OverlayBackdrop>(readOverlayBackdrop);
   const [motion, setMotion] = useState<MotionPref>(readMotionPref);
   const [expertView, setExpertViewState] = useState<boolean>(readExpertView);
+  // Language (2026-07-23): a genuine app-wide preference like Motion/Theme — persists via the same
+  // guarded-localStorage convention and flips the live i18next instance immediately (no reload).
+  const [language, setLanguageState] = useState<AppLanguage>(readLanguage);
   // §C build stamp (spec 2026-06-12): compile-time provenance from the backend — review hygiene.
   const [buildStamp, setBuildStamp] = useState<string | null>(null);
   useEffect(() => {
@@ -181,6 +186,10 @@ export default function Settings({
     setBackdrop(b);
     persistOverlayBackdrop(b);
   };
+  const changeLanguage = (l: AppLanguage) => {
+    setLanguageState(l);
+    applyLanguage(l); // persists, flips i18next + <html lang> live, notifies listeners
+  };
 
   return (
     <div className="set-root">
@@ -191,37 +200,41 @@ export default function Settings({
             <ForwardButton onForward={onForward} canGoForward={canGoForward} />
             {/* §6 — the shared Wordmark, the ONLY sanctioned brand source (no bespoke glyph). */}
             <Wordmark size={22} />
-            <h1 className="set-title">Settings</h1>
+            <h1 className="set-title">{t("settings.title")}</h1>
           </span>
           <button className="set-done" onClick={onClose}>
-            Done
+            {t("settings.done")}
           </button>
         </header>
-        <p className="set-tagline">Make it yours. None of this touches what Compy measures.</p>
+        <p className="set-tagline">{t("settings.tagline")}</p>
 
         {/* ── Appearance ── */}
         <section className="set-section">
-          <h2 className="set-section-title">Appearance</h2>
+          <h2 className="set-section-title">{t("settings.appearance.sectionTitle")}</h2>
           <div className="set-appearance">
             <div className="set-appearance-controls">
-              <div className="set-field-label" id="set-theme-label">Theme</div>
+              <div className="set-field-label" id="set-theme-label">
+                {t("settings.appearance.themeLabel")}
+              </div>
               <div className="set-themes" role="group" aria-labelledby="set-theme-label">
-                {THEME_CARDS.map((t) => (
+                {THEME_CARDS.map((th) => (
                   <button
-                    key={t.id}
-                    className={`set-theme ${itheme === t.id ? "set-theme-on" : ""}`}
-                    aria-pressed={itheme === t.id}
+                    key={th.id}
+                    className={`set-theme ${itheme === th.id ? "set-theme-on" : ""}`}
+                    aria-pressed={itheme === th.id}
                     onClick={() => {
-                      setITheme(t.id);
-                      applyInstrumentTheme(t.id);
+                      setITheme(th.id);
+                      applyInstrumentTheme(th.id);
                     }}
                   >
                     <span className="set-theme-swatch">
-                      {t.swatch.map((c, i) => (
+                      {th.swatch.map((c, i) => (
                         <span key={i} style={{ background: c }} />
                       ))}
                     </span>
-                    <span className="set-theme-label">{t.label}</span>
+                    <span className="set-theme-label">
+                      {t(`settings.appearance.themes.${th.id}`)}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -238,34 +251,25 @@ export default function Settings({
                   (the "0" setting restores the classic look). */}
               <div className="set-row set-row-inset">
                 <div className="set-row-text">
-                  <div className="set-row-title">Monitor console</div>
-                  <div className="set-row-sub">
-                    Monitor's live face as an instrument cluster: rolling fps and frametime
-                    traces with honest gauges. Same sensors, same measurements — turn off for
-                    the classic live tiles.
-                  </div>
+                  <div className="set-row-title">{t("settings.appearance.monitorConsole.title")}</div>
+                  <div className="set-row-sub">{t("settings.appearance.monitorConsole.sub")}</div>
                 </div>
                 <Toggle
                   on={monitorConsole}
                   onChange={changeMonitorConsole}
-                  ariaLabel="Monitor console"
+                  ariaLabel={t("settings.appearance.monitorConsole.title")}
                 />
               </div>
 
               <div className="set-row set-row-inset">
                 <div className="set-row-text">
-                  <div className="set-row-title">JARVIS motion</div>
-                  <div className="set-row-sub">
-                    Turns interface animation on or off: smooth scrolling, a short transition
-                    when you change rooms, buttons that shift toward the cursor, and a tick on
-                    gauges when a reading updates. It changes how things move, never what Compy
-                    measures. The Motion setting below still wins.
-                  </div>
+                  <div className="set-row-title">{t("settings.appearance.jarvisMotion.title")}</div>
+                  <div className="set-row-sub">{t("settings.appearance.jarvisMotion.sub")}</div>
                 </div>
                 <Toggle
                   on={jarvisMotion}
                   onChange={changeJarvisMotion}
-                  ariaLabel="JARVIS motion"
+                  ariaLabel={t("settings.appearance.jarvisMotion.title")}
                 />
               </div>
 
@@ -280,92 +284,106 @@ export default function Settings({
           </div>
         </section>
 
-        {/* ── Behavior ── */}
+        {/* ── Language (2026-07-23) ── */}
         <section className="set-section">
-          <h2 className="set-section-title">Behavior</h2>
+          <h2 className="set-section-title">{t("settings.language.sectionTitle")}</h2>
           <div className="set-row">
             <div className="set-row-text">
-              <div className="set-row-title">When I close, keep Compy running in the tray</div>
-              <div className="set-row-sub">
-                Off (default): closing fully quits Compy. On: closing tucks it into the system tray —
-                you'll see the Compy icon there. Right-click it for Show or Quit; hover for live FPS
-                while you play.
+              <div className="set-row-title" id="set-language-label">
+                {t("settings.language.title")}
               </div>
+              <div className="set-row-sub">{t("settings.language.sub")}</div>
+            </div>
+            <div className="set-seg" role="group" aria-labelledby="set-language-label">
+              {APP_LANGUAGES.map((l) => (
+                <button
+                  key={l.id}
+                  className={`set-seg-btn ${language === l.id ? "set-seg-on" : ""}`}
+                  aria-pressed={language === l.id}
+                  onClick={() => changeLanguage(l.id)}
+                >
+                  {l.nativeLabel}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Behavior ── */}
+        <section className="set-section">
+          <h2 className="set-section-title">{t("settings.behavior.sectionTitle")}</h2>
+          <div className="set-row">
+            <div className="set-row-text">
+              <div className="set-row-title">{t("settings.behavior.closeToTray.title")}</div>
+              <div className="set-row-sub">{t("settings.behavior.closeToTray.sub")}</div>
             </div>
             <Toggle
               on={closeToTray}
               onChange={changeCloseToTray}
-              ariaLabel="When I close, keep Compy running in the tray"
+              ariaLabel={t("settings.behavior.closeToTray.title")}
             />
           </div>
           <div className="set-row">
             <div className="set-row-text">
-              <div className="set-row-title">Motion</div>
-              <div className="set-row-sub">
-                Compy's living motion is on by default, even if Windows requests reduced motion. Choose
-                Follow system to defer to Windows, or Reduced to keep everything calm.
-              </div>
+              <div className="set-row-title">{t("settings.behavior.motion.title")}</div>
+              <div className="set-row-sub">{t("settings.behavior.motion.sub")}</div>
             </div>
-            <div className="set-seg" role="group" aria-label="Motion">
-              {(
-                [
-                  ["full", "Full"],
-                  ["system", "Follow system"],
-                  ["reduced", "Reduced"],
-                ] as [MotionPref, string][]
-              ).map(([id, label]) => (
+            <div className="set-seg" role="group" aria-label={t("settings.behavior.motion.title")}>
+              {(["full", "system", "reduced"] as MotionPref[]).map((id) => (
                 <button
                   key={id}
                   className={`set-seg-btn ${motion === id ? "set-seg-on" : ""}`}
                   aria-pressed={motion === id}
                   onClick={() => changeMotion(id)}
                 >
-                  {label}
+                  {t(`settings.behavior.motion.${id}`)}
                 </button>
               ))}
             </div>
           </div>
           <div className="set-row">
             <div className="set-row-text">
-              <div className="set-row-title">Expert view</div>
-              <div className="set-row-sub">
-                For tinkerers: shows every tweak's technical name and the exact registry key,
-                service, or setting it touches, opens the "deliberately refused" list with full
-                reasoning, and swaps rounded stats for raw measured values. Same tweaks, same
-                safety rails — nothing new becomes appliable.
-              </div>
+              <div className="set-row-title">{t("settings.behavior.expertView.title")}</div>
+              <div className="set-row-sub">{t("settings.behavior.expertView.sub")}</div>
             </div>
-            <Toggle on={expertView} onChange={changeExpertView} ariaLabel="Expert view" />
+            <Toggle
+              on={expertView}
+              onChange={changeExpertView}
+              ariaLabel={t("settings.behavior.expertView.title")}
+            />
           </div>
           <div className="set-row">
             <div className="set-row-text">
-              <div className="set-row-title">In-game overlay density</div>
-              <div className="set-row-sub">
-                What the in-game overlay shows: just FPS · + 1%/temp/GPU · + a frametime line.
-              </div>
+              <div className="set-row-title">{t("settings.behavior.overlayDensity.title")}</div>
+              <div className="set-row-sub">{t("settings.behavior.overlayDensity.sub")}</div>
             </div>
-            <div className="set-seg" role="group" aria-label="Overlay density">
+            <div
+              className="set-seg"
+              role="group"
+              aria-label={t("settings.behavior.overlayDensity.title")}
+            >
               {DENSITIES.map((d) => (
                 <button
-                  key={d.id}
-                  className={`set-seg-btn ${density === d.id ? "set-seg-on" : ""}`}
-                  aria-pressed={density === d.id}
-                  onClick={() => changeDensity(d.id)}
+                  key={d}
+                  className={`set-seg-btn ${density === d ? "set-seg-on" : ""}`}
+                  aria-pressed={density === d}
+                  onClick={() => changeDensity(d)}
                 >
-                  {d.label}
+                  {t(`settings.behavior.overlayDensity.${d}`)}
                 </button>
               ))}
             </div>
           </div>
           <div className="set-row">
             <div className="set-row-text">
-              <div className="set-row-title">In-game overlay background</div>
-              <div className="set-row-sub">
-                Off makes the overlay see-through — the numbers float on the game, outlined so they
-                stay readable.
-              </div>
+              <div className="set-row-title">{t("settings.behavior.overlayBackdrop.title")}</div>
+              <div className="set-row-sub">{t("settings.behavior.overlayBackdrop.sub")}</div>
             </div>
-            <div className="set-seg" role="group" aria-label="Overlay background">
+            <div
+              className="set-seg"
+              role="group"
+              aria-label={t("settings.behavior.overlayBackdrop.title")}
+            >
               {(["on", "off"] as OverlayBackdrop[]).map((b) => (
                 <button
                   key={b}
@@ -373,7 +391,7 @@ export default function Settings({
                   aria-pressed={backdrop === b}
                   onClick={() => changeBackdrop(b)}
                 >
-                  {b === "on" ? "On" : "Off"}
+                  {t(`settings.behavior.overlayBackdrop.${b}`)}
                 </button>
               ))}
             </div>
@@ -387,14 +405,14 @@ export default function Settings({
 
         {/* ── Setup (re-homed from the global footer, halfway-home §0) ── */}
         <section className="set-section">
-          <h2 className="set-section-title">Setup</h2>
+          <h2 className="set-section-title">{t("settings.setup.sectionTitle")}</h2>
           <div className="set-row">
             <div className="set-row-text">
-              <div className="set-row-title">Re-run the guided setup</div>
-              <div className="set-row-sub">Replay the intro, then run a fresh first check.</div>
+              <div className="set-row-title">{t("settings.setup.title")}</div>
+              <div className="set-row-sub">{t("settings.setup.sub")}</div>
             </div>
             <button className="set-action" onClick={onRerunSetup}>
-              Re-run setup
+              {t("settings.setup.action")}
             </button>
           </div>
         </section>
@@ -413,15 +431,13 @@ export default function Settings({
         {/* ── About ── */}
 
         <section className="set-section">
-          <h2 className="set-section-title">About</h2>
+          <h2 className="set-section-title">{t("settings.about.sectionTitle")}</h2>
           <div className="set-about">
             <div className="set-about-name">
               Compy <span className="set-about-version">v{appVersion}</span>
               {buildStamp && <span className="set-about-stamp"> · {buildStamp}</span>}
             </div>
-            <p className="set-about-privacy">
-              Fully local. No account, no telemetry, nothing leaves your PC.
-            </p>
+            <p className="set-about-privacy">{t("settings.about.privacy")}</p>
             {/* Rules-source — engineering status, re-homed here from the header (one-rail §1b). */}
             <p className="set-about-rules">{rulesSourceLabel}</p>
           </div>

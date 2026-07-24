@@ -1,6 +1,10 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import type { GameReadiness } from "../types";
 import { readLastCheck, formatCheckAge } from "./last-check";
+// Side-effect import: guarantees the i18next singleton is initialized even when this component
+// is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
+import "../i18n";
 import "./RerunCheckBand.css";
 
 // The Home masthead status + action module — owner-approved "A · Status band" (relocated + redesigned
@@ -37,6 +41,7 @@ export function RerunCheckBand({
   checking: boolean;
   onRunCheck: () => void;
 }) {
+  const { t } = useTranslation();
   const snap = checking ? null : readLastCheck();
 
   let tag: string;
@@ -44,23 +49,25 @@ export function RerunCheckBand({
   let warn = false;
 
   if (checking) {
-    tag = "Checking";
-    status = "running checks…";
+    tag = t("optimize.rerunCheckBand.tagChecking");
+    status = t("optimize.rerunCheckBand.runningChecks");
   } else if (snap) {
     warn = snap.fixCount > 0;
-    tag = "Last check";
-    const age = formatCheckAge(snap.at, Date.now());
+    tag = t("optimize.rerunCheckBand.tagLastCheck");
+    const age = formatCheckAge(snap.at, Date.now(), t);
     status = warn ? (
       <>
-        {age} · <b className="rcb-num">{snap.fixCount}</b> to fix
+        {t("optimize.rerunCheckBand.agePre", { age })}
+        <b className="rcb-num">{snap.fixCount}</b>
+        {t("optimize.rerunCheckBand.toFixSuffix")}
       </>
     ) : (
       <>
-        {age} ·{" "}
+        {t("optimize.rerunCheckBand.agePre", { age })}
         <b className="rcb-num">
           {snap.green}/{snap.total}
-        </b>{" "}
-        clean
+        </b>
+        {t("optimize.rerunCheckBand.cleanSuffix")}
       </>
     );
   } else {
@@ -70,20 +77,20 @@ export function RerunCheckBand({
     const measured = total - (readiness?.unknown_count ?? 0);
     const attention = readiness?.attention_count ?? 0;
     warn = attention > 0;
-    tag = "Checks";
+    tag = t("optimize.rerunCheckBand.tagChecks");
     status = warn ? (
       <>
         <b className="rcb-num">
           {measured}/{total}
-        </b>{" "}
-        measured · {attention} flagged
+        </b>
+        {t("optimize.rerunCheckBand.measuredFlaggedSuffix", { attention })}
       </>
     ) : (
       <>
         <b className="rcb-num">
           {measured}/{total}
-        </b>{" "}
-        clean
+        </b>
+        {t("optimize.rerunCheckBand.cleanSuffix")}
       </>
     );
   }
@@ -102,7 +109,7 @@ export function RerunCheckBand({
       </div>
       <button type="button" className="rcb-btn" onClick={onRunCheck} disabled={checking}>
         <span className="rcb-ic">{REFRESH_ICON}</span>
-        {checking ? "Checking…" : "Re-run check"}
+        {checking ? t("optimize.rerunCheckBand.checkingButton") : t("optimize.rerunCheckBand.rerunButton")}
       </button>
     </div>
   );

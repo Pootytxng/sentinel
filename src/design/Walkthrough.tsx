@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+// Side-effect import: guarantees the i18next instance is initialized before this file's t() calls run.
+import "../i18n";
 import {
   type Walkthrough as WT,
   type WalkthroughStep,
@@ -56,6 +59,7 @@ function Stage({ steps, active, cursor }: { steps: WalkthroughStep[]; active: nu
 }
 
 export function Walkthrough({ walkthrough, vendor }: { walkthrough: WT; vendor: GpuVendor }) {
+  const { t } = useTranslation();
   const reduced = useReducedMotion();
   const [variantIdx, setVariantIdx] = useState(() => {
     const i = walkthrough.variants.findIndex((v) => v.vendor === vendor);
@@ -104,7 +108,7 @@ export function Walkthrough({ walkthrough, vendor }: { walkthrough: WT; vendor: 
       <div className="wt-head">
         <span className="wt-title">{walkthrough.title}</span>
         {walkthrough.variants.length > 1 && (
-          <div className="wt-variants" role="tablist" aria-label="Which card?">
+          <div className="wt-variants" role="tablist" aria-label={t("common.walkthrough.whichCard")}>
             {walkthrough.variants.map((v, i) => (
               <button
                 key={v.vendor}
@@ -130,17 +134,17 @@ export function Walkthrough({ walkthrough, vendor }: { walkthrough: WT; vendor: 
           type="button"
           className="wt-step-btn"
           onClick={() => goTo(active - 1)}
-          aria-label="Previous step"
+          aria-label={t("common.walkthrough.previousStep")}
         >
           ‹
         </button>
-        <div className="wt-dots" role="group" aria-label="Steps">
+        <div className="wt-dots" role="group" aria-label={t("common.walkthrough.steps")}>
           {steps.map((_, i) => (
             <button
               key={i}
               type="button"
               className={`wt-dot ${i === active ? "wt-dot-on" : ""}`}
-              aria-label={`Step ${i + 1}`}
+              aria-label={t("common.walkthrough.stepN", { n: i + 1 })}
               aria-current={i === active ? "step" : undefined}
               onClick={() => goTo(i)}
             />
@@ -150,7 +154,7 @@ export function Walkthrough({ walkthrough, vendor }: { walkthrough: WT; vendor: 
           type="button"
           className="wt-step-btn"
           onClick={() => goTo(active + 1)}
-          aria-label="Next step"
+          aria-label={t("common.walkthrough.nextStep")}
         >
           ›
         </button>
@@ -166,14 +170,14 @@ export function Walkthrough({ walkthrough, vendor }: { walkthrough: WT; vendor: 
       </ol>
 
       <div className="wt-foot">
-        <span className="wt-honest">Schematic — menus vary slightly by version.</span>
+        <span className="wt-honest">{t("common.walkthrough.schematicNote")}</span>
         {walkthrough.deepLink && (
           <button
             type="button"
             className="wt-open"
             onClick={() => openGuidedUri(walkthrough.deepLink!)}
           >
-            {walkthrough.deepLinkLabel ?? "Open it"}
+            {walkthrough.deepLinkLabel ?? t("common.walkthrough.openIt")}
           </button>
         )}
       </div>

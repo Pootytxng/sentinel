@@ -1,4 +1,4 @@
-import { type Walkthrough, walkthroughForKey } from "./walkthroughs";
+import { type Walkthrough, walkthroughForKeyForLanguage } from "./walkthroughs";
 
 // 3-mode preset GUIDED checklists for the Monitor surface (Max Quality / More FPS / Lower Latency —
 // consumer-market terms per the owner's 2026-07-10 direction; ids kept stable). Goal-register
@@ -16,11 +16,13 @@ import { type Walkthrough, walkthroughForKey } from "./walkthroughs";
 // that no longer resolves so the UI never shows an empty/fabricated row.
 
 export type TuningPreset = {
-  /** Stable id (also the localStorage-free render key). */
+  /** Stable id (also the localStorage-free render key, AND the i18n key under
+   *  monitor.monitor.tuningPresets.<id>.{label,goal} — see label/goal below). */
   id: string;
-  /** Short card label. */
+  /** Short card label — the English default; Monitor.tsx renders the translated version via
+   *  t(`monitor.monitor.tuningPresets.${id}.label`, label). */
   label: string;
-  /** One plain-English line: what this preset is FOR. */
+  /** One plain-English line: what this preset is FOR — same t()-with-default-value pattern as label. */
   goal: string;
   /** Ordered walkthrough pairsWith keys this preset bundles. */
   keys: readonly string[];
@@ -50,11 +52,14 @@ export const TUNING_PRESETS: readonly TuningPreset[] = [
 ];
 
 // Resolve a preset's keys to their walkthroughs, in declared order, dropping any that no longer
-// resolve (honest: we never render a checklist row we can't actually show steps for).
-export function resolvePresetItems(preset: { keys: readonly string[] }): PresetItem[] {
+// resolve (honest: we never render a checklist row we can't actually show steps for). `lang` picks
+// the walkthrough's language (i18n, 2026-07-23) — pass i18n.language from the calling component;
+// optional (defaults to English) so existing call sites, incl. the pinned monitor-view.test.ts, keep
+// working unchanged.
+export function resolvePresetItems(preset: { keys: readonly string[] }, lang: string = "en"): PresetItem[] {
   const items: PresetItem[] = [];
   for (const key of preset.keys) {
-    const walkthrough = walkthroughForKey(key);
+    const walkthrough = walkthroughForKeyForLanguage(key, lang);
     if (walkthrough) items.push({ key, walkthrough });
   }
   return items;

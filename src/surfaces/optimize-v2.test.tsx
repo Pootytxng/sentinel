@@ -1,8 +1,22 @@
 import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { OptimizeV2 } from "./OptimizeV2";
-import { optimizeVerdict, safeFixesReady } from "./optimize-v2-data";
+import { optimizeVerdict as optimizeVerdictRaw, safeFixesReady } from "./optimize-v2-data";
 import type { AppliedChange, GameReadiness, Recommendation } from "../types";
+// i18n update (2026-07-23): optimizeVerdict's headline/sub now come from t(...) (Simplified
+// Chinese translation pass) instead of literal English strings, so it takes a TFunction as its
+// last param. This test-local wrapper resolves it through the real i18next instance (English is
+// the default language, matching what every assertion below already expects) so every call site
+// below stays exactly as written — same text, just sourced from locale JSON instead of a .ts
+// literal.
+import i18n from "../i18n";
+
+const optimizeVerdict = (
+  recs: Recommendation[] | null,
+  isAppliable: (recId: string) => boolean,
+  activeCount: number,
+  reverted?: { rec_id: string }[],
+) => optimizeVerdictRaw(recs, isAppliable, activeCount, reverted, i18n.t);
 
 // V2-4 guards (bug→guard tier 1): the V2 Optimize room composes RoomShell (one verdict, one
 // door), its verdict is a PURE derivation from the real catalog (honestly-loading while recs

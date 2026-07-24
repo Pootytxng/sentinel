@@ -1,5 +1,6 @@
+import type { TFunction } from "i18next";
 import {
-  LAB_STATIONS,
+  labStations,
   stationReading,
   type LabStationKey,
   type LabStationFacts,
@@ -35,21 +36,19 @@ export function stationHasReading(key: LabStationKey, f: LabStationFacts): boole
 // Lab notes — the "learn something just by playing around" layer. STATIC, generic, factual
 // lines about how PCs work; deliberately never a claim about THIS rig (the live reading line
 // owns rig-specific truth). Guard-tested for presence + the no-numbers-about-your-rig property.
-export const LAB_NOTES: Record<LabStationKey, string> = {
-  // Ground-only — never rendered by a bento card, but the Record must be exhaustive.
-  optimize:
-    "Most \"best settings\" guides are generic and one-size-fits-all. These tweaks are the ones vetted safe AND reversible for a rig like yours — every one snapshots its prior state before it touches anything.",
-  diagnostics:
-    "Most people never see their PC's real parts list. This is the honest inventory — read straight from the machine, nothing installed.",
-  benchmark:
-    "Benchmarks are noisy: two identical runs never score identical. Compy grades changes against that noise floor, so luck can't be called a win.",
-  latency:
-    "One click crosses the mouse, USB, Windows, the GPU and your monitor before you see it land — every hop adds delay, and each one is measurable.",
-  tuning:
-    "Undervolting asks the chip to do the same work on less power — often cooler and just as fast. How far yours goes is the silicon lottery.",
-  blackbox:
-    "Windows keeps a flight recorder of every crash and freeze. Almost nobody ever reads it — this station does, in plain English.",
-};
+// i18n note: plain data module, not a component — takes `t: TFunction` as its last param
+// (mirrors ago()/smoothness() elsewhere in this codebase); the caller passes its own `t`.
+export function labNotes(t: TFunction): Record<LabStationKey, string> {
+  return {
+    // Ground-only — never rendered by a bento card, but the Record must be exhaustive.
+    optimize: t("lab.labBento.notes.optimize"),
+    diagnostics: t("lab.labBento.notes.diagnostics"),
+    benchmark: t("lab.labBento.notes.benchmark"),
+    latency: t("lab.labBento.notes.latency"),
+    tuning: t("lab.labBento.notes.tuning"),
+    blackbox: t("lab.labBento.notes.blackbox"),
+  };
+}
 
 export type BentoCard = {
   key: LabStationKey;
@@ -61,15 +60,17 @@ export type BentoCard = {
   note: string; // the static lab note
 };
 
-export function labBentoCards(keys: LabStationKey[], f: LabStationFacts): BentoCard[] {
+export function labBentoCards(keys: LabStationKey[], f: LabStationFacts, t: TFunction): BentoCard[] {
+  const stations = labStations(t);
+  const notes = labNotes(t);
   return keys.map((key, i) => ({
     key,
     n: i + 1,
-    name: LAB_STATIONS[key].name,
-    forLine: LAB_STATIONS[key].forLine,
-    reading: stationReading(key, f),
+    name: stations[key].name,
+    forLine: stations[key].forLine,
+    reading: stationReading(key, f, t),
     hasReading: stationHasReading(key, f),
-    note: LAB_NOTES[key],
+    note: notes[key],
   }));
 }
 
@@ -84,25 +85,31 @@ export type CheckupReport = {
   next: string | null;
 };
 
-export function labCheckup(cards: BentoCard[]): CheckupReport {
+export function labCheckup(cards: BentoCard[], t: TFunction): CheckupReport {
   const read = cards.filter((c) => c.hasReading);
   const firstUnread = cards.find((c) => !c.hasReading) ?? null;
   const next = firstUnread
-    ? `Next: station ${firstUnread.n} — ${firstUnread.name}. ${LAB_STATIONS[firstUnread.key].forLine}`
+    ? t("lab.labBento.checkup.next", {
+        n: firstUnread.n,
+        name: firstUnread.name,
+        forLine: firstUnread.forLine,
+      })
     : null;
 
   let headline: string;
   let sub: string;
   if (read.length === 0) {
-    headline = "Your checkup hasn't started yet.";
-    sub =
-      "Work the stations left to right — each one only measures, so there's nothing here you can break. Poke around freely.";
+    headline = t("lab.labBento.checkup.notStarted.headline");
+    sub = t("lab.labBento.checkup.notStarted.sub");
   } else if (read.length === cards.length) {
-    headline = "Full checkup complete — every station has a reading.";
-    sub = "Here's what your rig's results mean, station by station.";
+    headline = t("lab.labBento.checkup.complete.headline");
+    sub = t("lab.labBento.checkup.complete.sub");
   } else {
-    headline = `Checkup in progress — ${read.length} of ${cards.length} stations have readings.`;
-    sub = "What you've measured so far, and where to go next.";
+    headline = t("lab.labBento.checkup.inProgress.headline", {
+      read: read.length,
+      total: cards.length,
+    });
+    sub = t("lab.labBento.checkup.inProgress.sub");
   }
 
   return {

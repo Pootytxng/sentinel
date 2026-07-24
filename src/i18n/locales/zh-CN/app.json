@@ -1,0 +1,124 @@
+{
+  "reportModal": {
+    "title": "报告已导出",
+    "close": "关闭",
+    "savedTo": "已保存至 {{path}}",
+    "feedbackHeadPre": "分享之前,帮我们改进一下",
+    "feedbackHeadOptional": "(可选)",
+    "whatLabel": "用一句话说说,Compy 对你来说是什么？",
+    "confusingLabel": "有没有哪里让你困惑或觉得不对劲？",
+    "nextLabel": "接下来你希望看到什么？",
+    "reexporting": "正在重新导出…",
+    "feedbackAdded": "反馈已添加 ✓",
+    "feedbackFailed": "失败,请重试",
+    "addFeedback": "添加反馈并重新导出",
+    "openFolder": "打开文件夹",
+    "copyFull": "复制完整报告",
+    "copySummary": "复制摘要卡片",
+    "copied": "已复制！",
+    "feedbackPointerPre": "想让它直接发给我们吗?",
+    "feedbackPointerBold": "设置 → 反馈与帮助",
+    "feedbackPointerPost": "一键就能把你的留言和报告发出去。"
+  },
+  "dialogs": {
+    "applyTitle": "应用「{{title}}」？",
+    "applyTradeoff": "权衡: {{downside}}",
+    "applyBody": "{{description}}{{tradeoff}} Compy 会先保存当前设置,方便你随时回滚。",
+    "apply": "应用",
+    "rollbackTitle": "回滚「{{title}}」？",
+    "rollbackDest": "将恢复为 {{label}}。",
+    "rollbackBody": "Compy 会把这项设置恢复到之前的状态。{{dest}}",
+    "rollback": "回滚"
+  },
+  "errors": {
+    "recoverGamingFailed": "暂时无法恢复你的设置——请重试,或点击「查看」。",
+    "gamingResumeFailedGround": "设置已恢复,但游戏模式未能重新开启——准备好后,可以从{{room}}重新打开。",
+    "gamingResumeFailedMerged": "设置已恢复,但游戏模式未能重新开启——准备好后,可以从{{room}}重新打开。",
+    "exportFailed": "暂时无法生成报告——请稍后重试。",
+    "readInfoFailed": "暂时无法读取部分系统信息——请稍后重试。",
+    "rankPrioritiesFailed": "暂时无法排出优先事项——请稍后重试。",
+    "startupToggleFailed": "暂时无法修改该启动项——请重试。",
+    "applyFailed": "未能应用这项更改——可能需要管理员授权,或提示被取消了。设置未发生任何改变,请重试。",
+    "rollbackFailed": "暂时无法撤销这项更改——请重试,或前往「信任台账」手动撤销。",
+    "recAppliedExternally": "「{{title}}」目前是开启状态,但并非 Compy 应用的,因此没有可回滚的记录。请前往 Windows 原本的设置位置手动关闭。",
+    "openExportsFolderFailed": "无法打开导出文件夹。"
+  },
+  "status": {
+    "rulesRemote": "规则:远程(已签名)",
+    "rulesCached": "规则:缓存(最近一次可用版本)",
+    "rulesBuiltin": "规则:内置"
+  },
+  "errorBanner": {
+    "dismiss": "关闭"
+  },
+  "gamingToast": {
+    "hideRecoveryAria": "隐藏这条提醒——你仍然可以在游戏面板中恢复设置",
+    "hideRecoveryTitle": "隐藏——你仍然可以在游戏面板中恢复设置",
+    "recoveryEmph": "一切都还在",
+    "recoveryBody": "——一场游戏模式会话被中断了({{status}}),Compy 已完整保存所需的恢复信息。是继续这场会话,还是现在就恢复设置？",
+    "resuming": "正在继续…",
+    "resumeAction": "继续游戏模式",
+    "restoring": "正在恢复…",
+    "restoreNow": "立即恢复",
+    "review": "查看",
+    "resumedHeadline": "✓ 游戏模式已重新开启。",
+    "resumedBodyGround": "{{summary}}——结束游戏后,可以从{{room}}关闭它。",
+    "resumedBodyMerged": "{{summary}}——结束游戏后,可以从{{room}}关闭它。",
+    "done": "完成"
+  },
+  "rig": {
+    "gpu": "显卡",
+    "cpu": "CPU",
+    "ram": "内存",
+    "os": "系统",
+    "noGpu": "未检测到显卡"
+  },
+  "booting": {
+    "readFailed": "暂时无法读取你的硬件信息。",
+    "retry": "重试",
+    "reading": "正在读取硬件信息…"
+  },
+  "monitoring": {
+    "title": "监测",
+    "overlayToggleTitle": "在无边框或窗口化游戏上显示一个紧凑的常驻置顶浮层",
+    "hideOverlay": "隐藏浮层",
+    "showOverlay": "显示浮层",
+    "moveOverlayTitle": "将浮层移动到屏幕角落",
+    "moveOverlayAria": "将浮层移动到{{corner}}角",
+    "corners": {
+      "top-left": "左上",
+      "top-right": "右上",
+      "bottom-left": "左下",
+      "bottom-right": "右下"
+    },
+    "starting": "正在启动…",
+    "historyDuration": "{{seconds}} 秒历史记录 · 1 Hz",
+    "helpPre": "实时系统遥测数据。CPU 占用率通过 Windows PDH 读取(系统自带,无需驱动程序)。显卡传感器数据来自厂商库(NVML / ADLX)。FPS 与",
+    "frametimeTerm": "帧时间",
+    "helpMid1": "通过 ",
+    "etwTerm": "ETW",
+    "helpMid2": " 获取。不会向你的游戏注入任何代码,也不需要",
+    "kernelDriverTerm": "内核驱动程序",
+    "helpPost": "——兼容反作弊系统。浮层会显示在无边框或窗口化游戏画面上(不支持独占全屏)。图表展示最近一分钟的数据。",
+    "gpuSensorsUnavailable": "显卡传感器不可用。Compy 通过 NVML 读取显卡遥测数据,NVML 随 NVIDIA 驱动程序一同安装。AMD(ADLX)和 Intel(GPA)的支持已在规划中——一旦上线,你的显卡也会在这里拥有专属面板。",
+    "collectingFirstSample": "正在采集首个样本…"
+  },
+  "diagnostics": {
+    "title": "诊断信息",
+    "help": "这里是 Compy 对你 PC 的原始观测数据,优化建议引擎正是依据这些观测结果来决定展示哪些内容。如果你期待的某项优化建议没有出现——或者出现了一项你没料到的——答案通常就在这里。"
+  },
+  "overlay": {
+    "fpsUnit": "fps",
+    "lowLabel": "1% 最低帧",
+    "est": "预估",
+    "cpuLabel": "cpu",
+    "gpuLabel": "gpu",
+    "classic": {
+      "fps": "FPS",
+      "frametime": "帧时间",
+      "gpu": "显卡",
+      "cpu": "CPU",
+      "ram": "内存"
+    }
+  }
+}

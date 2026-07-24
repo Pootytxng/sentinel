@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
+import { useTranslation } from "react-i18next";
 import type { Group } from "three";
 import { RigPartGeometry } from "./RigPartGeometry";
 import type { RigPart as Part } from "./rig-parts";
@@ -37,6 +38,7 @@ export function RigPart({
   onHover,
   glow = 1,
 }: Props) {
+  const { t } = useTranslation();
   const groupRef = useRef<Group>(null);
   const [hovered, setHovered] = useState(false);
   const active = hovered || hoveredId === part.id || selectedId === part.id;
@@ -104,7 +106,7 @@ export function RigPart({
           >
             <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.12em", color }}>
               {part.category}
-              {!part.detected && " · not detected"}
+              {!part.detected && t("gaming.rigViewer.notDetectedSuffix", { defaultValue: " · not detected" })}
             </div>
             <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.2 }}>{part.name}</div>
             <div style={{ fontSize: 11, color: "var(--ix-text-3, #8b95a8)", marginBottom: 8 }}>

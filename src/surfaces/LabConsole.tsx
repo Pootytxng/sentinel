@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import "../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { useReducedMotion } from "../design/use-motion";
 import { ArcGauge } from "../design/console/ArcGauge";
@@ -9,7 +11,7 @@ import { RigViewer } from "./rig/RigViewer";
 import { OptimizeStation, type LabFastPathProps } from "./lab/OptimizeStation";
 import {
   LAB_STATION_ORDER,
-  LAB_STATIONS,
+  labStations,
   type LabStationKey,
   type LabStationFacts,
 } from "./lab-guided-data";
@@ -19,7 +21,7 @@ import { safeFixesReady } from "./optimize-v2-data";
 import { deriveReverted } from "./use-scan";
 import { peekProbe, cachedProbe } from "../data/probe-cache";
 import { measureTuning, tuningEvidence } from "../data/tuning-measure";
-import { tuningGuideForVendor } from "../data/tuning-guides";
+import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
 import { latestSession } from "./dashboard-data";
 import { BenchmarkTab } from "./Benchmark";
 import { LatencyTab } from "./Latency";
@@ -84,7 +86,11 @@ export function LabConsole({
   // tests) means the honesty rail renders the Readiness gauge as NOT-YET, never a guess.
   readiness?: GameReadiness | null;
 }) {
+  const { t, i18n } = useTranslation();
   const reduced = useReducedMotion();
+  // Station name lookup, translated — the SAME shape Lab/LabBento build from their own `t`, so a
+  // station's name can never disagree across the three faces.
+  const stations = labStations(t);
 
   // Cursor-follow accent spotlight on the stage — a border-masked glow that tracks the pointer
   // (the JARVIS "alive" the owner missed). Custom props only; skipped entirely under reduced motion.
@@ -115,7 +121,7 @@ export function LabConsole({
   }, [reduced]);
 
   // v1 ships the AMD undervolt guide only (locked rule #5) — Tuning is a station only on AMD.
-  const tuningGuide = tuningGuideForVendor(vendor);
+  const tuningGuide = tuningGuideForVendorForLanguage(vendor, i18n.language);
 
   // The measure-station reads — the SAME on-mount probes Lab does (no polling, ZERO new IPC). Seed
   // from the probe cache so re-opening the console paints last-known instantly.
@@ -248,14 +254,14 @@ export function LabConsole({
   const dockNodes: DockNode[] = [
     {
       key: "optimize",
-      name: LAB_STATIONS.optimize.name,
+      name: stations.optimize.name,
       icon: STATION_ICON.optimize,
       primary: true,
       measured: stackApplied || safeReady > 0,
     },
     ...measureKeys.map((k) => ({
       key: k,
-      name: LAB_STATIONS[k].name,
+      name: stations[k].name,
       icon: STATION_ICON[k],
       measured: stationHasReading(k, facts),
     })),
@@ -276,27 +282,30 @@ export function LabConsole({
         <div className="lc-corner lc-tl">
           {/* Same "how we calculate this" line the Home console carries (consumer-panel Phase 2). */}
           <ArcGauge
-            label="Readiness"
+            label={t("lab.labConsole.readinessLabel")}
             value={readinessScore}
             max={100}
-            unit="score"
+            unit={t("lab.labConsole.unitScore")}
             tone="accent"
             note={
               readinessKnown
-                ? `= ${Math.max(0, readiness!.checks.length - readiness!.attention_count - readiness!.unknown_count)} of ${readiness!.checks.length} checks passed`
+                ? t("lab.labConsole.readinessNote", {
+                    passed: Math.max(0, readiness!.checks.length - readiness!.attention_count - readiness!.unknown_count),
+                    total: readiness!.checks.length,
+                  })
                 : undefined
             }
           />
         </div>
         <div className="lc-corner lc-tr">
-          <ArcGauge label="Avg FPS" value={avgFps} max={240} unit="fps" measured={avgFps != null} />
+          <ArcGauge label={t("lab.labConsole.avgFpsLabel")} value={avgFps} max={240} unit={t("lab.labConsole.unitFps")} measured={avgFps != null} />
         </div>
         <div className="lc-corner lc-bl">
           <ArcGauge
-            label="Safe stack"
+            label={t("lab.labConsole.safeStackLabel")}
             value={fast.recs != null ? safeReady : null}
             max={Math.max(1, safeReady)}
-            unit="ready"
+            unit={t("lab.labConsole.unitReady")}
             tone="accent"
             measured={fast.recs != null}
           />
@@ -306,11 +315,11 @@ export function LabConsole({
             label={
               /* align="end": this gauge sits at the stage's right edge — a left-anchored tooltip
                  rendered 126px past the window (self-review catch 2026-07-11). */
-              <Term id="one-percent-lows" align="end">1% low</Term>
+              <Term id="one-percent-lows" align="end">{t("lab.labConsole.oneLowLabel")}</Term>
             }
             value={lowFps}
             max={240}
-            unit="frames"
+            unit={t("lab.labConsole.unitFrames")}
             tone="warn"
             measured={lowFps != null}
           />
@@ -331,9 +340,9 @@ export function LabConsole({
       {openStation && (
         <div className="lc-detail lab-card" id="lab-console-detail">
           <div className="lc-detail-head">
-            <span className="lc-detail-name">{LAB_STATIONS[openStation].name}</span>
-            <button className="lc-detail-close" onClick={() => setOpenStation(null)} aria-label="Close station">
-              Close
+            <span className="lc-detail-name">{stations[openStation].name}</span>
+            <button className="lc-detail-close" onClick={() => setOpenStation(null)} aria-label={t("lab.labConsole.closeStationAriaLabel")}>
+              {t("lab.labConsole.close")}
             </button>
           </div>
           <div className="lab-card-body">
@@ -349,8 +358,7 @@ export function LabConsole({
                  first, LOCKED rule 3). The undo half stays on Fix's consent line beside the apply
                  controls (title-header law) so the panel never says undo twice. */
               <p className="lc-detail-note">
-                This station applies your safe stack in one click — and like every change made in this
-                room, it's fully reversible.
+                {t("lab.labConsole.optimizeReassurance")}
               </p>
             )}
             {openStation === "optimize" ? <OptimizeStation {...fast} /> : stationBody(openStation)}

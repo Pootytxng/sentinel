@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import { gradeGpuTempC, type Grade } from "./metric-grade";
 
 // Honesty gate — LOCKED rule #5. NVIDIA GPU sensor readings come from NVML and are NOT yet
@@ -70,25 +71,38 @@ export function isAmdGpu(fields: VendorProfileFields): boolean {
  * vendor): returns Adrenalin-named, plain-English insights derived from already-read fields. An UNREAD
  * field yields no insight (never fabricates state). NVIDIA/Intel/unknown → [] (no mis-vendored advice).
  * Makes no FPS/performance promise — it explains what a readable setting means, honestly.
+ * `t` optional/trailing (i18n, 2026-07-23) — omitting it reproduces today's English exactly.
  */
-export function vendorProfileInsights(fields: VendorProfileFields): VendorInsight[] {
+export function vendorProfileInsights(fields: VendorProfileFields, t?: TFunction): VendorInsight[] {
   if (!isAmdGpu(fields)) return [];
   const out: VendorInsight[] = [];
 
   if (fields.hagsEnabled === true) {
     out.push({
       key: "amd-hags-on",
-      title: "GPU scheduling on",
-      detail:
-        "Hardware-Accelerated GPU Scheduling is on — a modern default on your Radeon. Nothing to do; it's manageable under Windows Graphics settings, not AMD Adrenalin.",
+      title: t
+        ? t("lab.gpuProfile.insights.hagsOnTitle", { defaultValue: "GPU scheduling on" })
+        : "GPU scheduling on",
+      detail: t
+        ? t("lab.gpuProfile.insights.hagsOnDetail", {
+            defaultValue:
+              "Hardware-Accelerated GPU Scheduling is on — a modern default on your Radeon. Nothing to do; it's manageable under Windows Graphics settings, not AMD Adrenalin.",
+          })
+        : "Hardware-Accelerated GPU Scheduling is on — a modern default on your Radeon. Nothing to do; it's manageable under Windows Graphics settings, not AMD Adrenalin.",
       tone: "good",
     });
   } else if (fields.hagsEnabled === false) {
     out.push({
       key: "amd-hags-off",
-      title: "GPU scheduling off",
-      detail:
-        "Hardware-Accelerated GPU Scheduling is off. On Radeon it's usually fine either way — some games prefer it on, some off. It lives in Windows Graphics settings (not AMD Adrenalin), so you can try toggling it and comparing.",
+      title: t
+        ? t("lab.gpuProfile.insights.hagsOffTitle", { defaultValue: "GPU scheduling off" })
+        : "GPU scheduling off",
+      detail: t
+        ? t("lab.gpuProfile.insights.hagsOffDetail", {
+            defaultValue:
+              "Hardware-Accelerated GPU Scheduling is off. On Radeon it's usually fine either way — some games prefer it on, some off. It lives in Windows Graphics settings (not AMD Adrenalin), so you can try toggling it and comparing.",
+          })
+        : "Hardware-Accelerated GPU Scheduling is off. On Radeon it's usually fine either way — some games prefer it on, some off. It lives in Windows Graphics settings (not AMD Adrenalin), so you can try toggling it and comparing.",
       tone: "info",
     });
   }
@@ -97,26 +111,51 @@ export function vendorProfileInsights(fields: VendorProfileFields): VendorInsigh
   if (mode.length > 0) {
     out.push({
       key: "amd-power-mode",
-      title: "Power profile",
-      detail: `Your GPU power profile reads "${mode}". You can review or switch profiles in AMD Adrenalin under Performance → Tuning — Compy only reads this label, it never changes it.`,
+      title: t
+        ? t("lab.gpuProfile.insights.powerModeTitle", { defaultValue: "Power profile" })
+        : "Power profile",
+      detail: t
+        ? t("lab.gpuProfile.insights.powerModeDetail", {
+            defaultValue:
+              'Your GPU power profile reads "{{mode}}". You can review or switch profiles in AMD Adrenalin under Performance → Tuning — Compy only reads this label, it never changes it.',
+            mode,
+          })
+        : `Your GPU power profile reads "${mode}". You can review or switch profiles in AMD Adrenalin under Performance → Tuning — Compy only reads this label, it never changes it.`,
       tone: "info",
     });
   }
 
-  const t = typeof fields.peakTempC === "number" && Number.isFinite(fields.peakTempC) ? fields.peakTempC : null;
-  if (t != null) {
-    if (t >= 85) {
+  const peakTemp =
+    typeof fields.peakTempC === "number" && Number.isFinite(fields.peakTempC) ? fields.peakTempC : null;
+  if (peakTemp != null) {
+    if (peakTemp >= 85) {
       out.push({
         key: "amd-temp-hot",
-        title: "Thermals running hot",
-        detail: `Peak GPU temperature reached ${t} °C. Radeon cards are rated to run warm, but if it stays this high you can check case airflow and, in AMD Adrenalin's Tuning, review the fan curve.`,
+        title: t
+          ? t("lab.gpuProfile.insights.tempHotTitle", { defaultValue: "Thermals running hot" })
+          : "Thermals running hot",
+        detail: t
+          ? t("lab.gpuProfile.insights.tempHotDetail", {
+              defaultValue:
+                "Peak GPU temperature reached {{temp}} °C. Radeon cards are rated to run warm, but if it stays this high you can check case airflow and, in AMD Adrenalin's Tuning, review the fan curve.",
+              temp: peakTemp,
+            })
+          : `Peak GPU temperature reached ${peakTemp} °C. Radeon cards are rated to run warm, but if it stays this high you can check case airflow and, in AMD Adrenalin's Tuning, review the fan curve.`,
         tone: "caution",
       });
     } else {
       out.push({
         key: "amd-temp-ok",
-        title: "Thermals healthy",
-        detail: `Peak GPU temperature was ${t} °C — comfortable headroom for a Radeon. No thermal action needed.`,
+        title: t
+          ? t("lab.gpuProfile.insights.tempOkTitle", { defaultValue: "Thermals healthy" })
+          : "Thermals healthy",
+        detail: t
+          ? t("lab.gpuProfile.insights.tempOkDetail", {
+              defaultValue:
+                "Peak GPU temperature was {{temp}} °C — comfortable headroom for a Radeon. No thermal action needed.",
+              temp: peakTemp,
+            })
+          : `Peak GPU temperature was ${peakTemp} °C — comfortable headroom for a Radeon. No thermal action needed.`,
         tone: "good",
       });
     }

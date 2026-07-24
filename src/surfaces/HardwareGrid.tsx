@@ -1,6 +1,11 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
+// Side-effect import: guarantees the i18next singleton is initialized even when this component
+// is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
+import "../i18n";
 // Type-only imports (erased at build) — no runtime cycle back into App.tsx, which imports this
 // component as a value. The hardware shape lives in App.tsx; both Homes read the same `hw` object.
 import type { HardwareInfo, GpuInfo } from "../App";
@@ -17,14 +22,20 @@ import { useIntelligenceFlag } from "../design/use-hud";
 // zero new IPC. Responsive via the global `.grid` (flex-wrap, min-width:0).
 
 // Driver version + coarse age. Grid-only formatter (kept here, not in the shared module).
-const fmtDriver = (g: GpuInfo) => {
+const fmtDriver = (g: GpuInfo, t: TFunction) => {
   const version = g.driver_version || "—";
   // Honest empty-state for an unreadable age — say so (matches the Export "driver age —" /
   // readiness "Couldn't read a driver date") instead of silently hiding the freshness datum.
-  if (g.driver_age_days == null) return version === "—" ? version : `${version} · age unknown`;
+  if (g.driver_age_days == null)
+    return version === "—" ? version : t("gaming.hardwareGrid.driverAgeUnknown", { version });
   const months = Math.floor(g.driver_age_days / 30);
-  const age = months < 1 ? "<1 mo" : months === 1 ? "1 mo" : `${months} mo`;
-  return `${version} · ${age} old`;
+  const age =
+    months < 1
+      ? t("gaming.hardwareGrid.driverAgeLessThanMonth")
+      : months === 1
+      ? t("gaming.hardwareGrid.driverAgeOneMonth")
+      : t("gaming.hardwareGrid.driverAgeMonths", { months });
+  return t("gaming.hardwareGrid.driverAgeOld", { version, age });
 };
 
 // Intelligence Phase 4 (§4H hardware twin) — pull the component-evidence projection and key it by
@@ -66,10 +77,13 @@ function useComponentEvidence(enabled: boolean): Map<string, ComponentEvidence> 
 // disclosure holds the implicating patterns' own findings + the next test that would sharpen them.
 // No "go to another tab" dead-end (flags-name-it-and-fix-it-inline law) — the why lives right here.
 function CardEvidence({ ev }: { ev: ComponentEvidence }) {
+  const { t } = useTranslation();
   return (
     <details className={`hw-evi hw-evi-${ev.confidence}`}>
       <summary className="hw-evi-summary">
-        <span className="hw-evi-band">{ev.confidence} confidence</span>
+        <span className="hw-evi-band">
+          {t("gaming.hardwareGrid.confidenceSuffix", { level: ev.confidence })}
+        </span>
         <span className="hw-evi-headline">{ev.headline}</span>
       </summary>
       <div className="hw-evi-body">
@@ -80,7 +94,7 @@ function CardEvidence({ ev }: { ev: ComponentEvidence }) {
         </ul>
         {ev.next_test && (
           <p className="hw-evi-next">
-            <span className="hw-evi-next-label">Next test</span>
+            <span className="hw-evi-next-label">{t("gaming.hardwareGrid.nextTestLabel")}</span>
             {ev.next_test}
           </p>
         )}
@@ -123,6 +137,7 @@ function Detail({ k, v }: { k: ReactNode; v: string | number }) {
 }
 
 export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
+  const { t } = useTranslation();
   // §4H hardware twin — the map is keyed by component and holds ONLY implicated components (today:
   // gpu, memory). Every card reads its own key: an absent key ⇒ undefined ⇒ neutral. Passing the
   // lookup to all six cards is forward-compatible — when a detector that names a new component
@@ -139,16 +154,22 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
     <>
       {tier && (
         <div className={`hw-tier hw-tier-${tier.tier.toLowerCase()}`} role="note">
-          <span className="hw-tier-label">Rig tier</span>
-          <span className="hw-tier-value">{tier.tier}</span>
+          <span className="hw-tier-label">{t("gaming.hardwareGrid.rigTierLabel")}</span>
+          <span className="hw-tier-value">
+            {t(`gaming.hardwareGrid.rigTierValue.${tier.tier}`)}
+          </span>
           <span className="hw-tier-basis">{tier.basis}</span>
         </div>
       )}
       <div className="grid">
-        <Card label="CPU" value={hw.cpu_arch?.family_label || hw.cpu_brand} evidence={evidence.get("cpu")}>
+        <Card
+          label={t("gaming.hardwareGrid.cpuLabel")}
+          value={hw.cpu_arch?.family_label || hw.cpu_brand}
+          evidence={evidence.get("cpu")}
+        >
           {hw.cpu_arch?.architecture && hw.cpu_arch.architecture !== "Unknown" && (
             <Detail
-              k="Architecture"
+              k={t("gaming.hardwareGrid.architectureLabel")}
               v={`${hw.cpu_arch.architecture}${
                 hw.cpu_arch.generation && hw.cpu_arch.generation !== hw.cpu_arch.architecture
                   ? ` · ${hw.cpu_arch.generation}`
@@ -156,22 +177,26 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
               }`}
             />
           )}
-          <Detail k="Logical cores" v={hw.cpu_cores_logical} />
-          <Detail k="Physical cores" v={hw.cpu_cores_physical} />
-          <Detail k="Base frequency" v={fmtGHz(hw.cpu_frequency_mhz)} />
+          <Detail k={t("gaming.hardwareGrid.logicalCoresLabel")} v={hw.cpu_cores_logical} />
+          <Detail k={t("gaming.hardwareGrid.physicalCoresLabel")} v={hw.cpu_cores_physical} />
+          <Detail k={t("gaming.hardwareGrid.baseFrequencyLabel")} v={fmtGHz(hw.cpu_frequency_mhz)} />
         </Card>
 
-        <Card label="Memory" value={fmtGB(hw.ram_total_bytes)} evidence={evidence.get("memory")}>
+        <Card
+          label={t("gaming.hardwareGrid.memoryLabel")}
+          value={fmtGB(hw.ram_total_bytes)}
+          evidence={evidence.get("memory")}
+        >
           <Detail
-            k="In use"
+            k={t("gaming.hardwareGrid.inUseLabel")}
             v={`${fmtGB(hw.ram_used_bytes)} (${Math.round(
               (hw.ram_used_bytes / hw.ram_total_bytes) * 100
             )}%)`}
           />
-          <Detail k="Swap" v={fmtGB(hw.swap_total_bytes)} />
+          <Detail k={t("gaming.hardwareGrid.swapLabel")} v={fmtGB(hw.swap_total_bytes)} />
           {hw.memory_modules.length > 0 && (
             <>
-              <div className="sub-divider">Modules</div>
+              <div className="sub-divider">{t("gaming.hardwareGrid.modulesLabel")}</div>
               {hw.memory_modules.map((m, i) => {
                 const cap = m.capacity_bytes > 0 ? fmtGB(m.capacity_bytes) : "—";
                 const speed = m.speed_mhz > 0 ? `${m.speed_mhz} MHz` : "";
@@ -184,12 +209,20 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
                   m.xmp_expo_status === "running_below_rated" && m.rated_speed_mhz > 0;
                 return (
                   <div key={i}>
-                    <Detail k={`Slot ${i + 1}`} v={`${cap}${desc ? ` ${desc}` : ""}${mfg}`} />
+                    <Detail
+                      k={t("gaming.hardwareGrid.slotLabel", { n: i + 1 })}
+                      v={`${cap}${desc ? ` ${desc}` : ""}${mfg}`}
+                    />
                     {belowRated && (
                       <div className="detail-flag">
-                        Running at {m.speed_mhz} of {m.rated_speed_mhz} MT/s — enable{" "}
-                        <Term id="xmp">EXPO/XMP</Term> in <Term id="uefi-bios">BIOS</Term> to reach
-                        its rated speed.
+                        {t("gaming.hardwareGrid.xmpFlagPre", {
+                          speed: m.speed_mhz,
+                          rated: m.rated_speed_mhz,
+                        })}{" "}
+                        <Term id="xmp">{t("gaming.hardwareGrid.xmpTermLabel")}</Term>{" "}
+                        {t("gaming.hardwareGrid.xmpFlagMid")}{" "}
+                        <Term id="uefi-bios">{t("gaming.hardwareGrid.biosTermLabel")}</Term>{" "}
+                        {t("gaming.hardwareGrid.xmpFlagPost")}
                       </div>
                     )}
                   </div>
@@ -200,33 +233,44 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
         </Card>
 
         <Card
-          label="Graphics"
-          value={hw.gpus.length === 0 ? "No GPU detected" : hw.gpus[0].name}
+          label={t("gaming.hardwareGrid.graphicsLabel")}
+          value={hw.gpus.length === 0 ? t("gaming.hardwareGrid.noGpuDetected") : hw.gpus[0].name}
           evidence={evidence.get("gpu")}
         >
           {hw.gpus.length === 0 ? (
             <Detail
-              k="Status"
-              v="Compy couldn't read a graphics card here. If this PC has one, its driver may not be installed — restart, or reinstall the GPU driver from the maker's site."
+              k={t("gaming.hardwareGrid.statusLabel")}
+              v={t("gaming.hardwareGrid.noGpuMessage")}
             />
           ) : (
             hw.gpus.map((g, i) => (
               <div key={i} className="gpu-block">
-                {hw.gpus.length > 1 && <Detail k="Adapter" v={g.name} />}
-                <Detail k={<Term id="vram">VRAM</Term>} v={g.vram_bytes > 0 ? fmtGB(g.vram_bytes) : "—"} />
-                <Detail k="Driver" v={fmtDriver(g)} />
+                {hw.gpus.length > 1 && (
+                  <Detail k={t("gaming.hardwareGrid.adapterLabel")} v={g.name} />
+                )}
+                <Detail
+                  k={<Term id="vram">{t("gaming.hardwareGrid.vramTermLabel")}</Term>}
+                  v={g.vram_bytes > 0 ? fmtGB(g.vram_bytes) : "—"}
+                />
+                <Detail k={t("gaming.hardwareGrid.driverLabel")} v={fmtDriver(g, t)} />
                 {g.current_refresh_rate_hz > 0 && (
-                  <Detail k="Output" v={`${g.current_refresh_rate_hz} Hz`} />
+                  <Detail
+                    k={t("gaming.hardwareGrid.outputLabel")}
+                    v={`${g.current_refresh_rate_hz} Hz`}
+                  />
                 )}
               </div>
             ))
           )}
           {hw.display && hw.display.width > 0 && (
             <Detail
-              k="Display"
+              k={t("gaming.hardwareGrid.displayLabel")}
               v={
                 hw.display.max_refresh_rate_hz > hw.display.current_refresh_rate_hz
-                  ? `${hw.display.width}×${hw.display.height} @ ${hw.display.current_refresh_rate_hz} Hz (max ${hw.display.max_refresh_rate_hz} Hz)`
+                  ? `${hw.display.width}×${hw.display.height} @ ${hw.display.current_refresh_rate_hz} Hz ${t(
+                      "gaming.hardwareGrid.displayMaxSuffix",
+                      { maxRate: hw.display.max_refresh_rate_hz }
+                    )}`
                   : `${hw.display.width}×${hw.display.height} @ ${hw.display.current_refresh_rate_hz} Hz`
               }
             />
@@ -235,7 +279,11 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
               "Generic PnP Monitor". Names YOUR monitor; one row per connected display. */}
           {(hw.monitors ?? []).length > 0 && (
             <Detail
-              k={(hw.monitors ?? []).length > 1 ? "Monitors" : "Monitor"}
+              k={t(
+                (hw.monitors ?? []).length > 1
+                  ? "gaming.hardwareGrid.monitorsLabel"
+                  : "gaming.hardwareGrid.monitorLabel"
+              )}
               v={(hw.monitors ?? [])
                 .map((m) => `${m.manufacturer ? `${m.manufacturer} ` : ""}${m.model}`.trim())
                 .join(" · ")}
@@ -244,25 +292,27 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
         </Card>
 
         <Card
-          label="System"
+          label={t("gaming.hardwareGrid.systemLabel")}
           value={hw.windows_version?.product_name || `${hw.os_name} ${hw.os_version}`}
           evidence={evidence.get("system")}
         >
           <Detail
-            k="Build"
+            k={t("gaming.hardwareGrid.buildLabel")}
             v={
               hw.windows_version
                 ? `${hw.windows_version.build}.${hw.windows_version.ubr}`
                 : hw.kernel_version
             }
           />
-          <Detail k="Hostname" v={hw.hostname} />
+          <Detail k={t("gaming.hardwareGrid.hostnameLabel")} v={hw.hostname} />
           {hw.bios_info && hw.bios_info.version && (
             <Detail
-              k={<Term id="uefi-bios">BIOS</Term>}
+              k={<Term id="uefi-bios">{t("gaming.hardwareGrid.biosTermLabel")}</Term>}
               v={`${hw.bios_info.version}${
                 hw.bios_info.release_date_age_days != null
-                  ? ` · ${hw.bios_info.release_date_age_days} days old`
+                  ? ` · ${t("gaming.hardwareGrid.daysOldSuffix", {
+                      days: hw.bios_info.release_date_age_days,
+                    })}`
                   : ""
               }`}
             />
@@ -270,20 +320,24 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
         </Card>
 
         <Card
-          label="Storage"
-          value={`${hw.disks.length} drive${hw.disks.length === 1 ? "" : "s"}`}
+          label={t("gaming.hardwareGrid.storageLabel")}
+          value={t("gaming.hardwareGrid.driveCount", { count: hw.disks.length })}
           evidence={evidence.get("storage")}
         >
           {hw.disks.map((d) => (
             <Detail
               key={d.mount_point}
               k={d.mount_point}
-              v={`${fmtGB(d.available_bytes)} free of ${fmtGB(d.total_bytes)} · ${d.file_system}`}
+              v={t("gaming.hardwareGrid.freeOfTotal", {
+                free: fmtGB(d.available_bytes),
+                total: fmtGB(d.total_bytes),
+                fs: d.file_system,
+              })}
             />
           ))}
           {hw.physical_disks.length > 0 && (
             <>
-              <div className="sub-divider">Physical drives</div>
+              <div className="sub-divider">{t("gaming.hardwareGrid.physicalDrivesLabel")}</div>
               {hw.physical_disks.map((p, i) => {
                 const health = hw.disk_health.find(
                   (d) => d.friendly_name === p.friendly_name
@@ -292,15 +346,14 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
                 return (
                   <div key={i}>
                     <Detail
-                      k={p.friendly_name || `Disk ${i + 1}`}
+                      k={p.friendly_name || t("gaming.hardwareGrid.diskFallback", { n: i + 1 })}
                       v={`${p.bus_type} ${p.media_type} · ${fmtGB(p.size_bytes)}${
                         health ? ` · ${health}` : ""
                       }`}
                     />
                     {concern && (
                       <div className="detail-flag">
-                        SMART reports {health} — back up important data and run the drive vendor's
-                        health tool.
+                        {t("gaming.hardwareGrid.smartWarning", { health })}
                       </div>
                     )}
                   </div>
@@ -316,18 +369,25 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
           const phys = (hw.network_adapters ?? []).filter((a) => a.physical);
           const active = phys.find((a) => a.connected) ?? null;
           const mediumLabel = (m: string) =>
-            m === "wired" ? "Ethernet" : m === "wifi" ? "Wi-Fi" : "Other";
+            m === "wired"
+              ? t("gaming.hardwareGrid.ethernetLabel")
+              : m === "wifi"
+              ? t("gaming.hardwareGrid.wifiLabel")
+              : t("gaming.hardwareGrid.otherLabel");
           const value = active
             ? mediumLabel(active.medium)
             : hw.has_wired_ethernet_port
-            ? "Ethernet — unplugged"
+            ? t("gaming.hardwareGrid.ethernetUnplugged")
             : phys.length > 0
-            ? "Not connected"
-            : "No adapter detected";
+            ? t("gaming.hardwareGrid.notConnectedLabel")
+            : t("gaming.hardwareGrid.noAdapterDetected");
           return (
-            <Card label="Network" value={value} evidence={evidence.get("network")}>
+            <Card label={t("gaming.hardwareGrid.networkLabel")} value={value} evidence={evidence.get("network")}>
               {phys.length === 0 ? (
-                <Detail k="Status" v="No physical adapter detected" />
+                <Detail
+                  k={t("gaming.hardwareGrid.statusLabel")}
+                  v={t("gaming.hardwareGrid.noPhysicalAdapterDetected")}
+                />
               ) : (
                 // Stack name over status (names are long); the medium ("Ethernet"/"Wi-Fi") already
                 // shows in the card value, so the status drops it — just Connected / Not connected.
@@ -335,7 +395,9 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
                   <div key={i} className="net-adapter">
                     <span className="net-adapter-name">{a.name}</span>
                     <span className="net-adapter-status">
-                      {a.connected ? "Connected" : "Not connected"}
+                      {a.connected
+                        ? t("gaming.hardwareGrid.connectedLabel")
+                        : t("gaming.hardwareGrid.notConnectedLabel")}
                     </span>
                   </div>
                 ))

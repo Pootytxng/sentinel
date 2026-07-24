@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { ExportResult } from "../types";
@@ -22,17 +24,20 @@ const NOTES_MAX = 4000;
 // report, so trimming the inline email copy loses nothing.
 const MAILTO_BODY_MAX = 1900;
 
-function buildMailto(notes: string, r: ExportResult, subjectTag: string): string {
-  const subject = `Compy feedback${subjectTag ? ` — ${subjectTag}` : ""}`;
-  const note = notes.trim() || "(no note written — the saved report has the diagnostics)";
-  const snapshot = r.discord?.trim() ? `\n\n— system snapshot —\n${r.discord.trim()}` : "";
-  const pointer = `\n\nFull diagnostic report saved on this PC:\n${r.path}\n(reply and I'll ask for it if I need more detail)`;
+// `t` is threaded in (not read from a hook) because this is a module-level pure helper — the compose
+// window it builds is part of the localized UI, so its subject + body scaffolding follow the app language.
+function buildMailto(notes: string, r: ExportResult, subjectTag: string, t: TFunction): string {
+  const base = t("settings.feedback.mailSubject");
+  const subject = subjectTag ? `${base} — ${subjectTag}` : base;
+  const note = notes.trim() || t("settings.feedback.mailNoNote");
+  const snapshot = r.discord?.trim() ? `\n\n${t("settings.feedback.mailSnapshotHeader")}\n${r.discord.trim()}` : "";
+  const pointer = `\n\n${t("settings.feedback.mailPointer", { path: r.path })}`;
   let body = note + snapshot + pointer;
   if (body.length > MAILTO_BODY_MAX) {
     // Drop the inline snapshot first (it's in the saved report), then trim the note if still over.
     const room = MAILTO_BODY_MAX - pointer.length - 48;
     const trimmedNote =
-      note.length > room ? note.slice(0, Math.max(0, room)).trimEnd() + "\n…(trimmed — full text in the saved report)" : note;
+      note.length > room ? note.slice(0, Math.max(0, room)).trimEnd() + "\n" + t("settings.feedback.mailTrimmed") : note;
     body = trimmedNote + pointer;
   }
   return `mailto:${INTAKE_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -45,6 +50,7 @@ export function FeedbackExport({
   appVersion?: string;
   buildStamp?: string | null;
 }) {
+  const { t } = useTranslation();
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState<"email" | "save" | null>(null);
   const [result, setResult] = useState<ExportResult | null>(null);
@@ -67,13 +73,13 @@ export function FeedbackExport({
     setError(null);
     try {
       const r = await generate();
-      await openUrl(buildMailto(notes, r, subjectTag));
+      await openUrl(buildMailto(notes, r, subjectTag, t));
     } catch (e) {
       // The bundle may have saved even if the mail client didn't open — say what actually happened.
       setError(
         result
-          ? "Couldn't open your email app. Your report is saved below — you can attach it to an email yourself."
-          : "Couldn't build the report. Nothing was sent.",
+          ? t("settings.feedback.errEmailFailed")
+          : t("settings.feedback.errBuildFailed"),
       );
     } finally {
       setBusy(null);
@@ -86,14 +92,14 @@ export function FeedbackExport({
     try {
       await generate();
     } catch {
-      setError("Couldn't save the report.");
+      setError(t("settings.feedback.errSaveFailed"));
     } finally {
       setBusy(null);
     }
   };
 
   const onOpenFolder = () => {
-    invoke("open_export_folder").catch(() => setError("Couldn't open the exports folder."));
+    invoke("open_export_folder").catch(() => setError(t("settings.feedback.errFolderFailed")));
   };
 
   const copySummary = async () => {
@@ -109,12 +115,11 @@ export function FeedbackExport({
 
   return (
     <section className="set-section" data-testid="feedback-export">
-      <h2 className="set-section-title">Feedback &amp; help</h2>
+      <h2 className="set-section-title">{t("settings.feedback.sectionTitle")}</h2>
       <p className="receipts-hint">
-        Hit a bug, have an idea, or just want to send what Compy sees on your PC? Write a note and
-        Compy builds a diagnostic report for you. <strong>Nothing is sent automatically</strong> —
-        "Email it to me" opens your own email app with everything filled in, and a copy is always
-        saved on your PC either way.
+        {t("settings.feedback.hintPre")}
+        <strong>{t("settings.feedback.hintStrong")}</strong>
+        {t("settings.feedback.hintPost")}
       </p>
 
       <textarea
@@ -123,8 +128,8 @@ export function FeedbackExport({
         onChange={(e) => setNotes(e.target.value.slice(0, NOTES_MAX))}
         maxLength={NOTES_MAX}
         rows={4}
-        placeholder="What's working, what's broken, or what you'd want next…"
-        aria-label="Your feedback"
+        placeholder={t("settings.feedback.notesPlaceholder")}
+        aria-label={t("settings.feedback.notesAria")}
         spellCheck
       />
       <div className="fb-count">
@@ -133,10 +138,10 @@ export function FeedbackExport({
 
       <div className="fb-actions">
         <button className="set-action fb-primary" onClick={onEmail} disabled={busy !== null}>
-          {busy === "email" ? "Preparing…" : "Email it to me"}
+          {busy === "email" ? t("settings.feedback.preparing") : t("settings.feedback.emailIt")}
         </button>
         <button className="set-action" onClick={onSave} disabled={busy !== null}>
-          {busy === "save" ? "Saving…" : "Save a report file"}
+          {busy === "save" ? t("settings.feedback.saving") : t("settings.feedback.saveFile")}
         </button>
       </div>
 
@@ -145,14 +150,15 @@ export function FeedbackExport({
       {result && (
         <div className="fb-saved">
           <p className="receipts-hint fb-saved-line">
-            Saved to <span className="fb-path">{result.path}</span>
+            {t("settings.feedback.savedToPre")}
+            <span className="fb-path">{result.path}</span>
           </p>
           <div className="fb-saved-actions">
             <button className="set-action" onClick={onOpenFolder}>
-              Open folder
+              {t("settings.feedback.openFolder")}
             </button>
             <button className="set-action" onClick={copySummary} disabled={!result.discord}>
-              {copied ? "Copied!" : "Copy summary for Discord"}
+              {copied ? t("settings.feedback.copied") : t("settings.feedback.copySummary")}
             </button>
           </div>
           {result.discord && <pre className="receipts-preview fb-summary">{result.discord}</pre>}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary } from "../types";
 import { readDisplayRefreshHz } from "../design/theme";
@@ -7,8 +8,9 @@ import { gradeFps, gradeLow1, gradeRamPct, gradeColor, type Grade } from "../dat
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { Term } from "../design/Term";
 import { prettyGameName } from "./game-name";
-import { shortVerdict, fmtDur } from "./Play";
+import { fmtDur, verdictLabel } from "./Play";
 import type { GpuVendor } from "./walkthroughs";
+import "../i18n";
 import "./MonitorBasic.css";
 
 // MonitorBasic — the BASIC face of Monitor (P2 UI slim-down, plan §4.3/§5.2): one glanceable answer
@@ -56,6 +58,7 @@ export function MonitorBasic({
    *  get_fps_status read the tiles already make — no second IPC. */
   onFpsActive?: (active: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const [cpu, setCpu] = useState<CpuSnap | null>(null);
   const [gpu, setGpu] = useState<GpuSnap | null>(null);
   const [fps, setFps] = useState<FpsLite | null>(null);
@@ -117,10 +120,10 @@ export function MonitorBasic({
         <section className="mb-tile">
           <div className="mb-tile-head">
             <span className="mb-tile-k">
-              <Term id="hz-vs-fps">FPS</Term>
+              <Term id="hz-vs-fps">{t("monitor.monitorBasic.fpsTermLabel")}</Term>
             </span>
             <button className={`mb-cap ${fps?.active ? "mb-cap-on" : ""}`} disabled={fpsBusy} onClick={toggleCapture}>
-              {fpsBusy ? "…" : fps?.active ? "Stop capture" : "Start capture"}
+              {fpsBusy ? "…" : fps?.active ? t("monitor.monitorBasic.stopCapture") : t("monitor.monitorBasic.startCapture")}
             </button>
           </div>
           <div className="mb-tile-v" style={sample ? gradeStyle(gradeFps(sample.fps, rig)) : undefined}>
@@ -129,14 +132,14 @@ export function MonitorBasic({
           <div className="mb-tile-m" style={sample ? gradeStyle(gradeLow1(sample.low1_fps, sample.fps)) : undefined}>
             {sample ? (
               <>
-                {Math.round(sample.low1_fps)} <Term id="one-percent-lows">1% low</Term> · est
+                {Math.round(sample.low1_fps)} <Term id="one-percent-lows">{t("monitor.monitorBasic.oneLowTermLabel")}</Term>{t("monitor.monitorBasic.estSuffix")}
               </>
             ) : fps?.status === "declined" ? (
-              "admin permission declined — tap Start capture to allow it"
+              t("monitor.monitorBasic.declinedStatus")
             ) : fps?.active ? (
-              "capturing — focus a DX11/DX12 game"
+              t("monitor.monitorBasic.capturingStatus")
             ) : (
-              "start capture, then play"
+              t("monitor.monitorBasic.idleStatus")
             )}
           </div>
         </section>
@@ -144,29 +147,31 @@ export function MonitorBasic({
         {/* GPU temp — vendor-gated grading (NVIDIA stays ungraded/neutral, LOCKED rule #5). */}
         <section className="mb-tile">
           <div className="mb-tile-head">
-            <span className="mb-tile-k">GPU temp</span>
+            <span className="mb-tile-k">{t("monitor.monitorBasic.gpuTempLabel")}</span>
           </div>
           <div className="mb-tile-v" style={gradeStyle(gradeGpuTempForVendor(vendor, gpu?.temperature_c ?? null))}>
             {gpu?.temperature_c == null ? "—" : `${Math.round(gpu.temperature_c)}°C`}
           </div>
           <div className="mb-tile-m">
-            {gpu?.utilization_gpu_pct != null ? `${Math.round(gpu.utilization_gpu_pct)}% busy` : "waiting for sensors"}
+            {gpu?.utilization_gpu_pct != null
+              ? t("monitor.monitorBasic.busySuffix", { pct: Math.round(gpu.utilization_gpu_pct) })
+              : t("monitor.monitorBasic.waitingForSensors")}
           </div>
         </section>
 
         {/* CPU — utilisation stays ungraded by design (high while gaming is fine). */}
         <section className="mb-tile">
           <div className="mb-tile-head">
-            <span className="mb-tile-k">CPU</span>
+            <span className="mb-tile-k">{t("monitor.monitorBasic.cpuLabel")}</span>
           </div>
           <div className="mb-tile-v">{cpu ? `${Math.round(cpu.usage_overall_pct)}%` : "—"}</div>
-          <div className="mb-tile-m">{cpu ? `${(cpu.frequency_mhz / 1000).toFixed(2)} GHz` : "waiting for sensors"}</div>
+          <div className="mb-tile-m">{cpu ? `${(cpu.frequency_mhz / 1000).toFixed(2)} GHz` : t("monitor.monitorBasic.waitingForSensors")}</div>
         </section>
 
         {/* RAM — pressure-graded (same gradeRamPct as LiveCharts/Home). */}
         <section className="mb-tile">
           <div className="mb-tile-head">
-            <span className="mb-tile-k">RAM</span>
+            <span className="mb-tile-k">{t("monitor.monitorBasic.ramLabel")}</span>
           </div>
           <div className="mb-tile-v" style={gradeStyle(gradeRamPct(ramPct))}>
             {ramPct == null ? "—" : `${ramPct}%`}
@@ -174,23 +179,27 @@ export function MonitorBasic({
           <div className="mb-tile-m">
             {cpu?.ram_total_bytes
               ? `${(cpu.ram_used_bytes / 1024 ** 3).toFixed(1)} / ${(cpu.ram_total_bytes / 1024 ** 3).toFixed(0)} GB`
-              : "waiting for sensors"}
+              : t("monitor.monitorBasic.waitingForSensors")}
           </div>
         </section>
       </div>
 
       {/* The same honesty line the full card carries — method stated, no injection, no kernel driver. */}
       <p className="mb-honest">
-        <Term id="etw">ETW</Term> · external · anti-cheat safe — no injection, no kernel driver.
+        <Term id="etw">{t("monitor.monitorBasic.etwEmph")}</Term>{t("monitor.monitorBasic.etwHonestyPost")}
       </p>
 
       {/* Last-session summary (plan §4.3) — a door into the full debrief, never a dead end. */}
       {latest && (
         <button className="mb-last cmp-door" onClick={onOpenSessions}>
-          <span className="mb-last-k">Last session</span>
+          <span className="mb-last-k">{t("monitor.monitorBasic.lastSessionLabel")}</span>
           <span className="mb-last-v">
-            {prettyGameName(latest.process_name) || "Unknown game"} · {shortVerdict(latest)} ·{" "}
-            {fmtDur(latest.duration_secs)} · {latest.avg_fps.toFixed(0)} avg
+            {t("monitor.monitorBasic.lastSessionSummary", {
+              game: prettyGameName(latest.process_name) || t("monitor.monitorBasic.unknownGameFallback"),
+              verdict: verdictLabel(t, latest),
+              duration: fmtDur(latest.duration_secs),
+              avg: latest.avg_fps.toFixed(0),
+            })}
           </span>
           <span className="cmp-door-chevron cmp-door-chevron-end" aria-hidden="true">
             ▸

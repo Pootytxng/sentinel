@@ -3,6 +3,7 @@
 // sticks, GPU(s) and physical drives with their real specs; parts Compy genuinely cannot read in
 // software (CPU cooler, PSU, case fans) are emitted as honest "ghost" placeholders labelled
 // "not software-detectable" — never invented with fake specs. Pure + unit-testable (no three.js).
+import type { TFunction } from "i18next";
 import type { HardwareInfo } from "../../App";
 import { fmtGB, fmtGHz } from "../hardware-format";
 
@@ -34,15 +35,32 @@ function row(start: Vec3, step: Vec3, i: number): Vec3 {
   return [start[0] + step[0] * i, start[1] + step[1] * i, start[2] + step[2] * i];
 }
 
-export function buildRigParts(hw: HardwareInfo): RigPart[] {
+// Static-copy translator for this module's `gaming.rigViewer.parts.*` keys. `t` omitted (or the
+// `!t` branch, used by every existing caller/test) returns byte-identical English — including
+// simple `{{var}}` interpolation, so templated fallbacks (e.g. "Memory · Slot {{n}}") still render
+// exactly like the old template literals did. Real hardware-measured values never flow through here.
+function tp(
+  t: TFunction | undefined,
+  key: string,
+  defaultValue: string,
+  vars?: Record<string, unknown>,
+): string {
+  if (t) return t(`gaming.rigViewer.parts.${key}`, { defaultValue, ...vars });
+  if (!vars) return defaultValue;
+  return defaultValue.replace(/\{\{(\w+)\}\}/g, (match, name: string) =>
+    Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : match,
+  );
+}
+
+export function buildRigParts(hw: HardwareInfo, t?: TFunction): RigPart[] {
   const parts: RigPart[] = [];
 
   // ── Mainboard — the structural anchor. No fabricated model (Compy doesn't read a board model);
   //    it carries the honest platform/OS identity instead. ──
   parts.push({
     id: "board",
-    name: "Mainboard",
-    category: "Platform",
+    name: tp(t, "boardName", "Mainboard"),
+    category: tp(t, "boardCategory", "Platform"),
     kind: "board",
     detected: true,
     assembled: [0.1, 0.2, -0.72],
@@ -50,15 +68,15 @@ export function buildRigParts(hw: HardwareInfo): RigPart[] {
     rotation: [0, 0.5, 0],
     tagline: hw.windows_version?.product_name || `${hw.os_name} ${hw.os_version}`.trim(),
     specs: [
-      { label: "Platform", value: hw.windows_version?.product_name || hw.os_name || "—" },
+      { label: tp(t, "platformLabel", "Platform"), value: hw.windows_version?.product_name || hw.os_name || "—" },
       {
-        label: "Build",
+        label: tp(t, "buildLabel", "Build"),
         value: hw.windows_version
           ? `${hw.windows_version.build}.${hw.windows_version.ubr}`
           : hw.kernel_version || "—",
       },
-      { label: "Host", value: hw.hostname || "—" },
-      { label: "Note", value: "Board model isn't software-readable" },
+      { label: tp(t, "hostLabel", "Host"), value: hw.hostname || "—" },
+      { label: tp(t, "noteLabel", "Note"), value: tp(t, "boardNoteValue", "Board model isn't software-readable") },
     ],
   });
 
@@ -66,8 +84,8 @@ export function buildRigParts(hw: HardwareInfo): RigPart[] {
   const arch = hw.cpu_arch;
   parts.push({
     id: "cpu",
-    name: arch?.family_label || hw.cpu_brand || "Processor",
-    category: "Processor",
+    name: arch?.family_label || hw.cpu_brand || tp(t, "cpuNameFallback", "Processor"),
+    category: tp(t, "cpuCategory", "Processor"),
     kind: "cpu",
     detected: true,
     assembled: [0.05, 1.15, -0.58],
@@ -78,7 +96,7 @@ export function buildRigParts(hw: HardwareInfo): RigPart[] {
       ...(arch?.architecture && arch.architecture !== "Unknown"
         ? [
             {
-              label: "Architecture",
+              label: tp(t, "architectureLabel", "Architecture"),
               value:
                 arch.generation && arch.generation !== arch.architecture
                   ? `${arch.architecture} · ${arch.generation}`
@@ -86,8 +104,11 @@ export function buildRigParts(hw: HardwareInfo): RigPart[] {
             },
           ]
         : []),
-      { label: "Cores / Threads", value: `${hw.cpu_cores_physical}C / ${hw.cpu_cores_logical}T` },
-      { label: "Base clock", value: fmtGHz(hw.cpu_frequency_mhz) },
+      {
+        label: tp(t, "coresThreadsLabel", "Cores / Threads"),
+        value: `${hw.cpu_cores_physical}C / ${hw.cpu_cores_logical}T`,
+      },
+      { label: tp(t, "baseClockLabel", "Base clock"), value: fmtGHz(hw.cpu_frequency_mhz) },
     ],
   });
 
@@ -101,8 +122,8 @@ export function buildRigParts(hw: HardwareInfo): RigPart[] {
       const mfg = m.manufacturer && m.manufacturer !== "Undefined" ? m.manufacturer : "";
       parts.push({
         id: `ram-${i}`,
-        name: `Memory · Slot ${i + 1}`,
-        category: "Memory",
+        name: tp(t, "memorySlotName", "Memory · Slot {{n}}", { n: i + 1 }),
+        category: tp(t, "memoryCategory", "Memory"),
         kind: "ram",
         detected: true,
         assembled: row([0.78, 1.05, -0.58], [0.26, 0, 0], i),
@@ -111,18 +132,18 @@ export function buildRigParts(hw: HardwareInfo): RigPart[] {
         capacityBytes: m.capacity_bytes,
         tagline: `${fmtGB(m.capacity_bytes)}${type_ ? ` ${type_}` : ""}`,
         specs: [
-          { label: "Capacity", value: fmtGB(m.capacity_bytes) },
-          ...(type_ ? [{ label: "Type", value: type_ }] : []),
-          ...(speed ? [{ label: "Speed", value: speed }] : []),
-          ...(mfg ? [{ label: "Maker", value: mfg }] : []),
+          { label: tp(t, "capacityLabel", "Capacity"), value: fmtGB(m.capacity_bytes) },
+          ...(type_ ? [{ label: tp(t, "typeLabel", "Type"), value: type_ }] : []),
+          ...(speed ? [{ label: tp(t, "speedLabel", "Speed"), value: speed }] : []),
+          ...(mfg ? [{ label: tp(t, "makerLabel", "Maker"), value: mfg }] : []),
         ],
       });
     });
   } else {
     parts.push({
       id: "ram",
-      name: "Memory",
-      category: "Memory",
+      name: tp(t, "memoryNameFallback", "Memory"),
+      category: tp(t, "memoryCategory", "Memory"),
       kind: "ram",
       detected: true,
       assembled: [0.95, 1.05, -0.58],
@@ -130,9 +151,9 @@ export function buildRigParts(hw: HardwareInfo): RigPart[] {
       rotation: [0, -0.5, 0.05],
       tagline: fmtGB(hw.ram_total_bytes),
       specs: [
-        { label: "Total", value: fmtGB(hw.ram_total_bytes) },
-        { label: "In use", value: fmtGB(hw.ram_used_bytes) },
-        { label: "Note", value: "Per-slot data not reported" },
+        { label: tp(t, "totalLabel", "Total"), value: fmtGB(hw.ram_total_bytes) },
+        { label: tp(t, "inUseLabel", "In use"), value: fmtGB(hw.ram_used_bytes) },
+        { label: tp(t, "noteLabel", "Note"), value: tp(t, "perSlotNoteValue", "Per-slot data not reported") },
       ],
     });
   }
@@ -142,21 +163,24 @@ export function buildRigParts(hw: HardwareInfo): RigPart[] {
     parts.push({
       id: `gpu-${i}`,
       name: g.name,
-      category: hw.gpus.length > 1 ? `Graphics ${i + 1}` : "Graphics",
+      category:
+        hw.gpus.length > 1
+          ? tp(t, "graphicsCategoryNumbered", "Graphics {{n}}", { n: i + 1 })
+          : tp(t, "graphicsCategory", "Graphics"),
       kind: "gpu",
       detected: true,
       assembled: row([0.1, -0.15, -0.18], [0, -0.62, 0], i),
       exploded: row([0.2, -0.5, 2.7], [0, -0.7, 0.2], i),
       rotation: [0.1, 0, 0],
-      tagline: g.vram_bytes > 0 ? `${fmtGB(g.vram_bytes)} VRAM` : "GPU",
+      tagline: g.vram_bytes > 0 ? `${fmtGB(g.vram_bytes)} VRAM` : tp(t, "gpuTaglineFallback", "GPU"),
       specs: [
         ...(g.video_processor && g.video_processor !== g.name
-          ? [{ label: "Processor", value: g.video_processor }]
+          ? [{ label: tp(t, "processorLabel", "Processor"), value: g.video_processor }]
           : []),
-        { label: "VRAM", value: g.vram_bytes > 0 ? fmtGB(g.vram_bytes) : "—" },
-        ...(g.driver_version ? [{ label: "Driver", value: g.driver_version }] : []),
+        { label: tp(t, "vramLabel", "VRAM"), value: g.vram_bytes > 0 ? fmtGB(g.vram_bytes) : "—" },
+        ...(g.driver_version ? [{ label: tp(t, "driverLabel", "Driver"), value: g.driver_version }] : []),
         ...(g.current_refresh_rate_hz > 0
-          ? [{ label: "Output", value: `${g.current_refresh_rate_hz} Hz` }]
+          ? [{ label: tp(t, "outputLabel", "Output"), value: `${g.current_refresh_rate_hz} Hz` }]
           : []),
       ],
     });
@@ -168,8 +192,8 @@ export function buildRigParts(hw: HardwareInfo): RigPart[] {
     physical.forEach((d, i) => {
       parts.push({
         id: `disk-${i}`,
-        name: d.friendly_name || `Drive ${i + 1}`,
-        category: "Storage",
+        name: d.friendly_name || tp(t, "driveNameFallback", "Drive {{n}}", { n: i + 1 }),
+        category: tp(t, "storageCategory", "Storage"),
         kind: "storage",
         detected: true,
         assembled: row([-0.55, -0.4, -0.6], [0, -0.22, 0], i),
@@ -177,9 +201,9 @@ export function buildRigParts(hw: HardwareInfo): RigPart[] {
         rotation: [0, 0.6, 0.5],
         tagline: `${d.media_type || ""} ${fmtGB(d.size_bytes)}`.trim(),
         specs: [
-          { label: "Size", value: fmtGB(d.size_bytes) },
-          ...(d.bus_type ? [{ label: "Bus", value: d.bus_type }] : []),
-          ...(d.media_type ? [{ label: "Media", value: d.media_type }] : []),
+          { label: tp(t, "sizeLabel", "Size"), value: fmtGB(d.size_bytes) },
+          ...(d.bus_type ? [{ label: tp(t, "busLabel", "Bus"), value: d.bus_type }] : []),
+          ...(d.media_type ? [{ label: tp(t, "mediaLabel", "Media"), value: d.media_type }] : []),
         ],
       });
     });
@@ -187,8 +211,8 @@ export function buildRigParts(hw: HardwareInfo): RigPart[] {
     (hw.disks ?? []).slice(0, 4).forEach((d, i) => {
       parts.push({
         id: `vol-${i}`,
-        name: `Volume ${d.mount_point}`,
-        category: "Storage",
+        name: tp(t, "volumeName", "Volume {{mount}}", { mount: d.mount_point }),
+        category: tp(t, "storageCategory", "Storage"),
         kind: "storage",
         detected: true,
         assembled: row([-0.55, -0.4, -0.6], [0, -0.22, 0], i),
@@ -196,9 +220,9 @@ export function buildRigParts(hw: HardwareInfo): RigPart[] {
         rotation: [0, 0.6, 0.5],
         tagline: `${fmtGB(d.total_bytes)} · ${d.file_system}`,
         specs: [
-          { label: "Total", value: fmtGB(d.total_bytes) },
-          { label: "Free", value: fmtGB(d.available_bytes) },
-          { label: "FS", value: d.file_system },
+          { label: tp(t, "totalLabel", "Total"), value: fmtGB(d.total_bytes) },
+          { label: tp(t, "freeLabel", "Free"), value: fmtGB(d.available_bytes) },
+          { label: tp(t, "fsLabel", "FS"), value: d.file_system },
         ],
       });
     });
@@ -208,27 +232,37 @@ export function buildRigParts(hw: HardwareInfo): RigPart[] {
   //    specs. This is on-brand: Compy shows only what it can measure. ──
   parts.push({
     id: "cooler",
-    name: "CPU Cooler",
-    category: "Cooling",
+    name: tp(t, "coolerName", "CPU Cooler"),
+    category: tp(t, "coolerCategory", "Cooling"),
     kind: "cooler",
     detected: false,
     assembled: [0.05, 1.15, -0.16],
     exploded: [0.3, 3.3, 0.7],
     rotation: [0.4, 0, 0.2],
-    tagline: "Not software-detectable",
-    specs: [{ label: "Detection", value: "Coolers expose no software identity" }],
+    tagline: tp(t, "notSoftwareDetectableTagline", "Not software-detectable"),
+    specs: [
+      {
+        label: tp(t, "detectionLabel", "Detection"),
+        value: tp(t, "coolerNoteValue", "Coolers expose no software identity"),
+      },
+    ],
   });
   parts.push({
     id: "psu",
-    name: "Power Supply",
-    category: "Power",
+    name: tp(t, "psuName", "Power Supply"),
+    category: tp(t, "psuCategory", "Power"),
     kind: "psu",
     detected: false,
     assembled: [0.1, -1.85, -0.25],
     exploded: [0.4, -3.1, 0.7],
     rotation: [0, -0.4, 0],
-    tagline: "Not software-detectable",
-    specs: [{ label: "Detection", value: "PSUs expose no software identity" }],
+    tagline: tp(t, "notSoftwareDetectableTagline", "Not software-detectable"),
+    specs: [
+      {
+        label: tp(t, "detectionLabel", "Detection"),
+        value: tp(t, "psuNoteValue", "PSUs expose no software identity"),
+      },
+    ],
   });
 
   return parts;

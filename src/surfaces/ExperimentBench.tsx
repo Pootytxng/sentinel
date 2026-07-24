@@ -8,6 +8,8 @@
 // Spec: docs/superpowers/specs/2026-07-17-intelligence-phase3-experiment-engine.md.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import "../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary } from "../types";
 import { LEDGER_CHANGED_EVENT } from "../types";
@@ -71,47 +73,61 @@ type RecLite = {
   currently_applied: boolean;
 };
 
+// A plain (key, options?) => string signature — avoids importing react-i18next's generic TFunction
+// type just to thread the translator into a couple of module-level helper functions.
+type Translate = (key: string, options?: Record<string, unknown>) => string;
+
 // Plain-English label for each honest conclude verdict (§4F/§1 — measurement, never a promise).
-const VERDICT_COPY: Record<string, string> = {
-  improved: "Measurably faster — kept",
-  "no-change": "No measurable change — restored",
-  regressed: "Slower — restored",
-  confounded: "Another change interfered — restored, can't attribute",
-  expired: "Baseline too old to judge — restored",
-  "insufficient-evidence": "Not enough data to judge — restored",
-  "not-comparable": "Different game — not comparable, restored",
-};
+// Built from `t` (not a module-level constant) so it's translated; called from inside the component.
+function verdictCopy(t: Translate): Record<string, string> {
+  return {
+    improved: t("lab.experimentBench.verdict.improved"),
+    "no-change": t("lab.experimentBench.verdict.noChange"),
+    regressed: t("lab.experimentBench.verdict.regressed"),
+    confounded: t("lab.experimentBench.verdict.confounded"),
+    expired: t("lab.experimentBench.verdict.expired"),
+    "insufficient-evidence": t("lab.experimentBench.verdict.insufficientEvidence"),
+    "not-comparable": t("lab.experimentBench.verdict.notComparable"),
+  };
+}
 
 // Honest label per simulator verdict + whether a controlled test is a meaningful next step.
 // `blocked` verdicts have nothing to learn from an experiment (already on / wrong rig / barred).
-const SIM_VERDICT: Record<string, { label: string; blocked: boolean }> = {
-  "worth-testing": { label: "Worth testing", blocked: false },
-  "plausible-unproven": { label: "Plausible — unproven", blocked: false },
-  "insufficient-evidence": { label: "Unknown — measure it to find out", blocked: false },
-  "unlikely-to-matter": { label: "Unlikely to matter", blocked: false },
-  "already-configured": { label: "Already configured", blocked: true },
-  // Covers both a hardware mismatch AND an advisory Compy can't one-click apply — either way there's
-  // no controlled before/after to run here, so Start stays disabled (blocked). The `why` disambiguates.
-  "not-applicable": { label: "Not testable here", blocked: true },
-  "risk-exceeds-value": { label: "Risk exceeds value — barred", blocked: true },
-};
+function simVerdictCopy(t: Translate): Record<string, { label: string; blocked: boolean }> {
+  return {
+    "worth-testing": { label: t("lab.experimentBench.simVerdict.worthTesting"), blocked: false },
+    "plausible-unproven": { label: t("lab.experimentBench.simVerdict.plausibleUnproven"), blocked: false },
+    "insufficient-evidence": {
+      label: t("lab.experimentBench.simVerdict.insufficientEvidence"),
+      blocked: false,
+    },
+    "unlikely-to-matter": { label: t("lab.experimentBench.simVerdict.unlikelyToMatter"), blocked: false },
+    "already-configured": { label: t("lab.experimentBench.simVerdict.alreadyConfigured"), blocked: true },
+    // Covers both a hardware mismatch AND an advisory Compy can't one-click apply — either way there's
+    // no controlled before/after to run here, so Start stays disabled (blocked). The `why` disambiguates.
+    "not-applicable": { label: t("lab.experimentBench.simVerdict.notApplicable"), blocked: true },
+    "risk-exceeds-value": { label: t("lab.experimentBench.simVerdict.riskExceedsValue"), blocked: true },
+  };
+}
 
-const CONFIDENCE_COPY: Record<Confidence, string> = {
-  unknown: "confidence: unknown",
-  low: "confidence: low",
-  medium: "confidence: medium",
-  high: "confidence: high",
-};
+function confidenceCopy(t: Translate): Record<Confidence, string> {
+  return {
+    unknown: t("lab.experimentBench.confidence.unknown"),
+    low: t("lab.experimentBench.confidence.low"),
+    medium: t("lab.experimentBench.confidence.medium"),
+    high: t("lab.experimentBench.confidence.high"),
+  };
+}
 
-function whenLabel(iso: string): string {
+function whenLabel(iso: string, t: Translate): string {
   const then = new Date(iso).getTime();
   if (!Number.isFinite(then)) return "";
   const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins} min ago`;
+  if (mins < 1) return t("lab.experimentBench.when.justNow");
+  if (mins < 60) return t("lab.experimentBench.when.minAgo", { count: mins });
   const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs} hr ago`;
-  return `${Math.round(hrs / 24)} d ago`;
+  if (hrs < 24) return t("lab.experimentBench.when.hrAgo", { count: hrs });
+  return t("lab.experimentBench.when.dAgo", { count: Math.round(hrs / 24) });
 }
 
 // The treatment session for a running experiment: the most recent monitored session of the SAME game
@@ -131,6 +147,7 @@ function treatmentFor(exp: Experiment, sessions: SessionSummary[]): SessionSumma
 }
 
 export default function ExperimentBench() {
+  const { t } = useTranslation();
   const [gate, setGate] = useState(false);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [recs, setRecs] = useState<RecLite[]>([]);
@@ -199,10 +216,11 @@ export default function ExperimentBench() {
         if (simReq.current !== reqId) return; // a newer read superseded this one — drop the stale sim
         setSim(report);
         if (!quiet) {
+          const metric = report.metric_to_watch ?? t("lab.experimentBench.hypothesisMetricFallback");
           setHypothesis(
-            `${report.metric_to_watch ?? "1% low FPS"} should beat the ${
-              hasBaseline ? "3% noise floor" : "noise floor"
-            }`,
+            hasBaseline
+              ? t("lab.experimentBench.hypothesisWithBaseline", { metric })
+              : t("lab.experimentBench.hypothesisWithoutBaseline", { metric }),
           );
         }
       } catch (e) {
@@ -212,7 +230,7 @@ export default function ExperimentBench() {
         if (simReq.current === reqId && !quiet) setSimBusy(false);
       }
     },
-    [hasBaseline],
+    [hasBaseline, t],
   );
 
   // Intelligence Phase 3 fast-follow (W2 + Measurement-2.0 Task A): the bench loads once when the gate
@@ -329,16 +347,15 @@ export default function ExperimentBench() {
     }
   }
 
+  const SIM_VERDICT = simVerdictCopy(t);
   const simMeta = sim ? SIM_VERDICT[sim.verdict] ?? { label: sim.verdict, blocked: false } : null;
   const canStart = !!sim && !!simMeta && !simMeta.blocked && !!baseline && !busy;
 
   return (
     <section className="exp-bench" data-testid="experiment-bench">
-      <h2 className="exp-bench-title">Controlled experiments</h2>
+      <h2 className="exp-bench-title">{t("lab.experimentBench.title")}</h2>
       <p className="exp-bench-hint">
-        Test one change at a time on your own rig: Compy captures a baseline, applies a single
-        reversible tweak, measures a real session against it, and automatically restores the change
-        unless the numbers clearly beat the noise. It measures — it never promises a gain.
+        {t("lab.experimentBench.hint")}
       </p>
 
       {error && (
@@ -360,14 +377,14 @@ export default function ExperimentBench() {
         // ── Launcher: pick a change → honest simulator read → start against the real baseline ──
         <div className="exp-launch">
           <label className="exp-field">
-            <span className="exp-field-label">Pick a change to test</span>
+            <span className="exp-field-label">{t("lab.experimentBench.pickLabel")}</span>
             <select
               className="exp-select"
               value={pickId}
               disabled={busy || simBusy}
               onChange={(e) => runSim(e.target.value)}
             >
-              <option value="">Choose a change…</option>
+              <option value="">{t("lab.experimentBench.chooseChange")}</option>
               {options.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.title}
@@ -377,31 +394,30 @@ export default function ExperimentBench() {
           </label>
           {options.length === 0 && (
             <p className="exp-note">
-              No changes to test right now — every applicable change is already applied, or nothing in
-              the catalog fits this rig.
+              {t("lab.experimentBench.noChangesToTest")}
             </p>
           )}
 
-          {simBusy && <p className="exp-note">Reading your rig…</p>}
+          {simBusy && <p className="exp-note">{t("lab.experimentBench.readingRig")}</p>}
 
           {sim && simMeta && (
             <div className="exp-sim" data-verdict={sim.verdict}>
               <p className="exp-sim-rec">{sim.rec_title}</p>
               <div className="exp-sim-head">
                 <span className="exp-sim-verdict">{simMeta.label}</span>
-                <span className="exp-sim-conf">{CONFIDENCE_COPY[sim.confidence]}</span>
+                <span className="exp-sim-conf">{confidenceCopy(t)[sim.confidence]}</span>
               </div>
               <p className="exp-sim-why">{sim.why}</p>
               <p className="exp-sim-line">
-                <span className="exp-sim-mark">For your rig:</span> {sim.hardware_factor}
+                <span className="exp-sim-mark">{t("lab.experimentBench.forYourRig")}</span> {sim.hardware_factor}
               </p>
               {sim.metric_to_watch && (
                 <p className="exp-sim-line">
-                  <span className="exp-sim-mark">Watch:</span> {sim.metric_to_watch}
+                  <span className="exp-sim-mark">{t("lab.experimentBench.watch")}</span> {sim.metric_to_watch}
                 </p>
               )}
               <p className="exp-sim-line">
-                <span className="exp-sim-mark">Disproved if:</span> {sim.disproof}
+                <span className="exp-sim-mark">{t("lab.experimentBench.disprovedIf")}</span> {sim.disproof}
               </p>
             </div>
           )}
@@ -411,13 +427,16 @@ export default function ExperimentBench() {
               {baseline ? (
                 <>
                   <p className="exp-baseline">
-                    <span className="exp-sim-mark">Baseline:</span>{" "}
-                    {prettyGameName(baseline.process_name) || "your last session"} — avg{" "}
-                    <b>{Math.round(baseline.avg_fps)}</b> fps · 1% low{" "}
-                    <b>{Math.round(baseline.low1_fps_est)}</b> fps ({whenLabel(baseline.started_at)})
+                    <span className="exp-sim-mark">{t("lab.experimentBench.baselineLabel")}</span>{" "}
+                    {t("lab.experimentBench.baselinePre", {
+                      game: prettyGameName(baseline.process_name) || t("lab.experimentBench.yourLastSession"),
+                    })}{" "}
+                    <b>{Math.round(baseline.avg_fps)}</b> {t("lab.experimentBench.baselineMid")}{" "}
+                    <b>{Math.round(baseline.low1_fps_est)}</b>{" "}
+                    {t("lab.experimentBench.baselinePost", { when: whenLabel(baseline.started_at, t) })}
                   </p>
                   <label className="exp-field">
-                    <span className="exp-field-label">Hypothesis</span>
+                    <span className="exp-field-label">{t("lab.experimentBench.hypothesisLabel")}</span>
                     <input
                       className="exp-input"
                       value={hypothesis}
@@ -431,18 +450,17 @@ export default function ExperimentBench() {
                     disabled={!canStart}
                     onClick={startExperiment}
                   >
-                    {busy ? "Applying…" : "Start experiment — apply & measure next session"}
+                    {busy ? t("lab.experimentBench.applying") : t("lab.experimentBench.startExperiment")}
                   </button>
                   <p className="exp-fineprint">
-                    Applies one reversible change now, then compares your next{" "}
-                    {prettyGameName(baseline.process_name) || "game"} session. Auto-restores unless it
-                    clearly beats the noise floor.
+                    {t("lab.experimentBench.fineprint", {
+                      game: prettyGameName(baseline.process_name) || t("lab.experimentBench.fineprintGameFallback"),
+                    })}
                   </p>
                 </>
               ) : (
                 <p className="exp-note">
-                  No baseline yet — play one monitored gaming session first. Compy needs a real
-                  before-reading; it won't invent one.
+                  {t("lab.experimentBench.noBaselineYet")}
                 </p>
               )}
             </div>
@@ -452,18 +470,19 @@ export default function ExperimentBench() {
 
       {history.length > 0 && (
         <div className="exp-history">
-          <div className="exp-history-label">Past experiments</div>
+          <div className="exp-history-label">{t("lab.experimentBench.pastExperiments")}</div>
           <ul className="exp-bench-list">
             {history.map((x) => (
               <li key={x.id} className="exp-bench-row" data-status={x.status}>
                 <span className="exp-bench-rec">{x.rec_title}</span>
                 <span className="exp-bench-verdict">
-                  {x.verdict ? VERDICT_COPY[x.verdict] ?? x.verdict : "—"}
+                  {x.verdict ? verdictCopy(t)[x.verdict] ?? x.verdict : "—"}
                 </span>
                 {x.treatment && (
                   <span className="exp-bench-delta">
                     {x.treatment.delta_low1_pct >= 0 ? "+" : ""}
-                    {x.treatment.delta_low1_pct}% 1% low
+                    {x.treatment.delta_low1_pct}
+                    {t("lab.experimentBench.deltaSuffix")}
                   </span>
                 )}
                 {x.stop_reason && x.status === "aborted" && (
@@ -491,21 +510,21 @@ function RunningPanel({
   onConclude: (exp: Experiment, treatment: SessionSummary) => void;
   onRestore: (exp: Experiment) => void;
 }) {
-  const game = prettyGameName(exp.game) || "your game";
+  const { t } = useTranslation();
+  const game = prettyGameName(exp.game) || t("lab.experimentBench.yourGame");
   return (
     <div className="exp-running" data-testid="experiment-running">
       <div className="exp-running-head">
         <span className="exp-running-dot" aria-hidden />
-        <span className="exp-running-title">Experiment in progress — {exp.rec_title}</span>
+        <span className="exp-running-title">{t("lab.experimentBench.runningTitlePrefix")} {exp.rec_title}</span>
       </div>
       <p className="exp-running-baseline">
-        Baseline · {game} — avg <b>{Math.round(exp.baseline_avg_fps)}</b> fps · 1% low{" "}
-        <b>{Math.round(exp.baseline_low1_fps)}</b> fps
+        {t("lab.experimentBench.runningBaselinePre", { game })} <b>{Math.round(exp.baseline_avg_fps)}</b> {t("lab.experimentBench.baselineMid")}{" "}
+        <b>{Math.round(exp.baseline_low1_fps)}</b> {t("lab.experimentBench.fpsUnit")}
       </p>
       {exp.attribution_warning && <p className="exp-bench-warn">{exp.attribution_warning}</p>}
       <p className="exp-running-step">
-        The change is applied. Play a {game} session, then conclude — Compy compares it to the
-        baseline and restores the change unless it clearly wins.
+        {t("lab.experimentBench.runningStep", { game })}
       </p>
 
       <div className="exp-running-actions">
@@ -515,28 +534,28 @@ function RunningPanel({
           onClick={() => treatment && onConclude(exp, treatment)}
         >
           {busy
-            ? "Working…"
+            ? t("lab.experimentBench.working")
             : treatment
-              ? `Conclude with my latest ${game} session`
-              : `No new ${game} session yet`}
+              ? t("lab.experimentBench.concludeWithLatest", { game })
+              : t("lab.experimentBench.noNewSession", { game })}
         </button>
         <button
           className="exp-cta-ghost"
           disabled={busy}
           onClick={() => onRestore(exp)}
         >
-          Restore now
+          {t("lab.experimentBench.restoreNow")}
         </button>
       </div>
       {treatment ? (
         <p className="exp-fineprint">
-          Latest {game} session: avg <b>{Math.round(treatment.avg_fps)}</b> fps · 1% low{" "}
-          <b>{Math.round(treatment.low1_fps_est)}</b> fps · {treatment.samples.toLocaleString()}{" "}
-          frames.
+          {t("lab.experimentBench.runningLatestPre", { game })} <b>{Math.round(treatment.avg_fps)}</b> {t("lab.experimentBench.baselineMid")}{" "}
+          <b>{Math.round(treatment.low1_fps_est)}</b>{" "}
+          {t("lab.experimentBench.runningLatestPost", { samples: treatment.samples.toLocaleString() })}
         </p>
       ) : (
         <p className="exp-fineprint">
-          Play a monitored {game} session to give the experiment a real after-reading.
+          {t("lab.experimentBench.runningNoTreatment", { game })}
         </p>
       )}
     </div>

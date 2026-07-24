@@ -6,9 +6,20 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(nul
 
 import { LabV2 } from "./LabV2";
 import Lab from "./Lab";
-import { labVerdict, labLatestReadings } from "./lab-v2-data";
+import { labVerdict as labVerdictRaw, labLatestReadings as labLatestReadingsRaw } from "./lab-v2-data";
 import { invalidateProbe, putProbe } from "../data/probe-cache";
 import type { AppliedChange, BenchmarkState, Efficacy, LatencyReport } from "../types";
+// i18n update (2026-07-23): labVerdict/labLatestReadings now take a TFunction as their last
+// param (Simplified Chinese translation pass) instead of literal English strings. These test-
+// local wrappers resolve them through the real i18next instance (English is the default
+// language, matching what every assertion below already expects) so every call site below stays
+// exactly as written — same text, just sourced from locale JSON instead of a .ts literal.
+import i18n from "../i18n";
+
+const labVerdict = (bench: BenchmarkState | null, changes: AppliedChange[] = []) =>
+  labVerdictRaw(bench, changes, i18n.t);
+const labLatestReadings = (f: Parameters<typeof labLatestReadingsRaw>[0]) =>
+  labLatestReadingsRaw(f, i18n.t);
 
 // V2-7 guards (bug→guard tier 1): the V2 Lab room composes RoomShell (one verdict, NO door —
 // Lab is the journey's last chapter — and deliberately NO primary action: the instruments ARE

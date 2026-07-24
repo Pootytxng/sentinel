@@ -1,0 +1,386 @@
+{
+  "gpuProfile": {
+    "scopeAriaLabel": "GPU 配置范围",
+    "scopeTitle": "GPU 配置视图",
+    "scopeReassurance": "这只是决定你查看的角度——不会更改你电脑上的任何设置。",
+    "beforeAfterTitle": "前后对比",
+    "beforeAfterIntro": "在你于驱动程序工具中做出更改的前后,分别捕捉一次 GPU 可读取的设置,即可精确查看发生了哪些变化。仅供查看——Compy 不会更改这里的任何设置。",
+    "captureBefore": "捕捉更改前",
+    "recaptureBefore": "重新捕捉更改前",
+    "captureAfter": "捕捉更改后",
+    "recaptureAfter": "重新捕捉更改后",
+    "clear": "清除",
+    "noReadingYet": "目前还没有可用的 GPU 读数——等 GPU 详情加载完成后,你就可以捕捉快照了。",
+    "beforeSaved": "已保存更改前快照。做出更改后,再捕捉更改后快照。",
+    "captureToBegin": "先捕捉一次更改前快照以开始。",
+    "driverMismatchWarning": "你的驱动程序版本也发生了变化({{before}} → {{after}}),所以这不是一次针对你所改设置的纯净前后对比。请在同一驱动程序版本下重新捕捉两次快照,以进行公平对比。",
+    "colSetting": "设置项",
+    "colBefore": "更改前",
+    "colAfter": "更改后",
+    "colDelta": "差值",
+    "changed": "已变化",
+    "noChange": "无变化",
+    "footnote": "快照仅保存在本机。显示为「—」表示该数值在某次快照中无法读取,因此不计入变化。",
+    "vendorInsightsAriaLabel": "厂商建议洞察",
+    "vendorInsightsTitle": "针对你的 Radeon 显卡",
+    "vendorInsightsIntro": "根据 Compy 已读取到的设置,为你的显卡量身定制的直白说明。仅供参考——Compy 不会更改这里的任何设置。",
+    "scope": {
+      "global": { "label": "全局", "blurb": "展示你所有使用场景下的 GPU 情况——不针对任何单一游戏。" },
+      "per-game": { "label": "按游戏", "blurb": "围绕你当前所玩的游戏，呈现 GPU 视图。" }
+    },
+    "insights": {
+      "hagsOnTitle": "GPU 调度已开启",
+      "hagsOnDetail": "硬件加速 GPU 计划已开启——这是你的 Radeon 显卡的现代默认设置。无需处理；可在 Windows 图形设置中管理，而非 AMD Adrenalin。",
+      "hagsOffTitle": "GPU 调度已关闭",
+      "hagsOffDetail": "硬件加速 GPU 计划已关闭。在 Radeon 显卡上，开启或关闭通常都没问题——有些游戏更适合开启，有些更适合关闭。它位于 Windows 图形设置中（而非 AMD Adrenalin），你可以尝试切换并对比效果。",
+      "powerModeTitle": "电源配置",
+      "powerModeDetail": "你的 GPU 电源配置读数为「{{mode}}」。你可以在 AMD Adrenalin 的「性能 → 调校」中查看或切换配置——Compy 只读取这个标签，绝不会更改它。",
+      "tempHotTitle": "温度偏高",
+      "tempHotDetail": "GPU 峰值温度达到了 {{temp}}°C。Radeon 显卡本身耐受较高温度是正常设计，但如果持续这么高，可以检查一下机箱风道，并在 AMD Adrenalin 的「调校」中查看风扇曲线。",
+      "tempOkTitle": "温度正常",
+      "tempOkDetail": "GPU 峰值温度为 {{temp}}°C——对 Radeon 显卡来说温度余量很充足。无需处理散热。"
+    }
+  },
+  "labBento": {
+    "ledePre": "你这台主机的全面体检——五项测量,从左到右依次呈现。这里的一切都只是在",
+    "ledeEmph": "读取",
+    "ledePost": "；不会更改你电脑上的任何设置,尽管放心探索。",
+    "openStationAriaLabel": "打开第 {{n}} 站 —— {{name}}",
+    "measured": "已测量",
+    "notYet": "暂未测得",
+    "checkupReportLabel": "体检报告",
+    "notes": {
+      "optimize": "网上大多数「最佳设置」指南都千篇一律、放之四海而皆准。而这些优化项,都是针对像你这样的主机专门验证过安全且可撤销的——每一项在改动前都会先保存原始状态的快照。",
+      "diagnostics": "大多数人从没见过自己电脑真正的配件清单。这是一份诚实的清单——直接从这台机器读取,不安装任何东西。",
+      "benchmark": "跑分本身就带有波动:哪怕两次测试的设置完全一样,分数也不会完全相同。Compy 会以这个噪声下限为标准判定更改效果,所以运气不会被当成一次提升。",
+      "latency": "一次点击要经过鼠标、USB、Windows、GPU 和显示器,你才能在画面上看到它——每一步都会增加延迟,而且每一步都可以测量。",
+      "tuning": "降压是让芯片用更少的功耗完成同样的工作——通常会更凉快,速度却不受影响。至于你这颗芯片能降多少,就要看「硅片彩票」了。",
+      "blackbox": "Windows 会像飞行记录仪一样,记录下每一次崩溃和卡死。几乎没有人会去读它——而这一站会用大白话把它读给你听。"
+    },
+    "checkup": {
+      "notStarted": {
+        "headline": "你的体检还没有开始。",
+        "sub": "从左到右依次体验每一站——这里的一切都只是测量,不会弄坏任何东西。放心随便试试。"
+      },
+      "complete": {
+        "headline": "全面体检已完成——每一站都有了读数。",
+        "sub": "下面逐站说明,你这台主机的这些结果都意味着什么。"
+      },
+      "inProgress": {
+        "headline": "体检进行中——{{total}} 站中已有 {{read}} 站测得读数。",
+        "sub": "到目前为止测到的结果,以及接下来该去哪一站。"
+      },
+      "next": "下一步：第 {{n}} 站——{{name}}。{{forLine}}"
+    }
+  },
+  "labV2": {
+    "masthead": "测试台",
+    "componentLabels": {
+      "cpu": "CPU",
+      "ram": "RAM",
+      "gpu": "GPU",
+      "disk": "磁盘"
+    },
+    "verdict": {
+      "nothingGraded": {
+        "headline": "实验室里还没有任何判定结果。",
+        "sub": "从「基准测试」开始——设定一个基准,改一项设置,再测一次,Compy 会如实告诉你这项改动到底有没有用。"
+      },
+      "baselineRecorded": {
+        "headline": "基准已记录——下一次基准测试将以它为标准进行判定。",
+        "sub": "只要你重新测一次,判定结果就会显示在这里。"
+      },
+      "headline": {
+        "improvedSingle": "你上一次的更改经测试证实提升了这台电脑。",
+        "improvedStacked": "你上一次一起测试的几项更改,共同提升了这台电脑。",
+        "regressedSingle": "你上一次的更改经测试证实让情况变差了。",
+        "regressedStacked": "你上一次一起测试的几项更改,共同让情况变差了。",
+        "noChangeSingle": "你上一次的更改没有带来可测量的变化。",
+        "noChangeStacked": "你上一次的这几项更改,没有带来可测量的变化。"
+      },
+      "gradedWithEvidence": "实测：{{evidence}}——以 {{floor}} 噪声下限为标准判定。",
+      "gradedNoEvidence": "以 {{floor}} 噪声下限为标准判定。",
+      "noise": "所有部件的变化都在 {{floor}} 的噪声下限以内——我们只会把这算作噪声,而不是提升。",
+      "undoSingle": "撤销它,或者重新测一次以确认。",
+      "undoStacked": "撤销它们,或者重新测一次以确认。"
+    }
+  },
+  "labGround": {
+    "masthead": "试炼场"
+  },
+  "labConsole": {
+    "readinessLabel": "就绪度",
+    "readinessNote": "= {{total}} 项检查中通过 {{passed}} 项",
+    "avgFpsLabel": "平均 FPS",
+    "safeStackLabel": "安全优化组合",
+    "oneLowLabel": "1% 最低帧",
+    "unitScore": "分",
+    "unitFps": "fps",
+    "unitReady": "就绪",
+    "unitFrames": "帧",
+    "closeStationAriaLabel": "关闭站点",
+    "close": "关闭",
+    "optimizeReassurance": "这一站可以一键应用你的安全优化组合——和这个房间里的每一项更改一样,均可完全撤销。"
+  },
+  "optimizeStation": {
+    "gaugeAriaLabel": "{{total}} 项安全优化项中已开启 {{applied}} 项",
+    "yourSafeStack": "你的安全优化组合",
+    "allApplied": "这台主机的 {{total}} 项已全部开启——无需再应用。",
+    "freshLeft": "下方还有 {{count}} 项待开启——每项一键完成,且可撤销。",
+    "driftedRestore_one": "有 {{count}} 项在 Compy 之外被关闭——请在下方恢复。",
+    "driftedRestore_other": "有 {{count}} 项在 Compy 之外被关闭——请在下方恢复。",
+    "mixedLeft": "下方还有 {{totalLeft}} 项——{{fresh}} 项待开启,{{drifted}} 项在 Compy 之外被关闭。",
+    "appliedHistorySummary": "已应用与历史记录——每项更改均可撤销",
+    "moreCleanupSummary": "更多清理项(可选)",
+    "powerFeaturesSummary": "进阶功能——游戏模式(进阶,可撤销)",
+    "powerFeaturesIntro": "在这里可以进行力度更大、且能被验证效果的更改。这些和「监测」里的控制项完全相同,同样可以撤销——应用一项后,运行基准测试站,即可测出它对这台主机的实际效果。"
+  },
+  "stations": {
+    "optimize": {
+      "name": "优化",
+      "forLine": "一键为你的主机开启经过验证的安全优化项。",
+      "whenLine": "你只是想更快、更安全,又不想自己动手折腾。",
+      "connectsLine": "验证你刚应用的这组优化——运行「基准测试」,查看前后对比。"
+    },
+    "diagnostics": {
+      "name": "诊断",
+      "forLine": "在你更改任何设置之前,先弄清楚这台主机里到底有什么。",
+      "whenLine": "你只是想知道这台电脑里都有什么。",
+      "connectsLine": "为其他每一站提供参照——你可以对照这里的真实配置,理解它们测出的数字。"
+    },
+    "benchmark": {
+      "name": "基准测试",
+      "forLine": "验证一项更改是否真的有用——而不是安慰剂效应。",
+      "whenLine": "你在想:「这项调整到底有没有用,还是我在自我安慰?」",
+      "connectsLine": "整套测试流程的核心——在任何「优化」或「调校」更改前后都运行一次。"
+    },
+    "latency": {
+      "name": "延迟",
+      "forLine": "缩短从你的手到屏幕之间的延迟。",
+      "whenLine": "你的瞄准或点击感觉慢了一拍。",
+      "connectsLine": "搭配「基准测试」使用,验证延迟方面的更改是否真的生效。"
+    },
+    "tuning": {
+      "name": "调校",
+      "forLine": "在不掉帧的前提下,让它运行得更凉快、更安静(AMD)。",
+      "whenLine": "它运行得又热又吵,你想让它安静下来,又不想牺牲帧数。",
+      "connectsLine": "「基准测试」会判定降压后你的帧数是否保住了。"
+    },
+    "blackbox": {
+      "name": "黑匣子",
+      "forLine": "在崩溃或卡死发生后,弄清楚到底出了什么问题。",
+      "whenLine": "它崩溃或卡死了,你却不知道为什么。",
+      "connectsLine": "查看「诊断」,了解它发现的问题背后,这台主机当时的状态。"
+    },
+    "routerLeadOptimize": {
+      "symptom": "我只是想让电脑更快——安全地、不用自己折腾",
+      "because": "它能一键为你的主机开启经过验证的安全优化项——随时可以撤销"
+    },
+    "router": {
+      "latency": {
+        "symptom": "我的瞄准/点击感觉慢了一拍",
+        "because": "它会追踪从鼠标到屏幕的整个过程,并指出究竟是什么在增加延迟"
+      },
+      "benchmark": {
+        "symptom": "那项调整到底有没有用——还是我在自我安慰?",
+        "because": "它会依据噪声下限,对真实的前后数据进行判定"
+      },
+      "tuning": {
+        "symptom": "它又热又吵,我想让它凉快下来,同时又不掉帧",
+        "because": "它会测量降压后温度是否下降,同时帧数是否保住"
+      },
+      "blackbox": {
+        "symptom": "它崩溃或卡死了,我却不知道为什么",
+        "because": "它会用大白话读懂 Windows 自己记录的崩溃与卡死信息"
+      },
+      "diagnostics": {
+        "symptom": "我只是想知道这台主机里都有什么",
+        "because": "只读取证——Compy 检测到的一切,原始呈现"
+      }
+    },
+    "verdictReading": {
+      "improved": "上次判定：已提升——这项更改的变化幅度超过了本次测试自身的噪声。",
+      "noMeasurableChange": "上次判定：无可测量的变化——变化幅度仍在噪声下限以内。这只是噪声,不是提升。",
+      "regressed": "上次判定：已退步——实测结果变差了,值得撤销。"
+    },
+    "verdictReadingStacked": {
+      "improved": "上次判定：已提升——你这几项更改合在一起的变化幅度,超过了本次测试自身的噪声。",
+      "noMeasurableChange": "上次判定：无可测量的变化——这组更改整体的变化幅度仍在噪声下限以内。这只是噪声,不是提升。",
+      "regressed": "上次判定：已退步——这几项更改放在一起,实测结果变差了,值得撤销。"
+    },
+    "reading": {
+      "optimizeReady_other": "还有 {{count}} 项安全优化待开启——一键完成,均可撤销。",
+      "optimizeAllSet": "每一项安全优化都已开启——你的主机已经就绪。可以在下方验证效果,到此为止也可以。",
+      "diagnosticsCaptured": "报告已生成——这台主机的原始信息,随时可读。",
+      "diagnosticsNotCaptured": "暂无读数——系统报告还没有生成。",
+      "benchmarkBaselineSaved": "基准已保存——改一项设置,再测一次,判定结果就会显示在这里。",
+      "benchmarkNoReading": "暂无读数——先设定一个基准以开始。",
+      "latencyNoReading": "暂无读数——打开这一站,Compy 会追踪整个路径。",
+      "latencyWithTimer": "MSI 开启 {{on}} · 关闭 {{off}} · 计时器 {{ms}}ms——MSI 开启且计时器数值低,意味着从鼠标到屏幕的路程更短。",
+      "latencyNoTimer": "MSI 开启 {{on}} · 关闭 {{off}}——MSI 开启且计时器数值低,意味着从鼠标到屏幕的路程更短。",
+      "tuningNoReading": "暂无读数——在 AMD 的工具中完成降压,玩一局游戏,Compy 会判定它是否扛住了。",
+      "blackboxNoReading": "暂无读数——扫描一下,Compy 会读取 Windows 自己的崩溃记录。",
+      "blackboxClean": "扫描结果干净——Windows 的记录里没有崩溃或卡死。",
+      "blackboxIncidents_other": "记录到 {{count}} 起事件——用大白话读懂发生了什么。"
+    }
+  },
+  "lab": {
+    "title": "高级",
+    "lastBenchmarkLabel": "最近一次基准测试：",
+    "subhead": "这是你这台主机的仪表面板。这里的一切都只是测量——「高级」不会更改你的电脑。从「基准测试」开始吧。",
+    "verdict": {
+      "improved": "已提升",
+      "noMeasurableChange": "无可测量的变化",
+      "regressed": "已退步"
+    },
+    "benchSummary": {
+      "lastVerdict": "上次判定：{{verdict}}",
+      "baselineSetOn": "基准已保存于 {{date}}",
+      "baselineSet": "基准已保存",
+      "noBaselineYet": "尚无基准"
+    },
+    "latencySummary": "MSI 开启 {{on}} · 关闭 {{off}}",
+    "latencySummaryWithTimer": "MSI 开启 {{on}} · 关闭 {{off}} · 计时器 {{ms}}ms",
+    "tuningSummaryFallback": "降压指南 + 稳定性",
+    "closeStationAriaLabel": "关闭站点",
+    "close": "关闭",
+    "routerTitle": "你是来做什么的?",
+    "routerSub": "选择最符合你情况的一条——它会为你打开下方对应的工具。",
+    "welcome": {
+      "benchmark": {
+        "term": "基准测试",
+        "gloss": "这项更改到底有没有起作用?"
+      },
+      "latency": {
+        "term": "延迟",
+        "gloss": "是什么拖慢了从鼠标到屏幕的这段路程?"
+      },
+      "tuning": {
+        "term": "调校",
+        "gloss": "你的 AMD 降压设置扛住了吗?"
+      },
+      "diagnostics": {
+        "term": "诊断",
+        "gloss": "Compy 读取到的这台主机的原始信息。"
+      },
+      "blackBox": {
+        "term": "黑匣子",
+        "gloss": "什么崩溃了、什么卡死了——用大白话读懂 Windows 自己的记录。"
+      }
+    },
+    "sections": {
+      "benchmark": {
+        "name": "基准测试",
+        "oneLiner": "运行一次,改一项设置,再运行一次——Compy 会如实告诉你这项改动到底有没有用。"
+      },
+      "blackBox": {
+        "name": "黑匣子",
+        "oneLiner": "读取 Windows 记录的崩溃与卡死证据——用大白话讲清楚,并附上你的最后生命体征。",
+        "summary": "崩溃与卡死记录"
+      },
+      "latency": {
+        "name": "延迟",
+        "oneLiner": "从鼠标到屏幕的整条路径——Compy 会指出究竟是什么在增加延迟。"
+      },
+      "tuning": {
+        "name": "调校",
+        "oneLiner": "在 AMD 官方工具中完成降压——Compy 会测量温度是否下降、帧数是否保住。"
+      },
+      "diagnostics": {
+        "name": "诊断",
+        "oneLiner": "只读的系统取证信息——Compy 检测到的这台主机的原始数据。",
+        "summary": "系统报告"
+      }
+    },
+    "latestReadingsLabel": "最新读数",
+    "readings": {
+      "baselineLabel": "基准",
+      "latencyLabel": "延迟",
+      "tuningLabel": "调校",
+      "blackBoxLabel": "黑匣子",
+      "systemReportLabel": "系统报告",
+      "baselineSet": "已保存",
+      "latencyTimer": "计时器 {{ms}} 毫秒",
+      "latencyMsiOn": "MSI 开启 {{on}}",
+      "blackBoxNoneFound": "未发现",
+      "blackBoxRecorded": "{{n}} 条记录",
+      "systemReportCaptured": "已采集"
+    },
+    "stationAriaLabel": "第 {{n}} 站",
+    "contract": {
+      "forLabel": "用途",
+      "whenLabel": "适用场景",
+      "readingLabel": "读数含义",
+      "connectsLabel": "关联方式"
+    }
+  },
+  "experimentBench": {
+    "verdict": {
+      "improved": "实测更快——已保留",
+      "noChange": "无可测量的变化——已恢复",
+      "regressed": "变慢了——已恢复",
+      "confounded": "另一项更改产生了干扰——已恢复,无法归因",
+      "expired": "基准过旧,无法判定——已恢复",
+      "insufficientEvidence": "数据不足,无法判定——已恢复",
+      "notComparable": "游戏不同,不可比较——已恢复"
+    },
+    "simVerdict": {
+      "worthTesting": "值得一试",
+      "plausibleUnproven": "有可能——尚未证实",
+      "insufficientEvidence": "未知——实测一下便知",
+      "unlikelyToMatter": "影响可能不大",
+      "alreadyConfigured": "已配置",
+      "notApplicable": "此处无法测试",
+      "riskExceedsValue": "风险大于收益——已禁止"
+    },
+    "confidence": {
+      "unknown": "置信度：未知",
+      "low": "置信度：低",
+      "medium": "置信度：中",
+      "high": "置信度：高"
+    },
+    "when": {
+      "justNow": "刚刚",
+      "minAgo": "{{count}} 分钟前",
+      "hrAgo": "{{count}} 小时前",
+      "dAgo": "{{count}} 天前"
+    },
+    "hypothesisMetricFallback": "1% 最低帧 FPS",
+    "hypothesisWithBaseline": "{{metric}} 应超过 3% 的噪声下限",
+    "hypothesisWithoutBaseline": "{{metric}} 应超过噪声下限",
+    "title": "对照实验",
+    "hint": "在你自己的主机上一次只测试一项更改:Compy 先记录一个基准,应用一项可撤销的优化,再用一局真实对局的实测数据与基准比较,除非数据明显超出噪声范围,否则会自动恢复这项更改。它只负责测量——从不承诺一定会有提升。",
+    "pickLabel": "选择要测试的更改",
+    "chooseChange": "选择一项更改…",
+    "noChangesToTest": "目前没有可测试的更改——要么所有适用的更改都已应用,要么目录中没有适合这台主机的项目。",
+    "readingRig": "正在读取你的主机…",
+    "forYourRig": "针对你的主机：",
+    "watch": "关注：",
+    "disprovedIf": "推翻条件：",
+    "baselineLabel": "基准：",
+    "baselinePre": "{{game}} —— 平均",
+    "yourLastSession": "你上一局的数据",
+    "baselineMid": "fps · 1% 最低帧",
+    "baselinePost": "fps（{{when}}）",
+    "hypothesisLabel": "假设",
+    "applying": "应用中…",
+    "startExperiment": "开始实验——应用并测量下一局",
+    "fineprint": "现在应用一项可撤销的更改,并与你下一局 {{game}} 对局进行比较。除非明显超过噪声下限,否则将自动恢复。",
+    "fineprintGameFallback": "对局",
+    "noBaselineYet": "目前还没有基准——请先玩一局开启监测的对局。Compy 需要一份真实的「更改前」读数,绝不会凭空捏造。",
+    "pastExperiments": "历史实验",
+    "deltaSuffix": "% 1% 最低帧",
+    "runningTitlePrefix": "实验进行中——",
+    "runningBaselinePre": "基准 · {{game}} —— 平均",
+    "fpsUnit": "fps",
+    "runningStep": "这项更改已应用。玩一局 {{game}},然后点击结束——Compy 会将结果与基准比较,除非明显更优,否则会恢复这项更改。",
+    "working": "处理中…",
+    "concludeWithLatest": "用我最近一局 {{game}} 结束实验",
+    "noNewSession": "还没有新的 {{game}} 对局",
+    "restoreNow": "立即恢复",
+    "runningLatestPre": "最近一局 {{game}}：平均",
+    "runningLatestPost": "fps · {{samples}} 帧。",
+    "runningNoTreatment": "玩一局开启监测的 {{game}} 对局,为实验提供真实的「更改后」读数。",
+    "yourGame": "你的游戏"
+  }
+}

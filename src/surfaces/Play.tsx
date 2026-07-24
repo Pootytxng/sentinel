@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary, Priorities, Recommendation, AppliedChange } from "../types";
 import {
@@ -25,6 +27,7 @@ import {
   type Grade,
 } from "../data/metric-grade";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
+import "../i18n";
 import "./Play.css";
 
 // PLAY — live + debrief (halfway-home §1: navigation never teleports). The live-monitor card +
@@ -63,6 +66,20 @@ export function shortVerdict(s: SessionSummary): string {
     default:
       return "Some dips"; // "ok" and "neutral"
   }
+}
+
+// Display-only i18n label for shortVerdict()'s grade. shortVerdict() itself must keep returning
+// the literal English "Smooth" / "Rough" / "Some dips" strings unchanged — monitor-v2-data.ts
+// compares its result with === to pick the headline sentence, and that composed sentence is
+// pinned verbatim by monitor-v2.test.tsx. This helper only picks which translated word to RENDER;
+// it never feeds back into shortVerdict's own return value or any comparison.
+export function verdictLabel(t: TFunction, s: SessionSummary): string {
+  const grade = shortVerdict(s);
+  return grade === "Smooth"
+    ? t("monitor.play.smoothVerdict")
+    : grade === "Rough"
+      ? t("monitor.play.roughVerdict")
+      : t("monitor.play.someDipsVerdict");
 }
 
 export function fmtDur(sec: number): string {
@@ -122,6 +139,7 @@ export default function Play({
   // count (one screen never states the same fact twice — the punch (j) law).
   v2?: boolean;
 }) {
+  const { t } = useTranslation();
   const [fps, setFps] = useState<FpsLite | null>(null);
   const [gpu, setGpu] = useState<GpuLite | null>(null);
   const [cpu, setCpu] = useState<number | null>(null);
@@ -245,8 +263,9 @@ export default function Play({
           Monitor shell the Sessions/Live segment label provides the context (no stacked headings). */}
       {view === "all" && (
         <header className="play-head">
-          <h2 className="play-title">Monitor</h2>
-          <p className="play-sub">Live while you play, and the debriefs after.</p>
+          {/* Room label — owned by the rail (common.json), not re-translated here. */}
+          <h2 className="play-title">{t("common.rail.play", "Monitor")}</h2>
+          <p className="play-sub">{t("monitor.play.subtitle")}</p>
         </header>
       )}
 
@@ -254,28 +273,33 @@ export default function Play({
       {view === "sessions" && latest && (
         <div className="play-hero">
           <div className="play-hero-top">
-            <span className="play-hero-game">{prettyGameName(latest.process_name) || "Last session"}</span>
+            <span className="play-hero-game">{prettyGameName(latest.process_name) || t("monitor.play.lastSessionFallback")}</span>
             {/* "live estimate" = the F3 honesty framing, re-homed from the room verdict sub
                 (title-header law 2026-07-10): a 1 Hz sampler's grade never overclaims benchmark
                 precision, and the hero is where that grade lives now. */}
-            <span className="play-hero-verdict">{shortVerdict(latest)} · {fmtDur(latest.duration_secs)} · live estimate</span>
+            <span className="play-hero-verdict">
+              {t("monitor.play.heroVerdict", {
+                verdict: verdictLabel(t, latest),
+                duration: fmtDur(latest.duration_secs),
+              })}
+            </span>
           </div>
           <div className="play-hero-metrics">
             <div className="play-hero-metric">
               <span className="play-hero-value" style={gradeStyle(gradeFps(latest.avg_fps, rig))}>{latest.avg_fps.toFixed(0)}</span>
-              <span className="play-hero-label"><Term id="hz-vs-fps">avg FPS</Term></span>
+              <span className="play-hero-label"><Term id="hz-vs-fps">{t("monitor.play.avgFpsTermLabel")}</Term></span>
             </div>
             <div className="play-hero-metric">
               <span className="play-hero-value" style={gradeStyle(gradeLow1(latest.low1_fps_est, latest.avg_fps))}>{latest.low1_fps_est.toFixed(0)}</span>
-              <span className="play-hero-label"><Term id="one-percent-lows">1% low</Term> · est</span>
+              <span className="play-hero-label"><Term id="one-percent-lows">{t("monitor.play.oneLowTermLabel")}</Term>{t("monitor.play.estSuffix")}</span>
             </div>
             <div className="play-hero-metric">
               <span className="play-hero-value" style={gradeStyle(gradeFrametimeMs(latest.avg_frametime_ms, rig))}>{latest.avg_frametime_ms.toFixed(1)}</span>
-              <span className="play-hero-label">ms <Term id="frametime">frametime</Term></span>
+              <span className="play-hero-label">ms <Term id="frametime">{t("monitor.play.frametimeTermLabel")}</Term></span>
             </div>
             <div className="play-hero-metric">
               <span className="play-hero-value" style={gradeStyle(tempGrade(latest.peak_gpu_temp_c))}>{latest.peak_gpu_temp_c == null ? "—" : `${latest.peak_gpu_temp_c}°C`}</span>
-              <span className="play-hero-label">peak GPU</span>
+              <span className="play-hero-label">{t("monitor.play.peakGpuLabel")}</span>
             </div>
           </div>
         </div>
@@ -295,58 +319,58 @@ export default function Play({
         {/* Live monitor card */}
         <div className="play-card">
           <div className="play-card-head">
-            <span className="play-card-title">Live monitor</span>
+            <span className="play-card-title">{t("monitor.play.liveMonitorTitle")}</span>
             <button
               className={`play-btn ${fps?.active ? "play-btn-on" : ""}`}
               disabled={fpsBusy}
               onClick={toggleCapture}
             >
-              {fpsBusy ? "…" : fps?.active ? "Stop FPS capture" : "Start FPS capture"}
+              {fpsBusy ? "…" : fps?.active ? t("monitor.play.stopFpsCapture") : t("monitor.play.startFpsCapture")}
             </button>
           </div>
           <div className="play-live">
             <div className="play-metric">
               <div className="play-metric-value" style={sample ? gradeStyle(gradeFps(sample.fps, rig)) : undefined}>{sample ? Math.round(sample.fps) : "—"}</div>
-              <div className="play-metric-label"><Term id="hz-vs-fps">FPS</Term></div>
+              <div className="play-metric-label"><Term id="hz-vs-fps">{t("monitor.play.fpsTermLabel")}</Term></div>
             </div>
             <div className="play-metric">
               <div className="play-metric-value" style={sample ? gradeStyle(gradeLow1(sample.low1_fps, sample.fps)) : undefined}>{sample ? Math.round(sample.low1_fps) : "—"}</div>
-              <div className="play-metric-label"><Term id="one-percent-lows">1% low</Term> · est</div>
+              <div className="play-metric-label"><Term id="one-percent-lows">{t("monitor.play.oneLowTermLabel")}</Term>{t("monitor.play.estSuffix")}</div>
             </div>
             <div className="play-metric">
               <div className="play-metric-value" style={gradeStyle(tempGrade(gpu?.temperature_c ?? null))}>{gpu?.temperature_c == null ? "—" : `${gpu.temperature_c}°C`}</div>
-              <div className="play-metric-label">GPU temp</div>
+              <div className="play-metric-label">{t("monitor.play.gpuTempLabel")}</div>
             </div>
             <div className="play-metric">
               <div className="play-metric-value">{cpu == null ? "—" : `${cpu}%`}</div>
-              <div className="play-metric-label">CPU</div>
+              <div className="play-metric-label">{t("monitor.play.cpuLabel")}</div>
             </div>
           </div>
           {fps?.status === "declined" && (
             <p className="play-honest">
-              Administrator permission was declined — tap “Start FPS capture” to allow it.
+              {t("monitor.play.adminDeclined")}
             </p>
           )}
           {fps?.active && !sample && fps?.status !== "declined" && (
             <p className="play-honest">
-              Capturing… launch or focus a DX11/DX12 game to see frames (Vulkan/OpenGL aren't counted yet).
+              {t("monitor.play.capturingHint")}
             </p>
           )}
-          <p className="play-honest"><Term id="etw">ETW</Term> · external · anti-cheat safe — no injection, no kernel driver.</p>
+          <p className="play-honest"><Term id="etw">{t("monitor.play.etwEmph")}</Term>{t("monitor.play.etwHonestyPost")}</p>
         </div>
 
         {/* Overlay card */}
         <div className="play-card">
           <div className="play-card-head">
-            <span className="play-card-title">In-game overlay</span>
+            <span className="play-card-title">{t("monitor.play.inGameOverlayTitle")}</span>
             <button className={`play-btn ${overlayOn ? "play-btn-on" : ""}`} onClick={toggleOverlay}>
-              {overlayOn ? "Hide overlay" : "Show overlay"}
+              {overlayOn ? t("monitor.play.hideOverlay") : t("monitor.play.showOverlay")}
             </button>
           </div>
           {overlayCfgVisible ? (
             <>
-              <div className="play-field-label">Density</div>
-              <div className="play-seg" role="group" aria-label="Overlay density">
+              <div className="play-field-label">{t("monitor.play.densityLabel")}</div>
+              <div className="play-seg" role="group" aria-label={t("monitor.play.overlayDensityAria")}>
                 {(["minimal", "standard", "full"] as OverlayDensity[]).map((d) => (
                   <button
                     key={d}
@@ -354,12 +378,12 @@ export default function Play({
                     aria-pressed={density === d}
                     onClick={() => chooseDensity(d)}
                   >
-                    {d.charAt(0).toUpperCase() + d.slice(1)}
+                    {t(`monitor.play.density.${d}`)}
                   </button>
                 ))}
               </div>
-              <div className="play-field-label">Background</div>
-              <div className="play-seg" role="group" aria-label="Overlay background">
+              <div className="play-field-label">{t("monitor.play.backgroundLabel")}</div>
+              <div className="play-seg" role="group" aria-label={t("monitor.play.overlayBackgroundAria")}>
                 {(["on", "off"] as OverlayBackdrop[]).map((b) => (
                   <button
                     key={b}
@@ -367,19 +391,19 @@ export default function Play({
                     aria-pressed={backdrop === b}
                     onClick={() => chooseBackdrop(b)}
                   >
-                    {b === "on" ? "On" : "Off"}
+                    {b === "on" ? t("monitor.play.onLabel") : t("monitor.play.offLabel")}
                   </button>
                 ))}
               </div>
-              <div className="play-field-label">Corner</div>
+              <div className="play-field-label">{t("monitor.play.cornerLabel")}</div>
               <div className="play-corners">
                 {CORNERS.map(([c, glyph]) => (
                   <button
                     key={c}
                     className={`play-corner ${corner === c ? "play-corner-on" : ""}`}
                     onClick={() => chooseCorner(c)}
-                    title={c.replace("-", " ")}
-                    aria-label={`Move the overlay to the ${c.replace("-", " ")} corner`}
+                    title={t(`monitor.play.corner.${c}`)}
+                    aria-label={t("monitor.play.moveOverlayAria", { corner: t(`monitor.play.corner.${c}`) })}
                     aria-pressed={corner === c}
                   >
                     {glyph}
@@ -389,7 +413,7 @@ export default function Play({
             </>
           ) : (
             <button className="play-cfg-toggle" onClick={() => setOverlayCfgOpen(true)}>
-              Overlay settings ▸
+              {t("monitor.play.overlaySettingsToggle")}
             </button>
           )}
         </div>
@@ -401,8 +425,8 @@ export default function Play({
       {showLive && deepMonitoring && (
         <div className="play-monitor">
           <div className="play-monitor-head">
-            <span className="play-monitor-title">Full monitoring &amp; charts</span>
-            <span className="play-monitor-sub">memory pressure · per-core · live graphs</span>
+            <span className="play-monitor-title">{t("monitor.play.fullMonitoringTitle")}</span>
+            <span className="play-monitor-sub">{t("monitor.play.fullMonitoringSub")}</span>
           </div>
           <div className="play-monitor-body">{deepMonitoring}</div>
         </div>
@@ -411,10 +435,10 @@ export default function Play({
       {/* Sessions — rows expand IN PLACE into the full debrief (no route; navigation never teleports). */}
       {showSessions && (
       <div className="play-sessions">
-        <div className="play-section-label">Recent sessions</div>
+        <div className="play-section-label">{t("monitor.play.recentSessionsLabel")}</div>
         {sessions.length === 0 ? (
           <p className="play-empty">
-            Play a session to see this — Compy captures it from outside the game.
+            {t("monitor.play.emptySessionsHint")}
           </p>
         ) : (
           <ul className="play-list">
@@ -432,16 +456,19 @@ export default function Play({
                     onClick={() => setOpenKey(open ? null : key)}
                   >
                     <span className="play-session-main">
-                      {unviewed && <span className="play-dot" aria-label="new" />}
-                      <span className="play-session-game">{prettyGameName(s.process_name) || "Unknown game"}</span>
+                      {unviewed && <span className="play-dot" aria-label={t("monitor.play.newDotAria")} />}
+                      <span className="play-session-game">{prettyGameName(s.process_name) || t("monitor.play.unknownGameFallback")}</span>
                       <span className="play-session-meta">
-                        {fmtDur(s.duration_secs)} · {shortVerdict(s)}
-                        {isArmed && <span className="play-armed">comparison armed</span>}
+                        {fmtDur(s.duration_secs)} · {verdictLabel(t, s)}
+                        {isArmed && <span className="play-armed">{t("monitor.play.comparisonArmed")}</span>}
                       </span>
                     </span>
                     <span className="play-session-right">
                       <span className="play-session-nums">
-                        {s.avg_fps.toFixed(0)} avg · {s.low1_fps_est.toFixed(0)} 1% low (est)
+                        {t("monitor.play.sessionNums", {
+                          avg: s.avg_fps.toFixed(0),
+                          low1: s.low1_fps_est.toFixed(0),
+                        })}
                       </span>
                       <span className="cmp-door-chevron" aria-hidden="true">▸</span>
                     </span>

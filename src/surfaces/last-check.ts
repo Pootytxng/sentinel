@@ -5,6 +5,8 @@
 // completion — the band renders a self-consistent "as of your last check" record, never a live
 // count paired with an implied/stale time. No snapshot yet → the band shows live counts with NO age.
 
+import type { TFunction } from "i18next";
+
 export const LAST_CHECK_KEY = "compy_last_check_v1";
 
 export type LastCheck = {
@@ -43,16 +45,30 @@ export function readLastCheck(): LastCheck | null {
 }
 
 // Pure + testable. Coarse, human ages — never implies more precision than a "last check" deserves.
-export function formatCheckAge(at: number, now: number): string {
+// `t` optional/trailing (i18n, 2026-07-23) — omitting it reproduces today's English exactly.
+export function formatCheckAge(at: number, now: number, t?: TFunction): string {
   const ms = now - at;
-  if (ms < 60000) return "just now";
+  if (ms < 60000)
+    return t ? t("optimize.rerunCheckBand.age.justNow", { defaultValue: "just now" }) : "just now";
   const min = Math.floor(ms / 60000);
-  if (min < 60) return `${min}m ago`;
+  if (min < 60)
+    return t
+      ? t("optimize.rerunCheckBand.age.minutesAgo", { defaultValue: "{{n}}m ago", n: min })
+      : `${min}m ago`;
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
+  if (hr < 24)
+    return t
+      ? t("optimize.rerunCheckBand.age.hoursAgo", { defaultValue: "{{n}}h ago", n: hr })
+      : `${hr}h ago`;
   const day = Math.floor(hr / 24);
-  if (day === 1) return "yesterday";
-  if (day < 7) return `${day}d ago`;
+  if (day === 1)
+    return t ? t("optimize.rerunCheckBand.age.yesterday", { defaultValue: "yesterday" }) : "yesterday";
+  if (day < 7)
+    return t
+      ? t("optimize.rerunCheckBand.age.daysAgo", { defaultValue: "{{n}}d ago", n: day })
+      : `${day}d ago`;
   const wk = Math.floor(day / 7);
-  return `${wk}w ago`;
+  return t
+    ? t("optimize.rerunCheckBand.age.weeksAgo", { defaultValue: "{{n}}w ago", n: wk })
+    : `${wk}w ago`;
 }

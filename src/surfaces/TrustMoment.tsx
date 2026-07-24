@@ -1,8 +1,12 @@
 import { useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import type { Recommendation, AppliedChange } from "../types";
 import { friendlyLabel } from "../data/friendly-labels";
 import { pickTrustDemoRec, shouldOfferTrustMoment } from "./trust-moment-data";
+// Side-effect import: guarantees the i18next singleton is initialized even when this component
+// is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
+import "../i18n";
 import "./trust-moment.css";
 
 // TrustMoment (consumer-panel Phase 2, plan 2026-07-11) — the guided "watch it work" loop the
@@ -43,6 +47,7 @@ export function TrustMoment({
   isAppliable: (recId: string) => boolean;
   onChanged: () => void;
 }) {
+  const { t } = useTranslation();
   const [done, setDone] = useState(readDone);
   const [phase, setPhase] = useState<Phase>("offer");
   const [receipt, setReceipt] = useState<AppliedChange | null>(null);
@@ -73,7 +78,7 @@ export function TrustMoment({
         recTitle: demoRec.title,
       });
     } catch (e) {
-      setErrorMsg(`Couldn't apply it: ${String(e)}. Nothing on your PC was changed.`);
+      setErrorMsg(t("home.trustMoment.errors.applyFailed", { error: String(e) }));
       setPhase("error");
       return;
     }
@@ -86,9 +91,7 @@ export function TrustMoment({
       await invoke("rollback_change", { changeId: change.id });
     } catch (e) {
       // Honest, unsoftened: the change is real and still active — say exactly where to undo it.
-      setErrorMsg(
-        `The apply worked but the rollback didn't finish: ${String(e)}. The change is still active and undoable in the Lab under "Applied & history".`,
-      );
+      setErrorMsg(t("home.trustMoment.errors.rollbackFailed", { error: String(e) }));
       setPhase("error");
       onChanged();
       return;
@@ -100,21 +103,20 @@ export function TrustMoment({
   };
 
   return (
-    <section className="trust-moment" aria-label="Watch Compy work">
-      <div className="tm-head">Watch it work</div>
+    <section className="trust-moment" aria-label={t("home.trustMoment.sectionAria")}>
+      <div className="tm-head">{t("home.trustMoment.heading")}</div>
       {phase === "offer" && (
         <>
           <p className="tm-body">
-            Compy's whole promise is reversible changes with receipts. See the loop once, live, on
-            a real setting — <b>{name}</b> gets applied through the same path every change uses,
-            then restored to exactly how it is now. About ten seconds; nothing else is touched.
+            {t("home.trustMoment.offer.bodyPre")} <b>{name}</b>{" "}
+            {t("home.trustMoment.offer.bodyPost")}
           </p>
           <div className="tm-actions">
             <button type="button" className="tm-btn tm-btn-primary" onClick={run}>
-              Watch it work
+              {t("home.trustMoment.actions.watch")}
             </button>
             <button type="button" className="tm-btn" onClick={dismiss}>
-              No thanks
+              {t("home.trustMoment.actions.noThanks")}
             </button>
           </div>
         </>
@@ -122,32 +124,31 @@ export function TrustMoment({
       {phase !== "offer" && (
         <div className="tm-live" role="status" aria-live="polite">
           <p className={`tm-step ${phase !== "applying" ? "tm-step-done" : "tm-step-now"}`}>
-            {phase === "applying" ? "1/3 · Applying " : "1/3 · Applied ✓ — "}
+            {phase === "applying"
+              ? t("home.trustMoment.live.applyingPrefix")
+              : t("home.trustMoment.live.appliedPrefix")}
             <b>{name}</b>
-            {phase === "applying" ? "…" : ""}
+            {phase === "applying" ? t("home.trustMoment.live.applyingSuffix") : ""}
           </p>
           {(phase === "applied" || phase === "reverting" || phase === "done") && receipt && (
             <p className={`tm-step ${phase === "applied" ? "tm-step-now" : "tm-step-done"}`}>
-              2/3 · Receipt written to your Trust Ledger — it restores to{" "}
-              <b>{receipt.restores_label || "the exact prior value"}</b>
+              {t("home.trustMoment.live.receiptPre")}{" "}
+              <b>{receipt.restores_label || t("home.trustMoment.live.defaultRestoreValue")}</b>
             </p>
           )}
           {(phase === "reverting" || phase === "done") && (
             <p className={`tm-step ${phase === "reverting" ? "tm-step-now" : "tm-step-done"}`}>
               {phase === "reverting"
-                ? "3/3 · Rolling it back…"
-                : "3/3 · Rolled back ✓ — your setting is exactly as it was."}
+                ? t("home.trustMoment.live.rollingBack")
+                : t("home.trustMoment.live.rolledBack")}
             </p>
           )}
           {phase === "done" && (
             <>
-              <p className="tm-body tm-close">
-                That's the loop every change gets: applied, receipted, reversible. Both steps are
-                in your Trust Ledger.
-              </p>
+              <p className="tm-body tm-close">{t("home.trustMoment.done.body")}</p>
               <div className="tm-actions">
                 <button type="button" className="tm-btn tm-btn-primary" onClick={dismiss}>
-                  Got it
+                  {t("home.trustMoment.actions.gotIt")}
                 </button>
               </div>
             </>
@@ -157,7 +158,7 @@ export function TrustMoment({
               <p className="tm-body tm-error">{errorMsg}</p>
               <div className="tm-actions">
                 <button type="button" className="tm-btn" onClick={dismiss}>
-                  Close
+                  {t("home.trustMoment.actions.close")}
                 </button>
               </div>
             </>

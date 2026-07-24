@@ -1,6 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { deriveSystemPosture } from "./system-posture";
+import { deriveSystemPosture as deriveSystemPostureRaw } from "./system-posture";
 import type { GameReadiness, ReadinessCheck } from "../types";
+// i18n update (2026-07-23): deriveSystemPosture's headline/sub now come from t(...) (Simplified
+// Chinese translation pass) instead of literal English strings, so it takes a TFunction as its
+// last param. This test-local wrapper resolves it through the real i18next instance (English is
+// the default language, matching what every assertion below already expects) so every call site
+// stays exactly as written — same text, just sourced from locale JSON instead of a .ts literal.
+import i18n from "../i18n";
+
+const deriveSystemPosture = (input: Parameters<typeof deriveSystemPostureRaw>[0]) =>
+  deriveSystemPostureRaw(input, i18n.t);
 
 const check = (status: ReadinessCheck["status"], label: string, detail = ""): ReadinessCheck =>
   ({ id: label, label, status, detail, value: null });

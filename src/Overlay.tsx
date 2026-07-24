@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
+// i18next init (side-effect import): the overlay is a separate window/module graph from the main
+// one — main.tsx's own "./i18n" import doesn't cover a direct import of this file (e.g. by
+// Overlay.test.tsx), so this guarantees the translator is ready before first render here too.
+import "./i18n";
 import {
   type OverlayDensity,
   type OverlayBackdrop,
@@ -72,6 +77,7 @@ function pickPrimaryGpu(list: GpuLite[]): GpuLite | null {
 // only displays — start/stop of FPS capture lives in the main window. GPU and
 // CPU readouts work with no elevation; FPS shows once capture is enabled.
 export default function Overlay() {
+  const { t } = useTranslation();
   const [gpu, setGpu] = useState<GpuLite | null>(null);
   const [cpu, setCpu] = useState<number | null>(null);
   const [ram, setRam] = useState<number | null>(null);
@@ -144,22 +150,22 @@ export default function Overlay() {
       <div className={`ovl2 ovl2-${density}${backdrop === "off" ? " ovl2-nobg" : ""}`}>
         <div className="ovl2-fps">
           <span className="ovl2-fps-num" style={fpsColor ? { color: fpsColor } : undefined}>{fpsNum ?? "—"}</span>
-          <span className="ovl2-unit">fps</span>
+          <span className="ovl2-unit">{t("app.overlay.fpsUnit")}</span>
         </div>
         {density !== "minimal" && (
           <div className="ovl2-row">
-            <span>1% low <span style={low1Color ? { color: low1Color } : undefined}>{sample ? Math.round(sample.low1_fps) : "—"}</span> <span className="ovl2-est">est</span></span>
+            <span>{t("app.overlay.lowLabel")} <span style={low1Color ? { color: low1Color } : undefined}>{sample ? Math.round(sample.low1_fps) : "—"}</span> <span className="ovl2-est">{t("app.overlay.est")}</span></span>
             <span className="ovl2-dot">·</span>
             <span><span style={tempColor ? { color: tempColor } : undefined}>{gpu?.temperature_c ?? "—"}</span>°C</span>
             {/* §2: Full density adds CPU USAGE (never CPU temp — no kernel driver); data already fetched. */}
             {density === "full" && (
               <>
                 <span className="ovl2-dot">·</span>
-                <span>cpu {cpu ?? "—"}%</span>
+                <span>{t("app.overlay.cpuLabel")} {cpu ?? "—"}%</span>
               </>
             )}
             <span className="ovl2-dot">·</span>
-            <span>gpu {gpu?.utilization_gpu_pct ?? "—"}%</span>
+            <span>{t("app.overlay.gpuLabel")} {gpu?.utilization_gpu_pct ?? "—"}%</span>
           </div>
         )}
         {density === "full" && sample && sample.recent_frametimes_ms.length > 1 && (
@@ -173,17 +179,17 @@ export default function Overlay() {
   return (
     <div className="ovl">
       <div className="ovl-row ovl-fps">
-        <span className="ovl-k">FPS</span>
+        <span className="ovl-k">{t("app.overlay.classic.fps")}</span>
         <span className="ovl-v">{sample ? Math.round(sample.fps) : "—"}</span>
       </div>
       <div className="ovl-row">
-        <span className="ovl-k">frametime</span>
+        <span className="ovl-k">{t("app.overlay.classic.frametime")}</span>
         <span className="ovl-v">
           {sample ? `${sample.avg_frametime_ms.toFixed(1)} ms` : "—"}
         </span>
       </div>
       <div className="ovl-row">
-        <span className="ovl-k">GPU</span>
+        <span className="ovl-k">{t("app.overlay.classic.gpu")}</span>
         <span className="ovl-v">
           {gpu
             ? `${gpu.utilization_gpu_pct ?? "—"}% · ${gpu.temperature_c ?? "—"}°C`
@@ -191,11 +197,11 @@ export default function Overlay() {
         </span>
       </div>
       <div className="ovl-row">
-        <span className="ovl-k">CPU</span>
+        <span className="ovl-k">{t("app.overlay.classic.cpu")}</span>
         <span className="ovl-v">{cpu ?? "—"}%</span>
       </div>
       <div className="ovl-row">
-        <span className="ovl-k">RAM</span>
+        <span className="ovl-k">{t("app.overlay.classic.ram")}</span>
         <span
           className={`ovl-v${
             ram != null && ram >= 90

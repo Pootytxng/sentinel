@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useReducedMotion } from "../../design/use-motion";
 import { Term } from "../../design/Term";
 import { prettyGameName } from "../game-name";
@@ -11,6 +12,7 @@ import {
   type LogbookAutopsy,
   type LogbookObserved,
 } from "./logbook";
+import "../../i18n";
 import "./blackbook-console.css";
 
 // BlackbookConsole — the Logbook face (Console HUD Phase 4, plan
@@ -33,30 +35,9 @@ import "./blackbook-console.css";
 // Lab via a single jump (the plan's sanctioned "manage in Optimize jump" v1). The Logbook triggers
 // ZERO mutations — no rollback_change call, no mutation primitive, no src-tauri (mutation-gate: n/a).
 
-const TYPE_LABEL: Record<string, string> = {
-  guide: "Guide",
-  tweak: "Tweak",
-  term: "Term",
-  trick: "Scam pattern",
-};
-
 // Human, plain-language type tags (never "autopsy"/"Black Box" — the naming rail): the record's
-// kind, as a non-technical gamer reads it.
-const KIND_TAG: Record<LogbookRecord["kind"], string> = {
-  change: "Change",
-  session: "Session",
-  autopsy: "Guide check",
-  observed: "Observed",
-};
-
-// Plural nouns for the filtered section head ("· changes only"). "Observed" is already a
-// collective — appending an s would render "observeds".
-const FILTER_NOUN: Record<LogbookRecord["kind"], string> = {
-  change: "changes",
-  session: "sessions",
-  autopsy: "guide checks",
-  observed: "observed",
-};
+// kind, as a non-technical gamer reads it. Values resolved via t("blackbook.blackbookConsole.*")
+// at each call site (typeLabel / kindTag / filterNoun keys), keyed by the same record-kind strings.
 
 // How many tape rows mount before the "show older" press (the SessionStack MAX_STACK_ROWS pattern,
 // sized for a tape: ~a month of typical use above the fold, everything older one press away).
@@ -86,22 +67,31 @@ const fmtDuration = (secs: number): string => {
 // happens to read explains the whole page (a diary of what Compy and you did to this PC). Copy
 // only; the data underneath is unchanged.
 function ChangeBody({ r }: { r: LogbookChange }) {
+  const { t } = useTranslation();
   return (
     <>
       <span className="bc-row-title">
-        Compy applied <b>{r.title}</b>
+        {t("blackbook.blackbookConsole.changeBody.titlePre")}
+        <b>{r.title}</b>
       </span>
       <span className="bc-row-meta">
         {r.active ? (
-          <span className="bc-state bc-state-on">still on</span>
+          <span className="bc-state bc-state-on">
+            {t("blackbook.blackbookConsole.changeBody.stillOn")}
+          </span>
         ) : r.rolledBack ? (
-          <span className="bc-state">rolled back</span>
+          <span className="bc-state">{t("blackbook.blackbookConsole.changeBody.rolledBack")}</span>
         ) : (
-          <span className="bc-state">no longer active</span>
+          <span className="bc-state">
+            {t("blackbook.blackbookConsole.changeBody.noLongerActive")}
+          </span>
         )}
         {r.payoffLabel && <span className="bc-chip">{r.payoffLabel}</span>}
         {r.active && r.restoresLabel && (
-          <span className="bc-row-note">undo returns to {r.restoresLabel}</span>
+          <span className="bc-row-note">
+            {t("blackbook.blackbookConsole.changeBody.restoresPre")}
+            {r.restoresLabel}
+          </span>
         )}
       </span>
     </>
@@ -109,28 +99,36 @@ function ChangeBody({ r }: { r: LogbookChange }) {
 }
 
 function SessionBody({ r }: { r: LogbookSession }) {
+  const { t } = useTranslation();
   const delta = r.avgFpsDelta;
   return (
     <>
       <span className="bc-row-title">
-        You played <b>{prettyGameName(r.game) || "an unknown game"}</b> for {fmtDuration(r.durationSecs)}
+        {t("blackbook.blackbookConsole.sessionBody.titlePre")}
+        <b>{prettyGameName(r.game) || t("blackbook.blackbookConsole.sessionBody.unknownGame")}</b>
+        {t("blackbook.blackbookConsole.sessionBody.titlePost")}
+        {fmtDuration(r.durationSecs)}
       </span>
       <span className="bc-row-meta">
         <span className="bc-stat">
           avg <b className="bc-mono">{Math.round(r.avgFps)}</b> fps
         </span>
         <span className="bc-stat">
-          <Term id="one-percent-lows">1% low</Term> <b className="bc-mono">{Math.round(r.low1Fps)}</b>
+          <Term id="one-percent-lows">{t("blackbook.blackbookConsole.sessionBody.oneLow")}</Term>{" "}
+          <b className="bc-mono">{Math.round(r.low1Fps)}</b>
         </span>
         {delta != null && delta !== 0 && (
           <span className={`bc-delta ${delta > 0 ? "bc-delta-up" : "bc-delta-down"}`}>
-            {delta > 0 ? "▲" : "▼"} {delta > 0 ? "+" : "−"}
-            {Math.abs(Math.round(delta))} fps vs last
+            {t("blackbook.blackbookConsole.sessionBody.delta", {
+              arrow: delta > 0 ? "▲" : "▼",
+              sign: delta > 0 ? "+" : "−",
+              value: Math.abs(Math.round(delta)),
+            })}
           </span>
         )}
         {r.changesActive > 0 && (
           <span className="bc-chip">
-            {r.changesActive} {r.changesActive === 1 ? "change" : "changes"} on
+            {t("blackbook.blackbookConsole.sessionBody.changesOn", { count: r.changesActive })}
           </span>
         )}
       </span>
@@ -139,29 +137,31 @@ function SessionBody({ r }: { r: LogbookSession }) {
 }
 
 function AutopsyBody({ r }: { r: LogbookAutopsy }) {
+  const { t } = useTranslation();
   const graded = r.real + r.placebo + r.risky;
   return (
     <>
-      <span className="bc-row-title">You fact-checked a guide</span>
+      <span className="bc-row-title">{t("blackbook.blackbookConsole.autopsyBody.title")}</span>
       <span className="bc-row-meta">
         {graded > 0 ? (
           <>
             <span className="bc-stat">
-              <b className="bc-mono">{r.real}</b> real
+              <b className="bc-mono">{r.real}</b> {t("blackbook.blackbookConsole.autopsyBody.real")}
             </span>
             <span className="bc-stat">
-              <b className="bc-mono">{r.placebo}</b> placebo
+              <b className="bc-mono">{r.placebo}</b>{" "}
+              {t("blackbook.blackbookConsole.autopsyBody.placebo")}
             </span>
             <span className="bc-stat">
-              <b className="bc-mono">{r.risky}</b> risky
+              <b className="bc-mono">{r.risky}</b> {t("blackbook.blackbookConsole.autopsyBody.risky")}
             </span>
           </>
         ) : (
-          <span className="bc-row-note">no claims we recognized — we never guess</span>
+          <span className="bc-row-note">{t("blackbook.blackbookConsole.autopsyBody.noClaims")}</span>
         )}
         {r.scamFlags > 0 && (
           <span className="bc-chip bc-chip-warn">
-            {r.scamFlags} scam {r.scamFlags === 1 ? "pattern" : "patterns"} flagged
+            {t("blackbook.blackbookConsole.scamFlagged", { count: r.scamFlags })}
           </span>
         )}
       </span>
@@ -170,6 +170,7 @@ function AutopsyBody({ r }: { r: LogbookAutopsy }) {
 }
 
 function ObservedBody({ r }: { r: LogbookObserved }) {
+  const { t } = useTranslation();
   return (
     <>
       <span className="bc-row-title">
@@ -178,11 +179,15 @@ function ObservedBody({ r }: { r: LogbookObserved }) {
       <span className="bc-row-meta">
         {r.observedBetween && (
           <span className="bc-stat">
-            between <b className="bc-mono">{fmtWhen(r.observedBetween[0])}</b> and{" "}
+            {t("blackbook.blackbookConsole.observedBody.betweenPre")}
+            <b className="bc-mono">{fmtWhen(r.observedBetween[0])}</b>
+            {t("blackbook.blackbookConsole.observedBody.betweenMid")}
             <b className="bc-mono">{fmtWhen(r.observedBetween[1])}</b>
           </span>
         )}
-        <span className="bc-row-note">{r.detail ?? "Noticed between two Compy readings."}</span>
+        <span className="bc-row-note">
+          {r.detail ?? t("blackbook.blackbookConsole.observedBody.noDetail")}
+        </span>
       </span>
     </>
   );
@@ -201,8 +206,9 @@ export function BlackbookConsole({
   /** Door into the field guide; a focusId deep-links to that entry. */
   onOpenGuide: (focusId?: string) => void;
 }) {
+  const { t, i18n } = useTranslation();
   const reduced = useReducedMotion();
-  const startHere = useMemo(() => startHereEntries(vendor, 4), [vendor]);
+  const startHere = useMemo(() => startHereEntries(vendor, 4, i18n.language), [vendor, i18n.language]);
   // The Receipts Strip's tape filter (owner pick 2026-07-13, concept A): null = the full tape.
   // Session-local by design — a filter is a glance tool, not a preference.
   const [filter, setFilter] = useState<LogbookRecord["kind"] | null>(null);
@@ -259,7 +265,7 @@ export function BlackbookConsole({
           Title-header law: this is BODY content; the h1 stays the bare room title. Absent when
           there is no record (the empty state below carries the message instead). */}
       {records.length > 0 && (
-        <div className="bc-strip" role="group" aria-label="What Blackbook records">
+        <div className="bc-strip" role="group" aria-label={t("blackbook.blackbookConsole.stripAriaLabel")}>
           <button
             type="button"
             className="bc-tile"
@@ -268,14 +274,14 @@ export function BlackbookConsole({
             disabled={counts.change === 0}
             onClick={() => toggleFilter("change")}
           >
-            <span className="bc-tile-k">Changes to this PC</span>
+            <span className="bc-tile-k">{t("blackbook.blackbookConsole.tiles.changesTitle")}</span>
             <span className="bc-tile-n bc-mono">{counts.change}</span>
             <span className="bc-tile-d">
               {counts.change === 0
-                ? "nothing changed yet"
+                ? t("blackbook.blackbookConsole.tiles.changesNone")
                 : activeChanges > 0
-                  ? `${activeChanges} still on · every one undoable`
-                  : "none active now · every one undoable"}
+                  ? t("blackbook.blackbookConsole.tiles.changesActive", { count: activeChanges })
+                  : t("blackbook.blackbookConsole.tiles.changesInactive")}
             </span>
           </button>
           <button
@@ -286,10 +292,12 @@ export function BlackbookConsole({
             disabled={counts.session === 0}
             onClick={() => toggleFilter("session")}
           >
-            <span className="bc-tile-k">Gaming sessions</span>
+            <span className="bc-tile-k">{t("blackbook.blackbookConsole.tiles.sessionsTitle")}</span>
             <span className="bc-tile-n bc-mono">{counts.session}</span>
             <span className="bc-tile-d">
-              {counts.session === 0 ? "none watched yet" : "measured, not guessed"}
+              {counts.session === 0
+                ? t("blackbook.blackbookConsole.tiles.sessionsNone")
+                : t("blackbook.blackbookConsole.tiles.sessionsSome")}
             </span>
           </button>
           <button
@@ -300,14 +308,14 @@ export function BlackbookConsole({
             disabled={counts.autopsy === 0}
             onClick={() => toggleFilter("autopsy")}
           >
-            <span className="bc-tile-k">Guides fact-checked</span>
+            <span className="bc-tile-k">{t("blackbook.blackbookConsole.tiles.autopsyTitle")}</span>
             <span className="bc-tile-n bc-mono">{counts.autopsy}</span>
             <span className="bc-tile-d">
               {counts.autopsy === 0
-                ? "none checked yet"
+                ? t("blackbook.blackbookConsole.tiles.autopsyNone")
                 : counts.scamFlags > 0
-                  ? `${counts.scamFlags} scam ${counts.scamFlags === 1 ? "pattern" : "patterns"} flagged`
-                  : "every claim graded"}
+                  ? t("blackbook.blackbookConsole.scamFlagged", { count: counts.scamFlags })
+                  : t("blackbook.blackbookConsole.tiles.autopsySome")}
             </span>
           </button>
           {/* Observed machine changes (Intelligence Phase 1) — the tile only mounts once such a
@@ -320,9 +328,9 @@ export function BlackbookConsole({
               aria-pressed={filter === "observed"}
               onClick={() => toggleFilter("observed")}
             >
-              <span className="bc-tile-k">Changed outside Compy</span>
+              <span className="bc-tile-k">{t("blackbook.blackbookConsole.tiles.observedTitle")}</span>
               <span className="bc-tile-n bc-mono">{counts.observed}</span>
-              <span className="bc-tile-d">drivers · Windows · hardware · power</span>
+              <span className="bc-tile-d">{t("blackbook.blackbookConsole.tiles.observedSub")}</span>
             </button>
           )}
         </div>
@@ -330,10 +338,8 @@ export function BlackbookConsole({
 
       {records.length === 0 ? (
         <div className="bc-empty">
-          <span className="bc-empty-title">No record yet</span>
-          <span className="bc-empty-sub">
-            Compy logs changes, gaming sessions and guide checks here as they happen.
-          </span>
+          <span className="bc-empty-title">{t("blackbook.blackbookConsole.empty.title")}</span>
+          <span className="bc-empty-sub">{t("blackbook.blackbookConsole.empty.sub")}</span>
         </div>
       ) : (
         <>
@@ -341,10 +347,16 @@ export function BlackbookConsole({
               strip below already speaks, so the room's two halves finally introduce themselves the
               same way. One line, not a paragraph. */}
           <div className="bc-sect">
-            <span className="bc-sect-t">The record{filter ? ` · ${FILTER_NOUN[filter]} only` : ""}</span>
+            <span className="bc-sect-t">
+              {t("blackbook.blackbookConsole.sectionHead.record")}
+              {filter
+                ? ` · ${t(`blackbook.blackbookConsole.filterNoun.${filter}`)} only`
+                : ""}
+            </span>
             <span className="bc-sect-rule" aria-hidden="true" />
             <span className="bc-sect-s">
-              everything Compy has done on this PC · since <span className="bc-mono">{sinceDate}</span>
+              {t("blackbook.blackbookConsole.sectionHead.since")}
+              <span className="bc-mono">{sinceDate}</span>
             </span>
           </div>
           <ol className="bc-tape">
@@ -355,7 +367,7 @@ export function BlackbookConsole({
               style={reduced ? undefined : { animationDelay: `${Math.min(i, 12) * 26}ms` }}
             >
               <span className="bc-tag" data-kind={r.kind}>
-                {KIND_TAG[r.kind]}
+                {t(`blackbook.blackbookConsole.kindTag.${r.kind}`)}
               </span>
               <span className="bc-time bc-mono">{fmtWhen(r.at)}</span>
               <div className="bc-row-body">
@@ -374,7 +386,7 @@ export function BlackbookConsole({
           </ol>
           {older > 0 && (
             <button type="button" className="bc-tape-more" onClick={() => setTapeAll(true)}>
-              show {older} older {older === 1 ? "record" : "records"}
+              {t("blackbook.blackbookConsole.tapeMore", { count: older })}
             </button>
           )}
         </>
@@ -384,10 +396,7 @@ export function BlackbookConsole({
           active change routes there rather than rolling back in-room (no second undo surface). */}
       {activeChanges > 0 && (
         <button type="button" className="bc-manage" onClick={onOpenLab}>
-          <span>
-            {activeChanges} {activeChanges === 1 ? "change" : "changes"} still active — roll back in
-            the Lab
-          </span>
+          <span>{t("blackbook.blackbookConsole.manageJump", { count: activeChanges })}</span>
           <span className="bc-chevron" aria-hidden="true">
             ▸
           </span>
@@ -398,10 +407,8 @@ export function BlackbookConsole({
           (real corpus only, hardware-aware) deep-link into the guide; the door browses all. */}
       <div className="bc-library">
         <div className="bc-library-head">
-          <span className="bc-library-eyebrow">The field guide</span>
-          <span className="bc-library-scent">
-            Heard a tweak online? Look it up before you try it — every claim graded.
-          </span>
+          <span className="bc-library-eyebrow">{t("blackbook.blackbookConsole.library.eyebrow")}</span>
+          <span className="bc-library-scent">{t("blackbook.blackbookConsole.library.scent")}</span>
         </div>
         {startHere.length > 0 && (
           <div className="bc-picks">
@@ -412,14 +419,16 @@ export function BlackbookConsole({
                 className="bc-pick"
                 onClick={() => onOpenGuide(e.id)}
               >
-                <span className="bc-pick-type">{TYPE_LABEL[e.type] ?? e.type}</span>
+                <span className="bc-pick-type">
+                  {t(`blackbook.blackbookConsole.typeLabel.${e.type}`, { defaultValue: e.type })}
+                </span>
                 <span className="bc-pick-name">{e.name}</span>
               </button>
             ))}
           </div>
         )}
         <button type="button" className="bc-library-all" onClick={() => onOpenGuide()}>
-          <span>Open the field guide</span>
+          <span>{t("blackbook.blackbookConsole.library.openAll")}</span>
           <span className="bc-chevron" aria-hidden="true">
             ▸
           </span>

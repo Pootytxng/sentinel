@@ -8,6 +8,11 @@ import { ErrorBoundary } from "./design/ErrorBoundary";
 import { WindowChrome } from "./design/WindowChrome";
 import { applyMotionAttribute } from "./design/use-motion";
 import { applyRoomAccents } from "./design/theme";
+// i18next init (side-effect import — sets up the translator before first render) + the language
+// preference reader, same "resolve before first paint" convention as every other data-* attribute
+// below. Default is ALWAYS English; Chinese (Simplified) is reachable only via Settings.
+import "./i18n";
+import { readLanguage } from "./i18n/language";
 
 // The overlay runs in a separate window labeled "overlay". Detect by the
 // window label (robust — avoids URL hash/encoding issues across dev & prod).
@@ -128,6 +133,11 @@ try {
 // overrides the OS "reduce motion" setting (opt-out in Settings → Motion). Resolved onto
 // <html data-motion="full|reduced"> before first paint so CSS + JS read one source of truth.
 applyMotionAttribute();
+
+// App language (2026-07-23): the i18next instance above already initialized in this language
+// (initialLanguage() reads the same compy_lang key); this just mirrors it onto <html lang> for
+// assistive tech / the OS, before first paint, same as every other data-* attribute above.
+document.documentElement.lang = readLanguage();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

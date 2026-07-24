@@ -1,0 +1,96 @@
+{
+  "title": "设置",
+  "done": "完成",
+  "tagline": "把它调成你喜欢的样子。这里的一切都不会影响 Compy 的实际测量。",
+  "appearance": {
+    "sectionTitle": "外观",
+    "themeLabel": "主题",
+    "themes": {
+      "midnight": "午夜",
+      "violet": "紫罗兰",
+      "crimson": "绯红",
+      "emerald": "翡翠绿",
+      "hearth": "炉火"
+    },
+    "livePreview": "实时预览",
+    "monitorConsole": {
+      "title": "监测控制台",
+      "sub": "让「监测」的实时界面变成仪表盘:滚动显示 FPS 和帧时间曲线,搭配真实的仪表读数。传感器和测量方式不变——关闭后可恢复经典的实时卡片视图。"
+    },
+    "jarvisMotion": {
+      "title": "JARVIS 动效",
+      "sub": "开关界面动画效果:平滑滚动、切换房间时的过渡动画、按钮随光标轻微偏移,以及数值更新时仪表上的跳动提示。只改变界面的动态表现,不会影响 Compy 测量的任何数据。下方的「动效」设置优先级更高。"
+    }
+  },
+  "language": {
+    "sectionTitle": "语言",
+    "title": "应用语言",
+    "sub": "会切换 Compy 的每一个界面。除非你手动切换,默认始终是英文。"
+  },
+  "behavior": {
+    "sectionTitle": "行为",
+    "closeToTray": {
+      "title": "关闭窗口时,让 Compy 保留在系统托盘中运行",
+      "sub": "关闭(默认):关闭窗口即完全退出 Compy。开启:关闭窗口后会缩小到系统托盘——你会看到 Compy 图标。右键点击可选择「显示」或「退出」;鼠标悬停可查看游戏中的实时 FPS。"
+    },
+    "motion": {
+      "title": "动效",
+      "sub": "即使 Windows 开启了「减少动画」,Compy 的动态效果默认依然开启。选择「跟随系统」可交由 Windows 决定,选择「减少」则让界面始终保持平静。",
+      "full": "完整",
+      "system": "跟随系统",
+      "reduced": "减少"
+    },
+    "expertView": {
+      "title": "专家视图",
+      "sub": "面向喜欢深入研究的用户:显示每个优化项的技术名称,以及它涉及的具体注册表项、服务或系统设置,展开「主动跳过」列表并给出完整原因,并将四舍五入的数值换成原始测量值。优化项和安全机制都不会变——不会有任何新内容变得可应用。"
+    },
+    "overlayDensity": {
+      "title": "游戏内浮层密度",
+      "sub": "游戏内浮层显示的内容:仅 FPS · + 1% 最低帧/温度/GPU · + 帧时间曲线。",
+      "minimal": "精简",
+      "standard": "标准",
+      "full": "完整"
+    },
+    "overlayBackdrop": {
+      "title": "游戏内浮层背景",
+      "sub": "关闭后浮层会变成透明——数字会带描边悬浮在游戏画面上,以保持清晰可读。",
+      "on": "开启",
+      "off": "关闭"
+    }
+  },
+  "setup": {
+    "sectionTitle": "初始设置",
+    "title": "重新运行引导设置",
+    "sub": "重新播放介绍动画,然后进行一次全新的初次检测。",
+    "action": "重新运行设置"
+  },
+  "about": {
+    "sectionTitle": "关于",
+    "privacy": "完全本地运行。无需账号、无遥测数据,任何信息都不会离开你的电脑。"
+  },
+  "feedback": {
+    "sectionTitle": "反馈与帮助",
+    "hintPre": "遇到 bug、有想法,或者只是想把 Compy 在你电脑上看到的信息发过来?写下留言,Compy 就会帮你生成一份诊断报告。",
+    "hintStrong": "任何信息都不会自动发送",
+    "hintPost": "——点击「把它发给我」会打开你自己的邮件应用,并预先填好所有内容;而且无论如何,都会在你电脑上保存一份副本。",
+    "notesPlaceholder": "哪些好用、哪些有问题,或者你还想要什么…",
+    "notesAria": "你的反馈",
+    "preparing": "正在准备…",
+    "emailIt": "把它发给我",
+    "saving": "正在保存…",
+    "saveFile": "保存一份报告文件",
+    "savedToPre": "已保存至 ",
+    "openFolder": "打开文件夹",
+    "copied": "已复制！",
+    "copySummary": "复制摘要以发到 Discord",
+    "errEmailFailed": "无法打开你的邮件应用。你的报告已保存在下方——你可以自己把它附加到邮件里发送。",
+    "errBuildFailed": "无法生成报告。什么都还没有发送。",
+    "errSaveFailed": "无法保存报告。",
+    "errFolderFailed": "无法打开导出文件夹。",
+    "mailSubject": "Compy 反馈",
+    "mailNoNote": "(没有写留言——保存的报告里包含诊断信息)",
+    "mailSnapshotHeader": "—— 系统快照 ——",
+    "mailPointer": "完整诊断报告已保存在这台电脑上:\n{{path}}\n(回复我,如果我需要更多细节会再向你索取)",
+    "mailTrimmed": "…(已截断——完整内容见保存的报告)"
+  }
+}

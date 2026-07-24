@@ -1,4 +1,6 @@
 import { useMemo, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import "../i18n";
 import { LabConsole } from "./LabConsole";
 import ExperimentBench from "./ExperimentBench";
 import { RoomShell } from "../design/room-shell";
@@ -36,6 +38,7 @@ export function LabGround(props: LabFastPathProps & {
   diagnosticsCaptured?: boolean;
   hw: HardwareInfo;
 }) {
+  const { t } = useTranslation();
   const {
     recs,
     changes,
@@ -57,7 +60,7 @@ export function LabGround(props: LabFastPathProps & {
   // live in their context: ready counts on the Safe-stack gauge + the station rows, drift in
   // Fix's "Applied — turned off outside Compy" group inside the Optimize panel.
   const reverted = useMemo(() => deriveReverted(changes), [changes]);
-  const verdict = optimizeVerdict(recs, isAppliable, activeCount, reverted);
+  const verdict = optimizeVerdict(recs, isAppliable, activeCount, reverted, t);
 
   // The whole fast-path bundle threaded to Lab's ground mode (station 1's body).
   const fast: LabFastPathProps = { recs, changes, isAppliable, vendor, ...rest };
@@ -84,10 +87,10 @@ export function LabGround(props: LabFastPathProps & {
         return (
           <>
             <HudMasthead
-              label="Proving ground"
+              label={t("lab.labGround.masthead")}
               led={!verdict.settled ? "scan" : verdict.allClear ? "ok" : "warn"}
             />
-            <span className="hud-headline">Lab</span>
+            <span className="hud-headline">{t("common.rail.lab", "Lab")}</span>
           </>
         );
       })()}

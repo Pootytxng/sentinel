@@ -1,6 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { postureLine, liveStrip } from "./command-center-data";
+import { postureLine as postureLineRaw, liveStrip as liveStripRaw } from "./command-center-data";
 import type { GameReadiness, Priorities, ReadinessCheck, SessionSummary } from "../types";
+// i18n update (2026-07-23): postureLine/liveStrip's strings now come from t(...) (Simplified
+// Chinese translation pass) instead of literal English, so both take a TFunction as their last
+// param. These test-local wrappers resolve them through the real i18next instance (English is the
+// default language, matching what every assertion below already expects) so every call site below
+// stays exactly as written — same text, just sourced from locale JSON instead of a .ts literal.
+import i18n from "../i18n";
+
+const postureLine = (
+  readiness: GameReadiness | null,
+  priorities: Priorities | null,
+  activeChanges: number,
+) => postureLineRaw(readiness, priorities, activeChanges, i18n.t);
+const liveStrip = (sessions: SessionSummary[]) => liveStripRaw(sessions, i18n.t);
 
 const check = (status: ReadinessCheck["status"], label: string): ReadinessCheck =>
   ({ id: label, label, status, detail: "", value: null });

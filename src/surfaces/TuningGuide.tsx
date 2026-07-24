@@ -1,4 +1,6 @@
+import { useTranslation } from "react-i18next";
 import type { TuningGuide } from "../data/tuning-guides";
+import "../i18n";
 import "./TuningGuide.css";
 
 // The rendered tuning-guide body — ONE shared component fed by the single source (tuning-guides.ts),
@@ -8,6 +10,7 @@ import "./TuningGuide.css";
 // button — Compy never touches your voltage (locked rule #6), so there's nothing here to click. The
 // "Show me the way" schematic is appended by each consumer (EntryCard in Learn; the Lab section).
 export function TuningGuideBody({ guide }: { guide: TuningGuide }) {
+  const { t } = useTranslation();
   return (
     <div className="tg-body">
       <p className="tg-goal">{guide.goal}</p>
@@ -20,13 +23,13 @@ export function TuningGuideBody({ guide }: { guide: TuningGuide }) {
       </ol>
 
       <p className="tg-line tg-range">
-        <b>A "normal" number?</b> {guide.range}
+        <b>{t("blackbook.tuningGuide.normalNumber")}</b> {guide.range}
       </p>
       <p className="tg-line tg-discretion">
-        <b>Discretion:</b> {guide.discretion}
+        <b>{t("blackbook.tuningGuide.discretion")}</b> {guide.discretion}
       </p>
       <p className="tg-line tg-undo">
-        <b>Undo:</b> {guide.undo}
+        <b>{t("blackbook.tuningGuide.undo")}</b> {guide.undo}
       </p>
     </div>
   );

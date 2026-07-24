@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
 import { RoomShell } from "../design/room-shell";
@@ -120,6 +121,7 @@ export function HomeV2({
   onSeeInFix,
   fixRoomLabel = "Optimize",
 }: Props) {
+  const { t } = useTranslation();
   const reduced = useReducedMotion();
   const accent = useV2Accent();
 
@@ -171,8 +173,8 @@ export function HomeV2({
   const { parts: manualParts } = useManualParts();
 
   // ── measured derivations (all real, all honestly empty when absent) ──
-  const posture = postureLine(readiness, priorities, activeChangeCount(changes));
-  const strip = liveStrip(sessions);
+  const posture = postureLine(readiness, priorities, activeChangeCount(changes), t);
+  const strip = liveStrip(sessions, t);
   // Session numbers graded against THIS rig (deslop directive #4): fps vs the display's real
   // refresh, 1% low vs the session's own average. Neutral (nothing measured) = uncolored ink.
   const rig = { refreshHz: hw.display?.current_refresh_rate_hz ?? null };
@@ -185,11 +187,14 @@ export function HomeV2({
   const gpuGrade = gradeGpuTempForVendor(vendor, gpuTemp);
 
   const measured = readiness
-    ? `${readiness.checks.length - readiness.unknown_count}/${readiness.checks.length} checks measured` +
+    ? t("home.homeV2.header.checksMeasured", {
+        done: readiness.checks.length - readiness.unknown_count,
+        total: readiness.checks.length,
+      }) +
       (readiness.attention_count === 0
-        ? " · nothing needs urgent attention"
-        : ` · ${readiness.attention_count} need${readiness.attention_count === 1 ? "s" : ""} attention`)
-    : "running checks…";
+        ? t("home.homeV2.header.noAttention")
+        : t("home.homeV2.header.needsAttention", { count: readiness.attention_count }))
+    : t("home.homeV2.header.runningChecks");
 
   // Storage tag: the Windows drive (C:) — used% from the same disk probe the hardware cards read.
   const sysDisk = hw.disks?.find((d) => d.mount_point?.toUpperCase().startsWith("C"));
@@ -212,7 +217,8 @@ export function HomeV2({
     drifts
       .slice(0, 2)
       .map((d) => d.label)
-      .join(" · ") + (drifts.length > 2 ? ` · and ${drifts.length - 2} more` : "");
+      .join(" · ") +
+    (drifts.length > 2 ? t("home.homeV2.stats.driftMore", { count: drifts.length - 2 }) : "");
   // Drive health: SMART reads only — a drive with no reading is omitted from the count, never guessed.
   const smartDrives = (hw.disk_health ?? []).filter((d) => d.health !== "Unknown");
   const flaggedDrives = smartDrives.filter((d) => d.health !== "Healthy");
@@ -239,7 +245,9 @@ export function HomeV2({
     <div className="hv2-stage">
       {checking && !reduced && <div className="hv2-scan" aria-hidden="true" />}
       {rig3d ? (
-        <Suspense fallback={<div className="hv2-stage-loading">Initializing hologram…</div>}>
+        <Suspense
+          fallback={<div className="hv2-stage-loading">{t("home.homeV2.stage.loading")}</div>}
+        >
           <RigHologram
             hw={hw}
             exploded={exploded}
@@ -262,7 +270,7 @@ export function HomeV2({
           <div className="hv2-tags hv2-tags-left">
             <PartTag
               tone={mem ? gradeTone(mem.level === "ok" ? "good" : "bad") : null}
-              name="RAM"
+              name={t("home.homeV2.tag.ram")}
               value={
                 mem
                   ? `${fmtGB1(mem.used)} / ${fmtGB1(mem.total)} GB`
@@ -273,8 +281,8 @@ export function HomeV2({
             {diskPct != null && (
               <PartTag
                 tone={diskPct >= 90 ? "warn" : "ok"}
-                name="Storage"
-                value={`C: ${diskPct}% full`}
+                name={t("home.homeV2.tag.storage")}
+                value={t("home.homeV2.tag.diskFull", { pct: diskPct })}
                 valueTone={diskPct >= 90 ? "warn" : "ok"}
               />
             )}
@@ -282,22 +290,20 @@ export function HomeV2({
           <div className="hv2-tags hv2-tags-right">
             <PartTag
               tone={gradeTone(gpuGrade)}
-              name="GPU"
+              name={t("home.homeV2.tag.gpu")}
               detail={shortModel(hw.gpus[0]?.name)}
               value={gpuTemp != null ? `${Math.round(gpuTemp)}°C` : undefined}
               valueTone={gradeTone(gpuGrade)}
             />
             <PartTag
               tone={null}
-              name="CPU"
+              name={t("home.homeV2.tag.cpu")}
               detail={hw.cpu_arch?.family_label || undefined}
-              value="temp n/a — by design"
+              value={t("home.homeV2.tag.cpuNoTemp")}
               mono={false}
             />
           </div>
-          <div className="hv2-stage-hint">
-            Drag to orbit · click a part for its live specs · statuses are measured, never guessed
-          </div>
+          <div className="hv2-stage-hint">{t("home.homeV2.stage.hint")}</div>
         </>
       )}
     </div>
@@ -327,7 +333,7 @@ export function HomeV2({
       measured={measured}
       primaryAction={
         <button type="button" className="hv2-btn" onClick={onRunCheck}>
-          Re-run check
+          {t("home.homeV2.actions.rerun")}
         </button>
       }
     >
@@ -335,8 +341,12 @@ export function HomeV2({
         {/* ── Hologram hero — the owner's centerpiece on a dedicated stage ── */}
         <div className="hv2-hero">
           <div className="hv2-hero-head">
-            <span className="hv2-hero-title">Your rig</span>
-            <div className="hv2-view-toggle" role="tablist" aria-label="Rig view">
+            <span className="hv2-hero-title">{t("home.homeV2.hero.title")}</span>
+            <div
+              className="hv2-view-toggle"
+              role="tablist"
+              aria-label={t("home.homeV2.hero.rigViewAria")}
+            >
               <button
                 type="button"
                 role="tab"
@@ -344,7 +354,7 @@ export function HomeV2({
                 className={`hv2-seg ${rig3d ? "hv2-seg-on" : ""}`}
                 onClick={() => chooseRig3d(true)}
               >
-                3D
+                {t("home.homeV2.hero.view3d")}
               </button>
               <button
                 type="button"
@@ -353,7 +363,7 @@ export function HomeV2({
                 className={`hv2-seg ${!rig3d ? "hv2-seg-on" : ""}`}
                 onClick={() => chooseRig3d(false)}
               >
-                Cards
+                {t("home.homeV2.hero.viewCards")}
               </button>
             </div>
             {rig3d && (
@@ -363,7 +373,7 @@ export function HomeV2({
                   className={`hv2-seg ${exploded ? "hv2-seg-on" : ""}`}
                   onClick={() => setExploded((v) => !v)}
                 >
-                  {exploded ? "Reassemble" : "Exploded"}
+                  {exploded ? t("home.homeV2.hero.reassemble") : t("home.homeV2.hero.exploded")}
                 </button>
                 <button
                   type="button"
@@ -371,7 +381,7 @@ export function HomeV2({
                   onClick={() => setAutoRotate((v) => !v)}
                   aria-pressed={autoRotate}
                 >
-                  Orbit
+                  {t("home.homeV2.hero.orbit")}
                 </button>
               </div>
             )}
@@ -392,7 +402,9 @@ export function HomeV2({
           <SpotlightCard className="hv2-stat" spotlightColor="rgba(167, 139, 250, 0.10)">
             {strip.kind === "data" ? (
               <>
-                <span className="hv2-stat-k">Last session · {strip.game}</span>
+                <span className="hv2-stat-k">
+                  {t("home.homeV2.stats.lastSessionGame", { game: strip.game })}
+                </span>
                 <span
                   className={`hv2-stat-n hv2-mono${gradeClass(fpsGrade)}`}
                   style={gradeInk(fpsGrade)}
@@ -402,17 +414,17 @@ export function HomeV2({
                   ) : (
                     <CountUp to={Math.round(strip.avgFps)} duration={0.9} />
                   )}
-                  <span className="hv2-stat-unit">fps avg</span>
+                  <span className="hv2-stat-unit">{t("home.homeV2.stats.fpsAvg")}</span>
                 </span>
                 <span className="hv2-stat-d">
-                  1% low{" "}
+                  {t("home.homeV2.stats.onePercentLowLabel")}{" "}
                   <span
                     className={`hv2-mono${gradeClass(low1Grade)}`}
                     style={gradeInk(low1Grade)}
                   >
                     {Math.round(strip.low1Est)}
                   </span>{" "}
-                  (estimate)
+                  {t("home.homeV2.stats.estimateSuffix")}
                 </span>
                 {sparkValues.length >= 2 && (
                   <div className="hv2-spark">
@@ -422,28 +434,26 @@ export function HomeV2({
               </>
             ) : (
               <>
-                <span className="hv2-stat-k">Last session</span>
-                <span className="hv2-stat-d">
-                  Play a session to see this — Compy captures it from outside the game.
-                </span>
+                <span className="hv2-stat-k">{t("home.homeV2.stats.lastSession")}</span>
+                <span className="hv2-stat-d">{t("home.homeV2.stats.noSession")}</span>
               </>
             )}
           </SpotlightCard>
 
           <SpotlightCard className="hv2-stat" spotlightColor="rgba(167, 139, 250, 0.10)">
-            <span className="hv2-stat-k">Safe changes active</span>
+            <span className="hv2-stat-k">{t("home.homeV2.stats.activeChangesLabel")}</span>
             <span className="hv2-stat-n hv2-mono">
               {reduced ? activeCount : <CountUp to={activeCount} duration={0.9} />}
             </span>
-            <span className="hv2-stat-d">every one reversible from the ledger</span>
+            <span className="hv2-stat-d">{t("home.homeV2.stats.activeChangesNote")}</span>
           </SpotlightCard>
 
           <SpotlightCard className="hv2-stat" spotlightColor="rgba(167, 139, 250, 0.10)">
-            <span className="hv2-stat-k">Trust ledger</span>
+            <span className="hv2-stat-k">{t("home.homeV2.stats.trustLedgerLabel")}</span>
             <span className="hv2-stat-n hv2-mono">
               {reduced ? changes.length : <CountUp to={changes.length} duration={0.9} />}
               <span className="hv2-stat-unit">
-                change{changes.length === 1 ? "" : "s"} tracked
+                {t("home.homeV2.stats.changesTracked", { count: changes.length })}
               </span>
             </span>
             {latest ? (
@@ -451,34 +461,34 @@ export function HomeV2({
               // a mid-word break artifact); the full name stays reachable via the title attr.
               <span className="hv2-stat-d hv2-stat-latest">
                 <span className="hv2-stat-latest-t" title={latest.rec_title}>
-                  latest: {latest.rec_title}
+                  {t("home.homeV2.stats.latest", { title: latest.rec_title })}
                 </span>
                 <span className="hv2-mono">· {latestTime}</span>
               </span>
             ) : (
-              <span className="hv2-stat-d">nothing applied yet — your PC is untouched</span>
+              <span className="hv2-stat-d">{t("home.homeV2.stats.nothingApplied")}</span>
             )}
           </SpotlightCard>
 
           {/* ── Glanceable fill (spec 2026-07-05) — below the existing stats, so the verdict →
               hologram → priorities order is untouched (answer-first). Measured or honestly absent. ── */}
           <SpotlightCard className="hv2-stat" spotlightColor="rgba(167, 139, 250, 0.10)">
-            <span className="hv2-stat-k">Drift watch</span>
+            <span className="hv2-stat-k">{t("home.homeV2.stats.driftWatchLabel")}</span>
             {readiness == null ? (
-              <span className="hv2-stat-d">drift status lands with the current check</span>
+              <span className="hv2-stat-d">{t("home.homeV2.stats.driftPending")}</span>
             ) : drifts.length === 0 ? (
               <>
                 <span className="hv2-glance-h">
                   <span className="hv2-led hv2-led-ok" aria-hidden="true" />
-                  Nothing's drifted
+                  {t("home.homeV2.stats.driftNone")}
                 </span>
-                <span className="hv2-stat-d">every applied change is still holding</span>
+                <span className="hv2-stat-d">{t("home.homeV2.stats.driftNoneNote")}</span>
               </>
             ) : (
               <>
                 <span className="hv2-glance-h hv2-glance-warn">
                   <span className="hv2-led hv2-led-warn" aria-hidden="true" />
-                  {drifts.length} setting{drifts.length === 1 ? "" : "s"} drifted off
+                  {t("home.homeV2.stats.driftCount", { count: drifts.length })}
                 </span>
                 <span className="hv2-stat-d">{driftNames}</span>
               </>
@@ -486,19 +496,17 @@ export function HomeV2({
           </SpotlightCard>
 
           <SpotlightCard className="hv2-stat" spotlightColor="rgba(167, 139, 250, 0.10)">
-            <span className="hv2-stat-k">Drive health</span>
+            <span className="hv2-stat-k">{t("home.homeV2.stats.driveHealthLabel")}</span>
             {smartDrives.length === 0 ? (
-              <span className="hv2-stat-d">
-                no SMART reading from this rig — Compy won't guess drive health
-              </span>
+              <span className="hv2-stat-d">{t("home.homeV2.stats.driveHealthUnknown")}</span>
             ) : flaggedDrives.length === 0 ? (
               <>
                 <span className="hv2-glance-h">
                   <span className="hv2-led hv2-led-ok" aria-hidden="true" />
-                  Drives healthy
+                  {t("home.homeV2.stats.drivesHealthy")}
                 </span>
                 <span className="hv2-stat-d">
-                  {smartDrives.length} drive{smartDrives.length === 1 ? "" : "s"} · SMART OK
+                  {t("home.homeV2.stats.driveCountOk", { count: smartDrives.length })}
                 </span>
               </>
             ) : (
@@ -508,8 +516,7 @@ export function HomeV2({
                   {flaggedDrives[0].friendly_name} — {flaggedDrives[0].health}
                 </span>
                 <span className="hv2-stat-d">
-                  SMART flagged {flaggedDrives.length === 1 ? "this drive" : `${flaggedDrives.length} drives`} —
-                  back up important data
+                  {t("home.homeV2.stats.smartFlagged", { count: flaggedDrives.length })}
                 </span>
               </>
             )}
@@ -519,8 +526,8 @@ export function HomeV2({
         {/* ── Priorities — ranked for THIS hardware, honest when clean ── */}
         <div className="hv2-card hv2-full">
           <div className="hv2-card-hd">
-            Worth your attention
-            <span className="hv2-card-hd-right">ranked for your hardware, not generic advice</span>
+            {t("home.homeV2.priorities.title")}
+            <span className="hv2-card-hd-right">{t("home.homeV2.priorities.note")}</span>
           </div>
           {priorities == null ? (
             <div className="hv2-rows">
@@ -535,10 +542,7 @@ export function HomeV2({
             </div>
           ) : limiters.length === 0 ? (
             <div className="hv2-rows">
-              <div className="hv2-row hv2-row-clear">
-                Nothing worth changing today — measured clean on this rig. A lesser tool would
-                invent something; Compy won't.
-              </div>
+              <div className="hv2-row hv2-row-clear">{t("home.homeV2.priorities.clean")}</div>
             </div>
           ) : (
             <div className="hv2-rows">
@@ -552,10 +556,12 @@ export function HomeV2({
                   <span
                     className={`hv2-pill hv2-pill-${i === 0 ? "warn" : (statusTone[l.status] ?? "info")}`}
                   >
-                    {i === 0 ? "biggest limiter" : `${l.confidence} confidence`}
+                    {i === 0
+                      ? t("home.homeV2.priorities.biggestLimiter")
+                      : t("home.homeV2.priorities.confidenceTag", { level: l.confidence })}
                   </span>
                   <button type="button" className="hv2-btn hv2-btn-ghost" onClick={onSeeInFix}>
-                    See in {fixRoomLabel}
+                    {t("home.homeV2.priorities.seeIn", { room: fixRoomLabel })}
                   </button>
                 </div>
               ))}

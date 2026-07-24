@@ -1,5 +1,8 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+// Side-effect import: guarantees the i18next instance is initialized before this file's t() calls run.
+import "../i18n";
 import "./doorknob.css";
 import "./SlimRecRow.css";
 
@@ -17,11 +20,6 @@ import "./SlimRecRow.css";
 
 export type SlimRowStatus = "attention" | "ready" | "neutral";
 export type SlimRowBadge = "recommended" | "optional";
-
-const BADGE_LABEL: Record<SlimRowBadge, string> = {
-  recommended: "Recommended",
-  optional: "Optional",
-};
 
 // Same enclosed-chevron knob as the app's other doors (doorknob grammar): the chip rotates via
 // .cmp-door[aria-expanded]; the glyph stays static.
@@ -77,6 +75,7 @@ export function SlimRecRow({
   /** Detail-panel content, revealed in place on row click / chevron. */
   children?: ReactNode;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(!!defaultOpen);
   return (
     <li className="slimrow">
@@ -93,7 +92,9 @@ export function SlimRecRow({
             <span className="slimrow-proof">{proof}</span>
             {meta}
           </span>
-          <span className={`slimrow-badge slimrow-badge-${badge}`}>{BADGE_LABEL[badge]}</span>
+          <span className={`slimrow-badge slimrow-badge-${badge}`}>
+            {t(`common.slimRecRow.badge.${badge}`)}
+          </span>
           <Chevron />
         </button>
         {/* Outside the toggle: clicks on the control never expand/collapse the row. */}

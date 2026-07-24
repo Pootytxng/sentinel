@@ -1,5 +1,8 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { KNOWLEDGE_BY_ID } from "../data/knowledge";
+import { useTranslation } from "react-i18next";
+// Side-effect import: guarantees the i18next instance is initialized before this file's t() calls run.
+import "../i18n";
+import { knowledgeByIdForLanguage } from "../data/knowledge";
 import { useLibrary } from "../surfaces/library-context";
 import "./Term.css";
 
@@ -16,7 +19,8 @@ export function Term({
   /** Tooltip anchor edge — "end" (right-anchored) for triggers near the window's right side. */
   align?: "start" | "end";
 }) {
-  const entry = KNOWLEDGE_BY_ID.get(id);
+  const { t, i18n } = useTranslation();
+  const entry = knowledgeByIdForLanguage(i18n.language).get(id);
   const { openLibrary } = useLibrary();
   const [open, setOpen] = useState(false);
   const tipId = useId();
@@ -85,7 +89,7 @@ export function Term({
               openLibrary(id);
             }}
           >
-            More in the Blackbook →
+            {t("common.term.moreInBlackbook")}
           </button>
         </span>
       )}

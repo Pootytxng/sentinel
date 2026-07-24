@@ -2,8 +2,17 @@ import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from "vite
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { MonitorV2 } from "./MonitorV2";
 import Monitor from "./Monitor";
-import { monitorVerdict } from "./monitor-v2-data";
+import { monitorVerdict as monitorVerdictRaw } from "./monitor-v2-data";
 import type { SessionSummary } from "../types";
+// i18n update (2026-07-23): monitorVerdict's headline/sub now come from t(...) (Simplified
+// Chinese translation pass) instead of literal English strings, so it takes a TFunction as its
+// last param. This test-local wrapper resolves it through the real i18next instance (English is
+// the default language, matching what every assertion below already expects) so every call site
+// below stays exactly as written — same text, just sourced from locale JSON instead of a .ts
+// literal.
+import i18n from "../i18n";
+
+const monitorVerdict = (sessions: SessionSummary[]) => monitorVerdictRaw(sessions, i18n.t);
 
 // V2-5 guards (bug→guard tier 1): the V2 Monitor room composes RoomShell (one verdict, one
 // door to Blackbook), its verdict is a PURE derivation from the real session records (graded

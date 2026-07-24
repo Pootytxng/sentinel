@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
+import "../i18n";
 import { ParticleCard } from "../design/vendor/MagicBento/MagicBento";
 import { labBentoCards, labCheckup } from "./lab-bento-data";
 import type { LabStationKey, LabStationFacts } from "./lab-guided-data";
@@ -42,6 +44,7 @@ export function LabBento({
   // menu — one detail at a time, no standing duplicate list). Marks the active card.
   openStation?: LabStationKey | null;
 }) {
+  const { t } = useTranslation();
   const reduced = useReducedMotion();
   const gridRef = useRef<HTMLDivElement>(null);
   const [rgb, setRgb] = useState("160, 160, 160");
@@ -85,15 +88,15 @@ export function LabBento({
     };
   }, [reduced]);
 
-  const cards = labBentoCards(keys, facts);
-  const report = labCheckup(cards);
+  const cards = labBentoCards(keys, facts, t);
+  const report = labCheckup(cards, t);
 
   return (
     <div className="lab-bento">
       {/* The needle rule: the read-only promise leads the room, so nobody's afraid to poke. */}
       <p className="lab-bento-lede">
-        Your rig's checkup — five kinds of measurement, in order, left to right. Everything
-        here only <em>reads</em>; nothing changes your PC, so tinker freely.
+        {t("lab.labBento.ledePre")} <em>{t("lab.labBento.ledeEmph")}</em>
+        {t("lab.labBento.ledePost")}
       </p>
 
       <div className="lab-bento-grid" ref={gridRef}>
@@ -112,7 +115,7 @@ export function LabBento({
             <button
               className="lab-bento-door"
               onClick={() => onOpen(c.key)}
-              aria-label={`Open station ${c.n} — ${c.name}`}
+              aria-label={t("lab.labBento.openStationAriaLabel", { n: c.n, name: c.name })}
               aria-pressed={openStation === c.key}
             >
               <span className="lab-bento-top">
@@ -122,7 +125,7 @@ export function LabBento({
                   aria-hidden="true"
                 />
                 <span className="lab-bento-state">
-                  {c.hasReading ? "Measured" : "Not yet"}
+                  {c.hasReading ? t("lab.labBento.measured") : t("lab.labBento.notYet")}
                 </span>
               </span>
               {/* One-mention law: the full reading sentence lives in the checkup report below
@@ -137,9 +140,9 @@ export function LabBento({
 
       {/* The checkup report — the annotated summary. Every reading line is stationReading()'s
           exact output (one source); the next-step points at the first unread station in order. */}
-      <section className="lab-bento-report" aria-label="Checkup report">
+      <section className="lab-bento-report" aria-label={t("lab.labBento.checkupReportLabel")}>
         <div className="lab-bento-report-head">
-          <span className="lab-bento-report-k">Checkup report</span>
+          <span className="lab-bento-report-k">{t("lab.labBento.checkupReportLabel")}</span>
           <span className="lab-bento-report-headline">{report.headline}</span>
         </div>
         <p className="lab-bento-report-sub">{report.sub}</p>

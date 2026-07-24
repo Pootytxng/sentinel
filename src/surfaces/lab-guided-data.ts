@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import type { BenchmarkState, BlackBoxReport, LatencyReport, Verdict } from "../types";
 import { changeAttribution } from "./benchmark-view";
 
@@ -41,46 +42,52 @@ export type LabStationInfo = {
   connectsLine: string; // 4. How it connects — the thread to a sibling station.
 };
 
-export const LAB_STATIONS: Record<LabStationKey, LabStationInfo> = {
-  optimize: {
-    name: "Optimize",
-    forLine: "Enable the safe, vetted tweaks for your rig — in one tap.",
-    whenLine: "You just want it faster and safe, without fiddling.",
-    // The cohesion thread: the fast path points INTO the proving loop — apply the stack here,
-    // then prove it moved at the Benchmark station.
-    connectsLine: "Prove the stack you just applied — run Benchmark and watch the before/after.",
-  },
-  diagnostics: {
-    name: "Diagnostics",
-    forLine: "Know exactly what's in your rig before you change anything.",
-    whenLine: "You just want to know what's in this PC.",
-    connectsLine: "Feeds every other station — you read their numbers against what's really in here.",
-  },
-  benchmark: {
-    name: "Benchmark",
-    forLine: "Prove a change actually helped — not a placebo.",
-    whenLine: "You're asking \"did that tweak actually do anything, or did I imagine it?\"",
-    connectsLine: "The bench's spine — run it before and after any Optimize or Tuning change.",
-  },
-  latency: {
-    name: "Latency",
-    forLine: "Cut the delay between your hand and the screen.",
-    whenLine: "Your aim or clicks feel a beat behind.",
-    connectsLine: "Pair it with Benchmark to prove a latency change held.",
-  },
-  tuning: {
-    name: "Tuning",
-    forLine: "Run cooler and quieter without losing frames (AMD).",
-    whenLine: "It runs hot or loud and you want it calmer without giving up frames.",
-    connectsLine: "Benchmark grades whether your frames held after the undervolt.",
-  },
-  blackbox: {
-    name: "Black Box",
-    forLine: "Understand a crash or freeze after it happens.",
-    whenLine: "It crashed or froze and you don't know why.",
-    connectsLine: "Check Diagnostics for the rig state behind what it finds.",
-  },
-};
+// i18n note: this is a plain data module, not a component — it can't call useTranslation()
+// itself. Every export below takes `t: TFunction` as its LAST parameter (mirrors ago()/
+// smoothness() elsewhere in this codebase); every call site passes its own `t` from
+// useTranslation().
+export function labStations(t: TFunction): Record<LabStationKey, LabStationInfo> {
+  return {
+    optimize: {
+      name: t("lab.stations.optimize.name"),
+      forLine: t("lab.stations.optimize.forLine"),
+      whenLine: t("lab.stations.optimize.whenLine"),
+      // The cohesion thread: the fast path points INTO the proving loop — apply the stack here,
+      // then prove it moved at the Benchmark station.
+      connectsLine: t("lab.stations.optimize.connectsLine"),
+    },
+    diagnostics: {
+      name: t("lab.stations.diagnostics.name"),
+      forLine: t("lab.stations.diagnostics.forLine"),
+      whenLine: t("lab.stations.diagnostics.whenLine"),
+      connectsLine: t("lab.stations.diagnostics.connectsLine"),
+    },
+    benchmark: {
+      name: t("lab.stations.benchmark.name"),
+      forLine: t("lab.stations.benchmark.forLine"),
+      whenLine: t("lab.stations.benchmark.whenLine"),
+      connectsLine: t("lab.stations.benchmark.connectsLine"),
+    },
+    latency: {
+      name: t("lab.stations.latency.name"),
+      forLine: t("lab.stations.latency.forLine"),
+      whenLine: t("lab.stations.latency.whenLine"),
+      connectsLine: t("lab.stations.latency.connectsLine"),
+    },
+    tuning: {
+      name: t("lab.stations.tuning.name"),
+      forLine: t("lab.stations.tuning.forLine"),
+      whenLine: t("lab.stations.tuning.whenLine"),
+      connectsLine: t("lab.stations.tuning.connectsLine"),
+    },
+    blackbox: {
+      name: t("lab.stations.blackbox.name"),
+      forLine: t("lab.stations.blackbox.forLine"),
+      whenLine: t("lab.stations.blackbox.whenLine"),
+      connectsLine: t("lab.stations.blackbox.connectsLine"),
+    },
+  };
+}
 
 // "What are you here to do?" — the symptom→station router (§A). The copy is the spec's, pinned
 // literally by lab-guided.test.tsx: real-world feelings, each mapped to exactly one station with
@@ -88,43 +95,47 @@ export const LAB_STATIONS: Record<LabStationKey, LabStationInfo> = {
 // never point at a station that isn't there — no dead ends).
 export type LabRouterRow = { symptom: string; station: LabStationKey; because: string };
 
-// The GROUND-ONLY lead row (§8.1). Kept OUT of LAB_ROUTER (which is pinned literally by
+// The GROUND-ONLY lead row (§8.1). Kept OUT of labRouter() (which is pinned literally by
 // lab-guided.test.tsx and shared with non-ground guided mode) — Lab prepends it to the router only
 // in `ground` mode, so "just make it fast" is the first, most prominent intake choice for the
 // assumed-majority path while every non-ground face stays byte-identical.
-export const LAB_ROUTER_LEAD_OPTIMIZE: LabRouterRow = {
-  symptom: "I just want my PC faster — safely, no fiddling",
-  station: "optimize",
-  because: "it enables the safe, vetted tweaks for your rig in one tap — undo any time",
-};
+export function labRouterLeadOptimize(t: TFunction): LabRouterRow {
+  return {
+    symptom: t("lab.stations.routerLeadOptimize.symptom"),
+    station: "optimize",
+    because: t("lab.stations.routerLeadOptimize.because"),
+  };
+}
 
-export const LAB_ROUTER: LabRouterRow[] = [
-  {
-    symptom: "My aim/clicks feel a beat behind",
-    station: "latency",
-    because: "it traces mouse→screen and names what's adding delay",
-  },
-  {
-    symptom: "Did that tweak actually help — or did I imagine it?",
-    station: "benchmark",
-    because: "it grades a real before/after against a noise floor",
-  },
-  {
-    symptom: "It runs hot / loud, I want it cooler without losing frames",
-    station: "tuning",
-    because: "it measures whether an undervolt dropped temps AND held frames",
-  },
-  {
-    symptom: "It crashed or froze and I don't know why",
-    station: "blackbox",
-    because: "it reads Windows' own crash & freeze record in plain English",
-  },
-  {
-    symptom: "I just want to know what's in this rig",
-    station: "diagnostics",
-    because: "read-only forensics — everything Compy detected, raw",
-  },
-];
+export function labRouter(t: TFunction): LabRouterRow[] {
+  return [
+    {
+      symptom: t("lab.stations.router.latency.symptom"),
+      station: "latency",
+      because: t("lab.stations.router.latency.because"),
+    },
+    {
+      symptom: t("lab.stations.router.benchmark.symptom"),
+      station: "benchmark",
+      because: t("lab.stations.router.benchmark.because"),
+    },
+    {
+      symptom: t("lab.stations.router.tuning.symptom"),
+      station: "tuning",
+      because: t("lab.stations.router.tuning.because"),
+    },
+    {
+      symptom: t("lab.stations.router.blackbox.symptom"),
+      station: "blackbox",
+      because: t("lab.stations.router.blackbox.because"),
+    },
+    {
+      symptom: t("lab.stations.router.diagnostics.symptom"),
+      station: "diagnostics",
+      because: t("lab.stations.router.diagnostics.because"),
+    },
+  ];
+}
 
 // The live inputs — the SAME state the instrument bodies render from (zero new IPC; Lab already
 // holds all of these).
@@ -149,68 +160,76 @@ export type LabStationFacts = {
   stackedCount: number;
 };
 
-const VERDICT_READING: Record<Verdict, string> = {
-  improved: "Last verdict: Improved — the change moved more than the run's own noise.",
-  "no-measurable-change":
-    "Last verdict: No measurable change — it stayed inside the noise floor. That's noise, not a win.",
-  regressed: "Last verdict: Regressed — things measured worse. Worth undoing.",
-};
+function verdictReadingText(overall: Verdict, t: TFunction): string {
+  switch (overall) {
+    case "improved":
+      return t("lab.stations.verdictReading.improved");
+    case "no-measurable-change":
+      return t("lab.stations.verdictReading.noMeasurableChange");
+    case "regressed":
+      return t("lab.stations.verdictReading.regressed");
+  }
+}
 
 // With several changes inside the graded window the verdict belongs to the STACK — plural lead
 // plus changeAttribution's credit-refusing caveat, mirroring labVerdict (the room header and
 // this reading render the same result on one screen; they must never disagree on whose win it is).
-const VERDICT_READING_STACKED: Record<Verdict, string> = {
-  improved: "Last verdict: Improved — your changes together moved more than the run's own noise.",
-  "no-measurable-change":
-    "Last verdict: No measurable change — the stack stayed inside the noise floor. That's noise, not a win.",
-  regressed: "Last verdict: Regressed — things measured worse together. Worth undoing.",
-};
+function verdictReadingStackedText(overall: Verdict, t: TFunction): string {
+  switch (overall) {
+    case "improved":
+      return t("lab.stations.verdictReadingStacked.improved");
+    case "no-measurable-change":
+      return t("lab.stations.verdictReadingStacked.noMeasurableChange");
+    case "regressed":
+      return t("lab.stations.verdictReadingStacked.regressed");
+  }
+}
 
 // Line 3 — "what the reading means", translated to real life. Every branch is either the live
 // value the instrument body already shows or an honest "No reading yet" with the way to get one.
-export function stationReading(key: LabStationKey, f: LabStationFacts): string {
+// i18n note: `t` is threaded through as the LAST param (mirrors ago()/smoothness() elsewhere in
+// this codebase) — every call site passes its own `t` from useTranslation().
+export function stationReading(key: LabStationKey, f: LabStationFacts, t: TFunction): string {
   switch (key) {
     case "optimize":
       // Honest singular/plural, no "(s)". safeReady is the same measured count the verdict shows;
       // when it's zero the safe stack is set and the utility below is the next move.
-      if (f.safeReady === 1) return "1 safe tweak ready to enable — one tap, reversible.";
-      if (f.safeReady > 1)
-        return `${f.safeReady} safe tweaks ready to enable — one tap, all reversible.`;
-      return "Every safe tweak is already on — your rig is set. Prove it below, or you're done.";
+      if (f.safeReady >= 1)
+        return t("lab.stations.reading.optimizeReady", { count: f.safeReady });
+      return t("lab.stations.reading.optimizeAllSet");
     case "diagnostics":
       return f.diagnosticsCaptured
-        ? "Report captured — the raw facts about this rig, ready to read."
-        : "No reading yet — the system report hasn't been captured.";
+        ? t("lab.stations.reading.diagnosticsCaptured")
+        : t("lab.stations.reading.diagnosticsNotCaptured");
     case "benchmark": {
       if (f.bench?.efficacy) {
         const caveat = changeAttribution(f.stackedCount).caveat;
-        if (caveat) return `${VERDICT_READING_STACKED[f.bench.efficacy.overall]} ${caveat}`;
-        return VERDICT_READING[f.bench.efficacy.overall];
+        if (caveat) return `${verdictReadingStackedText(f.bench.efficacy.overall, t)} ${caveat}`;
+        return verdictReadingText(f.bench.efficacy.overall, t);
       }
-      if (f.bench?.baseline)
-        return "Baseline saved — change one thing, re-run, and the grade lands here.";
-      return "No reading yet — set a baseline to start.";
+      if (f.bench?.baseline) return t("lab.stations.reading.benchmarkBaselineSaved");
+      return t("lab.stations.reading.benchmarkNoReading");
     }
     case "latency": {
-      if (!f.latency) return "No reading yet — open the station and Compy traces the path.";
-      const timer =
-        f.latency.timer_current_ms != null
-          ? ` · timer ${f.latency.timer_current_ms.toFixed(2)}ms`
-          : "";
-      return `MSI ${f.latency.msi.msi_on} on · ${f.latency.msi.msi_off} off${timer} — MSI on and a low timer mean a shorter mouse-to-screen trip.`;
+      if (!f.latency) return t("lab.stations.reading.latencyNoReading");
+      return f.latency.timer_current_ms != null
+        ? t("lab.stations.reading.latencyWithTimer", {
+            on: f.latency.msi.msi_on,
+            off: f.latency.msi.msi_off,
+            ms: f.latency.timer_current_ms.toFixed(2),
+          })
+        : t("lab.stations.reading.latencyNoTimer", {
+            on: f.latency.msi.msi_on,
+            off: f.latency.msi.msi_off,
+          });
     }
     case "tuning":
-      return (
-        f.tuningHeadline ??
-        "No reading yet — undervolt in AMD's tool, play a session, and Compy grades whether it held."
-      );
+      return f.tuningHeadline ?? t("lab.stations.reading.tuningNoReading");
     case "blackbox": {
-      if (!f.crash) return "No reading yet — scan and Compy reads Windows' own crash record.";
+      if (!f.crash) return t("lab.stations.reading.blackboxNoReading");
       const n = f.crash.incidents.length;
-      if (n === 0) return "Scanned clean — no crashes or freezes in Windows' record.";
-      return n === 1
-        ? "1 incident recorded — read what happened in plain English."
-        : `${n} incidents recorded — read what happened in plain English.`;
+      if (n === 0) return t("lab.stations.reading.blackboxClean");
+      return t("lab.stations.reading.blackboxIncidents", { count: n });
     }
   }
 }

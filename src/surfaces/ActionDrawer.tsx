@@ -1,8 +1,12 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { friendlyLabel } from "../data/friendly-labels";
 import { recMutation } from "../data/rec-mutations";
 import { type Provenance, PROVENANCE_LABEL, PROVENANCE_NOTE } from "../data/provenance";
+// Side-effect import: guarantees the i18next singleton is initialized even when this component
+// is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
+import "../i18n";
 import "./ActionDrawer.css";
 
 // Action Drawer (owner: "lil pop-up windows tied to the function", 2026-06-15). A premium right-sliding
@@ -43,6 +47,7 @@ export function ActionDrawer({
   onRollback: () => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -109,7 +114,7 @@ export function ActionDrawer({
             <h2 className="ad-headline">{headline}</h2>
             {tech && <span className="ad-tech">{tech}</span>}
           </div>
-          <button className="ad-close" onClick={onClose} aria-label="Close">
+          <button className="ad-close" onClick={onClose} aria-label={t("optimize.actionDrawer.close")}>
             ✕
           </button>
         </header>
@@ -117,31 +122,31 @@ export function ActionDrawer({
         <div className="ad-body">
           {what && (
             <section className="ad-block">
-              <span className="ad-eyebrow">What it does</span>
+              <span className="ad-eyebrow">{t("optimize.actionDrawer.whatItDoes")}</span>
               <p className="ad-text">{what}</p>
             </section>
           )}
 
           <section className="ad-block">
-            <span className="ad-eyebrow">What changes on your PC</span>
+            <span className="ad-eyebrow">{t("optimize.actionDrawer.whatChangesOnPc")}</span>
             {mut ? (
               <>
                 <p className="ad-text ad-mono-soft">{mut.changes}</p>
                 <div className="ad-flags">
-                  {mut.elevated && <span className="ad-flag">Needs one admin OK</span>}
-                  {mut.restart && <span className="ad-flag ad-flag-warn">Takes effect after restart</span>}
+                  {mut.elevated && <span className="ad-flag">{t("optimize.actionDrawer.needsAdminOk")}</span>}
+                  {mut.restart && (
+                    <span className="ad-flag ad-flag-warn">{t("optimize.actionDrawer.takesEffectAfterRestart")}</span>
+                  )}
                 </div>
               </>
             ) : (
-              <p className="ad-text ad-muted">
-                A single, scoped Windows setting — Compy snapshots its exact prior value before touching it.
-              </p>
+              <p className="ad-text ad-muted">{t("optimize.actionDrawer.singleScopedSettingFallback")}</p>
             )}
           </section>
 
           {prov && (
             <section className="ad-block">
-              <span className="ad-eyebrow">Evidence</span>
+              <span className="ad-eyebrow">{t("optimize.actionDrawer.evidence")}</span>
               <p className="ad-text">
                 <span className={`ad-chip ad-tone-${prov.tone}`}>{prov.label}</span>
                 {prov.note}
@@ -150,26 +155,27 @@ export function ActionDrawer({
           )}
 
           <section className="ad-block ad-revert">
-            <span className="ad-eyebrow">How it reverts</span>
+            <span className="ad-eyebrow">{t("optimize.actionDrawer.howItReverts")}</span>
             <p className="ad-text">
-              {mut?.reverts ??
-                "Compy captures the exact prior state before changing anything, and restores it on rollback."}
-              {applied && restoresLabel ? ` Currently active — rolls back to: ${restoresLabel}.` : ""}
+              {mut?.reverts ?? t("optimize.actionDrawer.revertsFallback")}
+              {applied && restoresLabel
+                ? t("optimize.actionDrawer.currentlyActive", { restoresLabel })
+                : ""}
             </p>
           </section>
         </div>
 
         <footer className="ad-foot">
           <button className="ad-secondary" onClick={onClose}>
-            Close
+            {t("optimize.actionDrawer.close")}
           </button>
           {applied ? (
             <button className="ad-action ad-rollback" disabled={busy} onClick={onRollback}>
-              {busy ? "Rolling back…" : "Roll back"}
+              {busy ? t("optimize.actionDrawer.rollingBack") : t("optimize.actionDrawer.rollBack")}
             </button>
           ) : (
             <button className="ad-action ad-apply" disabled={busy} onClick={onApply}>
-              {busy ? "Applying…" : "Apply this change"}
+              {busy ? t("optimize.actionDrawer.applying") : t("optimize.actionDrawer.applyThisChange")}
             </button>
           )}
         </footer>

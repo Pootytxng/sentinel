@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Oscilloscope, spikeIndices, niceCap } from "../../design/console/Oscilloscope";
 import type { ArcTone } from "../../design/console/ArcGauge";
 import { Term } from "../../design/Term";
 import { zoomWindow, type ZoomSel } from "./monitor-stack-profile";
+import "../../i18n";
 
 // DeckScope — the Flight Deck's hero (plan 2026-07-11-monitor-v5-deck-stack, T3). The SAME
 // Oscilloscope frametime scope MonitorConsole always drew, full-width, wearing the deleted
@@ -35,6 +37,7 @@ export function DeckScope({
   /** The backend window cap (MAX_FRAMETIME_POINTS) — passed through to the scope. */
   cap?: number;
 }) {
+  const { t } = useTranslation();
   const [zoom, setZoom] = useState<ZoomSel | null>(null);
   const [drag, setDrag] = useState<ZoomSel | null>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -59,9 +62,11 @@ export function DeckScope({
     const ms = win[i];
     if (typeof ms === "number" && ms > 0) {
       const spike = spikeIndices(win, budget).includes(i);
-      scrubText = `frame ${i + 1} · ${ms.toFixed(1)} ms · ${Math.round(1000 / ms)} fps${
-        spike ? " · SPIKE" : ""
-      }`;
+      scrubText = `${t("monitor.deckScope.scrubFrame", {
+        n: i + 1,
+        ms: ms.toFixed(1),
+        fps: Math.round(1000 / ms),
+      })}${spike ? t("monitor.deckScope.spikeSuffix") : ""}`;
     }
   }
 
@@ -109,7 +114,7 @@ export function DeckScope({
       <Oscilloscope
         samples={win}
         cap={cap}
-        label={<Term id="frametime">frametime</Term>}
+        label={<Term id="frametime">{t("monitor.deckScope.frametimeLabel")}</Term>}
         unit="ms"
         tone={tone}
         reduced={reduced}
@@ -124,17 +129,17 @@ export function DeckScope({
         {scrubText ? (
           <span className="deck-scrub">{scrubText}</span>
         ) : drawable ? (
-          <span className="deck-hint">drag to zoom · double-click to reset</span>
+          <span className="deck-hint">{t("monitor.deckScope.dragHint")}</span>
         ) : null}
         {zoom && (
           <button type="button" className="deck-zoomreset" onClick={() => setZoom(null)}>
-            Reset zoom
+            {t("monitor.deckScope.resetZoom")}
           </button>
         )}
         {span && (
           <span className="deck-axis">
-            0–{niceCap(Math.max(span.max, budget ?? 0))} ms scale
-            {budget != null && ` · budget ${budget.toFixed(1)} ms`}
+            {t("monitor.deckScope.axisScale", { cap: niceCap(Math.max(span.max, budget ?? 0)) })}
+            {budget != null && t("monitor.deckScope.axisBudget", { budget: budget.toFixed(1) })}
           </span>
         )}
       </div>

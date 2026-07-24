@@ -5,6 +5,9 @@ import { ShellV2 } from "../design/ShellV2";
 import { railFor } from "../design/homeRail";
 import { postureLine } from "./command-center-data";
 import { activeChangeCount } from "./dashboard-data";
+// i18n update (2026-07-23): postureLine now takes a TFunction as its last param — the real
+// i18next instance (English default, same as every assertion below already expects).
+import i18n from "../i18n";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
 
@@ -169,7 +172,7 @@ describe("HomeV2 — RoomShell composition", () => {
   it("renders ONE verdict (postureLine's real output) and ONE forward door to Optimize", () => {
     useReduced();
     const { container } = mount();
-    const expected = postureLine(readiness, priorities, activeChangeCount([change]));
+    const expected = postureLine(readiness, priorities, activeChangeCount([change]), i18n.t);
     const h1s = container.querySelectorAll(".v2-verdict h1");
     expect(h1s.length).toBe(1);
     expect(h1s[0].textContent).toBe(expected.headline);

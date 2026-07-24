@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import Learn from "./Learn";
 import { RoomShell } from "../design/room-shell";
@@ -14,6 +15,7 @@ import { buildLogbook } from "./blackbook/logbook";
 import type { AppliedChange, SessionSummary, IntelEvent, IntelligenceTimeline } from "../types";
 import type { GpuVendor } from "./walkthroughs";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
+import "../i18n";
 import "./blackbook-v2.css";
 
 // BlackbookV2 (V2-6, spec 2026-07-02-v2-shell-sourcing-and-plan) — the Blackbook room on the
@@ -44,10 +46,7 @@ import "./blackbook-v2.css";
 // (test-pinned).
 
 type Face = "logbook" | "guide";
-const FACES: { id: Face; label: string }[] = [
-  { id: "logbook", label: "Logbook" },
-  { id: "guide", label: "Field guide" },
-];
+const FACE_IDS: Face[] = ["logbook", "guide"];
 
 export function BlackbookV2({
   focusId,
@@ -67,13 +66,14 @@ export function BlackbookV2({
   /** Route to the Lab's Optimize station — the Logbook's read view sends undo there, not in-room. */
   onOpenLab?: () => void;
 }) {
+  const { t } = useTranslation();
   const reduced = useReducedMotion();
   const hud = useHudFlag();
   const consoleOn = useBlackbookConsoleFlag();
   // Seeded from the persisted ledger; Learn reports each new grading up so the room verdict AND
   // the Logbook tape update the moment a guide is fact-checked (same data, no second read).
   const [ledger, setLedger] = useState(readAutopsyLedger);
-  const verdict = blackbookVerdict(ledger);
+  const verdict = blackbookVerdict(ledger, t);
 
   // The Logbook face + which field-guide entry a library-strip pick deep-links to. Flag off, none
   // of this is reachable (the classic Learn tree renders directly).
@@ -133,8 +133,12 @@ export function BlackbookV2({
         // No LED: a record count is not a health state, and this room computes no live status.
         return (
           <>
-            <HudMasthead label="Field records" />
-            <span className="hud-headline">Blackbook</span>
+            <HudMasthead label={t("blackbook.blackbookV2.fieldRecordsLabel")} />
+            {/* "Blackbook" is the rail's own label for this room (id "learn", see homeRail.ts) —
+                sourced from the shared common.rail.* keys (owned alongside the rest of the rail
+                copy) rather than re-translated here. The English literal is a defaultValue so this
+                still renders correctly before that namespace is populated. */}
+            <span className="hud-headline">{t("common.rail.learn", "Blackbook")}</span>
           </>
         );
       })()}
@@ -145,20 +149,20 @@ export function BlackbookV2({
           {/* The room's face toggle — the Logbook tape or the full field guide. */}
           <div className="bbv2-bar">
             <SegmentedControl
-              segments={FACES}
+              segments={FACE_IDS.map((id) => ({
+                id,
+                label: t(`blackbook.blackbookV2.faces.${id}`),
+              }))}
               value={face}
               onChange={(id) => setFace(id as Face)}
-              aria-label="Blackbook view"
+              aria-label={t("blackbook.blackbookV2.faceToggleAriaLabel")}
             />
           </div>
           {/* The Field Guide introduces ITSELF on its own tab (tester Matthew 2026-07-22: he first
               met the term inside the Logbook and was confused — the description belongs where the
               guide lives, and in the intro's Blackbook blurb, not buried in a sibling tab). */}
           {face === "guide" && (
-            <p className="bbv2-guide-lede">
-              The Field Guide is Compy's library: every tweak and myth, graded by the measured
-              record — hardware-aware for this rig.
-            </p>
+            <p className="bbv2-guide-lede">{t("blackbook.blackbookV2.guideLede")}</p>
           )}
           {face === "logbook" ? (
             <>

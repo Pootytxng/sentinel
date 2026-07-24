@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import type {
   WhatChangedOutcome,
   IntelHypothesis,
@@ -13,6 +15,9 @@ import type {
 } from "../types";
 import { useIntelligenceFlag } from "../design/use-hud";
 import { useExpertView } from "../design/use-expert-view";
+// Side-effect import: guarantees the i18next singleton is initialized even when this component
+// is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
+import "../i18n";
 
 // Intelligence Phase 1 — the "What changed?" panel (Monitor session debrief slot). Renders the
 // deterministic Rust engine's verdict for THIS session vs the previous session of the same game:
@@ -44,15 +49,18 @@ const sign = (n: number) => (n >= 0 ? `+${n.toFixed(1)}` : n.toFixed(1));
 
 // One hypothesis, in §7 language: title + confidence band, Evidence, What argues against it.
 function HypothesisBlock({ h, lead }: { h: IntelHypothesis; lead: boolean }) {
+  const { t } = useTranslation();
   return (
     <div className={`wcp-hypo${lead ? " wcp-hypo-lead" : ""}`}>
       <div className="wcp-hypo-head">
         <span className="wcp-hypo-title">{h.title}</span>
-        <span className="wcp-hypo-conf">{h.confidence} confidence</span>
+        <span className="wcp-hypo-conf">
+          {t("optimize.whatChangedPanel.confidenceTag", { level: h.confidence })}
+        </span>
       </div>
       {h.supporting_evidence.length > 0 && (
         <div className="wcp-evi">
-          <span className="wcp-evi-label">Evidence</span>
+          <span className="wcp-evi-label">{t("optimize.whatChangedPanel.evidence")}</span>
           <ul>
             {h.supporting_evidence.map((e) => (
               <li key={e}>{e}</li>
@@ -62,7 +70,7 @@ function HypothesisBlock({ h, lead }: { h: IntelHypothesis; lead: boolean }) {
       )}
       {h.contradicting_evidence.length > 0 && (
         <div className="wcp-evi">
-          <span className="wcp-evi-label">What argues against it</span>
+          <span className="wcp-evi-label">{t("optimize.whatChangedPanel.arguesAgainst")}</span>
           <ul>
             {h.contradicting_evidence.map((e) => (
               <li key={e}>{e}</li>
@@ -72,7 +80,7 @@ function HypothesisBlock({ h, lead }: { h: IntelHypothesis; lead: boolean }) {
       )}
       {h.missing_evidence.length > 0 && (
         <div className="wcp-evi wcp-evi-missing">
-          <span className="wcp-evi-label">Not recorded</span>
+          <span className="wcp-evi-label">{t("optimize.whatChangedPanel.notRecorded")}</span>
           <ul>
             {h.missing_evidence.map((e) => (
               <li key={e}>{e}</li>
@@ -93,43 +101,58 @@ function SessionLine({
   r: IntelSessionRef;
   expert: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="wcp-session">
       <span className="wcp-session-tag">{tag}</span>
       <span>
-        {fmtWhen(r.started_at, expert)} · 1% low {r.low1_fps.toFixed(1)} · avg{" "}
-        {r.avg_fps.toFixed(1)}
-        {expert && ` · ${r.samples} samples · ${Math.round(r.duration_secs / 60)}m`}
+        {t("optimize.whatChangedPanel.sessionLine.main", {
+          when: fmtWhen(r.started_at, expert),
+          low1: r.low1_fps.toFixed(1),
+          avg: r.avg_fps.toFixed(1),
+        })}
+        {expert &&
+          t("optimize.whatChangedPanel.sessionLine.samplesSuffix", {
+            samples: r.samples,
+            minutes: Math.round(r.duration_secs / 60),
+          })}
         {expert &&
           r.gaming_mode_active != null &&
-          ` · Gaming Mode ${r.gaming_mode_active ? "on" : "off"}`}
+          (r.gaming_mode_active
+            ? t("optimize.whatChangedPanel.sessionLine.gamingOn")
+            : t("optimize.whatChangedPanel.sessionLine.gamingOff"))}
       </span>
     </div>
   );
 }
 
-// §4C node/edge vocabularies → the plain words the everyday user would use. Kept a static map so a
-// new backend variant surfaces as a TS error here rather than a silent raw kebab string on screen.
-const NODE_TYPE_LABEL: Record<EvidenceNodeType, string> = {
-  symptom: "Symptom",
-  metric: "Metric",
-  event: "Event",
-  driver: "Driver change",
-  "os-update": "Windows update",
-  "compy-change": "Compy change",
-  "external-change": "Outside change",
-  hypothesis: "Possible cause",
-  experiment: "Next test",
-  conclusion: "Conclusion",
+// §4C node/edge vocabularies → the plain words the everyday user would use. Kept a static map (enum
+// key → i18n key suffix) so a new backend variant surfaces as a TS error here rather than a silent
+// raw kebab string on screen; the display text itself lives in the i18n JSON.
+const NODE_TYPE_KEY: Record<EvidenceNodeType, string> = {
+  symptom: "symptom",
+  metric: "metric",
+  event: "event",
+  driver: "driver",
+  "os-update": "osUpdate",
+  "compy-change": "compyChange",
+  "external-change": "externalChange",
+  hypothesis: "hypothesis",
+  experiment: "experiment",
+  conclusion: "conclusion",
 };
+const nodeTypeLabel = (n: EvidenceNodeType, t: TFunction): string =>
+  t(`optimize.whatChangedPanel.nodeType.${NODE_TYPE_KEY[n]}`);
 
-const RELATION_LABEL: Record<EvidenceRelation, string> = {
+const RELATION_KEY: Record<EvidenceRelation, string> = {
   supports: "supports",
-  "correlates-with": "lines up with",
-  "occurred-before": "happened before",
-  "requires-verification": "still needs verifying by",
-  "ruled-out-by": "ruled out by",
+  "correlates-with": "correlatesWith",
+  "occurred-before": "occurredBefore",
+  "requires-verification": "requiresVerification",
+  "ruled-out-by": "ruledOutBy",
 };
+const relationLabel = (r: EvidenceRelation, t: TFunction): string =>
+  t(`optimize.whatChangedPanel.relation.${RELATION_KEY[r]}`);
 
 // §4C evidence graph — Expert view only. A deterministic, inspectable re-projection of the report
 // above (the wrapper builds it from the finished report; it adds no data). We render it as a plain
@@ -137,21 +160,19 @@ const RELATION_LABEL: Record<EvidenceRelation, string> = {
 // back to a record. The directive is explicit: the normal view stays plain-language; only the
 // Expert view exposes the detailed graph.
 function EvidenceGraphBlock({ graph }: { graph: EvidenceGraph }) {
+  const { t } = useTranslation();
   if (graph.nodes.length === 0) return null;
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const labelFor = (id: string) => byId.get(id)?.label ?? id;
   return (
     <div className="wcp-graph">
-      <span className="wcp-section-label">Evidence graph</span>
-      <p className="wcp-graph-note">
-        A re-projection of the reasoning above — every node cites the record it came from. Nothing
-        new; just the same evidence, laid out so you can trace it.
-      </p>
+      <span className="wcp-section-label">{t("optimize.whatChangedPanel.evidenceGraph")}</span>
+      <p className="wcp-graph-note">{t("optimize.whatChangedPanel.evidenceGraphNote")}</p>
       <ul className="wcp-graph-nodes">
         {graph.nodes.map((n) => (
           <li className="wcp-graph-node" key={n.id}>
             <span className={`wcp-graph-kind wcp-graph-kind-${n.node_type}`}>
-              {NODE_TYPE_LABEL[n.node_type]}
+              {nodeTypeLabel(n.node_type, t)}
             </span>
             <span className="wcp-graph-label">{n.label}</span>
             <span className="wcp-graph-meta">
@@ -166,7 +187,7 @@ function EvidenceGraphBlock({ graph }: { graph: EvidenceGraph }) {
             <li className="wcp-graph-edge" key={`${e.from}|${e.to}|${e.relation}|${i}`}>
               <span className="wcp-graph-edge-line">
                 <span className="wcp-graph-from">{labelFor(e.from)}</span>{" "}
-                <span className="wcp-graph-rel">{RELATION_LABEL[e.relation]}</span>{" "}
+                <span className="wcp-graph-rel">{relationLabel(e.relation, t)}</span>{" "}
                 <span className="wcp-graph-to">{labelFor(e.to)}</span>
               </span>
               {e.explanation && <span className="wcp-graph-why">{e.explanation}</span>}
@@ -180,22 +201,27 @@ function EvidenceGraphBlock({ graph }: { graph: EvidenceGraph }) {
 
 // §F/§G comparability — how far two sessions may HONESTLY be compared. The four verdicts map to the
 // plain-language bands METHODOLOGY §11 states up front, so the reader sees the comparison's basis
-// before any cause talk. Static map: a new backend variant surfaces as a TS error here, never a raw
-// kebab band on screen.
-const COMPARABILITY_LABEL: Record<Comparability, string> = {
-  comparable: "Directly comparable",
-  partial: "Direct comparison is limited",
-  "not-comparable": "Not directly comparable",
-  unknown: "Not enough comparable evidence",
+// before any cause talk. Static map (enum key → i18n key suffix): a new backend variant surfaces as
+// a TS error here, never a raw kebab band on screen.
+const COMPARABILITY_KEY: Record<Comparability, string> = {
+  comparable: "comparable",
+  partial: "partial",
+  "not-comparable": "notComparable",
+  unknown: "unknown",
 };
+const comparabilityLabel = (c: Comparability, t: TFunction): string =>
+  t(`optimize.whatChangedPanel.comparability.${COMPARABILITY_KEY[c]}`);
 
-// Expert-only confidence-ceiling wording (a BAND, never a number — METHODOLOGY §10).
-const CONF_LIMIT_LABEL: Record<SessionComparability["confidence_limit"], string> = {
-  unknown: "Unknown",
-  low: "Low",
-  medium: "Medium",
-  high: "High",
+// Expert-only confidence-ceiling wording (a BAND, never a number — METHODOLOGY §10). Static map
+// (enum key → i18n key suffix): a new backend variant surfaces as a TS error here.
+const CONF_LIMIT_KEY: Record<SessionComparability["confidence_limit"], string> = {
+  unknown: "unknown",
+  low: "low",
+  medium: "medium",
+  high: "high",
 };
+const confLimitLabel = (c: SessionComparability["confidence_limit"], t: TFunction): string =>
+  t(`optimize.whatChangedPanel.confLimit.${CONF_LIMIT_KEY[c]}`);
 
 // The comparison-basis banner (Tasks F + G). Stated up front, before the headline's cause talk:
 // the verdict band + WHY (the prose `reasons`, plus `missing_context` — the conditions we couldn't
@@ -203,10 +229,11 @@ const CONF_LIMIT_LABEL: Record<SessionComparability["confidence_limit"], string>
 // silently dropped). The terse before→after values live one expand down in ComparabilityDetail, so
 // this stays prose and that stays values — complementary, not a repeat.
 function ComparabilityBanner({ c }: { c: SessionComparability }) {
+  const { t } = useTranslation();
   const why = [...c.reasons, ...c.missing_context];
   return (
     <div className={`wcp-compare wcp-compare-${c.verdict}`}>
-      <span className="wcp-compare-band">{COMPARABILITY_LABEL[c.verdict]}</span>
+      <span className="wcp-compare-band">{comparabilityLabel(c.verdict, t)}</span>
       {why.length > 0 && (
         <ul className="wcp-compare-why">
           {why.map((line, i) => (
@@ -223,26 +250,29 @@ function ComparabilityBanner({ c }: { c: SessionComparability }) {
 // captures actually recorded (the only ones a comparison may honestly touch), and — Expert only —
 // the confidence ceiling this comparability imposes. Renders nothing when there's nothing to add.
 function ComparabilityDetail({ c, expert }: { c: SessionComparability; expert: boolean }) {
+  const { t } = useTranslation();
   if (c.changed_context.length === 0 && c.shared_metrics.length === 0 && !expert) return null;
   return (
     <div className="wcp-compare-detail">
-      <span className="wcp-section-label">How comparable these are</span>
+      <span className="wcp-section-label">{t("optimize.whatChangedPanel.howComparable")}</span>
       {c.changed_context.length > 0 && (
         <div className="wcp-compare-row">
-          <span className="wcp-compare-key">What differed</span>
+          <span className="wcp-compare-key">{t("optimize.whatChangedPanel.whatDiffered")}</span>
           <span className="wcp-compare-val">{c.changed_context.join(" · ")}</span>
         </div>
       )}
       {c.shared_metrics.length > 0 && (
         <div className="wcp-compare-row">
-          <span className="wcp-compare-key">Compared on</span>
+          <span className="wcp-compare-key">{t("optimize.whatChangedPanel.comparedOn")}</span>
           <span className="wcp-compare-val">{c.shared_metrics.join(", ")}</span>
         </div>
       )}
       {expert && (
         <div className="wcp-compare-row">
-          <span className="wcp-compare-key">Confidence capped at</span>
-          <span className="wcp-compare-val">{CONF_LIMIT_LABEL[c.confidence_limit]}</span>
+          <span className="wcp-compare-key">
+            {t("optimize.whatChangedPanel.confidenceCappedAt")}
+          </span>
+          <span className="wcp-compare-val">{confLimitLabel(c.confidence_limit, t)}</span>
         </div>
       )}
     </div>
@@ -265,12 +295,14 @@ function WhatChangedReportView({
   /** Overrides the "vs your previous X session" head line — the investigator names both picks. */
   headline?: string;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 
   if (outcome.kind === "unavailable") {
     return (
       <div className={`wcp wcp-unavailable${arcV2 ? " arc-v2" : ""}`}>
-        <span className="wcp-tag">What changed?</span> {outcome.reason}
+        <span className="wcp-tag">{t("optimize.whatChangedPanel.whatChangedTag")}</span>{" "}
+        {outcome.reason}
       </div>
     );
   }
@@ -292,8 +324,12 @@ function WhatChangedReportView({
   return (
     <div className={`wcp wcp-${r.verdict}${arcV2 ? " arc-v2" : ""}`}>
       <div className="wcp-head">
-        <span>{headline ?? `WHAT CHANGED? · vs your previous ${r.game} session`}</span>
-        <span className="wcp-nf">noise floor ±{r.noise_floor_pct.toFixed(0)}%</span>
+        <span>
+          {headline ?? t("optimize.whatChangedPanel.headlineDefault", { game: r.game })}
+        </span>
+        <span className="wcp-nf">
+          {t("optimize.whatChangedPanel.noiseFloor", { pct: r.noise_floor_pct.toFixed(0) })}
+        </span>
       </div>
 
       <h3 className="wcp-headline">{r.headline}</h3>
@@ -304,14 +340,17 @@ function WhatChangedReportView({
 
       {showLeader && (
         <>
-          <div className="wcp-section-label">Most likely cause</div>
+          <div className="wcp-section-label">
+            {t("optimize.whatChangedPanel.mostLikelyCause")}
+          </div>
           <HypothesisBlock h={leader} lead />
         </>
       )}
 
       {r.next_action && (
         <p className="wcp-next">
-          <span className="wcp-section-label">Next test</span> {r.next_action}
+          <span className="wcp-section-label">{t("optimize.whatChangedPanel.nextTest")}</span>{" "}
+          {r.next_action}
         </p>
       )}
 
@@ -321,17 +360,21 @@ function WhatChangedReportView({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
       >
-        <span>{open ? "Hide the working" : "Show the working"}</span>
+        <span>
+          {open
+            ? t("optimize.whatChangedPanel.hideTheWorking")
+            : t("optimize.whatChangedPanel.showTheWorking")}
+        </span>
         <span aria-hidden="true">{open ? "▾" : "▸"}</span>
       </button>
 
       {open && (
         <div className="wcp-detail">
           <div className="wcp-sessions">
-            <SessionLine tag="baseline" r={r.baseline} expert={expert} />
-            <SessionLine tag="this one" r={r.current} expert={expert} />
+            <SessionLine tag={t("optimize.whatChangedPanel.tagBaseline")} r={r.baseline} expert={expert} />
+            <SessionLine tag={t("optimize.whatChangedPanel.tagThisOne")} r={r.current} expert={expert} />
             <div className="wcp-gap">
-              {r.gap_days} day{r.gap_days === 1 ? "" : "s"} apart
+              {t("optimize.whatChangedPanel.gapDays", { count: r.gap_days })}
             </div>
           </div>
 
@@ -347,10 +390,10 @@ function WhatChangedReportView({
                   </span>
                   <span className="wcp-obs-tag">
                     {o.reference_only
-                      ? "reference only"
+                      ? t("optimize.whatChangedPanel.referenceOnly")
                       : o.meaningful
-                        ? "past the noise floor"
-                        : "inside the noise floor"}
+                        ? t("optimize.whatChangedPanel.pastNoiseFloor")
+                        : t("optimize.whatChangedPanel.insideNoiseFloor")}
                   </span>
                 </div>
               ))}
@@ -358,9 +401,13 @@ function WhatChangedReportView({
           )}
 
           <div className="wcp-between">
-            <span className="wcp-section-label">Between these sessions</span>
+            <span className="wcp-section-label">
+              {t("optimize.whatChangedPanel.betweenTheseSessions")}
+            </span>
             {r.events_between.length === 0 ? (
-              <p className="wcp-between-none">Nothing Compy recorded changed in between.</p>
+              <p className="wcp-between-none">
+                {t("optimize.whatChangedPanel.nothingRecordedBetween")}
+              </p>
             ) : (
               <ul>
                 {r.events_between.map((ev) => (
@@ -368,7 +415,7 @@ function WhatChangedReportView({
                     {ev.summary}
                     <span className="wcp-between-when">
                       {" "}
-                      · {ev.observed_between ? "observed by " : ""}
+                      · {ev.observed_between ? t("optimize.whatChangedPanel.observedByPrefix") : ""}
                       {fmtWhen(ev.timestamp, expert)}
                     </span>
                   </li>
@@ -379,7 +426,7 @@ function WhatChangedReportView({
 
           {others.length > 0 && (
             <div className="wcp-others">
-              <span className="wcp-section-label">Also possible</span>
+              <span className="wcp-section-label">{t("optimize.whatChangedPanel.alsoPossible")}</span>
               {others.map((h) => (
                 <HypothesisBlock h={h} key={h.id} lead={false} />
               ))}
@@ -388,7 +435,9 @@ function WhatChangedReportView({
 
           {r.unknowns.length > 0 && (
             <div className="wcp-unknowns">
-              <span className="wcp-section-label">What Compy can't know here</span>
+              <span className="wcp-section-label">
+                {t("optimize.whatChangedPanel.whatCompyCantKnow")}
+              </span>
               <ul>
                 {r.unknowns.map((u) => (
                   <li key={u}>{u}</li>
@@ -399,7 +448,7 @@ function WhatChangedReportView({
 
           {expert && r.ruled_out.length > 0 && (
             <div className="wcp-ruled-out">
-              <span className="wcp-section-label">Ruled out</span>
+              <span className="wcp-section-label">{t("optimize.whatChangedPanel.ruledOut")}</span>
               {r.ruled_out.map((h) => (
                 <HypothesisBlock h={h} key={h.id} lead={false} />
               ))}
@@ -453,6 +502,7 @@ export function SessionInvestigator({
   sessions: SessionSummary[];
   arcV2?: boolean;
 }) {
+  const { t } = useTranslation();
   const on = useIntelligenceFlag();
   const expert = useExpertView();
 
@@ -513,23 +563,27 @@ export function SessionInvestigator({
   };
 
   const optLabel = (s: SessionSummary) =>
-    `${fmtWhen(s.started_at, expert)} · 1% low ${s.low1_fps_est.toFixed(1)} · avg ${s.avg_fps.toFixed(1)}`;
+    t("optimize.whatChangedPanel.sessionLine.main", {
+      when: fmtWhen(s.started_at, expert),
+      low1: s.low1_fps_est.toFixed(1),
+      avg: s.avg_fps.toFixed(1),
+    });
 
   const sameSession = baselineAt === currentAt;
 
   return (
     <div className={`wcp-investigate${arcV2 ? " arc-v2" : ""}`}>
       <div className="wcp-inv-head">
-        <span className="wcp-tag">Investigate · good vs bad session</span>
+        <span className="wcp-tag">{t("optimize.whatChangedPanel.investigateTag")}</span>
         <span className="wcp-inv-sub">
-          Compare any two of your {active?.game} sessions and Compy explains the delta.
+          {t("optimize.whatChangedPanel.compareAnyTwo", { game: active?.game })}
         </span>
       </div>
 
       <div className="wcp-inv-controls">
         {groups.length > 1 && (
           <label className="wcp-inv-field">
-            <span>Game</span>
+            <span>{t("optimize.whatChangedPanel.gameLabel")}</span>
             <select value={game} onChange={(e) => setGame(e.target.value)}>
               {groups.map((g) => (
                 <option value={g.game} key={g.game}>
@@ -540,7 +594,7 @@ export function SessionInvestigator({
           </label>
         )}
         <label className="wcp-inv-field">
-          <span>Baseline (good)</span>
+          <span>{t("optimize.whatChangedPanel.baselineGoodLabel")}</span>
           <select value={baselineAt} onChange={(e) => setBaselineAt(e.target.value)}>
             {active?.sessions.map((s) => (
               <option value={s.started_at} key={s.started_at}>
@@ -550,7 +604,7 @@ export function SessionInvestigator({
           </select>
         </label>
         <label className="wcp-inv-field">
-          <span>Compare (suspect)</span>
+          <span>{t("optimize.whatChangedPanel.compareSuspectLabel")}</span>
           <select value={currentAt} onChange={(e) => setCurrentAt(e.target.value)}>
             {active?.sessions.map((s) => (
               <option value={s.started_at} key={s.started_at}>
@@ -565,12 +619,14 @@ export function SessionInvestigator({
           onClick={run}
           disabled={busy || sameSession || !baselineAt || !currentAt}
         >
-          {busy ? "Comparing…" : "Compare"}
+          {busy
+            ? t("optimize.whatChangedPanel.comparingEllipsis")
+            : t("optimize.whatChangedPanel.compareButton")}
         </button>
       </div>
 
       {sameSession && (
-        <p className="wcp-inv-hint">Pick two different sessions to compare.</p>
+        <p className="wcp-inv-hint">{t("optimize.whatChangedPanel.pickTwoDifferentSessions")}</p>
       )}
 
       {outcome && (
@@ -579,7 +635,7 @@ export function SessionInvestigator({
             outcome={outcome}
             expert={expert}
             arcV2={arcV2}
-            headline="WHAT CHANGED? · between the two sessions you picked"
+            headline={t("optimize.whatChangedPanel.headlineBetween")}
           />
         </div>
       )}

@@ -1,14 +1,20 @@
 import React from "react";
+import { withTranslation, type WithTranslation } from "react-i18next";
 
 // Top-level defense-in-depth: if any render throws (a storage SecurityError in a lazy initializer,
 // a malformed-state crash, etc.) this catches it and shows a plain recovery screen instead of the
 // white void a bare React tree renders on an uncaught throw. The app's own "Couldn't read your
 // hardware" screen only guards the hardware-fetch path; this guards EVERYTHING, including crashes
 // that happen before that branch is reached.
-type Props = { children: React.ReactNode };
+//
+// withTranslation() (not the useTranslation() hook) on purpose: this is a class component — it has
+// to be, since getDerivedStateFromError/an error boundary has no hook equivalent — and hooks can't
+// be called from a class's render(). withTranslation is react-i18next's own HOC for exactly this
+// case; it injects `t` as a prop off the same "common" resources every other surface reads.
+type Props = WithTranslation & { children: React.ReactNode };
 type State = { error: Error | null };
 
-export class ErrorBoundary extends React.Component<Props, State> {
+class ErrorBoundaryBase extends React.Component<Props, State> {
   state: State = { error: null };
 
   static getDerivedStateFromError(error: Error): State {
@@ -16,6 +22,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   render() {
+    const { t } = this.props;
     if (this.state.error) {
       // Inline styles on purpose: this must render even if a stylesheet failed to load, since the
       // boundary exists precisely to survive a broken startup.
@@ -37,10 +44,10 @@ export class ErrorBoundary extends React.Component<Props, State> {
           }}
         >
           <h1 style={{ fontSize: "20px", fontWeight: 600, margin: 0 }}>
-            Compy hit a snag starting up
+            {t("common.errorBoundary.title")}
           </h1>
           <p style={{ fontSize: "14px", opacity: 0.75, margin: 0, maxWidth: "34ch" }}>
-            Something went wrong while loading. Restarting Compy usually clears it.
+            {t("common.errorBoundary.body")}
           </p>
           <button
             type="button"
@@ -56,7 +63,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
               cursor: "pointer",
             }}
           >
-            Reload Compy
+            {t("common.errorBoundary.reload")}
           </button>
         </div>
       );
@@ -64,3 +71,5 @@ export class ErrorBoundary extends React.Component<Props, State> {
     return this.props.children;
   }
 }
+
+export const ErrorBoundary = withTranslation()(ErrorBoundaryBase);

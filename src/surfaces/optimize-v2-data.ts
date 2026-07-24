@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import type { Recommendation } from "../types";
 
 // Pure verdict/measured derivations for the V2 Optimize room (V2-4, spec
@@ -46,6 +47,9 @@ export function safeFixesReady(
   return safeFixesReadyList(recs, isAppliable, revertedIds).length;
 }
 
+// i18n note: `t` is threaded through as the LAST param (this is a plain data module, not a
+// component — it can't call useTranslation() itself) — every call site passes its own `t` from
+// useTranslation(). Mirrors ago()/smoothness() elsewhere in this codebase.
 export function optimizeVerdict(
   recs: Recommendation[] | null,
   isAppliable: (recId: string) => boolean,
@@ -55,36 +59,41 @@ export function optimizeVerdict(
   // never count them as "ready to apply" — the V2-9 punch (g) law: the verdict describes the
   // state the body actually shows.
   reverted: { rec_id: string }[] = [],
+  t: TFunction,
 ): OptimizeVerdictLine {
   if (recs == null) {
-    return { settled: false, allClear: false, headline: "Checking what's safe to change…" };
+    return {
+      settled: false,
+      allClear: false,
+      headline: t("optimize.optimizeV2.verdict.checkingHeadline"),
+    };
   }
   const revertedIds = new Set(reverted.map((r) => r.rec_id));
   const ready = safeFixesReady(recs, isAppliable, revertedIds);
   // The undo promise is the rollback-first law stated plainly — and it names where undo lives.
-  const undoSub = "Every apply captures its undo first — roll anything back from Applied.";
+  const undoSub = t("optimize.optimizeV2.verdict.undoSub");
   // When ready fixes AND drifted changes coexist, the ready headline wins (it's the primary
   // action), but the body ALSO shows the "turned off outside Compy" rows — so the sub must name
   // that drift too (V2-9 (g) law: the verdict describes the state the body actually shows). Without
   // this the drifted section rendered with no mention in the verdict at all.
   const driftClause =
     reverted.length === 1
-      ? " Plus 1 change you applied was turned off outside Compy — flip it back on below."
+      ? t("optimize.optimizeV2.verdict.driftClauseSuffix", { count: 1 })
       : reverted.length > 1
-        ? ` Plus ${reverted.length} changes you applied were turned off outside Compy — flip them back on below.`
+        ? t("optimize.optimizeV2.verdict.driftClauseSuffix", { count: reverted.length })
         : "";
   if (ready === 1)
     return {
       settled: true,
       allClear: false,
-      headline: "1 safe fix is ready to apply.",
+      headline: t("optimize.optimizeV2.verdict.readyHeadline", { count: 1 }),
       sub: undoSub + driftClause,
     };
   if (ready > 1)
     return {
       settled: true,
       allClear: false,
-      headline: `${ready} safe fixes are ready to apply.`,
+      headline: t("optimize.optimizeV2.verdict.readyHeadline", { count: ready }),
       sub: undoSub + driftClause,
     };
   // Drifted-only: nothing new to apply, but a change Compy made was switched off outside it.
@@ -94,35 +103,35 @@ export function optimizeVerdict(
     return {
       settled: true,
       allClear: false,
-      headline: "1 change you applied was turned off outside Compy.",
-      sub: "Flip it back on from the row below — or leave it off if that was you. Compy never re-applies on its own.",
+      headline: t("optimize.optimizeV2.verdict.driftedOnlyHeadline", { count: 1 }),
+      sub: t("optimize.optimizeV2.verdict.driftedOnlySub", { count: 1 }),
     };
   if (reverted.length > 1)
     return {
       settled: true,
       allClear: false,
-      headline: `${reverted.length} changes you applied were turned off outside Compy.`,
-      sub: "Flip them back on from the rows below — or leave them off if that was you. Compy never re-applies on its own.",
+      headline: t("optimize.optimizeV2.verdict.driftedOnlyHeadline", { count: reverted.length }),
+      sub: t("optimize.optimizeV2.verdict.driftedOnlySub", { count: reverted.length }),
     };
   if (activeCount === 1)
     return {
       settled: true,
       allClear: true,
-      headline: "Nothing new to apply — 1 safe change is active.",
+      headline: t("optimize.optimizeV2.verdict.allSafeActiveHeadline", { count: 1 }),
       sub: undoSub,
     };
   if (activeCount > 1)
     return {
       settled: true,
       allClear: true,
-      headline: `Nothing new to apply — ${activeCount} safe changes are active.`,
+      headline: t("optimize.optimizeV2.verdict.allSafeActiveHeadline", { count: activeCount }),
       sub: undoSub,
     };
   return {
     settled: true,
     allClear: true,
-    headline: "Nothing needs applying right now.",
-    sub: "Compy only recommends what it measured on this rig — nothing invented.",
+    headline: t("optimize.optimizeV2.verdict.nothingToApplyHeadline"),
+    sub: t("optimize.optimizeV2.verdict.nothingToApplySub"),
   };
 }
 

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
+import "../i18n";
 import { Card, StatusPill, SectionHeader } from "../design";
 import { Term } from "../design/Term";
 import {
@@ -23,6 +25,7 @@ const MOUSE_CAPTURE_MS = 2000;
 // machine — nothing on this tab changes a setting. Time-windowed measurements
 // (wake granularity, mouse polling) run on demand so the snapshot loads instantly.
 export function LatencyTab() {
+  const { t } = useTranslation();
   const [report, setReport] = useState<LatencyReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [wake, setWake] = useState<WakeMeasurement | null>(null);
@@ -68,15 +71,15 @@ export function LatencyTab() {
 
   const measureMouse = async () => {
     setMouseBusy(true);
-    setMouseMsg("Move your mouse for ~2 seconds…");
+    setMouseMsg(t("monitor.latency.moveMouseHint"));
     try {
       const m = await invoke<MouseMeasurement | null>("latency_measure_mouse", {
         durationMs: MOUSE_CAPTURE_MS,
       });
       setMouse(m);
-      setMouseMsg(m ? null : "No mouse reports captured — try again and keep the mouse moving.");
+      setMouseMsg(m ? null : t("monitor.latency.noMouseReports"));
     } catch {
-      setMouseMsg("Measurement failed.");
+      setMouseMsg(t("monitor.latency.measurementFailed"));
     } finally {
       setMouseBusy(false);
     }
@@ -85,45 +88,47 @@ export function LatencyTab() {
   if (loading) {
     return (
       <div className="lat-wrap">
-        <p className="lat-muted">Reading diagnostics…</p>
+        <p className="lat-muted">{t("monitor.latency.readingDiagnostics")}</p>
       </div>
     );
   }
   if (!report) {
     return (
       <div className="lat-wrap">
-        <p className="lat-muted">
-          Compy couldn't read latency diagnostics just now — this can happen right after launch.
-          Reopen Advanced in a moment to try again.
-        </p>
+        <p className="lat-muted">{t("monitor.latency.diagnosticsUnavailable")}</p>
       </div>
     );
   }
 
   const { msi, msi_active, cpu, usb } = report;
-  const rateClass = mouse ? pollingRateClass(mouse.polling.median_hz) : null;
+  const rateClass = mouse ? pollingRateClass(mouse.polling.median_hz, t) : null;
 
   return (
     <div className="lat-wrap">
       <header className="lat-head">
-        <h2>Latency &amp; responsiveness</h2>
-        <p className="lat-muted">
-          Read-only diagnostics — Compy reports what your machine actually does. Nothing here
-          changes a setting.
-        </p>
+        <h2>{t("monitor.latency.title")}</h2>
+        <p className="lat-muted">{t("monitor.latency.subtitle")}</p>
       </header>
 
       <Card>
         <SectionHeader
-          title={<>Interrupt mode (<Term id="interrupts">MSI</Term>)</>}
+          title={
+            <>
+              {t("monitor.latency.interruptModePre")}
+              <Term id="interrupts">{t("monitor.latency.interruptModeEmph")}</Term>
+              {t("monitor.latency.interruptModePost")}
+            </>
+          }
           right={<StatusPill status={msiStatus(msi_active)} />}
         />
         <p className="lat-stat">
-          {msi_active.active_on} of {msi.total} capable devices confirmed on MSI
+          {t("monitor.latency.msiConfirmed", { on: msi_active.active_on, total: msi.total })}
           {msi_active.advertised_but_inactive > 0 &&
-            ` · ${msi_active.advertised_but_inactive} advertise it but run on a line IRQ`}
+            t("monitor.latency.msiAdvertisedInactive", {
+              count: msi_active.advertised_but_inactive,
+            })}
           {msi_active.unknown > 0 &&
-            ` · ${msi_active.unknown} couldn't be read (not a problem — just not readable)`}
+            t("monitor.latency.msiUnknown", { count: msi_active.unknown })}
         </p>
         {report.msi_advisory && <p className="lat-advisory">{report.msi_advisory}</p>}
         {/* Name the guilty device: every VERIFIED line-IRQ device, worst-first — receipts the
@@ -135,11 +140,13 @@ export function LatencyTab() {
                 <span className="lat-ctrl">{d.name}</span>
                 <span className="lat-devs">
                   {d.advertises_msi
-                    ? "advertises MSI · verified running on a line IRQ"
-                    : "no MSI support advertised · on a line IRQ"}
+                    ? t("monitor.latency.msiAdvertisesVerified")
+                    : t("monitor.latency.msiNotAdvertised")}
                 </span>
                 {d.latency_sensitive && (
-                  <span className="lat-shared lat-shared-warn">latency-sensitive</span>
+                  <span className="lat-shared lat-shared-warn">
+                    {t("monitor.latency.latencySensitive")}
+                  </span>
                 )}
               </li>
             ))}
@@ -148,35 +155,43 @@ export function LatencyTab() {
       </Card>
 
       <Card>
-        <SectionHeader title="Timer resolution & wake granularity" />
+        <SectionHeader title={t("monitor.latency.timerSectionTitle")} />
         {report.timer_current_ms != null && (
           <p className="lat-stat">
-            Current timer resolution: <strong>{fmtMs(report.timer_current_ms)}</strong>
+            {t("monitor.latency.currentTimerResolutionPre")}
+            <strong>{fmtMs(report.timer_current_ms)}</strong>
           </p>
         )}
-        {report.timer && <p className="lat-muted">{timerRangeLabel(report.timer)}</p>}
+        {report.timer && <p className="lat-muted">{timerRangeLabel(report.timer, t)}</p>}
         {wake ? (
           <>
             <p className="lat-stat">
-              Measured wake: median <strong>{fmtMs(wake.granularity.median_ms)}</strong> (min{" "}
-              {fmtMs(wake.granularity.min_ms)}, max {fmtMs(wake.granularity.max_ms)}, jitter{" "}
-              {fmtMs(wake.granularity.jitter_ms)})
+              {t("monitor.latency.wakeMeasuredPre")}
+              <strong>{fmtMs(wake.granularity.median_ms)}</strong>
+              {t("monitor.latency.wakeMeasuredPost", {
+                min: fmtMs(wake.granularity.min_ms),
+                max: fmtMs(wake.granularity.max_ms),
+                jitter: fmtMs(wake.granularity.jitter_ms),
+              })}
             </p>
             <p className="lat-advisory">{wake.note}</p>
           </>
         ) : (
           <button className="lat-btn" onClick={measureWake} disabled={wakeBusy}>
-            {wakeBusy ? "Measuring…" : "Measure wake granularity"}
+            {wakeBusy ? t("monitor.latency.measuring") : t("monitor.latency.measureWakeGranularity")}
           </button>
         )}
       </Card>
 
       {cpu && (
         <Card>
-          <SectionHeader title="CPU topology & interrupt affinity" />
+          <SectionHeader title={t("monitor.latency.cpuTopologyTitle")} />
           <p className="lat-stat">
-            {cpu.physical_cores} cores / {cpu.logical_processors} threads · {cpu.l3_complexes} L3
-            complex{cpu.l3_complexes === 1 ? "" : "es"}
+            {t("monitor.latency.cpuTopology", {
+              count: cpu.l3_complexes,
+              physical: cpu.physical_cores,
+              logical: cpu.logical_processors,
+            })}
           </p>
           {/* The device-named suggestion is the DEEPENED version of the general advisory (it includes
               everything the general line says + the named devices + the manual/never-writes caveats),
@@ -191,11 +206,11 @@ export function LatencyTab() {
 
       <Card>
         <SectionHeader
-          title="USB input topology"
+          title={t("monitor.latency.usbTopologyTitle")}
           right={usb.length > 0 ? <StatusPill status={usbStatus(usb)} /> : undefined}
         />
         {usb.length === 0 ? (
-          <p className="lat-muted">No USB input controllers detected.</p>
+          <p className="lat-muted">{t("monitor.latency.noUsbControllers")}</p>
         ) : (
           <ul className="lat-list">
             {usb.map((c) => {
@@ -206,9 +221,13 @@ export function LatencyTab() {
                   <span className="lat-ctrl">{c.controller_name}</span>
                   <span className="lat-devs">{devs}</span>
                   {sev === "attention" && (
-                    <span className="lat-shared lat-shared-warn">jitter risk</span>
+                    <span className="lat-shared lat-shared-warn">
+                      {t("monitor.latency.jitterRisk")}
+                    </span>
                   )}
-                  {sev === "info" && <span className="lat-shared lat-shared-info">shared</span>}
+                  {sev === "info" && (
+                    <span className="lat-shared lat-shared-info">{t("monitor.latency.shared")}</span>
+                  )}
                 </li>
               );
             })}
@@ -216,8 +235,9 @@ export function LatencyTab() {
         )}
         {report.usb_top_spec && (
           <p className="lat-muted">
-            Platform supports up to <strong>{report.usb_top_spec}</strong> (capability tier — not a
-            per-port speed)
+            {t("monitor.latency.usbTopSpecPre")}
+            <strong>{report.usb_top_spec}</strong>
+            {t("monitor.latency.usbTopSpecPost")}
           </p>
         )}
         {report.usb_advisory && <p className="lat-advisory">{report.usb_advisory}</p>}
@@ -231,12 +251,17 @@ export function LatencyTab() {
 
       <Card>
         <SectionHeader
-          title={<>Mouse <Term id="polling-rate">polling rate</Term></>}
+          title={
+            <>
+              {t("monitor.latency.mousePollingPre")}
+              <Term id="polling-rate">{t("monitor.latency.mousePollingEmph")}</Term>
+            </>
+          }
           right={
             mouse ? (
               <StatusPill
                 status={pollingJitterStatus(mouse.polling.jitter_ms)}
-                label={`jitter ${pollingJitterLabel(mouse.polling.jitter_ms)}`}
+                label={`${t("monitor.latency.jitterLabelPre")}${pollingJitterLabel(mouse.polling.jitter_ms, t)}`}
               />
             ) : undefined
           }
@@ -244,22 +269,28 @@ export function LatencyTab() {
         {mouse ? (
           <>
             <p className="lat-stat">
-              Median <strong>{Math.round(mouse.polling.median_hz)} Hz</strong> over{" "}
-              {mouse.polling.reports} reports (jitter {fmtMs(mouse.polling.jitter_ms)})
+              {t("monitor.latency.medianPollingPre")}
+              <strong>{Math.round(mouse.polling.median_hz)} Hz</strong>
+              {t("monitor.latency.medianPollingPost", {
+                reports: mouse.polling.reports,
+                jitter: fmtMs(mouse.polling.jitter_ms),
+              })}
             </p>
             {rateClass && <p className="lat-muted">{rateClass}</p>}
             <p className="lat-muted">
-              Report gaps ranged {fmtMs(mouse.polling.min_interval_ms)} (fastest) to{" "}
-              {fmtMs(mouse.polling.max_interval_ms)} (slowest)
+              {t("monitor.latency.reportGaps", {
+                min: fmtMs(mouse.polling.min_interval_ms),
+                max: fmtMs(mouse.polling.max_interval_ms),
+              })}
             </p>
             <p className="lat-advisory">{mouse.note}</p>
             <button className="lat-btn lat-btn-ghost" onClick={measureMouse} disabled={mouseBusy}>
-              {mouseBusy ? "Measuring…" : "Measure again"}
+              {mouseBusy ? t("monitor.latency.measuring") : t("monitor.latency.measureAgain")}
             </button>
           </>
         ) : (
           <button className="lat-btn" onClick={measureMouse} disabled={mouseBusy}>
-            {mouseBusy ? "Measuring…" : "Measure mouse polling"}
+            {mouseBusy ? t("monitor.latency.measuring") : t("monitor.latency.measureMousePolling")}
           </button>
         )}
         {/* Capture status renders in BOTH states (not just the no-result branch): a returning user
@@ -274,7 +305,7 @@ export function LatencyTab() {
           by an honest tone (never a score). Only shown when the signal was actually read. */}
       {netPills.length > 0 && (
         <Card>
-          <SectionHeader title="Network connection" />
+          <SectionHeader title={t("monitor.latency.networkConnectionTitle")} />
           <ul className="lat-pills">
             {netPills.map((p, i) => (
               <li key={`${p.label}-${i}`} className={`lat-pill lat-pill-${networkPillTone(p.tone)}`}>
@@ -282,11 +313,7 @@ export function LatencyTab() {
               </li>
             ))}
           </ul>
-          <p className="lat-muted">
-            How your PC reaches the internet — this shapes online-game latency (ping and lag), separate
-            from the local responsiveness above. Wired Ethernet is the steadiest; Wi-Fi is fine for
-            plenty of games.
-          </p>
+          <p className="lat-muted">{t("monitor.latency.networkExplainer")}</p>
         </Card>
       )}
     </div>

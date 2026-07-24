@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import type { AppliedChange, StartupEntry } from "../types";
 import { TrustSwitch, TrustSnapshotLine } from "../design/TrustSwitch";
 import { WhatsThis } from "../design/WhatsThis";
 import { Walkthrough } from "../design/Walkthrough";
-import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
+import { walkthroughForKeyForLanguage, type GpuVendor } from "./walkthroughs";
 import { useDismissed } from "./dismissed";
 import { useEligibilityOverrides } from "./eligibility-override";
 import { GUIDED_STEPS, openGuidedUri } from "./guided";
@@ -19,6 +21,9 @@ import { SlimRecRow, SlimDetailRow } from "../design/SlimRecRow";
 import { ActionDrawer, type DrawerRec } from "./ActionDrawer";
 import { gameModeRevertedExternally } from "./dashboard-data";
 import { SidePileItem, SIDE_PILE_ORDER } from "./side-pile";
+// Side-effect import: guarantees the i18next singleton is initialized even when this component
+// is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
+import "../i18n";
 import "./Fix.css";
 
 // Whether the Living Instrument preview is on (DOM-read; the surface re-renders fresh on navigation,
@@ -75,9 +80,10 @@ function ExpertTargetLine({ id }: { id: string }) {
 // never a fabricated FPS/latency number (honest-measurement law). Absent → renders nothing, so a
 // legacy entry or a restore-to-stock leftover shows no meter rather than an invented one.
 function PayoffMeter({ label }: { label?: string | null }) {
+  const { t } = useTranslation();
   if (!label) return null;
   return (
-    <span className="fix-payoff" title="What this change is measured to help with — not a promised number">
+    <span className="fix-payoff" title={t("optimize.fix.payoffMeterTitle")}>
       <span className="fix-payoff-dot" aria-hidden="true" />
       {label}
     </span>
@@ -132,15 +138,18 @@ type Props = {
 };
 
 // Humanized timestamp (ledger §2): "3 days ago · 6:08 AM", never raw seconds.
-function humanizeWhen(iso: string): string {
-  const t = new Date(iso);
-  if (isNaN(t.getTime())) return "recently";
-  const time = t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  const days = Math.floor((Date.now() - t.getTime()) / 86400000);
-  if (days <= 0) return `today · ${time}`;
-  if (days === 1) return `yesterday · ${time}`;
-  if (days < 7) return `${days} days ago · ${time}`;
-  return `${t.toLocaleDateString([], { month: "short", day: "numeric" })} · ${time}`;
+function humanizeWhen(iso: string, t: TFunction): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return t("optimize.fix.humanizeRecently");
+  const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  if (days <= 0) return t("optimize.fix.humanizeToday", { time });
+  if (days === 1) return t("optimize.fix.humanizeYesterday", { time });
+  if (days < 7) return t("optimize.fix.humanizeDaysAgo", { days, time });
+  return t("optimize.fix.humanizeDateTime", {
+    date: d.toLocaleDateString([], { month: "short", day: "numeric" }),
+    time,
+  });
 }
 
 // Labels come from the shared provenance source of truth so they can't drift from the
@@ -153,23 +162,17 @@ const EVIDENCE: Record<Rec["provenance"], { label: string; cls: string }> = {
 
 // The refuse-pile (spec §2 v1 trio). Calm one-liners consistent with tweaks.json verdicts; each
 // links to its Library autopsy. Educates, never shames — no fear-tone.
-const REFUSE_PILE: { id: string; name: string; why: string }[] = [
-  {
-    id: "useplatformclock",
-    name: "Force HPET",
-    why: "On modern Windows this almost always raises latency and causes stutter — the OS already picks the best timer.",
-  },
-  {
-    id: "pagefile-disable",
-    name: "Disable the pagefile",
-    why: "Games that commit more memory than your RAM hard-crash with it off — leave it system-managed.",
-  },
-  {
-    id: "disable-defender",
-    name: "Disable Windows Defender",
-    why: "The FPS gain is a rounding error; the cost is your only always-on protection — and some anti-cheats react badly.",
-  },
+const REFUSE_PILE: { id: string }[] = [
+  { id: "useplatformclock" },
+  { id: "pagefile-disable" },
+  { id: "disable-defender" },
 ];
+// id → the i18n key segment for its name/why pair (see optimize.fix.refusePile.* in the locale JSON).
+const REFUSE_PILE_KEY: Record<string, string> = {
+  useplatformclock: "forceHpet",
+  "pagefile-disable": "pagefileDisable",
+  "disable-defender": "disableDefender",
+};
 
 // The knob — an enclosed chevron CHIP (doorknob grammar), so an expandable reads as a door at rest.
 // The chip rotates via the parent .cmp-door[aria-expanded]; the glyph itself stays static.
@@ -220,22 +223,19 @@ function GameModeNote({
   vendor?: GpuVendor;
   reverted?: boolean;
 }) {
+  const { t } = useTranslation();
   if (id !== "game-mode") return null;
   if (reverted) {
     return (
       <p className="fix-amd-note">
-        You applied this before, but Windows switched Game Mode back off. That's your GPU's
-        recording software (AMD Adrenalin / NVIDIA ShadowPlay) resetting it at login — not Compy.
-        Re-applying works, but it'll reset again after the next restart.
+        {t("optimize.fix.gameModeRevertedNote")}
       </p>
     );
   }
   if (vendor === "amd") {
     return (
       <p className="fix-amd-note">
-        Heads up: on AMD systems, Radeon Adrenalin tends to switch Windows Game Mode back off
-        after you log in (a known Windows/AMD Game Bar conflict). Compy can turn it on, but it
-        may not stay on across reboots — that's the system resetting it, not a Compy bug.
+        {t("optimize.fix.gameModeAmdNote")}
       </p>
     );
   }
@@ -267,6 +267,7 @@ function FixRow({
   vendor?: GpuVendor;
   gameModeReverted?: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <li className="fix-row">
       <div className="fix-row-main">
@@ -275,8 +276,8 @@ function FixRow({
           <EvidenceChip p={rec.provenance} />
           <WhatsThis id={rec.id} onOpen={onWhatsThis} />
           {onOpenDrawer && (
-            <button className="fix-details" onClick={onOpenDrawer} title="See exactly what this changes" aria-label="See exactly what this changes">
-              Details ›
+            <button className="fix-details" onClick={onOpenDrawer} title={t("optimize.fix.seeExactlyWhatChanges")} aria-label={t("optimize.fix.seeExactlyWhatChanges")}>
+              {t("optimize.fix.detailsArrow")}
             </button>
           )}
         </div>
@@ -291,7 +292,7 @@ function FixRow({
         {/* Deliberate, reversible decline — applied rows can't be dismissed (roll back instead). */}
         {!applied && (
           <button className="fix-dismiss" onClick={() => onDismiss(rec.id)}>
-            Not for me
+            {t("optimize.fix.notForMe")}
           </button>
         )}
       </div>
@@ -299,7 +300,10 @@ function FixRow({
         applied={applied}
         busy={busy}
         onToggle={onToggle}
-        ariaLabel={`${applied ? "Roll back" : "Apply"} ${rec.title}`}
+        ariaLabel={t("optimize.fix.toggleAriaLabel", {
+          action: applied ? t("optimize.fix.rollBack") : t("optimize.fix.apply"),
+          title: rec.title,
+        })}
       />
     </li>
   );
@@ -332,8 +336,9 @@ export function SlimFixRow({
   vendor?: GpuVendor;
   gameModeReverted?: boolean;
 }) {
+  const { t, i18n } = useTranslation();
   const mut = recMutation(rec.id);
-  const walkthrough = walkthroughForKey(rec.id);
+  const walkthrough = walkthroughForKeyForLanguage(rec.id, i18n.language);
   const why = rec.description || rec.impact;
   return (
     <SlimRecRow
@@ -347,13 +352,16 @@ export function SlimFixRow({
           applied={applied}
           busy={busy}
           onToggle={onToggle}
-          ariaLabel={`${applied ? "Roll back" : "Apply"} ${rec.title}`}
+          ariaLabel={t("optimize.fix.toggleAriaLabel", {
+            action: applied ? t("optimize.fix.rollBack") : t("optimize.fix.apply"),
+            title: rec.title,
+          })}
         />
       }
     >
-      {why && <SlimDetailRow k="Why it matters" v={why} />}
+      {why && <SlimDetailRow k={t("optimize.fix.whyItMatters")} v={why} />}
       <SlimDetailRow
-        k="Evidence"
+        k={t("optimize.fix.evidence")}
         v={
           <>
             <EvidenceChip p={rec.provenance} /> {PROVENANCE_NOTE[rec.provenance]}
@@ -361,21 +369,18 @@ export function SlimFixRow({
         }
       />
       <SlimDetailRow
-        k="What changes"
+        k={t("optimize.fix.whatChanges")}
         v={
           mut
-            ? `${mut.changes}${mut.elevated ? " Needs one admin OK." : ""}${
-                mut.restart ? " Takes effect after restart." : ""
+            ? `${mut.changes}${mut.elevated ? ` ${t("optimize.fix.needsAdminOk")}` : ""}${
+                mut.restart ? ` ${t("optimize.fix.takesEffectAfterRestart")}` : ""
               }`
-            : "A single, scoped Windows setting — Compy snapshots its exact prior value before touching it."
+            : t("optimize.fix.singleScopedSettingFallback")
         }
       />
       <SlimDetailRow
-        k="Undo"
-        v={
-          mut?.reverts ??
-          "Compy captures the exact prior state before changing anything, and restores it on rollback."
-        }
+        k={t("optimize.fix.undo")}
+        v={mut?.reverts ?? t("optimize.fix.revertsFallback")}
       />
       <GameModeNote id={rec.id} vendor={vendor} reverted={gameModeReverted} />
       {applied && (
@@ -387,7 +392,7 @@ export function SlimFixRow({
       <div className="slimrow-acts">
         {walkthrough && (
           <details className="fix-walkthrough">
-            <summary>Show me the way</summary>
+            <summary>{t("optimize.fix.showMeTheWay")}</summary>
             <Walkthrough walkthrough={walkthrough} vendor={vendor ?? "any"} />
           </details>
         )}
@@ -395,7 +400,7 @@ export function SlimFixRow({
         {/* Deliberate, reversible decline — applied rows can't be dismissed (roll back instead). */}
         {!applied && (
           <button className="fix-dismiss" onClick={() => onDismiss(rec.id)}>
-            Not for me
+            {t("optimize.fix.notForMe")}
           </button>
         )}
       </div>
@@ -442,11 +447,18 @@ function CollapsibleSection({
 // Ids match the Rust `KnownBloatTask::from_id` allowlist — the backend re-enforces it, so nothing
 // off-list (never Defender / policy) can be passed. Disabling is reversible: the change lands in the
 // Trust Ledger and re-enables on rollback.
-const DEBLOAT_TASKS: { id: string; label: string; what: string }[] = [
-  { id: "compatibility-appraiser", label: "Compatibility Appraiser", what: "feeds Microsoft's compatibility telemetry (legacy; absent on newer Windows)" },
-  { id: "ceip-consolidator", label: "CEIP Consolidator", what: "sends Customer Experience Improvement Program data" },
-  { id: "ceip-usb", label: "CEIP USB telemetry", what: "reports USB device usage to the CEIP" },
+const DEBLOAT_TASKS: { id: string }[] = [
+  { id: "compatibility-appraiser" },
+  { id: "ceip-consolidator" },
+  { id: "ceip-usb" },
 ];
+// id → the i18n key segment for its label/what pair (translated display text keeps the id-keyed
+// Rust allowlist above untouched — see optimize.fix.debloatTasks.* in the locale JSON).
+const DEBLOAT_TASK_KEY: Record<string, string> = {
+  "compatibility-appraiser": "compatibilityAppraiser",
+  "ceip-consolidator": "ceipConsolidator",
+  "ceip-usb": "ceipUsb",
+};
 
 // Self-contained: invokes the gated `disable_known_bloat_task` command directly; the applied change
 // shows in the Trust Ledger (History) where it can be rolled back (re-enables the task).
@@ -461,6 +473,7 @@ function DebloatTasks({
   // + any error text; the ledger is the durable truth (mirrors the toggle-row rows' activeChangeFor use).
   activeChangeFor: (recId: string) => AppliedChange | undefined;
 }) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState<string | null>(null);
   const [state, setState] = useState<Record<string, "done" | string>>({});
   const disable = async (id: string) => {
@@ -472,37 +485,37 @@ function DebloatTasks({
       // Plain-English, not the raw Rust string: this is an ARMED mutation, so make clear nothing changed.
       setState((s) => ({
         ...s,
-        [id]: "Couldn't turn that off — it may need an admin OK, or the prompt was cancelled. Nothing changed; try again.",
+        [id]: t("optimize.fix.debloatFailed"),
       }));
     } finally {
       setBusy(null);
     }
   };
   return (
-    <CollapsibleSection title="Telemetry tasks" count={DEBLOAT_TASKS.length}>
+    <CollapsibleSection title={t("optimize.fix.telemetryTasks")} count={DEBLOAT_TASKS.length}>
       <p className="fix-refuse-intro">
-        Disable Microsoft telemetry scheduled tasks for this PC — reversible (re-enable from History).
-        Compy only ever touches this curated list; never Defender or anything that breaks Windows.{" "}
+        {t("optimize.fix.telemetryTasksIntro")}{" "}
         <WhatsThis id="telemetry" onOpen={onWhatsThis} />
       </p>
       <ul className="fix-list">
-        {DEBLOAT_TASKS.map((t) => {
-          const st = state[t.id];
+        {DEBLOAT_TASKS.map((task) => {
+          const st = state[task.id];
           // Persisted (ledger) OR just-clicked this session. The ledger read survives remount/nav —
           // the row no longer reverts to "Disable" after leaving and returning while the task stays off.
-          const done = !!activeChangeFor(`bloat-task:${t.id}`) || st === "done";
+          const done = !!activeChangeFor(`bloat-task:${task.id}`) || st === "done";
           const err = st && st !== "done" ? st : null;
+          const key = DEBLOAT_TASK_KEY[task.id];
           return (
-            <li className="fix-row fix-row-advisory" key={t.id}>
+            <li className="fix-row fix-row-advisory" key={task.id}>
               <div className="fix-row-main">
                 <span className="fix-row-title fix-row-title-friendly">
-                  <span className="fix-row-headline">{t.label}</span>
-                  <span className="fix-row-tech">{t.what}</span>
+                  <span className="fix-row-headline">{t(`optimize.fix.debloatTasks.${key}.label`)}</span>
+                  <span className="fix-row-tech">{t(`optimize.fix.debloatTasks.${key}.what`)}</span>
                 </span>
                 {err && <p className="fix-row-reason">{err}</p>}
               </div>
-              <button className="btn btn-small" disabled={busy === t.id || done} onClick={() => disable(t.id)}>
-                {done ? "Disabled · undo in History" : busy === t.id ? "Disabling…" : "Disable"}
+              <button className="btn btn-small" disabled={busy === task.id || done} onClick={() => disable(task.id)}>
+                {done ? t("optimize.fix.disabledUndoInHistory") : busy === task.id ? t("optimize.fix.disablingEllipsis") : t("optimize.fix.disable")}
               </button>
             </li>
           );
@@ -517,18 +530,27 @@ function DebloatTasks({
 // re-enforces it, so nothing off-list (never the Store, Game Bar, or a data-bearing app) can be
 // passed. Removal is for THIS USER only; undo lives in History (silent re-register when Windows
 // still has the files, else Compy opens the app's Store page to finish).
-export const PRELOAD_APPS: { id: string; label: string; what: string }[] = [
-  { id: "solitaire-collection", label: "Solitaire Collection", what: "preinstalled card-game bundle" },
-  { id: "feedback-hub", label: "Feedback Hub", what: "collects Windows feedback and diagnostic reports for Microsoft" },
-  { id: "bing-news", label: "Microsoft News", what: "preinstalled news-feed app" },
-  { id: "office-hub", label: "Microsoft 365 (Office) hub", what: "launcher for Office web apps" },
+export const PRELOAD_APPS: { id: string }[] = [
+  { id: "solitaire-collection" },
+  { id: "feedback-hub" },
+  { id: "bing-news" },
+  { id: "office-hub" },
   // Spotify cut by owner curation 2026-07-06 — same package id as a real install, no honest "stub" copy.
 ];
+// id → the i18n key segment for its label/what pair (see optimize.fix.preloadApps.* in the locale
+// JSON) — keeps the Rust-allowlist-matching ids above untranslated.
+const PRELOAD_APP_KEY: Record<string, string> = {
+  "solitaire-collection": "solitaireCollection",
+  "feedback-hub": "feedbackHub",
+  "bing-news": "bingNews",
+  "office-hub": "officeHub",
+};
 
 // Renders NOTHING unless the backend reports the feature armed AND at least one curated app is
 // installed for this user — so shipping it dark changes zero pixels (no flag needed; the gate IS
 // the switch, and the same probe lights the card up the commit the gate arms).
 function PreloadApps() {
+  const { t } = useTranslation();
   const [view, setView] = useState<{ armed: boolean; installed: string[] } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [state, setState] = useState<Record<string, "done" | string>>({});
@@ -549,36 +571,34 @@ function PreloadApps() {
       // Plain-English, honest: nothing changed on a refusal/failure.
       setState((s) => ({
         ...s,
-        [id]: "Couldn't remove it — nothing changed; try again.",
+        [id]: t("optimize.fix.preloadRemoveFailed"),
       }));
     } finally {
       setBusy(null);
     }
   };
   return (
-    <CollapsibleSection title="Preinstalled apps" count={rows.length}>
+    <CollapsibleSection title={t("optimize.fix.preinstalledApps")} count={rows.length}>
       <p className="fix-refuse-intro">
-        Remove Store apps Windows preinstalled — for this user account only, reversible from History
-        (Windows restores it silently when it can; otherwise Compy opens the app&apos;s Store page to
-        finish). Compy only ever touches this curated list; never the Store itself, Xbox Game Bar, or
-        an app holding your files.
+        {t("optimize.fix.preinstalledAppsIntro")}
       </p>
       <ul className="fix-list">
         {rows.map((a) => {
           const st = state[a.id];
           const done = st === "done";
           const err = st && st !== "done" ? st : null;
+          const key = PRELOAD_APP_KEY[a.id];
           return (
             <li className="fix-row fix-row-advisory" key={a.id}>
               <div className="fix-row-main">
                 <span className="fix-row-title fix-row-title-friendly">
-                  <span className="fix-row-headline">{a.label}</span>
-                  <span className="fix-row-tech">{a.what}</span>
+                  <span className="fix-row-headline">{t(`optimize.fix.preloadApps.${key}.label`)}</span>
+                  <span className="fix-row-tech">{t(`optimize.fix.preloadApps.${key}.what`)}</span>
                 </span>
                 {err && <p className="fix-row-reason">{err}</p>}
               </div>
               <button className="btn btn-small" disabled={busy === a.id || done} onClick={() => remove(a.id)}>
-                {done ? "Removed · undo in History" : busy === a.id ? "Removing…" : "Remove"}
+                {done ? t("optimize.fix.removedUndoInHistory") : busy === a.id ? t("optimize.fix.removingEllipsis") : t("optimize.fix.remove")}
               </button>
             </li>
           );
@@ -602,9 +622,10 @@ function GuidedRow({
   onDismiss: (id: string) => void;
   onWhatsThis: (id: string) => void;
 }) {
+  const { t, i18n } = useTranslation();
   const [open, setOpen] = useState(false);
   const guide = GUIDED_STEPS[rec.id];
-  const walkthrough = walkthroughForKey(rec.id);
+  const walkthrough = walkthroughForKeyForLanguage(rec.id, i18n.language);
   return (
     <li className={"fix-row fix-row-advisory" + (open ? " fix-advisory-open" : "")}>
       <div className="fix-row-main">
@@ -621,14 +642,14 @@ function GuidedRow({
           <span className="fix-advisory-chev" aria-hidden="true" />
           <RecTitle id={rec.id} title={rec.title} />
           <EvidenceChip p={rec.provenance} />
-          <span className="fix-guided-tag">Guided</span>
+          <span className="fix-guided-tag">{t("optimize.fix.guidedTag")}</span>
         </button>
         <RecReason id={rec.id} text={rec.impact || rec.description} />
         <ExpertTargetLine id={rec.id} />
         <div className="fix-advisory-quickacts">
           <WhatsThis id={rec.id} onOpen={onWhatsThis} />
           <button className="fix-dismiss" onClick={() => onDismiss(rec.id)}>
-            Not for me
+            {t("optimize.fix.notForMe")}
           </button>
         </div>
         {guide && (
@@ -669,7 +690,7 @@ function GuidedRow({
             )}
             {walkthrough && (
               <details className="fix-walkthrough">
-                <summary>Show me the way</summary>
+                <summary>{t("optimize.fix.showMeTheWay")}</summary>
                 <Walkthrough walkthrough={walkthrough} vendor={vendor} />
               </details>
             )}
@@ -681,9 +702,7 @@ function GuidedRow({
                 stop clicking (J's exact conclusion). Honest: no safe switch exists; say where the
                 deeper story lives. */}
             <p className="fix-guided-none">
-              No safe, reversible switch for this one — it lives in a vendor app or a Windows page,
-              and flipping it is deliberately left to you. Compy won't automate a change it can't
-              safely undo.
+              {t("optimize.fix.noSafeSwitchNote")}
             </p>
           </div>
         )}
@@ -703,13 +722,14 @@ function StartupRow({
   busy: boolean;
   onToggle: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <li className={`fix-startup-row ${!entry.enabled ? "fix-startup-off" : ""}`}>
       <div className="fix-row-main">
         <div className="fix-row-head">
           <span className="fix-row-title">{entry.name}</span>
         </div>
-        <p className="fix-row-reason fix-startup-cmd">{entry.command || "(no command)"}</p>
+        <p className="fix-row-reason fix-startup-cmd">{entry.command || t("optimize.fix.noCommand")}</p>
       </div>
       <button
         className={`fix-startup-toggle ${entry.enabled ? "fix-startup-on" : ""}`}
@@ -717,7 +737,10 @@ function StartupRow({
         disabled={busy}
         role="switch"
         aria-checked={entry.enabled}
-        aria-label={`${entry.enabled ? "Disable" : "Enable"} ${entry.name} at startup`}
+        aria-label={t("optimize.fix.startupToggleAriaLabel", {
+          action: entry.enabled ? t("optimize.fix.disable") : t("optimize.fix.enable"),
+          name: entry.name,
+        })}
       >
         <span className="fix-startup-track">
           <span className="fix-startup-thumb" />
@@ -743,6 +766,7 @@ function ActiveChangeCard({
   onWhatsThis: (id: string) => void;
   onOpenDrawer?: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <li className="fix-active-card">
       <div className="fix-row-main">
@@ -750,19 +774,22 @@ function ActiveChangeCard({
           <RecTitle id={change.rec_id} title={change.rec_title} />
           <WhatsThis id={change.rec_id} onOpen={onWhatsThis} />
           {onOpenDrawer && (
-            <button className="fix-details" onClick={onOpenDrawer} title="See exactly what this changes" aria-label="See exactly what this changes">
-              Details ›
+            <button className="fix-details" onClick={onOpenDrawer} title={t("optimize.fix.seeExactlyWhatChanges")} aria-label={t("optimize.fix.seeExactlyWhatChanges")}>
+              {t("optimize.fix.detailsArrow")}
             </button>
           )}
         </div>
         <p className="fix-row-reason">
-          Active since {humanizeWhen(change.applied_at)}
+          {t("optimize.fix.activeSince", { when: humanizeWhen(change.applied_at, t) })}
           {change.restores_label && change.applied_label
             ? change.restores_label === change.applied_label
-              ? ` · Already ${change.applied_label} — no change needed`
-              : ` · ${change.restores_label} → ${change.applied_label}`
+              ? t("optimize.fix.alreadyNoChangeNeeded", { label: change.applied_label })
+              : t("optimize.fix.restoresToApplied", {
+                  restores: change.restores_label,
+                  applied: change.applied_label,
+                })
             : change.restores_label
-              ? ` · rolls back to ${change.restores_label}`
+              ? t("optimize.fix.rollsBackTo", { restores: change.restores_label })
               : ""}
         </p>
         <PayoffMeter label={change.payoff_label} />
@@ -771,13 +798,14 @@ function ActiveChangeCard({
             stamp is KNOWN to mismatch; legacy unstamped entries say nothing. */}
         {change.on_this_rig === false && change.hw_fingerprint && (
           <p className="fix-rig-note">
-            Last seen working on <strong>{rigLabel(change.hw_fingerprint)}</strong> — applied
-            before your hardware changed. Rollback still works from the ledger.
+            {t("optimize.fix.lastSeenWorkingOnPre")}
+            <strong>{rigLabel(change.hw_fingerprint, t)}</strong>
+            {t("optimize.fix.lastSeenWorkingOnPost")}
           </p>
         )}
       </div>
       <button className="fix-ghost-rollback" disabled={busy} onClick={onRollback}>
-        {busy ? "Rolling back…" : "Roll back"}
+        {busy ? t("optimize.fix.rollingBackEllipsis") : t("optimize.fix.rollBack")}
       </button>
     </li>
   );
@@ -785,14 +813,15 @@ function ActiveChangeCard({
 
 // A5 rig tagging: the short human name of a stamped rig ("RX 9070 XT · 32 GB RAM"). Only ever
 // renders fields the stamp actually recorded — an empty GPU read stays honest.
-function rigLabel(f: NonNullable<AppliedChange["hw_fingerprint"]>): string {
-  const gpu = f.gpu.trim() || "unknown GPU";
-  return `${gpu} · ${f.ram_gb} GB RAM`;
+function rigLabel(f: NonNullable<AppliedChange["hw_fingerprint"]>, t: TFunction): string {
+  const gpu = f.gpu.trim() || t("optimize.fix.unknownGpu");
+  return t("optimize.fix.rigLabelFormat", { gpu, ramGb: f.ram_gb });
 }
 
 // Ledger Layer 2 — the full chronological audit trail (active + rolled-back + superseded), muted,
 // each row expands to its typed receipt. Click to expand.
 function HistoryRow({ change }: { change: AppliedChange }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const rolledBack = change.status === "rolled_back" || !change.is_still_active;
   return (
@@ -802,53 +831,65 @@ function HistoryRow({ change }: { change: AppliedChange }) {
         <span className="fix-hist-title">{change.rec_title}</span>
         {/* A5 rig tag — only when the stamp says this entry is KNOWN to be from other hardware. */}
         {change.on_this_rig === false && (
-          <span className="fix-hist-rig-tag" title="Applied before your hardware changed">
-            other rig
+          <span className="fix-hist-rig-tag" title={t("optimize.fix.historyOtherRigTitle")}>
+            {t("optimize.fix.historyOtherRigTag")}
           </span>
         )}
-        <span className="fix-hist-when">{humanizeWhen(change.applied_at)}</span>
-        <span className="fix-hist-status">{rolledBack ? "✓ rolled back" : "active"}</span>
+        <span className="fix-hist-when">{humanizeWhen(change.applied_at, t)}</span>
+        <span className="fix-hist-status">
+          {rolledBack ? t("optimize.fix.historyRolledBack") : t("optimize.fix.historyActive")}
+        </span>
       </button>
       {open && (
         <div className="fix-hist-detail">
           {change.restores_label && change.applied_label ? (
             change.restores_label === change.applied_label ? (
               <div>
-                Already <strong>{change.applied_label}</strong> — no change needed
+                {t("optimize.fix.historyAlreadyPre")}
+                <strong>{change.applied_label}</strong>
+                {t("optimize.fix.historyAlreadyPost")}
               </div>
             ) : (
               <div>
-                Before <strong>{change.restores_label}</strong> → after{" "}
+                {t("optimize.fix.historyBeforePrefix")}
+                <strong>{change.restores_label}</strong>
+                {t("optimize.fix.historyAfterMid")}
                 <strong>{change.applied_label}</strong>
               </div>
             )
           ) : change.restores_label ? (
             <div>
-              Restores: <strong>{change.restores_label}</strong>
+              {t("optimize.fix.historyRestoresPrefix")}
+              <strong>{change.restores_label}</strong>
             </div>
           ) : (
             change.applied_label && (
               <div>
-                Set to <strong>{change.applied_label}</strong>
+                {t("optimize.fix.historySetToPrefix")}
+                <strong>{change.applied_label}</strong>
               </div>
             )
           )}
           <div>
-            Applied {humanizeWhen(change.applied_at)}
-            {change.elevation_used ? " · elevated" : ""}
+            {t("optimize.fix.historyAppliedPrefix")}
+            {humanizeWhen(change.applied_at, t)}
+            {change.elevation_used ? t("optimize.fix.historyElevatedSuffix") : ""}
           </div>
           {/* A5 rig tagging: where this change was applied. Legacy entries (no stamp) show
               nothing rather than a guess. */}
           {change.hw_fingerprint && (
             <div>
-              {change.on_this_rig === false ? "Last seen working on" : "Applied on"}{" "}
-              <strong>{rigLabel(change.hw_fingerprint)}</strong>
-              {change.on_this_rig === false && " — before your hardware changed"}
+              {change.on_this_rig === false
+                ? t("optimize.fix.historyLastSeenWorkingOnLabel")
+                : t("optimize.fix.historyAppliedOnLabel")}{" "}
+              <strong>{rigLabel(change.hw_fingerprint, t)}</strong>
+              {change.on_this_rig === false && t("optimize.fix.historyBeforeHwChangedSuffix")}
             </div>
           )}
           {change.payoff_label && (
             <div>
-              Measured payoff: <PayoffMeter label={change.payoff_label} />
+              {t("optimize.fix.historyMeasuredPayoffPrefix")}
+              <PayoffMeter label={change.payoff_label} />
             </div>
           )}
           <div className="fix-hist-id">{change.rec_id}</div>
@@ -875,6 +916,7 @@ export default function Fix({
   v2Ia = false,
   reverted = [],
 }: Props) {
+  const { t } = useTranslation();
   // Which section(s) of the surface to render — the merged Optimize shell drives this via segments;
   // standalone Tune leaves it "all" so the surface is unchanged. The two ledger layers gate
   // independently so Applied (active only) and History (full trail only) are distinct views.
@@ -1029,21 +1071,24 @@ export default function Fix({
           {/* In the merged Optimize "Fixes" segment (view="fixes"), the segment label already names
               the surface — suppress the standalone "Tune" tab-title to avoid stacked redundant headings
               (Check's title is suppressed the same way). Standalone Tune (view="all") keeps it. */}
-          {view !== "fixes" && <h2 className="fix-title">Tune</h2>}
+          {view !== "fixes" && <h2 className="fix-title">{t("common.rail.fix")}</h2>}
           {/* V2-4b: the RoomShell verdict is the room's ONE summary line — this subtitle would
               restate it (the stacked-summaries owner catch). The consent line below stays. */}
           {v2Ia ? null : living ? (
             <p className="fix-subtitle">
               {worthFixing.length === 0
-                ? "Your rig's already dialed in."
-                : `${worthFixing.length} ${worthFixing.length === 1 ? "thing" : "things"} worth a look.`}{" "}
-              Measured for your rig — every change is one tap to undo.
+                ? t("optimize.fix.subtitleLivingEmpty")
+                : t("optimize.fix.subtitleLivingCount", { count: worthFixing.length })}{" "}
+              {t("optimize.fix.subtitleLivingSuffix")}
             </p>
           ) : (
             <p className="fix-subtitle">
-              {worthFixing.length} worth a look · {active.length} active ·{" "}
-              {dismissedRecs.length} dismissed · {notForThisRig.length} not for this rig. Measured
-              changes for your rig — every one is one click to undo.
+              {t("optimize.fix.subtitleClassic", {
+                worth: worthFixing.length,
+                active: active.length,
+                dismissed: dismissedRecs.length,
+                notForRig: notForThisRig.length,
+              })}
             </p>
           )}
           {/* Standing approval reassurance, re-homed here from the global footer (halfway-home §0) —
@@ -1052,8 +1097,7 @@ export default function Fix({
               carried "every apply captures its undo first" is gone — this consent line beside the
               apply controls is its context. */}
           <p className="fix-consent">
-            Compy never changes anything without your explicit approval — and every apply captures
-            its undo first, so anything here rolls back from Applied.
+            {t("optimize.fix.consentLine")}
           </p>
         </div>
       </header>
@@ -1068,12 +1112,9 @@ export default function Fix({
           drift state, GameModeNote carries the won't-stick specifics on its row. */}
       {v2Ia && drifted.length > 0 && (
         <>
-          <div className="fix-section-label">Applied — turned off outside Compy</div>
+          <div className="fix-section-label">{t("optimize.fix.driftedSectionLabel")}</div>
           <p className="fix-refuse-intro">
-            You turned {drifted.length === 1 ? "this" : "these"} on with Compy; something outside
-            Compy switched {drifted.length === 1 ? "it" : "them"} back off. Flip{" "}
-            {drifted.length === 1 ? "it" : "any"} back on — or leave it, your call. Compy never
-            re-applies on its own.
+            {t("optimize.fix.driftedIntro", { count: drifted.length })}
           </p>
           <ul className="fix-list">
             {drifted.map((rec) => (
@@ -1097,25 +1138,28 @@ export default function Fix({
           where the room's only pending fix is in the drifted group above) is noise, not order. */}
       {!(v2Ia && readyRows.length === 0 && drifted.length > 0) && (
         <div className="fix-section-label">
-          {v2Ia ? "Ready — one click, reversible" : "Worth making for your rig"}
+          {v2Ia ? t("optimize.fix.sectionReadyV2") : t("optimize.fix.sectionWorthMaking")}
         </div>
       )}
       {safeBatch.length >= 2 && (
         <div className="fix-applyall-bar">
           <button className="fix-applyall" onClick={openSheet}>
-            {slim ? `Apply reviewed (${safeBatch.length})` : `Apply all safe fixes (${safeBatch.length})`}
+            {slim
+              ? t("optimize.fix.applyReviewedCount", { count: safeBatch.length })
+              : t("optimize.fix.applySafeFixesCount", { count: safeBatch.length })}
           </button>
-          <span className="fix-applyall-hint">reversible · one undo each · cleaner setup, not a magic boost</span>
+          <span className="fix-applyall-hint">{t("optimize.fix.applyAllHint")}</span>
         </div>
       )}
       {batchSummary && (
         <p className="fix-applyall-summary" role="status">
-          Applied {batchSummary.applied}
+          {t("optimize.fix.appliedCount", { count: batchSummary.applied })}
           {batchSummary.skipped.length > 0 &&
-            ` · ${batchSummary.skipped.length} skipped: ${batchSummary.skipped
-              .map((s) => s.title)
-              .join(", ")}`}
-          . Each is individually reversible below.
+            t("optimize.fix.skippedSuffix", {
+              count: batchSummary.skipped.length,
+              titles: batchSummary.skipped.map((s) => s.title).join(", "),
+            })}
+          {t("optimize.fix.eachReversibleBelow")}
         </p>
       )}
       {readyRows.length === 0 ? (
@@ -1124,7 +1168,7 @@ export default function Fix({
         // One phrase, one owner: the living subtitle already says "dialed in" — this line
         // states the fact without restating it.
         drifted.length === 0 && (
-          <p className="fix-empty">Nothing waiting — no changes to make on this rig right now.</p>
+          <p className="fix-empty">{t("optimize.fix.nothingWaiting")}</p>
         )
       ) : (
         <ul className="fix-list">
@@ -1190,13 +1234,13 @@ export default function Fix({
             aria-labelledby="fix-applyall-h"
           >
             <h3 id="fix-applyall-h" className="fix-applyall-h">
-              Apply these {slim ? sheetSelected.size : safeBatch.length} changes to your rig?
+              {t("optimize.fix.applyTheseChangesTitle", {
+                count: slim ? sheetSelected.size : safeBatch.length,
+              })}
             </h3>
             <p className="fix-applyall-note">
-              Each is reversible — Compy snapshots the prior state and writes a separate undo for every
-              one. These tidy up your setup — not a performance boost.
-              {slim &&
-                " Recommended arrive ticked — untick anything you don't want; only what's ticked changes."}
+              {t("optimize.fix.applyAllNote")}
+              {slim && t("optimize.fix.applyAllNoteSlimSuffix")}
             </p>
             <ul className="fix-applyall-list">
               {safeBatch.map((r) =>
@@ -1210,7 +1254,7 @@ export default function Fix({
                         checked={sheetSelected.has(r.id)}
                         disabled={batching}
                         onChange={() => toggleSheetItem(r.id)}
-                        aria-label={`Include ${r.title}`}
+                        aria-label={t("optimize.fix.includeAriaLabel", { title: r.title })}
                       />
                       <span className="fix-applyall-pick-text">
                         <span className="fix-applyall-item-title">{r.title}</span>
@@ -1232,7 +1276,7 @@ export default function Fix({
                 disabled={batching}
                 onClick={() => setSheetOpen(false)}
               >
-                Cancel
+                {t("optimize.fix.cancel")}
               </button>
               <button
                 className="fix-applyall-go"
@@ -1240,10 +1284,10 @@ export default function Fix({
                 onClick={runApplyAll}
               >
                 {batching
-                  ? "Applying…"
+                  ? t("optimize.fix.applyingEllipsis")
                   : slim
-                    ? `Apply selected (${sheetSelected.size})`
-                    : `Apply all (${safeBatch.length})`}
+                    ? t("optimize.fix.applySelectedCount", { count: sheetSelected.size })
+                    : t("optimize.fix.applyAllCount", { count: safeBatch.length })}
               </button>
             </div>
           </div>
@@ -1256,7 +1300,7 @@ export default function Fix({
           Answers Sarah's only question: "what is Compy doing to my machine right now?" */}
       {showActive && active.length > 0 && (
         <>
-          <div className="fix-section-label">Active on this PC</div>
+          <div className="fix-section-label">{t("optimize.fix.activeOnThisPc")}</div>
           <ul className="fix-list">
             {active.map((c) => (
               <ActiveChangeCard
@@ -1287,16 +1331,16 @@ export default function Fix({
           ledger/applied views so standalone Tune (view="all") renders exactly as before. */}
       {(view === "applied" || view === "ledger") && active.length === 0 && (
         <p className="fix-empty">
-          Nothing active on this PC — anything Compy applies shows up here with one-tap undo.
+          {t("optimize.fix.nothingActiveOnThisPc")}
         </p>
       )}
 
       {/* History (ledger Layer 2) — the complete audit trail, collapsed; click a row for its
           receipt. Rolled-back + superseded entries stay, muted. */}
       {showHistory && history.length > 0 && (
-        <CollapsibleSection title="History" count={visibleHistory.length} tint="applied">
+        <CollapsibleSection title={t("optimize.fix.history")} count={visibleHistory.length} tint="applied">
           <p className="fix-refuse-intro">
-            The complete trail — applied, rolled back, superseded. Click any row for its receipt.
+            {t("optimize.fix.historyIntro")}
           </p>
           {/* A5 "this rig only" — rendered ONLY when some entry is KNOWN to be from other
               hardware (a filter with nothing to filter is noise). Hides exactly the entries whose
@@ -1308,10 +1352,10 @@ export default function Fix({
                 checked={thisRigOnly}
                 onChange={(e) => chooseThisRigOnly(e.target.checked)}
               />
-              This rig only
+              {t("optimize.fix.thisRigOnly")}
               {thisRigOnly && (
                 <span className="fix-rig-hidden">
-                  {otherRigCount} from other hardware hidden
+                  {t("optimize.fix.otherHardwareHidden", { count: otherRigCount })}
                 </span>
               )}
             </label>
@@ -1333,11 +1377,9 @@ export default function Fix({
           and OUT of the completion denominator, so they never block "all handled" or nag. */}
       {notForThisRig.length + overriddenRecs.length > 0 && (
         <SidePileItem order={SIDE_PILE_ORDER.notForThisRig}>
-        <CollapsibleSection title="Not for this rig" count={notForThisRig.length} tint="refuse">
+        <CollapsibleSection title={t("optimize.fix.notForThisRig")} count={notForThisRig.length} tint="refuse">
           <p className="fix-refuse-intro">
-            Compy detected these don't apply to your hardware — set aside, and left out of your
-            "all handled" count. If a hardware read is wrong (a dock, an adapter, a new part),
-            you can override it.
+            {t("optimize.fix.notForThisRigIntro")}
           </p>
           <ul className="fix-list">
             {notForThisRig.map((r) => (
@@ -1346,12 +1388,12 @@ export default function Fix({
                   <RecTitle id={r.id} title={r.title} />
                 </div>
                 <p className="fix-row-reason">
-                  {r.ineligible_reason ?? "Not applicable to this rig's hardware."}
+                  {r.ineligible_reason ?? t("optimize.fix.notApplicableFallback")}
                 </p>
                 {/* A5 override — reversible; the rec rejoins the normal list through the SAME
                     audited apply path. The user is asserting the detection, not skipping safety. */}
                 <button className="fix-dismiss" onClick={() => override(r.id)}>
-                  My hardware supports this — show it anyway
+                  {t("optimize.fix.myHardwareSupportsThis")}
                 </button>
               </li>
             ))}
@@ -1359,14 +1401,14 @@ export default function Fix({
               <li key={r.id} className="fix-refuse-row">
                 <div className="fix-row-head">
                   <RecTitle id={r.id} title={r.title} />
-                  <span className="fix-override-chip">overridden by you</span>
+                  <span className="fix-override-chip">{t("optimize.fix.overriddenByYou")}</span>
                 </div>
                 <p className="fix-row-reason">
-                  Treated as eligible — it now appears in your list. Compy's read was:{" "}
-                  {r.ineligible_reason ?? "not applicable to this rig's hardware."}
+                  {t("optimize.fix.compysReadWasPrefix")}{" "}
+                  {r.ineligible_reason ?? t("optimize.fix.notApplicableFallbackLower")}
                 </p>
                 <button className="fix-dismiss" onClick={() => clearOverride(r.id)}>
-                  Set aside again
+                  {t("optimize.fix.setAsideAgain")}
                 </button>
               </li>
             ))}
@@ -1379,9 +1421,9 @@ export default function Fix({
           denominator but one tap from restore, so a 100% reached by dismissing is a LABELED 100%. */}
       {dismissedRecs.length > 0 && (
         <SidePileItem order={SIDE_PILE_ORDER.dismissed}>
-        <CollapsibleSection title="Dismissed" count={dismissedRecs.length} tint="applied">
+        <CollapsibleSection title={t("optimize.fix.dismissed")} count={dismissedRecs.length} tint="applied">
           <p className="fix-refuse-intro">
-            You set these aside. They're out of your active count — restore any one anytime.
+            {t("optimize.fix.dismissedIntro")}
           </p>
           {/* A5 override-all: one control to undo every "Not for me" at once, so a user who
               dismissed a pile while setting up isn't stuck tapping Restore row by row. Shown only
@@ -1392,10 +1434,10 @@ export default function Fix({
                 className="fix-restore"
                 onClick={() => dismissedRecs.forEach((r) => restore(r.id))}
               >
-                Restore all ({dismissedRecs.length})
+                {t("optimize.fix.restoreAllCount", { count: dismissedRecs.length })}
               </button>
               <span className="fix-applyall-hint">
-                brings every dismissed item back into your active list
+                {t("optimize.fix.restoreAllHint")}
               </span>
             </div>
           )}
@@ -1409,7 +1451,7 @@ export default function Fix({
                   <RecReason id={r.id} text={r.impact || r.description} />
                 </div>
                 <button className="fix-restore" onClick={() => restore(r.id)}>
-                  Restore
+                  {t("optimize.fix.restore")}
                 </button>
               </li>
             ))}
@@ -1421,28 +1463,30 @@ export default function Fix({
       {/* Not worth touching — the refuse-pile. What Compy won't do, and why, with the autopsy link. */}
       <SidePileItem order={SIDE_PILE_ORDER.refusePile}>
       <CollapsibleSection
-        title={view === "fixes" ? "Deliberately refused" : "Not worth touching"}
+        title={view === "fixes" ? t("optimize.fix.deliberatelyRefused") : t("optimize.fix.notWorthTouching")}
         count={REFUSE_PILE.length}
         tint="refuse"
         icon={<ShieldOff />}
       >
         <p className="fix-refuse-intro">
-          Popular tweaks Compy deliberately refuses — the reason for each, with the full
-          autopsy a click away.
+          {t("optimize.fix.refusePileIntro")}
         </p>
         <ul className="fix-list">
-          {REFUSE_PILE.map((r) => (
-            <li key={r.id} className="fix-refuse-row">
-              <div className="fix-row-head">
-                <span className="fix-row-title">{r.name}</span>
-              </div>
-              <p className="fix-row-reason">{r.why}</p>
-              <ExpertTargetLine id={r.id} />
-              <button className="fix-autopsy" onClick={() => onOpenLibrary(r.id)}>
-                Read the autopsy →
-              </button>
-            </li>
-          ))}
+          {REFUSE_PILE.map((r) => {
+            const key = REFUSE_PILE_KEY[r.id];
+            return (
+              <li key={r.id} className="fix-refuse-row">
+                <div className="fix-row-head">
+                  <span className="fix-row-title">{t(`optimize.fix.refusePile.${key}.name`)}</span>
+                </div>
+                <p className="fix-row-reason">{t(`optimize.fix.refusePile.${key}.why`)}</p>
+                <ExpertTargetLine id={r.id} />
+                <button className="fix-autopsy" onClick={() => onOpenLibrary(r.id)}>
+                  {t("optimize.fix.readTheAutopsy")}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       </CollapsibleSection>
       </SidePileItem>
@@ -1455,11 +1499,9 @@ export default function Fix({
           // "cold and insignificant" catch was burial, not insignificance), grouped by what
           // they need from you: a judgment call + a few steps outside Compy.
           <>
-            <div className="fix-section-label">Needs your call</div>
+            <div className="fix-section-label">{t("optimize.fix.needsYourCall")}</div>
             <p className="fix-refuse-intro">
-              Detected, but Compy won't change these for you — they live in a vendor app or a
-              Windows page with no safe, reversible switch. Here's exactly where each one lives,
-              with the steps.
+              {t("optimize.fix.advisoryIntro")}
             </p>
             <ul className="fix-list">
               {advisory.map((rec) => (
@@ -1468,10 +1510,9 @@ export default function Fix({
             </ul>
           </>
         ) : (
-          <CollapsibleSection title="Compy points the way" count={advisory.length}>
+          <CollapsibleSection title={t("optimize.fix.compyPointsTheWay")} count={advisory.length}>
             <p className="fix-refuse-intro">
-              Detected, but Compy won't change these for you — they live in a vendor app or a Windows
-              page with no safe, reversible switch. Here's exactly where each one lives, with the steps.
+              {t("optimize.fix.advisoryIntro")}
             </p>
             <ul className="fix-list">
               {advisory.map((rec) => (
@@ -1483,10 +1524,9 @@ export default function Fix({
 
       {/* Startup apps — user-scope auto-start entries; toggle off to stop them launching with Windows. */}
       {startup.length > 0 && (
-        <CollapsibleSection title="Startup apps" count={startup.length}>
+        <CollapsibleSection title={t("optimize.fix.startupApps")} count={startup.length}>
           <p className="fix-refuse-intro">
-            Apps that launch with Windows. Toggle one off to keep it from auto-starting — reversible,
-            nothing is deleted.
+            {t("optimize.fix.startupAppsIntro")}
           </p>
           <ul className="fix-list">
             {startup.map((entry) => (

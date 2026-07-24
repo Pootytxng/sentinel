@@ -1,20 +1,26 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import type { LicenseStatus } from "../types";
+// Side-effect import: guarantees the i18next instance is initialized before this file's t() calls run.
+import "../i18n";
 
 // Compy Pro — the license status + key-entry surface (DARK foundation, model-agnostic). Reads
 // `get_license_status`; while licensing is disarmed the backend reports free with reason
 // "licensing not active", so we show ONLY the honest free state and no entry form (no dead-end). When
 // the owner arms licensing (real public key + a chosen model), the entry form appears and a valid Pro
 // key flips this to "Pro active." Never paywalls safety — this surface only reports a tier.
-function friendlyReason(reason: string): string {
-  if (reason.includes("expired")) return "That license has expired.";
-  if (reason.includes("signature") || reason.includes("malformed")) return "That key doesn't look valid.";
-  if (reason === "licensing not active") return "Pro isn't available yet.";
+// `t` threaded in explicitly (not a component/hook, so it can't call useTranslation() itself).
+function friendlyReason(reason: string, t: (key: string) => string): string {
+  if (reason.includes("expired")) return t("common.licensePanel.reasonExpired");
+  if (reason.includes("signature") || reason.includes("malformed"))
+    return t("common.licensePanel.reasonInvalid");
+  if (reason === "licensing not active") return t("common.licensePanel.reasonNotAvailable");
   return "";
 }
 
 export function LicensePanel() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<LicenseStatus | null>(null);
   const [showEntry, setShowEntry] = useState(false);
   const [keyInput, setKeyInput] = useState("");
@@ -39,28 +45,29 @@ export function LicensePanel() {
         setStatus(s);
         if (s.valid) setShowEntry(false);
       })
-      .catch((e) => setError(typeof e === "string" ? e : "Couldn't save that key."))
+      .catch((e) => setError(typeof e === "string" ? e : t("common.licensePanel.saveError")))
       .finally(() => setSaving(false));
   };
 
   return (
     <section className="set-section">
-      <h2 className="set-section-title">License</h2>
+      <h2 className="set-section-title">{t("common.licensePanel.title")}</h2>
       <div className="set-license">
         {isPro ? (
           <p className="set-license-status set-license-pro">
-            ✓ Compy Pro is active{status?.expires_at ? ` · renews ${status.expires_at.split("T")[0]}` : ""}.
+            {status?.expires_at
+              ? t("common.licensePanel.proActiveWithExpiry", {
+                  date: status.expires_at.split("T")[0],
+                })
+              : t("common.licensePanel.proActiveNoExpiry")}
           </p>
         ) : (
-          <p className="set-license-status">
-            You're on the free version. All of Compy's core — including everything safety-critical —
-            is free.
-          </p>
+          <p className="set-license-status">{t("common.licensePanel.freeVersion")}</p>
         )}
 
         {!isPro && armed && !showEntry && (
           <button className="set-license-link" onClick={() => setShowEntry(true)}>
-            Have a license key?
+            {t("common.licensePanel.haveKey")}
           </button>
         )}
 
@@ -70,12 +77,12 @@ export function LicensePanel() {
               className="set-license-input"
               value={keyInput}
               onChange={(e) => setKeyInput(e.target.value)}
-              placeholder="Paste your license key"
-              aria-label="License key"
+              placeholder={t("common.licensePanel.placeholder")}
+              aria-label={t("common.licensePanel.keyAriaLabel")}
               spellCheck={false}
             />
             <button className="set-license-btn cmp-door" onClick={submit} disabled={saving || !keyInput.trim()}>
-              {saving ? "Checking…" : "Apply"}
+              {saving ? t("common.licensePanel.checking") : t("common.licensePanel.apply")}
             </button>
             {error ? (
               <p className="set-license-note">{error}</p>
@@ -83,8 +90,8 @@ export function LicensePanel() {
               status &&
               !status.valid &&
               keyInput.trim() !== "" &&
-              friendlyReason(status.reason) && (
-                <p className="set-license-note">{friendlyReason(status.reason)}</p>
+              friendlyReason(status.reason, t) && (
+                <p className="set-license-note">{friendlyReason(status.reason, t)}</p>
               )
             )}
           </div>

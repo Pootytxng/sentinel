@@ -3,6 +3,7 @@
 // score. Everything here is a real count off real readiness/priorities data; the component only
 // renders these. If you can't derive it honestly from the inputs, it doesn't appear.
 
+import type { TFunction } from "i18next";
 import type { GameReadiness, Priorities, SessionSummary } from "../types";
 import { deriveSystemPosture } from "./system-posture";
 import { latestSession } from "./dashboard-data";
@@ -24,18 +25,22 @@ export type PostureLine = {
   tone: PostureTone;
 };
 
+// i18n note: `t` is threaded through as the LAST param (this is a plain data module, not a
+// component — it can't call useTranslation() itself) — every call site passes its own `t` from
+// useTranslation(). Mirrors ago()/smoothness() elsewhere in this codebase.
 export function postureLine(
   readiness: GameReadiness | null,
   priorities: Priorities | null,
   activeChanges: number,
+  t: TFunction,
 ): PostureLine {
-  const p = deriveSystemPosture({ readiness, activeChanges, monitoringAvailable: true });
+  const p = deriveSystemPosture({ readiness, activeChanges, monitoringAvailable: true }, t);
 
   if (p.state === "attention") {
     return {
       headline: p.headline,
       sentence: p.sub,
-      reassurance: "Nothing changes without your say-so.",
+      reassurance: t("home.posture.noChangeWithoutSayso"),
       tone: "attention",
     };
   }
@@ -47,16 +52,14 @@ export function postureLine(
   const limiterCount = priorities?.limiters.length ?? 0;
   const sentence =
     limiterCount > 0
-      ? `Ready to play — ${limiterCount} worth fixing.`
-      : "Ready to play — this rig measured clean today.";
+      ? t("home.posture.readyWorthFixing", { count: limiterCount })
+      : t("home.posture.readyMeasuredClean");
   const changeNote =
-    activeChanges > 0
-      ? `${activeChanges} safe change${activeChanges === 1 ? "" : "s"} active & reversible. `
-      : "";
+    activeChanges > 0 ? t("home.posture.changeNoteReversible", { count: activeChanges }) : "";
   return {
     headline: p.headline,
     sentence,
-    reassurance: `${changeNote}Nothing changes without your say-so.`,
+    reassurance: `${changeNote}${t("home.posture.noChangeWithoutSayso")}`,
     tone: "ready",
   };
 }
@@ -73,12 +76,12 @@ export type LiveStrip =
       startedAt: string;
     };
 
-export function liveStrip(sessions: SessionSummary[]): LiveStrip {
+export function liveStrip(sessions: SessionSummary[], t: TFunction): LiveStrip {
   const s = latestSession(sessions);
   if (!s) return { kind: "empty" };
   return {
     kind: "data",
-    game: prettyGameName(s.process_name) || "Last session",
+    game: prettyGameName(s.process_name) || t("home.posture.lastSessionFallback"),
     avgFps: s.avg_fps,
     low1Est: s.low1_fps_est,
     peakTempC: s.peak_gpu_temp_c,

@@ -3,6 +3,7 @@
 import type { Status } from "../design";
 import type { BenchComponent, Verdict, TrialVerdict } from "../types";
 import { rigTierLine, type RigTier } from "../data/rig-tier";
+import type { TFunction } from "i18next";
 
 const COMPONENT_LABELS: Record<BenchComponent, string> = {
   cpu: "CPU",
@@ -11,8 +12,9 @@ const COMPONENT_LABELS: Record<BenchComponent, string> = {
   disk: "Disk",
 };
 
-export function componentLabel(c: BenchComponent): string {
-  return COMPONENT_LABELS[c];
+export function componentLabel(c: BenchComponent, t?: TFunction): string {
+  if (!t) return COMPONENT_LABELS[c];
+  return t(`gaming.benchmark.componentLabels.${c}`, { defaultValue: COMPONENT_LABELS[c] });
 }
 
 const VERDICT_LABELS: Record<Verdict, string> = {
@@ -21,8 +23,10 @@ const VERDICT_LABELS: Record<Verdict, string> = {
   regressed: "Regressed",
 };
 
-export function verdictLabel(v: Verdict): string {
-  return VERDICT_LABELS[v];
+export function verdictLabel(v: Verdict, t?: TFunction): string {
+  if (!t) return VERDICT_LABELS[v];
+  const key = v === "improved" ? "improved" : v === "regressed" ? "regressed" : "noChange";
+  return t(`gaming.benchmark.verdictLabels.${key}`, { defaultValue: VERDICT_LABELS[v] });
 }
 
 /** Map an efficacy verdict to a status-pill tone. "No measurable change" is neutral
@@ -42,10 +46,12 @@ export function fmtDelta(pct: number): string {
 }
 
 // ── Live trial (game-frametime) verdict — Keep / Revert / Inconclusive ──
-export function trialVerdictLabel(v: TrialVerdict): string {
-  if (v.verdict === "keep") return "Helped";
-  if (v.verdict === "revert") return "Hurt — reverted";
-  return "No measurable change";
+export function trialVerdictLabel(v: TrialVerdict, t?: TFunction): string {
+  const fallback =
+    v.verdict === "keep" ? "Helped" : v.verdict === "revert" ? "Hurt — reverted" : "No measurable change";
+  if (!t) return fallback;
+  const key = v.verdict === "keep" ? "helped" : v.verdict === "revert" ? "hurtReverted" : "noChange";
+  return t(`gaming.benchmark.trialVerdict.${key}`, { defaultValue: fallback });
 }
 
 export function trialVerdictTone(v: TrialVerdict): Status {
@@ -54,17 +60,21 @@ export function trialVerdictTone(v: TrialVerdict): Status {
   return "info"; // "no measurable change" — a determined null, neutral not amber
 }
 
-export function trialReasonText(reason: string): string {
-  switch (reason) {
-    case "within-noise":
-      return "the change stayed within your rig's run-to-run noise";
-    case "conditions-unstable":
-      return "conditions were too noisy to measure reliably — try again";
-    case "invalid-trial":
-      return "the run was invalid — the GPU throttled or its clock/temperature drifted mid-run — and was discarded";
-    default:
-      return reason;
-  }
+export function trialReasonText(reason: string, t?: TFunction): string {
+  const fallbacks: Record<string, string> = {
+    "within-noise": "the change stayed within your rig's run-to-run noise",
+    "conditions-unstable": "conditions were too noisy to measure reliably — try again",
+    "invalid-trial":
+      "the run was invalid — the GPU throttled or its clock/temperature drifted mid-run — and was discarded",
+  };
+  const fallback = fallbacks[reason] ?? reason;
+  if (!t || !(reason in fallbacks)) return fallback;
+  const keyMap: Record<string, string> = {
+    "within-noise": "withinNoise",
+    "conditions-unstable": "conditionsUnstable",
+    "invalid-trial": "invalidTrial",
+  };
+  return t(`gaming.benchmark.trialReason.${keyMap[reason]}`, { defaultValue: fallback });
 }
 
 // ── Combined-effect attribution (panel-review brief 2026-07-15 §2) ──
@@ -74,14 +84,27 @@ export function trialReasonText(reason: string): string {
  * only speak for the stack: the lead says "combined" and the caveat refuses to split the
  * credit. A multi-change delta must never read as any single change's win.
  */
-export function changeAttribution(count: number): { lead: string; caveat: string | null } {
+export function changeAttribution(count: number, t?: TFunction): { lead: string; caveat: string | null } {
   if (count > 1) {
     return {
-      lead: "Measuring the combined effect of:",
-      caveat: `These ${count} changes were measured together, so the result is their combined effect — it can't be credited to any one of them.`,
+      lead: t
+        ? t("gaming.benchmark.attributionLeadMulti", { defaultValue: "Measuring the combined effect of:" })
+        : "Measuring the combined effect of:",
+      caveat: t
+        ? t("gaming.benchmark.attributionCaveatMulti", {
+            defaultValue:
+              "These {{count}} changes were measured together, so the result is their combined effect — it can't be credited to any one of them.",
+            count,
+          })
+        : `These ${count} changes were measured together, so the result is their combined effect — it can't be credited to any one of them.`,
     };
   }
-  return { lead: "Measuring the effect of:", caveat: null };
+  return {
+    lead: t
+      ? t("gaming.benchmark.attributionLeadSingle", { defaultValue: "Measuring the effect of:" })
+      : "Measuring the effect of:",
+    caveat: null,
+  };
 }
 
 /**
@@ -138,10 +161,11 @@ export function benchRigTier(hw: RigSpecs): { tier: RigTier; basis: string } | n
  * (too few wins → backend sends null; or a non-finite value), so the UI shows nothing rather than
  * a meaningless number. Strictly LOCAL — there is no peer/network cohort (that's Phase C, gated).
  */
-export function fmtLocalWinTopPct(percentile: number | null | undefined): string | null {
+export function fmtLocalWinTopPct(percentile: number | null | undefined, t?: TFunction): string | null {
   if (percentile == null || !Number.isFinite(percentile)) return null;
   const top = Math.min(100, Math.max(1, Math.round(100 - percentile)));
-  return `Top ${top}% of your verified wins`;
+  if (!t) return `Top ${top}% of your verified wins`;
+  return t("gaming.benchmark.localWinTopPct", { defaultValue: "Top {{top}}% of your verified wins", top });
 }
 
 /**
@@ -149,7 +173,14 @@ export function fmtLocalWinTopPct(percentile: number | null | undefined): string
  * the rounded "top N%" bucket. Same input contract and null-guards as fmtLocalWinTopPct; no
  * clamping — the raw number IS the point. Display-only over the already-computed value.
  */
-export function fmtLocalWinPercentile(percentile: number | null | undefined): string | null {
+export function fmtLocalWinPercentile(percentile: number | null | undefined, t?: TFunction): string | null {
   if (percentile == null || !Number.isFinite(percentile)) return null;
-  return `Percentile ${percentile.toFixed(1)} of your verified wins (top ${(100 - percentile).toFixed(1)}%)`;
+  const percentileStr = percentile.toFixed(1);
+  const topPct = (100 - percentile).toFixed(1);
+  if (!t) return `Percentile ${percentileStr} of your verified wins (top ${topPct}%)`;
+  return t("gaming.benchmark.localWinPercentile", {
+    defaultValue: "Percentile {{percentile}} of your verified wins (top {{topPct}}%)",
+    percentile: percentileStr,
+    topPct,
+  });
 }

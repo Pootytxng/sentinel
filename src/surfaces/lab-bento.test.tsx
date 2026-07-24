@@ -5,14 +5,33 @@ import { render, fireEvent, cleanup } from "@testing-library/react";
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(null)) }));
 
 import Lab from "./Lab";
-import { LAB_STATION_ORDER, LAB_STATIONS, stationReading } from "./lab-guided-data";
+import { LAB_STATION_ORDER, labStations, stationReading as stationReadingRaw } from "./lab-guided-data";
 import {
-  LAB_NOTES,
-  labBentoCards,
-  labCheckup,
+  labNotes,
+  labBentoCards as labBentoCardsRaw,
+  labCheckup as labCheckupRaw,
   stationHasReading,
 } from "./lab-bento-data";
 import type { LabStationFacts } from "./lab-guided-data";
+// i18n update (2026-07-23): labStations/labNotes/stationReading/labBentoCards/labCheckup now
+// take a TFunction as their last param (Simplified Chinese translation pass) instead of literal
+// English strings. These test-local wrappers/aliases resolve them through the real i18next
+// instance (English is the default language, matching what every assertion below already
+// expects) so every call site below stays exactly as written — same text, just sourced from
+// locale JSON instead of a .ts literal.
+import i18n from "../i18n";
+
+const LAB_STATIONS = labStations(i18n.t);
+const LAB_NOTES = labNotes(i18n.t);
+const stationReading = (
+  key: Parameters<typeof stationReadingRaw>[0],
+  f: Parameters<typeof stationReadingRaw>[1],
+) => stationReadingRaw(key, f, i18n.t);
+const labBentoCards = (
+  keys: Parameters<typeof labBentoCardsRaw>[0],
+  f: Parameters<typeof labBentoCardsRaw>[1],
+) => labBentoCardsRaw(keys, f, i18n.t);
+const labCheckup = (cards: Parameters<typeof labCheckupRaw>[0]) => labCheckupRaw(cards, i18n.t);
 
 // Guards for the Lab bento checkup (spec 2026-07-05-lab-bento-checkup; DEFAULT ON since the
 // owner approval 2026-07-06). These pin the reversibility contract (flag "0" — the Settings

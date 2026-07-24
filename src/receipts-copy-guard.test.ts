@@ -18,15 +18,24 @@ import { join } from "path";
 const receiptsRs = readFileSync(join("src-tauri", "src", "receipts.rs"), "utf8");
 
 // Watched absolute telemetry claims that must be reworded before/when receipts arms.
+//
+// i18n update (2026-07-23): SetupTour.tsx and Settings.tsx had their copy extracted into
+// src/i18n/locales/en/*.json as part of the Simplified Chinese translation — the English text is
+// unchanged (still the source of truth for what ships in English), it just moved from a literal
+// in the .tsx to a value in the matching locale JSON, read by the component via t(...). Per this
+// guard's own doctrine above ("if the copy moved/changed, update WATCHED"), the `file` entries
+// below now point at the JSON that actually carries the phrase. Onboarding.tsx (retired/unmounted)
+// and setup-steps.ts (test-pinned pure data module) were deliberately left untouched by that pass,
+// so those two entries still point at the original .tsx/.ts source.
 const WATCHED: { file: string; phrase: string }[] = [
   { file: join("src", "Onboarding.tsx"), phrase: "no telemetry" },
   {
     file: join("src", "surfaces", "setup", "setup-steps.ts"),
     phrase: "No telemetry. These never change.",
   },
-  { file: join("src", "surfaces", "setup", "SetupTour.tsx"), phrase: "no telemetry" },
+  { file: join("src", "i18n", "locales", "en", "home.json"), phrase: "no telemetry" },
   {
-    file: join("src", "surfaces", "Settings.tsx"),
+    file: join("src", "i18n", "locales", "en", "settings.json"),
     phrase: "no telemetry, nothing leaves your PC",
   },
 ];

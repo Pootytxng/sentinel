@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import type { ArcTone } from "./ArcGauge";
+// Side-effect import: guarantees the i18next instance is initialized before this file's t() calls run.
+import "../../i18n";
 import "./oscilloscope.css";
 
 // Console kit — Oscilloscope (plan 2026-07-10-console-hud-phase3-monitor Task 2; v3 upgrade per
@@ -96,6 +99,7 @@ export function Oscilloscope({
    *  pointer math shares the exact drawn geometry. The component itself stays stateless. */
   stageProps?: React.HTMLAttributes<HTMLDivElement>;
 }) {
+  const { t } = useTranslation();
   const win = samples.length > cap ? samples.slice(-cap) : samples;
   const empty = win.length === 0;
 
@@ -141,7 +145,7 @@ export function Oscilloscope({
         <span>{label}</span>
         {worstIdx >= 0 && (
           <span className="osc-worst">
-            worst spike {Math.round(win[worstIdx])} {unit ?? ""}
+            {t("common.oscilloscope.worstSpike", { value: Math.round(win[worstIdx]), unit: unit ?? "" })}
           </span>
         )}
         {latest !== null && (
@@ -226,7 +230,7 @@ export function Oscilloscope({
             {v.toFixed(v < 10 ? 1 : 0)}
           </span>
         ))}
-        {empty && <span className="osc-nosignal">no signal</span>}
+        {empty && <span className="osc-nosignal">{t("common.oscilloscope.noSignal")}</span>}
       </div>
     </figure>
   );

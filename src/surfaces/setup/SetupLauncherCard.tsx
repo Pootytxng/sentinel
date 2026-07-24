@@ -1,3 +1,7 @@
+import { useTranslation } from "react-i18next";
+// Side-effect import: guarantees the i18next singleton is initialized even when this component
+// is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
+import "../../i18n";
 import "./SetupLauncherCard.css";
 
 // The always-present Home affordance that opens the Setup & Tour. Dispatches a window event (mirrors
@@ -7,6 +11,7 @@ import "./SetupLauncherCard.css";
 export const START_TOUR_EVENT = "compy:start-tour";
 
 export function SetupLauncherCard() {
+  const { t } = useTranslation();
   return (
     <button
       type="button"
@@ -19,13 +24,11 @@ export function SetupLauncherCard() {
         <span className="stl-core" />
       </span>
       <span className="stl-text">
-        <span className="stl-title">Set up &amp; tour Compy</span>
-        <span className="stl-sub">
-          A guided setup and a 3D fly-through of everything Compy does — about 2 minutes.
-        </span>
+        <span className="stl-title">{t("home.setupLauncherCard.title")}</span>
+        <span className="stl-sub">{t("home.setupLauncherCard.sub")}</span>
       </span>
       <span className="stl-go" aria-hidden="true">
-        Start ▸
+        {t("home.setupLauncherCard.start")}
       </span>
     </button>
   );

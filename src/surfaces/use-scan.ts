@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import type { TFunction } from "i18next";
 import type { GameReadiness, ReadinessCheck, Priorities } from "../types";
 import { peekProbe, putProbe } from "../data/probe-cache";
 
@@ -7,12 +8,20 @@ import { peekProbe, putProbe } from "../data/probe-cache";
 // copy anywhere (a friend, a forum, a build note). PURE + read-only — it only restates what Compy
 // already measured, never a new claim, never a promise ("advisory only · measured on this rig"), and
 // never fabricates a limiter on a clean rig. Zero IPC; the caller copies the string to the clipboard.
+//
+// i18n note: `t` is threaded through as the LAST param (this is a plain data module, not a
+// component — it can't call useTranslation() itself) — both call sites (Check.tsx, OptimizeV2.tsx)
+// pass their own `t` from useTranslation(). Its new keys live under the shared
+// optimize.setupSummary.* sub-namespace (optimize.json) since this builder serves two rooms.
+// Mirrors ago()/smoothness() elsewhere in this codebase. `l.title` stays untranslated — it's
+// already-localized data from the priorities engine, not a literal string in this module.
 export function buildSetupSummary(
   readiness: GameReadiness | null,
   priorities: Priorities | null,
+  t: TFunction,
 ): string {
   if (!readiness) return "";
-  const lines: string[] = ["Compy setup summary", ""];
+  const lines: string[] = [t("optimize.setupSummary.title"), ""];
 
   // Readiness breakdown — only the non-zero buckets, so a clean rig reads "N checks · N ready".
   const total = readiness.checks.length;
@@ -21,37 +30,42 @@ export function buildSetupSummary(
   // branch-proper counts (never "1 need attention") — the V2-9 punch (e)/(f) laws, applied to
   // the shareable summary too so pasted text reads as well as the screen.
   if (readiness.ready_count > 0)
-    parts.push(`${readiness.ready_count} look${readiness.ready_count === 1 ? "s" : ""} good`);
+    parts.push(t("optimize.setupSummary.readinessLooksGood", { count: readiness.ready_count }));
   if (readiness.attention_count > 0)
     parts.push(
-      `${readiness.attention_count} need${readiness.attention_count === 1 ? "s" : ""} attention`,
+      t("optimize.setupSummary.readinessNeedsAttention", { count: readiness.attention_count }),
     );
-  if (readiness.advisory_count > 0) parts.push(`${readiness.advisory_count} advisory`);
-  if (readiness.unknown_count > 0) parts.push(`${readiness.unknown_count} unknown`);
+  if (readiness.advisory_count > 0)
+    parts.push(t("optimize.setupSummary.readinessAdvisoryCount", { count: readiness.advisory_count }));
+  if (readiness.unknown_count > 0)
+    parts.push(t("optimize.setupSummary.readinessUnknownCount", { count: readiness.unknown_count }));
   lines.push(
     parts.length > 0
-      ? `${total} check${total === 1 ? "" : "s"} · ${parts.join(", ")}`
-      : `${total} check${total === 1 ? "" : "s"}`,
+      ? t("optimize.setupSummary.checksTotalWithBreakdown", {
+          count: total,
+          breakdown: parts.join(", "),
+        })
+      : t("optimize.setupSummary.checksTotal", { count: total }),
   );
   lines.push("");
 
   // What's worth a look — the ranked limiters, named. Never invented: a clean rig says so plainly.
   const limiters = priorities?.limiters ?? [];
   if (limiters.length > 0) {
-    lines.push("Worth a look:");
+    lines.push(t("optimize.setupSummary.worthALookHeader"));
     for (const l of limiters) lines.push(`- ${l.title}`);
   } else {
-    lines.push("Nothing worth changing today — measured clean on this rig.");
+    lines.push(t("optimize.setupSummary.nothingWorthChangingToday"));
   }
 
   const fine = priorities?.already_fine ?? [];
   if (fine.length > 0) {
     lines.push("");
-    lines.push(`${fine.length} check${fine.length === 1 ? "" : "s"} measured fine already.`);
+    lines.push(t("optimize.setupSummary.checksMeasuredFineAlready", { count: fine.length }));
   }
 
   lines.push("");
-  lines.push("Advisory only · measured on this rig by Compy — no performance promised.");
+  lines.push(t("optimize.setupSummary.advisoryOnlyFooter"));
   return lines.join("\n");
 }
 

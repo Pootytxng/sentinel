@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import type {
   AppliedChange,
   BenchComponent,
@@ -21,12 +22,12 @@ import { changeAttribution, changesBetweenRuns } from "./benchmark-view";
 
 export type LabVerdictLine = { headline: string; sub?: string };
 
-const COMPONENT_LABEL: Record<BenchComponent, string> = {
-  cpu: "CPU",
-  ram: "RAM",
-  gpu: "GPU",
-  disk: "Disk",
-};
+const componentLabel = (t: TFunction): Record<BenchComponent, string> => ({
+  cpu: t("lab.labV2.componentLabels.cpu"),
+  ram: t("lab.labV2.componentLabels.ram"),
+  gpu: t("lab.labV2.componentLabels.gpu"),
+  disk: t("lab.labV2.componentLabels.disk"),
+});
 
 // "+4.2%" / "-6.3%" — the sign IS the evidence, never dropped on positives.
 const fmtDelta = (pct: number): string => `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
@@ -36,15 +37,21 @@ const fmtFloor = (pct: number): string =>
   Number.isInteger(pct) ? `${pct}%` : `${pct.toFixed(1)}%`;
 
 // The components that earned the overall grade, with their measured deltas.
-const evidence = (per: ComponentEfficacy[], verdict: string): string =>
-  per
+const evidence = (per: ComponentEfficacy[], verdict: string, t: TFunction): string => {
+  const label = componentLabel(t);
+  return per
     .filter((c) => c.verdict === verdict)
-    .map((c) => `${COMPONENT_LABEL[c.component]} ${fmtDelta(c.delta_pct)}`)
+    .map((c) => `${label[c.component]} ${fmtDelta(c.delta_pct)}`)
     .join(" · ");
+};
 
+// i18n note: `t` is threaded through as the LAST param (this is a plain data module, not a
+// component — it can't call useTranslation() itself) — every call site passes its own `t` from
+// useTranslation(). Mirrors ago()/smoothness() elsewhere in this codebase.
 export function labVerdict(
   bench: BenchmarkState | null,
   changes: AppliedChange[] = [],
+  t: TFunction,
 ): LabVerdictLine {
   const efficacy = bench?.efficacy ?? null;
   if (efficacy) {
@@ -55,43 +62,43 @@ export function labVerdict(
     const stacked = changesBetweenRuns(bench, changes);
     const combined = changeAttribution(stacked.length).caveat;
     if (efficacy.overall === "improved") {
-      const ev = evidence(efficacy.per_component, "improved");
+      const ev = evidence(efficacy.per_component, "improved", t);
       const graded = ev
-        ? `Measured: ${ev} — graded against a ${floor} noise floor.`
-        : `Graded against a ${floor} noise floor.`;
+        ? t("lab.labV2.verdict.gradedWithEvidence", { evidence: ev, floor })
+        : t("lab.labV2.verdict.gradedNoEvidence", { floor });
       if (combined) {
         return {
-          headline: "Your last benchmarked changes improved this PC together.",
+          headline: t("lab.labV2.verdict.headline.improvedStacked"),
           sub: `${graded} ${combined}`,
         };
       }
-      return { headline: "Your last benchmarked change improved this PC.", sub: graded };
+      return { headline: t("lab.labV2.verdict.headline.improvedSingle"), sub: graded };
     }
     if (efficacy.overall === "regressed") {
-      const ev = evidence(efficacy.per_component, "regressed");
+      const ev = evidence(efficacy.per_component, "regressed", t);
       const graded = ev
-        ? `Measured: ${ev} — graded against a ${floor} noise floor.`
-        : `Graded against a ${floor} noise floor.`;
+        ? t("lab.labV2.verdict.gradedWithEvidence", { evidence: ev, floor })
+        : t("lab.labV2.verdict.gradedNoEvidence", { floor });
       if (combined) {
         return {
-          headline: "Your last benchmarked changes made things worse together.",
-          sub: `${graded} ${combined} Undo them, or re-run to confirm.`,
+          headline: t("lab.labV2.verdict.headline.regressedStacked"),
+          sub: `${graded} ${combined} ${t("lab.labV2.verdict.undoStacked")}`,
         };
       }
       return {
-        headline: "Your last benchmarked change made things worse.",
-        sub: `${graded} Undo it, or re-run to confirm.`,
+        headline: t("lab.labV2.verdict.headline.regressedSingle"),
+        sub: `${graded} ${t("lab.labV2.verdict.undoSingle")}`,
       };
     }
-    const noise = `Every component stayed inside the ${floor} noise floor — we call that noise, not a win.`;
+    const noise = t("lab.labV2.verdict.noise", { floor });
     if (combined) {
       return {
-        headline: "Your last benchmarked changes made no measurable difference.",
+        headline: t("lab.labV2.verdict.headline.noChangeStacked"),
         sub: `${noise} ${combined}`,
       };
     }
     return {
-      headline: "Your last benchmarked change made no measurable difference.",
+      headline: t("lab.labV2.verdict.headline.noChangeSingle"),
       sub: noise,
     };
   }
@@ -100,13 +107,13 @@ export function labVerdict(
     // baseline was saved — so the sub repeats neither (V2-9 punch j: the same fact never
     // renders twice on one screen).
     return {
-      headline: "Baseline recorded — your next benchmark run gets graded against it.",
-      sub: "The grade lands here the moment you re-run.",
+      headline: t("lab.labV2.verdict.baselineRecorded.headline"),
+      sub: t("lab.labV2.verdict.baselineRecorded.sub"),
     };
   }
   return {
-    headline: "Nothing graded in the Lab yet.",
-    sub: "Start with Benchmark — set a baseline, change one thing, re-run. Compy tells you if it actually moved.",
+    headline: t("lab.labV2.verdict.nothingGraded.headline"),
+    sub: t("lab.labV2.verdict.nothingGraded.sub"),
   };
 }
 
@@ -120,52 +127,58 @@ export function labVerdict(
 // an instrument with no reading yet is an honest "—" — no placeholder number, ever.
 export type LabReading = { label: string; value: string };
 
-export function labLatestReadings(f: {
-  bench: BenchmarkState | null;
-  latency: LatencyReport | null;
-  // present = the Tuning instrument renders on this rig (vendor gate); headline = measureTuning's
-  // verdict when a measurement exists.
-  tuning: { present: boolean; headline: string | null };
-  // null = the user hasn't scanned yet this visit (Black Box is on-demand) — honestly unread.
-  crash: BlackBoxReport | null;
-  // present = the Diagnostics instrument renders; captured = the system report actually has sections.
-  diagnostics: { present: boolean; captured: boolean };
-}): LabReading[] {
+export function labLatestReadings(
+  f: {
+    bench: BenchmarkState | null;
+    latency: LatencyReport | null;
+    // present = the Tuning instrument renders on this rig (vendor gate); headline = measureTuning's
+    // verdict when a measurement exists.
+    tuning: { present: boolean; headline: string | null };
+    // null = the user hasn't scanned yet this visit (Black Box is on-demand) — honestly unread.
+    crash: BlackBoxReport | null;
+    // present = the Diagnostics instrument renders; captured = the system report actually has sections.
+    diagnostics: { present: boolean; captured: boolean };
+  },
+  t: TFunction,
+): LabReading[] {
   const baselineDate = f.bench?.baseline_at ? new Date(f.bench.baseline_at) : null;
   const readings: LabReading[] = [
     {
-      label: "Baseline",
+      label: t("lab.lab.readings.baselineLabel"),
       value:
         baselineDate && !isNaN(baselineDate.getTime())
           ? baselineDate.toLocaleDateString()
           : f.bench?.baseline
-            ? "set"
+            ? t("lab.lab.readings.baselineSet")
             : "—",
     },
     {
-      label: "Latency",
+      label: t("lab.lab.readings.latencyLabel"),
       value:
         f.latency == null
           ? "—"
           : f.latency.timer_current_ms != null
-            ? `timer ${f.latency.timer_current_ms.toFixed(2)} ms`
-            : `MSI ${f.latency.msi.msi_on} on`,
+            ? t("lab.lab.readings.latencyTimer", { ms: f.latency.timer_current_ms.toFixed(2) })
+            : t("lab.lab.readings.latencyMsiOn", { on: f.latency.msi.msi_on }),
     },
   ];
   if (f.tuning.present) {
-    readings.push({ label: "Tuning", value: f.tuning.headline ?? "—" });
+    readings.push({ label: t("lab.lab.readings.tuningLabel"), value: f.tuning.headline ?? "—" });
   }
   readings.push({
-    label: "Black Box",
+    label: t("lab.lab.readings.blackBoxLabel"),
     value:
       f.crash == null
         ? "—"
         : f.crash.incidents.length === 0
-          ? "none found"
-          : `${f.crash.incidents.length} recorded`,
+          ? t("lab.lab.readings.blackBoxNoneFound")
+          : t("lab.lab.readings.blackBoxRecorded", { n: f.crash.incidents.length }),
   });
   if (f.diagnostics.present) {
-    readings.push({ label: "System report", value: f.diagnostics.captured ? "captured" : "—" });
+    readings.push({
+      label: t("lab.lab.readings.systemReportLabel"),
+      value: f.diagnostics.captured ? t("lab.lab.readings.systemReportCaptured") : "—",
+    });
   }
   return readings;
 }

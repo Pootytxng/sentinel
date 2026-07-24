@@ -1,5 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import type {
   AppliedChange,
   GameReadiness,
@@ -29,8 +31,8 @@ import { safeFixesReadyList } from "./optimize-v2-data";
 import { RerunCheckBand } from "./RerunCheckBand";
 import { deriveReverted } from "./use-scan";
 import {
-  HOME_INTAKE_ROWS,
-  HOME_INTAKE_FASTPATH,
+  homeIntakeRows,
+  homeIntakeFastpath,
   fastPathReadyHeadline,
   fastPathApplyLabel,
   fastPathAppliedNote,
@@ -103,9 +105,13 @@ const shortModel = (n: string | undefined): string | undefined =>
 // RAM speed for the rig annotation (consumer panel 2026-07-14: capacity alone hid the speed/EXPO
 // story the cards view already tells). Measured module speed only — no reading, no claim; the
 // below-rated case mirrors HardwareGrid's actionable EXPO/XMP flag in compact form.
-const ramSpeedNote = (mods: HardwareInfo["memory_modules"]): string | undefined => {
+const ramSpeedNote = (mods: HardwareInfo["memory_modules"], t: TFunction): string | undefined => {
   const below = mods.find((m) => m.xmp_expo_status === "running_below_rated" && m.rated_speed_mhz > 0);
-  if (below) return `${below.speed_mhz} of ${below.rated_speed_mhz} MT/s — EXPO/XMP off in BIOS`;
+  if (below)
+    return t("home.homeConsole.callout.ramBelowRated", {
+      speed: below.speed_mhz,
+      rated: below.rated_speed_mhz,
+    });
   const m = mods.find((x) => x.speed_mhz > 0);
   return m ? `${m.speed_mhz} MT/s` : undefined;
 };
@@ -118,28 +124,34 @@ const fmtGB0 = (b: number) => `${Math.round(b / 1024 ** 3)}`;
 const fmtDiskSize = (b: number) =>
   b >= 1000 * 1024 ** 3 ? `${(b / 1024 ** 4).toFixed(1)} TB` : `${fmtGB0(b)} GB`;
 
-export const denseGpu = (g: HardwareInfo["gpus"][number] | undefined): [string, string][] => {
+export const denseGpu = (
+  g: HardwareInfo["gpus"][number] | undefined,
+  t: TFunction,
+): [string, string][] => {
   if (!g) return [];
-  const rows: [string, string][] = [["model", g.name]];
-  if (g.vram_bytes > 0) rows.push(["VRAM", `${fmtGB0(g.vram_bytes)} GB`]);
-  if (g.driver_version) rows.push(["driver", g.driver_version]);
-  if (g.driver_date) rows.push(["driver date", g.driver_date]);
+  const rows: [string, string][] = [[t("home.homeConsole.dense.model"), g.name]];
+  if (g.vram_bytes > 0) rows.push([t("home.homeConsole.dense.vram"), `${fmtGB0(g.vram_bytes)} GB`]);
+  if (g.driver_version) rows.push([t("home.homeConsole.dense.driver"), g.driver_version]);
+  if (g.driver_date) rows.push([t("home.homeConsole.dense.driverDate"), g.driver_date]);
   return rows;
 };
 
-export const denseCpu = (hw: HardwareInfo): [string, string][] => {
+export const denseCpu = (hw: HardwareInfo, t: TFunction): [string, string][] => {
   const rows: [string, string][] = [];
-  if (hw.cpu_brand) rows.push(["model", hw.cpu_brand]);
+  if (hw.cpu_brand) rows.push([t("home.homeConsole.dense.model"), hw.cpu_brand]);
   if (hw.cpu_cores_physical > 0)
-    rows.push(["cores", `${hw.cpu_cores_physical}c / ${hw.cpu_cores_logical}t`]);
+    rows.push([
+      t("home.homeConsole.dense.cores"),
+      `${hw.cpu_cores_physical}c / ${hw.cpu_cores_logical}t`,
+    ]);
   if (hw.cpu_frequency_mhz > 0)
-    rows.push(["clock", `${(hw.cpu_frequency_mhz / 1000).toFixed(1)} GHz`]);
+    rows.push([t("home.homeConsole.dense.clock"), `${(hw.cpu_frequency_mhz / 1000).toFixed(1)} GHz`]);
   return rows;
 };
 
-export const denseRam = (mods: HardwareInfo["memory_modules"]): [string, string][] =>
+export const denseRam = (mods: HardwareInfo["memory_modules"], t: TFunction): [string, string][] =>
   mods.map((m, i) => [
-    `slot ${i + 1}`,
+    t("home.homeConsole.dense.slot", { n: i + 1 }),
     [
       m.capacity_bytes > 0 ? `${fmtGB0(m.capacity_bytes)} GB` : null,
       m.type_name || null,
@@ -179,6 +191,7 @@ function Callout({
   mono?: boolean;
   dense?: [string, string][];
 }) {
+  const { t } = useTranslation();
   const [pinned, setPinned] = useState(false);
   const [hovered, setHovered] = useState(false);
   const expandable = !!dense && dense.length > 0;
@@ -206,7 +219,7 @@ function Callout({
           type="button"
           className="hc-callout-btn"
           aria-expanded={open}
-          aria-label={`${name} details`}
+          aria-label={t("home.homeConsole.callout.detailsAria", { name })}
           onClick={() => setPinned((v) => !v)}
         >
           {head}
@@ -250,6 +263,7 @@ export function HomeConsole({
   isAppliable,
   onApplyBatch,
 }: Props) {
+  const { t } = useTranslation();
   const reduced = useReducedMotion();
   // Optional confirm — the fast path (default-OFF) is the only consumer, so HomeConsole must not
   // hard-require the provider on every mount (see useConfirmOptional). null → runFastPath no-ops.
@@ -385,8 +399,8 @@ export function HomeConsole({
   const { parts: manualParts } = useManualParts();
 
   // ── measured derivations (all real, all honestly empty when absent — HomeHud's exact logic) ──
-  const posture = postureLine(readiness, priorities, activeChangeCount(changes));
-  const strip = liveStrip(sessions);
+  const posture = postureLine(readiness, priorities, activeChangeCount(changes), t);
+  const strip = liveStrip(sessions, t);
   const rig = { refreshHz: hw.display?.current_refresh_rate_hz ?? null };
   const avgFps = strip.kind === "data" ? strip.avgFps : null;
   const lowFps = strip.kind === "data" ? strip.low1Est : null;
@@ -413,7 +427,10 @@ export function HomeConsole({
   // only the part that ADDS information; a fully-redundant sentence is omitted (the readout
   // strip still carries provenance). Text is still postureLine's real output — trimmed,
   // never rewritten.
-  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, "").trim();
+  // i18n note: Unicode-aware (\p{L}\p{N}, not a-z0-9) so this comparison still works once
+  // posture.headline/sentence are Chinese — the old ASCII-only class stripped CJK text down to
+  // "", which made every zh-CN dek compare as spuriously redundant (identical for English).
+  const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N} ]+/gu, "").trim();
   const headNorm = norm(posture.headline).replace(/^youre /, "");
   const sentNorm = norm(posture.sentence).replace(/^youre /, "");
   const dek = sentNorm.startsWith(headNorm)
@@ -496,11 +513,13 @@ export function HomeConsole({
   // stands down and lets the block own it — mirrors the verdictNamesLimiter/topLimiter and
   // dek/ForwardDoor standdowns above (self-reviewer catch 2026-07-14, rubric 3 duplication).
   const lastSessionRendered = !!intelHeadline;
-  const intakeRows = HOME_INTAKE_ROWS.filter(
+  const intakeRows = homeIntakeRows(t).filter(
     (row) =>
       rooms?.some((rm) => rm.key === row.room) && !(lastSessionRendered && row.room === "play"),
   );
   const intakeRenders = intakeOn && (fastPathAvailable || intakeRows.length > 0);
+  // Static fast-path copy (option C) — resolved once per render through the live `t`.
+  const fastpath = homeIntakeFastpath(t);
 
   // Option C's apply — mirrors FirstCheck's honest inline-apply idiom: confirm names the rollback
   // guarantee, then the ONE audited batch primitive applies only the safe stack. On success the
@@ -509,9 +528,9 @@ export function HomeConsole({
   const runFastPath = async () => {
     if (!confirm || !onApplyBatch || fastPathBusy || stackReady === 0) return;
     const ok = await confirm({
-      title: fastPathReadyHeadline(stackReady),
-      body: "Compy snapshots the prior state first, so you can roll every one back anytime from Applied.",
-      confirmLabel: fastPathApplyLabel(stackReady),
+      title: fastPathReadyHeadline(stackReady, t),
+      body: t("home.homeConsole.intake.fastpath.confirmBody"),
+      confirmLabel: fastPathApplyLabel(stackReady, t),
     });
     if (!ok) return;
     setFastPathBusy(true);
@@ -531,12 +550,12 @@ export function HomeConsole({
         <>
           <span className="hc-masthead-eyebrow">
             <span className={`hc-led hc-led-${ledState}`} aria-hidden="true" />
-            Rig diagnostic <span className="hc-eyebrow-sep">·</span>{" "}
+            {t("home.homeConsole.masthead.eyebrow")} <span className="hc-eyebrow-sep">·</span>{" "}
             <span className="hc-mono">{dateline}</span>
           </span>
           {/* Title only in the h1 (owner title-header law 2026-07-10 ×2) — the posture
               verdict lives in its body context strip above the stage. */}
-          <span className="hc-headline">Home</span>
+          <span className="hc-headline">{t("common.rail.home", { defaultValue: "Home" })}</span>
         </>
       }
       measured={<RerunCheckBand readiness={readiness} checking={checking} onRunCheck={onRunCheck} />}
@@ -557,33 +576,37 @@ export function HomeConsole({
             (option B door-hints declined — the band already carries the symptom→room map, so
             duplicating symptoms onto the doors would be the annoyance the owner warned against). */}
         {intakeRenders && (
-          <section className="hc-intake" aria-label="What are you here to do?">
-            <div className="hc-intake-head">What are you here to do?</div>
+          <section className="hc-intake" aria-label={t("home.homeConsole.intake.prompt")}>
+            <div className="hc-intake-head">{t("home.homeConsole.intake.prompt")}</div>
             {/* Option C — the always-available one-tap "just make it faster, safely" fast path.
                 Honest state machine: applied receipt › loading › all-clear › ready-with-apply. */}
             {fastPathAvailable && (
               <div className="hc-intake-fast">
-                <span className="hc-intake-fast-symptom">{HOME_INTAKE_FASTPATH.symptom}</span>
+                <span className="hc-intake-fast-symptom">{fastpath.symptom}</span>
                 {fastPathReceipt ? (
                   <span className="hc-intake-fast-line">
-                    {fastPathAppliedNote(fastPathReceipt.applied, fastPathReceipt.skipped)}
+                    {fastPathAppliedNote(fastPathReceipt.applied, fastPathReceipt.skipped, t)}
                   </span>
                 ) : recs === null ? (
-                  <span className="hc-intake-fast-line hc-mono">{HOME_INTAKE_FASTPATH.loading}</span>
+                  <span className="hc-intake-fast-line hc-mono">{fastpath.loading}</span>
                 ) : stackReady === 0 ? (
-                  <span className="hc-intake-fast-line">{HOME_INTAKE_FASTPATH.allClear}</span>
+                  <span className="hc-intake-fast-line">{fastpath.allClear}</span>
                 ) : (
                   <>
-                    <span className="hc-intake-fast-line">{fastPathReadyHeadline(stackReady)}</span>
+                    <span className="hc-intake-fast-line">
+                      {fastPathReadyHeadline(stackReady, t)}
+                    </span>
                     <button
                       type="button"
                       className="hc-btn hc-intake-fast-btn"
                       onClick={runFastPath}
                       disabled={fastPathBusy}
                     >
-                      {fastPathBusy ? "Applying…" : fastPathApplyLabel(stackReady)}
+                      {fastPathBusy
+                        ? t("home.homeConsole.intake.applying")
+                        : fastPathApplyLabel(stackReady, t)}
                     </button>
-                    <span className="hc-intake-fast-undo">↺ {HOME_INTAKE_FASTPATH.reversible}</span>
+                    <span className="hc-intake-fast-undo">↺ {fastpath.reversible}</span>
                   </>
                 )}
               </div>
@@ -629,21 +652,27 @@ export function HomeConsole({
             {/* The score's whole formula, stated where the number is (consumer-panel Phase 2:
                 a bare 0–100 read as a made-up number). */}
             <ArcGauge
-              label="Readiness"
+              label={t("home.homeConsole.stage.readinessLabel")}
               value={readinessScore}
               max={100}
               unit="score"
               tone="accent"
               note={
                 readinessKnown
-                  ? `= ${Math.max(0, readiness!.checks.length - readiness!.attention_count - readiness!.unknown_count)} of ${readiness!.checks.length} checks passed`
+                  ? t("home.homeConsole.stage.readinessNote", {
+                      passed: Math.max(
+                        0,
+                        readiness!.checks.length - readiness!.attention_count - readiness!.unknown_count,
+                      ),
+                      total: readiness!.checks.length,
+                    })
                   : undefined
               }
             />
           </div>
           <div className="hc-corner hc-tr">
             <ArcGauge
-              label="Avg FPS"
+              label={t("home.homeConsole.stage.avgFps")}
               value={avgFps}
               max={240}
               unit="fps"
@@ -655,7 +684,7 @@ export function HomeConsole({
             {/* First exposure of "1% low" in the app (the cold-open) — glossed inline, plan
                 2026-07-11 Phase 1 (the no-jargon promise). */}
             <ArcGauge
-              label={<Term id="one-percent-lows">1% low</Term>}
+              label={<Term id="one-percent-lows">{t("home.homeConsole.stage.onePercentLow")}</Term>}
               value={lowFps}
               max={240}
               unit="fps"
@@ -666,7 +695,7 @@ export function HomeConsole({
           <div className="hc-corner hc-br">
             {/* NVIDIA renders neutral tone (LOCKED rule 5 — sensor not hardware-verified). */}
             <ArcGauge
-              label="GPU temp"
+              label={t("home.homeConsole.stage.gpuTemp")}
               value={gpuTemp}
               max={100}
               unit="°C"
@@ -676,7 +705,9 @@ export function HomeConsole({
           </div>
           <div className="hc-rig">
             {rig3d ? (
-              <Suspense fallback={<div className="hc-stage-loading">Loading your rig in 3D…</div>}>
+              <Suspense
+                fallback={<div className="hc-stage-loading">{t("home.homeConsole.stage.loading3d")}</div>}
+              >
                 <RigHologram
                   hw={hw}
                   exploded={exploded}
@@ -705,21 +736,21 @@ export function HomeConsole({
               <div className="hc-ann hc-ann-left">
                 <Callout
                   tone={mem ? gradeTone(mem.level === "ok" ? "good" : "bad") : null}
-                  name="RAM"
-                  detail={ramSpeedNote(hw.memory_modules)}
+                  name={t("home.homeConsole.callout.ram")}
+                  detail={ramSpeedNote(hw.memory_modules, t)}
                   value={
                     mem
                       ? `${fmtGB1(mem.used)} / ${fmtGB1(mem.total)} GB`
                       : `${fmtGB1(hw.ram_total_bytes)} GB`
                   }
                   valueTone={mem && mem.level !== "ok" ? "warn" : mem ? "ok" : null}
-                  dense={denseRam(hw.memory_modules)}
+                  dense={denseRam(hw.memory_modules, t)}
                 />
                 {diskPct != null && (
                   <Callout
                     tone={diskPct >= 90 ? "warn" : "ok"}
-                    name="Storage"
-                    value={`C: ${diskPct}% full`}
+                    name={t("home.homeConsole.callout.storage")}
+                    value={t("home.homeConsole.stage.diskFull", { pct: diskPct })}
                     valueTone={diskPct >= 90 ? "warn" : "ok"}
                     dense={denseStorage(hw.physical_disks)}
                   />
@@ -728,24 +759,24 @@ export function HomeConsole({
               <div className="hc-ann hc-ann-right">
                 <Callout
                   tone={null}
-                  name="GPU"
+                  name={t("home.homeConsole.callout.gpu")}
                   detail={shortModel(hw.gpus[0]?.name)}
-                  dense={denseGpu(hw.gpus[0])}
+                  dense={denseGpu(hw.gpus[0], t)}
                 />
                 <Callout
                   tone={null}
-                  name="CPU"
+                  name={t("home.homeConsole.callout.cpu")}
                   detail={hw.cpu_arch?.family_label || undefined}
-                  value="no temp — Compy won't ship a kernel driver"
+                  value={t("home.homeConsole.callout.cpuNoTemp")}
                   mono={false}
-                  dense={denseCpu(hw)}
+                  dense={denseCpu(hw, t)}
                 />
               </div>
             </>
           )}
           {/* Quiet view controls — the same persisted choices HomeHud offers, console chrome. */}
           <div className="hc-controls">
-            <div className="hc-seg-group" role="tablist" aria-label="Rig view">
+            <div className="hc-seg-group" role="tablist" aria-label={t("home.homeConsole.stage.rigViewAria")}>
               <button
                 type="button"
                 role="tab"
@@ -753,7 +784,7 @@ export function HomeConsole({
                 className={`hc-seg ${rig3d ? "hc-seg-on" : ""}`}
                 onClick={() => chooseRig3d(true)}
               >
-                3D
+                {t("home.homeConsole.stage.view3d")}
               </button>
               <button
                 type="button"
@@ -762,7 +793,7 @@ export function HomeConsole({
                 className={`hc-seg ${!rig3d ? "hc-seg-on" : ""}`}
                 onClick={() => chooseRig3d(false)}
               >
-                Cards
+                {t("home.homeConsole.stage.viewCards")}
               </button>
             </div>
             {rig3d && (
@@ -772,7 +803,9 @@ export function HomeConsole({
                   className={`hc-seg ${exploded ? "hc-seg-on" : ""}`}
                   onClick={() => setExploded((v) => !v)}
                 >
-                  {exploded ? "Reassemble" : "Exploded"}
+                  {exploded
+                    ? t("home.homeConsole.stage.reassemble")
+                    : t("home.homeConsole.stage.exploded")}
                 </button>
                 <button
                   type="button"
@@ -780,7 +813,7 @@ export function HomeConsole({
                   onClick={() => setAutoRotate((v) => !v)}
                   aria-pressed={autoRotate}
                 >
-                  Orbit
+                  {t("home.homeConsole.stage.orbit")}
                 </button>
               </div>
             )}
@@ -793,11 +826,13 @@ export function HomeConsole({
         {/* THE #1 LIMITER — micro-label · the measured title · quiet confidence tag · jump. */}
         {topLimiter && (
           <div className="hc-limiter">
-            <span className="hc-limiter-label">top limiter</span>
+            <span className="hc-limiter-label">{t("home.homeConsole.limiter.topLabel")}</span>
             <span className="hc-limiter-title">{topLimiter.title}</span>
-            <span className="hc-limiter-tag hc-mono">{topLimiter.confidence} confidence</span>
+            <span className="hc-limiter-tag hc-mono">
+              {t("home.homeConsole.limiter.confidenceTag", { level: topLimiter.confidence })}
+            </span>
             <button type="button" className="hc-btn hc-btn-ghost" onClick={onSeeInFix}>
-              See in {fixRoomLabel}
+              {t("home.homeConsole.limiter.seeIn", { room: fixRoomLabel })}
             </button>
           </div>
         )}
@@ -808,7 +843,7 @@ export function HomeConsole({
             otherwise), and the door only shows when Monitor is actually on the rail. */}
         {intelHeadline && (
           <div className="hc-limiter">
-            <span className="hc-limiter-label">last session</span>
+            <span className="hc-limiter-label">{t("home.homeConsole.limiter.lastSessionLabel")}</span>
             <span className="hc-limiter-title">{intelHeadline.text}</span>
             {onNavigate && rooms?.some((r) => r.key === "play") && (
               <button
@@ -816,7 +851,9 @@ export function HomeConsole({
                 className="hc-btn hc-btn-ghost"
                 onClick={() => onNavigate("play")}
               >
-                See in {rooms.find((r) => r.key === "play")?.name}
+                {t("home.homeConsole.limiter.seeIn", {
+                  room: rooms.find((r) => r.key === "play")?.name,
+                })}
               </button>
             )}
           </div>

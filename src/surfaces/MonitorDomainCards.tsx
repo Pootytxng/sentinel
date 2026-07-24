@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import SpotlightCard from "../design/vendor/SpotlightCard/SpotlightCard";
 import { gradeRamPct, gradeColor } from "../data/metric-grade";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import type { GpuVendor } from "./walkthroughs";
 import { fmtGB, fmtGHz } from "./hardware-format";
+import "../i18n";
 import {
   CpuMonitorPanel,
   GpuMonitorPanel,
@@ -93,6 +95,7 @@ export function MonitorDomainCards({
   mem: MemoryPressure | null;
   reduced: boolean;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState<CardId | null>(null);
   const latestCpu = cpuSamples[cpuSamples.length - 1] ?? null;
   const latestGpu = gpuSamples[gpuSamples.length - 1] ?? [];
@@ -129,8 +132,8 @@ export function MonitorDomainCards({
   if (latestCpu) {
     cards.push({
       id: "cpu",
-      label: "CPU",
-      sub: `${latestCpu.usage_per_core_pct.length} cores${latestCpu.frequency_mhz > 0 ? ` · ${fmtGHz(latestCpu.frequency_mhz)}` : ""}`,
+      label: t("monitor.monitorDomainCards.cpuCardLabel"),
+      sub: `${t("monitor.monitorDomainCards.cpuCoresSub", { count: latestCpu.usage_per_core_pct.length })}${latestCpu.frequency_mhz > 0 ? ` · ${fmtGHz(latestCpu.frequency_mhz)}` : ""}`,
       value: cpuPct == null ? "—" : String(cpuPct),
       unit: "%",
       donutPct: cpuPct,
@@ -150,7 +153,7 @@ export function MonitorDomainCards({
     const tempColor = gradeColor(gradeGpuTempForVendor(vendor, gpu.temperature_c));
     cards.push({
       id: `gpu-${gpu.vendor}-${gpu.index}`,
-      label: "GPU",
+      label: t("monitor.monitorDomainCards.gpuCardLabel"),
       sub: gpu.name,
       value: gpu.temperature_c == null ? "—" : String(Math.round(gpu.temperature_c)),
       unit: gpu.temperature_c == null ? "" : "°C",
@@ -169,7 +172,7 @@ export function MonitorDomainCards({
   if (latestCpu && latestCpu.ram_total_bytes > 0) {
     cards.push({
       id: "mem",
-      label: "Memory",
+      label: t("monitor.monitorDomainCards.memoryCardLabel"),
       sub: `${fmtGB(latestCpu.ram_used_bytes)} / ${fmtGB(latestCpu.ram_total_bytes)}`,
       value: ramPct == null ? "—" : String(ramPct),
       unit: "%",
@@ -186,14 +189,16 @@ export function MonitorDomainCards({
       detail: (
         <div className="monitor-panel">
           <div className="monitor-panel-head">
-            <div className="monitor-panel-name">Memory</div>
+            <div className="monitor-panel-name">{t("monitor.monitorDomainCards.memoryCardLabel")}</div>
             <div className="monitor-panel-sub">
-              {mem ? `pressure · ${mem.level}` : "pressure probe unavailable"}
+              {mem
+                ? `${t("monitor.monitorDomainCards.pressurePrefix")}${mem.level}`
+                : t("monitor.monitorDomainCards.pressureProbeUnavailable")}
             </div>
           </div>
           <div className="monitor-metrics">
             <MetricRow
-              label="Memory used"
+              label={t("monitor.monitorDomainCards.memoryUsedLabel")}
               value={ramPct}
               unit="%"
               history={cpuSamples.map((s) =>
@@ -206,7 +211,7 @@ export function MonitorDomainCards({
             />
             {mem && mem.swap_total_bytes > 0 && (
               <MetricRow
-                label="Swap used"
+                label={t("monitor.monitorDomainCards.swapUsedLabel")}
                 value={Math.round((mem.swap_used_bytes / mem.swap_total_bytes) * 100)}
                 unit="%"
                 history={[Math.round((mem.swap_used_bytes / mem.swap_total_bytes) * 100)]}
@@ -236,8 +241,8 @@ export function MonitorDomainCards({
   if (latestCpu) {
     cards.push({
       id: "cores",
-      label: "Cores",
-      sub: "per-core load",
+      label: t("monitor.monitorDomainCards.coresCardLabel"),
+      sub: t("monitor.monitorDomainCards.perCoreLoadSub"),
       value: "",
       unit: "",
       donutPct: null,
@@ -255,9 +260,9 @@ export function MonitorDomainCards({
       detail: (
         <div className="monitor-panel">
           <div className="monitor-panel-head">
-            <div className="monitor-panel-name">Per-core load</div>
+            <div className="monitor-panel-name">{t("monitor.monitorDomainCards.perCoreLoadTitle")}</div>
             <div className="monitor-panel-sub">
-              {latestCpu.usage_per_core_pct.length} logical cores
+              {t("monitor.monitorDomainCards.logicalCoresSub", { count: latestCpu.usage_per_core_pct.length })}
             </div>
           </div>
           <div className="cpu-core-grid">

@@ -21,6 +21,10 @@ const openUrlMock = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: openUrlMock }));
 
+// Side-effect init of the shared i18n instance (English default) so the component's t() calls
+// resolve to real English copy, not raw keys — the repo idiom for testing translated components.
+// The setup file deliberately does NOT init i18n. This does not weaken any boundary assertion below.
+import "../i18n";
 import FeedbackExport from "./FeedbackExport";
 
 beforeEach(() => {

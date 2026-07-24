@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import type { SessionSummary } from "../../types";
 
 // Monitor v5 "Flight Deck + Session Stack" pure math (plan 2026-07-11-monitor-v5-deck-stack,
@@ -100,16 +101,20 @@ export function fmtDeltaGlyph(v: number | null): string {
 
 // ── Labels ─────────────────────────────────────────────────────────────────────────────────
 
-/** Relative calendar-day label: today · yesterday · N days ago · "" (unparseable). */
-export function relativeDay(startedAt: string, now: Date): string {
+/** Relative calendar-day label: today · yesterday · N days ago · "" (unparseable). `t`
+ *  optional/trailing (i18n, 2026-07-23) — omitting it reproduces today's English exactly. */
+export function relativeDay(startedAt: string, now: Date, t?: TFunction): string {
   const d = new Date(startedAt);
   if (Number.isNaN(d.getTime())) return "";
   const day = (x: Date) =>
     Math.floor(new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime() / 86_400_000);
   const diff = day(now) - day(d);
-  if (diff <= 0) return "today";
-  if (diff === 1) return "yesterday";
-  return `${diff} days ago`;
+  if (diff <= 0) return t ? t("monitor.sessionStack.relativeDay.today", { defaultValue: "today" }) : "today";
+  if (diff === 1)
+    return t ? t("monitor.sessionStack.relativeDay.yesterday", { defaultValue: "yesterday" }) : "yesterday";
+  return t
+    ? t("monitor.sessionStack.relativeDay.daysAgo", { defaultValue: "{{n}} days ago", n: diff })
+    : `${diff} days ago`;
 }
 
 /** The exact local clock time `elapsedSecs` into a session — the worst-dip pin's time label.

@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+// Side-effect import: guarantees the i18next instance is initialized before this file's t() calls run.
+import "../i18n";
 import "./WindowChrome.css";
 
 // @tauri-apps/api declares ResizeDirection but doesn't export it; mirror the union locally (the
@@ -36,6 +39,7 @@ const RESIZE: { cls: string; dir: ResizeDirection }[] = [
 ];
 
 export function WindowChrome() {
+  const { t } = useTranslation();
   const [maxed, setMaxed] = useState(false);
 
   useEffect(() => {
@@ -54,14 +58,14 @@ export function WindowChrome() {
     <>
       <header className="wc-bar" data-tauri-drag-region>
         <div className="wc-left" data-tauri-drag-region>
-          <span className="wc-title">Compy</span>
+          <span className="wc-title">{t("common.windowChrome.title")}</span>
           {/* Settings lives in the always-visible titlebar so it's reachable on every tab + every
               responsive layout (the rail gear vanished on non-Home tabs). Signals across the tree
               via a window event — App listens (it's the same bridge as compy:*-changed). */}
           <button
             className="wc-action"
-            aria-label="Settings"
-            title="Settings"
+            aria-label={t("common.windowChrome.settings")}
+            title={t("common.windowChrome.settings")}
             onClick={() => window.dispatchEvent(new Event("compy:open-settings"))}
           >
             <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
@@ -73,8 +77,8 @@ export function WindowChrome() {
         <div className="wc-controls">
           <button
             className="wc-btn"
-            aria-label="Minimize"
-            title="Minimize"
+            aria-label={t("common.windowChrome.minimize")}
+            title={t("common.windowChrome.minimize")}
             onClick={() => getCurrentWindow().minimize().catch(() => {})}
           >
             <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
@@ -83,8 +87,8 @@ export function WindowChrome() {
           </button>
           <button
             className="wc-btn"
-            aria-label={maxed ? "Restore" : "Maximize"}
-            title={maxed ? "Restore" : "Maximize"}
+            aria-label={maxed ? t("common.windowChrome.restore") : t("common.windowChrome.maximize")}
+            title={maxed ? t("common.windowChrome.restore") : t("common.windowChrome.maximize")}
             onClick={() => getCurrentWindow().toggleMaximize().catch(() => {})}
           >
             {maxed ? (
@@ -100,8 +104,8 @@ export function WindowChrome() {
           </button>
           <button
             className="wc-btn wc-close"
-            aria-label="Close"
-            title="Close"
+            aria-label={t("common.windowChrome.close")}
+            title={t("common.windowChrome.close")}
             onClick={() => getCurrentWindow().close().catch(() => {})}
           >
             <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">

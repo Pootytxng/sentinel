@@ -1,0 +1,373 @@
+{
+  "homeConsole": {
+    "masthead": {
+      "eyebrow": "主机诊断"
+    },
+    "intake": {
+      "prompt": "你想做什么?",
+      "applying": "正在应用…",
+      "rows": {
+        "lastSession": {
+          "symptom": "我上一局游戏到底打得怎么样?",
+          "because": "回放你的场次总结——帧率、卡顿,以及发生了哪些变化"
+        },
+        "understandSetting": {
+          "symptom": "我想先搞懂一个设置,再决定要不要改",
+          "because": "先讲清楚实测有效的做法,再让你动手改"
+        },
+        "changeHelped": {
+          "symptom": "这次更改到底有没有用——还是我的错觉?",
+          "because": "用真实的前后对比打分,排除误差干扰——讲证据,不靠感觉"
+        },
+        "hotLoudBehind": {
+          "symptom": "主机发烫、风扇吵,或者操作有延迟感",
+          "because": "在你的这台主机上实测温度、噪音和鼠标到画面的延迟"
+        },
+        "crashedFroze": {
+          "symptom": "系统崩溃或卡死了,但我不知道为什么",
+          "because": "用大白话读取 Windows 自身的崩溃与卡死记录"
+        }
+      },
+      "fastpath": {
+        "symptom": "我只想让电脑更快——安全、不折腾",
+        "loading": "正在检查有哪些可以安全更改…",
+        "allClear": "所有安全优化项都已开启——你的主机已经调好了,这里没什么可做的。",
+        "reversible": "每次应用都会先保存撤销点——可随时在「已应用」中回滚。",
+        "confirmBody": "Compy 会先保存更改前的状态,你可以随时从「已应用」中把它们全部回滚。",
+        "ready_other": "{{count}} 项安全优化已就绪——一键搞定。",
+        "apply_other": "应用 {{count}} 项安全优化 · 一键搞定",
+        "appliedPart_other": "已应用 {{count}} 项安全优化",
+        "appliedAllReversible": "{{appliedPart}}——可在「已应用」中全部回滚。",
+        "skippedPart_other": "{{count}} 项被跳过",
+        "appliedWithSkipped": "{{appliedPart}} · {{skippedPart}}——可在「已应用」中全部回滚。"
+      }
+    },
+    "callout": {
+      "detailsAria": "{{name}}详情",
+      "ram": "内存",
+      "ramBelowRated": "{{speed}} / {{rated}} MT/s——BIOS 中未开启 EXPO/XMP",
+      "storage": "存储",
+      "gpu": "GPU",
+      "cpu": "CPU",
+      "cpuNoTemp": "无温度读数——Compy 不会内置内核驱动"
+    },
+    "dense": {
+      "model": "型号",
+      "vram": "VRAM",
+      "driver": "驱动版本",
+      "driverDate": "驱动日期",
+      "cores": "核心数",
+      "clock": "主频",
+      "slot": "插槽 {{n}}"
+    },
+    "stage": {
+      "readinessLabel": "就绪度",
+      "readinessNote": "= {{total}} 项检测中通过 {{passed}} 项",
+      "avgFps": "平均 FPS",
+      "onePercentLow": "1% 低帧",
+      "gpuTemp": "GPU 温度",
+      "loading3d": "正在以 3D 方式加载你的主机…",
+      "rigViewAria": "主机视图",
+      "view3d": "3D",
+      "viewCards": "卡片",
+      "reassemble": "还原",
+      "exploded": "爆炸视图",
+      "orbit": "环绕旋转",
+      "diskFull": "C 盘已用 {{pct}}%"
+    },
+    "limiter": {
+      "topLabel": "首要限制因素",
+      "lastSessionLabel": "上次会话",
+      "seeIn": "在「{{room}}」中查看",
+      "confidenceTag": "{{level}} 置信度"
+    }
+  },
+  "homeHud": {
+    "masthead": {
+      "eyebrow": "主机诊断"
+    },
+    "callout": {
+      "ram": "内存",
+      "storage": "存储",
+      "diskFull": "C 盘已用 {{pct}}%",
+      "gpu": "GPU",
+      "cpu": "CPU",
+      "cpuNoTemp": "无温度读数——Compy 不会内置内核驱动"
+    },
+    "stage": {
+      "loading3d": "正在以 3D 方式加载你的主机…",
+      "hint": "拖动可环绕旋转 · 点击部件查看实时参数"
+    },
+    "bay": {
+      "title": "你的主机",
+      "rigViewAria": "主机视图",
+      "view3d": "3D",
+      "viewCards": "卡片",
+      "reassemble": "还原",
+      "exploded": "爆炸视图",
+      "orbit": "环绕旋转"
+    },
+    "readout": {
+      "running": "正在检测…",
+      "checksPre": "已检测",
+      "checksPost": "项",
+      "attentionLabel": "需关注"
+    },
+    "actions": {
+      "rerun": "重新检测"
+    },
+    "ledger": {
+      "lastSession": "上次会话",
+      "lastSessionGame": "上次会话 — {{game}}",
+      "vsHz": "对比 {{hz}} Hz",
+      "fpsAvg": "平均 FPS",
+      "onePercentLowLabel": "1% 低帧",
+      "estimateSuffix": "(预估)",
+      "noSession": "还没有记录——去玩一局吧,Compy 会在游戏之外自动捕捉数据。",
+      "traceCaption": "平均 FPS · 最近 {{count}} 场",
+      "activeChangesLabel": "生效变更",
+      "activeChangesNote": "每一项都可在台账中回滚",
+      "trustLedgerLabel": "信任台账",
+      "changesTracked_other": "项变更已记录",
+      "latest": "最近一次:{{title}}",
+      "nothingApplied": "尚未应用任何更改——你的 PC 保持原样",
+      "driftWatchLabel": "漂移监测",
+      "driftPending": "漂移状态将随本次检测更新",
+      "driftNone": "没有设置漂移——所有已应用的更改仍然有效",
+      "driftCount_other": "{{count}} 项设置已漂移 · {{names}}",
+      "driftMore": " · 还有 {{count}} 项",
+      "driveHealthLabel": "硬盘健康",
+      "driveHealthUnknown": "这台主机没有 SMART 读数——Compy 不会瞎猜硬盘健康状况",
+      "driveCountOk_other": "{{count}} 块硬盘 · SMART 正常",
+      "driveFlaggedSuffix": " · 请备份重要数据"
+    },
+    "docket": {
+      "title": "优先事项队列",
+      "note": "根据你的硬件排序",
+      "clean": "今天没有需要更改的地方——这台主机测得很干净。",
+      "biggestLimiter": "最大限制因素",
+      "confidenceTag": "{{level}} 置信度",
+      "seeIn": "在「{{room}}」中查看"
+    }
+  },
+  "homeV2": {
+    "tag": {
+      "ram": "内存",
+      "storage": "存储",
+      "diskFull": "C 盘已用 {{pct}}%",
+      "gpu": "GPU",
+      "cpu": "CPU",
+      "cpuNoTemp": "无温度——设计如此"
+    },
+    "stage": {
+      "hint": "拖动可环绕旋转 · 点击部件查看实时参数 · 所有状态均为实测,绝不臆测",
+      "loading": "正在初始化全息影像…"
+    },
+    "hero": {
+      "title": "你的主机",
+      "rigViewAria": "主机视图",
+      "view3d": "3D",
+      "viewCards": "卡片",
+      "reassemble": "还原",
+      "exploded": "爆炸视图",
+      "orbit": "环绕旋转"
+    },
+    "header": {
+      "checksMeasured": "{{done}}/{{total}} 项检测已完成",
+      "noAttention": " · 没有需要紧急处理的问题",
+      "needsAttention_other": " · {{count}} 项需要处理",
+      "runningChecks": "正在检测…"
+    },
+    "actions": {
+      "rerun": "重新检测"
+    },
+    "stats": {
+      "lastSession": "上次会话",
+      "lastSessionGame": "上次会话 · {{game}}",
+      "fpsAvg": "平均 FPS",
+      "onePercentLowLabel": "1% 低帧",
+      "estimateSuffix": "(预估)",
+      "noSession": "去玩一局吧——Compy 会在游戏之外自动捕捉数据。",
+      "activeChangesLabel": "生效变更",
+      "activeChangesNote": "每一项都可在台账中回滚",
+      "trustLedgerLabel": "信任台账",
+      "changesTracked_other": "项变更已记录",
+      "latest": "最近一次:{{title}}",
+      "nothingApplied": "尚未应用任何更改——你的 PC 保持原样",
+      "driftWatchLabel": "漂移监测",
+      "driftPending": "漂移状态将随本次检测更新",
+      "driftNone": "没有设置漂移",
+      "driftNoneNote": "所有已应用的更改仍然有效",
+      "driftCount_other": "{{count}} 项设置已漂移",
+      "driftMore": " · 还有 {{count}} 项",
+      "driveHealthLabel": "硬盘健康",
+      "driveHealthUnknown": "这台主机没有 SMART 读数——Compy 不会瞎猜硬盘健康状况",
+      "drivesHealthy": "硬盘状态良好",
+      "driveCountOk_other": "{{count}} 块硬盘 · SMART 正常",
+      "smartFlagged_other": "SMART 已标记 {{count}} 块硬盘——请备份重要数据"
+    },
+    "priorities": {
+      "title": "值得关注",
+      "note": "根据你的硬件排序,而非泛泛而谈",
+      "clean": "今天没有需要更改的地方——这台主机测得很干净。换成其他工具可能会硬凑一个问题出来,但 Compy 不会。",
+      "biggestLimiter": "最大限制因素",
+      "confidenceTag": "{{level}} 置信度",
+      "seeIn": "在「{{room}}」中查看"
+    }
+  },
+  "posture": {
+    "scanning": {
+      "headline": "正在扫描你的系统…",
+      "sub": "正在读取硬件信息并执行检测。"
+    },
+    "unknown": {
+      "headline": "数据还不足以判断",
+      "sub": "运行一次扫描以查看就绪状态。"
+    },
+    "attentionMore": "{{label}} · 还有 {{count}} 项",
+    "dialedInHeadline": "你可以开玩了",
+    "dialedInSub": "所有就绪检测均已通过 · {{changeNote}}。",
+    "changeNote_other": "{{count}} 项安全更改生效中,可随时回滚",
+    "noChangeNote": "没有需要更改的地方",
+    "readyWorthFixing": "可以开玩了——有 {{count}} 项值得修复。",
+    "readyMeasuredClean": "可以开玩了——这台主机今天测得很干净。",
+    "changeNoteReversible_other": "{{count}} 项安全更改生效中,可随时回滚。",
+    "noChangeWithoutSayso": "未经你同意,绝不更改任何东西。",
+    "lastSessionFallback": "上次会话"
+  },
+  "trustMoment": {
+    "sectionAria": "看 Compy 演示",
+    "heading": "看它演示",
+    "offer": {
+      "bodyPre": "Compy 的核心承诺就是:每一次更改都可回滚,且有回执可查。来看一次真实演示——",
+      "bodyPost": "会通过和所有更改完全相同的路径被应用,然后恢复到现在这个状态。大约十秒钟,不会碰其他任何东西。"
+    },
+    "actions": {
+      "watch": "看它演示",
+      "noThanks": "不用了",
+      "gotIt": "知道了",
+      "close": "关闭"
+    },
+    "live": {
+      "applyingPrefix": "1/3 · 正在应用 ",
+      "appliedPrefix": "1/3 · 已应用 ✓ — ",
+      "applyingSuffix": "…",
+      "receiptPre": "2/3 · 回执已写入你的信任台账——将恢复为",
+      "defaultRestoreValue": "此前的原始值",
+      "rollingBack": "3/3 · 正在回滚…",
+      "rolledBack": "3/3 · 已回滚 ✓——你的设置和之前完全一样。"
+    },
+    "done": {
+      "body": "这就是每一次更改都会经历的流程:应用、开具回执、可回滚。这两步都会记录在你的信任台账中。"
+    },
+    "errors": {
+      "applyFailed": "未能应用:{{error}}。你的 PC 未发生任何更改。",
+      "rollbackFailed": "应用成功,但回滚未能完成:{{error}}。该更改仍然生效,你可以在实验室的「已应用与历史记录」中手动撤销。"
+    }
+  },
+  "compyHero": {
+    "sectionAria": "欢迎使用 Compy",
+    "titlePre": "欢迎使用",
+    "tagline": "你的 PC 各项指标——实测,绝不臆测。",
+    "pills": {
+      "measured": "实测",
+      "reversible": "可回滚",
+      "yours": "由你做主"
+    }
+  },
+  "bootTheater": {
+    "skipAria": "跳到结论",
+    "railLabel": "系统检测",
+    "measuring": "检测中——这台主机的真实读数,绝不猜测",
+    "tagWorthFixing": "值得修复",
+    "queued_other": "{{count}} 项待检测",
+    "skipHint": "点击跳过"
+  },
+  "setupLauncherCard": {
+    "title": "设置与导览 Compy",
+    "sub": "一次引导式设置,外加一段 Compy 全部功能的 3D 漫游导览——大约 2 分钟。",
+    "start": "开始 ▸"
+  },
+  "setupTour": {
+    "leg": {
+      "setup": "引导设置",
+      "tour": "硬件导览"
+    },
+    "dialogAria": "Compy 设置与导览",
+    "skipAria": "跳过设置与导览",
+    "skip": "跳过 ✕",
+    "stageLoading": "正在初始化全息影像…",
+    "footer": {
+      "back": "上一步",
+      "next": "下一步",
+      "finish": "完成",
+      "stepAria": "第 {{current}} 步,共 {{total}} 步",
+      "stepCount": "{{current}} / {{total}}"
+    },
+    "rig": {
+      "tag": "你的主机",
+      "title": "Compy 刚刚读取了你的主机信息",
+      "bodyPre": "你将看到的每一条建议,都是专为",
+      "bodyEmph": "这台主机",
+      "bodyPost": "量身定制——没有一条是泛泛而谈,也没有一条无法撤销。"
+    },
+    "seatbelt": {
+      "tag": "安全带",
+      "title": "一键应用,一键撤销。",
+      "demoName": "电源计划",
+      "demoSub": "推荐:高性能 · 当前:平衡",
+      "undoAria": "撤销电源计划(演示)",
+      "applyAria": "应用电源计划(演示)",
+      "ledger": "信任台账 — 电源计划 · 平衡 → 高性能 · 刚刚",
+      "bodyPre": "试试看——这个开关可以真实交互(但不会改变这里的任何设置)。每一次真实的更改都会被记录进",
+      "bodyPost": "标签页的台账里,并保留更改前的状态。今天能撤销,六个月后一样能撤销。"
+    },
+    "rules": {
+      "tag": "使用守则",
+      "title": "Compy 绝不会做的事",
+      "noKernelDriver": "无内核驱动——始终运行在用户态",
+      "noInjection": "不注入游戏进程——设计上对反作弊系统安全",
+      "wifiOff": "任何信息都不会离开你的电脑——无需账号,无遥测数据",
+      "kickerPre": "可疑的优化项并非缺失。",
+      "kickerEmph": "而是被拒绝了。"
+    },
+    "check": {
+      "tag": "首次检测",
+      "spotlightTag": "#1 最大限制因素",
+      "applyConfirmTitle": "应用「{{title}}」?",
+      "confirmBody": "Compy 会先保存之前的状态,你可以随时回滚。",
+      "applyLabel": "应用",
+      "applyFailedTitle": "未能应用该修复",
+      "ok": "确定",
+      "turnOnConfirmTitle": "将「{{title}}」重新打开?",
+      "turnOn": "重新打开",
+      "turnOnFailedTitle": "未能重新打开该设置",
+      "readingTitle": "正在读取你的主机…",
+      "runningChecks": "正在执行真实检测",
+      "elapsedSuffix": " · {{elapsed}} 秒",
+      "elapsedPending": "…",
+      "noGuessing": "绝不猜测——Compy 实测这台主机,然后告诉你真相。",
+      "readyClean": "可以开玩了——这台主机测得很干净",
+      "readyFixing_other": "可以开玩了——有 {{count}} 项值得修复",
+      "revertedTitle_other": "你应用过的 {{count}} 项设置已被关闭",
+      "revertedReason_other": "你曾用 Compy 打开:{{names}},但它们现在已被关闭。可以在这里重新打开。",
+      "turningOn": "正在打开…",
+      "turnBackOn": "重新打开",
+      "turnTitleOn": "打开「{{title}}」",
+      "gameModeNote": "提示:游戏模式会不断被关闭,因为你的录制软件(AMD Adrenalin)每次重启都会重置它——打开是有效的,但无法保持开启。",
+      "applying": "正在应用…",
+      "applyFix": "应用此修复",
+      "advisory": "仅供参考——没有一键修复选项",
+      "checksClean": "{{count}} 项检测全部通过——基于这台主机的实测,而非假设。",
+      "reversibleFooter": "全部可撤销。接下来,快速浏览一下你的主机——点击「下一步」。"
+    },
+    "lesson": {
+      "drivesLabel": "影响",
+      "tweaksHead": "Compy 可在此调节的设置",
+      "tweaksFine": "导览过程中不会更改任何设置——每一项优化都只在你点击后才会应用,并且可以从台账中撤销。"
+    },
+    "tabMap": {
+      "tag": "导览"
+    }
+  }
+}

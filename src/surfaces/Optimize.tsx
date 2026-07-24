@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import type { AppliedChange, Recommendation, SessionSummary, StartupEntry } from "../types";
 import type { GpuVendor } from "./walkthroughs";
 import Check from "./Check";
 import Fix from "./Fix";
 import { SegmentedControl } from "../design/SegmentedControl";
 import { SidePileContext } from "./side-pile";
+// Side-effect import: guarantees the i18next singleton is initialized even when this component
+// is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
+import "../i18n";
 import "./Optimize.css";
 
 // Optimize — the merged Check + Tune surface (phase 1a, spec 2026-06-21-optimize-merge-design).
@@ -57,10 +61,6 @@ type Props = {
 // lives inside Applied as one collapsed "History (N)" expander (Fix view="ledger"), so there's no
 // near-empty third room. "Gaming Mode" appears as its own clearly-doored segment when the gate is
 // on (placement law: a mutation feature is a room, not a mid-scroll card).
-const BASE_SEGMENTS: { id: Segment; label: string }[] = [
-  { id: "fixes", label: "Fixes" },
-  { id: "applied", label: "Applied" },
-];
 
 export function Optimize({
   isAppliable,
@@ -83,6 +83,7 @@ export function Optimize({
   onExport,
   exporting,
 }: Props) {
+  const { t } = useTranslation();
   const [segment, setSegment] = useState<Segment>("fixes");
 
   // The Fixes segment's six "leave it alone" piles collapse under ONE quiet "Nothing else needs
@@ -95,9 +96,11 @@ export function Optimize({
   // Gaming Mode's own clearly-doored segment (the "right room" placement law) — present whenever
   // the gate passes a slot.
   const gamingDoored = Boolean(gamingSlot);
+  const fixesSegment = { id: "fixes" as Segment, label: t("optimize.optimize.segments.fixes") };
+  const appliedSegment = { id: "applied" as Segment, label: t("optimize.optimize.segments.applied") };
   const segments = gamingDoored
-    ? [BASE_SEGMENTS[0], { id: "gaming" as Segment, label: "Gaming Mode" }, BASE_SEGMENTS[1]]
-    : BASE_SEGMENTS;
+    ? [fixesSegment, { id: "gaming" as Segment, label: t("optimize.optimize.segments.gaming") }, appliedSegment]
+    : [fixesSegment, appliedSegment];
 
   // The gliding active indicator (one accent pill measured from the live DOM) is now the shared
   // <SegmentedControl> — extracted to src/design so Optimize, Monitor, and future tabs use ONE
@@ -134,7 +137,7 @@ export function Optimize({
           segments={segments}
           value={segment}
           onChange={(id) => setSegment(id as Segment)}
-          aria-label="Optimize sections"
+          aria-label={t("optimize.optimize.sectionsAriaLabel")}
         />
         {/* Persistent active-changes affordance (council First-Principles: rollback is one glance from
             anywhere, not buried at the bottom of a tab). Hidden when nothing is active. */}
@@ -142,9 +145,10 @@ export function Optimize({
           <button
             className="optimize-chip"
             onClick={landOnApplied}
-            title="See what Compy has active and roll any of it back"
+            title={t("optimize.optimize.chipTitle")}
           >
-            <span className="optimize-chip-count">{activeCount}</span> active · undo
+            <span className="optimize-chip-count">{activeCount}</span>
+            {t("optimize.optimize.activeUndo")}
           </button>
         )}
       </header>
@@ -189,9 +193,11 @@ export function Optimize({
                 aria-expanded={pileOpen}
                 aria-controls="optimize-sidepile-body"
               >
-                <span className="optimize-sidepile-title">Nothing else needs attention</span>
+                <span className="optimize-sidepile-title">
+                  {t("optimize.optimize.sidepileTitle")}
+                </span>
                 <span className="optimize-sidepile-hint">
-                  measured fine · set aside · deliberately refused
+                  {t("optimize.optimize.sidepileHint")}
                 </span>
                 <span aria-hidden="true">{pileOpen ? "▾" : "▸"}</span>
               </button>

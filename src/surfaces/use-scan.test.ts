@@ -4,10 +4,25 @@ import { renderHook, waitFor } from "@testing-library/react";
 // use-scan pulls @tauri-apps/api/core at import — stub invoke so jsdom doesn't choke loading the module.
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
-import { buildSetupSummary, deriveReverted, rowVerdict, useScan, type AppliedChangeLite } from "./use-scan";
+import {
+  buildSetupSummary as buildSetupSummaryRaw,
+  deriveReverted,
+  rowVerdict,
+  useScan,
+  type AppliedChangeLite,
+} from "./use-scan";
 import { invoke } from "@tauri-apps/api/core";
 import { invalidateProbe } from "../data/probe-cache";
 import type { GameReadiness, PriorityItem, Priorities, ReadinessCheck } from "../types";
+// i18n update (2026-07-23): buildSetupSummary's strings now come from t(...) (Simplified Chinese
+// translation pass) instead of literal English, so it takes a TFunction as its last param. This
+// test-local wrapper resolves it through the real i18next instance (English is the default
+// language, matching what every assertion below already expects) so every call site below stays
+// exactly as written — same text, just sourced from locale JSON instead of a .ts literal.
+import i18n from "../i18n";
+
+const buildSetupSummary = (readiness: GameReadiness | null, priorities: Priorities | null) =>
+  buildSetupSummaryRaw(readiness, priorities, i18n.t);
 
 const invokeMock = vi.mocked(invoke);
 

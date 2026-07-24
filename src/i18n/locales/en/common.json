@@ -1,0 +1,172 @@
+{
+  "rail": {
+    "home": "Home",
+    "check": "Check",
+    "play": "Monitor",
+    "fix": "Tune",
+    "learn": "Blackbook",
+    "lab": "Lab",
+    "optimize": "Optimize"
+  },
+  "shellV2": {
+    "navAriaLabel": "Rooms",
+    "crumb": {
+      "home": "how your PC is doing",
+      "check": "is anything holding you back?",
+      "fix": "find it, fix it, undo it",
+      "play": "watch it live",
+      "learn": "what actually works — measured",
+      "lab": "benchmarks, latency, diagnostics"
+    },
+    "footerPre": "Every change reversible ·",
+    "footerEmph": "ledger {{n}}",
+    "fallbackTitle": "Compy"
+  },
+  "confirmDialog": {
+    "cancel": "Cancel",
+    "confirm": "Confirm"
+  },
+  "errorBoundary": {
+    "title": "Compy hit a snag starting up",
+    "body": "Something went wrong while loading. Restarting Compy usually clears it.",
+    "reload": "Reload Compy"
+  },
+  "gallery": {
+    "statusVocabulary": "Status vocabulary",
+    "stats": "Stats",
+    "average": "Average",
+    "frametime": "Frametime",
+    "oneLowEstimate": "1% low · estimate",
+    "instrumentCluster": "Instrument cluster",
+    "gpuTemp": "GPU temp",
+    "gpuUsage": "GPU usage",
+    "fan": "Fan",
+    "power": "Power",
+    "protectedTitle": "You're protected",
+    "protectedDetail": "4 changes active — all reversible from the Ledger.",
+    "noSessions": "No sessions yet",
+    "noSessionsBody": "Play a game with monitoring on and Compy will write a debrief here."
+  },
+  "roomAccentPicker": {
+    "accentColorAriaLabel": "{{room}} accent color",
+    "accentHeading": "{{room}} accent",
+    "applyToAll": "Apply to all rooms",
+    "applyToAllTitle": "Make every room use this accent",
+    "resetToDefault": "Reset to default",
+    "swatchNames": {
+      "violet": "Violet",
+      "teal": "Teal",
+      "amber": "Amber",
+      "emerald": "Emerald",
+      "sky": "Sky",
+      "red": "Red",
+      "yellow": "Yellow",
+      "magenta": "Magenta",
+      "cyanMidnight": "Cyan / Midnight",
+      "redBlue": "Red / Blue",
+      "limeCyan": "Lime / Cyan",
+      "violetTeal": "Violet / Teal",
+      "magentaViolet": "Magenta / Violet",
+      "amberWine": "Amber / Wine",
+      "skyEmerald": "Sky / Emerald"
+    }
+  },
+  "slimRecRow": {
+    "badge": {
+      "recommended": "Recommended",
+      "optional": "Optional"
+    }
+  },
+  "term": {
+    "moreInBlackbook": "More in the Blackbook →"
+  },
+  "trustSwitch": {
+    "working": "Working…",
+    "previousSetting": "your previous setting",
+    "restoresCopy": "snapshot captured — restores {{label}} · logged to Trust Ledger",
+    "setTo": " · set to {{label}}"
+  },
+  "updatePill": {
+    "updatingPct": "updating · {{pct}}%",
+    "updatingStarting": "updating · starting",
+    "installing": "installing — Compy restarts itself",
+    "updateFailedRetry": "update failed · retry",
+    "updateReady": "update ready · v{{version}}",
+    "detailsAriaLabel": "Update details",
+    "versionTitle": "Compy v{{version}}",
+    "updateNow": "Update now",
+    "later": "Later",
+    "fineprint": "Signature-verified before install · Compy restarts itself"
+  },
+  "walkthrough": {
+    "whichCard": "Which card?",
+    "previousStep": "Previous step",
+    "steps": "Steps",
+    "stepN": "Step {{n}}",
+    "nextStep": "Next step",
+    "schematicNote": "Schematic — menus vary slightly by version.",
+    "openIt": "Open it"
+  },
+  "whatsThis": {
+    "trigger": "What's this?",
+    "more": "More in the Blackbook →"
+  },
+  "windowChrome": {
+    "title": "Compy",
+    "settings": "Settings",
+    "minimize": "Minimize",
+    "restore": "Restore",
+    "maximize": "Maximize",
+    "close": "Close"
+  },
+  "backButton": {
+    "backTitle": "Back (Alt+Left)",
+    "back": "Back",
+    "forwardTitle": "Forward (Alt+Right)",
+    "forward": "Forward"
+  },
+  "arcGauge": {
+    "noReading": "no reading",
+    "notYet": "not yet",
+    "measured": "measured"
+  },
+  "oscilloscope": {
+    "worstSpike": "worst spike {{value}} {{unit}}",
+    "noSignal": "no signal"
+  },
+  "licensePanel": {
+    "title": "License",
+    "proActiveNoExpiry": "✓ Compy Pro is active.",
+    "proActiveWithExpiry": "✓ Compy Pro is active · renews {{date}}.",
+    "freeVersion": "You're on the free version. All of Compy's core — including everything safety-critical — is free.",
+    "haveKey": "Have a license key?",
+    "placeholder": "Paste your license key",
+    "keyAriaLabel": "License key",
+    "checking": "Checking…",
+    "apply": "Apply",
+    "saveError": "Couldn't save that key.",
+    "reasonExpired": "That license has expired.",
+    "reasonInvalid": "That key doesn't look valid.",
+    "reasonNotAvailable": "Pro isn't available yet."
+  },
+  "roomShell": {
+    "door": {
+      "home": "Find what's worth fixing",
+      "fix": "Watch it live",
+      "play": "See what changed",
+      "learn": "Open the instruments"
+    }
+  },
+  "status": {
+    "ready": "Ready",
+    "attention": "Attention",
+    "critical": "Critical",
+    "protected": "Protected",
+    "scanning": "Scanning",
+    "info": "Info",
+    "unavailable": "Unavailable"
+  },
+  "sparkline": {
+    "trendAriaLabel": "trend"
+  }
+}

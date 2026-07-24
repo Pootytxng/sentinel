@@ -1,4 +1,5 @@
 import { useEffect, useState, type ComponentProps } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import Play from "./Play";
 import { MonitorBasic } from "./MonitorBasic";
@@ -6,6 +7,7 @@ import { SegmentedControl } from "../design/SegmentedControl";
 import { Walkthrough } from "../design/Walkthrough";
 import { readViewMode, applyViewMode, type ViewMode } from "../design/theme";
 import { TUNING_PRESETS, resolvePresetItems, type TuningPreset } from "./monitor-view";
+import "../i18n";
 import "./Monitor.css";
 
 // Monitor — the restructured live+sessions surface (spec 2026-06-21-monitor-restructure, tab #2 of the
@@ -23,18 +25,6 @@ import "./Monitor.css";
 
 type Segment = "sessions" | "live";
 
-// Live first + default (owner 2026-06-26): the live meters are the primary content of this section, so
-// Monitor opens on Live; Sessions (the last-game debrief) is the second segment.
-const SEGMENTS: { id: Segment; label: string }[] = [
-  { id: "live", label: "Live" },
-  { id: "sessions", label: "Sessions" },
-];
-
-const MODES: { id: ViewMode; label: string }[] = [
-  { id: "basic", label: "Basic" },
-  { id: "advanced", label: "Advanced" },
-];
-
 // Same props App passes to <Play>, minus `view` (the shell drives that from the segment).
 type Props = Omit<ComponentProps<typeof Play>, "view">;
 
@@ -48,6 +38,7 @@ export function TuningPresets({
   vendor: ComponentProps<typeof Play>["vendor"];
   bare?: boolean;
 }) {
+  const { t, i18n } = useTranslation();
   // Which preset's checklist is open (null = all collapsed); and within it, which walkthrough is open.
   const [openPreset, setOpenPreset] = useState<string | null>(null);
   const [openItem, setOpenItem] = useState<string | null>(null);
@@ -58,32 +49,32 @@ export function TuningPresets({
   // see. The full per-brand VRR/HDR/refresh guidance lives in the Learn "Monitor settings by brand" card.
   const vendorHint =
     v === "amd"
-      ? " — FreeSync on your AMD card"
+      ? t("monitor.monitor.vendorHintAmd")
       : v === "nvidia"
-        ? " — G-SYNC on your NVIDIA card"
+        ? t("monitor.monitor.vendorHintNvidia")
         : v === "intel"
-          ? " — Adaptive-Sync on your Intel graphics"
+          ? t("monitor.monitor.vendorHintIntel")
           : "";
 
   return (
     <section
-      aria-label="Tuning presets"
+      aria-label={t("monitor.monitor.tuningPresetsTitle")}
       style={{ display: "flex", flexDirection: "column", gap: 8 }}
     >
       {!bare && (
         <h2 className="section-title" style={{ fontSize: 14 }}>
-          Tuning presets
+          {t("monitor.monitor.tuningPresetsTitle")}
         </h2>
       )}
       <p className="section-help" style={{ marginTop: 0 }}>
-        Pick the result you want — each is a short, by-hand checklist of guided steps. The steps adapt
-        to your graphics card by name{vendorHint}. Advisory only: Compy never changes these for you; it
-        just shows the way.
+        {t("monitor.monitor.tuningPresetsHelpPre")}
+        {vendorHint}
+        {t("monitor.monitor.tuningPresetsHelpPost")}
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {TUNING_PRESETS.map((preset: TuningPreset) => {
           const open = openPreset === preset.id;
-          const items = resolvePresetItems(preset);
+          const items = resolvePresetItems(preset, i18n.language);
           return (
             <button
               key={preset.id}
@@ -95,7 +86,7 @@ export function TuningPresets({
                 setOpenItem(null);
               }}
             >
-              {preset.label}
+              {t(`monitor.monitor.tuningPresets.${preset.id}.label`, preset.label)}
               <span className="chip-count">{items.length}</span>
             </button>
           );
@@ -103,12 +94,12 @@ export function TuningPresets({
       </div>
 
       {TUNING_PRESETS.filter((p) => p.id === openPreset).map((preset) => {
-        const items = resolvePresetItems(preset);
+        const items = resolvePresetItems(preset, i18n.language);
         return (
           <div key={preset.id} className="card">
-            <span className="card-label">{preset.label}</span>
+            <span className="card-label">{t(`monitor.monitor.tuningPresets.${preset.id}.label`, preset.label)}</span>
             <span className="card-value" style={{ fontSize: 14, fontWeight: 500 }}>
-              {preset.goal}
+              {t(`monitor.monitor.tuningPresets.${preset.id}.goal`, preset.goal)}
             </span>
             <ol
               style={{
@@ -146,6 +137,18 @@ export function TuningPresets({
 }
 
 export function Monitor(props: Props) {
+  const { t } = useTranslation();
+  // Live first + default (owner 2026-06-26): the live meters are the primary content of this section, so
+  // Monitor opens on Live; Sessions (the last-game debrief) is the second segment. Built inside the
+  // component (not module scope) so the labels re-resolve on a language change.
+  const SEGMENTS: { id: Segment; label: string }[] = [
+    { id: "live", label: t("monitor.monitor.segments.live") },
+    { id: "sessions", label: t("monitor.monitor.segments.sessions") },
+  ];
+  const MODES: { id: ViewMode; label: string }[] = [
+    { id: "basic", label: t("monitor.monitor.modes.basic") },
+    { id: "advanced", label: t("monitor.monitor.modes.advanced") },
+  ];
   const [segment, setSegment] = useState<Segment>("live");
   // Basic is the default answer-first face; Advanced is the full panels. Mode is global + persisted.
   const [mode, setMode] = useState<ViewMode>(readViewMode);
@@ -172,14 +175,14 @@ export function Monitor(props: Props) {
             segments={SEGMENTS}
             value={segment}
             onChange={(id) => setSegment(id as Segment)}
-            aria-label="Monitor sections"
+            aria-label={t("monitor.monitor.monitorSectionsAria")}
           />
         )}
         <SegmentedControl
           segments={MODES}
           value={mode}
           onChange={(id) => chooseMode(id as ViewMode)}
-          aria-label="Detail level"
+          aria-label={t("monitor.monitor.detailLevelAria")}
         />
       </header>
       {basic ? (

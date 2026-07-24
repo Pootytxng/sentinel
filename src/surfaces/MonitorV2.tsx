@@ -1,4 +1,5 @@
 import { useEffect, useState, type ComponentProps } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import Play from "./Play";
 import { MonitorBasic } from "./MonitorBasic";
@@ -12,6 +13,7 @@ import { HudMasthead } from "./hud-masthead";
 import { readViewMode, applyViewMode, type ViewMode } from "../design/theme";
 import { monitorVerdict } from "./monitor-v2-data";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
+import "../i18n";
 import "./monitor-v2.css";
 
 // MonitorV2 (V2-5, spec 2026-07-02-v2-shell-sourcing-and-plan) — the Monitor room on the V2
@@ -43,21 +45,21 @@ import "./monitor-v2.css";
 
 type Segment = "sessions" | "live";
 
-// Live first + default — same owner ruling (2026-06-26) the classic Monitor pins.
-const SEGMENTS: { id: Segment; label: string }[] = [
-  { id: "live", label: "Live" },
-  { id: "sessions", label: "Sessions" },
-];
-
-const MODES: { id: ViewMode; label: string }[] = [
-  { id: "basic", label: "Basic" },
-  { id: "advanced", label: "Advanced" },
-];
-
 // Same props App passes to <Play> / <Monitor>, minus `view`/`onFpsActive`/`v2` (this shell drives them).
 type Props = Omit<ComponentProps<typeof Play>, "view" | "onFpsActive" | "v2">;
 
 export function MonitorV2(props: Props) {
+  const { t } = useTranslation();
+  // Live first + default — same owner ruling (2026-06-26) the classic Monitor pins. Built inside
+  // the component (not module scope) so the labels re-resolve on a language change.
+  const SEGMENTS: { id: Segment; label: string }[] = [
+    { id: "live", label: t("monitor.monitorV2.segments.live") },
+    { id: "sessions", label: t("monitor.monitorV2.segments.sessions") },
+  ];
+  const MODES: { id: ViewMode; label: string }[] = [
+    { id: "basic", label: t("monitor.monitorV2.modes.basic") },
+    { id: "advanced", label: t("monitor.monitorV2.modes.advanced") },
+  ];
   const reduced = useReducedMotion();
   const hud = useHudFlag();
   const monitorConsole = useMonitorConsoleFlag();
@@ -103,7 +105,7 @@ export function MonitorV2(props: Props) {
   }, [capturing, segment]);
 
   const basic = mode === "basic";
-  const verdict = monitorVerdict(props.sessions);
+  const verdict = monitorVerdict(props.sessions, t);
 
   return (
     <RoomShell
@@ -132,8 +134,10 @@ export function MonitorV2(props: Props) {
         // is actually recording (the room's one live state); otherwise no LED, never fabricated.
         return (
           <>
-            <HudMasthead label="Live telemetry" led={capturing ? "scan" : null} />
-            <span className="hud-headline">Monitor</span>
+            <HudMasthead label={t("monitor.monitorV2.liveTelemetryLabel")} led={capturing ? "scan" : null} />
+            {/* Room label — owned by the rail (common.json), not re-translated here (rule: reuse
+                common.rail.<id> for any rendered rail/room label). */}
+            <span className="hud-headline">{t("common.rail.play", "Monitor")}</span>
           </>
         );
       })()}
@@ -152,9 +156,9 @@ export function MonitorV2(props: Props) {
               aria-controls="mv2-presets-body"
             >
               <span aria-hidden="true">{presetsOpen ? "▾" : "▸"}</span>
-              Tuning presets
+              {t("monitor.monitorV2.tuningPresetsLabel")}
               <span className="mv2-quiet-hint">
-                by-hand checklists · advisory — Compy never changes these for you
+                {t("monitor.monitorV2.tuningPresetsHint")}
               </span>
             </button>
             <div id="mv2-presets-body" className="mv2-presets-body" hidden={!presetsOpen}>
@@ -172,14 +176,14 @@ export function MonitorV2(props: Props) {
             segments={SEGMENTS}
             value={segment}
             onChange={(id) => setSegment(id as Segment)}
-            aria-label="Monitor sections"
+            aria-label={t("monitor.monitorV2.monitorSectionsAria")}
           />
         )}
         <SegmentedControl
           segments={MODES}
           value={mode}
           onChange={(id) => chooseMode(id as ViewMode)}
-          aria-label="Detail level"
+          aria-label={t("monitor.monitorV2.detailLevelAria")}
         />
       </div>
       <div className="mv2-body">

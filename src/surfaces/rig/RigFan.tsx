@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Edges, Html } from "@react-three/drei";
+import { useTranslation } from "react-i18next";
 import type { Group } from "three";
 import type { Vec3 } from "./rig-parts";
 import { useTooltipFlip } from "./use-tooltip-flip";
@@ -48,6 +49,7 @@ export function RigFan({
   onHover: (id: string | null) => void;
   onSelect: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const groupRef = useRef<Group>(null);
   const bladesRef = useRef<Group>(null);
   const [hovered, setHovered] = useState(false);
@@ -156,15 +158,18 @@ export function RigFan({
             }}
           >
             <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.12em", color }}>
-              Fan{!fan.detected && " · not detected"}
+              {t("gaming.rigViewer.fan.categoryLabel", { defaultValue: "Fan" })}
+              {!fan.detected && t("gaming.rigViewer.notDetectedSuffix", { defaultValue: " · not detected" })}
             </div>
             <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.2 }}>{fan.label}</div>
             <div style={{ fontSize: 11, color: "var(--ix-text-3, #8b95a8)", marginTop: 3 }}>
               {fan.detected
                 ? fan.rpm && fan.rpm > 0
-                  ? `${fan.rpm} RPM · spinning`
-                  : "0 RPM · stopped"
-                : "Run HWiNFO or LibreHardwareMonitor to read live RPM"}
+                  ? t("gaming.rigViewer.fan.rpmSpinning", { defaultValue: "{{rpm}} RPM · spinning", rpm: fan.rpm })
+                  : t("gaming.rigViewer.fan.rpmStopped", { defaultValue: "0 RPM · stopped" })
+                : t("gaming.rigViewer.fan.noMonitorHint", {
+                    defaultValue: "Run HWiNFO or LibreHardwareMonitor to read live RPM",
+                  })}
             </div>
           </div>
         </Html>

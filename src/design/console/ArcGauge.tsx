@@ -1,8 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { gsap } from "gsap";
 import { useReducedMotion } from "../use-motion";
 import { useJarvisActive } from "../jarvis/use-jarvis";
 import { useCountTo } from "../../surfaces/lab/use-count-to";
+// Side-effect import: guarantees the i18next instance is initialized before this file's t() calls run.
+import "../../i18n";
 import "./arc-gauge.css";
 
 export type ArcTone = "accent" | "warn" | "good" | "neutral";
@@ -21,6 +24,7 @@ export function ArcGauge({
   /** One quiet "how we calculate this" line under the label — shown only with a live value. */
   note?: string;
 }) {
+  const { t } = useTranslation();
   const reduced = useReducedMotion();
   const shown = useCountTo(value, { reduced });     // null → null (honesty rail); reduced → snaps
   const empty = shown === null;
@@ -71,12 +75,12 @@ export function ArcGauge({
       </svg>
       <div className="ag-ctr">
         <div className="ag-v">{empty ? "— —" : Math.round(shown!)}</div>
-        <div className="ag-u">{empty ? "no reading" : unit}</div>
+        <div className="ag-u">{empty ? t("common.arcGauge.noReading") : unit}</div>
       </div>
       <div className="ag-label">
         <span>{label}</span>
-        {empty ? <span className="ag-tag ag-tag-ny">not yet</span>
-               : measured ? <span className="ag-tag">measured</span> : null}
+        {empty ? <span className="ag-tag ag-tag-ny">{t("common.arcGauge.notYet")}</span>
+               : measured ? <span className="ag-tag">{t("common.arcGauge.measured")}</span> : null}
         {note && !empty && <span className="ag-note">{note}</span>}
       </div>
     </div>

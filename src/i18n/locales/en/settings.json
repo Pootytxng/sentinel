@@ -1,0 +1,96 @@
+{
+  "title": "Settings",
+  "done": "Done",
+  "tagline": "Make it yours. None of this touches what Compy measures.",
+  "appearance": {
+    "sectionTitle": "Appearance",
+    "themeLabel": "Theme",
+    "themes": {
+      "midnight": "Midnight",
+      "violet": "Violet",
+      "crimson": "Crimson",
+      "emerald": "Emerald",
+      "hearth": "Hearth"
+    },
+    "livePreview": "Live preview",
+    "monitorConsole": {
+      "title": "Monitor console",
+      "sub": "Monitor's live face as an instrument cluster: rolling fps and frametime traces with honest gauges. Same sensors, same measurements — turn off for the classic live tiles."
+    },
+    "jarvisMotion": {
+      "title": "JARVIS motion",
+      "sub": "Turns interface animation on or off: smooth scrolling, a short transition when you change rooms, buttons that shift toward the cursor, and a tick on gauges when a reading updates. It changes how things move, never what Compy measures. The Motion setting below still wins."
+    }
+  },
+  "language": {
+    "sectionTitle": "Language",
+    "title": "App language",
+    "sub": "Changes every screen in Compy. English stays the default until you switch."
+  },
+  "behavior": {
+    "sectionTitle": "Behavior",
+    "closeToTray": {
+      "title": "When I close, keep Compy running in the tray",
+      "sub": "Off (default): closing fully quits Compy. On: closing tucks it into the system tray — you'll see the Compy icon there. Right-click it for Show or Quit; hover for live FPS while you play."
+    },
+    "motion": {
+      "title": "Motion",
+      "sub": "Compy's living motion is on by default, even if Windows requests reduced motion. Choose Follow system to defer to Windows, or Reduced to keep everything calm.",
+      "full": "Full",
+      "system": "Follow system",
+      "reduced": "Reduced"
+    },
+    "expertView": {
+      "title": "Expert view",
+      "sub": "For tinkerers: shows every tweak's technical name and the exact registry key, service, or setting it touches, opens the \"deliberately refused\" list with full reasoning, and swaps rounded stats for raw measured values. Same tweaks, same safety rails — nothing new becomes appliable."
+    },
+    "overlayDensity": {
+      "title": "In-game overlay density",
+      "sub": "What the in-game overlay shows: just FPS · + 1%/temp/GPU · + a frametime line.",
+      "minimal": "Minimal",
+      "standard": "Standard",
+      "full": "Full"
+    },
+    "overlayBackdrop": {
+      "title": "In-game overlay background",
+      "sub": "Off makes the overlay see-through — the numbers float on the game, outlined so they stay readable.",
+      "on": "On",
+      "off": "Off"
+    }
+  },
+  "setup": {
+    "sectionTitle": "Setup",
+    "title": "Re-run the guided setup",
+    "sub": "Replay the intro, then run a fresh first check.",
+    "action": "Re-run setup"
+  },
+  "about": {
+    "sectionTitle": "About",
+    "privacy": "Fully local. No account, no telemetry, nothing leaves your PC."
+  },
+  "feedback": {
+    "sectionTitle": "Feedback & help",
+    "hintPre": "Hit a bug, have an idea, or just want to send what Compy sees on your PC? Write a note and Compy builds a diagnostic report for you. ",
+    "hintStrong": "Nothing is sent automatically",
+    "hintPost": " — \"Email it to me\" opens your own email app with everything filled in, and a copy is always saved on your PC either way.",
+    "notesPlaceholder": "What's working, what's broken, or what you'd want next…",
+    "notesAria": "Your feedback",
+    "preparing": "Preparing…",
+    "emailIt": "Email it to me",
+    "saving": "Saving…",
+    "saveFile": "Save a report file",
+    "savedToPre": "Saved to ",
+    "openFolder": "Open folder",
+    "copied": "Copied!",
+    "copySummary": "Copy summary for Discord",
+    "errEmailFailed": "Couldn't open your email app. Your report is saved below — you can attach it to an email yourself.",
+    "errBuildFailed": "Couldn't build the report. Nothing was sent.",
+    "errSaveFailed": "Couldn't save the report.",
+    "errFolderFailed": "Couldn't open the exports folder.",
+    "mailSubject": "Compy feedback",
+    "mailNoNote": "(no note written — the saved report has the diagnostics)",
+    "mailSnapshotHeader": "— system snapshot —",
+    "mailPointer": "Full diagnostic report saved on this PC:\n{{path}}\n(reply and I'll ask for it if I need more detail)",
+    "mailTrimmed": "…(trimmed — full text in the saved report)"
+  }
+}

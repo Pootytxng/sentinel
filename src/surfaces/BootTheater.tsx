@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { GameReadiness } from "../types";
 import { rowVerdict } from "./use-scan";
+// Side-effect import: guarantees the i18next singleton is initialized even when this component
+// is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
+import "../i18n";
 import "./BootTheater.css";
 
 // BootTheater (T2+T4a, spec 2026-07-06-firstcheck-monitor-mvp-train) — the FirstCheck RUN state
@@ -80,6 +84,7 @@ export function BootTheater({
   reduced: boolean;
   onSkip: () => void;
 }) {
+  const { t } = useTranslation();
   const checks = readiness?.checks ?? [];
   const n = checks.length;
   // Row `shownRows` is the one revealing NOW: everything before it has settled into the stack,
@@ -91,12 +96,17 @@ export function BootTheater({
   const activeLabel = useScramble(active?.label ?? "", reduced);
 
   return (
-    <button type="button" className="fct-frame" aria-label="Skip to the verdict" onClick={onSkip}>
+    <button
+      type="button"
+      className="fct-frame"
+      aria-label={t("home.bootTheater.skipAria")}
+      onClick={onSkip}
+    >
       <BracketFrame />
 
       {/* Progress rail — mono micro-labels, honest counter, LED only while something is live. */}
       <div className="fct-rail">
-        <span className="fct-rail-label">SYSTEM CHECK</span>
+        <span className="fct-rail-label">{t("home.bootTheater.railLabel")}</span>
         <span className={`fct-led ${running || active ? "fct-led-scan" : ""}`} aria-hidden="true" />
         <span className="fct-rail-count">
           {running ? "· · ·" : `${String(Math.min(shownRows, n)).padStart(2, "0")}/${String(n).padStart(2, "0")}`}
@@ -110,7 +120,7 @@ export function BootTheater({
       </div>
 
       {/* The commands are genuinely in flight — say that, and nothing more. */}
-      {running && <p className="fct-measuring">measuring — real reads on this rig, no guesses</p>}
+      {running && <p className="fct-measuring">{t("home.bootTheater.measuring")}</p>}
 
       {/* Completed checks compress into the terminal stack. */}
       {done.length > 0 && (
@@ -121,7 +131,9 @@ export function BootTheater({
               <div key={c.id} className={`fct-row fct-row-${v}`}>
                 <span className="fct-mark">{v === "fix" ? "→" : v === "ok" ? "✓" : "·"}</span>
                 <span className="fct-label">{c.label}</span>
-                <span className="fct-tag">{v === "fix" ? "worth fixing" : v === "unknown" ? "—" : ""}</span>
+                <span className="fct-tag">
+                  {v === "fix" ? t("home.bootTheater.tagWorthFixing") : v === "unknown" ? "—" : ""}
+                </span>
               </div>
             );
           })}
@@ -140,12 +152,10 @@ export function BootTheater({
 
       {/* Pending checks stay queued — a count, never fabricated detail. */}
       {queued > 0 && (
-        <div className="fct-queued">
-          {queued} queued{queued > 1 ? " checks" : " check"}
-        </div>
+        <div className="fct-queued">{t("home.bootTheater.queued", { count: queued })}</div>
       )}
 
-      {!running && n > 0 && <div className="fct-skip-hint">click to skip</div>}
+      {!running && n > 0 && <div className="fct-skip-hint">{t("home.bootTheater.skipHint")}</div>}
     </button>
   );
 }

@@ -1,5 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { KNOWLEDGE_BY_ID, type KnowledgeEntry } from "../data/knowledge";
+import { useTranslation } from "react-i18next";
+// Side-effect import: guarantees the i18next instance is initialized before this file's t() calls run.
+import "../i18n";
+import { knowledgeByIdForLanguage, type KnowledgeEntry } from "../data/knowledge";
 import "./WhatsThis.css";
 
 // "What's this?" (wayfinding §3) — an in-place hover/focus tooltip on a rec/toggle/graded row. Instead
@@ -23,7 +26,8 @@ function blurbFor(entry: KnowledgeEntry): string {
 }
 
 export function WhatsThis({ id, onOpen }: { id: string; onOpen: (id: string) => void }) {
-  const entry = KNOWLEDGE_BY_ID.get(id);
+  const { t, i18n } = useTranslation();
+  const entry = knowledgeByIdForLanguage(i18n.language).get(id);
   const [open, setOpen] = useState(false);
   const tipId = useId();
   // Mouse-leave closes on a short GRACE (not instantly), mirroring Term.tsx: the tip sits below the
@@ -79,7 +83,7 @@ export function WhatsThis({ id, onOpen }: { id: string; onOpen: (id: string) => 
           setOpen((v) => !v);
         }}
       >
-        What's this?
+        {t("common.whatsThis.trigger")}
       </button>
       {open && (
         <span className="whats-this-tip" role="tooltip" id={tipId}>
@@ -93,7 +97,7 @@ export function WhatsThis({ id, onOpen }: { id: string; onOpen: (id: string) => 
               onOpen(id);
             }}
           >
-            More in the Blackbook →
+            {t("common.whatsThis.more")}
           </button>
         </span>
       )}

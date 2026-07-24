@@ -1,3 +1,7 @@
+import { useTranslation } from "react-i18next";
+// Side-effect import: guarantees the i18next singleton is initialized even when this component
+// is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
+import "../i18n";
 import "./CompyHero.css";
 
 // "Welcome to Compy" — the committed brand hero (owner "take a full swing", 2026-06-15).
@@ -18,8 +22,9 @@ const C_ARC = "M672 320 A240 240 0 1 0 672 704";
 const PULSE = "360,512 424,512 460,434 514,594 556,470 602,512 648,512";
 
 export function CompyHero({ greeting }: { greeting?: string }) {
+  const { t } = useTranslation();
   return (
-    <section className="ch-hero" aria-label="Welcome to Compy">
+    <section className="ch-hero" aria-label={t("home.compyHero.sectionAria")}>
       {/* Signal field — a committed teal glow + a faint oscilloscope grid (instrument texture, not
           glassmorphism). This is where the teal is allowed to OWN the surface. */}
       <div className="ch-field" aria-hidden="true">
@@ -66,29 +71,29 @@ export function CompyHero({ greeting }: { greeting?: string }) {
       <div className="ch-copy">
         {greeting && <p className="ch-greeting">{greeting}</p>}
         <h1 className="ch-title">
-          Welcome to <span className="ch-title-c">Compy</span>
+          {t("home.compyHero.titlePre")} <span className="ch-title-c">Compy</span>
         </h1>
-        <p className="ch-tagline">Your PC's vitals — measured, never guessed.</p>
+        <p className="ch-tagline">{t("home.compyHero.tagline")}</p>
         <div className="ch-pills">
           <span className="ch-pill">
             <svg viewBox="0 0 16 16" className="ch-pill-i" aria-hidden="true">
               <polyline points="1.5 8 5 8 6.5 4.5 9 11.5 10.5 8 14.5 8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Measured
+            {t("home.compyHero.pills.measured")}
           </span>
           <span className="ch-pill">
             <svg viewBox="0 0 16 16" className="ch-pill-i" aria-hidden="true">
               <path d="M8 2 13 4v3.5c0 3.2-2.1 5.3-5 6.5-2.9-1.2-5-3.3-5-6.5V4z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
               <polyline points="5.8 8 7.3 9.5 10.4 6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Reversible
+            {t("home.compyHero.pills.reversible")}
           </span>
           <span className="ch-pill">
             <svg viewBox="0 0 16 16" className="ch-pill-i" aria-hidden="true">
               <rect x="3.5" y="7" width="9" height="6.5" rx="1.6" fill="none" stroke="currentColor" strokeWidth="1.4" />
               <path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
-            Yours
+            {t("home.compyHero.pills.yours")}
           </span>
         </div>
       </div>

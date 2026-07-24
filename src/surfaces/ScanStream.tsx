@@ -1,3 +1,7 @@
+import { useTranslation } from "react-i18next";
+// Side-effect import: guarantees the i18next singleton is initialized even when this component
+// is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
+import "../i18n";
 import type { GameReadiness } from "../types";
 import { rowVerdict } from "./use-scan";
 import "./FirstCheck.css"; // scan-row + sweep styles (shared wherever ScanStream renders)
@@ -17,6 +21,7 @@ export function ScanStream({
   running: boolean;
   phase: "scan" | "verdict";
 }) {
+  const { t } = useTranslation();
   const checks = readiness?.checks ?? [];
   const scanning = running || phase === "scan";
   return (
@@ -33,7 +38,7 @@ export function ScanStream({
               <span className="fc-row-mark">{v === "fix" ? "→" : v === "ok" ? "✓" : "·"}</span>
               <span className="fc-row-label">{c.label}</span>
               <span className="fc-row-tag">
-                {v === "fix" ? "worth fixing" : v === "unknown" ? "—" : ""}
+                {v === "fix" ? t("gaming.scanStream.worthFixing") : v === "unknown" ? "—" : ""}
               </span>
             </div>
           );

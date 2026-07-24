@@ -2,10 +2,19 @@ import { describe, it, expect, afterEach, beforeAll, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { BlackbookV2 } from "./BlackbookV2";
 import Learn from "./Learn";
-import { blackbookVerdict } from "./blackbook-v2-data";
+import { blackbookVerdict as blackbookVerdictRaw } from "./blackbook-v2-data";
 import { KNOWLEDGE } from "../data/knowledge";
 import { recordAutopsy, type AutopsyLedgerEntry } from "../data/autopsy-ledger";
 import { autopsyScan } from "../data/knowledge-autopsy";
+// i18n update (2026-07-23): blackbookVerdict's headline/sub now come from t(...) (Simplified
+// Chinese translation pass) instead of literal English strings, so it takes a TFunction as its
+// last param. This test-local wrapper resolves it through the real i18next instance (English is
+// the default language, matching what every assertion below already expects) so every call site
+// below stays exactly as written — same text, just sourced from locale JSON instead of a .ts
+// literal.
+import i18n from "../i18n";
+
+const blackbookVerdict = (ledger: AutopsyLedgerEntry[]) => blackbookVerdictRaw(ledger, i18n.t);
 
 // V2-6 guards (bug→guard tier 1): the V2 Blackbook room composes RoomShell (one verdict, one
 // door to Lab, deliberately NO primary action — the P6 spec names Blackbook the room that may

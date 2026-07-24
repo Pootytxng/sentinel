@@ -5,6 +5,7 @@ import { EffectComposer, Bloom, Glitch } from "@react-three/postprocessing";
 import { GlitchMode } from "postprocessing";
 import { Vector2 } from "three";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import HolographicMaterial from "../../design/vendor/HolographicMaterial/HolographicMaterial";
 import { readHologramV2 } from "../../design/theme";
 import type { HardwareInfo } from "../../App";
@@ -98,8 +99,9 @@ export const RigHologram = memo(function RigHologram({
   manualParts,
   cameraDist = 9.5,
 }: Props) {
+  const { t } = useTranslation();
   const colors = useRigColors();
-  const parts = useMemo(() => buildRigParts(hw), [hw]);
+  const parts = useMemo(() => buildRigParts(hw, t), [hw, t]);
   const reduced = useReducedMotion();
   const visible = useDocumentVisible();
   const [gameActive, setGameActive] = useState(false);
@@ -161,21 +163,26 @@ export const RigHologram = memo(function RigHologram({
       const place = manualPlacement(m.kind, m.kind === "other" ? otherIndex++ : 0);
       return {
         id: m.id,
-        name: m.name || "User part",
-        category: "User-added",
+        name: m.name || t("gaming.rigViewer.manualPart.nameFallback", { defaultValue: "User part" }),
+        category: t("gaming.rigViewer.manualPart.category", { defaultValue: "User-added" }),
         kind: manualGeom(m.kind),
         detected: true,
         assembled: place.assembled,
         exploded: place.exploded,
         rotation: place.rotation,
-        tagline: m.note || "Added by you",
+        tagline: m.note || t("gaming.rigViewer.manualPart.taglineFallback", { defaultValue: "Added by you" }),
         specs: [
-          { label: "Source", value: "You added this" },
-          ...(m.note ? [{ label: "Note", value: m.note }] : []),
+          {
+            label: t("gaming.rigViewer.manualPart.sourceLabel", { defaultValue: "Source" }),
+            value: t("gaming.rigViewer.manualPart.sourceValue", { defaultValue: "You added this" }),
+          },
+          ...(m.note
+            ? [{ label: t("gaming.rigViewer.manualPart.noteLabel", { defaultValue: "Note" }), value: m.note }]
+            : []),
         ],
       };
     });
-  }, [manualParts]);
+  }, [manualParts, t]);
 
   // Live fans — polled only while no game is capturing (the hologram is paused then anyway).
   useEffect(() => {
@@ -203,11 +210,26 @@ export const RigHologram = memo(function RigHologram({
     }
     // Nothing publishing → honest static ghosts (the "run a monitor" nudge lives in RigViewer).
     return [
-      { id: "fan-ghost-cpu", label: "CPU fan", rpm: null, detected: false },
-      { id: "fan-ghost-front", label: "Front intake", rpm: null, detected: false },
-      { id: "fan-ghost-rear", label: "Rear exhaust", rpm: null, detected: false },
+      {
+        id: "fan-ghost-cpu",
+        label: t("gaming.rigViewer.fan.ghostCpu", { defaultValue: "CPU fan" }),
+        rpm: null,
+        detected: false,
+      },
+      {
+        id: "fan-ghost-front",
+        label: t("gaming.rigViewer.fan.ghostFrontIntake", { defaultValue: "Front intake" }),
+        rpm: null,
+        detected: false,
+      },
+      {
+        id: "fan-ghost-rear",
+        label: t("gaming.rigViewer.fan.ghostRearExhaust", { defaultValue: "Rear exhaust" }),
+        rpm: null,
+        detected: false,
+      },
     ];
-  }, [fanSensors]);
+  }, [fanSensors, t]);
 
   const fanPlacements = useMemo(() => {
     const casePos: Vec3[] = [

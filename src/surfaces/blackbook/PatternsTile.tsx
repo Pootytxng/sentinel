@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import type { PatternReport, SessionPattern } from "../../types";
 import { useIntelligenceFlag } from "../../design/use-hud";
 import { useExpertView } from "../../design/use-expert-view";
 import { prettyGameName } from "../game-name";
+import "../../i18n";
 import "./patterns-tile.css";
 
 // Intelligence Phase 2 — cross-session pattern detection, surfaced in Blackbook (§5E: the room that
@@ -16,6 +18,7 @@ import "./patterns-tile.css";
 // Expert view rather than dropped. The plain findings themselves are for every user (§7 language).
 
 function PatternCard({ p, expert }: { p: SessionPattern; expert: boolean }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const hasWorking =
     p.confidence_reason.length > 0 ||
@@ -29,7 +32,11 @@ function PatternCard({ p, expert }: { p: SessionPattern; expert: boolean }) {
           <span className="bpt-card-title">{p.title}</span>
           {p.game && <span className="bpt-card-game">{prettyGameName(p.game) || p.game}</span>}
         </div>
-        <span className="bpt-card-conf">{p.confidence} confidence</span>
+        <span className="bpt-card-conf">
+          {t("blackbook.patternsTile.confidenceLabel", {
+            level: t(`blackbook.patternsTile.confidenceLevel.${p.confidence}`),
+          })}
+        </span>
       </div>
       <p className="bpt-card-detail">{p.detail}</p>
       {hasWorking && (
@@ -39,7 +46,11 @@ function PatternCard({ p, expert }: { p: SessionPattern; expert: boolean }) {
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
         >
-          <span>{open ? "Hide the working" : "Why we think so"}</span>
+          <span>
+            {open
+              ? t("blackbook.patternsTile.hideTheWorking")
+              : t("blackbook.patternsTile.whyWeThinkSo")}
+          </span>
           <span aria-hidden="true">{open ? "▾" : "▸"}</span>
         </button>
       )}
@@ -50,7 +61,7 @@ function PatternCard({ p, expert }: { p: SessionPattern; expert: boolean }) {
           )}
           {p.supporting_evidence.length > 0 && (
             <div className="bpt-evi">
-              <span className="bpt-evi-label">Evidence</span>
+              <span className="bpt-evi-label">{t("blackbook.patternsTile.evidenceLabel")}</span>
               <ul>
                 {p.supporting_evidence.map((e) => (
                   <li key={e}>{e}</li>
@@ -60,7 +71,7 @@ function PatternCard({ p, expert }: { p: SessionPattern; expert: boolean }) {
           )}
           {p.raises_confidence.length > 0 && (
             <div className="bpt-evi bpt-evi-raise">
-              <span className="bpt-evi-label">What would make this clearer</span>
+              <span className="bpt-evi-label">{t("blackbook.patternsTile.raisesConfidenceLabel")}</span>
               <ul>
                 {p.raises_confidence.map((e) => (
                   <li key={e}>{e}</li>
@@ -70,7 +81,8 @@ function PatternCard({ p, expert }: { p: SessionPattern; expert: boolean }) {
           )}
           {expert && p.next_test && (
             <p className="bpt-next">
-              <span className="bpt-evi-label">Next test</span> {p.next_test}
+              <span className="bpt-evi-label">{t("blackbook.patternsTile.nextTestLabel")}</span>{" "}
+              {p.next_test}
             </p>
           )}
         </div>
@@ -80,6 +92,7 @@ function PatternCard({ p, expert }: { p: SessionPattern; expert: boolean }) {
 }
 
 export function PatternsTile() {
+  const { t } = useTranslation();
   const on = useIntelligenceFlag();
   const expert = useExpertView();
   const [report, setReport] = useState<PatternReport | null>(null);
@@ -106,20 +119,17 @@ export function PatternsTile() {
   return (
     <div className="bpt">
       <div className="bpt-sect">
-        <span className="bpt-sect-t">Patterns across your sessions</span>
+        <span className="bpt-sect-t">{t("blackbook.patternsTile.sectionTitle")}</span>
         <span className="bpt-sect-rule" aria-hidden="true" />
         <span className="bpt-sect-s">
-          from {sessions_considered} session{sessions_considered === 1 ? "" : "s"}
+          {t("blackbook.patternsTile.fromSessions", { count: sessions_considered })}
           {games_considered > 0 &&
-            ` · ${games_considered} game${games_considered === 1 ? "" : "s"}`}
+            t("blackbook.patternsTile.andGames", { count: games_considered })}
         </span>
       </div>
 
       {patterns.length === 0 ? (
-        <p className="bpt-none">
-          No clear cross-session pattern yet — nothing has moved past what normal variation
-          explains.
-        </p>
+        <p className="bpt-none">{t("blackbook.patternsTile.none")}</p>
       ) : (
         <div className="bpt-cards">
           {patterns.map((p) => (
@@ -132,7 +142,7 @@ export function PatternsTile() {
           Kept in the Expert view: the everyday face shows the findings, the inspector sees the gaps. */}
       {expert && coverage.length > 0 && (
         <div className="bpt-coverage">
-          <span className="bpt-coverage-label">What Compy couldn't judge yet</span>
+          <span className="bpt-coverage-label">{t("blackbook.patternsTile.coverageLabel")}</span>
           <ul>
             {coverage.map((c) => (
               <li key={c}>{c}</li>

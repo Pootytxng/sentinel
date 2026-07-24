@@ -1,0 +1,388 @@
+{
+  "gpuProfile": {
+    "scopeAriaLabel": "GPU profile scope",
+    "scopeTitle": "GPU profile view",
+    "scopeReassurance": "This just frames what you look at — it changes nothing on your PC.",
+    "beforeAfterTitle": "Before & after",
+    "beforeAfterIntro": "Capture your GPU's readable settings before and after a change you make in your driver tool, then see exactly what moved. Read-only — Compy changes nothing here.",
+    "captureBefore": "Capture before",
+    "recaptureBefore": "Re-capture before",
+    "captureAfter": "Capture after",
+    "recaptureAfter": "Re-capture after",
+    "clear": "Clear",
+    "noReadingYet": "No GPU reading is available yet — once your GPU details load you can capture a snapshot.",
+    "beforeSaved": "Before snapshot saved. Make your change, then capture after.",
+    "captureToBegin": "Capture a before snapshot to begin.",
+    "driverMismatchWarning": "Your driver changed too ({{before}} → {{after}}), so this isn't a clean before/after of just your setting. Re-capture both on the same driver to compare fairly.",
+    "colSetting": "Setting",
+    "colBefore": "Before",
+    "colAfter": "After",
+    "colDelta": "Delta",
+    "changed": "Changed",
+    "noChange": "No change",
+    "footnote": "Snapshots are stored only on this PC. A dash means that value wasn't readable in one of the snapshots, so it isn't counted as a change.",
+    "vendorInsightsAriaLabel": "Vendor advisory insights",
+    "vendorInsightsTitle": "For your Radeon GPU",
+    "vendorInsightsIntro": "Plain-English notes tailored to your GPU, read from settings Compy already sees. Advisory only — Compy changes nothing here.",
+    "scope": {
+      "global": { "label": "Global", "blurb": "Shows the GPU picture across all your usage — no single game assumed." },
+      "per-game": { "label": "Per-game", "blurb": "Frames the GPU view around the game you're currently in." }
+    },
+    "insights": {
+      "hagsOnTitle": "GPU scheduling on",
+      "hagsOnDetail": "Hardware-Accelerated GPU Scheduling is on — a modern default on your Radeon. Nothing to do; it's manageable under Windows Graphics settings, not AMD Adrenalin.",
+      "hagsOffTitle": "GPU scheduling off",
+      "hagsOffDetail": "Hardware-Accelerated GPU Scheduling is off. On Radeon it's usually fine either way — some games prefer it on, some off. It lives in Windows Graphics settings (not AMD Adrenalin), so you can try toggling it and comparing.",
+      "powerModeTitle": "Power profile",
+      "powerModeDetail": "Your GPU power profile reads \"{{mode}}\". You can review or switch profiles in AMD Adrenalin under Performance → Tuning — Compy only reads this label, it never changes it.",
+      "tempHotTitle": "Thermals running hot",
+      "tempHotDetail": "Peak GPU temperature reached {{temp}} °C. Radeon cards are rated to run warm, but if it stays this high you can check case airflow and, in AMD Adrenalin's Tuning, review the fan curve.",
+      "tempOkTitle": "Thermals healthy",
+      "tempOkDetail": "Peak GPU temperature was {{temp}} °C — comfortable headroom for a Radeon. No thermal action needed."
+    }
+  },
+  "labBento": {
+    "ledePre": "Your rig's checkup — five kinds of measurement, in order, left to right. Everything here only",
+    "ledeEmph": "reads",
+    "ledePost": "; nothing changes your PC, so tinker freely.",
+    "openStationAriaLabel": "Open station {{n}} — {{name}}",
+    "measured": "Measured",
+    "notYet": "Not yet",
+    "checkupReportLabel": "Checkup report",
+    "notes": {
+      "optimize": "Most \"best settings\" guides are generic and one-size-fits-all. These tweaks are the ones vetted safe AND reversible for a rig like yours — every one snapshots its prior state before it touches anything.",
+      "diagnostics": "Most people never see their PC's real parts list. This is the honest inventory — read straight from the machine, nothing installed.",
+      "benchmark": "Benchmarks are noisy: two identical runs never score identical. Compy grades changes against that noise floor, so luck can't be called a win.",
+      "latency": "One click crosses the mouse, USB, Windows, the GPU and your monitor before you see it land — every hop adds delay, and each one is measurable.",
+      "tuning": "Undervolting asks the chip to do the same work on less power — often cooler and just as fast. How far yours goes is the silicon lottery.",
+      "blackbox": "Windows keeps a flight recorder of every crash and freeze. Almost nobody ever reads it — this station does, in plain English."
+    },
+    "checkup": {
+      "notStarted": {
+        "headline": "Your checkup hasn't started yet.",
+        "sub": "Work the stations left to right — each one only measures, so there's nothing here you can break. Poke around freely."
+      },
+      "complete": {
+        "headline": "Full checkup complete — every station has a reading.",
+        "sub": "Here's what your rig's results mean, station by station."
+      },
+      "inProgress": {
+        "headline": "Checkup in progress — {{read}} of {{total}} stations have readings.",
+        "sub": "What you've measured so far, and where to go next."
+      },
+      "next": "Next: station {{n}} — {{name}}. {{forLine}}"
+    }
+  },
+  "labV2": {
+    "masthead": "Test bench",
+    "componentLabels": {
+      "cpu": "CPU",
+      "ram": "RAM",
+      "gpu": "GPU",
+      "disk": "Disk"
+    },
+    "verdict": {
+      "nothingGraded": {
+        "headline": "Nothing graded in the Lab yet.",
+        "sub": "Start with Benchmark — set a baseline, change one thing, re-run. Compy tells you if it actually moved."
+      },
+      "baselineRecorded": {
+        "headline": "Baseline recorded — your next benchmark run gets graded against it.",
+        "sub": "The grade lands here the moment you re-run."
+      },
+      "headline": {
+        "improvedSingle": "Your last benchmarked change improved this PC.",
+        "improvedStacked": "Your last benchmarked changes improved this PC together.",
+        "regressedSingle": "Your last benchmarked change made things worse.",
+        "regressedStacked": "Your last benchmarked changes made things worse together.",
+        "noChangeSingle": "Your last benchmarked change made no measurable difference.",
+        "noChangeStacked": "Your last benchmarked changes made no measurable difference."
+      },
+      "gradedWithEvidence": "Measured: {{evidence}} — graded against a {{floor}} noise floor.",
+      "gradedNoEvidence": "Graded against a {{floor}} noise floor.",
+      "noise": "Every component stayed inside the {{floor}} noise floor — we call that noise, not a win.",
+      "undoSingle": "Undo it, or re-run to confirm.",
+      "undoStacked": "Undo them, or re-run to confirm."
+    }
+  },
+  "labGround": {
+    "masthead": "Proving ground"
+  },
+  "labConsole": {
+    "readinessLabel": "Readiness",
+    "readinessNote": "= {{passed}} of {{total}} checks passed",
+    "avgFpsLabel": "Avg FPS",
+    "safeStackLabel": "Safe stack",
+    "oneLowLabel": "1% low",
+    "unitScore": "score",
+    "unitFps": "fps",
+    "unitReady": "ready",
+    "unitFrames": "frames",
+    "closeStationAriaLabel": "Close station",
+    "close": "Close",
+    "optimizeReassurance": "This station applies your safe stack in one click — and like every change made in this room, it's fully reversible."
+  },
+  "optimizeStation": {
+    "gaugeAriaLabel": "{{applied}} of {{total}} safe tweaks on",
+    "yourSafeStack": "Your safe stack",
+    "allApplied": "All {{total}} already on for this rig — nothing to apply.",
+    "freshLeft": "{{count}} left to enable below — one tap each, reversible.",
+    "driftedRestore_one": "{{count}} was turned off outside Compy — restore it below.",
+    "driftedRestore_other": "{{count}} were turned off outside Compy — restore them below.",
+    "mixedLeft": "{{totalLeft}} left below — {{fresh}} to enable, {{drifted}} turned off outside Compy.",
+    "appliedHistorySummary": "Applied & history — every change, undoable",
+    "moreCleanupSummary": "More cleanup (optional)",
+    "powerFeaturesSummary": "Power features — Gaming Mode (advanced, reversible)",
+    "powerFeaturesIntro": "Bigger changes you can make and prove here. These are the same reversible controls from Play — apply one, then run the Benchmark station to measure what it did on your rig."
+  },
+  "stations": {
+    "optimize": {
+      "name": "Optimize",
+      "forLine": "Enable the safe, vetted tweaks for your rig — in one tap.",
+      "whenLine": "You just want it faster and safe, without fiddling.",
+      "connectsLine": "Prove the stack you just applied — run Benchmark and watch the before/after."
+    },
+    "diagnostics": {
+      "name": "Diagnostics",
+      "forLine": "Know exactly what's in your rig before you change anything.",
+      "whenLine": "You just want to know what's in this PC.",
+      "connectsLine": "Feeds every other station — you read their numbers against what's really in here."
+    },
+    "benchmark": {
+      "name": "Benchmark",
+      "forLine": "Prove a change actually helped — not a placebo.",
+      "whenLine": "You're asking \"did that tweak actually do anything, or did I imagine it?\"",
+      "connectsLine": "The bench's spine — run it before and after any Optimize or Tuning change."
+    },
+    "latency": {
+      "name": "Latency",
+      "forLine": "Cut the delay between your hand and the screen.",
+      "whenLine": "Your aim or clicks feel a beat behind.",
+      "connectsLine": "Pair it with Benchmark to prove a latency change held."
+    },
+    "tuning": {
+      "name": "Tuning",
+      "forLine": "Run cooler and quieter without losing frames (AMD).",
+      "whenLine": "It runs hot or loud and you want it calmer without giving up frames.",
+      "connectsLine": "Benchmark grades whether your frames held after the undervolt."
+    },
+    "blackbox": {
+      "name": "Black Box",
+      "forLine": "Understand a crash or freeze after it happens.",
+      "whenLine": "It crashed or froze and you don't know why.",
+      "connectsLine": "Check Diagnostics for the rig state behind what it finds."
+    },
+    "routerLeadOptimize": {
+      "symptom": "I just want my PC faster — safely, no fiddling",
+      "because": "it enables the safe, vetted tweaks for your rig in one tap — undo any time"
+    },
+    "router": {
+      "latency": {
+        "symptom": "My aim/clicks feel a beat behind",
+        "because": "it traces mouse→screen and names what's adding delay"
+      },
+      "benchmark": {
+        "symptom": "Did that tweak actually help — or did I imagine it?",
+        "because": "it grades a real before/after against a noise floor"
+      },
+      "tuning": {
+        "symptom": "It runs hot / loud, I want it cooler without losing frames",
+        "because": "it measures whether an undervolt dropped temps AND held frames"
+      },
+      "blackbox": {
+        "symptom": "It crashed or froze and I don't know why",
+        "because": "it reads Windows' own crash & freeze record in plain English"
+      },
+      "diagnostics": {
+        "symptom": "I just want to know what's in this rig",
+        "because": "read-only forensics — everything Compy detected, raw"
+      }
+    },
+    "verdictReading": {
+      "improved": "Last verdict: Improved — the change moved more than the run's own noise.",
+      "noMeasurableChange": "Last verdict: No measurable change — it stayed inside the noise floor. That's noise, not a win.",
+      "regressed": "Last verdict: Regressed — things measured worse. Worth undoing."
+    },
+    "verdictReadingStacked": {
+      "improved": "Last verdict: Improved — your changes together moved more than the run's own noise.",
+      "noMeasurableChange": "Last verdict: No measurable change — the stack stayed inside the noise floor. That's noise, not a win.",
+      "regressed": "Last verdict: Regressed — things measured worse together. Worth undoing."
+    },
+    "reading": {
+      "optimizeReady_one": "{{count}} safe tweak ready to enable — one tap, reversible.",
+      "optimizeReady_other": "{{count}} safe tweaks ready to enable — one tap, all reversible.",
+      "optimizeAllSet": "Every safe tweak is already on — your rig is set. Prove it below, or you're done.",
+      "diagnosticsCaptured": "Report captured — the raw facts about this rig, ready to read.",
+      "diagnosticsNotCaptured": "No reading yet — the system report hasn't been captured.",
+      "benchmarkBaselineSaved": "Baseline saved — change one thing, re-run, and the grade lands here.",
+      "benchmarkNoReading": "No reading yet — set a baseline to start.",
+      "latencyNoReading": "No reading yet — open the station and Compy traces the path.",
+      "latencyWithTimer": "MSI {{on}} on · {{off}} off · timer {{ms}}ms — MSI on and a low timer mean a shorter mouse-to-screen trip.",
+      "latencyNoTimer": "MSI {{on}} on · {{off}} off — MSI on and a low timer mean a shorter mouse-to-screen trip.",
+      "tuningNoReading": "No reading yet — undervolt in AMD's tool, play a session, and Compy grades whether it held.",
+      "blackboxNoReading": "No reading yet — scan and Compy reads Windows' own crash record.",
+      "blackboxClean": "Scanned clean — no crashes or freezes in Windows' record.",
+      "blackboxIncidents_one": "{{count}} incident recorded — read what happened in plain English.",
+      "blackboxIncidents_other": "{{count}} incidents recorded — read what happened in plain English."
+    }
+  },
+  "lab": {
+    "title": "Advanced",
+    "lastBenchmarkLabel": "Last benchmark: ",
+    "subhead": "Your rig's instrument panel. Everything here only measures — nothing in Advanced changes your PC. Start with Benchmark.",
+    "verdict": {
+      "improved": "Improved",
+      "noMeasurableChange": "No measurable change",
+      "regressed": "Regressed"
+    },
+    "benchSummary": {
+      "lastVerdict": "Last verdict: {{verdict}}",
+      "baselineSetOn": "Baseline set on {{date}}",
+      "baselineSet": "Baseline set",
+      "noBaselineYet": "No baseline yet"
+    },
+    "latencySummary": "MSI {{on}} on · {{off}} off",
+    "latencySummaryWithTimer": "MSI {{on}} on · {{off}} off · timer {{ms}}ms",
+    "tuningSummaryFallback": "Undervolt guide + stability",
+    "closeStationAriaLabel": "Close station",
+    "close": "Close",
+    "routerTitle": "What are you here to do?",
+    "routerSub": "Pick the line that sounds like you — it opens the right tool below.",
+    "welcome": {
+      "benchmark": {
+        "term": "Benchmark",
+        "gloss": "did a change actually move anything?"
+      },
+      "latency": {
+        "term": "Latency",
+        "gloss": "what's slowing the trip from mouse to screen?"
+      },
+      "tuning": {
+        "term": "Tuning",
+        "gloss": "did your AMD undervolt hold up?"
+      },
+      "diagnostics": {
+        "term": "Diagnostics",
+        "gloss": "the raw facts Compy read about this rig."
+      },
+      "blackBox": {
+        "term": "Black Box",
+        "gloss": "what crashed or froze — read Windows' own record, in plain English."
+      }
+    },
+    "sections": {
+      "benchmark": {
+        "name": "Benchmark",
+        "oneLiner": "Run it, change one thing, re-run — Compy tells you if it actually moved, honestly."
+      },
+      "blackBox": {
+        "name": "Black Box",
+        "oneLiner": "Read the crash and freeze evidence Windows recorded — plain English, with your last vitals.",
+        "summary": "Crash & freeze record"
+      },
+      "latency": {
+        "name": "Latency",
+        "oneLiner": "The path from your mouse to the screen — Compy names what's adding delay."
+      },
+      "tuning": {
+        "name": "Tuning",
+        "oneLiner": "Undervolt in AMD's own tool — Compy measures whether temps dropped and frames held."
+      },
+      "diagnostics": {
+        "name": "Diagnostics",
+        "oneLiner": "Read-only system forensics — what Compy detected about this rig, raw.",
+        "summary": "System report"
+      }
+    },
+    "latestReadingsLabel": "Latest readings",
+    "readings": {
+      "baselineLabel": "Baseline",
+      "latencyLabel": "Latency",
+      "tuningLabel": "Tuning",
+      "blackBoxLabel": "Black Box",
+      "systemReportLabel": "System report",
+      "baselineSet": "set",
+      "latencyTimer": "timer {{ms}} ms",
+      "latencyMsiOn": "MSI {{on}} on",
+      "blackBoxNoneFound": "none found",
+      "blackBoxRecorded": "{{n}} recorded",
+      "systemReportCaptured": "captured"
+    },
+    "stationAriaLabel": "Station {{n}}",
+    "contract": {
+      "forLabel": "What it's for",
+      "whenLabel": "Reach for it when",
+      "readingLabel": "What the reading means",
+      "connectsLabel": "How it connects"
+    }
+  },
+  "experimentBench": {
+    "verdict": {
+      "improved": "Measurably faster — kept",
+      "noChange": "No measurable change — restored",
+      "regressed": "Slower — restored",
+      "confounded": "Another change interfered — restored, can't attribute",
+      "expired": "Baseline too old to judge — restored",
+      "insufficientEvidence": "Not enough data to judge — restored",
+      "notComparable": "Different game — not comparable, restored"
+    },
+    "simVerdict": {
+      "worthTesting": "Worth testing",
+      "plausibleUnproven": "Plausible — unproven",
+      "insufficientEvidence": "Unknown — measure it to find out",
+      "unlikelyToMatter": "Unlikely to matter",
+      "alreadyConfigured": "Already configured",
+      "notApplicable": "Not testable here",
+      "riskExceedsValue": "Risk exceeds value — barred"
+    },
+    "confidence": {
+      "unknown": "confidence: unknown",
+      "low": "confidence: low",
+      "medium": "confidence: medium",
+      "high": "confidence: high"
+    },
+    "when": {
+      "justNow": "just now",
+      "minAgo": "{{count}} min ago",
+      "hrAgo": "{{count}} hr ago",
+      "dAgo": "{{count}} d ago"
+    },
+    "hypothesisMetricFallback": "1% low FPS",
+    "hypothesisWithBaseline": "{{metric}} should beat the 3% noise floor",
+    "hypothesisWithoutBaseline": "{{metric}} should beat the noise floor",
+    "title": "Controlled experiments",
+    "hint": "Test one change at a time on your own rig: Compy captures a baseline, applies a single reversible tweak, measures a real session against it, and automatically restores the change unless the numbers clearly beat the noise. It measures — it never promises a gain.",
+    "pickLabel": "Pick a change to test",
+    "chooseChange": "Choose a change…",
+    "noChangesToTest": "No changes to test right now — every applicable change is already applied, or nothing in the catalog fits this rig.",
+    "readingRig": "Reading your rig…",
+    "forYourRig": "For your rig:",
+    "watch": "Watch:",
+    "disprovedIf": "Disproved if:",
+    "baselineLabel": "Baseline:",
+    "baselinePre": "{{game}} — avg",
+    "yourLastSession": "your last session",
+    "baselineMid": "fps · 1% low",
+    "baselinePost": "fps ({{when}})",
+    "hypothesisLabel": "Hypothesis",
+    "applying": "Applying…",
+    "startExperiment": "Start experiment — apply & measure next session",
+    "fineprint": "Applies one reversible change now, then compares your next {{game}} session. Auto-restores unless it clearly beats the noise floor.",
+    "fineprintGameFallback": "game",
+    "noBaselineYet": "No baseline yet — play one monitored gaming session first. Compy needs a real before-reading; it won't invent one.",
+    "pastExperiments": "Past experiments",
+    "deltaSuffix": "% 1% low",
+    "runningTitlePrefix": "Experiment in progress —",
+    "runningBaselinePre": "Baseline · {{game}} — avg",
+    "fpsUnit": "fps",
+    "runningStep": "The change is applied. Play a {{game}} session, then conclude — Compy compares it to the baseline and restores the change unless it clearly wins.",
+    "working": "Working…",
+    "concludeWithLatest": "Conclude with my latest {{game}} session",
+    "noNewSession": "No new {{game}} session yet",
+    "restoreNow": "Restore now",
+    "runningLatestPre": "Latest {{game}} session: avg",
+    "runningLatestPost": "fps · {{samples}} frames.",
+    "runningNoTreatment": "Play a monitored {{game}} session to give the experiment a real after-reading.",
+    "yourGame": "your game"
+  }
+}

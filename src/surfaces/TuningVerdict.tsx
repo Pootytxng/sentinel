@@ -1,5 +1,7 @@
+import { useTranslation } from "react-i18next";
 import type { TuningMeasurement } from "../data/tuning-measure";
 import { Term } from "../design/Term";
+import "../i18n";
 import "./TuningVerdict.css";
 
 // The honest-measurement verdict card — ONE shared presentational block rendered identically in the
@@ -16,6 +18,7 @@ const VERDICT_CLASS: Record<TuningMeasurement["verdict"], string> = {
 };
 
 export function TuningVerdictCard({ m }: { m: TuningMeasurement }) {
+  const { t } = useTranslation();
   const sign = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
   return (
     <div className={`tg-verdict ${VERDICT_CLASS[m.verdict]}`}>
@@ -24,17 +27,20 @@ export function TuningVerdictCard({ m }: { m: TuningMeasurement }) {
       <div className="tg-verdict-stats">
         {m.baselinePeakTempC != null && m.afterPeakTempC != null && (
           <span className="tg-stat">
-            Peak temp <b>{m.baselinePeakTempC}°C → {m.afterPeakTempC}°C</b>
+            {t("blackbook.tuningVerdict.peakTemp")}
+            <b>{m.baselinePeakTempC}°C → {m.afterPeakTempC}°C</b>
             {m.tempDropC != null && m.tempDropC > 0 ? ` (−${m.tempDropC}°C)` : ""}
           </span>
         )}
         {m.low1DeltaPct != null && (
           <span className="tg-stat">
-            <Term id="one-percent-lows">1% low</Term> <b>{sign(m.low1DeltaPct)}%</b> vs baseline
+            <Term id="one-percent-lows">{t("blackbook.tuningVerdict.oneLow")}</Term>{" "}
+            <b>{sign(m.low1DeltaPct)}%</b>
+            {t("blackbook.tuningVerdict.vsBaseline")}
           </span>
         )}
         <span className="tg-stat tg-stat-muted">
-          {m.sessionsSince} session{m.sessionsSince === 1 ? "" : "s"} since the tune
+          {t("blackbook.tuningVerdict.sessionsSinceTune", { count: m.sessionsSince })}
         </span>
       </div>
     </div>

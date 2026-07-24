@@ -1,6 +1,6 @@
 import type { AppliedChange, SessionSummary, IntelEvent } from "../../types";
 import type { AutopsyLedgerEntry } from "../../data/autopsy-ledger";
-import { KNOWLEDGE, type KnowledgeEntry } from "../../data/knowledge";
+import { knowledgeForLanguage, type KnowledgeEntry } from "../../data/knowledge";
 
 // The Logbook tape builder (Console HUD Phase 4, plan 2026-07-12-console-hud-phase4-blackbook,
 // direction A "The Logbook"). A PURE builder — it does no IO itself; the surface hands it data.
@@ -195,11 +195,15 @@ export function buildLogbook({ changes, sessions, autopsy, observed }: LogbookIn
 export function startHereEntries(
   vendor: string,
   limit = 4,
+  // i18n (2026-07-23): optional, defaults to English so the pinned logbook.test.ts calls (which pass
+  // only vendor/limit) keep resolving the same English corpus unchanged. Pass i18n.language from the
+  // calling component (BlackbookConsole.tsx) to get translated names.
+  lang: string = "en",
 ): { id: string; name: string; type: KnowledgeEntry["type"] }[] {
   const fits = (e: KnowledgeEntry): boolean =>
     !e.applies || e.applies.length === 0 || (e.applies as string[]).includes(vendor);
   const current = (e: KnowledgeEntry): boolean => e.status !== "deprecated" && e.status !== "superseded";
-  const pool = KNOWLEDGE.filter((e) => fits(e) && current(e));
+  const pool = knowledgeForLanguage(lang).filter((e) => fits(e) && current(e));
   const guides = pool.filter((e) => e.type === "guide");
   const rest = pool.filter((e) => e.type !== "guide");
   return [...guides, ...rest]

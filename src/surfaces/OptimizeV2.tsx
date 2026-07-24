@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import type {
   AppliedChange,
   GameReadiness,
@@ -20,6 +21,9 @@ import { SidePileContext } from "./side-pile";
 import { buildSetupSummary, deriveReverted } from "./use-scan";
 import { optimizeVerdict } from "./optimize-v2-data";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
+// Side-effect import: guarantees the i18next singleton is initialized even when this component
+// is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
+import "../i18n";
 import "./optimize-v2.css";
 
 // OptimizeV2 (V2-4, spec 2026-07-02-v2-shell-sourcing-and-plan) — the Optimize room on the V2
@@ -73,11 +77,6 @@ type Props = {
   exporting?: boolean;
 };
 
-const BASE_SEGMENTS: { id: Segment; label: string }[] = [
-  { id: "fixes", label: "Fixes" },
-  { id: "applied", label: "Applied" },
-];
-
 export function OptimizeV2({
   isAppliable,
   onOpenLibrary,
@@ -101,6 +100,7 @@ export function OptimizeV2({
   onExport,
   exporting,
 }: Props) {
+  const { t } = useTranslation();
   const reduced = useReducedMotion();
   const hud = useHudFlag();
   const [segment, setSegment] = useState<Segment>("fixes");
@@ -109,9 +109,11 @@ export function OptimizeV2({
   const recList = recs ?? [];
 
   const gamingDoored = Boolean(gamingSlot);
+  const fixesSegment = { id: "fixes" as Segment, label: t("optimize.optimizeV2.segments.fixes") };
+  const appliedSegment = { id: "applied" as Segment, label: t("optimize.optimizeV2.segments.applied") };
   const segments = gamingDoored
-    ? [BASE_SEGMENTS[0], { id: "gaming" as Segment, label: "Gaming Mode" }, BASE_SEGMENTS[1]]
-    : BASE_SEGMENTS;
+    ? [fixesSegment, { id: "gaming" as Segment, label: t("optimize.optimizeV2.segments.gaming") }, appliedSegment]
+    : [fixesSegment, appliedSegment];
 
   // Land-on-Applied (council Contrarian, same contract as the classic shell): every apply entry
   // point switches to Applied so the panic-user sees undo, not "apply more". Rollback is NOT an
@@ -140,10 +142,10 @@ export function OptimizeV2({
   // ONE row (one-mention law). The verdict takes it too (V2-9 punch g): a drifted re-enable
   // must never be announced as "ready to apply".
   const reverted = useMemo(() => deriveReverted(changes), [changes]);
-  const verdict = optimizeVerdict(recs, isAppliable, activeCount, reverted);
+  const verdict = optimizeVerdict(recs, isAppliable, activeCount, reverted, t);
   // Setup summary — a record of what the check measured, so it lives with the records on
   // Applied (owner: it felt unrelated in the fixes flow). Same pure builder Check used.
-  const setupSummary = buildSetupSummary(readiness, priorities);
+  const setupSummary = buildSetupSummary(readiness, priorities, t);
   const [copiedSummary, setCopiedSummary] = useState(false);
   const copySetupSummary = async () => {
     try {
@@ -212,10 +214,10 @@ export function OptimizeV2({
           return (
             <>
               <HudMasthead
-                label="Repair bay"
+                label={t("optimize.optimizeV2.mastheadLabel")}
                 led={!verdict.settled ? "scan" : verdict.allClear ? "ok" : "warn"}
               />
-              <span className="hud-headline">Optimize</span>
+              <span className="hud-headline">{t("common.rail.optimize")}</span>
             </>
           );
         })()}
@@ -226,9 +228,10 @@ export function OptimizeV2({
               type="button"
               className="ov2-chip"
               onClick={landOnApplied}
-              title="See what Compy has active and roll any of it back"
+              title={t("optimize.optimizeV2.chipTitle")}
             >
-              <span className="ov2-chip-count">{activeCount}</span> active · undo
+              <span className="ov2-chip-count">{activeCount}</span>
+              {t("optimize.optimizeV2.activeUndo")}
             </button>
           ) : undefined
         }
@@ -246,9 +249,9 @@ export function OptimizeV2({
                 aria-controls="ov2-sidepile-body"
               >
                 <span aria-hidden="true">{pileOpen ? "▾" : "▸"}</span>
-                Nothing else needs attention
+                {t("optimize.optimizeV2.sidepileTitle")}
                 <span className="ov2-quiet-hint">
-                  measured fine · set aside · deliberately refused
+                  {t("optimize.optimizeV2.sidepileHint")}
                 </span>
               </button>
               <div
@@ -266,7 +269,7 @@ export function OptimizeV2({
             segments={segments}
             value={segment}
             onChange={(id) => setSegment(id as Segment)}
-            aria-label="Optimize sections"
+            aria-label={t("optimize.optimizeV2.sectionsAriaLabel")}
           />
         </div>
 
@@ -287,10 +290,12 @@ export function OptimizeV2({
               {priorities?.upgrade_path && (
                 <div className="ov2-upgrade">
                   <div className="ov2-upgrade-head">
-                    <span className="ov2-upgrade-label">Upgrade path (advisory)</span>
+                    <span className="ov2-upgrade-label">
+                      {t("optimize.optimizeV2.upgradePathLabel")}
+                    </span>
                     {/* Honesty label — the owner called the link-dump underdeveloped; until the
                         per-rig evidence-gated engine is designed, the card says so plainly. */}
-                    <span className="ov2-early">early — being developed</span>
+                    <span className="ov2-early">{t("optimize.optimizeV2.upgradePathEarly")}</span>
                   </div>
                   {priorities.upgrade_path.items.map((item) => (
                     <div key={item.kind} className="ov2-upgrade-item">
@@ -302,12 +307,12 @@ export function OptimizeV2({
                             key={l.retailer}
                             type="button"
                             className="btn btn-small"
-                            title={`Copies a plain ${l.retailer} search link to open in your browser. No affiliate tag today.`}
+                            title={t("optimize.optimizeV2.copyRetailLinkTitle", { retailer: l.retailer })}
                             onClick={() => copyRetailLink(`${item.kind}-${l.retailer}`, l.url)}
                           >
                             {copiedRetail === `${item.kind}-${l.retailer}`
-                              ? "Copied!"
-                              : `Copy ${l.retailer} search link`}
+                              ? t("optimize.optimizeV2.copiedExclaim")
+                              : t("optimize.optimizeV2.copyRetailSearchLink", { retailer: l.retailer })}
                           </button>
                         ))}
                       </div>
@@ -316,8 +321,7 @@ export function OptimizeV2({
                   {/* Same truthful no-affiliate line Check renders (its guard pins the classic
                       copy) — swap BOTH to the backend disclosure in the commit that arms tags. */}
                   <p className="ov2-upgrade-disclosure">
-                    Compy earns nothing from these links today — they're plain searches with no
-                    affiliate tag. What you buy never affects verdicts.
+                    {t("optimize.optimizeV2.upgradeDisclosure")}
                   </p>
                 </div>
               )}
@@ -340,7 +344,9 @@ export function OptimizeV2({
               {setupSummary && (
                 <div className="ov2-summary">
                   <div className="ov2-summary-head">
-                    <span className="ov2-summary-title">Setup summary</span>
+                    <span className="ov2-summary-title">
+                      {t("optimize.optimizeV2.setupSummaryTitle")}
+                    </span>
                     <span className="ov2-summary-actions">
                       {onExport && (
                         <button
@@ -349,17 +355,20 @@ export function OptimizeV2({
                           onClick={onExport}
                           disabled={exporting}
                         >
-                          {exporting ? "Exporting…" : "Export full report"}
+                          {exporting
+                            ? t("optimize.optimizeV2.exportingEllipsis")
+                            : t("optimize.optimizeV2.exportFullReport")}
                         </button>
                       )}
                       <button type="button" className="btn btn-small" onClick={copySetupSummary}>
-                        {copiedSummary ? "Copied ✓" : "Copy summary"}
+                        {copiedSummary
+                          ? t("optimize.optimizeV2.copiedCheckmark")
+                          : t("optimize.optimizeV2.copySummary")}
                       </button>
                     </span>
                   </div>
                   <p className="ov2-summary-blurb">
-                    A plain-English recap of what the last check measured — copy it to share your
-                    setup.
+                    {t("optimize.optimizeV2.setupSummaryBlurb")}
                   </p>
                   <pre className="ov2-summary-text">{setupSummary}</pre>
                 </div>

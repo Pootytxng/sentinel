@@ -4,7 +4,11 @@
 // No send path exists anywhere — see docs/superpowers/specs/2026-06-12-receipts-telemetry-spec.md.
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
+// Side-effect import: guarantees the i18next singleton is initialized even when this component
+// is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
+import "../i18n";
 
 type ReceiptPayload = {
   schema_version: number;
@@ -20,6 +24,7 @@ type ReceiptPayload = {
 };
 
 export default function ReceiptsConsent() {
+  const { t } = useTranslation();
   const [gate, setGate] = useState(false);
   const [preview, setPreview] = useState<ReceiptPayload | null>(null);
   const [previewErr, setPreviewErr] = useState<string | null>(null);
@@ -52,15 +57,11 @@ export default function ReceiptsConsent() {
 
   return (
     <section className="set-section" data-testid="receipts-consent">
-      <h2 className="set-section-title">Share your receipts (opt-in)</h2>
-      <p className="receipts-hint">
-        Off by default, anonymous by design. If you opt in, Compy shares only measured outcomes —
-        your hardware class and session numbers, never your name, paths, or anything that
-        identifies this PC. You can inspect the exact payload below before anything is ever sent.
-      </p>
+      <h2 className="set-section-title">{t("optimize.receiptsConsent.title")}</h2>
+      <p className="receipts-hint">{t("optimize.receiptsConsent.hint")}</p>
       <div className="set-row">
         <button className="set-action" onClick={inspect}>
-          Inspect your receipt
+          {t("optimize.receiptsConsent.inspectButton")}
         </button>
       </div>
       {previewErr && <p className="receipts-hint">{previewErr}</p>}

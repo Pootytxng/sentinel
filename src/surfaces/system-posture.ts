@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import type { GameReadiness } from "../types";
 
 export type PostureState = "scanning" | "dialed-in" | "attention" | "unknown";
@@ -10,19 +11,37 @@ export type SystemPosture = {
   reasons: string[]; // the exact checks driving "attention" — click-through to readiness rows
 };
 
-export function deriveSystemPosture(input: {
-  readiness: GameReadiness | null;
-  activeChanges: number;
-  monitoringAvailable: boolean;
-}): SystemPosture {
+// i18n note: `t` is threaded through as the LAST param (this is a plain data module, not a
+// component — it can't call useTranslation() itself) — every call site passes its own `t` from
+// useTranslation(). Mirrors ago()/smoothness() elsewhere in this codebase.
+export function deriveSystemPosture(
+  input: {
+    readiness: GameReadiness | null;
+    activeChanges: number;
+    monitoringAvailable: boolean;
+  },
+  t: TFunction,
+): SystemPosture {
   const { readiness, activeChanges } = input;
 
   if (readiness == null) {
-    return { state: "scanning", headline: "Scanning your system…", sub: "Reading hardware and running checks.", attentionCount: 0, reasons: [] };
+    return {
+      state: "scanning",
+      headline: t("home.posture.scanning.headline"),
+      sub: t("home.posture.scanning.sub"),
+      attentionCount: 0,
+      reasons: [],
+    };
   }
 
   if (readiness.checks.length === 0) {
-    return { state: "unknown", headline: "Not enough to judge yet", sub: "Run a scan to see your readiness.", attentionCount: 0, reasons: [] };
+    return {
+      state: "unknown",
+      headline: t("home.posture.unknown.headline"),
+      sub: t("home.posture.unknown.sub"),
+      attentionCount: 0,
+      reasons: [],
+    };
   }
 
   // Dismissed checks are informed user choices — they never drive the attention posture.
@@ -40,7 +59,8 @@ export function deriveSystemPosture(input: {
     // rest, so the headline still names a real thing instead of a bare number. (Regression fix
     // 2026-07-17: the count phrasing had crept back onto Home's verdict strip — guard-pinned.)
     const top = attentionChecks[0];
-    const headline = n === 1 ? top.label : `${top.label} · and ${n - 1} more`;
+    const headline =
+      n === 1 ? top.label : t("home.posture.attentionMore", { label: top.label, count: n - 1 });
     return {
       state: "attention",
       headline,
@@ -52,13 +72,14 @@ export function deriveSystemPosture(input: {
     };
   }
 
-  const changeNote = activeChanges > 0
-    ? `${activeChanges} safe change${activeChanges === 1 ? "" : "s"} active & reversible`
-    : "nothing needs changing";
+  const changeNote =
+    activeChanges > 0
+      ? t("home.posture.changeNote", { count: activeChanges })
+      : t("home.posture.noChangeNote");
   return {
     state: "dialed-in",
-    headline: "You're ready to play",
-    sub: `All readiness checks pass · ${changeNote}.`,
+    headline: t("home.posture.dialedInHeadline"),
+    sub: t("home.posture.dialedInSub", { changeNote }),
     attentionCount: 0,
     reasons: [],
   };

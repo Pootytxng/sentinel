@@ -1,0 +1,116 @@
+[
+  {
+    "group": "vrr",
+    "title": "开启可变刷新率(FreeSync / G-SYNC)",
+    "variants": [
+      {
+        "vendor": "amd",
+        "steps": [
+          {
+            "caption": "右键点击桌面,打开 AMD Software: Adrenalin Edition。"
+          },
+          {
+            "caption": "打开左侧的 Display(显示)标签页。"
+          },
+          {
+            "caption": "将 AMD FreeSync 切换为 On(开启)。"
+          }
+        ]
+      },
+      {
+        "vendor": "nvidia",
+        "steps": [
+          {
+            "caption": "右键点击桌面,打开 NVIDIA 控制面板(NVIDIA Control Panel)。"
+          },
+          {
+            "caption": "在 Display(显示)分类下选择“Set up G-SYNC”(设置 G-SYNC)。"
+          },
+          {
+            "caption": "勾选“Enable G-SYNC”(启用 G-SYNC),然后点击 Apply(应用)。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "group": "xmp-expo",
+    "title": "开启 XMP / EXPO(解锁内存全速)",
+    "variants": [
+      {
+        "vendor": "any",
+        "steps": [
+          {
+            "caption": "重启电脑,开机时按 Del 或 F2 进入 BIOS。"
+          },
+          {
+            "caption": "找到内存配置选项——名称因主板而异,可能显示为 XMP、EXPO 或 DOCP。"
+          },
+          {
+            "caption": "启用 Profile 1(配置文件 1),然后 Save & Exit(保存并退出,通常是 F10)。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "group": "game-mode",
+    "title": "开启 Windows 游戏模式(Game Mode)",
+    "variants": [
+      {
+        "vendor": "any",
+        "steps": [
+          {
+            "caption": "打开 Settings → Gaming(设置 → 游戏)。"
+          },
+          {
+            "caption": "选择 Game Mode(游戏模式)。"
+          },
+          {
+            "caption": "将其切换为 On(开启)。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "group": "storage-sense",
+    "title": "释放系统盘空间(存储感知 Storage Sense)",
+    "variants": [
+      {
+        "vendor": "any",
+        "steps": [
+          {
+            "caption": "打开 Settings → System → Storage(设置 → 系统 → 存储)。"
+          },
+          {
+            "caption": "开启 Storage Sense(存储感知),或运行 Cleanup recommendations(清理建议)。"
+          },
+          {
+            "caption": "查看并清理——临时文件、回收站、不常用的应用。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "group": "hdr",
+    "title": "开启 HDR / Auto HDR",
+    "variants": [
+      {
+        "vendor": "any",
+        "steps": [
+          {
+            "caption": "打开 Settings → System → Display(设置 → 系统 → 显示)。"
+          },
+          {
+            "caption": "选择 HDR。"
+          },
+          {
+            "caption": "开启 Use HDR(使用 HDR),游戏方面再开启 Auto HDR。"
+          }
+        ]
+      }
+    ]
+  }
+]

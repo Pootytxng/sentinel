@@ -1,4 +1,6 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import "../i18n";
 import { GPU_SCOPES, gpuScopeMeta } from "../data/profile-store";
 import { useGpuProfileScope } from "../hooks/use-gpu-profile-scope";
 import {
@@ -36,16 +38,17 @@ const panelStyle: React.CSSProperties = {
 const headingStyle: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: "var(--ix-text)" };
 
 function GpuProfileScopePicker() {
+  const { t } = useTranslation();
   const { scope, setScope } = useGpuProfileScope();
   const active = gpuScopeMeta(scope);
 
   return (
-    <section aria-label="GPU profile scope" style={panelStyle}>
-      <div style={headingStyle}>GPU profile view</div>
+    <section aria-label={t("lab.gpuProfile.scopeAriaLabel")} style={panelStyle}>
+      <div style={headingStyle}>{t("lab.gpuProfile.scopeTitle")}</div>
 
       <div
         role="radiogroup"
-        aria-label="GPU profile scope"
+        aria-label={t("lab.gpuProfile.scopeAriaLabel")}
         style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
       >
         {GPU_SCOPES.map((s) => {
@@ -69,18 +72,18 @@ function GpuProfileScopePicker() {
                 color: selected ? "var(--ix-accent-ink)" : "var(--ix-text-2)",
               }}
             >
-              {meta.label}
+              {t(`lab.gpuProfile.scope.${s}.label`, meta.label)}
             </button>
           );
         })}
       </div>
 
       <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: "var(--ix-text-2)" }}>
-        {active.blurb}
+        {t(`lab.gpuProfile.scope.${scope}.blurb`, active.blurb)}
       </p>
 
       <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.4, color: "var(--ix-text-3, var(--ix-text-2))" }}>
-        This just frames what you look at — it changes nothing on your PC.
+        {t("lab.gpuProfile.scopeReassurance")}
       </p>
     </section>
   );
@@ -115,6 +118,7 @@ function versionMismatch(deltas: FieldDelta[]): { before: string; after: string 
 }
 
 function DeltaRow({ d }: { d: FieldDelta }) {
+  const { t } = useTranslation();
   // Temp down = cooler = the good direction; up = warmer. Text/boolean changes are neutral (a driver
   // bump or a mode switch isn't "good" or "bad" on its own — we don't editorialise).
   const changed = d.status === "changed";
@@ -140,13 +144,14 @@ function DeltaRow({ d }: { d: FieldDelta }) {
         ) : null}
       </td>
       <td style={{ ...cell, fontWeight: changed ? 600 : 400 }}>
-        {changed ? "Changed" : d.status === "same" ? "No change" : "—"}
+        {changed ? t("lab.gpuProfile.changed") : d.status === "same" ? t("lab.gpuProfile.noChange") : "—"}
       </td>
     </tr>
   );
 }
 
 function GpuProfileDelta({ currentSnapshot }: { currentSnapshot?: GpuProfileSnapshot | null }) {
+  const { t } = useTranslation();
   const [pair, setPair] = useState(() => readGpuProfiles());
 
   const capture = useCallback(
@@ -172,36 +177,35 @@ function GpuProfileDelta({ currentSnapshot }: { currentSnapshot?: GpuProfileSnap
   return (
     <section aria-labelledby="gpu-profile-delta-title" style={panelStyle}>
       <div id="gpu-profile-delta-title" style={headingStyle}>
-        Before &amp; after
+        {t("lab.gpuProfile.beforeAfterTitle")}
       </div>
       <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: "var(--ix-text-3, var(--ix-text-2))" }}>
-        Capture your GPU&apos;s readable settings before and after a change you make in your driver
-        tool, then see exactly what moved. Read-only — Compy changes nothing here.
+        {t("lab.gpuProfile.beforeAfterIntro")}
       </p>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button type="button" style={btnStyle()} onClick={() => capture("before")} disabled={!currentSnapshot}>
-          {pair.before ? "Re-capture before" : "Capture before"}
+          {pair.before ? t("lab.gpuProfile.recaptureBefore") : t("lab.gpuProfile.captureBefore")}
         </button>
         <button type="button" style={btnStyle()} onClick={() => capture("after")} disabled={!currentSnapshot}>
-          {pair.after ? "Re-capture after" : "Capture after"}
+          {pair.after ? t("lab.gpuProfile.recaptureAfter") : t("lab.gpuProfile.captureAfter")}
         </button>
         {(pair.before || pair.after) && (
           <button type="button" style={btnStyle(true)} onClick={reset}>
-            Clear
+            {t("lab.gpuProfile.clear")}
           </button>
         )}
       </div>
 
       {!currentSnapshot && !pair.before && !pair.after ? (
         <p style={muted}>
-          No GPU reading is available yet — once your GPU details load you can capture a snapshot.
+          {t("lab.gpuProfile.noReadingYet")}
         </p>
       ) : !bothCaptured ? (
         <p style={muted}>
           {pair.before
-            ? "Before snapshot saved. Make your change, then capture after."
-            : "Capture a before snapshot to begin."}
+            ? t("lab.gpuProfile.beforeSaved")
+            : t("lab.gpuProfile.captureToBegin")}
         </p>
       ) : (
         <>
@@ -225,9 +229,10 @@ function GpuProfileDelta({ currentSnapshot }: { currentSnapshot?: GpuProfileSnap
                 ⚠
               </span>
               <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.5, color: "var(--ix-text-1, #f2f3f7)" }}>
-                Your driver changed too ({mismatch.before} → {mismatch.after}), so this isn&apos;t a
-                clean before/after of just your setting. Re-capture both on the same driver to compare
-                fairly.
+                {t("lab.gpuProfile.driverMismatchWarning", {
+                  before: mismatch.before,
+                  after: mismatch.after,
+                })}
               </p>
             </div>
           )}
@@ -235,16 +240,16 @@ function GpuProfileDelta({ currentSnapshot }: { currentSnapshot?: GpuProfileSnap
             <thead>
               <tr style={{ color: "var(--ix-text-3, var(--ix-text-2))", fontSize: 11.5 }}>
                 <th scope="col" style={{ textAlign: "left", padding: "4px 8px", fontWeight: 600 }}>
-                  Setting
+                  {t("lab.gpuProfile.colSetting")}
                 </th>
                 <th scope="col" style={{ textAlign: "left", padding: "4px 8px", fontWeight: 600 }}>
-                  Before
+                  {t("lab.gpuProfile.colBefore")}
                 </th>
                 <th scope="col" style={{ textAlign: "left", padding: "4px 8px", fontWeight: 600 }}>
-                  After
+                  {t("lab.gpuProfile.colAfter")}
                 </th>
                 <th scope="col" style={{ textAlign: "left", padding: "4px 8px", fontWeight: 600 }}>
-                  Delta
+                  {t("lab.gpuProfile.colDelta")}
                 </th>
               </tr>
             </thead>
@@ -255,8 +260,7 @@ function GpuProfileDelta({ currentSnapshot }: { currentSnapshot?: GpuProfileSnap
             </tbody>
           </table>
           <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.4, color: "var(--ix-text-3, var(--ix-text-2))" }}>
-            Snapshots are stored only on this PC. A dash means that value wasn&apos;t readable in one
-            of the snapshots, so it isn&apos;t counted as a change.
+            {t("lab.gpuProfile.footnote")}
           </p>
         </>
       )}
@@ -278,16 +282,16 @@ const toneColor: Record<InsightTone, string> = {
  * vendor. Pure derive from `vendorProfileInsights`; changes nothing, promises no FPS/perf.
  */
 function GpuVendorInsights({ currentSnapshot }: { currentSnapshot?: GpuProfileSnapshot | null }) {
+  const { t } = useTranslation();
   if (!currentSnapshot) return null;
-  const insights = vendorProfileInsights(currentSnapshot);
+  const insights = vendorProfileInsights(currentSnapshot, t);
   if (insights.length === 0) return null;
 
   return (
-    <section aria-label="Vendor advisory insights" style={panelStyle}>
-      <div style={headingStyle}>For your Radeon GPU</div>
+    <section aria-label={t("lab.gpuProfile.vendorInsightsAriaLabel")} style={panelStyle}>
+      <div style={headingStyle}>{t("lab.gpuProfile.vendorInsightsTitle")}</div>
       <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: "var(--ix-text-3, var(--ix-text-2))" }}>
-        Plain-English notes tailored to your GPU, read from settings Compy already sees. Advisory only
-        — Compy changes nothing here.
+        {t("lab.gpuProfile.vendorInsightsIntro")}
       </p>
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
         {insights.map((i) => (

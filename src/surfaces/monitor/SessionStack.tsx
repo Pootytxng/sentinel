@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { SessionSummary } from "../../types";
 import { useRoomIdentityFlag } from "../../design/use-hud";
 import { monotoneSegments } from "../../design/console/monotone";
@@ -11,6 +12,7 @@ import {
   relativeDay,
   type StackRow,
 } from "./monitor-stack-profile";
+import "../../i18n";
 
 // SessionStack — Monitor v5's sessions half (owner pick 2026-07-11: "A's top + B's stack",
 // plan 2026-07-11-monitor-v5-deck-stack, T2). Small multiples, dead flat: every session is one
@@ -74,6 +76,7 @@ function RowCanvas({
   /** The stack-shared ink resolver — see the cache note in SessionStack. */
   inkFor: (name: string, fb: string, from?: Element | null) => string;
 }) {
+  const { t } = useTranslation();
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 640, h: 40 });
@@ -169,12 +172,14 @@ function RowCanvas({
     <span className={`ss-canvas-wrap ${row.partial ? "ss-canvas-partial" : ""}`} ref={wrapRef}>
       <canvas ref={canvasRef} className="ss-canvas" aria-hidden="true" />
       {(row.fracs.length < 2 || axisMax == null) && (
-        <span className="ss-notimeline">timeline not kept</span>
+        <span className="ss-notimeline">{t("monitor.sessionStack.timelineNotKept")}</span>
       )}
       {/* A capped recording must SAY so — the trace spans what was RECORDED, and this states
           it, so a full-width line never claims hours it doesn't show (bug→guard). */}
       {row.partial && row.coveredSecs != null && (
-        <span className="ss-coverage">first {fmtDur(row.coveredSecs)} recorded</span>
+        <span className="ss-coverage">
+          {t("monitor.sessionStack.coverageNote", { duration: fmtDur(row.coveredSecs) })}
+        </span>
       )}
       {row.pin && (
         <span
@@ -198,6 +203,7 @@ export function SessionStack({
   sessions?: SessionSummary[];
   reduced: boolean;
 }) {
+  const { t } = useTranslation();
   const [gameOnly, setGameOnly] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const roomIdentityOn = useRoomIdentityFlag();
@@ -243,23 +249,29 @@ export function SessionStack({
   }, []);
 
   if (sessions.length === 0) {
-    return <p className="ss-empty">no sessions on record yet — play with capture on</p>;
+    return <p className="ss-empty">{t("monitor.sessionStack.noSessionsEmpty")}</p>;
   }
 
   const detailLine = (row: StackRow) => {
     const s = row.session;
     const parts = [
-      `${fmtV(s.avg_fps)} AVG`,
-      `${fmtV(s.low1_fps_est)} 1% LOW`,
-      `${row.dipCount} ${row.dipCount === 1 ? "SPIKE" : "SPIKES"}`,
+      t("monitor.sessionStack.avgTag", { value: fmtV(s.avg_fps) }),
+      t("monitor.sessionStack.oneLowTag", { value: fmtV(s.low1_fps_est) }),
+      t("monitor.sessionStack.spikeCount", { count: row.dipCount }),
     ];
-    if (row.pin) parts.push(`worst dip ${row.pin.clock} — ${row.pin.label}`.trim());
+    if (row.pin) {
+      parts.push(
+        t("monitor.sessionStack.worstDip", { clock: row.pin.clock, label: row.pin.label }).trim(),
+      );
+    }
     if (row.partial && row.coveredSecs != null) {
-      parts.push(`timeline covers the first ${fmtDur(row.coveredSecs)} only`);
+      parts.push(
+        t("monitor.sessionStack.timelineCoversFirst", { duration: fmtDur(row.coveredSecs) }),
+      );
     }
     if (s.compy_changes_active > 0) {
       parts.push(
-        `${s.compy_changes_active} ${s.compy_changes_active === 1 ? "COMPY CHANGE" : "COMPY CHANGES"} ON`,
+        t("monitor.sessionStack.changesOn", { count: s.compy_changes_active }),
       );
     }
     return parts.join(" · ");
@@ -268,14 +280,14 @@ export function SessionStack({
   return (
     <div className="ss" data-motion={reduced ? "reduced" : "full"}>
       {filterAvail && currentGame && (
-        <div className="ss-filter" role="group" aria-label="Game filter">
+        <div className="ss-filter" role="group" aria-label={t("monitor.sessionStack.gameFilterAria")}>
           <button
             type="button"
             className={`ss-filter-btn ${!gameOnly ? "ss-filter-on" : ""}`}
             aria-pressed={!gameOnly}
             onClick={() => setGameOnly(false)}
           >
-            All games
+            {t("monitor.sessionStack.allGames")}
           </button>
           <button
             type="button"
@@ -283,7 +295,9 @@ export function SessionStack({
             aria-pressed={gameOnly}
             onClick={() => setGameOnly(true)}
           >
-            {prettyGameName(currentGame) || "unknown game"} only
+            {t("monitor.sessionStack.gameOnlyButton", {
+              game: prettyGameName(currentGame) || t("monitor.sessionStack.unknownGame"),
+            })}
           </button>
         </div>
       )}
@@ -303,8 +317,8 @@ export function SessionStack({
               >
                 <span className="ss-meta">
                   {[
-                    prettyGameName(s.process_name) || "unknown game",
-                    relativeDay(s.started_at, now),
+                    prettyGameName(s.process_name) || t("monitor.sessionStack.unknownGame"),
+                    relativeDay(s.started_at, now, t),
                     fmtDur(s.duration_secs),
                   ]
                     .filter(Boolean)
@@ -320,8 +334,8 @@ export function SessionStack({
                 />
                 {row.delta && (
                   <span className="ss-chip">
-                    VS PREVIOUS {fmtDeltaGlyph(row.delta.avgFps)} AVG
-                    {!row.delta.sameGame && " · DIFFERENT GAME"}
+                    {t("monitor.sessionStack.vsPrevious", { glyph: fmtDeltaGlyph(row.delta.avgFps) })}
+                    {!row.delta.sameGame && t("monitor.sessionStack.differentGameTag")}
                   </span>
                 )}
               </button>
@@ -333,8 +347,7 @@ export function SessionStack({
 
       {model.axisMax != null && (
         <p className="ss-axisnote">
-          one axis for every row · 0–{Math.round(model.axisMax)} 1% low fps — a taller line is a
-          better session
+          {t("monitor.sessionStack.axisNote", { max: Math.round(model.axisMax) })}
         </p>
       )}
     </div>

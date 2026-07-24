@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import "../../i18n";
 import Fix from "../Fix";
 import Check from "../Check";
 import { GamingMode } from "../GamingMode";
@@ -59,6 +61,7 @@ const GAUGE_R = 32;
 const GAUGE_C = 2 * Math.PI * GAUGE_R;
 
 export function OptimizeStation(props: LabFastPathProps) {
+  const { t } = useTranslation();
   // Same drift derivation the Optimize room + verdict use — a drifted rec renders ONCE in Fix's
   // "turned off outside Compy" group, never double-counted as ready (one-mention law).
   const reverted = useMemo(() => deriveReverted(props.changes), [props.changes]);
@@ -107,7 +110,7 @@ export function OptimizeStation(props: LabFastPathProps) {
           <div
             className="lab-gauge"
             role="img"
-            aria-label={`${appliedSafe} of ${totalSafe} safe tweaks on`}
+            aria-label={t("lab.optimizeStation.gaugeAriaLabel", { applied: appliedSafe, total: totalSafe })}
           >
             <svg className="lab-gauge-ring" viewBox="0 0 76 76" width="76" height="76" aria-hidden="true">
               <circle className="lab-gauge-track" cx="38" cy="38" r={GAUGE_R} />
@@ -134,20 +137,22 @@ export function OptimizeStation(props: LabFastPathProps) {
             </span>
           </div>
           <p className="lab-gauge-caption">
-            <span className="lab-gauge-caption-k">Your safe stack</span>
+            <span className="lab-gauge-caption-k">{t("lab.optimizeStation.yourSafeStack")}</span>
             {/* State observation, never an action claim (consumer-panel Phase 0/1): currently_applied
                 is a live system probe — a setting can be on because Windows shipped that way or the
                 user set it themselves, not because Compy applied anything. "Fully applied" read as
                 unconsented action to first-contact readers. */}
             {appliedSafe >= totalSafe
-              ? `All ${totalSafe} already on for this rig — nothing to apply.`
+              ? t("lab.optimizeStation.allApplied", { total: totalSafe })
               : driftedPending === 0
-                ? `${freshPending} left to enable below — one tap each, reversible.`
+                ? t("lab.optimizeStation.freshLeft", { count: freshPending })
                 : freshPending === 0
-                  ? driftedPending === 1
-                    ? "1 was turned off outside Compy — restore it below."
-                    : `${driftedPending} were turned off outside Compy — restore them below.`
-                  : `${freshPending + driftedPending} left below — ${freshPending} to enable, ${driftedPending} turned off outside Compy.`}
+                  ? t("lab.optimizeStation.driftedRestore", { count: driftedPending })
+                  : t("lab.optimizeStation.mixedLeft", {
+                      totalLeft: freshPending + driftedPending,
+                      fresh: freshPending,
+                      drifted: driftedPending,
+                    })}
           </p>
         </div>
       )}
@@ -179,7 +184,7 @@ export function OptimizeStation(props: LabFastPathProps) {
           changes with per-row undo + the full history), one disclosure below the toggles it
           records. Zero new IPC; rollback resolves from history.json alone, same as everywhere. */}
       <details className="lab-optimize-more lab-optimize-ledger" open={expert || undefined}>
-        <summary className="lab-optimize-more-summary">Applied &amp; history — every change, undoable</summary>
+        <summary className="lab-optimize-more-summary">{t("lab.optimizeStation.appliedHistorySummary")}</summary>
         <div className="lab-optimize-more-body">
           <Fix
             recs={props.recs ?? []}
@@ -206,7 +211,7 @@ export function OptimizeStation(props: LabFastPathProps) {
           advises. (The ARMED telemetry-task disable — the "bloat" of §5 — already lives in the
           fixes surface above.) */}
       <details className="lab-optimize-more" open={expert || undefined}>
-        <summary className="lab-optimize-more-summary">More cleanup (optional)</summary>
+        <summary className="lab-optimize-more-summary">{t("lab.optimizeStation.moreCleanupSummary")}</summary>
         <div className="lab-optimize-more-body">
           <Check
             embedded
@@ -232,11 +237,10 @@ export function OptimizeStation(props: LabFastPathProps) {
           className="lab-optimize-more lab-optimize-power"
           onToggle={(e) => setPowerOpen((e.currentTarget as HTMLDetailsElement).open)}
         >
-          <summary className="lab-optimize-more-summary">Power features — Gaming Mode (advanced, reversible)</summary>
+          <summary className="lab-optimize-more-summary">{t("lab.optimizeStation.powerFeaturesSummary")}</summary>
           <div className="lab-optimize-more-body">
             <p className="lab-optimize-power-intro">
-              Bigger changes you can make and prove here. These are the same reversible controls from
-              Play — apply one, then run the Benchmark station to measure what it did on your rig.
+              {t("lab.optimizeStation.powerFeaturesIntro")}
             </p>
             {powerOpen && <GamingMode />}
           </div>

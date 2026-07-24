@@ -1,0 +1,172 @@
+{
+  "rail": {
+    "home": "主页",
+    "check": "检测",
+    "play": "监测",
+    "fix": "调校",
+    "learn": "小黑本",
+    "lab": "实验室",
+    "optimize": "优化"
+  },
+  "shellV2": {
+    "navAriaLabel": "房间导航",
+    "crumb": {
+      "home": "你的电脑现在怎么样",
+      "check": "有什么在拖你后腿吗?",
+      "fix": "找出问题、修复问题、随时可撤销",
+      "play": "实时查看",
+      "learn": "什么真正有用——用实测数据说话",
+      "lab": "跑分、延迟、诊断"
+    },
+    "footerPre": "每一项更改均可撤销 ·",
+    "footerEmph": "台账 {{n}}",
+    "fallbackTitle": "Compy"
+  },
+  "confirmDialog": {
+    "cancel": "取消",
+    "confirm": "确认"
+  },
+  "errorBoundary": {
+    "title": "Compy 启动时遇到了点问题",
+    "body": "加载过程中出了点问题。重启 Compy 通常就能解决。",
+    "reload": "重新加载 Compy"
+  },
+  "gallery": {
+    "statusVocabulary": "状态词汇",
+    "stats": "数据",
+    "average": "平均值",
+    "frametime": "帧时间",
+    "oneLowEstimate": "1% 最低帧 · 估算值",
+    "instrumentCluster": "仪表集群",
+    "gpuTemp": "GPU 温度",
+    "gpuUsage": "GPU 使用率",
+    "fan": "风扇",
+    "power": "功耗",
+    "protectedTitle": "你已受到保护",
+    "protectedDetail": "4 项更改生效中——均可在台账中撤销。",
+    "noSessions": "还没有会话记录",
+    "noSessionsBody": "开启监测后玩一局游戏,Compy 就会在这里生成复盘报告。"
+  },
+  "roomAccentPicker": {
+    "accentColorAriaLabel": "{{room}}主题色",
+    "accentHeading": "{{room}}主题色",
+    "applyToAll": "应用到全部房间",
+    "applyToAllTitle": "让每个房间都使用这个主题色",
+    "resetToDefault": "恢复默认",
+    "swatchNames": {
+      "violet": "紫罗兰",
+      "teal": "藏青色",
+      "amber": "琥珀色",
+      "emerald": "翡翠绿",
+      "sky": "天蓝色",
+      "red": "红色",
+      "yellow": "黄色",
+      "magenta": "洋红色",
+      "cyanMidnight": "青色 / 午夜蓝",
+      "redBlue": "红色 / 蓝色",
+      "limeCyan": "青柠绿 / 青色",
+      "violetTeal": "紫罗兰 / 藏青色",
+      "magentaViolet": "洋红色 / 紫罗兰",
+      "amberWine": "琥珀色 / 酒红色",
+      "skyEmerald": "天蓝色 / 翡翠绿"
+    }
+  },
+  "slimRecRow": {
+    "badge": {
+      "recommended": "推荐",
+      "optional": "可选"
+    }
+  },
+  "term": {
+    "moreInBlackbook": "在小黑本(Blackbook)中查看更多 →"
+  },
+  "trustSwitch": {
+    "working": "处理中…",
+    "previousSetting": "你之前的设置",
+    "restoresCopy": "已保存快照——将恢复至 {{label}} · 已记录到信任台账",
+    "setTo": " · 已设为 {{label}}"
+  },
+  "updatePill": {
+    "updatingPct": "更新中 · {{pct}}%",
+    "updatingStarting": "更新中 · 正在启动",
+    "installing": "安装中——Compy 会自动重启",
+    "updateFailedRetry": "更新失败 · 重试",
+    "updateReady": "有可用更新 · v{{version}}",
+    "detailsAriaLabel": "更新详情",
+    "versionTitle": "Compy v{{version}}",
+    "updateNow": "立即更新",
+    "later": "以后再说",
+    "fineprint": "安装前会验证签名 · Compy 会自动重启"
+  },
+  "walkthrough": {
+    "whichCard": "选择显卡",
+    "previousStep": "上一步",
+    "steps": "步骤",
+    "stepN": "第 {{n}} 步",
+    "nextStep": "下一步",
+    "schematicNote": "示意图——菜单可能因版本略有不同。",
+    "openIt": "打开"
+  },
+  "whatsThis": {
+    "trigger": "这是什么?",
+    "more": "在小黑本中查看更多 →"
+  },
+  "windowChrome": {
+    "title": "Compy",
+    "settings": "设置",
+    "minimize": "最小化",
+    "restore": "还原",
+    "maximize": "最大化",
+    "close": "关闭"
+  },
+  "backButton": {
+    "backTitle": "后退(Alt+Left)",
+    "back": "后退",
+    "forwardTitle": "前进(Alt+Right)",
+    "forward": "前进"
+  },
+  "arcGauge": {
+    "noReading": "暂无读数",
+    "notYet": "暂未测得",
+    "measured": "已测量"
+  },
+  "oscilloscope": {
+    "worstSpike": "最大峰值 {{value}} {{unit}}",
+    "noSignal": "无信号"
+  },
+  "licensePanel": {
+    "title": "授权",
+    "proActiveNoExpiry": "✓ Compy Pro 已激活。",
+    "proActiveWithExpiry": "✓ Compy Pro 已激活 · 将于 {{date}} 续期。",
+    "freeVersion": "你正在使用免费版。Compy 的核心功能——包括所有涉及安全的功能——完全免费。",
+    "haveKey": "已有授权密钥吗?",
+    "placeholder": "粘贴你的授权密钥",
+    "keyAriaLabel": "授权密钥",
+    "checking": "验证中…",
+    "apply": "应用",
+    "saveError": "无法保存该密钥。",
+    "reasonExpired": "该授权已过期。",
+    "reasonInvalid": "该密钥看起来无效。",
+    "reasonNotAvailable": "Pro 版本暂未开放。"
+  },
+  "roomShell": {
+    "door": {
+      "home": "找出值得优化的地方",
+      "fix": "实时查看",
+      "play": "查看有哪些变化",
+      "learn": "打开仪表面板"
+    }
+  },
+  "status": {
+    "ready": "就绪",
+    "attention": "需注意",
+    "critical": "严重",
+    "protected": "受保护",
+    "scanning": "扫描中",
+    "info": "信息",
+    "unavailable": "不可用"
+  },
+  "sparkline": {
+    "trendAriaLabel": "趋势"
+  }
+}

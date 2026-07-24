@@ -7,6 +7,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useTranslation } from "react-i18next";
+// Side-effect import: guarantees the i18next instance is initialized before this file's t() calls run.
+import "../i18n";
 import "./ConfirmDialog.css";
 
 // Themed Confirm Dialog (spec 2026-06-07) — replaces the native window.confirm() ("tauri.localhost
@@ -47,6 +50,7 @@ export function useConfirmOptional(): ConfirmFn | null {
 }
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
   const [opts, setOpts] = useState<ConfirmOpts | null>(null);
   const resolver = useRef<((v: boolean) => void) | null>(null);
   const trigger = useRef<HTMLElement | null>(null);
@@ -133,7 +137,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             <div className="cmp-confirm-actions">
               {!opts.acknowledge && (
                 <button type="button" className="cmp-confirm-cancel" onClick={() => close(false)}>
-                  {opts.cancelLabel ?? "Cancel"}
+                  {opts.cancelLabel ?? t("common.confirmDialog.cancel")}
                 </button>
               )}
               <button
@@ -142,7 +146,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                 className="cmp-confirm-go"
                 onClick={() => close(true)}
               >
-                {opts.confirmLabel ?? "Confirm"}
+                {opts.confirmLabel ?? t("common.confirmDialog.confirm")}
               </button>
             </div>
           </div>

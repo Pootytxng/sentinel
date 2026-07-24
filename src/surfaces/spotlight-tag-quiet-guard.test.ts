@@ -14,15 +14,23 @@ describe("spotlight #1-limiter tags stay quiet, never loud alert badges", () => 
   const setupTsx = readFileSync(join("src", "surfaces", "setup", "SetupTour.tsx"), "utf8");
   const firstCheckCss = readFileSync(join("src", "surfaces", "FirstCheck.css"), "utf8");
   const setupCss = readFileSync(join("src", "surfaces", "setup", "SetupTour.css"), "utf8");
+  // i18n update (2026-07-23): SetupTour.tsx's copy — including this tag — was extracted into
+  // src/i18n/locales/en/home.json (key home.setupTour.check.spotlightTag) as part of the
+  // Simplified Chinese translation; SetupTour.tsx now renders it via t(...) instead of a literal.
+  // The English text is unchanged, just relocated — so the text-content assertions below read the
+  // JSON (the actual source of the shipped English string) while the CSS assertions keep reading
+  // SetupTour.css directly, since that file wasn't touched by the i18n pass.
+  const setupHomeJson = readFileSync(join("src", "i18n", "locales", "en", "home.json"), "utf8");
 
   it("no uppercase 'BIGGEST LIMITER' shout in either surface", () => {
     expect(firstCheckTsx).not.toContain("BIGGEST LIMITER");
     expect(setupTsx).not.toContain("BIGGEST LIMITER");
+    expect(setupHomeJson).not.toContain("BIGGEST LIMITER");
   });
 
   it("the quiet lowercase tag is actually present (guard wired to the real strings)", () => {
     expect(firstCheckTsx).toContain("biggest limiter");
-    expect(setupTsx).toContain("biggest limiter");
+    expect(setupHomeJson).toContain("biggest limiter");
   });
 
   const tagBlock = (css: string, selector: string) => {

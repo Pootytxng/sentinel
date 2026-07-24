@@ -5,6 +5,9 @@ import { railFor } from "../design/homeRail";
 import { postureLine } from "./command-center-data";
 import { activeChangeCount } from "./dashboard-data";
 import { HomeConsole } from "./HomeConsole";
+// i18n update (2026-07-23): postureLine now takes a TFunction as its last param — the real
+// i18next instance (English default, same as every assertion below already expects).
+import i18n from "../i18n";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
 import { readFileSync } from "fs";
@@ -191,7 +194,7 @@ const mount = (p = props) =>
 
 describe("HomeConsole — masthead (the proven HomeHud register)", () => {
   it("title-header law: the h1 is the room TITLE; the posture verdict renders ONCE, in body context", () => {
-    const posture = postureLine(readiness, priorities, activeChangeCount(props.changes));
+    const posture = postureLine(readiness, priorities, activeChangeCount(props.changes), i18n.t);
     const c = mount().container;
     const h1 = c.querySelector(".v2-verdict h1")!;
     expect(h1.querySelector(".hc-headline")!.textContent).toBe("Home");
@@ -218,7 +221,7 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
       ready_count: 2,
       attention_count: 1,
     };
-    const posture = postureLine(attn, priorities, activeChangeCount(props.changes));
+    const posture = postureLine(attn, priorities, activeChangeCount(props.changes), i18n.t);
     const c = mount({ ...props, readiness: attn }).container;
     expect(posture.tone).toBe("attention");
     const strip = c.querySelector(".hc-verdict")!;

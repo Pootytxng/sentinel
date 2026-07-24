@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary } from "../types";
 import {
@@ -31,6 +33,7 @@ import { SessionStack } from "./monitor/SessionStack";
 import { deckDeltaFrom, fmtDeltaGlyph } from "./monitor/monitor-stack-profile";
 import { prettyGameName } from "./game-name";
 import type { GpuVendor } from "./walkthroughs";
+import "../i18n";
 import "./monitor-console.css";
 
 // MonitorConsole — the Monitor room as v5 "Flight Deck + Session Stack" (owner pick 2026-07-11,
@@ -81,6 +84,21 @@ function pickGpu(list: GpuSnap[]): GpuSnap | null {
   return [...list].sort((a, b) => (b.temperature_c ?? -1) - (a.temperature_c ?? -1))[0];
 }
 
+// Corner id ("top-left" etc.) → its translated label. A lookup (not a literal word-swap of the
+// id) because natural phrasing per locale isn't a mechanical translation of "top"/"left".
+function cornerLabel(t: TFunction, c: string): string {
+  switch (c) {
+    case "top-left":
+      return t("monitor.monitorConsole.cornerTopLeft");
+    case "top-right":
+      return t("monitor.monitorConsole.cornerTopRight");
+    case "bottom-left":
+      return t("monitor.monitorConsole.cornerBottomLeft");
+    default:
+      return t("monitor.monitorConsole.cornerBottomRight");
+  }
+}
+
 // Grade → ArcGauge/Oscilloscope tone — HomeConsole's mapping: "ok" rides the accent (fine, not
 // celebrated), "bad" warns; neutral never borrows a judgment color.
 const arcTone = (g: Grade): ArcTone =>
@@ -111,6 +129,7 @@ export function MonitorConsole({
   /** Basic's route into Advanced → Sessions (never a dead end) — same door MonitorBasic has. */
   onOpenSessions?: () => void;
 }) {
+  const { t } = useTranslation();
   const reduced = useReducedMotion();
   const [cpu, setCpu] = useState<CpuSnap | null>(null);
   const [gpu, setGpu] = useState<GpuSnap | null>(null);
@@ -311,19 +330,19 @@ export function MonitorConsole({
           disabled={fpsBusy}
           onClick={toggleCapture}
         >
-          {fpsBusy ? "…" : fpsActive ? "Stop capture" : "Start capture"}
+          {fpsBusy ? "…" : fpsActive ? t("monitor.monitorConsole.stopCapture") : t("monitor.monitorConsole.startCapture")}
         </button>
         <span className="mc-cap-status" style={live ? { color: gradeColor(low1Grade) || undefined } : undefined}>
           {live ? (
             <>
-              {Math.round(sample.low1_fps)} <Term id="one-percent-lows">1% low</Term> · est
+              {Math.round(sample.low1_fps)} <Term id="one-percent-lows">{t("monitor.monitorConsole.oneLowTermLabel")}</Term>{t("monitor.monitorConsole.estSuffix")}
             </>
           ) : fps?.status === "declined" ? (
-            "admin permission declined — tap Start capture to allow it"
+            t("monitor.monitorConsole.declinedStatus")
           ) : fpsActive ? (
-            "capturing — focus a DX11/DX12 game"
+            t("monitor.monitorConsole.capturingStatus")
           ) : (
-            "start capture, then play"
+            t("monitor.monitorConsole.idleStatus")
           )}
         </span>
         {/* The in-game overlay's control — the room's other real action (§A0 item 1). */}
@@ -333,7 +352,7 @@ export function MonitorConsole({
             className={`mc-cap ${overlayOn ? "mc-cap-on" : ""}`}
             onClick={toggleOverlay}
           >
-            {overlayOn ? "Overlay on" : "Overlay"}
+            {overlayOn ? t("monitor.monitorConsole.overlayOn") : t("monitor.monitorConsole.overlayLabel")}
           </button>
           {overlayOn && (
             <>
@@ -342,13 +361,13 @@ export function MonitorConsole({
                   key={c}
                   type="button"
                   className={`mc-ov-corner ${corner === c ? "mc-ov-corner-on" : ""}`}
-                  aria-label={`Overlay corner ${c.replace("-", " ")}`}
+                  aria-label={t("monitor.monitorConsole.overlayCornerAria", { corner: cornerLabel(t, c) })}
                   onClick={() => chooseCorner(c)}
                 >
                   {glyph}
                 </button>
               ))}
-              <span className="mc-ov-group" role="group" aria-label="Overlay density">
+              <span className="mc-ov-group" role="group" aria-label={t("monitor.monitorConsole.overlayDensityAria")}>
                 {(["minimal", "standard", "full"] as OverlayDensity[]).map((d) => (
                   <button
                     key={d}
@@ -357,7 +376,11 @@ export function MonitorConsole({
                     aria-pressed={density === d}
                     onClick={() => chooseDensity(d)}
                   >
-                    {d === "minimal" ? "Min" : d === "standard" ? "Std" : "Full"}
+                    {d === "minimal"
+                      ? t("monitor.monitorConsole.densityMin")
+                      : d === "standard"
+                        ? t("monitor.monitorConsole.densityStd")
+                        : t("monitor.monitorConsole.densityFull")}
                   </button>
                 ))}
               </span>
@@ -365,10 +388,10 @@ export function MonitorConsole({
                 type="button"
                 className={`mc-ov-seg ${backdrop === "on" ? "mc-ov-seg-on" : ""}`}
                 aria-pressed={backdrop === "on"}
-                aria-label="Overlay background"
+                aria-label={t("monitor.monitorConsole.overlayBackgroundAria")}
                 onClick={() => chooseBackdrop(backdrop === "on" ? "off" : "on")}
               >
-                Backdrop
+                {t("monitor.monitorConsole.backdropLabel")}
               </button>
             </>
           )}
@@ -386,13 +409,13 @@ export function MonitorConsole({
             <span className="mc-readout-v" style={ink(gradeFps(stats.maxFps, rig))}>
               {stats.maxFps == null ? "—" : Math.round(stats.maxFps)}
             </span>
-            <span className="mc-readout-k">MAX FPS</span>
+            <span className="mc-readout-k">{t("monitor.monitorConsole.maxFpsLabel")}</span>
           </div>
           <div className="mc-readout">
             <span className="mc-readout-v" style={ink(gradeFps(stats.avgFps, rig))}>
               {stats.avgFps == null ? "—" : Math.round(stats.avgFps)}
             </span>
-            <span className="mc-readout-k">AVG FPS</span>
+            <span className="mc-readout-k">{t("monitor.monitorConsole.avgFpsLabel")}</span>
           </div>
           <div className="mc-readout">
             <span
@@ -401,7 +424,7 @@ export function MonitorConsole({
             >
               {stats.lowestLatencyMs == null ? "—" : `${stats.lowestLatencyMs.toFixed(1)} ms`}
             </span>
-            <span className="mc-readout-k">LOWEST LATENCY</span>
+            <span className="mc-readout-k">{t("monitor.monitorConsole.lowestLatencyLabel")}</span>
           </div>
           <div className="mc-readout">
             <span
@@ -410,7 +433,7 @@ export function MonitorConsole({
             >
               {stats.spikeCount == null ? "—" : stats.spikeCount}
             </span>
-            <span className="mc-readout-k">SPIKES</span>
+            <span className="mc-readout-k">{t("monitor.monitorConsole.spikesLabel")}</span>
           </div>
         </div>
 
@@ -432,13 +455,14 @@ export function MonitorConsole({
         {deck && (
           <div className="mc-delta">
             <span className="mc-delta-k">
-              VS YOUR LAST{" "}
-              {(prettyGameName(deck.prev.process_name) || "unknown game").toUpperCase()} SESSION
-              {!deck.sameGame && " (DIFFERENT GAME)"}
+              {t("monitor.monitorConsole.vsLastSession", {
+                game: (prettyGameName(deck.prev.process_name) || t("monitor.monitorConsole.unknownGame")).toUpperCase(),
+              })}
+              {!deck.sameGame && t("monitor.monitorConsole.differentGameTag")}
             </span>
-            <span className="mc-delta-v">AVG FPS {fmtDeltaGlyph(deck.avgFps)}</span>
-            <span className="mc-delta-v">1% LOW {fmtDeltaGlyph(deck.low1)}</span>
-            <span className="mc-delta-v">SPIKES {fmtDeltaGlyph(deck.spikes)}</span>
+            <span className="mc-delta-v">{t("monitor.monitorConsole.avgFpsLabel")} {fmtDeltaGlyph(deck.avgFps)}</span>
+            <span className="mc-delta-v">{t("monitor.monitorConsole.oneLowCapsLabel")} {fmtDeltaGlyph(deck.low1)}</span>
+            <span className="mc-delta-v">{t("monitor.monitorConsole.spikesLabel")} {fmtDeltaGlyph(deck.spikes)}</span>
             {deck.changesOn > 0 && (
               // Honesty caveat (consumer panel 2026-07-14): with >1 change on, these deltas are
               // the COMBINED effect — never imply per-change attribution. The one-change-at-a-time
@@ -447,12 +471,12 @@ export function MonitorConsole({
                 className="mc-delta-tag"
                 title={
                   deck.changesOn > 1
-                    ? "These deltas reflect all active changes (and anything else that differed) together — for a one-change-at-a-time measurement, run the Lab's before/after benchmark."
+                    ? t("monitor.monitorConsole.combinedEffectTooltip")
                     : undefined
                 }
               >
-                {deck.changesOn} {deck.changesOn === 1 ? "COMPY CHANGE" : "COMPY CHANGES"} ON
-                {deck.changesOn > 1 && " · COMBINED EFFECT"}
+                {t("monitor.monitorConsole.changesOn", { count: deck.changesOn })}
+                {deck.changesOn > 1 && t("monitor.monitorConsole.combinedEffectTag")}
               </span>
             )}
           </div>
@@ -462,7 +486,7 @@ export function MonitorConsole({
           <Oscilloscope
             samples={live ? fpsH.current : []}
             cap={FPS_CAP}
-            label="fps"
+            label={t("monitor.monitorConsole.fpsScopeLabel")}
             unit="fps"
             tone={live ? arcTone(gradeFps(sample.fps, rig)) : "accent"}
             reduced={reduced}
@@ -473,7 +497,7 @@ export function MonitorConsole({
             CPU utilisation stays deliberately ungraded (high while gaming is fine). */}
         <div className="mc-gauges">
           <ArcGauge
-            label="GPU temp"
+            label={t("monitor.monitorConsole.gpuTempLabel")}
             value={gpu?.temperature_c ?? null}
             max={100}
             unit="°C"
@@ -482,7 +506,7 @@ export function MonitorConsole({
           />
           {mode === "advanced" && (
             <ArcGauge
-              label="GPU load"
+              label={t("monitor.monitorConsole.gpuLoadLabel")}
               value={gpu?.utilization_gpu_pct ?? null}
               max={100}
               unit="%"
@@ -491,7 +515,7 @@ export function MonitorConsole({
             />
           )}
           <ArcGauge
-            label="CPU"
+            label={t("monitor.monitorConsole.cpuLabel")}
             value={cpu ? Math.round(cpu.usage_overall_pct) : null}
             max={100}
             unit="%"
@@ -499,7 +523,7 @@ export function MonitorConsole({
             measured={cpu != null}
           />
           <ArcGauge
-            label="RAM"
+            label={t("monitor.monitorConsole.ramLabel")}
             value={ramPct}
             max={100}
             unit="%"
@@ -515,7 +539,7 @@ export function MonitorConsole({
 
       {/* Same honesty micro-line the classic face carries — method stated. */}
       <p className="mc-honest">
-        <Term id="etw">ETW</Term> · external · anti-cheat safe — no injection, no kernel driver.
+        <Term id="etw">{t("monitor.monitorConsole.etwEmph")}</Term>{t("monitor.monitorConsole.etwHonestyPost")}
       </p>
 
       {/* THE SESSION STACK — the face's second half (the stack IS the session shelf): every
@@ -526,7 +550,7 @@ export function MonitorConsole({
           a dead end); Advanced reaches it via its own tab. */}
       {mode === "basic" && sessions.length > 0 && (
         <button type="button" className="mc-last cmp-door" onClick={onOpenSessions}>
-          <span className="mc-last-k">Session history</span>
+          <span className="mc-last-k">{t("monitor.monitorConsole.sessionHistory")}</span>
           <span className="cmp-door-chevron cmp-door-chevron-end" aria-hidden="true">
             ▸
           </span>

@@ -5,12 +5,19 @@ import { ShellV2 } from "../design/ShellV2";
 import { ConfirmProvider } from "../design/ConfirmDialog";
 import { railFor } from "../design/homeRail";
 import {
-  HOME_INTAKE_ROWS,
-  HOME_INTAKE_FASTPATH,
-  fastPathReadyHeadline,
-  fastPathApplyLabel,
-  fastPathAppliedNote,
+  homeIntakeRows,
+  homeIntakeFastpath,
+  fastPathReadyHeadline as fastPathReadyHeadlineRaw,
+  fastPathApplyLabel as fastPathApplyLabelRaw,
+  fastPathAppliedNote as fastPathAppliedNoteRaw,
 } from "./home-intake-data";
+// i18n update (2026-07-23): home-intake-data.ts's exports now take a TFunction as their last param
+// (Simplified Chinese translation pass). These test-local aliases resolve them through the real
+// i18next instance (English is the default language, matching what every assertion below already
+// expects) under their ORIGINAL names, so every existing call site in this file below keeps
+// reading the exact same shipped text, unchanged — same text, just sourced from locale JSON
+// instead of a literal in the .ts file.
+import i18n from "../i18n";
 import type {
   AppliedChange,
   GameReadiness,
@@ -20,6 +27,15 @@ import type {
   SessionSummary,
 } from "../types";
 import type { HardwareInfo } from "../App";
+
+// English-resolved re-exports under the ORIGINAL names (see the i18n-update note above) — every
+// call site below (HOME_INTAKE_ROWS.find(...), fastPathReadyHeadline(2), etc.) is untouched.
+const HOME_INTAKE_ROWS = homeIntakeRows(i18n.t);
+const HOME_INTAKE_FASTPATH = homeIntakeFastpath(i18n.t);
+const fastPathReadyHeadline = (n: number) => fastPathReadyHeadlineRaw(n, i18n.t);
+const fastPathApplyLabel = (n: number) => fastPathApplyLabelRaw(n, i18n.t);
+const fastPathAppliedNote = (applied: number, skipped: number) =>
+  fastPathAppliedNoteRaw(applied, skipped, i18n.t);
 
 // Guards for the Home intake band (BACKLOG:916 — the pre-room intent router + one-tap fast path,
 // behind compy_home_intake, DEFAULT OFF). The owner's greenlit direction (2026-07-14):
