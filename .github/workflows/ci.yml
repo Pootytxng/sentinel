@@ -50,6 +50,10 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm ci
+        working-directory: site-app
+      - name: Stage site once for site guard tests
+        run: npm run stage:site
       - name: vitest
         run: npm test
       - name: type-check + build
