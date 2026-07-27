@@ -11,8 +11,9 @@
 // every span must prove itself — re-encoding the recovered character has to reproduce the exact
 // source characters it consumed, or the span is left untouched.
 //
-// Known limit: text that is genuinely indistinguishable from mojibake (e.g. a literal "Â©") is
-// reported. That is the intended reading — this repo has no such content.
+// Known limit: text that is genuinely indistinguishable from mojibake is reported rather than
+// silently kept. That is the intended reading — this repo has no such content. The literal
+// example, exempted from this file's own scan: "Â©"  encoding-guard:allow
 //
 // Usage:
 //   node scripts/encoding-guard.mjs            scan every tracked text file, exit 1 if any is dirty
