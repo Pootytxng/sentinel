@@ -3,13 +3,33 @@ $root = Split-Path $PSScriptRoot -Parent
 Write-Host "== doc-budget:"
 & powershell -NoProfile -File (Join-Path $PSScriptRoot "doc-budget.ps1")
 $bud = $LASTEXITCODE
-Write-Host "== stale Claude Code CLI processes (>24h, identified by PATH; AnthropicClaude desktop app NEVER touched):"
+Write-Host "== markdown links:"
+& node (Join-Path $PSScriptRoot "markdown-link-guard.mjs")
+$links = $LASTEXITCODE
+if ($links -ne 0) { exit $links }
+Write-Host "== stale Claude Code CLI processes (>24h, exact standalone CLI executable path only):"
 $now = Get-Date
-Get-Process claude -ErrorAction SilentlyContinue | ForEach-Object {
-  $p = $_; $path = $null; try { $path = $p.Path } catch {}
-  if (-not $path) { Write-Host "  SKIP pid $($p.Id) (no path visible - leave alone)"; return }
-  if ($path -like "*\AppData\Local\AnthropicClaude\*") { return }
-  if (($now - $p.StartTime).TotalHours -gt 24) { Write-Host "  WARN stale CLI pid $($p.Id) started $($p.StartTime) path $path -> confirm it is not an active session, then kill in a sweep" }
+$claudeCommand = Get-Command claude -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $claudeCommand) {
+  Write-Host "  SKIP standalone Claude CLI not resolved by Get-Command"
+} else {
+  $claudePath = [System.IO.Path]::GetFullPath($claudeCommand.Source)
+  $cliProcesses = @()
+  Get-Process claude -ErrorAction SilentlyContinue | ForEach-Object {
+    $p = $_; $processPath = $null; try { $processPath = $p.Path } catch {}
+    if (-not $processPath) { Write-Host "  SKIP pid $($p.Id) (no path visible - leave alone)"; return }
+    $normalizedProcessPath = [System.IO.Path]::GetFullPath($processPath)
+    if (-not [string]::Equals($normalizedProcessPath, $claudePath, [System.StringComparison]::OrdinalIgnoreCase)) {
+      Write-Host "  SKIP pid $($p.Id) (not standalone Claude CLI)"
+      return
+    }
+    $cliProcesses += $p
+  }
+  $newestCli = $cliProcesses | Sort-Object StartTime -Descending | Select-Object -First 1
+  $cliProcesses | ForEach-Object {
+    if ($_.Id -eq $newestCli.Id) { Write-Host "  SKIP newest CLI pid $($_.Id) (leave active session alone)"; return }
+    if (($now - $_.StartTime).TotalHours -gt 24) { Write-Host "  WARN stale CLI pid $($_.Id) started $($_.StartTime) path $($_.Path) -> confirm it is not an active session, then kill in a sweep" }
+  }
 }
 Write-Host "== untracked under docs/ older than 7 days:"
 git -C $root ls-files --others --exclude-standard -- docs | ForEach-Object {

@@ -15,8 +15,9 @@ Act on WARNs:
 PROCESS-KILL SAFETY (2026-07-22 - learned by severing our own bridge):
 the process name "claude" matches BOTH the Claude Code CLI and the Claude DESKTOP APP
 (Claude.exe under \AppData\Local\AnthropicClaude\) which hosts the Cowork device bridge.
-- Identify by executable Path ONLY (Get-Process claude | Select-Object Id,StartTime,Path).
-- NEVER kill anything under \AppData\Local\AnthropicClaude\.
+- Resolve the standalone CLI with `Get-Command claude`, then compare normalized executable paths
+  case-insensitively; only an exact match is Claude Code CLI.
+- Skip every other `claude.exe`, including anything under `\AppData\Local\AnthropicClaude\`.
 - Never kill the newest CLI session; leave node / node_repl / compy alone (Desktop Commander
   and dev servers live there).
 - A process you cannot attribute is a process you report, not one you kill.

@@ -118,8 +118,4 @@ than papered over:
   `.claude/hooks/workflow-usage-guard.mjs` (PreToolUse, matcher `Workflow`) injects the §2
   reminder on every call — advisory like `subagent-throttle.mjs`, since "was this workflow
   warranted" is judgment, not mechanics. Live-fired in-session: the reminder reached the model.
-  Unlike the Agent-tool guards above, which were verified against the documented schema before
-  shipping, a matcher here would be a guess — per the project's own no-speculation rule, it was
-  deliberately NOT built. To close this: in a live CC session, run a Workflow-tool call once and
-  check `tool_name` in the hook debug log (`--debug`) or via a temporary catch-all PreToolUse
-  logging hook, then wire the real matcher.
+  The matcher is wired from that empirical evidence, so it does not rely on a guessed tool name.

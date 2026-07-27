@@ -1,6 +1,6 @@
 # Roadmap — Compy · Road to Public 1.0
 
-Companion to [PRD.md](PRD.md) + [PRODUCT_DIRECTION.md](PRODUCT_DIRECTION.md). **Live state → [`RELEASE_STATE.md`](RELEASE_STATE.md); what's-next → [`BACKLOG.md`](BACKLOG.md); money/direction → [`RECEIPTS_DOCTRINE.md`](RECEIPTS_DOCTRINE.md)** (which supersedes the monetization framing here). This file is the **aging (2026-06-02) forward sketch** — what's shipped vs what stands between us and "a stranger can buy it, install it, optimize their PC, and recommend it."
+Companion to [PRD.md](../PRD.md) + [PRODUCT_DIRECTION.md](../PRODUCT_DIRECTION.md). **Live state → [`RELEASE_STATE.md`](../RELEASE_STATE.md); what's-next → [`BACKLOG.md`](../BACKLOG.md); money/direction → [`RECEIPTS_DOCTRINE.md`](../RECEIPTS_DOCTRINE.md)** (which supersedes the monetization framing here). This file is the **aging (2026-06-02) forward sketch** — what's shipped vs what stands between us and "a stranger can buy it, install it, optimize their PC, and recommend it."
 
 **Legend:** ☑ done · ◐ in progress / built-but-gated · ☐ not started · 🔒 owner-gated (decision/outward) · 🤖 Claude can drive solo
 
