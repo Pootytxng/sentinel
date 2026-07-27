@@ -8,6 +8,10 @@
 
 ## Live skills
 
+> **Codex adapters:** the ten matching tracked entrypoints under `.agents/skills/` are thin adapters,
+> not a mirror or a second implementation. Each loads its canonical `.claude/skills/<name>/SKILL.md`
+> and preserves Codex's read-only advisory authority; no Claude Code build/write/ship authority transfers.
+
 | Skill | Fires when | Cheapest executor | Notes |
 |---|---|---|---|
 | `self-review` | any UI change about to be claimed done/fixed/ready | dispatcher: any Â· worker: **sonnet** (pinned) | Verdict block = the license. Never review inline (token law: evidence stays in worker context). |
