@@ -19,8 +19,9 @@ tweak did nothing, it says so.**
 
 It's a real, working Windows app (Tauri: Rust core, web UI), at private-beta quality. **Core
 promise: optimize + rollback stay free forever, no account required.** The live signed updater
-performs the narrowly documented, consent-first update check; `docs/RELEASE_STATE.md` owns its
-current scope and validation record. A future opt-in **Receipts telemetry** feature (anonymous,
+makes the app's only automatic outbound request: an update check. No update bytes download or
+install until the user explicitly chooses **Update now**; `docs/RELEASE_STATE.md` owns current
+operational detail and validation. A future opt-in **Receipts telemetry** feature (anonymous,
 default-off, kill-switched) remains separately gated and cannot ship without its own security
 review and owner sign-off. The wedge isn't "boost" — it's being the only tool in a snake-oil
 category that **measures instead of promises.**
@@ -67,10 +68,10 @@ Detect → diagnose → debrief → prove. That loop is built and running today 
   game injection — FPS is captured externally via Windows' own event tracing, so it's anti-cheat
   safe by design. GPU sensors use official vendor SDKs where available.
 - **Local-first, narrowly connected.** No account, remote config, or telemetry is required for the
-  core app. The signed updater is the one documented outbound surface: it checks for an update and
-  downloads only after the user chooses **Update now**. Current updater behavior, validation, and
-  all other network-boundary facts live in `docs/RELEASE_STATE.md`. Export leaves only by the
-  user's hand; Receipts telemetry remains a separate gated track.
+  core app. Its only automatic outbound request is the signed updater's check; no update bytes
+  download or install until the user explicitly chooses **Update now**. Current operational
+  detail, validation, and all other network-boundary facts live in `docs/RELEASE_STATE.md`. Export
+  leaves only by the user's hand; Receipts telemetry remains a separate gated track.
 
 ## Honesty about the project itself
 
