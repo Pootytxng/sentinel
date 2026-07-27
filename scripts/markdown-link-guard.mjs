@@ -1,21 +1,27 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const root = path.resolve(import.meta.dirname, '..');
-const markdownFiles = execFileSync('git', ['ls-files', '--', '*.md'], {
-  cwd: root,
-  encoding: 'utf8',
-}).split(/\r?\n/).filter(Boolean);
 
-function withoutFencedCode(text) {
-  let fenced = false;
+export function withoutFencedCode(text) {
+  let fence = null;
   return text.split(/\r?\n/).map((line) => {
-    if (/^\s{0,3}(?:`{3,}|~{3,})/.test(line)) {
-      fenced = !fenced;
+    const marker = /^\s{0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (!fence && marker) {
+      fence = { character: marker[0], length: marker.length };
       return '';
     }
-    return fenced ? '' : line;
+    if (fence) {
+      const closesFence = marker
+        && marker[0] === fence.character
+        && marker.length >= fence.length
+        && /^\s{0,3}(?:`{3,}|~{3,})\s*$/.test(line);
+      if (closesFence) fence = null;
+      return '';
+    }
+    return line;
   }).join('\n');
 }
 
@@ -96,25 +102,35 @@ function localPath(destination) {
   }
 }
 
-const broken = [];
-let checked = 0;
-for (const source of markdownFiles) {
-  const text = withoutFencedCode(readFileSync(path.join(root, source), 'utf8'));
-  for (const destination of destinations(text)) {
-    const local = localPath(destination);
-    if (!local) continue;
-    checked += 1;
-    const target = path.resolve(root, path.dirname(source), local);
-    if (!existsSync(target)) broken.push({ source, destination });
+export function findBrokenMarkdownLinks(rootDir = root) {
+  const markdownFiles = execFileSync('git', ['ls-files', '--', '*.md'], {
+    cwd: rootDir,
+    encoding: 'utf8',
+  }).split(/\r?\n/).filter(Boolean);
+  const broken = [];
+  let checked = 0;
+  for (const source of markdownFiles) {
+    const text = withoutFencedCode(readFileSync(path.join(rootDir, source), 'utf8'));
+    for (const destination of destinations(text)) {
+      const local = localPath(destination);
+      if (!local) continue;
+      checked += 1;
+      const target = path.resolve(rootDir, path.dirname(source), local);
+      if (!existsSync(target)) broken.push({ source, destination });
+    }
   }
+  return { broken, checked };
 }
 
-if (broken.length) {
-  for (const { source, destination } of broken) {
-    console.error(`BROKEN ${source} -> ${destination}`);
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const { broken, checked } = findBrokenMarkdownLinks();
+  if (broken.length) {
+    for (const { source, destination } of broken) {
+      console.error(`BROKEN ${source} -> ${destination}`);
+    }
+    console.error(`markdown-link-guard: FAIL ${broken.length} broken link(s) (${checked} checked)`);
+    process.exitCode = 1;
+  } else {
+    console.log(`markdown-link-guard: PASS ${checked} local link(s) checked`);
   }
-  console.error(`markdown-link-guard: FAIL ${broken.length} broken link(s) (${checked} checked)`);
-  process.exitCode = 1;
-} else {
-  console.log(`markdown-link-guard: PASS ${checked} local link(s) checked`);
 }
