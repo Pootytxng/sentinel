@@ -1,15 +1,15 @@
 {
   "verdictGlossary": {
     "real": {
-      "chip": "Real",
+      "chip": "真有效",
       "definition": "它真的有用。对你的游戏有可衡量、有据可查的效果——值得一做。"
     },
     "placebo": {
-      "chip": "Placebo",
+      "chip": "安慰剂",
       "definition": "纯属炒作,没有效果。网上很火,但改变不了任何可衡量的东西。我们跳过这些,免得你浪费时间去追它们。"
     },
     "risky": {
-      "chip": "Risky — refused",
+      "chip": "有风险 — 已拒绝",
       "definition": "代价不值得。它可能确实有点作用,但会带来实打实的代价——不稳定、安全漏洞,或者干脆把东西搞坏——所以 Compy 拒绝执行它,或者把决定权交给你,让你清楚利弊后自己选。"
     }
   },
@@ -30,7 +30,7 @@
       "unratedClaimsPlural": "其中的说法不属于我们已验证的优化项,因此没有评级——我们从不瞎猜。",
       "scamFlaggedInline_other": " · 已标记 {{count}} 个诈骗套路",
       "gradedHeadline_other": "你已核查了 {{count}} 份指南——其中 {{pct}}% 的优化项是真实有效的。",
-      "recognizedBreakdown": "在我们识别的优化项中:{{real}} 项 real · {{placebo}} 项 placebo · {{risky}} 项 risky{{scamPart}}。"
+      "recognizedBreakdown": "在我们识别的优化项中:{{real}} 项真有效 · {{placebo}} 项安慰剂 · {{risky}} 项有风险{{scamPart}}。"
     }
   },
   "blackbookConsole": {
@@ -93,9 +93,9 @@
     },
     "autopsyBody": {
       "title": "你核查了一份指南",
-      "real": "real",
-      "placebo": "placebo",
-      "risky": "risky",
+      "real": "真有效",
+      "placebo": "安慰剂",
+      "risky": "有风险",
       "noClaims": "没有我们能识别的说法——我们从不瞎猜"
     },
     "observedBody": {
@@ -155,9 +155,9 @@
     "gradeLabel": "结论:",
     "anyVerdict": "不限结论",
     "verdictFilters": {
-      "real": "Real",
-      "placebo": "Placebo",
-      "risky": "Risky"
+      "real": "真有效",
+      "placebo": "安慰剂",
+      "risky": "有风险"
     },
     "topicFilterAriaLabel": "按主题筛选",
     "topicLabel": "主题:",
@@ -202,7 +202,7 @@
     },
     "typeDesc": {
       "guide": "手把手的操作流程,每一条说法都经过逐条核查",
-      "tweak": "单项设置,每一项都被评为 Real、Placebo 或 Risky",
+      "tweak": "单项设置,每一项都被评为真有效、安慰剂或有风险",
       "term": "把行话黑话,翻译成大白话",
       "trick": "假优化工具惯用的套路——在被坑之前先认出它们"
     },
@@ -232,9 +232,9 @@
       "recordTitle": "你的解剖记录",
       "recordGuides_other": "已评级 {{count}} 份指南",
       "recordBreakdownPre": "——其中被识别的优化项:",
-      "recordRealPct": "{{pct}}% real",
-      "recordPlaceboPct": "{{pct}}% placebo",
-      "recordRiskyPct": "{{pct}}% risky",
+      "recordRealPct": "{{pct}}% 真有效",
+      "recordPlaceboPct": "{{pct}}% 安慰剂",
+      "recordRiskyPct": "{{pct}}% 有风险",
       "recordScamPre": " · ",
       "recordScam_other": "{{count}} 个诈骗套路被标记",
       "textareaAriaLabel": "粘贴一份优化指南进行解剖",
@@ -249,9 +249,9 @@
       "stickyPrefix": "解剖:",
       "claimsGraded_other": "已评级 {{count}} 条说法",
       "gradePrefix": "这份指南:",
-      "real": "real",
-      "placebo": "placebo",
-      "risky": "risky",
+      "real": "真有效",
+      "placebo": "安慰剂",
+      "risky": "有风险",
       "unrecognized_other": "{{count}} 项我们无法识别的内容",
       "scamFlags_other": "这里有 {{count}} 个已知诈骗套路——展开下方标记的行查看详情。",
       "resultNote": "无法识别的内容不会给出结论——我们绝不瞎猜。点击任意一行即可在此查看详情。",

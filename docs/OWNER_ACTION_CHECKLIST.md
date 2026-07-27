@@ -24,29 +24,32 @@
   password-manager attachment or your personal cloud. **Lose it** → the fleet can never receive
   another update (one-time re-send of new-key builds required). **Leak it** → whoever holds it can
   push code to every install. Same custody class as the remote-rules key law.
-- ⏳ **Send the six invitees the first updater-enabled build — the last manual send ever.** Their
-  current installs (0.9.0/0.1.0) have NO updater and cannot hear about updates until they install
-  one build that does. Send the v0.9.3 installer:
-  `https://github.com/Pootytxng/compy-releases/releases/latest` (direct exe link on that page).
-  After they install it once, every future patch reaches them in-app ("update ready" pill →
-  one click). Timing/wording is yours — distribution is owner territory.
+- ⏳ **Send the first updater-enabled build as a one-tester canary, then expand to the remaining
+  invitees after it proves clean.** Their current installs (0.9.0/0.1.0) have NO updater and cannot
+  hear about updates until they install one build that does. Do not send the stale v0.9.3 installer
+  or the unpublished local v0.9.8 candidate: cut a fresh candidate only after PR #9 and the completed
+  zh-CN change are integrated on a runner-green `main`, then prove the owner-box update before the
+  canary send. The release page is
+  `https://github.com/Pootytxng/compy-releases/releases/latest`. After a tester installs the canary
+  once, future patches can reach them in-app ("update ready" pill → one click). Timing, signing,
+  publication, and distribution are owner territory.
 
-### A0b. zh-CN (Simplified Chinese) build — verified SHIP-READY, awaiting your merge + publish GO (2026-07-23)
+### A0b. zh-CN (Simplified Chinese) — base translation merged; publish GO still held (updated 2026-07-26)
 
-Branch `i18n/zh-CN` = current `main` + 3 clean commits: full zh-CN translation `100ace3`, plus two
-reversible tooling fixes (ship-gate `e22be5e`, QA-probe `719408b`). Version **0.9.7** everywhere —
-main, branch, the one Desktop installer, and the live installed build all agree, no drift. End-to-end
-smoke **PASS**: EN↔ZH switch clean (no reload), every surface translated, no raw i18n keys, no crashes;
-live==build proven by stamp (`100ace3 · release`). Feedback surface (`c51f3bb`) already included.
-Two owner calls, both **HELD** (never self-authorized):
+The full zh-CN translation (`100ace3`) and reversible ship/QA fixes (`e22be5e`, `719408b`) are already
+on live `origin/main` at `20306bc`; the old merge hold is closed. The owner's 2026-07-24 follow-up also
+resolved the vocabulary taste call: user-visible Real/Placebo/Risky labels are localized as
+真有效/安慰剂/有风险, with the full refusal badge 有风险 — 已拒绝. The completion change includes a guard
+that rejects visible English verdict vocabulary in the zh-CN Black Book while ignoring interpolation
+placeholder names.
 
-- ⏳ **Merge `i18n/zh-CN` → `main`** — clean fast-forward (main hasn't moved since the fork). Needs your
-  explicit "merge it" (per the shared-main per-PR rule).
-- ⏳ **Publish into the in-app updater** (ships zh-CN to the six invitees) — owner territory + signing-key
-  custody. Your GO.
-
-Optional taste call: Lab verdict labels (Real/Placebo/Risky) stay English by brand design — say if you
-want them localized.
+- ✅ **Merge the base zh-CN cut into `main`** — already complete at `20306bc`.
+- ✅ **Localize the verdict vocabulary** — owner decision resolved; completion + regression guard are
+  in the current zh-CN finishing change.
+- ⏳ **Restore hosted CI and get a real green run** — GitHub currently refuses every job before runner
+  startup because of the account billing/spending state; workflow permissions cannot bypass it.
+- ⏳ **Publish into the in-app updater** — owner territory + signing-key custody. Cut a fresh candidate
+  only after the vocabulary completion and CI fix are integrated on a runner-green `main`.
 
 ### A1. Gaming Mode QA — ✅ CLOSED: SIGNED OFF (owner, 2026-07-14)  ·  full list: [`GAMING_MODE_QA.md`](GAMING_MODE_QA.md)
 

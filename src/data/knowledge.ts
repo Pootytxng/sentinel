@@ -422,15 +422,15 @@ const INJECTED_ENTRIES_ZH_CN: Raw[] = [
   {
     id: VERDICT_GLOSSARY_ENTRY_ID,
     name: "Compy 是怎么评级的",
-    what: "Compy 给每一项优化打出三种诚实结论之一——Real(真有用)、Placebo(安慰剂)或 Risky(有风险)——这样你在改动任何设置之前,就能知道它到底值不值得花时间。",
+    what: "Compy 给每一项优化打出三种诚实结论之一——真有效、安慰剂或有风险——这样你在改动任何设置之前,就能知道它到底值不值得花时间。",
     // Hand-translated, matching the Chinese chip/definition pairs shipped in
     // src/i18n/locales/zh-CN/blackbook.json's verdictGlossary.* (this module can't call the t()-based
     // verdictChip/verdictDefinition helpers — it's plain data, not a React tree — so the joined string
     // is written out directly; keep the two in sync if the glossary copy ever changes).
     more:
-      "Real：它真的有用。对你的游戏有可衡量、有据可查的效果——值得一做。　" +
-      "Placebo：纯属炒作,没有效果。网上很火,但改变不了任何可衡量的东西。我们跳过这些,免得你浪费时间去追它们。　" +
-      "Risky — refused：代价不值得。它可能确实有点作用,但会带来实打实的代价——不稳定、安全漏洞,或者干脆把东西搞坏——所以 Compy 拒绝执行它,或者把决定权交给你,让你清楚利弊后自己选。",
+      "真有效：它真的有用。对你的游戏有可衡量、有据可查的效果——值得一做。　" +
+      "安慰剂：纯属炒作,没有效果。网上很火,但改变不了任何可衡量的东西。我们跳过这些,免得你浪费时间去追它们。　" +
+      "有风险 — 已拒绝：代价不值得。它可能确实有点作用,但会带来实打实的代价——不稳定、安全漏洞,或者干脆把东西搞坏——所以 Compy 拒绝执行它,或者把决定权交给你,让你清楚利弊后自己选。",
   },
   {
     id: "freesync-vrb-exclusion",

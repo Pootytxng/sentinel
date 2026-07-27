@@ -127,6 +127,24 @@ describe("Learn surface (reskin)", () => {
     expect(screen.getByRole("group", { name: "How we grade" })).toBeInTheDocument();
   });
 
+  it("shows only the entry's grading key while the How-we-grade card is expanded", async () => {
+    localStorage.setItem("compy_blackbook_gradekey_seen_v1", "1");
+    open();
+    expect(document.querySelector(".lx-gradekey-toggle")).not.toBeNull();
+
+    fireEvent.change(searchBox(), { target: { value: "How Compy grades things" } });
+    const titleEl = await screen.findByText(/How Compy grades things/i, { selector: title });
+    const card = titleEl.closest<HTMLElement>('[data-kl-id="how-we-grade"]')!;
+    fireEvent.click(card.querySelector<HTMLButtonElement>(".lx-card-head")!);
+
+    expect(card.classList.contains("lx-card-open")).toBe(true);
+    expect(document.querySelector(".lx-gradekey-toggle")).toBeNull();
+    expect(document.querySelectorAll(".lx-gradekey")).toHaveLength(1);
+
+    fireEvent.click(card.querySelector<HTMLButtonElement>(".lx-card-head")!);
+    expect(document.querySelector(".lx-gradekey-toggle")).not.toBeNull();
+  });
+
   it("labels the verdict-filter row so it doesn't read as a second type filter", () => {
     open();
     // Grade/Topic/Fits are power-user axes collapsed behind "More filters" by default — expand first.
@@ -161,12 +179,20 @@ describe("Learn surface (reskin)", () => {
     // The sticky context header reports the read-through.
     expect(screen.getByText(/claims? graded/i)).toBeInTheDocument();
     // Clicking a graded row expands IN PLACE — the autopsy stays (paste box remains), no redirect.
-    fireEvent.click(screen.getByRole("button", { name: /Windows Game Mode/i }));
+    const hitRow = screen.getByRole("button", { name: /Windows Game Mode/i });
+    fireEvent.click(hitRow);
     expect(screen.getByText(/Open full entry/i)).toBeInTheDocument();
     expect(screen.getByLabelText("Paste a tweak guide to autopsy")).toBeInTheDocument();
+    const hit = hitRow.closest("li")!;
+    expect(hitRow.querySelectorAll(".lx-verdict")).toHaveLength(1);
+    expect(hit.querySelector(".lx-hit-detail .lx-row .lx-verdict")).toBeNull();
+    expect(hit.querySelectorAll(".lx-verdict")).toHaveLength(1);
     // The quiet full-entry link is the only deliberate travel into the library.
     fireEvent.click(screen.getByText(/Open full entry/i));
     expect(screen.getByLabelText("Search the knowledge library")).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-kl-id="game-mode"] .lx-card-body .lx-row .lx-verdict'),
+    ).not.toBeNull();
   });
 
   it("an over-cap paste reports the SAME char count it actually graded (no hardcoded drift)", () => {
