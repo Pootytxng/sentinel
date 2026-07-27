@@ -39,6 +39,15 @@ function Write-NoBom([string]$Path, [string]$Text) {
   [System.IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding($false)))
 }
 
+# Pair every Write-NoBom with this reader, never `Get-Content -Raw`. Windows PowerShell 5.1 decodes
+# a BOM-less file as the ANSI codepage (CP1252), so a UTF-8 file round-tripped through
+# Get-Content -> Write-NoBom comes back double-encoded. That is exactly how the version bump in
+# 1d9bad6 (v0.9.7) and d9ced24 (v0.9.8) turned a one-line edit into 38 corrupted lines of
+# Cargo.toml and 42 of RELEASE_STATE.md. Guarded by scripts/encoding-guard.test.mjs.
+function Read-Utf8([string]$Path) {
+  [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
+}
+
 function Invoke-Native([string]$Label, [scriptblock]$Command) {
   & $Command
   if ($LASTEXITCODE -ne 0) {
@@ -524,17 +533,17 @@ $currentText = $current.ToString()
 $nextText = $next.ToString()
 $currentEscaped = [regex]::Escape($currentText)
 
-Write-NoBom $confPath ((Get-Content -LiteralPath $confPath -Raw) -replace ('"version": "' + $currentEscaped + '"'), ('"version": "' + $nextText + '"'))
-Write-NoBom $pkgPath ((Get-Content -LiteralPath $pkgPath -Raw) -replace ('"version": "' + $currentEscaped + '"'), ('"version": "' + $nextText + '"'))
+Write-NoBom $confPath ((Read-Utf8 $confPath) -replace ('"version": "' + $currentEscaped + '"'), ('"version": "' + $nextText + '"'))
+Write-NoBom $pkgPath ((Read-Utf8 $pkgPath) -replace ('"version": "' + $currentEscaped + '"'), ('"version": "' + $nextText + '"'))
 $lockPattern = '("name": "compy",\s*"version": ")' + $currentEscaped + '"'
-Write-NoBom $lockPath ((Get-Content -LiteralPath $lockPath -Raw) -replace $lockPattern, ('${1}' + $nextText + '"'))
-Write-NoBom $cargoPath ((Get-Content -LiteralPath $cargoPath -Raw) -replace ('(?m)^version = "' + $currentEscaped + '"'), ('version = "' + $nextText + '"'))
+Write-NoBom $lockPath ((Read-Utf8 $lockPath) -replace $lockPattern, ('${1}' + $nextText + '"'))
+Write-NoBom $cargoPath ((Read-Utf8 $cargoPath) -replace ('(?m)^version = "' + $currentEscaped + '"'), ('version = "' + $nextText + '"'))
 # Keep docs/RELEASE_STATE.md's version anchor in lockstep with the bump so the strict release-state
 # verifier (tauri.conf version == STATE:latest_release_version) stays green in the exact-commit gate.
 # manifest_version is intentionally NOT touched here: it tracks the PUBLIC updater manifest and only
 # advances when publish actually ships the artifact.
 $statePattern = '(<!-- STATE:latest_release_version=)' + $currentEscaped + '( -->)'
-$stateBefore = Get-Content -LiteralPath $statePath -Raw
+$stateBefore = Read-Utf8 $statePath
 $stateAfter = $stateBefore -replace $statePattern, ('${1}' + $nextText + '${2}')
 if ($stateAfter -eq $stateBefore) {
   throw "Release-state version anchor not found/updated in docs/RELEASE_STATE.md (expected STATE:latest_release_version=$currentText). Reconcile the doc, then retry."

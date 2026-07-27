@@ -15,6 +15,7 @@
 // The last two guard the f21c170 class (2026-07-22: a doc diet accidentally cut the live Gate matrix +
 // Release blockers; the verifier passed vacuously on the gutted file). An empty contract is a failure.
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { dirname, join, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -185,6 +186,53 @@ if (decMatch && latestVersion) {
 // (5) exactly one 'Bottom line' section.
 const bottomLines = (docText.match(/^\*\*Bottom line/gim) || []).length;
 if (bottomLines > 1) stateFail.push(`MULTI-BOTTOM-LINE: ${bottomLines} "Bottom line" sections — collapse to one current bottom line`);
+
+// (6) source_main_commit must name a real commit on the mainline, and must not be badly stale.
+// Why this exists: on 2026-07-27 the anchor read `cff77ab` while origin/main had moved 16 commits
+// on to `20306bc` — and every check above passed, because they verify citation LOCATION and this
+// value was verified by nothing at all. 16 commits accrued inside ONE day, so the tolerance has to
+// be tight to mean anything. Unresolvable/off-mainline are hard failures (unambiguous defects);
+// staleness fails at MAX_ANCHOR_LAG. Skipped — never failed — when git history isn't available,
+// so a shallow CI clone or an exported tree can't produce a phantom gate failure.
+const gitOut = (args) => {
+  try {
+    return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return null;
+  }
+};
+const gitOk = (args) => {
+  try {
+    execFileSync("git", args, { cwd: ROOT, stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+};
+const MAX_ANCHOR_LAG = 10; // commits the marker may trail the mainline before it stops being current
+const sourceCommit = anchor("source_main_commit");
+if (!sourceCommit) {
+  stateFail.push("STATE:source_main_commit anchor missing from CURRENT STATE");
+} else if (gitOut(["rev-parse", "--git-dir"]) === null) {
+  console.log("STATE-SKIP       source_main_commit: no git history here — anchor left unverified");
+} else if (gitOut(["rev-parse", "--is-shallow-repository"]) === "true") {
+  console.log("STATE-SKIP       source_main_commit: shallow clone — anchor left unverified");
+} else {
+  const resolved = gitOut(["rev-parse", "--verify", "--quiet", `${sourceCommit}^{commit}`]);
+  // Compare against the mainline, not HEAD: a lane branched off an older main is not a doc defect.
+  const mainRef = ["origin/main", "main", "HEAD"].find((r) => gitOut(["rev-parse", "--verify", "--quiet", `${r}^{commit}`]));
+  if (!resolved) {
+    stateFail.push(`SOURCE-COMMIT-UNKNOWN: STATE:source_main_commit ${sourceCommit} resolves to no commit in this repo`);
+  } else if (!mainRef) {
+    console.log("STATE-SKIP       source_main_commit: no main/HEAD ref to compare against — anchor left unverified");
+  } else if (!gitOk(["merge-base", "--is-ancestor", resolved, mainRef])) {
+    stateFail.push(`SOURCE-COMMIT-ORPHAN: STATE:source_main_commit ${sourceCommit} is not an ancestor of ${mainRef} — it names a commit that never landed on the mainline`);
+  } else {
+    const lag = Number(gitOut(["rev-list", "--count", `${resolved}..${mainRef}`]));
+    if (Number.isFinite(lag) && lag > MAX_ANCHOR_LAG)
+      stateFail.push(`SOURCE-COMMIT-STALE: STATE:source_main_commit ${sourceCommit} trails ${mainRef} by ${lag} commits (max ${MAX_ANCHOR_LAG}) — re-stamp it to \`${gitOut(["rev-parse", "--short", mainRef])}\``);
+  }
+}
 
 for (const f of stateFail) console.log(`STATE-DRIFT      ${f}`);
 
