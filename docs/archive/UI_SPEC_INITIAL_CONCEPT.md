@@ -1,3 +1,9 @@
+> **Historical initial concept — not authoritative for the live app.** Its React, Tailwind,
+> Lucide, Zustand, Framer Motion, Recharts stack and its proposed layout are preserved for
+> historical context only.
+
+---
+
 # Frontend UI/UX Specification: PC Optimizer Desktop App
 
 ## 1. Tech Stack & Core Libraries

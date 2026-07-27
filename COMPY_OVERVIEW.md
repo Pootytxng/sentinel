@@ -3,13 +3,10 @@
 *A shareable snapshot of where the project is and where it's going. Written for outside eyes:
 what's good, what's missing, what's a bad idea. Be blunt — "this part is dumb" is useful data.*
 
-> **Last reconciled: 2026-07-15**, against `docs/RELEASE_STATE.md`, `docs/RECEIPTS_DOCTRINE.md`,
-> and `docs/MONETIZATION_PLAN.md` (the authoritative current-state docs — if this file and any of
-> those three ever disagree again, those three win). This file had gone six weeks stale (last
-> touched 2026-06-05) before a 2026-07-15 consumer panel review caught it describing a product
-> that no longer existed: it said Gaming Mode was dark, the catalog was frozen, and monetization
-> was undecided — all wrong by the time of the fix. Re-check this line before trusting anything
-> below it as current.
+> This is a non-volatile overview. `docs/RELEASE_STATE.md` owns current gate, build, distribution,
+> updater, and hardware-validation truth; `docs/RECEIPTS_DOCTRINE.md` and
+> `docs/MONETIZATION_PLAN.md` own product and money direction. If this overview differs, those
+> documents win.
 
 ---
 
@@ -21,11 +18,12 @@ what's worth changing on *your* rig, what's already fine, and — the soul of th
 tweak did nothing, it says so.**
 
 It's a real, working Windows app (Tauri: Rust core, web UI), at private-beta quality. **Core
-promise: optimize + rollback stay free forever, no account required.** Today, nothing leaves your
-PC — the app is verified zero-outbound, full stop. A future opt-in **Receipts telemetry** feature
-(anonymous, default-off, kill-switched) is planned but **not yet built** — there is no toggle to
-turn on yet, and it won't ship without its own security review and owner sign-off. The wedge isn't
-"boost" — it's being the only tool in a snake-oil category that **measures instead of promises.**
+promise: optimize + rollback stay free forever, no account required.** The live signed updater
+performs the narrowly documented, consent-first update check; `docs/RELEASE_STATE.md` owns its
+current scope and validation record. A future opt-in **Receipts telemetry** feature (anonymous,
+default-off, kill-switched) remains separately gated and cannot ship without its own security
+review and owner sign-off. The wedge isn't "boost" — it's being the only tool in a snake-oil
+category that **measures instead of promises.**
 
 ---
 
@@ -63,18 +61,16 @@ Detect → diagnose → debrief → prove. That loop is built and running today 
   were audited and most were refused*: HPET/timer hacks, Defender disable, core parking, TCP
   mega-packs, fixed pagefile — permanently blocklisted. The category competes on tweak count;
   Compy competes on what it leaves out, on purpose, with receipts.
-- **No risky internals.** No kernel driver (which is why there's no CPU temperature — reading it
-  needs one, and we won't ship one). No game injection — FPS is captured externally via Windows'
-  own event tracing, so it's anti-cheat safe by design. GPU sensors via official vendor SDKs.
-- **Local-first, one outbound call.** No account, no remote config, no telemetry. **The in-app
-  updater (LIVE 2026-07-22, owner-directed) is the one thing that talks out:** a signed-update
-  check against the public releases repo on launch + every 4h; nothing downloads until the user
-  clicks Update now, and every package is signature-verified against the pinned public key before
-  install (private key lives outside the repo). The Export report still leaves only by the user's
-  hand. **Receipts telemetry** (anonymous, opt-in, default-off, kill-switched) remains a separate
-  gated track requiring its own security review and owner sign-off before it can arm. The old
-  "verified zero-outbound" absolute is RETIRED by the updater decision — the in-app footer now
-  states exactly what leaves the machine: "Outbound: signed update check only."
+- **No risky internals.** Compy ships no driver and never reads CPU die temperature itself. It may
+  display read-only data published by an external HWiNFO, LibreHardwareMonitor, or
+  OpenHardwareMonitor monitor the user already runs; otherwise temperature stays unavailable. No
+  game injection — FPS is captured externally via Windows' own event tracing, so it's anti-cheat
+  safe by design. GPU sensors use official vendor SDKs where available.
+- **Local-first, narrowly connected.** No account, remote config, or telemetry is required for the
+  core app. The signed updater is the one documented outbound surface: it checks for an update and
+  downloads only after the user chooses **Update now**. Current updater behavior, validation, and
+  all other network-boundary facts live in `docs/RELEASE_STATE.md`. Export leaves only by the
+  user's hand; Receipts telemetry remains a separate gated track.
 
 ## Honesty about the project itself
 
@@ -85,8 +81,8 @@ a real mutation surface passed its own crash-safety QA (10/10 field cases) and t
 off 2026-07-14. The private beta exists to *earn* the trust the design claims: real testers, real
 ledgers, real rollbacks, before a single public promise.
 
-**Hardware truth:** AMD is hardware-verified (developed on an RX 9070 XT rig). NVIDIA is
-implemented but **not yet verified on real hardware** — and the app says so instead of guessing.
+**Hardware truth:** Compy names the evidence it has and does not upgrade a vendor claim by
+assumption. Current per-capability NVIDIA validation is recorded in `docs/RELEASE_STATE.md`.
 
 ---
 
@@ -106,10 +102,9 @@ you to turn off its own telemetry.
 
 ## Status & what gates what
 
-- **Private beta: functionally complete, still unsent.** The full loop above, plus readiness
-  checks, priority ranking, latency diagnostics, live monitoring + overlay, Gaming Mode (live),
-  and local export. Remaining before invites go out: the beta smoke pass (24 checks, 0 run) and
-  the owner's send GO. Distribution: unsigned, invite-only, direct download, fully local.
+- **Private beta:** the full loop above, plus readiness checks, priority ranking, latency
+  diagnostics, live monitoring + overlay, Gaming Mode, and local export. Current distribution,
+  canary, and release posture are deliberately maintained in `docs/RELEASE_STATE.md`, not here.
 - **The compy.gg marketing site is already live and public** (`compy-bd6.pages.dev`, owner deploy
   GO 2026-07-15) — landing page, `/compare`, Blackbook content pages, waitlist funnel, SEO
   plumbing. This is ahead of the app beta send, not behind it: the site is a separate, lower-risk
@@ -117,9 +112,9 @@ you to turn off its own telemetry.
 - **Money: deliberately zero spend** until a phase proves it can pay for itself — domain purchase,
   code signing, legal, and a Pro entity/payments are all owner-gated. Signing and legal gate the
   *public app* release; the domain gates the site's canonical URLs; none of this blocks the beta.
-- **Still dark on purpose:** remote rules (triple-gated off), the updater (off), Receipts
-  telemetry (no send path, needs its own security review + owner sign-off), Compy Pro licensing
-  (needs an entity + payments). Gaming Mode is **no longer on this list — it's live.**
+- **Still dark on purpose:** remote rules (triple-gated off), Receipts telemetry (needs its own
+  security review + owner sign-off), and Compy Pro licensing (needs an entity + payments). Gaming
+  Mode is **no longer on this list — it's live.**
 - **The tweak catalog is open, not frozen** (owner decision 2026-07-09): a tweak earns inclusion
   by measurable benefit under the same permanent safety rails (reversible, no kernel driver/
   injection, non-security-weakening, stability-safe) — see CLAUDE.md LOCKED rule 6.
@@ -140,8 +135,9 @@ you to turn off its own telemetry.
    pack did to your PC) is real product, not a future maybe: it ships publicly as
    **"Optimization Cleanup"** — a read-only audit that identifies known tweak-pack artifacts,
    grades them (useful/placebo/risky/outdated/unknown), shows the documented-default Windows
-   state, and only offers automatic restoration where the correct prior state is unambiguous
-   (separate recovery snapshot before any remediation). Not publicly called "Paramedic Mode."
+   state, and only offers automatic restoration where rollback evidence is unambiguous. Recovery
+   stays within the same Trust Ledger, rollback-first architecture as the rest of Compy; current
+   implementation detail belongs in the canonical docs. Not publicly called "Paramedic Mode."
 3. **Does "measures instead of promises" land** with a 20-something gamer, or does it sound like
    homework next to "BOOST FPS NOW"?
 4. **Pricing shape — mostly decided.** Compy Pro is scoped at ~$3–4/mo or ~$25/yr in the doctrine,

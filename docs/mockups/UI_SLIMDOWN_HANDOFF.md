@@ -15,8 +15,9 @@ Continue Compy's UI slim-down work.
 FIRST: attach my repo folder  C:\Users\Kuya\code\sentinel  so you have file access. (Adding
 this chat to the Space only gives you memory/context, not files.) Then READ before doing
 anything: docs/mockups/UI_SLIMDOWN_HANDOFF.md (this brief), docs/UI_SLIMDOWN_PLAN.md (the plan +
-council review), docs/mockups/ui-slimdown-preview.html (the v1 mockup), DESIGN.md, ui-spec.md,
-and the src/surfaces/rig/ directory (RigHologram.tsx / RigViewer.tsx — the 3D rig).
+council review), docs/mockups/ui-slimdown-preview.html (the v1 mockup), DESIGN.md,
+`docs/archive/UI_SPEC_INITIAL_CONCEPT.md`, and the src/surfaces/rig/ directory
+(RigHologram.tsx / RigViewer.tsx — the 3D rig).
 
 CONTEXT: last session you researched competitors + audited the app + wrote a slim-down plan. The
 thesis is right and approved — "one question per room, one primary action, answer first, detail
