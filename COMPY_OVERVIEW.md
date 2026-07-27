@@ -83,7 +83,7 @@ off 2026-07-14. The private beta exists to *earn* the trust the design claims: r
 ledgers, real rollbacks, before a single public promise.
 
 **Hardware truth:** Compy names the evidence it has and does not upgrade a vendor claim by
-assumption. Current per-capability NVIDIA validation is recorded in `docs/RELEASE_STATE.md`.
+assumption. NVIDIA sensor data stays ungraded until hardware validation per `CLAUDE.md` LOCKED rule 5.
 
 ---
 

@@ -25,6 +25,44 @@ export function withoutFencedCode(text) {
   }).join('\n');
 }
 
+export function withoutInlineCodeSpans(text) {
+  const masked = text.split('');
+  let opener = 0;
+  while (opener < text.length) {
+    if (text[opener] !== '`') {
+      opener += 1;
+      continue;
+    }
+
+    let openerEnd = opener;
+    while (text[openerEnd] === '`') openerEnd += 1;
+    const delimiterLength = openerEnd - opener;
+    let cursor = openerEnd;
+    let closerEnd = null;
+    while (cursor < text.length) {
+      const nextRun = text.indexOf('`', cursor);
+      if (nextRun === -1) break;
+      let runEnd = nextRun;
+      while (text[runEnd] === '`') runEnd += 1;
+      if (runEnd - nextRun === delimiterLength) {
+        closerEnd = runEnd;
+        break;
+      }
+      cursor = runEnd;
+    }
+
+    if (closerEnd === null) {
+      opener = openerEnd;
+      continue;
+    }
+    for (let index = opener; index < closerEnd; index += 1) {
+      if (masked[index] !== '\n' && masked[index] !== '\r') masked[index] = ' ';
+    }
+    opener = closerEnd;
+  }
+  return masked.join('');
+}
+
 function destinationFromInline(raw) {
   const trimmed = raw.trim();
   if (trimmed.startsWith('<')) {
@@ -69,10 +107,11 @@ function inlineDestinations(text) {
   return found;
 }
 
-function destinations(text) {
+export function markdownDestinations(text) {
   const found = [];
-  const definitions = referenceDefinitions(text);
-  const withoutDefinitions = text.replace(/^\s{0,3}\[[^\]]+]\s*:\s*.*$/gm, '');
+  const visibleText = withoutInlineCodeSpans(withoutFencedCode(text));
+  const definitions = referenceDefinitions(visibleText);
+  const withoutDefinitions = visibleText.replace(/^\s{0,3}\[[^\]]+]\s*:\s*.*$/gm, '');
 
   found.push(...inlineDestinations(withoutDefinitions));
   for (const match of withoutDefinitions.matchAll(/(?<!!)\[([^\]]+)]\[([^\]]*)]/g)) {
@@ -110,8 +149,8 @@ export function findBrokenMarkdownLinks(rootDir = root) {
   const broken = [];
   let checked = 0;
   for (const source of markdownFiles) {
-    const text = withoutFencedCode(readFileSync(path.join(rootDir, source), 'utf8'));
-    for (const destination of destinations(text)) {
+    const text = readFileSync(path.join(rootDir, source), 'utf8');
+    for (const destination of markdownDestinations(text)) {
       const local = localPath(destination);
       if (!local) continue;
       checked += 1;

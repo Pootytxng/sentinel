@@ -3,6 +3,10 @@ $root = Split-Path $PSScriptRoot -Parent
 Write-Host "== doc-budget:"
 & powershell -NoProfile -File (Join-Path $PSScriptRoot "doc-budget.ps1")
 $bud = $LASTEXITCODE
+Write-Host "== Codex adapter layout:"
+& node (Join-Path $PSScriptRoot "agents-layout-guard.mjs")
+$agents = $LASTEXITCODE
+if ($agents -ne 0) { exit $agents }
 Write-Host "== markdown links:"
 & node (Join-Path $PSScriptRoot "markdown-link-guard.mjs")
 $links = $LASTEXITCODE
