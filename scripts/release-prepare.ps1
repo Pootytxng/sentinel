@@ -15,10 +15,12 @@ param(
   [switch]$BumpMinor
 )
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "lib\native-process.ps1")
 $release = Join-Path $PSScriptRoot "release.ps1"
+$arguments = @("-NoProfile", "-File", $release, "-Mode", "stage", "-Notes", $Notes)
 if ($SetVersion) {
-  & $release -Mode stage -Notes $Notes -SetVersion $SetVersion -BumpMinor:$BumpMinor
-} else {
-  & $release -Mode stage -Notes $Notes -BumpMinor:$BumpMinor
+  $arguments += @("-SetVersion", $SetVersion)
 }
-exit $LASTEXITCODE
+if ($BumpMinor) { $arguments += "-BumpMinor" }
+Invoke-StreamedProcess "release prepare" "powershell" $arguments -WorkingDirectory (Split-Path -Parent $PSScriptRoot) | Out-Null
+exit 0

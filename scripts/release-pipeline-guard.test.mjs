@@ -85,7 +85,7 @@ describe("release pipeline safety", () => {
   it("runs the complete gate again on the exact clean release commit before building", () => {
     const releaseCommit = position("$releaseCommit = Get-GitLine");
     const exactGate = position("=== Exact release-commit verification ===");
-    const signedBuild = position('Invoke-TauriSigned $keyPath @("run", "tauri", "build")');
+    const signedBuild = position('Invoke-TauriSigned $keyPath @("build")');
     const exactGateBlock = executable.slice(exactGate, signedBuild);
     expect(releaseCommit).toBeLessThan(exactGate);
     expect(exactGate).toBeLessThan(signedBuild);
@@ -134,22 +134,22 @@ describe("release pipeline safety", () => {
     expect(script).toContain("GRANDFATHERED FLEET ANCHOR"); // the grandfather rationale is documented
     expect(signingProbe).toBeLessThan(versionWrite);
     expect(signingProbe).toBeLessThan(commit);
-    // A real password passes THROUGH when set; the shim never hardcodes an empty password.
-    expect(executable).toContain('TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || ""');
-    expect(script).not.toContain("TAURI_SIGNING_PRIVATE_KEY_PASSWORD:''");
-    expect(executable).toContain("Get-Command npm.cmd");
+    // A real password passes THROUGH when set; passwordless fleet-key mode uses a child-only,
+    // present-but-empty override without mutating the parent environment.
+    expect(executable).toContain("TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $password");
+    expect(executable).toContain("-Environment $signingEnvironment");
+    expect(executable).not.toContain("[Environment]::SetEnvironmentVariable");
     // bug->guard (2026-07-23): signing carries the key CONTENT, not the path. `tauri signer sign`
     // (sign-probe preflight + receipt signing) treats TAURI_SIGNING_PRIVATE_KEY as literal base64
     // key material and never path-resolves it, so a path fails "failed to decode base64 secret key".
     expect(executable).toContain("Get-Content -LiteralPath $KeyPath -Raw");
     expect(executable).not.toContain("$env:COMPY_SIGN_KEY = $KeyPath");
-    // bug->guard (2026-07-23): the shim hands cmd.exe ONE per-token-quoted command string under
-    // shell:true, so the spaced npm.cmd path (C:\Program Files\nodejs\npm.cmd) is not word-split.
-    expect(executable).toContain("spawnSync(cmd, {");
-    expect(executable).not.toContain("spawnSync(a[0], a.slice(1)");
-    // Build + signer both route through the single signing shim (Invoke-TauriSigned).
-    expect(executable).toContain('Invoke-TauriSigned $keyPath @("run", "tauri", "build")');
-    expect(executable).toContain('Invoke-TauriSigned $KeyPath @("run", "tauri", "--", "signer", "sign", $Path)');
+    // Build + signer launch the actual Tauri JS entry point through node, without cmd.exe or shell:true.
+    expect(executable).toContain("node_modules\\@tauri-apps\\cli\\tauri.js");
+    expect(executable).not.toContain("shell:true");
+    expect(executable).not.toContain("cmd.exe");
+    expect(executable).toContain('Invoke-TauriSigned $keyPath @("build")');
+    expect(executable).toContain('Invoke-TauriSigned $KeyPath @("signer", "sign", $Path)');
   });
 
   it("commits the release version via a parse-safe message file, never -m $Notes", () => {
@@ -172,7 +172,7 @@ describe("release pipeline safety", () => {
   });
 
   it.runIf(process.platform === "win32")(
-    "executes the exact PowerShell-resolved npm.cmd runner on Windows",
+    "executes npm through node and npm-cli.js without a batch shim on Windows",
     () => {
       const result = spawnSync(
         "powershell.exe",
@@ -180,7 +180,10 @@ describe("release pipeline safety", () => {
           "-NoProfile",
           "-NonInteractive",
           "-Command",
-          "$npmCmd=(Get-Command npm.cmd -ErrorAction Stop).Source; & $npmCmd --version; exit $LASTEXITCODE",
+          `. '${join(root, "scripts", "lib", "native-process.ps1").replaceAll("'", "''")}'; ` +
+            "$npm=Get-NpmCliInvocation; " +
+            '$result=Invoke-NativeProcess -Command $npm.Command -ArgumentList (@($npm.ArgumentPrefix)+@("--version")); ' +
+            "if($result.ExitCode -ne 0){throw $result.StdErr}; $result.StdOut",
         ],
         { cwd: root, encoding: "utf8", shell: false },
       );
@@ -257,7 +260,9 @@ describe("release pipeline safety", () => {
     expect(reinstall).toContain("Built release executable is missing before install");
     expect(reinstall).toContain("Could not resolve the source HEAD before install");
     expect(reinstall).toContain("Could not verify the source worktree before install");
-    expect(reinstallExecutable).toContain("WaitForExit(180000)");
+    expect(reinstallExecutable).toContain(
+      "Invoke-NativeProcess -Command $dest -ArgumentList @(\"/S\") -TimeoutMs 180000 -KillTreeOnTimeout $false",
+    );
     expect(reinstall).toContain("Silent install timed out after 180 seconds");
     // Correctness invariant is the embedded HEAD commit + version, NOT byte-identity vs
     // target/release/compy.exe: NSIS packaging + non-reproducible Rust links mean a legitimate
@@ -273,7 +278,7 @@ describe("release pipeline safety", () => {
     expect(reinstallExecutable).toContain("Invoke-CompyRuntimeProof");
     expect(runtimeProofExecutable).toContain("RUNTIME STAMP MISMATCH");
     expect(runtimeProofExecutable).toContain("RUNTIME VERSION MISMATCH");
-    expect(reinstallExecutable).toContain("Start-Process $exe");
+    expect(reinstallExecutable).toContain("Start-NativeProcess -Command $exe");
   });
 
   it("refuses every Gaming Mode contract before stopping Compy or touching installers", () => {
@@ -353,19 +358,14 @@ describe("release-critical PowerShell cannot be killed by an expected native fai
     }
   });
 
-  it("never reads $LASTEXITCODE except in the two thin wrappers that forward a child's code", () => {
-    // Once every tool runs through System.Diagnostics.Process/Start-Process, $LASTEXITCODE is never
-    // set -- and `$null -ne 0` is TRUE, so a leftover check would throw on success. The wrappers are
-    // exempt: they call release.ps1 as a SCRIPT, whose explicit `exit` does define $LASTEXITCODE.
-    const wrappers = new Set(["release-prepare.ps1", "release-publish.ps1"]);
+  it("never reads $LASTEXITCODE, including in the two thin wrappers", () => {
+    // Once every tool and nested script runs through System.Diagnostics.Process, $LASTEXITCODE is
+    // never set -- and `$null -ne 0` is TRUE. Wrappers use Invoke-StreamedProcess too.
     for (const { name, executable: exe } of releaseCriticalSurface) {
-      if (wrappers.has(name)) {
-        expect(exe, `${name} must forward the child's exit code`).toContain("exit $LASTEXITCODE");
-        continue;
-      }
       expect(exe, `${name} still depends on $LASTEXITCODE`).not.toContain("$LASTEXITCODE");
     }
-    // Both wrapped paths end in an explicit exit, so the forwarded code is never undefined.
+    expect(stripComments(read("release-prepare.ps1"))).toContain('Invoke-StreamedProcess "release prepare"');
+    expect(stripComments(read("release-publish.ps1"))).toContain('Invoke-StreamedProcess "release publish"');
     expect(executable.match(/^\s*exit 0\s*$/gm) ?? [], "release.ps1 stage+publish must both exit 0").toHaveLength(2);
   });
 
@@ -379,7 +379,7 @@ describe("release-critical PowerShell cannot be killed by an expected native fai
     expect(nativeProcessExecutable).toContain("$startInfo.StandardOutputEncoding = [System.Text.Encoding]::UTF8");
     expect(nativeProcessExecutable).toContain("$startInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8");
     // Both pipes are drained asynchronously BEFORE the wait, or a chatty child deadlocks its buffer.
-    expect(nativeProcessExecutable.match(/ReadToEndAsync\(\)/g) ?? []).toHaveLength(2);
+    expect((nativeProcessExecutable.match(/ReadToEndAsync\(\)/g) ?? []).length).toBeGreaterThanOrEqual(2);
     expect(nativeProcessExecutable).toMatch(/ExitCode\s+=\s+\$exitCode/);
     // Optional timeout with termination, so a hung tool cannot hang a release.
     expect(nativeProcessExecutable).toMatch(/WaitForExit\(\$TimeoutMs\)/);
@@ -392,7 +392,9 @@ describe("release-critical PowerShell cannot be killed by an expected native fai
     // malformed responses throw -- "I could not ask" is never "it is not there".
     expect(nativeProcessExecutable).toContain("function Test-GhNotFound");
     expect(nativeProcessExecutable).toContain("\\(HTTP 404\\)");
-    expect(nativeProcessExecutable).toMatch(/if\s*\(\$Result\.TimedOut\)\s*{\s*return\s*\$false\s*}/);
+    expect(nativeProcessExecutable).toMatch(
+      /if\s*\(\$Result\.TimedOut\s+-or\s+\$Result\.ExitCode\s+-eq\s+0\)\s*{\s*return\s*\$false\s*}/,
+    );
     // The tag probe branches on the classification instead of collapsing every failure to "absent".
     const tagProbe = executable.slice(position("$tagProbe = Invoke-NativeProcess"), position("create releases-repo tag"));
     expect(tagProbe).toContain("$tagProbe.ExitCode -eq 0");

@@ -44,13 +44,52 @@ if (mode === "network") {
   console.error("dial tcp: lookup api.github.com: no such host");
   process.exit(1);
 }
+if (mode === "mixed-auth-404") {
+  console.error("gh: Bad credentials (HTTP 401)");
+  console.error("proxy footer: HTTP 404");
+  process.exit(1);
+}
 if (mode === "ok") { console.log("${OK_SHA}"); process.exit(0); }
 if (mode === "json") { console.log(JSON.stringify({ ref: "refs/tags/v0.9.10", object: { sha: "${JSON_SHA}", type: "commit" } })); process.exit(0); }
 if (mode === "noisy-ok") { console.error("warning: reusing cached credentials"); console.log("${NOISY_SHA}"); process.exit(0); }
 if (mode === "empty-ok") { process.exit(0); }
 if (mode === "echo-args") { console.log(JSON.stringify(rest)); process.exit(0); }
-if (mode !== "hang") { console.error("unknown mode " + mode); process.exit(2); }
-setInterval(() => {}, 60000);
+if (mode === "environment") {
+  console.log(JSON.stringify({
+    present: Object.prototype.hasOwnProperty.call(process.env, "COMPY_PRESENT_EMPTY"),
+    empty: process.env.COMPY_PRESENT_EMPTY,
+    value: process.env.COMPY_OVERRIDE_VALUE,
+    inherited: process.env.COMPY_INHERITED_VALUE,
+  }));
+  process.exit(0);
+}
+if (mode === "utf8") {
+  process.stdout.write("stdout: Nihon - \\u65e5\\u672c\\u8a9e - \\u00b7\\n");
+  process.stderr.write("stderr: Zhongwen - \\u4e2d\\u6587 - \\u00b7\\n");
+  process.exit(0);
+}
+if (mode === "high-volume") {
+  for (let i = 0; i < 12000; i++) {
+    process.stdout.write("OUT-" + i.toString().padStart(5, "0") + "-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\n");
+    process.stderr.write("ERR-" + i.toString().padStart(5, "0") + "-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\\n");
+  }
+  process.exit(0);
+}
+if (mode === "child-hang") { setInterval(() => {}, 60000); }
+if (mode === "tree-hang") {
+  const { spawn } = await import("node:child_process");
+  const child = spawn(process.execPath, [process.argv[1], "child-hang"], {
+    detached: false,
+    stdio: "ignore",
+  });
+  console.log("CHILD_PID=" + child.pid);
+  setInterval(() => {}, 60000);
+}
+if (!["hang", "child-hang", "tree-hang"].includes(mode)) {
+  console.error("unknown mode " + mode);
+  process.exit(2);
+}
+if (mode === "hang") setInterval(() => {}, 60000);
 `;
 
 // Batch shim, so the .cmd route (cmd.exe /s /c "...") is exercised the same way npm.cmd is by
@@ -96,6 +135,7 @@ $modes = @{
   "structured-json"    = "json"
   "stderr-on-success"  = "noisy-ok"
   "empty-success"      = "empty-ok"
+  "mixed-auth-404"     = "mixed-auth-404"
 }
 
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -127,6 +167,11 @@ if ($modes.ContainsKey($Scenario)) {
   } catch {
     Write-Output ("THREW=" + $_.Exception.Message)
   }
+} elseif ($Scenario -eq "timeout-tree-kill") {
+  $result = Invoke-NativeProcess -Command $NodeExe -ArgumentList @($FakeGh, "tree-hang") -TimeoutMs 2000
+  Write-Output ("TIMEDOUT=" + $result.TimedOut)
+  Write-Output ("TERMINATION_ATTEMPTED=" + $result.TerminationAttempted)
+  Write-Output ("TREE_STDOUT=" + (($result.StdOut -replace "[\r\n]+", "|").Trim("|")))
 } elseif ($Scenario -eq "checked-fails-closed") {
   try {
     Invoke-CheckedProcess "releases-repo tag lookup" $NodeExe @($FakeGh, "auth") -TimeoutMs 30000 | Out-Null
@@ -153,9 +198,34 @@ if ($modes.ContainsKey($Scenario)) {
   $result = Invoke-StreamedProcess "streamed gate" $NodeExe @($FakeGh, "notfound") -TimeoutMs 30000 -AllowExitCodes @(1)
   Write-Output ("EXIT=" + $result.ExitCode)
 } elseif ($Scenario -eq "batch-and-quoting") {
-  $result = Invoke-NativeProcess -Command $GhCmd -ArgumentList @("--jq", ".object.sha", $SpaceArg) -TimeoutMs 30000
-  Write-Output ("EXIT=" + $result.ExitCode)
+  try {
+    Invoke-NativeProcess -Command $GhCmd -ArgumentList @("--jq", ".object.sha", "--version&echo INJECTED", $SpaceArg) -TimeoutMs 30000 | Out-Null
+    Write-Output "RESOLVED=[unsafe]"
+  } catch {
+    Write-Output ("THREW=" + $_.Exception.Message)
+  }
+} elseif ($Scenario -eq "direct-argument-fidelity") {
+  $tricky = @("", "space value", 'quote"value', 'trailing\\', 'amp&pipe|percent%bang!')
+  $result = Invoke-NativeProcess -Command $NodeExe -ArgumentList (@($FakeGh, "echo-args") + $tricky) -TimeoutMs 30000
   Write-Output ("ARGS=" + $result.StdOut.Trim())
+} elseif ($Scenario -eq "environment-overrides") {
+  [Environment]::SetEnvironmentVariable("COMPY_INHERITED_VALUE", "parent", "Process")
+  $result = Invoke-NativeProcess -Command $NodeExe -ArgumentList @($FakeGh, "environment") -Environment @{
+    COMPY_PRESENT_EMPTY = ""
+    COMPY_OVERRIDE_VALUE = "child-only"
+    COMPY_INHERITED_VALUE = "overridden"
+  } -TimeoutMs 30000
+  Write-Output ("ENV_JSON=" + $result.StdOut.Trim())
+  Write-Output ("PARENT_VALUE=" + [Environment]::GetEnvironmentVariable("COMPY_INHERITED_VALUE", "Process"))
+} elseif ($Scenario -eq "utf8-capture") {
+  $result = Invoke-NativeProcess -Command $NodeExe -ArgumentList @($FakeGh, "utf8") -TimeoutMs 30000
+  Write-Output ("UTF8_OUT_B64=" + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($result.StdOut.Trim())))
+  Write-Output ("UTF8_ERR_B64=" + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($result.StdErr.Trim())))
+} elseif ($Scenario -eq "high-volume") {
+  $result = Invoke-NativeProcess -Command $NodeExe -ArgumentList @($FakeGh, "high-volume") -TimeoutMs 30000
+  Write-Output ("EXIT=" + $result.ExitCode)
+  Write-Output ("OUT_HAS_LAST=" + $result.StdOut.Contains("OUT-11999"))
+  Write-Output ("ERR_HAS_LAST=" + $result.StdErr.Contains("ERR-11999"))
 } elseif ($Scenario -eq "missing-executable") {
   try {
     Invoke-NativeProcess -Command "compy-no-such-tool-xyz" -ArgumentList @("--version") | Out-Null
@@ -259,6 +329,12 @@ describe.runIf(windows)("native-process behaviour (bug->guard, both failed v0.9.
     expect(field("THREW")).toContain("error connecting to api.github.com");
   }, 60000);
 
+  it("does not let an authentication failure hide behind unrelated 404 text", () => {
+    const { field } = run("mixed-auth-404");
+    expect(field("NOTFOUND")).toBe("False");
+    expect(field("THREW")).toContain("Bad credentials (HTTP 401)");
+  }, 60000);
+
   it("captures successful structured stdout and parses it correctly", () => {
     const { out, field } = run("structured-json");
     expect(out, out).not.toContain("THREW=");
@@ -290,6 +366,16 @@ describe.runIf(windows)("native-process behaviour (bug->guard, both failed v0.9.
     expect(field("THREW")).toContain("timed out");
     expect(field("THREW")).toContain("not treated as an absent tag");
     expect(elapsed).toBeLessThan(30000);
+  }, 60000);
+
+  it("attempts process-tree termination so timed-out descendants do not survive", async () => {
+    const { field } = run("timeout-tree-kill");
+    expect(field("TIMEDOUT")).toBe("True");
+    expect(field("TERMINATION_ATTEMPTED")).toBe("True");
+    const childPid = Number(field("TREE_STDOUT").match(/CHILD_PID=(\d+)/)?.[1]);
+    expect(childPid).toBeGreaterThan(0);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    expect(() => process.kill(childPid, 0)).toThrow();
   }, 60000);
 
   it("fails closed on an unexpected nonzero exit, carrying the child's stderr", () => {
@@ -329,11 +415,50 @@ describe.runIf(windows)("native-process behaviour (bug->guard, both failed v0.9.
     expect(field("EXIT")).toBe("1");
   }, 60000);
 
-  it("routes a .cmd shim through cmd.exe and round-trips an argument containing spaces", () => {
-    const { out, field } = run("batch-and-quoting");
-    expect(out, out).not.toContain("THREW=");
+  it("refuses batch shims instead of reparsing argument arrays through cmd.exe", () => {
+    const { field } = run("batch-and-quoting");
+    expect(field("RESOLVED")).toBe("");
+    expect(field("THREW")).toContain("Batch shim");
+    expect(field("THREW")).toContain("shell reparsing");
+  }, 60000);
+
+  it("round-trips empty, quoted, trailing-slash, and shell-metachar arguments to executables", () => {
+    const { field } = run("direct-argument-fidelity");
+    expect(JSON.parse(field("ARGS"))).toEqual([
+      "",
+      "space value",
+      'quote"value',
+      "trailing\\",
+      "amp&pipe|percent%bang!",
+    ]);
+  }, 60000);
+
+  it("applies child-only environment overrides including a present empty value", () => {
+    const { field } = run("environment-overrides");
+    expect(JSON.parse(field("ENV_JSON"))).toEqual({
+      present: true,
+      empty: "",
+      value: "child-only",
+      inherited: "overridden",
+    });
+    expect(field("PARENT_VALUE")).toBe("parent");
+  }, 60000);
+
+  it("decodes captured stdout and stderr explicitly as UTF-8", () => {
+    const { field } = run("utf8-capture");
+    const stdout = Buffer.from(field("UTF8_OUT_B64"), "base64").toString("utf8");
+    const stderr = Buffer.from(field("UTF8_ERR_B64"), "base64").toString("utf8");
+    expect(stdout).toContain("日本語");
+    expect(stdout).toContain("·");
+    expect(stderr).toContain("中文");
+    expect(stderr).toContain("·");
+  }, 60000);
+
+  it("drains high-volume stdout and stderr concurrently without deadlock or truncation", () => {
+    const { field } = run("high-volume");
     expect(field("EXIT")).toBe("0");
-    expect(JSON.parse(field("ARGS"))).toEqual(["--jq", ".object.sha", spaceArg]);
+    expect(field("OUT_HAS_LAST")).toBe("True");
+    expect(field("ERR_HAS_LAST")).toBe("True");
   }, 60000);
 
   it("refuses to run a tool that is not on PATH", () => {

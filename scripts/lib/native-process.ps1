@@ -66,9 +66,10 @@ function Get-FirstNonEmptyLine {
   return ""
 }
 
-# Resolves a command name or path to a real executable. CreateProcess (which is what
-# UseShellExecute=$false uses) CANNOT launch a .cmd/.bat file, so a batch shim such as npm.cmd is
-# reported as such and routed through cmd.exe by ConvertTo-NativeCommandLine.
+# Resolves a command name or path to a real executable. CreateProcess cannot launch a .cmd/.bat
+# file. Routing an argument array through cmd.exe would reparse &, |, <, >, %, ! and ^ as shell
+# syntax, which is not argument-array semantics. Batch shims are therefore refused. Callers that
+# need npm use Get-NpmCliInvocation, which launches npm-cli.js through node.exe directly.
 function Resolve-NativeExecutable {
   param([Parameter(Mandatory = $true)][string]$Command)
 
@@ -86,24 +87,92 @@ function Resolve-NativeExecutable {
 
   $extension = [System.IO.Path]::GetExtension($source)
   $isBatch = ($extension -eq ".cmd" -or $extension -eq ".bat")
+  if ($isBatch) {
+    throw "Batch shim '$source' is not a safe executable target: cmd.exe shell reparsing would violate argument-array semantics. Invoke its real interpreter entry point instead."
+  }
   return [pscustomobject]@{
     Source   = $source
-    FilePath = $(if ($isBatch) { $env:ComSpec } else { $source })
-    IsBatch  = $isBatch
+    FilePath = $source
+    IsBatch  = $false
   }
 }
 
-# Builds the exact command line for a resolved executable. A batch shim gets the only cmd.exe form
-# that survives a quoted path plus quoted arguments: /s /c "<the whole quoted command>".
 function ConvertTo-NativeCommandLine {
   param(
     [Parameter(Mandatory = $true)][psobject]$Resolved,
     [string[]]$ArgumentList = @()
   )
-  if ($Resolved.IsBatch) {
-    return '/s /c "' + (ConvertTo-NativeArgumentString (@($Resolved.Source) + @($ArgumentList))) + '"'
-  }
   return (ConvertTo-NativeArgumentString $ArgumentList)
+}
+
+function Get-NpmCliInvocation {
+  $npm = @(Get-Command "npm.cmd" -CommandType Application -ErrorAction SilentlyContinue)
+  if ($npm.Count -eq 0) { throw "Required npm.cmd installation was not found on PATH." }
+  $nodeRoot = Split-Path -Parent $npm[0].Source
+  $node = Join-Path $nodeRoot "node.exe"
+  $cli = Join-Path $nodeRoot "node_modules\npm\bin\npm-cli.js"
+  if (-not (Test-Path -LiteralPath $node -PathType Leaf)) {
+    $node = (Resolve-NativeExecutable "node").Source
+  }
+  if (-not (Test-Path -LiteralPath $cli -PathType Leaf)) {
+    throw "npm CLI entry point was not found beside npm.cmd: $cli"
+  }
+  return [pscustomobject]@{
+    Command = $node
+    ArgumentPrefix = @($cli)
+  }
+}
+
+function Set-NativeEnvironment {
+  param(
+    [Parameter(Mandatory = $true)][System.Diagnostics.ProcessStartInfo]$StartInfo,
+    [hashtable]$Environment
+  )
+  if (-not $Environment) { return }
+  foreach ($key in $Environment.Keys) {
+    if ([string]::IsNullOrWhiteSpace([string]$key)) {
+      throw "Native-process environment overrides cannot contain an empty variable name."
+    }
+    $value = $Environment[$key]
+    if ($null -eq $value) {
+      $StartInfo.EnvironmentVariables.Remove([string]$key)
+    } else {
+      # Assign through ProcessStartInfo, not the parent process environment. An empty string remains
+      # PRESENT in the child, which the passwordless pinned Tauri signing key requires.
+      $StartInfo.EnvironmentVariables[[string]$key] = [string]$value
+    }
+  }
+}
+
+function Stop-NativeProcessTree {
+  param(
+    [Parameter(Mandatory = $true)][int]$ProcessId,
+    [int]$TimeoutMs = 10000
+  )
+  $taskkill = Join-Path $env:SystemRoot "System32\taskkill.exe"
+  if (Test-Path -LiteralPath $taskkill -PathType Leaf) {
+    $info = New-Object System.Diagnostics.ProcessStartInfo
+    $info.FileName = $taskkill
+    $info.Arguments = ConvertTo-NativeArgumentString @("/PID", "$ProcessId", "/T", "/F")
+    $info.UseShellExecute = $false
+    $info.CreateNoWindow = $true
+    $info.RedirectStandardOutput = $true
+    $info.RedirectStandardError = $true
+    $killer = New-Object System.Diagnostics.Process
+    $killer.StartInfo = $info
+    try {
+      if ($killer.Start()) {
+        $null = $killer.StandardOutput.ReadToEndAsync()
+        $null = $killer.StandardError.ReadToEndAsync()
+        $killer.WaitForExit($TimeoutMs) | Out-Null
+      }
+    } catch {
+      # The tracked-process fallback below still runs. Timeout handling must never pretend a failed
+      # tree-kill attempt succeeded.
+    } finally {
+      $killer.Dispose()
+    }
+  }
 }
 
 # Runs a native executable and returns its stdout, stderr and exit code as DATA. Never raises a
@@ -116,10 +185,13 @@ function Invoke-CapturedProcess {
     [string[]]$ArgumentList = @(),
     [string]$ArgumentString,
     [string]$WorkingDirectory,
+    [hashtable]$Environment,
     [int]$TimeoutMs = 20000,
-    [int]$DrainMs = 5000
+    [int]$DrainMs = 5000,
+    [bool]$KillTreeOnTimeout = $true
   )
 
+  $clock = [System.Diagnostics.Stopwatch]::StartNew()
   $startInfo = New-Object System.Diagnostics.ProcessStartInfo
   $startInfo.FileName = $FilePath
   if ($PSBoundParameters.ContainsKey("ArgumentString")) {
@@ -137,6 +209,7 @@ function Invoke-CapturedProcess {
   # code page would corrupt the exact string this proof compares, i.e. invent a mismatch.
   $startInfo.StandardOutputEncoding = [System.Text.Encoding]::UTF8
   $startInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+  Set-NativeEnvironment -StartInfo $startInfo -Environment $Environment
 
   $process = New-Object System.Diagnostics.Process
   $process.StartInfo = $startInfo
@@ -144,16 +217,25 @@ function Invoke-CapturedProcess {
   $stderr = ""
   $exitCode = -1
   $timedOut = $false
+  $terminationAttempted = $false
+  $processId = -1
   try {
     if (-not $process.Start()) { throw "Could not start '$FilePath'." }
+    $processId = $process.Id
     $process.StandardInput.Close()
     # Read both pipes concurrently: reading one to the end while the other fills can deadlock.
     $outReader = $process.StandardOutput.ReadToEndAsync()
     $errReader = $process.StandardError.ReadToEndAsync()
     if (-not $process.WaitForExit($TimeoutMs)) {
       $timedOut = $true
-      try { $process.Kill() } catch { }
-      $process.WaitForExit($DrainMs) | Out-Null
+      if ($KillTreeOnTimeout) {
+        $terminationAttempted = $true
+        Stop-NativeProcessTree -ProcessId $process.Id -TimeoutMs $DrainMs
+        if (-not $process.HasExited) {
+          try { $process.Kill() } catch { }
+        }
+        $process.WaitForExit($DrainMs) | Out-Null
+      }
     }
     # Bounded drain: a killed child must not hang the caller, and a faulted reader is reported as
     # empty output for THIS attempt rather than crashing it.
@@ -165,12 +247,16 @@ function Invoke-CapturedProcess {
   }
 
   return [pscustomobject]@{
-    FilePath  = $FilePath
-    Arguments = $startInfo.Arguments
-    ExitCode  = $exitCode
-    StdOut    = $stdout
-    StdErr    = $stderr
-    TimedOut  = $timedOut
+    FilePath             = $FilePath
+    Arguments            = $startInfo.Arguments
+    ExitCode             = $exitCode
+    StdOut               = $stdout
+    StdErr               = $stderr
+    TimedOut             = $timedOut
+    ProcessId            = $processId
+    DurationMs           = $clock.ElapsedMilliseconds
+    TerminationAttempted = $terminationAttempted
+    EnvironmentKeys      = @($(if ($Environment) { $Environment.Keys | Sort-Object } else { @() }))
   }
 }
 
@@ -182,11 +268,13 @@ function Invoke-NativeProcess {
     [Parameter(Mandatory = $true, Position = 0)][string]$Command,
     [Parameter(Position = 1)][string[]]$ArgumentList = @(),
     [string]$WorkingDirectory,
-    [int]$TimeoutMs = 600000
+    [hashtable]$Environment,
+    [int]$TimeoutMs = 600000,
+    [bool]$KillTreeOnTimeout = $true
   )
   $resolved = Resolve-NativeExecutable $Command
   $commandLine = ConvertTo-NativeCommandLine $resolved $ArgumentList
-  return Invoke-CapturedProcess -FilePath $resolved.FilePath -ArgumentString $commandLine -WorkingDirectory $WorkingDirectory -TimeoutMs $TimeoutMs
+  return Invoke-CapturedProcess -FilePath $resolved.FilePath -ArgumentString $commandLine -WorkingDirectory $WorkingDirectory -Environment $Environment -TimeoutMs $TimeoutMs -KillTreeOnTimeout $KillTreeOnTimeout
 }
 
 # Capture and FAIL CLOSED. Any exit code outside -AllowExitCodes, and any timeout, throws with the
@@ -198,11 +286,13 @@ function Invoke-CheckedProcess {
     [Parameter(Mandatory = $true, Position = 1)][string]$Command,
     [Parameter(Position = 2)][string[]]$ArgumentList = @(),
     [string]$WorkingDirectory,
+    [hashtable]$Environment,
     [int]$TimeoutMs = 600000,
+    [bool]$KillTreeOnTimeout = $true,
     [int[]]$AllowExitCodes = @(),
     [switch]$ShowOutput
   )
-  $result = Invoke-NativeProcess -Command $Command -ArgumentList $ArgumentList -WorkingDirectory $WorkingDirectory -TimeoutMs $TimeoutMs
+  $result = Invoke-NativeProcess -Command $Command -ArgumentList $ArgumentList -WorkingDirectory $WorkingDirectory -Environment $Environment -TimeoutMs $TimeoutMs -KillTreeOnTimeout $KillTreeOnTimeout
   if ($result.TimedOut) {
     throw "$Label timed out after $TimeoutMs ms and was terminated."
   }
@@ -220,9 +310,10 @@ function Invoke-CheckedProcess {
   return $result
 }
 
-# For long-running commands whose output must be surfaced while they run. Start-Process is a cmdlet,
-# so no NativeCommandError is possible; -NoNewWindow makes the child inherit this console's handles,
-# so its output streams live instead of arriving in one lump at the end.
+# For long-running commands whose output must be surfaced while they run. The child inherits this
+# console's stdout/stderr handles, so output remains live. System.Diagnostics.Process still returns
+# the exit code as data and supports the same working-directory, environment, timeout and tree-kill
+# contract as captured mode.
 function Invoke-StreamedProcess {
   [CmdletBinding()]
   param(
@@ -230,39 +321,50 @@ function Invoke-StreamedProcess {
     [Parameter(Mandatory = $true, Position = 1)][string]$Command,
     [Parameter(Position = 2)][string[]]$ArgumentList = @(),
     [string]$WorkingDirectory,
+    [hashtable]$Environment,
     [int]$TimeoutMs = 3600000,
     [int]$DrainMs = 5000,
+    [bool]$KillTreeOnTimeout = $true,
     [int[]]$AllowExitCodes = @()
   )
   $resolved = Resolve-NativeExecutable $Command
   $commandLine = ConvertTo-NativeCommandLine $resolved $ArgumentList
 
-  $startArgs = @{
-    FilePath    = $resolved.FilePath
-    NoNewWindow = $true
-    PassThru    = $true
+  $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+  $startInfo.FileName = $resolved.FilePath
+  $startInfo.Arguments = $commandLine
+  if ($WorkingDirectory) { $startInfo.WorkingDirectory = $WorkingDirectory }
+  $startInfo.UseShellExecute = $false
+  $startInfo.CreateNoWindow = $true
+  $startInfo.RedirectStandardInput = $false
+  $startInfo.RedirectStandardOutput = $false
+  $startInfo.RedirectStandardError = $false
+  Set-NativeEnvironment -StartInfo $startInfo -Environment $Environment
+
+  $process = New-Object System.Diagnostics.Process
+  $process.StartInfo = $startInfo
+  if (-not $process.Start()) {
+    $process.Dispose()
+    throw "$Label could not start '$($resolved.Source)'."
   }
-  # A single pre-quoted string is passed to the child verbatim; an ARRAY would be space-joined by
-  # Start-Process without any quoting, which breaks the first path containing a space.
-  if ($commandLine) { $startArgs["ArgumentList"] = $commandLine }
-  if ($WorkingDirectory) { $startArgs["WorkingDirectory"] = $WorkingDirectory }
 
-  $process = Start-Process @startArgs
-  if (-not $process) { throw "$Label could not start '$($resolved.Source)'." }
-  # Start-Process -PassThru hands back a Process whose SafeHandle is NOT cached. Once the child
-  # exits, .ExitCode then comes back $null - and $null -ne 0 is TRUE, so a PASSING gate reads as a
-  # failure. Dereferencing .Handle while the child is still alive caches it, which is what makes
-  # .ExitCode retrievable after exit.
-  try { $null = $process.Handle } catch { }
-
+  $clock = [System.Diagnostics.Stopwatch]::StartNew()
+  $processId = $process.Id
   $exitCode = -1
   $exitUnknown = $false
   $timedOut = $false
+  $terminationAttempted = $false
   try {
     if (-not $process.WaitForExit($TimeoutMs)) {
       $timedOut = $true
-      try { $process.Kill() } catch { }
-      $process.WaitForExit($DrainMs) | Out-Null
+      if ($KillTreeOnTimeout) {
+        $terminationAttempted = $true
+        Stop-NativeProcessTree -ProcessId $process.Id -TimeoutMs $DrainMs
+        if (-not $process.HasExited) {
+          try { $process.Kill() } catch { }
+        }
+        $process.WaitForExit($DrainMs) | Out-Null
+      }
     }
     $process.Refresh()
     if ($process.HasExited) {
@@ -275,7 +377,10 @@ function Invoke-StreamedProcess {
     $process.Dispose()
   }
 
-  if ($timedOut) { throw "$Label timed out after $TimeoutMs ms and was terminated." }
+  if ($timedOut) {
+    if ($KillTreeOnTimeout) { throw "$Label timed out after $TimeoutMs ms and process-tree termination was attempted." }
+    throw "$Label timed out after $TimeoutMs ms; the process was intentionally left running for inspection."
+  }
   # Fail closed: an unreadable exit code is not a pass.
   if ($exitUnknown) {
     throw "$Label finished but Windows did not report an exit code. Refusing to assume success."
@@ -284,11 +389,45 @@ function Invoke-StreamedProcess {
     throw "$Label failed (exit $exitCode)."
   }
   return [pscustomobject]@{
-    Command   = $resolved.Source
-    Arguments = $commandLine
-    ExitCode  = $exitCode
-    TimedOut  = $timedOut
+    FilePath             = $resolved.Source
+    Arguments            = $commandLine
+    ExitCode             = $exitCode
+    StdOut               = ""
+    StdErr               = ""
+    TimedOut             = $timedOut
+    ProcessId            = $processId
+    DurationMs           = $clock.ElapsedMilliseconds
+    TerminationAttempted = $terminationAttempted
+    EnvironmentKeys      = @($(if ($Environment) { $Environment.Keys | Sort-Object } else { @() }))
   }
+}
+
+# Starts a long-lived executable without waiting. Used only where the caller needs a Process object
+# for lifecycle proof (Compy's CDP launch) or an intentional fire-and-forget normal app launch.
+function Start-NativeProcess {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true, Position = 0)][string]$Command,
+    [Parameter(Position = 1)][string[]]$ArgumentList = @(),
+    [string]$WorkingDirectory,
+    [hashtable]$Environment,
+    [switch]$CreateNoWindow
+  )
+  $resolved = Resolve-NativeExecutable $Command
+  $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+  $startInfo.FileName = $resolved.FilePath
+  $startInfo.Arguments = ConvertTo-NativeCommandLine $resolved $ArgumentList
+  if ($WorkingDirectory) { $startInfo.WorkingDirectory = $WorkingDirectory }
+  $startInfo.UseShellExecute = $false
+  $startInfo.CreateNoWindow = [bool]$CreateNoWindow
+  Set-NativeEnvironment -StartInfo $startInfo -Environment $Environment
+  $process = New-Object System.Diagnostics.Process
+  $process.StartInfo = $startInfo
+  if (-not $process.Start()) {
+    $process.Dispose()
+    throw "Could not start '$($resolved.Source)'."
+  }
+  return $process
 }
 
 # The ONE nonzero result the release pipeline is allowed to absorb: GitHub's 404 for a ref that does
@@ -297,10 +436,14 @@ function Invoke-StreamedProcess {
 # ref, must not be mistaken for one, and stays fatal at the call site.
 function Test-GhNotFound {
   param([Parameter(Mandatory = $true)][psobject]$Result)
-  if ($Result.TimedOut) { return $false }
+  if ($Result.TimedOut -or $Result.ExitCode -eq 0) { return $false }
   $text = ("" + $Result.StdErr) + "`n" + ("" + $Result.StdOut)
-  if ($text -match '\(HTTP 404\)') { return $true }
-  if ($text -match '"status"\s*:\s*"404"') { return $true }
-  if ($text -match 'HTTP\s+404\b') { return $true }
+  # Any stronger failure signal wins. A proxy footer or combined stderr must never hide auth,
+  # permission, rate-limit or network failures behind the digits "404".
+  if ($text -match '(?i)HTTP\s+(401|403|407|429)\b|bad credentials|not accessible|permission|rate.?limit|timed?\s*out|could not resolve|no such host|error connecting|connection (?:refused|reset)') {
+    return $false
+  }
+  if ($text -match '(?im)^\s*gh:\s+Not Found\s+\(HTTP 404\)\s*$') { return $true }
+  if ($text -match '"message"\s*:\s*"Not Found"' -and $text -match '"status"\s*:\s*"404"') { return $true }
   return $false
 }

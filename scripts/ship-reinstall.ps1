@@ -24,15 +24,14 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-# Runtime proof mechanism (Invoke-CapturedProcess / Invoke-CompyRuntimeProof). Lives in its own
+# Runtime proof mechanism (Invoke-NativeProcess / Invoke-CompyRuntimeProof). Lives in its own
 # dot-sourced file so the release-pipeline tests can drive it directly. See its header for the
 # 2026-07-27 NativeCommandError incident it exists to make impossible.
 . (Join-Path $PSScriptRoot "lib\runtime-proof.ps1")
-# Every external command in this script runs through Invoke-CapturedProcess. Windows PowerShell 5.1
+# Every external command in this script runs through the shared native-process abstraction. Windows PowerShell 5.1
 # turns a native command's stderr into a TERMINATING error under "Stop" (that is what broke the
 # v0.9.9 publish), and git legitimately writes warnings to stderr, so no gate here may depend on
 # whether an external tool happened to stay quiet.
-$gitExe = (Get-Command git -ErrorAction Stop).Source
 
 if ($VerifyRuntime -and $NoLaunch) {
   throw "VerifyRuntime requires launching the installed app."
@@ -84,7 +83,7 @@ $releaseExe = Join-Path $repo "src-tauri\target\release\compy.exe"
 if (-not (Test-Path -LiteralPath $releaseExe -PathType Leaf)) {
   throw "Built release executable is missing before install: $releaseExe"
 }
-$headProbe = Invoke-CapturedProcess -FilePath $gitExe -ArgumentList @("-C", $repo, "rev-parse", "--short", "HEAD")
+$headProbe = Invoke-NativeProcess -Command "git" -ArgumentList @("-C", $repo, "rev-parse", "--short", "HEAD")
 if ($headProbe.ExitCode -ne 0) { throw "Could not resolve the source HEAD before install. $(Get-FirstNonEmptyLine $headProbe.StdErr)" }
 $head = $headProbe.StdOut.Trim()
 if (-not $head) { throw "Source HEAD was empty before install." }
@@ -98,7 +97,7 @@ if (-not (Select-String -Path $releaseExe -Pattern $head -Quiet)) {
 #     excludes docs/ from the dirty check). This gate blocks the REAL case: any tracked change or
 #     non-docs untracked file at ship time means the stamp can't be trusted to equal HEAD's code.
 #     Override deliberately with -AllowDirty (states intent in the transcript).
-$dirtProbe = Invoke-CapturedProcess -FilePath $gitExe -ArgumentList @("-C", $repo, "status", "--porcelain", "--", ":(exclude)docs")
+$dirtProbe = Invoke-NativeProcess -Command "git" -ArgumentList @("-C", $repo, "status", "--porcelain", "--", ":(exclude)docs")
 if ($dirtProbe.ExitCode -ne 0) { throw "Could not verify the source worktree before install. $(Get-FirstNonEmptyLine $dirtProbe.StdErr)" }
 $treeDirt = @($dirtProbe.StdOut -split "`r?`n" | Where-Object { $_.Trim() })
 if ($treeDirt.Count -gt 0 -and -not $AllowDirty) {
@@ -153,23 +152,36 @@ $left = Get-Process compy -ErrorAction SilentlyContinue
 if ($left) { throw "compy process(es) still alive 20s after close+kill (PID $(($left.Id) -join ', ')) — a helper that won't self-exit is a real defect (and would hold the exe lock through the install); investigate before shipping." }
 Start-Sleep -Milliseconds 600
 
-# 2) Desktop hygiene: remove EVERY Compy installer, then stage ONLY the current NSIS (one file).
-Get-ChildItem $desk -File -ErrorAction SilentlyContinue |
-  Where-Object { $_.Name -like "Compy*" -and ($_.Extension -eq ".exe" -or $_.Extension -eq ".msi") } |
-  Remove-Item -Force
+# 2) Desktop hygiene is a recoverable replacement. Copy and hash the new installer first, preserve
+# every prior installer in a temporary backup, then atomically move the verified copy into place.
+# The backup is deleted only after installation succeeds; a failed install leaves evidence intact.
 $dest = Join-Path $desk "Compy_${ver}_x64-setup.exe"
-Copy-Item $nsis $dest -Force
+$incoming = Join-Path $desk (".compy-incoming-" + [guid]::NewGuid().ToString("N") + ".exe")
+$desktopBackup = Join-Path ([System.IO.Path]::GetTempPath()) ("compy-desktop-installers-" + [guid]::NewGuid().ToString("N"))
+Copy-Item -LiteralPath $nsis -Destination $incoming
+if ((Get-FileHash -LiteralPath $incoming -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $nsis -Algorithm SHA256).Hash) {
+  throw "Desktop staging copy does not match the canonical NSIS installer."
+}
+New-Item -ItemType Directory -Path $desktopBackup | Out-Null
+$priorInstallers = @(Get-ChildItem $desk -File -ErrorAction SilentlyContinue |
+  Where-Object { $_.FullName -ne $incoming -and $_.Name -like "Compy*" -and ($_.Extension -eq ".exe" -or $_.Extension -eq ".msi") })
+foreach ($priorInstaller in $priorInstallers) {
+  Copy-Item -LiteralPath $priorInstaller.FullName -Destination (Join-Path $desktopBackup $priorInstaller.Name)
+  Remove-Item -LiteralPath $priorInstaller.FullName -Force
+}
+Move-Item -LiteralPath $incoming -Destination $dest -Force
 $sha = (Get-FileHash $dest -Algorithm SHA256).Hash
 
 # 3) Silent install (per-user → no UAC). A hung installer must stop the release train rather than
 # hold the owner shell forever; leave its PID visible for manual inspection instead of killing a
 # possibly mid-transaction installer and pretending rollback is safe.
-$p = Start-Process -FilePath $dest -ArgumentList "/S" -PassThru
-if (-not $p.WaitForExit(180000)) {
-  throw "Silent install timed out after 180 seconds (PID $($p.Id)). Publication remains blocked; inspect the installer before retrying."
+$installResult = Invoke-NativeProcess -Command $dest -ArgumentList @("/S") -TimeoutMs 180000 -KillTreeOnTimeout $false
+if ($installResult.TimedOut) {
+  throw "Silent install timed out after 180 seconds (PID $($installResult.ProcessId)). Publication remains blocked; inspect the installer before retrying. Prior Desktop installers remain preserved at $desktopBackup."
 }
-$p.Refresh()
-if ($p.ExitCode -ne 0) { throw "Silent install failed: exit $($p.ExitCode)" }
+if ($installResult.ExitCode -ne 0) {
+  throw "Silent install failed: exit $($installResult.ExitCode). Prior Desktop installers remain preserved at $desktopBackup."
+}
 
 # 4) Prove the installed payload and Windows app metadata both match the staged release.
 $exe = Join-Path $env:LOCALAPPDATA "Compy\compy.exe"
@@ -206,24 +218,20 @@ if (-not $NoLaunch) {
   if ($VerifyRuntime) {
     # Derive what the running app MUST report before anything is launched: a bad -ExpectedCommit
     # must never leave a release build running with a debugging port open.
-    $stampProbe = Invoke-CapturedProcess -FilePath $gitExe -ArgumentList @("-C", $repo, "rev-parse", "--short", $ExpectedCommit)
+    $stampProbe = Invoke-NativeProcess -Command "git" -ArgumentList @("-C", $repo, "rev-parse", "--short", $ExpectedCommit)
     $expectedShort = $stampProbe.StdOut.Trim()
     if ($stampProbe.ExitCode -ne 0 -or -not $expectedShort) {
       throw "Could not derive the expected short build stamp for $ExpectedCommit. $(Get-FirstNonEmptyLine $stampProbe.StdErr)"
     }
     $expectedStamp = $expectedShort + " " + [char]0x00B7 + " release"
     $probeScript = Join-Path $repo "scripts\e2e-updater-probe.mjs"
-    $nodeExe = (Get-Command node -ErrorAction Stop).Source
+    $nodeExe = (Resolve-NativeExecutable "node").Source
 
     $debugPort = Get-FreeLoopbackPort
-    $debugName = "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"
-    $priorDebug = [Environment]::GetEnvironmentVariable($debugName, "Process")
-    [Environment]::SetEnvironmentVariable($debugName, "--remote-debugging-port=$debugPort", "Process")
-    try {
-      $launched = Start-Process $exe -PassThru
-    } finally {
-      [Environment]::SetEnvironmentVariable($debugName, $priorDebug, "Process")
+    $debugEnvironment = @{
+      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$debugPort"
     }
+    $launched = Start-NativeProcess -Command $exe -Environment $debugEnvironment
 
     try {
       # The app needs a moment before it serves CDP, so the first attempts are EXPECTED to fail.
@@ -247,10 +255,16 @@ if (-not $NoLaunch) {
         }
       }
     }
-    Start-Process $exe
+    $normalLaunch = Start-NativeProcess -Command $exe
+    $normalLaunch.Dispose()
   } else {
-    Start-Process $exe
+    $normalLaunch = Start-NativeProcess -Command $exe
+    $normalLaunch.Dispose()
   }
+}
+
+if (Test-Path -LiteralPath $desktopBackup -PathType Container) {
+  Remove-Item -LiteralPath $desktopBackup -Recurse -Force
 }
 
 Write-Output "ship-reinstall OK"

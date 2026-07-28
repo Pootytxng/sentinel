@@ -10,5 +10,7 @@
 # This is the single explicit owner action that makes a release fleet-visible. ASCII only.
 param()
 $ErrorActionPreference = "Stop"
-& (Join-Path $PSScriptRoot "release.ps1") -Mode publish
-exit $LASTEXITCODE
+. (Join-Path $PSScriptRoot "lib\native-process.ps1")
+$release = Join-Path $PSScriptRoot "release.ps1"
+Invoke-StreamedProcess "release publish" "powershell" @("-NoProfile", "-File", $release, "-Mode", "publish") -WorkingDirectory (Split-Path -Parent $PSScriptRoot) | Out-Null
+exit 0

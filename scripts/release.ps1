@@ -38,7 +38,6 @@ $stageReceiptPath = Join-Path $bundleDir "release-stage.json"
 $stageReceiptSignaturePath = "$stageReceiptPath.sig"
 $trustRootPath = Join-Path $repo "scripts\updater-trust-root.json"
 $pinnedFleetTrustRootSha256 = "a9b2df7ea775a4a3a095791222e781b2629ef2bafa077d2f0e89be99bf50662e"
-$npmCmd = (Get-Command npm.cmd -ErrorAction Stop).Source
 
 function Write-NoBom([string]$Path, [string]$Text) {
   [System.IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding($false)))
@@ -238,56 +237,31 @@ function Assert-PublicVersionCanPublish([string]$CandidateVersion, [string]$Cand
   }
 }
 
-function Invoke-TauriSigned([string]$KeyPath, [string[]]$NpmArgs, [string]$Label) {
+function Invoke-TauriSigned([string]$KeyPath, [string[]]$TauriArgs, [string]$Label) {
   # GRANDFATHERED FLEET ANCHOR (reconcile 2026-07-23, owner-approved): the pinned fleet key
   # (docs/UPDATER_TRUST_ROOT.md) is passwordless, and normal releases MUST use it. The tauri CLI
-  # needs TAURI_SIGNING_PRIVATE_KEY_PASSWORD PRESENT-BUT-EMPTY, which PowerShell/.NET cannot express
-  # (assigning "" deletes the var), so route every signing build/sign through a node shim whose spawn
-  # env carries the present-but-empty value. A future password-protected key is honored transparently
-  # (a non-empty TAURI_SIGNING_PRIVATE_KEY_PASSWORD in the environment passes through). The real gate
-  # stays cryptographic: the sign-probe + the trust-root pubkey pin reject any key that is not the
-  # exact fleet anchor, with or without a password.
-  # Everything is passed via ENV (key content + the command as a JSON array), never node argv or an
-  # inline `node -e` script: PowerShell mangles the double-quotes when handing an inline script to
-  # node.exe, and `node -e SCRIPT ... -- ...` also swallows the `--` that `signer sign` needs. The
-  # shim is written to a temp `.cjs` file (`.cjs` because package.json is type:module) and run as
-  # `node <file>`, which is quote-safe.
-  $shimBody = @"
-const { spawnSync } = require("child_process");
-const a = JSON.parse(process.env.COMPY_SIGN_ARGS);
-// shell:true is required to launch npm.cmd, but Node does NOT quote the exe/args for it, so a
-// spaced path (C:\Program Files\nodejs\npm.cmd) or a spaced artifact path would be split by cmd.exe.
-// Pass a single command string with every whitespace-bearing token quoted; cmd.exe /s + Node's own
-// outer quotes then hand each token through intact.
-const cmd = a.map(s => /\s/.test(s) ? '"' + s + '"' : s).join(" ");
-const r = spawnSync(cmd, {
-  env: { ...process.env, TAURI_SIGNING_PRIVATE_KEY: process.env.COMPY_SIGN_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || "" },
-  stdio: "inherit",
-  shell: true,
-});
-process.exit(r.status === null ? 1 : r.status);
-"@
-  $shimPath = Join-Path ([System.IO.Path]::GetTempPath()) ("compy-sign-shim-" + [guid]::NewGuid().ToString("N") + ".cjs")
-  [System.IO.File]::WriteAllText($shimPath, $shimBody, (New-Object System.Text.UTF8Encoding($false)))
-  # TAURI_SIGNING_PRIVATE_KEY carries the key CONTENT, not the path: `tauri signer sign` (used by the
-  # sign-probe preflight and receipt signing) treats the env value as literal base64 key material and
-  # never path-resolves it, so a path here fails with "failed to decode base64 secret key". Content is
-  # accepted uniformly by both `signer sign` and `tauri build`.
-  $env:COMPY_SIGN_KEY = (Get-Content -LiteralPath $KeyPath -Raw).Trim()
-  $env:COMPY_SIGN_ARGS = (,$npmCmd + $NpmArgs | ConvertTo-Json -Compress)
-  try {
-    # Streamed: a signing build runs for minutes and its output is the operator's only progress view.
-    # The repo is passed as the child's working directory rather than assumed from the caller's cwd,
-    # so `npm run tauri` resolves the project regardless of where the release was launched from.
-    Invoke-StreamedProcess $Label "node" @($shimPath) -WorkingDirectory $repo -TimeoutMs 3600000 | Out-Null
-  } finally {
-    Remove-Item Env:\COMPY_SIGN_KEY, Env:\COMPY_SIGN_ARGS -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $shimPath -Force -ErrorAction SilentlyContinue
+  # needs TAURI_SIGNING_PRIVATE_KEY_PASSWORD PRESENT-BUT-EMPTY. The native-process helper applies
+  # child-only ProcessStartInfo environment overrides, where an empty value stays present. It also
+  # launches the real Tauri node entry point: no npm.cmd, cmd.exe, shell string, temp shim, or parent
+  # environment mutation exists while key material is in scope.
+  $tauriCli = Join-Path $repo "node_modules\@tauri-apps\cli\tauri.js"
+  if (-not (Test-Path -LiteralPath $tauriCli -PathType Leaf)) {
+    throw "Tauri CLI entry point is missing: $tauriCli"
   }
+  $password = if ($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) {
+    $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+  } else {
+    ""
+  }
+  $signingEnvironment = @{
+    TAURI_SIGNING_PRIVATE_KEY = (Get-Content -LiteralPath $KeyPath -Raw).Trim()
+    TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $password
+  }
+  Invoke-StreamedProcess $Label "node" (@($tauriCli) + @($TauriArgs)) -WorkingDirectory $repo -Environment $signingEnvironment -TimeoutMs 3600000 | Out-Null
 }
 
 function Invoke-ProtectedSigner([string]$Path, [string]$KeyPath, [string]$Label) {
-  Invoke-TauriSigned $KeyPath @("run", "tauri", "--", "signer", "sign", $Path) $Label
+  Invoke-TauriSigned $KeyPath @("signer", "sign", $Path) $Label
 }
 
 Assert-UpdaterTrustRoot
@@ -627,7 +601,7 @@ if ($postCommitVerifyHead -ne $releaseCommit) {
 
 # Build signed updater artifacts from the committed, clean release source (via the grandfathered
 # present-but-empty-password signing shim; see Invoke-TauriSigned).
-Invoke-TauriSigned $keyPath @("run", "tauri", "build") "Signed Tauri build"
+Invoke-TauriSigned $keyPath @("build") "Signed Tauri build"
 
 $installerRelative = "src-tauri/target/release/bundle/nsis/Compy_${nextText}_x64-setup.exe"
 $signatureRelative = "$installerRelative.sig"
@@ -700,5 +674,5 @@ Write-Host "Receipt: $stageReceiptPath"
 Write-Host "Receipt signature: $stageReceiptSignaturePath"
 Write-Host "After owner review, publish this exact candidate with:"
 Write-Host "  powershell -NoProfile -File .\scripts\release.ps1 -Mode publish"
-# Explicit success exit so release-prepare.ps1's `exit $LASTEXITCODE` is always well-defined.
+# Explicit success exit for the nested powershell.exe process used by release-prepare.ps1.
 exit 0

@@ -15,7 +15,7 @@
 #   but could not complete.
 #
 # The repair is not to suppress errors. It is to stop treating the probe as a native command at all:
-# Invoke-CapturedProcess runs it through System.Diagnostics.Process with both streams redirected, so
+# Invoke-NativeProcess runs it through System.Diagnostics.Process with both streams redirected, so
 # stdout, stderr and the exit code come back as DATA. An unsuccessful attempt is then an ordinary
 # value the retry loop inspects, while every real proof failure still THROWS immediately:
 #   * the installed app exited                      -> RUNTIME PROOF FAILED (exit ...)
@@ -29,7 +29,7 @@
 # relaxed: success still requires the exact expected stamp plus the expected version, from a live
 # process, within the deadline.
 
-# Invoke-CapturedProcess, ConvertTo-NativeArgumentString and Get-FirstNonEmptyLine now live in the
+# Invoke-NativeProcess, ConvertTo-NativeArgumentString and Get-FirstNonEmptyLine now live in the
 # shared helper, because the identical defect killed the NEXT publish attempt one line-of-business
 # over (the expected-404 releases-tag probe in release.ps1). Same contract, same behaviour, one
 # implementation for the whole release-critical surface.
@@ -61,7 +61,7 @@ function Invoke-CompyRuntimeProof {
     }
 
     $attempts += 1
-    $result = Invoke-CapturedProcess -FilePath $ProbeFilePath -ArgumentList $ProbeArgumentList -TimeoutMs $ProbeTimeoutMs
+    $result = Invoke-NativeProcess -Command $ProbeFilePath -ArgumentList $ProbeArgumentList -TimeoutMs $ProbeTimeoutMs
     $payload = $null
 
     if ($result.TimedOut) {
