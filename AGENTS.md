@@ -26,6 +26,8 @@ path.
 - **`docs/RECEIPTS_DOCTRINE.md`** — money/product direction (canonical where older direction conflicts).
 - **`docs/METHODOLOGY.md`** — how work is run here.
 - **`docs/OWNER_ACTION_CHECKLIST.md`** — the one index of items waiting on the owner.
+- **`docs/RELEASE_AUTONOMY.md`** — durable authority and stop boundaries for an owner-authorized
+  release train; applies equally to Codex, Claude Code, Cowork, and future agents.
 - **`docs/COUNCIL_PROTOCOL.md`** — the five-lens council review protocol.
 
 ## The lane split — Codex is a read-only advisor here
@@ -39,9 +41,14 @@ Three lanes; do not cross them:
   risks, and propose changes **as text**. **Do not edit, build, install, commit, push, or mutate
   Windows/system state** unless the owner explicitly directs a specific write action in that turn.
   Where you would otherwise "just fix it," instead report the fix precisely and leave the apply to the
-  owner or Claude Code. As an advisor you surface; you don't ship.
-- **The owner (Kuya)** controls every gate: anything irreversible or outward-facing, security/system
-  settings, telemetry/network, remote-rules/updater, signing keys, paid services, and distribution.
+  owner or Claude Code. As an advisor you surface; you don't ship. **Release-train exception:** an
+  explicit owner authorization activates `docs/RELEASE_AUTONOMY.md`; Codex then owns the full
+  reversible engineering train through the named fleet-visible stop boundary without repeated
+  check-ins.
+- **The owner (Kuya)** controls fleet-visible publication/distribution, secrets and signing-key
+  custody/rotation, security/system settings, destructive Git, paid services, and material
+  telemetry/network/updater policy changes. Correcting already-authorized release engineering does
+  not create a new owner gate.
 
 ## Hard constraints that bind even an advisor
 

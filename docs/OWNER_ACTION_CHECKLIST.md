@@ -8,7 +8,8 @@
 > — it keeps going and only raises one of these if it *truly* can't proceed.
 >
 > **Status legend:** ⬜ open · ✅ done · ⏳ waiting on you · 🔒 gated on money/legal.
-> Last reconciled: **2026-07-08**, patched **2026-07-11** (Cowork full audit — added the missing
+> Last reconciled for release truth: **2026-07-28**; broader owner-list audit remains the
+> **2026-07-11** Cowork pass (added the missing
 > Monitor-v4 eyeball item, fixed a same-day self-contradiction on Lenis/HoloLens status, flagged a
 > dead repo link in the legal drafts). Not a full re-sweep of every doc — see
 > `docs/COWORK_AUDIT_2026-07-11.md` for what was and wasn't checked.
@@ -29,7 +30,10 @@
   hear about updates until they install one build that does. Do **not** send the stale v0.9.3
   installer, and do **not** send the **v0.9.9** build (`664aa5e`) that is running on your own machine
   — v0.9.9 was source-tagged and installed here but its publish failed closed, so it exists on no
-  public page and is not republishable. The send candidate is **v0.9.10**. The zh-CN vocabulary
+  public page and is not republishable. Also do **not** send the preserved **v0.9.10 / 92c7608**
+  private-draft checkpoint: it was installed locally and its draft assets are byte-correct, but the
+  release-infrastructure repair must land after its immutable source tag. The send candidate is the
+  next receipt-bound version prepared from repaired `main` (**v0.9.11**). The zh-CN vocabulary
   completion is integrated on `main`, so the remaining precondition is the **full local gate set**
   (hosted Actions stay off by your standing decision — see B7 — so **local IS the gate**), then a
   proven update on your own box before any canary send. The release page is
@@ -49,10 +53,11 @@ regression guard that rejects visible English verdict vocabulary anywhere in the
 - ✅ **Merge the base zh-CN cut into `main`** — complete at `20306bc`.
 - ✅ **Localize the verdict vocabulary** — your decision, resolved; completion + regression guard are
   integrated and now merged on `main` at `d000295`.
-- ⏳ **Publish into the in-app updater** — owner territory + signing-key custody. Nothing is published
-  today: the newest **published** release is **v0.9.7** (`1d9bad6`) and the public updater manifest
-  still advertises **0.9.7**. The v0.9.9 attempt never reached the fleet (aborted source-only
-  checkpoint — see `RELEASE_STATE.md`), so the publishable candidate is **v0.9.10**. Your GO.
+- ⏳ **Publish into the in-app updater** — the single remaining fleet-visible owner action after the
+  repaired train prepares and locally proves the next candidate. The newest **published** release and
+  public updater manifest remain **v0.9.7** (`1d9bad6`). v0.9.9 never reached `compy-releases`;
+  v0.9.10 reached a private draft but was never published. Both are preserved checkpoints, so the
+  next publishable candidate is **v0.9.11**. Your later GO runs the one resumable publish command.
 
 **Hosted CI is not on this list — by your own standing decision.** GitHub refuses every job before
 runner startup under the account's $0 Actions budget; that was declined as a zero-budget-law spend
@@ -205,20 +210,23 @@ Still folded in and NOT yet built: the **Two Futures hologram** feedback — *"l
 hologram has no visible purpose or information integrated"* (needs part-anchored, measured info) — it
 rides a later Lab phase, tracked in [`BACKLOG.md`](BACKLOG.md).
 
-### B2. Beta send — go / no-go  ·  ⏳
-[`BACKLOG.md`](BACKLOG.md) RUNG 3: private-beta to friends + your Discord. The decision "ship from
-current `main`" is made; what's pending is **your GO** to actually send (after A2 smoke). Also open:
-ship `beta-001` frozen vs. cut a fresh `beta-002` from `main`.
+### B2. Next updater canary distribution — go / no-go  ·  ⏳
 
-**Distribution protocol (owner-dictated 2026-07-21 — the runbook when the GO comes):**
+The six original invitees already received the verified 0.9.0 link. The former
+`beta-001`-versus-0.9.1 choice is closed; do not resend either historical artifact. After the next
+receipt-bound candidate is published and proves its updater path on the owner machine, the only
+distribution decision is **which one tester receives that canary first**. Publication and the
+recipient/send remain separate owner actions.
+
+**Historical 0.9.0 distribution protocol (completed 2026-07-22; preserve for provenance only):**
 Release label: **"Compy 0.9.0 Invite-Only Private Beta — Validated binary source: 37a166c"**.
 The artifact is the exact validated NSIS built from `37a166c` — `Compy_0.9.0_x64-setup.exe`,
 SHA-256 `6BC2F7DFBCCC31A6714A49EE07F36327016DBB65741FA40D4371A45690F5A2C4` (3,826,464 bytes;
 re-verified intact on the Desktop 2026-07-21). Note: repo HEAD moves — derive it live
 (`git rev-parse HEAD`); never trust a hash baked into this paragraph. The validated binary source
 for THIS beta stays `37a166c`; newer main commits (e.g. `970f801`, the §6 presenter fix now on the
-owner's box) do NOT change what the six invitees hold. **OPEN (owner call): ride `37a166c` for this
-beta or cut a 0.9.1 with the presenter fix — decide in CC with the delta in context.** At send time:
+  owner's box) do NOT change what the six invitees hold. The old choice to ride `37a166c` or cut
+  0.9.1 is **closed and superseded**. At the completed send:
 1. Recalculate the file's SHA-256 immediately before uploading; it must match the value above.
 2. Upload to the private tester location; **never overwrite the validated file with a different
    build under the same filename.**

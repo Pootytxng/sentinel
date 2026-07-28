@@ -19,6 +19,40 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
+export function validateOwnerDecisionVersions(section, latestVersion, candidateVersion) {
+  const failures = [];
+  if (!section) return ["STALE-DECISION: Required owner decisions section is missing"];
+  if (!candidateVersion) return ["STALE-DECISION: STATE:candidate_version anchor is missing"];
+
+  const versionParts = (value) => value.split(".").map(Number);
+  const compare = (left, right) => {
+    const a = versionParts(left), b = versionParts(right);
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      const delta = (a[i] || 0) - (b[i] || 0);
+      if (delta) return delta;
+    }
+    return 0;
+  };
+  if (latestVersion && compare(candidateVersion, latestVersion) < 0) {
+    failures.push(
+      `STALE-DECISION: candidate v${candidateVersion} is older than configured version ${latestVersion}`,
+    );
+  }
+
+  const firstDecision = section.match(/^\s*1\.\s+\*\*([^\n]+)\*\*/m);
+  const escapedCandidate = candidateVersion.replace(/\./g, "\\.");
+  if (!firstDecision || !new RegExp(`\\bv?${escapedCandidate}\\b`).test(firstDecision[1])) {
+    failures.push(
+      `STALE-DECISION: first live owner decision must name candidate v${candidateVersion}`,
+    );
+  }
+  return failures;
+}
+
+const IS_MAIN =
+  !!process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
+
+if (IS_MAIN) {
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DOC = join(ROOT, "docs", "RELEASE_STATE.md");
 const STRICT = process.argv.includes("--strict");
@@ -140,14 +174,6 @@ const anchor = (key) => {
   const m = docText.match(new RegExp(`<!--\\s*STATE:${key}=([^\\s]+)\\s*-->`));
   return m ? m[1] : null;
 };
-const cmpVer = (a, b) => {
-  const pa = a.split(".").map(Number), pb = b.split(".").map(Number);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const d = (pa[i] || 0) - (pb[i] || 0);
-    if (d) return d;
-  }
-  return 0;
-};
 const stateFail = [];
 let conf = null;
 try { conf = JSON.parse(readFileSync(join(ROOT, "src-tauri", "tauri.conf.json"), "utf8")); }
@@ -173,15 +199,13 @@ if (hasPublicEndpoint) {
     stateFail.push("PUBLIC-CONTRADICTION: STATE:public_artifact must acknowledge the public releases repo (endpoint is configured)");
 }
 
-// (4) no owner decision may reference a version older than the latest release.
+// (4) The live publish decision must name the candidate anchor. Historical checkpoint versions may
+// be explained in the same paragraph; treating those facts as stale decisions made a truthful
+// v0.9.11 decision fail merely because it preserved v0.9.9/v0.9.10 provenance.
 const decMatch = docText.match(/##\s+Required owner decisions[\s\S]*?(?=^##\s|\Z)/m);
-if (decMatch && latestVersion) {
-  // Optional `v` prefix: "v0.9.3" has NO word boundary between v and 0, so `\b0\.` would miss it.
-  for (const m of decMatch[0].matchAll(/\bv?(0\.\d+\.\d+)\b/g)) {
-    if (cmpVer(m[1], latestVersion) < 0)
-      stateFail.push(`STALE-DECISION: owner decision references ${m[1]}, older than the latest release ${latestVersion}`);
-  }
-}
+stateFail.push(
+  ...validateOwnerDecisionVersions(decMatch ? decMatch[0] : "", latestVersion, anchor("candidate_version")),
+);
 
 // (5) exactly one 'Bottom line' section.
 const bottomLines = (docText.match(/^\*\*Bottom line/gim) || []).length;
@@ -240,4 +264,5 @@ console.log(`\n${results.length} citations: ${results.filter((r) => r.verdict.st
 if (bad.length || missingSections.length || citations.length === 0 || stateFail.length || (STRICT && near.length)) {
   console.log("FIX-FORWARD: re-anchor each citation in the SAME commit as whatever moved it (precedent c056fee); restore any cut required section from the pre-diet copy; reconcile every STATE-DRIFT before the gate can pass.");
   process.exit(1);
+}
 }

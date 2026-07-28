@@ -4,6 +4,48 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-07-28 — v0.9.10: preserved private-draft checkpoint after partial publish
+
+Live verification found the v0.9.10 train had advanced beyond the prior state document before the
+release-autonomy repair began. The immutable checkpoint is preserved, not rewritten:
+
+- Source release commit and annotated source tag `v0.9.10` dereference to
+  `92c7608da8541754e7c4bd888009d31d82de3b6a`; both source `main` and the source tag were already on
+  origin.
+- `Pootytxng/compy-releases` already had tag `v0.9.10`, a private draft, and two uploaded assets.
+  The draft installer digest `61fa97cd…0efb` and manifest digest `263daf07…f7e` match the signed
+  staged receipt. Nothing was made public to the updater: latest published and public
+  `latest.json` remained v0.9.7.
+- The owner machine already ran 0.9.10 with embedded stamp `92c7608`. The complete local candidate
+  was copied to
+  `C:\Users\Kuya\code\compy-release-evidence\2026-07-28-v0.9.10-private-draft-92c7608\`.
+- The old publish path could not resume this compatible draft: its initial collision check rejected
+  any same-tag draft before reaching its later `-AllowOwnDraft` check. Because the complete
+  transaction/journal repair must land after the immutable release commit, v0.9.10 is a preserved
+  unpublished checkpoint and the next publishable candidate must be greater than v0.9.10.
+
+### 2026-07-27 — first v0.9.9 candidate `2bd649d`: preserved runtime-proof failure
+
+- Release commit `2bd649d40ead9e396bf40cb462b820aecd7a770c` was installed locally, but the
+  first CDP startup probe's expected `ECONNREFUSED` stderr became a terminating
+  `NativeCommandError` under Windows PowerShell 5.1. Publication failed closed before any source
+  push, tag push, release, asset upload, or manifest change.
+- The temporary local v0.9.9 tag was removed only after preservation; the authoritative ref is
+  `recovery/failed-v0.9.9-runtime-proof-2bd649d`, present locally and on origin. Exact artifacts,
+  hashes, receipt, signature, and failure transcript live at
+  `C:\Users\Kuya\code\compy-release-evidence\2026-07-27-v0.9.9-failed-runtime-proof-2bd649d\`.
+
+### 2026-07-24 — v0.9.8 `d9ced24`: owner-installed unpublished provenance
+
+- Release commit `d9ced248d7060ba2926cb8ce69aa55aeb9f67d7f` and local annotated tag `v0.9.8`
+  were created and the owner machine ran that build. It was never published to
+  `Pootytxng/compy-releases` or sent to another person.
+- Provenance remains intact through local tag `v0.9.8` and local/origin branch
+  `recovery/local-v0.9.8-d9ced24`. The retained installer is 5,036,267 bytes, SHA-256
+  `f5dad67efd074da8e17b0faf3fca56722e6888c8faceed4e5acd41f462d3096f`; its updater signature
+  is 416 bytes, SHA-256 `beec50ebf60a91da524a2fc6ba220f561d26db003ae546c7eedc045b7a973537`.
+- It was superseded locally by later source-tagged candidates; no tag or recovery ref was moved.
+
 ### 2026-07-28 — v0.9.9: source-tagged and owner-installed, but NEVER published (aborted release)
 
 **v0.9.9 is not a public release and must never be described as one.** It is a source-only checkpoint:

@@ -1,6 +1,10 @@
 # Compy — Packaging & Signing Plan
 
-**Planning / config-audit only. No public release artifact yet.** This is the path to a
+> **HISTORICAL PLAN — superseded for current state.** Fleet updater publication is live and tracked
+> only in `docs/RELEASE_STATE.md`; code signing/legal still gate a marketed public/store launch.
+> Preserve the dated audit below as history, not as an operative release checklist.
+
+**Planning / config-audit only. No public release artifact yet.** This was the path to a
 **private-beta** installer and, later, a properly-signed public release. The product surface
 (Readiness, Sessions, Export, Priorities, Monitoring, Trust Ledger, verified apply/rollback) is
 already beta-worthy; packaging is now the safer critical path. (NOTE 2026-06-27: Gaming Mode F1 is now LIVE on `main`, and service-suspend + debloat are ARMED — see `docs/RELEASE_STATE.md`. The remaining mutation discipline is LOCKED-rule-6 catalog freeze, not "no Gaming Mode.")

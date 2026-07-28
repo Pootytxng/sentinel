@@ -287,7 +287,9 @@ Tracked here so the right decisions are made at the right time, not skipped:
 - [ ] Final bundle identifier confirmed
 - [ ] Final public product name confirmed
 - [ ] EV code-signing certificate purchased and integrated into the build pipeline
-- [ ] Tauri 2 built-in updater configured (`tauri.conf.json` `updater` section + Ed25519 signing key)
+- [x] Tauri 2 built-in updater configured (`tauri.conf.json` updater section + pinned signing key);
+      every fleet-visible publication still requires the exact owner GO in
+      `docs/RELEASE_STATE.md`
 - [ ] LICENSE replaced from the placeholder with the final commercial license
 - [ ] Privacy policy + EULA + clear disclaimers about reboot-required tweaks
 - [ ] Signed remote rules manifest pipeline live (see §1.4) — verification code already landed; production key + URL gated by this checklist

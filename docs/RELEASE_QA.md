@@ -16,9 +16,11 @@
 >
 > **Non-blocking follow-ups (optional):** live elevated-apply UAC cancel-message UX check;
 > external-revert "no longer active" UI observation.
-> **Still gates beta/public release (separate from mutation QA):** code-signing config, legal
-> finalization (license model + jurisdiction in PRIVACY/EULA), and per-feature QA for any new
-> mutating feature (e.g. F1 Gaming Mode). Remote fetch stays disabled. F5/F4 (read-only) unblocked.
+> **Still gates marketed public/store launch (separate from invite-only updater publication):**
+> Authenticode code signing, legal finalization (license model + jurisdiction in PRIVACY/EULA), and
+> per-feature QA for any new mutating feature. Fleet updater publication and tester distribution
+> remain explicit owner actions with their exact receipt/provenance gates. Remote fetch stays
+> disabled. F5/F4 (read-only) unblocked.
 
 Manual, interactive QA pass. The structural refactor + automated checks are done
 (`cargo test` 44/44, `cargo build` zero warnings, `npm run build` clean). This

@@ -78,6 +78,19 @@ plainly and first, with evidence. Unverified stays labeled unverified — that I
 
 ## Working mode — SPORT MODE (default, set by owner 2026-06-02)
 
+### RELEASE TRAINS — one authorization, autonomous reversible engineering
+
+**Authoritative policy: [`docs/RELEASE_AUTONOMY.md`](docs/RELEASE_AUTONOMY.md).** One owner
+authorization covers the complete reversible release-engineering train. Claude autonomously
+preserves evidence, repairs pipeline defects, adds regression coverage, commits, fast-forward
+pushes, and continues; a failed gate triggers repair, not automatic owner escalation. Private
+source commits/branches, preparation tags, builds, local installs, and local runtime proofs are
+reversible engineering. Exact receipt/artifact/source provenance remains mandatory and verification
+may never be bypassed. Preserve every failed candidate before reset, replacement, or abandonment.
+The first fleet-visible publication/distribution step remains owner-gated, as do secrets and key
+rotation, security/system settings, destructive Git, spending, and out-of-scope product/taste
+decisions. This policy binds Claude Code, Cowork, Codex, and future agents in this repository.
+
 **Default to maximum momentum. Stop way less.** For owner-greenlit or clearly-scoped work, do NOT run
 the brainstorm → spec → plan → TDD ceremony and do NOT ask permission at reversible checkpoints — just
 **build → verify → commit → push → move to the next item**, batching any questions to the end. This

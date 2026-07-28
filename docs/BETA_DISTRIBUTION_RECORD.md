@@ -70,7 +70,10 @@ unauthenticated → HTTP 200, `MZ`, 3,826,464 B, SHA-256 `6BC2F7DF…F5A2C4` (ex
 re-confirmed dead in the same pass. **Install status per tester: unknown until they report** —
 `BETA_TESTER_TRACKER.md` is the follow-up surface.
 
-## Release: Compy 0.9.1 — STAGED + VERIFIED, NOT SENT
+## Release: Compy 0.9.1 — SUPERSEDED HISTORICAL STAGING, NEVER SENT
+
+> Superseded by the signed-updater train. Preserve this record and its hashes, but it is no longer a
+> send option or owner decision. `docs/RELEASE_STATE.md` names the only current candidate role.
 
 **Artifact identity (the ONLY file this release may distribute once staging completes):**
 
@@ -108,8 +111,8 @@ SHA-256 `7d7650eac09375e797877fbea69558565b3f3835a93507b16d7463d44c57e108`, exac
 the `37a166c` 0.9.0 NSIS link (above); this section changes nothing about that, and the link above
 is not recorded anywhere a tester would find it. A 0.9.1 replacement send is a separate owner
 decision, additionally gated per `RELEASE_STATE.md` CURRENT STATE on an **owner-present smoke
-pass** before GO — not yet scheduled. Whether to send 0.9.1 at all, versus waiting for 0.9.2 (the
-in-progress updater build — see `RELEASE_STATE.md`), is also an open owner decision.
+pass** before GO — not yet scheduled. The former 0.9.1-versus-0.9.2 choice is closed and
+superseded; neither artifact may be sent.
 
 ## Prior distribution surfaces (historical)
 

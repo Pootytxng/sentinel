@@ -324,6 +324,21 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
+### Cycle 2026-07-28a — 🔧 RELEASE AUTONOMY + RESUMABILITY REPAIR IN PROGRESS
+
+- Live verification superseded the 2026-07-27a release snapshot below: source `main` and source tag
+  v0.9.10 already resolved to `92c7608`; the owner machine already ran 0.9.10; and
+  `compy-releases` already held a tag plus byte-correct **private draft**. Public latest and the
+  updater manifest remained v0.9.7.
+- The immutable v0.9.10 candidate is preserved at
+  `C:\Users\Kuya\code\compy-release-evidence\2026-07-28-v0.9.10-private-draft-92c7608\`.
+  The release-engineering repair must land after its tag, so the next publishable candidate is
+  v0.9.11. No public release or tester distribution is authorized by this cycle.
+- Durable authority lives in `docs/RELEASE_AUTONOMY.md`: failed reversible gates trigger
+  preserve → diagnose → guard → repair → commit/push → resume. Only fleet-visible publication,
+  distribution, secrets/key rotation, security settings, destructive Git, spending, and
+  irreversible out-of-scope choices stop for the owner.
+
 ### Cycle 2026-07-27a — ✅ FORENSIC RECONCILIATION + SILENT-CORRUPTION REPAIR (CC): `15efc54` + `27c5f4b` on `chore/ci-encoding-and-state-truth` — **unpushed, unmerged**
 
 - **Two silent defects, both now guarded.** (1) **Mojibake:** `scripts/release.ps1` read-modify-writes
