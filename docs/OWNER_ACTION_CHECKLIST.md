@@ -47,7 +47,7 @@ regression guard that rejects visible English verdict vocabulary anywhere in the
 
 - ✅ **Merge the base zh-CN cut into `main`** — complete at `20306bc`.
 - ✅ **Localize the verdict vocabulary** — your decision, resolved; completion + regression guard are
-  integrated on the `integration/v0.9.8-hardened` candidate (not yet on `main`).
+  integrated and now merged on `main` at `d000295`.
 - ⏳ **Publish into the in-app updater** — owner territory + signing-key custody. Nothing is published
   today: the newest **published** release is **v0.9.7** (`1d9bad6`) and the public updater manifest
   still advertises **0.9.7**. Your GO.

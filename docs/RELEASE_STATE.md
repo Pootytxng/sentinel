@@ -21,9 +21,9 @@
 <!-- latest_release_version is enforced by check (1) to equal src-tauri/tauri.conf.json's version, so it
      means "the version THIS TREE is configured to build" — NOT "the newest published release".
      Published truth is carried separately by published_release_* below. Do not conflate them. -->
-<!-- STATE:source_main_commit=20306bc -->
+<!-- STATE:source_main_commit=d000295 -->
 <!-- STATE:latest_release_version=0.9.8 -->
-<!-- STATE:candidate_branch=integration/v0.9.8-hardened -->
+<!-- STATE:candidate_branch=main -->
 <!-- STATE:candidate_published=no -->
 <!-- STATE:candidate_installed=no -->
 <!-- STATE:published_release_version=0.9.7 -->
@@ -32,7 +32,7 @@
 <!-- STATE:owner_installed_stamp=d9ced24 -->
 <!-- STATE:manifest_version=0.9.7 -->
 <!-- STATE:hosted_ci=off-by-owner-decision-2026-07-16 -->
-<!-- STATE:zh_cn_localization=base-on-main-20306bc-vocabulary-on-candidate -->
+<!-- STATE:zh_cn_localization=base-and-vocabulary-on-main-d000295 -->
 <!-- STATE:tester_distributed_version=0.9.0 -->
 <!-- STATE:public_artifact=releases-repo-public -->
 <!-- STATE:code_signing=open -->
@@ -40,11 +40,11 @@
 
 | Identity | Current truth | How to re-verify |
 |---|---|---|
-| **Source `main` commit** | `20306bc` = **published** `origin/main` (zh-CN base merge). A dated marker, not the live pointer. ⚠️ **Local `main` is 1 commit AHEAD and unpushed: `d9ced24` "release: v0.9.8", plus a LOCAL-ONLY annotated tag `v0.9.8` → `d9ced24`** (no `v0.9.8` tag on origin). `d9ced24` is the source of the owner's live app (row below) and exists **only in this clone**. Push/tag = owner-gated, deliberately not done. | `git rev-parse HEAD` · `git rev-list --left-right --count origin/main...main` · `git ls-remote --tags origin v0.9.8` |
-| **Hardened integration candidate** | Branch **`integration/v0.9.8-hardened`** = `d9ced24` + the encoding/state-truth hardening (`15efc54`, `27c5f4b`, `85d5034`) + the zh-CN vocabulary completion (from `2461106`) + this truth pass. **NOT on `main`, NOT tagged, NOT built into an installer, NOT published, NOT installed.** It is an integration candidate only; its embedded build stamp will differ from `d9ced24`. | `git log --oneline origin/main..integration/v0.9.8-hardened` · `git ls-remote --tags origin` (no `v0.9.8`) |
-| **Configured build version (this tree)** | **0.9.8** in `tauri.conf.json` / `package.json` / `Cargo.toml`. This is what the tree *would* build — it is **not** a released version. The `STATE:latest_release_version` anchor tracks THIS value (check (1) pins it to `tauri.conf.json`), not the published release. | `grep '"version"' src-tauri/tauri.conf.json package.json` |
-| **Latest PUBLISHED release + source commit** | **v0.9.7**, source `1d9bad6` (tag `v0.9.7` on `Pootytxng/compy-releases`). **Nothing 0.9.8 is published** — no release, no asset, no tag on any remote. | `gh release list --repo Pootytxng/compy-releases`; tag → commit |
-| **Owner-installed version + embedded stamp** | **0.9.8**, embedded stamp **`d9ced24`** (exe `ProductVersion`/`FileVersion` 0.9.8, mtime 2026-07-24). Built from the **unpushed** local-`main` commit above, so the live app corresponds to **no published release**. ⚠️ Registry `DisplayVersion` still reads **0.9.7** — the uninstall entry is stale vs the running binary; trust the embedded stamp, not the registry. Earlier updater-delivered chain (0.9.4→0.9.7) is history — see [archive](archive/RELEASE_STATE_HISTORY.md). ⚠️ **The hardened candidate is NOT this build** — it is not installed anywhere and carries a different embedded stamp; only `d9ced24` is resident on the owner's box (verified: the installed exe contains `d9ced24` and no other candidate hash). | `Select-String compy.exe <shorthash>` + HKCU uninstall `DisplayVersion` (read-only) |
+| **Source `main` commit** | `d000295` = `origin/main` **and** local `main` — the hardened encoding/state-truth candidate, fast-forwarded from `20306bc` on 2026-07-27. Local and remote are in sync. ⚠️ The annotated tag **`v0.9.8` is LOCAL-ONLY** and still points at the older `d9ced24`; **no release tag exists on origin**, and moving or pushing it is an owner call. | `git rev-parse HEAD` · `git rev-list --left-right --count origin/main...main` · `git ls-remote --tags origin` |
+| **Hardened candidate** | **MERGED to `main` at `d000295`** = `d9ced24` + the encoding/state-truth hardening (`15efc54`, `27c5f4b`, `85d5034`) + the zh-CN vocabulary completion (from `2461106`) + the truth pass. On `main` and on origin, but **NOT tagged on any remote, NOT built into an installer, NOT published, NOT installed.** Its embedded build stamp will differ from `d9ced24`. | `git log --oneline d9ced24..origin/main` · `git ls-remote --tags origin` |
+| **Configured build version (this tree)** | Carried by the `STATE:latest_release_version` anchor above — check (1) pins that anchor to `src-tauri/tauri.conf.json`'s version, and the release pipeline moves both in the same commit as the bump. This is what the tree *would* build — it is **not** a released version (published truth is the row below). Do not restate the number here; it would drift. | `grep '"version"' src-tauri/tauri.conf.json package.json` |
+| **Latest PUBLISHED release + source commit** | **v0.9.7**, source `1d9bad6` (tag `v0.9.7` on `Pootytxng/compy-releases`). **Nothing newer is published** — no release, no asset, and no release tag on any remote beyond v0.9.7. | `gh release list --repo Pootytxng/compy-releases`; tag → commit |
+| **Owner-installed version + embedded stamp** | **0.9.8**, embedded stamp **`d9ced24`** (exe `ProductVersion`/`FileVersion` 0.9.8, mtime 2026-07-24). Built from `d9ced24` — now an ancestor of `main` on origin, but never tagged on a remote or published — so the live app corresponds to **no published release**. ⚠️ Registry `DisplayVersion` still reads **0.9.7** — the uninstall entry is stale vs the running binary; trust the embedded stamp, not the registry. Earlier updater-delivered chain (0.9.4→0.9.7) is history — see [archive](archive/RELEASE_STATE_HISTORY.md). ⚠️ **The hardened candidate is NOT this build** — it is not installed anywhere and carries a different embedded stamp; only `d9ced24` is resident on the owner's box (verified: the installed exe contains `d9ced24` and no other candidate hash). | `Select-String compy.exe <shorthash>` + HKCU uninstall `DisplayVersion` (read-only) |
 | **Latest updater manifest version** | **v0.9.7** — `latest.json` at `releases/latest/download/` names the v0.9.7 asset; signature verifies against the pinned minisign key; installer + `latest.json` match GitHub's bytes. | unauthenticated fetch of `latest.json` + `scripts/verify-updater-signature.mjs` |
 | **Tester-distributed version** | **0.9.0** — the `37a166c` NSIS (SHA-256 `6BC2F7DF…F5A2C4`) is what the six invitees were sent (Drive link). **NO updater-enabled build has been sent to any tester** (owner hold). | `BETA_DISTRIBUTION_RECORD.md` |
 | **Known tester installation state** | **UNKNOWN.** No telemetry, no remote inventory by design. Six invitees hold the 0.9.0 link; what each actually installed is owner-confirmable only. | owner report only |
@@ -52,7 +52,7 @@
 | **Code-signing status** | **OPEN** — installers are Authenticode **NotSigned**. Gates a PUBLIC (store/marketing) release, not the private-beta updater. | `Get-AuthenticodeSignature` on the NSIS |
 | **Legal status** | **OPEN** — EULA + privacy are DRAFTS only. Gates a PUBLIC release. | `docs/` legal drafts |
 
-**Bottom line:** the newest **published** thing is **v0.9.7 (`1d9bad6`)**, and the updater manifest still points there — **nothing 0.9.8 exists outside this clone.** The owner's box runs a locally-built **0.9.8 (`d9ced24`)** that was never pushed, tagged on a remote, or published, so his live app is ahead of everything public and reproducible only from here. The hardened **`integration/v0.9.8-hardened`** candidate is a further step ahead of that: it is **not** the installed build, **not** tagged, **not** built into an installer, and **not** published — it exists as a branch awaiting the owner's GO. The releases repo is **public**, so published installers are downloadable by anyone with the URL; what stays private is the **source**. Nothing newer than the 0.9.0 kit has been **sent** to a tester. Hosted CI is intentionally off (owner's $0-budget decision, 2026-07-16) — the full gate set runs locally. Public/store release stays blocked on **Code signing + Legal**.
+**Bottom line:** the newest **published** thing is **v0.9.7 (`1d9bad6`)**, and the updater manifest still points there — **nothing newer is published anywhere.** The owner's box runs a locally-built **0.9.8 (`d9ced24`)**; that commit now sits on origin as an ancestor of `main`, but it was never tagged on a remote or published, so his live app is ahead of everything public. The hardened candidate is a further step ahead of that and is now **merged to `main` at `d000295`**: still **not** the installed build, **not** tagged on any remote, **not** built into an installer, and **not** published — the next release is prepared from here and awaits the owner's publish. The releases repo is **public**, so published installers are downloadable by anyone with the URL; what stays private is the **source**. Nothing newer than the 0.9.0 kit has been **sent** to a tester. Hosted CI is intentionally off (owner's $0-budget decision, 2026-07-16) — the full gate set runs locally. Public/store release stays blocked on **Code signing + Legal**.
 
 ## Gate matrix
 
@@ -75,7 +75,7 @@
 | **Signed remote rules / fetch** | **OFF** (`false`) | `remote_fetch_enabled()` — `remote_rules.rs:97`; all-zeros pubkey `remote_rules.rs:85` | Double-gated: `verify_chain` (`remote_rules.rs:231`) hard-fails on the placeholder key. Never runs in shipped builds. |
 | **Auto-updater** | **LIVE** (2026-07-22, owner-directed) | `plugins.updater` — `tauri.conf.json:73` (pubkey `:75`, endpoints `:76`); `tauri-plugin-updater` — `Cargo.toml:37`; capability `capabilities/updater.json` (main window ONLY, `updater:allow-check` + `allow-download-and-install`) | Consent-first: check on launch + every 4h; nothing downloads until the user clicks Update now. Minisign-verified against the pinned key before install; private key outside the repo. **E2E-witnessed 0.9.4→0.9.7 this session** (CDP stamp transitions, no reinstall between); GitHub asset counters corroborate. |
 | **Hosted CI (GitHub Actions)** | **OFF — by standing owner decision (2026-07-16), not a defect and not an open owner obligation** | `.github/workflows/` (workflows present but never start) | GitHub refuses every job **before runner startup** under the account's $0 Actions budget (~$12 of the free minutes already burned). The owner declined the spend under the zero-budget law and directed that it never be re-asked. **The full gate set runs locally instead** (encoding guard · release-state verifier · hook self-tests · doc budget · tsc · vitest · frontend build · cargo test · clippy `-D warnings` · release-pipeline guards · updater-signature verify). A red/absent CI badge is the expected steady state. |
-| **zh-CN localization** | **Base MERGED on `main` (`20306bc`); verdict vocabulary completed ON THE CANDIDATE only** | `src/i18n/locales/zh-CN/` · guard `src/i18n/zh-cn-verdict-vocabulary-guard.test.ts` | The zh-CN base translation is already on `main` — nothing about it is pending a merge. What is **not** on `main` is the verdict-chip vocabulary finish (真有效 / 安慰剂 / 有风险 — 已拒绝) integrated from `2461106`; it lives only on `integration/v0.9.8-hardened`, pinned by the guard test. |
+| **zh-CN localization** | **Base AND verdict vocabulary both MERGED on `main` (`d000295`)** | `src/i18n/locales/zh-CN/` · guard `src/i18n/zh-cn-verdict-vocabulary-guard.test.ts` | The zh-CN base translation and the verdict-chip vocabulary finish (真有效 / 安慰剂 / 有风险 — 已拒绝, integrated from `2461106`) are both on `main` — nothing zh-CN is pending a merge. The guard test pins the vocabulary. |
 | **Outbound network** | **ONE surface: signed update check/download** (2026-07-22) | `tauri-plugin-updater` (`Cargo.toml:37`) fetches the pinned endpoint (`tauri.conf.json:76`) Rust-side; **production CSP `connect-src` UNCHANGED** (`tauri.conf.json:47` — `'self' ipc:`; no webview-reachable HTTP) | Supersedes the 2026-07-11 zero-outbound audit BY OWNER DECISION. Receipts + remote-fetch stay dark; Export leaves only by the user's hand. |
 
 ## Mutation safety posture (unchanged LOCKED rules)
@@ -96,7 +96,7 @@
 | Item | Status |
 |---|---|
 | Private-beta functional blockers | **NONE** — Gaming Mode signed off; installed-build QA + runtime closure done; the updater path is live and owner-proven. |
-| Publish of the hardened candidate | **OPEN — owner GO/NO-GO.** `integration/v0.9.8-hardened` passes the full local gate set but is **unpublished, untagged on any remote, unbuilt as an installer, and not installed**. Nothing ships until the owner runs the publish step; the next tester artifact would be this candidate, single-tester canary first. |
+| Publish of the hardened candidate | **OPEN — owner GO/NO-GO.** The hardened source is merged to `main` (`d000295`) and passes the full local gate set, but is **unpublished, untagged on any remote, unbuilt as an installer, and not installed**. Nothing ships until the owner runs the publish step; the next tester artifact would be this build, single-tester canary first. |
 | Hosted CI | **NOT A BLOCKER — settled OFF by owner decision (2026-07-16).** Listed here only so its absence is never re-read as an unresolved gate. Local gates are the verification path. |
 | Code signing | **OPEN** — gates PUBLIC release (Azure Trusted Signing route, owner/$-gated). |
 | Legal (EULA + privacy) | **OPEN** — gates PUBLIC release. DRAFTS only. |
@@ -107,11 +107,13 @@
 
 ## Required owner decisions (live)
 
-1. **Hardened v0.9.8 candidate GO/NO-GO** — `integration/v0.9.8-hardened` is verified against the
-   full local gate set but **unpublished, untagged on any remote, unbuilt, and not installed**.
-   GO means: merge to `main` → build → tag → publish (publish = owner action, via
-   `scripts/release-publish.ps1`). Until then the local `v0.9.8` tag still points at the older
-   `d9ced24`, and moving it is an owner call — see the tag note in CURRENT STATE.
+1. **Publish GO/NO-GO for the next release (v0.9.9)** — the hardened source is merged to `main`
+   (`d000295`) and verified against the full local gate set, but **unpublished, untagged on any
+   remote, unbuilt, and not installed**. GO means: prepare → build → tag → publish (publish = owner
+   action, via `scripts/release-publish.ps1`). The updater only offers a build whose version is
+   strictly greater than the one installed, which is why the next publishable candidate is v0.9.9.
+   The local-only legacy release tag and its target are recorded in CURRENT STATE; moving or
+   pushing it is an owner call.
 2. **Single-tester canary** — after publish + the owner-box updater proof, choose the ONE tester to
    receive the updater-enabled build first; expand to the rest only after that tester completes the
    core path.
