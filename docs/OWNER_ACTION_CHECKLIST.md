@@ -27,11 +27,12 @@
 - ⏳ **Send the first updater-enabled build as a one-tester canary, then expand to the remaining
   invitees once it proves clean.** Their current installs (0.9.0/0.1.0) have NO updater and cannot
   hear about updates until they install one build that does. Do **not** send the stale v0.9.3
-  installer, and do **not** send the unpublished local **v0.9.8** build (`d9ced24`) — that one exists
-  only in this clone and on your own machine. Cut a fresh candidate only after the zh-CN vocabulary
-  completion is integrated on `main` and the **full local gate set** passes (hosted Actions stay off
-  by your standing decision — see B7 — so **local IS the gate**), then prove the update on your own
-  box before any canary send. The release page is
+  installer, and do **not** send the **v0.9.9** build (`664aa5e`) that is running on your own machine
+  — v0.9.9 was source-tagged and installed here but its publish failed closed, so it exists on no
+  public page and is not republishable. The send candidate is **v0.9.10**. The zh-CN vocabulary
+  completion is integrated on `main`, so the remaining precondition is the **full local gate set**
+  (hosted Actions stay off by your standing decision — see B7 — so **local IS the gate**), then a
+  proven update on your own box before any canary send. The release page is
   `https://github.com/Pootytxng/compy-releases/releases/latest`. After a tester installs the canary
   once, future patches reach them in-app ("update ready" pill → one click). Timing, signing,
   publication, and distribution are owner territory.
@@ -50,7 +51,8 @@ regression guard that rejects visible English verdict vocabulary anywhere in the
   integrated and now merged on `main` at `d000295`.
 - ⏳ **Publish into the in-app updater** — owner territory + signing-key custody. Nothing is published
   today: the newest **published** release is **v0.9.7** (`1d9bad6`) and the public updater manifest
-  still advertises **0.9.7**. Your GO.
+  still advertises **0.9.7**. The v0.9.9 attempt never reached the fleet (aborted source-only
+  checkpoint — see `RELEASE_STATE.md`), so the publishable candidate is **v0.9.10**. Your GO.
 
 **Hosted CI is not on this list — by your own standing decision.** GitHub refuses every job before
 runner startup under the account's $0 Actions budget; that was declined as a zero-budget-law spend

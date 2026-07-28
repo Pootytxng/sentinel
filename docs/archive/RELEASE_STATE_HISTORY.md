@@ -4,6 +4,44 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-07-28 — v0.9.9: source-tagged and owner-installed, but NEVER published (aborted release)
+
+**v0.9.9 is not a public release and must never be described as one.** It is a source-only checkpoint:
+source-tagged and installed on the owner machine, but never published to the fleet because the
+release-repository existence probe failed closed.
+
+- **Release commit** `664aa5e1ee56ce27be072edd09b05db136e7a758` ("release: v0.9.9"), pushed to
+  `origin/main`. **Source tag** `v0.9.9` = annotated tag object `531cf07bf3868c5e07413e33b6e50b01b33ac65b`
+  → `664aa5e`, pushed to the source remote. Preserved as-is: not moved, deleted, recreated or forced.
+- **Staged artifacts** (byte-hashed, second immutable copy at
+  `C:\Users\Kuya\code\compy-release-evidence\2026-07-28-v0.9.9-aborted-source-only-664aa5e\`):
+  `Compy_0.9.9_x64-setup.exe` 5,038,558 B SHA-256 `080d5456c5e24ef318d88fe5963b31804222b157a2e94649af5dc42e31361f22` ·
+  `.sig` 416 B `6aaf8787ac5301907f8aa566fcd8cb71cef5f0e7309a32760d28f20d51eee83e` ·
+  `latest.json` 999 B `0e8257c22b118f5939d3b6ba4db06d1feda95c3e3dd42b779a22d048b0489387` ·
+  `release-stage.json` 1,103 B `e32b65fe66bfcea72bfef9c4239275457b191bea6e732a4089d1ee1af745578b` ·
+  `release-stage.json.sig` 404 B `64cfc1adc9e7f27e32080df9a39e8e0e77aeb580116cb6f269ae361e751da45b`.
+- **Failure location** `scripts/release.ps1:393` (as of `18da464`): the releases-repo tag probe
+  `(& gh api "repos/.../git/refs/tags/$tag" --jq ".object.sha" 2>$null)`. GitHub's **expected** 404
+  ("this tag does not exist yet") was promoted by Windows PowerShell 5.1 into a terminating
+  `NativeCommandError` under `$ErrorActionPreference = "Stop"`, because redirecting a native
+  command's stderr is exactly what triggers that promotion. Three stages had completed (source push,
+  source tag push, releases-main lookup); six never started (releases tag, draft, asset upload,
+  manifest, publish, verify). The pipeline failed **closed** — nothing public was created or altered.
+- **Proof no public v0.9.9 exists** (four independent checks): `gh release list --repo
+  Pootytxng/compy-releases` newest = "Compy v0.9.7" (2026-07-23) · `git ls-remote --tags` on the
+  releases repo returns v0.9.2–v0.9.7 only · the public `latest.json` still advertises `0.9.7` ·
+  no draft release exists.
+- **Installed owner state**: 0.9.9, registry `DisplayVersion` 0.9.9, embedded stamp `664aa5e`
+  present exactly once with no `-dirty` suffix, runtime-proof `"664aa5e - release - shell 0.9.9"`
+  (2 attempts, 1 expected startup transient). His box is ahead of every public user, who are on 0.9.7.
+- **Recovery refs kept intact**: `recovery/failed-v0.9.9-runtime-proof-2bd649d` (`2bd649d40ead9e396bf40cb462b820aecd7a770c`) ·
+  `recovery/failed-v0.9.9-prepare-1fa06a8` (`1fa06a8c1dfe98015cce6e706fc7fe938bb355d8`) ·
+  `recovery/local-v0.9.8-d9ced24` (`d9ced248d7060ba2926cb8ce69aa55aeb9f67d7f`).
+- **Consequence**: the v0.9.9 receipt, installer and embedded stamp are bound to `664aa5e`, and the
+  pipeline requires the release commit to be the exact HEAD — so a later tooling commit cannot publish
+  that receipt. v0.9.9 is closed as an aborted source-only checkpoint; the next publishable version is
+  **v0.9.10**, which carries the generalized native-process repair (`71bbb1d`).
+
 ### 2026-07-23 — updater train v0.9.2–v0.9.7 + tester-review wave (banners retired from the live file)
 
 The live RELEASE_STATE.md was rewritten this date to a single current-truth table (Phase 4 control-plane
