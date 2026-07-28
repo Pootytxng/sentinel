@@ -1,6 +1,6 @@
-# release.ps1 - fail-closed two-phase Compy updater release pipeline (engine for the two-command
-# interface: scripts/release-prepare.ps1 and scripts/release-publish.ps1 are thin wrappers over the
-# -Mode stage / -Mode publish paths below; prefer those so the two operations can't be confused).
+# release.ps1 - fail-closed Compy updater release pipeline. The three explicit entrypoints are
+# release-prepare.ps1, release-prove.ps1, and release-publish.ps1; they map to the stage, prove, and
+# publish modes below so preparation, local proof, and the fleet-visible owner action stay distinct.
 #
 # Reconcile 2026-07-23 (Phase 3) added, on top of the fail-closed base: stage + publish both refuse a
 # pending Gaming Mode session/recovery record (a cleanly-cleared .bak backup does NOT count); stage
@@ -12,14 +12,16 @@
 # immutable receipt. It never installs, pushes, or publishes anything:
 #   powershell -NoProfile -File .\scripts\release.ps1 -Notes "Plain-English notes"
 #
-# Phase 2 is an explicit owner ship action. It consumes the exact staged receipt, installs
-# that artifact locally, pushes its exact source, creates and re-downloads a draft release,
-# and only then makes the draft public:
+# Phase 2 installs and live-proves that exact receipt-bound candidate without pushing or publishing:
+#   powershell -NoProfile -File .\scripts\release.ps1 -Mode prove
+#
+# Phase 3 is the explicit owner ship action. It resumes the same receipt-bound transaction, pushes
+# exact source, creates and verifies a private draft, and only then makes the release public:
 #   powershell -NoProfile -File .\scripts\release.ps1 -Mode publish
 #
 # ASCII only: Windows PowerShell 5.1 must not reinterpret this release-critical script.
 param(
-  [ValidateSet("stage", "publish")][string]$Mode = "stage",
+  [ValidateSet("stage", "prove", "publish")][string]$Mode = "stage",
   [string]$Notes,
   [string]$SetVersion,
   [switch]$BumpMinor
@@ -32,6 +34,9 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 # redirected, and `2>$null` causes it rather than preventing it. That killed the v0.9.9 publish at
 # the expected-404 releases-tag probe, one release after the same class killed the runtime proof.
 . (Join-Path $PSScriptRoot "lib\native-process.ps1")
+. (Join-Path $PSScriptRoot "lib\release-artifacts.ps1")
+. (Join-Path $PSScriptRoot "lib\release-transaction.ps1")
+. (Join-Path $PSScriptRoot "lib\release-publish-adapter.ps1")
 $releasesRepo = "Pootytxng/compy-releases"
 $bundleDir = Join-Path $repo "src-tauri\target\release\bundle\nsis"
 $stageReceiptPath = Join-Path $bundleDir "release-stage.json"
@@ -102,32 +107,6 @@ function Assert-NoPendingGamingContract([string]$Phase) {
   }
 }
 
-function Get-ArtifactHash([string]$Path) {
-  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-    throw "Release artifact is missing: $Path"
-  }
-  return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
-}
-
-function Resolve-ReceiptArtifact([string]$RelativePath) {
-  if ([string]::IsNullOrWhiteSpace($RelativePath)) {
-    throw "Staged receipt contains an empty artifact path."
-  }
-  $candidate = [System.IO.Path]::GetFullPath((Join-Path $repo $RelativePath))
-  $rootPrefix = $repo.TrimEnd('\') + '\'
-  if (-not $candidate.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-    throw "Staged receipt artifact escapes the repository: $RelativePath"
-  }
-  return $candidate
-}
-
-function Assert-ReceiptHash([string]$Label, [string]$Path, [string]$Expected) {
-  $actual = Get-ArtifactHash $Path
-  if ($actual -ne $Expected.ToLowerInvariant()) {
-    throw "$Label hash changed after staging. Expected $Expected; found $actual."
-  }
-}
-
 function Assert-UpdaterTrustRoot {
   if (-not (Test-Path -LiteralPath $trustRootPath -PathType Leaf)) {
     throw "UPDATER TRUST-ROOT DRIFT: machine-readable fleet anchor is missing."
@@ -150,41 +129,7 @@ function Assert-UpdaterTrustRoot {
   }
 }
 
-function Read-BoundManifest([string]$Path, [string]$SignaturePath, [string]$Version, [string]$InstallerName) {
-  $manifest = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
-  if ($manifest.version -ne $Version) {
-    throw "Manifest version $($manifest.version) does not match staged version $Version."
-  }
-  $platform = $manifest.platforms.'windows-x86_64'
-  if (-not $platform) {
-    throw "Manifest has no windows-x86_64 updater entry."
-  }
-  $expectedUrl = "https://github.com/$releasesRepo/releases/download/v$Version/$InstallerName"
-  if ($platform.url -ne $expectedUrl) {
-    throw "Manifest URL does not bind the staged release. Expected $expectedUrl; found $($platform.url)."
-  }
-  $signatureText = (Get-Content -LiteralPath $SignaturePath -Raw).Trim()
-  if ($platform.signature -ne $signatureText) {
-    throw "Manifest signature does not match the staged updater signature."
-  }
-  return $manifest
-}
-
-function Invoke-DownloadWithRetry([string]$Uri, [string]$OutFile) {
-  $lastError = $null
-  for ($attempt = 1; $attempt -le 6; $attempt++) {
-    try {
-      Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $OutFile
-      return
-    } catch {
-      $lastError = $_
-      if ($attempt -lt 6) { Start-Sleep -Seconds 5 }
-    }
-  }
-  throw "Public release download failed after retries: $Uri`n$lastError"
-}
-
-function Assert-PublicVersionCanPublish([string]$CandidateVersion, [string]$CandidateTag, [switch]$AllowOwnDraft) {
+function Assert-PublicVersionCanPublish([string]$CandidateVersion, [string]$CandidateTag, [switch]$AllowCandidateState) {
   # Fail closed: an unreadable release list is NOT an empty release list. Any nonzero exit or timeout
   # aborts here rather than letting the caller conclude the candidate tag is free.
   $releaseListProbe = Invoke-NativeProcess -Command "gh" -ArgumentList @("release", "list", "--repo", $releasesRepo, "--limit", "1000", "--json", "tagName,isDraft,isPrerelease,publishedAt") -TimeoutMs 300000
@@ -198,12 +143,14 @@ function Assert-PublicVersionCanPublish([string]$CandidateVersion, [string]$Cand
   }
   $releaseList = @($releaseListText | ConvertFrom-Json)
   $sameTag = @($releaseList | Where-Object { $_.tagName -eq $CandidateTag })
-  if ($AllowOwnDraft) {
-    if ($sameTag.Count -ne 1 -or -not $sameTag[0].isDraft -or $sameTag[0].isPrerelease) {
-      throw "Expected exactly one private draft for $CandidateTag immediately before publication."
-    }
-  } elseif ($sameTag.Count -gt 0) {
+  if ($sameTag.Count -gt 1) {
+    throw "Multiple releases exist for $CandidateTag; refusing ambiguous external state."
+  }
+  if ($sameTag.Count -eq 1 -and -not $AllowCandidateState) {
     throw "Release $CandidateTag already exists. Refusing to overwrite or republish it."
+  }
+  if ($sameTag.Count -eq 1 -and $sameTag[0].isPrerelease) {
+    throw "Release $CandidateTag exists as a prerelease, which is incompatible with this transaction."
   }
 
   $latestPublished = $releaseList |
@@ -225,7 +172,8 @@ function Assert-PublicVersionCanPublish([string]$CandidateVersion, [string]$Cand
     if ($currentPublicVersion -ne $latestTagVersion) {
       throw "Public updater manifest $currentPublicVersion disagrees with latest tag $latestTagVersion."
     }
-    if ([version]$CandidateVersion -le $currentPublicVersion) {
+    if ([version]$CandidateVersion -lt $currentPublicVersion -or
+        ([version]$CandidateVersion -eq $currentPublicVersion -and -not $AllowCandidateState)) {
       throw "Refusing updater downgrade/non-increase: staged=$CandidateVersion public=$currentPublicVersion."
     }
   } finally {
@@ -266,209 +214,123 @@ function Invoke-ProtectedSigner([string]$Path, [string]$KeyPath, [string]$Label)
 
 Assert-UpdaterTrustRoot
 
-if ($Mode -eq "publish") {
+if ($Mode -eq "publish" -or $Mode -eq "prove") {
   if ($Notes -or $SetVersion -or $BumpMinor) {
-    throw "Publish consumes an existing staged receipt; do not pass Notes, SetVersion, or BumpMinor."
+    throw "Proof and publish consume an existing staged receipt; do not pass Notes, SetVersion, or BumpMinor."
   }
 
   Assert-CleanMain
-  Assert-NoPendingGamingContract "publish"
+  Assert-NoPendingGamingContract $Mode
   if (-not (Test-Path -LiteralPath $stageReceiptPath -PathType Leaf)) {
     throw "No staged release receipt found at $stageReceiptPath. Run stage mode first."
   }
 
-  $receipt = Get-Content -LiteralPath $stageReceiptPath -Raw | ConvertFrom-Json
-  if ($receipt.schema_version -ne 3) {
-    throw "Unsupported staged receipt schema: $($receipt.schema_version)"
-  }
-
-  $head = Get-GitLine @("rev-parse", "HEAD")
-  if ($head -ne $receipt.commit) {
-    throw "HEAD does not match staged commit. HEAD=$head staged=$($receipt.commit)"
-  }
-
-  $conf = Get-Content -LiteralPath (Join-Path $repo "src-tauri\tauri.conf.json") -Raw | ConvertFrom-Json
-  if ($conf.version -ne $receipt.version) {
-    throw "Source version $($conf.version) does not match staged version $($receipt.version)."
-  }
-
-  # Pre-existing tag gate (Phase 3 #4): the annotated tag from stage must ALREADY point at the exact
-  # release commit before publish will push source or create the release.
-  if ([string]::IsNullOrWhiteSpace($receipt.tag)) { throw "Staged receipt has no release tag." }
-  if ($receipt.tag -ne "v$($receipt.version)") { throw "Staged tag $($receipt.tag) does not match version v$($receipt.version)." }
-  $tagCommit = Get-GitLine @("rev-parse", "$($receipt.tag)^{commit}")
-  if ($tagCommit -ne $receipt.commit) {
-    throw "Release tag $($receipt.tag) does not point at the staged commit. tag=$tagCommit staged=$($receipt.commit)"
-  }
-
-  if (-not (Test-Path -LiteralPath $stageReceiptSignaturePath -PathType Leaf)) {
-    throw "Staged receipt signature is missing: $stageReceiptSignaturePath"
-  }
-  Invoke-CheckedProcess "staged receipt signature verification" "node" @((Join-Path $repo "scripts\verify-updater-signature.mjs"), $stageReceiptPath, $stageReceiptSignaturePath, (Join-Path $repo "src-tauri\tauri.conf.json")) -ShowOutput | Out-Null
-
-  $canonicalInstallerRelative = "src-tauri/target/release/bundle/nsis/Compy_$($receipt.version)_x64-setup.exe"
-  $canonicalSignatureRelative = "$canonicalInstallerRelative.sig"
-  $canonicalManifestRelative = "src-tauri/target/release/bundle/nsis/latest.json"
-  if ($receipt.installer.path -ne $canonicalInstallerRelative -or
-      $receipt.signature.path -ne $canonicalSignatureRelative -or
-      $receipt.manifest.path -ne $canonicalManifestRelative) {
-    throw "Staged receipt artifact paths are not the canonical paths for v$($receipt.version)."
-  }
-
+  $receipt = (Read-Utf8 $stageReceiptPath) | ConvertFrom-Json
+  $binding = Get-ReleaseTransactionBinding $receipt
   $installer = Resolve-ReceiptArtifact $receipt.installer.path
   $signature = Resolve-ReceiptArtifact $receipt.signature.path
   $manifestPath = Resolve-ReceiptArtifact $receipt.manifest.path
-  Assert-ReceiptHash "Installer" $installer $receipt.installer.sha256
-  Assert-ReceiptHash "Updater signature" $signature $receipt.signature.sha256
-  Assert-ReceiptHash "Updater manifest" $manifestPath $receipt.manifest.sha256
-
   $installerName = Split-Path -Leaf $installer
-  $manifest = Read-BoundManifest $manifestPath $signature $receipt.version $installerName
-  Invoke-CheckedProcess "publish-time updater signature verification" "node" @((Join-Path $repo "scripts\verify-updater-signature.mjs"), $installer, $signature, (Join-Path $repo "src-tauri\tauri.conf.json")) -ShowOutput | Out-Null
+  $transactionJournalPath = Join-Path $bundleDir "release-transaction-$($receipt.tag).json"
 
-  $tag = "v$($receipt.version)"
-  # A stale local source may never publish a downgrade. Check before touching the local install,
-  # then check again immediately before the only fleet-visible transition below.
-  Assert-PublicVersionCanPublish $receipt.version $tag
-
-  # Local proof happens before any source push or GitHub release creation. It runs as a real child
-  # PROCESS rather than `& script.ps1` + $LASTEXITCODE: now that no native command runs in this scope,
-  # $LASTEXITCODE can be $null, and `$null -ne 0` is TRUE - a spurious failure at the worst moment.
-  # A child powershell.exe returns a genuine exit code, which Invoke-StreamedProcess checks as data.
-  Invoke-StreamedProcess "local ship-reinstall runtime proof" "powershell" @(
-    "-NoProfile", "-File", (Join-Path $repo "scripts\ship-reinstall.ps1"),
-    "-VerifyRuntime",
-    "-ExpectedCommit", $receipt.commit,
-    "-ExpectedInstallerPath", $installer,
-    "-ExpectedInstallerSha256", $receipt.installer.sha256
-  ) -TimeoutMs 1800000 | Out-Null
-
-  Assert-CleanMain
-  $postInstallHead = Get-GitLine @("rev-parse", "HEAD")
-  if ($postInstallHead -ne $receipt.commit) {
-    throw "Source moved during local runtime proof. HEAD=$postInstallHead staged=$($receipt.commit)"
-  }
-
-  Invoke-Git "git fetch origin main" @("fetch", "origin", "main")
-  $remote = Get-GitLine @("rev-parse", "origin/main")
-  $parent = Get-GitLine @("rev-parse", "HEAD^")
-  if ($remote -eq $parent) {
-    Invoke-Git "git push staged source" @("push", "origin", "$($receipt.commit):main")
-  } elseif ($remote -ne $head) {
-    throw "origin/main is neither the staged commit nor its parent. Refusing a non-fast-forward release."
-  }
-  Invoke-Git "refresh pushed source" @("fetch", "origin", "main")
-  $pushed = Get-GitLine @("rev-parse", "origin/main")
-  if ($pushed -ne $receipt.commit) {
-    throw "Source push did not publish the staged commit. Expected $($receipt.commit); found $pushed."
-  }
-  # Push the source tag alongside the commit; confirm origin's tag resolves to the exact commit.
-  Invoke-Git "push release tag" @("push", "origin", "refs/tags/$($receipt.tag)")
-  # Fail-closed by construction: Get-GitLine throws on any nonzero ls-remote, and an EMPTY answer
-  # (tag absent on origin) yields an empty sha that cannot equal the staged commit below.
-  $remoteTagLine = Get-GitLine @("ls-remote", "origin", "refs/tags/$($receipt.tag)^{}")
-  $remoteTagSha = ($remoteTagLine -split '\s+')[0]
-  if ($remoteTagSha -ne $receipt.commit) {
-    throw "Pushed release tag $($receipt.tag) does not resolve to the staged commit on origin. tag=$remoteTagSha staged=$($receipt.commit)"
-  }
-
-  # A draft is still not visible to the fleet updater. Verify its exact downloaded bytes first.
-  $releaseNotes = "$($receipt.notes)`n`nSource commit: $head"
-  # The release lives in compy-releases (no source commits), so its tag can't point at the source
-  # commit — that binding is the source-tag gate above + this notes line. Create the releases-repo tag
-  # ref so gh --verify-tag is a real fail-closed check (refuses creation if the tag is absent).
-  # Idempotent for a retried publish.
-  # Fail closed on the lookup itself: an unreadable answer is not an absent commit.
-  $releasesMainProbe = Invoke-NativeProcess -Command "gh" -ArgumentList @("api", "repos/$releasesRepo/commits/main", "--jq", ".sha") -TimeoutMs 300000
-  if ($releasesMainProbe.TimedOut -or $releasesMainProbe.ExitCode -ne 0) {
-    throw "Could not resolve $releasesRepo main sha for the release tag. $(Get-FirstNonEmptyLine $releasesMainProbe.StdErr)"
-  }
-  $releasesMainSha = ($releasesMainProbe.StdOut).Trim()
-  if ([string]::IsNullOrWhiteSpace($releasesMainSha)) { throw "Could not resolve $releasesRepo main sha for the release tag." }
-
-  # THIS is the line that killed the v0.9.9 publish. HTTP 404 is the CORRECT first-publish answer
-  # here ("the tag does not exist yet") and the branch below exists to act on it - but as a native
-  # command with redirected stderr it became a terminating NativeCommandError under "Stop".
-  # Captured instead, the outcomes are distinguished explicitly and ONLY a real 404 reads as absence.
-  # Authentication, permission, network, malformed response and every other non-404 failure throws:
-  # "I could not ask" must never be mistaken for "it is not there".
-  $existingReleasesTag = ""
-  $tagProbe = Invoke-NativeProcess -Command "gh" -ArgumentList @("api", "repos/$releasesRepo/git/refs/tags/$tag", "--jq", ".object.sha") -TimeoutMs 300000
-  if ($tagProbe.TimedOut) {
-    throw "Releases-repo tag lookup for $tag timed out. Authentication/network failure is not treated as an absent tag."
-  } elseif ($tagProbe.ExitCode -eq 0) {
-    $existingReleasesTag = ($tagProbe.StdOut).Trim()
-    if ([string]::IsNullOrWhiteSpace($existingReleasesTag)) {
-      throw "Releases-repo tag lookup for $tag succeeded but returned no sha. Refusing to guess."
+  # These callbacks are re-run by receipt_verified and release_published. They keep the production
+  # adapter independent of repository-specific helpers while still exercising the same engine as
+  # the complete sandbox simulation.
+  $validateReceipt = {
+    param($context)
+    Assert-CleanMain
+    Assert-NoPendingGamingContract $Mode
+    $head = Get-GitLine @("rev-parse", "HEAD")
+    if ($head -ne $context.Receipt.commit) {
+      $containsReceipt = Invoke-NativeProcess -Command "git" -ArgumentList @(
+        "-C", $repo, "merge-base", "--is-ancestor", $context.Receipt.commit, "HEAD"
+      ) -TimeoutMs 300000
+      if ($containsReceipt.TimedOut -or @(0, 1) -notcontains $containsReceipt.ExitCode) {
+        throw "Could not prove whether clean main contains the staged release commit."
+      }
+      if ($containsReceipt.ExitCode -ne 0) {
+        throw "HEAD neither matches nor contains the staged release commit. HEAD=$head staged=$($context.Receipt.commit)"
+      }
     }
-  } elseif (Test-GhNotFound $tagProbe) {
-    $existingReleasesTag = ""
-  } else {
-    throw "Releases-repo tag lookup for $tag failed (exit $($tagProbe.ExitCode)). Authentication/network failure is not treated as an absent tag. $(Get-FirstNonEmptyLine $tagProbe.StdErr)"
-  }
-  if ([string]::IsNullOrWhiteSpace($existingReleasesTag)) {
-    Invoke-CheckedProcess "create releases-repo tag" "gh" @("api", "repos/$releasesRepo/git/refs", "-f", "ref=refs/tags/$tag", "-f", "sha=$releasesMainSha") -ShowOutput | Out-Null
-  }
-  Invoke-CheckedProcess "create draft GitHub release" "gh" @(
-    "release", "create", $tag, "--repo", $releasesRepo, "--draft", "--verify-tag",
-    "--title", "Compy $tag", "--notes", $releaseNotes, $installer, $manifestPath
-  ) -TimeoutMs 1800000 -ShowOutput | Out-Null
-
-  $verifyDir = Join-Path ([System.IO.Path]::GetTempPath()) ("compy-release-verify-" + [guid]::NewGuid().ToString("N"))
-  New-Item -ItemType Directory -Path $verifyDir | Out-Null
-  try {
-    Invoke-CheckedProcess "download draft release assets" "gh" @("release", "download", $tag, "--repo", $releasesRepo, "--dir", $verifyDir, "--pattern", $installerName, "--pattern", "latest.json") -TimeoutMs 1800000 -ShowOutput | Out-Null
-    $downloadedInstaller = Join-Path $verifyDir $installerName
-    $downloadedManifest = Join-Path $verifyDir "latest.json"
-    Assert-ReceiptHash "Downloaded draft installer" $downloadedInstaller $receipt.installer.sha256
-    Assert-ReceiptHash "Downloaded draft manifest" $downloadedManifest $receipt.manifest.sha256
-    $null = Read-BoundManifest $downloadedManifest $signature $receipt.version $installerName
-    Invoke-CheckedProcess "downloaded draft signature verification" "node" @((Join-Path $repo "scripts\verify-updater-signature.mjs"), $downloadedInstaller, $signature, (Join-Path $repo "src-tauri\tauri.conf.json")) -ShowOutput | Out-Null
-  } finally {
-    $tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd('\') + '\'
-    $resolvedVerifyDir = [System.IO.Path]::GetFullPath($verifyDir)
-    if ($resolvedVerifyDir.StartsWith($tempRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
-      Remove-Item -LiteralPath $resolvedVerifyDir -Recurse -Force -ErrorAction SilentlyContinue
+    $conf = Get-Content -LiteralPath (Join-Path $repo "src-tauri\tauri.conf.json") -Raw | ConvertFrom-Json
+    if ($conf.version -ne $context.Receipt.version) {
+      throw "Source version $($conf.version) does not match staged version $($context.Receipt.version)."
     }
-  }
-
-  # GitHub exposes no compare-and-swap for "latest" release publication. Compy release publishing
-  # is therefore a single-writer owner action, with this second check kept immediately beside edit.
-  Assert-PublicVersionCanPublish $receipt.version $tag -AllowOwnDraft
-  # This is the only fleet-visible transition, and it is deliberately last.
-  Invoke-CheckedProcess "publish verified GitHub release" "gh" @("release", "edit", $tag, "--repo", $releasesRepo, "--draft=false") -TimeoutMs 300000 -ShowOutput | Out-Null
-
-  # Same fail-closed shape as the probes above: an unreadable answer is not a passing verification.
-  $latestProbe = Invoke-NativeProcess -Command "gh" -ArgumentList @("release", "view", "--repo", $releasesRepo, "--json", "tagName", "--jq", ".tagName") -TimeoutMs 300000
-  $latestTag = ""
-  if (-not $latestProbe.TimedOut -and $latestProbe.ExitCode -eq 0) { $latestTag = ($latestProbe.StdOut).Trim() }
-  if ($latestProbe.TimedOut -or $latestProbe.ExitCode -ne 0 -or $latestTag -ne $tag) {
-    throw "Release was published but latest-release verification failed. Expected $tag; found '$latestTag'."
-  }
-
-  # Verify the exact public URLs consumed by installed clients, not only GitHub's draft API bytes.
-  $publicDir = Join-Path ([System.IO.Path]::GetTempPath()) ("compy-public-verify-" + [guid]::NewGuid().ToString("N"))
-  New-Item -ItemType Directory -Path $publicDir | Out-Null
-  try {
-    $publicManifest = Join-Path $publicDir "latest.json"
-    $publicInstaller = Join-Path $publicDir $installerName
-    Invoke-DownloadWithRetry "https://github.com/$releasesRepo/releases/latest/download/latest.json" $publicManifest
-    Invoke-DownloadWithRetry "https://github.com/$releasesRepo/releases/latest/download/$installerName" $publicInstaller
-    Assert-ReceiptHash "Public latest installer" $publicInstaller $receipt.installer.sha256
-    Assert-ReceiptHash "Public latest manifest" $publicManifest $receipt.manifest.sha256
-    $null = Read-BoundManifest $publicManifest $signature $receipt.version $installerName
-    Invoke-CheckedProcess "public latest signature verification" "node" @((Join-Path $repo "scripts\verify-updater-signature.mjs"), $publicInstaller, $signature, (Join-Path $repo "src-tauri\tauri.conf.json")) -ShowOutput | Out-Null
-  } finally {
-    $tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd('\') + '\'
-    $resolvedPublicDir = [System.IO.Path]::GetFullPath($publicDir)
-    if ($resolvedPublicDir.StartsWith($tempRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
-      Remove-Item -LiteralPath $resolvedPublicDir -Recurse -Force -ErrorAction SilentlyContinue
+    $tagCommit = Get-GitLine @("rev-parse", "$($context.Receipt.tag)^{commit}")
+    if ($tagCommit -ne $context.Receipt.commit) {
+      throw "Release tag $($context.Receipt.tag) does not point at the staged commit. tag=$tagCommit staged=$($context.Receipt.commit)"
     }
+    $tagType = Get-GitLine @("cat-file", "-t", $context.Receipt.tag)
+    if ($tagType -ne "tag") {
+      throw "Release tag $($context.Receipt.tag) is not an annotated tag object."
+    }
+    if (-not (Test-Path -LiteralPath $stageReceiptSignaturePath -PathType Leaf)) {
+      throw "Staged receipt signature is missing: $stageReceiptSignaturePath"
+    }
+    Invoke-CheckedProcess "staged receipt signature verification" "node" @(
+      (Join-Path $repo "scripts\verify-updater-signature.mjs"), $stageReceiptPath,
+      $stageReceiptSignaturePath, (Join-Path $repo "src-tauri\tauri.conf.json")
+    ) -ShowOutput | Out-Null
+    $canonicalInstaller = "src-tauri/target/release/bundle/nsis/Compy_$($context.Receipt.version)_x64-setup.exe"
+    if ($context.Receipt.installer.path -ne $canonicalInstaller -or
+        $context.Receipt.signature.path -ne "$canonicalInstaller.sig" -or
+        $context.Receipt.manifest.path -ne "src-tauri/target/release/bundle/nsis/latest.json") {
+      throw "Staged receipt artifact paths are not canonical for v$($context.Receipt.version)."
+    }
+    Assert-ReceiptHash "Installer" $context.Installer $context.Receipt.installer.sha256
+    Assert-ReceiptHash "Updater signature" $context.Signature $context.Receipt.signature.sha256
+    Assert-ReceiptHash "Updater manifest" $context.Manifest $context.Receipt.manifest.sha256
+    $null = Read-BoundManifest $context.Manifest $context.Signature $context.Receipt.version $context.InstallerName
+    Invoke-CheckedProcess "publish-time updater signature verification" "node" @(
+      (Join-Path $repo "scripts\verify-updater-signature.mjs"), $context.Installer,
+      $context.Signature, (Join-Path $repo "src-tauri\tauri.conf.json")
+    ) -ShowOutput | Out-Null
+    Assert-PublicVersionCanPublish $context.Receipt.version $context.Receipt.tag -AllowCandidateState
+  }
+  $assertPublicVersion = {
+    param($context)
+    Assert-PublicVersionCanPublish $context.Receipt.version $context.Receipt.tag -AllowCandidateState
+  }
+  $context = [pscustomobject]@{
+    Receipt = $receipt
+    Repo = $repo
+    ReleasesRepo = $releasesRepo
+    Installer = $installer
+    Signature = $signature
+    Manifest = $manifestPath
+    InstallerName = $installerName
+    ReleaseNotes = "$($receipt.notes)`n`nSource commit: $($receipt.commit)"
+    ValidateReceipt = $validateReceipt
+    AssertPublicVersion = $assertPublicVersion
+    Dependencies = @{}
+    GhCommand = "gh"
+    GhArgumentPrefix = @()
+    GhArgumentsEncoder = $null
+  }
+  $adapter = New-ProductionReleaseAdapter -Dependencies $context.Dependencies
+  if ($Mode -eq "prove") {
+    $transaction = Invoke-ReleaseTransaction -Context $context -Adapter $adapter `
+      -JournalPath $transactionJournalPath -StopAfterStage "runtime_proved"
+    if ($transaction.StoppedAfter -ne "runtime_proved") {
+      throw "Local release proof did not stop at runtime_proved."
+    }
+    Write-Host "LOCALLY PROVED: $($receipt.tag)"
+    Write-Host "Source: $($receipt.commit)"
+    Write-Host "Installer SHA-256: $($receipt.installer.sha256)"
+    Write-Host "Transaction journal: $transactionJournalPath"
+    exit 0
   }
 
-  Write-Host "PUBLISHED: $tag"
-  Write-Host "Source: $head"
+  $transaction = Invoke-ReleaseTransaction -Context $context -Adapter $adapter `
+    -JournalPath $transactionJournalPath -AllowPublication
+  if (-not $transaction.Completed) {
+    throw "Release transaction stopped before completion at $($transaction.StoppedAfter)."
+  }
+
+  Write-Host "PUBLISHED: $($receipt.tag)"
+  Write-Host "Source: $($receipt.commit)"
   Write-Host "Installer SHA-256: $($receipt.installer.sha256)"
+  Write-Host "Transaction journal: $transactionJournalPath"
   exit 0
 }
 
@@ -672,7 +534,9 @@ Write-Host "STAGED ONLY: v$nextText"
 Write-Host "Nothing was installed, pushed, or published."
 Write-Host "Receipt: $stageReceiptPath"
 Write-Host "Receipt signature: $stageReceiptSignaturePath"
-Write-Host "After owner review, publish this exact candidate with:"
-Write-Host "  powershell -NoProfile -File .\scripts\release.ps1 -Mode publish"
+Write-Host "Locally install and prove this exact candidate with:"
+Write-Host "  powershell -NoProfile -File .\scripts\release-prove.ps1"
+Write-Host "After that proof, the fleet-visible owner action is:"
+Write-Host "  powershell -NoProfile -File .\scripts\release-publish.ps1"
 # Explicit success exit for the nested powershell.exe process used by release-prepare.ps1.
 exit 0

@@ -10,11 +10,10 @@
 
 ## Repo location
 
-Working tree: **`C:\Users\Kuya\code\sentinel\`** (Windows-side). The directory kept its pre-rename
-name: the app was renamed **Sentinel → Compy** on 2026-06-04, but the git dir, the git history, and
-the `Pootytxng/sentinel` GitHub remote still read "sentinel" — that is expected, not a leftover.
-**Resolve paths from the repo root** (`git rev-parse --show-toplevel`), never a hardcoded workstation
-path.
+The canonical Windows checkout is commonly named `sentinel`, and isolated release worktrees may
+use names such as `sentinel-rel`. The app was renamed **Sentinel → Compy** on 2026-06-04, while git
+history and the `Pootytxng/sentinel` GitHub remote retain the old name. **Always resolve the active
+repo root** with `git rev-parse --show-toplevel`; never assume a hardcoded workstation path.
 
 ## Canonical docs (read; do not duplicate them here)
 

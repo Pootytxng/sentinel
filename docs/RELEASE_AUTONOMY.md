@@ -2,6 +2,7 @@
 
 > Repository law for Claude Code, Cowork, Codex, and every future agent working on Compy. This
 > document governs release-engineering authority; `docs/RELEASE_STATE.md` governs live state.
+> The fixed resumable state machine is documented in `docs/RELEASE_TRANSACTION.md`.
 
 ## One authorization covers the reversible train
 

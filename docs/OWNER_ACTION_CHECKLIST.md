@@ -28,8 +28,8 @@
 - ⏳ **Send the first updater-enabled build as a one-tester canary, then expand to the remaining
   invitees once it proves clean.** Their current installs (0.9.0/0.1.0) have NO updater and cannot
   hear about updates until they install one build that does. Do **not** send the stale v0.9.3
-  installer, and do **not** send the **v0.9.9** build (`664aa5e`) that is running on your own machine
-  — v0.9.9 was source-tagged and installed here but its publish failed closed, so it exists on no
+  installer, and do **not** send the **v0.9.9** build (`664aa5e`) that previously ran on your machine
+  — v0.9.9 was source-tagged and owner-installed but its publish failed closed, so it exists on no
   public page and is not republishable. Also do **not** send the preserved **v0.9.10 / 92c7608**
   private-draft checkpoint: it was installed locally and its draft assets are byte-correct, but the
   release-infrastructure repair must land after its immutable source tag. The send candidate is the
@@ -38,8 +38,9 @@
   (hosted Actions stay off by your standing decision — see B7 — so **local IS the gate**), then a
   proven update on your own box before any canary send. The release page is
   `https://github.com/Pootytxng/compy-releases/releases/latest`. After a tester installs the canary
-  once, future patches reach them in-app ("update ready" pill → one click). Timing, signing,
-  publication, and distribution are owner territory.
+  once, future patches reach them in-app ("update ready" pill → one click). Key custody/rotation,
+  Authenticode enrollment, publication, distribution, and external timing are owner territory;
+  protected use of the existing updater key inside an authorized local release train is engineering.
 
 ### A0b. zh-CN (Simplified Chinese) — base translation merged; publish GO still held (updated 2026-07-27)
 

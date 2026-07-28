@@ -47,6 +47,7 @@ if (mode === "always-fail" || (mode === "flaky" && count <= Number(failCount))) 
 }
 if (mode === "stamp-mismatch") { console.log(JSON.stringify({ ...good, stamp: "deadbee \\u00b7 release" })); process.exit(0); }
 if (mode === "version-mismatch") { console.log(JSON.stringify({ ...good, railVersion: "v0.0.1" })); process.exit(0); }
+if (mode === "version-prefix-collision") { console.log(JSON.stringify({ ...good, railVersion: "v9.9.90" })); process.exit(0); }
 console.log(JSON.stringify(good));
 process.exit(0);
 `;
@@ -70,7 +71,27 @@ $psExe = (Get-Command powershell).Source
 $child = $null
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
 try {
-  if ($Scenario -eq "closed-port") {
+  if ($Scenario -eq "port-closure") {
+    $listener = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, 0)
+    $listener.Start()
+    $port = ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
+    try {
+      try {
+        Wait-LoopbackPortClosed -Port $port -TimeoutMs 700
+        Write-Output "OPEN_PORT_ACCEPTED"
+      } catch {
+        Write-Output ("OPEN_PORT_THREW=" + $_.Exception.Message)
+      }
+    } finally {
+      $listener.Stop()
+    }
+    $closedListener = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, 0)
+    $closedListener.Start()
+    $closedPort = ([System.Net.IPEndPoint]$closedListener.LocalEndpoint).Port
+    $closedListener.Stop()
+    Wait-LoopbackPortClosed -Port $closedPort -TimeoutMs 3000
+    Write-Output "CLOSED_PORT_ACCEPTED"
+  } elseif ($Scenario -eq "closed-port") {
     # Port 1 never listens: the REAL probe writes to stderr and exits nonzero.
     $r = Invoke-CapturedProcess -FilePath $NodeExe -ArgumentList @($RealProbe, "1", "stamp")
     Write-Output ("EXIT=" + $r.ExitCode)
@@ -83,6 +104,7 @@ try {
     if ($Scenario -eq "flaky-then-ok") { $mode = "flaky"; $failCount = 2 }
     if ($Scenario -eq "stamp-mismatch") { $mode = "stamp-mismatch" }
     if ($Scenario -eq "version-mismatch") { $mode = "version-mismatch" }
+    if ($Scenario -eq "version-prefix-collision") { $mode = "version-prefix-collision" }
     if ($Scenario -eq "deadline") { $mode = "always-fail"; $timeout = 1 }
 
     if ($Scenario -eq "process-exited") {
@@ -173,6 +195,13 @@ describe.runIf(windows)("runtime proof behaviour (bug->guard, failed v0.9.9 publ
     expect(field("TIMEDOUT")).toBe("False");
   }, 60000);
 
+  it("fails closed while a debugging port listens and accepts it only after closure", () => {
+    const { out, field } = run("port-closure");
+    expect(out).not.toContain("OPEN_PORT_ACCEPTED");
+    expect(field("OPEN_PORT_THREW")).toContain("remained open");
+    expect(out).toContain("CLOSED_PORT_ACCEPTED");
+  }, 60000);
+
   it("survives expected failed attempts and then accepts a valid response", () => {
     const { field, out } = run("flaky-then-ok");
     expect(out, out).not.toContain("THREW=");
@@ -191,6 +220,12 @@ describe.runIf(windows)("runtime proof behaviour (bug->guard, failed v0.9.9 publ
 
   it("still fails immediately on a version mismatch", () => {
     const { field, elapsed } = run("version-mismatch");
+    expect(field("THREW")).toContain("RUNTIME VERSION MISMATCH");
+    expect(elapsed).toBeLessThan(20000);
+  }, 60000);
+
+  it("rejects a longer version that merely contains the expected version as a prefix", () => {
+    const { field, elapsed } = run("version-prefix-collision");
     expect(field("THREW")).toContain("RUNTIME VERSION MISMATCH");
     expect(elapsed).toBeLessThan(20000);
   }, 60000);

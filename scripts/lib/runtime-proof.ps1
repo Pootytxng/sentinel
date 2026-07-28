@@ -100,7 +100,7 @@ function Invoke-CompyRuntimeProof {
       if ($payload.stamp -ne $ExpectedStamp) {
         throw "RUNTIME STAMP MISMATCH: running app reports '$($payload.stamp)'; expected '$ExpectedStamp'."
       }
-      if ($payload.railVersion -notmatch [regex]::Escape($ExpectedVersion)) {
+      if (("" + $payload.railVersion).Trim() -cne "v$ExpectedVersion") {
         throw "RUNTIME VERSION MISMATCH: the mounted shell does not show version $ExpectedVersion (found '$($payload.railVersion)')."
       }
       return [pscustomobject]@{
@@ -121,4 +121,23 @@ function Invoke-CompyRuntimeProof {
   }
 
   throw "RUNTIME PROOF FAILED: Compy's main shell did not answer the build-stamp probe within $TimeoutSeconds seconds ($attempts attempt(s); last failure: $lastFailure)."
+}
+
+function Wait-LoopbackPortClosed {
+  param(
+    [Parameter(Mandatory = $true)][int]$Port,
+    [int]$TimeoutMs = 10000
+  )
+  $deadline = [DateTime]::UtcNow.AddMilliseconds($TimeoutMs)
+  do {
+    try {
+      $listeners = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners()
+      $stillListening = @($listeners | Where-Object { $_.Port -eq $Port }).Count -gt 0
+      if (-not $stillListening) { return }
+    } catch {
+      # An unreadable listener table is indeterminate, never proof that the debugging port closed.
+    }
+    Start-Sleep -Milliseconds 200
+  } while ([DateTime]::UtcNow -lt $deadline)
+  throw "RUNTIME PROOF FAILED: CDP/debugging port $Port remained open after the proof launch closed."
 }

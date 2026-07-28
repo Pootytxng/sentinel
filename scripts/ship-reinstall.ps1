@@ -18,6 +18,7 @@ param(
   [switch]$NoLaunch,
   [switch]$AllowDirty,
   [switch]$VerifyRuntime,
+  [switch]$ProofOnly,
   [string]$ExpectedCommit,
   [string]$ExpectedInstallerPath,
   [string]$ExpectedInstallerSha256
@@ -35,6 +36,10 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 
 if ($VerifyRuntime -and $NoLaunch) {
   throw "VerifyRuntime requires launching the installed app."
+}
+if ($ProofOnly) {
+  $VerifyRuntime = $true
+  if ($NoLaunch) { throw "ProofOnly cannot be combined with NoLaunch." }
 }
 if ($VerifyRuntime -and $ExpectedCommit -notmatch '^[0-9a-fA-F]{40}$') {
   throw "VerifyRuntime requires the full 40-character expected source commit."
@@ -83,12 +88,13 @@ $releaseExe = Join-Path $repo "src-tauri\target\release\compy.exe"
 if (-not (Test-Path -LiteralPath $releaseExe -PathType Leaf)) {
   throw "Built release executable is missing before install: $releaseExe"
 }
-$headProbe = Invoke-NativeProcess -Command "git" -ArgumentList @("-C", $repo, "rev-parse", "--short", "HEAD")
-if ($headProbe.ExitCode -ne 0) { throw "Could not resolve the source HEAD before install. $(Get-FirstNonEmptyLine $headProbe.StdErr)" }
-$head = $headProbe.StdOut.Trim()
-if (-not $head) { throw "Source HEAD was empty before install." }
-if (-not (Select-String -Path $releaseExe -Pattern $head -Quiet)) {
-  throw "STALE BUILD: target\release\compy.exe does not embed HEAD ($head) — cargo reused a cached binary. Run: cargo clean -p compy --release --manifest-path src-tauri/Cargo.toml && npm run tauri build"
+$proofCommit = if ($VerifyRuntime) { $ExpectedCommit } else { "HEAD" }
+$headProbe = Invoke-NativeProcess -Command "git" -ArgumentList @("-C", $repo, "rev-parse", "--short", $proofCommit)
+if ($headProbe.ExitCode -ne 0) { throw "Could not resolve the expected source commit before install. $(Get-FirstNonEmptyLine $headProbe.StdErr)" }
+$expectedShortCommit = $headProbe.StdOut.Trim()
+if (-not $expectedShortCommit) { throw "Expected source commit was empty before install." }
+if (-not (Select-String -Path $releaseExe -Pattern $expectedShortCommit -Quiet)) {
+  throw "STALE BUILD: target\release\compy.exe does not embed receipt-bound commit ($expectedShortCommit). Run: cargo clean -p compy --release --manifest-path src-tauri/Cargo.toml && npm run tauri build"
 }
 
 # 0b) DIRTY-STAMP GATE (bug→guard, 2026-07-14): a build cut from a dirty tree stamps "+dirty" and
@@ -152,35 +158,40 @@ $left = Get-Process compy -ErrorAction SilentlyContinue
 if ($left) { throw "compy process(es) still alive 20s after close+kill (PID $(($left.Id) -join ', ')) — a helper that won't self-exit is a real defect (and would hold the exe lock through the install); investigate before shipping." }
 Start-Sleep -Milliseconds 600
 
-# 2) Desktop hygiene is a recoverable replacement. Copy and hash the new installer first, preserve
-# every prior installer in a temporary backup, then atomically move the verified copy into place.
-# The backup is deleted only after installation succeeds; a failed install leaves evidence intact.
-$dest = Join-Path $desk "Compy_${ver}_x64-setup.exe"
-$incoming = Join-Path $desk (".compy-incoming-" + [guid]::NewGuid().ToString("N") + ".exe")
-$desktopBackup = Join-Path ([System.IO.Path]::GetTempPath()) ("compy-desktop-installers-" + [guid]::NewGuid().ToString("N"))
-Copy-Item -LiteralPath $nsis -Destination $incoming
-if ((Get-FileHash -LiteralPath $incoming -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $nsis -Algorithm SHA256).Hash) {
-  throw "Desktop staging copy does not match the canonical NSIS installer."
-}
-New-Item -ItemType Directory -Path $desktopBackup | Out-Null
-$priorInstallers = @(Get-ChildItem $desk -File -ErrorAction SilentlyContinue |
-  Where-Object { $_.FullName -ne $incoming -and $_.Name -like "Compy*" -and ($_.Extension -eq ".exe" -or $_.Extension -eq ".msi") })
-foreach ($priorInstaller in $priorInstallers) {
-  Copy-Item -LiteralPath $priorInstaller.FullName -Destination (Join-Path $desktopBackup $priorInstaller.Name)
-  Remove-Item -LiteralPath $priorInstaller.FullName -Force
-}
-Move-Item -LiteralPath $incoming -Destination $dest -Force
-$sha = (Get-FileHash $dest -Algorithm SHA256).Hash
+# 2-3) A journal rerun uses ProofOnly: it re-proves the real installed payload and mounted shell
+# without reinstalling or changing Desktop artifacts. A first proof stages and installs the exact
+# receipt-bound NSIS through the recoverable replacement path.
+$desktopBackup = $null
+if ($ProofOnly) {
+  $dest = $nsis
+  $sha = (Get-FileHash -LiteralPath $nsis -Algorithm SHA256).Hash
+} else {
+  $dest = Join-Path $desk "Compy_${ver}_x64-setup.exe"
+  $incoming = Join-Path $desk (".compy-incoming-" + [guid]::NewGuid().ToString("N") + ".exe")
+  $desktopBackup = Join-Path ([System.IO.Path]::GetTempPath()) ("compy-desktop-installers-" + [guid]::NewGuid().ToString("N"))
+  Copy-Item -LiteralPath $nsis -Destination $incoming
+  if ((Get-FileHash -LiteralPath $incoming -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $nsis -Algorithm SHA256).Hash) {
+    throw "Desktop staging copy does not match the canonical NSIS installer."
+  }
+  New-Item -ItemType Directory -Path $desktopBackup | Out-Null
+  $priorInstallers = @(Get-ChildItem $desk -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -ne $incoming -and $_.Name -like "Compy*" -and ($_.Extension -eq ".exe" -or $_.Extension -eq ".msi") })
+  foreach ($priorInstaller in $priorInstallers) {
+    Copy-Item -LiteralPath $priorInstaller.FullName -Destination (Join-Path $desktopBackup $priorInstaller.Name)
+    Remove-Item -LiteralPath $priorInstaller.FullName -Force
+  }
+  Move-Item -LiteralPath $incoming -Destination $dest -Force
+  $sha = (Get-FileHash $dest -Algorithm SHA256).Hash
 
-# 3) Silent install (per-user → no UAC). A hung installer must stop the release train rather than
-# hold the owner shell forever; leave its PID visible for manual inspection instead of killing a
-# possibly mid-transaction installer and pretending rollback is safe.
-$installResult = Invoke-NativeProcess -Command $dest -ArgumentList @("/S") -TimeoutMs 180000 -KillTreeOnTimeout $false
-if ($installResult.TimedOut) {
-  throw "Silent install timed out after 180 seconds (PID $($installResult.ProcessId)). Publication remains blocked; inspect the installer before retrying. Prior Desktop installers remain preserved at $desktopBackup."
-}
-if ($installResult.ExitCode -ne 0) {
-  throw "Silent install failed: exit $($installResult.ExitCode). Prior Desktop installers remain preserved at $desktopBackup."
+  # Silent install (per-user -> no UAC). Leave a hung installer visible rather than killing it
+  # mid-transaction and pretending rollback is safe.
+  $installResult = Invoke-NativeProcess -Command $dest -ArgumentList @("/S") -TimeoutMs 180000 -KillTreeOnTimeout $false
+  if ($installResult.TimedOut) {
+    throw "Silent install timed out after 180 seconds (PID $($installResult.ProcessId)). Publication remains blocked; inspect the installer before retrying. Prior Desktop installers remain preserved at $desktopBackup."
+  }
+  if ($installResult.ExitCode -ne 0) {
+    throw "Silent install failed: exit $($installResult.ExitCode). Prior Desktop installers remain preserved at $desktopBackup."
+  }
 }
 
 # 4) Prove the installed payload and Windows app metadata both match the staged release.
@@ -194,8 +205,8 @@ if (-not (Test-Path $exe)) { throw "Installed exe not found after install: $exe"
 # "an OLDER build got installed" — caught precisely by the env!("COMPY_GIT_HASH") short hash baked
 # into the exe (the same Gate-0 proof run against the staged binary) plus the ProductVersion check
 # below. (bug->guard 2026-07-23; matches CLAUDE.md ship-LAW: verify by stamp, not exe hash.)
-if (-not (Select-String -Path $exe -Pattern $head -Quiet)) {
-  throw "INSTALLED-BINARY STALE: installed compy.exe does not embed HEAD commit $head; a wrong/older build is installed."
+if (-not (Select-String -Path $exe -Pattern $expectedShortCommit -Quiet)) {
+  throw "INSTALLED-BINARY STALE: installed compy.exe does not embed receipt-bound commit $expectedShortCommit; a wrong/older build is installed."
 }
 $installedVersion = (Get-Item $exe).VersionInfo.ProductVersion
 if ($installedVersion -ne $ver) {
@@ -255,7 +266,14 @@ if (-not $NoLaunch) {
         }
       }
     }
-    $normalLaunch = Start-NativeProcess -Command $exe
+    Wait-LoopbackPortClosed -Port $debugPort -TimeoutMs 10000
+    $normalLaunch = Start-NativeProcess -Command $exe -Environment @{
+      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $null
+    }
+    Start-Sleep -Seconds 3
+    if ($normalLaunch.HasExited) {
+      throw "RUNTIME PROOF FAILED: normal relaunch exited during the health window (exit $($normalLaunch.ExitCode))."
+    }
     $normalLaunch.Dispose()
   } else {
     $normalLaunch = Start-NativeProcess -Command $exe
@@ -263,7 +281,7 @@ if (-not $NoLaunch) {
   }
 }
 
-if (Test-Path -LiteralPath $desktopBackup -PathType Container) {
+if ($desktopBackup -and (Test-Path -LiteralPath $desktopBackup -PathType Container)) {
   Remove-Item -LiteralPath $desktopBackup -Recurse -Force
 }
 
