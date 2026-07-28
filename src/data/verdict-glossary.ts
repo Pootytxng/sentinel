@@ -54,8 +54,9 @@ const BY_VERDICT = VERDICT_GLOSSARY.reduce(
 // returns the English chip/definition below, same as before. Pass `t` (from useTranslation(), or
 // threaded through like Learn.tsx's hitPill(h, t) for module-scope helpers) to get the localized
 // string, keyed off this same English text as the defaultValue so a missing translation degrades to
-// English rather than a raw key. The "Real"/"Placebo"/"Risky — refused" chips are Compy's own coined
-// vocabulary (see file header) and are deliberately NOT translated in zh-CN — only `definition` is.
+// English rather than a raw key. The "Real"/"Placebo"/"Risky — refused" chips ARE localized in zh-CN as
+// of 2026-07-24 (owner decision) — zh vocab lives in blackbook.json: verdictGlossary.{v}.chip (full
+// badge) + learn.verdictFilters.{v} (short filter form). English stays the defaultValue fallback.
 /** Chip label for a verdict — the single source that replaces Learn's old local VERDICT_LABEL. */
 export const verdictChip = (v: TweakVerdict, t?: TFunction): string =>
   t ? t(`blackbook.verdictGlossary.${v}.chip`, BY_VERDICT[v].chip) : BY_VERDICT[v].chip;

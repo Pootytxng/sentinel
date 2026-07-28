@@ -24,29 +24,39 @@
   password-manager attachment or your personal cloud. **Lose it** → the fleet can never receive
   another update (one-time re-send of new-key builds required). **Leak it** → whoever holds it can
   push code to every install. Same custody class as the remote-rules key law.
-- ⏳ **Send the six invitees the first updater-enabled build — the last manual send ever.** Their
-  current installs (0.9.0/0.1.0) have NO updater and cannot hear about updates until they install
-  one build that does. Send the v0.9.3 installer:
-  `https://github.com/Pootytxng/compy-releases/releases/latest` (direct exe link on that page).
-  After they install it once, every future patch reaches them in-app ("update ready" pill →
-  one click). Timing/wording is yours — distribution is owner territory.
+- ⏳ **Send the first updater-enabled build as a one-tester canary, then expand to the remaining
+  invitees once it proves clean.** Their current installs (0.9.0/0.1.0) have NO updater and cannot
+  hear about updates until they install one build that does. Do **not** send the stale v0.9.3
+  installer, and do **not** send the unpublished local **v0.9.8** build (`d9ced24`) — that one exists
+  only in this clone and on your own machine. Cut a fresh candidate only after the zh-CN vocabulary
+  completion is integrated on `main` and the **full local gate set** passes (hosted Actions stay off
+  by your standing decision — see B7 — so **local IS the gate**), then prove the update on your own
+  box before any canary send. The release page is
+  `https://github.com/Pootytxng/compy-releases/releases/latest`. After a tester installs the canary
+  once, future patches reach them in-app ("update ready" pill → one click). Timing, signing,
+  publication, and distribution are owner territory.
 
-### A0b. zh-CN (Simplified Chinese) build — verified SHIP-READY, awaiting your merge + publish GO (2026-07-23)
+### A0b. zh-CN (Simplified Chinese) — base translation merged; publish GO still held (updated 2026-07-27)
 
-Branch `i18n/zh-CN` = current `main` + 3 clean commits: full zh-CN translation `100ace3`, plus two
-reversible tooling fixes (ship-gate `e22be5e`, QA-probe `719408b`). Version **0.9.7** everywhere —
-main, branch, the one Desktop installer, and the live installed build all agree, no drift. End-to-end
-smoke **PASS**: EN↔ZH switch clean (no reload), every surface translated, no raw i18n keys, no crashes;
-live==build proven by stamp (`100ace3 · release`). Feedback surface (`c51f3bb`) already included.
-Two owner calls, both **HELD** (never self-authorized):
+The full zh-CN translation (`100ace3`) and the reversible ship/QA fixes (`e22be5e`, `719408b`) are
+already on live `origin/main` at `20306bc` — the old merge hold is **closed**. Your 2026-07-24
+follow-up also settled the vocabulary taste call: user-visible Real/Placebo/Risky labels are localized
+as 真有效 / 安慰剂 / 有风险, with the full refusal badge 有风险 — 已拒绝. That completion ships with a
+regression guard that rejects visible English verdict vocabulary anywhere in the zh-CN Black Book
+(interpolation placeholder names excluded).
 
-- ⏳ **Merge `i18n/zh-CN` → `main`** — clean fast-forward (main hasn't moved since the fork). Needs your
-  explicit "merge it" (per the shared-main per-PR rule).
-- ⏳ **Publish into the in-app updater** (ships zh-CN to the six invitees) — owner territory + signing-key
-  custody. Your GO.
+- ✅ **Merge the base zh-CN cut into `main`** — complete at `20306bc`.
+- ✅ **Localize the verdict vocabulary** — your decision, resolved; completion + regression guard are
+  integrated on the `integration/v0.9.8-hardened` candidate (not yet on `main`).
+- ⏳ **Publish into the in-app updater** — owner territory + signing-key custody. Nothing is published
+  today: the newest **published** release is **v0.9.7** (`1d9bad6`) and the public updater manifest
+  still advertises **0.9.7**. Your GO.
 
-Optional taste call: Lab verdict labels (Real/Placebo/Risky) stay English by brand design — say if you
-want them localized.
+**Hosted CI is not on this list — by your own standing decision.** GitHub refuses every job before
+runner startup under the account's $0 Actions budget; that was declined as a zero-budget-law spend
+gate on 2026-07-16 (B7). It is a settled configuration, **not an open owner obligation** — nobody is
+waiting on you to "restore CI," and you will not be asked for a billing change or budget raise again.
+The full gate set runs locally instead.
 
 ### A1. Gaming Mode QA — ✅ CLOSED: SIGNED OFF (owner, 2026-07-14)  ·  full list: [`GAMING_MODE_QA.md`](GAMING_MODE_QA.md)
 

@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
@@ -89,7 +89,7 @@ function readGradeKeySeen(): boolean {
 
 // Browse-mode "How we grade" key: full on first view, a re-openable toggle thereafter. The "seen"
 // flag is written once the full key has been shown, so later visits open collapsed.
-function CollapsibleGradeKey() {
+function CollapsibleGradeKey({ suppressed = false }: { suppressed?: boolean }) {
   const { t } = useTranslation();
   const [seen] = useState(readGradeKeySeen);
   const [open, setOpen] = useState(!seen);
@@ -101,6 +101,7 @@ function CollapsibleGradeKey() {
       /* localStorage unavailable — degrade to per-render expanded */
     }
   }, [seen]);
+  if (suppressed) return null;
   if (open) {
     return (
       <div className="lx-gradekey-wrap">
@@ -173,7 +174,15 @@ function detectUrlPaste(text: string): "youtube" | "webpage" | null {
   return /(?:youtube\.com|youtu\.be)/i.test(urls.join(" ")) ? "youtube" : "webpage";
 }
 
-function EntryBody({ entry, onNavigate }: { entry: KnowledgeEntry; onNavigate: (id: string) => void }) {
+function EntryBody({
+  entry,
+  onNavigate,
+  showInlineVerdict = true,
+}: {
+  entry: KnowledgeEntry;
+  onNavigate: (id: string) => void;
+  showInlineVerdict?: boolean;
+}) {
   const { t, i18n } = useTranslation();
   // The "How Compy grades things" entry renders the visible key as its body (same single source).
   if (entry.id === VERDICT_GLOSSARY_ENTRY_ID && entry.type === "term") {
@@ -191,7 +200,7 @@ function EntryBody({ entry, onNavigate }: { entry: KnowledgeEntry; onNavigate: (
   return (
     <>
       {entry.status && <SupersededNote entry={entry} onNavigate={onNavigate} />}
-      {entryTypeBody(entry, t)}
+      {entryTypeBody(entry, t, showInlineVerdict)}
     </>
   );
 }
@@ -247,19 +256,21 @@ function SupersededNote({
   );
 }
 
-function entryTypeBody(entry: KnowledgeEntry, t: TFunction) {
+function entryTypeBody(entry: KnowledgeEntry, t: TFunction, showInlineVerdict = true) {
   switch (entry.type) {
     case "tweak":
       return (
         <>
-          <div className="lx-row">
-            <span
-              className={`lx-verdict lx-verdict-${entry.verdict}`}
-              title={verdictDefinition(entry.verdict, t)}
-            >
-              {verdictChip(entry.verdict, t)}
-            </span>
-          </div>
+          {showInlineVerdict && (
+            <div className="lx-row">
+              <span
+                className={`lx-verdict lx-verdict-${entry.verdict}`}
+                title={verdictDefinition(entry.verdict, t)}
+              >
+                {verdictChip(entry.verdict, t)}
+              </span>
+            </div>
+          )}
           <p className="lx-what">{entry.what}</p>
           <p className="lx-why">{entry.why}</p>
         </>
@@ -311,12 +322,14 @@ function typePill(type: KnowledgeType, t: TFunction): string {
 function EntryCard({
   entry,
   defaultOpen = false,
+  onOpenChange,
   onNavigate,
   registerRef,
   vendor,
 }: {
   entry: KnowledgeEntry;
   defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
   onNavigate: (id: string) => void;
   registerRef: (el: HTMLDivElement | null) => void;
   vendor: GpuVendor;
@@ -325,6 +338,10 @@ function EntryCard({
   // §5 de-overload: rows are COMPRESSED to name + kind + one-liner and expand IN PLACE (the same
   // expand grammar the autopsy uses). Deep-linked entries open by default. Zero copy changes.
   const [open, setOpen] = useState(defaultOpen);
+  useLayoutEffect(() => {
+    onOpenChange?.(open);
+    return () => onOpenChange?.(false);
+  }, [onOpenChange, open]);
   const related = relatedIds(entry, knowledgeForLanguage(i18n.language));
   const walkthrough = walkthroughForKeyForLanguage(entry.id, i18n.language);
   // Tweak cards take the verdict color on their edge; other types take their kind color.
@@ -496,7 +513,7 @@ function AutopsyResultView({
                 </button>
                 {open && entry && (
                   <div className="lx-hit-detail">
-                    <EntryBody entry={entry} onNavigate={onNavigate} />
+                    <EntryBody entry={entry} onNavigate={onNavigate} showInlineVerdict={false} />
                     {/* Deliberate travel only — the quiet full-entry link, per the continuity law. */}
                     <button className="lx-howto" onClick={() => onNavigate(h.id)}>
                       {t("blackbook.learn.autopsy.openFullEntry")}
@@ -721,6 +738,7 @@ export default function Learn({
     (verdict !== "all" ? 1 : 0) + (topic !== "all" ? 1 : 0) + (fits !== "all" ? 1 : 0);
   const [openCats, setOpenCats] = useState<Set<KnowledgeType>>(new Set()); // §5 collapsed categories
   const [focused, setFocused] = useState<string | null>(focusId);
+  const [gradeKeyEntryOpen, setGradeKeyEntryOpen] = useState(false);
   const [phIdx, setPhIdx] = useState(0);
   // Motion law: gate on the project's resolved pref (Compy motion is ON by default and OVERRIDES OS
   // reduce-motion), NEVER raw matchMedia — the owner's WebView2 reports reduce=true, which had silently
@@ -986,7 +1004,7 @@ export default function Learn({
               {/* The visible "How we grade" key — gives the verdict filter chips above their meaning
                   (foam-pit law: on the page, not hover-only). Full on a reader's first browse, a quiet
                   re-openable toggle thereafter so it stops re-claiming a block every visit. */}
-              <CollapsibleGradeKey />
+              <CollapsibleGradeKey suppressed={gradeKeyEntryOpen} />
               {results.length === 0 ? (
                 <div className="lx-empty">{t("blackbook.learn.empty")}</div>
               ) : !deferredQ.trim() && filter === "all" && verdict === "all" && topic === "all" && fits === "all" ? (
@@ -1034,6 +1052,9 @@ export default function Learn({
                                 key={e.id === focused ? `${e.id}-f` : e.id}
                                 entry={e}
                                 defaultOpen={e.id === focused}
+                                onOpenChange={
+                                  e.id === VERDICT_GLOSSARY_ENTRY_ID ? setGradeKeyEntryOpen : undefined
+                                }
                                 onNavigate={navigateTo}
                                 vendor={vendor}
                                 registerRef={(el) => {
@@ -1056,6 +1077,9 @@ export default function Learn({
                       key={e.id === focused ? `${e.id}-f` : e.id}
                       entry={e}
                       defaultOpen={e.id === focused}
+                      onOpenChange={
+                        e.id === VERDICT_GLOSSARY_ENTRY_ID ? setGradeKeyEntryOpen : undefined
+                      }
                       onNavigate={navigateTo}
                       vendor={vendor}
                       registerRef={(el) => {
