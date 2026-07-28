@@ -31,18 +31,19 @@
   installer, and do **not** send the **v0.9.9** build (`664aa5e`) that previously ran on your machine
   — v0.9.9 was source-tagged and owner-installed but its publish failed closed, so it exists on no
   public page and is not republishable. Also do **not** send the preserved **v0.9.10 / 92c7608**
-  private-draft checkpoint: it was installed locally and its draft assets are byte-correct, but the
-  release-infrastructure repair must land after its immutable source tag. The send candidate is the
-  next receipt-bound version prepared from repaired `main` (**v0.9.11**). The zh-CN vocabulary
-  completion is integrated on `main`, so the remaining precondition is the **full local gate set**
-  (hosted Actions stay off by your standing decision — see B7 — so **local IS the gate**), then a
-  proven update on your own box before any canary send. The release page is
+  private-draft checkpoint: it was installed locally and its draft assets are byte-correct, but it
+  remains an unpublished private draft pending your cleanup decision. **The send candidate is now
+  live: v0.9.11 (`7ba5fb6`) published 2026-07-28** — public release id `361056355`, installer
+  SHA-256 `bb2b85a4…5438384f`, manifest `0.9.11`, signature verified, and your own box runs those
+  exact bytes. The remaining precondition is met (full local gate set green; hosted Actions stay off
+  by your standing decision — see B7 — so **local IS the gate**), so nothing blocks the canary send
+  but your pick of tester. The release page is
   `https://github.com/Pootytxng/compy-releases/releases/latest`. After a tester installs the canary
   once, future patches reach them in-app ("update ready" pill → one click). Key custody/rotation,
   Authenticode enrollment, publication, distribution, and external timing are owner territory;
   protected use of the existing updater key inside an authorized local release train is engineering.
 
-### A0b. zh-CN (Simplified Chinese) — base translation merged; publish GO still held (updated 2026-07-27)
+### A0b. zh-CN (Simplified Chinese) — ✅ CLOSED: merged AND published in v0.9.11 (updated 2026-07-28)
 
 The full zh-CN translation (`100ace3`) and the reversible ship/QA fixes (`e22be5e`, `719408b`) are
 already on live `origin/main` at `20306bc` — the old merge hold is **closed**. Your 2026-07-24
@@ -54,11 +55,10 @@ regression guard that rejects visible English verdict vocabulary anywhere in the
 - ✅ **Merge the base zh-CN cut into `main`** — complete at `20306bc`.
 - ✅ **Localize the verdict vocabulary** — your decision, resolved; completion + regression guard are
   integrated and now merged on `main` at `d000295`.
-- ⏳ **Publish into the in-app updater** — the single remaining fleet-visible owner action after the
-  repaired train prepares and locally proves the next candidate. The newest **published** release and
-  public updater manifest remain **v0.9.7** (`1d9bad6`). v0.9.9 never reached `compy-releases`;
-  v0.9.10 reached a private draft but was never published. Both are preserved checkpoints, so the
-  next publishable candidate is **v0.9.11**. Your later GO runs the one resumable publish command.
+- ✅ **Publish into the in-app updater** — done. Your GO published **v0.9.11** (`7ba5fb6`) on
+  2026-07-28; the public updater manifest now reads **0.9.11**, so the zh-CN completion is
+  fleet-visible. v0.9.9 never reached `compy-releases`; v0.9.10 remains an unpublished private draft
+  (preserved checkpoints, untouched). The only fleet action still on you is the canary pick (A0).
 
 **Hosted CI is not on this list — by your own standing decision.** GitHub refuses every job before
 runner startup under the account's $0 Actions budget; that was declined as a zero-budget-law spend
@@ -214,8 +214,8 @@ rides a later Lab phase, tracked in [`BACKLOG.md`](BACKLOG.md).
 ### B2. Next updater canary distribution — go / no-go  ·  ⏳
 
 The six original invitees already received the verified 0.9.0 link. The former
-`beta-001`-versus-0.9.1 choice is closed; do not resend either historical artifact. After the next
-receipt-bound candidate is published and proves its updater path on the owner machine, the only
+`beta-001`-versus-0.9.1 choice is closed; do not resend either historical artifact. **Publication is
+now done — v0.9.11 (`7ba5fb6`) is public and proved on the owner machine** — so the only remaining
 distribution decision is **which one tester receives that canary first**. Publication and the
 recipient/send remain separate owner actions.
 

@@ -324,7 +324,7 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
-### Cycle 2026-07-28a — 🔧 RELEASE AUTONOMY + RESUMABILITY REPAIR IN PROGRESS
+### Cycle 2026-07-28a — ✅ RELEASE AUTONOMY + RESUMABILITY REPAIR → **v0.9.11 PUBLISHED**
 
 - Live verification superseded the 2026-07-27a release snapshot below: source `main` and source tag
   v0.9.10 already resolved to `92c7608`; the owner machine already ran 0.9.10; and
@@ -332,8 +332,17 @@ queued).
   updater manifest remained v0.9.7.
 - The immutable v0.9.10 candidate is preserved at
   `C:\Users\Kuya\code\compy-release-evidence\2026-07-28-v0.9.10-private-draft-92c7608\`.
-  The release-engineering repair must land after its tag, so the next publishable candidate is
-  v0.9.11. No public release or tester distribution is authorized by this cycle.
+  The release-engineering repair must land after its tag, so the next publishable candidate was
+  v0.9.11. v0.9.10 stays an **unpublished private draft** (`360948018`) pending a separate cleanup
+  decision — untouched by the publish train.
+- **Publish outcome (owner GO, 2026-07-28):** **v0.9.11 / `7ba5fb6` is PUBLIC** — release id
+  `361056355`, `draft:false`, `prerelease:false`, published `14:44:17Z`; installer SHA-256
+  `bb2b85a4…5438384f` and manifest SHA-256 `6bcd6cea…b76b007` both byte-match the signed receipt;
+  updater signature verifies; public manifest now serves `0.9.11`; owner box runs `0.9.11` /
+  `7ba5fb6 · release · shell 0.9.11`. Resumable transaction **complete 9/9**, closing on
+  `public_assets_verified`. Three tooling repairs landed with it (`03c41e8` list-not-tag release
+  lookup · `b6a50fa` PS 5.1 nested-JSON prerelease misparse · `c0fed45` latest-alias propagation
+  wait). **No tester distribution yet** — the canary pick is still an owner action.
 - Durable authority lives in `docs/RELEASE_AUTONOMY.md`: failed reversible gates trigger
   preserve → diagnose → guard → repair → commit/push → resume. Only fleet-visible publication,
   distribution, secrets/key rotation, security settings, destructive Git, spending, and
