@@ -324,6 +324,38 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
+### Cycle 2026-07-27a — ✅ FORENSIC RECONCILIATION + SILENT-CORRUPTION REPAIR (CC): `15efc54` + `27c5f4b` on `chore/ci-encoding-and-state-truth` — **unpushed, unmerged**
+
+- **Two silent defects, both now guarded.** (1) **Mojibake:** `scripts/release.ps1` read-modify-writes
+  5 files per version bump; under **Windows PowerShell 5.1** `Get-Content -Raw` decodes BOM-less files
+  as CP1252, so the UTF-8 writer double-encoded them. Reproduced on this host (em-dash → `c3 a2 e2 82
+  ac e2 80 9d`). Fixed at the source with `Read-Utf8`; repaired 690 lines across
+  `RELEASE_STATE_HISTORY.md`, `.claude/skills/INDEX.md`, `Cargo.toml`. `333b725` ("demojibake") had
+  fixed 2 of 44 lines and closed the item — a human eyeball already failed on this class.
+  Guard `scripts/encoding-guard.mjs` + 10 tests (runs in CI via `npm test`); 1020 tracked files clean.
+  (2) **Unverified state anchor:** `source_main_commit=cff77ab` while `origin/main` was 16 commits on
+  at `20306bc`, and `verify-release-state.mjs` passed — it checks where a citation LIVES, never
+  whether the value is true. 3 anchors re-stamped; new check (6) resolves the commit, requires
+  mainline ancestry, fails past `MAX_ANCHOR_LAG=10` (16 commits accrued in ONE day, so a loose bound
+  would have missed this), and skips-not-fails on shallow clones.
+- **🔴 Unpushed release, owner-gated.** Local `main` = `d9ced24` "release: v0.9.8" + annotated tag
+  `v0.9.8`, **neither on origin**. The owner's live app IS that build (embedded stamp `d9ced24`,
+  exe 0.9.8) — **his running app is reproducible only from this clone**, and corresponds to no
+  published release. Registry `DisplayVersion` still reads 0.9.7 (stale vs the binary; the embedded
+  stamp is truth). Push/publish/tag = owner territory, deliberately NOT done.
+- **zh-CN reconciled.** Base cut (`100ace3`,`e22be5e`,`719408b`,`c51f3bb`) **is** on `origin/main`;
+  the checklist there reads stale only because its correction sits in **`2461106`
+  ("finish zh-CN verdict vocabulary"), the one commit still unmerged on `i18n/zh-CN`** (real delta —
+  merge-tree ≠ main tree). ⚠️ **Merge-time correction required:** that commit's checklist adds
+  "⏳ Restore hosted CI" — which is the **$0-Actions-budget item the OWNER DECREE above permanently
+  declined.** Drop or re-word it to "CI stays red by owner decision" when merging; do not re-ask.
+- **Gates (local, all green):** doc-budget PASS · encoding-guard 1020 clean · verify-release-state
+  24/24, 0 drift · hooks-selftest 38/0 · cargo test 870 pass/0 fail · clippy `-D warnings` clean ·
+  vitest 196 files/1855 tests · `npm run build` ✓ · `release.ps1` parses. **Hosted CI cannot confirm
+  any of it — Actions blocked since Jul 9 by the owner's $0 budget (decree above). Local IS the gate.**
+- **Next:** owner call — push `chore/ci-encoding-and-state-truth`, and decide the `d9ced24`/`v0.9.8`
+  publish. Nothing here was pushed, tagged, merged, installed, or distributed.
+
 ### Cycle 2026-07-17a — ✅ INTELLIGENCE PHASE 1 SHIPPED (CC, owner directive `docs/reviews/2026-07-16-owner-directive-intelligence-platform.md` §5): `8f612d2` foundation + What-Changed read-only slice · `d45bb1c` game-name class sweep (bug→guard) · LIVE `d45bb1c`
 
 - **Train `8f612d2` (23 files, +3984/−28):** new `src-tauri/src/intelligence.rs` domain layer
