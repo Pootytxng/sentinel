@@ -309,8 +309,13 @@ if ($Mode -eq "publish" -or $Mode -eq "prove") {
   }
   $adapter = New-ProductionReleaseAdapter -Dependencies $context.Dependencies
   if ($Mode -eq "prove") {
-    $transaction = Invoke-ReleaseTransaction -Context $context -Adapter $adapter `
-      -JournalPath $transactionJournalPath -StopAfterStage "runtime_proved"
+    try {
+      $transaction = Invoke-ReleaseTransaction -Context $context -Adapter $adapter `
+        -JournalPath $transactionJournalPath -StopAfterStage "runtime_proved"
+    } catch {
+      Write-ReleaseFailureDiagnostic -Label "release transaction (prove)" -Failure $_
+      exit 1
+    }
     if ($transaction.StoppedAfter -ne "runtime_proved") {
       throw "Local release proof did not stop at runtime_proved."
     }
@@ -321,8 +326,15 @@ if ($Mode -eq "publish" -or $Mode -eq "prove") {
     exit 0
   }
 
-  $transaction = Invoke-ReleaseTransaction -Context $context -Adapter $adapter `
-    -JournalPath $transactionJournalPath -AllowPublication
+  try {
+    $transaction = Invoke-ReleaseTransaction -Context $context -Adapter $adapter `
+      -JournalPath $transactionJournalPath -AllowPublication
+  } catch {
+    # The transaction preserves exact state on failure; the operator needs the failing stage and the
+    # underlying cause here, not a bare nonzero exit relayed up through two wrappers.
+    Write-ReleaseFailureDiagnostic -Label "release transaction (publish)" -Failure $_
+    exit 1
+  }
   if (-not $transaction.Completed) {
     throw "Release transaction stopped before completion at $($transaction.StoppedAfter)."
   }

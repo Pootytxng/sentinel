@@ -75,6 +75,44 @@ if (mode === "high-volume") {
   }
   process.exit(0);
 }
+if (mode === "ordered-stream") {
+  // Interleaved on purpose: the two streams arrive through separate handlers, which is exactly the
+  // condition under which a racing relay reorders them.
+  for (let i = 1; i <= 60; i++) {
+    process.stdout.write("out-" + i + "\\n");
+    process.stderr.write("err-" + i + "\\n");
+  }
+  process.exit(0);
+}
+if (mode === "blank-stream") {
+  // A blank line is ordinary build output -- npm prints one immediately after its banner, which is
+  // precisely where verify-release.ps1 died. Emitted in every position that matters on BOTH streams:
+  // leading, interior, consecutive, and trailing.
+  process.stdout.write("\\n\\nout-a\\n\\n\\nout-b\\nout-c\\n\\n");
+  process.stderr.write("\\nerr-a\\n\\nerr-b\\n\\n\\n");
+  process.exit(0);
+}
+if (mode === "secrets" || mode === "secrets-fail") {
+  // Secret-SHAPED, never real. One line per redaction class, including the two MULTI-LINE forms a
+  // per-line pass cannot see: a PEM body sits between its markers, minisign key bytes sit after
+  // their header. The last line is ordinary build output: a relay that blanks everything after a
+  // secret is also broken, because the error it exists to show would be gone.
+  for (const line of [
+    "gh: request rejected for token ghp_CANARYTOKENaaaaaaaaaaaaaaaaaaaaaaaa",
+    "Authorization: Bearer CANARYBEARERbbbbbbbbbbbb",
+    "signing_key=CANARYASSIGNcccccccccccc",
+    "untrusted comment: minisign encrypted secret key",
+    "CANARYMINISIGNdddddddddddddddddddddd",
+    "-----BEGIN PRIVATE KEY-----",
+    "CANARYPEMBODYeeeeeeeeeeeeeeeeeeeeeeee",
+    "-----END PRIVATE KEY-----",
+    "tauri build failed at the bundling step",
+  ]) {
+    console.log(line);
+    console.error(line);
+  }
+  process.exit(mode === "secrets" ? 0 : 1);
+}
 if (mode === "child-hang") { setInterval(() => {}, 60000); }
 if (mode === "tree-hang") {
   const { spawn } = await import("node:child_process");
@@ -193,6 +231,80 @@ if ($modes.ContainsKey($Scenario)) {
     Write-Output "RESOLVED=[unreachable]"
   } catch {
     Write-Output ("THREW=" + $_.Exception.Message)
+  }
+} elseif ($Scenario -eq "streamed-order") {
+  # 6>$null: the live echo is not the subject here, the RETAINED order is. Split on a regex class
+  # rather than an escape sequence, because this harness is embedded in a JS template literal.
+  $result = Invoke-StreamedProcess "ordered gate" $NodeExe @($FakeGh, "ordered-stream") -TimeoutMs 30000 6>$null
+  $outLines = @($result.StdOut -split "[\r\n]+" | Where-Object { $_ -ne "" })
+  $errLines = @($result.StdErr -split "[\r\n]+" | Where-Object { $_ -ne "" })
+  $expectedOut = @(1..60 | ForEach-Object { "out-" + $_ })
+  $expectedErr = @(1..60 | ForEach-Object { "err-" + $_ })
+  Write-Output ("OUT_COUNT=" + $outLines.Count)
+  Write-Output ("ERR_COUNT=" + $errLines.Count)
+  Write-Output ("OUT_ORDERED=" + ([string]::Join("|", $outLines) -eq [string]::Join("|", $expectedOut)))
+  Write-Output ("ERR_ORDERED=" + ([string]::Join("|", $errLines) -eq [string]::Join("|", $expectedErr)))
+  Write-Output ("OUT_FIRST12_B64=" + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]::Join(" ", @($outLines | Select-Object -First 12)))))
+} elseif ($Scenario -eq "streamed-blank-lines") {
+  # 6>&1 captures the LIVE echo alongside the retained sink, because a blank line has to survive both
+  # surfaces: the sink is what poisoned the next relay bind, and the echo is what an operator reads.
+  $captured = @(Invoke-StreamedProcess "blank gate" $NodeExe @($FakeGh, "blank-stream") -TimeoutMs 30000 6>&1)
+  $records = @($captured | Where-Object { $_ -is [System.Management.Automation.InformationRecord] })
+  $result = @($captured | Where-Object { $_ -isnot [System.Management.Automation.InformationRecord] })[0]
+  $relay = @($records | ForEach-Object {
+    if ($null -ne $_.MessageData -and $null -ne $_.MessageData.Message) { [string]$_.MessageData.Message } else { [string]$_ }
+  })
+  Write-Output ("EXIT=" + $result.ExitCode)
+  # Base64 of the RAW joined text: a blank line is invisible in a console transcript, so it has to be
+  # carried through a lossless encoding to be assertable at all.
+  Write-Output ("RELAY_B64=" + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]::Join("|", $relay))))
+  Write-Output ("BLANK_OUT_B64=" + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$result.StdOut)))
+  Write-Output ("BLANK_ERR_B64=" + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$result.StdErr)))
+} elseif ($Scenario -eq "streamed-secret-relay") {
+  # 6>&1 captures what the relay ECHOES. The live transcript is the surface a credential would leak
+  # to, so redaction has to happen before the line is printed, not only inside the retained sink.
+  $captured = @(Invoke-StreamedProcess "signing gate" $NodeExe @($FakeGh, "secrets") -TimeoutMs 30000 6>&1)
+  $records = @($captured | Where-Object { $_ -is [System.Management.Automation.InformationRecord] })
+  $result = @($captured | Where-Object { $_ -isnot [System.Management.Automation.InformationRecord] })[0]
+  $relay = @($records | ForEach-Object {
+    if ($_.MessageData -and $_.MessageData.Message) { [string]$_.MessageData.Message } else { [string]$_ }
+  })
+  # Base64: console wrapping would corrupt a long diagnostic line before the assertion ever saw it.
+  Write-Output ("RELAY_B64=" + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]::Join("|", $relay))))
+  Write-Output ("SINK_B64=" + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$result.StdErr)))
+  Write-Output ("EXIT=" + $result.ExitCode)
+} elseif ($Scenario -eq "streamed-secret-diagnostic") {
+  $failure = $null
+  try {
+    Invoke-StreamedProcess "signing gate" $NodeExe @($FakeGh, "secrets-fail") -TimeoutMs 30000 6>$null | Out-Null
+  } catch {
+    $failure = $_
+  }
+  if ($null -eq $failure) {
+    Write-Output "THREW="
+  } else {
+    $inner = $failure.Exception
+    # Verbatim shape of release-transaction.ps1's stage wrapper, so the rendered chain is the real one.
+    $message = "Release transaction stage 'draft_created' failed during inspect: " + $inner.Message
+    $wrapped = New-Object System.Management.Automation.RuntimeException $message, $inner
+    $diagnostic = @(Write-ReleaseFailureDiagnostic -Label "release publish" -Failure $wrapped 6>&1 | ForEach-Object {
+      if ($_.MessageData -and $_.MessageData.Message) { [string]$_.MessageData.Message } else { [string]$_ }
+    })
+    Write-Output ("THREW_B64=" + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$inner.Message)))
+    Write-Output ("CLASSIFICATION=" + [string]$inner.Data["NativeClassification"])
+    Write-Output ("EXITCODE=" + [string]$inner.Data["NativeExitCode"])
+    Write-Output ("DIAG_B64=" + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]::Join("|", $diagnostic))))
+  }
+} elseif ($Scenario -eq "checked-secret-diagnostic") {
+  try {
+    Invoke-CheckedProcess "signing gate" $NodeExe @($FakeGh, "secrets-fail") -TimeoutMs 30000 | Out-Null
+    Write-Output "RESOLVED=[unreachable]"
+  } catch {
+    $inner = $_.Exception
+    Write-Output ("THREW_B64=" + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$inner.Message)))
+    Write-Output ("CLASSIFICATION=" + [string]$inner.Data["NativeClassification"])
+    Write-Output ("STDERR_TAIL_B64=" + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$inner.Data["NativeStdErrTail"])))
+    Write-Output ("STDOUT_TAIL_B64=" + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$inner.Data["NativeStdOutTail"])))
   }
 } elseif ($Scenario -eq "streamed-allows-expected") {
   $result = Invoke-StreamedProcess "streamed gate" $NodeExe @($FakeGh, "notfound") -TimeoutMs 30000 -AllowExitCodes @(1)
@@ -404,9 +516,130 @@ describe.runIf(windows)("native-process behaviour (bug->guard, both failed v0.9.
     expect(field("TIMEDOUT")).toBe("False");
   }, 60000);
 
-  it("still fails a streamed gate closed when the child exits nonzero", () => {
+  // bug->guard (2026-07-28, the v0.9.11 publish): the whole failure arrived as
+  // "release publish failed (exit 1)." An outer wrapper's exit status is not a diagnosis; the
+  // child's own first stderr line is the one fact an operator needs.
+  it("still fails a streamed gate closed, carrying the child's own stderr", () => {
     const { field } = run("streamed-failure");
-    expect(field("THREW")).toBe("streamed gate failed (exit 1).");
+    expect(field("THREW")).toBe("streamed gate failed (exit 1): gh: Bad credentials (HTTP 401)");
+  }, 60000);
+
+  const CANARIES = [
+    "CANARYTOKEN",
+    "CANARYBEARER",
+    "CANARYASSIGN",
+    "CANARYMINISIGN",
+    "CANARYPEMBODY",
+  ];
+  const decode = (value) => Buffer.from(value, "base64").toString("utf8");
+
+  // bug->guard (2026-07-28, found while proving the redaction below): the relay used
+  // Register-ObjectEvent -Action, and PowerShell runs each -Action block as a thread-pool job. Two
+  // racing handlers enqueued the child's lines OUT OF ORDER (measured: out-1 out-2 out-4 out-5
+  // out-3). A scrambled build log already fails the "surface useful stderr" bar -- but worse,
+  // multi-line redaction reads ADJACENT lines, so the reordering split a PEM block and printed its
+  // body in cleartext. Faithful order is therefore a SECURITY property here, not a cosmetic one.
+  it("relays both streams in the child's own order", () => {
+    const { field } = run("streamed-order");
+    expect(field("OUT_COUNT")).toBe("60");
+    expect(field("ERR_COUNT")).toBe("60");
+    expect(decode(field("OUT_FIRST12_B64"))).toBe(
+      "out-1 out-2 out-3 out-4 out-5 out-6 out-7 out-8 out-9 out-10 out-11 out-12",
+    );
+    expect(field("OUT_ORDERED")).toBe("True");
+    expect(field("ERR_ORDERED")).toBe("True");
+  }, 60000);
+
+  // bug->guard (2026-07-28, caught by the full verify-release.ps1 run of THIS repair, before commit):
+  // the relay sink is a List[string] bound to a MANDATORY parameter, and PowerShell validates a
+  // mandatory argument that implements IList ELEMENT BY ELEMENT. One blank line already in the sink
+  // therefore failed the NEXT relay call with "Cannot bind argument to parameter 'Sink' because it is
+  // an empty string" -- so `npm test`, which prints a blank line right after its banner, could not
+  // run through Invoke-StreamedProcess at all. [AllowEmptyCollection()] does not cover this;
+  // [AllowEmptyString()] is the decoration that permits an empty ELEMENT. The queue was never
+  // affected because ConcurrentQueue is not an IList, which is why the failure looked so arbitrary.
+  // No other fixture here emits a blank line, which is exactly why 25 passing guards missed it.
+  it("relays and retains blank child output lines instead of failing the sink bind", () => {
+    const { field } = run("streamed-blank-lines");
+    expect(field("EXIT")).toBe("0");
+    // Exact arrays: blanks preserved in every position, and no line collapsed, dropped or moved.
+    expect(decode(field("BLANK_OUT_B64")).split("\r\n")).toEqual([
+      "", "", "out-a", "", "", "out-b", "out-c", "",
+    ]);
+    expect(decode(field("BLANK_ERR_B64")).split("\r\n")).toEqual([
+      "", "err-a", "", "err-b", "", "",
+    ]);
+    // The live echo carries them too: a relay that silently swallowed blanks would still let the
+    // multi-line redaction state machine read the wrong adjacent line.
+    const relay = decode(field("RELAY_B64")).split("|");
+    expect(relay).toHaveLength(14);
+    expect(relay.filter((line) => line === "")).toHaveLength(9);
+    // Cross-stream interleaving is not deterministic; per-stream order is.
+    expect(relay.filter((line) => line.startsWith("out-"))).toEqual(["out-a", "out-b", "out-c"]);
+    expect(relay.filter((line) => line.startsWith("err-"))).toEqual(["err-a", "err-b"]);
+  }, 60000);
+
+  it("redacts every secret class from the live relay without blanking the rest of the build", () => {
+    const { out, field } = run("streamed-secret-relay");
+    const relay = decode(field("RELAY_B64"));
+    const sink = decode(field("SINK_B64"));
+    expect(field("EXIT")).toBe("0");
+    for (const canary of CANARIES) {
+      // Printed AND retained: a credential must survive neither surface.
+      expect(relay, relay).not.toContain(canary);
+      expect(sink, sink).not.toContain(canary);
+      // Nothing reaches the raw transcript either, base64 aside.
+      expect(out.replace(/^[A-Z_]+_B64=.*$/gm, ""), out).not.toContain(canary);
+    }
+    expect(relay).toContain("[REDACTED-TOKEN]");
+    expect(relay).toContain("[REDACTED]");
+    expect(relay).toContain("[REDACTED-SIGNING-MATERIAL]");
+    expect(relay).toContain("[REDACTED-PRIVATE-KEY]");
+    // Suppression is bounded: exactly the key material, not everything that follows it.
+    expect(relay).toContain("tauri build failed at the bundling step");
+    expect(sink).toContain("tauri build failed at the bundling step");
+  }, 60000);
+
+  it("prints the nested cause chain, stage, classification, exit code and redacted stderr", () => {
+    const { field } = run("streamed-secret-diagnostic");
+    const diagnostic = decode(field("DIAG_B64"));
+    expect(decode(field("THREW_B64"))).toBe(
+      "signing gate failed (exit 1): gh: request rejected for token [REDACTED-TOKEN]",
+    );
+    expect(field("CLASSIFICATION")).toBe("nonzero-exit");
+    expect(field("EXITCODE")).toBe("1");
+    expect(diagnostic).toContain("=== release publish FAILED ===");
+    // Outer stage context AND the innermost actionable cause, not either end alone.
+    expect(diagnostic).toContain("cause: Release transaction stage 'draft_created' failed during inspect");
+    expect(diagnostic).toContain("caused by: signing gate failed (exit 1)");
+    expect(diagnostic).toContain("failing stage: draft_created (inspect)");
+    expect(diagnostic).toContain("command: signing gate");
+    expect(diagnostic).toContain("classification: nonzero-exit");
+    expect(diagnostic).toContain("exit code: 1");
+    expect(diagnostic).toContain("stderr (tail):");
+    expect(diagnostic).toContain("tauri build failed at the bundling step");
+    expect(diagnostic).toContain("=== end release publish diagnostic ===");
+    for (const canary of CANARIES) {
+      expect(diagnostic, diagnostic).not.toContain(canary);
+    }
+  }, 60000);
+
+  it("redacts the captured-mode diagnostic tails the same way", () => {
+    const { field } = run("checked-secret-diagnostic");
+    const stdErrTail = decode(field("STDERR_TAIL_B64"));
+    const stdOutTail = decode(field("STDOUT_TAIL_B64"));
+    expect(decode(field("THREW_B64"))).toBe(
+      "signing gate failed (exit 1): gh: request rejected for token [REDACTED-TOKEN]",
+    );
+    expect(field("CLASSIFICATION")).toBe("nonzero-exit");
+    for (const canary of CANARIES) {
+      expect(stdErrTail, stdErrTail).not.toContain(canary);
+      expect(stdOutTail, stdOutTail).not.toContain(canary);
+    }
+    // Whole-text redaction is what catches a PEM block, whose markers straddle lines.
+    expect(stdErrTail).toContain("[REDACTED-PRIVATE-KEY]");
+    expect(stdErrTail).toContain("[REDACTED-SIGNING-MATERIAL]");
+    expect(stdErrTail).toContain("tauri build failed at the bundling step");
   }, 60000);
 
   it("lets a streamed caller allow an expected nonzero exit", () => {

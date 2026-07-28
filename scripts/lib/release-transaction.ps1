@@ -30,6 +30,26 @@ function Invoke-ReleaseScriptBlock {
   return & $ScriptBlock @ArgumentList
 }
 
+# A stage handler that throws is the most important diagnostic the pipeline produces, and it used to
+# surface as a bare message with no indication of WHICH stage or phase produced it. Rethrow with the
+# stage context attached and the original exception preserved as InnerException, so the wrapper can
+# print the real cause instead of an outer "exit 1".
+function Invoke-ReleaseStageHandler {
+  param(
+    [Parameter(Mandatory = $true)][string]$Stage,
+    [Parameter(Mandatory = $true)][ValidateSet("inspect", "apply")][string]$Phase,
+    [Parameter(Mandatory = $true)][scriptblock]$ScriptBlock,
+    [object[]]$ArgumentList = @()
+  )
+  try {
+    return Invoke-ReleaseScriptBlock -ScriptBlock $ScriptBlock -ArgumentList $ArgumentList
+  } catch {
+    $inner = $_.Exception
+    $message = "Release transaction stage '$Stage' failed during $Phase`: $($inner.Message)"
+    throw (New-Object System.Management.Automation.RuntimeException $message, $inner)
+  }
+}
+
 function Get-ReleaseTransactionBinding {
   param([Parameter(Mandatory = $true)][psobject]$Receipt)
   if ($Receipt.schema_version -ne 3) {
@@ -196,7 +216,7 @@ function Invoke-ReleaseTransaction {
     }
 
     # The journal is evidence, never authority: inspect real state on every invocation.
-    $inspection = Invoke-ReleaseScriptBlock -ScriptBlock $handler.Inspect -ArgumentList @($Context)
+    $inspection = Invoke-ReleaseStageHandler -Stage $stage -Phase "inspect" -ScriptBlock $handler.Inspect -ArgumentList @($Context)
     if (-not $inspection -or @("complete", "absent") -notcontains $inspection.Status) {
       throw "Release transaction stage '$stage' returned a malformed inspection result."
     }
@@ -212,8 +232,8 @@ function Invoke-ReleaseTransaction {
       if (-not $handler.Apply) {
         throw "Release transaction stage '$stage' is absent and has no Apply handler."
       }
-      Invoke-ReleaseScriptBlock -ScriptBlock $handler.Apply -ArgumentList @($Context)
-      $inspection = Invoke-ReleaseScriptBlock -ScriptBlock $handler.Inspect -ArgumentList @($Context)
+      Invoke-ReleaseStageHandler -Stage $stage -Phase "apply" -ScriptBlock $handler.Apply -ArgumentList @($Context)
+      $inspection = Invoke-ReleaseStageHandler -Stage $stage -Phase "inspect" -ScriptBlock $handler.Inspect -ArgumentList @($Context)
       if (-not $inspection -or $inspection.Status -ne "complete") {
         throw "Release transaction stage '$stage' did not verify as complete after its action."
       }

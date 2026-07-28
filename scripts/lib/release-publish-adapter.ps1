@@ -286,9 +286,97 @@ function Inspect-ProductionReleasesTag {
   return New-ProductionInspection "complete" @{ releases_tag_target = $actual }
 }
 
+# GitHub does not serve DRAFT releases from `GET /repos/{repo}/releases/{tag}`: that endpoint
+# answers 404 for a draft that demonstrably exists, because drafts are reachable only by numeric id
+# or through the authenticated releases list. A draft-sensitive stage resolved by tag therefore
+# reads "absent" for the draft it just created, so the transaction can never confirm its own work
+# (v0.9.11 failed exactly this way). The authenticated, paginated list is the authoritative lookup;
+# the numeric id it yields is what the precise read below -- and later stages -- use.
+#
+# Absence is the ONLY non-fatal outcome, and it is earned: a complete, well-formed listing that
+# contains no matching tag. Authentication, permission, rate-limit, network, timeout, nonzero exit,
+# empty body, malformed JSON, unexpected shape and incomplete pagination are all fatal, because
+# none of them are evidence that the release does not exist.
+function Get-ProductionReleasePage {
+  param(
+    [Parameter(Mandatory = $true)][psobject]$Context,
+    [Parameter(Mandatory = $true)][int]$Page,
+    [Parameter(Mandatory = $true)][int]$PageSize
+  )
+  $endpoint = "repos/$($Context.ReleasesRepo)/releases?per_page=$PageSize&page=$Page"
+  $result = Invoke-ProductionGhProcess -Context $Context -ArgumentList @("api", $endpoint) -TimeoutMs 300000
+  if ($result.TimedOut) {
+    throw "GitHub release listing timed out on page $Page for $($Context.ReleasesRepo). Network failure is not absence."
+  }
+  if ($result.ExitCode -ne 0) {
+    $detail = Get-FirstNonEmptyLine $result.StdErr
+    if (-not $detail) { $detail = Get-FirstNonEmptyLine $result.StdOut }
+    $class = if (Test-GhNotFound $result) { "not-found" } else { "failure" }
+    throw "GitHub release listing failed on page $Page for $($Context.ReleasesRepo) (exit $($result.ExitCode), $class). Authentication, permission, rate-limit, network and not-found failures are all fatal here; none of them mean the release is absent. $detail"
+  }
+  $raw = [string]$result.StdOut
+  if ([string]::IsNullOrWhiteSpace($raw)) {
+    throw "GitHub release listing returned an empty response on page $Page for $($Context.ReleasesRepo)."
+  }
+  if (-not $raw.TrimStart().StartsWith("[")) {
+    throw "GitHub release listing returned an unexpected response shape on page $Page for $($Context.ReleasesRepo); a JSON array was required."
+  }
+  try {
+    $parsed = $raw | ConvertFrom-Json
+  } catch {
+    throw "GitHub release listing returned malformed JSON on page $Page for $($Context.ReleasesRepo)."
+  }
+  return @($parsed)
+}
+
+function Get-ProductionReleaseList {
+  param([Parameter(Mandatory = $true)][psobject]$Context)
+  $pageSize = 100
+  $maxPages = 100
+  $releases = New-Object System.Collections.Generic.List[psobject]
+  for ($page = 1; $page -le $maxPages; $page++) {
+    $batch = Get-ProductionReleasePage -Context $Context -Page $page -PageSize $pageSize
+    foreach ($entry in $batch) {
+      if ($null -eq $entry.id -or [string]::IsNullOrWhiteSpace([string]$entry.tag_name)) {
+        throw "GitHub release listing returned an entry without an id and tag on page $page for $($Context.ReleasesRepo)."
+      }
+      $releases.Add($entry)
+    }
+    # A short page is the documented end of the listing; a full page is never assumed to be the last.
+    if ($batch.Count -lt $pageSize) { return @($releases.ToArray()) }
+  }
+  throw "GitHub release listing for $($Context.ReleasesRepo) exceeded $maxPages pages; refusing to act on an incompletely paginated listing."
+}
+
 function Get-ProductionRelease {
   param([Parameter(Mandatory = $true)][psobject]$Context)
-  return Get-ProductionGhApi -Context $Context -Endpoint "repos/$($Context.ReleasesRepo)/releases/tags/$($Context.Receipt.tag)" -AllowNotFound
+  $tag = [string]$Context.Receipt.tag
+  $releases = Get-ProductionReleaseList -Context $Context
+  $exact = @($releases | Where-Object { [string]$_.tag_name -ceq $tag })
+  $variant = @($releases | Where-Object { [string]$_.tag_name -ieq $tag -and [string]$_.tag_name -cne $tag })
+  if ($variant.Count -gt 0) {
+    $names = (@($variant | ForEach-Object { [string]$_.tag_name }) | Sort-Object -Unique) -join ", "
+    throw "GitHub releases for $($Context.ReleasesRepo) contain case-variant tags for ${tag}: $names. Refusing to act on an ambiguous release namespace."
+  }
+  if ($exact.Count -eq 0) {
+    return [pscustomobject]@{ Found = $false; Value = $null }
+  }
+  if ($exact.Count -gt 1) {
+    $ids = (@($exact | ForEach-Object { [string]$_.id }) | Sort-Object) -join ", "
+    throw "Duplicate GitHub releases for tag ${tag} in $($Context.ReleasesRepo) (ids $ids). Refusing to act on an ambiguous release."
+  }
+  $releaseId = [string]$exact[0].id
+  if ($releaseId -notmatch '^\d+$') {
+    throw "GitHub release listing returned a malformed release id for tag ${tag} in $($Context.ReleasesRepo)."
+  }
+  # The listing proved existence; this precise by-id read is the authoritative object (drafts
+  # included). Any failure here is fatal -- a release that just listed cannot be "absent".
+  $precise = Get-ProductionGhApi -Context $Context -Endpoint "repos/$($Context.ReleasesRepo)/releases/$releaseId"
+  $release = $precise.Value
+  if ([string]$release.id -ne $releaseId -or [string]$release.tag_name -cne $tag) {
+    throw "GitHub release $releaseId in $($Context.ReleasesRepo) did not read back as tag ${tag}. Refusing to act on an inconsistent release."
+  }
+  return [pscustomobject]@{ Found = $true; Value = $release }
 }
 
 function Assert-ProductionReleaseIdentity {

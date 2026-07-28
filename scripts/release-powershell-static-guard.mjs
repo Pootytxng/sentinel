@@ -69,6 +69,29 @@ const listPowerShell = (directory) =>
     return entry.name.toLowerCase().endsWith(".ps1") ? [path] : [];
   });
 
+const functionBody = (text, name) => {
+  const start = text.search(new RegExp(String.raw`function\s+${name}\b`, "i"));
+  if (start < 0) return null;
+  const open = text.indexOf("{", start);
+  if (open < 0) return null;
+  let depth = 0;
+  let quote = "";
+  for (let index = open; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (char === quote && text[index - 1] !== "`") quote = "";
+    } else if (char === '"' || char === "'") {
+      quote = char;
+    } else if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return text.slice(open + 1, index);
+    }
+  }
+  return null;
+};
+
 const braceDepthAt = (text, end) => {
   let depth = 0;
   let quote = "";
@@ -160,6 +183,10 @@ const requiredTokens = new Map([
     [
       "Test-GhNotFound $result",
       "exact annotated tag object and receipt commit",
+      '/releases?per_page=$PageSize&page=$Page',
+      "Get-ProductionReleaseList -Context $Context",
+      "incompletely paginated listing",
+      "Refusing to act on an ambiguous release.",
       "MissingDraftAssets",
       "downloaded draft signature verification",
       "Public tag-specific installer",
@@ -340,6 +367,61 @@ export function scanReleasePowerShell({ overrides = {} } = {}) {
       "scripts/lib/release-publish-adapter.ps1",
       "publication-order",
       "the final public-version gate must execute before the sole public transition",
+    );
+  }
+
+  // GitHub answers 404 from `GET /repos/{repo}/releases/tags/{tag}` for a DRAFT release that
+  // demonstrably exists, so a draft-sensitive stage resolved by tag reads "absent" for its own work
+  // (the v0.9.11 failure). The authenticated, paginated list is the only draft-aware lookup, and this
+  // rule is what stops any release-critical file from quietly regressing to the tag endpoint.
+  for (const [file, source] of sources) {
+    if (/releases\/tags\//i.test(source.liveExecutable)) {
+      report(
+        file,
+        "draft-lookup",
+        "the releases-by-tag endpoint is 404 for drafts and may not be used as a release lookup",
+      );
+    }
+  }
+  for (const stageFunction of [
+    "Inspect-ProductionDraft",
+    "Inspect-ProductionDraftAssets",
+    "Inspect-ProductionPublished",
+    "Inspect-ProductionPublicAssets",
+  ]) {
+    const body = functionBody(adapter, stageFunction);
+    if (body === null) {
+      report("scripts/lib/release-publish-adapter.ps1", "draft-lookup", `missing stage handler: ${stageFunction}`);
+      continue;
+    }
+    if (!body.includes("Get-ProductionRelease $Context") && !body.includes("Get-ProductionRelease -Context $Context")) {
+      report(
+        "scripts/lib/release-publish-adapter.ps1",
+        "draft-lookup",
+        `${stageFunction} must resolve its release through the draft-aware Get-ProductionRelease lookup`,
+      );
+    }
+  }
+  const releaseLookup = functionBody(adapter, "Get-ProductionRelease");
+  if (releaseLookup === null || !releaseLookup.includes("Get-ProductionReleaseList -Context $Context")) {
+    report(
+      "scripts/lib/release-publish-adapter.ps1",
+      "draft-lookup",
+      "Get-ProductionRelease must resolve through the paginated releases listing",
+    );
+  } else if (!/tag_name\s+-ceq\s+\$tag/.test(releaseLookup)) {
+    report(
+      "scripts/lib/release-publish-adapter.ps1",
+      "draft-lookup",
+      "Get-ProductionRelease must filter the listing by exact tag_name",
+    );
+  }
+  const listPage = functionBody(adapter, "Get-ProductionReleasePage");
+  if (listPage === null || !/\$result\.TimedOut/.test(listPage) || !/\$result\.ExitCode\s+-ne\s+0/.test(listPage)) {
+    report(
+      "scripts/lib/release-publish-adapter.ps1",
+      "draft-lookup",
+      "the releases listing must treat timeout and nonzero exit as fatal, never as absence",
     );
   }
 

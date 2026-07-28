@@ -13,7 +13,10 @@ param(
     "happy", "authentication-failure", "permission-failure", "network-failure",
     "wrong-source-tag", "wrong-installer-hash", "wrong-manifest-hash",
     "wrong-updater-signature", "public-release-collision",
-    "downloaded-draft-mismatch", "downloaded-public-mismatch"
+    "downloaded-draft-mismatch", "downloaded-public-mismatch",
+    "adopt-existing-draft", "incompatible-existing-draft", "duplicate-release",
+    "paginated-release-list", "unpaginated-release-list",
+    "malformed-release-list", "empty-release-list", "wrong-shape-release-list"
   )][string]$Scenario = "happy"
 )
 
@@ -107,7 +110,24 @@ $releaseTag = "v9.9.9"
 $releaseNotes = "Sandbox production-adapter integration."
 
 if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
-  $existingRelease = @("public-release-collision", "downloaded-draft-mismatch") -contains $Scenario
+  $existingRelease = @(
+    "public-release-collision", "downloaded-draft-mismatch",
+    "adopt-existing-draft", "incompatible-existing-draft"
+  ) -contains $Scenario
+  $listFailure = switch ($Scenario) {
+    "unpaginated-release-list" { "unpaginated" }
+    "malformed-release-list" { "malformed" }
+    "empty-release-list" { "empty" }
+    "wrong-shape-release-list" { "shape" }
+    default { "" }
+  }
+  # Two releases carrying the same tag: the ambiguity a by-tag lookup can never see.
+  $extraReleases = if ($Scenario -eq "duplicate-release") {
+    @(
+      @{ id = 771001; tag_name = $releaseTag; name = "Compy $releaseTag"; body = $releaseNotes; draft = $true; prerelease = $false },
+      @{ id = 771002; tag_name = $releaseTag; name = "Compy $releaseTag"; body = $releaseNotes; draft = $false; prerelease = $false }
+    )
+  } else { @() }
   Write-SandboxUtf8 $statePath (@{
     releaseCommit = $releaseCommit
     sourceDescendant = $sourceDescendant
@@ -122,8 +142,12 @@ if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
     releasesTagCreated = $existingRelease
     draftCreated = $existingRelease
     published = ($Scenario -eq "public-release-collision")
+    releaseId = 990099
+    padCount = if ($Scenario -eq "paginated-release-list") { 150 } else { 0 }
+    extraReleases = $extraReleases
+    listFailure = $listFailure
     title = if ($Scenario -eq "public-release-collision") { "Foreign release" } elseif ($existingRelease) { "Compy $releaseTag" } else { "" }
-    notes = if ($Scenario -eq "public-release-collision") { "foreign" } elseif ($existingRelease) { $releaseNotes } else { "" }
+    notes = if ($Scenario -eq "public-release-collision") { "foreign" } elseif ($Scenario -eq "incompatible-existing-draft") { "notes that are not the signed receipt notes" } elseif ($existingRelease) { $releaseNotes } else { "" }
     ghFailure = if ($Scenario -like "*-failure") { $Scenario } else { "" }
     assetStore = $assetStore
     callsPath = $callsPath
@@ -204,7 +228,7 @@ const notFound = () => {
   process.exit(1);
 };
 const releaseObject = () => ({
-  id: 990099,
+  id: state.releaseId,
   tag_name: state.sourceTag,
   name: state.title,
   body: state.notes,
@@ -217,6 +241,33 @@ const releaseObject = () => ({
         .map((name, index) => ({id: index + 1, name}))
     : [],
 });
+// Real GitHub visibility, which the previous fake did not model: a DRAFT release is absent from
+// the by-tag endpoint (HTTP 404) and is reachable only by numeric id or through the authenticated
+// releases list. Padding entries sit BEFORE the real release so a client that stops after page one
+// fails to find a release that demonstrably exists.
+const asArray = (value) => {
+  // Windows PowerShell 5.1 serializes an EMPTY array inside a hashtable as {} (sometimes as
+  // {"value":[],"Count":0}) and a one-item array as a bare object, so every shape is normalized
+  // back to a list here and only entries that actually carry a release id survive.
+  const list = Array.isArray(value)
+    ? value
+    : value && Array.isArray(value.value)
+      ? value.value
+      : value ? [value] : [];
+  return list.filter((entry) => entry && entry.id);
+};
+const listReleases = () => {
+  const releases = [];
+  for (let index = 0; index < (state.padCount || 0); index += 1) {
+    releases.push({
+      id: 500000 + index, tag_name: `v0.0.${index}`, name: `pad ${index}`,
+      body: "pad", draft: false, prerelease: false, assets: [],
+    });
+  }
+  if (state.draftCreated) releases.push(releaseObject());
+  for (const extra of asArray(state.extraReleases)) releases.push({assets: [], ...extra});
+  return releases;
+};
 if (args[0] === "api" && args[1].endsWith("/commits/main")) {
   console.log(JSON.stringify({sha: state.releasesMain}));
   process.exit(0);
@@ -238,8 +289,35 @@ if (args[0] === "api" && args[1].endsWith("/git/refs")) {
   console.log(JSON.stringify({ref, object:{sha}}));
   process.exit(0);
 }
+if (args[0] === "api" && args[1].includes("/releases?")) {
+  if (state.listFailure === "malformed") { console.log("[{\"id\": 1, "); process.exit(0); }
+  if (state.listFailure === "empty") { process.exit(0); }
+  if (state.listFailure === "shape") { console.log(JSON.stringify({message: "not an array"})); process.exit(0); }
+  const perPage = Number((args[1].match(/per_page=(\d+)/) || [])[1] || 30);
+  const page = Number((args[1].match(/[?&]page=(\d+)/) || [])[1] || 1);
+  if (state.listFailure === "unpaginated") {
+    // Every page is full, so the listing never ends: an honest client must refuse, not guess.
+    const filler = [];
+    for (let index = 0; index < perPage; index += 1) {
+      filler.push({id: page * 1000 + index, tag_name: `v0.0.${page}-${index}`, draft: false, prerelease: false, assets: []});
+    }
+    console.log(JSON.stringify(filler));
+    process.exit(0);
+  }
+  const all = listReleases();
+  console.log(JSON.stringify(all.slice((page - 1) * perPage, page * perPage)));
+  process.exit(0);
+}
+const byId = args[0] === "api" ? args[1].match(/\/releases\/(\d+)$/) : null;
+if (byId) {
+  const found = listReleases().find((release) => release.id === Number(byId[1]));
+  if (!found) notFound();
+  console.log(JSON.stringify(found));
+  process.exit(0);
+}
 if (args[0] === "api" && args[1].includes("/releases/tags/")) {
-  if (!state.draftCreated) notFound();
+  // GitHub answers 404 here for a draft that exists. v0.9.11 failed on exactly this.
+  if (!state.draftCreated || !state.published) notFound();
   console.log(JSON.stringify(releaseObject()));
   process.exit(0);
 }
@@ -247,6 +325,12 @@ if (args[0] === "release" && args[1] === "create") {
   if (!state.releasesTagCreated) {
     console.error("release tag missing");
     process.exit(14);
+  }
+  if (state.draftCreated) {
+    // Real GitHub refuses a second release for one tag; adopting the existing draft is the only
+    // correct resume behaviour, so a duplicate-create attempt must fail loudly here.
+    console.error("gh: Validation Failed (HTTP 422): a release for tag v9.9.9 already exists");
+    process.exit(1);
   }
   state.draftCreated = true;
   state.title = args[args.indexOf("--title") + 1];

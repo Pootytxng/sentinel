@@ -160,6 +160,61 @@ describe("permanent release PowerShell static guard", () => {
     );
   });
 
+  it("rejects a draft-sensitive lookup that regresses to the releases-by-tag endpoint", () => {
+    const file = "scripts/lib/release-publish-adapter.ps1";
+    const bypassed = read(file).replace(
+      "$releases = Get-ProductionReleaseList -Context $Context",
+      () =>
+        '$releases = @((Get-ProductionGhApi -Context $Context -Endpoint "repos/$($Context.ReleasesRepo)/releases/tags/$tag" -AllowNotFound).Value)',
+    );
+    const result = scanReleasePowerShell({ overrides: { [file]: bypassed } });
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ file, rule: "draft-lookup" })]),
+    );
+  });
+
+  it("rejects a stage handler that resolves a release outside the draft-aware lookup", () => {
+    const file = "scripts/lib/release-publish-adapter.ps1";
+    const bypassed = read(file).replace(
+      /(function Inspect-ProductionPublished \{[\s\S]*?\r?\n\s*)\$lookup = Get-ProductionRelease \$Context/,
+      (_match, head) =>
+        `${head}$lookup = Get-ProductionGhApi -Context $Context -Endpoint "repos/$($Context.ReleasesRepo)/releases/990099"`,
+    );
+    expect(bypassed).not.toBe(read(file));
+    const result = scanReleasePowerShell({ overrides: { [file]: bypassed } });
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          file,
+          rule: "draft-lookup",
+          message: expect.stringContaining("Inspect-ProductionPublished"),
+        }),
+      ]),
+    );
+  });
+
+  it("rejects a releases listing that can report a transport failure as absence", () => {
+    const file = "scripts/lib/release-publish-adapter.ps1";
+    const bypassed = read(file).replace(
+      /if \(\$result\.TimedOut\) \{(\s*\r?\n\s*throw "GitHub release listing timed out)/,
+      (_match, tail) => `if ($false) {${tail}`,
+    );
+    expect(bypassed).not.toBe(read(file));
+    const result = scanReleasePowerShell({ overrides: { [file]: bypassed } });
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          file,
+          rule: "draft-lookup",
+          message: expect.stringContaining("never as absence"),
+        }),
+      ]),
+    );
+  });
+
   it("requires every transitively referenced PowerShell helper to be in the guarded surface", () => {
     const file = "scripts/release.ps1";
     const result = scanReleasePowerShell({

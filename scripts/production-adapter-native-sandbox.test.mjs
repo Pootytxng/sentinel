@@ -80,7 +80,39 @@ describe("production release adapter over sandboxed native transports", () => {
     const journal = JSON.parse(readFileSync(payload.journal, "utf8"));
     expect(journal.completed_stages).toEqual(stages);
     expect(payload.calls_after_retry).toBeGreaterThan(payload.calls_before_retry);
+
+    // The sandbox gh now answers 404 for a draft by tag, exactly as GitHub does. Completing the
+    // draft stages anyway is the proof that 404-by-tag is no longer read as absence, and that the
+    // authenticated list -- not the tag endpoint -- is the authoritative draft-aware lookup.
+    expect(ghCalls.some((args) => args[0] === "api" && /\/releases\?per_page=\d+&page=\d+$/.test(args[1]))).toBe(true);
+    expect(ghCalls.some((args) => args[0] === "api" && args[1].includes("/releases/tags/"))).toBe(false);
+    expect(ghCalls.some((args) => args[0] === "api" && /\/releases\/\d+$/.test(args[1]))).toBe(true);
   }, 120_000);
+
+  it("adopts a compatible pre-existing private draft instead of creating a second release", () => {
+    const output = invoke("adopt-existing-draft");
+    const payload = JSON.parse(output.stdout.trim().split(/\r?\n/).at(-1));
+    expect(output.status, `${output.stderr}\n${output.stdout}`).toBe(0);
+    expect(payload.first_stages).toContain("draft_created");
+    expect(payload.first_stages).toContain("release_published");
+    expect(payload.state).toMatchObject({ draftCreated: true, published: true, releaseId: 990099 });
+    const ghCalls = payload.calls.filter((call) => call.tool === "gh").map((call) => call.args);
+    // The existing draft was invisible by tag; only the list lookup can find it, and finding it is
+    // what keeps the transaction from attempting a second draft (which the fake gh rejects, 422).
+    expect(ghCalls.some((args) => args[0] === "release" && args[1] === "create")).toBe(false);
+    expect(ghCalls.some((args) => args[0] === "release" && args[1] === "upload")).toBe(true);
+    expect(ghCalls.some((args) => args[0] === "release" && args[1] === "edit")).toBe(true);
+  }, 120_000);
+
+  it("finds a draft that only appears on a later page of the releases listing", () => {
+    const output = invoke("paginated-release-list");
+    const payload = JSON.parse(output.stdout.trim().split(/\r?\n/).at(-1));
+    expect(output.status, `${output.stderr}\n${output.stdout}`).toBe(0);
+    expect(payload.first_stages).toContain("release_published");
+    expect(payload.state.padCount).toBe(150);
+    const ghCalls = payload.calls.filter((call) => call.tool === "gh").map((call) => call.args);
+    expect(ghCalls.some((args) => args[0] === "api" && args[1].endsWith("&page=2"))).toBe(true);
+  }, 180_000);
 
   it.each([
     ["authentication-failure", /Bad credentials|failures are fatal/i],
@@ -93,9 +125,18 @@ describe("production release adapter over sandboxed native transports", () => {
     ["public-release-collision", /Existing GitHub release collision/i],
     ["downloaded-draft-mismatch", /Downloaded draft installer hash changed/i],
     ["downloaded-public-mismatch", /Public tag-specific installer hash changed/i],
+    ["incompatible-existing-draft", /Existing GitHub release collision/i],
+    ["duplicate-release", /Duplicate GitHub releases for tag/i],
+    ["malformed-release-list", /release listing returned malformed JSON/i],
+    ["empty-release-list", /release listing returned an empty response/i],
+    ["wrong-shape-release-list", /unexpected response shape/i],
+    ["unpaginated-release-list", /incompletely paginated listing/i],
   ])("fails closed in the real production handler for %s", (scenario, pattern) => {
     const output = invoke(scenario);
-    expect(output.status, `${output.stderr}\n${output.stdout}`).not.toBe(0);
-    expect(`${output.stderr}\n${output.stdout}`).toMatch(pattern);
-  }, 120_000);
+    const combined = `${output.stderr}\n${output.stdout}`;
+    expect(output.status, combined).not.toBe(0);
+    // PowerShell hard-wraps console error text at the host width, so a message is matched against
+    // whitespace-normalized output rather than against accidental line breaks.
+    expect(combined.replace(/\s+/g, " "), combined).toMatch(pattern);
+  }, 180_000);
 });

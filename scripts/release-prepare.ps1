@@ -22,5 +22,10 @@ if ($SetVersion) {
   $arguments += @("-SetVersion", $SetVersion)
 }
 if ($BumpMinor) { $arguments += "-BumpMinor" }
-Invoke-StreamedProcess "release prepare" "powershell" $arguments -WorkingDirectory (Split-Path -Parent $PSScriptRoot) | Out-Null
+try {
+  Invoke-StreamedProcess "release prepare" "powershell" $arguments -WorkingDirectory (Split-Path -Parent $PSScriptRoot) | Out-Null
+} catch {
+  Write-ReleaseFailureDiagnostic -Label "release prepare" -Failure $_
+  exit 1
+}
 exit 0

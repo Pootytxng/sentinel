@@ -293,14 +293,19 @@ function Invoke-CheckedProcess {
     [switch]$ShowOutput
   )
   $result = Invoke-NativeProcess -Command $Command -ArgumentList $ArgumentList -WorkingDirectory $WorkingDirectory -Environment $Environment -TimeoutMs $TimeoutMs -KillTreeOnTimeout $KillTreeOnTimeout
+  # The message text is unchanged; the classification, exit code and full redacted stderr ride along
+  # as exception Data so a wrapper can print a real diagnosis instead of "exit 1".
   if ($result.TimedOut) {
-    throw "$Label timed out after $TimeoutMs ms and was terminated."
+    throw (New-NativeProcessFailure -Label $Label -Classification "timeout" -Command $result.Arguments `
+      -StdOut $result.StdOut -StdErr $result.StdErr `
+      -Message "$Label timed out after $TimeoutMs ms and was terminated.")
   }
   if ($result.ExitCode -ne 0 -and -not ($AllowExitCodes -contains $result.ExitCode)) {
     $detail = Get-FirstNonEmptyLine $result.StdErr
     if (-not $detail) { $detail = Get-FirstNonEmptyLine $result.StdOut }
-    if ($detail) { throw "$Label failed (exit $($result.ExitCode)): $detail" }
-    throw "$Label failed (exit $($result.ExitCode))."
+    $failureMessage = if ($detail) { "$Label failed (exit $($result.ExitCode)): $detail" } else { "$Label failed (exit $($result.ExitCode))." }
+    throw (New-NativeProcessFailure -Label $Label -Message $failureMessage -Classification "nonzero-exit" `
+      -ExitCode $result.ExitCode -Command $result.Arguments -StdOut $result.StdOut -StdErr $result.StdErr)
   }
   if ($ShowOutput) {
     foreach ($stream in @($result.StdOut, $result.StdErr)) {
@@ -310,10 +315,229 @@ function Invoke-CheckedProcess {
   return $result
 }
 
-# For long-running commands whose output must be surfaced while they run. The child inherits this
-# console's stdout/stderr handles, so output remains live. System.Diagnostics.Process still returns
-# the exit code as data and supports the same working-directory, environment, timeout and tree-kill
-# contract as captured mode.
+# FAILURE DIAGNOSTICS
+# -------------------
+# A failing release stage is the most important output this pipeline produces, and it used to arrive
+# as a bare "release publish failed (exit 1)." with the child's real message destroyed. Failures now
+# carry the child's own stderr, a CLASSIFICATION and the exit code as exception DATA, and the
+# wrappers print the whole cause chain.
+#
+# Diagnostics are printed AND retained, so nothing that could carry a credential may pass through
+# them. Redaction is deliberately over-eager: a masked token is a cosmetic loss, a printed signing
+# key is a security incident.
+function Get-RedactedDiagnosticText {
+  param([string]$Text)
+  if ([string]::IsNullOrEmpty($Text)) { return "" }
+  $redacted = [string]$Text
+  $redacted = [regex]::Replace($redacted, '(?s)-----BEGIN[^-]*PRIVATE KEY-----.*?-----END[^-]*PRIVATE KEY-----', '[REDACTED-PRIVATE-KEY]')
+  # minisign/Tauri signing material: the key bytes are the line AFTER the untrusted comment.
+  $redacted = [regex]::Replace($redacted, '(?i)untrusted comment:[^\r\n]*(\r?\n[^\r\n]*)?', '[REDACTED-SIGNING-MATERIAL]')
+  $redacted = [regex]::Replace($redacted, '(?i)\b(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{16,}', '[REDACTED-TOKEN]')
+  $redacted = [regex]::Replace($redacted, '(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{8,}', 'Bearer [REDACTED]')
+  $redacted = [regex]::Replace($redacted, '(?i)\b(token|secret|password|passphrase|api[_-]?key|private[_-]?key|signing[_-]?key|authorization)\b(["'']?\s*[:=]\s*["'']?)([^\s"'']{4,})', '$1$2[REDACTED]')
+  $redacted = [regex]::Replace($redacted, '[A-Za-z0-9+/]{200,}={0,2}', '[REDACTED-BLOB]')
+  return $redacted
+}
+
+# The LAST lines are the diagnostic ones: a build's real error follows thousands of progress lines.
+function Get-DiagnosticTail {
+  param(
+    [string]$Text,
+    [int]$MaxLines = 40,
+    [int]$MaxChars = 4000
+  )
+  if ([string]::IsNullOrWhiteSpace($Text)) { return "" }
+  $lines = @(($Text -split "`r?`n") | Where-Object { $_.Trim() })
+  if ($lines.Count -eq 0) { return "" }
+  if ($lines.Count -gt $MaxLines) { $lines = @($lines[($lines.Count - $MaxLines)..($lines.Count - 1)]) }
+  $tail = ($lines -join "`n")
+  if ($tail.Length -gt $MaxChars) { $tail = "..." + $tail.Substring($tail.Length - $MaxChars) }
+  return (Get-RedactedDiagnosticText $tail)
+}
+
+function New-NativeProcessFailure {
+  param(
+    [Parameter(Mandatory = $true)][string]$Label,
+    [Parameter(Mandatory = $true)][string]$Message,
+    [Parameter(Mandatory = $true)][string]$Classification,
+    [int]$ExitCode = -1,
+    [string]$Command = "",
+    [string]$StdOut = "",
+    [string]$StdErr = ""
+  )
+  $text = Get-RedactedDiagnosticText $Message
+  $exception = New-Object System.Management.Automation.RuntimeException $text
+  $exception.Data["NativeLabel"] = $Label
+  $exception.Data["NativeClassification"] = $Classification
+  $exception.Data["NativeExitCode"] = $ExitCode
+  $exception.Data["NativeCommand"] = (Get-RedactedDiagnosticText $Command)
+  $exception.Data["NativeStdOutTail"] = (Get-DiagnosticTail -Text $StdOut)
+  $exception.Data["NativeStdErrTail"] = (Get-DiagnosticTail -Text $StdErr)
+  return $exception
+}
+
+# Unwinds an ErrorRecord (or a bare exception) into its cause chain, outermost first. The stage
+# context added by the transaction engine lives in the OUTER message; the actionable cause lives in
+# the innermost one, so a diagnosis needs the whole chain, not either end of it.
+function Get-NativeExceptionChain {
+  param([Parameter(Mandatory = $true)]$Failure)
+  $exception = if ($Failure -is [System.Management.Automation.ErrorRecord]) { $Failure.Exception } else { $Failure }
+  $chain = New-Object System.Collections.Generic.List[object]
+  $guard = 0
+  while ($exception -and $guard -lt 16) {
+    $chain.Add($exception)
+    $exception = $exception.InnerException
+    $guard++
+  }
+  return @($chain.ToArray())
+}
+
+# Prints the complete, secret-free cause of a failed release step: every message in the chain, the
+# failing transaction stage and phase when the chain carries one, the command classification, the
+# exit code, and the child's own stderr tail. A wrapper that reports only its own "exit 1" is not a
+# diagnosis.
+function Write-ReleaseFailureDiagnostic {
+  param(
+    [Parameter(Mandatory = $true)][string]$Label,
+    [Parameter(Mandatory = $true)]$Failure
+  )
+  $chain = Get-NativeExceptionChain -Failure $Failure
+  Write-Host ""
+  Write-Host "=== $Label FAILED ==="
+  for ($index = 0; $index -lt $chain.Count; $index++) {
+    $prefix = if ($index -eq 0) { "cause" } else { "caused by" }
+    Write-Host ("  {0}: {1}" -f $prefix, (Get-RedactedDiagnosticText ([string]$chain[$index].Message)))
+  }
+  foreach ($exception in $chain) {
+    $stageMatch = [regex]::Match([string]$exception.Message, "Release transaction stage '([a-z_]+)' failed during (inspect|apply)")
+    if ($stageMatch.Success) {
+      Write-Host ("  failing stage: {0} ({1})" -f $stageMatch.Groups[1].Value, $stageMatch.Groups[2].Value)
+      break
+    }
+  }
+  foreach ($exception in $chain) {
+    if (-not $exception.Data -or -not $exception.Data["NativeClassification"]) { continue }
+    Write-Host ("  command: {0}" -f [string]$exception.Data["NativeLabel"])
+    Write-Host ("  classification: {0}" -f [string]$exception.Data["NativeClassification"])
+    Write-Host ("  exit code: {0}" -f [string]$exception.Data["NativeExitCode"])
+    $invocation = [string]$exception.Data["NativeCommand"]
+    if ($invocation) { Write-Host ("  invocation: {0}" -f $invocation) }
+    $stdErrTail = [string]$exception.Data["NativeStdErrTail"]
+    $stdOutTail = [string]$exception.Data["NativeStdOutTail"]
+    if ($stdErrTail) {
+      Write-Host "  stderr (tail):"
+      foreach ($line in ($stdErrTail -split "`r?`n")) { Write-Host "    $line" }
+    } elseif ($stdOutTail) {
+      Write-Host "  stdout (tail):"
+      foreach ($line in ($stdOutTail -split "`r?`n")) { Write-Host "    $line" }
+    }
+    break
+  }
+  if ($Failure -is [System.Management.Automation.ErrorRecord] -and $Failure.ScriptStackTrace) {
+    Write-Host "  script stack:"
+    foreach ($line in ($Failure.ScriptStackTrace -split "`r?`n")) { Write-Host "    $line" }
+  }
+  Write-Host "=== end $Label diagnostic ==="
+  Write-Host ""
+}
+
+# Pulls whatever the child has already written into the relay queue, without blocking. Exactly ONE
+# ReadLineAsync is outstanding per stream at a time - the next read is issued only after the previous
+# line is in hand - so a line physically cannot overtake an earlier one. The reader bag is a
+# hashtable because it is mutated across polls and hashtables are reference types.
+function Read-NativeStreamLines {
+  param(
+    [Parameter(Mandatory = $true)][hashtable]$Reader,
+    [Parameter(Mandatory = $true)][AllowEmptyCollection()][System.Collections.Concurrent.ConcurrentQueue[string]]$Queue
+  )
+  while (-not $Reader["Done"]) {
+    if ($null -eq $Reader["Task"]) { $Reader["Task"] = $Reader["Stream"].ReadLineAsync() }
+    if (-not $Reader["Task"].IsCompleted) { return }
+    $task = $Reader["Task"]
+    $Reader["Task"] = $null
+    $line = $null
+    # A faulted or cancelled read means the pipe is gone. That is end-of-stream, not a reason to
+    # terminate a release run whose child has already reported an exit code.
+    try { $line = $task.Result } catch { $Reader["Done"] = $true; return }
+    if ($null -eq $line) {
+      $Reader["Done"] = $true
+      return
+    }
+    $Queue.Enqueue([string]$line)
+  }
+}
+
+# Drains to real end-of-stream once the child is gone, bounded so a stuck pipe cannot hang a release.
+function Complete-NativeStreamLines {
+  param(
+    [Parameter(Mandatory = $true)][hashtable]$Reader,
+    [Parameter(Mandatory = $true)][AllowEmptyCollection()][System.Collections.Concurrent.ConcurrentQueue[string]]$Queue,
+    [int]$TimeoutMs = 5000
+  )
+  $clock = [System.Diagnostics.Stopwatch]::StartNew()
+  while (-not $Reader["Done"]) {
+    Read-NativeStreamLines -Reader $Reader -Queue $Queue
+    if ($Reader["Done"]) { break }
+    if ($clock.ElapsedMilliseconds -ge $TimeoutMs) { break }
+    if ($null -ne $Reader["Task"]) { $Reader["Task"].Wait(50) | Out-Null }
+  }
+}
+
+# Drains one relayed stream into its retained sink and echoes it to this host. Write-Host (never
+# Write-Error) on both streams: under $ErrorActionPreference = "Stop" an echoed stderr line must not
+# become a terminating error of the PARENT, and the child's exit code is the only verdict.
+function Write-NativeRelayLines {
+  param(
+    # AllowEmptyCollection is required, not decorative: PowerShell rejects an EMPTY collection as an
+    # unbound mandatory argument, which would break the relay on the very first (silent) poll.
+    [Parameter(Mandatory = $true)][AllowEmptyCollection()][System.Collections.Concurrent.ConcurrentQueue[string]]$Queue,
+    # AllowEmptyString is required for a DIFFERENT reason, and the sink needs it while the queue does
+    # not: a mandatory parameter whose argument is an IList is validated ELEMENT BY ELEMENT, so one
+    # blank line already in the sink fails the bind with "because it is an empty string" - and every
+    # real build log has blank lines (npm prints one right after its banner). List[string] is an IList;
+    # ConcurrentQueue[string] is not, so its elements are never walked.
+    [Parameter(Mandatory = $true)][AllowEmptyCollection()][AllowEmptyString()][System.Collections.Generic.List[string]]$Sink,
+    # Multi-line secrets straddle relay polls, so the carry-over must survive between calls. One
+    # state bag PER STREAM: stdout and stderr interleave, and a block opened on one is not open on
+    # the other. A hashtable is a reference type, so the caller's bag is what gets updated.
+    [hashtable]$State,
+    [int]$RetainLines = 4000
+  )
+  if ($null -eq $State) { $State = @{} }
+  $line = $null
+  while ($Queue.TryDequeue([ref]$line)) {
+    $raw = [string]$line
+    $text = Get-RedactedDiagnosticText $raw
+    $suppressSuccessor = $false
+    # A per-line pass cannot see a multi-line secret: a PEM body sits BETWEEN its markers and
+    # signing key bytes sit AFTER their header, so both look innocuous line by line.
+    if ($State["InKeyBlock"]) {
+      $text = "[REDACTED-PRIVATE-KEY]"
+      if ($raw -match '(?i)-----END[^-]*PRIVATE KEY-----') { $State["InKeyBlock"] = $false }
+    } elseif ($raw -match '(?i)-----BEGIN[^-]*PRIVATE KEY-----' -and $raw -notmatch '(?i)-----END[^-]*PRIVATE KEY-----') {
+      $text = "[REDACTED-PRIVATE-KEY]"
+      $State["InKeyBlock"] = $true
+    } elseif ($State["AfterSigningHeader"]) {
+      $text = "[REDACTED-SIGNING-MATERIAL]"
+    } elseif ($text -match '\[REDACTED-SIGNING-MATERIAL\]$') {
+      # Exactly ONE successor. Keying this off the previous SINK line instead made every later line
+      # redact itself forever, which hid the build error the relay exists to show.
+      $suppressSuccessor = $true
+    }
+    $State["AfterSigningHeader"] = $suppressSuccessor
+    $Sink.Add($text)
+    if ($Sink.Count -gt $RetainLines) { $Sink.RemoveAt(0) }
+    Write-Host $text
+  }
+}
+
+# For long-running commands whose output must be surfaced while they run. Both streams are redirected
+# and drained asynchronously, then echoed live AND retained, so a failing child's real message is
+# both visible as it happens and attached to the thrown exception. (The former "inherit the console"
+# design silently destroyed all child output whenever the parent's own stdout was a pipe rather than
+# a console - which is exactly the case that matters, a captured/redirected release run.)
+# System.Diagnostics.Process still returns the exit code as data and supports the same
+# working-directory, environment, timeout and tree-kill contract as captured mode.
 function Invoke-StreamedProcess {
   [CmdletBinding()]
   param(
@@ -337,26 +561,54 @@ function Invoke-StreamedProcess {
   $startInfo.UseShellExecute = $false
   $startInfo.CreateNoWindow = $true
   $startInfo.RedirectStandardInput = $false
-  $startInfo.RedirectStandardOutput = $false
-  $startInfo.RedirectStandardError = $false
+  $startInfo.RedirectStandardOutput = $true
+  $startInfo.RedirectStandardError = $true
+  $startInfo.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+  $startInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8
   Set-NativeEnvironment -StartInfo $startInfo -Environment $Environment
 
+  $outQueue = New-Object System.Collections.Concurrent.ConcurrentQueue[string]
+  $errQueue = New-Object System.Collections.Concurrent.ConcurrentQueue[string]
+  $stdOutLines = New-Object System.Collections.Generic.List[string]
+  $stdErrLines = New-Object System.Collections.Generic.List[string]
+  $outRelayState = @{}
+  $errRelayState = @{}
   $process = New-Object System.Diagnostics.Process
   $process.StartInfo = $startInfo
-  if (-not $process.Start()) {
-    $process.Dispose()
-    throw "$Label could not start '$($resolved.Source)'."
-  }
 
   $clock = [System.Diagnostics.Stopwatch]::StartNew()
-  $processId = $process.Id
+  $processId = -1
   $exitCode = -1
   $exitUnknown = $false
   $timedOut = $false
   $terminationAttempted = $false
   try {
-    if (-not $process.WaitForExit($TimeoutMs)) {
-      $timedOut = $true
+    if (-not $process.Start()) {
+      throw "$Label could not start '$($resolved.Source)'."
+    }
+    $processId = $process.Id
+    # Deliberately NOT BeginOutputReadLine: that raises OutputDataReceived through PowerShell's event
+    # plumbing, and BOTH routes into it dispatch through the thread pool - an -Action handler, and the
+    # -Action-less route drained with Get-Event. Concurrent dispatch REORDERS the child's own lines
+    # (measured on the ordering guard: "out-3" arriving after "out-5"). A scrambled build log already
+    # fails the "surface useful stderr" bar; a scrambled SECRET is worse, because the relay's
+    # multi-line redaction reads ADJACENT lines - reordering split a PEM block and printed its body in
+    # cleartext. One outstanding read per stream cannot reorder anything.
+    $outReader = @{ Stream = $process.StandardOutput; Task = $null; Done = $false }
+    $errReader = @{ Stream = $process.StandardError; Task = $null; Done = $false }
+    $exited = $false
+    while (-not $exited) {
+      $exited = $process.WaitForExit(200)
+      Read-NativeStreamLines -Reader $outReader -Queue $outQueue
+      Read-NativeStreamLines -Reader $errReader -Queue $errQueue
+      Write-NativeRelayLines -Queue $outQueue -Sink $stdOutLines -State $outRelayState
+      Write-NativeRelayLines -Queue $errQueue -Sink $stdErrLines -State $errRelayState
+      if (-not $exited -and $clock.ElapsedMilliseconds -ge $TimeoutMs) {
+        $timedOut = $true
+        break
+      }
+    }
+    if ($timedOut) {
       if ($KillTreeOnTimeout) {
         $terminationAttempted = $true
         Stop-NativeProcessTree -ProcessId $process.Id -TimeoutMs $DrainMs
@@ -365,7 +617,15 @@ function Invoke-StreamedProcess {
         }
         $process.WaitForExit($DrainMs) | Out-Null
       }
+    } else {
+      $process.WaitForExit()
     }
+    # The child is gone, but its pipes still hold whatever it wrote last. Draining to real
+    # end-of-stream (bounded) is what makes the tail complete - exiting is not flushing.
+    Complete-NativeStreamLines -Reader $outReader -Queue $outQueue -TimeoutMs $DrainMs
+    Complete-NativeStreamLines -Reader $errReader -Queue $errQueue -TimeoutMs $DrainMs
+    Write-NativeRelayLines -Queue $outQueue -Sink $stdOutLines -State $outRelayState
+    Write-NativeRelayLines -Queue $errQueue -Sink $stdErrLines -State $errRelayState
     $process.Refresh()
     if ($process.HasExited) {
       $raw = $process.ExitCode
@@ -376,24 +636,38 @@ function Invoke-StreamedProcess {
   } finally {
     $process.Dispose()
   }
+  $stdOutText = ($stdOutLines -join "`r`n")
+  $stdErrText = ($stdErrLines -join "`r`n")
 
   if ($timedOut) {
-    if ($KillTreeOnTimeout) { throw "$Label timed out after $TimeoutMs ms and process-tree termination was attempted." }
-    throw "$Label timed out after $TimeoutMs ms; the process was intentionally left running for inspection."
+    $timeoutMessage = if ($KillTreeOnTimeout) {
+      "$Label timed out after $TimeoutMs ms and process-tree termination was attempted."
+    } else {
+      "$Label timed out after $TimeoutMs ms; the process was intentionally left running for inspection."
+    }
+    throw (New-NativeProcessFailure -Label $Label -Message $timeoutMessage -Classification "timeout" `
+      -Command $commandLine -StdOut $stdOutText -StdErr $stdErrText)
   }
   # Fail closed: an unreadable exit code is not a pass.
   if ($exitUnknown) {
-    throw "$Label finished but Windows did not report an exit code. Refusing to assume success."
+    throw (New-NativeProcessFailure -Label $Label -Classification "unknown-exit" -Command $commandLine `
+      -StdOut $stdOutText -StdErr $stdErrText `
+      -Message "$Label finished but Windows did not report an exit code. Refusing to assume success.")
   }
   if ($exitCode -ne 0 -and -not ($AllowExitCodes -contains $exitCode)) {
-    throw "$Label failed (exit $exitCode)."
+    # The child's own first line is the actionable cause; an outer "exit 1" is not a diagnosis.
+    $detail = Get-FirstNonEmptyLine $stdErrText
+    if (-not $detail) { $detail = Get-FirstNonEmptyLine $stdOutText }
+    $failureMessage = if ($detail) { "$Label failed (exit $exitCode): $detail" } else { "$Label failed (exit $exitCode)." }
+    throw (New-NativeProcessFailure -Label $Label -Message $failureMessage -Classification "nonzero-exit" `
+      -ExitCode $exitCode -Command $commandLine -StdOut $stdOutText -StdErr $stdErrText)
   }
   return [pscustomobject]@{
     FilePath             = $resolved.Source
     Arguments            = $commandLine
     ExitCode             = $exitCode
-    StdOut               = ""
-    StdErr               = ""
+    StdOut               = $stdOutText
+    StdErr               = $stdErrText
     TimedOut             = $timedOut
     ProcessId            = $processId
     DurationMs           = $clock.ElapsedMilliseconds

@@ -12,5 +12,12 @@ param()
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "lib\native-process.ps1")
 $release = Join-Path $PSScriptRoot "release.ps1"
-Invoke-StreamedProcess "release publish" "powershell" @("-NoProfile", "-File", $release, "-Mode", "publish") -WorkingDirectory (Split-Path -Parent $PSScriptRoot) | Out-Null
+try {
+  Invoke-StreamedProcess "release publish" "powershell" @("-NoProfile", "-File", $release, "-Mode", "publish") -WorkingDirectory (Split-Path -Parent $PSScriptRoot) | Out-Null
+} catch {
+  # A publish failure must name the failing stage and the child's own error. Reporting only this
+  # wrapper's exit status hides the one fact an operator needs.
+  Write-ReleaseFailureDiagnostic -Label "release publish" -Failure $_
+  exit 1
+}
 exit 0
