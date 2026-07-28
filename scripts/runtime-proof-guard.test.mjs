@@ -30,7 +30,7 @@ const windows = process.platform === "win32";
 // place U+00B7 exists as a byte is where the code under test puts it.
 const EXPECTED_STAMP = "abc1234 · release";
 const EXPECTED_VERSION = "9.9.9";
-const EXPECTED_RAIL = "v9.9.9";
+const EXPECTED_RAIL = "9.9.9";
 
 // One fake probe, selected by mode. Mirrors e2e-updater-probe.mjs: one JSON line on stdout and
 // exit 0, or a message on stderr and a nonzero exit.
@@ -47,7 +47,7 @@ if (mode === "always-fail" || (mode === "flaky" && count <= Number(failCount))) 
 }
 if (mode === "stamp-mismatch") { console.log(JSON.stringify({ ...good, stamp: "deadbee \\u00b7 release" })); process.exit(0); }
 if (mode === "version-mismatch") { console.log(JSON.stringify({ ...good, railVersion: "v0.0.1" })); process.exit(0); }
-if (mode === "version-prefix-collision") { console.log(JSON.stringify({ ...good, railVersion: "v9.9.90" })); process.exit(0); }
+if (mode === "version-prefix-collision") { console.log(JSON.stringify({ ...good, railVersion: "9.9.90" })); process.exit(0); }
 console.log(JSON.stringify(good));
 process.exit(0);
 `;

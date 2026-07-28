@@ -100,7 +100,7 @@ function Invoke-CompyRuntimeProof {
       if ($payload.stamp -ne $ExpectedStamp) {
         throw "RUNTIME STAMP MISMATCH: running app reports '$($payload.stamp)'; expected '$ExpectedStamp'."
       }
-      if (("" + $payload.railVersion).Trim() -cne "v$ExpectedVersion") {
+      if (("" + $payload.railVersion).Trim() -cne $ExpectedVersion) {
         throw "RUNTIME VERSION MISMATCH: the mounted shell does not show version $ExpectedVersion (found '$($payload.railVersion)')."
       }
       return [pscustomobject]@{
