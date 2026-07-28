@@ -17,6 +17,7 @@ function Invoke-Gate([string]$Label, [string]$Command, [string[]]$Arguments) {
 }
 
 Invoke-Gate "git diff check" "git" @("-C", $repo, "diff", "--check")
+Invoke-Gate "release PowerShell static guard" "node" @("scripts/release-powershell-static-guard.mjs")
 Invoke-Gate "frontend tests" $npm.Command (@($npm.ArgumentPrefix) + @("test"))
 Invoke-Gate "TypeScript" "node" @("node_modules/typescript/bin/tsc", "--noEmit")
 Invoke-Gate "frontend production build" $npm.Command (@($npm.ArgumentPrefix) + @("run", "build"))

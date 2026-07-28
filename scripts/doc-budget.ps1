@@ -9,6 +9,7 @@ $budgets = @{
   "docs/OWNER_ACTION_CHECKLIST.md" = 450
   "docs/BETA_DISTRIBUTION_RECORD.md" = 250
   "docs/RELEASE_AUTONOMY.md" = 120
+  "docs/RELEASE_TRANSACTION.md" = 120
   "CLAUDE.md" = 400
 }
 $root = Split-Path $PSScriptRoot -Parent

@@ -22,10 +22,17 @@ const script = read("release.ps1");
 const reinstall = read("ship-reinstall.ps1");
 const runtimeProof = read("lib", "runtime-proof.ps1");
 const nativeProcess = read("lib", "native-process.ps1");
+const releaseArtifacts = read("lib", "release-artifacts.ps1");
+const releaseTransaction = read("lib", "release-transaction.ps1");
+const publishAdapter = read("lib", "release-publish-adapter.ps1");
 const executable = stripComments(script);
 const reinstallExecutable = stripComments(reinstall);
 const runtimeProofExecutable = stripComments(runtimeProof);
 const nativeProcessExecutable = stripComments(nativeProcess);
+const releaseArtifactsExecutable = stripComments(releaseArtifacts);
+const transactionExecutable = stripComments(releaseTransaction);
+const publishAdapterExecutable = stripComments(publishAdapter);
+const productionExecutable = [executable, transactionExecutable, publishAdapterExecutable].join("\n");
 
 // The COMPLETE release-critical PowerShell surface: every .ps1 the release pipeline can execute.
 // The v0.9.9 publish died because the previous ban covered only ship-reinstall.ps1 + runtime-proof.ps1,
@@ -35,11 +42,15 @@ const releaseCriticalSurface = [
   { name: "release.ps1", text: script, executable },
   { name: "release-prepare.ps1", text: read("release-prepare.ps1") },
   { name: "release-publish.ps1", text: read("release-publish.ps1") },
+  { name: "release-prove.ps1", text: read("release-prove.ps1") },
   { name: "verify-release.ps1", text: read("verify-release.ps1") },
   { name: "ship-reinstall.ps1", text: reinstall, executable: reinstallExecutable },
   { name: "doc-budget.ps1", text: read("doc-budget.ps1") },
   { name: "lib/native-process.ps1", text: nativeProcess, executable: nativeProcessExecutable },
+  { name: "lib/release-artifacts.ps1", text: releaseArtifacts, executable: releaseArtifactsExecutable },
   { name: "lib/runtime-proof.ps1", text: runtimeProof, executable: runtimeProofExecutable },
+  { name: "lib/release-transaction.ps1", text: releaseTransaction, executable: transactionExecutable },
+  { name: "lib/release-publish-adapter.ps1", text: publishAdapter, executable: publishAdapterExecutable },
 ].map((entry) => ({ ...entry, executable: entry.executable ?? stripComments(entry.text) }));
 
 const position = (needle) => {
@@ -62,7 +73,7 @@ describe("release pipeline safety", () => {
   });
 
   it("defaults to staging and requires an explicit publish mode", () => {
-    expect(script).toMatch(/ValidateSet\("stage",\s*"publish"\)/i);
+    expect(script).toMatch(/ValidateSet\("stage",\s*"prove",\s*"publish"\)/i);
     expect(script).toMatch(/\$Mode\s*=\s*"stage"/i);
     expect(script).not.toContain("NoPublish");
     expect(script).not.toContain("SkipReinstall");
@@ -96,20 +107,22 @@ describe("release pipeline safety", () => {
 
   it("uses a staged receipt so publishing never bumps or rebuilds a new version", () => {
     expect(script).toContain("release-stage.json");
-    expect(script).toMatch(/if\s*\(\$Mode\s+-eq\s+"publish"\)/i);
-    expect(script).toMatch(/HEAD does not match staged commit/i);
+    expect(script).toMatch(/if\s*\(\$Mode\s+-eq\s+"publish"\s+-or\s+\$Mode\s+-eq\s+"prove"\)/i);
+    expect(script).toMatch(/HEAD neither matches nor contains the staged release commit/i);
+    expect(script).toContain('"merge-base", "--is-ancestor", $context.Receipt.commit, "HEAD"');
     expect(script).toContain("verify-updater-signature.mjs");
     expect(executable).toContain("schema_version = 3");
     expect(executable).toContain("staged receipt signature verification");
     expect(executable).toContain("staged receipt self-verification");
-    expect(executable).toContain("canonicalInstallerRelative");
-    expect(executable).toContain("canonicalSignatureRelative");
-    expect(executable).toContain("canonicalManifestRelative");
+    expect(executable).toContain("$canonicalInstaller");
+    expect(executable).toContain('"$canonicalInstaller.sig"');
+    expect(executable).toContain("src-tauri/target/release/bundle/nsis/latest.json");
+    expect(executable).toContain("Invoke-ReleaseTransaction");
   });
 
   it("refuses a pending Gaming Mode contract in both stage and publish (reconcile 2026-07-23)", () => {
     expect(executable).toContain('Assert-NoPendingGamingContract "stage"');
-    expect(executable).toContain('Assert-NoPendingGamingContract "publish"');
+    expect(executable).toContain("Assert-NoPendingGamingContract $Mode");
     // A cleanly-cleared backup must NOT block; a live contract must — same rule in both scripts.
     expect(executable).toContain('-notlike "*.cleared-*.json.bak"');
     expect(reinstallExecutable).toContain('-notlike "*.cleared-*.json.bak"');
@@ -122,7 +135,7 @@ describe("release pipeline safety", () => {
     expect(executable).toContain("bytes = (Get-Item -LiteralPath $installer).Length");
     expect(executable).toContain('"tag", "-a", $releaseTag, $releaseCommit');
     expect(executable).toContain("does not point at the staged commit");
-    expect(executable).toContain("push release tag");
+    expect(publishAdapterExecutable).toContain("push exact source tag");
   });
 
   it("signs via the grandfathered fleet-anchor path and proves the key before the version commit", () => {
@@ -194,71 +207,72 @@ describe("release pipeline safety", () => {
 
   it("revalidates manifest binding and cryptography when publishing", () => {
     const receiptHashes = position('Assert-ReceiptHash "Updater manifest"');
-    const bind = position("Read-BoundManifest $manifestPath");
+    const bind = position("Read-BoundManifest $context.Manifest");
     const crypto = position("publish-time updater signature verification");
-    const reinstall = position('Invoke-StreamedProcess "local ship-reinstall runtime proof"');
     expect(receiptHashes).toBeLessThan(bind);
     expect(bind).toBeLessThan(crypto);
-    expect(crypto).toBeLessThan(reinstall);
-    expect(script).toContain("Manifest URL does not bind the staged release");
-    expect(script).toContain("Manifest signature does not match the staged updater signature");
+    expect(transactionExecutable).toContain('"receipt_verified"');
+    expect(transactionExecutable.indexOf('"receipt_verified"')).toBeLessThan(
+      transactionExecutable.indexOf('"runtime_proved"'),
+    );
+    expect(releaseArtifacts).toContain("Manifest URL does not bind the staged release");
+    expect(releaseArtifacts).toContain("Manifest signature does not match the staged updater signature");
   });
 
   it("publishes only after local verification and exact-source push", () => {
-    const reinstall = position('Invoke-StreamedProcess "local ship-reinstall runtime proof"');
-    const push = position('"push", "origin", "$($receipt.commit):main"');
-    const draft = position("create draft GitHub release");
-    const downloadedCrypto = position("downloaded draft signature verification");
-    const publish = position("--draft=false");
-    expect(reinstall).toBeLessThan(push);
-    expect(push).toBeLessThan(draft);
-    expect(draft).toBeLessThan(downloadedCrypto);
-    expect(downloadedCrypto).toBeLessThan(publish);
-    expect(draft).toBeLessThan(publish);
-    expect(executable.slice(draft, publish)).toContain("--draft");
-    expect(executable.slice(draft, publish)).toContain("--verify-tag");
-    expect(executable.slice(draft, publish)).not.toContain("--target $head");
+    const stages = [
+      "runtime_proved",
+      "source_main_pushed",
+      "source_tag_pushed",
+      "releases_tag_created",
+      "draft_created",
+      "draft_assets_verified",
+      "release_published",
+      "public_assets_verified",
+    ];
+    const indices = stages.map((stage) => transactionExecutable.indexOf(`"${stage}"`));
+    expect(indices.every((index) => index >= 0)).toBe(true);
+    expect(indices).toEqual([...indices].sort((a, b) => a - b));
+    expect(publishAdapterExecutable).toContain("local ship-reinstall runtime proof");
+    expect(publishAdapterExecutable).toContain("push staged source");
+    expect(publishAdapterExecutable).toContain("create private draft release");
+    expect(publishAdapterExecutable).toContain("downloaded draft signature verification");
+    expect(publishAdapterExecutable).toContain("--draft=false");
+    expect(publishAdapterExecutable).toContain("--verify-tag");
   });
 
   it("rechecks source identity after verification, install, build, and push", () => {
     const verify = position('Invoke-StreamedProcess "verify-release.ps1"');
     const postVerify = position("$postVerifyHead = Get-GitLine");
     const versionWrite = position("Write-NoBom $confPath");
-    const postInstall = position("$postInstallHead = Get-GitLine");
-    const literalPush = position('"push", "origin", "$($receipt.commit):main"');
     const postBuild = position("$postBuildHead = Get-GitLine");
     const receiptWrite = position("Write-NoBom $stageReceiptPath");
     expect(verify).toBeLessThan(postVerify);
     expect(postVerify).toBeLessThan(versionWrite);
-    expect(postInstall).toBeLessThan(literalPush);
     expect(postBuild).toBeLessThan(receiptWrite);
-    expect(executable).toContain("Source push did not publish the staged commit");
+    expect(publishAdapterExecutable).toContain("Inspect-ProductionSourceMain");
+    expect(publishAdapterExecutable).toContain("merge-base");
+    expect(publishAdapterExecutable).toContain("origin/main and the staged release commit have diverged");
   });
 
   it("checks remote truth before install and the exact public latest URLs after publish", () => {
     const remoteList = position("function Assert-PublicVersionCanPublish");
     const downgrade = position("Refusing updater downgrade/non-increase");
-    const reinstall = position('Invoke-StreamedProcess "local ship-reinstall runtime proof"');
-    const firstMonotonicCheck = position("Assert-PublicVersionCanPublish $receipt.version $tag");
-    const finalMonotonicCheck = position(
-      "Assert-PublicVersionCanPublish $receipt.version $tag -AllowOwnDraft",
-    );
-    const publish = position("--draft=false");
-    const publicManifest = position('releases/latest/download/latest.json" $publicManifest');
-    const publicCrypto = position("public latest signature verification");
     expect(remoteList).toBeLessThan(downgrade);
-    expect(firstMonotonicCheck).toBeLessThan(reinstall);
-    expect(downgrade).toBeLessThan(reinstall);
-    expect(finalMonotonicCheck).toBeLessThan(publish);
-    expect(publish).toBeLessThan(publicManifest);
-    expect(publicManifest).toBeLessThan(publicCrypto);
+    expect(executable).toContain("Assert-PublicVersionCanPublish $context.Receipt.version");
+    expect(publishAdapterExecutable).toContain("publicVersionGate");
+    expect(publishAdapterExecutable).toContain("releases/latest/download/latest.json");
+    expect(publishAdapterExecutable).toContain("public updater signature verification");
+    expect(transactionExecutable.indexOf('"release_published"')).toBeLessThan(
+      transactionExecutable.indexOf('"public_assets_verified"'),
+    );
     expect(executable).toContain("Authentication/network failure is not treated as an absent tag");
-    expect(script).toContain("single-writer owner action");
+    expect(transactionExecutable).toContain("OWNER BOUNDARY");
   });
 
   it("proves the installed build's embedded commit, executable version, and Windows app metadata before success", () => {
     expect(reinstall).toContain("Built release executable is missing before install");
-    expect(reinstall).toContain("Could not resolve the source HEAD before install");
+    expect(reinstall).toContain("Could not resolve the expected source commit before install");
     expect(reinstall).toContain("Could not verify the source worktree before install");
     expect(reinstallExecutable).toContain(
       "Invoke-NativeProcess -Command $dest -ArgumentList @(\"/S\") -TimeoutMs 180000 -KillTreeOnTimeout $false",
@@ -267,7 +281,8 @@ describe("release pipeline safety", () => {
     // Correctness invariant is the embedded HEAD commit + version, NOT byte-identity vs
     // target/release/compy.exe: NSIS packaging + non-reproducible Rust links mean a legitimate
     // install of THIS build has a different SHA-256 (same commit/version/size). See ship-reinstall.ps1.
-    expect(reinstall).toContain("Select-String -Path $exe -Pattern $head -Quiet");
+    expect(reinstall).toContain('$proofCommit = if ($VerifyRuntime) { $ExpectedCommit } else { "HEAD" }');
+    expect(reinstall).toContain("Select-String -Path $exe -Pattern $expectedShortCommit -Quiet");
     expect(reinstall).toContain("INSTALLED-BINARY STALE");
     expect(reinstall).toContain("VersionInfo.ProductVersion");
     expect(reinstall).toContain("DisplayVersion");
@@ -365,8 +380,9 @@ describe("release-critical PowerShell cannot be killed by an expected native fai
       expect(exe, `${name} still depends on $LASTEXITCODE`).not.toContain("$LASTEXITCODE");
     }
     expect(stripComments(read("release-prepare.ps1"))).toContain('Invoke-StreamedProcess "release prepare"');
+    expect(stripComments(read("release-prove.ps1"))).toContain('Invoke-StreamedProcess "release local proof"');
     expect(stripComments(read("release-publish.ps1"))).toContain('Invoke-StreamedProcess "release publish"');
-    expect(executable.match(/^\s*exit 0\s*$/gm) ?? [], "release.ps1 stage+publish must both exit 0").toHaveLength(2);
+    expect(executable.match(/^\s*exit 0\s*$/gm) ?? [], "release.ps1 stage+prove+publish must all exit 0").toHaveLength(3);
   });
 
   it("captures stdout, stderr and exit code explicitly, decoded as UTF-8", () => {
@@ -395,23 +411,24 @@ describe("release-critical PowerShell cannot be killed by an expected native fai
     expect(nativeProcessExecutable).toMatch(
       /if\s*\(\$Result\.TimedOut\s+-or\s+\$Result\.ExitCode\s+-eq\s+0\)\s*{\s*return\s*\$false\s*}/,
     );
-    // The tag probe branches on the classification instead of collapsing every failure to "absent".
-    const tagProbe = executable.slice(position("$tagProbe = Invoke-NativeProcess"), position("create releases-repo tag"));
-    expect(tagProbe).toContain("$tagProbe.ExitCode -eq 0");
-    expect(tagProbe).toContain("Test-GhNotFound $tagProbe");
-    expect(tagProbe).toContain("Releases-repo tag lookup for $tag timed out.");
-    expect(tagProbe).toMatch(/Releases-repo tag lookup for \$tag failed \(exit \$\(\$tagProbe\.ExitCode\)\)/);
-    expect(tagProbe).toContain("Authentication/network failure is not treated as an absent tag");
-    // A successful lookup that returns nothing is refused rather than guessed at.
-    expect(tagProbe).toContain("succeeded but returned no sha");
+    // The production adapter branches on the classification instead of collapsing failures to absence.
+    expect(publishAdapterExecutable).toContain("Test-GhNotFound $result");
+    expect(publishAdapterExecutable).toContain("GitHub API lookup timed out");
+    expect(publishAdapterExecutable).toContain(
+      "Authentication, permission, network, and malformed failures are fatal",
+    );
+    expect(publishAdapterExecutable).toContain("GitHub API lookup succeeded with an empty response");
+    expect(publishAdapterExecutable).toContain("GitHub API lookup returned malformed JSON");
   });
 
   it("keeps the source-tag and releases-lookup verifications fail-closed", () => {
     // Coverages (6) and (7). Get-GitLine throws on any nonzero git, so an unreadable ls-remote can
     // never present as "tag absent"; an empty answer cannot equal the staged commit either.
-    expect(executable).toContain('Get-GitLine @("ls-remote", "origin", "refs/tags/$($receipt.tag)^{}")');
-    expect(executable).toContain("does not resolve to the staged commit on origin");
-    expect(executable).toMatch(/Invoke-CheckedProcess[^\n]*"git"/);
+    expect(publishAdapterExecutable).toContain('"ls-remote", "origin"');
+    expect(publishAdapterExecutable).toContain('"refs/tags/$($Context.Receipt.tag)^{}"');
+    expect(publishAdapterExecutable).toContain("exact annotated tag object and receipt commit");
+    expect(publishAdapterExecutable).toContain("Invoke-ProductionGitChecked");
+    expect(publishAdapterExecutable).toContain('else { "git" }');
     // The release-list query and the releases-main lookup both abort on an unreadable answer.
     const releaseList = executable.slice(
       position("$releaseListProbe = Invoke-NativeProcess"),
@@ -420,11 +437,10 @@ describe("release-critical PowerShell cannot be killed by an expected native fai
     expect(releaseList).toMatch(/\$releaseListProbe\.TimedOut\s+-or\s+\$releaseListProbe\.ExitCode\s+-ne\s+0/);
     expect(releaseList).toContain("Could not query the releases repository.");
     expect(releaseList).toContain("Empty response.");
-    expect(executable).toMatch(/\$releasesMainProbe\.TimedOut\s+-or\s+\$releasesMainProbe\.ExitCode\s+-ne\s+0/);
-    expect(executable).toContain("Could not resolve $releasesRepo main sha for the release tag.");
-    // Latest-release verification after publish is the same shape: unreadable is not verified.
-    expect(executable).toMatch(/\$latestProbe\.TimedOut\s+-or\s+\$latestProbe\.ExitCode\s+-ne\s+0\s+-or\s+\$latestTag\s+-ne\s+\$tag/);
-    expect(executable).toContain("latest-release verification failed");
+    expect(publishAdapterExecutable).toContain("Get-ProductionReleasesMain");
+    expect(publishAdapterExecutable).toContain("Releases repository main lookup returned a malformed object id");
+    expect(publishAdapterExecutable).toContain("Inspect-ProductionPublicAssets");
+    expect(publishAdapterExecutable).toContain("Public latest manifest");
   });
 
   it("treats a nonzero probe exit as a retryable attempt and still fails closed", () => {
@@ -446,7 +462,9 @@ describe("release-critical PowerShell cannot be killed by an expected native fai
     // itself may contain exactly ONE catch -- the malformed-payload one above. Any second catch in
     // it could swallow a verdict. (The bounded cleanup catches in the capture helper are a
     // different function and are deliberately allowed.)
-    const proofBody = runtimeProofExecutable.slice(runtimeProofExecutable.indexOf("function Invoke-CompyRuntimeProof"));
+    const proofStart = runtimeProofExecutable.indexOf("function Invoke-CompyRuntimeProof");
+    const proofEnd = runtimeProofExecutable.indexOf("function Wait-LoopbackPortClosed");
+    const proofBody = runtimeProofExecutable.slice(proofStart, proofEnd);
     expect(proofBody).not.toBe("");
     expect(proofBody.match(/\bcatch\b/g) ?? []).toHaveLength(1);
     expect(proofBody).not.toMatch(/\btrap\b/);
