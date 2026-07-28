@@ -92,6 +92,58 @@ const functionBody = (text, name) => {
   return null;
 };
 
+const matchingParen = (text, open) => {
+  let depth = 0;
+  let quote = "";
+  for (let index = open; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (char === quote && text[index - 1] !== "`") quote = "";
+    } else if (char === '"' || char === "'") {
+      quote = char;
+    } else if (char === "(") {
+      depth += 1;
+    } else if (char === ")") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return -1;
+};
+
+// PowerShell 5.1 hands a parsed JSON array back as ONE Object[], so @(<pipeline> | ConvertFrom-Json)
+// collects a single nested element instead of unrolling it, and every later property read silently
+// member-enumerates instead of failing. Only the TAIL of an array subexpression is dangerous: a
+// ConvertFrom-Json nested inside a ForEach-Object block still emits one parsed object per iteration.
+const nestedJsonArrayParses = (text) => {
+  const hits = [];
+  for (const match of text.matchAll(/@\(/g)) {
+    const open = match.index + 1;
+    const close = matchingParen(text, open);
+    if (close < 0) continue;
+    const inner = text.slice(open + 1, close);
+    let depth = 0;
+    let quote = "";
+    let tail = -1;
+    for (let index = 0; index < inner.length; index += 1) {
+      const char = inner[index];
+      if (quote) {
+        if (char === quote && inner[index - 1] !== "`") quote = "";
+      } else if (char === '"' || char === "'") {
+        quote = char;
+      } else if (char === "(" || char === "{" || char === "[") {
+        depth += 1;
+      } else if (char === ")" || char === "}" || char === "]") {
+        depth -= 1;
+      } else if (char === "|" && depth === 0) {
+        tail = index + 1;
+      }
+    }
+    if (tail >= 0 && /^\s*ConvertFrom-Json\b/i.test(inner.slice(tail))) hits.push(match.index);
+  }
+  return hits;
+};
+
 const braceDepthAt = (text, end) => {
   let depth = 0;
   let quote = "";
@@ -120,6 +172,8 @@ const requiredTokens = new Map([
       'Assert-ReceiptHash "Installer"',
       "publish-time updater signature verification",
       "Assert-PublicVersionCanPublish",
+      "$releaseList = @($parsedReleaseList)",
+      "Unexpected release entry shape.",
       "Invoke-ReleaseTransaction",
     ],
   ],
@@ -217,6 +271,14 @@ export function scanReleasePowerShell({ overrides = {} } = {}) {
     }
     if (/\bInvoke-Expression\b/i.test(executable)) {
       report(file, "no-eval", "Invoke-Expression is forbidden");
+    }
+    for (const index of nestedJsonArrayParses(liveExecutable)) {
+      const snippet = liveExecutable.slice(index, index + 72).replace(/\s+/g, " ").trim();
+      report(
+        file,
+        "json-array-parse",
+        `array-wrapped ConvertFrom-Json nests a JSON array on PowerShell 5.1; assign the parse first, then wrap: ${snippet}`,
+      );
     }
     if (/(?:^|[^\d])2>\s*\$null\b/m.test(executable)) {
       report(file, "native-stderr", "2>$null cannot control a native-process result on PowerShell 5.1");

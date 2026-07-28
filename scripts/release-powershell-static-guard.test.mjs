@@ -215,6 +215,64 @@ describe("permanent release PowerShell static guard", () => {
     );
   });
 
+  it("rejects the exact historical PowerShell 5.1 nested JSON-array parse", () => {
+    const file = "scripts/release.ps1";
+    const original = read(file);
+    const bypassed = original.replace(
+      /  try \{\r?\n    \$parsedReleaseList = \$releaseListText \| ConvertFrom-Json\r?\n[\s\S]*?\r?\n  \$releaseList = @\(\$parsedReleaseList\)/,
+      "  $releaseList = @($releaseListText | ConvertFrom-Json)",
+    );
+    expect(bypassed).not.toBe(original);
+    const result = scanReleasePowerShell({ overrides: { [file]: bypassed } });
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          file,
+          rule: "json-array-parse",
+          message: expect.stringContaining("nests a JSON array on PowerShell 5.1"),
+        }),
+      ]),
+    );
+  });
+
+  it("rejects any array-wrapped ConvertFrom-Json across the guarded surface", () => {
+    for (const [file, injected] of [
+      ["scripts/lib/release-publish-adapter.ps1", '\n$list = @($raw | ConvertFrom-Json)\n'],
+      ["scripts/lib/release-transaction.ps1", '\n$journal = @(\n  Read-Utf8 $path |\n  ConvertFrom-Json\n)\n'],
+      ["scripts/verify-release.ps1", '\n$entries = @((Get-Content -LiteralPath $p -Raw) | ConvertFrom-Json)\n'],
+    ]) {
+      const result = scanReleasePowerShell({ overrides: { [file]: read(file) + injected } });
+      expect(result.ok).toBe(false);
+      expect(result.errors).toEqual(
+        expect.arrayContaining([expect.objectContaining({ file, rule: "json-array-parse" })]),
+      );
+    }
+  });
+
+  it("accepts the safe per-item and assign-then-wrap JSON parses", () => {
+    const file = "scripts/lib/release-transaction.ps1";
+    const injected =
+      '\n$lines = @(Get-Content -LiteralPath $callsPath | ForEach-Object { $_ | ConvertFrom-Json })\n' +
+      "\n$parsedSafely = $raw | ConvertFrom-Json\n$wrapped = @($parsedSafely)\n";
+    const result = scanReleasePowerShell({ overrides: { [file]: read(file) + injected } });
+    expect(result.errors.filter((error) => error.rule === "json-array-parse")).toEqual([]);
+  });
+
+  it("requires the releases-list parse to keep its shape and malformed-JSON checks", () => {
+    const file = "scripts/release.ps1";
+    const original = read(file);
+    for (const token of ["$releaseList = @($parsedReleaseList)", "Unexpected release entry shape."]) {
+      const bypassed = original.replace(token, "");
+      expect(bypassed).not.toBe(original);
+      const result = scanReleasePowerShell({ overrides: { [file]: bypassed } });
+      expect(result.ok).toBe(false);
+      expect(result.errors).toEqual(
+        expect.arrayContaining([expect.objectContaining({ file, rule: "required-verification" })]),
+      );
+    }
+  });
+
   it("requires every transitively referenced PowerShell helper to be in the guarded surface", () => {
     const file = "scripts/release.ps1";
     const result = scanReleasePowerShell({

@@ -141,7 +141,25 @@ function Assert-PublicVersionCanPublish([string]$CandidateVersion, [string]$Cand
   if ([string]::IsNullOrWhiteSpace($releaseListText)) {
     throw "Could not query the releases repository. Authentication/network failure is not treated as an absent tag. Empty response."
   }
-  $releaseList = @($releaseListText | ConvertFrom-Json)
+  if (-not $releaseListText.TrimStart().StartsWith("[")) {
+    throw "Could not query the releases repository. Authentication/network failure is not treated as an absent tag. A JSON array was required."
+  }
+  # PowerShell 5.1 returns a whole JSON array as ONE Object[] value, so @(<pipeline> | ConvertFrom-Json)
+  # captures a single NESTED element instead of unrolling the array. Every later property read then
+  # member-enumerates ($sameTag[0].isPrerelease -> @(False, False, ...)) and a multi-element array is
+  # TRUE, which is exactly how a compatible draft read back as "exists as a prerelease". Assign first,
+  # then wrap: @() over an already-unrolled array is a no-op, a lone object becomes 1, [] becomes 0.
+  try {
+    $parsedReleaseList = $releaseListText | ConvertFrom-Json
+  } catch {
+    throw "Could not query the releases repository. Authentication/network failure is not treated as an absent tag. Malformed JSON response."
+  }
+  $releaseList = @($parsedReleaseList)
+  foreach ($releaseEntry in $releaseList) {
+    if (-not ($releaseEntry.PSObject.Properties.Name -contains "tagName")) {
+      throw "Could not query the releases repository. Authentication/network failure is not treated as an absent tag. Unexpected release entry shape."
+    }
+  }
   $sameTag = @($releaseList | Where-Object { $_.tagName -eq $CandidateTag })
   if ($sameTag.Count -gt 1) {
     throw "Multiple releases exist for $CandidateTag; refusing ambiguous external state."
