@@ -15,7 +15,7 @@ afterEach(() => {
 const invoke = (scenario = "happy") => {
   const sandbox = mkdtempSync(join(tmpdir(), "compy-production-adapter-"));
   sandboxes.push(sandbox);
-  return spawnSync(
+  const output = spawnSync(
     "powershell.exe",
     [
       "-NoProfile",
@@ -29,7 +29,30 @@ const invoke = (scenario = "happy") => {
     ],
     { cwd: root, encoding: "utf8", shell: false, timeout: 120_000 },
   );
+  // The sandbox path travels with the result: a run that fails emits no payload, and its journal is
+  // the only place the "what did the transaction record before it stopped" question can be answered.
+  return Object.assign(output, { sandbox });
 };
+
+const payloadOf = (output) => {
+  expect(output.status, `${output.stderr}\n${output.stdout}`).toBe(0);
+  return JSON.parse(output.stdout.trim().split(/\r?\n/).at(-1));
+};
+
+const journalOf = (output) =>
+  JSON.parse(readFileSync(join(output.sandbox, "native-release-transaction.json"), "utf8"));
+
+const stages = [
+  "receipt_verified",
+  "runtime_proved",
+  "source_main_pushed",
+  "source_tag_pushed",
+  "releases_tag_created",
+  "draft_created",
+  "draft_assets_verified",
+  "release_published",
+  "public_assets_verified",
+];
 
 describe("production release adapter over sandboxed native transports", () => {
   it("runs real Git/GitHub handlers through first publish and a non-mutating retry", () => {
@@ -38,17 +61,6 @@ describe("production release adapter over sandboxed native transports", () => {
     const payload = JSON.parse(lines.at(-1));
     expect(output.status, `${output.stderr}\n${output.stdout}`).toBe(0);
     expect(payload.ok).toBe(true);
-    const stages = [
-      "receipt_verified",
-      "runtime_proved",
-      "source_main_pushed",
-      "source_tag_pushed",
-      "releases_tag_created",
-      "draft_created",
-      "draft_assets_verified",
-      "release_published",
-      "public_assets_verified",
-    ];
     expect(payload.first_stages).toEqual(stages);
     expect(payload.retry_stages).toEqual(stages);
     expect(payload.state).toMatchObject({
@@ -81,6 +93,20 @@ describe("production release adapter over sandboxed native transports", () => {
     expect(journal.completed_stages).toEqual(stages);
     expect(payload.calls_after_retry).toBeGreaterThan(payload.calls_before_retry);
 
+    // An alias that already serves the published release costs exactly one attempt and no waiting:
+    // the retry policy must not impose a delay on the common case.
+    expect(payload.first_alias.latest_alias_verified).toBe(true);
+    expect(payload.first_alias.latest_alias_attempts).toBe(1);
+    expect(payload.first_alias.latest_alias_seconds).toBe(0);
+    expect(payload.first_alias_probes).toEqual({ manifest: 1, installer: 1 });
+    // Both aliases are read on every attempt, each with its own cache-busting token, so a cached
+    // edge response can never be mistaken for a converged one.
+    expect(payload.alias_tokens).toHaveLength(4);
+    const tokens = payload.alias_tokens.map((line) => line.split("?compy-cache-bust=").at(-1));
+    expect(new Set(tokens).size).toBe(2);
+    expect(payload.alias_tokens.filter((line) => line.startsWith("latest.json "))).toHaveLength(2);
+    expect(payload.alias_tokens.filter((line) => line.startsWith("Compy_9.9.9_x64-setup.exe "))).toHaveLength(2);
+
     // The sandbox gh now answers 404 for a draft by tag, exactly as GitHub does. Completing the
     // draft stages anyway is the proof that 404-by-tag is no longer read as absence, and that the
     // authenticated list -- not the tag endpoint -- is the authoritative draft-aware lookup.
@@ -88,6 +114,60 @@ describe("production release adapter over sandboxed native transports", () => {
     expect(ghCalls.some((args) => args[0] === "api" && args[1].includes("/releases/tags/"))).toBe(false);
     expect(ghCalls.some((args) => args[0] === "api" && /\/releases\/\d+$/.test(args[1]))).toBe(true);
   }, 120_000);
+
+  it("waits out a latest-download alias that still serves the previous release", () => {
+    const output = invoke("alias-propagation-lag");
+    const payload = payloadOf(output);
+    // The tag-specific assets are already correct and GitHub already names the new release as
+    // latest; only the alias lags. That combination is the one shape treated as transient.
+    expect(payload.first_stages).toEqual(stages);
+    expect(payload.first_alias.latest_alias_verified).toBe(true);
+    expect(payload.first_alias.latest_alias_attempts).toBe(3);
+    // Backoff really is charged against the deadline, not skipped: 5s then 10s before the third read.
+    expect(payload.first_alias.latest_alias_seconds).toBeCloseTo(15, 0);
+    expect(payload.first_alias_probes.manifest).toBe(3);
+    // A retry must not reuse the previous attempt's download: the hashes finally recorded are the
+    // receipt-bound ones, never the stale 9.9.8 body an earlier attempt left in the same file.
+    const binding = journalOf(output).binding;
+    expect(payload.first_alias.manifest_sha256).toBe(binding.manifest_sha256);
+    expect(payload.first_alias.installer_sha256).toBe(binding.installer_sha256);
+    // And the whole transaction stays idempotent across the lag: nine stages again, no second push,
+    // tag, draft, upload or publication.
+    expect(payload.retry_stages).toEqual(stages);
+    const mutations = payload.mutation_calls.map((call) => `${call.tool}:${call.args.join(" ")}`);
+    expect(mutations.filter((call) => call.startsWith("gh:release create"))).toHaveLength(1);
+    expect(mutations.filter((call) => call.startsWith("gh:release upload"))).toHaveLength(1);
+    expect(mutations.filter((call) => call.startsWith("gh:release edit"))).toHaveLength(1);
+  }, 180_000);
+
+  it("requires the installer alias to converge too, not just the manifest", () => {
+    const output = invoke("alias-installer-lag");
+    const payload = payloadOf(output);
+    // Here the manifest alias is correct from the first read while the installer alias 404s. The
+    // stage must keep waiting: a converged manifest alone is not a converged release.
+    expect(payload.first_stages).toEqual(stages);
+    expect(payload.first_alias.latest_alias_attempts).toBe(3);
+    expect(payload.first_alias_probes).toEqual({ manifest: 3, installer: 3 });
+  }, 180_000);
+
+  it("treats an alias 404 for the installer as propagation lag rather than a missing asset", () => {
+    const output = invoke("alias-manifest-absent");
+    const payload = payloadOf(output);
+    expect(payload.first_stages).toEqual(stages);
+    expect(payload.first_alias.latest_alias_attempts).toBe(3);
+    expect(payload.first_alias.latest_alias_verified).toBe(true);
+  }, 180_000);
+
+  it("leaves the journal one stage short when the alias never converges", () => {
+    const output = invoke("alias-never-converges");
+    expect(output.status).not.toBe(0);
+    // The eight stages that really did happen stay recorded -- the transaction is resumable -- but
+    // public_assets_verified is not written on a stage that failed.
+    const journal = journalOf(output);
+    expect(journal.completed_stages).toEqual(stages.slice(0, 8));
+    expect(journal.completed_stages).not.toContain("public_assets_verified");
+    expect(journal.evidence.public_assets_verified).toBeUndefined();
+  }, 180_000);
 
   it("adopts a compatible pre-existing private draft instead of creating a second release", () => {
     const output = invoke("adopt-existing-draft");
@@ -131,6 +211,9 @@ describe("production release adapter over sandboxed native transports", () => {
     ["empty-release-list", /release listing returned an empty response/i],
     ["wrong-shape-release-list", /unexpected response shape/i],
     ["unpaginated-release-list", /incompletely paginated listing/i],
+    ["alias-never-converges", /alias did not converge on v9\.9\.9 within 30 seconds \(3 attempts\)/i],
+    ["alias-unrelated-payload", /not older than the published 9\.9\.9/i],
+    ["unexpected-latest-release", /reports release 880088 \(tag v9\.9\.8\) as latest/i],
   ])("fails closed in the real production handler for %s", (scenario, pattern) => {
     const output = invoke(scenario);
     const combined = `${output.stderr}\n${output.stdout}`;

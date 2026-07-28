@@ -273,6 +273,95 @@ describe("permanent release PowerShell static guard", () => {
     }
   });
 
+  // The v0.9.11 propagation race: the tag-specific assets were correct and GitHub already named the
+  // new release as latest, but /releases/latest/download/ still served the previous one. Each of
+  // these mutations is a plausible way to "simplify" the repair back into that failure.
+  it.each([
+    ["$deadlineSeconds = 900", "an unbounded poll"],
+    ["$backoff = @(5, 10, 20, 30, 45, 60)", "a poll with no backoff"],
+    ['("alias-attempt-" + $attempt.ToString("000"))', "attempts sharing one download directory"],
+    ['Assert-ReceiptHash "Public latest installer"', "an accepted attempt that skips the installer"],
+    ['Assert-ReceiptHash "Public latest manifest"', "an accepted attempt that skips the manifest"],
+    ["Assert-AliasPropagationLag", "retrying a body that was never classified"],
+  ])("rejects %s (%s)", (token) => {
+    const file = "scripts/lib/release-publish-adapter.ps1";
+    const original = read(file);
+    const bypassed = original.replace(token, "");
+    expect(bypassed).not.toBe(original);
+    const result = scanReleasePowerShell({ overrides: { [file]: bypassed } });
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ file, rule: "alias-propagation" })]),
+    );
+  });
+
+  it("rejects a retried download that can verify a file an earlier attempt left behind", () => {
+    const file = "scripts/lib/release-publish-adapter.ps1";
+    const original = read(file);
+    const bypassed = original.replace("    Remove-Item -LiteralPath $OutFile -Force\n", "");
+    expect(bypassed).not.toBe(original);
+    const result = scanReleasePowerShell({ overrides: { [file]: bypassed } });
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ file, rule: "alias-propagation" })]),
+    );
+  });
+
+  it("rejects an equal-or-newer alias version being waited out as propagation lag", () => {
+    const file = "scripts/lib/release-publish-adapter.ps1";
+    const original = read(file);
+    const bypassed = original.replace(
+      "if ((Compare-ReleaseVersion $aliasVersion $Context.Receipt.version) -ge 0) {",
+      "if ($false) {",
+    );
+    expect(bypassed).not.toBe(original);
+    const result = scanReleasePowerShell({ overrides: { [file]: bypassed } });
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ file, rule: "alias-propagation" })]),
+    );
+  });
+
+  it("rejects proving the eventually-consistent alias before the release identity is pinned", () => {
+    const file = "scripts/lib/release-publish-adapter.ps1";
+    const original = read(file);
+    const identity = "    $null = Assert-ProductionLatestReleaseIdentity $Context $lookup.Value\n";
+    const wait = "    $convergence = Wait-ProductionLatestAliasConvergence $Context $publicDir\n";
+    const reordered = original.replace(identity, "").replace(wait, wait + identity);
+    expect(reordered).not.toBe(original);
+    const result = scanReleasePowerShell({ overrides: { [file]: reordered } });
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ file, rule: "alias-propagation" })]),
+    );
+  });
+
+  it("rejects asserting the latest alias outside the bounded convergence poll", () => {
+    const file = "scripts/lib/release-publish-adapter.ps1";
+    const injected = read(file).replace(
+      '    Assert-ReceiptHash "Public tag-specific installer" $publicInstaller $Context.Receipt.installer.sha256',
+      '    Assert-ReceiptHash "Public latest installer" $publicInstaller $Context.Receipt.installer.sha256\n' +
+        '    Assert-ReceiptHash "Public tag-specific installer" $publicInstaller $Context.Receipt.installer.sha256',
+    );
+    const result = scanReleasePowerShell({ overrides: { [file]: injected } });
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ file, rule: "alias-propagation" })]),
+    );
+  });
+
+  it("rejects classifying anything but a 404 as an unpublished-yet alias asset", () => {
+    const file = "scripts/lib/release-artifacts.ps1";
+    const original = read(file);
+    const bypassed = original.replace("return ($status -eq 404)", "return ($status -ge 400)");
+    expect(bypassed).not.toBe(original);
+    const result = scanReleasePowerShell({ overrides: { [file]: bypassed } });
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ file, rule: "alias-propagation" })]),
+    );
+  });
+
   it("requires every transitively referenced PowerShell helper to be in the guarded surface", () => {
     const file = "scripts/release.ps1";
     const result = scanReleasePowerShell({

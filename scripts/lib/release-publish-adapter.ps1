@@ -103,13 +103,23 @@ function Invoke-ProductionDownload {
   param(
     [Parameter(Mandatory = $true)][psobject]$Context,
     [Parameter(Mandatory = $true)][string]$Uri,
-    [Parameter(Mandatory = $true)][string]$OutFile
+    [Parameter(Mandatory = $true)][string]$OutFile,
+    [string]$CacheBustToken,
+    [switch]$StopOnNotFound
   )
-  if ($Context.DownloadFile) {
-    Invoke-ReleaseScriptBlock -ScriptBlock $Context.DownloadFile -ArgumentList @($Uri, $OutFile)
-    return
+  # A retried download must never be able to verify a file a previous attempt left behind.
+  if (Test-Path -LiteralPath $OutFile) {
+    Remove-Item -LiteralPath $OutFile -Force
   }
-  Invoke-DownloadWithRetry $Uri $OutFile
+  $requestUri = Add-ReleaseCacheBustingQuery $Uri $CacheBustToken
+  if ($Context.DownloadFile) {
+    $null = Invoke-ReleaseScriptBlock -ScriptBlock $Context.DownloadFile -ArgumentList @($requestUri, $OutFile)
+  } else {
+    Invoke-DownloadWithRetry $requestUri $OutFile -StopOnNotFound:$StopOnNotFound
+  }
+  if (-not (Test-Path -LiteralPath $OutFile -PathType Leaf)) {
+    throw "Public release download reported success but produced no file: $requestUri"
+  }
 }
 
 function Get-ProductionGhApi {
@@ -468,6 +478,143 @@ function Inspect-ProductionPublished {
   return New-ProductionInspection "complete" @{ release_id = $lookup.Value.id; published_at = $lookup.Value.published_at }
 }
 
+# GitHub answers `GET /repos/{repo}/releases/latest` from release metadata, which is consistent
+# immediately, while the /releases/latest/download/ redirector converges a beat later. Requiring the
+# metadata to already name this exact release is what makes a lagging alias provably a lag and not a
+# publication that went somewhere else.
+function Assert-ProductionLatestReleaseIdentity {
+  param(
+    [Parameter(Mandatory = $true)][psobject]$Context,
+    [Parameter(Mandatory = $true)][psobject]$Release
+  )
+  $latest = Get-ProductionGhApi $Context "repos/$($Context.ReleasesRepo)/releases/latest"
+  if (-not $latest.Found -or -not $latest.Value) {
+    throw "The releases repository reports no latest published release for $($Context.Receipt.tag)."
+  }
+  $value = $latest.Value
+  if (("" + $value.id) -cne ("" + $Release.id)) {
+    throw "GitHub reports release $($value.id) (tag $($value.tag_name)) as latest, not the published release $($Release.id) for $($Context.Receipt.tag)."
+  }
+  if (("" + $value.tag_name) -cne $Context.Receipt.tag) {
+    throw "The latest published release is tagged $($value.tag_name); the receipt binds $($Context.Receipt.tag)."
+  }
+  if ($value.draft) { throw "The latest published release for $($Context.Receipt.tag) is still a draft." }
+  if ($value.prerelease) { throw "The latest published release for $($Context.Receipt.tag) is marked prerelease." }
+  return $value
+}
+
+# The only body a lagging alias is allowed to serve is a well-formed manifest for a STRICTLY OLDER
+# release of this same repository. A newer version, an equal version with different bytes, an
+# unparseable body or a manifest bound somewhere else is an unrelated payload, and unrelated is fatal.
+function Assert-AliasPropagationLag {
+  param(
+    [Parameter(Mandatory = $true)][psobject]$Context,
+    [Parameter(Mandatory = $true)][string]$ManifestPath
+  )
+  $manifest = $null
+  try {
+    $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
+  } catch {
+    throw "The latest-download alias returned an unparseable manifest; refusing to read it as propagation lag."
+  }
+  if (-not $manifest -or [string]::IsNullOrWhiteSpace(("" + $manifest.version))) {
+    throw "The latest-download alias returned a manifest with no version; refusing to read it as propagation lag."
+  }
+  $aliasVersion = ("" + $manifest.version).Trim()
+  if ((Compare-ReleaseVersion $aliasVersion $Context.Receipt.version) -ge 0) {
+    throw "The latest-download alias serves version $aliasVersion, which is not older than the published $($Context.Receipt.version). That is an unrelated or newer release, not propagation lag."
+  }
+  $platform = $manifest.platforms.'windows-x86_64'
+  $expectedPrefix = "https://github.com/$($Context.ReleasesRepo)/releases/download/v$aliasVersion/"
+  if (-not $platform -or -not ("" + $platform.url).StartsWith($expectedPrefix, [System.StringComparison]::Ordinal)) {
+    throw "The latest-download alias serves a manifest that does not bind $($Context.ReleasesRepo) v$aliasVersion; refusing to read it as propagation lag."
+  }
+  return $aliasVersion
+}
+
+function Invoke-ProductionAliasDelay {
+  param(
+    [Parameter(Mandatory = $true)][psobject]$Context,
+    [Parameter(Mandatory = $true)][int]$Seconds
+  )
+  if ($Context.SleepSeconds) {
+    $null = Invoke-ReleaseScriptBlock -ScriptBlock $Context.SleepSeconds -ArgumentList @($Seconds)
+    return [double]$Seconds
+  }
+  Start-Sleep -Seconds $Seconds
+  return 0.0
+}
+
+function Get-ProductionAliasAsset {
+  param(
+    [Parameter(Mandatory = $true)][psobject]$Context,
+    [Parameter(Mandatory = $true)][string]$Uri,
+    [Parameter(Mandatory = $true)][string]$OutFile,
+    [Parameter(Mandatory = $true)][string]$CacheBustToken
+  )
+  try {
+    Invoke-ProductionDownload $Context $Uri $OutFile -CacheBustToken $CacheBustToken -StopOnNotFound
+  } catch {
+    if (Test-ReleasePropagationAbsence $_) { return $false }
+    throw
+  }
+  return $true
+}
+
+function Wait-ProductionLatestAliasConvergence {
+  param(
+    [Parameter(Mandatory = $true)][psobject]$Context,
+    [Parameter(Mandatory = $true)][string]$WorkingDir
+  )
+  $deadlineSeconds = 900
+  if ($Context.AliasDeadlineSeconds) { $deadlineSeconds = [int]$Context.AliasDeadlineSeconds }
+  $backoff = @(5, 10, 20, 30, 45, 60)
+  $manifestUri = "https://github.com/$($Context.ReleasesRepo)/releases/latest/download/latest.json"
+  $installerUri = "https://github.com/$($Context.ReleasesRepo)/releases/latest/download/$($Context.InstallerName)"
+  $expectedManifestHash = $Context.Receipt.manifest.sha256.ToLowerInvariant()
+  $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+  $charged = 0.0
+  $attempt = 0
+  $observed = "no attempt completed"
+  for (;;) {
+    $attempt++
+    # A fresh directory per attempt, plus a fresh cache-busting token, so nothing an earlier attempt
+    # downloaded can be mistaken for what this attempt observed.
+    $attemptDir = Join-Path $WorkingDir ("alias-attempt-" + $attempt.ToString("000"))
+    New-Item -ItemType Directory -Path $attemptDir | Out-Null
+    $token = [guid]::NewGuid().ToString("N")
+    $aliasManifest = Join-Path $attemptDir "latest.json"
+    $aliasInstaller = Join-Path $attemptDir $Context.InstallerName
+    $converged = $false
+    if (-not (Get-ProductionAliasAsset $Context $manifestUri $aliasManifest $token)) {
+      $observed = "the latest-download alias does not serve a manifest yet"
+    } elseif ((Get-ArtifactHash $aliasManifest) -cne $expectedManifestHash) {
+      $aliasVersion = Assert-AliasPropagationLag $Context $aliasManifest
+      $observed = "the latest-download alias still serves v$aliasVersion"
+    } elseif (-not (Get-ProductionAliasAsset $Context $installerUri $aliasInstaller $token)) {
+      # Half a converged alias is not convergence: the fleet resolves both names.
+      $observed = "the latest-download alias serves the published manifest but not yet the installer"
+    } else {
+      Assert-ReceiptHash "Public latest installer" $aliasInstaller $Context.Receipt.installer.sha256
+      Assert-ReceiptHash "Public latest manifest" $aliasManifest $Context.Receipt.manifest.sha256
+      $null = Read-BoundManifest $aliasManifest $Context.Signature $Context.Receipt.version $Context.InstallerName
+      $converged = $true
+    }
+    if ($converged) {
+      return [pscustomobject]@{
+        Attempts = $attempt
+        ElapsedSeconds = [math]::Round(($stopwatch.Elapsed.TotalSeconds + $charged), 1)
+      }
+    }
+    $elapsed = $stopwatch.Elapsed.TotalSeconds + $charged
+    $delay = $backoff[[math]::Min(($attempt - 1), ($backoff.Count - 1))]
+    if (($elapsed + $delay) -ge $deadlineSeconds) {
+      throw "The /releases/latest/download/ alias did not converge on $($Context.Receipt.tag) within $deadlineSeconds seconds ($attempt attempts): $observed."
+    }
+    $charged += Invoke-ProductionAliasDelay $Context $delay
+  }
+}
+
 function Inspect-ProductionPublicAssets {
   param([Parameter(Mandatory = $true)][psobject]$Context)
   $lookup = Get-ProductionRelease $Context
@@ -477,26 +624,34 @@ function Inspect-ProductionPublicAssets {
   Assert-ProductionReleaseIdentity $Context $lookup.Value
   $publicDir = Join-Path ([System.IO.Path]::GetTempPath()) ("compy-public-verify-" + [guid]::NewGuid().ToString("N"))
   New-Item -ItemType Directory -Path $publicDir | Out-Null
+  $convergence = $null
   try {
+    # 1. The tag-specific assets ARE the release. They are consistent the moment it is published, so
+    #    a mismatch here is never propagation lag and is never retried.
     $tagManifest = Join-Path $publicDir "tag-latest.json"
-    $latestManifest = Join-Path $publicDir "fleet-latest.json"
     $publicInstaller = Join-Path $publicDir $Context.InstallerName
     Invoke-ProductionDownload $Context "https://github.com/$($Context.ReleasesRepo)/releases/download/$($Context.Receipt.tag)/latest.json" $tagManifest
     Invoke-ProductionDownload $Context "https://github.com/$($Context.ReleasesRepo)/releases/download/$($Context.Receipt.tag)/$($Context.InstallerName)" $publicInstaller
-    Invoke-ProductionDownload $Context "https://github.com/$($Context.ReleasesRepo)/releases/latest/download/latest.json" $latestManifest
     Assert-ReceiptHash "Public tag-specific installer" $publicInstaller $Context.Receipt.installer.sha256
     Assert-ReceiptHash "Public tag-specific manifest" $tagManifest $Context.Receipt.manifest.sha256
-    Assert-ReceiptHash "Public latest manifest" $latestManifest $Context.Receipt.manifest.sha256
     $null = Read-BoundManifest $tagManifest $Context.Signature $Context.Receipt.version $Context.InstallerName
-    $null = Read-BoundManifest $latestManifest $Context.Signature $Context.Receipt.version $Context.InstallerName
+    # 2. The updater signature is proved from the public bytes a fleet machine would actually fetch.
     Invoke-ProductionSignatureVerification $Context "public updater signature verification" $publicInstaller
+    # 3. GitHub's own metadata must already name this release as latest before the eventually
+    #    consistent redirector is given any benefit of the doubt.
+    $null = Assert-ProductionLatestReleaseIdentity $Context $lookup.Value
+    # 4. Only the alias may lag, so only the alias is polled - and both names must land together.
+    $convergence = Wait-ProductionLatestAliasConvergence $Context $publicDir
   } finally {
     Remove-ProductionTempDirectory $publicDir
   }
+  # 5. Recorded only after the alias has converged on the receipt-bound assets.
   return New-ProductionInspection "complete" @{
     installer_sha256 = $Context.Receipt.installer.sha256
     manifest_sha256 = $Context.Receipt.manifest.sha256
     latest_alias_verified = $true
+    latest_alias_attempts = $convergence.Attempts
+    latest_alias_seconds = $convergence.ElapsedSeconds
   }
 }
 

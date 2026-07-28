@@ -168,13 +168,23 @@ function Set-ReleaseJournalEvidence {
     [Parameter(Mandatory = $true)][string]$Stage,
     [psobject]$Evidence
   )
+  # Enumerate by TYPE, not both ways. psobject.Properties on a dictionary yields the IDictionary
+  # surface (Count/Keys/Values/SyncRoot/...), not the entries, and the old both-ways carry-forward
+  # baked that surface into the file as literal evidence keys -- then re-read it as real properties
+  # and grew it on every write. Evidence keys are transaction stage names by construction, so keeping
+  # only known stages both fixes the write and repairs a journal an older build already polluted.
+  # Journal AUTHORITY is unchanged: schema_version, binding and completed_stages are untouched.
+  $known = @(Get-ReleaseTransactionStages)
   $evidenceTable = [ordered]@{}
   if ($Journal.evidence) {
-    foreach ($property in $Journal.evidence.psobject.Properties) {
-      $evidenceTable[$property.Name] = $property.Value
-    }
     if ($Journal.evidence -is [System.Collections.IDictionary]) {
-      foreach ($key in $Journal.evidence.Keys) { $evidenceTable[$key] = $Journal.evidence[$key] }
+      foreach ($key in @($Journal.evidence.Keys)) {
+        if ($known -contains $key) { $evidenceTable[$key] = $Journal.evidence[$key] }
+      }
+    } else {
+      foreach ($property in $Journal.evidence.psobject.Properties) {
+        if ($known -contains $property.Name) { $evidenceTable[$property.Name] = $property.Value }
+      }
     }
   }
   $evidenceTable[$Stage] = if ($null -eq $Evidence) { [ordered]@{} } else { $Evidence }

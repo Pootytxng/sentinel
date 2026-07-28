@@ -223,6 +223,47 @@ describe("sandboxed end-to-end release publication", () => {
     expect(retry.payload.error).toContain("real state is not compatible");
   });
 
+  it("repairs a journal whose evidence was polluted with the dictionary surface", () => {
+    const directory = sandbox();
+    const stopped = run("journal-audit", directory, ["-StopAfterStage", "receipt_verified"]);
+    expect(stopped.result.status).toBe(0);
+
+    // The exact shape the real v0.9.11 journal was written with: enumerating an ordered dictionary
+    // through psobject.Properties yielded the IDictionary surface, and those names were persisted as
+    // literal evidence keys alongside the real stage evidence.
+    const polluted = JSON.parse(readFileSync(stopped.payload.journal, "utf8"));
+    const receipt = polluted.evidence.receipt_verified;
+    expect(receipt).toBeTruthy();
+    polluted.evidence = {
+      Count: 8,
+      IsReadOnly: false,
+      Keys: ["Count", "IsReadOnly", "Keys", "Values", "IsFixedSize", "SyncRoot", "IsSynchronized"],
+      Values: [0, false, [], [], false, {}, false],
+      IsFixedSize: false,
+      SyncRoot: {},
+      IsSynchronized: false,
+      receipt_verified: receipt,
+    };
+    writeFileSync(stopped.payload.journal, JSON.stringify(polluted));
+
+    // A polluted journal is still readable and still resumable: authority never lived in evidence.
+    const retry = run("journal-audit", directory);
+    expect(retry.result.status, retry.payload.error).toBe(0);
+    expect(retry.payload.completed).toBe(true);
+    expect(retry.payload.stages).toHaveLength(9);
+
+    const repaired = JSON.parse(readFileSync(stopped.payload.journal, "utf8"));
+    expect(repaired.schema_version).toBe(1);
+    expect(repaired.completed_stages).toEqual(retry.payload.stages);
+    // The surface names are gone, the real evidence survived, and only stage names remain.
+    for (const name of ["Count", "IsReadOnly", "Keys", "Values", "IsFixedSize", "SyncRoot", "IsSynchronized"]) {
+      expect(Object.keys(repaired.evidence)).not.toContain(name);
+    }
+    expect(repaired.evidence.receipt_verified).toMatchObject(receipt);
+    expect(Object.keys(repaired.evidence).every((key) => retry.payload.stages.includes(key))).toBe(true);
+    expect(Object.keys(repaired.evidence)).toContain("public_assets_verified");
+  });
+
   it("rejects duplicate or out-of-order journal stage lists", () => {
     for (const completed_stages of [
       ["release_published", "receipt_verified"],

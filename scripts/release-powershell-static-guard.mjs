@@ -209,6 +209,10 @@ const requiredTokens = new Map([
       "Read-BoundManifest",
       "Invoke-DownloadWithRetry",
       "Manifest signature does not match",
+      "$script:ReleaseNoCacheHeaders",
+      "Add-ReleaseCacheBustingQuery",
+      "Test-ReleasePropagationAbsence",
+      "Compare-ReleaseVersion",
     ],
   ],
   [
@@ -245,6 +249,11 @@ const requiredTokens = new Map([
       "downloaded draft signature verification",
       "Public tag-specific installer",
       "Public latest manifest",
+      "Public latest installer",
+      "public updater signature verification",
+      "Assert-ProductionLatestReleaseIdentity",
+      "Wait-ProductionLatestAliasConvergence",
+      "Assert-AliasPropagationLag",
       "--draft=false",
     ],
   ],
@@ -485,6 +494,110 @@ export function scanReleasePowerShell({ overrides = {} } = {}) {
       "draft-lookup",
       "the releases listing must treat timeout and nonzero exit as fatal, never as absence",
     );
+  }
+
+  // GitHub's /releases/latest/download/ redirector is eventually consistent and served the PREVIOUS
+  // release for a window after v0.9.11 went public, which failed the final stage against a release
+  // that was in fact correct. The repair is a bounded poll, and this rule is what stops it from ever
+  // collapsing back into a single immediate assertion (or into a poll that hides a real mismatch).
+  const publicAssets = functionBody(adapter, "Inspect-ProductionPublicAssets");
+  const aliasWait = functionBody(adapter, "Wait-ProductionLatestAliasConvergence");
+  const aliasLag = functionBody(adapter, "Assert-AliasPropagationLag");
+  const latestIdentity = functionBody(adapter, "Assert-ProductionLatestReleaseIdentity");
+  const download = functionBody(adapter, "Invoke-ProductionDownload");
+  const absence = functionBody(sources.get("scripts/lib/release-artifacts.ps1")?.liveExecutable ?? "", "Test-ReleasePropagationAbsence");
+  if (publicAssets === null || aliasWait === null || aliasLag === null || latestIdentity === null || download === null || absence === null) {
+    report(
+      "scripts/lib/release-publish-adapter.ps1",
+      "alias-propagation",
+      "the latest-alias convergence handlers must exist: Inspect-ProductionPublicAssets, Wait-ProductionLatestAliasConvergence, Assert-AliasPropagationLag, Assert-ProductionLatestReleaseIdentity, Invoke-ProductionDownload, Test-ReleasePropagationAbsence",
+    );
+  } else {
+    // Only the alias may be polled. The tag-specific assets, the updater signature and the
+    // latest-release identity are consistent the instant a release is published, so each is proved
+    // once, up front, and a failure there is never retried into a pass.
+    const order = [
+      'Assert-ReceiptHash "Public tag-specific installer"',
+      'Assert-ReceiptHash "Public tag-specific manifest"',
+      '"public updater signature verification"',
+      "Assert-ProductionLatestReleaseIdentity",
+      "Wait-ProductionLatestAliasConvergence",
+    ];
+    let previous = -1;
+    for (const token of order) {
+      const index = publicAssets.indexOf(token);
+      if (index < 0) {
+        report(
+          "scripts/lib/release-publish-adapter.ps1",
+          "alias-propagation",
+          `Inspect-ProductionPublicAssets is missing a required step: ${token}`,
+        );
+        previous = Number.MAX_SAFE_INTEGER;
+        continue;
+      }
+      if (index < previous) {
+        report(
+          "scripts/lib/release-publish-adapter.ps1",
+          "alias-propagation",
+          `Inspect-ProductionPublicAssets runs its steps out of order at: ${token}`,
+        );
+      }
+      previous = index;
+    }
+    if (/Assert-ReceiptHash\s+"Public latest/.test(publicAssets)) {
+      report(
+        "scripts/lib/release-publish-adapter.ps1",
+        "alias-propagation",
+        "the eventually-consistent latest alias may not be asserted outside the bounded convergence poll",
+      );
+    }
+    // A poll with no deadline is a hang, and a poll that accepts one of the two names is a fleet that
+    // half-updates: both aliases are proved on the accepted attempt or the stage does not complete.
+    for (const [pattern, message] of [
+      [/\$deadlineSeconds\s*=\s*\d+/, "the convergence poll must carry an explicit overall deadline"],
+      [/\$backoff\s*=\s*@\(\s*\d+\s*,/, "the convergence poll must use a stepped or exponential backoff"],
+      [/did not converge/, "expiring the convergence deadline must fail the stage"],
+      [/Assert-ReceiptHash "Public latest installer"/, "the accepted attempt must verify the aliased installer"],
+      [/Assert-ReceiptHash "Public latest manifest"/, "the accepted attempt must verify the aliased manifest"],
+      [/Read-BoundManifest/, "the accepted attempt must re-prove the aliased manifest binding"],
+      [/Assert-AliasPropagationLag/, "a non-matching alias body must be classified before it is retried"],
+      [/alias-attempt-/, "each attempt must download into its own directory so no stale file is reused"],
+      [/\[guid\]::NewGuid\(\)/, "each attempt must issue a fresh cache-busting token"],
+    ]) {
+      if (!pattern.test(aliasWait)) {
+        report("scripts/lib/release-publish-adapter.ps1", "alias-propagation", message);
+      }
+    }
+    // Lag means strictly older, well-formed and bound to this repository. Anything else is an
+    // unrelated payload and must fail immediately rather than be waited out.
+    if (!/Compare-ReleaseVersion/.test(aliasLag) || !/-ge 0/.test(aliasLag)) {
+      report(
+        "scripts/lib/release-publish-adapter.ps1",
+        "alias-propagation",
+        "only a strictly older release version may be accepted as propagation lag",
+      );
+    }
+    if (!/tag_name.*-cne/.test(latestIdentity) || !/prerelease/.test(latestIdentity) || !/draft/.test(latestIdentity)) {
+      report(
+        "scripts/lib/release-publish-adapter.ps1",
+        "alias-propagation",
+        "the latest-release identity check must pin tag, draft and prerelease state",
+      );
+    }
+    if (!/Remove-Item -LiteralPath \$OutFile -Force/.test(download)) {
+      report(
+        "scripts/lib/release-publish-adapter.ps1",
+        "alias-propagation",
+        "a retried download must delete any file a previous attempt left behind",
+      );
+    }
+    if (!/-eq 404/.test(absence)) {
+      report(
+        "scripts/lib/release-artifacts.ps1",
+        "alias-propagation",
+        "only an HTTP 404 may be classified as unpublished-yet; every other failure is real",
+      );
+    }
   }
 
   return { ok: errors.length === 0, errors, files: releaseCriticalPowerShell };

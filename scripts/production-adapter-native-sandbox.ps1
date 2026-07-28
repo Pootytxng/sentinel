@@ -16,7 +16,9 @@ param(
     "downloaded-draft-mismatch", "downloaded-public-mismatch",
     "adopt-existing-draft", "incompatible-existing-draft", "duplicate-release",
     "paginated-release-list", "unpaginated-release-list",
-    "malformed-release-list", "empty-release-list", "wrong-shape-release-list"
+    "malformed-release-list", "empty-release-list", "wrong-shape-release-list",
+    "alias-propagation-lag", "alias-manifest-absent", "alias-installer-lag",
+    "alias-never-converges", "alias-unrelated-payload", "unexpected-latest-release"
   )][string]$Scenario = "happy"
 )
 
@@ -36,6 +38,11 @@ $fakeGitPath = Join-Path $Sandbox "fake-git.mjs"
 $fakeGhPath = Join-Path $Sandbox "fake-gh.mjs"
 $callsPath = Join-Path $Sandbox "native-calls.jsonl"
 $assetStore = Join-Path $Sandbox "remote-assets"
+# The bodies an eventually-consistent /releases/latest/download/ alias may hand back while it still
+# points at an older release, plus the probe ledger that drives per-scenario lag.
+$aliasStore = Join-Path $Sandbox "alias-assets"
+$aliasProbePath = Join-Path $Sandbox "alias-probes.json"
+$aliasTokenPath = Join-Path $Sandbox "alias-tokens.txt"
 $repo = Join-Path $Sandbox "source"
 $scriptDir = Join-Path $repo "scripts"
 $tauriDir = Join-Path $repo "src-tauri"
@@ -64,7 +71,7 @@ function Get-SandboxHash {
   }
 }
 
-foreach ($directory in @($repo, $scriptDir, $tauriDir, $assetStore)) {
+foreach ($directory in @($repo, $scriptDir, $tauriDir, $assetStore, $aliasStore)) {
   if (-not (Test-Path -LiteralPath $directory -PathType Container)) {
     New-Item -ItemType Directory -Path $directory | Out-Null
   }
@@ -87,6 +94,38 @@ Write-SandboxUtf8 $manifest ([ordered]@{
   }
 } | ConvertTo-Json -Depth 6 -Compress)
 Write-SandboxUtf8 (Join-Path $tauriDir "tauri.conf.json") '{"version":"9.9.9"}'
+
+function New-SandboxAliasManifest {
+  param([string]$Version)
+  return ([ordered]@{
+    version = $Version
+    platforms = [ordered]@{
+      "windows-x86_64" = [ordered]@{
+        url = "https://github.com/$releasesRepo/releases/download/v$Version/Compy_${Version}_x64-setup.exe"
+        signature = "sandbox-signature:alias-$Version"
+      }
+    }
+  } | ConvertTo-Json -Depth 6 -Compress)
+}
+
+# "stale" is the honest shape of propagation lag: a well-formed manifest for the STRICTLY OLDER
+# release the alias still resolves to. "newer" is the shape that must never be tolerated as lag.
+Write-SandboxUtf8 (Join-Path $aliasStore "stale-latest.json") (New-SandboxAliasManifest "9.9.8")
+Write-SandboxUtf8 (Join-Path $aliasStore "newer-latest.json") (New-SandboxAliasManifest "9.9.10")
+
+# How the alias behaves on the Nth read of each asset name. Absence is a real GitHub 404; production
+# classifies it from the HTTP status, injected transports raise the shared absence marker instead.
+function Get-SandboxAliasBehaviour {
+  param([string]$Scenario, [string]$Kind, [int]$Attempt)
+  switch ($Scenario) {
+    "alias-propagation-lag" { if ($Kind -eq "manifest" -and $Attempt -le 2) { return "stale" } }
+    "alias-manifest-absent" { if ($Kind -eq "manifest" -and $Attempt -le 2) { return "absent" } }
+    "alias-installer-lag" { if ($Kind -eq "installer" -and $Attempt -le 2) { return "absent" } }
+    "alias-never-converges" { if ($Kind -eq "manifest") { return "stale" } }
+    "alias-unrelated-payload" { if ($Kind -eq "manifest") { return "newer" } }
+  }
+  return "current"
+}
 
 Write-SandboxUtf8 (Join-Path $scriptDir "verify-updater-signature.mjs") @'
 import { createHash } from "node:crypto";
@@ -149,6 +188,11 @@ if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
     title = if ($Scenario -eq "public-release-collision") { "Foreign release" } elseif ($existingRelease) { "Compy $releaseTag" } else { "" }
     notes = if ($Scenario -eq "public-release-collision") { "foreign" } elseif ($Scenario -eq "incompatible-existing-draft") { "notes that are not the signed receipt notes" } elseif ($existingRelease) { $releaseNotes } else { "" }
     ghFailure = if ($Scenario -like "*-failure") { $Scenario } else { "" }
+    # Release metadata that names a DIFFERENT release as latest: publication went somewhere else, so
+    # nothing about a lagging alias may be forgiven afterwards.
+    latestOverride = if ($Scenario -eq "unexpected-latest-release") {
+      @{ id = 880088; tag_name = "v9.9.8"; name = "Compy v9.9.8"; body = "older"; draft = $false; prerelease = $false }
+    } else { $null }
     assetStore = $assetStore
     callsPath = $callsPath
   } | ConvertTo-Json -Depth 8)
@@ -308,6 +352,17 @@ if (args[0] === "api" && args[1].includes("/releases?")) {
   console.log(JSON.stringify(all.slice((page - 1) * perPage, page * perPage)));
   process.exit(0);
 }
+if (args[0] === "api" && args[1].endsWith("/releases/latest")) {
+  // Release metadata, unlike the download redirector, is consistent the moment a release publishes.
+  if (state.latestOverride) {
+    console.log(JSON.stringify({assets: [], ...state.latestOverride}));
+    process.exit(0);
+  }
+  const published = listReleases().filter((release) => !release.draft && !release.prerelease);
+  if (!published.length) notFound();
+  console.log(JSON.stringify(published[published.length - 1]));
+  process.exit(0);
+}
 const byId = args[0] === "api" ? args[1].match(/\/releases\/(\d+)$/) : null;
 if (byId) {
   const found = listReleases().find((release) => release.id === Number(byId[1]));
@@ -369,12 +424,35 @@ process.exit(15);
 $node = (Resolve-NativeExecutable "node").Source
 $downloadFile = {
   param([string]$Uri, [string]$OutFile)
-  $name = if ($Uri -like "*/latest/download/latest.json") {
-    "latest.json"
-  } else {
-    [System.IO.Path]::GetFileName(([uri]$Uri).AbsolutePath)
+  # The alias is classified from the parsed path, never from the raw string: alias reads carry a
+  # cache-busting query, so any match against the whole URI would break the moment one is appended.
+  $parsed = [uri]$Uri
+  $name = [System.IO.Path]::GetFileName($parsed.AbsolutePath)
+  $behaviour = "current"
+  if ($parsed.AbsolutePath -like "*/releases/latest/download/*") {
+    if ($parsed.Query -notlike "*compy-cache-bust=*") {
+      throw "Sandbox alias read carried no cache-busting token: $Uri"
+    }
+    Add-Content -LiteralPath $aliasTokenPath -Value ("$name $($parsed.Query)")
+    $kind = if ($name -eq "latest.json") { "manifest" } else { "installer" }
+    $probes = if (Test-Path -LiteralPath $aliasProbePath -PathType Leaf) {
+      Get-Content -LiteralPath $aliasProbePath -Raw | ConvertFrom-Json
+    } else {
+      [pscustomobject]@{ manifest = 0; installer = 0 }
+    }
+    $probes.$kind = [int]$probes.$kind + 1
+    Write-SandboxUtf8 $aliasProbePath ($probes | ConvertTo-Json -Compress)
+    $behaviour = Get-SandboxAliasBehaviour $Scenario $kind ([int]$probes.$kind)
   }
-  $source = Join-Path $assetStore $name
+  if ($behaviour -eq "absent") {
+    # The exact marker production reads out of a real HTTP 404 response.
+    throw "release-asset-not-published-yet: $name"
+  }
+  $source = if ($behaviour -eq "current") {
+    Join-Path $assetStore $name
+  } else {
+    Join-Path $aliasStore "$behaviour-latest.json"
+  }
   if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
     throw "Sandbox public asset is absent: $name"
   }
@@ -440,6 +518,10 @@ $context = [pscustomobject]@{
   GitArgumentPrefix = @($fakeGitPath, $statePath)
   DownloadFile = $downloadFile
   RuntimeInspector = $runtimeInspector
+  # Backoff is charged, never slept: the bounded deadline is exercised in full without the test
+  # spending the wall-clock time a real propagation window would take.
+  SleepSeconds = { param([int]$seconds) }
+  AliasDeadlineSeconds = 30
   Dependencies = @{}
 }
 
@@ -447,6 +529,10 @@ $context = [pscustomobject]@{
 $adapter = New-ProductionReleaseAdapter
 $first = Invoke-ReleaseTransaction -Context $context -Adapter $adapter `
   -JournalPath $journalPath -AllowPublication
+# The transaction result carries stages only, so the convergence evidence is read off the journal
+# before the retry pass overwrites it.
+$firstEvidence = (Get-Content -LiteralPath $journalPath -Raw | ConvertFrom-Json).evidence.public_assets_verified
+$firstProbes = Get-Content -LiteralPath $aliasProbePath -Raw | ConvertFrom-Json
 
 # A second complete pass proves the journal is evidence only: every production Inspect handler
 # re-runs against fake external state, while no mutating Git/GitHub operation is repeated. Advance
@@ -476,5 +562,11 @@ $mutations = @($afterRetry | Where-Object {
   mutation_calls = @($mutations)
   calls = @($afterRetry)
   journal = $journalPath
+  first_alias = $firstEvidence
+  first_alias_probes = $firstProbes
+  # Read through .NET, not Get-Content: the provider decorates every string it returns with ETS
+  # members whose PSProvider.Drives -> Provider -> Drives is a cycle, and serialising one of those
+  # with ConvertTo-Json -Depth 12 walks that cycle and never returns.
+  alias_tokens = @([System.IO.File]::ReadAllLines($aliasTokenPath))
   state = (Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json)
 } | ConvertTo-Json -Depth 12 -Compress
