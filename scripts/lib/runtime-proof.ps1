@@ -29,97 +29,11 @@
 # relaxed: success still requires the exact expected stamp plus the expected version, from a live
 # process, within the deadline.
 
-# Windows CommandLineToArgvW quoting. .NET Framework (PowerShell 5.1) has no
-# ProcessStartInfo.ArgumentList, so the argument string is built explicitly rather than by
-# string-joining and hoping no path contains a space.
-function ConvertTo-NativeArgumentString {
-  param([string[]]$ArgumentList = @())
-  $parts = @()
-  foreach ($argument in $ArgumentList) {
-    if ($null -eq $argument) { continue }
-    if ($argument.Length -gt 0 -and $argument -notmatch '[\s"]') {
-      $parts += $argument
-      continue
-    }
-    # Backslashes are literal unless they precede a quote, where they must be doubled.
-    $escaped = [regex]::Replace($argument, '(\\*)"', '$1$1\"')
-    $escaped = [regex]::Replace($escaped, '(\\+)$', '$1$1')
-    $parts += '"' + $escaped + '"'
-  }
-  return ($parts -join ' ')
-}
-
-function Get-FirstNonEmptyLine {
-  param([string]$Text)
-  if (-not $Text) { return "" }
-  foreach ($line in ($Text -split "`r?`n")) {
-    if ($line.Trim()) { return $line.Trim() }
-  }
-  return ""
-}
-
-# Runs a native executable and returns its stdout, stderr and exit code as DATA. Never raises a
-# NativeCommandError, because the child is never a PowerShell native command. A child that outlives
-# TimeoutMs is killed and reported as TimedOut.
-function Invoke-CapturedProcess {
-  [CmdletBinding()]
-  param(
-    [Parameter(Mandatory = $true)][string]$FilePath,
-    [string[]]$ArgumentList = @(),
-    [string]$WorkingDirectory,
-    [int]$TimeoutMs = 20000,
-    [int]$DrainMs = 5000
-  )
-
-  $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-  $startInfo.FileName = $FilePath
-  $startInfo.Arguments = ConvertTo-NativeArgumentString $ArgumentList
-  if ($WorkingDirectory) { $startInfo.WorkingDirectory = $WorkingDirectory }
-  $startInfo.UseShellExecute = $false
-  $startInfo.CreateNoWindow = $true
-  $startInfo.RedirectStandardInput = $true
-  $startInfo.RedirectStandardOutput = $true
-  $startInfo.RedirectStandardError = $true
-  # The probe emits UTF-8 and the build stamp carries U+00B7. Decoding its output with the console
-  # code page would corrupt the exact string this proof compares, i.e. invent a mismatch.
-  $startInfo.StandardOutputEncoding = [System.Text.Encoding]::UTF8
-  $startInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8
-
-  $process = New-Object System.Diagnostics.Process
-  $process.StartInfo = $startInfo
-  $stdout = ""
-  $stderr = ""
-  $exitCode = -1
-  $timedOut = $false
-  try {
-    if (-not $process.Start()) { throw "Could not start '$FilePath'." }
-    $process.StandardInput.Close()
-    # Read both pipes concurrently: reading one to the end while the other fills can deadlock.
-    $outReader = $process.StandardOutput.ReadToEndAsync()
-    $errReader = $process.StandardError.ReadToEndAsync()
-    if (-not $process.WaitForExit($TimeoutMs)) {
-      $timedOut = $true
-      try { $process.Kill() } catch { }
-      $process.WaitForExit($DrainMs) | Out-Null
-    }
-    # Bounded drain: a killed child must not hang the caller, and a faulted reader is reported as
-    # empty output for THIS attempt rather than crashing it.
-    try { if ($outReader.Wait($DrainMs)) { $stdout = $outReader.Result } } catch { $stdout = "" }
-    try { if ($errReader.Wait($DrainMs)) { $stderr = $errReader.Result } } catch { $stderr = "" }
-    if ($process.HasExited) { $exitCode = $process.ExitCode }
-  } finally {
-    $process.Dispose()
-  }
-
-  return [pscustomobject]@{
-    FilePath  = $FilePath
-    Arguments = $startInfo.Arguments
-    ExitCode  = $exitCode
-    StdOut    = $stdout
-    StdErr    = $stderr
-    TimedOut  = $timedOut
-  }
-}
+# Invoke-CapturedProcess, ConvertTo-NativeArgumentString and Get-FirstNonEmptyLine now live in the
+# shared helper, because the identical defect killed the NEXT publish attempt one line-of-business
+# over (the expected-404 releases-tag probe in release.ps1). Same contract, same behaviour, one
+# implementation for the whole release-critical surface.
+. (Join-Path $PSScriptRoot "native-process.ps1")
 
 # The proof itself. Polls the CDP probe until the LIVE process answers with the exact expected build
 # stamp and a shell showing the expected version, or throws.

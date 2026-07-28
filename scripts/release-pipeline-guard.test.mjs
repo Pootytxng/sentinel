@@ -11,21 +11,36 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const script = readFileSync(join(root, "scripts", "release.ps1"), "utf8");
-const reinstall = readFileSync(join(root, "scripts", "ship-reinstall.ps1"), "utf8");
-const runtimeProof = readFileSync(join(root, "scripts", "lib", "runtime-proof.ps1"), "utf8");
-const executable = script
-  .split(/\r?\n/)
-  .filter((line) => !line.trimStart().startsWith("#"))
-  .join("\n");
-const reinstallExecutable = reinstall
-  .split(/\r?\n/)
-  .filter((line) => !line.trimStart().startsWith("#"))
-  .join("\n");
-const runtimeProofExecutable = runtimeProof
-  .split(/\r?\n/)
-  .filter((line) => !line.trimStart().startsWith("#"))
-  .join("\n");
+const read = (...parts) => readFileSync(join(root, "scripts", ...parts), "utf8");
+const stripComments = (text) =>
+  text
+    .split(/\r?\n/)
+    .filter((line) => !line.trimStart().startsWith("#"))
+    .join("\n");
+
+const script = read("release.ps1");
+const reinstall = read("ship-reinstall.ps1");
+const runtimeProof = read("lib", "runtime-proof.ps1");
+const nativeProcess = read("lib", "native-process.ps1");
+const executable = stripComments(script);
+const reinstallExecutable = stripComments(reinstall);
+const runtimeProofExecutable = stripComments(runtimeProof);
+const nativeProcessExecutable = stripComments(nativeProcess);
+
+// The COMPLETE release-critical PowerShell surface: every .ps1 the release pipeline can execute.
+// The v0.9.9 publish died because the previous ban covered only ship-reinstall.ps1 + runtime-proof.ps1,
+// so the structurally identical native invocation one file over (release.ps1's expected-404 releases-tag
+// probe) was never guarded. Anything added to the pipeline must be added here too.
+const releaseCriticalSurface = [
+  { name: "release.ps1", text: script, executable },
+  { name: "release-prepare.ps1", text: read("release-prepare.ps1") },
+  { name: "release-publish.ps1", text: read("release-publish.ps1") },
+  { name: "verify-release.ps1", text: read("verify-release.ps1") },
+  { name: "ship-reinstall.ps1", text: reinstall, executable: reinstallExecutable },
+  { name: "doc-budget.ps1", text: read("doc-budget.ps1") },
+  { name: "lib/native-process.ps1", text: nativeProcess, executable: nativeProcessExecutable },
+  { name: "lib/runtime-proof.ps1", text: runtimeProof, executable: runtimeProofExecutable },
+].map((entry) => ({ ...entry, executable: entry.executable ?? stripComments(entry.text) }));
 
 const position = (needle) => {
   const index = executable.indexOf(needle);
@@ -64,7 +79,7 @@ describe("release pipeline safety", () => {
   });
 
   it("runs the canonical verification gate before creating a release commit", () => {
-    expect(position("verify-release.ps1")).toBeLessThan(position("git -C $repo commit"));
+    expect(position("verify-release.ps1")).toBeLessThan(position("commit staged release version"));
   });
 
   it("runs the complete gate again on the exact clean release commit before building", () => {
@@ -105,7 +120,7 @@ describe("release pipeline safety", () => {
   it("verifies the embedded release stamp, records installer size, and requires a pre-existing tag", () => {
     expect(executable).toContain("EMBEDDED-STAMP MISMATCH");
     expect(executable).toContain("bytes = (Get-Item -LiteralPath $installer).Length");
-    expect(executable).toContain("git -C $repo tag -a $releaseTag $releaseCommit");
+    expect(executable).toContain('"tag", "-a", $releaseTag, $releaseCommit');
     expect(executable).toContain("does not point at the staged commit");
     expect(executable).toContain("push release tag");
   });
@@ -142,9 +157,9 @@ describe("release pipeline safety", () => {
     // embedded double-quote, when it is passed to git.exe as a native -m argument -- git read a
     // fragment of the note as a pathspec and "commit staged release version" failed. The release
     // commit message must come from a file (-F), which is parse-safe for any note content.
-    expect(executable).toContain("git -C $repo commit -F");
+    expect(executable).toContain('"commit", "-F", $commitMsgPath');
     expect(executable).toContain("Write-NoBom $commitMsgPath");
-    expect(executable).not.toContain('git -C $repo commit -m "release: v$nextText" -m $Notes');
+    expect(executable).not.toMatch(/"commit",\s*"-m"/);
   });
 
   it("bumps the release-state version anchor in lockstep with the version files and stages the doc", () => {
@@ -153,7 +168,7 @@ describe("release pipeline safety", () => {
     // version files but not the doc. The bump must rewrite the anchor AND stage docs/RELEASE_STATE.md
     // into the release commit so the exact-commit gate stays green.
     expect(executable).toContain("STATE:latest_release_version=");
-    expect(executable).toContain('"src-tauri/Cargo.lock" "docs/RELEASE_STATE.md"');
+    expect(executable).toContain('"src-tauri/Cargo.lock", "docs/RELEASE_STATE.md"');
   });
 
   it.runIf(process.platform === "win32")(
@@ -178,7 +193,7 @@ describe("release pipeline safety", () => {
     const receiptHashes = position('Assert-ReceiptHash "Updater manifest"');
     const bind = position("Read-BoundManifest $manifestPath");
     const crypto = position("publish-time updater signature verification");
-    const reinstall = position('& (Join-Path $repo "scripts\\ship-reinstall.ps1") -VerifyRuntime');
+    const reinstall = position('Invoke-StreamedProcess "local ship-reinstall runtime proof"');
     expect(receiptHashes).toBeLessThan(bind);
     expect(bind).toBeLessThan(crypto);
     expect(crypto).toBeLessThan(reinstall);
@@ -187,9 +202,9 @@ describe("release pipeline safety", () => {
   });
 
   it("publishes only after local verification and exact-source push", () => {
-    const reinstall = position('& (Join-Path $repo "scripts\\ship-reinstall.ps1") -VerifyRuntime');
-    const push = position('git -C $repo push origin "$($receipt.commit):main"');
-    const draft = position("gh release create");
+    const reinstall = position('Invoke-StreamedProcess "local ship-reinstall runtime proof"');
+    const push = position('"push", "origin", "$($receipt.commit):main"');
+    const draft = position("create draft GitHub release");
     const downloadedCrypto = position("downloaded draft signature verification");
     const publish = position("--draft=false");
     expect(reinstall).toBeLessThan(push);
@@ -203,11 +218,11 @@ describe("release pipeline safety", () => {
   });
 
   it("rechecks source identity after verification, install, build, and push", () => {
-    const verify = position('& (Join-Path $repo "scripts\\verify-release.ps1")');
+    const verify = position('Invoke-StreamedProcess "verify-release.ps1"');
     const postVerify = position("$postVerifyHead = Get-GitLine");
     const versionWrite = position("Write-NoBom $confPath");
     const postInstall = position("$postInstallHead = Get-GitLine");
-    const literalPush = position('git -C $repo push origin "$($receipt.commit):main"');
+    const literalPush = position('"push", "origin", "$($receipt.commit):main"');
     const postBuild = position("$postBuildHead = Get-GitLine");
     const receiptWrite = position("Write-NoBom $stageReceiptPath");
     expect(verify).toBeLessThan(postVerify);
@@ -220,7 +235,7 @@ describe("release pipeline safety", () => {
   it("checks remote truth before install and the exact public latest URLs after publish", () => {
     const remoteList = position("function Assert-PublicVersionCanPublish");
     const downgrade = position("Refusing updater downgrade/non-increase");
-    const reinstall = position('& (Join-Path $repo "scripts\\ship-reinstall.ps1") -VerifyRuntime');
+    const reinstall = position('Invoke-StreamedProcess "local ship-reinstall runtime proof"');
     const firstMonotonicCheck = position("Assert-PublicVersionCanPublish $receipt.version $tag");
     const finalMonotonicCheck = position(
       "Assert-PublicVersionCanPublish $receipt.version $tag -AllowOwnDraft",
@@ -273,38 +288,141 @@ describe("release pipeline safety", () => {
   });
 });
 
-// bug->guard (failed v0.9.9 publish, 2026-07-27): the runtime proof ran the CDP probe as a
-// PowerShell NATIVE command with `2>$null`. Under $ErrorActionPreference = "Stop", Windows
-// PowerShell 5.1 promotes ANY native stderr write to a TERMINATING NativeCommandError and `2>$null`
-// does not stop it, so the first (always-expected) connection refusal killed the publish inside a
-// retry loop built to tolerate it. These guards pin the mechanism; runtime-proof-guard.test.mjs
-// proves the behaviour end to end against real processes.
-describe("runtime proof cannot be killed by an expected probe failure", () => {
+// bug->guard (BOTH failed v0.9.9 publishes, 2026-07-27): release-critical PowerShell invoked tools
+// as NATIVE commands. Under $ErrorActionPreference = "Stop", Windows PowerShell 5.1 promotes ANY
+// native stderr write to a TERMINATING NativeCommandError once that stream is redirected, and
+// `2>$null` does not prevent it -- it CAUSES it. Attempt 1 died on the CDP probe's always-expected
+// first connection refusal; attempt 2 died on the releases-repo tag probe's expected HTTP 404, the
+// correct first-publish answer, inside the branch written to act on it.
+//
+// The first guard for this only covered ship-reinstall.ps1 + lib/runtime-proof.ps1, so the
+// structurally identical instance one file over survived and burned the next release. The bans below
+// therefore cover the COMPLETE release-critical surface, not the two files that happened to fail.
+// runtime-proof-guard.test.mjs and native-process-guard.test.mjs prove the behaviour end to end
+// against real PowerShell 5.1 processes.
+describe("release-critical PowerShell cannot be killed by an expected native failure", () => {
   it("keeps the strict error preference instead of relaxing it", () => {
-    expect(reinstallExecutable).toContain('$ErrorActionPreference = "Stop"');
-    expect(reinstallExecutable).not.toMatch(/\$ErrorActionPreference\s*=\s*["'](?:Continue|SilentlyContinue)["']/i);
-    expect(runtimeProofExecutable).not.toMatch(/\$ErrorActionPreference\s*=/);
+    for (const { name, text, executable: exe } of releaseCriticalSurface) {
+      // Every entry point declares Stop; the two dot-sourced libs inherit their caller's preference.
+      if (!name.startsWith("lib/")) {
+        expect(text, `${name} must set a strict error preference`).toContain('$ErrorActionPreference = "Stop"');
+      }
+      expect(exe, `${name} must not relax the error preference`).not.toMatch(
+        /\$ErrorActionPreference\s*=\s*["'](?:Continue|SilentlyContinue|Ignore)["']/i,
+      );
+    }
   });
 
-  it("never invokes the probe as a native command, and never fakes safety with a stderr redirect", () => {
+  it("routes every native invocation through the approved helper", () => {
+    // Coverage (8). `& <tool>` is the exact shape that detonates; the approved helper is
+    // scripts/lib/native-process.ps1, which is the ONLY file allowed to construct a process.
+    for (const { name, executable: exe } of releaseCriticalSurface) {
+      for (const tool of ["gh", "git", "node", "npm", "cargo", "powershell", "pwsh"]) {
+        // A LONE `&` is PowerShell's call operator. `&&` is not: ship-reinstall.ps1's rebuild-advice
+        // message quotes a cmd-style "cargo clean ... && npm run tauri build" for the owner to run,
+        // and that text must not read as an invocation.
+        expect(exe, `${name} invokes ${tool} natively`).not.toMatch(
+          new RegExp(`(?<![&|])&(?![&|])\\s*"?\\$?\\w*${tool}\\b`, "i"),
+        );
+      }
+      if (name !== "lib/native-process.ps1") {
+        expect(exe, `${name} builds a process outside the approved helper`).not.toContain(
+          "System.Diagnostics.ProcessStartInfo",
+        );
+      }
+    }
+    // Everything that runs a tool dot-sources the one helper.
+    expect(executable).toContain('. (Join-Path $PSScriptRoot "lib\\native-process.ps1")');
     expect(reinstallExecutable).toContain('. (Join-Path $PSScriptRoot "lib\\runtime-proof.ps1")');
-    expect(reinstallExecutable).not.toMatch(/&\s*node\b/);
-    expect(reinstallExecutable).not.toMatch(/&\s*git\b/);
-    expect(reinstallExecutable).not.toContain("2>$null");
-    expect(runtimeProofExecutable).not.toMatch(/&\s*node\b/);
-    expect(runtimeProofExecutable).not.toContain("2>$null");
-    expect(runtimeProofExecutable).not.toContain("$LASTEXITCODE");
+    expect(runtimeProofExecutable).toContain('. (Join-Path $PSScriptRoot "native-process.ps1")');
   });
 
-  it("captures the probe's stdout, stderr and exit code explicitly, decoded as UTF-8", () => {
-    expect(runtimeProofExecutable).toContain("System.Diagnostics.ProcessStartInfo");
-    expect(runtimeProofExecutable).toContain("$startInfo.RedirectStandardOutput = $true");
-    expect(runtimeProofExecutable).toContain("$startInfo.RedirectStandardError = $true");
+  it("never substitutes a stderr redirect for explicit capture", () => {
+    // Coverage (9). Redirecting a native command's stderr is what ARMS the promotion; there is no
+    // safe form of it here, so none is permitted anywhere on the surface.
+    for (const { name, executable: exe } of releaseCriticalSurface) {
+      expect(exe, `${name} suppresses stderr instead of capturing it`).not.toContain("2>$null");
+      expect(exe, `${name} merges stderr instead of capturing it`).not.toContain("2>&1");
+      // `-ErrorAction SilentlyContinue` on a CMDLET (Get-Process, Get-Command, Remove-Item) is a
+      // legitimate idiom and is not the defect -- the defect is a redirected NATIVE stream. But
+      // silencing the process helpers themselves would defeat their fail-closed contract, so that
+      // exact combination is banned.
+      expect(exe, `${name} silences the process helper instead of letting it fail closed`).not.toMatch(
+        /Invoke-(?:Native|Checked|Streamed|Captured)Process[^\n]*-ErrorAction/i,
+      );
+    }
+  });
+
+  it("never reads $LASTEXITCODE except in the two thin wrappers that forward a child's code", () => {
+    // Once every tool runs through System.Diagnostics.Process/Start-Process, $LASTEXITCODE is never
+    // set -- and `$null -ne 0` is TRUE, so a leftover check would throw on success. The wrappers are
+    // exempt: they call release.ps1 as a SCRIPT, whose explicit `exit` does define $LASTEXITCODE.
+    const wrappers = new Set(["release-prepare.ps1", "release-publish.ps1"]);
+    for (const { name, executable: exe } of releaseCriticalSurface) {
+      if (wrappers.has(name)) {
+        expect(exe, `${name} must forward the child's exit code`).toContain("exit $LASTEXITCODE");
+        continue;
+      }
+      expect(exe, `${name} still depends on $LASTEXITCODE`).not.toContain("$LASTEXITCODE");
+    }
+    // Both wrapped paths end in an explicit exit, so the forwarded code is never undefined.
+    expect(executable.match(/^\s*exit 0\s*$/gm) ?? [], "release.ps1 stage+publish must both exit 0").toHaveLength(2);
+  });
+
+  it("captures stdout, stderr and exit code explicitly, decoded as UTF-8", () => {
+    // Coverages (4) and (5): structured stdout comes back as DATA, and stderr on a successful or
+    // expected-result path is just another captured string.
+    expect(nativeProcessExecutable).toContain("System.Diagnostics.ProcessStartInfo");
+    expect(nativeProcessExecutable).toContain("$startInfo.RedirectStandardOutput = $true");
+    expect(nativeProcessExecutable).toContain("$startInfo.RedirectStandardError = $true");
     // The build stamp carries U+00B7; console-code-page decoding would invent a mismatch.
-    expect(runtimeProofExecutable).toContain("$startInfo.StandardOutputEncoding = [System.Text.Encoding]::UTF8");
-    expect(runtimeProofExecutable).toContain("$startInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8");
-    expect(runtimeProofExecutable).toContain("ReadToEndAsync()");
-    expect(runtimeProofExecutable).toMatch(/ExitCode\s+=\s+\$exitCode/);
+    expect(nativeProcessExecutable).toContain("$startInfo.StandardOutputEncoding = [System.Text.Encoding]::UTF8");
+    expect(nativeProcessExecutable).toContain("$startInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8");
+    // Both pipes are drained asynchronously BEFORE the wait, or a chatty child deadlocks its buffer.
+    expect(nativeProcessExecutable.match(/ReadToEndAsync\(\)/g) ?? []).toHaveLength(2);
+    expect(nativeProcessExecutable).toMatch(/ExitCode\s+=\s+\$exitCode/);
+    // Optional timeout with termination, so a hung tool cannot hang a release.
+    expect(nativeProcessExecutable).toMatch(/WaitForExit\(\$TimeoutMs\)/);
+    expect(nativeProcessExecutable).toContain("$process.Kill()");
+    expect(nativeProcessExecutable).toMatch(/TimedOut\s+=\s+\$timedOut/);
+  });
+
+  it("distinguishes an expected gh 404 from every other gh failure", () => {
+    // Coverages (1)(2)(3): ONLY a real 404 reads as absence. Timeout, auth, permission, network and
+    // malformed responses throw -- "I could not ask" is never "it is not there".
+    expect(nativeProcessExecutable).toContain("function Test-GhNotFound");
+    expect(nativeProcessExecutable).toContain("\\(HTTP 404\\)");
+    expect(nativeProcessExecutable).toMatch(/if\s*\(\$Result\.TimedOut\)\s*{\s*return\s*\$false\s*}/);
+    // The tag probe branches on the classification instead of collapsing every failure to "absent".
+    const tagProbe = executable.slice(position("$tagProbe = Invoke-NativeProcess"), position("create releases-repo tag"));
+    expect(tagProbe).toContain("$tagProbe.ExitCode -eq 0");
+    expect(tagProbe).toContain("Test-GhNotFound $tagProbe");
+    expect(tagProbe).toContain("Releases-repo tag lookup for $tag timed out.");
+    expect(tagProbe).toMatch(/Releases-repo tag lookup for \$tag failed \(exit \$\(\$tagProbe\.ExitCode\)\)/);
+    expect(tagProbe).toContain("Authentication/network failure is not treated as an absent tag");
+    // A successful lookup that returns nothing is refused rather than guessed at.
+    expect(tagProbe).toContain("succeeded but returned no sha");
+  });
+
+  it("keeps the source-tag and releases-lookup verifications fail-closed", () => {
+    // Coverages (6) and (7). Get-GitLine throws on any nonzero git, so an unreadable ls-remote can
+    // never present as "tag absent"; an empty answer cannot equal the staged commit either.
+    expect(executable).toContain('Get-GitLine @("ls-remote", "origin", "refs/tags/$($receipt.tag)^{}")');
+    expect(executable).toContain("does not resolve to the staged commit on origin");
+    expect(executable).toMatch(/Invoke-CheckedProcess[^\n]*"git"/);
+    // The release-list query and the releases-main lookup both abort on an unreadable answer.
+    const releaseList = executable.slice(
+      position("$releaseListProbe = Invoke-NativeProcess"),
+      position("Refusing updater downgrade/non-increase"),
+    );
+    expect(releaseList).toMatch(/\$releaseListProbe\.TimedOut\s+-or\s+\$releaseListProbe\.ExitCode\s+-ne\s+0/);
+    expect(releaseList).toContain("Could not query the releases repository.");
+    expect(releaseList).toContain("Empty response.");
+    expect(executable).toMatch(/\$releasesMainProbe\.TimedOut\s+-or\s+\$releasesMainProbe\.ExitCode\s+-ne\s+0/);
+    expect(executable).toContain("Could not resolve $releasesRepo main sha for the release tag.");
+    // Latest-release verification after publish is the same shape: unreadable is not verified.
+    expect(executable).toMatch(/\$latestProbe\.TimedOut\s+-or\s+\$latestProbe\.ExitCode\s+-ne\s+0\s+-or\s+\$latestTag\s+-ne\s+\$tag/);
+    expect(executable).toContain("latest-release verification failed");
   });
 
   it("treats a nonzero probe exit as a retryable attempt and still fails closed", () => {

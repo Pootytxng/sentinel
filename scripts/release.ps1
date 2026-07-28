@@ -27,6 +27,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+# Every external program below runs through this helper. Windows PowerShell 5.1 promotes a NATIVE
+# command's stderr into a TERMINATING NativeCommandError under "Stop" whenever that stderr is
+# redirected, and `2>$null` causes it rather than preventing it. That killed the v0.9.9 publish at
+# the expected-404 releases-tag probe, one release after the same class killed the runtime proof.
+. (Join-Path $PSScriptRoot "lib\native-process.ps1")
 $releasesRepo = "Pootytxng/compy-releases"
 $bundleDir = Join-Path $repo "src-tauri\target\release\bundle\nsis"
 $stageReceiptPath = Join-Path $bundleDir "release-stage.json"
@@ -48,30 +53,26 @@ function Read-Utf8([string]$Path) {
   [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
 }
 
-function Invoke-Native([string]$Label, [scriptblock]$Command) {
-  & $Command
-  if ($LASTEXITCODE -ne 0) {
-    throw "$Label failed (exit $LASTEXITCODE)"
-  }
+# Captured git: the command's stdout comes back as a value and any failure throws with git's own
+# stderr attached. Used wherever the pipeline needs to READ a fact (a sha, a branch, a ref).
+function Get-GitLine([string[]]$Arguments) {
+  $result = Invoke-CheckedProcess "git $($Arguments -join ' ')" "git" (@("-C", $repo) + $Arguments) -TimeoutMs 300000
+  return (($result.StdOut) -replace "`r", "").Trim()
 }
 
-function Get-GitLine([string[]]$Arguments) {
-  $output = & git -C $repo @Arguments
-  if ($LASTEXITCODE -ne 0) {
-    throw "git $($Arguments -join ' ') failed (exit $LASTEXITCODE)"
-  }
-  return (($output | Out-String).Trim())
+# Streamed git: for fetch/push, whose progress output belongs in the release transcript.
+function Invoke-Git([string]$Label, [string[]]$Arguments) {
+  Invoke-StreamedProcess $Label "git" (@("-C", $repo) + $Arguments) -TimeoutMs 900000 | Out-Null
 }
 
 function Assert-CleanMain {
-  $dirty = @(& git -C $repo status --porcelain --untracked-files=all)
-  if ($LASTEXITCODE -ne 0) { throw "git status failed (exit $LASTEXITCODE)" }
+  $statusText = (Invoke-CheckedProcess "git status --porcelain" "git" @("-C", $repo, "status", "--porcelain", "--untracked-files=all") -TimeoutMs 300000).StdOut
+  $dirty = @(($statusText -split "`r?`n") | Where-Object { $_.Trim().Length -gt 0 })
   if ($dirty.Count -gt 0) {
     throw "Release refused: the worktree is not clean.`n$($dirty -join [Environment]::NewLine)"
   }
 
-  $branch = (& git -C $repo branch --show-current).Trim()
-  if ($LASTEXITCODE -ne 0) { throw "git branch --show-current failed (exit $LASTEXITCODE)" }
+  $branch = (Invoke-CheckedProcess "git branch --show-current" "git" @("-C", $repo, "branch", "--show-current") -TimeoutMs 300000).StdOut.Trim()
   if ($branch -ne "main") {
     throw "Release refused: branch is '$branch'; releases must run from main."
   }
@@ -79,7 +80,7 @@ function Assert-CleanMain {
 
 function Assert-StageStartsAtRemoteMain {
   Assert-CleanMain
-  Invoke-Native "git fetch origin main" { git -C $repo fetch origin main }
+  Invoke-Git "git fetch origin main" @("fetch", "origin", "main")
   $head = Get-GitLine @("rev-parse", "HEAD")
   $remote = Get-GitLine @("rev-parse", "origin/main")
   if ($head -ne $remote) {
@@ -185,9 +186,16 @@ function Invoke-DownloadWithRetry([string]$Uri, [string]$OutFile) {
 }
 
 function Assert-PublicVersionCanPublish([string]$CandidateVersion, [string]$CandidateTag, [switch]$AllowOwnDraft) {
-  $releaseListText = (& gh release list --repo $releasesRepo --limit 1000 --json tagName,isDraft,isPrerelease,publishedAt | Out-String).Trim()
-  if ($LASTEXITCODE -ne 0) {
-    throw "Could not query the releases repository. Authentication/network failure is not treated as an absent tag."
+  # Fail closed: an unreadable release list is NOT an empty release list. Any nonzero exit or timeout
+  # aborts here rather than letting the caller conclude the candidate tag is free.
+  $releaseListProbe = Invoke-NativeProcess -Command "gh" -ArgumentList @("release", "list", "--repo", $releasesRepo, "--limit", "1000", "--json", "tagName,isDraft,isPrerelease,publishedAt") -TimeoutMs 300000
+  if ($releaseListProbe.TimedOut -or $releaseListProbe.ExitCode -ne 0) {
+    $releaseListDetail = Get-FirstNonEmptyLine $releaseListProbe.StdErr
+    throw "Could not query the releases repository. Authentication/network failure is not treated as an absent tag. $releaseListDetail"
+  }
+  $releaseListText = ($releaseListProbe.StdOut).Trim()
+  if ([string]::IsNullOrWhiteSpace($releaseListText)) {
+    throw "Could not query the releases repository. Authentication/network failure is not treated as an absent tag. Empty response."
   }
   $releaseList = @($releaseListText | ConvertFrom-Json)
   $sameTag = @($releaseList | Where-Object { $_.tagName -eq $CandidateTag })
@@ -268,7 +276,10 @@ process.exit(r.status === null ? 1 : r.status);
   $env:COMPY_SIGN_KEY = (Get-Content -LiteralPath $KeyPath -Raw).Trim()
   $env:COMPY_SIGN_ARGS = (,$npmCmd + $NpmArgs | ConvertTo-Json -Compress)
   try {
-    Invoke-Native $Label { & node $shimPath }
+    # Streamed: a signing build runs for minutes and its output is the operator's only progress view.
+    # The repo is passed as the child's working directory rather than assumed from the caller's cwd,
+    # so `npm run tauri` resolves the project regardless of where the release was launched from.
+    Invoke-StreamedProcess $Label "node" @($shimPath) -WorkingDirectory $repo -TimeoutMs 3600000 | Out-Null
   } finally {
     Remove-Item Env:\COMPY_SIGN_KEY, Env:\COMPY_SIGN_ARGS -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $shimPath -Force -ErrorAction SilentlyContinue
@@ -319,9 +330,7 @@ if ($Mode -eq "publish") {
   if (-not (Test-Path -LiteralPath $stageReceiptSignaturePath -PathType Leaf)) {
     throw "Staged receipt signature is missing: $stageReceiptSignaturePath"
   }
-  Invoke-Native "staged receipt signature verification" {
-    node (Join-Path $repo "scripts\verify-updater-signature.mjs") $stageReceiptPath $stageReceiptSignaturePath (Join-Path $repo "src-tauri\tauri.conf.json")
-  }
+  Invoke-CheckedProcess "staged receipt signature verification" "node" @((Join-Path $repo "scripts\verify-updater-signature.mjs"), $stageReceiptPath, $stageReceiptSignaturePath, (Join-Path $repo "src-tauri\tauri.conf.json")) -ShowOutput | Out-Null
 
   $canonicalInstallerRelative = "src-tauri/target/release/bundle/nsis/Compy_$($receipt.version)_x64-setup.exe"
   $canonicalSignatureRelative = "$canonicalInstallerRelative.sig"
@@ -341,18 +350,24 @@ if ($Mode -eq "publish") {
 
   $installerName = Split-Path -Leaf $installer
   $manifest = Read-BoundManifest $manifestPath $signature $receipt.version $installerName
-  Invoke-Native "publish-time updater signature verification" {
-    node (Join-Path $repo "scripts\verify-updater-signature.mjs") $installer $signature (Join-Path $repo "src-tauri\tauri.conf.json")
-  }
+  Invoke-CheckedProcess "publish-time updater signature verification" "node" @((Join-Path $repo "scripts\verify-updater-signature.mjs"), $installer, $signature, (Join-Path $repo "src-tauri\tauri.conf.json")) -ShowOutput | Out-Null
 
   $tag = "v$($receipt.version)"
   # A stale local source may never publish a downgrade. Check before touching the local install,
   # then check again immediately before the only fleet-visible transition below.
   Assert-PublicVersionCanPublish $receipt.version $tag
 
-  # Local proof happens before any source push or GitHub release creation.
-  & (Join-Path $repo "scripts\ship-reinstall.ps1") -VerifyRuntime -ExpectedCommit $receipt.commit -ExpectedInstallerPath $installer -ExpectedInstallerSha256 $receipt.installer.sha256
-  if ($LASTEXITCODE -ne 0) { throw "Local ship-reinstall failed (exit $LASTEXITCODE)" }
+  # Local proof happens before any source push or GitHub release creation. It runs as a real child
+  # PROCESS rather than `& script.ps1` + $LASTEXITCODE: now that no native command runs in this scope,
+  # $LASTEXITCODE can be $null, and `$null -ne 0` is TRUE - a spurious failure at the worst moment.
+  # A child powershell.exe returns a genuine exit code, which Invoke-StreamedProcess checks as data.
+  Invoke-StreamedProcess "local ship-reinstall runtime proof" "powershell" @(
+    "-NoProfile", "-File", (Join-Path $repo "scripts\ship-reinstall.ps1"),
+    "-VerifyRuntime",
+    "-ExpectedCommit", $receipt.commit,
+    "-ExpectedInstallerPath", $installer,
+    "-ExpectedInstallerSha256", $receipt.installer.sha256
+  ) -TimeoutMs 1800000 | Out-Null
 
   Assert-CleanMain
   $postInstallHead = Get-GitLine @("rev-parse", "HEAD")
@@ -360,22 +375,24 @@ if ($Mode -eq "publish") {
     throw "Source moved during local runtime proof. HEAD=$postInstallHead staged=$($receipt.commit)"
   }
 
-  Invoke-Native "git fetch origin main" { git -C $repo fetch origin main }
+  Invoke-Git "git fetch origin main" @("fetch", "origin", "main")
   $remote = Get-GitLine @("rev-parse", "origin/main")
   $parent = Get-GitLine @("rev-parse", "HEAD^")
   if ($remote -eq $parent) {
-    Invoke-Native "git push staged source" { git -C $repo push origin "$($receipt.commit):main" }
+    Invoke-Git "git push staged source" @("push", "origin", "$($receipt.commit):main")
   } elseif ($remote -ne $head) {
     throw "origin/main is neither the staged commit nor its parent. Refusing a non-fast-forward release."
   }
-  Invoke-Native "refresh pushed source" { git -C $repo fetch origin main }
+  Invoke-Git "refresh pushed source" @("fetch", "origin", "main")
   $pushed = Get-GitLine @("rev-parse", "origin/main")
   if ($pushed -ne $receipt.commit) {
     throw "Source push did not publish the staged commit. Expected $($receipt.commit); found $pushed."
   }
   # Push the source tag alongside the commit; confirm origin's tag resolves to the exact commit.
-  Invoke-Native "push release tag" { git -C $repo push origin "refs/tags/$($receipt.tag)" }
-  $remoteTagLine = (& git -C $repo ls-remote origin "refs/tags/$($receipt.tag)^{}" | Out-String).Trim()
+  Invoke-Git "push release tag" @("push", "origin", "refs/tags/$($receipt.tag)")
+  # Fail-closed by construction: Get-GitLine throws on any nonzero ls-remote, and an EMPTY answer
+  # (tag absent on origin) yields an empty sha that cannot equal the staged commit below.
+  $remoteTagLine = Get-GitLine @("ls-remote", "origin", "refs/tags/$($receipt.tag)^{}")
   $remoteTagSha = ($remoteTagLine -split '\s+')[0]
   if ($remoteTagSha -ne $receipt.commit) {
     throw "Pushed release tag $($receipt.tag) does not resolve to the staged commit on origin. tag=$remoteTagSha staged=$($receipt.commit)"
@@ -387,31 +404,52 @@ if ($Mode -eq "publish") {
   # commit — that binding is the source-tag gate above + this notes line. Create the releases-repo tag
   # ref so gh --verify-tag is a real fail-closed check (refuses creation if the tag is absent).
   # Idempotent for a retried publish.
-  $releasesMainSha = (& gh api "repos/$releasesRepo/commits/main" --jq ".sha")
-  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releasesMainSha)) { throw "Could not resolve $releasesRepo main sha for the release tag." }
-  $releasesMainSha = $releasesMainSha.Trim()
-  $existingReleasesTag = (& gh api "repos/$releasesRepo/git/refs/tags/$tag" --jq ".object.sha" 2>$null)
+  # Fail closed on the lookup itself: an unreadable answer is not an absent commit.
+  $releasesMainProbe = Invoke-NativeProcess -Command "gh" -ArgumentList @("api", "repos/$releasesRepo/commits/main", "--jq", ".sha") -TimeoutMs 300000
+  if ($releasesMainProbe.TimedOut -or $releasesMainProbe.ExitCode -ne 0) {
+    throw "Could not resolve $releasesRepo main sha for the release tag. $(Get-FirstNonEmptyLine $releasesMainProbe.StdErr)"
+  }
+  $releasesMainSha = ($releasesMainProbe.StdOut).Trim()
+  if ([string]::IsNullOrWhiteSpace($releasesMainSha)) { throw "Could not resolve $releasesRepo main sha for the release tag." }
+
+  # THIS is the line that killed the v0.9.9 publish. HTTP 404 is the CORRECT first-publish answer
+  # here ("the tag does not exist yet") and the branch below exists to act on it - but as a native
+  # command with redirected stderr it became a terminating NativeCommandError under "Stop".
+  # Captured instead, the outcomes are distinguished explicitly and ONLY a real 404 reads as absence.
+  # Authentication, permission, network, malformed response and every other non-404 failure throws:
+  # "I could not ask" must never be mistaken for "it is not there".
+  $existingReleasesTag = ""
+  $tagProbe = Invoke-NativeProcess -Command "gh" -ArgumentList @("api", "repos/$releasesRepo/git/refs/tags/$tag", "--jq", ".object.sha") -TimeoutMs 300000
+  if ($tagProbe.TimedOut) {
+    throw "Releases-repo tag lookup for $tag timed out. Authentication/network failure is not treated as an absent tag."
+  } elseif ($tagProbe.ExitCode -eq 0) {
+    $existingReleasesTag = ($tagProbe.StdOut).Trim()
+    if ([string]::IsNullOrWhiteSpace($existingReleasesTag)) {
+      throw "Releases-repo tag lookup for $tag succeeded but returned no sha. Refusing to guess."
+    }
+  } elseif (Test-GhNotFound $tagProbe) {
+    $existingReleasesTag = ""
+  } else {
+    throw "Releases-repo tag lookup for $tag failed (exit $($tagProbe.ExitCode)). Authentication/network failure is not treated as an absent tag. $(Get-FirstNonEmptyLine $tagProbe.StdErr)"
+  }
   if ([string]::IsNullOrWhiteSpace($existingReleasesTag)) {
-    Invoke-Native "create releases-repo tag" { gh api "repos/$releasesRepo/git/refs" -f "ref=refs/tags/$tag" -f "sha=$releasesMainSha" }
+    Invoke-CheckedProcess "create releases-repo tag" "gh" @("api", "repos/$releasesRepo/git/refs", "-f", "ref=refs/tags/$tag", "-f", "sha=$releasesMainSha") -ShowOutput | Out-Null
   }
-  Invoke-Native "create draft GitHub release" {
-    gh release create $tag --repo $releasesRepo --draft --verify-tag --title "Compy $tag" --notes $releaseNotes $installer $manifestPath
-  }
+  Invoke-CheckedProcess "create draft GitHub release" "gh" @(
+    "release", "create", $tag, "--repo", $releasesRepo, "--draft", "--verify-tag",
+    "--title", "Compy $tag", "--notes", $releaseNotes, $installer, $manifestPath
+  ) -TimeoutMs 1800000 -ShowOutput | Out-Null
 
   $verifyDir = Join-Path ([System.IO.Path]::GetTempPath()) ("compy-release-verify-" + [guid]::NewGuid().ToString("N"))
   New-Item -ItemType Directory -Path $verifyDir | Out-Null
   try {
-    Invoke-Native "download draft release assets" {
-      gh release download $tag --repo $releasesRepo --dir $verifyDir --pattern $installerName --pattern "latest.json"
-    }
+    Invoke-CheckedProcess "download draft release assets" "gh" @("release", "download", $tag, "--repo", $releasesRepo, "--dir", $verifyDir, "--pattern", $installerName, "--pattern", "latest.json") -TimeoutMs 1800000 -ShowOutput | Out-Null
     $downloadedInstaller = Join-Path $verifyDir $installerName
     $downloadedManifest = Join-Path $verifyDir "latest.json"
     Assert-ReceiptHash "Downloaded draft installer" $downloadedInstaller $receipt.installer.sha256
     Assert-ReceiptHash "Downloaded draft manifest" $downloadedManifest $receipt.manifest.sha256
     $null = Read-BoundManifest $downloadedManifest $signature $receipt.version $installerName
-    Invoke-Native "downloaded draft signature verification" {
-      node (Join-Path $repo "scripts\verify-updater-signature.mjs") $downloadedInstaller $signature (Join-Path $repo "src-tauri\tauri.conf.json")
-    }
+    Invoke-CheckedProcess "downloaded draft signature verification" "node" @((Join-Path $repo "scripts\verify-updater-signature.mjs"), $downloadedInstaller, $signature, (Join-Path $repo "src-tauri\tauri.conf.json")) -ShowOutput | Out-Null
   } finally {
     $tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd('\') + '\'
     $resolvedVerifyDir = [System.IO.Path]::GetFullPath($verifyDir)
@@ -424,10 +462,13 @@ if ($Mode -eq "publish") {
   # is therefore a single-writer owner action, with this second check kept immediately beside edit.
   Assert-PublicVersionCanPublish $receipt.version $tag -AllowOwnDraft
   # This is the only fleet-visible transition, and it is deliberately last.
-  Invoke-Native "publish verified GitHub release" { gh release edit $tag --repo $releasesRepo --draft=false }
+  Invoke-CheckedProcess "publish verified GitHub release" "gh" @("release", "edit", $tag, "--repo", $releasesRepo, "--draft=false") -TimeoutMs 300000 -ShowOutput | Out-Null
 
-  $latestTag = (& gh release view --repo $releasesRepo --json tagName --jq ".tagName").Trim()
-  if ($LASTEXITCODE -ne 0 -or $latestTag -ne $tag) {
+  # Same fail-closed shape as the probes above: an unreadable answer is not a passing verification.
+  $latestProbe = Invoke-NativeProcess -Command "gh" -ArgumentList @("release", "view", "--repo", $releasesRepo, "--json", "tagName", "--jq", ".tagName") -TimeoutMs 300000
+  $latestTag = ""
+  if (-not $latestProbe.TimedOut -and $latestProbe.ExitCode -eq 0) { $latestTag = ($latestProbe.StdOut).Trim() }
+  if ($latestProbe.TimedOut -or $latestProbe.ExitCode -ne 0 -or $latestTag -ne $tag) {
     throw "Release was published but latest-release verification failed. Expected $tag; found '$latestTag'."
   }
 
@@ -442,9 +483,7 @@ if ($Mode -eq "publish") {
     Assert-ReceiptHash "Public latest installer" $publicInstaller $receipt.installer.sha256
     Assert-ReceiptHash "Public latest manifest" $publicManifest $receipt.manifest.sha256
     $null = Read-BoundManifest $publicManifest $signature $receipt.version $installerName
-    Invoke-Native "public latest signature verification" {
-      node (Join-Path $repo "scripts\verify-updater-signature.mjs") $publicInstaller $signature (Join-Path $repo "src-tauri\tauri.conf.json")
-    }
+    Invoke-CheckedProcess "public latest signature verification" "node" @((Join-Path $repo "scripts\verify-updater-signature.mjs"), $publicInstaller, $signature, (Join-Path $repo "src-tauri\tauri.conf.json")) -ShowOutput | Out-Null
   } finally {
     $tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd('\') + '\'
     $resolvedPublicDir = [System.IO.Path]::GetFullPath($publicDir)
@@ -489,9 +528,10 @@ $lockPath = Join-Path $repo "package-lock.json"
 $cargoPath = Join-Path $repo "src-tauri\Cargo.toml"
 $statePath = Join-Path $repo "docs\RELEASE_STATE.md"
 
-# Full project proof runs on the exact clean source that will be versioned.
-& (Join-Path $repo "scripts\verify-release.ps1")
-if ($LASTEXITCODE -ne 0) { throw "verify-release.ps1 failed (exit $LASTEXITCODE)" }
+# Full project proof runs on the exact clean source that will be versioned. As a child PROCESS, not
+# `& script.ps1` + $LASTEXITCODE: with no native command left in this scope $LASTEXITCODE can be
+# $null, and `$null -ne 0` is TRUE. A child powershell.exe returns a real exit code.
+Invoke-StreamedProcess "verify-release.ps1" "powershell" @("-NoProfile", "-File", (Join-Path $repo "scripts\verify-release.ps1")) -WorkingDirectory $repo | Out-Null
 Assert-CleanMain
 $postVerifyHead = Get-GitLine @("rev-parse", "HEAD")
 if ($postVerifyHead -ne $verifiedSourceHead) {
@@ -506,9 +546,7 @@ $signProbe = Join-Path $signProbeDir "probe.bin"
 Write-NoBom $signProbe "Compy updater signing preflight"
 try {
   Invoke-ProtectedSigner $signProbe $keyPath "Updater signing-key preflight"
-  Invoke-Native "signing-key preflight verification" {
-    node (Join-Path $repo "scripts\verify-updater-signature.mjs") $signProbe "$signProbe.sig" $confPath
-  }
+  Invoke-CheckedProcess "signing-key preflight verification" "node" @((Join-Path $repo "scripts\verify-updater-signature.mjs"), $signProbe, "$signProbe.sig", $confPath) -ShowOutput | Out-Null
 } finally {
   $tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd('\') + '\'
   $resolvedProbeDir = [System.IO.Path]::GetFullPath($signProbeDir)
@@ -550,26 +588,14 @@ if ($stateAfter -eq $stateBefore) {
 }
 Write-NoBom $statePath $stateAfter
 
-Push-Location (Join-Path $repo "src-tauri")
-try {
-  Invoke-Native "Cargo.lock version sync" { cargo update -p compy }
-} finally {
-  Pop-Location
-}
+# The child's working directory is set explicitly rather than by Push-Location, so no cwd state can
+# leak past a failure.
+Invoke-CheckedProcess "Cargo.lock version sync" "cargo" @("update", "-p", "compy") -WorkingDirectory (Join-Path $repo "src-tauri") -ShowOutput | Out-Null
 
 # Version and release-shape guards run again after the mechanical bump.
-Push-Location $repo
-try {
-  Invoke-Native "post-bump release guards" {
-    node scripts/run-vitest.mjs run scripts/version-drift-guard.test.mjs scripts/release-pipeline-guard.test.mjs
-  }
-} finally {
-  Pop-Location
-}
+Invoke-StreamedProcess "post-bump release guards" "node" @("scripts/run-vitest.mjs", "run", "scripts/version-drift-guard.test.mjs", "scripts/release-pipeline-guard.test.mjs") -WorkingDirectory $repo | Out-Null
 
-Invoke-Native "stage release version files" {
-  git -C $repo add "src-tauri/tauri.conf.json" "package.json" "package-lock.json" "src-tauri/Cargo.toml" "src-tauri/Cargo.lock" "docs/RELEASE_STATE.md"
-}
+Invoke-CheckedProcess "stage release version files" "git" @("-C", $repo, "add", "src-tauri/tauri.conf.json", "package.json", "package-lock.json", "src-tauri/Cargo.toml", "src-tauri/Cargo.lock", "docs/RELEASE_STATE.md") | Out-Null
 # Commit via a message FILE (-F), never `-m $Notes`: Windows PowerShell 5.1 mangles a note that is
 # multi-line or contains an embedded double-quote when it is handed to git.exe as a native argument
 # (git then reads a fragment of the note as a pathspec and the commit fails). A file is parse-safe
@@ -577,7 +603,7 @@ Invoke-Native "stage release version files" {
 $commitMsgPath = Join-Path ([System.IO.Path]::GetTempPath()) ("compy-relmsg-" + [guid]::NewGuid().ToString("N") + ".txt")
 Write-NoBom $commitMsgPath ("release: v$nextText`n`n$Notes`n")
 try {
-  Invoke-Native "commit staged release version" { git -C $repo commit -F $commitMsgPath }
+  Invoke-CheckedProcess "commit staged release version" "git" @("-C", $repo, "commit", "-F", $commitMsgPath) -ShowOutput | Out-Null
 } finally {
   Remove-Item -LiteralPath $commitMsgPath -Force -ErrorAction SilentlyContinue
 }
@@ -592,8 +618,7 @@ if ($releaseParent -ne $verifiedSourceHead) {
 # pre-bump proof covered its parent; this closes the gap where an unintended/concurrent edit to a
 # version file could otherwise be swept into the release commit after that proof.
 Write-Host "`n=== Exact release-commit verification ==="
-& (Join-Path $repo "scripts\verify-release.ps1")
-if ($LASTEXITCODE -ne 0) { throw "Exact release-commit verification failed (exit $LASTEXITCODE)" }
+Invoke-StreamedProcess "Exact release-commit verification" "powershell" @("-NoProfile", "-File", (Join-Path $repo "scripts\verify-release.ps1")) -WorkingDirectory $repo | Out-Null
 Assert-CleanMain
 $postCommitVerifyHead = Get-GitLine @("rev-parse", "HEAD")
 if ($postCommitVerifyHead -ne $releaseCommit) {
@@ -602,12 +627,7 @@ if ($postCommitVerifyHead -ne $releaseCommit) {
 
 # Build signed updater artifacts from the committed, clean release source (via the grandfathered
 # present-but-empty-password signing shim; see Invoke-TauriSigned).
-Push-Location $repo
-try {
-  Invoke-TauriSigned $keyPath @("run", "tauri", "build") "Signed Tauri build"
-} finally {
-  Pop-Location
-}
+Invoke-TauriSigned $keyPath @("run", "tauri", "build") "Signed Tauri build"
 
 $installerRelative = "src-tauri/target/release/bundle/nsis/Compy_${nextText}_x64-setup.exe"
 $signatureRelative = "$installerRelative.sig"
@@ -619,9 +639,7 @@ if (-not (Test-Path -LiteralPath $signature -PathType Leaf)) {
   throw "Signed build did not produce the mandatory updater signature: $signature"
 }
 
-Invoke-Native "cryptographic updater signature verification" {
-  node (Join-Path $repo "scripts\verify-updater-signature.mjs") $installer $signature $confPath
-}
+Invoke-CheckedProcess "cryptographic updater signature verification" "node" @((Join-Path $repo "scripts\verify-updater-signature.mjs"), $installer, $signature, $confPath) -ShowOutput | Out-Null
 Assert-CleanMain
 $postBuildHead = Get-GitLine @("rev-parse", "HEAD")
 if ($postBuildHead -ne $releaseCommit) {
@@ -659,7 +677,7 @@ Write-NoBom $manifestPath (($manifest | ConvertTo-Json -Depth 5))
 # source repo. LOCAL only — stage never pushes/publishes. Publish REQUIRES this tag to already point
 # at the receipt commit before it will push source or create the release.
 $releaseTag = "v$nextText"
-Invoke-Native "create release tag" { git -C $repo tag -a $releaseTag $releaseCommit -m "Compy $releaseTag" }
+Invoke-CheckedProcess "create release tag" "git" @("-C", $repo, "tag", "-a", $releaseTag, $releaseCommit, "-m", "Compy $releaseTag") -ShowOutput | Out-Null
 
 $receipt = [ordered]@{
   schema_version = 3
@@ -674,9 +692,7 @@ $receipt = [ordered]@{
 }
 Write-NoBom $stageReceiptPath (($receipt | ConvertTo-Json -Depth 5))
 Invoke-ProtectedSigner $stageReceiptPath $keyPath "Staged receipt signing"
-Invoke-Native "staged receipt self-verification" {
-  node (Join-Path $repo "scripts\verify-updater-signature.mjs") $stageReceiptPath $stageReceiptSignaturePath $confPath
-}
+Invoke-CheckedProcess "staged receipt self-verification" "node" @((Join-Path $repo "scripts\verify-updater-signature.mjs"), $stageReceiptPath, $stageReceiptSignaturePath, $confPath) -ShowOutput | Out-Null
 
 Write-Host "STAGED ONLY: v$nextText"
 Write-Host "Nothing was installed, pushed, or published."
@@ -684,3 +700,5 @@ Write-Host "Receipt: $stageReceiptPath"
 Write-Host "Receipt signature: $stageReceiptSignaturePath"
 Write-Host "After owner review, publish this exact candidate with:"
 Write-Host "  powershell -NoProfile -File .\scripts\release.ps1 -Mode publish"
+# Explicit success exit so release-prepare.ps1's `exit $LASTEXITCODE` is always well-defined.
+exit 0

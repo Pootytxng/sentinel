@@ -1,5 +1,8 @@
 # doc-budget.ps1 - line budgets for hot docs (owner token-efficiency decree 2026-07-22)
 # FAIL = MOVE history/log sections to docs/archive/ (append at top, leave a pointer), never delete. Re-run after.
+# Release-critical: verify-release.ps1 runs this as a gate, so it fails closed like the rest of the
+# surface. Nothing here invokes a native program; the budget check is pure cmdlets.
+$ErrorActionPreference = "Stop"
 $budgets = @{
   "docs/RELEASE_STATE.md" = 300
   "docs/BACKLOG.md" = 1400
