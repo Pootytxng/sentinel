@@ -24,6 +24,15 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+# Runtime proof mechanism (Invoke-CapturedProcess / Invoke-CompyRuntimeProof). Lives in its own
+# dot-sourced file so the release-pipeline tests can drive it directly. See its header for the
+# 2026-07-27 NativeCommandError incident it exists to make impossible.
+. (Join-Path $PSScriptRoot "lib\runtime-proof.ps1")
+# Every external command in this script runs through Invoke-CapturedProcess. Windows PowerShell 5.1
+# turns a native command's stderr into a TERMINATING error under "Stop" (that is what broke the
+# v0.9.9 publish), and git legitimately writes warnings to stderr, so no gate here may depend on
+# whether an external tool happened to stay quiet.
+$gitExe = (Get-Command git -ErrorAction Stop).Source
 
 if ($VerifyRuntime -and $NoLaunch) {
   throw "VerifyRuntime requires launching the installed app."
@@ -75,9 +84,9 @@ $releaseExe = Join-Path $repo "src-tauri\target\release\compy.exe"
 if (-not (Test-Path -LiteralPath $releaseExe -PathType Leaf)) {
   throw "Built release executable is missing before install: $releaseExe"
 }
-$headOutput = @(& git -C $repo rev-parse --short HEAD)
-if ($LASTEXITCODE -ne 0) { throw "Could not resolve the source HEAD before install." }
-$head = (($headOutput | Out-String).Trim())
+$headProbe = Invoke-CapturedProcess -FilePath $gitExe -ArgumentList @("-C", $repo, "rev-parse", "--short", "HEAD")
+if ($headProbe.ExitCode -ne 0) { throw "Could not resolve the source HEAD before install. $(Get-FirstNonEmptyLine $headProbe.StdErr)" }
+$head = $headProbe.StdOut.Trim()
 if (-not $head) { throw "Source HEAD was empty before install." }
 if (-not (Select-String -Path $releaseExe -Pattern $head -Quiet)) {
   throw "STALE BUILD: target\release\compy.exe does not embed HEAD ($head) — cargo reused a cached binary. Run: cargo clean -p compy --release --manifest-path src-tauri/Cargo.toml && npm run tauri build"
@@ -89,9 +98,10 @@ if (-not (Select-String -Path $releaseExe -Pattern $head -Quiet)) {
 #     excludes docs/ from the dirty check). This gate blocks the REAL case: any tracked change or
 #     non-docs untracked file at ship time means the stamp can't be trusted to equal HEAD's code.
 #     Override deliberately with -AllowDirty (states intent in the transcript).
-$treeDirt = @(& git -C $repo status --porcelain -- ":(exclude)docs")
-if ($LASTEXITCODE -ne 0) { throw "Could not verify the source worktree before install." }
-if ($treeDirt -and -not $AllowDirty) {
+$dirtProbe = Invoke-CapturedProcess -FilePath $gitExe -ArgumentList @("-C", $repo, "status", "--porcelain", "--", ":(exclude)docs")
+if ($dirtProbe.ExitCode -ne 0) { throw "Could not verify the source worktree before install. $(Get-FirstNonEmptyLine $dirtProbe.StdErr)" }
+$treeDirt = @($dirtProbe.StdOut -split "`r?`n" | Where-Object { $_.Trim() })
+if ($treeDirt.Count -gt 0 -and -not $AllowDirty) {
   $dirtLines = $treeDirt -join [Environment]::NewLine
   throw "DIRTY-STAMP: the tree has non-docs changes — the build stamp would read '+dirty' (or lie about HEAD). Commit/stash first, rebuild, then ship. Deliberate override: -AllowDirty.`n$dirtLines"
 }
@@ -194,6 +204,17 @@ if ($uninstall.DisplayVersion -ne $ver) {
 $runtimeProof = $null
 if (-not $NoLaunch) {
   if ($VerifyRuntime) {
+    # Derive what the running app MUST report before anything is launched: a bad -ExpectedCommit
+    # must never leave a release build running with a debugging port open.
+    $stampProbe = Invoke-CapturedProcess -FilePath $gitExe -ArgumentList @("-C", $repo, "rev-parse", "--short", $ExpectedCommit)
+    $expectedShort = $stampProbe.StdOut.Trim()
+    if ($stampProbe.ExitCode -ne 0 -or -not $expectedShort) {
+      throw "Could not derive the expected short build stamp for $ExpectedCommit. $(Get-FirstNonEmptyLine $stampProbe.StdErr)"
+    }
+    $expectedStamp = $expectedShort + " " + [char]0x00B7 + " release"
+    $probeScript = Join-Path $repo "scripts\e2e-updater-probe.mjs"
+    $nodeExe = (Get-Command node -ErrorAction Stop).Source
+
     $debugPort = Get-FreeLoopbackPort
     $debugName = "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"
     $priorDebug = [Environment]::GetEnvironmentVariable($debugName, "Process")
@@ -204,39 +225,17 @@ if (-not $NoLaunch) {
       [Environment]::SetEnvironmentVariable($debugName, $priorDebug, "Process")
     }
 
-    $expectedShort = (& git -C $repo rev-parse --short $ExpectedCommit).Trim()
-    if ($LASTEXITCODE -ne 0 -or -not $expectedShort) {
-      throw "Could not derive the expected short build stamp for $ExpectedCommit."
-    }
-    $expectedStamp = $expectedShort + " " + [char]0x00B7 + " release"
-    $probeScript = Join-Path $repo "scripts\e2e-updater-probe.mjs"
     try {
-      $deadline = (Get-Date).AddSeconds(30)
-      while ((Get-Date) -lt $deadline) {
-        if ($launched.HasExited) {
-          throw "RUNTIME PROOF FAILED: installed Compy exited before its main window became healthy (exit $($launched.ExitCode))."
-        }
-        $probeText = (& node $probeScript $debugPort stamp 2>$null | Out-String).Trim()
-        if ($LASTEXITCODE -eq 0 -and $probeText) {
-          try {
-            $probe = $probeText | ConvertFrom-Json
-            if ($probe.stamp -ne $expectedStamp) {
-              throw "RUNTIME STAMP MISMATCH: running app reports '$($probe.stamp)'; expected '$expectedStamp'."
-            }
-            if (-not $probe.railVersion -or $probe.railVersion -notmatch [regex]::Escape($ver)) {
-              throw "RUNTIME VERSION MISMATCH: the mounted shell does not show version $ver (found '$($probe.railVersion)')."
-            }
-            $runtimeProof = $probe
-            break
-          } catch {
-            if ($_.Exception.Message -like "RUNTIME *") { throw }
-          }
-        }
-        Start-Sleep -Milliseconds 500
-      }
-      if (-not $runtimeProof) {
-        throw "RUNTIME PROOF FAILED: Compy's main shell did not answer the build-stamp probe within 30 seconds."
-      }
+      # The app needs a moment before it serves CDP, so the first attempts are EXPECTED to fail.
+      # Invoke-CompyRuntimeProof treats those as data and keeps polling; it throws on an exited
+      # process, a stamp mismatch, a version mismatch, or the deadline.
+      $runtimeProof = Invoke-CompyRuntimeProof `
+        -LaunchedProcess $launched `
+        -ProbeFilePath $nodeExe `
+        -ProbeArgumentList @($probeScript, "$debugPort", "stamp") `
+        -ExpectedStamp $expectedStamp `
+        -ExpectedVersion $ver `
+        -TimeoutSeconds 60
     } finally {
       # Never leave a release build running with a CDP debugging port. Close the proof launch and
       # restart normally only after its exact stamp and mounted shell have passed.
@@ -259,7 +258,8 @@ Write-Output ("installer SHA-256 : " + $sha)
 Write-Output ("live exe          : " + $exe + $(if ($NoLaunch) { " (not launched)" } else { " (launched)" }))
 Write-Output ("installed version : " + $installedVersion + " (Windows Apps: " + $uninstall.DisplayVersion + ")")
 if ($runtimeProof) {
-  Write-Output ("runtime proof     : " + $runtimeProof.stamp + " · shell " + $runtimeProof.railVersion)
+  Write-Output ("runtime proof     : " + $runtimeProof.Stamp + " · shell " + $runtimeProof.RailVersion)
+  Write-Output ("proof attempts    : " + $runtimeProof.Attempts + " (" + $runtimeProof.TransientFailures + " expected transient)")
 } else {
   Write-Output "Desktop now holds exactly one installer. Runtime proof was not requested."
 }

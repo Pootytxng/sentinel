@@ -13,11 +13,16 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const script = readFileSync(join(root, "scripts", "release.ps1"), "utf8");
 const reinstall = readFileSync(join(root, "scripts", "ship-reinstall.ps1"), "utf8");
+const runtimeProof = readFileSync(join(root, "scripts", "lib", "runtime-proof.ps1"), "utf8");
 const executable = script
   .split(/\r?\n/)
   .filter((line) => !line.trimStart().startsWith("#"))
   .join("\n");
 const reinstallExecutable = reinstall
+  .split(/\r?\n/)
+  .filter((line) => !line.trimStart().startsWith("#"))
+  .join("\n");
+const runtimeProofExecutable = runtimeProof
   .split(/\r?\n/)
   .filter((line) => !line.trimStart().startsWith("#"))
   .join("\n");
@@ -250,8 +255,9 @@ describe("release pipeline safety", () => {
     expect(reinstallExecutable).toContain("ExpectedInstallerPath");
     expect(reinstallExecutable).toContain("ExpectedInstallerSha256");
     expect(reinstallExecutable).toContain("e2e-updater-probe.mjs");
-    expect(reinstallExecutable).toContain("RUNTIME STAMP MISMATCH");
-    expect(reinstallExecutable).toContain("RUNTIME VERSION MISMATCH");
+    expect(reinstallExecutable).toContain("Invoke-CompyRuntimeProof");
+    expect(runtimeProofExecutable).toContain("RUNTIME STAMP MISMATCH");
+    expect(runtimeProofExecutable).toContain("RUNTIME VERSION MISMATCH");
     expect(reinstallExecutable).toContain("Start-Process $exe");
   });
 
@@ -264,5 +270,65 @@ describe("release pipeline safety", () => {
     expect(refusal).toBeLessThan(processStop);
     expect(refusal).toBeLessThan(desktopTouch);
     expect(reinstallExecutable).not.toContain("Remove-Item $pendingGamingContracts");
+  });
+});
+
+// bug->guard (failed v0.9.9 publish, 2026-07-27): the runtime proof ran the CDP probe as a
+// PowerShell NATIVE command with `2>$null`. Under $ErrorActionPreference = "Stop", Windows
+// PowerShell 5.1 promotes ANY native stderr write to a TERMINATING NativeCommandError and `2>$null`
+// does not stop it, so the first (always-expected) connection refusal killed the publish inside a
+// retry loop built to tolerate it. These guards pin the mechanism; runtime-proof-guard.test.mjs
+// proves the behaviour end to end against real processes.
+describe("runtime proof cannot be killed by an expected probe failure", () => {
+  it("keeps the strict error preference instead of relaxing it", () => {
+    expect(reinstallExecutable).toContain('$ErrorActionPreference = "Stop"');
+    expect(reinstallExecutable).not.toMatch(/\$ErrorActionPreference\s*=\s*["'](?:Continue|SilentlyContinue)["']/i);
+    expect(runtimeProofExecutable).not.toMatch(/\$ErrorActionPreference\s*=/);
+  });
+
+  it("never invokes the probe as a native command, and never fakes safety with a stderr redirect", () => {
+    expect(reinstallExecutable).toContain('. (Join-Path $PSScriptRoot "lib\\runtime-proof.ps1")');
+    expect(reinstallExecutable).not.toMatch(/&\s*node\b/);
+    expect(reinstallExecutable).not.toMatch(/&\s*git\b/);
+    expect(reinstallExecutable).not.toContain("2>$null");
+    expect(runtimeProofExecutable).not.toMatch(/&\s*node\b/);
+    expect(runtimeProofExecutable).not.toContain("2>$null");
+    expect(runtimeProofExecutable).not.toContain("$LASTEXITCODE");
+  });
+
+  it("captures the probe's stdout, stderr and exit code explicitly, decoded as UTF-8", () => {
+    expect(runtimeProofExecutable).toContain("System.Diagnostics.ProcessStartInfo");
+    expect(runtimeProofExecutable).toContain("$startInfo.RedirectStandardOutput = $true");
+    expect(runtimeProofExecutable).toContain("$startInfo.RedirectStandardError = $true");
+    // The build stamp carries U+00B7; console-code-page decoding would invent a mismatch.
+    expect(runtimeProofExecutable).toContain("$startInfo.StandardOutputEncoding = [System.Text.Encoding]::UTF8");
+    expect(runtimeProofExecutable).toContain("$startInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8");
+    expect(runtimeProofExecutable).toContain("ReadToEndAsync()");
+    expect(runtimeProofExecutable).toMatch(/ExitCode\s+=\s+\$exitCode/);
+  });
+
+  it("treats a nonzero probe exit as a retryable attempt and still fails closed", () => {
+    // The retry path exists...
+    expect(runtimeProofExecutable).toMatch(/\$result\.ExitCode\s+-ne\s+0/);
+    expect(runtimeProofExecutable).toContain("$transientFailures += 1");
+    expect(runtimeProofExecutable).toContain("Start-Sleep -Milliseconds $RetryDelayMs");
+    // ...and every real verdict still throws.
+    expect(runtimeProofExecutable).toContain("RUNTIME PROOF FAILED: installed Compy exited");
+    expect(runtimeProofExecutable).toContain("RUNTIME STAMP MISMATCH");
+    expect(runtimeProofExecutable).toContain("RUNTIME VERSION MISMATCH");
+    expect(runtimeProofExecutable).toContain("did not answer the build-stamp probe");
+    // The only tolerated exception is a malformed payload; the verdicts live outside that catch.
+    const parseCatch = runtimeProofExecutable.indexOf("$parseFailed = $true");
+    const stampVerdict = runtimeProofExecutable.indexOf("RUNTIME STAMP MISMATCH");
+    expect(parseCatch).toBeGreaterThanOrEqual(0);
+    expect(parseCatch).toBeLessThan(stampVerdict);
+    // "Do not simply suppress every exception around the entire proof block": the proof function
+    // itself may contain exactly ONE catch -- the malformed-payload one above. Any second catch in
+    // it could swallow a verdict. (The bounded cleanup catches in the capture helper are a
+    // different function and are deliberately allowed.)
+    const proofBody = runtimeProofExecutable.slice(runtimeProofExecutable.indexOf("function Invoke-CompyRuntimeProof"));
+    expect(proofBody).not.toBe("");
+    expect(proofBody.match(/\bcatch\b/g) ?? []).toHaveLength(1);
+    expect(proofBody).not.toMatch(/\btrap\b/);
   });
 });
