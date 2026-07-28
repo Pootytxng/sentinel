@@ -22,7 +22,7 @@
      means "the version THIS TREE is configured to build" — NOT "the newest published release".
      Published truth is carried separately by published_release_* below. Do not conflate them. -->
 <!-- STATE:source_main_commit=d000295 -->
-<!-- STATE:latest_release_version=0.9.8 -->
+<!-- STATE:latest_release_version=0.9.9 -->
 <!-- STATE:candidate_branch=main -->
 <!-- STATE:candidate_published=no -->
 <!-- STATE:candidate_installed=no -->
