@@ -9,7 +9,7 @@
     "chipTitle": "查看 Compy 当前生效的更改,随时可回滚",
     "activeUndo": " 项生效 · 撤销",
     "sidepileTitle": "其余项目均无需处理",
-    "sidepileHint": "已测量正常 · 已搁置 · 已主动拒绝"
+    "sidepileHint": "已测量正常 · 你已搁置 · 已主动拒绝"
   },
   "optimizeV2": {
     "segments": {
@@ -22,7 +22,7 @@
     "chipTitle": "查看 Compy 当前生效的更改,随时可回滚",
     "activeUndo": " 项生效 · 撤销",
     "sidepileTitle": "其余项目均无需处理",
-    "sidepileHint": "已测量正常 · 已搁置 · 已主动拒绝",
+    "sidepileHint": "已测量正常 · 你已搁置 · 已主动拒绝",
     "upgradePathLabel": "升级路径(仅供参考)",
     "upgradePathEarly": "早期阶段——仍在开发中",
     "copyRetailLinkTitle": "复制一个纯净的 {{retailer}} 搜索链接,可在浏览器中打开。目前不含任何联盟标记。",
@@ -295,6 +295,8 @@
     "skippedSuffix": " · 跳过 {{count}} 项:{{titles}}",
     "eachReversibleBelow": "。以下每一项均可单独回滚。",
     "nothingWaiting": "没有待处理项——这台主机目前没有需要更改的地方。",
+    "nothingWaitingSetAside_one": "没有待处理项——最后一项已被你搁置,随时可在下方恢复。",
+    "nothingWaitingSetAside_other": "没有待处理项——有 {{count}} 项已被你搁置,随时可在下方恢复。",
     "applyTheseChangesTitle": "将这 {{count}} 项更改应用到你的主机?",
     "applyAllNote": "每一项都可回滚——Compy 会先保存原始状态,并为每一项单独生成撤销记录。这些只是让配置更整洁——不是性能提升。",
     "applyAllNoteSlimSuffix": " 推荐项默认勾选——取消勾选你不想要的;只有勾选的项目才会更改。",
@@ -310,13 +312,13 @@
     "thisRigOnly": "仅此主机",
     "otherHardwareHidden": "已隐藏 {{count}} 项来自其他硬件的记录",
     "notForThisRig": "不适用于本机",
-    "notForThisRigIntro": "Compy 检测到这些项不适用于你的硬件——已被搁置,不计入「全部处理完毕」的统计。如果硬件识别有误(比如接了扩展坞、转接器,或换了新部件),你可以手动覆盖这个判断。",
+    "notForThisRigIntro": "Compy 检测到这些项不适用于你的硬件——不计入「全部处理完毕」的统计。如果硬件识别有误(比如接了扩展坞、转接器,或换了新部件),你可以手动覆盖这个判断。",
     "notApplicableFallback": "不适用于本机硬件。",
     "myHardwareSupportsThis": "我的硬件支持这项——仍然显示",
     "overriddenByYou": "已被你手动覆盖",
     "compysReadWasPrefix": "已视为适用——现已出现在你的列表中。Compy 的原始判断是:",
     "notApplicableFallbackLower": "不适用于本机硬件。",
-    "setAsideAgain": "重新搁置",
+    "notForThisRigAfterAll": "还是不适用于本机",
     "dismissed": "已搁置",
     "dismissedIntro": "你搁置了这些项目。它们不计入生效项统计——随时可以恢复任意一项。",
     "restoreAllCount": "全部恢复({{count}})",

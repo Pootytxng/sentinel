@@ -9,7 +9,7 @@
     "chipTitle": "See what Compy has active and roll any of it back",
     "activeUndo": " active · undo",
     "sidepileTitle": "Nothing else needs attention",
-    "sidepileHint": "measured fine · set aside · deliberately refused"
+    "sidepileHint": "measured fine · set aside by you · deliberately refused"
   },
   "optimizeV2": {
     "segments": {
@@ -22,7 +22,7 @@
     "chipTitle": "See what Compy has active and roll any of it back",
     "activeUndo": " active · undo",
     "sidepileTitle": "Nothing else needs attention",
-    "sidepileHint": "measured fine · set aside · deliberately refused",
+    "sidepileHint": "measured fine · set aside by you · deliberately refused",
     "upgradePathLabel": "Upgrade path (advisory)",
     "upgradePathEarly": "early — being developed",
     "copyRetailLinkTitle": "Copies a plain {{retailer}} search link to open in your browser. No affiliate tag today.",
@@ -315,6 +315,8 @@
     "skippedSuffix": " · {{count}} skipped: {{titles}}",
     "eachReversibleBelow": ". Each is individually reversible below.",
     "nothingWaiting": "Nothing waiting — no changes to make on this rig right now.",
+    "nothingWaitingSetAside_one": "Nothing waiting — the last one is set aside. Restore it below anytime.",
+    "nothingWaitingSetAside_other": "Nothing waiting — {{count}} are set aside. Restore them below anytime.",
     "applyTheseChangesTitle": "Apply these {{count}} changes to your rig?",
     "applyAllNote": "Each is reversible — Compy snapshots the prior state and writes a separate undo for every one. These tidy up your setup — not a performance boost.",
     "applyAllNoteSlimSuffix": " Recommended arrive ticked — untick anything you don't want; only what's ticked changes.",
@@ -330,13 +332,13 @@
     "thisRigOnly": "This rig only",
     "otherHardwareHidden": "{{count}} from other hardware hidden",
     "notForThisRig": "Not for this rig",
-    "notForThisRigIntro": "Compy detected these don't apply to your hardware — set aside, and left out of your \"all handled\" count. If a hardware read is wrong (a dock, an adapter, a new part), you can override it.",
+    "notForThisRigIntro": "Compy detected these don't apply to your hardware — left out of your \"all handled\" count. If a hardware read is wrong (a dock, an adapter, a new part), you can override it.",
     "notApplicableFallback": "Not applicable to this rig's hardware.",
     "myHardwareSupportsThis": "My hardware supports this — show it anyway",
     "overriddenByYou": "overridden by you",
     "compysReadWasPrefix": "Treated as eligible — it now appears in your list. Compy's read was:",
     "notApplicableFallbackLower": "not applicable to this rig's hardware.",
-    "setAsideAgain": "Set aside again",
+    "notForThisRigAfterAll": "Not for this rig after all",
     "dismissed": "Dismissed",
     "dismissedIntro": "You set these aside. They're out of your active count — restore any one anytime.",
     "restoreAllCount": "Restore all ({{count}})",

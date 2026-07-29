@@ -768,7 +768,7 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
 | 19 | Keyboard focus is visible | pending — **not claimed**; jsdom does not paint. Installed candidate + `self-review` |
 | 20 | Screen-reader naming and hierarchy are sensible | ✅ `…journey.test.tsx` — every section `aria-labelledby`→`H2` and `tabIndex=-1`; every row head a real `BUTTON` with `aria-expanded`+`aria-controls`; chevrons `aria-hidden` |
 | 21 | Cursor behavior is consistent | ✅ `design/cursor-consistency.test.tsx` (7) — one disabled answer, `none` quarantined to the opt-in reticle, the map is a `:where()` floor, reticle off by default |
-| 22 | Existing mutation / rollback / anti-fabrication / release / encoding / state guards stay green | ✅ `npx vitest run` 215 files / 2159 passed / 2 skipped · `npx tsc --noEmit` clean · `cargo test` 876 passed / 0 failed / 24 ignored (cold build) · `cargo clippy --all-targets` clean |
+| 22 | Existing mutation / rollback / anti-fabrication / release / encoding / state guards stay green | ✅ `npx vitest run` 223 files / 2209 passed / 2 skipped · `npx tsc --noEmit` clean · `cargo test` 880 passed / 0 failed / 24 ignored (cold build) · `cargo clippy --all-targets` clean |
 
 **"All tests pass" is NOT proof the design is accepted.** The acceptance gate is: functional journey
 proof · installed owner eyeball · subsequent validation from the same kind of users who gave the
@@ -852,7 +852,7 @@ Lab or its rollback path during this train."_).
 | 5 | Lab candidate information architecture | `0102a14` (five-section decision journey + `compy_lab_deck` flag + flag guard) |
 | 6 | Lab candidate visual layer | `ff1a773` (section rail lit by IntersectionObserver, `aria-current` nav, both motion branches, <640px collapse) |
 | 7 | journey tests + pruning plan | `3e22a7c` (28 journey tests) + _(this commit — §3 inventory)_ |
-| 8 | installed-review fixes | `0937137` (rounds 1–3) + `c783d63` (round 4: one name on the whole action path + class guard) + `c15d1e2` (round 5: the arc is a real modal for the keyboard) + `a079edd` (round 6: the confirm is never buried; one click never opens two rows) + `75ebc91` (round 7: a proof door lands on its instrument wherever it lives) + `d310220` (round 8: one dismissal set, and a ring that counts it) + _(this commit — round 9: the decline reaches every surface that claims work, Home and the ranker included)_ |
+| 8 | installed-review fixes | `0937137` (rounds 1–3) + `c783d63` (round 4: one name on the whole action path + class guard) + `c15d1e2` (round 5: the arc is a real modal for the keyboard) + `a079edd` (round 6: the confirm is never buried; one click never opens two rows) + `75ebc91` (round 7: a proof door lands on its instrument wherever it lives) + `d310220` (round 8: one dismissal set, and a ring that counts it) + `ff8de44` (round 9: the decline reaches every surface that claims work, Home and the ranker included) + _(this commit — round 10: one phrase one owner; keyboard focus is visible)_ |
 
 Round 6 found two **pre-existing** defects neither the tests nor five prior review rounds caught,
 both structural, both now guarded:
@@ -949,6 +949,43 @@ exposed that nothing outside the Lab was listening:
   Why no test saw it: every prior guard lived *within* one surface. The reviewer's fix list asked
   for exactly this file — "a live-journey guard test spanning Home → Lab (not just within-Lab
   surfaces) so this class of drift trips CI next time."
+
+Round 10 closed the *sentence* half of the same seam (rounds 8–9 closed the *count* half), plus a
+plain accessibility defect the whole train had walked past:
+
+- **The empty state contradicted the caption directly above it.** Set your only tweak aside in the
+  Lab and the Optimize panel printed the round-8 caption — *"Nothing waiting — the last one is set
+  aside. Restore it below anytime."* — and two lines under it `Fix`'s own line: *"Nothing waiting —
+  no changes to make on this rig right now."* The second sentence is **false about the rig**: there
+  IS a change to make, the user declined it. `Fix` had no knowledge of the caption and no
+  set-aside-aware string. Fixed both ways, not by muting one: a new `emptyStatedAbove` prop lets the
+  caller own the sentence when it already prints one (extending `Fix.tsx`'s own precedent, where the
+  ready label already stands down for the drifted group), **and** the standalone line — the one
+  OptimizeV2 and the classic Lab still show, where no caption exists — became set-aside-aware
+  (`optimize.fix.nothingWaitingSetAside`). Blanket suppression alone would have left those two
+  surfaces with no line at all. The section label now stands down on the same condition, so a bare
+  "Ready to enable" can't hang over nothing. **Pre-existing PRODUCTION defect** (`LabConsole`
+  renders `OptimizeStation` too), fixed on this branch only.
+- **"Set aside" had two owners on one screen.** It named the *user's* decline (Dismissed pile, gauge
+  caption) **and** Compy's *hardware* read ("Not for this rig" intro, and the button that undid an
+  override, literally "Set aside again") — two unrelated meanings, one phrase, no way for a reader
+  to tell which. The hardware copy gave the word back: the intro dropped it, the button became
+  "Not for this rig after all", and the side-pile hint now reads *"measured fine · set aside by you ·
+  deliberately refused"*. Both locales.
+- **Keyboard focus was invisible on Home's intent rows** (ledger item 19). `.hc-intake-row` shared
+  one rule for `:hover, :focus-visible` that ended in `outline: none` — so a tabbing user got exactly
+  the faint background wash a mouse hover gives, and nothing else, while every other focusable
+  control on Home and the Lab drew a real ring (measured live: `outline: none 3px` vs
+  `outline: solid 2px`). Split into its own rule with a real `2px` accent ring.
+  Guards: `src/focus-ring-guard.test.ts` — sweeps **every** `src/**/*.css` and fails any
+  `:focus-visible` rule that kills the outline without leaving another mark (`border-color`,
+  `box-shadow`, a different `outline`); `background` deliberately does not count, because hover
+  already spends it. Two pre-existing legitimate cases pass on their `border-color` replacement.
+  And `src/surfaces/set-aside-truth-guard.test.tsx` — journey assertions that press the real "Not
+  for me" in both the Lab panel and standalone `Fix`, plus per-locale string guards that keep the
+  decline word out of all eight hardware-read keys while proving the Dismissed pile still owns it.
+  Why no test saw either: jsdom applies no stylesheets (the ring is unmeasurable there — hence the
+  static CSS sweep), and every prior empty-state test fixtured zero dismissals.
 
 ### Self-review findings NOT fixed, and why (owner call, round 5)
 

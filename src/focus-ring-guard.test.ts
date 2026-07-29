@@ -1,0 +1,68 @@
+import { describe, it, expect } from "vitest";
+import { readFileSync, readdirSync, statSync } from "fs";
+import { join } from "path";
+
+// bug→guard (self-review round 10, 2026-07-29). Home's intent rows shipped with keyboard focus
+// INVISIBLE: `.hc-intake-row:hover, .hc-intake-row:focus-visible { background: …; outline: none; }`
+// — one rule for both states, so a tabbing user got exactly the faint wash a mouse hover gives and
+// nothing else, while every other focusable control on Home/Lab drew a real ring. Green tsc/vitest
+// saw none of it (jsdom applies no stylesheets), and the reviewer had to measure it live.
+//
+// The class, not the instance: killing the default outline is FINE when the rule replaces it with
+// another mark — `border-color: var(--accent)` on a field, a `box-shadow` ring, a different
+// `outline`. It is NOT fine to replace it with `background` alone, because background is what
+// hover already spends; the two states become indistinguishable to anyone not holding a mouse.
+
+const CSS_ROOT = join("src");
+
+function cssFiles(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const p = join(dir, name);
+    return statSync(p).isDirectory() ? cssFiles(p) : p.endsWith(".css") ? [p] : [];
+  });
+}
+
+// Flat { selector, body } rules. Nested at-rules (@media) leave their wrapper as a stray "rule"
+// with a body of "" — harmless here, since we only look at bodies that declare `outline: none`.
+function rules(css: string): { sel: string; body: string }[] {
+  const out: { sel: string; body: string }[] = [];
+  const re = /([^{}]+)\{([^{}]*)\}/g;
+  let m: RegExpExecArray | null;
+  const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  while ((m = re.exec(stripped))) out.push({ sel: m[1].trim(), body: m[2] });
+  return out;
+}
+
+const KILLS_OUTLINE = /outline\s*:\s*(none|0)\b/;
+// An acceptable stand-in mark. `background` is deliberately absent — that's the footgun.
+const REPLACEMENT_MARK = /(border-color\s*:|box-shadow\s*:|outline\s*:\s*(?!none|0\b))/;
+
+describe("focus-visible must stay visible", () => {
+  const offenders: string[] = [];
+  for (const file of cssFiles(CSS_ROOT)) {
+    for (const r of rules(readFileSync(file, "utf8"))) {
+      if (!/:focus-visible/.test(r.sel)) continue;
+      if (!KILLS_OUTLINE.test(r.body)) continue;
+      if (REPLACEMENT_MARK.test(r.body)) continue;
+      offenders.push(`${file}: ${r.sel}`);
+    }
+  }
+
+  it("no :focus-visible rule removes the outline without leaving another focus mark", () => {
+    expect(
+      offenders,
+      "these rules kill the focus outline and put nothing visible in its place " +
+        "(a background tint does not count — hover already spends it)",
+    ).toEqual([]);
+  });
+
+  it("Home's intake rows draw a real ring, not just the hover tint", () => {
+    const css = readFileSync(join("src", "surfaces", "home-console.css"), "utf8");
+    const focus = rules(css).find(
+      (r) => /\.hc-intake-row:focus-visible/.test(r.sel) && !/:hover/.test(r.sel),
+    );
+    expect(focus, ".hc-intake-row needs its OWN :focus-visible rule, separate from :hover").toBeTruthy();
+    expect(focus!.body).toMatch(/outline\s*:\s*\d/);
+    expect(focus!.body).not.toMatch(KILLS_OUTLINE);
+  });
+});

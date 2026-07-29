@@ -328,7 +328,8 @@ describe("Fix", () => {
       ineligible_reason: "No wired Ethernet port detected.",
     };
     render(<Fix recs={[ineligibleRec]} {...baseProps} />);
-    // Starts set aside: counted as not-for-this-rig, not worth-a-look; no switch offered.
+    // Starts in the hardware pile: counted as not-for-this-rig, not worth-a-look; no switch offered.
+    // (Deliberately NOT "set aside" — round 10 gave that phrase back to the user's own decline.)
     expect(screen.getByText(/0 worth a look · 0 active · 0 dismissed · 1 not for this rig/)).toBeTruthy();
     expect(screen.queryByRole("switch", { name: /Apply Title game-mode/ })).toBeNull();
     // Override from the pile → it rejoins the normal flow with the REAL switch.
@@ -340,7 +341,7 @@ describe("Fix", () => {
     // The pile keeps the decision on record — marker + the original read + the way back.
     expect(screen.getByText("overridden by you")).toBeTruthy();
     expect(screen.getByText(/Compy's read was/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Set aside again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Not for this rig after all" }));
     expect(screen.getByText(/0 worth a look · 0 active · 0 dismissed · 1 not for this rig/)).toBeTruthy();
     expect(screen.queryByRole("switch", { name: /Apply Title game-mode/ })).toBeNull();
   });

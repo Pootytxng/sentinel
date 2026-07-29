@@ -280,6 +280,9 @@ export function OptimizeStation(
         v2Ia
         reverted={reverted}
         carried={carriedOpenIds}
+        // The gauge caption above is the panel's living subtitle and it already states the empty
+        // case, set-asides included — so Fix must not print a second, blinder sentence under it.
+        emptyStatedAbove={gaugeValue != null}
       />
 
       {/* The record half of the room (owner decision 2026-07-10: with the standalone Optimize tab

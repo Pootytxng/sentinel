@@ -143,6 +143,11 @@ type Props = {
   // presentational — order and a marker, never a different action, never an auto-apply. Absent for
   // every other caller → the list is byte-identical to before.
   carried?: readonly string[];
+  // One phrase, one owner (self-review round 10): the Lab's Optimize panel prints a living gauge
+  // caption directly above this surface, and that caption already states the empty case — including
+  // the set-aside case Fix couldn't see ("Nothing waiting — the last one is set aside"). When the
+  // caller has said it, Fix stays quiet instead of adding a second, blinder sentence underneath.
+  emptyStatedAbove?: boolean;
 };
 
 // Humanized timestamp (ledger §2): "3 days ago · 6:08 AM", never raw seconds.
@@ -941,6 +946,7 @@ export default function Fix({
   v2Ia = false,
   reverted = [],
   carried = [],
+  emptyStatedAbove = false,
 }: Props) {
   const { t } = useTranslation();
   // Which section(s) of the surface to render — the merged Optimize shell drives this via segments;
@@ -967,6 +973,10 @@ export default function Fix({
   const { dismissed, dismiss, restore } = useDismissed();
   const isDismissed = (r: Rec) => dismissed.has(r.id) && !r.currently_applied;
   const dismissedRecs = eligibleRecs.filter(isDismissed);
+  // The set-asides that WOULD have been ready rows (same filter as worthFixing, minus the decline).
+  // The empty state reads this so it can never say "no changes to make on this rig" about work the
+  // user declined — the changes exist, they're one tap from restore in the Dismissed pile below.
+  const setAsideWaiting = dismissedRecs.filter((r) => isAppliable(r.id)).length;
   const liveRecs = eligibleRecs.filter((r) => !isDismissed(r));
   const appliable = liveRecs.filter((r) => isAppliable(r.id));
   const worthFixing = appliable.filter((r) => !r.currently_applied);
@@ -1176,7 +1186,7 @@ export default function Fix({
       )}
       {/* V2-4b: the ready head disappears with its rows — a group label over nothing (the case
           where the room's only pending fix is in the drifted group above) is noise, not order. */}
-      {!(v2Ia && readyRows.length === 0 && drifted.length > 0) && (
+      {!(readyRows.length === 0 && ((v2Ia && drifted.length > 0) || emptyStatedAbove)) && (
         <div className="fix-section-label">
           {v2Ia ? t("optimize.fix.sectionReadyV2") : t("optimize.fix.sectionWorthMaking")}
         </div>
@@ -1203,12 +1213,18 @@ export default function Fix({
         </p>
       )}
       {readyRows.length === 0 ? (
-        // With a drifted group above, "already dialed in" would be false — the group head + intro
-        // already said what's up, so the empty line renders only when there's truly nothing.
-        // One phrase, one owner: the living subtitle already says "dialed in" — this line
-        // states the fact without restating it.
-        drifted.length === 0 && (
-          <p className="fix-empty">{t("optimize.fix.nothingWaiting")}</p>
+        // One phrase, one owner. Two callers above can already own the empty statement: the drifted
+        // group (its head + intro say what's up) and the Lab panel's gauge caption. When either does,
+        // this line stays quiet. When Fix stands alone (Optimize v2, classic Lab) it speaks — and it
+        // has to be as honest as the caption is: "no changes to make on this rig" is FALSE when the
+        // only thing left is something the user set aside. The changes exist; they were declined.
+        drifted.length === 0 &&
+        !emptyStatedAbove && (
+          <p className="fix-empty">
+            {setAsideWaiting > 0
+              ? t("optimize.fix.nothingWaitingSetAside", { count: setAsideWaiting })
+              : t("optimize.fix.nothingWaiting")}
+          </p>
         )
       ) : (
         <ul className="fix-list">
@@ -1455,7 +1471,9 @@ export default function Fix({
                   {r.ineligible_reason ?? t("optimize.fix.notApplicableFallbackLower")}
                 </p>
                 <button className="fix-dismiss" onClick={() => clearOverride(r.id)}>
-                  {t("optimize.fix.setAsideAgain")}
+                  {/* "Set aside" is the user-decline word (the Dismissed pile owns it) — this pile
+                      is Compy's HARDWARE read, so the way back names its own pile instead. */}
+                  {t("optimize.fix.notForThisRigAfterAll")}
                 </button>
               </li>
             ))}

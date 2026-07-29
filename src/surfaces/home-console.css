@@ -664,7 +664,13 @@
 :root[data-v2="on"] .hc-intake-row:hover,
 :root[data-v2="on"] .hc-intake-row:focus-visible {
   background: var(--v2-accent-dim);
-  outline: none;
+}
+/* Keyboard focus needs its OWN mark, not the hover tint (self-review round 10: this rule used to
+   carry `outline: none`, so a tabbing user got the same faint wash a mouse hover gives — and every
+   other focusable control on Home/Lab draws a real ring). The tint stays as the secondary cue. */
+:root[data-v2="on"] .hc-intake-row:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: -2px;
 }
 :root[data-v2="on"] .hc-intake-row-symptom {
   flex: 0 1 340px;
