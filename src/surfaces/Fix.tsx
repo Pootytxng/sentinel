@@ -1471,15 +1471,28 @@ export default function Fix({
                     for a rec that is already on: it can't be a ready row (worthFixing drops
                     currently_applied) and it has no ledger receipt either (Compy never applied it),
                     so it appeared in NO list while the copy swore it did. One sentence per real
-                    outcome, each naming where to look. */}
+                    outcome, each naming where to look — and it names the heading THIS render
+                    actually draws, because two of these groups are titled differently in v2Ia vs
+                    classic (round 12: the copy had the classic "Compy points the way" baked in, so
+                    in the Lab it pointed at a heading that says "Needs your call"). */}
                 <p className="fix-row-landed">
                   {r.currently_applied
                     ? t("optimize.fix.overrideNowApplied")
                     : isDismissed(r)
-                      ? t("optimize.fix.overrideNowSetAside")
+                      ? t("optimize.fix.overrideNowSetAside", {
+                          section: t("optimize.fix.dismissed"),
+                        })
                       : isAppliable(r.id)
-                        ? t("optimize.fix.overrideNowReady")
-                        : t("optimize.fix.overrideNowGuided")}
+                        ? t("optimize.fix.overrideNowReady", {
+                            section: v2Ia
+                              ? t("optimize.fix.sectionReadyV2")
+                              : t("optimize.fix.sectionWorthMaking"),
+                          })
+                        : t("optimize.fix.overrideNowGuided", {
+                            section: v2Ia
+                              ? t("optimize.fix.needsYourCall")
+                              : t("optimize.fix.compyPointsTheWay"),
+                          })}
                 </p>
                 <p className="fix-row-reason">
                   {t("optimize.fix.compysReadWasPrefix")}{" "}

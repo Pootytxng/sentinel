@@ -852,7 +852,7 @@ Lab or its rollback path during this train."_).
 | 5 | Lab candidate information architecture | `0102a14` (five-section decision journey + `compy_lab_deck` flag + flag guard) |
 | 6 | Lab candidate visual layer | `ff1a773` (section rail lit by IntersectionObserver, `aria-current` nav, both motion branches, <640px collapse) |
 | 7 | journey tests + pruning plan | `3e22a7c` (28 journey tests) + `896f1c2` (§3 inventory — six Lab generations read out of the router) |
-| 8 | installed-review fixes | `0937137` (rounds 1–3) + `c783d63` (round 4: one name on the whole action path + class guard) + `c15d1e2` (round 5: the arc is a real modal for the keyboard) + `a079edd` (round 6: the confirm is never buried; one click never opens two rows) + `75ebc91` (round 7: a proof door lands on its instrument wherever it lives) + `d310220` (round 8: one dismissal set, and a ring that counts it) + `ff8de44` (round 9: the decline reaches every surface that claims work, Home and the ranker included) + `63a3538` (round 10: one phrase one owner; keyboard focus is visible) + _(this commit — round 11: an override reaches every surface that counts work, and the row says where it landed)_ |
+| 8 | installed-review fixes | `0937137` (rounds 1–3) + `c783d63` (round 4: one name on the whole action path + class guard) + `c15d1e2` (round 5: the arc is a real modal for the keyboard) + `a079edd` (round 6: the confirm is never buried; one click never opens two rows) + `75ebc91` (round 7: a proof door lands on its instrument wherever it lives) + `d310220` (round 8: one dismissal set, and a ring that counts it) + `ff8de44` (round 9: the decline reaches every surface that claims work, Home and the ranker included) + `63a3538` (round 10: one phrase one owner; keyboard focus is visible) + `ba17397` (round 11: an override reaches every surface that counts work, and the row says where it landed) + `9c901d9` (round 12: the destination sentence names the heading THIS surface draws) |
 
 Round 6 found two **pre-existing** defects neither the tests nor five prior review rounds caught,
 both structural, both now guarded:
@@ -1024,6 +1024,31 @@ one component's head while every counter kept quoting the raw catalog:
   (identity return on an empty set, catalog never mutated, and a negative control that ignores an
   override for a rec Compy never rejected). **Negative control run:** both fixes neutered in place →
   2 failed / 4 passed, restored → 6/6. **Pre-existing PRODUCTION defect**, fixed on this branch only.
+
+Round 12 caught round 11's own fix committing the exact defect this train exists to kill — a
+sentence sending the reader to a place by a name that isn't on screen:
+
+- **The destination sentence quoted the wrong heading.** `overrideNowGuided` said *"Now under
+  'Compy points the way' below"*, but the guided group has **two** titles: `Fix` renders
+  `compyPointsTheWay` in classic mode and `needsYourCall` ("Needs your call") under `v2Ia` — and
+  `OptimizeStation` (the Lab's Optimize panel) always passes `v2Ia`. So in the surface this train
+  is rebuilding, the sentence pointed at a heading that does not exist, and the fix for "the row
+  promised a list it wasn't in" had quietly reintroduced the same lie one branch over. The ready
+  branch had the softer version of it (*"the ready list above"* — but classic titles that group
+  "Worth making for your rig", where the word "ready" never appears), and the set-aside branch
+  said *"your set-aside pile"* while the heading reads "Dismissed". Fixed at the class: all three
+  destination strings now interpolate `{{section}}`, and `Fix` passes the title **this render
+  actually draws**. Both locales. The already-on branch still names no destination, because there
+  isn't one.
+  Guard: the same `override-truth-guard.test.tsx` grew a **tripwire** — any quoted name inside
+  `.fix-row-landed` must resolve to a heading (`.fix-section-label` / `.fix-group-head`) present in
+  the same render, plus paired tests that press the identical journey through the Lab panel
+  (expects "Needs your call") and through classic `Fix` (expects "Compy points the way"). One
+  hardcoded string cannot satisfy both. Negative control: restoring the hardcoded name → 1 failed /
+  6 passed with the heading list printed in the failure; restored → 7/7. Why round 11's own guard
+  missed it: it asserted the sentence's substring and never asked whether the place it named was
+  on screen — test-green as proof of a design claim, which is the thing the owner's brief warns
+  against.
 
 ### Self-review findings NOT fixed, and why (owner call, round 5)
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/react";
+import Fix from "./Fix";
 import { OptimizeStation, type LabFastPathProps } from "./lab/OptimizeStation";
 import { ConfirmProvider } from "../design/ConfirmDialog";
 import { withOverrides } from "./eligibility-override";
@@ -114,6 +115,28 @@ const overrideFirstRejected = (container: HTMLElement) => {
   fireEvent.click(btn);
 };
 
+// THE TRIPWIRE (round 12). The landed sentence names its destination in quotes. That name is only
+// true if a heading with exactly that text is on screen — and two of these groups are titled
+// DIFFERENTLY in v2Ia vs classic, so a hardcoded name is right in one surface and a dead reference
+// in the other. (It was: the copy said "Compy points the way", the Lab's heading says "Needs your
+// call".) Any quoted name in .fix-row-landed must resolve to a real heading in the same render.
+const NAMED = /[""«「](.+?)[""»」]/;
+const headings = (container: HTMLElement) =>
+  [...container.querySelectorAll(".fix-section-label, .fix-group-head")].map((el) =>
+    (el.textContent ?? "").trim(),
+  );
+const assertNamesALiveSection = (container: HTMLElement) => {
+  const landed = container.querySelector(".fix-row-landed")!.textContent!;
+  const named = NAMED.exec(landed)?.[1];
+  expect(named, `nothing quoted in "${landed}" — the sentence must name where the rec went`).toBeTruthy();
+  const live = headings(container);
+  expect(
+    live.some((h) => h === named || h.startsWith(named!)),
+    `the sentence points at "${named}" but the only headings on screen are ${JSON.stringify(live)}`,
+  ).toBe(true);
+  return named!;
+};
+
 const caption = (container: HTMLElement) =>
   container.querySelector(".lab-gauge-caption")!.textContent!;
 const den = (container: HTMLElement) => container.querySelector(".lab-gauge-den")!.textContent!;
@@ -141,6 +164,8 @@ describe("an override moves the whole room, not just the row that owns the butto
       rowTitles(container).some((t) => t.includes("GPU scheduling")),
       "and it must be a real, appliable row — not just a number",
     ).toBe(true);
+    // …and the sentence under the row points at the heading that list actually sits under.
+    expect(assertNamesALiveSection(container)).toBe("Ready — one click, reversible");
   });
 
   it("an already-on rec says so, and never claims a ready list it isn't in", () => {
@@ -155,13 +180,16 @@ describe("an override moves the whole room, not just the row that owns the butto
 
     const landed = container.querySelector(".fix-row-landed")!.textContent!;
     expect(landed).toContain("Already switched on");
-    // THE LIE: it is in no ready list, so it may not say it is in one.
-    expect(landed).not.toContain("ready list");
-    expect(container.textContent).not.toContain("Now in the ready list above");
+    // THE LIE: it is in no list at all, so it may not send the reader to one — this is the ONE
+    // branch that names no destination, and the tripwire's mirror image (round 12).
+    expect(NAMED.test(landed), `"${landed}" points somewhere, but there is nowhere to point`).toBe(
+      false,
+    );
+    expect(landed).not.toContain("Now in the ready list above");
     expect(rowTitles(container).some((t) => t.includes("GPU scheduling"))).toBe(false);
   });
 
-  it("a rec Compy can't apply points at the walkthrough, not at a ready list", () => {
+  it("a rec Compy can't apply points at the walkthrough — by the name the LAB calls it", () => {
     const { container } = render(
       <ConfirmProvider>
         <OptimizeStation {...station([rejected()], () => false)} />
@@ -169,9 +197,25 @@ describe("an override moves the whole room, not just the row that owns the butto
     );
     overrideFirstRejected(container);
 
-    const landed = container.querySelector(".fix-row-landed")!.textContent!;
-    expect(landed).toContain("Compy points the way");
-    expect(landed).not.toContain("ready list");
+    // In the Lab (v2Ia) the guided group's heading is "Needs your call" — the classic
+    // "Compy points the way" title never renders here, so the sentence may not use it.
+    expect(assertNamesALiveSection(container)).toBe("Needs your call");
+    expect(container.querySelector(".fix-row-landed")!.textContent).not.toContain(
+      "Compy points the way",
+    );
+  });
+
+  it("…and by the name CLASSIC calls it — same rec, other surface, other heading", () => {
+    const { container } = render(
+      <ConfirmProvider>
+        <Fix {...station([rejected()], () => false)} recs={[rejected()] as never[]} view="fixes" />
+      </ConfirmProvider>,
+    );
+    overrideFirstRejected(container);
+
+    // Same journey through classic Fix (no v2Ia): the heading IS "Compy points the way".
+    // One hardcoded name could never satisfy both this test and the one above.
+    expect(assertNamesALiveSection(container)).toBe("Compy points the way");
   });
 });
 
