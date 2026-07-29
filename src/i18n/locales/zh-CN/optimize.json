@@ -163,7 +163,17 @@
     "couldntCheckPre": "未能检查 ",
     "couldntCheckMid": " — ",
     "couldntCheckPost": "。",
-    "adminRightsNote": "读取这些项需要管理员权限——Compy 不会仅仅为了查看就申请权限。"
+    "adminRightsNote": "读取这些项需要管理员权限——Compy 不会仅仅为了查看就申请权限。",
+    "recFactDetected": "你的电脑上",
+    "recFactWhat": "它有什么用",
+    "recFactChanges": "会有什么变化",
+    "recFactCatch": "注意事项",
+    "recApply": "应用",
+    "recApplying": "正在应用…",
+    "recAlreadyOn": "已开启 —— 这里不用再做什么。",
+    "recNotForRig": "不适用于这台电脑 —— Compy 没有改动它。",
+    "recManual": "Compy 只改动它能先备份、之后能撤销的设置。这一项不在其中，需要你自己动手改。",
+    "recManualWithSteps": "Compy 只改动它能先备份、之后能撤销的设置。这一项不在其中，需要你自己动手改 —— 下面就是它的具体位置。"
   },
   "fix": {
     "payoffMeterTitle": "这项更改经测量对什么有帮助——不是承诺的具体数字",

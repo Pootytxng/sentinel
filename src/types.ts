@@ -72,7 +72,12 @@ export type ReadinessCheck = { id: string; label: string; status: ReadinessStatu
 export type Drift = { id: string; label: string; detail: string; noticed_at: string };
 export type GameReadiness = { checks: ReadinessCheck[]; ready_count: number; attention_count: number; unknown_count: number; advisory_count: number; advisory: string; dismissed_ids: string[]; drifts: Drift[] };
 
-export type PriorityItem = { id: string; title: string; reason: string; linked: string | null; confidence: Confidence; status: PriorityStatus };
+// `linked` = the ONE thing this row points at (a rec id OR a readiness-check id).
+// `rec_ids` = every catalog RECOMMENDATION id the row is about, in display order — the identity
+// the Check → Optimize handoff carries. Never re-derive a rec from a row's prose; read this.
+// Optional in TS only because a probe-cache payload written by an older build won't have it
+// (Rust always emits it) — read it as `rec_ids ?? []`, never assume presence.
+export type PriorityItem = { id: string; title: string; reason: string; linked: string | null; rec_ids?: string[]; confidence: Confidence; status: PriorityStatus };
 // R3 Lane B: advisory upgrade path — present only when a verdict names hardware as the limiter.
 // Links are plain retailer searches (no affiliate tags); in-app they are COPY-only, never opened.
 export type RetailLink = { retailer: string; url: string };

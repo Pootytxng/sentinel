@@ -32,6 +32,14 @@ pub(crate) struct PriorityItem {
     reason: String,
     /// rec_id or readiness-check id this row links to, if any.
     linked: Option<String>,
+    /// Every stable RECOMMENDATION id this row is about, in display order.
+    ///
+    /// `linked` names at most one target and may be a readiness-check id; this is
+    /// strictly catalog rec ids, and it is the identity the Check → Optimize handoff
+    /// carries (user-feedback recovery train, item 2/4: a row must NAME what it found,
+    /// and downstream surfaces must never re-derive identity from display prose).
+    /// Empty when the row is not about catalog recommendations.
+    rec_ids: Vec<String>,
     confidence: Confidence,
     status: PriorityStatus,
 }
@@ -219,6 +227,9 @@ pub(crate) fn build_priorities(
                 title: if label.is_empty() { id.to_string() } else { label },
                 reason: detail,
                 linked: Some(id.to_string()),
+                // A readiness check id is NOT a rec id — leave the rec identity empty
+                // rather than hand the handoff something the catalog can't resolve.
+                rec_ids: Vec::new(),
                 confidence: conf,
                 status,
             };
@@ -258,31 +269,53 @@ pub(crate) fn build_priorities(
                     title: "Safe one-click tweaks".into(),
                     reason: "No pending safe tweaks — the safe recommendations that apply to your PC are already applied, or none apply.".into(),
                     linked: None,
+                    rec_ids: Vec::new(),
                     confidence: Confidence::Low,
                     status: PriorityStatus::Ready,
                 },
             ));
         } else {
+            // NAME the tweaks, don't just count them (user-feedback recovery train, items 2/4/5:
+            // "1 safe tweak not applied" told a tester a number and nothing else, and the row
+            // carried no identity, so every downstream surface had to guess). `ids` carries EVERY
+            // pending rec — never truncated; the 4-title cap below is display prose only.
+            let ids: Vec<String> = pending
+                .iter()
+                .filter_map(|r| r.get("id").and_then(Value::as_str).map(str::to_string))
+                .collect();
             let titles: Vec<&str> = pending
                 .iter()
                 .filter_map(|r| r.get("title").and_then(Value::as_str))
                 .take(4)
                 .collect();
+            // Exactly one pending tweak ⇒ the row IS that tweak: its real title, and `linked`
+            // resolves it, so the surfaces that already render a linked rec's real action
+            // (FirstCheck/Check/SetupTour/SessionDebrief) stop falling through to a dead end.
+            let single = if pending.len() == 1 { ids.first().cloned() } else { None };
             tagged.push((
                 Bucket::Limiter(8),
                 PriorityItem {
                     id: "pending-safe-recs",
-                    title: format!(
-                        "{} safe {} not applied",
-                        pending.len(),
-                        if pending.len() == 1 { "tweak" } else { "tweaks" }
-                    ),
-                    reason: format!(
-                        "Compy has safe, reversible tweaks you haven't applied: {}{}.",
-                        titles.join(", "),
-                        if pending.len() > titles.len() { ", …" } else { "" }
-                    ),
-                    linked: None,
+                    title: match (&single, titles.first()) {
+                        (Some(_), Some(t)) => (*t).to_string(),
+                        // Grammar stays real either way — never an "N tweak(s)" artifact.
+                        _ => format!(
+                            "{} safe {} not applied",
+                            pending.len(),
+                            if pending.len() == 1 { "tweak" } else { "tweaks" }
+                        ),
+                    },
+                    reason: if single.is_some() {
+                        "A safe, reversible tweak Compy can apply for you — you haven't applied it yet.".into()
+                    } else {
+                        format!(
+                            "Compy has safe, reversible tweaks you haven't applied: {}{}.",
+                            titles.join(", "),
+                            if pending.len() > titles.len() { ", …" } else { "" }
+                        )
+                    },
+                    linked: single,
+                    rec_ids: ids,
                     confidence: Confidence::Medium,
                     status: PriorityStatus::Attention,
                 },
@@ -305,6 +338,9 @@ pub(crate) fn build_priorities(
                     title: format!("{enabled} apps launch at startup"),
                     reason: "A heavy startup load uses RAM and CPU before you even open a game. Compy can turn off the ones you don't need — it stops them auto-starting, never uninstalls.".into(),
                     linked: None,
+                    // Startup entries are not catalog recs — Check names them inline from
+                    // get_startup_entries and turns them off there.
+                    rec_ids: Vec::new(),
                     confidence: Confidence::Low,
                     status: PriorityStatus::Attention,
                 },
@@ -317,6 +353,7 @@ pub(crate) fn build_priorities(
                     title: "Startup load looks reasonable".into(),
                     reason: format!("{enabled} app(s) launch at startup."),
                     linked: None,
+                    rec_ids: Vec::new(),
                     confidence: Confidence::Low,
                     status: PriorityStatus::Ready,
                 },
@@ -352,6 +389,11 @@ pub(crate) fn build_priorities(
                         "Memory Integrity / VBS is off — nothing to do. (Leaving it off can help a few games; turning it on is a security/FPS tradeoff Compy never changes for you.)".into()
                     },
                     linked: r.get("id").and_then(Value::as_str).map(str::to_string),
+                    rec_ids: r
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .map(|id| vec![id.to_string()])
+                        .unwrap_or_default(),
                     confidence: Confidence::Low,
                     status: PriorityStatus::Ready,
                 },
@@ -469,6 +511,9 @@ mod priority_tests {
     }
     fn limiter_ids(p: &Priorities) -> Vec<&str> {
         p.limiters.iter().map(|i| i.id).collect()
+    }
+    fn limiter_rec_ids(p: &Priorities, id: &str) -> Vec<String> {
+        p.limiters.iter().find(|i| i.id == id).map(|i| i.rec_ids.clone()).unwrap_or_default()
     }
 
     #[test]
@@ -646,11 +691,16 @@ mod priority_tests {
         ]);
         let p = build_priorities(&r, &recs, &json!([]), &json!([]));
         assert!(limiter_ids(&p).contains(&"pending-safe-recs"), "the non-drifted rec still lists");
-        // …and the count reflects ONE rec, grammar-correct (no "(s)").
-        assert_eq!(limiter_title(&p, "pending-safe-recs").as_deref(), Some("1 safe tweak not applied"));
+        // …and exactly ONE rec survived, so the row IS that rec — named, not counted.
+        assert_eq!(
+            limiter_title(&p, "pending-safe-recs").as_deref(),
+            Some("Hardware-accelerated GPU scheduling")
+        );
+        assert_eq!(limiter_rec_ids(&p, "pending-safe-recs"), vec!["hags-enable"]);
     }
 
     // flags-name-it law: no "N setting(s)" pluralization artifact. Singular vs plural is real grammar.
+    // (The one-rec case no longer counts at all — it names the tweak; guarded just below.)
     #[test]
     fn pending_safe_title_uses_real_grammar_never_paren_s() {
         let one = build_priorities(
@@ -659,7 +709,10 @@ mod priority_tests {
             &json!([]),
             &json!([]),
         );
-        assert_eq!(limiter_title(&one, "pending-safe-recs").as_deref(), Some("1 safe tweak not applied"));
+        assert_eq!(
+            limiter_title(&one, "pending-safe-recs").as_deref(),
+            Some("Enable Windows Game Mode")
+        );
         let two = build_priorities(
             &readiness(vec![]),
             &json!([
@@ -676,6 +729,102 @@ mod priority_tests {
         {
             assert!(!t.contains("(s)"), "no pluralization artifact: {t}");
         }
+    }
+
+    // ── bug → guard: "1 safe tweak not applied" (tester feedback, recovery train items 2/4/5) ──
+    // The row named a COUNT and carried no identity, so every downstream surface (FirstCheck's
+    // spotlight, Check's ranked list, SetupTour, SessionDebrief) had to guess which rec it meant —
+    // and, failing, dropped the user on a dead end. These pin the identity contract at the source.
+
+    #[test]
+    fn pending_safe_row_carries_every_pending_rec_id_never_truncated() {
+        // Six pending appliable recs — the display prose caps at 4 titles, the IDENTITY must not.
+        let ids = ["game-mode", "visual-effects", "sysmain-disable", "nagle-disable", "hags-enable", "mouse-accel-off"];
+        for id in ids {
+            assert!(APPLIABLE_REC_IDS.contains(&id), "fixture drifted from the appliable set: {id}");
+        }
+        let recs = Value::Array(
+            ids.iter().map(|id| rec_titled(id, &format!("Tweak {id}"), false, "safe")).collect(),
+        );
+        let p = build_priorities(&readiness(vec![]), &recs, &json!([]), &json!([]));
+        assert_eq!(
+            limiter_rec_ids(&p, "pending-safe-recs"),
+            ids,
+            "every pending rec id survives; the .take(4) is prose-only"
+        );
+        // …and the prose is still the capped, honest summary (not a wall of six titles).
+        let reason = p
+            .limiters
+            .iter()
+            .find(|i| i.id == "pending-safe-recs")
+            .map(|i| i.reason.clone())
+            .unwrap_or_default();
+        assert!(reason.ends_with("\u{2026}."), "over-cap prose keeps its ellipsis: {reason}");
+    }
+
+    #[test]
+    fn a_single_pending_rec_becomes_the_row_identity_not_a_count() {
+        let p = build_priorities(
+            &readiness(vec![]),
+            &json!([rec_titled("game-mode", "Enable Windows Game Mode", false, "safe")]),
+            &json!([]),
+            &json!([]),
+        );
+        let row = p.limiters.iter().find(|i| i.id == "pending-safe-recs").expect("row present");
+        // The title names the tweak…
+        assert_eq!(row.title, "Enable Windows Game Mode");
+        assert!(!row.title.contains("not applied"), "no count-only language: {}", row.title);
+        // …and `linked` resolves it, which is what makes the surfaces render its REAL action.
+        assert_eq!(row.linked.as_deref(), Some("game-mode"));
+        assert_eq!(row.rec_ids, vec!["game-mode"]);
+    }
+
+    #[test]
+    fn several_pending_recs_keep_the_honest_count_but_still_carry_identity() {
+        let p = build_priorities(
+            &readiness(vec![]),
+            &json!([
+                rec_titled("game-mode", "Enable Windows Game Mode", false, "safe"),
+                rec_titled("hags-enable", "Hardware-accelerated GPU scheduling", false, "safe"),
+            ]),
+            &json!([]),
+            &json!([]),
+        );
+        let row = p.limiters.iter().find(|i| i.id == "pending-safe-recs").expect("row present");
+        assert_eq!(row.title, "2 safe tweaks not applied");
+        // No single target to link — but the ids are all there for the UI to expand.
+        assert_eq!(row.linked, None, "an aggregate must not pretend to be one rec");
+        assert_eq!(row.rec_ids, vec!["game-mode", "hags-enable"]);
+    }
+
+    #[test]
+    fn rows_that_are_not_about_recommendations_carry_no_rec_ids() {
+        // A readiness check id is not a catalog rec id — handing it to the handoff would produce
+        // a highlight target the Optimize catalog can never resolve.
+        let p = build_priorities(
+            &readiness(vec![chk("monitor-refresh", "attention")]),
+            &json!([]),
+            &json!([{ "name": "a", "enabled": true }]),
+            &json!([]),
+        );
+        for row in p.limiters.iter().chain(p.already_fine.iter()) {
+            if row.id == "monitor-refresh" || row.id == "startup-load" {
+                assert!(row.rec_ids.is_empty(), "{} must not claim rec identity", row.id);
+            }
+        }
+    }
+
+    #[test]
+    fn no_pending_recs_means_no_rec_identity_to_carry() {
+        let p = build_priorities(
+            &readiness(vec![]),
+            &json!([rec_titled("game-mode", "Enable Windows Game Mode", true, "safe")]),
+            &json!([]),
+            &json!([]),
+        );
+        let row = p.already_fine.iter().find(|i| i.id == "pending-safe-recs").expect("fine row");
+        assert!(row.rec_ids.is_empty(), "nothing pending → nothing to hand off");
+        assert_eq!(row.linked, None);
     }
 
     #[test]

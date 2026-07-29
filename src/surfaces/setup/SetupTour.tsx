@@ -14,7 +14,7 @@ import { StepIndicator, StepConnector } from "../../design/vendor/Stepper/Steppe
 import { TrustSwitch } from "../../design/TrustSwitch";
 import { useConfirm } from "../../design/ConfirmDialog";
 import { useReducedMotion } from "../../design/use-motion";
-import { useScan, type ScanRecLite } from "../use-scan";
+import { useScan, type ScanRec } from "../use-scan";
 import { buildRigParts } from "../rig/rig-parts";
 import { buildSetupSteps, type SetupStep } from "./setup-steps";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
@@ -317,7 +317,7 @@ function StepCheck() {
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const confirm = useConfirm();
 
-  const recFor = (lim: PriorityItem | null): ScanRecLite | null => {
+  const recFor = (lim: PriorityItem | null): ScanRec | null => {
     if (!lim) return null;
     const id = lim.linked ?? lim.id;
     const rec = recs.find((r) => r.id === id);

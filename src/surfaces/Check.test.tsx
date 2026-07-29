@@ -27,6 +27,9 @@ const prioritiesMock = vi.hoisted(() => ({
   } as Record<string, unknown>,
 }));
 
+// Settable recommendation catalog — a priority row resolves back into these by id (rec_ids).
+const recsMock = vi.hoisted(() => ({ list: [] as unknown[] }));
+
 // useScan polls real commands on mount; mock invoke to feed a tiny readiness/priorities scan.
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
@@ -46,11 +49,12 @@ vi.mock("@tauri-apps/api/core", () => ({
     if (cmd === "get_priorities") return Promise.resolve(prioritiesMock.payload);
     // useScan/refresh now rank via priorities_from (pure) instead of re-running get_priorities.
     if (cmd === "priorities_from") return Promise.resolve(prioritiesMock.payload);
-    if (cmd === "get_recommendations") return Promise.resolve([]);
+    if (cmd === "get_recommendations") return Promise.resolve(recsMock.list);
     return Promise.resolve(null);
   }),
 }));
 
+import { invoke } from "@tauri-apps/api/core";
 import Check, { LEFTOVER_LEARN_ID } from "./Check";
 import { KNOWLEDGE_BY_ID } from "../data/knowledge";
 import { ConfirmProvider } from "../design/ConfirmDialog";
@@ -59,6 +63,7 @@ import type { SessionSummary } from "../types";
 
 afterEach(() => {
   cleanup();
+  recsMock.list = [];
   readinessMock.drifts = [];
   prioritiesMock.payload = {
     limiters: [],
@@ -443,6 +448,183 @@ describe("Check", () => {
     const copied = writeText.mock.calls[0][0] as string;
     expect(copied).toMatch(/^Compy setup summary/);
     expect(copied).toMatch(/measured on this rig/i);
+  });
+
+  // ── Result identity: a row that stands for several tweaks (recovery items 2/4/5) ──
+  //
+  // The tester's dead end: "1 safe tweak not applied" named a COUNT and stopped, and the row fell
+  // through to a bare "advisory" chip. A row now resolves back through its rec_ids into the actual
+  // recommendations and gives each one the single action Compy can honestly offer for it.
+
+  const rec = (over: Record<string, unknown> = {}) => ({
+    id: "hags-enable",
+    title: "Enable Hardware GPU Scheduling",
+    category: "GPU",
+    severity: "safe",
+    description: "Lets the GPU manage its own memory and command queue directly.",
+    impact: "Smoother frame pacing",
+    downside: null,
+    applies_to: "Currently: Off",
+    currently_applied: false,
+    provenance: "expected-impact",
+    ...over,
+  });
+
+  const aggregate = (rec_ids: string[]) => ({
+    limiters: [
+      {
+        id: "pending-safe-recs",
+        title: `${rec_ids.length} safe tweaks not applied`,
+        reason: "Compy has safe, reversible tweaks you haven't applied.",
+        linked: null,
+        rec_ids,
+        confidence: "high",
+        status: "attention",
+      },
+    ],
+    already_fine: [],
+    not_worth_touching: [],
+    session_hint: null,
+    upgrade_path: null,
+  });
+
+  const APPLIABLE = new Set(["hags-enable", "game-mode"]);
+
+  it("a count-only row names every tweak behind it, each with its own honest action", async () => {
+    recsMock.list = [
+      rec(),
+      rec({
+        id: "game-mode",
+        title: "Turn on Game Mode",
+        description: "Tells Windows to hold back background work while a game is in front.",
+        applies_to: "Currently: Off",
+      }),
+      // Real change, but outside what Compy can snapshot + undo → hands-on, with the real guide.
+      rec({
+        id: "xmp-expo",
+        title: "Enable EXPO memory profile",
+        description: "Runs your RAM at the speed it was sold at, instead of the safe fallback.",
+        applies_to: "Currently: Off",
+      }),
+    ];
+    prioritiesMock.payload = aggregate(["hags-enable", "game-mode", "xmp-expo"]);
+    render(
+      <ConfirmProvider>
+        <Check
+          isAppliable={(id) => APPLIABLE.has(id)}
+          onOpenLibrary={vi.fn()}
+          onChanged={vi.fn()}
+          vendor="any"
+        />
+      </ConfirmProvider>,
+    );
+    // Every tweak is NAMED — the count is no longer the whole story.
+    expect(await screen.findByText("Enable Hardware GPU Scheduling")).toBeInTheDocument();
+    expect(screen.getByText("Turn on Game Mode")).toBeInTheDocument();
+    expect(screen.getByText("Enable EXPO memory profile")).toBeInTheDocument();
+    // …with the per-rig facts that justify each one (detected state + what it does).
+    expect(screen.getAllByText("Currently: Off")).toHaveLength(3);
+    expect(
+      screen.getByText("Lets the GPU manage its own memory and command queue directly."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Runs your RAM at the speed it was sold at, instead of the safe fallback."),
+    ).toBeInTheDocument();
+    // Two are appliable through the audited path; the third honestly says Compy can't flip it and
+    // opens its REAL walkthrough instead of a dead chip.
+    expect(screen.getAllByRole("button", { name: "Apply" })).toHaveLength(2);
+    expect(screen.getByText(/Compy only flips settings it can snapshot and undo/)).toBeInTheDocument();
+    expect(screen.getByText("Show me the way")).toBeInTheDocument();
+    // And the row no longer terminates in the count-only "advisory" dead end.
+    expect(document.querySelector(".check-advisory")).toBeNull();
+  });
+
+  it("applying a named card dispatches THAT rec's id through the audited apply path", async () => {
+    recsMock.list = [rec(), rec({ id: "game-mode", title: "Turn on Game Mode" })];
+    prioritiesMock.payload = aggregate(["hags-enable", "game-mode"]);
+    render(
+      <ConfirmProvider>
+        <Check
+          isAppliable={(id) => APPLIABLE.has(id)}
+          onOpenLibrary={vi.fn()}
+          onChanged={vi.fn()}
+          vendor="any"
+        />
+      </ConfirmProvider>,
+    );
+    await screen.findByText("Turn on Game Mode");
+    const applies = screen.getAllByRole("button", { name: "Apply" });
+    fireEvent.click(applies[1]); // the SECOND card — proves identity, not row-position, drives it
+    // Confirm dialog first (nothing applies silently), naming the exact tweak.
+    expect(await screen.findByText('Apply "Turn on Game Mode"?')).toBeInTheDocument();
+    fireEvent.click(document.querySelector(".cmp-confirm-go") as HTMLElement);
+    await vi.waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("apply_recommendation", {
+        recId: "game-mode",
+        recTitle: "Turn on Game Mode",
+      }),
+    );
+  });
+
+  it("an already-applied or rig-ineligible tweak says so instead of offering a button", async () => {
+    recsMock.list = [
+      rec({ currently_applied: true }),
+      rec({
+        id: "game-mode",
+        title: "Turn on Game Mode",
+        eligible: false,
+        ineligible_reason: "Windows 11 25H2 manages this itself.",
+      }),
+    ];
+    prioritiesMock.payload = aggregate(["hags-enable", "game-mode"]);
+    render(
+      <ConfirmProvider>
+        <Check
+          isAppliable={(id) => APPLIABLE.has(id)}
+          onOpenLibrary={vi.fn()}
+          onChanged={vi.fn()}
+          vendor="any"
+        />
+      </ConfirmProvider>,
+    );
+    expect(await screen.findByText("Turn on Game Mode")).toBeInTheDocument();
+    expect(screen.getByText("Already on — nothing to do here.")).toBeInTheDocument();
+    expect(screen.getByText("Windows 11 25H2 manages this itself.")).toBeInTheDocument();
+    // Neither state offers an Apply the backend would refuse.
+    expect(screen.queryByRole("button", { name: "Apply" })).not.toBeInTheDocument();
+  });
+
+  it("a single-rec row is untouched — it keeps its one row-level switch, no card stack", async () => {
+    recsMock.list = [rec()];
+    prioritiesMock.payload = {
+      ...aggregate(["hags-enable"]),
+      limiters: [
+        {
+          id: "pending-safe-recs",
+          title: "Enable Hardware GPU Scheduling",
+          reason: "A safe, reversible tweak Compy can apply for you.",
+          linked: "hags-enable",
+          rec_ids: ["hags-enable"],
+          confidence: "high",
+          status: "attention",
+        },
+      ],
+    };
+    render(
+      <ConfirmProvider>
+        <Check
+          isAppliable={(id) => APPLIABLE.has(id)}
+          onOpenLibrary={vi.fn()}
+          onChanged={vi.fn()}
+          vendor="any"
+        />
+      </ConfirmProvider>,
+    );
+    // The headline IS the tweak here, so the row keeps its switch and grows no card stack.
+    expect(
+      await screen.findByRole("switch", { name: "Apply Enable Hardware GPU Scheduling" }),
+    ).toBeInTheDocument();
+    expect(document.querySelector(".check-recs")).toBeNull();
   });
 
   it("renders NO upgrade-path block when no verdict names hardware", async () => {

@@ -143,6 +143,20 @@
 .check-row-main {
   min-width: 0;
 }
+/* A row that resolved into SEVERAL named tweaks: the cards stack down the full width — there is no
+   single right-hand switch to align against, because each card carries its own action. */
+.check-row-stacked {
+  align-items: stretch;
+}
+.check-row-stacked .check-row-main {
+  flex: 1 1 auto;
+}
+.check-recs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
 .check-row-head {
   display: flex;
   align-items: center;

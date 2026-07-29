@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { TFunction } from "i18next";
-import type { GameReadiness, ReadinessCheck, Priorities } from "../types";
+import type { GameReadiness, ReadinessCheck, Priorities, Recommendation } from "../types";
 import { peekProbe, putProbe } from "../data/probe-cache";
 
 // buildSetupSummary (A5): turn the settled scan into a plain-English, paste-ready block the user can
@@ -73,7 +73,13 @@ export function buildSetupSummary(
 // (the permanent consolidation surface). One source of truth for the scan choreography: real
 // commands only (zero new IPC), honest elapsed, display-stagger streaming (never a fake sleep).
 
-export type ScanRecLite = { id: string; title: string; currently_applied: boolean };
+// The scan hands its callers the FULL catalog recommendation. This used to be a narrowed
+// {id,title,currently_applied} projection — which threw away exactly the fields a Check result needs
+// to say WHAT Compy found: `applies_to` (the per-rig detection, e.g. "Currently: Off"),
+// `description` (why it matters), `severity`/`downside` (risk), `eligible` (applicability).
+// `get_recommendations` already sends all of it over the wire, so widening costs no backend change
+// and no new IPC — the old type was only ever a TS-side narrowing. See src/data/rec-detail.ts.
+export type ScanRec = Recommendation;
 
 // A Compy-applied change the live system no longer matches (drifted off outside Compy). Named, so a
 // flag can say WHICH setting + offer its inline fix instead of "1 setting(s) — go to another tab".
@@ -92,7 +98,7 @@ const STAGGER_MS = 280; // legibility only (spec: ≤~350ms/row, never sleep for
 type ScanResult = {
   readiness: GameReadiness | null;
   priorities: Priorities | null;
-  recs: ScanRecLite[];
+  recs: ScanRec[];
   reverted: RevertedChange[];
   elapsed: number | null;
 };
@@ -119,7 +125,7 @@ export function deriveReverted(changes: AppliedChangeLite[]): RevertedChange[] {
 export type ScanState = {
   readiness: GameReadiness | null;
   priorities: Priorities | null;
-  recs: ScanRecLite[];
+  recs: ScanRec[];
   /** Compy-applied changes that have since drifted off (named) — drives inline "turn it back on". */
   reverted: RevertedChange[];
   running: boolean;
@@ -139,7 +145,7 @@ async function fetchScan(): Promise<ScanResult> {
   const t0 = performance.now();
   const [r, rc, changes, startup, sessions] = await Promise.all([
     invoke<GameReadiness>("get_game_readiness"),
-    invoke<ScanRecLite[]>("get_recommendations"),
+    invoke<ScanRec[]>("get_recommendations"),
     invoke<AppliedChangeLite[]>("get_applied_changes"),
     invoke<unknown>("get_startup_entries"),
     invoke<unknown>("get_session_summaries"),
@@ -184,7 +190,7 @@ export function useScan(opts?: { cache?: boolean; staggerMs?: number }): ScanSta
 
   const [readiness, setReadiness] = useState<GameReadiness | null>(seed?.readiness ?? null);
   const [priorities, setPriorities] = useState<Priorities | null>(seed?.priorities ?? null);
-  const [recs, setRecs] = useState<ScanRecLite[]>(seed?.recs ?? []);
+  const [recs, setRecs] = useState<ScanRec[]>(seed?.recs ?? []);
   const [reverted, setReverted] = useState<RevertedChange[]>(seed?.reverted ?? []);
   const [running, setRunning] = useState(!seed);
   const [elapsed, setElapsed] = useState<number | null>(seed?.elapsed ?? null);

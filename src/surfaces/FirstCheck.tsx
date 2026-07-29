@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { PriorityItem } from "../types";
-import { TrustSwitch } from "../design/TrustSwitch";
 import { Wordmark } from "../design/Wordmark";
 import { useConfirm } from "../design/ConfirmDialog";
-import { useScan, rowVerdict, type ScanRecLite } from "./use-scan";
+import { useScan, rowVerdict } from "./use-scan";
 import { ScanStream } from "./ScanStream";
 import { BootTheater } from "./BootTheater";
 import { readFirstCheckTheater } from "../design/theme";
 import { useReducedMotion } from "../design/use-motion";
 import { recordLastCheck } from "./last-check";
+import { describePriority, type RecDetail } from "../data/rec-detail";
+import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
+import { RecDetailCard, type RecDetailCardLabels } from "../design/RecDetailCard";
 import "./FirstCheck.css";
 
 // Moment 2 of the first-experience arc — the first-run "first check" landing.
@@ -21,15 +23,79 @@ import "./FirstCheck.css";
 
 export const FIRST_CHECK_KEY = "compy_first_check_v1";
 
+// The arc's copy for the shared named-recommendation card (design/RecDetailCard). The arc is
+// spec-locked English (first-run, pre-language-picker), so its wording lives here verbatim while
+// the card's structure is shared with the Check tab — one grammar for a tweak, two voices.
+const ARC_REC_LABELS: RecDetailCardLabels = {
+  detected: "On your PC",
+  what: "What it does",
+  changes: "What changes",
+  catch: "The catch",
+  apply: "Apply",
+  applying: "Applying…",
+  applyAria: (title) => `Apply ${title}`,
+  applied: "Already on — nothing to do here.",
+  ineligibleFallback: "Not for this rig — Compy left it alone.",
+  manual:
+    "Compy only flips settings it can snapshot and undo for you. This one lives outside that, so you make the change.",
+  manualWithSteps:
+    "Compy only flips settings it can snapshot and undo for you. This one lives outside that, so you make the change — here's exactly where it lives.",
+  steps: "Show me the steps",
+};
+
+// One named recommendation in the arc. The real guided steps come from the same shipped walkthrough
+// system Fix and Check use; the old copy promised "Compy shows you the steps" and then showed
+// nothing, so a rec with no walkthrough behind it now says so plainly instead.
+function RecCard({
+  d,
+  showTitle,
+  vendor,
+  arcV2,
+  busy,
+  disabled,
+  onApply,
+}: {
+  d: RecDetail;
+  /** The single-rec case already shows the name as the row headline — don't repeat it. */
+  showTitle: boolean;
+  vendor: GpuVendor;
+  arcV2: boolean;
+  busy: boolean;
+  disabled: boolean;
+  onApply: () => void;
+}) {
+  return (
+    <RecDetailCard
+      d={d}
+      labels={ARC_REC_LABELS}
+      walkthrough={d.action === "manual" ? (walkthroughForKey(d.id) ?? null) : null}
+      vendor={vendor}
+      variant={arcV2 ? "switch" : "button"}
+      showTitle={showTitle}
+      busy={busy}
+      disabled={disabled}
+      onApply={onApply}
+    />
+  );
+}
+
 export default function FirstCheck({
   onDone,
   onGoToLab,
+  isAppliable,
+  vendor = "any",
   arcV2 = false,
 }: {
   onDone: () => void;
   // Post-check route into the Lab's Optimize station (tester J 2026-07-22). Optional: when absent
   // the verdict shows only "Open the dashboard" (byte-identical to before this prop).
   onGoToLab?: () => void;
+  /** The frontend mirror of the backend's APPLIABLE_REC_IDS (App.tsx). Required to tell an
+   *  applyable fix from an advisory one — without it the arc offered "Apply" on recs
+   *  `apply_recommendation` can't dispatch, which throws at the IPC boundary. */
+  isAppliable: (recId: string) => boolean;
+  /** Picks the right walkthrough variant for this rig's GPU. */
+  vendor?: GpuVendor;
   arcV2?: boolean;
 }) {
   // Boot theater (T2+T4a, default ON; classic ScanStream is the failsafe). Read once at mount —
@@ -54,25 +120,24 @@ export default function FirstCheck({
     onDone();
   };
 
-  const recFor = (lim: PriorityItem | null): ScanRecLite | null => {
-    if (!lim) return null;
-    const id = lim.linked ?? lim.id;
-    const rec = recs.find((r) => r.id === id);
-    return rec && !rec.currently_applied ? rec : null;
-  };
+  // What a limiter row is ACTUALLY about — resolved from the ids the payload carries
+  // (PriorityItem.rec_ids), never guessed from the row's prose. An aggregate row like "2 safe tweaks
+  // not applied" used to resolve to nothing and fell through to a chip promising steps it never
+  // showed; now every rec behind the row comes back named, with its own honest action.
+  const detailsFor = (lim: PriorityItem | null): RecDetail[] =>
+    lim ? describePriority(lim, recs, isAppliable) : [];
 
-  const applyLimiter = async (lim: PriorityItem) => {
-    const rec = recFor(lim);
-    if (!rec) return;
+  const applyRec = async (d: RecDetail) => {
+    if (d.action !== "apply") return; // the audited path only dispatches APPLIABLE_REC_IDS
     const ok = await confirm({
-      title: `Apply "${rec.title}"?`,
+      title: `Apply "${d.title}"?`,
       body: "Compy snapshots the prior state so you can roll this back anytime.",
       confirmLabel: "Apply",
     });
     if (!ok) return;
-    setApplyingId(rec.id);
+    setApplyingId(d.id);
     try {
-      await invoke("apply_recommendation", { recId: rec.id, recTitle: rec.title });
+      await invoke("apply_recommendation", { recId: d.id, recTitle: d.title });
       await rerun(); // re-run so the verdict + limiters reflect the change
     } catch (e) {
       setApplyingId(null);
@@ -92,6 +157,7 @@ export default function FirstCheck({
   const limiters = priorities?.limiters ?? [];
   const fixCount = limiters.length;
   const top = limiters[0] ?? null;
+  const topDetails = detailsFor(top);
   const rest = limiters.slice(1);
   const greenChecks = checks.filter((c) => rowVerdict(c.status) === "ok");
 
@@ -156,39 +222,45 @@ export default function FirstCheck({
                 <div className="fc-spotlight-tag">#1 biggest limiter</div>
                 <div className="fc-spotlight-title">{top.title}</div>
                 <p className="fc-spotlight-reason">{top.reason}</p>
-                <div className="fc-spotlight-foot">
-                  <span className="fc-chip">Expected impact · not yet measured on this rig</span>
-                  {recFor(top) ? (
-                    arcV2 ? (
-                      // The shared trust-switch, label-less to introduce no copy into the locked arc;
-                      // it triggers the SAME applyLimiter flow as the classic button.
-                      <TrustSwitch
-                        applied={false}
-                        busy={applyingId === recFor(top)?.id}
-                        onToggle={() => applyLimiter(top)}
-                        ariaLabel={`Apply ${top.title}`}
-                      />
-                    ) : (
-                      <button
-                        className="fc-btn fc-btn-primary"
+                {topDetails.length === 0 ? (
+                  // Nothing in the catalog behind this row (a readiness check, not a tweak). It gets
+                  // the arc's honesty chip and NO action affordance — the old code showed a
+                  // "Compy shows you the steps" chip here that led nowhere at all.
+                  <div className="fc-spotlight-foot">
+                    <span className="fc-chip">Expected impact · not yet measured on this rig</span>
+                  </div>
+                ) : (
+                  // Each rec is NAMED with its own real data + its own honest action. The name is
+                  // repeated on the card unless the row headline above IS already that rec's title
+                  // (the collapsed single-rec case) — a count-only headline must never hide the
+                  // tweak's identity. Every rec carries its own provenance chip, which is why the
+                  // blanket "Expected impact" chip isn't stacked on top of it here.
+                  <div className="fc-recs">
+                    {topDetails.length > 1 && (
+                      <p className="fc-recs-lede">
+                        {topDetails.length} of them, and here is each one:
+                      </p>
+                    )}
+                    {topDetails.map((d) => (
+                      <RecCard
+                        key={d.id}
+                        d={d}
+                        showTitle={topDetails.length > 1 || d.title !== top.title}
+                        vendor={vendor}
+                        arcV2={arcV2}
+                        busy={applyingId === d.id}
                         disabled={applyingId !== null}
-                        onClick={() => applyLimiter(top)}
-                      >
-                        {applyingId === recFor(top)?.id ? "Applying…" : "Apply"}
-                      </button>
-                    )
-                  ) : (
-                    <span className="fc-chip fc-chip-muted">
-                      Hands-on fix — no switch to flip, but Compy shows you the steps
-                    </span>
-                  )}
-                </div>
+                        onApply={() => applyRec(d)}
+                      />
+                    ))}
+                  </div>
+                )}
                 {/* Restore guarantee — STANDING on the card, not trapped in the post-Apply confirm
                     dialog (bug→guard: a user who never clicks Apply must still see the core
-                    reversibility promise). Same true promise as applyLimiter's confirm body; shown
+                    reversibility promise). Same true promise as applyRec's confirm body; shown
                     only when there's an applyable fix (a hands-on fix has nothing for Compy to roll
                     back). Guard: FirstCheck.test.tsx "surfaces the restore-guarantee as a standing line". */}
-                {recFor(top) && (
+                {topDetails.some((d) => d.action === "apply") && (
                   <p className="fc-spotlight-reversible">
                     <span className="fc-rev-mark" aria-hidden="true">
                       ↺
@@ -206,7 +278,7 @@ export default function FirstCheck({
               <div className="fc-rest">
                 {rest.map((lim) => {
                   const open = openRestId === lim.id;
-                  const rec = recFor(lim);
+                  const details = detailsFor(lim);
                   return (
                     <div key={lim.id} className="fc-rest-item">
                       <button
@@ -225,19 +297,21 @@ export default function FirstCheck({
                       {open && (
                         <div className="fc-rest-detail">
                           <p className="fc-rest-reason">{lim.reason}</p>
-                          {rec ? (
-                            <button
-                              className="fc-btn fc-btn-primary"
+                          {/* Same rule as the spotlight: name every rec behind the row and give it
+                              its own real action. A row with nothing in the catalog behind it gets
+                              no action affordance rather than a promise Compy can't keep. */}
+                          {details.map((d) => (
+                            <RecCard
+                              key={d.id}
+                              d={d}
+                              showTitle={details.length > 1 || d.title !== lim.title}
+                              vendor={vendor}
+                              arcV2={arcV2}
+                              busy={applyingId === d.id}
                               disabled={applyingId !== null}
-                              onClick={() => applyLimiter(lim)}
-                            >
-                              {applyingId === rec.id ? "Applying…" : "Apply"}
-                            </button>
-                          ) : (
-                            <span className="fc-chip fc-chip-muted">
-                              Hands-on fix — no switch to flip, but Compy shows you the steps
-                            </span>
-                          )}
+                              onApply={() => applyRec(d)}
+                            />
+                          ))}
                         </div>
                       )}
                     </div>

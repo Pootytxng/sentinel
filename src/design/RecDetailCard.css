@@ -1,0 +1,121 @@
+/* Named recommendation card — the count-only row ("1 safe tweak not applied") resolved back into
+   the actual tweak(s) it is about, each with its own per-rig facts and its own honest action.
+   Self-contained (tokens only) so every surface that mounts the card gets the same object. */
+.rd-rec {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md, 10px);
+  background: var(--panel-2);
+  padding: 12px 14px;
+}
+.rd-rec[data-action="ineligible"] {
+  opacity: 0.72;
+}
+.rd-rec-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+  margin-bottom: 8px;
+}
+.rd-rec-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+.rd-rec-fact {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 10px;
+  align-items: baseline;
+}
+.rd-rec-fact dt {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.rd-rec-fact dd {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg-2, var(--fg));
+}
+/* Honesty tag riding with the impact line — verified / measured / expected, never dropped. */
+.rd-rec-prov {
+  display: inline-block;
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 7px;
+  vertical-align: 1px;
+}
+.rd-rec-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.rd-chip {
+  font-size: 11.5px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+.rd-chip-muted {
+  color: var(--faint);
+}
+.rd-chip-done {
+  color: var(--ready, #46d98a);
+}
+.rd-btn {
+  font: inherit;
+  font-size: 0.9rem;
+  border-radius: 9px;
+  padding: 9px 18px;
+  cursor: pointer;
+  border: 1px solid var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.rd-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.rd-btn-primary {
+  background: var(--ready, #46d98a);
+  border-color: var(--ready, #46d98a);
+  color: #05130c;
+  font-weight: 600;
+}
+/* The real guided steps for a hands-on rec — a disclosure, never a promise with nothing behind it. */
+.rd-rec-guide {
+  margin-top: 10px;
+}
+.rd-rec-guide > summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--fg-2, var(--fg));
+  list-style: none;
+}
+.rd-rec-guide > summary::-webkit-details-marker {
+  display: none;
+}
+.rd-rec-guide > summary::before {
+  content: "▸ ";
+  color: var(--muted);
+}
+.rd-rec-guide[open] > summary::before {
+  content: "▾ ";
+}
+.rd-rec-guide > summary:hover {
+  color: var(--fg);
+}

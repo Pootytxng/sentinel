@@ -7,6 +7,8 @@ import { TrustSwitch } from "../design/TrustSwitch";
 import { WhatsThis } from "../design/WhatsThis";
 import { useConfirm } from "../design/ConfirmDialog";
 import { Walkthrough } from "../design/Walkthrough";
+import { RecDetailCard, type RecDetailCardLabels } from "../design/RecDetailCard";
+import { describePriority, type RecDetail } from "../data/rec-detail";
 import { walkthroughForKeyForLanguage, gpuVendor, type GpuVendor } from "./walkthroughs";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
 import { gpuRunningHot } from "../data/tuning-measure";
@@ -173,27 +175,47 @@ export default function Check({
   }, [expert]);
   const confirm = useConfirm();
 
-  const linkedRec = (lim: PriorityItem) => {
-    const id = lim.linked ?? lim.id;
-    return recs.find((r) => r.id === id);
-  };
-  const canApply = (lim: PriorityItem) => {
-    const r = linkedRec(lim);
-    return !!r && !r.currently_applied && isAppliable(r.id);
+  // Copy for the shared named-recommendation card (design/RecDetailCard) — the Check tab's own
+  // (translated) voice over the SAME structure the first-run arc uses, so a tweak reads the same
+  // wherever the user meets it.
+  const recLabels: RecDetailCardLabels = {
+    detected: t("optimize.check.recFactDetected"),
+    what: t("optimize.check.recFactWhat"),
+    changes: t("optimize.check.recFactChanges"),
+    catch: t("optimize.check.recFactCatch"),
+    apply: t("optimize.check.recApply"),
+    applying: t("optimize.check.recApplying"),
+    applyAria: (title: string) => t("optimize.check.applyAriaLabel", { title }),
+    applied: t("optimize.check.recAlreadyOn"),
+    ineligibleFallback: t("optimize.check.recNotForRig"),
+    manual: t("optimize.check.recManual"),
+    manualWithSteps: t("optimize.check.recManualWithSteps"),
+    steps: t("optimize.check.showMeTheWay"),
   };
 
-  const applyLimiter = async (lim: PriorityItem) => {
-    const r = linkedRec(lim);
-    if (!r) return;
+  // What a limiter row is ACTUALLY about — resolved from the ids the payload carries
+  // (PriorityItem.rec_ids), never guessed from the row's prose. The old lookup
+  // (`recs.find(r => r.id === (lim.linked ?? lim.id))`) resolved NOTHING for an aggregate row like
+  // "3 safe tweaks not applied", so that row fell through to a dead "advisory" chip: a count, no
+  // names, nothing to act on (recovery items 2/4/5).
+  const detailsFor = (lim: PriorityItem): RecDetail[] => describePriority(lim, recs, isAppliable);
+  // The row-level switch belongs to the collapsed single-rec row, where the headline IS the tweak.
+  // A row standing for several tweaks can't carry ONE switch — each named card carries its own.
+  const canApply = (lim: PriorityItem) => {
+    const d = detailsFor(lim);
+    return d.length === 1 && d[0].action === "apply";
+  };
+
+  const applyRec = async (recId: string, recTitle: string) => {
     const ok = await confirm({
-      title: t("optimize.check.applyTitle", { title: r.title }),
+      title: t("optimize.check.applyTitle", { title: recTitle }),
       body: t("optimize.check.snapshotConfirmBody"),
       confirmLabel: t("optimize.check.applyConfirmLabel"),
     });
     if (!ok) return;
-    setApplyingId(r.id);
+    setApplyingId(recId);
     try {
-      await invoke("apply_recommendation", { recId: r.id, recTitle: r.title });
+      await invoke("apply_recommendation", { recId, recTitle });
       await rerun();
       onChanged(); // keep App's other surfaces in sync
     } catch (e) {
@@ -721,8 +743,17 @@ export default function Check({
                     </li>
                   );
                 }
+                // A row that stands for MORE than one tweak names every one of them instead of
+                // reporting a count and stopping ("3 safe tweaks not applied" → an advisory chip was
+                // the tester's dead end). Each named card carries its own per-rig facts and the one
+                // action Compy can honestly offer for it — through the SAME audited apply path.
+                const details = detailsFor(lim);
+                const named = details.length > 1;
+                const rowWalkthrough = !named
+                  ? walkthroughForKeyForLanguage(lim.linked ?? lim.id, i18n.language)
+                  : null;
                 return (
-                  <li key={lim.id} className="check-row">
+                  <li key={lim.id} className={named ? "check-row check-row-stacked" : "check-row"}>
                     <div className="check-row-main">
                       <div className="check-row-head">
                         <span className="check-row-title">{lim.title}</span>
@@ -731,23 +762,42 @@ export default function Check({
                         </span>
                       </div>
                       <p className="check-row-reason">{lim.reason}</p>
+                      {named && (
+                        <div className="check-recs">
+                          {details.map((d) => (
+                            <RecDetailCard
+                              key={d.id}
+                              d={d}
+                              labels={recLabels}
+                              walkthrough={
+                                d.action === "manual"
+                                  ? (walkthroughForKeyForLanguage(d.id, i18n.language) ?? null)
+                                  : null
+                              }
+                              vendor={vendor}
+                              variant="button"
+                              showTitle
+                              busy={applyingId === d.id}
+                              disabled={applyingId !== null}
+                              onApply={() => applyRec(d.id, d.title)}
+                            />
+                          ))}
+                        </div>
+                      )}
                       {/* Advisory checks that need action outside Compy finally show the way
                           (walkthroughs §3) — the readiness check is no longer a dead "verify it yourself". */}
-                      {!canApply(lim) && walkthroughForKeyForLanguage(lim.linked ?? lim.id, i18n.language) && (
+                      {!canApply(lim) && rowWalkthrough && (
                         <details className="fix-walkthrough">
                           <summary>{t("optimize.check.showMeTheWay")}</summary>
-                          <Walkthrough
-                            walkthrough={walkthroughForKeyForLanguage(lim.linked ?? lim.id, i18n.language)!}
-                            vendor={vendor}
-                          />
+                          <Walkthrough walkthrough={rowWalkthrough} vendor={vendor} />
                         </details>
                       )}
                     </div>
-                    {canApply(lim) ? (
+                    {named ? null : canApply(lim) ? (
                       <TrustSwitch
                         applied={false}
                         busy={applyingId === (lim.linked ?? lim.id)}
-                        onToggle={() => applyLimiter(lim)}
+                        onToggle={() => applyRec(details[0].id, details[0].title)}
                         ariaLabel={t("optimize.check.applyAriaLabel", { title: lim.title })}
                       />
                     ) : (

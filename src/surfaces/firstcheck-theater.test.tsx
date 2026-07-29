@@ -36,7 +36,7 @@ beforeEach(() => localStorage.clear());
 const mount = () =>
   render(
     <ConfirmProvider>
-      <FirstCheck onDone={vi.fn()} />
+      <FirstCheck onDone={vi.fn()} isAppliable={() => false} />
     </ConfirmProvider>,
   );
 

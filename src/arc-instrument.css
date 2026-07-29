@@ -282,7 +282,9 @@
 .arc-v2 .fc-footer strong {
   color: var(--ix-text-1);
 }
-.arc-v2 .fc-btn-primary {
+/* The arc's Apply lives on the shared recommendation card now; under arc-v2 it renders as a
+   TrustSwitch, so this skins the classic (flag-off) button wherever the card falls back to it. */
+.arc-v2 .rd-btn-primary {
   background: var(--ix-accent);
   border: 0;
   color: var(--ix-accent-ink, #06231c);

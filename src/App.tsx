@@ -1381,6 +1381,8 @@ function App() {
             void refresh();
             navHome("lab");
           }}
+          isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
+          vendor={detectedVendor}
           arcV2
         />
       )}

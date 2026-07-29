@@ -259,6 +259,20 @@
   flex: none;
 }
 
+/* The named recommendation cards behind a row live in design/RecDetailCard.css (shared with the
+   Check tab — one grammar for a tweak). Only the arc's own stack/lede wrapper stays here. */
+.fc-recs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.fc-recs-lede {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
 /* #2…N compact */
 .fc-rest {
   display: flex;
@@ -303,11 +317,13 @@
   color: var(--muted);
   font-size: 11px;
 }
+/* Expanded #2…N row: a column now — the reason, then a named card per recommendation behind it
+   (it used to be one row holding a reason and a single dead-end chip). */
 .fc-rest-detail {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
   padding: 10px 12px 12px;
   border: 1px solid var(--border);
   border-top: none;
