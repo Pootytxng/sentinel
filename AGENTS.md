@@ -21,6 +21,8 @@ repo root** with `git rev-parse --show-toplevel`; never assume a hardcoded works
   safety rules, the Rust module map, and how to resume.
 - **`docs/RELEASE_STATE.md`** — the authoritative live gate/build/release matrix (every gate + `file:line`).
 - **`docs/BACKLOG.md`** — the living status ledger; the next non-gated `[ ]` item.
+- **`docs/WORK_CONTROL.md`** — the cross-tool ownership/claim protocol and live GitHub Project link.
+  It coordinates execution only; it never replaces BACKLOG or RELEASE_STATE product truth.
 - **`docs/ARCHITECTURE_LOCKS.md`** — the frozen architectural boundaries.
 - **`docs/RECEIPTS_DOCTRINE.md`** — money/product direction (canonical where older direction conflicts).
 - **`docs/METHODOLOGY.md`** — how work is run here.

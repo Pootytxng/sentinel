@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Kuya Work Control
+    url: https://github.com/users/Pootytxng/projects/1
+    about: See current ownership, next actions, reviews, gates, and stale claims.
