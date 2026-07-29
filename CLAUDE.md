@@ -335,11 +335,15 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## How to resume
 
-1. Read `docs/RELEASE_STATE.md` (the gate matrix) for current state.
-2. Read `docs/BACKLOG.md` and take the next non-gated `[ ]` item. Per the false-done protocol, never declare "done" without enumerating remaining + gated items.
-3. Skim `docs/OWNER_ACTION_CHECKLIST.md` — the owner-facing open items. Don't silently pass over them; if one is now unblocked or the owner asks, surface it.
-4. For anything UI/visual — read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN section. Do NOT report the UI as "done"/"queue empty" off RELEASE_STATE alone; those track the shipped reskin, not the owner's unbuilt motion/interaction vision.
-5. Treat any file:line claim as point-in-time — verify against current code before asserting.
+1. Read `docs/WORK_CONTROL.md`. Before any write, claim the linked issue with the exact worktree,
+   branch, scope, expiry, and next action. An overlapping or unknown live claim means stay read-only
+   or use a truly separate worktree. The Project coordinates execution; it never overrides the
+   product and release truth below.
+2. Read `docs/RELEASE_STATE.md` (the gate matrix) for current state.
+3. Read `docs/BACKLOG.md` and take the next non-gated `[ ]` item. Per the false-done protocol, never declare "done" without enumerating remaining + gated items.
+4. Skim `docs/OWNER_ACTION_CHECKLIST.md` — the owner-facing open items. Don't silently pass over them; if one is now unblocked or the owner asks, surface it.
+5. For anything UI/visual — read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN section. Do NOT report the UI as "done"/"queue empty" off RELEASE_STATE alone; those track the shipped reskin, not the owner's unbuilt motion/interaction vision.
+6. Treat any file:line claim as point-in-time — verify against current code before asserting.
 
 ## TOKEN LAW (owner decree 2026-07-22 — after a same-week usage cap-out; permanent, both lanes)
 

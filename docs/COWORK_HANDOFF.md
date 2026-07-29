@@ -15,6 +15,11 @@
 - **Kuya (owner)** — owns money, taste (theme hexes, tone, naming), people (tester invites/sends),
   and anything irreversible. He drives; he decides final execution order.
 
+**Live execution coordination:** read [`WORK_CONTROL.md`](WORK_CONTROL.md) before starting. The
+linked GitHub Project holds the current executor, worktree, claim, status, and next action. Cowork
+may audit in parallel, but it does not write into an overlapping scope. Product status remains in
+BACKLOG and gate/release truth remains in RELEASE_STATE.
+
 ## Kuya's communication style (match this)
 
 - **End EVERY response with the next applicable copy-paste prompt** (to CC or, when it's his call, a
@@ -212,5 +217,7 @@ have to judge it himself. Everything else, CC just verifies in-lane and reports.
 
 The reverse-chronological board log + resume points were moved to
 [`docs/archive/cowork-handoff-board-2026-06.md`](archive/cowork-handoff-board-2026-06.md) on 2026-06-28,
-to keep this file the durable doctrine it's meant to be. **Live status lives in `docs/BACKLOG.md`** (the
-canonical ledger) + `docs/RELEASE_STATE.md` (gate state) — not a board here.
+to keep this file the durable doctrine it's meant to be. **Product status lives in
+`docs/BACKLOG.md`** (the canonical ledger) and gate/release truth in `docs/RELEASE_STATE.md`.
+Current executor/claim state lives in the Project linked by [`WORK_CONTROL.md`](WORK_CONTROL.md) —
+never in another Markdown board.

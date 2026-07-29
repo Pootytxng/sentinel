@@ -1,0 +1,95 @@
+name: Agent work item
+description: Create a collision-safe task for Claude Code, Codex, Cowork, Kuya, or an external lane
+title: "[WORK] "
+labels:
+  - work-control
+projects:
+  - Pootytxng/1
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This issue is the durable task record. Product and release truth still live in the repository's canonical docs.
+        Before any write, post the ownership claim from `docs/WORK_CONTROL.md` and update the Project fields.
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Intended outcome
+      description: Describe the user-visible or operational result, not merely the activity.
+      placeholder: "Example: every active AI session has one visible owner, exact worktree, and next action."
+    validations:
+      required: true
+
+  - type: textarea
+    id: success
+    attributes:
+      label: Success criteria
+      description: List the evidence that would make Done honest.
+      placeholder: |
+        - The expected behavior is present.
+        - Named verification passes.
+        - Remaining and owner-gated work is explicit.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: lane
+    attributes:
+      label: Recommended lane
+      options:
+        - Claude Code
+        - Codex
+        - Cowork
+        - Kuya
+        - External
+    validations:
+      required: true
+
+  - type: dropdown
+    id: gate
+    attributes:
+      label: Gate
+      options:
+        - None
+        - Kuya
+        - Security / System
+        - Release / Distribution
+        - External / Account
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Bounded scope
+      description: Name the allowed repositories, folders, files, or read-only surfaces. State exclusions.
+      placeholder: |
+        In scope:
+        Out of scope:
+        Canonical source(s) to verify:
+    validations:
+      required: true
+
+  - type: textarea
+    id: next
+    attributes:
+      label: First next action
+      description: Give one concrete action that can be taken without guessing.
+    validations:
+      required: true
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints and known active sessions
+      description: Record possible collisions, owner gates, active builds, and folders that must remain untouched.
+      placeholder: "Example: another session is active; its possible work folders remain locked until handoff."
+
+  - type: checkboxes
+    id: acknowledgement
+    attributes:
+      label: Collision check
+      options:
+        - label: I understand that opening this issue does not authorize overlapping writes; an ownership claim is required before editing.
+          required: true
