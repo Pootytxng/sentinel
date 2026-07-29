@@ -263,6 +263,34 @@ describe("item 13 — proof doors exist only where a structured mapping really d
     expect(door(c, "ld-prove-latency")!.getAttribute("aria-expanded")).toBe("true");
     expect(document.activeElement).toBe(c.querySelector("#ld-prove"));
   });
+
+  // bug→guard (self-review round 7, 2026-07-29): the test above is the ONLY proof-door journey
+  // there used to be, and it fixtures a latency goal — whose instrument happens to live in the
+  // "prove" section. So it never noticed that the click handler hardcoded that section for EVERY
+  // goal. A stability rec's proof is the Black Box, which lives under Advanced: the jump scrolled
+  // to the wrong section and expanded nothing at all — a labelled button that visibly did nothing.
+  // Compounding it, Advanced is a native <details> that was uncontrolled, so even the right host
+  // would have landed the user on a collapsed summary. Pin the goal whose proof lives OUTSIDE
+  // "prove"; that is the whole class of bug this door can have.
+  it("a proof door whose instrument lives outside section 3 still lands ON the instrument", () => {
+    const c = renderDeck({ recs: [rec({ id: "fast-startup-off" })] });
+    const prove = Array.from(c.querySelectorAll<HTMLButtonElement>(".ld-move-actions .ld-btn")).find(
+      (b) => text(b) === "How you'd prove it",
+    )!;
+    fireEvent.click(prove);
+    // Opened, in the section it really lives in — and the disclosure hiding it was opened too,
+    // so the row is on screen rather than sealed behind a summary the user never clicked.
+    expect(door(c, "ld-advanced-blackbox")!.getAttribute("aria-expanded")).toBe("true");
+    expect(c.querySelector<HTMLDetailsElement>("details.ld-advanced")!.open).toBe(true);
+    expect(document.activeElement).toBe(c.querySelector("#ld-advanced"));
+    // Still exactly one instrument live app-wide — a jump is a move, not a second copy.
+    expect(c.querySelectorAll(".ld-row-body").length).toBe(1);
+  });
+
+  it("Advanced stays the user's disclosure — it is not forced open on arrival", () => {
+    const c = renderDeck({ recs: [rec({ id: "fast-startup-off" })] });
+    expect(c.querySelector<HTMLDetailsElement>("details.ld-advanced")!.open).toBe(false);
+  });
 });
 
 describe("item 14 — diagnostics is reachable by saying what's wrong, not by knowing the tool", () => {

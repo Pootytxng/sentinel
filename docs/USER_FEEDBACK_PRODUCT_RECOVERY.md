@@ -852,7 +852,7 @@ Lab or its rollback path during this train."_).
 | 5 | Lab candidate information architecture | `0102a14` (five-section decision journey + `compy_lab_deck` flag + flag guard) |
 | 6 | Lab candidate visual layer | `ff1a773` (section rail lit by IntersectionObserver, `aria-current` nav, both motion branches, <640px collapse) |
 | 7 | journey tests + pruning plan | `3e22a7c` (28 journey tests) + _(this commit — §3 inventory)_ |
-| 8 | installed-review fixes | `0937137` (rounds 1–3) + `c783d63` (round 4: one name on the whole action path + class guard) + `c15d1e2` (round 5: the arc is a real modal for the keyboard) + _(this commit — round 6: the confirm is never buried; one click never opens two rows)_ |
+| 8 | installed-review fixes | `0937137` (rounds 1–3) + `c783d63` (round 4: one name on the whole action path + class guard) + `c15d1e2` (round 5: the arc is a real modal for the keyboard) + `a079edd` (round 6: the confirm is never buried; one click never opens two rows) + _(this commit — round 7: a proof door lands on its instrument wherever it lives)_ |
 
 Round 6 found two **pre-existing** defects neither the tests nor five prior review rounds caught,
 both structural, both now guarded:
@@ -871,6 +871,22 @@ both structural, both now guarded:
   exists to hold. Now keyed on row identity. The pre-existing "one instrument at a time" test
   compared two rows with *different* stations, which is why it never saw this.
   Guard: the shared-station case in `lab-deck-journey.test.tsx`.
+
+Round 7 then found a third one of the same shape — a control that looks like it works:
+
+- **"How you'd prove it" was a dead end for stability recommendations.** An instrument lives in
+  exactly one section, but the jump handler was *told* its destination by the caller, and section 1
+  always said `"prove"`. A stability rec's proof is the Black Box, which lives under **Advanced** —
+  so the button scrolled to the wrong section and expanded nothing at all. Compounding it, Advanced
+  is a native `<details>` that was uncontrolled, so even the right section would have landed the
+  user on a collapsed summary. `openAt` now resolves the host from the section arrays themselves
+  (callers name the instrument, the deck finds it) and opens the disclosure when it routes there —
+  the whole class of dead end is now unrepresentable. Advanced still starts closed and still honours
+  a manual toggle; it is the user's disclosure, not a forced one.
+  Why no test saw it: the *only* proof-door journey test fixtured a latency goal, whose instrument
+  happens to live in `"prove"` — so the hardcoded section was always accidentally right.
+  Guard: the outside-section-3 case in `lab-deck-journey.test.tsx`, negative-control-proven against
+  both halves of the fix (hardcoded host → fails; unbound `<details>` → fails).
 
 ### Self-review findings NOT fixed, and why (owner call, round 5)
 

@@ -345,12 +345,11 @@ export function LabDeck({
     setOpen((cur) => (cur && cur.row === row && cur.host === host ? null : { row, host }));
   const isOpen = (row: string, host: DeckSection) =>
     open != null && open.row === row && open.host === host;
-  // Open an instrument from somewhere else in the page (section 1's "how you'd prove it") and
-  // take the user to it — an explicit, labelled move, never a silent teleport.
-  const openAt = (key: LabStationKey, host: DeckSection) => {
-    setOpen({ row: key, host });
-    jump(host);
-  };
+  // Section 5 is a native <details>. A jump from section 1 can legitimately target an instrument
+  // that lives inside it, and landing on a collapsed summary is a dead end — so the disclosure is
+  // controlled, not free-running: `openAt` opens it when it routes there, and `onToggle` keeps this
+  // honest when the user opens or closes it by hand (self-review round 7).
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const instrumentBody = (key: LabStationKey): ReactNode => {
     switch (key) {
@@ -400,6 +399,24 @@ export function LabDeck({
   );
   const problems = labProblems(available, t);
 
+  // An instrument lives in exactly one section, and only these two arrays know which. `openAt` used
+  // to be told the host by its caller, and section 1's "how you'd prove it" always said "prove" —
+  // so a stability goal (whose proof is the Black Box, hosted under Advanced) jumped to the right
+  // section and expanded nothing at all. Resolving the host from the arrays themselves makes that
+  // class of dead end unrepresentable: callers name the instrument, the deck finds it.
+  const hostForStation = (key: LabStationKey): DeckSection | null =>
+    proveKeys.includes(key) ? "prove" : advancedKeys.includes(key) ? "advanced" : null;
+
+  // Open an instrument from somewhere else in the page and take the user to it — an explicit,
+  // labelled move, never a silent teleport.
+  const openAt = (key: LabStationKey) => {
+    const host = hostForStation(key);
+    if (!host) return;
+    if (host === "advanced") setAdvancedOpen(true);
+    setOpen({ row: key, host });
+    jump(host);
+  };
+
   // ───────────────────────── section 1 render ─────────────────────────
   const moveCard = (() => {
     if (move.state === "unknown") {
@@ -426,7 +443,7 @@ export function LabDeck({
             <button
               type="button"
               className="ld-btn ld-btn-primary"
-              onClick={() => openAt("benchmark", "prove")}
+              onClick={() => openAt("benchmark")}
             >
               {t("lab.labDeck.move.allClearCta")}
             </button>
@@ -443,7 +460,7 @@ export function LabDeck({
             <button
               type="button"
               className="ld-btn ld-btn-primary"
-              onClick={() => openAt("benchmark", "prove")}
+              onClick={() => openAt("benchmark")}
             >
               {t("lab.labDeck.move.noneCta")}
             </button>
@@ -521,7 +538,7 @@ export function LabDeck({
             {t("lab.labDeck.move.notForMe")}
           </button>
           {proof && (
-            <button type="button" className="ld-btn" onClick={() => openAt(proof, "prove")}>
+            <button type="button" className="ld-btn" onClick={() => openAt(proof)}>
               {t("lab.labDeck.move.proveCta")}
             </button>
           )}
@@ -666,7 +683,11 @@ export function LabDeck({
 
       {section(
         "advanced",
-        <details className="ld-advanced">
+        <details
+          className="ld-advanced"
+          open={advancedOpen}
+          onToggle={(e) => setAdvancedOpen(e.currentTarget.open)}
+        >
           <summary className="ld-advanced-summary">{t("lab.labDeck.advanced.summary")}</summary>
           <div className="ld-rows">
             {advancedKeys.map((k) => instrumentRow(k, "advanced"))}
