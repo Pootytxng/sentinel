@@ -189,7 +189,10 @@
     "recAlreadyOn": "Already on — nothing to do here.",
     "recNotForRig": "Not for this rig — Compy left it alone.",
     "recManual": "Compy only flips settings it can snapshot and undo for you. This one lives outside that, so you make the change.",
-    "recManualWithSteps": "Compy only flips settings it can snapshot and undo for you. This one lives outside that, so you make the change — here is exactly where it lives."
+    "recManualWithSteps": "Compy only flips settings it can snapshot and undo for you. This one lives outside that, so you make the change — here is exactly where it lives.",
+    "recSetAside": "Set aside — out of your active count until you restore it.",
+    "recSetAsideAria": "Set aside {{title}}",
+    "recRestoreAria": "Restore {{title}}"
   },
   "fix": {
     "payoffMeterTitle": "What this change is measured to help with — not a promised number",

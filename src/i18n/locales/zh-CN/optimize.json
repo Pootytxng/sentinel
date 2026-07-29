@@ -173,7 +173,10 @@
     "recAlreadyOn": "已开启 —— 这里不用再做什么。",
     "recNotForRig": "不适用于这台电脑 —— Compy 没有改动它。",
     "recManual": "Compy 只改动它能先备份、之后能撤销的设置。这一项不在其中，需要你自己动手改。",
-    "recManualWithSteps": "Compy 只改动它能先备份、之后能撤销的设置。这一项不在其中，需要你自己动手改 —— 下面就是它的具体位置。"
+    "recManualWithSteps": "Compy 只改动它能先备份、之后能撤销的设置。这一项不在其中，需要你自己动手改 —— 下面就是它的具体位置。",
+    "recSetAside": "已搁置 —— 在你恢复之前，它不计入生效项统计。",
+    "recSetAsideAria": "搁置 {{title}}",
+    "recRestoreAria": "恢复 {{title}}"
   },
   "fix": {
     "payoffMeterTitle": "这项更改经测量对什么有帮助——不是承诺的具体数字",

@@ -36,6 +36,12 @@ export type RecDetailCardLabels = {
   manual: string;
   manualWithSteps: string;
   steps: string;
+  /** Decline copy. Required only for callers that wire the dismiss affordance (onDismiss). */
+  notForMe?: string;
+  notForMeAria?: (title: string) => string;
+  setAside?: string;
+  restore?: string;
+  restoreAria?: (title: string) => string;
 };
 
 export function RecDetailCard({
@@ -48,6 +54,9 @@ export function RecDetailCard({
   busy,
   disabled,
   onApply,
+  dismissed = false,
+  onDismiss,
+  onRestore,
 }: {
   d: RecDetail;
   labels: RecDetailCardLabels;
@@ -62,7 +71,40 @@ export function RecDetailCard({
   busy: boolean;
   disabled: boolean;
   onApply: () => void;
+  /** The caller's stored decline for this rec (surfaces/dismissed.ts — a localStorage PREFERENCE,
+   *  zero IPC). The card owns no state: pass all three or none. */
+  dismissed?: boolean;
+  onDismiss?: () => void;
+  onRestore?: () => void;
 }) {
+  // A deliberate, reversible decline — the third honest answer next to "apply" and "show me the
+  // steps", so a rec the user will never want stops being a permanent nag. Offered only where
+  // declining MEANS something: an apply Compy can do, or a hands-on step the user could take.
+  // Never on an already-applied rec — that's a rollback, not a decline (same rule as Fix.tsx).
+  const canDecline = !!onDismiss && (d.action === "apply" || d.action === "manual");
+
+  // Set aside: the card stays exactly where it was, labeled, with Restore riding on it. It never
+  // vanishes mid-report — dismissal is a preference, and hiding the finding would hide the truth.
+  if (dismissed) {
+    return (
+      <div className="rd-rec rd-rec-declined" data-action={d.action}>
+        {showTitle && <div className="rd-rec-title">{d.title}</div>}
+        <div className="rd-rec-foot">
+          <span className="rd-chip rd-chip-muted">{labels.setAside}</span>
+          {onRestore && (
+            <button
+              className="rd-btn rd-btn-quiet"
+              onClick={onRestore}
+              aria-label={labels.restoreAria?.(d.title)}
+            >
+              {labels.restore}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rd-rec" data-action={d.action}>
       {showTitle && <div className="rd-rec-title">{d.title}</div>}
@@ -113,6 +155,16 @@ export function RecDetailCard({
           <span className="rd-chip rd-chip-muted">
             {walkthrough ? labels.manualWithSteps : labels.manual}
           </span>
+        )}
+        {canDecline && (
+          <button
+            className="rd-btn rd-btn-quiet rd-rec-decline"
+            disabled={disabled}
+            onClick={onDismiss}
+            aria-label={labels.notForMeAria?.(d.title)}
+          >
+            {labels.notForMe}
+          </button>
         )}
       </div>
 

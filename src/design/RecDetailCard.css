@@ -90,6 +90,26 @@
   opacity: 0.55;
   cursor: default;
 }
+/* The decline ("Not for me") and its undo ("Restore") — deliberately quiet: real doors, never
+   competing with the action the card is actually recommending. */
+.rd-btn-quiet {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--muted);
+  padding: 7px 14px;
+  font-size: 0.85rem;
+}
+.rd-btn-quiet:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: var(--fg-2, var(--fg));
+}
+/* Set aside: the card stays in place, dimmed and labeled, with its way back riding on it. */
+.rd-rec-declined {
+  opacity: 0.72;
+}
+.rd-rec-declined .rd-rec-foot {
+  margin-top: 0;
+}
 .rd-btn-primary {
   background: var(--ready, #46d98a);
   border-color: var(--ready, #46d98a);

@@ -154,9 +154,11 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   something is wrong and is returned to a general dashboard with no path to the place where it is
   fixed.
 - **Current implementation:** `FirstCheck.tsx:279-298` — a `Take me to the Lab` CTA exists **only in
-  the first-run arc** (rendered only when `onGoToLab` is passed). The re-run Check surface has no
-  equivalent. `App.tsx:1371-1383` performs the navigation.
-- **Status:** `PARTIAL`
+  the first-run arc** (rendered only when `onGoToLab` is passed). `App.tsx:1371-1383` performs the
+  navigation. *(This bullet originally added "the re-run Check surface has no equivalent" — wrong,
+  corrected in the evidence block: on the shipped default the re-run check IS this same arc.)*
+- **Status:** `RESOLVED` (default journey) — see the correction in the evidence block; the
+  `compy_optimize="0"` failsafe surface stays open by decision, logged in §5.
 - **Intended correction:** the post-check destination CTA must exist on **every** path that produces
   a check verdict (first run AND re-run), must route through the normal room navigation, and must
   carry what was found (see item 4).
@@ -166,13 +168,37 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   to the Optimize destination; the destination opens on the exact findings; browser/room back
   behavior remains understandable; nothing is applied by navigating.
 - **Class:** structural
-- **Evidence after implementation:** **first-run arc DONE, re-run Check surface STILL OPEN.**
+- **Evidence after implementation:**
   `FirstCheck.tsx:170` computes the actionable ids, the CTA label degrades to `Take me to the Lab`
   when nothing is actionable (`FirstCheck.tsx:376`), `App.tsx` `onGoToLab` writes the typed intent
   then calls the ordinary `navHome("lab")` — no teleport, no bypass of the rail. Destination proof:
   `check-handoff-journey.test.tsx` "opens Optimize automatically — no hunting for where to act" +
-  "arriving applies nothing". **Remaining:** `Check.tsx` (the re-run surface) still ends without a
-  destination CTA → item stays `PARTIAL`; scheduled with Phase 2C.
+  "arriving applies nothing".
+
+  **Correction — "first run vs re-run" was a false distinction (re-traced 2026-07-28, not
+  inferred).** The criterion above assumed a separate re-run Check surface that still needed its own
+  CTA. There isn't one on the shipped default. Three verified facts:
+  1. **The re-run check IS the first-run arc.** Home's `RerunCheckBand` (`HomeConsole.tsx:561`) calls
+     `onRunCheck`, and `App.tsx:1612` binds that to `setShowFirstCheck(true)` — re-running re-opens
+     `FirstCheck`, the *same* component, with the *same* `onGoToLab` CTA and the *same*
+     `writeHandoff`. The fix that landed for "first run" IS the fix for re-run.
+  2. **The standalone `Check` room never renders.** `readLabGround()` (`theme.ts:270-277`) and
+     `readOptimizeMerged()` (`nav-flags.ts:8-14`) are both `!== "0"` → default-ON, so
+     `App.tsx:1239`'s `activeTab === "Check" && !optimizeMerged` guard is permanently false, and
+     `App.tsx:1076` maps the Check tab onto the Lab room regardless.
+  3. **The one live `<Check>` is already inside the destination.** `OptimizeStation.tsx:274` mounts
+     it under the "More cleanup (optional)" disclosure, in the same scroll as the Fix rows it feeds.
+     A "Take me to Optimize" button there would point at the room it is standing in — exactly the
+     cosmetic substitution item 17 forbids.
+
+  **Status → `RESOLVED` for the production journey.** Both check entry points (first run, Home
+  re-run) end in a destination CTA carrying the exact findings; the third surface is inside the
+  destination. Proof: `check-rerun-journey.test.tsx` ("Home's re-run band re-opens the same check arc
+  — same CTA, same handoff" · "the hygiene check lives inside Optimize, not a room away").
+  **Known non-default gap (documented, not silently closed):** with the `compy_optimize="0"` escape
+  hatch the classic standalone Check room returns and still ends without a destination CTA. That
+  path is a developer failsafe, is not what any tester received, and Phase 3 retires it — logged in
+  §5 rather than patched, because patching a surface the redesign deletes is waste.
 
 ---
 
@@ -228,7 +254,7 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   payload, so it cannot express "open Lab already on Optimize, holding these findings." Nor is any
   room/tab persisted: `activeTab` is plain `useState`, and no `compy_room`/`compy_last_room`-style
   key exists anywhere in `src/` — the one-shot string is the entire cross-surface handoff.
-- **Status:** `PARTIAL`
+- **Status:** `RESOLVED`
 - **Intended correction:** replace the bare string flag with a **durable typed handoff contract**
   (not DOM querying, not text matching) that carries the exact recommendation IDs and the context of
   the check; consume it in the Optimize destination. Route through normal navigation — the
@@ -248,8 +274,13 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   clock jump, rejected-payload-is-cleared) + the 13 journey tests.
   **Deliberate deviation from the stated criterion:** a malformed/absent payload degrades to *the
   Lab opening normally*, not to "plain open Optimize" — a payload Compy can't trust shouldn't get to
-  move the user either. **Remaining:** only the first-run arc writes an intent; `Check.tsx` doesn't
-  → `PARTIAL` with item 1.
+  move the user either.
+  **Status → `RESOLVED`.** The earlier "`Check.tsx` doesn't write an intent" gap was measured
+  against a surface that does not render on the shipped default (full reachability proof in ITEM 1's
+  correction). Every check that actually crosses rooms — first run AND Home's re-run band, which
+  re-opens the same `FirstCheck` arc via `App.tsx:1612` — writes the typed intent. The only other
+  live `<Check>` sits *inside* Optimize (`OptimizeStation.tsx:274`); writing a handoff there would
+  be a self-hop.
 
 ---
 
@@ -305,7 +336,7 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   in that file at all.** The copy promises steps the screen cannot open. That same branch is what
   the aggregate wrongly falls into (§0.3), so a one-click-appliable tweak is announced as hands-on
   *and* given nothing to open.
-- **Status:** `PARTIAL`
+- **Status:** `RESOLVED`
 - **Intended correction:** expose audited direct action where it exists; where Compy cannot safely
   apply, open the **real** guided steps and say why manual action is required; always retain
   *Ignore* / *Not for me*; never leave a dead-end card. **No new mutation path — everything continues
@@ -323,9 +354,22 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   Apply (through the existing audited `apply_recommendation` path), "already on", the rig's real
   ineligibility reason, or the real shipped `Walkthrough`. In the Lab, manual-only rows carried from
   a check keep their door (`check-handoff-journey.test.tsx` "a manual-only finding is marked too,
-  and still opens its real steps"). **Remaining → `PARTIAL`:** `RecDetailCard` has no *Ignore / Not
-  for me*, so dismissal exists in `Fix.tsx` but NOT where the check first shows a finding. Closing
-  that is Phase 2C.
+  and still opens its real steps").
+  **Phase 2C closed the third door.** `RecDetailCard` + `Check.tsx` now offer *Not for me* on every
+  actionable finding — appliable AND hands-on — through the SAME preference store `Fix.tsx` reads
+  (`surfaces/dismissed.ts`, key `compy_dismissed_recs`, localStorage, **zero IPC**), so one decline is
+  honored wherever the user next meets the tweak, and **no new mutation path was created**. Declining
+  is scoped to `apply` / `manual` only: an already-applied rec is a *rollback*, not a decline (same
+  rule as `Fix.tsx`), and an ineligible one has nothing to decline. A set-aside finding **stays where
+  it was, labeled, with Restore riding on it** — never hidden, honoring `dismissed.ts`'s own law
+  ("Dismissal NEVER hides truth"). Guard: `src/surfaces/check-decline-journey.test.tsx` (6 tests) pins
+  the door open, the in-place set-aside, the applied/ineligible exclusion, cross-surface persistence,
+  and `expect(invoke).not.toHaveBeenCalled()` on both decline and restore.
+  **Deliberate exclusion — the `FirstCheck` arc has no decline, by design.** It is a one-shot
+  momentum moment with spec-locked pre-language-picker English copy, and its CTA hands `recIds`
+  straight to Optimize; a decline there would carry an id into a banner naming a rec that `Fix` has
+  already filtered into the Dismissed pile — self-inflicted drift. The user meets the same rec again
+  in Optimize/Check, where the decline is available.
 
 ---
 
@@ -647,7 +691,7 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
 | 6 | Multiple findings retain identity | ✅ `…journey.test.tsx` "several findings keep their identity and the order" |
 | 7 | A stale or already-applied recommendation is handled honestly | ✅ `…journey.test.tsx` stale / applied-since / all-done cases |
 | 8 | A manual-only recommendation opens its real guide | ✅ `…journey.test.tsx` "a manual-only finding is marked too, and still opens its real steps" |
-| 9 | Ignore / Not for me remains available | ⚠️ partial — present in `Fix.tsx`, absent on the Check faces (item 5, Phase 2C) |
+| 9 | Ignore / Not for me remains available | ✅ `check-decline-journey.test.tsx` (6) — door open on appliable + hands-on, set aside in place with Restore, none on applied/ineligible, shared with `Fix.tsx`, zero IPC |
 | 10 | "Needs your call" doors are mouse- and keyboard-operable | pending |
 | 11 | A rig with no justified action receives an honest useful state | pending |
 | 12 | Goal groups render only when supported recommendations exist | pending |
@@ -682,7 +726,7 @@ train.)_
 | --- | --- | --- |
 | 1 | feedback truth matrix | `5f7e38f` + `3c2ed53` (audit corrections) |
 | 2 | Check result identity + handoff contract | `654bf53` (identity) |
-| 3 | Optimize destination highlighting + actions | _(this commit)_ |
+| 3 | Optimize destination highlighting + actions | `a4f6b24` (handoff destination) + _(this commit — re-run journey correction + the decline door)_ |
 | 4 | cursor + interaction consistency | pending |
 | 5 | Lab candidate information architecture | pending |
 | 6 | Lab candidate visual layer | pending |

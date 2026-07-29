@@ -230,6 +230,52 @@
   padding: 3px 11px;
 }
 
+/* "Not for me" — the third honest answer beside apply and show-me-the-steps. Deliberately quiet:
+   a real door, never competing with the action the row is recommending. */
+.check-dismiss {
+  margin-top: 9px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--ix-glass-border);
+  background: transparent;
+  color: var(--ix-text-2);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+.check-dismiss:hover:not(:disabled) {
+  color: var(--ix-text-1);
+  border-color: var(--ix-glass-top);
+}
+.check-dismiss:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+/* Set aside: the finding stays right where it was, labeled, with its way back on it. */
+.check-setaside {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 9px;
+}
+.check-setaside-note {
+  font-size: 12px;
+  color: var(--ix-text-2);
+}
+.check-restore {
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  background: var(--accent-soft, rgba(46, 230, 192, 0.12));
+  color: var(--ix-accent-text);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
 /* Driver freshness — read-only age advisory (spec 2026-06-10). Quiet pass/skip; amber edge only
    when >90 days. Links live behind Copy buttons only (clipboard), never a launcher. */
 .check-driver {

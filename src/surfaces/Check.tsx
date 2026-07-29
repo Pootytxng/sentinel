@@ -15,6 +15,7 @@ import { gpuRunningHot } from "../data/tuning-measure";
 import { useHardwareChange, summarizeHardwareChanges } from "../hooks/use-hardware-change";
 import { useScan, buildSetupSummary, rowVerdict } from "./use-scan";
 import { useExpertView } from "../design/use-expert-view";
+import { useDismissed } from "./dismissed";
 import { ScanStream } from "./ScanStream";
 import { SidePileItem, SIDE_PILE_ORDER } from "./side-pile";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
@@ -191,7 +192,18 @@ export default function Check({
     manual: t("optimize.check.recManual"),
     manualWithSteps: t("optimize.check.recManualWithSteps"),
     steps: t("optimize.check.showMeTheWay"),
+    notForMe: t("optimize.fix.notForMe"),
+    notForMeAria: (title: string) => t("optimize.check.recSetAsideAria", { title }),
+    setAside: t("optimize.check.recSetAside"),
+    restore: t("optimize.fix.restore"),
+    restoreAria: (title: string) => t("optimize.check.recRestoreAria", { title }),
   };
+
+  // "Not for me" — the third honest answer the check has been missing (recovery item 5). The same
+  // stored preference Optimize/Fix reads (surfaces/dismissed.ts: localStorage, zero IPC, NO mutation
+  // path), so one decline is honored wherever the user meets the tweak next. Set-aside recs stay
+  // visible here, labeled, with Restore — dismissal is a preference, never a way to hide a finding.
+  const { dismissed, dismiss, restore } = useDismissed();
 
   // What a limiter row is ACTUALLY about — resolved from the ids the payload carries
   // (PriorityItem.rec_ids), never guessed from the row's prose. The old lookup
@@ -749,6 +761,11 @@ export default function Check({
                 // action Compy can honestly offer for it — through the SAME audited apply path.
                 const details = detailsFor(lim);
                 const named = details.length > 1;
+                // A row standing for exactly ONE named tweak can be declined as a whole; a row with
+                // no rec behind it (a pure advisory observation) has nothing specific to set aside.
+                const single = details.length === 1 ? details[0] : null;
+                const declinable = !!single && (single.action === "apply" || single.action === "manual");
+                const setAside = !!single && dismissed.has(single.id);
                 const rowWalkthrough = !named
                   ? walkthroughForKeyForLanguage(lim.linked ?? lim.id, i18n.language)
                   : null;
@@ -780,6 +797,9 @@ export default function Check({
                               busy={applyingId === d.id}
                               disabled={applyingId !== null}
                               onApply={() => applyRec(d.id, d.title)}
+                              dismissed={dismissed.has(d.id)}
+                              onDismiss={() => dismiss(d.id)}
+                              onRestore={() => restore(d.id)}
                             />
                           ))}
                         </div>
@@ -792,8 +812,36 @@ export default function Check({
                           <Walkthrough walkthrough={rowWalkthrough} vendor={vendor} />
                         </details>
                       )}
+                      {/* Deliberate, reversible decline. Applied rows can't be set aside — that's a
+                          rollback, not a decline (same rule as Fix.tsx). */}
+                      {single && declinable && !setAside && (
+                        <button
+                          type="button"
+                          className="check-dismiss"
+                          disabled={applyingId !== null}
+                          onClick={() => dismiss(single.id)}
+                          aria-label={t("optimize.check.recSetAsideAria", { title: single.title })}
+                        >
+                          {t("optimize.fix.notForMe")}
+                        </button>
+                      )}
+                      {single && setAside && (
+                        <div className="check-setaside">
+                          <span className="check-setaside-note">
+                            {t("optimize.check.recSetAside")}
+                          </span>
+                          <button
+                            type="button"
+                            className="check-restore"
+                            onClick={() => restore(single.id)}
+                            aria-label={t("optimize.check.recRestoreAria", { title: single.title })}
+                          >
+                            {t("optimize.fix.restore")}
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    {named ? null : canApply(lim) ? (
+                    {named || setAside ? null : canApply(lim) ? (
                       <TrustSwitch
                         applied={false}
                         busy={applyingId === (lim.linked ?? lim.id)}
