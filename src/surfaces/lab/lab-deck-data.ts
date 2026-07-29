@@ -291,3 +291,37 @@ export function labProblems(
     because: t(`lab.labDeck.problems.${key}.because`),
   }));
 }
+
+// ─────────────────────────── Section 3: "how do I prove it helped?" ───────────────────────────
+//
+// The structured recommendation→proof mapping (recovery §Section 3). Keyed on the GOAL — a typed
+// field this module owns — never on a rec's display prose: parsing prose into a test mapping is
+// exactly the fake mapping the recovery brief bars. Where no instrument can honestly measure a
+// goal, the answer is null and NO proof door is offered (a "prove it" button that leads to a tool
+// which cannot see the change is a false affordance, not a feature).
+//
+//   fps       → the benchmark: frametimes before vs after, the one thing that reads frames.
+//   latency   → the latency probe: it measures the mouse-to-screen path the goal names.
+//   stability → the black box: Windows' own crash/freeze record is the only stability evidence
+//               Compy has; a bench run cannot prove "it stopped crashing".
+//   image     → null. Refresh rate and motion smoothness are a display setting, not a measurement
+//               any instrument here reads.
+//   cleanup   → null. Disk space and background activity are visible in the change itself; no
+//               instrument here measures them, and a bench run would only report noise.
+const PROOF_STATION_BY_GOAL: Record<LabGoal, LabStationKey | null> = {
+  fps: "benchmark",
+  latency: "latency",
+  stability: "blackbox",
+  image: null,
+  cleanup: null,
+};
+
+// `available` is the same rig-scoped station set labProblems takes, so a proof door can never
+// point at an instrument this rig doesn't have.
+export function proofStationFor(
+  goal: LabGoal,
+  available: ReadonlySet<LabStationKey>,
+): LabStationKey | null {
+  const station = PROOF_STATION_BY_GOAL[goal];
+  return station && available.has(station) ? station : null;
+}

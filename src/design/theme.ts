@@ -289,6 +289,39 @@ export function applyLabGround(on: boolean): void {
   }
 }
 
+// Lab DECK — the decision-journey Lab candidate (product-recovery train, 2026-07-28). Recovery
+// items 13/15: the six-peer-station mega-room is not the product direction, and the room must be
+// organized by the USER'S decision journey (what did Compy find → what do I do first → why for MY
+// rig → can Compy do it safely → how do I prove it helped), not by our module structure.
+//
+// DEFAULT OFF, explicit "1" — this is a TEMPORARY development flag for owner comparison, NOT a
+// seventh permanent Lab variation. Flag off, the production LabConsole renders byte-identical
+// (pinned by lab-deck-flag.test.tsx). When the owner accepts the candidate it becomes the ONE
+// canonical Lab and this flag is retired with the faces it replaces (Phase 4 pruning plan).
+const LAB_DECK_KEY = "compy_lab_deck";
+
+export function readLabDeck(): boolean {
+  try {
+    return localStorage.getItem(LAB_DECK_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyLabDeck(on: boolean): void {
+  try {
+    localStorage.setItem(LAB_DECK_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:lab-deck-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Setup & Tour stepper progress (React Bits Stepper, round-2 sourcing pass) — the tour's
 // footer progress row as numbered step indicators with animated connectors + check marks,
 // replacing the anonymous ticks. DEFAULT OFF behind `compy_setup_stepper` (Settings →

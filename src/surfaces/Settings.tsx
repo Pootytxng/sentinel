@@ -9,6 +9,8 @@ import {
   applyMonitorConsole,
   readJarvisMotion,
   applyJarvisMotion,
+  readLabDeck,
+  applyLabDeck,
   readCloseToTray,
   persistCloseToTray,
   type OverlayDensity,
@@ -119,6 +121,7 @@ export default function Settings({
   const [itheme, setITheme] = useState<InstrumentTheme>(readInstrumentTheme);
   const [monitorConsole, setMonitorConsole] = useState<boolean>(readMonitorConsole);
   const [jarvisMotion, setJarvisMotion] = useState<boolean>(readJarvisMotion);
+  const [labDeck, setLabDeckState] = useState<boolean>(readLabDeck);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
   const [backdrop, setBackdrop] = useState<OverlayBackdrop>(readOverlayBackdrop);
@@ -170,6 +173,14 @@ export default function Settings({
   const changeJarvisMotion = (v: boolean) => {
     setJarvisMotion(v);
     applyJarvisMotion(v);
+  };
+  // Lab deck — the decision-journey Lab candidate (product-recovery train, 2026-07-28). DEFAULT
+  // OFF and TEMPORARY: this row exists so the owner can A/B the candidate against today's station
+  // dock in the installed build without devtools. It retires with the flag once one canonical Lab
+  // is chosen (Phase 4 pruning map) — it is not a permanent preference.
+  const changeLabDeck = (v: boolean) => {
+    setLabDeckState(v);
+    applyLabDeck(v);
   };
   // Close-to-tray: persist + sync the backend gate. Default OFF keeps the §1 clean exit until opt-in.
   const changeCloseToTray = (v: boolean) => {
@@ -270,6 +281,20 @@ export default function Settings({
                   on={jarvisMotion}
                   onChange={changeJarvisMotion}
                   ariaLabel={t("settings.appearance.jarvisMotion.title")}
+                />
+              </div>
+
+              {/* TEMPORARY owner-comparison row (product-recovery train) — the only exception to
+                  the flag-debt sweep above, and it comes OUT with the flag. */}
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">{t("settings.appearance.labDeck.title")}</div>
+                  <div className="set-row-sub">{t("settings.appearance.labDeck.sub")}</div>
+                </div>
+                <Toggle
+                  on={labDeck}
+                  onChange={changeLabDeck}
+                  ariaLabel={t("settings.appearance.labDeck.title")}
                 />
               </div>
 

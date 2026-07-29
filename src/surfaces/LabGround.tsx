@@ -2,16 +2,17 @@ import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import "../i18n";
 import { LabConsole } from "./LabConsole";
+import { LabDeck } from "./lab/LabDeck";
 import ExperimentBench from "./ExperimentBench";
 import { RoomShell } from "../design/room-shell";
 import { useReducedMotion } from "../design/use-motion";
-import { useHudFlag } from "../design/use-hud";
+import { useHudFlag, useLabDeckFlag } from "../design/use-hud";
 import { HudMasthead } from "./hud-masthead";
 import { deriveReverted } from "./use-scan";
 import { optimizeVerdict } from "./optimize-v2-data";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import type { LabFastPathProps } from "./lab/OptimizeStation";
-import type { GameReadiness } from "../types";
+import type { GameReadiness, Priorities } from "../types";
 import type { HardwareInfo } from "../App";
 import "./lab-v2.css";
 
@@ -37,6 +38,9 @@ export function LabGround(props: LabFastPathProps & {
   diagnostics?: ReactNode;
   diagnosticsCaptured?: boolean;
   hw: HardwareInfo;
+  // The MEASURED limiter ranking, threaded through for the deck candidate's "your next best move"
+  // card. Optional: absent → the card cites the catalog instead of claiming a measurement.
+  priorities?: Priorities | null;
 }) {
   const { t } = useTranslation();
   const {
@@ -49,10 +53,16 @@ export function LabGround(props: LabFastPathProps & {
     diagnosticsCaptured = false,
     vendor = "any",
     hw,
+    priorities = null,
     ...rest
   } = props;
   const reduced = useReducedMotion();
   const hud = useHudFlag();
+  // The decision-journey candidate (product-recovery train, 2026-07-28). DEFAULT OFF — a temporary
+  // owner-comparison flag. Off, this room renders exactly today's LabConsole dock + ExperimentBench
+  // (pinned by lab-deck-flag.test.tsx); on, the deck replaces both (it hosts the bench in its
+  // "Measure & prove" section, so the bench is never mounted twice).
+  const deck = useLabDeckFlag();
 
   // The fixes-state verdict still drives the LED (a real room state) — but under the HUD the
   // HEADER carries a title only (owner title-header law 2026-07-10 round 2: "the header just
@@ -95,22 +105,36 @@ export function LabGround(props: LabFastPathProps & {
         );
       })()}
     >
-      {/* THE OPS CONSOLE (spec 2026-07-09, Phase 1, Task 4) — a real 3D hologram center-stage with
-          four corner arc gauges + a Dock of stations (Optimize primary, the measure→prove
-          instruments beside it), replacing the Instrument Bench bento. Same audited apply path,
-          zero new IPC. */}
-      <LabConsole
-        fast={fast}
-        diagnostics={diagnostics}
-        diagnosticsCaptured={diagnosticsCaptured}
-        vendor={vendor}
-        hw={hw}
-        readiness={readiness}
-      />
-      {/* Intelligence Phase 3 — the controlled-experiment engine + optimization simulator. ARMED
-          2026-07-17 (owner-signed): renders the bench when experiment_gate() is true; still
-          fails-dark (renders NOTHING) if the gate ever reads false. */}
-      <ExperimentBench />
+      {deck ? (
+        /* THE DECK candidate — the same room ordered by the user's decision journey instead of by
+           our module structure (recovery items 13/15). Same audited apply path, zero new IPC. */
+        <LabDeck
+          fast={fast}
+          diagnostics={diagnostics}
+          diagnosticsCaptured={diagnosticsCaptured}
+          priorities={priorities}
+          activeCount={activeCount}
+        />
+      ) : (
+        <>
+          {/* THE OPS CONSOLE (spec 2026-07-09, Phase 1, Task 4) — a real 3D hologram center-stage
+              with four corner arc gauges + a Dock of stations (Optimize primary, the measure→prove
+              instruments beside it), replacing the Instrument Bench bento. Same audited apply path,
+              zero new IPC. */}
+          <LabConsole
+            fast={fast}
+            diagnostics={diagnostics}
+            diagnosticsCaptured={diagnosticsCaptured}
+            vendor={vendor}
+            hw={hw}
+            readiness={readiness}
+          />
+          {/* Intelligence Phase 3 — the controlled-experiment engine + optimization simulator. ARMED
+              2026-07-17 (owner-signed): renders the bench when experiment_gate() is true; still
+              fails-dark (renders NOTHING) if the gate ever reads false. */}
+          <ExperimentBench />
+        </>
+      )}
     </RoomShell>
   );
 }

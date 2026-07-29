@@ -9,6 +9,7 @@ import { resolveCarried } from "../../data/check-handoff";
 import { useReducedMotion } from "../../design/use-motion";
 import { useExpertView } from "../../design/use-expert-view";
 import { useCountTo } from "./use-count-to";
+import { goalOf, type LabGoal } from "./lab-deck-data";
 import type {
   Recommendation,
   StartupEntry,
@@ -61,7 +62,9 @@ export type LabFastPathProps = {
 const GAUGE_R = 32;
 const GAUGE_C = 2 * Math.PI * GAUGE_R;
 
-export function OptimizeStation(props: LabFastPathProps & { carriedRecIds?: string[] }) {
+export function OptimizeStation(
+  props: LabFastPathProps & { carriedRecIds?: string[]; goalFilter?: LabGoal | null },
+) {
   const { t } = useTranslation();
   // Same drift derivation the Optimize room + verdict use — a drifted rec renders ONCE in Fix's
   // "turned off outside Compy" group, never double-counted as ready (one-mention law).
@@ -106,6 +109,23 @@ export function OptimizeStation(props: LabFastPathProps & { carriedRecIds?: stri
     [props.carriedRecIds, props.recs],
   );
   const carriedOpenIds = useMemo(() => carried.open.map((r) => r.id), [carried.open]);
+  // Goal filter (product-recovery Section 2). The deck candidate scopes THIS ONE audited fix list
+  // to a user goal rather than rendering a separate list per group — a list per group means
+  // repeated headings and N competing "enable all" buttons, which is precisely the overload
+  // recovery item 13 names. Absent (every caller before the deck) → the full list, unchanged.
+  // The hero gauge above deliberately keeps counting the WHOLE safe stack: it reports the rig's
+  // state, not the chip the user happens to have selected.
+  const shownRecs = useMemo(
+    () =>
+      props.goalFilter == null
+        ? (props.recs ?? [])
+        : (props.recs ?? []).filter((r) => goalOf(r) === props.goalFilter),
+    [props.recs, props.goalFilter],
+  );
+  // Startup apps are cleanup work (they're what Fix renders alongside the cleanup recs). Under
+  // "More FPS" they'd be an unrelated pile with no relationship to the filter the user picked.
+  const shownStartup =
+    props.goalFilter == null || props.goalFilter === "cleanup" ? props.startup : [];
   const gaugeTarget = props.recs == null || totalSafe === 0 ? null : appliedSafe;
   const gaugeValue = useCountTo(gaugeTarget, { reduced });
   const gaugeRatio = totalSafe > 0 && gaugeValue != null ? Math.min(1, Math.max(0, gaugeValue / totalSafe)) : 0;
@@ -218,8 +238,8 @@ export function OptimizeStation(props: LabFastPathProps & { carriedRecIds?: stri
           relevant. Nothing here applies, dismisses, or changes anything. */}
       {carriedBanner}
       <Fix
-        recs={props.recs ?? []}
-        startup={props.startup}
+        recs={shownRecs}
+        startup={shownStartup}
         changes={props.changes}
         busyId={props.busyId}
         isAppliable={props.isAppliable}

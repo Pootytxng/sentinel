@@ -1692,6 +1692,7 @@ function App() {
                     gpus={hw?.gpus ?? []}
                     recs={recs}
                     readiness={readiness}
+                    priorities={priorities}
                     startup={startup}
                     changes={changes}
                     busyId={busyId}

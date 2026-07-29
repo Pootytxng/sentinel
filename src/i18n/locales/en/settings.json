@@ -20,6 +20,10 @@
     "jarvisMotion": {
       "title": "JARVIS motion",
       "sub": "Turns interface animation on or off: smooth scrolling, a short transition when you change rooms, buttons that shift toward the cursor, and a tick on gauges when a reading updates. It changes how things move, never what Compy measures. The Motion setting below still wins."
+    },
+    "labDeck": {
+      "title": "New Lab layout (preview)",
+      "sub": "Lays the Lab out in the order you actually decide things — what to do first, then everything you can change, then how to prove it helped — instead of a row of six stations. Same tools, same changes, same undo: only the arrangement differs. Turn it off to go back to the station dock."
     }
   },
   "language": {

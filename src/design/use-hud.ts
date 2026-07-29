@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   readHud,
   readLabGround,
+  readLabDeck,
   readHomeConsole,
   readHomeIntake,
   readMonitorConsole,
@@ -37,6 +38,20 @@ export function useLabGroundFlag(): boolean {
     const sync = () => setOn(readLabGround());
     window.addEventListener("compy:lab-ground-changed", sync);
     return () => window.removeEventListener("compy:lab-ground-changed", sync);
+  }, []);
+  return on;
+}
+
+// The Lab DECK candidate flag as live React state (product-recovery train, 2026-07-28; same
+// contract: a flag change fires compy:lab-deck-changed so LabGround re-branches without a reload).
+// DEFAULT OFF — a TEMPORARY owner-comparison flag, not a permanent seventh Lab face. Flag off,
+// today's LabConsole renders byte-identical (pinned by lab-deck-flag.test.tsx).
+export function useLabDeckFlag(): boolean {
+  const [on, setOn] = useState(readLabDeck);
+  useEffect(() => {
+    const sync = () => setOn(readLabDeck());
+    window.addEventListener("compy:lab-deck-changed", sync);
+    return () => window.removeEventListener("compy:lab-deck-changed", sync);
   }, []);
   return on;
 }

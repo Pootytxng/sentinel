@@ -1,0 +1,427 @@
+/* LabDeck — the decision-journey Lab candidate (product-recovery train, 2026-07-28).
+
+   LAYOUT ONLY, and deliberately calm. The recovery brief's visual direction asks for premium and
+   futuristic WITHOUT overload, so this sheet spends its budget on hierarchy and breathing room
+   rather than on chrome: one column, one type scale, one accent, and exactly one focal point per
+   viewport (the move card, then the fix list, then whichever row you opened). Every colour is a
+   token with a fallback — no literal brand rgba, no second palette.
+
+   The instruments inside the rows keep their own skins (hud-rooms.css / instrument.css); this file
+   never restyles them. It only owns the deck: nav, sections, the move card, the goal chips, rows. */
+
+.lab-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+/* ── the one navigation grammar: five names, journey order, same page ── */
+.ld-nav {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 2px;
+  background: var(--ix-base, var(--v2-bg, #0b0d12));
+  border-bottom: 1px solid var(--ix-line, rgba(255, 255, 255, 0.08));
+}
+.ld-nav-item {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 6px 13px;
+  background: transparent;
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+.ld-nav-item:hover {
+  color: var(--ix-text-1, var(--v2-text, #fff));
+  background: var(--ix-glass-fill, rgba(255, 255, 255, 0.05));
+  border-color: var(--ix-glass-border, rgba(255, 255, 255, 0.1));
+}
+
+/* ── sections ── */
+.ld-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scroll-margin-top: 56px; /* the sticky nav must never cover the heading you jumped to */
+  outline: none;
+}
+.ld-section:focus-visible {
+  outline: 2px solid var(--ix-accent, #7c5cff);
+  outline-offset: 6px;
+  border-radius: var(--ix-radius, 12px);
+}
+.ld-h {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 650;
+  line-height: 1.25;
+  color: var(--ix-text-1, var(--v2-text, #fff));
+}
+.ld-h-line {
+  margin: -6px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+  max-width: 62ch;
+}
+
+/* ── section 1: your next best move — the one thing above the fold ── */
+.ld-move {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--ix-glass-border, rgba(255, 255, 255, 0.1));
+  border-radius: var(--ix-radius, 12px);
+  background:
+    linear-gradient(
+      180deg,
+      var(--ix-glass-top, rgba(255, 255, 255, 0.05)),
+      var(--ix-glass-fill, rgba(255, 255, 255, 0.02))
+    ),
+    var(--ix-surface-2, rgba(255, 255, 255, 0.02));
+}
+/* The quiet variants (nothing found / all clear / not scanned yet) are the same card without the
+   accent — an honest empty state must not look like an alert. */
+.ld-move-quiet {
+  background: var(--ix-surface-2, rgba(255, 255, 255, 0.02));
+}
+.ld-move-goal {
+  margin: 0;
+  font-family: var(--v2-font-mono, var(--font-mono, ui-monospace, monospace));
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ix-accent-text, var(--ix-accent, #7c5cff));
+}
+.ld-move-head {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 650;
+  line-height: 1.25;
+  color: var(--ix-text-1, var(--v2-text, #fff));
+  max-width: 34ch;
+}
+.ld-move-why {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ix-accent-text, var(--ix-accent, #7c5cff));
+  max-width: 62ch;
+}
+.ld-move-line {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
+  max-width: 66ch;
+}
+.ld-move-note,
+.ld-move-safe,
+.ld-move-remaining {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+  max-width: 66ch;
+}
+
+/* The four facts every recommendation must answer, as a definition list so a screen reader hears
+   label→value pairs instead of a run-on sentence. */
+.ld-move-facts {
+  margin: 2px 0 0;
+  display: grid;
+  gap: 8px 18px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.ld-move-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ld-move-fact dt {
+  font-family: var(--v2-font-mono, var(--font-mono, ui-monospace, monospace));
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+}
+.ld-move-fact dd {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ix-text-1, var(--v2-text, #fff));
+  overflow-wrap: anywhere; /* a long registry-ish value must wrap, never widen the card */
+}
+
+.ld-move-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ── buttons ── */
+.ld-btn {
+  appearance: none;
+  border: 1px solid var(--ix-glass-border, rgba(255, 255, 255, 0.14));
+  border-radius: 9px;
+  padding: 9px 16px;
+  background: var(--ix-glass-fill, rgba(255, 255, 255, 0.04));
+  color: var(--ix-text-1, var(--v2-text, #fff));
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+.ld-btn:hover:not(:disabled) {
+  background: var(--ix-glass-top, rgba(255, 255, 255, 0.08));
+  border-color: var(--ix-border, rgba(255, 255, 255, 0.2));
+}
+.ld-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+/* not-allowed, never default: the Phase-2D cursor law says a dead control must SAY it's dead. */
+.ld-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+/* Mid-apply is "wait", not "refused" — the button reads busy while the audited apply runs. */
+.ld-btn[data-busy="1"]:disabled {
+  cursor: progress;
+}
+/* Ink on the accent fill comes from the accent-ink token, which the contrast guard holds at the
+   4.5:1 floor — never a hard-coded white. */
+.ld-btn-primary {
+  background: var(--ix-accent, #7c5cff);
+  border-color: var(--ix-accent, #7c5cff);
+  color: var(--ix-accent-ink, #fff);
+}
+.ld-btn-primary:hover:not(:disabled) {
+  background: var(--ix-accent-2, var(--ix-accent, #7c5cff));
+  border-color: var(--ix-accent-2, var(--ix-accent, #7c5cff));
+}
+.ld-link {
+  appearance: none;
+  border: none;
+  padding: 0;
+  background: none;
+  color: var(--ix-accent-text, var(--ix-accent, #7c5cff));
+  font-size: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ── section 2: goal chips (a filter over ONE list, not five lists) ── */
+.ld-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ld-chip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--ix-glass-border, rgba(255, 255, 255, 0.12));
+  border-radius: 999px;
+  padding: 6px 13px;
+  background: var(--ix-glass-fill, rgba(255, 255, 255, 0.03));
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.ld-chip:hover {
+  color: var(--ix-text-1, var(--v2-text, #fff));
+  border-color: var(--ix-border, rgba(255, 255, 255, 0.2));
+}
+.ld-chip[aria-pressed="true"] {
+  background: var(--ix-accent, #7c5cff);
+  border-color: var(--ix-accent, #7c5cff);
+  color: var(--ix-accent-ink, #fff);
+}
+.ld-chip-n {
+  font-family: var(--v2-font-mono, var(--font-mono, ui-monospace, monospace));
+  font-size: 11px;
+  opacity: 0.8;
+}
+.ld-chip-line {
+  margin: -4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+}
+
+/* ── sections 3–5: rows that open in place ── */
+.ld-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ld-row {
+  border: 1px solid var(--ix-glass-border, rgba(255, 255, 255, 0.1));
+  border-radius: var(--ix-radius, 12px);
+  background: var(--ix-surface-2, rgba(255, 255, 255, 0.02));
+  overflow: hidden;
+}
+.ld-row[data-open="on"] {
+  border-color: var(--ix-border, rgba(255, 255, 255, 0.2));
+}
+.ld-row-head {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: none;
+  padding: 13px 16px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+.ld-row-head:hover {
+  background: var(--ix-glass-fill, rgba(255, 255, 255, 0.04));
+}
+.ld-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.ld-row-name {
+  font-size: 14px;
+  font-weight: 620;
+  color: var(--ix-text-1, var(--v2-text, #fff));
+}
+.ld-row-sub {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+}
+/* The live reading, in the instrument voice. `data-measured="no"` is the honesty state: an
+   instrument with nothing to report says so, in the muted tone, and never shows a placeholder
+   number. */
+.ld-row-reading {
+  flex: 0 1 auto;
+  max-width: 38%;
+  font-family: var(--v2-font-mono, var(--font-mono, ui-monospace, monospace));
+  font-size: 11.5px;
+  line-height: 1.35;
+  text-align: right;
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
+}
+.ld-row-reading[data-measured="no"] {
+  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+  opacity: 0.85;
+}
+/* The chevron IS the door affordance — it points down when closed, up when open, so a row never
+   looks like a static card (the "needs your call" lesson). */
+.ld-row-chev {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-right: 1.5px solid var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+  border-bottom: 1.5px solid var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform 160ms ease;
+}
+.ld-row[data-open="on"] .ld-row-chev {
+  transform: rotate(-135deg) translate(-2px, -2px);
+}
+.ld-row-body {
+  padding: 4px 16px 16px;
+  border-top: 1px solid var(--ix-line, rgba(255, 255, 255, 0.07));
+}
+
+/* ── section 5: advanced instruments, behind progressive disclosure ── */
+.ld-advanced > .ld-advanced-summary {
+  cursor: pointer;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
+}
+.ld-advanced > .ld-advanced-summary::-webkit-details-marker {
+  display: none;
+}
+.ld-advanced > .ld-advanced-summary::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 160ms ease;
+}
+.ld-advanced[open] > .ld-advanced-summary::before {
+  transform: rotate(45deg);
+}
+.ld-unavailable {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px dashed var(--ix-glass-border, rgba(255, 255, 255, 0.12));
+  border-radius: var(--ix-radius, 12px);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+}
+
+/* ── 1280×720: the deck must stay usable on the owner's floor resolution ──
+   Below 900px of stage the reading column would squeeze the row name into two words per line, so
+   it moves under the text instead of beside it. Nothing is hidden at any width. */
+@media (max-width: 900px) {
+  .ld-row-head {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
+  .ld-row-reading {
+    max-width: 100%;
+    text-align: left;
+    order: 3;
+    flex-basis: 100%;
+  }
+  .ld-move-head {
+    font-size: 19px;
+  }
+}
+
+/* Reduced motion: the deck's only motion is the chevron and the smooth jump; both stop dead. */
+.lab-deck[data-motion="reduced"] .ld-row-chev,
+.lab-deck[data-motion="reduced"] .ld-advanced > .ld-advanced-summary::before,
+.lab-deck[data-motion="reduced"] .ld-btn,
+.lab-deck[data-motion="reduced"] .ld-chip,
+.lab-deck[data-motion="reduced"] .ld-nav-item,
+.lab-deck[data-motion="reduced"] .ld-row-head {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ld-row-chev,
+  .ld-btn,
+  .ld-chip,
+  .ld-nav-item,
+  .ld-row-head,
+  .ld-advanced > .ld-advanced-summary::before {
+    transition: none;
+  }
+}

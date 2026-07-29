@@ -109,6 +109,9 @@
     "masthead": "Proving ground"
   },
   "labDeck": {
+    "nav": {
+      "label": "Lab sections"
+    },
     "sections": {
       "move": "Your next best move",
       "optimize": "Optimize",
@@ -137,7 +140,33 @@
       "allClearCta": "Measure what they did",
       "noneHead": "Nothing worth changing on this rig",
       "noneLine": "Compy looked and found no change it can honestly recommend here. That's a result, not an empty page.",
-      "noneCta": "Measure how it runs anyway"
+      "noneCta": "Measure how it runs anyway",
+      "stateLabel": "Right now",
+      "changeLabel": "What Compy changes",
+      "downsideLabel": "The trade-off",
+      "reversible": "Compy records how to put this back before it changes anything, so you can undo it later.",
+      "applyCta": "Apply this",
+      "applying": "Applying…",
+      "showSteps": "Show me how",
+      "canApplyNo": "Compy won't set this one for you — it lives outside what Compy can safely change. The steps are below in Optimize.",
+      "notForMe": "Not for me",
+      "proveCta": "How you'd prove it",
+      "seeAll": "See everything in Optimize"
+    },
+    "optimize": {
+      "allChip": "All",
+      "filterLabel": "Show recommendations for"
+    },
+    "prove": {
+      "experimentsName": "Experiments",
+      "experimentsLine": "Run a change as a controlled test and keep the numbers."
+    },
+    "advanced": {
+      "summary": "Show the advanced instruments"
+    },
+    "unavailable": {
+      "tuning": "Undervolt tuning isn't here: Compy only has verified guidance for AMD cards, and this rig isn't one.",
+      "diagnostics": "Raw diagnostics appear once Compy has captured a report on this PC."
     },
     "goals": {
       "fps": {
@@ -186,8 +215,7 @@
         "symptom": "Something changed and I don't know what",
         "because": "Read everything Compy detected on this rig, raw."
       }
-    },
-    "labConsoleSwitch": "Switch back to the station dock"
+    }
   },
   "labConsole": {
     "readinessLabel": "Readiness",

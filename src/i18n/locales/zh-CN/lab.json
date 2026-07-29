@@ -109,6 +109,9 @@
     "masthead": "试炼场"
   },
   "labDeck": {
+    "nav": {
+      "label": "实验室分区"
+    },
     "sections": {
       "move": "下一步最值得做的事",
       "optimize": "优化",
@@ -137,7 +140,33 @@
       "allClearCta": "测一测它们的效果",
       "noneHead": "这台机器没有值得改的地方",
       "noneLine": "Compy 看过了,没有可以诚实推荐的改动。这是一个结论,不是一个空页面。",
-      "noneCta": "还是测一下它的表现"
+      "noneCta": "还是测一下它的表现",
+      "stateLabel": "现在的状态",
+      "changeLabel": "Compy 会改什么",
+      "downsideLabel": "代价",
+      "reversible": "Compy 在改动前会先记录如何还原,所以你之后随时可以撤销。",
+      "applyCta": "应用这一项",
+      "applying": "正在应用…",
+      "showSteps": "教我怎么做",
+      "canApplyNo": "这一项 Compy 不会替你设置 —— 它超出了 Compy 能安全改动的范围。步骤就在下方的优化区。",
+      "notForMe": "不适合我",
+      "proveCta": "怎么验证效果",
+      "seeAll": "查看优化区的全部项目"
+    },
+    "optimize": {
+      "allChip": "全部",
+      "filterLabel": "筛选推荐项"
+    },
+    "prove": {
+      "experimentsName": "对照实验",
+      "experimentsLine": "把一项改动当作对照实验来跑,并留下数据。"
+    },
+    "advanced": {
+      "summary": "显示高级仪器"
+    },
+    "unavailable": {
+      "tuning": "这里没有降压调校:Compy 只对 AMD 显卡有经过验证的指引,而这台机器不是。",
+      "diagnostics": "等 Compy 在这台电脑上采集过一次报告后,原始诊断数据就会出现。"
     },
     "goals": {
       "fps": {
@@ -186,8 +215,7 @@
         "symptom": "有东西变了,但我不知道是什么",
         "because": "原样读出 Compy 在这台机器上检测到的一切。"
       }
-    },
-    "labConsoleSwitch": "切回站点面板"
+    }
   },
   "labConsole": {
     "readinessLabel": "就绪度",
