@@ -31,7 +31,9 @@
 <!-- STATE:candidate_published=yes-2026-07-28 -->
 <!-- STATE:candidate_installed=yes -->
 <!-- STATE:aborted_source_only_release=v0.9.9-664aa5e -->
-<!-- STATE:preserved_private_draft=v0.9.10-92c7608 -->
+<!-- STATE:v0910_release_debris=deleted-2026-07-28 -->
+<!-- STATE:v0910_source_tag=92c7608-preserved -->
+<!-- STATE:v0910_local_evidence=preserved -->
 <!-- STATE:published_release_version=0.9.11 -->
 <!-- STATE:published_release_commit=7ba5fb6 -->
 <!-- STATE:published_release_id=361056355 -->
@@ -53,10 +55,10 @@
 |---|---|---|
 | **Source `main` baseline** | The repair began from synchronized local/origin `main` at `92c7608` (`release: v0.9.10`) and advanced by fast-forward through the release commit `7ba5fb6` to the post-release tooling repairs (`c0fed45`). Annotated source tags are immutable: local-only `v0.9.8` → `d9ced24`; origin `v0.9.9` → `664aa5e`; origin `v0.9.10` → `92c7608`; origin `v0.9.11` → tag object `7d57446` peeling to commit `7ba5fb6`. Recovery branches for the 0.9.8 and both failed 0.9.9 candidates remain local and on origin. | `git rev-parse HEAD origin/main` · `git rev-parse v0.9.11^{commit}` · `git ls-remote --tags origin` |
 | **v0.9.9 — aborted source-only release** | **Source-tagged and installed on the owner machine, but NEVER published to the fleet because the release-repository existence probe failed closed.** The publish transaction stopped at `scripts/release.ps1` immediately after pushing the source tag: an expected GitHub 404 from the releases-repo tag probe was promoted into a terminating `NativeCommandError` by Windows PowerShell 5.1. Three stages completed (source push, source tag push, releases-main lookup); six never started (releases tag, draft, asset upload, manifest, publish, verify). **Not a public release. Not republishable** — the signed receipt, installer and stamp are bound to `664aa5e`, and the pipeline requires an exact-HEAD match. Full byte-level evidence: `C:\Users\Kuya\code\compy-release-evidence\2026-07-28-v0.9.9-aborted-source-only-664aa5e\EVIDENCE.txt`. | `gh release list --repo Pootytxng/compy-releases` · `git ls-remote --tags https://github.com/Pootytxng/compy-releases.git` |
-| **v0.9.10 — preserved private-draft checkpoint** | The partial train already created immutable source tag `v0.9.10` at `92c7608`, pushed source `main` and that tag, created the releases-repository tag and a **private draft**, uploaded installer + `latest.json`, downloaded them once, and installed/runtime-proved 0.9.10 locally. Draft asset digests exactly match the staged receipt. It was **never published to the updater fleet and remains an unpublished PRIVATE DRAFT** (release id `360948018`, `draft: true`, both assets intact) **pending a separate owner cleanup decision** — the v0.9.11 train did not touch it. The pre-repair pipeline cannot resume it because its first collision check rejects its own compatible draft. Complete evidence is preserved at `C:\Users\Kuya\code\compy-release-evidence\2026-07-28-v0.9.10-private-draft-92c7608\`; no ref, draft, or asset may be moved, deleted, or overwritten. | `gh release view v0.9.10 --repo Pootytxng/compy-releases --json isDraft,assets` · `git rev-parse v0.9.10^{commit}` |
+| **v0.9.10 — abandoned; release debris DELETED 2026-07-28** | The partial train created immutable source tag `v0.9.10` at `92c7608`, pushed source `main` and that tag, created a releases-repository tag and a **private draft**, uploaded installer + `latest.json`, and installed/runtime-proved 0.9.10 locally. It was **never published to the updater fleet**, and v0.9.11 superseded it. Under explicit owner authorization the abandoned **release debris was removed**: private draft release `360948018` deleted (HTTP 204, both assets with it) and releases-repository tag `v0.9.10` deleted (HTTP 204) after confirming no release depended on it — every releases-repo tag points at the same content commit `a628c9b`, so no commit was removed and no other release was affected. **Provenance is preserved and untouched:** the source tag `v0.9.10` → `92c7608` in `Pootytxng/sentinel` still exists, as do the recovery branches and the full local evidence directory `C:\Users\Kuya\code\compy-release-evidence\2026-07-28-v0.9.10-private-draft-92c7608\`. | `gh api repos/Pootytxng/compy-releases/releases --jq '[.[]\|select(.tag_name=="v0.9.10")]\|length'` (→ `0`) · `git rev-parse v0.9.10^{commit}` (→ `92c7608`) |
 | **v0.9.11 — PUBLISHED (2026-07-28)** | Cut from `main` after the autonomy, native-process, resumable-transaction, simulation, and static-guard repairs, then published under owner GO. Public release id **`361056355`**, tag `v0.9.11`, `draft: false`, `prerelease: false`, published `2026-07-28T14:44:17Z`. Public installer `Compy_0.9.11_x64-setup.exe` SHA-256 **`bb2b85a43c2bf5119666f7b0709e7cee0409e0eb5ed7c4da2e4998da5438384f`**; public `latest.json` SHA-256 `6bcd6cea96bd610e8be1c44765cfc4e6f3b8c2b4e4594774251fa3cceb76b007`; both byte-match the signed receipt and the updater signature verifies against the pinned key. Releases-repository tag `v0.9.11` → `a628c9b`. The resumable transaction is **complete: 9 of 9 stages**, closing on `public_assets_verified` after the `/releases/latest/download/` aliases converged. | `gh release view v0.9.11 --repo Pootytxng/compy-releases --json id,isDraft,isPrerelease,publishedAt` · `src-tauri/target/release/bundle/nsis/release-transaction-v0.9.11.json` |
 | **Configured build version (this tree)** | Carried by the `STATE:latest_release_version` anchor above — check (1) pins that anchor to `src-tauri/tauri.conf.json`'s version, and the release pipeline moves both in the same commit as the bump. This is what the tree *would* build — it is **not** a released version (published truth is the row below). Do not restate the number here; it would drift. | `grep '"version"' src-tauri/tauri.conf.json package.json` |
-| **Latest PUBLISHED release + source commit** | **v0.9.11**, source `7ba5fb6` (full `7ba5fb63750265c03e67783edfa0b52cbe1208bb`), published tag `v0.9.11` on `Pootytxng/compy-releases`, release id `361056355`. It supersedes v0.9.7 (`1d9bad6`) as the public release. There is still no v0.9.8 or v0.9.9 release/tag in the releases repository; v0.9.10 exists only as an unpublished private draft. | `gh release view --repo Pootytxng/compy-releases --json tagName,isDraft,publishedAt` · `gh release view v0.9.10 --repo Pootytxng/compy-releases --json isDraft,publishedAt` |
+| **Latest PUBLISHED release + source commit** | **v0.9.11**, source `7ba5fb6` (full `7ba5fb63750265c03e67783edfa0b52cbe1208bb`), published tag `v0.9.11` on `Pootytxng/compy-releases`, release id `361056355`. It supersedes v0.9.7 (`1d9bad6`) as the public release. There is no v0.9.8, v0.9.9, or v0.9.10 release or tag in the releases repository — the abandoned v0.9.10 draft and its tag were deleted 2026-07-28. | `gh release view --repo Pootytxng/compy-releases --json tagName,isDraft,publishedAt` · `gh api repos/Pootytxng/compy-releases/git/refs/tags/v0.9.10` (→ 404) |
 | **Owner-installed version + embedded stamp** | **0.9.11**, embedded stamp **`7ba5fb6`** — runtime proof reads `7ba5fb6 · release · shell 0.9.11`; exe `ProductVersion`/`FileVersion` and registry `DisplayVersion` all read 0.9.11 (Windows Apps: 0.9.11). Installed from the exact receipt-bound installer that was published. | binary short-stamp count · HKCU uninstall `DisplayVersion` · local runtime proof |
 | **Latest updater manifest version** | **v0.9.11** — `latest.json` at `releases/latest/download/` names the v0.9.11 asset (`.../releases/download/v0.9.11/Compy_0.9.11_x64-setup.exe`); signature verifies against the pinned minisign key; installer + `latest.json` match GitHub's bytes and the receipt digests. | unauthenticated fetch of `latest.json` + `scripts/verify-updater-signature.mjs` |
 | **Hand-distributed tester version** | **0.9.0** — the `37a166c` NSIS (SHA-256 `6BC2F7DF…F5A2C4`) is what the six invitees were sent (Drive link). That remains the only hand-send; nothing has been mailed out since. | `BETA_DISTRIBUTION_RECORD.md` |
@@ -71,12 +73,15 @@
 build, and the owner box runs the same 0.9.11 bytes it published. The recovery provenance behind it
 is intact and unaltered: v0.9.8 (`d9ced24`) owner-installed unpublished; the failed v0.9.9 candidate
 (`2bd649d`) preserved; v0.9.9 (`664aa5e`) source-tagged, owner-installed, never in `compy-releases`;
-v0.9.10 (`92c7608`) an immutable source tag plus a byte-correct **private draft that stays
-unpublished pending a separate cleanup decision**. Hosted Actions remain intentionally off under the
-owner's $0-budget decision; local gates plus the sandboxed publish simulation are operative. **No
-build has been distributed to another person by hand since the 0.9.0 link** — the fleet reaches
-0.9.11 only through the consent-first updater, and **the A0 single-tester canary has PASSED** on
-that path: the tester updated in-app, runs v0.9.11, and reported no updater failure.
+v0.9.10 (`92c7608`) an immutable source tag whose abandoned **release debris (private draft
+`360948018` + releases-repo tag) was deleted 2026-07-28** under owner authorization, leaving the
+source tag, recovery branches and local evidence intact. Hosted Actions remain intentionally off
+under the owner's $0-budget decision; local gates plus the sandboxed publish simulation are
+operative. **No build has been distributed to another person by hand since the 0.9.0 link** — the
+fleet reaches 0.9.11 only through the consent-first updater, and **the A0 single-tester canary has
+PASSED** on that path: the tester updated in-app, runs v0.9.11, and reported no updater failure.
+The v0.9.11 release transaction is **complete: 9 of 9 stages**, **no active release blocker
+remains, and normal product development may resume.**
 
 ## Gate matrix
 
@@ -129,6 +134,12 @@ that path: the tester updated in-app, runs v0.9.11, and reported no updater fail
 | Preload-app removal live QA + owner-curated list | **OPEN** — gates arming preload-app removal (built DARK, not a ship blocker). |
 | Aggregate-stack trial live QA | **OPEN** — gates arming the §2a stack trial (built DARK, not a ship blocker). |
 | Remote-rules production key + CDN + staged rollout | **OPEN** — gates arming remote fetch. |
+| v0.9.10 release debris | **CLOSED — deleted 2026-07-28** under owner authorization (draft `360948018` + releases-repo tag). Source tag `92c7608`, recovery branches and local evidence preserved. |
+
+**No active blocker remains on the v0.9.11 release train** — it is complete 9/9, the canary passed,
+and the debris is cleared, so **normal product development may resume.** Every row still marked OPEN
+above gates a *future* PUBLIC (store/marketing) release or the arming of a dark feature; none of them
+blocks the shipped v0.9.11 build or the work that follows it.
 
 ## Required owner decisions (live)
 
@@ -137,11 +148,12 @@ that path: the tester updated in-app, runs v0.9.11, and reported no updater fail
    was the stated precondition for widening. The remaining call is whether/when the other invitees
    move onto the updater-enabled build — a distribution decision, owner territory. Publish GO/NO-GO
    returns as a decision only for the *next* prepared candidate.
-2. **v0.9.10 private-draft cleanup** — the unpublished draft (`360948018`) and its releases-repository
-   tag are intact and untouched. Keeping it costs nothing and preserves provenance; deleting it is
-   irreversible. No action taken without an explicit owner decision.
-3. Code-signing route + legal finalization (PUBLIC gates).
-4. When/whether to arm Receipts (its own security review + owner sign-off).
+2. Code-signing route + legal finalization (PUBLIC gates).
+3. When/whether to arm Receipts (its own security review + owner sign-off).
+
+**Closed 2026-07-28:** the v0.9.10 private-draft cleanup decision — the owner authorized deletion and
+the abandoned release debris (draft `360948018` + releases-repo tag `v0.9.10`) is gone; source tag,
+recovery branches and local evidence were preserved. It is no longer an open decision.
 
 **Not** an owner decision: hosted CI. It is settled OFF under the 2026-07-16 zero-budget decision and
 must never be surfaced as an open obligation — see the Gate matrix row.

@@ -35,9 +35,9 @@
   cannot hear about updates until they install one build that does. Do **not** send the stale v0.9.3
   installer, and do **not** send the **v0.9.9** build (`664aa5e`) that previously ran on your machine
   — v0.9.9 was source-tagged and owner-installed but its publish failed closed, so it exists on no
-  public page and is not republishable. Also do **not** send the preserved **v0.9.10 / 92c7608**
-  private-draft checkpoint: it was installed locally and its draft assets are byte-correct, but it
-  remains an unpublished private draft pending your cleanup decision. **The send candidate is now
+  public page and is not republishable. **v0.9.10 is likewise not sendable** — you authorized its
+  cleanup, so its abandoned draft and releases-repo tag were deleted on 2026-07-28 (source tag
+  `92c7608` and the local evidence stay preserved). **The send candidate is now
   live: v0.9.11 (`7ba5fb6`) published 2026-07-28** — public release id `361056355`, installer
   SHA-256 `bb2b85a4…5438384f`, manifest `0.9.11`, signature verified, and your own box runs those
   exact bytes — and the canary above proves that path works on someone else's machine. Every
@@ -64,9 +64,10 @@ regression guard that rejects visible English verdict vocabulary anywhere in the
   integrated and now merged on `main` at `d000295`.
 - ✅ **Publish into the in-app updater** — done. Your GO published **v0.9.11** (`7ba5fb6`) on
   2026-07-28; the public updater manifest now reads **0.9.11**, so the zh-CN completion is
-  fleet-visible. v0.9.9 never reached `compy-releases`; v0.9.10 remains an unpublished private draft
-  (preserved checkpoints, untouched). The canary is done and PASSED (A0); the only fleet action
-  still on you is whether to widen to the remaining invitees.
+  fleet-visible. v0.9.9 never reached `compy-releases`; v0.9.10's abandoned draft and releases-repo
+  tag were deleted 2026-07-28 under your authorization, with its source tag and evidence preserved.
+  The canary is done and PASSED (A0); the only fleet action still on you is whether to widen to the
+  remaining invitees.
 
 **Hosted CI is not on this list — by your own standing decision.** GitHub refuses every job before
 runner startup under the account's $0 Actions budget; that was declined as a zero-budget-law spend

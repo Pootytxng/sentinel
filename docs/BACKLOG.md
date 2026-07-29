@@ -333,8 +333,8 @@ queued).
 - The immutable v0.9.10 candidate is preserved at
   `C:\Users\Kuya\code\compy-release-evidence\2026-07-28-v0.9.10-private-draft-92c7608\`.
   The release-engineering repair must land after its tag, so the next publishable candidate was
-  v0.9.11. v0.9.10 stays an **unpublished private draft** (`360948018`) pending a separate cleanup
-  decision — untouched by the publish train.
+  v0.9.11. v0.9.10 was never published; the publish train left it untouched, and its abandoned
+  release debris was cleaned up afterwards (below).
 - **Publish outcome (owner GO, 2026-07-28):** **v0.9.11 / `7ba5fb6` is PUBLIC** — release id
   `361056355`, `draft:false`, `prerelease:false`, published `14:44:17Z`; installer SHA-256
   `bb2b85a4…5438384f` and manifest SHA-256 `6bcd6cea…b76b007` both byte-match the signed receipt;
@@ -347,6 +347,15 @@ queued).
   **v0.9.11**; no updater failure was reported. Nothing else about that run was recorded (no prior
   version, timestamp, or per-step detail) — do not infer any. The canary is closed; widening to the
   remaining invitees stays an owner distribution call.
+- **v0.9.10 release debris removed (owner-authorized, 2026-07-28).** The abandoned private draft
+  `360948018` and the releases-repo tag `v0.9.10` were deleted (HTTP 204 each) after confirming no
+  release depended on the tag — every `compy-releases` tag points at the same content commit
+  `a628c9b`. Post-cleanup: no v0.9.10 release or tag in `compy-releases` (404), public latest still
+  `v0.9.11`, manifest still `0.9.11`, installer hash + updater signature still verify, source tag
+  `v0.9.11` still bound to `7ba5fb6`. **Preserved untouched:** source tag `v0.9.10` → `92c7608`,
+  recovery branches, and the local evidence directory.
+- **Release train closed.** v0.9.11 transaction complete 9/9 · A0 canary PASS · debris removed ·
+  provenance preserved · **no active release blocker remains — normal product development resumes.**
 - Durable authority lives in `docs/RELEASE_AUTONOMY.md`: failed reversible gates trigger
   preserve → diagnose → guard → repair → commit/push → resume. Only fleet-visible publication,
   distribution, secrets/key rotation, security settings, destructive Git, spending, and
