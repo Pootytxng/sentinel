@@ -70,6 +70,10 @@ import "./LabDeck.css";
 
 type DeckSection = "move" | "optimize" | "prove" | "diagnose" | "advanced";
 
+// The journey, in order. This array IS the navigation, the rail, and the section order — one list
+// so they can never disagree about how many steps there are or what comes next.
+const NAV: DeckSection[] = ["move", "optimize", "prove", "diagnose", "advanced"];
+
 // A row that opens in place — the ONE interactive grammar of this face. Native <button> head so
 // mouse and keyboard get the same door for free (the "needs your call" lesson, recovery item 6),
 // aria-expanded/aria-controls so a screen reader hears the state, and the body is only mounted
@@ -147,6 +151,38 @@ export function LabDeck({
     el?.scrollIntoView?.({ behavior: reduced ? "auto" : "smooth", block: "start" });
     el?.focus?.({ preventScroll: true });
   };
+
+  // WHERE AM I — the deck answers that with the layout itself, not a paragraph (recovery item 9:
+  // "orientation should be inherent in layout and controls"). An observer lights the nav pill and
+  // the journey rail for whichever section owns the viewport, so the five-step path is always
+  // visible AND you can always see your place on it. Falls back to "move" where IntersectionObserver
+  // is missing (jsdom): a wrong-but-stable highlight beats a crash, and nothing depends on it.
+  const [here, setHere] = useState<DeckSection>("move");
+  useEffect(() => {
+    if (typeof IntersectionObserver !== "function") return;
+    const seen = new Map<DeckSection, number>();
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          const key = (e.target as HTMLElement).dataset.section as DeckSection | undefined;
+          if (key) seen.set(key, e.intersectionRatio);
+        }
+        let best: DeckSection | null = null;
+        let bestRatio = 0;
+        for (const k of NAV) {
+          const r = seen.get(k) ?? 0;
+          if (r > bestRatio) {
+            bestRatio = r;
+            best = k;
+          }
+        }
+        if (best) setHere(best);
+      },
+      { threshold: [0, 0.15, 0.4, 0.75, 1] },
+    );
+    for (const el of Object.values(sections.current)) if (el) io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   // ───────────────────────── the check → optimize handoff ─────────────────────────
   // One-shot: readHandoff consumes it, so a later Lab visit is an ordinary visit. Intent only —
@@ -469,12 +505,21 @@ export function LabDeck({
     <section
       id={`ld-${key}`}
       className="ld-section"
+      data-section={key}
+      data-here={here === key ? "on" : undefined}
       tabIndex={-1}
       aria-labelledby={`ld-${key}-h`}
       ref={(el) => {
         sections.current[key] = el;
       }}
     >
+      {/* The rail is the journey made visible: a hairline spine down the section stack with a lit
+          node on the step you're reading. Decoration is the wrong word for it — it's the answer to
+          "where am I and how much is left", which is why it's aria-hidden (the nav already says it
+          in words) and why it's a step COUNT, not a flourish. */}
+      <span className="ld-rail" aria-hidden="true">
+        <span className="ld-rail-node" />
+      </span>
       <h2 id={`ld-${key}-h`} className="ld-h">
         {t(`lab.labDeck.sections.${key}`)}
       </h2>
@@ -483,15 +528,20 @@ export function LabDeck({
     </section>
   );
 
-  const NAV: DeckSection[] = ["move", "optimize", "prove", "diagnose", "advanced"];
-
   return (
     <div className="lab-deck" data-motion={reduced ? "reduced" : "full"}>
       {/* ONE visible navigation grammar for the whole face: five names, in journey order, that
-          move you down the same page. Nothing here hides a destination behind a mode. */}
+          move you down the same page. Nothing here hides a destination behind a mode. The lit pill
+          is where you ARE, so the nav doubles as orientation instead of only as transport. */}
       <nav className="ld-nav" aria-label={t("lab.labDeck.nav.label")}>
         {NAV.map((s) => (
-          <button key={s} type="button" className="ld-nav-item" onClick={() => jump(s)}>
+          <button
+            key={s}
+            type="button"
+            className="ld-nav-item"
+            aria-current={here === s ? "true" : undefined}
+            onClick={() => jump(s)}
+          >
             {t(`lab.labDeck.sections.${s}`)}
           </button>
         ))}

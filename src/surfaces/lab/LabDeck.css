@@ -45,14 +45,63 @@
   background: var(--ix-glass-fill, rgba(255, 255, 255, 0.05));
   border-color: var(--ix-glass-border, rgba(255, 255, 255, 0.1));
 }
+/* Where you ARE. Colour alone would fail a colour-blind user, so the state also carries weight and
+   a lit dot — three signals for one fact. */
+.ld-nav-item[aria-current="true"] {
+  color: var(--ix-accent-text, var(--ix-accent, #7c5cff));
+  background: var(--ix-glass-fill, rgba(255, 255, 255, 0.06));
+  border-color: var(--ix-glass-border, rgba(255, 255, 255, 0.14));
+  font-weight: 700;
+}
+.ld-nav-item[aria-current="true"]::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--ix-accent, #7c5cff);
+  vertical-align: middle;
+}
 
-/* ── sections ── */
+/* ── sections ──
+   Each section carries the journey rail in its left gutter, so the five steps read as one path
+   rather than five stacked pages. */
 .ld-section {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding-left: 26px;
   scroll-margin-top: 56px; /* the sticky nav must never cover the heading you jumped to */
   outline: none;
+}
+.ld-rail {
+  position: absolute;
+  left: 5px;
+  top: 4px;
+  bottom: -26px; /* spans the 26px stack gap so the spine is continuous between steps */
+  width: 1px;
+  background: var(--ix-line, rgba(255, 255, 255, 0.08));
+}
+.ld-section:last-of-type .ld-rail {
+  bottom: 50%; /* the path ends at the last step — it must not trail into nothing */
+}
+.ld-rail-node {
+  position: absolute;
+  left: -3px;
+  top: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ix-base, var(--v2-bg, #0b0d12));
+  border: 1.5px solid var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+  transition: background 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+}
+.ld-section[data-here="on"] .ld-rail-node {
+  background: var(--ix-accent, #7c5cff);
+  border-color: var(--ix-accent, #7c5cff);
+  box-shadow: 0 0 0 3px var(--ix-glass-fill, rgba(255, 255, 255, 0.06));
 }
 .ld-section:focus-visible {
   outline: 2px solid var(--ix-accent, #7c5cff);
@@ -404,14 +453,27 @@
   .ld-move-head {
     font-size: 19px;
   }
+  /* The rail costs 26px of a narrow stage. Below 640px it steps aside entirely — the nav still
+     says where you are in words, so no information is lost, only the picture of it. */
+}
+@media (max-width: 640px) {
+  .ld-section {
+    padding-left: 0;
+  }
+  .ld-rail {
+    display: none;
+  }
 }
 
-/* Reduced motion: the deck's only motion is the chevron and the smooth jump; both stop dead. */
+/* Reduced motion: the deck's only motion is the chevron, the rail node and the smooth jump — all
+   stop dead. The rail still LIGHTS on the current step (that's information, not animation); it
+   just stops fading between states. */
 .lab-deck[data-motion="reduced"] .ld-row-chev,
 .lab-deck[data-motion="reduced"] .ld-advanced > .ld-advanced-summary::before,
 .lab-deck[data-motion="reduced"] .ld-btn,
 .lab-deck[data-motion="reduced"] .ld-chip,
 .lab-deck[data-motion="reduced"] .ld-nav-item,
+.lab-deck[data-motion="reduced"] .ld-rail-node,
 .lab-deck[data-motion="reduced"] .ld-row-head {
   transition: none;
 }
@@ -420,6 +482,7 @@
   .ld-btn,
   .ld-chip,
   .ld-nav-item,
+  .ld-rail-node,
   .ld-row-head,
   .ld-advanced > .ld-advanced-summary::before {
     transition: none;
