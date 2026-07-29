@@ -331,4 +331,40 @@ describe("FirstCheck result identity (recovery items 2/4/5)", () => {
     expect(screen.queryByRole("button", { name: "Apply" })).not.toBeInTheDocument();
     expect(screen.queryByText(/roll this back anytime/i)).not.toBeInTheDocument();
   });
+
+  // bug→guard (self-review round 5, 2026-07-29): the arc is a fixed full-screen overlay drawn over
+  // the still-mounted app, but it declared none of that — no dialog role, no trap. A keyboard user
+  // Tabbed off the visible verdict into ~17 background stops (nav rail, theme picker, the Lab) with
+  // nothing focused on screen. Pin the two halves of the fix: it SAYS it's modal, and it BEHAVES
+  // modally (Tab off the last control comes back to the first instead of leaving).
+  it("is a real modal for the keyboard: dialog semantics + focus stays inside the arc", async () => {
+    // A background control of exactly the kind focus used to escape to.
+    render(<button data-testid="behind">Nav rail behind the arc</button>);
+    mount();
+    await screen.findByText("Ready to play — this rig measured clean");
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(dialog).toHaveClass("fc-backdrop");
+
+    const inside = Array.from(dialog.querySelectorAll<HTMLElement>("button:not([disabled])"));
+    expect(inside.length).toBeGreaterThan(1);
+    const first = inside[0];
+    const last = inside[inside.length - 1];
+
+    // Forward off the last control wraps to the first — it does not walk out into the app.
+    last.focus();
+    fireEvent.keyDown(window, { key: "Tab" });
+    expect(document.activeElement).toBe(first);
+
+    // Shift+Tab off the first wraps to the last, same reason.
+    fireEvent.keyDown(window, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(last);
+
+    // And focus that has already escaped gets pulled back in rather than continuing through
+    // background chrome the user cannot see.
+    screen.getByTestId("behind").focus();
+    fireEvent.keyDown(window, { key: "Tab" });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
 });

@@ -852,4 +852,24 @@ Lab or its rollback path during this train."_).
 | 5 | Lab candidate information architecture | `0102a14` (five-section decision journey + `compy_lab_deck` flag + flag guard) |
 | 6 | Lab candidate visual layer | `ff1a773` (section rail lit by IntersectionObserver, `aria-current` nav, both motion branches, <640px collapse) |
 | 7 | journey tests + pruning plan | `3e22a7c` (28 journey tests) + _(this commit — §3 inventory)_ |
-| 8 | installed-review fixes | pending |
+| 8 | installed-review fixes | `0937137` (rounds 1–3) + `c783d63` (round 4: one name on the whole action path + class guard) + _(this commit — round 5: the arc is a real modal for the keyboard)_ |
+
+### Self-review findings NOT fixed, and why (owner call, round 5)
+
+**FirstCheck's verdict h1 vs the title-header law.** Round 5 flagged `FirstCheck.tsx`'s
+`<h1 className="fc-headline">` ("Ready to play — N things worth fixing") as a dynamic verdict
+sentence standing where a title belongs, and `fc-subtitle` ("…measured on this rig, not assumed")
+as an always-on explainer line. **Not changed this train.** The law
+(`docs/superpowers/specs/2026-07-09-compy-console-hud-direction.md`, title-header addendum) governs
+*"the h1 under the HUD"* in a **room** — Optimize / Monitor / Blackbook / Lab — and carves out
+exactly this case: *"Home's masthead display verdict stays — Home is the answer-first cold-open;
+its verdict IS the content, not a room description."* FirstCheck is not a room and has no HUD
+masthead; its header space (`.fc-head`) already carries title-format text only (wordmark +
+`first check · N checks · Xs`), and the flagged h1 sits inside the verdict body under its own
+`VERDICT` tag. It is the answer-first cold-open in its purest form, and this train's governing
+question is *"can a non-technical gamer understand what Compy found"* — demoting the finding to
+body text answers that worse, and the brief forbids solving orientation with more prose.
+The law's own closing line leaves the extension to the owner (*"owner may extend the law there;
+flag on eyeball"*), so this is **flagged for the eyeball, not silently changed.** If the owner wants
+it extended, the change is a stable title (`First check`) with the verdict relocated into the
+spotlight body — a small commit on request.

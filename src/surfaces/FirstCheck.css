@@ -13,6 +13,13 @@
   padding: 40px 24px;
 }
 
+/* The backdrop takes programmatic focus on mount so the modal trap has an anchor (FirstCheck.tsx).
+   It is a container, not a control — no ring on it; the rings that matter are on the arc's own
+   buttons, which keep theirs. */
+.fc-backdrop:focus {
+  outline: none;
+}
+
 .fc-screen {
   width: 100%;
   max-width: 600px;

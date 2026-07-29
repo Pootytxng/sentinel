@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { PriorityItem } from "../types";
 import { Wordmark } from "../design/Wordmark";
@@ -187,8 +187,57 @@ export default function FirstCheck({
     recordLastCheck({ total: checks.length, green: greenChecks.length, fixCount });
   }, [phase, checks.length, greenChecks.length, fixCount]);
 
+  // The arc is a full-screen overlay drawn OVER the still-mounted app (App.tsx renders it as a
+  // sibling), so a keyboard user used to Tab straight off the visible verdict into the nav rail,
+  // the theme picker and the whole Lab behind it — ~17 stops with nothing focused on screen
+  // (self-review round 5). It's a modal in every way except the two things that say so, so it now
+  // declares itself one and cycles Tab inside itself, the same contract ConfirmDialog honours.
+  const backdropRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    backdropRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const root = backdropRef.current;
+      if (!root) return;
+      // A ConfirmDialog can open ON TOP of the arc (applying a rec from the spotlight). It renders
+      // outside this backdrop and runs its own trap, so stand down rather than yanking focus off
+      // its buttons.
+      if (document.querySelector(".cmp-confirm-modal")) return;
+      const f = Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), summary, [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (f.length === 0) return;
+      const first = f[0];
+      const last = f[f.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (!active || !root.contains(active) || active === root) {
+        // Focus escaped (or sits on the backdrop itself) — pull it back in instead of letting the
+        // next Tab land on background chrome the user cannot see.
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      } else if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
+  }, []);
+
   return (
-    <div className={`fc-backdrop ${arcV2 ? "arc-v2" : ""}`}>
+    <div
+      ref={backdropRef}
+      className={`fc-backdrop ${arcV2 ? "arc-v2" : ""}`}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Compy first check"
+      tabIndex={-1}
+    >
       <div className={`fc-screen ${theater && (running || phase === "scan") ? "fc-screen-theater" : ""}`}>
         <header className="fc-head">
           <span className="fc-brand">
