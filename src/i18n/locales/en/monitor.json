@@ -293,7 +293,7 @@
     "insideNoiseFloor": "inside",
     "outsideNoiseFloor": "outside",
     "noChangeMeansPre": "That's a real answer, not a failure — a lesser tool would have called this a win. One suspect cleared: ",
-    "noChangeMeansEmph": "your dips aren't {{title}}.",
+    "noChangeMeansEmph": "{{title}} isn't what's causing your dips.",
     "noChangeMeansPost": " It didn't help this game; it may still help heavier ones. Keep it or take it back — one click either way.",
     "chaseSuspect": "Chase suspect #2 — {{suspect}}",
     "keepIt": "Keep it — measured win, logged",

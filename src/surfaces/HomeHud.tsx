@@ -10,6 +10,7 @@ import { readHologramV2 } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
 import { activeChangeCount } from "./dashboard-data";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
+import { recDisplayLabel } from "../data/friendly-labels";
 import { gpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
@@ -572,8 +573,16 @@ export function HomeHud({
               </span>
             </span>
             {latest ? (
-              <span className="hud-note hud-note-clip" title={latest.rec_title}>
-                {t("home.homeHud.ledger.latest", { title: latest.rec_title })}{" "}
+              <span
+                className="hud-note hud-note-clip"
+                title={recDisplayLabel(latest.rec_id, latest.rec_title).headline}
+              >
+                {t("home.homeHud.ledger.latest", {
+                  // The ledger's own rows keep the raw catalog title (that's the receipt); this
+                  // one-line "latest:" readout is a NAME the user has to recognise from the card
+                  // they just applied, so it resolves through the shared display rule.
+                  title: recDisplayLabel(latest.rec_id, latest.rec_title).headline,
+                })}{" "}
                 <span className="hud-mono">· {latestTime}</span>
               </span>
             ) : (

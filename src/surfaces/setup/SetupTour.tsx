@@ -9,6 +9,7 @@ import { Wordmark } from "../../design/Wordmark";
 import { NavGlyph } from "../../design/NavGlyph";
 import { HOME_RAIL, railFor, type HomeRailId } from "../../design/homeRail";
 import { readOptimizeMerged } from "../../data/nav-flags";
+import { recDisplayLabel } from "../../data/friendly-labels";
 import { readSetupStepper, readLabGround } from "../../design/theme";
 import { StepIndicator, StepConnector } from "../../design/vendor/Stepper/Stepper";
 import { TrustSwitch } from "../../design/TrustSwitch";
@@ -328,7 +329,12 @@ function StepCheck() {
     const rec = recFor(lim);
     if (!rec) return;
     const ok = await confirm({
-      title: t("home.setupTour.check.applyConfirmTitle", { title: rec.title }),
+      // The tour is a non-technical gamer's FIRST meeting with a tweak, so the confirm must name it
+      // the way the card just did. The invoke below still sends the raw catalog title — the ledger
+      // records what Compy did, not what it said.
+      title: t("home.setupTour.check.applyConfirmTitle", {
+        title: recDisplayLabel(rec.id, rec.title).headline,
+      }),
       body: t("home.setupTour.check.confirmBody"),
       confirmLabel: t("home.setupTour.check.applyLabel"),
     });
@@ -356,7 +362,9 @@ function StepCheck() {
   // exact rec the ledger says drifted; the apply path snapshots prior state so it stays reversible.
   const applyReverted = async (rev: { rec_id: string; title: string }) => {
     const ok = await confirm({
-      title: t("home.setupTour.check.turnOnConfirmTitle", { title: rev.title }),
+      title: t("home.setupTour.check.turnOnConfirmTitle", {
+        title: recDisplayLabel(rev.rec_id, rev.title).headline,
+      }),
       body: t("home.setupTour.check.confirmBody"),
       confirmLabel: t("home.setupTour.check.turnOn"),
     });
@@ -442,7 +450,9 @@ function StepCheck() {
                   ? t("home.setupTour.check.turningOn")
                   : reverted.length === 1
                     ? t("home.setupTour.check.turnBackOn")
-                    : t("home.setupTour.check.turnTitleOn", { title: rev.title })}
+                    : t("home.setupTour.check.turnTitleOn", {
+                        title: recDisplayLabel(rev.rec_id, rev.title).headline,
+                      })}
               </button>
             ))}
           </div>

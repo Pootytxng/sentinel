@@ -14,6 +14,9 @@ import { ONBOARDED_KEY } from "./Onboarding";
 import FirstCheck, { FIRST_CHECK_KEY } from "./surfaces/FirstCheck";
 import { SetupTour, SETUP_TOUR_KEY } from "./surfaces/setup/SetupTour";
 import { LibraryContext } from "./surfaces/library-context";
+// Every surface's Apply/Undo button lands in this file's apply()/rollback(). The name the dialog
+// says has to be the name the user just read on the card they clicked — resolved the one shared way.
+import { recDisplayLabel } from "./data/friendly-labels";
 import { Term } from "./design/Term";
 import { Wordmark } from "./design/Wordmark";
 import { readCloseToTray, persistDisplayRefreshHz } from "./design/theme";
@@ -879,7 +882,10 @@ function App() {
   const apply = async (rec: Recommendation) => {
     const tradeoff = rec.downside ? t("app.dialogs.applyTradeoff", { downside: rec.downside }) : "";
     const ok = await confirm({
-      title: t("app.dialogs.applyTitle", { title: rec.title }),
+      // The card said "Help Windows focus on your game"; asking "Apply <Enable Windows Game Mode>?"
+      // is how a confirmation stops confirming. The invoke below still sends the raw catalog title —
+      // the Trust Ledger records what Compy did, not what it said.
+      title: t("app.dialogs.applyTitle", { title: recDisplayLabel(rec.id, rec.title).headline }),
       body: t("app.dialogs.applyBody", { description: rec.description, tradeoff }),
       confirmLabel: t("app.dialogs.apply"),
     });
@@ -926,10 +932,21 @@ function App() {
         applied: report.applied,
         skipped: report.items
           .filter((i) => i.status === "skipped")
-          .map((i) => ({ title: i.rec_title, reason: i.reason ?? "" })),
+          // Fix prints these titles back to the user ("skipped: …"), so they read the same name
+          // they clicked. The backend receipt keeps rec_title raw.
+          .map((i) => ({
+            title: recDisplayLabel(i.rec_id, i.rec_title).headline,
+            reason: i.reason ?? "",
+          })),
       };
     } catch (e) {
-      return { applied: 0, skipped: items.map((i) => ({ title: i.recTitle, reason: String(e) })) };
+      return {
+        applied: 0,
+        skipped: items.map((i) => ({
+          title: recDisplayLabel(i.recId, i.recTitle).headline,
+          reason: String(e),
+        })),
+      };
     } finally {
       await refresh();
     }
@@ -940,7 +957,9 @@ function App() {
       ? t("app.dialogs.rollbackDest", { label: change.restores_label })
       : "";
     const ok = await confirm({
-      title: t("app.dialogs.rollbackTitle", { title: change.rec_title }),
+      title: t("app.dialogs.rollbackTitle", {
+        title: recDisplayLabel(change.rec_id, change.rec_title).headline,
+      }),
       body: t("app.dialogs.rollbackBody", { dest }),
       confirmLabel: t("app.dialogs.rollback"),
     });
@@ -979,7 +998,11 @@ function App() {
       if (!active) {
         // Toggle UI says ON but Compy has no rollback record for this
         // setting — it was applied outside Compy before we started watching.
-        setError(t("app.errors.recAppliedExternally", { title: rec.title }));
+        setError(
+          t("app.errors.recAppliedExternally", {
+            title: recDisplayLabel(rec.id, rec.title).headline,
+          }),
+        );
         return;
       }
       await rollback(active);

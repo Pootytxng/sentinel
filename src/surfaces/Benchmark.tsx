@@ -10,6 +10,7 @@ import { WhatsThis } from "../design/WhatsThis";
 import { useLibrary } from "./library-context";
 import { useProfile } from "../hooks/use-profile";
 import { PROFILE_META, USE_PROFILES } from "../data/profile-store";
+import { recDisplayLabel } from "../data/friendly-labels";
 import {
   changeAttribution,
   changesBetweenRuns,
@@ -436,9 +437,11 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
                   value={selectedTweak}
                   onChange={(e) => setSelectedTweak(e.target.value)}
                 >
-                  {tweaks.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.title}
+                  {/* An <option> can't carry the quiet tech tag, so the picker shows the headline
+                      only — the same name the user read on the card they want to measure. */}
+                  {tweaks.map((tw) => (
+                    <option key={tw.id} value={tw.id}>
+                      {recDisplayLabel(tw.id, tw.title).headline}
                     </option>
                   ))}
                 </select>

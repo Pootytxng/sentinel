@@ -687,7 +687,10 @@ export default function Check({
                         <div className="check-row-head">
                           <span className="check-row-title">
                             {reverted.length === 1
-                              ? t("optimize.check.revertedSingleTitle", { title: reverted[0].title })
+                              ? t("optimize.check.revertedSingleTitle", {
+                                  title: recDisplayLabel(reverted[0].rec_id, reverted[0].title)
+                                    .headline,
+                                })
                               : t("optimize.check.revertedMultiCount", { count: reverted.length })}
                           </span>
                         </div>

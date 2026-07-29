@@ -8,6 +8,7 @@ import { type GpuVendor } from "./walkthroughs";
 import { useConfirm } from "../design/ConfirmDialog";
 import { TuningVerdictCard } from "./TuningVerdict";
 import { prettyGameName } from "./game-name";
+import { recDisplayLabel } from "../data/friendly-labels";
 import "../i18n";
 import "./TuningDebrief.css";
 
@@ -57,7 +58,7 @@ export function TuningDebrief({
       const ok = await confirm({
         title: t("blackbook.tuningDebrief.confirmReplace.title"),
         body: t("blackbook.tuningDebrief.confirmReplace.body", {
-          title: armed.rec_title,
+          title: recDisplayLabel(armed.rec_id, armed.rec_title).headline,
           game: prettyGameName(armed.game),
         }),
         confirmLabel: t("blackbook.tuningDebrief.confirmReplace.confirmLabel"),

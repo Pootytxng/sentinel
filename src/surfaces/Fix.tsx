@@ -12,6 +12,7 @@ import { useDismissed } from "./dismissed";
 import { useEligibilityOverrides } from "./eligibility-override";
 import { GUIDED_STEPS, openGuidedUri } from "./guided";
 import { friendlyLabel, recDisplayLabel } from "../data/friendly-labels";
+import { RecNameText } from "../design/RecName";
 import { expertTarget, EXPERT_TARGET_DISCLAIMER } from "../data/expert-targets";
 import { useExpertView } from "../design/use-expert-view";
 import { PROVENANCE_LABEL, PROVENANCE_NOTE } from "../data/provenance";
@@ -309,7 +310,8 @@ function FixRow({
         onToggle={onToggle}
         ariaLabel={t("optimize.fix.toggleAriaLabel", {
           action: applied ? t("optimize.fix.rollBack") : t("optimize.fix.apply"),
-          title: rec.title,
+          // Screen readers must announce the same name the card shows (RecTitle above).
+          title: recDisplayLabel(rec.id, rec.title).headline,
         })}
       />
     </li>
@@ -366,7 +368,7 @@ export function SlimFixRow({
           onToggle={onToggle}
           ariaLabel={t("optimize.fix.toggleAriaLabel", {
             action: applied ? t("optimize.fix.rollBack") : t("optimize.fix.apply"),
-            title: rec.title,
+            title: recDisplayLabel(rec.id, rec.title).headline,
           })}
         />
       }
@@ -1293,17 +1295,23 @@ export default function Fix({
                         checked={sheetSelected.has(r.id)}
                         disabled={batching}
                         onChange={() => toggleSheetItem(r.id)}
-                        aria-label={t("optimize.fix.includeAriaLabel", { title: r.title })}
+                        aria-label={t("optimize.fix.includeAriaLabel", {
+                          title: recDisplayLabel(r.id, r.title).headline,
+                        })}
                       />
                       <span className="fix-applyall-pick-text">
-                        <span className="fix-applyall-item-title">{r.title}</span>
+                        <span className="fix-applyall-item-title">
+                          <RecNameText label={recDisplayLabel(r.id, r.title)} />
+                        </span>
                         <span className="fix-applyall-item-what">{r.impact}</span>
                       </span>
                     </label>
                   </li>
                 ) : (
                   <li key={r.id} className="fix-applyall-item">
-                    <span className="fix-applyall-item-title">{r.title}</span>
+                    <span className="fix-applyall-item-title">
+                      <RecNameText label={recDisplayLabel(r.id, r.title)} />
+                    </span>
                     <span className="fix-applyall-item-what">{r.impact}</span>
                   </li>
                 ),

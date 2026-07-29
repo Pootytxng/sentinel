@@ -9,6 +9,7 @@ import { useReducedMotion } from "../design/use-motion";
 import { postureLine, liveStrip } from "./command-center-data";
 import { activeChangeCount } from "./dashboard-data";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
+import { recDisplayLabel } from "../data/friendly-labels";
 import { gpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
@@ -460,8 +461,13 @@ export function HomeV2({
               // Long titles/task ids truncate with an ellipsis (V2-9 punch b — the wrap produced
               // a mid-word break artifact); the full name stays reachable via the title attr.
               <span className="hv2-stat-d hv2-stat-latest">
-                <span className="hv2-stat-latest-t" title={latest.rec_title}>
-                  {t("home.homeV2.stats.latest", { title: latest.rec_title })}
+                <span
+                  className="hv2-stat-latest-t"
+                  title={recDisplayLabel(latest.rec_id, latest.rec_title).headline}
+                >
+                  {t("home.homeV2.stats.latest", {
+                    title: recDisplayLabel(latest.rec_id, latest.rec_title).headline,
+                  })}
                 </span>
                 <span className="hv2-mono">· {latestTime}</span>
               </span>

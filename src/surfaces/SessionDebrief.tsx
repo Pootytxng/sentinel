@@ -17,6 +17,7 @@ import { prettyGameName } from "./game-name";
 import { type GpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
+import { recDisplayLabel } from "../data/friendly-labels";
 import { readDisplayRefreshHz } from "../design/theme";
 import { useExpertView } from "../design/use-expert-view";
 import "../i18n";
@@ -85,7 +86,15 @@ function ComparisonCard({
   return (
     <div className={`cmp cmp-${r.verdict}${arcV2 ? " arc-v2" : ""}`}>
       <div className="cmp-head">
-        <span>{t("monitor.sessionDebrief.comparisonHeader", { title: r.rec_title, game: prettyGameName(r.game) })}</span>
+        {/* "Did it help?" only answers anything if the user recognises WHAT was measured — this
+            header has to say the same name the card they applied said. The stored comparison keeps
+            rec_title raw (it's evidence); only the reading changes. */}
+        <span>
+          {t("monitor.sessionDebrief.comparisonHeader", {
+            title: recDisplayLabel(r.rec_id, r.rec_title).headline,
+            game: prettyGameName(r.game),
+          })}
+        </span>
         <span className="cmp-nf">{t("monitor.sessionDebrief.noiseFloor", { pct: r.noise_floor_pct })}</span>
       </div>
 
@@ -124,7 +133,9 @@ function ComparisonCard({
         <>
           <h2 className="cmp-headline">{t("monitor.sessionDebrief.confoundedHeadline")}</h2>
           <p className="cmp-sub">
-            {t("monitor.sessionDebrief.confoundedSub", { title: r.rec_title })}
+            {t("monitor.sessionDebrief.confoundedSub", {
+              title: recDisplayLabel(r.rec_id, r.rec_title).headline,
+            })}
           </p>
         </>
       )}
@@ -150,7 +161,14 @@ function ComparisonCard({
       {r.verdict === "no-change" && (
         <div className="cmp-means">
           {t("monitor.sessionDebrief.noChangeMeansPre")}
-          <strong>{t("monitor.sessionDebrief.noChangeMeansEmph", { title: r.rec_title.toLowerCase() })}</strong>
+          {/* Was `rec_title.toLowerCase()` spliced into "your dips aren't {{title}}" — which read
+              "your dips aren't enable windows game mode" with either name. The sentence now takes
+              the name as a subject, so the friendly headline reads as English. */}
+          <strong>
+            {t("monitor.sessionDebrief.noChangeMeansEmph", {
+              title: recDisplayLabel(r.rec_id, r.rec_title).headline,
+            })}
+          </strong>
           {t("monitor.sessionDebrief.noChangeMeansPost")}
         </div>
       )}
@@ -413,7 +431,7 @@ export function SessionDebrief({
               const ok = await confirm({
                 title: t("monitor.sessionDebrief.replaceComparisonTitle"),
                 body: t("monitor.sessionDebrief.replaceComparisonBody", {
-                  title: existing.rec_title,
+                  title: recDisplayLabel(existing.rec_id, existing.rec_title).headline,
                   game: prettyGameName(existing.game),
                 }),
                 confirmLabel: t("monitor.sessionDebrief.replaceComparisonConfirm"),
