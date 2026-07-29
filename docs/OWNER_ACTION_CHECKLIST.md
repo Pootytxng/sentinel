@@ -25,9 +25,14 @@
   password-manager attachment or your personal cloud. **Lose it** → the fleet can never receive
   another update (one-time re-send of new-key builds required). **Leak it** → whoever holds it can
   push code to every install. Same custody class as the remote-rules key law.
-- ⏳ **Send the first updater-enabled build as a one-tester canary, then expand to the remaining
-  invitees once it proves clean.** Their current installs (0.9.0/0.1.0) have NO updater and cannot
-  hear about updates until they install one build that does. Do **not** send the stale v0.9.3
+- ✅ **One-tester canary — PASS (recorded 2026-07-28).** A tester completed it through Compy's
+  **normal public updater** and is **currently running v0.9.11**; **no updater failure was
+  reported.** That is the entire record — their prior version, the exact timing, and any per-step
+  detail were never captured, so nothing more can be claimed. **Nothing is pending from you on the
+  canary; do not re-run it or recruit another tester for it.** The only remaining distribution call
+  is whether/when to widen to the other invitees (§B2).
+- ⏳ **Expanding to the remaining invitees.** Their current installs (0.9.0/0.1.0) have NO updater and
+  cannot hear about updates until they install one build that does. Do **not** send the stale v0.9.3
   installer, and do **not** send the **v0.9.9** build (`664aa5e`) that previously ran on your machine
   — v0.9.9 was source-tagged and owner-installed but its publish failed closed, so it exists on no
   public page and is not republishable. Also do **not** send the preserved **v0.9.10 / 92c7608**
@@ -35,11 +40,13 @@
   remains an unpublished private draft pending your cleanup decision. **The send candidate is now
   live: v0.9.11 (`7ba5fb6`) published 2026-07-28** — public release id `361056355`, installer
   SHA-256 `bb2b85a4…5438384f`, manifest `0.9.11`, signature verified, and your own box runs those
-  exact bytes. The remaining precondition is met (full local gate set green; hosted Actions stay off
-  by your standing decision — see B7 — so **local IS the gate**), so nothing blocks the canary send
-  but your pick of tester. The release page is
-  `https://github.com/Pootytxng/compy-releases/releases/latest`. After a tester installs the canary
-  once, future patches reach them in-app ("update ready" pill → one click). Key custody/rotation,
+  exact bytes — and the canary above proves that path works on someone else's machine. Every
+  precondition is met (full local gate set green; hosted Actions stay off by your standing decision
+  — see B7 — so **local IS the gate**), so nothing blocks widening but your call on who and when.
+  The release page is
+  `https://github.com/Pootytxng/compy-releases/releases/latest`. Once an invitee installs one
+  updater-enabled build, future patches reach them in-app ("update ready" pill → one click). Key
+  custody/rotation,
   Authenticode enrollment, publication, distribution, and external timing are owner territory;
   protected use of the existing updater key inside an authorized local release train is engineering.
 
@@ -58,7 +65,8 @@ regression guard that rejects visible English verdict vocabulary anywhere in the
 - ✅ **Publish into the in-app updater** — done. Your GO published **v0.9.11** (`7ba5fb6`) on
   2026-07-28; the public updater manifest now reads **0.9.11**, so the zh-CN completion is
   fleet-visible. v0.9.9 never reached `compy-releases`; v0.9.10 remains an unpublished private draft
-  (preserved checkpoints, untouched). The only fleet action still on you is the canary pick (A0).
+  (preserved checkpoints, untouched). The canary is done and PASSED (A0); the only fleet action
+  still on you is whether to widen to the remaining invitees.
 
 **Hosted CI is not on this list — by your own standing decision.** GitHub refuses every job before
 runner startup under the account's $0 Actions budget; that was declined as a zero-budget-law spend
@@ -211,13 +219,14 @@ Still folded in and NOT yet built: the **Two Futures hologram** feedback — *"l
 hologram has no visible purpose or information integrated"* (needs part-anchored, measured info) — it
 rides a later Lab phase, tracked in [`BACKLOG.md`](BACKLOG.md).
 
-### B2. Next updater canary distribution — go / no-go  ·  ⏳
+### B2. Widening updater distribution past the canary — go / no-go  ·  ⏳
 
 The six original invitees already received the verified 0.9.0 link. The former
 `beta-001`-versus-0.9.1 choice is closed; do not resend either historical artifact. **Publication is
-now done — v0.9.11 (`7ba5fb6`) is public and proved on the owner machine** — so the only remaining
-distribution decision is **which one tester receives that canary first**. Publication and the
-recipient/send remain separate owner actions.
+done — v0.9.11 (`7ba5fb6`) is public and proved on the owner machine — and the single-tester canary
+PASSED:** a tester updated through the normal public updater, runs v0.9.11, and reported no updater
+failure. **The canary itself needs nothing further and must not be re-run.** The only remaining
+distribution decision is **whether/when the other invitees move onto the updater-enabled build.**
 
 **Historical 0.9.0 distribution protocol (completed 2026-07-22; preserve for provenance only):**
 Release label: **"Compy 0.9.0 Invite-Only Private Beta — Validated binary source: 37a166c"**.

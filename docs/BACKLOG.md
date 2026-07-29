@@ -342,7 +342,11 @@ queued).
   `7ba5fb6 · release · shell 0.9.11`. Resumable transaction **complete 9/9**, closing on
   `public_assets_verified`. Three tooling repairs landed with it (`03c41e8` list-not-tag release
   lookup · `b6a50fa` PS 5.1 nested-JSON prerelease misparse · `c0fed45` latest-alias propagation
-  wait). **No tester distribution yet** — the canary pick is still an owner action.
+  wait).
+- **A0 canary: PASS.** A tester completed it through Compy's normal public updater and runs
+  **v0.9.11**; no updater failure was reported. Nothing else about that run was recorded (no prior
+  version, timestamp, or per-step detail) — do not infer any. The canary is closed; widening to the
+  remaining invitees stays an owner distribution call.
 - Durable authority lives in `docs/RELEASE_AUTONOMY.md`: failed reversible gates trigger
   preserve → diagnose → guard → repair → commit/push → resume. Only fleet-visible publication,
   distribution, secrets/key rotation, security settings, destructive Git, spending, and

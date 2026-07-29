@@ -44,6 +44,7 @@
 <!-- STATE:hosted_ci=off-by-owner-decision-2026-07-16 -->
 <!-- STATE:zh_cn_localization=base-and-vocabulary-on-main-d000295 -->
 <!-- STATE:tester_distributed_version=0.9.0 -->
+<!-- STATE:canary_status=pass-on-0.9.11 -->
 <!-- STATE:public_artifact=releases-repo-public -->
 <!-- STATE:code_signing=open -->
 <!-- STATE:legal=open -->
@@ -58,8 +59,9 @@
 | **Latest PUBLISHED release + source commit** | **v0.9.11**, source `7ba5fb6` (full `7ba5fb63750265c03e67783edfa0b52cbe1208bb`), published tag `v0.9.11` on `Pootytxng/compy-releases`, release id `361056355`. It supersedes v0.9.7 (`1d9bad6`) as the public release. There is still no v0.9.8 or v0.9.9 release/tag in the releases repository; v0.9.10 exists only as an unpublished private draft. | `gh release view --repo Pootytxng/compy-releases --json tagName,isDraft,publishedAt` · `gh release view v0.9.10 --repo Pootytxng/compy-releases --json isDraft,publishedAt` |
 | **Owner-installed version + embedded stamp** | **0.9.11**, embedded stamp **`7ba5fb6`** — runtime proof reads `7ba5fb6 · release · shell 0.9.11`; exe `ProductVersion`/`FileVersion` and registry `DisplayVersion` all read 0.9.11 (Windows Apps: 0.9.11). Installed from the exact receipt-bound installer that was published. | binary short-stamp count · HKCU uninstall `DisplayVersion` · local runtime proof |
 | **Latest updater manifest version** | **v0.9.11** — `latest.json` at `releases/latest/download/` names the v0.9.11 asset (`.../releases/download/v0.9.11/Compy_0.9.11_x64-setup.exe`); signature verifies against the pinned minisign key; installer + `latest.json` match GitHub's bytes and the receipt digests. | unauthenticated fetch of `latest.json` + `scripts/verify-updater-signature.mjs` |
-| **Tester-distributed version** | **0.9.0** — the `37a166c` NSIS (SHA-256 `6BC2F7DF…F5A2C4`) is what the six invitees were sent (Drive link). **NO updater-enabled build has been sent to any tester** (owner hold). | `BETA_DISTRIBUTION_RECORD.md` |
-| **Known tester installation state** | **UNKNOWN.** No telemetry, no remote inventory by design. Six invitees hold the 0.9.0 link; what each actually installed is owner-confirmable only. | owner report only |
+| **Hand-distributed tester version** | **0.9.0** — the `37a166c` NSIS (SHA-256 `6BC2F7DF…F5A2C4`) is what the six invitees were sent (Drive link). That remains the only hand-send; nothing has been mailed out since. | `BETA_DISTRIBUTION_RECORD.md` |
+| **A0 single-tester canary** | **PASS.** A tester completed the canary through Compy's **normal public updater** and is **currently running v0.9.11**; **no updater failure was reported.** That is the whole recorded result — the tester's prior version, the update timestamp, and any per-step detail were never captured, so they are not reconstructible and must not be inferred. | owner report only |
+| **Known tester installation state** | **One confirmed: the canary tester on 0.9.11** (owner-reported). The other invitees remain **UNKNOWN** — no telemetry, no remote inventory by design; six invitees hold the 0.9.0 link and what each actually installed is owner-confirmable only. | owner report only |
 | **Public artifact exposure** | **YES — `Pootytxng/compy-releases` is a PUBLIC repo.** Every updater installer + `latest.json` is unauthenticated-downloadable (required for the updater; same discoverability as a shared link). **Source repo `Pootytxng/sentinel` stays PRIVATE.** No store listing, no marketing page, no Authenticode-signed public artifact. | `gh repo view Pootytxng/compy-releases --json visibility` |
 | **Code-signing status** | **OPEN** — installers are Authenticode **NotSigned**. Gates a PUBLIC (store/marketing) release, not the private-beta updater. | `Get-AuthenticodeSignature` on the NSIS |
 | **Legal status** | **OPEN** — EULA + privacy are DRAFTS only. Gates a PUBLIC release. | `docs/` legal drafts |
@@ -72,8 +74,9 @@ is intact and unaltered: v0.9.8 (`d9ced24`) owner-installed unpublished; the fai
 v0.9.10 (`92c7608`) an immutable source tag plus a byte-correct **private draft that stays
 unpublished pending a separate cleanup decision**. Hosted Actions remain intentionally off under the
 owner's $0-budget decision; local gates plus the sandboxed publish simulation are operative. **No
-build has been distributed to another person by hand** — the fleet reaches 0.9.11 only through the
-consent-first updater, and the single-tester canary decision is still open.
+build has been distributed to another person by hand since the 0.9.0 link** — the fleet reaches
+0.9.11 only through the consent-first updater, and **the A0 single-tester canary has PASSED** on
+that path: the tester updated in-app, runs v0.9.11, and reported no updater failure.
 
 ## Gate matrix
 
@@ -118,7 +121,7 @@ consent-first updater, and the single-tester canary decision is still open.
 |---|---|
 | Private-beta functional blockers | **NONE** — Gaming Mode signed off; installed-build QA + runtime closure done; the updater path is live and owner-proven. |
 | Publish of v0.9.11 | **CLOSED — published 2026-07-28** under owner GO; transaction complete 9/9, public assets and manifest verified against the signed receipt. Any *future* candidate still needs its own owner GO/NO-GO after local preparation. |
-| Tester distribution of the published build | **OPEN — owner call.** 0.9.11 is reachable by the consent-first updater, but no build has been hand-sent; the single-tester canary is still unchosen. |
+| Tester distribution of the published build | **CLOSED — A0 canary PASS.** A tester updated through the normal public updater and runs v0.9.11 with no reported failure, proving the fleet path end-to-end on a machine that is not the owner's. Widening to the remaining invitees is an owner distribution call, not a blocker. |
 | Hosted CI | **NOT A BLOCKER — settled OFF by owner decision (2026-07-16).** Listed here only so its absence is never re-read as an unresolved gate. Local gates are the verification path. |
 | Code signing | **OPEN** — gates PUBLIC release (Azure Trusted Signing route, owner/$-gated). |
 | Legal (EULA + privacy) | **OPEN** — gates PUBLIC release. DRAFTS only. |
@@ -129,10 +132,11 @@ consent-first updater, and the single-tester canary decision is still open.
 
 ## Required owner decisions (live)
 
-1. **Single-tester canary for the published v0.9.11 build** — publish is done (GO given, 9/9 stages,
-   public assets verified); the remaining call is which ONE tester receives the updater-enabled build
-   first. Expand to the rest only after that tester completes the core path. Publish GO/NO-GO returns
-   as a decision only for the *next* prepared candidate.
+1. **Fleet expansion beyond the passed v0.9.11 canary** — publish is done (GO given, 9/9 stages,
+   public assets verified) and the single-tester canary **PASSED** on the normal updater path, which
+   was the stated precondition for widening. The remaining call is whether/when the other invitees
+   move onto the updater-enabled build — a distribution decision, owner territory. Publish GO/NO-GO
+   returns as a decision only for the *next* prepared candidate.
 2. **v0.9.10 private-draft cleanup** — the unpublished draft (`360948018`) and its releases-repository
    tag are intact and untouched. Keeping it costs nothing and preserves provenance; deleting it is
    irreversible. No action taken without an explicit owner decision.
