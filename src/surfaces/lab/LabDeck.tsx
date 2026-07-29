@@ -22,6 +22,7 @@ import { deriveReverted } from "../use-scan";
 import { useDismissed } from "../dismissed";
 import { peekProbe, cachedProbe } from "../../data/probe-cache";
 import { readHandoff } from "../../data/check-handoff";
+import { recDisplayLabel } from "../../data/friendly-labels";
 import { measureTuning, tuningEvidence } from "../../data/tuning-measure";
 import { tuningGuideForVendorForLanguage } from "../../data/tuning-guides";
 import {
@@ -426,10 +427,14 @@ export function LabDeck({
           : t("lab.labDeck.move.whyCatalog");
     const proof = proofStationFor(goal, available);
     const busy = fast.busyId === rec.id;
+    // ONE NAME PER REC: resolved through the shared display-label layer, so the tweak this card
+    // nominates reads IDENTICALLY here, in the arrival banner, and in the row you land on.
+    const name = recDisplayLabel(rec.id, rec.title);
     return (
       <div className="ld-move">
         <p className="ld-move-goal">{goalInfo[goal].name}</p>
-        <h3 className="ld-move-head">{rec.title}</h3>
+        <h3 className="ld-move-head">{name.headline}</h3>
+        {name.tech && <p className="ld-move-tech">{name.tech}</p>}
         <p className="ld-move-why">{why}</p>
         <p className="ld-move-line">{rec.description}</p>
         <dl className="ld-move-facts">

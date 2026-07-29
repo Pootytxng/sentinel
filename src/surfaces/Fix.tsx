@@ -11,7 +11,7 @@ import { walkthroughForKeyForLanguage, type GpuVendor } from "./walkthroughs";
 import { useDismissed } from "./dismissed";
 import { useEligibilityOverrides } from "./eligibility-override";
 import { GUIDED_STEPS, openGuidedUri } from "./guided";
-import { friendlyLabel } from "../data/friendly-labels";
+import { friendlyLabel, recDisplayLabel } from "../data/friendly-labels";
 import { expertTarget, EXPERT_TARGET_DISCLAIMER } from "../data/expert-targets";
 import { useExpertView } from "../design/use-expert-view";
 import { PROVENANCE_LABEL, PROVENANCE_NOTE } from "../data/provenance";
@@ -42,12 +42,12 @@ function dashOn(): boolean {
 // + a quiet technical tag (owner direction 2026-06-15: friendly-first, real name kept visible). The
 // original catalog title + measured detail always stay reachable via "What's this?" and exports.
 function RecTitle({ id, title }: { id: string; title: string }) {
-  const f = livingOn() ? friendlyLabel(id) : null;
-  if (!f) return <span className="fix-row-title">{title}</span>;
+  const d = recDisplayLabel(id, title);
+  if (!d.friendly) return <span className="fix-row-title">{title}</span>;
   return (
     <span className="fix-row-title fix-row-title-friendly">
-      <span className="fix-row-headline">{f.headline}</span>
-      {f.tech && <span className="fix-row-tech">{f.tech}</span>}
+      <span className="fix-row-headline">{d.headline}</span>
+      {d.tech && <span className="fix-row-tech">{d.tech}</span>}
     </span>
   );
 }

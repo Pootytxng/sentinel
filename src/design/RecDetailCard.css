@@ -16,6 +16,15 @@
   color: var(--fg);
   margin-bottom: 8px;
 }
+/* The real technical name, quiet beside the plain headline — friendly-first, name still visible
+   (owner voice direction 2026-06-15), matching the Optimize rows exactly. */
+.rd-rec-tech {
+  margin-left: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--faint);
+}
 .rd-rec-facts {
   display: flex;
   flex-direction: column;

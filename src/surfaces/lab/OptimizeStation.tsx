@@ -6,6 +6,7 @@ import Check from "../Check";
 import { GamingMode } from "../GamingMode";
 import { deriveReverted } from "../use-scan";
 import { resolveCarried } from "../../data/check-handoff";
+import { recDisplayLabel } from "../../data/friendly-labels";
 import { useReducedMotion } from "../../design/use-motion";
 import { useExpertView } from "../../design/use-expert-view";
 import { useCountTo } from "./use-count-to";
@@ -141,11 +142,17 @@ export function OptimizeStation(
           <>
             <p className="lab-carried-head">{t("lab.optimizeStation.carriedHead")}</p>
             <ul className="lab-carried-list">
-              {carried.open.map((r) => (
-                <li key={r.id} className="lab-carried-item">
-                  {r.title}
-                </li>
-              ))}
+              {/* ONE NAME PER REC: the same display-label layer the rows below use, so
+                  "Compy found these during your check" names each tweak the way the row does. */}
+              {carried.open.map((r) => {
+                const name = recDisplayLabel(r.id, r.title);
+                return (
+                  <li key={r.id} className="lab-carried-item">
+                    <span className="lab-carried-name">{name.headline}</span>
+                    {name.tech && <span className="lab-carried-tech">{name.tech}</span>}
+                  </li>
+                );
+              })}
             </ul>
             <p className="lab-carried-hint">{t("lab.optimizeStation.carriedHint")}</p>
           </>
@@ -161,7 +168,7 @@ export function OptimizeStation(
           <p className="lab-carried-note">
             {t("lab.optimizeStation.carriedDone", {
               count: carried.done.length,
-              titles: carried.done.map((r) => r.title).join(", "),
+              titles: carried.done.map((r) => recDisplayLabel(r.id, r.title).headline).join(", "),
             })}
           </p>
         )}

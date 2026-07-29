@@ -62,3 +62,30 @@ export const FRIENDLY_LABELS: Record<string, FriendlyLabel> = {
 export function friendlyLabel(id: string): FriendlyLabel | null {
   return FRIENDLY_LABELS[id] ?? null;
 }
+
+/** Whether the Living Instrument preview is on. DOM-read: surfaces re-render fresh on navigation,
+ *  so a Settings toggle is reflected when you come back. */
+export function livingLabelsOn(): boolean {
+  return typeof document !== "undefined" && document.documentElement.dataset.living === "on";
+}
+
+export type RecDisplayLabel = {
+  /** What the user reads as the name of this tweak. */
+  headline: string;
+  /** The real technical name, quiet beside the headline — null when the headline IS the real name. */
+  tech: string | null;
+  /** True when a friendly headline replaced the catalog title (callers style the pair differently). */
+  friendly: boolean;
+};
+
+// ONE NAME PER REC (product-recovery train, 2026-07-28 — self-review FAIL). A recommendation used to
+// be named three different ways in a single scroll: the deck's "next best move" card and the
+// carried-arrival banner printed the raw catalog title while the row directly beneath printed the
+// friendly headline. A non-technical gamer cannot tell those are the same tweak, which is exactly the
+// orientation failure this train exists to fix (recovery items 2/4/9). Every surface that names a rec
+// resolves it HERE, so the name is decided in one place instead of per-component.
+export function recDisplayLabel(id: string, title: string): RecDisplayLabel {
+  const f = livingLabelsOn() ? friendlyLabel(id) : null;
+  if (!f) return { headline: title, tech: null, friendly: false };
+  return { headline: f.headline, tech: f.tech ?? null, friendly: true };
+}

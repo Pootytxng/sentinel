@@ -768,7 +768,7 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
 | 19 | Keyboard focus is visible | pending — **not claimed**; jsdom does not paint. Installed candidate + `self-review` |
 | 20 | Screen-reader naming and hierarchy are sensible | ✅ `…journey.test.tsx` — every section `aria-labelledby`→`H2` and `tabIndex=-1`; every row head a real `BUTTON` with `aria-expanded`+`aria-controls`; chevrons `aria-hidden` |
 | 21 | Cursor behavior is consistent | ✅ `design/cursor-consistency.test.tsx` (7) — one disabled answer, `none` quarantined to the opt-in reticle, the map is a `:where()` floor, reticle off by default |
-| 22 | Existing mutation / rollback / anti-fabrication / release / encoding / state guards stay green | ⏳ frontend green — `npx vitest run` 215 files / 2159 passed / 2 skipped, `npx tsc --noEmit` clean. `cargo test` + `clippy` still to run |
+| 22 | Existing mutation / rollback / anti-fabrication / release / encoding / state guards stay green | ✅ `npx vitest run` 215 files / 2159 passed / 2 skipped · `npx tsc --noEmit` clean · `cargo test` 876 passed / 0 failed / 24 ignored (cold build) · `cargo clippy --all-targets` clean |
 
 **"All tests pass" is NOT proof the design is accepted.** The acceptance gate is: functional journey
 proof · installed owner eyeball · subsequent validation from the same kind of users who gave the

@@ -1,4 +1,5 @@
 import type { RecDetail } from "../data/rec-detail";
+import { recDisplayLabel } from "../data/friendly-labels";
 import { PROVENANCE_LABEL } from "../data/provenance";
 import { TrustSwitch } from "./TrustSwitch";
 import { Walkthrough } from "./Walkthrough";
@@ -44,6 +45,21 @@ export type RecDetailCardLabels = {
   restoreAria?: (title: string) => string;
 };
 
+// ONE NAME PER REC. The name resolves through the shared display-label layer (data/friendly-labels),
+// the same one the Optimize rows and the Lab's next-best-move card use — so the tweak Check names is
+// recognisably the SAME tweak when the user lands on it after the handoff. Naming it one way here and
+// another way there is the orientation defect this train exists to fix (recovery items 2/4/9).
+function RecName({ id, title }: { id: string; title: string }) {
+  const n = recDisplayLabel(id, title);
+  if (!n.friendly) return <div className="rd-rec-title">{title}</div>;
+  return (
+    <div className="rd-rec-title">
+      {n.headline}
+      {n.tech && <span className="rd-rec-tech">{n.tech}</span>}
+    </div>
+  );
+}
+
 export function RecDetailCard({
   d,
   labels,
@@ -82,20 +98,23 @@ export function RecDetailCard({
   // declining MEANS something: an apply Compy can do, or a hands-on step the user could take.
   // Never on an already-applied rec — that's a rollback, not a decline (same rule as Fix.tsx).
   const canDecline = !!onDismiss && (d.action === "apply" || d.action === "manual");
+  // Screen readers hear the name the sighted user reads — "Apply Smoother online play", not a
+  // technical title that appears nowhere on screen.
+  const spokenName = recDisplayLabel(d.id, d.title).headline;
 
   // Set aside: the card stays exactly where it was, labeled, with Restore riding on it. It never
   // vanishes mid-report — dismissal is a preference, and hiding the finding would hide the truth.
   if (dismissed) {
     return (
       <div className="rd-rec rd-rec-declined" data-action={d.action}>
-        {showTitle && <div className="rd-rec-title">{d.title}</div>}
+        {showTitle && <RecName id={d.id} title={d.title} />}
         <div className="rd-rec-foot">
           <span className="rd-chip rd-chip-muted">{labels.setAside}</span>
           {onRestore && (
             <button
               className="rd-btn rd-btn-quiet"
               onClick={onRestore}
-              aria-label={labels.restoreAria?.(d.title)}
+              aria-label={labels.restoreAria?.(spokenName)}
             >
               {labels.restore}
             </button>
@@ -107,7 +126,7 @@ export function RecDetailCard({
 
   return (
     <div className="rd-rec" data-action={d.action}>
-      {showTitle && <div className="rd-rec-title">{d.title}</div>}
+      {showTitle && <RecName id={d.id} title={d.title} />}
       <dl className="rd-rec-facts">
         <div className="rd-rec-fact">
           <dt>{labels.detected}</dt>
@@ -140,7 +159,7 @@ export function RecDetailCard({
               applied={false}
               busy={busy}
               onToggle={onApply}
-              ariaLabel={labels.applyAria(d.title)}
+              ariaLabel={labels.applyAria(spokenName)}
             />
           ) : (
             <button className="rd-btn rd-btn-primary" disabled={disabled} onClick={onApply}>
@@ -161,7 +180,7 @@ export function RecDetailCard({
             className="rd-btn rd-btn-quiet rd-rec-decline"
             disabled={disabled}
             onClick={onDismiss}
-            aria-label={labels.notForMeAria?.(d.title)}
+            aria-label={labels.notForMeAria?.(spokenName)}
           >
             {labels.notForMe}
           </button>
