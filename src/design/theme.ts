@@ -655,6 +655,44 @@ export function applyHudFrame(on: boolean): void {
   }
 }
 
+// The Target Cursor reticle as its OWN flag — DEFAULT OFF (product-recovery train, 2026-07-28).
+// Split out of compy_hud_frame, which keeps the corner brackets + rig·clock readout unchanged.
+//
+// WHY OFF: tester feedback 2026-07-23 — (a) the native Windows cursor leaked through over the
+// sidebar rail and Monitor's capture/overlay buttons, (b) a tester finds the square crosshair "a
+// little weird". The 2026-07-22 fix for (a) bought consistency by DELETION: `cursor: none
+// !important` on `.lc-has-reticle *` blanks the whole semantic vocabulary at once — 174 pointer,
+// 7 help, 6 progress, 5 resize and 1 crosshair declaration all present identically, with only
+// text-entry and *:disabled escaping. A cursor that says the same thing everywhere is not a
+// consistent cursor, it is a cursor with nothing left to say. Native cursors carry the meaning
+// instead (see design/cursor.css for the one semantic map).
+//
+// Nothing is deleted: ReticleCursor.tsx, reticle.css and their guards stay whole, and an explicit
+// "1" restores the reticle app-wide. Owner taste call — pending eyeball at the installed candidate.
+const RETICLE_KEY = "compy_reticle";
+
+export function readReticle(): boolean {
+  try {
+    return localStorage.getItem(RETICLE_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyReticle(on: boolean): void {
+  try {
+    localStorage.setItem(RETICLE_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:reticle-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Intelligence Phase 1 surfaces (owner directive 2026-07-16 — "What changed?" panel in Monitor,
 // observed-change rows in Blackbook, one leading-finding line on Home). All read-only presentation
 // over the deterministic Rust engine (intelligence.rs); no mutation, no network. DEFAULT ON per the

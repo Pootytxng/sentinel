@@ -427,7 +427,7 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
      `cursor` value. The `!important`-vs-specificity bug that `reticle.css:5-10` documents as
      "reported 2026-07-22 on the sidebar nav rail + Monitor's capture/overlay buttons" — i.e.
      *this exact tester complaint* — was fixed with **no regression guard**.
-- **Status:** `UNRESOLVED` (root cause now mechanically identified, not inferred)
+- **Status:** `RESOLVED` — pending owner eyeball on the installed candidate (taste-adjacent, see item 8)
 - **Intended correction:** decide **one** cursor — consistent standard Windows pointer **or** the
   existing Compy reticle applied everywhere. **Do not invent a third cursor.** Apply it consistently
   to navigation, buttons, cards, expandable rows, graph interactions, drag zones, disabled controls,
@@ -438,7 +438,40 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   disabled controls and text inputs use their correct (distinct, standard) affordance in either
   direction of the decision.
 - **Class:** visual + functional
-- **Evidence after implementation:** _(pending)_
+- **Evidence after implementation:**
+  - **THE DECISION — native cursors, one semantic map.** The reticle is retired as the default and
+    becomes opt-in behind its own flag `compy_reticle` (DEFAULT OFF, `theme.ts` `readReticle`);
+    `compy_hud_frame` keeps the corner brackets + rig·clock readout unchanged on its own flag.
+    **Nothing is deleted** — `ReticleCursor.tsx`, `reticle.css` and their guards stay whole, and
+    `compy_reticle="1"` restores the reticle app-wide.
+  - **Why this direction and not "reticle everywhere":** the 2026-07-22 fix bought consistency by
+    DELETION — `cursor: none !important` on `.lc-has-reticle *` blanks the whole vocabulary at once
+    (174 `pointer`, 7 `help`, 6 `progress`, 5 `*-resize`, 1 `crosshair`), with only text-entry and
+    `*:disabled` escaping. A cursor that says the same thing everywhere is not a consistent cursor;
+    it is a cursor with nothing left to say. Item 9 asks for orientation to live in layout and
+    controls, and the cursor is the oldest such control. The train's own rule — *prefer the least
+    surprising consumer behavior unless the design doctrine gives a strong and current reason* —
+    decides it: the reticle doctrine is dated 2026-07-15, the tester feedback 2026-07-23, and no
+    reticle-specific owner sign-off post-dates the feedback.
+  - **The map** (`src/design/cursor.css`, new, loaded once from `App.tsx`): a zero-specificity
+    `:where()` FLOOR, so a component with a real reason to differ still wins by simply existing —
+    `Term`/`WhatsThis` keep `help`, `TrustSwitch` keeps `progress`, the oscilloscope keeps
+    `crosshair`, `WindowChrome` keeps its resize handles. No `!important` anywhere in the file.
+  - **The third inconsistency, found during the audit and fixed:** the disabled convention was split
+    — **22 rules across 17 files said `cursor: default`** (two identical-looking dead buttons, two
+    different answers). All 22 rewritten to `not-allowed`. `WhatsThis.css:46` and
+    `shell-v2.css:275` were deliberately left alone after verifying neither is a control.
+    Six `:disabled` rules that say `progress` were also verified and KEPT: each is disabled
+    *because its own action is running* (`TrustSwitch` is literally `disabled={busy}`), which is a
+    different fact about the same greyed-out button.
+  - **Guard:** `src/design/cursor-consistency.test.tsx` (7 tests) — no disabled control may say
+    `default`/`auto`/`pointer`; `cursor: none` may exist ONLY in `reticle.css`; every `none` rule
+    must be gated on `.lc-has-reticle` and exactly one component may add that class; the map is
+    loaded by `App.tsx`, its activator row is `:where()`-floored and its disabled row deliberately
+    is not; and behaviorally the reticle renders nothing and touches no DOM at default flags.
+  - **Verification:** `npx tsc --noEmit` clean · `npx vitest run` **212 files / 2091 passed, 2
+    skipped**. `hud-frame-flag.test.tsx` updated to arm `compy_reticle="1"` on its four reticle
+    claims so each still tests the scoping rule instead of passing trivially.
 
 ---
 
@@ -454,7 +487,7 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   centre pip. It is a target-lock bracket, and per item 7 it *replaces* the help/progress/crosshair
   cursors rather than coexisting with them — so the "weird" reticle is also the thing eating the
   affordance signals the rest of the app is trying to send.
-- **Status:** `UNRESOLVED`
+- **Status:** `RESOLVED` — **owner decision required on the installed candidate** (taste call)
 - **Intended correction:** resolved **together with item 7 as one decision**. Because a tester found
   the square crosshair strange, **prefer the least surprising consumer behavior unless the
   established design doctrine provides a strong and current reason otherwise.** Record the reasoning
@@ -463,7 +496,18 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
 - **Acceptance criteria:** one documented decision, applied consistently, reviewable by the owner on
   the installed candidate.
 - **Class:** visual
-- **Evidence after implementation:** _(pending)_
+- **Evidence after implementation:**
+  - Same decision and same commit as item 7: the square target-lock bracket no longer ships on.
+    Matthew's "a little weird" and J's "native cursor leaks through" had one root cause, and one
+    fix answers both — the app now shows the cursor Windows users already know, everywhere.
+  - **This is a taste call and it is NOT closed by tests.** Two things go to the owner at the
+    installed-build review: (a) does the app feel right without the reticle, and (b) if he wants it
+    back, `compy_reticle="1"` restores it in one line and the guard still holds — but then item 7's
+    blackout returns and would need a semantic reticle, not a flag flip. Carried to the 12-point
+    report, "exact owner decisions required."
+  - **Open, NOT closed by this:** the magnetic cursor in `docs/UI_VISION_BACKLOG.md` §JARVIS stack
+    is a separate unbuilt item. Retiring the reticle does not deliver it; whatever is built there
+    must carry a semantic vocabulary or `cursor-consistency.test.tsx` will fail it.
 
 ---
 
@@ -703,7 +747,7 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
 | 18 | Reduced motion works | pending |
 | 19 | Keyboard focus is visible | pending |
 | 20 | Screen-reader naming and hierarchy are sensible | pending |
-| 21 | Cursor behavior is consistent | pending |
+| 21 | Cursor behavior is consistent | ✅ `design/cursor-consistency.test.tsx` (7) — one disabled answer, `none` quarantined to the opt-in reticle, the map is a `:where()` floor, reticle off by default |
 | 22 | Existing mutation / rollback / anti-fabrication / release / encoding / state guards stay green | pending |
 
 **"All tests pass" is NOT proof the design is accepted.** The acceptance gate is: functional journey
@@ -726,8 +770,8 @@ train.)_
 | --- | --- | --- |
 | 1 | feedback truth matrix | `5f7e38f` + `3c2ed53` (audit corrections) |
 | 2 | Check result identity + handoff contract | `654bf53` (identity) |
-| 3 | Optimize destination highlighting + actions | `a4f6b24` (handoff destination) + _(this commit — re-run journey correction + the decline door)_ |
-| 4 | cursor + interaction consistency | pending |
+| 3 | Optimize destination highlighting + actions | `a4f6b24` (handoff destination) + `0e505fc` (re-run journey correction + the decline door) |
+| 4 | cursor + interaction consistency | _(this commit — native cursors, one semantic map, reticle opt-in)_ |
 | 5 | Lab candidate information architecture | pending |
 | 6 | Lab candidate visual layer | pending |
 | 7 | journey tests + pruning plan | pending |

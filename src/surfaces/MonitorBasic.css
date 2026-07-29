@@ -82,7 +82,7 @@
 }
 .mb-cap:disabled {
   opacity: 0.6;
-  cursor: default;
+  cursor: not-allowed;
 }
 .mb-cap-on {
   color: var(--accent-bright);

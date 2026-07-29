@@ -9,6 +9,7 @@ import {
   readGamingConsole,
   readRoomIdentity,
   readHudFrame,
+  readReticle,
   readIntelligence,
 } from "./theme";
 
@@ -120,6 +121,20 @@ export function useHudFrameFlag(): boolean {
     const sync = () => setOn(readHudFrame());
     window.addEventListener("compy:hud-frame-changed", sync);
     return () => window.removeEventListener("compy:hud-frame-changed", sync);
+  }, []);
+  return on;
+}
+
+// The Target Cursor reticle flag as live React state (product-recovery train, 2026-07-28; same
+// contract: a flag change fires compy:reticle-changed so every mounted ReticleCursor re-branches
+// without a reload). DEFAULT OFF — native cursors carry the semantic vocabulary (see theme.ts
+// readReticle for the why, design/cursor.css for the map). An explicit "1" restores the reticle.
+export function useReticleFlag(): boolean {
+  const [on, setOn] = useState(readReticle);
+  useEffect(() => {
+    const sync = () => setOn(readReticle());
+    window.addEventListener("compy:reticle-changed", sync);
+    return () => window.removeEventListener("compy:reticle-changed", sync);
   }, []);
   return on;
 }

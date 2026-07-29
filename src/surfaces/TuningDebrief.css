@@ -39,7 +39,7 @@
 }
 .td-arm-btn:disabled {
   opacity: 0.55;
-  cursor: default;
+  cursor: not-allowed;
 }
 
 .td-measure {
@@ -69,7 +69,7 @@
 }
 .td-clear:disabled {
   opacity: 0.55;
-  cursor: default;
+  cursor: not-allowed;
 }
 
 .td-crash {
@@ -99,5 +99,5 @@
 }
 .td-crash-btn:disabled {
   opacity: 0.55;
-  cursor: default;
+  cursor: not-allowed;
 }

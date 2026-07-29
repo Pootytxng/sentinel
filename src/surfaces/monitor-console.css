@@ -8,7 +8,7 @@
   text-transform: uppercase; padding: 6px 14px; cursor: pointer;
   background: transparent; color: var(--ix-accent-text); border: 1px solid var(--ix-accent-text); }
 :root[data-v2="on"] .mc-cap:hover:not(:disabled) { background: var(--ix-accent); color: var(--ix-accent-ink); }
-:root[data-v2="on"] .mc-cap:disabled { opacity: .6; cursor: default; }
+:root[data-v2="on"] .mc-cap:disabled { opacity: .6; cursor: not-allowed; }
 :root[data-v2="on"] .mc-cap-on { background: var(--ix-accent); color: var(--ix-accent-ink); }
 :root[data-v2="on"] .mc-cap-status { font-family: var(--ix-mono); font-size: 11px;
   letter-spacing: .04em; color: var(--ix-text-2); font-variant-numeric: tabular-nums; }

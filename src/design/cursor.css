@@ -1,0 +1,48 @@
+/* THE CURSOR MAP — one vocabulary, declared once (product-recovery train, 2026-07-28).
+ *
+ * Tester feedback 2026-07-23 was "cursor behavior is inconsistent across the application", and it
+ * was right twice over: the native pointer leaked through the reticle over the sidebar rail and
+ * Monitor's capture buttons, AND the disabled convention was split down the middle (12 rules said
+ * `not-allowed`, 23 said `default` — two identical-looking dead buttons, two different answers).
+ *
+ * The fix is a FLOOR, not an override. Every rule below is wrapped in `:where()` (specificity 0,0,0)
+ * except the disabled row, so any component that has a reason to say something else still wins by
+ * simply existing. The point is that a new button never has to remember: it inherits the right
+ * cursor from being a button.
+ *
+ * The disabled row deliberately carries specificity (0,1,1) — it must beat a bare `.btn { cursor:
+ * pointer }` that has no `:disabled` rule of its own, which is exactly the gap that produced the
+ * split. Component `:disabled` rules (0,2,0) still win; they were all unified to `not-allowed` in
+ * the same commit, so winning changes nothing.
+ *
+ * Loaded once from App.tsx. Scoped to nothing — the map is the same in every room, which is the
+ * whole claim. Pinned by design/cursor-consistency.test.tsx.
+ *
+ * THE MAP
+ *   pointer      an activator: button, link, tab, switch, summary, [role=button]
+ *   not-allowed  a control that exists but cannot be used right now
+ *   text         a text-entry field (browser default — no rule needed, don't add one)
+ *   help         a term/tooltip affordance that explains rather than acts (Term, WhatsThis)
+ *   progress     a control whose action is running (TrustSwitch, apply/scan buttons mid-flight)
+ *   crosshair    a plotted surface read by position (Monitor's oscilloscope stage)
+ *   *-resize     a window edge or corner (WindowChrome)
+ *   grab/grabbing a drag zone — reserved; nothing ships one yet (the panoramic gallery is unbuilt)
+ *   default      NOT a control: panel bodies, static readouts, decorative chrome
+ *
+ * `cursor: none` is reserved to reticle.css and engages only under `.lc-has-reticle`, which the
+ * opt-in reticle (compy_reticle, DEFAULT OFF) adds. The guard test enforces that reservation.
+ */
+
+/* Activators. `summary` is here on purpose — expandable rows are the app's most common door. */
+:where(button, summary, a[href], [role="button"], [role="tab"], [role="switch"]) {
+  cursor: pointer;
+}
+
+/* Present but unusable. Carries specificity on purpose (see header). */
+button:disabled,
+select:disabled,
+input:disabled,
+textarea:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}

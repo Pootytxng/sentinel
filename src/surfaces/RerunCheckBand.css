@@ -84,7 +84,7 @@
 :root[data-v2="on"] .rcb-btn:disabled {
   color: var(--v2-faint);
   border-color: var(--v2-line);
-  cursor: default;
+  cursor: not-allowed;
 }
 :root[data-v2="on"] .rcb-ic {
   display: inline-flex;

@@ -398,7 +398,7 @@
 }
 .fc-btn:disabled {
   opacity: 0.55;
-  cursor: default;
+  cursor: not-allowed;
 }
 .fc-btn-primary {
   background: var(--ready, #46d98a);

@@ -464,7 +464,7 @@
 }
 .set-license-btn:disabled {
   opacity: 0.55;
-  cursor: default;
+  cursor: not-allowed;
 }
 .set-license-note {
   flex-basis: 100%;
@@ -526,7 +526,7 @@
 }
 .set-action:disabled {
   opacity: 0.55;
-  cursor: default;
+  cursor: not-allowed;
   filter: none;
 }
 .fb-error {

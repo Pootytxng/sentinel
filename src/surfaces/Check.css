@@ -250,7 +250,7 @@
 }
 .check-dismiss:disabled {
   opacity: 0.55;
-  cursor: default;
+  cursor: not-allowed;
 }
 /* Set aside: the finding stays right where it was, labeled, with its way back on it. */
 .check-setaside {

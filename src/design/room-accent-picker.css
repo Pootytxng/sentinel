@@ -134,7 +134,7 @@
 }
 [data-v2="on"] .v2-accent-reset:disabled {
   opacity: 0.45;
-  cursor: default;
+  cursor: not-allowed;
 }
 
 @keyframes v2-accent-pop-in {

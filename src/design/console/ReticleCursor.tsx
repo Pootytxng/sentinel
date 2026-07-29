@@ -1,6 +1,6 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { useReducedMotion } from "../use-motion";
-import { useHudFrameFlag } from "../use-hud";
+import { useHudFrameFlag, useReticleFlag } from "../use-hud";
 import "./reticle.css";
 
 // ReticleCursor — a game-HUD Target Cursor (reactbits) scoped to a container. It follows the pointer
@@ -13,6 +13,11 @@ import "./reticle.css";
 // Text-entry surfaces (input/textarea/select/contenteditable) escape the reticle: the CSS restores
 // the native cursor there and the move handler hides the brackets. Renders nothing under reduced
 // motion (Compy's resolved setting) or a coarse pointer — the native cursor stays.
+//
+// OPT-IN SINCE 2026-07-28 (compy_reticle, DEFAULT OFF — product-recovery train, tester feedback
+// 2026-07-23). Off, this component mounts nothing and never adds `.lc-has-reticle`, so the
+// `cursor: none` blackout in reticle.css cannot engage and native cursors carry the meaning
+// (design/cursor.css). The reticle is intact, not deleted — `compy_reticle="1"` restores it.
 const TEXT_ENTRY = 'input, textarea, select, [contenteditable="true"]';
 
 export function ReticleCursor({
@@ -24,13 +29,16 @@ export function ReticleCursor({
 }) {
   const reduced = useReducedMotion();
   const hudFrame = useHudFrameFlag();
+  const enabled = useReticleFlag();
   const coarse =
     typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
-  const standDown = hudFrame && !appWide; // a stage instance defers to the shell's global reticle
+  // `off` folds the opt-in flag into the existing stand-down path, so the flag reaches BOTH the
+  // effect (no listeners, no `.lc-has-reticle`) and the render (no brackets) through one gate.
+  const off = !enabled || reduced || coarse || (hudFrame && !appWide);
   const elRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (reduced || coarse || standDown) return;
+    if (off) return;
     const scope = scopeRef.current;
     const el = elRef.current;
     if (!scope || !el) return;
@@ -97,9 +105,9 @@ export function ReticleCursor({
       scope.removeEventListener("pointerout", onOut);
       scope.classList.remove("lc-has-reticle");
     };
-  }, [reduced, coarse, standDown, scopeRef]);
+  }, [off, scopeRef]);
 
-  if (reduced || coarse || standDown) return null;
+  if (off) return null;
   return (
     <div className="lc-reticle" ref={elRef} aria-hidden="true">
       <span className="lc-ret-c tl" />

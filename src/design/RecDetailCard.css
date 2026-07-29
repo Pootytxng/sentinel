@@ -88,7 +88,7 @@
 }
 .rd-btn:disabled {
   opacity: 0.55;
-  cursor: default;
+  cursor: not-allowed;
 }
 /* The decline ("Not for me") and its undo ("Restore") — deliberately quiet: real doors, never
    competing with the action the card is actually recommending. */

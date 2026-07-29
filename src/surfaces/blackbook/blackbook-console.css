@@ -23,7 +23,7 @@
 :root[data-v2="on"] .bc-tile:hover:not(:disabled) { border-color: color-mix(in srgb, var(--ix-accent) 40%, var(--ix-glass-border)); }
 :root[data-v2="on"] .bc-tile[aria-pressed="true"] { border-color: var(--ix-accent-text);
   background: var(--ix-accent-wash, transparent); }
-:root[data-v2="on"] .bc-tile:disabled { cursor: default; opacity: .55; }
+:root[data-v2="on"] .bc-tile:disabled { cursor: not-allowed; opacity: .55; }
 :root[data-v2="on"] .bc-tile-k { font-family: var(--ix-mono); font-size: 9px; letter-spacing: .14em;
   text-transform: uppercase; color: var(--ix-text-3); }
 :root[data-v2="on"] .bc-tile[aria-pressed="true"] .bc-tile-k { color: var(--ix-accent-text); }

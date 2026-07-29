@@ -179,7 +179,7 @@
 }
 .ad-action:disabled {
   opacity: 0.6;
-  cursor: default;
+  cursor: not-allowed;
 }
 .ad-apply {
   background: var(--ix-accent, #2ee6c0);

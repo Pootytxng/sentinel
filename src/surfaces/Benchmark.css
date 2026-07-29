@@ -90,7 +90,7 @@
 
 .bench-btn:disabled {
   opacity: 0.55;
-  cursor: default;
+  cursor: not-allowed;
 }
 
 .bench-btn-primary {

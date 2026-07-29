@@ -4,6 +4,11 @@
 // readouts only (real rig/stamp/ledger/clock — a missing source is OMITTED, never faked),
 // "0" removes frame + shell reticle entirely, and the stage-scoped ReticleCursor instances
 // SELF-DEFER while the flag is on (one reticle, never two) but return when it's off.
+//
+// 2026-07-28: the reticle split off into its own opt-in flag (compy_reticle, DEFAULT OFF — see
+// cursor-consistency.test.tsx). The HUD FRAME is untouched and still DEFAULT ON; every reticle
+// claim below now arms compy_reticle="1" first, so these keep testing the scoping rule rather
+// than passing trivially because the reticle is off.
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, waitFor } from "@testing-library/react";
 import { useRef } from "react";
@@ -71,8 +76,15 @@ describe("compy_hud_frame default ON (the HUD frame + shell reticle)", () => {
   });
 
   it("mounts the shell-scoped reticle (appWide), direct child of .v2-shell", () => {
+    localStorage.setItem("compy_reticle", "1");
     const { container } = render(shell());
     expect(container.querySelector(".v2-shell > .lc-reticle")).toBeTruthy();
+  });
+
+  it("…but not while the reticle stays opt-out, which is the shipped default", () => {
+    const { container } = render(shell());
+    expect(container.querySelector(".hud-frame")).toBeTruthy(); // frame unaffected
+    expect(container.querySelector(".lc-reticle")).toBeNull();
   });
 
   it("HONEST OMISSION: no rig probe → the segment is absent, not faked (clock alone remains)", async () => {
@@ -87,6 +99,7 @@ describe("compy_hud_frame default ON (the HUD frame + shell reticle)", () => {
   });
 
   it("stage-scoped ReticleCursor instances SELF-DEFER while the flag is on (one reticle, never two)", () => {
+    localStorage.setItem("compy_reticle", "1"); // arm it, else this passes for the wrong reason
     const { container } = render(<Stage />);
     expect(container.querySelector(".lc-reticle")).toBeNull();
   });
@@ -94,6 +107,7 @@ describe("compy_hud_frame default ON (the HUD frame + shell reticle)", () => {
 
 describe('compy_hud_frame "0" failsafe', () => {
   it("removes the frame and the shell reticle entirely", () => {
+    localStorage.setItem("compy_reticle", "1");
     localStorage.setItem("compy_hud_frame", "0");
     const { container } = render(shell({ rig: "Ryzen 7" }));
     expect(container.querySelector(".hud-frame")).toBeNull();
@@ -101,6 +115,7 @@ describe('compy_hud_frame "0" failsafe', () => {
   });
 
   it("hands the reticle back to the stage scopes (classic behavior restored)", () => {
+    localStorage.setItem("compy_reticle", "1");
     localStorage.setItem("compy_hud_frame", "0");
     const { container } = render(<Stage />);
     expect(container.querySelector(".lc-reticle")).toBeTruthy();

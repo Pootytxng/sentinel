@@ -763,7 +763,7 @@
 .fix-applyall-cancel:disabled,
 .fix-applyall-go:disabled {
   opacity: 0.5;
-  cursor: default;
+  cursor: not-allowed;
 }
 :root[data-motion="reduced"] {
   .fix-applyall,

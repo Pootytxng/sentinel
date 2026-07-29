@@ -183,7 +183,7 @@
 }
 :root[data-v2="on"] .gc-engage:disabled {
   opacity: 0.55;
-  cursor: default;
+  cursor: not-allowed;
 }
 /* Engaged: the control reads as the restore path — ready-status ink, still one control. */
 :root[data-v2="on"] .gc-engage-on {
@@ -212,7 +212,7 @@
 }
 :root[data-v2="on"] .gc-btn:disabled {
   opacity: 0.55;
-  cursor: default;
+  cursor: not-allowed;
 }
 :root[data-v2="on"] .gc-btn-primary {
   border-color: var(--ix-accent-text, var(--ix-accent, var(--accent)));

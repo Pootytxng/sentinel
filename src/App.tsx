@@ -80,6 +80,7 @@ import {
   summarizeChanges,
 } from "./surfaces/gaming-mode";
 import "./App.css";
+import "./design/cursor.css"; // the one semantic cursor map — a zero-specificity floor, see header
 import "./design/doorknob.css";
 import { KonamiWhisper } from "./design/KonamiWhisper";
 import { useConfirm } from "./design/ConfirmDialog";
