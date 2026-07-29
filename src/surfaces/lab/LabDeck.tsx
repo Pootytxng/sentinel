@@ -61,8 +61,8 @@ import "./LabDeck.css";
 //
 // ONE NAVIGATION GRAMMAR (recovery item 14): every destination in this face is a ROW THAT OPENS
 // IN PLACE. No router, no card grid duplicating an accordion, no dock. Exactly one instrument is
-// mounted at a time app-wide (`open` is a single slot carrying both the station key and the row
-// that owns it), so a problem row in section 4 and an instrument row in section 3 can never
+// mounted at a time app-wide (`open` is a single slot identifying ONE row — its own id plus the
+// section hosting it), so a problem row in section 4 and an instrument row in section 3 can never
 // render two live copies of the same tool.
 //
 // ZERO NEW MUTATION PATH, ZERO NEW IPC (LOCKED rule 3). Every apply/undo goes through the same
@@ -335,15 +335,20 @@ export function LabDeck({
   };
   const stations = labStations(t);
 
-  const [open, setOpen] = useState<{ key: LabStationKey; host: DeckSection } | null>(null);
-  const toggle = (key: LabStationKey, host: DeckSection) =>
-    setOpen((cur) => (cur && cur.key === key && cur.host === host ? null : { key, host }));
-  const isOpen = (key: LabStationKey, host: DeckSection) =>
-    open != null && open.key === key && open.host === host;
+  // The slot identifies a ROW, not a station. Two problem rows can honestly route to the same
+  // instrument — "The game hitches or stutters" and "My FPS jumps around" both open Benchmark —
+  // so keying the slot on (station, section) made ONE click expand BOTH rows and mount the
+  // benchmark twice, the exact opposite of the one-instrument invariant above (self-review round
+  // 6). For instrument rows the row id IS the station key; problem rows use their own symptom key.
+  const [open, setOpen] = useState<{ row: string; host: DeckSection } | null>(null);
+  const toggle = (row: string, host: DeckSection) =>
+    setOpen((cur) => (cur && cur.row === row && cur.host === host ? null : { row, host }));
+  const isOpen = (row: string, host: DeckSection) =>
+    open != null && open.row === row && open.host === host;
   // Open an instrument from somewhere else in the page (section 1's "how you'd prove it") and
   // take the user to it — an explicit, labelled move, never a silent teleport.
   const openAt = (key: LabStationKey, host: DeckSection) => {
-    setOpen({ key, host });
+    setOpen({ row: key, host });
     jump(host);
   };
 
@@ -631,7 +636,7 @@ export function LabDeck({
             id="ld-prove-experiments"
             name={t("lab.labDeck.prove.experimentsName")}
             sub={t("lab.labDeck.prove.experimentsLine")}
-            expanded={open?.host === "prove" && open.key === "optimize"}
+            expanded={isOpen("optimize", "prove")}
             onToggle={() => toggle("optimize", "prove")}
           >
             <ExperimentBench />
@@ -650,8 +655,8 @@ export function LabDeck({
               sub={p.because}
               reading={stationReading(p.station, facts, t)}
               measured={stationHasReading(p.station, facts)}
-              expanded={isOpen(p.station, "diagnose")}
-              onToggle={() => toggle(p.station, "diagnose")}
+              expanded={isOpen(p.key, "diagnose")}
+              onToggle={() => toggle(p.key, "diagnose")}
             >
               {instrumentBody(p.station)}
             </DeckRow>

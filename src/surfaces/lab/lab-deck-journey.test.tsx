@@ -293,6 +293,30 @@ describe("item 14 — diagnostics is reachable by saying what's wrong, not by kn
     expect(changed.getAttribute("aria-expanded")).toBe("false");
     expect(delay.getAttribute("aria-expanded")).toBe("true");
   });
+
+  // bug→guard (self-review round 6, 2026-07-29): the test above picked two rows that route to
+  // DIFFERENT instruments, so it never touched the real hazard. Two problem rows legitimately share
+  // one instrument — "The game hitches or stutters" and "My FPS jumps around" both open Benchmark
+  // (PROBLEM_STATION in lab-deck-data.ts) — and the open slot used to key on (station, section),
+  // so a single click expanded BOTH rows and mounted the benchmark twice. Pin the rows that share
+  // a station specifically; a duplicate instrument is the one thing this slot exists to prevent.
+  it("rows that share ONE instrument still open independently — a click never expands two", () => {
+    const c = renderDeck();
+    const stutter = door(c, "ld-problem-stutter")!;
+    const unstable = door(c, "ld-problem-unstableFps")!;
+    // Same destination, by design — that is what made the old keying collide.
+    expect(stutter).not.toBe(unstable);
+
+    fireEvent.click(stutter);
+    expect(stutter.getAttribute("aria-expanded")).toBe("true");
+    expect(unstable.getAttribute("aria-expanded")).toBe("false");
+    expect(c.querySelectorAll(".ld-row-body").length).toBe(1);
+
+    fireEvent.click(unstable);
+    expect(stutter.getAttribute("aria-expanded")).toBe("false");
+    expect(unstable.getAttribute("aria-expanded")).toBe("true");
+    expect(c.querySelectorAll(".ld-row-body").length).toBe(1);
+  });
 });
 
 describe("item 15 — orientation is in the layout, not in a paragraph of explanation", () => {

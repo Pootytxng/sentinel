@@ -2,7 +2,15 @@
 .cmp-confirm-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  /* The confirm is the app's topmost blocking decision — the last thing between a user and a real
+     change to their machine — so nothing may paint over it except the window chrome (9000/9001,
+     which stays reachable by design). It used to sit at 200, BELOW every full-screen overlay in the
+     app (FirstCheck 999, Onboarding/SetupTour/GamingMode 1000, Term/WhatsThis 1200). ConfirmProvider
+     renders this backdrop as a DOM sibling of the app tree (main.tsx), so from inside any of those
+     the confirm was painted under an opaque overlay: invisible and un-clickable, while the keyboard
+     path still worked. A mouse user applying the #1 rec from the first-check arc saw the switch move
+     and then nothing. Guarded by src/modal-stacking-guard.test.ts (self-review round 6). */
+  z-index: 2000;
   display: flex;
   align-items: center;
   justify-content: center;

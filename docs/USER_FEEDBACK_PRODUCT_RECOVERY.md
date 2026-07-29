@@ -852,7 +852,25 @@ Lab or its rollback path during this train."_).
 | 5 | Lab candidate information architecture | `0102a14` (five-section decision journey + `compy_lab_deck` flag + flag guard) |
 | 6 | Lab candidate visual layer | `ff1a773` (section rail lit by IntersectionObserver, `aria-current` nav, both motion branches, <640px collapse) |
 | 7 | journey tests + pruning plan | `3e22a7c` (28 journey tests) + _(this commit — §3 inventory)_ |
-| 8 | installed-review fixes | `0937137` (rounds 1–3) + `c783d63` (round 4: one name on the whole action path + class guard) + _(this commit — round 5: the arc is a real modal for the keyboard)_ |
+| 8 | installed-review fixes | `0937137` (rounds 1–3) + `c783d63` (round 4: one name on the whole action path + class guard) + `c15d1e2` (round 5: the arc is a real modal for the keyboard) + _(this commit — round 6: the confirm is never buried; one click never opens two rows)_ |
+
+Round 6 found two **pre-existing** defects neither the tests nor five prior review rounds caught,
+both structural, both now guarded:
+
+- **The confirm dialog was buried under every full-screen overlay.** `.cmp-confirm-backdrop` sat at
+  `z-index: 200`; `ConfirmProvider` renders it as a DOM sibling of the whole app tree, so from
+  inside FirstCheck (999), Onboarding/SetupTour/Gaming Mode (1000) or Term/WhatsThis (1200) the
+  confirm painted *underneath* an opaque layer — invisible and un-clickable, while its DOM and
+  keyboard trap kept working. A mouse user applying the #1 rec from the arc saw the switch move and
+  then nothing: the safety confirmation for a real mutation, swallowed by paint order. Raised to
+  `2000` (below the window chrome at 9000, which stays reachable by design).
+  Guard: `src/modal-stacking-guard.test.ts`.
+- **One click expanded two problem rows.** "The game hitches or stutters" and "My FPS jumps around"
+  both route to Benchmark by design, but LabDeck's single open-slot keyed on `(station, section)`,
+  so clicking either expanded both and mounted the benchmark twice — the exact invariant the slot
+  exists to hold. Now keyed on row identity. The pre-existing "one instrument at a time" test
+  compared two rows with *different* stations, which is why it never saw this.
+  Guard: the shared-station case in `lab-deck-journey.test.tsx`.
 
 ### Self-review findings NOT fixed, and why (owner call, round 5)
 
