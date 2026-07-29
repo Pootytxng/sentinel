@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
 
 // User dismissal ("Not for me", eligibility train) — deliberate, reversible declines of advisory/
 // applicable recs. PREFERENCES, not receipts: frontend localStorage is the right durability (survives
@@ -23,21 +23,74 @@ function persist(s: Set<string>): void {
   }
 }
 
+// ONE set per session, not one per caller.
+//
+// THE BUG (self-review round 8, 2026-07-29): this hook used to be `useState(read)`, which handed
+// every caller its OWN copy of the set. Four surfaces ask for it — Check, Fix, LabDeck and (now)
+// OptimizeStation — and they drifted apart the instant any ONE of them dismissed something: the
+// mutating instance re-rendered, the others kept a stale snapshot and went on counting a set-aside
+// rec as outstanding. Live proof on a single screen: the Lab's safe-stack ring read "1 left to
+// enable below", three lines above Fix's "Nothing waiting — no changes to make on this rig right
+// now", with that same rec sitting in its own "Dismissed (1)" pile. Three contradictory answers to
+// "what should I do next?" in one render — precisely the disorientation this train exists to kill.
+//
+// A module-level store read through useSyncExternalStore makes it unrepresentable: one set, and
+// every subscriber re-renders together. Guarded by dismissed.test.ts + the live-journey assertion
+// in optimize-gauge-dock-guard.test.tsx.
+let current: Set<string> = read();
+const listeners = new Set<() => void>();
+
+function emit(): void {
+  // Copy first: a listener that unsubscribes while we notify must not reshape the set mid-iteration.
+  for (const notify of [...listeners]) notify();
+}
+
+function commit(next: Set<string>): void {
+  current = next;
+  persist(next);
+  emit();
+}
+
+function subscribe(notify: () => void): () => void {
+  // Nobody was watching, so nothing has been keeping `current` honest — another window (or a test
+  // seeding localStorage directly) may have written since the last unmount. Re-read as the first
+  // watcher arrives; React re-checks the snapshot immediately after subscribing, so a change here
+  // is picked up rather than swallowed.
+  if (listeners.size === 0) current = read();
+  listeners.add(notify);
+  return () => {
+    listeners.delete(notify);
+  };
+}
+
+// Compy runs a second webview (the FPS overlay). If anything there ever writes this key, the same
+// one-truth rule has to hold across windows — `storage` only fires in the OTHER document, so this
+// costs the writing window nothing.
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.key !== null && e.key !== DISMISSED_KEY) return;
+    current = read();
+    emit();
+  });
+}
+
 export function useDismissed() {
-  const [dismissed, setDismissed] = useState<Set<string>>(read);
-  const dismiss = (id: string) =>
-    setDismissed((prev) => {
-      const next = new Set(prev);
-      next.add(id);
-      persist(next);
-      return next;
-    });
-  const restore = (id: string) =>
-    setDismissed((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      persist(next);
-      return next;
-    });
+  const dismissed = useSyncExternalStore(
+    subscribe,
+    () => current,
+    () => current,
+  );
+  const dismiss = (id: string) => {
+    if (current.has(id)) return; // idempotent — and no pointless re-render storm
+    const next = new Set(current);
+    next.add(id);
+    commit(next);
+  };
+  const restore = (id: string) => {
+    if (!current.has(id)) return;
+    const next = new Set(current);
+    next.delete(id);
+    commit(next);
+  };
   return { dismissed, dismiss, restore };
 }

@@ -43,6 +43,23 @@ describe("useDismissed", () => {
     expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual(["b"]);
   });
 
+  // GUARD (self-review round 8): the hook used to be `useState(read)`, so every caller held its OWN
+  // set and they desynced the moment one dismissed something. Live symptom: the Lab's safe-stack
+  // ring said "1 left to enable below" three lines above Fix's "Nothing waiting" — same screen,
+  // same render, two answers. Four surfaces share this state (Check, Fix, LabDeck, OptimizeStation),
+  // so "one set per session" is the invariant, not an optimization.
+  it("shares ONE set across concurrent callers — a dismiss in one is visible in the others", () => {
+    const a = renderHook(() => useDismissed());
+    const b = renderHook(() => useDismissed());
+    act(() => a.result.current.dismiss("game-mode"));
+    expect(a.result.current.dismissed.has("game-mode")).toBe(true);
+    expect(b.result.current.dismissed.has("game-mode")).toBe(true);
+    // ...and the same for the un-dismiss direction, from the OTHER caller.
+    act(() => b.result.current.restore("game-mode"));
+    expect(b.result.current.dismissed.has("game-mode")).toBe(false);
+    expect(a.result.current.dismissed.has("game-mode")).toBe(false);
+  });
+
   it("degrades to empty on malformed or non-array stored JSON (never throws)", () => {
     localStorage.setItem(KEY, "{not json");
     expect(renderHook(() => useDismissed()).result.current.dismissed.size).toBe(0);

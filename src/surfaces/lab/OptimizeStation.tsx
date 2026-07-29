@@ -5,6 +5,7 @@ import Fix from "../Fix";
 import Check from "../Check";
 import { GamingMode } from "../GamingMode";
 import { deriveReverted } from "../use-scan";
+import { useDismissed } from "../dismissed";
 import { resolveCarried } from "../../data/check-handoff";
 import { recDisplayLabel } from "../../data/friendly-labels";
 import { useReducedMotion } from "../../design/use-motion";
@@ -100,8 +101,18 @@ export function OptimizeStation(
   // which read as contradicting the corner gauge's ready count; owner-sweep catch 2026-07-10).
   const revertedIds = useMemo(() => new Set(reverted.map((r) => r.rec_id)), [reverted]);
   const pendingSafe = safeStack.filter((r) => !r.currently_applied);
-  const driftedPending = pendingSafe.filter((r) => revertedIds.has(r.id)).length;
-  const freshPending = pendingSafe.length - driftedPending;
+  // ...and by dismissal, which OUTRANKS drift exactly as Fix.tsx does (isDismissed is tested
+  // before the drift split there, so one rec can never be both "set aside" and "restore this").
+  // The gauge's own numbers deliberately do NOT move: applied/total reports the RIG's state, and
+  // setting a tweak aside doesn't turn anything on. The CAPTION is the action claim, so the
+  // caption is what has to stop counting set-aside work as "left to enable" — before this split
+  // the ring said "1 left to enable below" directly above Fix's "Nothing waiting", because
+  // nothing here had ever consulted the dismissal set (self-review round 8).
+  const { dismissed } = useDismissed();
+  const setAsidePending = pendingSafe.filter((r) => dismissed.has(r.id)).length;
+  const activePending = pendingSafe.filter((r) => !dismissed.has(r.id));
+  const driftedPending = activePending.filter((r) => revertedIds.has(r.id)).length;
+  const freshPending = activePending.length - driftedPending;
   // The check handoff (recovery items 3/4): what the user was just told about, resolved against the
   // catalog THIS station can see right now — not a replay of what Check said. A rec applied since,
   // or gone from the catalog entirely, is stated as that; only still-pending ones lead the list.
@@ -223,15 +234,23 @@ export function OptimizeStation(
                 unconsented action to first-contact readers. */}
             {appliedSafe >= totalSafe
               ? t("lab.optimizeStation.allApplied", { total: totalSafe })
-              : driftedPending === 0
-                ? t("lab.optimizeStation.freshLeft", { count: freshPending })
-                : freshPending === 0
-                  ? t("lab.optimizeStation.driftedRestore", { count: driftedPending })
-                  : t("lab.optimizeStation.mixedLeft", {
-                      totalLeft: freshPending + driftedPending,
-                      fresh: freshPending,
-                      drifted: driftedPending,
-                    })}
+              : activePending.length === 0
+                ? /* Everything still off is off BY CHOICE. Saying "all applied" here would be a
+                     lie about the rig; saying "N left to enable" would be a lie about the list. */
+                  t("lab.optimizeStation.nothingLeftSetAside", { count: setAsidePending })
+                : driftedPending === 0
+                  ? t("lab.optimizeStation.freshLeft", { count: freshPending })
+                  : freshPending === 0
+                    ? t("lab.optimizeStation.driftedRestore", { count: driftedPending })
+                    : t("lab.optimizeStation.mixedLeft", {
+                        totalLeft: freshPending + driftedPending,
+                        fresh: freshPending,
+                        drifted: driftedPending,
+                      })}
+            {/* Reconciles the arithmetic when work remains AND something is set aside: without it
+                the ring's 8/9 minus "1 left to enable" leaves a rec the user can't account for. */}
+            {activePending.length > 0 && setAsidePending > 0 &&
+              t("lab.optimizeStation.setAsideNote", { count: setAsidePending })}
           </p>
         </div>
       )}

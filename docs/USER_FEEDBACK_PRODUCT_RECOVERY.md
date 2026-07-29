@@ -852,7 +852,7 @@ Lab or its rollback path during this train."_).
 | 5 | Lab candidate information architecture | `0102a14` (five-section decision journey + `compy_lab_deck` flag + flag guard) |
 | 6 | Lab candidate visual layer | `ff1a773` (section rail lit by IntersectionObserver, `aria-current` nav, both motion branches, <640px collapse) |
 | 7 | journey tests + pruning plan | `3e22a7c` (28 journey tests) + _(this commit — §3 inventory)_ |
-| 8 | installed-review fixes | `0937137` (rounds 1–3) + `c783d63` (round 4: one name on the whole action path + class guard) + `c15d1e2` (round 5: the arc is a real modal for the keyboard) + `a079edd` (round 6: the confirm is never buried; one click never opens two rows) + _(this commit — round 7: a proof door lands on its instrument wherever it lives)_ |
+| 8 | installed-review fixes | `0937137` (rounds 1–3) + `c783d63` (round 4: one name on the whole action path + class guard) + `c15d1e2` (round 5: the arc is a real modal for the keyboard) + `a079edd` (round 6: the confirm is never buried; one click never opens two rows) + `75ebc91` (round 7: a proof door lands on its instrument wherever it lives) + _(this commit — round 8: one dismissal set, and a ring that counts it)_ |
 
 Round 6 found two **pre-existing** defects neither the tests nor five prior review rounds caught,
 both structural, both now guarded:
@@ -887,6 +887,34 @@ Round 7 then found a third one of the same shape — a control that looks like i
   happens to live in `"prove"` — so the hardcoded section was always accidentally right.
   Guard: the outside-section-3 case in `lab-deck-journey.test.tsx`, negative-control-proven against
   both halves of the fix (hardcoded host → fails; unbound `<details>` → fails).
+
+Round 8 found a fourth, and the worst of the four for this train's governing question — the app
+contradicting itself about what to do next, on one screen, in one render:
+
+- **Three answers to "what's left?" at once.** The Lab's safe-stack ring read *"1 left to enable
+  below"*; three lines under it the list said *"Nothing waiting — no changes to make on this rig
+  right now"*; and the "Dismissed (1)" pile under that said the rec was *"out of your active
+  count"*. Two independent causes, both structural. (a) `useDismissed` was `useState(read)`, so
+  each of its **four** callers (Check, Fix, LabDeck, OptimizeStation) held a private copy of the
+  set and they desynced the instant one of them dismissed anything. (b) `OptimizeStation`'s gauge
+  math had **never consulted the dismissal set at all** — so even perfectly synced hooks would
+  have left the caption wrong. Fixed as a class, not an instance: the hook is now a module-level
+  store read through `useSyncExternalStore` (one set per session, all subscribers re-render
+  together, plus a `storage` listener for the second webview), and the station splits its pending
+  stack by dismissal with **dismissed outranking drift**, exactly as `Fix.tsx` orders it.
+  The ring's own numbers deliberately do NOT move: `applied/total` reports the **rig's** state, and
+  setting a tweak aside turns nothing on. The caption is the action claim, so the caption is what
+  had to stop counting set-aside work as outstanding.
+  **This is a pre-existing PRODUCTION defect, not one the candidate introduced** —
+  `OptimizeStation` is rendered by `LabConsole` (the production-default Lab) and by `Lab.tsx` as
+  well as by the deck candidate. Fixed on this branch only; nothing shipped. See the round-6
+  precedent above for the same shape.
+  Guards: the concurrent-callers case in `src/surfaces/dismissed.test.ts`, and two **journey**
+  assertions in `src/surfaces/lab/optimize-gauge-dock-guard.test.tsx` that open a real row, press
+  the real "Not for me", and read the real caption. Negative-control-proven against **both** halves
+  (old `useState` hook → all three fail; station ignoring dismissals → both journey tests fail).
+  Why no test saw it: the two halves are individually green-able, and every existing gauge test
+  fixtured zero dismissals. Only the journey assertion crosses the seam.
 
 ### Self-review findings NOT fixed, and why (owner call, round 5)
 
