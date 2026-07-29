@@ -37,10 +37,17 @@ genuinely reduces mistakes.
 
 ## 3. Session length — the #1 lever
 
-Compact around 80–120k context; avoid working above 150k. **This is why the auto-compact window
-in `.claude/settings.json` is set to 150000, not higher** — it's not a technical ceiling (Opus's
-real window is far larger), it's this deliberate quality/cost target: smaller working sets mean
-less "lost in the middle" degradation on long threads, on top of the direct token savings.
+Compact around 80–120k context; avoid working above 150k. The auto-compact window in
+`.claude/settings.json` was set to 150000 to enforce that — not a technical ceiling (Opus's real
+window is far larger), a deliberate quality/cost target: smaller working sets mean less "lost in
+the middle" degradation on long threads, on top of the direct token savings.
+
+⚠️ **Both numbers in this paragraph are UNDER TEST on `feat/user-feedback-lab-recovery`, where the
+window is provisionally 300000 — see §7.** The 150k ceiling was never empirically re-derived, and a
+measured session at 150000 spent 2.17M output tokens across **58 boundaries in 18.8 hours** while its
+peak single request only reached ~119k. That is the case for testing the ceiling rather than
+restating it. §7 is a bounded experiment with a pass/fail condition, **not** a new default: on every
+other branch, and unless and until §7 concludes, the numbers above stand as written.
 Refresh is now automatic (§5) — don't manually `/clear`/`/compact` unless the driver prompt says
 "NO REFRESH." Don't keep one giant thread alive because it "knows everything"; persist state to
 disk (BACKLOG/spec/handoff) instead, per the context-size-advisor hook's own instruction.
@@ -64,9 +71,9 @@ match these exactly or point back to this section rather than restate its own co
 |---|---|---|---|
 | Handoff target | 80–120k | Ideal working range (§3, unchanged) | this doc only |
 | Ceiling | 150k | "Avoid working above" (§3, unchanged) | this doc only |
-| `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | 150000 | The one literal env-var value; native auto-compact fires at ~92–95% of it (~140k) | `.claude/settings.json` — the ONLY place this literal should be set |
+| `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | **300000 on `feat/user-feedback-lab-recovery` (§7 trial, provisional); 150000 elsewhere** | The one literal env-var value; native auto-compact fires at ~92–95% of it (≈276–285k at 300000, ~140k at 150000) | `.claude/settings.json` — the ONLY place this literal should be set. Project-level only; the global `~/.claude/settings.json` does not set it |
 | Advisor warn threshold | 85% of the window above, computed at runtime | When the Stop hook injects a persist-to-disk instruction | `.claude/hooks/context-size-advisor.mjs` — reads the env var, does not hardcode a copy |
-| Audit red-flag | 200k peak context | Sanity check only — should never be reached if auto-compact is working; hitting it means compaction failed to fire, not a target to approach | `.claude/skills/usage-audit/SKILL.md`, `scripts/usage-audit.mjs` |
+| Audit red-flag | 200k peak context — **but see §7: a hard-coded literal that is WRONG for a 300000 window** | Sanity check only — should never be reached if auto-compact is working; hitting it means compaction failed to fire, not a target to approach | `.claude/skills/usage-audit/SKILL.md`, `scripts/usage-audit.mjs` (hard-codes `200_000`; does not derive from the window) |
 | Autopilot continuation cap | 2 | Hard code clamp (was: unenforced doc convention) on how many tasks autopilot chains in one session, so it can't manufacture a >150k context on its own | `.claude/hooks/stop-continue.mjs` (`MAX_CONTINUES`) |
 
 Unrelated metric that happens to also round to "200k" and should not be confused with the audit
@@ -109,9 +116,10 @@ than papered over:
   pointers left — ~21 KB off the board, back under the flag (107 KB). Remaining size is inherent
   cycle-log verbosity; next lever if it regrows past the flag: Phase-A detail (~37 KB, needs
   cross-reference re-pointing first — its Phase-D row and closure note cite lines inside it).
-- **The 150k window number itself is inherited, not re-derived.** It was set 2026-07-02 from that
-  period's burn pattern; nobody has re-tested whether 150k is still the right cutoff specifically
-  for Opus 4.8. Internally consistent now (§5), not empirically re-proven optimal.
+- **The 150k window number itself is inherited, not re-derived — NOW UNDER TEST (§7).** It was set
+  2026-07-02 from that period's burn pattern; nobody re-tested whether 150k is the right cutoff for
+  the current model. Internally consistent (§5), never empirically re-proven optimal. §7 is the
+  first attempt to actually measure it instead of inheriting it.
 - **`docs/LANE_WORKFLOW.md`'s "Workflow tool" — CONFIRMED + GUARDED (2026-07-22).** The live
   PreToolUse `tool_name` is `Workflow`, captured empirically via a temporary catch-all logging
   hook + a no-op workflow run (0 agents), not assumed. Now guarded:
@@ -123,3 +131,66 @@ than papered over:
   deliberately NOT built. To close this: in a live CC session, run a Workflow-tool call once and
   check `tool_name` in the hook debug log (`--debug`) or via a temporary catch-all PreToolUse
   logging hook, then wire the real matcher.
+
+## 7. The 300k window trial (2026-07-29, `feat/user-feedback-lab-recovery` only)
+
+**Status: PROVISIONAL CONTROLLED EXPERIMENT — not a proven optimum, not a new default.**
+`CLAUDE_CODE_AUTO_COMPACT_WINDOW` is `300000` in this branch's `.claude/settings.json` and `150000`
+everywhere else. Nothing about the trial makes 300000 correct; it makes it *measured*. Work Control
+issue **#15**.
+
+Held unchanged by the trial: `model` (`opus[1m]`), the effort setting, `CLAUDE_CODE_SUBAGENT_MODEL`
+(`sonnet`), and the global `~/.claude/settings.json` — which never set the window at all, so this is
+purely a project-level change.
+
+### Preserved baseline — measured at 150000
+
+| Metric | Baseline |
+|---|---|
+| Compaction boundaries | 58 |
+| Duration | 18.8 hours |
+| Boundary rate | ≈ 7.4 / hour |
+| Output tokens | 2.17M |
+| Peak observed request | ≈ 119k |
+
+This baseline is the trial's control. **Do not overwrite it** — replacing it with trial numbers
+destroys the comparison and leaves a doubled window justified by nothing.
+
+### What the trial measures
+
+1. **Boundaries/hour during implementation** — against ≈7.4/hr.
+2. **Output tokens per completed stage** — cost per unit of work, not raw session total (a longer
+   session at a bigger window can spend more in total while spending less per stage).
+3. **Repeated file reads** — re-reading the same file after a boundary is the direct cost of a
+   boundary; fewer boundaries should cut it.
+4. **Factual drift after compaction** — whether post-compaction state assertions stay true.
+
+**Pass/fail is not token-only: a drift regression fails the trial no matter how many tokens it
+saves.** Compy's honesty rules are the product; a cheaper session that misremembers gate state is a
+loss, not a saving. Likewise §1/§2/§4 (subagent split, Workflow restraint, checkpointed self-review)
+are untouched — a bigger window is not licence to run longer without persisting state to disk.
+
+### Known inconsistencies this trial exposes (named, not papered over)
+
+- **The advisor is already correct.** `context-size-advisor.mjs` reads the env var at runtime and
+  warns at 85%, so the warn point moves to ~255k on its own. Its `|| 150_000` is a fallback for a
+  missing env var, not a second copy of the number. No hook edit was needed or made.
+- **~255k warn vs the 150k ceiling (§3) is a real, deliberate contradiction during the trial.** The
+  ceiling is the hypothesis under test; measure 1–4 decide whether it returns as written, moves, or
+  is retired. Until then §3's ceiling stands off-branch.
+- **`scripts/usage-audit.mjs`'s `200_000` red flag is wrong for a 300000 window** and will emit a
+  false 🔴 for peaks that are simply normal pre-compaction context (compaction fires ≈276–285k).
+  **When reading a weekly report against this branch, treat >300k — not >200k — as "compaction
+  failed to fire."** Deferred, not done: deriving that flag from the configured window is a
+  `scripts/` change outside #15's claimed scope, and the script has no guard test, so under the
+  bug→guard law it needs a guard authored with it. **Do that before 300000 is adopted anywhere
+  beyond this branch.**
+- **`.claude/hooks/` is gitignored (`.gitignore:49`) and absent from the `sentinel-feedback`
+  worktree** — the hooks exist only under `C:\Users\Kuya\code\sentinel\.claude\hooks\`. Auto-compaction
+  is native and env-var-driven, so **the trial is valid here**, but the advisory Stop-hook nudge and
+  the autopilot continuation cap do not fire in this worktree. Persisting state to disk before a
+  boundary is therefore a manual discipline here, not a prompted one.
+- **`docs/superpowers/specs/2026-07-01-token-routing-protocol.md:93` still reads "currently 150000."**
+  Left as-is: that section is already marked ⚠️ SUPERSEDED and defers to this file's §5 for the current
+  number in the same sentence, and `docs/` is outside #15's claimed scope. This file stays the single
+  reconciled home for the window value.
