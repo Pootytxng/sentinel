@@ -70,8 +70,24 @@ tree at `9caf2c5`, not taken from a spec or a "shipped" banner.
 
 > **CONCLUSION: the runtime-default Lab face is `LabConsole` (reached through `LabGround`).**
 > `LabV2` → `Lab.tsx` is the `compy_lab_ground="0"` failsafe only (`src/App.tsx:1710`).
-> **`LabBento` is NOT imported by `App.tsx` at all — it is an orphaned generation.**
 > This is the "six-station mega-room" named by owner item 13 and the overload of tester item 10.
+
+**Full face map (corrected after the inventory sweep — an earlier read of this file said `LabBento`
+was orphaned; it is not, see below):**
+
+| Face | Reachable when | Chain |
+| --- | --- | --- |
+| `LabConsole` (**runtime default**) | always, by default | `App.tsx:1682` → `LabGround.tsx:102` |
+| `Lab.tsx` classic list | `compy_lab_ground="0"` **and** `compy_lab_bento="0"` | `App.tsx:1710` → `LabV2.tsx:90` → `Lab.tsx` |
+| `LabBento` grid | `compy_lab_ground="0"` **and** `compy_lab_bento` on (**its own default is ON**) | `LabV2` → `Lab.tsx:335-352` `{bento && !ground && <LabBento …/>}` |
+| `Lab.tsx` guided numbered spine | `compy_lab_ground="0"`, `compy_lab_bento="0"`, `compy_lab_guided="1"` (default **OFF**) | `Lab.tsx:462-499` |
+| classic `<Lab>` inside `App.tsx`'s `roomPanels` (`App.tsx:1339`) | **never for the Lab tab — dead code** | `roomPanels` is spread once (`App.tsx:1721`) behind `activeTab !== "Lab"` (`App.tsx:1720`) |
+
+Flag defaults (`src/design/theme.ts`): `compy_lab_ground` **ON** (270-277) · `compy_lab_bento`
+**ON** (235-244) · `compy_lab_guided` **OFF** (206-213). **None of the three has a Settings UI row** —
+they were removed in the 2026-07-11 flag-debt sweep (`src/surfaces/Settings.tsx:242-251`), so they
+are devtools/localStorage-only. Consequence: the failsafe path a user could actually reach is
+`LabV2 → Lab → LabBento`, not the classic list.
 
 ### 0.2 The Check → Optimize seam as it exists today
 
@@ -190,9 +206,14 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   different rooms with no hallway. The fix class is a routed hand-off (check verdict → deep link into
   Lab→Optimize with the found items highlighted), not more UI."*
 - **User problem:** the finding and the fix live in different rooms with no hallway between them.
-- **Current implementation:** the `compy_lab_open_station` localStorage deep link
-  (`App.tsx:1376` → `LabConsole.tsx:201-202`) opens the Optimize station. It is a **string flag with
-  no payload**, only written from the first-run arc.
+- **Current implementation (traced):** the `compy_lab_open_station` localStorage deep link
+  (`App.tsx:1376` → `LabConsole.tsx:201-206`, read-once-then-`removeItem`) opens the Optimize
+  station. It is a **bare string literal on both ends** — no shared type, no payload, written only
+  from the first-run arc. The typed room-navigation mechanism that *does* exist (`DOOR_MAP`,
+  `room-shell.tsx:26-33`) has **no `check` edge at all** (`DOOR_MAP.check === null`) and carries no
+  payload, so it cannot express "open Lab already on Optimize, holding these findings." Nor is any
+  room/tab persisted: `activeTab` is plain `useState`, and no `compy_room`/`compy_last_room`-style
+  key exists anywhere in `src/` — the one-shot string is the entire cross-surface handoff.
 - **Status:** `PARTIAL`
 - **Intended correction:** replace the bare string flag with a **durable typed handoff contract**
   (not DOM querying, not text matching) that carries the exact recommendation IDs and the context of
@@ -236,9 +257,17 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   no-safe-switch case (`docs/BACKLOG.md:48-51`).
 - **User problem:** a card the user cannot act on teaches them the section is dead. A card that
   offers the WRONG action (§0.3) is worse — it lies about what Compy can do.
-- **Current implementation:** the audited path exists in `Fix.tsx` (one-click `TrustSwitch` rows,
-  `GuidedRow` doors at `Fix.tsx:614-712`, `Not for me` dismiss). `FirstCheck.tsx:228-240` picks the
-  wrong branch for the aggregate.
+- **Current implementation (journey traced end-to-end):** the audited path exists and is sound in
+  `Fix.tsx` — `TrustSwitch` rows, `GuidedRow` doors (`Fix.tsx:614-712`), `Not for me` dismiss (only
+  when not applied), the Dismissed pile's Restore, the REFUSE_PILE's "Read the autopsy" → all resolve
+  to a real action or an honest empty state. `Check.tsx:724-757` likewise renders a real
+  `Walkthrough` for its non-appliable branch. **`FirstCheck.tsx:180-184` and `:236-240` are the
+  confirmed dead end:** both the #1 spotlight and the #2..N expandable rows emit a bare
+  `<span className="fc-chip fc-chip-muted">Hands-on fix — no switch to flip, but Compy shows you the
+  steps</span>` — **static text, no button, no link, no `onClick`, and no walkthrough lookup exists
+  in that file at all.** The copy promises steps the screen cannot open. That same branch is what
+  the aggregate wrongly falls into (§0.3), so a one-click-appliable tweak is announced as hands-on
+  *and* given nothing to open.
 - **Status:** `PARTIAL`
 - **Intended correction:** expose audited direct action where it exists; where Compy cannot safely
   apply, open the **real** guided steps and say why manual action is required; always retain
@@ -284,10 +313,31 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   sidebar items + some buttons (Monitor 'Overlay', 'Start Capture') instead of the Compy reticle
   cursor; keep ONE cursor."* (`docs/BACKLOG.md:40-41`)
 - **User problem:** the pointer changing identity between regions reads as breakage, not style.
-- **Current implementation:** `compy_hud_frame` (DEFAULT ON) mounts a shell-scoped global reticle,
-  with stage-level `ReticleCursor` instances self-deferring (`LabConsole.tsx`). Coverage across
-  surfaces is under audit (background inventory pending).
-- **Status:** `UNRESOLVED`
+- **Current implementation (audited — 231 `cursor:` declarations across `src/**/*.css`):**
+  `compy_hud_frame` (DEFAULT ON, `theme.ts:634-643`, no Settings row) makes `ShellV2.tsx:234` mount
+  ONE app-wide `ReticleCursor` scoped to the whole shell — rail, topbar and every room. The three
+  stage-scoped mounts (`LabConsole.tsx:333`, `MonitorConsole.tsx:537`, `HomeConsole.tsx:823`) render
+  `null` at default settings (`ReticleCursor.tsx:29` `standDown`). Four concrete defects found:
+  1. **`reticle.css:11-14` applies `cursor: none !important` to `.lc-has-reticle *`**, and
+     `.lc-has-reticle` is toggled on `pointerenter` of the *entire shell* (`ReticleCursor.tsx:62-76`).
+     Only two carve-outs exist (text entry → `auto`, `:disabled` → `not-allowed`). So **14
+     purpose-built semantic cursors are dead by default**: 7 × `help` (`WhatsThis.css:17`,
+     `Term.css:12`, `App.css:220,705,1262,2634,2676`), 6 × `progress` (`TrustSwitch.css:23`,
+     `Check.css:94,521`, `Fix.css:429,493`, `Play.css:79`), 1 × `crosshair`
+     (`monitor-console.css:35`, the oscilloscope). **This is the mechanical cause of item 7.**
+  2. **Double cursor over disabled controls** — the CSS restores the native `not-allowed` glyph,
+     but `ReticleCursor.tsx`'s move handler only fades the bracket for text entry, never for
+     `:disabled`, so both are drawn at once.
+  3. **The app's own stated disabled convention is broken 19 ways to 10** — `not-allowed` in 10
+     rules (incl. `App.css:250`, which `home-console.css:178` cites as "the app-wide convention"),
+     `default` in 19 (`FirstCheck.css:385`, `Benchmark.css:93`, `Latency.css:114`,
+     `gaming-console.css:186,215`, `Settings.css:467,529`, …), and **no cursor at all** on
+     `ExperimentBench.css:69-72`.
+  4. **Zero test coverage** — the three reticle tests assert mount/unmount only; none reads a
+     `cursor` value. The `!important`-vs-specificity bug that `reticle.css:5-10` documents as
+     "reported 2026-07-22 on the sidebar nav rail + Monitor's capture/overlay buttons" — i.e.
+     *this exact tester complaint* — was fixed with **no regression guard**.
+- **Status:** `UNRESOLVED` (root cause now mechanically identified, not inferred)
 - **Intended correction:** decide **one** cursor — consistent standard Windows pointer **or** the
   existing Compy reticle applied everywhere. **Do not invent a third cursor.** Apply it consistently
   to navigation, buttons, cards, expandable rows, graph interactions, drag zones, disabled controls,
@@ -308,7 +358,12 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   — treat as one cursor pass.)"* (`docs/BACKLOG.md:40-41`)
 - **User problem:** a custom cursor is a constant, unavoidable piece of UI. If it reads as odd, it
   taxes every single interaction.
-- **Current implementation:** the reticle is on by default via `compy_hud_frame`.
+- **Current implementation (audited):** on by default via `compy_hud_frame`, app-wide. The tester's
+  word "square" is literally accurate: `reticle.css:29-79` draws a **26×26px square** box of four
+  **7×7px square L-brackets** (`1.5px solid var(--ix-accent)`); the only round element is a 2×2px
+  centre pip. It is a target-lock bracket, and per item 7 it *replaces* the help/progress/crosshair
+  cursors rather than coexisting with them — so the "weird" reticle is also the thing eating the
+  affordance signals the rest of the app is trying to send.
 - **Status:** `UNRESOLVED`
 - **Intended correction:** resolved **together with item 7 as one decision**. Because a tester found
   the square crosshair strange, **prefer the least surprising consumer behavior unless the
@@ -438,8 +493,11 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   delegated the call 2026-07-23: newest shipped face per room is the bless candidate.)
 - **User problem:** indirect but real — every parallel generation splits testing, guards, and design
   attention, and produces surfaces that disagree with each other.
-- **Current implementation (verified §0.1):** `LabGround`→`LabConsole` is default; `LabV2`→`Lab` is
-  the failsafe; **`LabBento` is imported by nothing.**
+- **Current implementation (verified §0.1 face map):** `LabGround`→`LabConsole` is the runtime
+  default; `LabV2`→`Lab` is the `compy_lab_ground="0"` failsafe, and inside that failsafe the face
+  actually rendered is **`LabBento`** (its own flag defaults ON) — the classic list needs *two*
+  flags flipped, the guided spine three. The one genuinely dead call site is the bare `<Lab>` in
+  `App.tsx:1339`'s `roomPanels`, excluded for the Lab tab by `activeTab !== "Lab"` (`App.tsx:1720`).
 - **Status:** `UNRESOLVED`
 - **Intended correction:** Phase 4 — full inventory + a deletion/migration plan. **Do not create
   another permanent Lab variation.** A temporary development flag for owner comparison is acceptable;
