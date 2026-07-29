@@ -531,6 +531,14 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
 
 ---
 
+> **ITEMS 9–15 — why they still read `UNRESOLVED` after the candidate shipped.** These seven are the
+> redesign items, and a redesign is not resolved by its author. The candidate exists, is built, is
+> installed, and is covered by journey tests 11–15/17/18/20 — but it sits behind `compy_lab_deck`
+> (default OFF) and the production-default `LabConsole` is untouched, so **no user's Lab has
+> changed.** They flip to `RESOLVED` when the owner accepts the candidate on the installed build —
+> and per item 18, not one minute before. The `_(pending)_` evidence line under each is that
+> acceptance, not missing work.
+
 ### ITEM 9 — Orientation must be inherent in layout and controls, not in explanatory copy
 
 - **Feedback (retained wording):** NAV-1 audit finding — *"Orientation lives in copy, not chrome."*
