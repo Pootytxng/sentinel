@@ -17,7 +17,9 @@
      journey — "Advanced instruments" — can never reach the top of the viewport: the browser clamps
      the scroll at the end of the page, so jumping to step 5 left its content hugging the 1280×720
      fold edge while steps 1–4 landed cleanly under the nav. This gives the scroller enough travel
-     for every nav target to land in the same place, so the five steps behave identically. */
+     that the last step clears the sticky nav too. Measured at 1280×720: steps 1–4 land exactly on
+     the inset; step 5 still clamps at max scroll, ~92px further DOWN — more clearance than the
+     others, never less. Trailing room, not identical landings. */
   padding-bottom: min(34vh, 280px);
 }
 

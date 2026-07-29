@@ -1,0 +1,15 @@
+/* The quiet technical name beside a friendly headline. Same weight/size/colour as the card's own
+   `.rd-rec-tech` and the Lab's `.ld-move-tech` — the tweak's real name reads identically wherever
+   the user meets it. Inline-block so it never breaks mid-name when a row headline wraps. */
+.rec-name-tech {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  /* Same fallback chain the Lab's `.ld-move-tech` already proves: the instrument surfaces define
+     --ix-text-3, the arc and classic shell only define --faint, and neither may fall through to
+     `inherit` — an undefined token would paint the technical name in the HEADLINE's colour and
+     the quiet tag would read as part of the name. */
+  color: var(--ix-text-3, var(--faint, #7b7f8c));
+}

@@ -9,6 +9,8 @@ import { useConfirm } from "../design/ConfirmDialog";
 import { Walkthrough } from "../design/Walkthrough";
 import { RecDetailCard, type RecDetailCardLabels } from "../design/RecDetailCard";
 import { describePriority, type RecDetail } from "../data/rec-detail";
+import { recDisplayLabel, rowDisplayLabel } from "../data/friendly-labels";
+import { RecNameText } from "../design/RecName";
 import { walkthroughForKeyForLanguage, gpuVendor, type GpuVendor } from "./walkthroughs";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
 import { gpuRunningHot } from "../data/tuning-measure";
@@ -220,7 +222,9 @@ export default function Check({
 
   const applyRec = async (recId: string, recTitle: string) => {
     const ok = await confirm({
-      title: t("optimize.check.applyTitle", { title: recTitle }),
+      // Ask about the tweak by the name the user just read (friendly-labels), while the IPC call
+      // below keeps the raw catalog title — the Trust Ledger records what Compy did, not what it said.
+      title: t("optimize.check.applyTitle", { title: recDisplayLabel(recId, recTitle).headline }),
       body: t("optimize.check.snapshotConfirmBody"),
       confirmLabel: t("optimize.check.applyConfirmLabel"),
     });
@@ -249,7 +253,7 @@ export default function Check({
   // instead of "1 setting(s) — go to Optimize/Ledger". Re-applies via the snapshotted apply path.
   const applyReverted = async (rev: { rec_id: string; title: string }) => {
     const ok = await confirm({
-      title: t("optimize.check.turnOnTitle", { title: rev.title }),
+      title: t("optimize.check.turnOnTitle", { title: recDisplayLabel(rev.rec_id, rev.title).headline }),
       body: t("optimize.check.snapshotConfirmBody"),
       confirmLabel: t("optimize.check.turnItOn"),
     });
@@ -691,7 +695,9 @@ export default function Check({
                           {reverted.length === 1
                             ? t("optimize.check.revertedReasonSingle")
                             : t("optimize.check.revertedReasonMulti", {
-                                titles: reverted.map((r) => r.title).join(", "),
+                                titles: reverted
+                                  .map((r) => recDisplayLabel(r.rec_id, r.title).headline)
+                                  .join(", "),
                               })}
                         </p>
                         <div className="check-drift-actions">
@@ -706,7 +712,9 @@ export default function Check({
                                 ? t("optimize.check.turningOnEllipsis")
                                 : reverted.length === 1
                                   ? t("optimize.check.turnItBackOn")
-                                  : t("optimize.check.turnTitleOn", { title: rev.title })}
+                                  : t("optimize.check.turnTitleOn", {
+                                      title: recDisplayLabel(rev.rec_id, rev.title).headline,
+                                    })}
                             </button>
                           ))}
                         </div>
@@ -724,7 +732,9 @@ export default function Check({
                     <li key={lim.id} className="check-row">
                       <div className="check-row-main">
                         <div className="check-row-head">
-                          <span className="check-row-title">{lim.title}</span>
+                          <span className="check-row-title">
+                            <RecNameText label={rowDisplayLabel(lim.title, detailsFor(lim))} />
+                          </span>
                           <span className="check-conf">
                             {t("optimize.check.confidenceTag", { level: cap(lim.confidence) })}
                           </span>
@@ -761,6 +771,10 @@ export default function Check({
                 // action Compy can honestly offer for it — through the SAME audited apply path.
                 const details = detailsFor(lim);
                 const named = details.length > 1;
+                // A row that IS one tweak wears that tweak's display name — the same string the Lab,
+                // the confirm dialog and the card use. A count row or an advisory observation keeps
+                // its own words (rowDisplayLabel decides; see data/friendly-labels).
+                const rowLabel = rowDisplayLabel(lim.title, details);
                 // A row standing for exactly ONE named tweak can be declined as a whole; a row with
                 // no rec behind it (a pure advisory observation) has nothing specific to set aside.
                 const single = details.length === 1 ? details[0] : null;
@@ -773,7 +787,9 @@ export default function Check({
                   <li key={lim.id} className={named ? "check-row check-row-stacked" : "check-row"}>
                     <div className="check-row-main">
                       <div className="check-row-head">
-                        <span className="check-row-title">{lim.title}</span>
+                        <span className="check-row-title">
+                          <RecNameText label={rowLabel} />
+                        </span>
                         <span className="check-conf">
                           {t("optimize.check.confidenceTag", { level: cap(lim.confidence) })}
                         </span>
@@ -820,7 +836,9 @@ export default function Check({
                           className="check-dismiss"
                           disabled={applyingId !== null}
                           onClick={() => dismiss(single.id)}
-                          aria-label={t("optimize.check.recSetAsideAria", { title: single.title })}
+                          aria-label={t("optimize.check.recSetAsideAria", {
+                            title: recDisplayLabel(single.id, single.title).headline,
+                          })}
                         >
                           {t("optimize.fix.notForMe")}
                         </button>
@@ -834,7 +852,9 @@ export default function Check({
                             type="button"
                             className="check-restore"
                             onClick={() => restore(single.id)}
-                            aria-label={t("optimize.check.recRestoreAria", { title: single.title })}
+                            aria-label={t("optimize.check.recRestoreAria", {
+                              title: recDisplayLabel(single.id, single.title).headline,
+                            })}
                           >
                             {t("optimize.fix.restore")}
                           </button>
@@ -846,7 +866,7 @@ export default function Check({
                         applied={false}
                         busy={applyingId === (lim.linked ?? lim.id)}
                         onToggle={() => applyRec(details[0].id, details[0].title)}
-                        ariaLabel={t("optimize.check.applyAriaLabel", { title: lim.title })}
+                        ariaLabel={t("optimize.check.applyAriaLabel", { title: rowLabel.headline })}
                       />
                     ) : (
                       <span className="check-advisory">{t("optimize.check.advisoryBadge")}</span>
@@ -918,7 +938,9 @@ export default function Check({
                   {alreadyFine.map((i) => (
                     <li key={i.id} className="check-fine-row">
                       <span className="check-fine-mark" aria-hidden="true">✓</span>
-                      <span>{i.title}</span>
+                      <span>
+                        <RecNameText label={rowDisplayLabel(i.title, detailsFor(i))} />
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -944,7 +966,9 @@ export default function Check({
                   <li key={i.id} className="check-row check-row-info">
                     <div className="check-row-main">
                       <div className="check-row-head">
-                        <span className="check-row-title">{i.title}</span>
+                        <span className="check-row-title">
+                          <RecNameText label={rowDisplayLabel(i.title, detailsFor(i))} />
+                        </span>
                         {/* Named-place law (§2): link the SPECIFIC refusal to its EXACT Learn entry
                             via the quick-look (resolves only where an entry exists) — no generic
                             "read all of Learn" dump. */}

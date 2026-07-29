@@ -89,3 +89,38 @@ export function recDisplayLabel(id: string, title: string): RecDisplayLabel {
   if (!f) return { headline: title, tech: null, friendly: false };
   return { headline: f.headline, tech: f.tech ?? null, friendly: true };
 }
+
+/** The minimum a caller must know about a rec to name it: which one it is, and what the catalog
+ *  calls it. Structural so the display layer never has to import the whole RecDetail model. */
+export type NamedRec = { id: string; title: string };
+
+/**
+ * True when a limiter row's headline IS one rec's own catalog name — i.e. the row is not a count
+ * ("2 safe tweaks not applied") or a readiness observation, but the tweak itself wearing the row.
+ *
+ * This is the SAME condition under which a rec card hides its own title (it would be a duplicate),
+ * which is exactly why it lives here: the row and the card must agree about who is doing the naming,
+ * or the user gets the name twice — or, as shipped, gets two DIFFERENT names for one tweak.
+ */
+export function rowNamesItsRec(rowTitle: string, details: NamedRec[]): boolean {
+  return details.length === 1 && details[0].title === rowTitle;
+}
+
+/**
+ * What to print as the name of a limiter row.
+ *
+ * ONE NAME PER REC, PART 2 (self-review round 3, 2026-07-28). Part 1 routed the Lab's surfaces
+ * through `recDisplayLabel`; the Check surfaces were never converted, so a row that stands for a
+ * single rec printed the RAW catalog title — and because the card beneath then suppressed its own
+ * (friendly) name as a duplicate, the friendly name never appeared at all. A user met "Enable
+ * Windows Game Mode" in the check and "Help Windows focus on your game" in the Lab and had no way
+ * to know they were the same tweak. That is the orientation failure this train exists to fix, so
+ * the row resolves its name HERE like everything else.
+ *
+ * A row that is a count, or has no rec behind it, keeps its own title verbatim — renaming those
+ * would put a specific tweak's name on a row that stands for several, or for none.
+ */
+export function rowDisplayLabel(rowTitle: string, details: NamedRec[]): RecDisplayLabel {
+  if (!rowNamesItsRec(rowTitle, details)) return { headline: rowTitle, tech: null, friendly: false };
+  return recDisplayLabel(details[0].id, rowTitle);
+}

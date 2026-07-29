@@ -10,8 +10,10 @@ import { readFirstCheckTheater } from "../design/theme";
 import { useReducedMotion } from "../design/use-motion";
 import { recordLastCheck } from "./last-check";
 import { actionable, describePriority, type RecDetail } from "../data/rec-detail";
+import { recDisplayLabel, rowDisplayLabel, rowNamesItsRec } from "../data/friendly-labels";
 import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
 import { RecDetailCard, type RecDetailCardLabels } from "../design/RecDetailCard";
+import { RecNameText } from "../design/RecName";
 import "./FirstCheck.css";
 
 // Moment 2 of the first-experience arc — the first-run "first check" landing.
@@ -132,7 +134,10 @@ export default function FirstCheck({
   const applyRec = async (d: RecDetail) => {
     if (d.action !== "apply") return; // the audited path only dispatches APPLIABLE_REC_IDS
     const ok = await confirm({
-      title: `Apply "${d.title}"?`,
+      // The name the user just read on the row/card — asking "Apply <a name they've never seen>?"
+      // is how a confirm dialog stops being a confirmation. The IPC call below still sends the raw
+      // catalog title: the Trust Ledger and exports record what Compy really did.
+      title: `Apply "${recDisplayLabel(d.id, d.title).headline}"?`,
       body: "Compy snapshots the prior state so you can roll this back anytime.",
       confirmLabel: "Apply",
     });
@@ -160,6 +165,9 @@ export default function FirstCheck({
   const fixCount = limiters.length;
   const top = limiters[0] ?? null;
   const topDetails = detailsFor(top);
+  // When the #1 row IS a single tweak, it wears that tweak's display name — the same one the Lab
+  // prints. A count row ("2 safe tweaks not applied") or a readiness observation keeps its own words.
+  const topLabel = rowDisplayLabel(top?.title ?? "", topDetails);
   const rest = limiters.slice(1);
   const greenChecks = checks.filter((c) => rowVerdict(c.status) === "ok");
 
@@ -229,7 +237,9 @@ export default function FirstCheck({
             {top && (
               <div className="fc-spotlight">
                 <div className="fc-spotlight-tag">#1 biggest limiter</div>
-                <div className="fc-spotlight-title">{top.title}</div>
+                <div className="fc-spotlight-title">
+                  <RecNameText label={topLabel} />
+                </div>
                 <p className="fc-spotlight-reason">{top.reason}</p>
                 {topDetails.length === 0 ? (
                   // Nothing in the catalog behind this row (a readiness check, not a tweak). It gets
@@ -254,7 +264,7 @@ export default function FirstCheck({
                       <RecCard
                         key={d.id}
                         d={d}
-                        showTitle={topDetails.length > 1 || d.title !== top.title}
+                        showTitle={!rowNamesItsRec(top.title, topDetails)}
                         vendor={vendor}
                         arcV2={arcV2}
                         busy={applyingId === d.id}
@@ -288,6 +298,7 @@ export default function FirstCheck({
                 {rest.map((lim) => {
                   const open = openRestId === lim.id;
                   const details = detailsFor(lim);
+                  const label = rowDisplayLabel(lim.title, details);
                   return (
                     <div key={lim.id} className="fc-rest-item">
                       <button
@@ -295,7 +306,9 @@ export default function FirstCheck({
                         onClick={() => setOpenRestId(open ? null : lim.id)}
                         aria-expanded={open}
                       >
-                        <span className="fc-rest-title">{lim.title}</span>
+                        <span className="fc-rest-title">
+                          <RecNameText label={label} />
+                        </span>
                         <span className="fc-rest-right">
                           <span className="fc-rest-conf">
                             {lim.confidence[0].toUpperCase() + lim.confidence.slice(1)} confidence
@@ -313,7 +326,7 @@ export default function FirstCheck({
                             <RecCard
                               key={d.id}
                               d={d}
-                              showTitle={details.length > 1 || d.title !== lim.title}
+                              showTitle={!rowNamesItsRec(lim.title, details)}
                               vendor={vendor}
                               arcV2={arcV2}
                               busy={applyingId === d.id}
