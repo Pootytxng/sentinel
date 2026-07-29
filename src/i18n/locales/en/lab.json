@@ -108,6 +108,87 @@
   "labGround": {
     "masthead": "Proving ground"
   },
+  "labDeck": {
+    "sections": {
+      "move": "Your next best move",
+      "optimize": "Optimize",
+      "optimizeLine": "Everything Compy can change on this rig, grouped by what you're after.",
+      "prove": "Measure & prove",
+      "proveLine": "Record a real before and after, so you can tell a win from a feeling.",
+      "diagnose": "Diagnose a problem",
+      "diagnoseLine": "Say what it feels like — Compy opens the instrument that answers it.",
+      "advanced": "Advanced instruments",
+      "advancedLine": "The raw tools, for when you want to drive them yourself."
+    },
+    "move": {
+      "unknownHead": "Compy hasn't read this rig yet",
+      "unknownLine": "Run a check and the first thing worth doing shows up right here.",
+      "unknownCta": "Run a check",
+      "whyCheck": "Your check just named this one.",
+      "whyLimiter": "Measured on your rig: {{reason}}",
+      "whyCatalog": "Nothing measured points at one thing yet — so this is the safest change left for your rig.",
+      "remaining_one": "{{count}} more is waiting in Optimize below.",
+      "remaining_other": "{{count}} more are waiting in Optimize below.",
+      "remainingNone": "It's the only one left.",
+      "doNothing": "Skip it and nothing changes — your PC keeps running exactly as it does now.",
+      "allClearHead": "Your safe stack is set",
+      "allClearLine_one": "{{count}} change is applied and still undoable. Nothing else here is worth changing right now.",
+      "allClearLine_other": "{{count}} changes are applied and still undoable. Nothing else here is worth changing right now.",
+      "allClearCta": "Measure what they did",
+      "noneHead": "Nothing worth changing on this rig",
+      "noneLine": "Compy looked and found no change it can honestly recommend here. That's a result, not an empty page.",
+      "noneCta": "Measure how it runs anyway"
+    },
+    "goals": {
+      "fps": {
+        "name": "More FPS",
+        "line": "Frees the graphics card to draw more frames."
+      },
+      "latency": {
+        "name": "Lower latency",
+        "line": "Shortens the trip from your hand to the screen."
+      },
+      "stability": {
+        "name": "Stability",
+        "line": "Keeps Windows predictable — clean boots, no surprise slowdowns."
+      },
+      "image": {
+        "name": "Image quality",
+        "line": "How your display is driven — refresh rate and motion smoothness."
+      },
+      "cleanup": {
+        "name": "Cleanup & recovery",
+        "line": "Hands back disk space, memory, and background activity."
+      }
+    },
+    "problems": {
+      "stutter": {
+        "symptom": "The game hitches or stutters",
+        "because": "Record a run and read the frametime spikes behind the hitch."
+      },
+      "unstableFps": {
+        "symptom": "My FPS jumps around",
+        "because": "Record a run and compare the average against the 1% lows."
+      },
+      "inputDelay": {
+        "symptom": "It feels delayed or floaty",
+        "because": "Trace the mouse-to-screen path and name what's adding delay."
+      },
+      "crashes": {
+        "symptom": "It crashes or freezes",
+        "because": "Read Windows' own crash and freeze record in plain English."
+      },
+      "heat": {
+        "symptom": "It runs hot or loud",
+        "because": "Check whether an undervolt dropped temps and held your frames."
+      },
+      "changed": {
+        "symptom": "Something changed and I don't know what",
+        "because": "Read everything Compy detected on this rig, raw."
+      }
+    },
+    "labConsoleSwitch": "Switch back to the station dock"
+  },
   "labConsole": {
     "readinessLabel": "Readiness",
     "readinessNote": "= {{passed}} of {{total}} checks passed",

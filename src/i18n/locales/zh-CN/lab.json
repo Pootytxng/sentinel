@@ -108,6 +108,87 @@
   "labGround": {
     "masthead": "试炼场"
   },
+  "labDeck": {
+    "sections": {
+      "move": "下一步最值得做的事",
+      "optimize": "优化",
+      "optimizeLine": "Compy 能在这台机器上改动的全部项目,按你想要的效果分组。",
+      "prove": "测量与验证",
+      "proveLine": "记录真实的前后对比,让你分得清真提升和错觉。",
+      "diagnose": "排查问题",
+      "diagnoseLine": "说说它是什么感觉 —— Compy 会打开对应的仪器。",
+      "advanced": "高级仪器",
+      "advancedLine": "原始工具,留给想自己上手的时候。"
+    },
+    "move": {
+      "unknownHead": "Compy 还没读过这台机器",
+      "unknownLine": "跑一次检测,第一件值得做的事就会出现在这里。",
+      "unknownCta": "运行检测",
+      "whyCheck": "你刚才的检测点名了这一项。",
+      "whyLimiter": "在你的机器上实测:{{reason}}",
+      "whyCatalog": "目前没有实测数据指向某一项 —— 所以这是你的机器上剩下最安全的改动。",
+      "remaining_one": "还有 {{count}} 项在下方的优化区等着。",
+      "remaining_other": "还有 {{count}} 项在下方的优化区等着。",
+      "remainingNone": "这是仅剩的一项。",
+      "doNothing": "跳过也没关系 —— 你的电脑会和现在一模一样地运行。",
+      "allClearHead": "你的安全优化组合已就位",
+      "allClearLine_one": "已应用 {{count}} 项改动,并且随时可撤销。眼下没有别的值得改。",
+      "allClearLine_other": "已应用 {{count}} 项改动,并且随时可撤销。眼下没有别的值得改。",
+      "allClearCta": "测一测它们的效果",
+      "noneHead": "这台机器没有值得改的地方",
+      "noneLine": "Compy 看过了,没有可以诚实推荐的改动。这是一个结论,不是一个空页面。",
+      "noneCta": "还是测一下它的表现"
+    },
+    "goals": {
+      "fps": {
+        "name": "更高帧数",
+        "line": "让显卡腾出余力多画几帧。"
+      },
+      "latency": {
+        "name": "更低延迟",
+        "line": "缩短从你的手到屏幕的这段路。"
+      },
+      "stability": {
+        "name": "稳定性",
+        "line": "让 Windows 表现可预期 —— 干净启动,不会突然变慢。"
+      },
+      "image": {
+        "name": "画面质量",
+        "line": "显示器被如何驱动 —— 刷新率与画面顺滑度。"
+      },
+      "cleanup": {
+        "name": "清理与回收",
+        "line": "把磁盘空间、内存和后台活动还给你。"
+      }
+    },
+    "problems": {
+      "stutter": {
+        "symptom": "游戏会卡顿、一顿一顿的",
+        "because": "录一段实际运行,读出卡顿背后的帧时间尖峰。"
+      },
+      "unstableFps": {
+        "symptom": "我的帧数忽高忽低",
+        "because": "录一段实际运行,把平均帧和 1% 最低帧放在一起比。"
+      },
+      "inputDelay": {
+        "symptom": "手感发飘、有延迟",
+        "because": "追踪鼠标到屏幕这条路径,指出是什么在加延迟。"
+      },
+      "crashes": {
+        "symptom": "它会崩溃或者卡死",
+        "because": "用大白话读 Windows 自己记录的崩溃与卡死记录。"
+      },
+      "heat": {
+        "symptom": "机器很烫、风扇很吵",
+        "because": "看看降压之后温度有没有降、帧数有没有守住。"
+      },
+      "changed": {
+        "symptom": "有东西变了,但我不知道是什么",
+        "because": "原样读出 Compy 在这台机器上检测到的一切。"
+      }
+    },
+    "labConsoleSwitch": "切回站点面板"
+  },
   "labConsole": {
     "readinessLabel": "就绪度",
     "readinessNote": "= {{total}} 项检查中通过 {{passed}} 项",
