@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { readFileSync } from "fs";
+import { join } from "path";
+// (fs/path typed by src/test-node-shims.d.ts — @types/node is not a project dependency.)
 
 // V2-4b IA guards (spec 2026-07-03-owner-optimize-feedback, bug→guard tier 1):
 //   1. ONE-MENTION LAW — a rec renders as an actionable row exactly once per room. The owner
@@ -158,6 +161,115 @@ describe("Fix — V2-4b one-mention grouping", () => {
     expect(screen.getByText(/Compy points the way/)).toBeTruthy();
     expect(screen.queryByText("Needs your call")).toBeNull();
     expect(rowsTitled(container, "Enable Windows Game Mode")).toBe(1);
+  });
+});
+
+// ── "Needs your call" doors (recovery item 6 · validation test 10) ────────────
+// Tester J, 2026-07-22: clicked an advisory card, nothing happened, concluded the whole section was
+// dead. The FIX shipped that day (the entire head became a button, and an opened card always answers).
+// The GUARD did not — this is it. It fails if the head stops being a real button, if aria-expanded
+// stops tracking the open state, if a card without guided steps opens onto nothing, or if the row's
+// actions get folded back inside the head. Those are the four ways J's complaint comes back.
+describe("Fix — 'Needs your call' doors open, and always answer", () => {
+  // Two advisory recs, deliberately unlike each other. isAppliable is false for both (that is what
+  // routes them to the advisory group), but only one has an entry in GUIDED_STEPS.
+  const GUIDED_ID = "monitor-max-refresh"; // in GUIDED_STEPS, with steps + an ms-settings deep link
+  const BARE_ID = "gpu-driver"; //            NOT in GUIDED_STEPS — exercises the honest-answer branch
+  const DOORS = [
+    rec(GUIDED_ID, "Run your monitor at its full refresh rate"),
+    rec(BARE_ID, "Update your GPU driver", { severity: "moderate" }),
+  ];
+  const mountDoors = (over: Record<string, unknown> = {}) =>
+    mountFix({ v2Ia: true, recs: DOORS, ...over });
+
+  const rowTitled = (container: HTMLElement, title: string) =>
+    [...container.querySelectorAll("li.fix-row-advisory")].find((li) =>
+      li.textContent?.includes(title),
+    ) as HTMLElement;
+  const doorOf = (row: HTMLElement) => row.querySelector(".fix-advisory-door") as HTMLButtonElement;
+
+  it("the head is a real <button> — the only reason Enter and Space work at all", () => {
+    const { container } = mountDoors();
+    const head = doorOf(rowTitled(container, "Run your monitor at its full refresh rate"));
+    // jsdom does not synthesize activation from keydown, so "press Enter" is not directly
+    // observable here. What IS observable is the property that makes keyboard activation real in a
+    // browser: a native button, in the tab order, with the click handler on it. A div+onClick would
+    // fail this line, and that is exactly the regression worth catching.
+    expect(head.tagName).toBe("BUTTON");
+    expect(head.getAttribute("type")).toBe("button");
+    expect(head.tabIndex).toBe(0);
+    head.focus();
+    expect(document.activeElement).toBe(head);
+    // …and focus is VISIBLE: the global doorknob ring covers every button, and App loads it.
+    const knob = readFileSync(join("src", "design", "doorknob.css"), "utf8");
+    expect(knob).toMatch(/button:focus-visible[\s\S]{0,220}?outline:\s*2px solid/);
+    expect(readFileSync(join("src", "App.tsx"), "utf8")).toContain('import "./design/doorknob.css"');
+  });
+
+  it("a click opens it, and aria-expanded tracks the truth in both directions", () => {
+    const { container } = mountDoors();
+    const row = rowTitled(container, "Run your monitor at its full refresh rate");
+    const head = doorOf(row);
+    expect(head.getAttribute("aria-expanded")).toBe("false");
+    expect(row.querySelector(".fix-guided-detail")).toBeNull();
+
+    fireEvent.click(head);
+    expect(head.getAttribute("aria-expanded")).toBe("true");
+    expect(row.querySelector(".fix-guided-detail")).toBeTruthy();
+
+    fireEvent.click(head);
+    expect(head.getAttribute("aria-expanded")).toBe("false");
+    expect(row.querySelector(".fix-guided-detail")).toBeNull();
+  });
+
+  it("the guided door opens onto the REAL steps and the real deep link", () => {
+    const { container } = mountDoors();
+    const row = rowTitled(container, "Run your monitor at its full refresh rate");
+    // Closed, it already says where it goes — the affordance is not a mystery.
+    const toggle = row.querySelector(".fix-guided-toggle") as HTMLButtonElement;
+    expect(toggle.textContent).toContain("Windows Advanced display");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    // The deep link is offered without opening anything (it is a real ms-settings URI).
+    expect(row.querySelector(".fix-guided-open")?.textContent).toContain("Open Advanced display");
+
+    fireEvent.click(doorOf(row));
+    expect(toggle.getAttribute("aria-expanded")).toBe("true"); // both doors, one state
+    expect(row.querySelector(".fix-guided-where")?.textContent).toContain("Windows Advanced display");
+    expect(row.querySelectorAll("ol.fix-guided-steps li").length).toBe(2);
+  });
+
+  it("a rec with NO guided steps still ANSWERS — no door onto nothing, and no false affordance", () => {
+    const { container } = mountDoors();
+    const row = rowTitled(container, "Update your GPU driver");
+    // Nothing promises steps that do not exist…
+    expect(row.querySelector(".fix-guided-toggle")).toBeNull();
+    expect(row.querySelector(".fix-guided-open")).toBeNull();
+    // …but the card is still a door, and opening it gets a straight answer.
+    fireEvent.click(doorOf(row));
+    const none = row.querySelector(".fix-guided-none");
+    expect(none).toBeTruthy();
+    expect(none!.textContent).toContain("No safe, reversible switch");
+  });
+
+  it("the row's actions live OUTSIDE the head, visible before anything is opened", () => {
+    const { container } = mountDoors();
+    const row = rowTitled(container, "Update your GPU driver");
+    const head = doorOf(row);
+    // A button cannot nest a button: anything inside the head would be unreachable, and the head
+    // would swallow the click that was meant for it.
+    expect(head.querySelectorAll('button, a[href], input, [role="button"]').length).toBe(0);
+    const acts = row.querySelector(".fix-advisory-quickacts") as HTMLElement;
+    expect(acts).toBeTruthy();
+    expect(head.contains(acts)).toBe(false);
+
+    // "Not for me" is available while the card is still closed — the decline is never buried
+    // behind an expand the user has no reason to perform.
+    const notForMe = [...acts.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("Not for me"),
+    ) as HTMLButtonElement;
+    expect(notForMe).toBeTruthy();
+    fireEvent.click(notForMe);
+    expect(rowTitled(container, "Update your GPU driver")).toBeUndefined();
   });
 });
 

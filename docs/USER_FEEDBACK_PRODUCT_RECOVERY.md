@@ -383,7 +383,7 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   dead. Now — the fix is real but unprotected; a future refactor can silently re-break it.
 - **Current implementation:** `Fix.tsx:614-712` `GuidedRow` (§0.4). No DOM/interaction test covers
   it. `optimize-v2-ia.test.tsx:143,159` only assert the *presence/absence of the section label*.
-- **Status:** `UNVERIFIED` (shipped + live-verified via CDP; no regression guard)
+- **Status:** `RESOLVED` (guard written; behavior unchanged, now pinned)
 - **Intended correction:** add the DOM/interaction guard. Cover: mouse activation opens · keyboard
   activation opens (Enter/Space on the head) · visible focus · `aria-expanded` chevron/expanded state
   tracks reality · the no-guide case still answers (no door onto nothing) · actions are not hidden
@@ -393,7 +393,27 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
 - **Acceptance criteria:** the guard fails if the head stops being a button, if `aria-expanded` stops
   tracking, or if the `{open && !guide}` honest answer is removed.
 - **Class:** functional (test coverage)
-- **Evidence after implementation:** _(pending)_
+- **Evidence after implementation:** `src/surfaces/optimize-v2-ia.test.tsx` — describe *"Fix — 'Needs
+  your call' doors open, and always answer"*, 5 tests, no production code touched.
+  - **THE FIXTURE** is the point: two advisory recs that differ in the one way that matters —
+    `monitor-max-refresh` (in `GUIDED_STEPS`, 2 steps + an `ms-settings:display-advanced` deep link)
+    and `gpu-driver` (deliberately NOT a `GUIDED_STEPS` key), so both branches of the door are
+    exercised by real catalog data rather than a mock of it.
+  - **head is a real button** — `tagName`/`type="button"`/`tabIndex 0`/focusable. jsdom does not
+    synthesize activation from keydown, so the guard pins the *property that makes Enter and Space
+    work in a browser* instead of pretending to press them; a `div`+`onClick` fails every line.
+    Visible focus is proven at its real source: `doorknob.css`'s `button:focus-visible` outline
+    plus App's import of it.
+  - **`aria-expanded` tracks both directions** (closed → open → closed), and the `.fix-guided-toggle`
+    reports the SAME state as the head (one open state, two doors).
+  - **honest answer preserved:** the no-guide rec offers no `.fix-guided-toggle` and no
+    `.fix-guided-open` (no promise of steps that don't exist) yet still opens onto
+    `.fix-guided-none` — the `{open && !guide}` branch, asserted by its copy.
+  - **actions are not buried:** the head contains zero nested interactive elements (a button cannot
+    nest a button), `.fix-advisory-quickacts` sits outside it, and *Not for me* both renders and
+    dismisses while the card is still CLOSED.
+  - **VERIFICATION:** `npx tsc --noEmit` clean · `npx vitest run` **212 files / 2096 passed, 2
+    skipped** (2091 → 2096).
 
 ---
 
@@ -736,7 +756,7 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
 | 7 | A stale or already-applied recommendation is handled honestly | ✅ `…journey.test.tsx` stale / applied-since / all-done cases |
 | 8 | A manual-only recommendation opens its real guide | ✅ `…journey.test.tsx` "a manual-only finding is marked too, and still opens its real steps" |
 | 9 | Ignore / Not for me remains available | ✅ `check-decline-journey.test.tsx` (6) — door open on appliable + hands-on, set aside in place with Restore, none on applied/ineligible, shared with `Fix.tsx`, zero IPC |
-| 10 | "Needs your call" doors are mouse- and keyboard-operable | pending |
+| 10 | "Needs your call" doors are mouse- and keyboard-operable | ✅ `optimize-v2-ia.test.tsx` (5) — real button/type/tabIndex/focus + doorknob focus ring, `aria-expanded` both ways on head and toggle, no-guide card still answers, actions outside the head |
 | 11 | A rig with no justified action receives an honest useful state | pending |
 | 12 | Goal groups render only when supported recommendations exist | pending |
 | 13 | A relevant recommendation reaches a real proof tool where a structured mapping exists | pending |
@@ -771,7 +791,7 @@ train.)_
 | 1 | feedback truth matrix | `5f7e38f` + `3c2ed53` (audit corrections) |
 | 2 | Check result identity + handoff contract | `654bf53` (identity) |
 | 3 | Optimize destination highlighting + actions | `a4f6b24` (handoff destination) + `0e505fc` (re-run journey correction + the decline door) |
-| 4 | cursor + interaction consistency | _(this commit — native cursors, one semantic map, reticle opt-in)_ |
+| 4 | cursor + interaction consistency | `b1ecd44` (native cursors, one semantic map, reticle opt-in) + _(this commit — the "Needs your call" door guard)_ |
 | 5 | Lab candidate information architecture | pending |
 | 6 | Lab candidate visual layer | pending |
 | 7 | journey tests + pruning plan | pending |
