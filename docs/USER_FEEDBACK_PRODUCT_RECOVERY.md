@@ -757,18 +757,18 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
 | 8 | A manual-only recommendation opens its real guide | ✅ `…journey.test.tsx` "a manual-only finding is marked too, and still opens its real steps" |
 | 9 | Ignore / Not for me remains available | ✅ `check-decline-journey.test.tsx` (6) — door open on appliable + hands-on, set aside in place with Restore, none on applied/ineligible, shared with `Fix.tsx`, zero IPC |
 | 10 | "Needs your call" doors are mouse- and keyboard-operable | ✅ `optimize-v2-ia.test.tsx` (5) — real button/type/tabIndex/focus + doorknob focus ring, `aria-expanded` both ways on head and toggle, no-guide card still answers, actions outside the head |
-| 11 | A rig with no justified action receives an honest useful state | pending |
-| 12 | Goal groups render only when supported recommendations exist | pending |
-| 13 | A relevant recommendation reaches a real proof tool where a structured mapping exists | pending |
-| 14 | Diagnostics can be reached through a user-problem route | pending |
-| 15 | Back navigation and room orientation remain understandable | pending |
-| 16 | Critical controls fit at 1280×720 | pending |
-| 17 | Long copy + realistic density do not collapse the layout | pending |
-| 18 | Reduced motion works | pending |
-| 19 | Keyboard focus is visible | pending |
-| 20 | Screen-reader naming and hierarchy are sensible | pending |
+| 11 | A rig with no justified action receives an honest useful state | ✅ `lab-deck-journey.test.tsx` — three distinct empty states (nothing worth changing / stack already set / rig not read), each with a real onward CTA, none manufacturing urgency |
+| 12 | Goal groups render only when supported recommendations exist | ✅ `…journey.test.tsx` — 3 real goals → 3 chips + "All"; one goal → no chip row at all |
+| 13 | A relevant recommendation reaches a real proof tool where a structured mapping exists | ✅ `…journey.test.tsx` — "How you'd prove it" appears for latency/fps recs, absent for cleanup, and opens the mapped instrument with focus moved |
+| 14 | Diagnostics can be reached through a user-problem route | ✅ `…journey.test.tsx` — "Something changed and I don't know what" opens the real diagnostics slot |
+| 15 | Back navigation and room orientation remain understandable | ✅ `…journey.test.tsx` (one `aria-current` pill, nav text === section headings, one `data-here` section) + `lab-deck-flag.test.tsx` (RoomShell + verdict survive the swap) |
+| 16 | Critical controls fit at 1280×720 | pending — **not claimed**; jsdom has no layout. Installed candidate + `self-review` |
+| 17 | Long copy + realistic density do not collapse the layout | ✅ `…journey.test.tsx` — 13-rec / long-label case still yields exactly 5 sections, 1 nav, 1 move card, 1 chip row, 5 distinct headings |
+| 18 | Reduced motion works | ✅ `…journey.test.tsx` — `data-motion` mirrors `compy_motion`; both branches styled in `LabDeck.css` |
+| 19 | Keyboard focus is visible | pending — **not claimed**; jsdom does not paint. Installed candidate + `self-review` |
+| 20 | Screen-reader naming and hierarchy are sensible | ✅ `…journey.test.tsx` — every section `aria-labelledby`→`H2` and `tabIndex=-1`; every row head a real `BUTTON` with `aria-expanded`+`aria-controls`; chevrons `aria-hidden` |
 | 21 | Cursor behavior is consistent | ✅ `design/cursor-consistency.test.tsx` (7) — one disabled answer, `none` quarantined to the opt-in reticle, the map is a `:where()` floor, reticle off by default |
-| 22 | Existing mutation / rollback / anti-fabrication / release / encoding / state guards stay green | pending |
+| 22 | Existing mutation / rollback / anti-fabrication / release / encoding / state guards stay green | ⏳ frontend green — `npx vitest run` 215 files / 2159 passed / 2 skipped, `npx tsc --noEmit` clean. `cargo test` + `clippy` still to run |
 
 **"All tests pass" is NOT proof the design is accepted.** The acceptance gate is: functional journey
 proof · installed owner eyeball · subsequent validation from the same kind of users who gave the
@@ -778,9 +778,66 @@ feedback.
 
 ## §3 — LAB GENERATION INVENTORY & PRUNING PLAN (Phase 4)
 
-_(populated during Phase 4 — reachability, unique functionality, migration target, tests to migrate,
-flags to retire, deletion eligibility, and blockers, per generation. Nothing is deleted in this
-train.)_
+**Nothing is deleted in this train.** This section is the evidence a later train prunes from — every
+claim below was read out of the current code, not inferred from filenames or shipped banners.
+
+### The reachability truth (read out of `App.tsx`, not the specs)
+
+```
+App.tsx:1022   if (hw) list.push("Lab")            ← the Lab tab exists ONLY when hw !== null
+App.tsx:1210   const v2Shell = hw !== null && !settingsActive
+App.tsx:1548   ) : v2Shell ? ( <ShellV2> …         ← so hw !== null ALWAYS routes to the V2 shell
+App.tsx:1341   <Lab diagnostics vendor />          ← classic branch: needs hw === null … where the
+                                                     Lab tab does not exist and the reset effect
+                                                     bounces activeTab back to Overview
+App.tsx:1677   labGround ? hw && <LabGround/> : <LabV2/>
+LabGround:124  deck ? <LabDeck/> : <LabConsole/> + <ExperimentBench/>
+```
+
+**What a user actually receives today: `ShellV2 → LabGround → LabConsole` + `ExperimentBench`.**
+`compy_lab_ground` defaults ON (`theme.ts:270`), `compy_lab_deck` defaults OFF (`theme.ts:303`).
+The classic `<Lab>` mount at `App.tsx:1341` is **unreachable** — its guard and the tab's guard are
+mutually exclusive. Classic `Lab.tsx` still runs in production only as the *body* of `LabV2`
+(`LabV2.tsx:90 <Lab v2 …>`), which is itself the `compy_lab_ground="0"` failsafe.
+
+### Per-generation inventory
+
+| Generation | Files (lines) | Reachable today via | Unique functionality | Where it lands in the candidate | Tests to migrate | Flag to retire | Deletable when |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **Classic Lab** | `Lab.tsx` 769 · `Lab.css` 261 | `LabV2` only (ground failsafe). Its own `App.tsx:1341` mount is dead. | welcome band · vendor-honesty copy (NVML "not yet hardware-verified") · station readings strip · `ground`-mode spine (dead: nothing passes `ground` any more) | station readings → `stationReading()`; vendor honesty already lives in the shared station data | `Lab.test.tsx` (vendor honesty, welcome band) · the `<Lab v2 ground>` cases in `lab-ground.test.tsx` | — (composed, not flagged) | `compy_lab_ground` failsafe retires |
+| **LabV2** | `LabV2.tsx` 102 · `lab-v2.css` 115 · `lab-v2-data.ts` 184 | `compy_lab_ground="0"` failsafe | `labVerdict()` room headline · HUD masthead wiring | `RoomShell verdict` in `LabGround.tsx` already calls the same `labVerdict()` | `lab-v2.test.tsx` verdict cases | `compy_lab_ground` | ground failsafe retires. **`lab-v2.css` + `lab-v2-data.ts` stay** — `LabGround.tsx:17` and `lab-guided-data.ts` import them. |
+| **LabBento** | `LabBento.tsx` 166 · `lab-bento-data.ts` 126 | inside classic Lab, `compy_lab_bento` default ON | per-station bento cards + synthesized checkup report | deck rows carry the same station facts; the checkup report has no deck equivalent yet | `lab-bento.test.tsx` | `compy_lab_bento` | classic Lab retires. **`lab-bento-data.ts` stays** — `LabConsole.tsx:17` and `LabDeck.tsx` both import it. |
+| **Guided router** | inside `Lab.tsx` · `lab-guided-data.ts` 235 | `compy_lab_guided` default **OFF** — effectively unreached | plain-language intake router ("just make it fast" → station) | superseded by the deck's goal chips + `problems` rows | `lab-guided.test.tsx` router cases | `compy_lab_guided` | classic Lab retires. **`lab-guided-data.ts` stays** — it is the shared station model `LabConsole` *and* `LabDeck` read. |
+| **LabGround** | `LabGround.tsx` 142 | **production room host** (`compy_lab_ground` ON) | the room shell, verdict, and the console/deck swap | keeps its job — the deck is hosted *by* it | `lab-ground.test.tsx` room cases | — | never (it is the host, not a face) |
+| **LabConsole** | `LabConsole.tsx` 376 · `design/console/dock.css` | **the face users receive today** | RigViewer hologram · 4× `ArcGauge` · `ReticleCursor` stage · A/B comparison state (`armed`/`latestCmp`) · `latestSession` strip · `readiness` surface | **partially — this is the honest gap, below** | `lab-console.test.tsx` · `lab/optimize-gauge-dock-guard.test.tsx` · the `LabConsole` imports in `check-handoff-journey.test.tsx:21` and `check-rerun-journey.test.tsx:27` must re-point at `LabDeck` | — | owner accepts the deck **and** the gap below is closed or explicitly dropped |
+| **LabDeck (candidate)** | `lab/LabDeck.tsx` 646 · `lab/LabDeck.css` 490 · `lab/lab-deck-data.ts` 327 | `compy_lab_deck="1"` (Settings → Appearance, temporary) | the five-section decision journey | — | — | `compy_lab_deck` + its Settings row retire **with** acceptance | n/a |
+
+### The honest gap (do not let this disappear into a "COMPLETE" checkbox)
+
+`LabGround.tsx:124` swaps the deck in **instead of** `LabConsole`, not beside it. With the flag ON the
+user therefore loses: the **RigViewer hologram**, the **four ArcGauges**, the **ReticleCursor stage**,
+the **A/B comparison state**, the **latest-session strip**, and the **readiness surface**. Station
+readings survive as text via `stationReading()`; the 3D/gauge instrumentation layer does not. This is
+an owner decision (§ report item 11), not a bug to quietly close: either those elements migrate into
+the deck's premium layer, or the owner signs off on dropping them.
+
+### Pruning order for a later train (each step reversible on its own)
+
+1. Owner accepts the deck on the installed candidate → make `LabDeck` unconditional in `LabGround`,
+   retire `compy_lab_deck` + its Settings row (the one deliberate exception to the 2026-07-11
+   flag-debt sweep).
+2. Re-point `check-handoff-journey.test.tsx` / `check-rerun-journey.test.tsx` at `LabDeck`, migrate
+   the `lab-console.test.tsx` + `optimize-gauge-dock-guard.test.tsx` assertions that still describe
+   real behaviour, **then** delete `LabConsole.tsx`.
+3. Retire the `compy_lab_ground` failsafe → `LabV2.tsx`, `Lab.tsx`, `Lab.css`, `LabBento.tsx`, the
+   guided router, `compy_lab_bento`, `compy_lab_guided`, and the dead `App.tsx:1341` mount all become
+   deletable together, with their tests.
+4. **Blocked indefinitely:** `lab-guided-data.ts`, `lab-bento-data.ts`, `lab-v2-data.ts`,
+   `lab-v2.css` — shared with the survivors. Prune the *faces*, keep the *data*.
+
+**Blocker on all of the above:** LOCKED — the current production-default Lab and its rollback path are
+untouched in this train (owner instruction, verbatim: _"Do not delete the current production-default
+Lab or its rollback path during this train."_).
 
 ---
 
@@ -792,7 +849,7 @@ train.)_
 | 2 | Check result identity + handoff contract | `654bf53` (identity) |
 | 3 | Optimize destination highlighting + actions | `a4f6b24` (handoff destination) + `0e505fc` (re-run journey correction + the decline door) |
 | 4 | cursor + interaction consistency | `b1ecd44` (native cursors, one semantic map, reticle opt-in) + _(this commit — the "Needs your call" door guard)_ |
-| 5 | Lab candidate information architecture | pending |
-| 6 | Lab candidate visual layer | pending |
-| 7 | journey tests + pruning plan | pending |
+| 5 | Lab candidate information architecture | `0102a14` (five-section decision journey + `compy_lab_deck` flag + flag guard) |
+| 6 | Lab candidate visual layer | `ff1a773` (section rail lit by IntersectionObserver, `aria-current` nav, both motion branches, <640px collapse) |
+| 7 | journey tests + pruning plan | `3e22a7c` (28 journey tests) + _(this commit — §3 inventory)_ |
 | 8 | installed-review fixes | pending |
