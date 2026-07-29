@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { OptimizeV2 } from "./OptimizeV2";
-import { optimizeVerdict as optimizeVerdictRaw, safeFixesReady } from "./optimize-v2-data";
+import {
+  optimizeVerdict as optimizeVerdictRaw,
+  safeFixesReady,
+  setAsideCount,
+  EMPTY_DISMISSED,
+} from "./optimize-v2-data";
 import type { AppliedChange, GameReadiness, Recommendation } from "../types";
 // i18n update (2026-07-23): optimizeVerdict's headline/sub now come from t(...) (Simplified
 // Chinese translation pass) instead of literal English strings, so it takes a TFunction as its
@@ -11,12 +16,15 @@ import type { AppliedChange, GameReadiness, Recommendation } from "../types";
 // literal.
 import i18n from "../i18n";
 
+// (2026-07-29) `dismissedIds` joined the signature too — these branch assertions are about the
+// ready/drift/active axes, so the wrapper passes EMPTY_DISMISSED. The set-aside branch has its own
+// describe block below, which calls the raw function with a real set.
 const optimizeVerdict = (
   recs: Recommendation[] | null,
   isAppliable: (recId: string) => boolean,
   activeCount: number,
   reverted?: { rec_id: string }[],
-) => optimizeVerdictRaw(recs, isAppliable, activeCount, reverted, i18n.t);
+) => optimizeVerdictRaw(recs, isAppliable, EMPTY_DISMISSED, activeCount, reverted, i18n.t);
 
 // V2-4 guards (bug→guard tier 1): the V2 Optimize room composes RoomShell (one verdict, one
 // door), its verdict is a PURE derivation from the real catalog (honestly-loading while recs
@@ -145,7 +153,7 @@ const useReduced = () => localStorage.setItem("compy_motion", "reduced");
 
 describe("optimizeVerdict — pure, measured, branch-proper copy", () => {
   it("counts only safe + one-click + eligible + not-applied recs", () => {
-    expect(safeFixesReady(recsFixture, isAppliable)).toBe(1);
+    expect(safeFixesReady(recsFixture, isAppliable, EMPTY_DISMISSED)).toBe(1);
   });
 
   it("catalog not resolved → honestly loading, not settled (no animation on a placeholder)", () => {
@@ -217,7 +225,7 @@ describe("optimizeVerdict — pure, measured, branch-proper copy", () => {
     const mixed = [...recsFixture, rec({ id: "hags-enable", currently_applied: false })];
     const v = optimizeVerdict(mixed, isAppliable, 0, [{ rec_id: "hags-enable" }]);
     expect(v.headline).toBe("1 safe fix is ready to apply.");
-    expect(safeFixesReady(mixed, isAppliable, new Set(["hags-enable"]))).toBe(1);
+    expect(safeFixesReady(mixed, isAppliable, EMPTY_DISMISSED, new Set(["hags-enable"]))).toBe(1);
   });
 
   // bug→guard (optimize-v2-data.ts): when ready fixes AND drifted changes coexist, the body shows
@@ -241,6 +249,62 @@ describe("optimizeVerdict — pure, measured, branch-proper copy", () => {
     ]);
     expect(v2.sub).toContain("2 changes you applied were turned off outside Compy");
     for (const x of [v1, v2]) expect(`${x.headline} ${x.sub ?? ""}`).not.toContain("(s)");
+  });
+});
+
+// bug→guard (self-review round 9, 2026-07-29). The dismissal set was a frontend-only concept that
+// never reached this derivation, so every headline built on it counted recs the user had already
+// declined — the room promised "1 safe fix is ready to apply", the user tapped through, and the row
+// wasn't there. Setting the LAST safe fix aside then fell through to "Nothing new to apply — N safe
+// changes are active", which is the other available lie: the set-aside tweak is still OFF.
+describe("optimizeVerdict — a rec the user set aside is never counted as ready", () => {
+  it("drops a set-aside rec from the ready count", () => {
+    const two = [...recsFixture, rec({ id: "hags-enable", currently_applied: false })];
+    expect(safeFixesReady(two, isAppliable, EMPTY_DISMISSED)).toBe(2);
+    expect(safeFixesReady(two, isAppliable, new Set(["game-mode"]))).toBe(1);
+    expect(setAsideCount(two, isAppliable, new Set(["game-mode"]))).toBe(1);
+    const v = optimizeVerdictRaw(two, isAppliable, new Set(["game-mode"]), 0, [], i18n.t);
+    expect(v.headline).toBe("1 safe fix is ready to apply.");
+  });
+
+  it("the WHOLE stack set aside → names it, never 'nothing to apply' and never 'all active'", () => {
+    // The exact fall-through this guard exists for: active changes present, so the old code
+    // reached allSafeActiveHeadline and told the user everything safe was on. It isn't.
+    const v = optimizeVerdictRaw(recsFixture, isAppliable, new Set(["game-mode"]), 3, [], i18n.t);
+    expect(v.headline).toBe("Nothing waiting — you set 1 safe tweak aside.");
+    expect(v.headline).not.toContain("safe changes are active");
+    expect(v.sub).toContain("Restore it from Dismissed");
+    // Nothing is waiting on the user, so the forward door is genuinely open.
+    expect(v.allClear).toBe(true);
+    expect(v.settled).toBe(true);
+  });
+
+  it("branches plural, never '(s)'", () => {
+    const two = [...recsFixture, rec({ id: "hags-enable", currently_applied: false })];
+    const v = optimizeVerdictRaw(
+      two, isAppliable, new Set(["game-mode", "hags-enable"]), 0, [], i18n.t,
+    );
+    expect(v.headline).toBe("Nothing waiting — you set 2 safe tweaks aside.");
+    expect(v.sub).toContain("Restore them from Dismissed");
+    expect(`${v.headline} ${v.sub ?? ""}`).not.toContain("(s)");
+  });
+
+  it("a real drifted row still outranks the set-aside line (the actionable state wins)", () => {
+    // Drift is something the user can act on; a set-aside is not. Order matters, so pin it.
+    const two = [...recsFixture, rec({ id: "hags-enable", currently_applied: false })];
+    const v = optimizeVerdictRaw(
+      two, isAppliable, new Set(["game-mode", "hags-enable"]), 0,
+      [{ rec_id: "hags-enable" }], i18n.t,
+    );
+    expect(v.headline).toBe("1 change you applied was turned off outside Compy.");
+    expect(v.allClear).toBe(false);
+  });
+
+  it("no set-asides → the old branches are untouched (negative control)", () => {
+    expect(optimizeVerdict([], isAppliable, 3).headline).toBe(
+      "Nothing new to apply — 3 safe changes are active.",
+    );
+    expect(optimizeVerdict([], isAppliable, 0).headline).toBe("Nothing needs applying right now.");
   });
 });
 

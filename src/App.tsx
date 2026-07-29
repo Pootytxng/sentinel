@@ -55,6 +55,7 @@ import Check from "./surfaces/Check";
 // INTERNAL name of today's Tune slot; the merged tab reuses that same slot — see the wiring below).
 import { Optimize as OptimizeShell } from "./surfaces/Optimize";
 import { prewarmScan } from "./surfaces/use-scan";
+import { useDismissed, dismissedIdList } from "./surfaces/dismissed";
 import { activeChangeCount } from "./surfaces/dashboard-data";
 import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport, ExportResult } from "./types";
@@ -592,6 +593,40 @@ function App() {
   const [report, setReport] = useState<ExportResult | null>(null);
   const [priorities, setPriorities] = useState<Priorities | null>(null);
   const [exporting, setExporting] = useState(false);
+  // Re-rank when the user sets a rec aside (or brings one back), without paying for a full refresh.
+  // The ranker's pending-safe-tweaks row is the source of Home's "worth fixing" count AND its TOP
+  // LIMITER strip; leaving it stale is what let Home send the user to a Lab with nothing in it
+  // (self-review round 9). All four inputs are already in state, and priorities_from is a pure
+  // pass-through — no probes re-run. `dismissed` is one shared Set with a stable identity per
+  // change (useSyncExternalStore over a module store), so this can't loop.
+  const { dismissed } = useDismissed();
+  const rankInputs = useRef<{
+    readiness: GameReadiness;
+    recommendations: Recommendation[];
+    startup: StartupEntry[];
+    sessions: SessionSummary[];
+  } | null>(null);
+  const rankedFor = useRef(dismissed);
+  useEffect(() => {
+    // Deps are [dismissed] ALONE, and the inputs ride a ref: every OTHER trigger for a re-rank is a
+    // refresh, which already ranks them itself — depending on the four here would double every
+    // refresh's IPC and race its own setPriorities.
+    if (rankedFor.current === dismissed) return; // mount, or a no-op commit
+    rankedFor.current = dismissed;
+    const inputs = rankInputs.current;
+    if (inputs === null) return; // nothing ranked yet — the first refresh reads the live set anyway
+    let stale = false;
+    invoke<Priorities>("priorities_from", { ...inputs, dismissedIds: [...dismissed] })
+      .then((p) => {
+        if (!stale) setPriorities(p);
+      })
+      // Silent: the refresh path owns the user-visible error for this command, and a re-rank that
+      // fails simply leaves the previous (still-honest) ranking on screen.
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
+  }, [dismissed]);
   const [showSettings, setShowSettings] = useState(false);
   // Settings opens from the custom titlebar (window chrome lives outside <App/>, so it signals across
   // the tree — same bridge as the compy:*-changed flags). The titlebar gear is the app-wide entry.
@@ -832,11 +867,17 @@ function App() {
         ) {
           return;
         }
+        // Keep the ranker's inputs for the set-aside re-rank, so declining a tweak doesn't have to
+        // pay for a whole refresh to re-rank (see the dismissed effect above).
+        rankInputs.current = { readiness, recommendations, startup, sessions };
         return invoke<Priorities>("priorities_from", {
           readiness,
           recommendations,
           startup,
           sessions,
+          // Set-asides reach the ranker so its call-to-action row can't point at a tweak the user
+          // already declined — Home's "worth fixing" count and TOP LIMITER strip both read it.
+          dismissedIds: dismissedIdList(),
         }).then(setPriorities);
       })
       // Only a genuine priorities_from failure (all four present, ranking itself failed) reaches here.

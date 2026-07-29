@@ -18,6 +18,7 @@ import {
 import { stationHasReading } from "./lab-bento-data";
 import { changesBetweenRuns } from "./benchmark-view";
 import { safeFixesReady } from "./optimize-v2-data";
+import { useDismissed } from "./dismissed";
 import { deriveReverted } from "./use-scan";
 import { peekProbe, cachedProbe } from "../data/probe-cache";
 import { readHandoff } from "../data/check-handoff";
@@ -89,6 +90,9 @@ export function LabConsole({
 }) {
   const { t, i18n } = useTranslation();
   const reduced = useReducedMotion();
+  // The ONE session-wide "Not for me" set — the safe-stack reading below must not count a rec the
+  // user set aside (self-review round 9, 2026-07-29).
+  const { dismissed } = useDismissed();
   // Station name lookup, translated — the SAME shape Lab/LabBento build from their own `t`, so a
   // station's name can never disagree across the three faces.
   const stations = labStations(t);
@@ -160,6 +164,7 @@ export function LabConsole({
       ? safeFixesReady(
           fast.recs,
           fast.isAppliable ?? (() => false),
+          dismissed,
           new Set(groundReverted.map((r) => r.rec_id)),
         )
       : 0;

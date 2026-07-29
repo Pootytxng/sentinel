@@ -1,6 +1,6 @@
 import type { TFunction } from "i18next";
 import type { Confidence, Priorities, Recommendation } from "../../types";
-import { safeFixesReadyList } from "../optimize-v2-data";
+import { EMPTY_DISMISSED, safeFixesReadyList } from "../optimize-v2-data";
 import type { LabStationKey } from "../lab-guided-data";
 
 // THE LAB DECK — pure data for the decision-journey Lab (product-recovery train, 2026-07-28).
@@ -193,7 +193,7 @@ export function nextBestMove(input: NextBestMoveInput): LabNextMoveState {
     (r) => r.eligible !== false && !(dismissedIds?.has(r.id) && !r.currently_applied),
   );
   // The SAME predicate the room verdict and the fix rows use — one source, so these cannot drift.
-  const ready = safeFixesReadyList(live, isAppliable, revertedIds);
+  const ready = safeFixesReadyList(live, isAppliable, dismissedIds ?? EMPTY_DISMISSED, revertedIds);
   const openOther = live.filter(
     (r) =>
       !r.currently_applied &&

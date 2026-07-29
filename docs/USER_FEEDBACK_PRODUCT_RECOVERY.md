@@ -852,7 +852,7 @@ Lab or its rollback path during this train."_).
 | 5 | Lab candidate information architecture | `0102a14` (five-section decision journey + `compy_lab_deck` flag + flag guard) |
 | 6 | Lab candidate visual layer | `ff1a773` (section rail lit by IntersectionObserver, `aria-current` nav, both motion branches, <640px collapse) |
 | 7 | journey tests + pruning plan | `3e22a7c` (28 journey tests) + _(this commit — §3 inventory)_ |
-| 8 | installed-review fixes | `0937137` (rounds 1–3) + `c783d63` (round 4: one name on the whole action path + class guard) + `c15d1e2` (round 5: the arc is a real modal for the keyboard) + `a079edd` (round 6: the confirm is never buried; one click never opens two rows) + `75ebc91` (round 7: a proof door lands on its instrument wherever it lives) + _(this commit — round 8: one dismissal set, and a ring that counts it)_ |
+| 8 | installed-review fixes | `0937137` (rounds 1–3) + `c783d63` (round 4: one name on the whole action path + class guard) + `c15d1e2` (round 5: the arc is a real modal for the keyboard) + `a079edd` (round 6: the confirm is never buried; one click never opens two rows) + `75ebc91` (round 7: a proof door lands on its instrument wherever it lives) + `d310220` (round 8: one dismissal set, and a ring that counts it) + _(this commit — round 9: the decline reaches every surface that claims work, Home and the ranker included)_ |
 
 Round 6 found two **pre-existing** defects neither the tests nor five prior review rounds caught,
 both structural, both now guarded:
@@ -915,6 +915,40 @@ contradicting itself about what to do next, on one screen, in one render:
   (old `useState` hook → all three fail; station ignoring dismissals → both journey tests fail).
   Why no test saw it: the two halves are individually green-able, and every existing gauge test
   fixtured zero dismissals. Only the journey assertion crosses the seam.
+
+Round 9 found the **same class one layer up** — round 8 made the Lab agree with itself, and that
+exposed that nothing outside the Lab was listening:
+
+- **"Not for me" was a Lab-local opinion the rest of the app never heard.** Set *Enable Windows Game
+  Mode* aside in the Lab, walk to Home, and Home still offered it: the intake band said *"1 tweak
+  ready"* with a live **Apply** button, and the console read *"1 worth fixing · TOP LIMITER: Enable
+  Windows Game Mode — See in Lab"*. Tap through and the row isn't there. Home was not merely
+  miscounting; it was still **offering to apply a change the user had declined**, which is the
+  rollback-first promise read backwards. Two independent channels make that claim and both were
+  deaf: (a) `safeFixesReadyList` in `optimize-v2-data.ts` filtered `revertedIds` but had no notion of
+  dismissals, so the band both counted and *staged* declined recs; (b) the **Rust** limiter ranker
+  behind "worth fixing"/"TOP LIMITER" was never told about them at all, and `use-scan.ts` cached its
+  scan, so even a corrected ranker would have re-served the stale ranking.
+  Fixed at the derivation, not the display: `dismissedIds` is now a **required** parameter of
+  `safeFixesReadyList`/`safeFixesReady` (required so a future caller cannot silently opt out —
+  `EMPTY_DISMISSED` is the explicit no-op), `optimizeVerdict` gained a set-aside branch, and the
+  scan passes `dismissedIds` to `priorities_from` while `onDismissedChange` invalidates the cached
+  scan. Rust side: `build_priorities_filtered` drops set-asides from the limiter ranking.
+  **The honesty boundary holds:** a set-aside changes what Compy *offers*, never what it *measured*
+  — readiness checks, sensor reads and the ring's `applied/total` are untouched, and receipt/history
+  surfaces still name the rec.
+  **Also a pre-existing PRODUCTION defect** (`HomeConsole` is the default Home), fixed on this
+  branch only; nothing shipped.
+  Guards: `src/surfaces/home-lab-agreement.test.tsx` — five journey assertions that mount **Home and
+  the Lab in one tree** (the live condition: the rail swaps rooms, it does not reload), press the
+  real "Not for me", and read the real band, plus the real "Dismissed" door → "Restore" for the way
+  back; and four Rust tests in `priorities.rs` pinning that set-asides leave the *measurement* alone.
+  Negative-control-proven against all three halves independently (Home passing `EMPTY_DISMISSED` →
+  both band tests fail; scan dropping `dismissedIds` → ranker test fails; scan dropping
+  `onDismissedChange` → the stale-cache assertion fails).
+  Why no test saw it: every prior guard lived *within* one surface. The reviewer's fix list asked
+  for exactly this file — "a live-journey guard test spanning Home → Lab (not just within-Lab
+  surfaces) so this class of drift trips CI next time."
 
 ### Self-review findings NOT fixed, and why (owner call, round 5)
 

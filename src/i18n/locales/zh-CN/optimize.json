@@ -42,6 +42,8 @@
       "readyHeadline_other": "{{count}} 项安全修复已就绪,可以应用。",
       "driftedOnlyHeadline_other": "你应用过的 {{count}} 项设置在 Compy 之外被关闭了。",
       "driftedOnlySub_other": "可以在下方逐项重新打开——如果这是你自己的操作,也可以保留关闭状态。Compy 绝不会自作主张重新应用。",
+      "setAsideHeadline_other": "没有待处理的项目——你已将 {{count}} 项安全调整搁置。",
+      "setAsideSub_other": "它们仍处于关闭状态,Compy 不会自作主张打开。你可以随时在「已搁置」中恢复。",
       "allSafeActiveHeadline_other": "没有新的项目需要应用——已有 {{count}} 项安全更改生效中。",
       "nothingToApplyHeadline": "目前没有需要应用的项目。",
       "nothingToApplySub": "Compy 只会推荐它在这台主机上实测到的内容——绝不凭空捏造。"

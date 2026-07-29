@@ -24,9 +24,19 @@ export type OptimizeVerdictLine = {
 // count (safeFixesReady) and any consumer that needs the actual rec ids (the Home intake band's
 // one-tap fast path, BACKLOG:916) derive from THIS — so a count and its apply-set can never drift
 // out of a divergent re-implementation of the filter.
+//
+// `dismissedIds` is REQUIRED, and deliberately so (self-review round 9, 2026-07-29). It used to be
+// absent entirely, so every caller counted recs the user had already declined and every headline
+// built on it promised work that wasn't there. Making it a required positional argument means a
+// future caller cannot forget it — the compiler asks the question the reviewer had to. Pass
+// `EMPTY_DISMISSED` when the caller genuinely has no set (tests, fixtures), never `new Set()`
+// inline, so the intent reads as "none" rather than "not wired up yet".
+export const EMPTY_DISMISSED: ReadonlySet<string> = new Set<string>();
+
 export function safeFixesReadyList(
   recs: Recommendation[],
   isAppliable: (recId: string) => boolean,
+  dismissedIds: ReadonlySet<string>,
   revertedIds?: ReadonlySet<string>,
 ): Recommendation[] {
   return recs.filter(
@@ -35,6 +45,7 @@ export function safeFixesReadyList(
       isAppliable(r.id) &&
       !r.currently_applied &&
       r.eligible !== false &&
+      !dismissedIds.has(r.id) &&
       !revertedIds?.has(r.id),
   );
 }
@@ -42,9 +53,25 @@ export function safeFixesReadyList(
 export function safeFixesReady(
   recs: Recommendation[],
   isAppliable: (recId: string) => boolean,
+  dismissedIds: ReadonlySet<string>,
   revertedIds?: ReadonlySet<string>,
 ): number {
-  return safeFixesReadyList(recs, isAppliable, revertedIds).length;
+  return safeFixesReadyList(recs, isAppliable, dismissedIds, revertedIds).length;
+}
+
+/// How many of the recs a headline WOULD have counted are only missing because the user set them
+/// aside. Lets a verdict say "nothing waiting, N set aside" instead of the two available lies:
+/// "all applied" (the tweak is still off) or "N ready" (there is nothing to tap).
+export function setAsideCount(
+  recs: Recommendation[],
+  isAppliable: (recId: string) => boolean,
+  dismissedIds: ReadonlySet<string>,
+  revertedIds?: ReadonlySet<string>,
+): number {
+  return (
+    safeFixesReadyList(recs, isAppliable, EMPTY_DISMISSED, revertedIds).length -
+    safeFixesReadyList(recs, isAppliable, dismissedIds, revertedIds).length
+  );
 }
 
 // i18n note: `t` is threaded through as the LAST param (this is a plain data module, not a
@@ -53,6 +80,8 @@ export function safeFixesReady(
 export function optimizeVerdict(
   recs: Recommendation[] | null,
   isAppliable: (recId: string) => boolean,
+  // The user's "Not for me" set — required for the same reason as on the predicate above.
+  dismissedIds: ReadonlySet<string>,
   activeCount: number,
   // Drifted changes (applied with Compy, since turned off outside it). The body renders these
   // ONLY under "Applied — turned off outside Compy" (V2-4b one-mention), so the headline must
@@ -69,7 +98,8 @@ export function optimizeVerdict(
     };
   }
   const revertedIds = new Set(reverted.map((r) => r.rec_id));
-  const ready = safeFixesReady(recs, isAppliable, revertedIds);
+  const ready = safeFixesReady(recs, isAppliable, dismissedIds, revertedIds);
+  const setAside = setAsideCount(recs, isAppliable, dismissedIds, revertedIds);
   // The undo promise is the rollback-first law stated plainly — and it names where undo lives.
   const undoSub = t("optimize.optimizeV2.verdict.undoSub");
   // When ready fixes AND drifted changes coexist, the ready headline wins (it's the primary
@@ -112,6 +142,18 @@ export function optimizeVerdict(
       allClear: false,
       headline: t("optimize.optimizeV2.verdict.driftedOnlyHeadline", { count: reverted.length }),
       sub: t("optimize.optimizeV2.verdict.driftedOnlySub", { count: reverted.length }),
+    };
+  // Nothing to tap, and the ONLY reason is that the user set those tweaks aside. This branch sits
+  // ABOVE the activeCount ones on purpose: "Nothing new to apply — N safe changes are active" would
+  // be a lie here, because the set-aside tweak is still OFF. All-clear is still true (there is
+  // genuinely nothing waiting on the user), so the forward door stays open — but the verdict names
+  // where the missing rows went, and that they can come back.
+  if (setAside > 0)
+    return {
+      settled: true,
+      allClear: true,
+      headline: t("optimize.optimizeV2.verdict.setAsideHeadline", { count: setAside }),
+      sub: t("optimize.optimizeV2.verdict.setAsideSub", { count: setAside }),
     };
   if (activeCount === 1)
     return {

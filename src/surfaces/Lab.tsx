@@ -34,6 +34,7 @@ import { LabBento } from "./LabBento";
 import { TuningInstrument } from "./TuningInstrument";
 import { OptimizeStation, type LabFastPathProps } from "./lab/OptimizeStation";
 import { safeFixesReady } from "./optimize-v2-data";
+import { useDismissed } from "./dismissed";
 import { deriveReverted } from "./use-scan";
 import { type GpuVendor } from "./walkthroughs";
 import "./Lab.css";
@@ -143,6 +144,9 @@ export default function Lab({
     return () => window.removeEventListener("compy:lab-bento-changed", onChange);
   }, []);
   const reduced = useReducedMotion();
+  // The ONE session-wide "Not for me" set — the safe-stack reading below must not count a rec the
+  // user set aside (self-review round 9, 2026-07-29).
+  const { dismissed } = useDismissed();
   // Router → station jump: an incrementing pulse per station tells that LabSection to expand
   // (in-room scroll + expand — navigation never teleports). Jumping through the router counts as
   // finding a door, same as clicking the card head.
@@ -260,6 +264,7 @@ export default function Lab({
       ? safeFixesReady(
           fast.recs,
           fast.isAppliable ?? (() => false),
+          dismissed,
           new Set(groundReverted.map((r) => r.rec_id)),
         )
       : 0;

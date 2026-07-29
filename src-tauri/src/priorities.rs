@@ -198,12 +198,36 @@ fn drifted_rec_titles(readiness: &Value) -> std::collections::HashSet<String> {
         .unwrap_or_default()
 }
 
-/// Pure: assemble the ranked priorities from already-gathered signals.
+/// Pure: assemble the ranked priorities from already-gathered signals, with nothing set aside.
 pub(crate) fn build_priorities(
     readiness: &Value,
     recommendations: &Value,
     startup: &Value,
     sessions: &Value,
+) -> Priorities {
+    build_priorities_filtered(readiness, recommendations, startup, sessions, &[])
+}
+
+/// Pure: assemble the ranked priorities, honouring the recs the user has SET ASIDE.
+///
+/// `dismissed` is the frontend's per-user "Not for me" set (`compy_dismissed_recs`). It filters
+/// exactly ONE rule — rule 8's pending-safe-tweaks limiter, the row that tells the user there is
+/// something waiting for them. That row is a call to action, and a call to action for a tweak the
+/// user already declined is a dead end: it sent them to the Lab to find nothing there
+/// (self-review round 9, 2026-07-29). Filtering here — rather than at the caller — keeps the row's
+/// count, title, reason, `linked` and `rec_ids` derived from ONE list, so they can't contradict
+/// each other.
+///
+/// It deliberately filters NOTHING else. The memory-integrity row below also reads the rec array,
+/// but it is a MEASUREMENT of the rig (Bucket::NotWorth / Ready), not a call to action — hiding a
+/// real measurement because the user declined a related tweak would be fabricating a cleaner rig
+/// than they have.
+pub(crate) fn build_priorities_filtered(
+    readiness: &Value,
+    recommendations: &Value,
+    startup: &Value,
+    sessions: &Value,
+    dismissed: &[String],
 ) -> Priorities {
     let mut tagged: Vec<(Bucket, PriorityItem)> = Vec::new();
 
@@ -246,7 +270,7 @@ pub(crate) fn build_priorities(
     {
         let recs = recommendations.as_array().map(Vec::as_slice).unwrap_or(&[]);
         let drifted = drifted_rec_titles(readiness);
-        let pending: Vec<&Value> = recs
+        let unapplied: Vec<&Value> = recs
             .iter()
             .filter(|r| {
                 let id = r.get("id").and_then(Value::as_str).unwrap_or("");
@@ -261,13 +285,34 @@ pub(crate) fn build_priorities(
                     && !drifted.contains(title)
             })
             .collect();
+        // A SET-ASIDE rec is one the user already said "not for me" to — pointing them at it again
+        // is a call to action with nothing behind it (see the doc comment above).
+        let pending: Vec<&Value> = unapplied
+            .iter()
+            .copied()
+            .filter(|r| {
+                let id = r.get("id").and_then(Value::as_str).unwrap_or("");
+                !dismissed.iter().any(|d| d == id)
+            })
+            .collect();
+        let set_aside = unapplied.len() - pending.len();
         if pending.is_empty() {
             tagged.push((
                 Bucket::Fine,
                 PriorityItem {
                     id: "pending-safe-recs",
                     title: "Safe one-click tweaks".into(),
-                    reason: "No pending safe tweaks — the safe recommendations that apply to your PC are already applied, or none apply.".into(),
+                    // Never claim the rig is clean when it's only the user's own set-asides making
+                    // it look that way — say which it is, and leave the way back visible.
+                    reason: if set_aside > 0 {
+                        format!(
+                            "Nothing waiting — you set {set_aside} safe {} aside. You can bring {} back from the Lab any time.",
+                            if set_aside == 1 { "tweak" } else { "tweaks" },
+                            if set_aside == 1 { "it" } else { "them" }
+                        )
+                    } else {
+                        "No pending safe tweaks — the safe recommendations that apply to your PC are already applied, or none apply.".into()
+                    },
                     linked: None,
                     rec_ids: Vec::new(),
                     confidence: Confidence::Low,
@@ -470,14 +515,24 @@ pub(crate) fn get_priorities() -> Priorities {
 /// rank them. Pure pass-through to `build_priorities`; reads NO live Windows state, mutates nothing.
 /// The frontend passes back the exact JSON it got from get_game_readiness / get_recommendations /
 /// get_startup_entries / get_session_summaries, so the shapes are identical to get_priorities'.
+///
+/// `dismissed_ids` is the caller's set-aside rec list (`compy_dismissed_recs`). It is optional so
+/// the shape stays backward-compatible; omitting it means "nothing set aside".
 #[tauri::command]
 pub(crate) fn priorities_from(
     readiness: Value,
     recommendations: Value,
     startup: Value,
     sessions: Value,
+    dismissed_ids: Option<Vec<String>>,
 ) -> Priorities {
-    build_priorities(&readiness, &recommendations, &startup, &sessions)
+    build_priorities_filtered(
+        &readiness,
+        &recommendations,
+        &startup,
+        &sessions,
+        &dismissed_ids.unwrap_or_default(),
+    )
 }
 
 #[cfg(test)]
@@ -825,6 +880,97 @@ mod priority_tests {
         let row = p.already_fine.iter().find(|i| i.id == "pending-safe-recs").expect("fine row");
         assert!(row.rec_ids.is_empty(), "nothing pending → nothing to hand off");
         assert_eq!(row.linked, None);
+    }
+
+    // ── bug → guard: the Home → Lab dead end (self-review round 9, 2026-07-29) ──
+    // A user set "Enable Windows Game Mode" aside in the Lab. Home kept saying "1 worth fixing /
+    // TOP LIMITER: Enable Windows Game Mode — See in Lab", because the limiter came from HERE and
+    // the ranker had never heard of the set-aside set. They tapped through and found nothing.
+    // These pin the contract at the source: the call-to-action row obeys set-asides, the
+    // MEASUREMENT rows never do.
+
+    #[test]
+    fn a_set_aside_rec_stops_being_a_limiter() {
+        let recs = json!([rec_titled("game-mode", "Enable Windows Game Mode", false, "safe")]);
+        let live = build_priorities_filtered(&readiness(vec![]), &recs, &json!([]), &json!([]), &[]);
+        assert!(limiter_ids(&live).contains(&"pending-safe-recs"), "baseline: it IS a limiter");
+
+        let aside = build_priorities_filtered(
+            &readiness(vec![]),
+            &recs,
+            &json!([]),
+            &json!([]),
+            &["game-mode".to_string()],
+        );
+        assert!(
+            !limiter_ids(&aside).contains(&"pending-safe-recs"),
+            "a declined tweak must not send the user to the Lab to find nothing"
+        );
+        // …and the row that replaces it says WHY it's quiet — never "already applied, or none apply"
+        // (which would claim the rig is clean when it's only the user's own set-aside).
+        let row = aside.already_fine.iter().find(|i| i.id == "pending-safe-recs").expect("fine row");
+        assert!(row.reason.contains("you set 1 safe tweak aside"), "names the set-aside: {}", row.reason);
+        assert!(row.reason.contains("bring it back"), "offers the way back: {}", row.reason);
+        assert!(!row.reason.contains("already applied"), "never claims it's applied: {}", row.reason);
+    }
+
+    #[test]
+    fn a_partial_set_aside_leaves_an_honest_count_and_identity() {
+        let recs = json!([
+            rec_titled("game-mode", "Enable Windows Game Mode", false, "safe"),
+            rec_titled("hags-enable", "Hardware-accelerated GPU scheduling", false, "safe"),
+        ]);
+        let p = build_priorities_filtered(
+            &readiness(vec![]),
+            &recs,
+            &json!([]),
+            &json!([]),
+            &["game-mode".to_string()],
+        );
+        let row = p.limiters.iter().find(|i| i.id == "pending-safe-recs").expect("row present");
+        // Count, title, `linked` and rec_ids all derive from the SAME filtered list — so "2 safe
+        // tweaks not applied" can never survive next to a one-row Lab.
+        assert_eq!(row.title, "Hardware-accelerated GPU scheduling");
+        assert_eq!(row.linked.as_deref(), Some("hags-enable"));
+        assert_eq!(row.rec_ids, vec!["hags-enable"]);
+        assert!(!row.title.contains('2'), "the set-aside one is not counted: {}", row.title);
+    }
+
+    #[test]
+    fn set_asides_never_hide_a_real_measurement() {
+        // The memory-integrity row is rec-derived too, but it MEASURES the rig rather than asking
+        // for a tap. Filtering it would report a cleaner machine than the user has.
+        let recs = json!([rec_titled("memory-integrity", "Memory integrity is active", true, "safe")]);
+        let p = build_priorities_filtered(
+            &readiness(vec![]),
+            &recs,
+            &json!([]),
+            &json!([]),
+            &["memory-integrity".to_string()],
+        );
+        let row = p
+            .not_worth_touching
+            .iter()
+            .find(|i| i.id == "memory-integrity")
+            .expect("the measurement survives a set-aside");
+        assert!(row.reason.contains("is ON"), "still reports the true state: {}", row.reason);
+    }
+
+    #[test]
+    fn an_unknown_set_aside_id_changes_nothing() {
+        let recs = json!([rec_titled("game-mode", "Enable Windows Game Mode", false, "safe")]);
+        let p = build_priorities_filtered(
+            &readiness(vec![]),
+            &recs,
+            &json!([]),
+            &json!([]),
+            &["not-a-real-rec".to_string(), String::new()],
+        );
+        assert_eq!(
+            limiter_title(&p, "pending-safe-recs").as_deref(),
+            Some("Enable Windows Game Mode"),
+            "a stale/unknown id must never silence a real limiter"
+        );
     }
 
     #[test]

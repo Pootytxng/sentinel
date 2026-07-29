@@ -20,6 +20,7 @@ import { HudMasthead } from "./hud-masthead";
 import { SidePileContext } from "./side-pile";
 import { buildSetupSummary, deriveReverted } from "./use-scan";
 import { optimizeVerdict } from "./optimize-v2-data";
+import { useDismissed } from "./dismissed";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
@@ -103,6 +104,9 @@ export function OptimizeV2({
   const { t } = useTranslation();
   const reduced = useReducedMotion();
   const hud = useHudFlag();
+  // The ONE session-wide "Not for me" set — the room verdict must not promise work the user
+  // already declined (self-review round 9, 2026-07-29).
+  const { dismissed } = useDismissed();
   const [segment, setSegment] = useState<Segment>("fixes");
   const [pileOpen, setPileOpen] = useState(false);
   const [pileHost, setPileHost] = useState<HTMLElement | null>(null);
@@ -142,7 +146,7 @@ export function OptimizeV2({
   // ONE row (one-mention law). The verdict takes it too (V2-9 punch g): a drifted re-enable
   // must never be announced as "ready to apply".
   const reverted = useMemo(() => deriveReverted(changes), [changes]);
-  const verdict = optimizeVerdict(recs, isAppliable, activeCount, reverted, t);
+  const verdict = optimizeVerdict(recs, isAppliable, dismissed, activeCount, reverted, t);
   // Setup summary — a record of what the check measured, so it lives with the records on
   // Applied (owner: it felt unrelated in the fixes flow). Same pure builder Check used.
   const setupSummary = buildSetupSummary(readiness, priorities, t);

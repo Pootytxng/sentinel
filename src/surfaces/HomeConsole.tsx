@@ -28,6 +28,7 @@ import { Dock, type DockNode } from "../design/console/Dock";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { useConfirmOptional } from "../design/ConfirmDialog";
 import { safeFixesReadyList } from "./optimize-v2-data";
+import { useDismissed } from "./dismissed";
 import { RerunCheckBand } from "./RerunCheckBand";
 import { deriveReverted } from "./use-scan";
 import {
@@ -269,6 +270,9 @@ export function HomeConsole({
   // hard-require the provider on every mount (see useConfirmOptional). null → runFastPath no-ops.
   const confirm = useConfirmOptional();
   const intakeOn = useHomeIntakeFlag();
+  // The ONE session-wide "Not for me" set (see dismissed.ts) — Home reads it so the intake band
+  // never counts or applies a rec the user already declined in the Lab.
+  const { dismissed } = useDismissed();
   // Fast-path (option C) transient state: a busy guard against double-submit, and a real receipt
   // built from the batch result (never a fabricated "done" — it names applied AND skipped).
   const [fastPathBusy, setFastPathBusy] = useState(false);
@@ -502,8 +506,11 @@ export function HomeConsole({
   // SAME predicate the Optimize verdict counts, so the count and the applied ids can't diverge.
   const fastPathAvailable = intakeOn && !!onApplyBatch && !!isAppliable && recs !== undefined;
   const revertedIds = new Set(deriveReverted(changes).map((r) => r.rec_id));
+  // `dismissed` belongs in this predicate for the same reason `revertedIds` does: a rec the user
+  // declined is not something the one-tap band may count OR apply. Without it the band offered to
+  // apply a tweak the user had already said "Not for me" to (self-review round 9, 2026-07-29).
   const eligibleStack =
-    recs && isAppliable ? safeFixesReadyList(recs, isAppliable, revertedIds) : [];
+    recs && isAppliable ? safeFixesReadyList(recs, isAppliable, dismissed, revertedIds) : [];
   const stackReady = eligibleStack.length;
   // Intent rows (option A) filtered to rooms the live rail actually renders — a row must never
   // point at a room that isn't there (no dead ends). The room LABEL is resolved live from `rooms`.

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { TFunction } from "i18next";
 import type { GameReadiness, ReadinessCheck, Priorities, Recommendation } from "../types";
-import { peekProbe, putProbe } from "../data/probe-cache";
+import { peekProbe, putProbe, invalidateProbe } from "../data/probe-cache";
+import { dismissedIdList, onDismissedChange } from "./dismissed";
 
 // buildSetupSummary (A5): turn the settled scan into a plain-English, paste-ready block the user can
 // copy anywhere (a friend, a forum, a build note). PURE + read-only — it only restates what Compy
@@ -104,6 +105,12 @@ type ScanResult = {
 };
 const SCAN_KEY = "readiness-scan";
 
+// A cached scan carries the PRIORITIES that were ranked against the set-asides in force when it ran.
+// Setting a rec aside changes that ranking, so the cache is stale the instant one lands — without
+// this, re-opening Check re-seeds "TOP LIMITER: <the tweak you just declined>" from the old result.
+// Registered once at module load; `invalidateProbe` is a no-op when nothing is cached.
+onDismissedChange(() => invalidateProbe(SCAN_KEY));
+
 export function rowVerdict(s: ReadinessCheck["status"]): "ok" | "fix" | "unknown" {
   if (s === "attention") return "fix";
   if (s === "ready" || s === "advisory") return "ok";
@@ -155,6 +162,10 @@ async function fetchScan(): Promise<ScanResult> {
     recommendations: rc,
     startup,
     sessions,
+    // Set-asides reach the ranker so its call-to-action row can't point at a tweak the user
+    // already declined (self-review round 9 — Home said "1 worth fixing · TOP LIMITER: Enable
+    // Windows Game Mode" over a Lab with nothing in it). Measurement rows are unaffected.
+    dismissedIds: dismissedIdList(),
   });
   return {
     readiness: r,

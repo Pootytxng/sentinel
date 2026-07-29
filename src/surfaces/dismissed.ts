@@ -39,10 +39,15 @@ function persist(s: Set<string>): void {
 // in optimize-gauge-dock-guard.test.tsx.
 let current: Set<string> = read();
 const listeners = new Set<() => void>();
+// Non-React observers, kept in their OWN set on purpose: `subscribe` below treats "no listeners" as
+// "nobody has been keeping `current` honest, re-read it", and a permanent module-level subscriber
+// would silently disable that. These fire on every change and never unsubscribe.
+const observers = new Set<() => void>();
 
 function emit(): void {
   // Copy first: a listener that unsubscribes while we notify must not reshape the set mid-iteration.
   for (const notify of [...listeners]) notify();
+  for (const notify of [...observers]) notify();
 }
 
 function commit(next: Set<string>): void {
@@ -72,6 +77,23 @@ if (typeof window !== "undefined") {
     current = read();
     emit();
   });
+}
+
+/// Run `fn` whenever the set changes, from outside React. Used to drop derived caches that were
+/// computed against the old set — see `use-scan.ts`, where a stale cached scan would otherwise keep
+/// re-seeding a limiter the user had just set aside.
+export function onDismissedChange(fn: () => void): void {
+  observers.add(fn);
+}
+
+/// The same one set, for the non-React callers (`fetchScan`, which runs outside any component and
+/// has to hand the set-asides to the priorities ranker). Never snapshot this into a variable that
+/// outlives a tick — read it at the moment you need it.
+export function dismissedIdList(): string[] {
+  // No subscriber may exist yet (fetchScan can run before any surface mounts), so `current` could
+  // be stale from a previous mount cycle — re-read for the same reason `subscribe` does.
+  if (listeners.size === 0) current = read();
+  return [...current];
 }
 
 export function useDismissed() {

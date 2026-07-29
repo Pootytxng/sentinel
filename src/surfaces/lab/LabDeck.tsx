@@ -321,7 +321,7 @@ export function LabDeck({
   const measurement = measureTuning(armed, sessions, latestCmp);
   const tuningEvidenceVerdict = tuningEvidence(sessions);
   const safeReady =
-    fast.recs != null ? safeFixesReady(fast.recs, fast.isAppliable, revertedIds) : 0;
+    fast.recs != null ? safeFixesReady(fast.recs, fast.isAppliable, dismissed, revertedIds) : 0;
   // The honesty rail for every row's reading line: an instrument with no measurement says so.
   const facts: LabStationFacts = {
     bench,
