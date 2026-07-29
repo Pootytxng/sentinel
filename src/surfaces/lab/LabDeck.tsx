@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import "../../i18n";
 import { invoke } from "@tauri-apps/api/core";
@@ -33,6 +33,7 @@ import {
   proofStationFor,
   type LabGoal,
 } from "./lab-deck-data";
+import { computeJumpInset, scrollportOf, scrollportTop } from "./jump-inset";
 import type {
   ArmedComparison,
   BenchmarkState,
@@ -152,6 +153,37 @@ export function LabDeck({
     el?.scrollIntoView?.({ behavior: reduced ? "auto" : "smooth", block: "start" });
     el?.focus?.({ preventScroll: true });
   };
+
+  // …and it must land BELOW the sticky nav, not behind it. The strip the nav covers is the room
+  // scroller's top padding plus the nav's own (wrappable) height — a number no stylesheet can know,
+  // so the deck measures it and publishes it as --ld-jump-inset for .ld-section's scroll-margin-top.
+  // Re-measured on nav resize (the five names wrap to two rows on a narrow stage) and on window
+  // resize; see jump-inset.ts for why a constant was wrong (it clipped four of five headings).
+  const deckRef = useRef<HTMLDivElement | null>(null);
+  const navRef = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const deck = deckRef.current;
+    const nav = navRef.current;
+    if (!deck || !nav) return;
+    const measure = () => {
+      const navBottom = nav.getBoundingClientRect?.()?.bottom ?? 0;
+      const inset = computeJumpInset(navBottom, scrollportTop(scrollportOf(deck)));
+      if (inset !== null) deck.style.setProperty("--ld-jump-inset", `${inset}px`);
+    };
+    measure();
+    const ro =
+      typeof ResizeObserver === "function"
+        ? new ResizeObserver(() => {
+            measure();
+          })
+        : null;
+    ro?.observe(nav);
+    window.addEventListener?.("resize", measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener?.("resize", measure);
+    };
+  }, []);
 
   // WHERE AM I — the deck answers that with the layout itself, not a paragraph (recovery item 9:
   // "orientation should be inherent in layout and controls"). An observer lights the nav pill and
@@ -534,11 +566,11 @@ export function LabDeck({
   );
 
   return (
-    <div className="lab-deck" data-motion={reduced ? "reduced" : "full"}>
+    <div className="lab-deck" data-motion={reduced ? "reduced" : "full"} ref={deckRef}>
       {/* ONE visible navigation grammar for the whole face: five names, in journey order, that
           move you down the same page. Nothing here hides a destination behind a mode. The lit pill
           is where you ARE, so the nav doubles as orientation instead of only as transport. */}
-      <nav className="ld-nav" aria-label={t("lab.labDeck.nav.label")}>
+      <nav className="ld-nav" aria-label={t("lab.labDeck.nav.label")} ref={navRef}>
         {NAV.map((s) => (
           <button
             key={s}

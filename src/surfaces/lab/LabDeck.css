@@ -79,7 +79,13 @@
   flex-direction: column;
   gap: 12px;
   padding-left: 26px;
-  scroll-margin-top: 56px; /* the sticky nav must never cover the heading you jumped to */
+  /* The sticky nav must never cover the heading you jumped to. The strip it covers is the room
+     scroller's top padding PLUS the nav's own height (which grows to two rows when the five names
+     wrap), so a constant is wrong by construction — 56px here clipped four of the five destination
+     headings by ~15px at 1280×720 (self-review round 2, 2026-07-28). LabDeck measures the nav's real
+     bottom edge and publishes --ld-jump-inset; the 82px fallback is mirrored in jump-inset.ts and
+     pinned by lab-jump-clearance.test.ts. */
+  scroll-margin-top: var(--ld-jump-inset, 82px);
   outline: none;
 }
 .ld-rail {
