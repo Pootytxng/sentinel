@@ -39,6 +39,19 @@ fn main() {
     let (hash, dirty) = git_stamp();
     println!("cargo:rustc-env=COMPY_GIT_HASH={hash}");
     println!("cargo:rustc-env=COMPY_GIT_DIRTY={}", if dirty { "1" } else { "0" });
+    // Build channel (product-recovery train, 2026-07-28): an OPTIONAL operator label that replaces
+    // the "dev"/"release" profile word in the stamp — `COMPY_BUILD_CHANNEL="review candidate"`
+    // produces "896f1c2 · review candidate" in the topbar, Settings → About, and the window title.
+    // A local review build must never be mistakable for the public release it was cut beside: the
+    // git hash already proves WHICH commit, this says WHAT IT IS FOR. Unset ⇒ empty ⇒ the stamp is
+    // byte-identical to before, so ordinary release builds are untouched. `rerun-if-env-changed` is
+    // load-bearing: without it, flipping the variable would reuse the cached stamp from the last
+    // build (the same staleness trap documented for the git watch set below).
+    println!(
+        "cargo:rustc-env=COMPY_BUILD_CHANNEL={}",
+        std::env::var("COMPY_BUILD_CHANNEL").unwrap_or_default()
+    );
+    println!("cargo:rerun-if-env-changed=COMPY_BUILD_CHANNEL");
     // Re-run this stamp when an input that can make the binary differ from HEAD changes. Once a
     // build script emits ANY rerun-if-changed, cargo watches ONLY the listed paths (it drops its
     // default whole-package scan) — so the OLD watch set (`.git/HEAD` + `.git/index` alone) went

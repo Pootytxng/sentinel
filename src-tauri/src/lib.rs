@@ -398,13 +398,34 @@ pub(crate) fn nagle_disabled_on_any_nic() -> bool {
 // Baked at COMPILE time by build.rs (env!) — the running binary never invokes git. Format:
 // "ab12cd3 · dev" / "ab12cd3+dirty · release". Surfaces: Settings → About + the dev window title.
 
+/// An optional build-channel label (`COMPY_BUILD_CHANNEL`, baked by build.rs) replaces the profile
+/// word: "896f1c2 · review candidate". It is OPERATOR-supplied at compile time, so it is sanitized
+/// to a short printable label before it can reach a window title — a stamp is a provenance claim,
+/// and a claim carrying arbitrary bytes is not one. Empty/garbage ⇒ None ⇒ the profile word stands.
+fn sanitize_channel(raw: &str) -> Option<String> {
+    let cleaned: String = raw
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '.' | '_' | '-'))
+        .take(24)
+        .collect();
+    let trimmed = cleaned.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
 /// Pure formatter — split from the env!-reading wrapper so the format is testable.
-fn format_build_stamp(hash: &str, dirty: bool, debug: bool) -> String {
+fn format_build_stamp(hash: &str, dirty: bool, debug: bool, channel: &str) -> String {
     format!(
         "{hash}{} · {}",
         if dirty { "+dirty" } else { "" },
-        if debug { "dev" } else { "release" },
+        sanitize_channel(channel)
+            .unwrap_or_else(|| if debug { "dev" } else { "release" }.to_string()),
     )
+}
+
+/// The channel label this binary was built with, if any. Drives the window title so a review
+/// candidate announces itself in the taskbar, not only inside Settings → About.
+pub(crate) fn build_channel() -> Option<String> {
+    sanitize_channel(env!("COMPY_BUILD_CHANNEL"))
 }
 
 pub(crate) fn build_stamp() -> String {
@@ -412,6 +433,7 @@ pub(crate) fn build_stamp() -> String {
         env!("COMPY_GIT_HASH"),
         env!("COMPY_GIT_DIRTY") == "1",
         cfg!(debug_assertions),
+        env!("COMPY_BUILD_CHANNEL"),
     )
 }
 
@@ -1159,7 +1181,10 @@ pub fn run() {
             // §C build stamp (spec 2026-06-12): DEV windows title themselves with the exact build
             // so an owner review can never run against a stale window unnoticed. Release titles
             // stay clean (the stamp lives in Settings → About there).
-            if cfg!(debug_assertions) {
+            // A CHANNEL build (COMPY_BUILD_CHANNEL, e.g. a local review candidate) titles itself
+            // too even in release: it is not the public build, and the taskbar should say so
+            // without the owner opening Settings.
+            if cfg!(debug_assertions) || build_channel().is_some() {
                 use tauri::Manager;
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.set_title(&format!("Compy · {}", build_stamp()));
@@ -1227,13 +1252,48 @@ mod safety_tests {
     // §C build stamp: the format is the contract both surfaces (About + dev title) render.
     #[test]
     fn build_stamp_format_is_pinned() {
-        assert_eq!(format_build_stamp("ab12cd3", false, true), "ab12cd3 · dev");
-        assert_eq!(format_build_stamp("ab12cd3", true, false), "ab12cd3+dirty · release");
-        assert_eq!(format_build_stamp("nogit", false, false), "nogit · release");
+        assert_eq!(format_build_stamp("ab12cd3", false, true, ""), "ab12cd3 · dev");
+        assert_eq!(format_build_stamp("ab12cd3", true, false, ""), "ab12cd3+dirty · release");
+        assert_eq!(format_build_stamp("nogit", false, false, ""), "nogit · release");
         // The real stamp always carries a profile and a non-empty hash.
         let real = build_stamp();
-        assert!(real.ends_with(" · dev") || real.ends_with(" · release"));
+        let profile = real.rsplit(" · ").next().unwrap();
+        assert!(!profile.is_empty());
         assert!(!real.starts_with(" "));
+        // With no channel set, the profile is still exactly the old two-word contract.
+        if build_channel().is_none() {
+            assert!(real.ends_with(" · dev") || real.ends_with(" · release"));
+        }
+    }
+
+    // §C build channel (product-recovery train, 2026-07-28): a local review candidate must be
+    // unmistakable for the public release cut beside it. The channel REPLACES the profile word —
+    // and because the label is operator-supplied at compile time, the sanitizer is the guard that
+    // keeps a provenance claim from carrying arbitrary bytes into a window title.
+    #[test]
+    fn build_channel_replaces_the_profile_word_and_is_sanitized() {
+        assert_eq!(
+            format_build_stamp("896f1c2", false, false, "review candidate"),
+            "896f1c2 · review candidate"
+        );
+        // Dirty still shows through — the channel says WHAT, never hides the tree state.
+        assert_eq!(
+            format_build_stamp("896f1c2", true, false, "review candidate"),
+            "896f1c2+dirty · review candidate"
+        );
+        // Empty / whitespace / all-punctuation fall back to the profile word rather than
+        // rendering a stamp that ends in a dangling separator.
+        for junk in ["", "   ", "\n\t", "()<>"] {
+            assert_eq!(format_build_stamp("ab12cd3", false, false, junk), "ab12cd3 · release");
+        }
+        // Control characters, markup and newlines are stripped; the label is capped short. The
+        // filter is an ALLOWLIST, not a markup parser — "<b>" loses its brackets and leaves the
+        // letter behind, which is the honest outcome: nothing structural survives.
+        assert_eq!(sanitize_channel("  review \n").as_deref(), Some("review"));
+        let hostile = sanitize_channel("<script>a/b</script>").unwrap();
+        assert!(!hostile.contains(['<', '>', '/']));
+        assert_eq!(sanitize_channel(&"x".repeat(80)).unwrap().chars().count(), 24);
+        assert!(!format_build_stamp("ab12cd3", false, false, "a\u{7}b").contains('\u{7}'));
     }
 
     // §C build stamp — the dirty check MUST stay root-anchored. build.rs runs with CWD = the crate
