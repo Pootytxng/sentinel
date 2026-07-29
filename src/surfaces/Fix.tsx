@@ -18,6 +18,7 @@ import { PROVENANCE_LABEL, PROVENANCE_NOTE } from "../data/provenance";
 import { recMutation } from "../data/rec-mutations";
 import { slimProofLine } from "../data/slim-proof";
 import { SlimRecRow, SlimDetailRow } from "../design/SlimRecRow";
+import { CarriedTag } from "../design/CarriedTag";
 import { ActionDrawer, type DrawerRec } from "./ActionDrawer";
 import { gameModeRevertedExternally } from "./dashboard-data";
 import { SidePileItem, SIDE_PILE_ORDER } from "./side-pile";
@@ -135,6 +136,12 @@ type Props = {
   // drifted group with its state on it (one-mention law), never a second time under ready.
   v2Ia?: boolean;
   reverted?: { rec_id: string; title: string }[];
+  // Check handoff (recovery item 4): the exact rec ids the user was just shown in a check, carried
+  // here by the typed handoff contract (data/check-handoff.ts). They sort to the TOP of the ready
+  // list and wear a "from your check" tag, so what Compy named is what the user sees first. Purely
+  // presentational — order and a marker, never a different action, never an auto-apply. Absent for
+  // every other caller → the list is byte-identical to before.
+  carried?: readonly string[];
 };
 
 // Humanized timestamp (ledger §2): "3 days ago · 6:08 AM", never raw seconds.
@@ -325,6 +332,7 @@ export function SlimFixRow({
   onDismiss,
   vendor,
   gameModeReverted,
+  carried,
 }: {
   rec: Rec;
   applied: boolean;
@@ -335,6 +343,8 @@ export function SlimFixRow({
   onDismiss: (id: string) => void;
   vendor?: GpuVendor;
   gameModeReverted?: boolean;
+  /** Carried here by the Check handoff — a "from your check" marker only (never a different act). */
+  carried?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const mut = recMutation(rec.id);
@@ -342,6 +352,8 @@ export function SlimFixRow({
   const why = rec.description || rec.impact;
   return (
     <SlimRecRow
+      carried={carried}
+      carriedLabel={t("optimize.fix.fromYourCheck")}
       title={<RecTitle id={rec.id} title={rec.title} />}
       proof={slimProofLine(rec)}
       meta={<ExpertTargetLine id={rec.id} />}
@@ -616,18 +628,28 @@ function GuidedRow({
   vendor,
   onDismiss,
   onWhatsThis,
+  carried,
 }: {
   rec: Rec;
   vendor: GpuVendor;
   onDismiss: (id: string) => void;
   onWhatsThis: (id: string) => void;
+  /** Carried here by the Check handoff. A "from your check" marker only — a rec Compy can't flip
+   *  safely still opens exactly the same real steps it always did. */
+  carried?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const [open, setOpen] = useState(false);
   const guide = GUIDED_STEPS[rec.id];
   const walkthrough = walkthroughForKeyForLanguage(rec.id, i18n.language);
   return (
-    <li className={"fix-row fix-row-advisory" + (open ? " fix-advisory-open" : "")}>
+    <li
+      className={
+        "fix-row fix-row-advisory" +
+        (open ? " fix-advisory-open" : "") +
+        (carried ? " fix-row-carried" : "")
+      }
+    >
       <div className="fix-row-main">
         {/* The WHOLE head is a door (tester J 2026-07-22: clicked the card, nothing happened,
             concluded the section was dead — the affordance has to be the card, not a small link).
@@ -643,6 +665,7 @@ function GuidedRow({
           <RecTitle id={rec.id} title={rec.title} />
           <EvidenceChip p={rec.provenance} />
           <span className="fix-guided-tag">{t("optimize.fix.guidedTag")}</span>
+          {carried ? <CarriedTag label={t("optimize.fix.fromYourCheck")} /> : null}
         </button>
         <RecReason id={rec.id} text={rec.impact || rec.description} />
         <ExpertTargetLine id={rec.id} />
@@ -915,6 +938,7 @@ export default function Fix({
   view = "all",
   v2Ia = false,
   reverted = [],
+  carried = [],
 }: Props) {
   const { t } = useTranslation();
   // Which section(s) of the surface to render — the merged Optimize shell drives this via segments;
@@ -950,7 +974,20 @@ export default function Fix({
   // Classic (v2Ia false): drifted stays empty and readyRows === worthFixing, byte-identical.
   const revertedIds = new Set(reverted.map((r) => r.rec_id));
   const drifted = v2Ia ? worthFixing.filter((r) => revertedIds.has(r.id)) : [];
-  const readyRows = v2Ia ? worthFixing.filter((r) => !revertedIds.has(r.id)) : worthFixing;
+  const readyBase = v2Ia ? worthFixing.filter((r) => !revertedIds.has(r.id)) : worthFixing;
+  // Check-handoff ordering: rows the user was just told about lead their group, in the order the
+  // check named them; everything else keeps its existing relative order (a stable sort by carried
+  // rank). No carried ids → rank is equal for all → the list is exactly what it was.
+  const carriedRank = new Map(carried.map((id, i) => [id, i]));
+  const carriedFirst = <T extends { id: string }>(rows: T[]): T[] =>
+    carriedRank.size === 0
+      ? rows
+      : rows
+          .map((r, i) => ({ r, i, rank: carriedRank.get(r.id) ?? Number.MAX_SAFE_INTEGER }))
+          .sort((a, b) => a.rank - b.rank || a.i - b.i)
+          .map((x) => x.r);
+  const isCarried = (id: string) => carriedRank.has(id);
+  const readyRows = carriedFirst(readyBase);
 
   // §4 "Apply all safe fixes" — SAFE-tier only (moderate stays individual; advisory can't apply;
   // dismissed/not-for-this-rig already excluded since this derives from worthFixing). One consent
@@ -1117,7 +1154,7 @@ export default function Fix({
             {t("optimize.fix.driftedIntro", { count: drifted.length })}
           </p>
           <ul className="fix-list">
-            {drifted.map((rec) => (
+            {carriedFirst(drifted).map((rec) => (
               <SlimFixRow
                 key={rec.id}
                 rec={rec}
@@ -1126,6 +1163,7 @@ export default function Fix({
                 applied={false}
                 activeChange={undefined}
                 busy={rowBusy(rec)}
+                carried={isCarried(rec.id)}
                 onToggle={() => onToggleRec(rec.id)}
                 onWhatsThis={onOpenLibrary}
                 onDismiss={dismiss}
@@ -1184,6 +1222,7 @@ export default function Fix({
                 applied={false}
                 activeChange={undefined}
                 busy={rowBusy(rec)}
+                carried={isCarried(rec.id)}
                 onToggle={() => onToggleRec(rec.id)}
                 onWhatsThis={onOpenLibrary}
                 onDismiss={dismiss}
@@ -1504,8 +1543,15 @@ export default function Fix({
               {t("optimize.fix.advisoryIntro")}
             </p>
             <ul className="fix-list">
-              {advisory.map((rec) => (
-                <GuidedRow key={rec.id} rec={rec} vendor={vendor} onDismiss={dismiss} onWhatsThis={onOpenLibrary} />
+              {carriedFirst(advisory).map((rec) => (
+                <GuidedRow
+                  key={rec.id}
+                  rec={rec}
+                  vendor={vendor}
+                  onDismiss={dismiss}
+                  onWhatsThis={onOpenLibrary}
+                  carried={isCarried(rec.id)}
+                />
               ))}
             </ul>
           </>
@@ -1515,8 +1561,15 @@ export default function Fix({
               {t("optimize.fix.advisoryIntro")}
             </p>
             <ul className="fix-list">
-              {advisory.map((rec) => (
-                <GuidedRow key={rec.id} rec={rec} vendor={vendor} onDismiss={dismiss} onWhatsThis={onOpenLibrary} />
+              {carriedFirst(advisory).map((rec) => (
+                <GuidedRow
+                  key={rec.id}
+                  rec={rec}
+                  vendor={vendor}
+                  onDismiss={dismiss}
+                  onWhatsThis={onOpenLibrary}
+                  carried={isCarried(rec.id)}
+                />
               ))}
             </ul>
           </CollapsibleSection>

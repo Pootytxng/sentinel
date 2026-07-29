@@ -298,6 +298,7 @@
     "driftedSectionLabel": "Applied — turned off outside Compy",
     "driftedIntro_one": "You turned this on with Compy; something outside Compy switched it back off. Flip it back on — or leave it, your call. Compy never re-applies on its own.",
     "driftedIntro_other": "You turned these on with Compy; something outside Compy switched them back off. Flip any back on — or leave it, your call. Compy never re-applies on its own.",
+    "fromYourCheck": "From your check",
     "sectionReadyV2": "Ready — one click, reversible",
     "sectionWorthMaking": "Worth making for your rig",
     "applyReviewedCount": "Apply reviewed ({{count}})",

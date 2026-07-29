@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import "../i18n";
 import "./doorknob.css";
 import "./SlimRecRow.css";
+import { CarriedTag } from "./CarriedTag";
 
 // SlimRecRow — the master-detail rec row (P1 UI slim-down, spec 2026-07-01-p1-slimrows-optimize).
 // Collapsed: status dot · title + ONE always-visible proof line · badge · one control · chevron —
@@ -60,6 +61,8 @@ export function SlimRecRow({
   status,
   control,
   defaultOpen,
+  carried,
+  carriedLabel,
   children,
 }: {
   title: ReactNode;
@@ -72,13 +75,21 @@ export function SlimRecRow({
   /** The row's single control (Fix passes the existing TrustSwitch — semantics unchanged). */
   control: ReactNode;
   defaultOpen?: boolean;
+  /**
+   * This row is one the user was just shown in a check and carried here by the handoff contract
+   * (data/check-handoff.ts). Presentational ONLY — a marker so the user recognises the thing they
+   * came for; it never changes the row's control, action, or semantics.
+   */
+  carried?: boolean;
+  /** Localized text for the carried marker (the caller owns the wording). */
+  carriedLabel?: string;
   /** Detail-panel content, revealed in place on row click / chevron. */
   children?: ReactNode;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(!!defaultOpen);
   return (
-    <li className="slimrow">
+    <li className={carried ? "slimrow slimrow-carried" : "slimrow"}>
       <div className="slimrow-head">
         <button
           type="button"
@@ -88,7 +99,10 @@ export function SlimRecRow({
         >
           <span className={`slimrow-dot slimrow-dot-${status}`} aria-hidden="true" />
           <span className="slimrow-main">
-            <span className="slimrow-title">{title}</span>
+            <span className="slimrow-title">
+              {title}
+              {carried && carriedLabel ? <CarriedTag label={carriedLabel} /> : null}
+            </span>
             <span className="slimrow-proof">{proof}</span>
             {meta}
           </span>

@@ -280,6 +280,7 @@
     "consentLine": "未经你明确同意,Compy 绝不会更改任何东西——而且每次应用前都会先保存撤销所需的信息,因此这里的任何更改都可以从「已应用」中回滚。",
     "driftedSectionLabel": "已应用——在 Compy 之外被关闭",
     "driftedIntro_other": "你曾用 Compy 打开这些设置;但 Compy 之外的操作又把它们关闭了。可以重新打开任意一项——要不要开,你说了算。Compy 绝不会自作主张重新应用。",
+    "fromYourCheck": "来自你的检查",
     "sectionReadyV2": "已就绪——一键搞定,可撤销",
     "sectionWorthMaking": "值得为你的主机做的更改",
     "applyReviewedCount": "应用已选项({{count}})",

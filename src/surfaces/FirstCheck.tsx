@@ -9,7 +9,7 @@ import { BootTheater } from "./BootTheater";
 import { readFirstCheckTheater } from "../design/theme";
 import { useReducedMotion } from "../design/use-motion";
 import { recordLastCheck } from "./last-check";
-import { describePriority, type RecDetail } from "../data/rec-detail";
+import { actionable, describePriority, type RecDetail } from "../data/rec-detail";
 import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
 import { RecDetailCard, type RecDetailCardLabels } from "../design/RecDetailCard";
 import "./FirstCheck.css";
@@ -89,7 +89,9 @@ export default function FirstCheck({
   onDone: () => void;
   // Post-check route into the Lab's Optimize station (tester J 2026-07-22). Optional: when absent
   // the verdict shows only "Open the dashboard" (byte-identical to before this prop).
-  onGoToLab?: () => void;
+  // It hands over the EXACT rec ids this check found actionable — identity, not prose — so the
+  // destination can lead with them instead of dropping the user at the top of a full surface.
+  onGoToLab?: (recIds: string[]) => void;
   /** The frontend mirror of the backend's APPLIABLE_REC_IDS (App.tsx). Required to tell an
    *  applyable fix from an advisory one — without it the arc offered "Apply" on recs
    *  `apply_recommendation` can't dispatch, which throws at the IPC boundary. */
@@ -160,6 +162,13 @@ export default function FirstCheck({
   const topDetails = detailsFor(top);
   const rest = limiters.slice(1);
   const greenChecks = checks.filter((c) => rowVerdict(c.status) === "ok");
+
+  // What this check found that the user can actually act on — the payload of the Lab handoff.
+  // Limiter order is Compy's own ranking, so the destination inherits the priority it just showed.
+  // Deduped: two rows can legitimately be about the same rec (an aggregate + its own line).
+  const carriedRecIds = Array.from(
+    new Set(limiters.flatMap((lim) => actionable(detailsFor(lim)).map((d) => d.id))),
+  );
 
   // Persist the honest last-check record when a real check resolves to a verdict — Home's Re-run
   // band reads this to show "2h ago · N/N clean". Re-fires if an in-arc apply re-runs the scan (the
@@ -360,10 +369,12 @@ export default function FirstCheck({
                     } catch {
                       /* non-fatal */
                     }
-                    onGoToLab();
+                    onGoToLab(carriedRecIds);
                   }}
                 >
-                  Take me to the Lab
+                  {/* Name the destination only when there IS something to do there. With nothing
+                      actionable, "Take me to Optimize" would promise work that doesn't exist. */}
+                  {carriedRecIds.length > 0 ? "Take me to Optimize" : "Take me to the Lab"}
                 </button>
               )}
               <button className="fc-btn fc-btn-go" onClick={finish}>

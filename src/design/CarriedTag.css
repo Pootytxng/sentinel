@@ -1,0 +1,16 @@
+/* Check handoff marker (CarriedTag.tsx). One definition for every row primitive that can be a
+   destination of the Check → Optimize handoff, so "the thing I came for" looks the same wherever it
+   lands. Quiet accent pill — recognition, not an alert. */
+.cmp-carried-tag {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent-bright);
+  border: 1px solid var(--accent-line);
+  white-space: nowrap;
+}

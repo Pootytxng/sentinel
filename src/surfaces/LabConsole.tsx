@@ -20,6 +20,7 @@ import { changesBetweenRuns } from "./benchmark-view";
 import { safeFixesReady } from "./optimize-v2-data";
 import { deriveReverted } from "./use-scan";
 import { peekProbe, cachedProbe } from "../data/probe-cache";
+import { readHandoff } from "../data/check-handoff";
 import { measureTuning, tuningEvidence } from "../data/tuning-measure";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
 import { latestSession } from "./dashboard-data";
@@ -190,20 +191,19 @@ export function LabConsole({
     const k = key as LabStationKey;
     setOpenStation((cur) => (cur === k ? null : k));
   };
-  // Post-check deep-link (tester J 2026-07-22, Phase 5): "Take me to the Lab" from the first-check
-  // verdict lands here and auto-opens the Optimize station (the door to the safe-tweak toggles)
-  // instead of dropping the user on the dock to hunt for it. Race-free: the intent is written to
-  // localStorage BEFORE this face mounts. One-shot — cleared on read, so a normal Lab visit is
-  // unaffected.
+  // Post-check handoff (tester J 2026-07-22 → recovery train items 3/4): "Take me to Optimize" on
+  // the check verdict lands here, auto-opens the Optimize station AND carries the exact rec ids the
+  // check found, so the destination leads with them instead of dropping the user on the dock (or at
+  // the top of a full surface) to hunt for what Compy just named. Race-free: the handoff is written
+  // BEFORE this face mounts. One-shot — readHandoff consumes it, so a later Lab visit is an ordinary
+  // visit. Intent only: arriving never applies anything.
+  const [carriedRecIds, setCarriedRecIds] = useState<string[]>([]);
   useEffect(() => {
-    let pending: string | null = null;
-    try {
-      pending = localStorage.getItem("compy_lab_open_station");
-      if (pending) localStorage.removeItem("compy_lab_open_station");
-    } catch {
-      /* ignore — no deep-link this visit */
+    const handoff = readHandoff();
+    if (handoff?.station === "optimize") {
+      setOpenStation("optimize");
+      setCarriedRecIds(handoff.rec_ids);
     }
-    if (pending === "optimize") setOpenStation("optimize");
   }, []);
 
   // The identical instrument bodies the classic Lab renders — one source for every layout. Optimize
@@ -361,7 +361,11 @@ export function LabConsole({
                 {t("lab.labConsole.optimizeReassurance")}
               </p>
             )}
-            {openStation === "optimize" ? <OptimizeStation {...fast} /> : stationBody(openStation)}
+            {openStation === "optimize" ? (
+              <OptimizeStation {...fast} carriedRecIds={carriedRecIds} />
+            ) : (
+              stationBody(openStation)
+            )}
           </div>
         </div>
       )}

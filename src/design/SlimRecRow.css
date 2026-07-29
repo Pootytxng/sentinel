@@ -62,6 +62,17 @@
   font-weight: 620;
   font-size: 14.5px;
   color: var(--fg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Check handoff: the row the user was just shown, so they recognise what they came for. A marker,
+   not a state — the control, action, and semantics are identical to any other row. The pill itself
+   is shared with every other carried row primitive (design/CarriedTag.css). */
+.slimrow-carried {
+  border-color: var(--accent-line);
 }
 /* The ONE always-visible measured proof line (honesty guardrail — never hidden, never empty). */
 .slimrow-proof {

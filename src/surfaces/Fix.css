@@ -804,6 +804,11 @@
 .fix-row-advisory:hover {
   border-color: var(--ix-accent, #2ee6c0);
 }
+/* Check handoff: a row the user was just shown, carried here. Same marker grammar as .slimrow-carried
+   — a frame + the shared CarriedTag pill, never a different control or action. */
+.fix-row-carried {
+  border-color: var(--accent-line);
+}
 .fix-advisory-quickacts {
   display: flex;
   align-items: center;

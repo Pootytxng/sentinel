@@ -166,7 +166,13 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   to the Optimize destination; the destination opens on the exact findings; browser/room back
   behavior remains understandable; nothing is applied by navigating.
 - **Class:** structural
-- **Evidence after implementation:** _(pending)_
+- **Evidence after implementation:** **first-run arc DONE, re-run Check surface STILL OPEN.**
+  `FirstCheck.tsx:170` computes the actionable ids, the CTA label degrades to `Take me to the Lab`
+  when nothing is actionable (`FirstCheck.tsx:376`), `App.tsx` `onGoToLab` writes the typed intent
+  then calls the ordinary `navHome("lab")` — no teleport, no bypass of the rail. Destination proof:
+  `check-handoff-journey.test.tsx` "opens Optimize automatically — no hunting for where to act" +
+  "arriving applies nothing". **Remaining:** `Check.tsx` (the re-run surface) still ends without a
+  destination CTA → item stays `PARTIAL`; scheduled with Phase 2C.
 
 ---
 
@@ -181,7 +187,8 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   real titles live only in prose `reason`, `.take(4)`-capped. `FirstCheck.tsx:205-247` added an
   expandable row (the earlier partial fix) but `recFor()` (`FirstCheck.tsx:57-62`) returns `null` for
   the aggregate, so the expansion shows the reason prose and the **wrong** "Hands-on fix" chip.
-- **Status:** `PARTIAL` — and the partial fix currently states something untrue (see §0.3).
+- **Status:** `RESOLVED` (654bf53) — was `PARTIAL`, and the earlier partial fix stated something
+  untrue (§0.3); that false "Hands-on fix" chip is gone from `FirstCheck.tsx` entirely.
 - **Intended correction:** carry stable recommendation IDs in the payload. Each finding renders with
   real data: name · what Compy detected · why it matters on THIS rig · current state · recommended
   state · reversibility/risk · whether Compy can apply it directly · the correct available action.
@@ -194,7 +201,14 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   offers its correct action; with several, every one is named and identity is preserved; the
   "Hands-on fix" chip appears only when the rec genuinely has no safe switch.
 - **Class:** functional + structural (copy is downstream)
-- **Evidence after implementation:** _(pending)_
+- **Evidence after implementation:** commit `654bf53`. `priorities.rs` emits `rec_ids` on every
+  `PriorityItem` (identity, not prose); `src/data/rec-detail.ts` resolves a row → one `RecDetail`
+  per real recommendation and classifies the ONE honest action (`apply` | `applied` | `manual` |
+  `ineligible`); `design/RecDetailCard.tsx` renders it on both Check faces. Guards:
+  `rec-detail.test.ts` (incl. never re-deriving a rec from prose) · `Check.test.tsx` +
+  `FirstCheck.test.tsx` pin that every tweak is named, that Apply dispatches THAT rec's id (not the
+  row's, not row-position), and that a single-rec row is byte-identical to before. No fabricated
+  fps/latency/temp numbers anywhere in the card.
 
 ---
 
@@ -224,7 +238,18 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
 - **Acceptance criteria:** the contract is typed and versioned; a malformed/absent payload degrades
   to today's plain "open Optimize" behavior; back navigation stays sane; nothing auto-applies.
 - **Class:** structural
-- **Evidence after implementation:** _(pending)_
+- **Evidence after implementation:** **contract DONE, source coverage still `PARTIAL`.**
+  `src/data/check-handoff.ts` — versioned (`v: 1`), station/source-typed, consume-once (cleared on
+  read BEFORE validation, so a rejected payload can't haunt the next visit), 5-minute age cap.
+  Writer `App.tsx` `onGoToLab`; reader `LabConsole.tsx` on mount → `setOpenStation("optimize")` +
+  `carriedRecIds`. The retired `compy_lab_open_station` bare string has no live reader or writer
+  left. Guards: `check-handoff.test.ts` (24 unit tests: unparseable JSON, non-object, foreign
+  version, unknown station/source, non-string-array ids, missing/non-finite `at`, age cap, backwards
+  clock jump, rejected-payload-is-cleared) + the 13 journey tests.
+  **Deliberate deviation from the stated criterion:** a malformed/absent payload degrades to *the
+  Lab opening normally*, not to "plain open Optimize" — a payload Compy can't trust shouldn't get to
+  move the user either. **Remaining:** only the first-run arc writes an intent; `Check.tsx` doesn't
+  → `PARTIAL` with item 1.
 
 ---
 
@@ -236,7 +261,7 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   were just told about. The check's work is discarded at the door.
 - **Current implementation:** none — the handoff carries no identity (§0.2). The Optimize station
   renders its standard grouping with no arrival context.
-- **Status:** `UNRESOLVED`
+- **Status:** `RESOLVED`
 - **Intended correction:** the destination prioritizes/highlights the exact carried IDs and
   acknowledges context (e.g. *"Compy found these during your check"*), without silently applying
   anything and without dumping the user at the top of the Lab.
@@ -246,7 +271,19 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   finding gone stale before arrival · already applied · not automatically appliable · a later
   revisit of the Lab (context must not haunt the room forever) · nothing actionable found.
 - **Class:** functional + structural
-- **Evidence after implementation:** _(pending)_
+- **Evidence after implementation:** the destination re-reads the LIVE catalog rather than replaying
+  what the check claimed — `resolveCarried()` splits the carried ids into `open` / `done` / `missing`
+  in carried order, and `OptimizeStation` renders the `.lab-carried` arrival banner
+  ("Compy found these during your check" / "already on" / "no longer applies to this rig").
+  `Fix.tsx` sorts carried rows to the front with a **stable** `carriedFirst()` and marks them with
+  the shared `design/CarriedTag.tsx` pill — on BOTH row families: `SlimRecRow` (`.slimrow-carried`)
+  and the guided "Needs your call" `GuidedRow` (`.fix-row-carried`), which still opens its real
+  steps. **Marker + ordering only — no row's control, action, or semantics change, so no new
+  mutation path exists.** All seven cases proven in `src/surfaces/check-handoff-journey.test.tsx`
+  (13 tests): one found · several found (order preserved) · stale → stated honestly, never invented ·
+  applied-since → "already on" and not re-offered · manual-only → marked and opens its guide · later
+  revisit → consume-once + age cap · nothing actionable → station opens, no banner, CTA already
+  degraded upstream. Arriving applies nothing (`onToggleRec` / `onApplyBatch` never called).
 
 ---
 
@@ -279,7 +316,16 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
   (verified against `isAppliable` / `GUIDED_STEPS`, never guessed from prose); a manual-only finding
   opens its real guide; dismissal remains available everywhere a finding is shown.
 - **Class:** functional
-- **Evidence after implementation:** _(pending)_
+- **Evidence after implementation:** **the dead end is gone; dismissal at the Check surface is
+  not.** `654bf53` deleted the static `fc-chip-muted` "Hands-on fix" span from `FirstCheck.tsx`
+  outright — every finding on both Check faces now mounts `RecDetailCard`, which offers exactly one
+  action classified from real capability (`isAppliable` / `GUIDED_STEPS`), never guessed from prose:
+  Apply (through the existing audited `apply_recommendation` path), "already on", the rig's real
+  ineligibility reason, or the real shipped `Walkthrough`. In the Lab, manual-only rows carried from
+  a check keep their door (`check-handoff-journey.test.tsx` "a manual-only finding is marked too,
+  and still opens its real steps"). **Remaining → `PARTIAL`:** `RecDetailCard` has no *Ignore / Not
+  for me*, so dismissal exists in `Fix.tsx` but NOT where the check first shows a finding. Closing
+  that is Phase 2C.
 
 ---
 
@@ -593,15 +639,15 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
 
 | # | Journey assertion | Status |
 | --- | --- | --- |
-| 1 | Check finds one safe recommendation | pending |
-| 2 | The exact recommendation is named | pending |
-| 3 | The result exposes the proper action | pending |
-| 4 | "Take me to Optimize" enters through normal navigation | pending |
-| 5 | The exact recommendation is highlighted at the destination | pending |
-| 6 | Multiple findings retain identity | pending |
-| 7 | A stale or already-applied recommendation is handled honestly | pending |
-| 8 | A manual-only recommendation opens its real guide | pending |
-| 9 | Ignore / Not for me remains available | pending |
+| 1 | Check finds one safe recommendation | ✅ `Check.test.tsx` / `FirstCheck.test.tsx` (654bf53) |
+| 2 | The exact recommendation is named | ✅ same + `rec-detail.test.ts` |
+| 3 | The result exposes the proper action | ✅ same — action classified from capability, not prose |
+| 4 | "Take me to Optimize" enters through normal navigation | ✅ `check-handoff-journey.test.tsx` "opens Optimize automatically" (`App.tsx` writes intent → ordinary `navHome`) |
+| 5 | The exact recommendation is highlighted at the destination | ✅ `check-handoff-journey.test.tsx` "leads the list with the carried rec, marked" |
+| 6 | Multiple findings retain identity | ✅ `…journey.test.tsx` "several findings keep their identity and the order" |
+| 7 | A stale or already-applied recommendation is handled honestly | ✅ `…journey.test.tsx` stale / applied-since / all-done cases |
+| 8 | A manual-only recommendation opens its real guide | ✅ `…journey.test.tsx` "a manual-only finding is marked too, and still opens its real steps" |
+| 9 | Ignore / Not for me remains available | ⚠️ partial — present in `Fix.tsx`, absent on the Check faces (item 5, Phase 2C) |
 | 10 | "Needs your call" doors are mouse- and keyboard-operable | pending |
 | 11 | A rig with no justified action receives an honest useful state | pending |
 | 12 | Goal groups render only when supported recommendations exist | pending |
@@ -634,9 +680,9 @@ train.)_
 
 | # | Slice | Commit |
 | --- | --- | --- |
-| 1 | feedback truth matrix | _(this commit)_ |
-| 2 | Check result identity + handoff contract | pending |
-| 3 | Optimize destination highlighting + actions | pending |
+| 1 | feedback truth matrix | `5f7e38f` + `3c2ed53` (audit corrections) |
+| 2 | Check result identity + handoff contract | `654bf53` (identity) |
+| 3 | Optimize destination highlighting + actions | _(this commit)_ |
 | 4 | cursor + interaction consistency | pending |
 | 5 | Lab candidate information architecture | pending |
 | 6 | Lab candidate visual layer | pending |

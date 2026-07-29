@@ -139,3 +139,41 @@
   line-height: 1.5;
   color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
 }
+
+/* ── Arrival context (Check → Optimize handoff) ──
+   Renders ONLY when the user arrived carrying rec ids from a check. It states what Compy can see at
+   arrival — still open / already on / no longer applies — and nothing else. No control, no action,
+   no auto-apply: the rows below own every act. Quiet accent frame, so it reads as continuity from
+   the check rather than a new alert. */
+.lab-carried {
+  padding: 12px 14px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-lg);
+  background: var(--accent-soft);
+}
+.lab-carried-head {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.45;
+  color: var(--fg);
+}
+.lab-carried-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.lab-carried-item {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--fg-2);
+}
+.lab-carried-hint,
+.lab-carried-note {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}

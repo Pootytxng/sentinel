@@ -5,6 +5,7 @@ import Fix from "../Fix";
 import Check from "../Check";
 import { GamingMode } from "../GamingMode";
 import { deriveReverted } from "../use-scan";
+import { resolveCarried } from "../../data/check-handoff";
 import { useReducedMotion } from "../../design/use-motion";
 import { useExpertView } from "../../design/use-expert-view";
 import { useCountTo } from "./use-count-to";
@@ -60,7 +61,7 @@ export type LabFastPathProps = {
 const GAUGE_R = 32;
 const GAUGE_C = 2 * Math.PI * GAUGE_R;
 
-export function OptimizeStation(props: LabFastPathProps) {
+export function OptimizeStation(props: LabFastPathProps & { carriedRecIds?: string[] }) {
   const { t } = useTranslation();
   // Same drift derivation the Optimize room + verdict use — a drifted rec renders ONCE in Fix's
   // "turned off outside Compy" group, never double-counted as ready (one-mention law).
@@ -97,9 +98,60 @@ export function OptimizeStation(props: LabFastPathProps) {
   const pendingSafe = safeStack.filter((r) => !r.currently_applied);
   const driftedPending = pendingSafe.filter((r) => revertedIds.has(r.id)).length;
   const freshPending = pendingSafe.length - driftedPending;
+  // The check handoff (recovery items 3/4): what the user was just told about, resolved against the
+  // catalog THIS station can see right now — not a replay of what Check said. A rec applied since,
+  // or gone from the catalog entirely, is stated as that; only still-pending ones lead the list.
+  const carried = useMemo(
+    () => resolveCarried(props.carriedRecIds ?? [], props.recs),
+    [props.carriedRecIds, props.recs],
+  );
+  const carriedOpenIds = useMemo(() => carried.open.map((r) => r.id), [carried.open]);
   const gaugeTarget = props.recs == null || totalSafe === 0 ? null : appliedSafe;
   const gaugeValue = useCountTo(gaugeTarget, { reduced });
   const gaugeRatio = totalSafe > 0 && gaugeValue != null ? Math.min(1, Math.max(0, gaugeValue / totalSafe)) : 0;
+
+  // The arrival note. Renders only when a handoff actually carried something AND the catalog has
+  // loaded (props.recs null → resolveCarried returns empty, so nothing claims anything mid-load).
+  // Every branch states what is true on arrival; none of them promises an outcome.
+  const carriedTotal = carried.open.length + carried.done.length + carried.missing.length;
+  const carriedBanner =
+    carriedTotal === 0 ? null : (
+      <div className="lab-carried" role="status">
+        {carried.open.length > 0 ? (
+          <>
+            <p className="lab-carried-head">{t("lab.optimizeStation.carriedHead")}</p>
+            <ul className="lab-carried-list">
+              {carried.open.map((r) => (
+                <li key={r.id} className="lab-carried-item">
+                  {r.title}
+                </li>
+              ))}
+            </ul>
+            <p className="lab-carried-hint">{t("lab.optimizeStation.carriedHint")}</p>
+          </>
+        ) : (
+          <p className="lab-carried-head">
+            {carried.done.length > 0
+              ? t("lab.optimizeStation.carriedAllDone", { count: carried.done.length })
+              : t("lab.optimizeStation.carriedNoneLeft")}
+          </p>
+        )}
+        {/* Footnotes only when they carry news — an empty "0 applied since" line is noise. */}
+        {carried.open.length > 0 && carried.done.length > 0 && (
+          <p className="lab-carried-note">
+            {t("lab.optimizeStation.carriedDone", {
+              count: carried.done.length,
+              titles: carried.done.map((r) => r.title).join(", "),
+            })}
+          </p>
+        )}
+        {carried.missing.length > 0 && carried.open.length > 0 && (
+          <p className="lab-carried-note">
+            {t("lab.optimizeStation.carriedMissing", { count: carried.missing.length })}
+          </p>
+        )}
+      </div>
+    );
 
   return (
     <div className="lab-optimize">
@@ -160,6 +212,11 @@ export function OptimizeStation(props: LabFastPathProps) {
           audited Fix fixes surface — same components, same apply/rollback path — re-homed into the
           station. Under the room's HUD skin (default on) it already wears the instrument language,
           so there's no visual seam with stations 2–6. */}
+      {/* Arrival context (recovery item 4): you came here from a check, so say what it found and
+          lead with those rows. Every line below is the state Compy can see AT ARRIVAL — a tweak
+          applied in between reads as applied, one that left the catalog reads as no longer
+          relevant. Nothing here applies, dismisses, or changes anything. */}
+      {carriedBanner}
       <Fix
         recs={props.recs ?? []}
         startup={props.startup}
@@ -176,6 +233,7 @@ export function OptimizeStation(props: LabFastPathProps) {
         view="fixes"
         v2Ia
         reverted={reverted}
+        carried={carriedOpenIds}
       />
 
       {/* The record half of the room (owner decision 2026-07-10: with the standalone Optimize tab
