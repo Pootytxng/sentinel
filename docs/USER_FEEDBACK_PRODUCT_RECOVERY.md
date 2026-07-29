@@ -848,11 +848,11 @@ Lab or its rollback path during this train."_).
 | 1 | feedback truth matrix | `5f7e38f` + `3c2ed53` (audit corrections) |
 | 2 | Check result identity + handoff contract | `654bf53` (identity) |
 | 3 | Optimize destination highlighting + actions | `a4f6b24` (handoff destination) + `0e505fc` (re-run journey correction + the decline door) |
-| 4 | cursor + interaction consistency | `b1ecd44` (native cursors, one semantic map, reticle opt-in) + _(this commit — the "Needs your call" door guard)_ |
+| 4 | cursor + interaction consistency | `b1ecd44` (native cursors, one semantic map, reticle opt-in) + `bf01473` (the "Needs your call" door guard) |
 | 5 | Lab candidate information architecture | `0102a14` (five-section decision journey + `compy_lab_deck` flag + flag guard) |
 | 6 | Lab candidate visual layer | `ff1a773` (section rail lit by IntersectionObserver, `aria-current` nav, both motion branches, <640px collapse) |
-| 7 | journey tests + pruning plan | `3e22a7c` (28 journey tests) + _(this commit — §3 inventory)_ |
-| 8 | installed-review fixes | `0937137` (rounds 1–3) + `c783d63` (round 4: one name on the whole action path + class guard) + `c15d1e2` (round 5: the arc is a real modal for the keyboard) + `a079edd` (round 6: the confirm is never buried; one click never opens two rows) + `75ebc91` (round 7: a proof door lands on its instrument wherever it lives) + `d310220` (round 8: one dismissal set, and a ring that counts it) + `ff8de44` (round 9: the decline reaches every surface that claims work, Home and the ranker included) + _(this commit — round 10: one phrase one owner; keyboard focus is visible)_ |
+| 7 | journey tests + pruning plan | `3e22a7c` (28 journey tests) + `896f1c2` (§3 inventory — six Lab generations read out of the router) |
+| 8 | installed-review fixes | `0937137` (rounds 1–3) + `c783d63` (round 4: one name on the whole action path + class guard) + `c15d1e2` (round 5: the arc is a real modal for the keyboard) + `a079edd` (round 6: the confirm is never buried; one click never opens two rows) + `75ebc91` (round 7: a proof door lands on its instrument wherever it lives) + `d310220` (round 8: one dismissal set, and a ring that counts it) + `ff8de44` (round 9: the decline reaches every surface that claims work, Home and the ranker included) + `63a3538` (round 10: one phrase one owner; keyboard focus is visible) + _(this commit — round 11: an override reaches every surface that counts work, and the row says where it landed)_ |
 
 Round 6 found two **pre-existing** defects neither the tests nor five prior review rounds caught,
 both structural, both now guarded:
@@ -986,6 +986,44 @@ plain accessibility defect the whole train had walked past:
   decline word out of all eight hardware-read keys while proving the Dismissed pile still owns it.
   Why no test saw either: jsdom applies no stylesheets (the ring is unmeasurable there — hence the
   static CSS sweep), and every prior empty-state test fixtured zero dismissals.
+
+Round 11 found the **third and last instance of the round-8 class** — a per-user judgement held in
+one component's head while every counter kept quoting the raw catalog:
+
+- **"My hardware supports this — show it anyway" went nowhere.** `useEligibilityOverrides` was a
+  plain `useState(read)` with exactly ONE caller (`Fix`), so the override lived in Fix's head alone.
+  Everything else derives eligibility from `eligible !== false` on the RAW catalog, so pressing the
+  button moved the row into the ready list while the safe-stack ring three lines above it, Home's
+  one-tap band, the room verdicts, the deck's goal groups and its next-best-move all kept counting a
+  stack that did not contain the row now sitting under them. Fixed by the same shape round 8 used for
+  `dismissed`: `eligibility-override.ts` became a module-level `useSyncExternalStore` store (plus a
+  cross-window `storage` listener), and one boundary function — `withOverrides(recs, overridden)` —
+  corrects `eligible` for every consumer that counts or lists. **Eight call sites wired**:
+  `OptimizeStation` (safe-stack memo), `HomeConsole` (one-tap band), `LabGround` + `OptimizeV2` +
+  `Lab` + `LabConsole` (verdict / safe-fixes-ready), and `LabDeck` twice (`nextBestMove`, and
+  `liveRecs` → the goal groups). `Fix` deliberately keeps Compy's ORIGINAL read — it owns the control,
+  so it still needs the raw answer to render the "Not for this rig" pile, the reason line, and the way
+  back. `withOverrides` returns its input array **unchanged** when nothing is overridden, so no memo
+  thrashes and no helper signature changed.
+- **The row promised a list it wasn't in.** The confirmation under an overridden row said,
+  unconditionally, that the rec *"now appears in your list"*. For a rec **already switched on** that
+  is false in every direction: `worthFixing` drops `currently_applied`, and there is no ledger receipt
+  either because Compy never applied it — it was in NO list while the copy swore it was. Now four
+  outcomes, each naming the real destination: already-on · in the ready list · set aside by you ·
+  walkthrough-only ("Compy points the way"). Both locales.
+- **Deliberately NOT changed, verified rather than assumed:** `describeRec` (`src/data/rec-detail.ts`)
+  reads eligibility raw but a completeness grep proved it has **zero production callers** (tests only)
+  — no user-visible defect, so no change. `pickTrustDemoRec` (`trust-moment-data.ts`) stays on Compy's
+  own confident read on purpose: the first-run trust demo is Compy's confidence pitch, and running it
+  on a rec Compy judged ineligible risks a failed apply at the worst possible moment. No counter
+  contradicts it — the card either renders or doesn't.
+  Guard: `src/surfaces/override-truth-guard.test.tsx` — three journey tests that press the REAL button
+  inside the collapsed "Not for this rig" drawer and assert the gauge denominator, caption and row list
+  all move together, plus the landed-sentence truth for the already-on and walkthrough-only cases; and
+  three unit tests pinning `withOverrides` as a correction rather than a second source of truth
+  (identity return on an empty set, catalog never mutated, and a negative control that ignores an
+  override for a rec Compy never rejected). **Negative control run:** both fixes neutered in place →
+  2 failed / 4 passed, restored → 6/6. **Pre-existing PRODUCTION defect**, fixed on this branch only.
 
 ### Self-review findings NOT fixed, and why (owner call, round 5)
 

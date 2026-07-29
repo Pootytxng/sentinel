@@ -187,6 +187,16 @@
   flex: none;
 }
 
+/* Where an override LANDED (self-review round 11) — "now in the ready list above" / "already
+   switched on, nothing to apply". Reads before the muted "Compy's read was:" line under it, because
+   it answers the question the user asked by pressing the button: so where is it now? */
+.fix-row-landed {
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ix-text-1);
+}
+
 /* A5 rig tagging — the "other rig" tag on history rows + the active-card heads-up. Muted,
    informational chrome: an entry from old hardware is a fact, not an alarm. */
 .fix-hist-rig-tag {

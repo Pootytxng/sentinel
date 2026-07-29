@@ -20,6 +20,7 @@ import { changesBetweenRuns } from "../benchmark-view";
 import { safeFixesReady } from "../optimize-v2-data";
 import { deriveReverted } from "../use-scan";
 import { useDismissed } from "../dismissed";
+import { useEligibilityOverrides, withOverrides } from "../eligibility-override";
 import { peekProbe, cachedProbe } from "../../data/probe-cache";
 import { readHandoff } from "../../data/check-handoff";
 import { recDisplayLabel } from "../../data/friendly-labels";
@@ -142,6 +143,10 @@ export function LabDeck({
   const { t, i18n } = useTranslation();
   const reduced = useReducedMotion();
   const { dismissed, dismiss } = useDismissed();
+  // ...and its mirror: a rec the user vouched for with "My hardware supports this" is back in the
+  // deck's work — next-best-move, the goal groups, and the safe-stack reading all owe it a seat
+  // (self-review round 11, 2026-07-29).
+  const { overridden } = useEligibilityOverrides();
 
   // ───────────────────────── section anchors + the jump nav ─────────────────────────
   // Jumping moves FOCUS as well as scroll (each section is tabIndex={-1}), so a keyboard or
@@ -245,7 +250,7 @@ export function LabDeck({
   const move = useMemo(
     () =>
       nextBestMove({
-        recs: fast.recs,
+        recs: fast.recs && withOverrides(fast.recs, overridden),
         isAppliable: fast.isAppliable,
         revertedIds,
         dismissedIds: dismissed,
@@ -253,12 +258,27 @@ export function LabDeck({
         priorities,
         activeCount,
       }),
-    [fast.recs, fast.isAppliable, revertedIds, dismissed, carriedRecIds, priorities, activeCount],
+    [
+      fast.recs,
+      fast.isAppliable,
+      revertedIds,
+      dismissed,
+      overridden,
+      carriedRecIds,
+      priorities,
+      activeCount,
+    ],
   );
 
   // ───────────────────────── section 2: optimize, by goal ─────────────────────────
   const goalInfo = useMemo(() => labGoals(t), [t]);
-  const liveRecs = useMemo(() => (fast.recs ?? []).filter((r) => r.eligible !== false), [fast.recs]);
+  // `eligible !== false` AFTER the user's overrides, or a rec the user vouched for with "My
+  // hardware supports this" would be missing from every goal group on the deck while Fix showed
+  // it as ready one panel over (self-review round 11, 2026-07-29).
+  const liveRecs = useMemo(
+    () => withOverrides(fast.recs ?? [], overridden).filter((r) => r.eligible !== false),
+    [fast.recs, overridden],
+  );
   // A goal group exists ONLY when this rig really has recommendations in it (recovery §Section 2:
   // "only show a group when real supported recommendations exist") — never an empty shelf.
   const goalGroups = useMemo(() => groupByGoal(liveRecs), [liveRecs]);
@@ -321,7 +341,14 @@ export function LabDeck({
   const measurement = measureTuning(armed, sessions, latestCmp);
   const tuningEvidenceVerdict = tuningEvidence(sessions);
   const safeReady =
-    fast.recs != null ? safeFixesReady(fast.recs, fast.isAppliable, dismissed, revertedIds) : 0;
+    fast.recs != null
+      ? safeFixesReady(
+          withOverrides(fast.recs, overridden),
+          fast.isAppliable,
+          dismissed,
+          revertedIds,
+        )
+      : 0;
   // The honesty rail for every row's reading line: an instrument with no measurement says so.
   const facts: LabStationFacts = {
     bench,

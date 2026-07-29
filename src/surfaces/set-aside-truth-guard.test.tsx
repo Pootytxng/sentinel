@@ -164,6 +164,12 @@ describe("'set aside' means the user declined it — nothing else", () => {
     "overriddenByYou",
     "compysReadWasPrefix",
     "notForThisRigAfterAll",
+    // Three of the four "where the override landed" lines. `overrideNowSetAside` is deliberately
+    // ABSENT: it is the one outcome that really does land the rec in the decline pile, so it is
+    // required to say the word (self-review round 11, 2026-07-29).
+    "overrideNowReady",
+    "overrideNowApplied",
+    "overrideNowGuided",
   ];
   // "set aside" in English — the object may sit inside the verb ("you set these aside"), so the
   // pattern has to see the split form too, or the hardware copy could smuggle the word back in.

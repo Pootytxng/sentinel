@@ -6,6 +6,7 @@ import Check from "../Check";
 import { GamingMode } from "../GamingMode";
 import { deriveReverted } from "../use-scan";
 import { useDismissed } from "../dismissed";
+import { useEligibilityOverrides, withOverrides } from "../eligibility-override";
 import { resolveCarried } from "../../data/check-handoff";
 import { recDisplayLabel } from "../../data/friendly-labels";
 import { useReducedMotion } from "../../design/use-motion";
@@ -87,12 +88,18 @@ export function OptimizeStation(
   // gauge fills to applied / total. HONESTY RAIL: the gauge renders ONLY when that measured source
   // exists — recs still loading (null) or no safe stack for this rig → target null → nothing
   // animates (no placeholder zero). Every animated value traces to the catalog eval, not a guess.
+  // "Eligible" here means Compy's hardware read CORRECTED by the user's overrides — the same
+  // question Fix answers one panel down. Without this the gauge was blind to "My hardware supports
+  // this": the row rejoined Fix's ready list while the ring above it kept counting a stack that
+  // didn't contain it, so the caption said "Nothing waiting" over a list with a row in it
+  // (self-review round 11). Identity array when nothing is overridden — the memo doesn't thrash.
+  const { overridden } = useEligibilityOverrides();
   const safeStack = useMemo(
     () =>
-      (props.recs ?? []).filter(
+      withOverrides(props.recs ?? [], overridden).filter(
         (r) => r.severity === "safe" && r.eligible !== false && props.isAppliable(r.id),
       ),
-    [props.recs, props.isAppliable],
+    [props.recs, props.isAppliable, overridden],
   );
   const totalSafe = safeStack.length;
   const appliedSafe = safeStack.filter((r) => r.currently_applied).length;

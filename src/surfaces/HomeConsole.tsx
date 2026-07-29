@@ -29,6 +29,7 @@ import { ReticleCursor } from "../design/console/ReticleCursor";
 import { useConfirmOptional } from "../design/ConfirmDialog";
 import { safeFixesReadyList } from "./optimize-v2-data";
 import { useDismissed } from "./dismissed";
+import { useEligibilityOverrides, withOverrides } from "./eligibility-override";
 import { RerunCheckBand } from "./RerunCheckBand";
 import { deriveReverted } from "./use-scan";
 import {
@@ -273,6 +274,9 @@ export function HomeConsole({
   // The ONE session-wide "Not for me" set (see dismissed.ts) — Home reads it so the intake band
   // never counts or applies a rec the user already declined in the Lab.
   const { dismissed } = useDismissed();
+  // ...and the ONE session-wide "My hardware supports this" set beside it. Same reason: a rec the
+  // user vouched for is back in play, so the band must count and apply it (self-review round 11).
+  const { overridden } = useEligibilityOverrides();
   // Fast-path (option C) transient state: a busy guard against double-submit, and a real receipt
   // built from the batch result (never a fabricated "done" — it names applied AND skipped).
   const [fastPathBusy, setFastPathBusy] = useState(false);
@@ -510,7 +514,9 @@ export function HomeConsole({
   // declined is not something the one-tap band may count OR apply. Without it the band offered to
   // apply a tweak the user had already said "Not for me" to (self-review round 9, 2026-07-29).
   const eligibleStack =
-    recs && isAppliable ? safeFixesReadyList(recs, isAppliable, dismissed, revertedIds) : [];
+    recs && isAppliable
+      ? safeFixesReadyList(withOverrides(recs, overridden), isAppliable, dismissed, revertedIds)
+      : [];
   const stackReady = eligibleStack.length;
   // Intent rows (option A) filtered to rooms the live rail actually renders — a row must never
   // point at a room that isn't there (no dead ends). The room LABEL is resolved live from `rooms`.

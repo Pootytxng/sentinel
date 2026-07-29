@@ -1466,6 +1466,21 @@ export default function Fix({
                   <RecTitle id={r.id} title={r.title} />
                   <span className="fix-override-chip">{t("optimize.fix.overriddenByYou")}</span>
                 </div>
+                {/* WHERE THE OVERRIDE ACTUALLY LANDED (self-review round 11). This used to be baked
+                    into the prefix below as an unconditional "it now appears in your list" — false
+                    for a rec that is already on: it can't be a ready row (worthFixing drops
+                    currently_applied) and it has no ledger receipt either (Compy never applied it),
+                    so it appeared in NO list while the copy swore it did. One sentence per real
+                    outcome, each naming where to look. */}
+                <p className="fix-row-landed">
+                  {r.currently_applied
+                    ? t("optimize.fix.overrideNowApplied")
+                    : isDismissed(r)
+                      ? t("optimize.fix.overrideNowSetAside")
+                      : isAppliable(r.id)
+                        ? t("optimize.fix.overrideNowReady")
+                        : t("optimize.fix.overrideNowGuided")}
+                </p>
                 <p className="fix-row-reason">
                   {t("optimize.fix.compysReadWasPrefix")}{" "}
                   {r.ineligible_reason ?? t("optimize.fix.notApplicableFallbackLower")}

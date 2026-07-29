@@ -35,6 +35,7 @@ import { TuningInstrument } from "./TuningInstrument";
 import { OptimizeStation, type LabFastPathProps } from "./lab/OptimizeStation";
 import { safeFixesReady } from "./optimize-v2-data";
 import { useDismissed } from "./dismissed";
+import { useEligibilityOverrides, withOverrides } from "./eligibility-override";
 import { deriveReverted } from "./use-scan";
 import { type GpuVendor } from "./walkthroughs";
 import "./Lab.css";
@@ -147,6 +148,9 @@ export default function Lab({
   // The ONE session-wide "Not for me" set — the safe-stack reading below must not count a rec the
   // user set aside (self-review round 9, 2026-07-29).
   const { dismissed } = useDismissed();
+  // ...and its mirror: it must COUNT a rec the user vouched for with "My hardware supports this"
+  // (self-review round 11, 2026-07-29).
+  const { overridden } = useEligibilityOverrides();
   // Router → station jump: an incrementing pulse per station tells that LabSection to expand
   // (in-room scroll + expand — navigation never teleports). Jumping through the router counts as
   // finding a door, same as clicking the card head.
@@ -262,7 +266,7 @@ export default function Lab({
   const safeReady =
     fast?.recs != null
       ? safeFixesReady(
-          fast.recs,
+          withOverrides(fast.recs, overridden),
           fast.isAppliable ?? (() => false),
           dismissed,
           new Set(groundReverted.map((r) => r.rec_id)),

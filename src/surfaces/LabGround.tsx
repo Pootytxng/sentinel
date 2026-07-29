@@ -11,6 +11,7 @@ import { HudMasthead } from "./hud-masthead";
 import { deriveReverted } from "./use-scan";
 import { optimizeVerdict } from "./optimize-v2-data";
 import { useDismissed } from "./dismissed";
+import { useEligibilityOverrides, withOverrides } from "./eligibility-override";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import type { LabFastPathProps } from "./lab/OptimizeStation";
 import type { GameReadiness, Priorities } from "../types";
@@ -74,7 +75,17 @@ export function LabGround(props: LabFastPathProps & {
   // The ONE session-wide "Not for me" set — the room verdict must not promise work the user
   // already declined (self-review round 9, 2026-07-29).
   const { dismissed } = useDismissed();
-  const verdict = optimizeVerdict(recs, isAppliable, dismissed, activeCount, reverted, t);
+  // ...and its mirror: a rec the user vouched for with "My hardware supports this" is back in the
+  // room's work, so the verdict must count it (self-review round 11, 2026-07-29).
+  const { overridden } = useEligibilityOverrides();
+  const verdict = optimizeVerdict(
+    recs && withOverrides(recs, overridden),
+    isAppliable,
+    dismissed,
+    activeCount,
+    reverted,
+    t,
+  );
 
   // The whole fast-path bundle threaded to Lab's ground mode (station 1's body).
   const fast: LabFastPathProps = { recs, changes, isAppliable, vendor, ...rest };
