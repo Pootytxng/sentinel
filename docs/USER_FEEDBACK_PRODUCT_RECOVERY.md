@@ -762,10 +762,10 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
 | 13 | A relevant recommendation reaches a real proof tool where a structured mapping exists | ✅ `…journey.test.tsx` — "How you'd prove it" appears for latency/fps recs, absent for cleanup, and opens the mapped instrument with focus moved |
 | 14 | Diagnostics can be reached through a user-problem route | ✅ `…journey.test.tsx` — "Something changed and I don't know what" opens the real diagnostics slot |
 | 15 | Back navigation and room orientation remain understandable | ✅ `…journey.test.tsx` (one `aria-current` pill, nav text === section headings, one `data-here` section) + `lab-deck-flag.test.tsx` (RoomShell + verdict survive the swap) |
-| 16 | Critical controls fit at 1280×720 | pending — **not claimed**; jsdom has no layout. Installed candidate + `self-review` |
+| 16 | Critical controls fit at 1280×720 | ✅ measured on the installed candidate `af5bc2e`, real 1280×720 OS window (hwnd rect verified, not a helper decoy): `document.documentElement.scrollWidth === clientWidth === 1264` on **both** the Lab/Optimize screen and the Check-verdict screen — zero horizontal overflow. Expanded "Not for this rig" drawer: no clipping, no overlap with the pile below. jsdom still can't prove this; the number is from the live build (`self-review` round 13) |
 | 17 | Long copy + realistic density do not collapse the layout | ✅ `…journey.test.tsx` — 13-rec / long-label case still yields exactly 5 sections, 1 nav, 1 move card, 1 chip row, 5 distinct headings |
 | 18 | Reduced motion works | ✅ `…journey.test.tsx` — `data-motion` mirrors `compy_motion`; both branches styled in `LabDeck.css` |
-| 19 | Keyboard focus is visible | pending — **not claimed**; jsdom does not paint. Installed candidate + `self-review` |
+| 19 | Keyboard focus is visible | ✅ measured on the installed candidate `af5bc2e`: a really-focused control returns `outline: rgb(167,139,250) solid 2px` with `outlineOffset: 2px` (`--v2-accent`), and rect-containment math confirms **neither** `overflow:hidden` ancestor (`.fix-group.fix-group-refuse`, `.app.app-v2`) clips the ring — visible in the native capture too. jsdom does not paint; the value is from the live build (`self-review` round 13) |
 | 20 | Screen-reader naming and hierarchy are sensible | ✅ `…journey.test.tsx` — every section `aria-labelledby`→`H2` and `tabIndex=-1`; every row head a real `BUTTON` with `aria-expanded`+`aria-controls`; chevrons `aria-hidden` |
 | 21 | Cursor behavior is consistent | ✅ `design/cursor-consistency.test.tsx` (7) — one disabled answer, `none` quarantined to the opt-in reticle, the map is a `:where()` floor, reticle off by default |
 | 22 | Existing mutation / rollback / anti-fabrication / release / encoding / state guards stay green | ✅ `npx vitest run` 223 files / 2209 passed / 2 skipped · `npx tsc --noEmit` clean · `cargo test` 880 passed / 0 failed / 24 ignored (cold build) · `cargo clippy --all-targets` clean |
@@ -1049,6 +1049,24 @@ sentence sending the reader to a place by a name that isn't on screen:
   missed it: it asserted the sentence's substring and never asked whether the place it named was
   on screen — test-green as proof of a design claim, which is the thing the owner's brief warns
   against.
+
+Round 13 found no defect — the first clean pass in thirteen. What it did produce is evidence,
+on the installed candidate `af5bc2e`, at a verified 1280×720 OS window:
+
+- **The destination sentence is true on live data, not just in jsdom.** The guided branch's
+  "Needs your call" and the set-aside branch's "Dismissed" were each walked as a real journey
+  (override the row, then decline it) and the named group was confirmed to *contain that row* by
+  DOM dump — not merely to exist somewhere on the page. The **ready branch stays live-untested**:
+  this rig has exactly two ineligible recs, one already applied and one guided, so no appliable
+  ineligible rec exists to override. Fixture coverage only, and labelled as such rather than
+  counted as proof.
+- **Items 16 and 19 closed with numbers** (see the ledger rows): `scrollWidth === clientWidth ===
+  1264` on both required screens, and a real focused control returning `outline: rgb(167,139,250)
+  solid 2px` / `outlineOffset: 2px`, unclipped by either `overflow:hidden` ancestor.
+- **A "0 vs 2" badge scare was my own debris.** The "Not for this rig" count read 0 with two rows
+  under it — caused by `compy_eligibility_overrides` accumulated across twelve review rounds
+  (the badge counts still-ineligible rows, correctly excluding user overrides). Cleared, reloaded:
+  **badge 2, rows 2.** Not a defect, and the app was left clean for the owner's review.
 
 ### Self-review findings NOT fixed, and why (owner call, round 5)
 
