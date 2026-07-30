@@ -107,6 +107,50 @@ describe("LabDeck copy contract", () => {
     expect(zh.get(key)).not.toMatch(/没有实测|无实测|未实测/);
   });
 
+  // GUARD G14 — THE DISCLOSURE THAT REVEALED NOTHING (bug→guard, consumer panel round 4,
+  // 2026-07-30). The comparison-evidence row was the one layer no seat had ever reviewed. Seated on
+  // it deliberately, the Competitive Grinder found that opening it taught him nothing: the closed
+  // row already read "Apply a fix from a monitored session's summary and Compy records the before
+  // half" and carried the reading "No measured session yet", and the expanded body said "Compy
+  // hasn't measured a session yet. Monitor a game, then apply a fix from its summary — that's what
+  // captures the before half." Both sentences were paraphrases of text already on screen, so the
+  // disclosure was pure cost. His second finding named what was actually missing: nothing anywhere
+  // said WHICH numbers the comparison would report, so a user who already owns CapFrameX could not
+  // tell rigour from a single averaged FPS figure.
+  //
+  // The row has always known the answer — `compare.method` grades the 1% lows against the run's own
+  // noise floor and reports the average-FPS move — but only rendered it AFTER data existed, which is
+  // exactly backwards: the method is what earns trust BEFORE there is a result to trust.
+  //
+  // So the empty state must state the method. This guard fails if it goes back to restating the row
+  // above it.
+  it("the empty comparison state names the numbers it will report, instead of restating the row", () => {
+    const key = "labDeck.compare.noSessions";
+    expect(en.has(key) && zh.has(key)).toBe(true);
+    const enBody = en.get(key)!;
+    const zhBody = zh.get(key)!;
+
+    // The two metrics `compare.method` actually reports. Naming them is the new information.
+    expect(enBody).toMatch(/1%\s*low/i);
+    expect(enBody).toMatch(/average FPS/i);
+    expect(enBody).toMatch(/noise floor/i);
+    expect(zhBody).toMatch(/1%\s*低帧/);
+    expect(zhBody).toMatch(/平均\s*FPS/);
+    expect(zhBody).toMatch(/噪声/);
+
+    // The exact bare-paraphrase openings that shipped. If either returns, the disclosure is back to
+    // repeating the collapsed row and this fails.
+    expect(enBody).not.toMatch(/^Compy hasn't measured a session yet/i);
+    expect(zhBody).not.toMatch(/^Compy 还没有实测过任何会话/);
+
+    // And the method must not be a promise the populated state doesn't keep: whatever the empty
+    // state names, `compare.method` has to actually report it.
+    const method = en.get("labDeck.compare.method")!;
+    expect(method).toMatch(/1%\s*low/i);
+    expect(method).toMatch(/average FPS/i);
+    expect(method).toMatch(/noise floor/i);
+  });
+
   it("the whole-machine marker stays a marker, and the sentence stays a sentence", () => {
     // G2's fix is a chip drawn ON the render. If it grows into prose it stops being readable at a
     // glance and starts duplicating `map.whole`, which is the line that explains itself.

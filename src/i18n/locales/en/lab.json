@@ -212,7 +212,7 @@
       "confounded": "Another change landed between the two sessions, so Compy can't tell you which one moved the numbers.",
       "expired": "The before half is too old to compare against fairly, so Compy is holding the numbers back.",
       "armed": "The before half is captured. Play {{game}} again with Compy monitoring and Compy finishes the comparison.",
-      "noSessions": "Compy hasn't measured a session yet. Monitor a game, then apply a fix from its summary — that's what captures the before half.",
+      "noSessions": "When there is a before half to grade, this row judges your 1% lows against that run's own noise floor and shows how far average FPS moved. Monitor a game, then apply a fix from its summary to capture one.",
       "idle": "No before half captured yet. Apply a fix from a monitored session's summary and Compy records it.",
       "avgLabel": "Average FPS",
       "lowLabel": "1% lows",
