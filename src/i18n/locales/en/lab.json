@@ -226,6 +226,9 @@
     "advanced": {
       "summary": "Show the advanced instruments"
     },
+    "end": {
+      "label": "End of the Lab"
+    },
     "unavailable": {
       "tuning": "Undervolt tuning isn't here: Compy only has verified guidance for AMD cards, and this rig isn't one.",
       "diagnostics": "Raw diagnostics appear once Compy has captured a report on this PC."

@@ -1136,6 +1136,13 @@ export function LabDeck({
           </div>
         </details>,
       )}
+
+      {/* The deck ends here, and says so. The trailing room below the last row is the scroll travel
+          that lets step 5 clear the sticky nav (see .lab-deck in the sheet) — it stays, but it now
+          closes on a visible terminator instead of reading as a page that got cut off. */}
+      <div className="ld-end">
+        <span className="ld-end-label">{t("lab.labDeck.end.label")}</span>
+      </div>
     </div>
   );
 }

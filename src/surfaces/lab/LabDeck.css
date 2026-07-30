@@ -19,8 +19,41 @@
      fold edge while steps 1–4 landed cleanly under the nav. This gives the scroller enough travel
      that the last step clears the sticky nav too. Measured at 1280×720: steps 1–4 land exactly on
      the inset; step 5 still clamps at max scroll, ~92px further DOWN — more clearance than the
-     others, never less. Trailing room, not identical landings. */
-  padding-bottom: min(34vh, 280px);
+     others, never less. Trailing room, not identical landings.
+     The room itself now lives on `.ld-end` below — same travel, no longer bare. */
+}
+
+/* THE END OF THE DECK (self-review 2026-07-30, layout FAIL). The jump room above was a bare
+   `padding-bottom` on `.lab-deck`, so at rest the deck ended with ~380px of nothing under the last
+   row: no footer, no closing content, nothing that said the page had ENDED rather than failed to
+   finish loading. The room is load-bearing — deleting it takes clearance back from step 5 — so it
+   is not removed, it is OCCUPIED: the same travel, with a terminator anchored at its BOTTOM edge,
+   which is the edge the eye lands on at max scroll. Guarded in lab-jump-clearance.test.tsx: the
+   element must be the deck's last child, and the travel may grow but never shrink. */
+.ld-end {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 12px;
+  min-height: min(34vh, 280px);
+  padding-bottom: 18px;
+}
+.ld-end::before,
+.ld-end::after {
+  content: "";
+  flex: 1 1 0;
+  max-width: 132px;
+  height: 1px;
+  /* Optically centred on the label's x-height, not on its box. */
+  margin-bottom: 6px;
+  background: var(--ix-line, rgba(255, 255, 255, 0.08));
+}
+.ld-end-label {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
 }
 
 /* ── the one navigation grammar: five names, journey order, same page ── */

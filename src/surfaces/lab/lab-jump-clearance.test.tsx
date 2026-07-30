@@ -124,6 +124,70 @@ describe("a nav jump lands the destination heading below the sticky nav, not beh
   });
 });
 
+// BUG → GUARD (self-review round 3, 2026-07-30). The fix above bought the last step its clearance
+// with `padding-bottom: min(34vh, 280px)` on `.lab-deck` — and shipped a second defect doing it. At
+// rest on the installed candidate the review measured ~380px of pure empty space between the last
+// row and the window edge: no footer, no closing content, no anchor. It does not read as breathing
+// room, it reads as a page that got cut off or never finished loading.
+//
+// Both halves are real, and they pull against each other: delete the room and step 5 loses its
+// clearance; keep it bare and the deck looks broken. So the room is OCCUPIED rather than removed —
+// same travel, now carrying a terminator anchored at the bottom edge the eye actually lands on.
+//
+// This pins the shape so neither half can be undone by a later "tidy up that whitespace":
+//   · the terminator must be the deck's LAST child (delete it → fail)
+//   · the travel may grow but never shrink below the measured 34vh/280px (trim it → fail)
+//   · and it must not be re-added as bare padding on .lab-deck as well (double room → fail)
+describe("the deck ends on something, and the room that ends it is not bare", () => {
+  const css = () =>
+    readFileSync(join("src", "surfaces", "lab", "LabDeck.css"), "utf8").replace(
+      /\/\*[\s\S]*?\*\//g,
+      "",
+    );
+
+  it("the last thing in the deck is a visible end marker", () => {
+    const { container } = render(
+      <ConfirmProvider>
+        <LabDeck fast={fast()} diagnostics={<div />} diagnosticsCaptured priorities={null} activeCount={0} />
+      </ConfirmProvider>,
+    );
+    const deck = container.querySelector<HTMLElement>(".lab-deck")!;
+    const last = deck.lastElementChild!;
+    expect(last.className).toContain("ld-end");
+    // A marker nobody can read is the same defect wearing a class name.
+    expect(last.getAttribute("aria-hidden")).toBeNull();
+    expect((last.textContent ?? "").trim().length).toBeGreaterThan(0);
+    expect(deck.querySelectorAll(".ld-end").length).toBe(1);
+  });
+
+  it("it stays a marker, in both locales", () => {
+    // Prose here would just be a footer nobody asked for; the parity guard in
+    // lab-copy-contract.test.ts already forces zh-CN to exist alongside it.
+    for (const locale of ["en", "zh-CN"]) {
+      const label = JSON.parse(
+        readFileSync(join("src", "i18n", "locales", locale, "lab.json"), "utf8"),
+      ).labDeck.end.label as string;
+      expect(label.trim().length).toBeGreaterThan(0);
+      expect(label.length).toBeLessThanOrEqual(24);
+      expect(label).not.toMatch(/[.。]/);
+    }
+  });
+
+  it("the marker carries the jump travel, and .lab-deck no longer doubles it", () => {
+    const sheet = css();
+    const end = sheet.match(/\.ld-end\s*\{([\s\S]*?)\}/)?.[1] ?? "";
+    const travel = end.match(/min-height:\s*min\((\d+)vh,\s*(\d+)px\)/);
+    expect(travel).not.toBeNull();
+    // The two constants the 1280×720 measurement settled on. Raising them gives step 5 MORE
+    // clearance, which is safe; lowering them is the regression this guard exists to catch.
+    expect(Number(travel![1])).toBeGreaterThanOrEqual(34);
+    expect(Number(travel![2])).toBeGreaterThanOrEqual(280);
+
+    const deck = sheet.match(/\.lab-deck\s*\{([\s\S]*?)\}/)?.[1] ?? "";
+    expect(deck).not.toMatch(/padding-bottom/);
+  });
+});
+
 function fast() {
   return {
     recs: [],

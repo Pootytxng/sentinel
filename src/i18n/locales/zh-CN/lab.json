@@ -226,6 +226,9 @@
     "advanced": {
       "summary": "显示高级仪器"
     },
+    "end": {
+      "label": "实验室到此结束"
+    },
     "unavailable": {
       "tuning": "这里没有降压调校:Compy 只对 AMD 显卡有经过验证的指引,而这台机器不是。",
       "diagnostics": "等 Compy 在这台电脑上采集过一次报告后,原始诊断数据就会出现。"
