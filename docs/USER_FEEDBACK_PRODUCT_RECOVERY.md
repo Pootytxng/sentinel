@@ -778,6 +778,15 @@ people who raised them). Source of the owner direction: `docs/UI_VISION_BACKLOG.
 | 21 | Cursor behavior is consistent | ✅ `design/cursor-consistency.test.tsx` (7) — one disabled answer, `none` quarantined to the opt-in reticle, the map is a `:where()` floor, reticle off by default |
 | 22 | Existing mutation / rollback / anti-fabrication / release / encoding / state guards stay green | ✅ `npx vitest run` 223 files / 2209 passed / 2 skipped · `npx tsc --noEmit` clean · `cargo test` 880 passed / 0 failed / 24 ignored (cold build) · `cargo clippy --all-targets` clean |
 
+**Re-validated at `294db4f` (issue #14 installed-review sequence, 2026-07-30):** row 22's counts are
+now **230 files / 2368 passed / 2 skipped**, `tsc --noEmit` clean, zero `src-tauri` diff for the whole
+train (`git diff 6fdf23b..HEAD -- src-tauri` is empty, so the `cargo` line stands unchanged and no
+Rust review was owed). Rows 16 and 19 keep their `af5bc2e` provenance because that is where those
+1280×720 measurements were actually taken; round 6 independently re-measured zero horizontal overflow
+at 1484×971 on `294db4f`, which corroborates row 16 without replacing it. Row 15's invariants — one
+`aria-current` pill, one `data-here` section — survived the round-5 change to *which* section wins at
+maximum scroll; the new guard asserts the pair still agrees.
+
 **"All tests pass" is NOT proof the design is accepted.** The acceptance gate is: functional journey
 proof · installed owner eyeball · subsequent validation from the same kind of users who gave the
 feedback.

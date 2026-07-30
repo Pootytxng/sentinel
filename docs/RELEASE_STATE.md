@@ -117,7 +117,7 @@ remains, and normal product development may resume.**
   attribution (`elevation_outcome` — `actions.rs:964`); helper runs ONLY hex byte-matching the
   one-time ticket (`mint_elevation_ticket` — `actions.rs:1149`).
 - Gaming-session advanced tier batches to ONE elevation per session start and per restore
-  (`apply_elevated_tier` — `gaming_orchestrator.rs:201`); no-partial abort+restore contract;
+  (`apply_elevated_tier` — `gaming_orchestrator.rs:202`); no-partial abort+restore contract;
   UAC-decline drops only verifiably-never-ran staged entries (`elevation_error_nothing_ran` — `actions.rs:988`).
 
 ## Release blockers
