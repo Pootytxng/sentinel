@@ -847,10 +847,17 @@ export function LabDeck({
     // with the primary"). The earlier rule spent the accent only on an appliable change and left the
     // can't-apply state with three identically-weighted buttons — 5/5 consumer seats read that as a
     // three-way choice with no path, which is the paralysis the glance layer exists to remove.
-    //   canApply  → the apply button. It applies a change Compy captured a rollback contract for.
-    //   !canApply → "Show me how". It NAVIGATES to the guided steps and mutates nothing, so the accent
-    //               marks the next step instead of promising an apply Compy can't perform.
-    // A `severity: "advanced"` rec would move the accent to the disclosure instead (read before you
+    //   canApply  → the apply button, ACCENT. It applies a change Compy captured a rollback contract
+    //               for, so Compy is genuinely recommending it and wears the colour that says so.
+    //   !canApply → "Show me how", LEAD (weight, no accent). It navigates to the guided steps and
+    //               mutates nothing — but the accent is Compy's recommendation colour, and this is
+    //               exactly the class of rec whose own catalog text says the choice "belongs to you,
+    //               not to a default" (memory-integrity-vbs-advisory, baseline-rules-v1.json). An
+    //               accent-filled button IS a default: a consumer seat read it as the app leaning on
+    //               them to disable a security feature while "Not for me" got no weight at all. So
+    //               the lead control keeps primacy through border + fill + primary ink and gives up
+    //               the hue. Emphasis without endorsement — a path, not a push.
+    // A `severity: "advanced"` rec would move the lead to the disclosure instead (read before you
     // act) — the catalog emits only "safe"/"moderate" today, so that branch is deliberately unwritten
     // rather than shipped as dead code.
     return (
@@ -873,7 +880,7 @@ export function LabDeck({
             // which owns the guided steps — instead of offering a button that can't deliver.
             <button
               type="button"
-              className="ld-btn ld-btn-primary"
+              className="ld-btn ld-btn-lead"
               onClick={() => {
                 setGoalFilter(goal);
                 jump("optimize");

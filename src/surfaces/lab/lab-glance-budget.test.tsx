@@ -348,6 +348,24 @@ describe("P3 — ink rank follows meaning, not tidiness", () => {
     }
   });
 
+  // GUARD (bug→guard, consumer panel H10, 2026-07-29). The ink was already primary and the rule
+  // above already said so — yet a seat still called the absence reading "skippable grey noise". The
+  // real defect was the CONTAINER: the longest absence state is a 17-word instruction, and the
+  // readout column is a 12px mono right-aligned strip capped at 38% width, which wrapped that
+  // sentence into a thin ribbon. Legible ink inside a column shaped for four characters is not
+  // legible text, so the absence state has to leave the numeric voice.
+  it("…and an absence sentence is set as prose, not squeezed into the numeric column", () => {
+    const [absent] = rulesTouching('.ld-row-reading[data-measured="no"]');
+    // Out of the mono family — the family switch is the tell that this is a sentence, not a value.
+    expect(absent.body).toMatch(/font-family\s*:/);
+    expect(absent.body).not.toMatch(/font-mono|monospace/);
+    // …and out of the four-character column. Wider than the readout width it overrides, or the
+    // sentence is back in the ribbon with a different font.
+    const widthOf = (body: string) => Number(/max-width\s*:\s*(\d+(?:\.\d+)?)%/.exec(body)?.[1]);
+    const [base] = rules.filter((r) => r.selectors.includes(".ld-row-reading"));
+    expect(widthOf(absent.body)).toBeGreaterThan(widthOf(base.body));
+  });
+
   it("nothing in the move card wears the tiny-uppercase eyebrow treatment", () => {
     const eyebrows = rules.filter(
       (r) =>
@@ -355,6 +373,67 @@ describe("P3 — ink rank follows meaning, not tidiness", () => {
         r.selectors.some((s) => s.includes(".ld-move") || s.includes(".ld-h")),
     );
     expect(eyebrows.map((r) => r.selectors.join(", "))).toEqual([]);
+  });
+});
+
+// ── P2: exactly one primary, and the accent stays an endorsement ────────────────────────────────
+// BUG → GUARD (consumer panel H2, 2026-07-29 — 5/5 seats, the unanimous finding of the round)
+//
+// THE DEFECT  When Compy can't perform a change itself, the card rendered three identically flat
+// buttons — "Show me how" / "Not for me" / "How you'd prove it" — and every seat read that as a
+// three-way choice with no path. That is exactly the paralysis the glance layer exists to remove.
+//
+// THE OVER-CORRECTION THIS GUARD ALSO PINS  Promoting that button to `.ld-btn-primary` would hand
+// it the ACCENT, and the accent is Compy's recommendation colour. The rec that produced the finding
+// is the Memory Integrity advisory, whose own catalog text says the choice "belongs to you, not to
+// a default" (src-tauri/resources/baseline-rules-v1.json) — an accent-filled button IS a default,
+// and here it would read as Compy leaning on the user to weaken a real security guarantee. So the
+// lead control keeps primacy through border + fill + ring and gives up the hue.
+//
+// Both halves are asserted, because each one alone is satisfiable by the other's defect.
+describe("P2 — one obvious next step, and emphasis without endorsement", () => {
+  const weighted = (c: HTMLElement) =>
+    Array.from(c.querySelectorAll<HTMLElement>(".ld-move-actions .ld-btn")).filter(
+      (b) => b.classList.contains("ld-btn-primary") || b.classList.contains("ld-btn-lead"),
+    );
+
+  it("the appliable card spends the accent on the button that actually applies the change", () => {
+    const c = renderDeck({ isAppliable: () => true });
+    const hot = weighted(c);
+    expect(hot).toHaveLength(1);
+    expect(hot[0].classList.contains("ld-btn-primary")).toBe(true);
+    // Compy captured a rollback contract for this one, so it is genuinely recommending it. Nothing
+    // else in the card gets to look like a second recommendation.
+    expect(c.querySelectorAll(".ld-btn-lead")).toHaveLength(0);
+  });
+
+  it("the can't-apply card still offers one weighted next step, and it is not the accent", () => {
+    const c = renderDeck({ isAppliable: () => false });
+    const hot = weighted(c);
+    // Three flat buttons was the defect. Two weighted buttons is the over-correction.
+    expect(hot).toHaveLength(1);
+    expect(hot[0].classList.contains("ld-btn-lead")).toBe(true);
+    expect(hot[0].classList.contains("ld-btn-primary")).toBe(false);
+    // The one that wins is the one that leads somewhere — not "Not for me", not the proof link.
+    expect(hot[0].textContent).toContain("Show me how");
+  });
+
+  it("every quiet state keeps the same count — no state renders a choice with no path", () => {
+    // The three no-recommendation branches each own a single CTA. Adding a second one there would
+    // reintroduce the same defect in a state no render test currently walks.
+    expect(weighted(renderDeck({ recs: [] }))).toHaveLength(1);
+  });
+
+  it("…and the lead treatment takes its weight from border and fill, never from the accent", () => {
+    // Pseudo-class variants included on purpose: a hover state that reaches for the accent is the
+    // same violation arriving one interaction later.
+    const lead = rules.filter((r) => r.selectors.some((s) => s.startsWith(".ld-btn-lead")));
+    expect(lead.length).toBeGreaterThanOrEqual(2);
+    for (const r of lead) expect(r.body).not.toContain("--ix-accent");
+    // Weight has to come from somewhere, or "one obvious next step" is a claim only the DOM makes.
+    const [base] = lead.filter((r) => r.selectors.includes(".ld-btn-lead"));
+    expect(base.body).toMatch(/border-color\s*:/);
+    expect(base.body).toMatch(/background\s*:/);
   });
 });
 

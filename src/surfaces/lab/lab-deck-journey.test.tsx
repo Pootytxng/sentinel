@@ -211,19 +211,29 @@ describe("item 9 — the decline stays available on the headline move", () => {
     expect(text(c.querySelector(".ld-move-note"))).toContain("won't set this one for you");
   });
 
-  // GUARD (bug→guard, consumer panel 2026-07-29 — 5/5 seats). This assertion is the INVERSE of the
-  // one it replaces. The old rule withheld the accent fill from every state where the choice was the
-  // user's, on the reasoning that a solid CTA shouldn't push a change Compy can't undo. Sound as far
-  // as it went — but it left the can't-apply state rendering three identically-weighted buttons, and
-  // every consumer seat independently reported choosing between three options instead of following
-  // one path. The owner's law settles it: "secondary actions must not compete with the primary."
-  // The accent still never argues for an unsafe apply — in that state it moves to "Show me how",
-  // which only navigates. What is guarded is the COUNT: exactly one primary, in every state.
-  it("every state offers exactly one accented action — never three of equal weight", () => {
+  // GUARD (bug→guard, consumer panel 2026-07-29 — 5/5 seats, the unanimous finding of the round).
+  // THE DEFECT: the can't-apply state rendered three identically-weighted buttons, and every seat
+  // independently reported choosing between three options instead of following one path. The owner's
+  // law settles the count — "secondary actions must not compete with the primary" — so exactly one
+  // weighted action, in every state.
+  //
+  // REFINED 2026-07-30 (same finding, second pass). 01523a5 satisfied that count by handing the
+  // ACCENT to "Show me how", and the accent is Compy's recommendation colour. The rec that produced
+  // this finding is the Memory Integrity advisory, whose own catalog text says the choice "belongs to
+  // you, not to a default" (src-tauri/resources/baseline-rules-v1.json) — an accent-filled button IS
+  // a default, and there it read as Compy leaning on the user to weaken a real security guarantee.
+  // The lead treatment keeps the primacy and gives up the hue (weight from border + fill + ring).
+  // The count law is unchanged; the CSS half of the ban lives in lab-glance-budget.test.tsx → P2.
+  it("every state offers exactly one weighted action — never three of equal weight", () => {
     const cantSet = renderDeck({ isAppliable: () => false });
-    expect(cantSet.querySelectorAll(".ld-move-actions .ld-btn-primary").length).toBe(1);
+    const weighted = Array.from(
+      cantSet.querySelectorAll<HTMLElement>(".ld-move-actions .ld-btn"),
+    ).filter((b) => b.classList.contains("ld-btn-primary") || b.classList.contains("ld-btn-lead"));
+    expect(weighted.length).toBe(1);
     // …and it is the navigating action, not an apply Compy cannot perform.
-    expect(text(cantSet.querySelector(".ld-move-actions .ld-btn-primary"))).toBe("Show me how");
+    expect(text(weighted[0])).toBe("Show me how");
+    // Weighted, but not endorsed: no accent in a state where Compy is recommending nothing.
+    expect(cantSet.querySelectorAll(".ld-move-actions .ld-btn-primary").length).toBe(0);
     // The alternatives are still there, still reachable, just no longer competing.
     const cantSetActions = Array.from(cantSet.querySelectorAll(".ld-move-actions .ld-btn")).map((b) =>
       text(b),
@@ -235,6 +245,8 @@ describe("item 9 — the decline stays available on the headline move", () => {
     const safe = renderDeck();
     expect(safe.querySelectorAll(".ld-move-actions .ld-btn-primary").length).toBe(1);
     expect(text(safe.querySelector(".ld-move-actions .ld-btn-primary"))).toBe("Apply this");
+    // One weighted action here too — the lead treatment is the can't-apply substitute, not an extra.
+    expect(safe.querySelectorAll(".ld-move-actions .ld-btn-lead").length).toBe(0);
   });
 
   // GUARD (bug→guard, consumer panel 2026-07-29 — 4/5 seats, Burned Skeptic's top fix). Compy may

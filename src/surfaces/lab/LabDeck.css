@@ -530,6 +530,23 @@
   background: var(--ix-accent-2, var(--ix-accent, #7c5cff));
   border-color: var(--ix-accent-2, var(--ix-accent, #7c5cff));
 }
+/* EMPHASIS WITHOUT ENDORSEMENT. When Compy can't perform the change itself, the card still needs one
+   obvious next step — three identically flat buttons read as paralysis to 5/5 consumer seats — but the
+   accent is Compy's *recommendation* colour, and an accent-filled button IS a default. For a rec whose
+   own catalog text says the choice "belongs to you, not to a default", the lead control takes its
+   weight from a brighter border + fill + a doubled ring and gives up the hue. No accent token here on
+   purpose; the guard in lab-glance-budget.test.tsx fails the build if the accent comes back. */
+.ld-btn-lead {
+  border-color: var(--ix-text-3, rgba(255, 255, 255, 0.42));
+  background: var(--ix-glass-top, rgba(255, 255, 255, 0.08));
+  box-shadow: inset 0 0 0 1px var(--ix-glass-border, rgba(255, 255, 255, 0.14));
+  color: var(--ix-text-1, var(--v2-text, #fff));
+}
+.ld-btn-lead:hover:not(:disabled) {
+  border-color: var(--ix-text-2, rgba(255, 255, 255, 0.72));
+  background: var(--ix-glass-top, rgba(255, 255, 255, 0.08));
+  box-shadow: inset 0 0 0 1px var(--ix-glass-top, rgba(255, 255, 255, 0.08));
+}
 .ld-link {
   appearance: none;
   border: none;
@@ -650,9 +667,19 @@
   color: var(--ix-text-1, var(--v2-text, #fff));
 }
 /* The absence state stays fully legible — it is a reading the user has to interpret and act on, so it
-   keeps the same ink and says so in words. Italic, not dim, carries "this is not a value yet". */
+   keeps the same ink and says so in words. Italic, not dim, carries "this is not a value yet".
+   It is also PROSE, not a value: the longest absence reading is a 17-word instruction ("No reading yet
+   — undervolt in AMD's tool, play a session, and Compy grades whether it held."). Rendering that in a
+   38%-wide 12px monospace column wrapped it into a thin right-aligned ribbon that a consumer seat read
+   as skippable grey noise even though the ink is primary. So the absence state leaves the numeric
+   voice: proportional family, one step up, and room to breathe. Measured readings keep the mono
+   readout unchanged — the family switch is the tell that this is a sentence, not a value. */
 .ld-row-reading[data-measured="no"] {
   font-style: italic;
+  max-width: 58%;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.4;
 }
 /* The chevron IS the door affordance — it points down when closed, up when open, so a row never
    looks like a static card (the "needs your call" lesson). */
