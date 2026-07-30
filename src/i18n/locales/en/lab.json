@@ -148,7 +148,7 @@
       "applyCta": "Apply this",
       "applying": "Applying…",
       "showSteps": "Show me how",
-      "canApplyNo": "Compy won't set this one for you — it lives outside what Compy can safely change. The steps are below in Optimize.",
+      "canApplyNo": "Compy won't set this one for you — it lives outside what Compy can safely change, so there's nothing for Compy to put back either. The guided steps are in Optimize, and the same switch turns it off again.",
       "notForMe": "Not for me",
       "proveCta": "How you'd prove it",
       "detailCta": "What changes, the trade-off, and how to undo it",
@@ -162,6 +162,7 @@
       "of": "of {{value}}",
       "source": "Read from this PC.",
       "none": "Compy has no reading for this part on this PC.",
+      "whole": "Nothing to single out — this one changes how Windows treats the whole machine, so the rig is shown intact.",
       "subsystem": {
         "cpu": "processor",
         "gpu": "graphics card",

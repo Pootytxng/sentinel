@@ -678,11 +678,17 @@ export function LabDeck({
   const mapReadings = hw ? subsystemReadings(mapSubject.sub, hw) : [];
   // No hardware snapshot → no map at all. A hologram of a machine Compy hasn't read would be a
   // picture, not evidence.
+  // A subject with no single part behind it (system-wide, and the read-only subsystems the map has no
+  // audited reading for) lights nothing in the rig — correct, but 4/5 consumer seats read the unlit
+  // rig as decoration that failed to do its job. So the two cases are now DECLARED states rather than
+  // one state and an absence: `part` highlights, `whole` says in words why there is nothing to
+  // highlight. The value is the same typed mapping the highlight already uses — no new inference.
+  const mapFocus = rigKindForSubsystem(mapSubject.sub);
   const evidenceMap = hw ? (
-    <div className="ld-map">
+    <div className="ld-map" data-focus={mapFocus ? "part" : "whole"}>
       <div className="ld-map-stage">
         <Suspense fallback={<div className="ld-map-wait">{t("lab.labDeck.map.wait")}</div>}>
-          <RigViewer hw={hw} chromeless focusKind={rigKindForSubsystem(mapSubject.sub)} />
+          <RigViewer hw={hw} chromeless focusKind={mapFocus} />
         </Suspense>
       </div>
       <div className="ld-map-facts">
@@ -732,9 +738,11 @@ export function LabDeck({
             <p className="ld-map-src">{t("lab.labDeck.map.source")}</p>
           </>
         ) : (
-          // Honest absence, in words. `system` needs none — the line above already said this isn't
-          // one part, so a second sentence would only add density.
-          mapSubject.sub !== "system" && <p className="ld-map-src">{t("lab.labDeck.map.none")}</p>
+          // Honest absence, in words — and now it always SAYS something. Suppressing this line for
+          // `system` left the unlit rig explaining itself with nothing, which is what read as filler.
+          <p className="ld-map-src">
+            {mapSubject.sub === "system" ? t("lab.labDeck.map.whole") : t("lab.labDeck.map.none")}
+          </p>
         )}
       </div>
     </div>
@@ -814,11 +822,16 @@ export function LabDeck({
     // to overlap the fixed status readout at 1280×720 (panel P4). Nothing is deleted: everything the
     // user needs to DECIDE stays one labelled interaction away, in `detail` below.
     const detailOpen = isOpen("move-detail", "move");
-    // Accent discipline (panel P5): the solid primary is spent only where a click really applies a
-    // change Compy can undo. When Compy won't set it, or the catalog itself marks it `advanced`, both
-    // branches carry equal weight — the card's own framing says the choice is the user's, so its
-    // buttons must not argue otherwise. Both are typed catalog facts; nothing is inferred.
-    const consentFirst = !canApply || rec.severity === "advanced";
+    // EXACTLY ONE PRIMARY, in every state (owner law 2026-07-29: "secondary actions must not compete
+    // with the primary"). The earlier rule spent the accent only on an appliable change and left the
+    // can't-apply state with three identically-weighted buttons — 5/5 consumer seats read that as a
+    // three-way choice with no path, which is the paralysis the glance layer exists to remove.
+    //   canApply  → the apply button. It applies a change Compy captured a rollback contract for.
+    //   !canApply → "Show me how". It NAVIGATES to the guided steps and mutates nothing, so the accent
+    //               marks the next step instead of promising an apply Compy can't perform.
+    // A `severity: "advanced"` rec would move the accent to the disclosure instead (read before you
+    // act) — the catalog emits only "safe"/"moderate" today, so that branch is deliberately unwritten
+    // rather than shipped as dead code.
     return (
       <div className="ld-move">
         <h3 className="ld-move-head">{name.headline}</h3>
@@ -827,7 +840,7 @@ export function LabDeck({
           {canApply ? (
             <button
               type="button"
-              className={consentFirst ? "ld-btn" : "ld-btn ld-btn-primary"}
+              className="ld-btn ld-btn-primary"
               disabled={busy}
               data-busy={busy ? "1" : undefined}
               onClick={() => fast.onToggleRec(rec.id)}
@@ -839,7 +852,7 @@ export function LabDeck({
             // which owns the guided steps — instead of offering a button that can't deliver.
             <button
               type="button"
-              className="ld-btn"
+              className="ld-btn ld-btn-primary"
               onClick={() => {
                 setGoalFilter(goal);
                 jump("optimize");
@@ -883,7 +896,10 @@ export function LabDeck({
         </button>
         {detailOpen && (
           <div className="ld-move-detail" id="ld-move-detail">
-            <p className="ld-move-line">{rec.description}</p>
+            {/* Labelled facts FIRST, catalog prose last (panel: 4/5 seats hit a wall of text on
+                open and several stopped reading before the trade-off). The three labels answer the
+                decision; the description is the background behind it. Reordered, not trimmed —
+                every word the catalog wrote is still here. */}
             <dl className="ld-move-facts">
               <div className="ld-move-fact">
                 <dt>{t("lab.labDeck.move.stateLabel")}</dt>
@@ -900,9 +916,20 @@ export function LabDeck({
                 </div>
               )}
             </dl>
-            <p className="ld-move-safe">{t("lab.labDeck.move.reversible")}</p>
+            <p className="ld-move-line">{rec.description}</p>
+            {/* MUTUALLY EXCLUSIVE, and it has to be. These two used to render together whenever
+                Compy can't apply a rec: "Compy records how to put this back" directly above "Compy
+                won't set this one for you" — a rollback promise sitting on top of an item Compy
+                never touches, which 4/5 consumer seats read as the app overselling its own undo.
+                Compy only promises rollback for changes Compy itself makes; for the rest the honest
+                statement is where the steps are and how to reverse them by hand. Neither branch
+                deletes safety information — `canApplyNo` now carries the undo route in words. */}
+            {canApply ? (
+              <p className="ld-move-safe">{t("lab.labDeck.move.reversible")}</p>
+            ) : (
+              <p className="ld-move-note">{t("lab.labDeck.move.canApplyNo")}</p>
+            )}
             <p className="ld-move-line">{t("lab.labDeck.move.doNothing")}</p>
-            {!canApply && <p className="ld-move-note">{t("lab.labDeck.move.canApplyNo")}</p>}
           </div>
         )}
         <p className="ld-move-remaining">

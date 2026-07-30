@@ -586,6 +586,35 @@ describe("guard 4 — the map answers to the selection, and never becomes a seco
     );
   });
 
+  // GUARD (bug→guard, consumer panel 2026-07-29 — 4/5 seats). A system-wide subject lights no part of
+  // the rig, which is correct and unfabricatable: `rigKindForSubsystem` returns null and inventing a
+  // highlight would be inventing topology. But the map used to say NOTHING in that state (the "no
+  // reading" line was suppressed for `system`), so an unlit hologram beside a caption conceding "not
+  // one part" read to every seat as decoration that had failed. Absence must be DECLARED — as a typed
+  // state on the element and as a sentence the user can read — never left as silence.
+  it("a system-wide subject declares why nothing is lit, instead of showing an unlit rig in silence", async () => {
+    // `fast-startup-off` is a Power rec the subsystem map places at `system` on purpose (guard 1).
+    const c = await renderDeck({
+      recs: [rec({ id: "fast-startup-off", title: "Turn off Fast Startup" })] as never,
+    });
+    expect(c.querySelector(".ld-map")?.getAttribute("data-focus")).toBe("whole");
+    expect(focus(c)).toBe("none"); // hands off the hologram's selection — nothing is lit
+    expect(text(c.querySelector(".ld-map-part-name"))).toBe(
+      "Touches how Windows behaves, not one part",
+    );
+    // The sentence that turns the unlit rig from a failure into information.
+    expect(text(c.querySelector(".ld-map-src"))).toContain("Nothing to single out");
+    expect(text(c.querySelector(".ld-map-src"))).toContain("shown intact");
+    // …and it must NOT borrow the per-part wording, which would claim a missing reading instead.
+    expect(text(c.querySelector(".ld-map-src"))).not.toContain("no reading for this part");
+  });
+
+  it("a subject with a real part declares the part state, so the two are never confusable", async () => {
+    const c = await renderDeck({ recs: [GPU_REC] as never });
+    expect(c.querySelector(".ld-map")?.getAttribute("data-focus")).toBe("part");
+    expect(focus(c)).toBe("gpu");
+  });
+
   it("the map contains NOT ONE control — no second router, no duplicate instrument, no apply", async () => {
     const c = await renderDeck();
     const map = c.querySelector(".ld-map")!;

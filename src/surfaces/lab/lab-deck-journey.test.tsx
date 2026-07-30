@@ -211,22 +211,81 @@ describe("item 9 — the decline stays available on the headline move", () => {
     expect(text(c.querySelector(".ld-move-note"))).toContain("won't set this one for you");
   });
 
-  // Accent discipline (panel P5): the solid primary is spent only where a click really applies a
-  // change Compy can undo. On a rec Compy won't set, and on anything the catalog itself marks
-  // `advanced`, both branches carry equal weight — the card's framing says the choice is the user's,
-  // so its buttons must not argue otherwise.
-  it("neither branch takes the accent fill when the choice is the user's to make", () => {
+  // GUARD (bug→guard, consumer panel 2026-07-29 — 5/5 seats). This assertion is the INVERSE of the
+  // one it replaces. The old rule withheld the accent fill from every state where the choice was the
+  // user's, on the reasoning that a solid CTA shouldn't push a change Compy can't undo. Sound as far
+  // as it went — but it left the can't-apply state rendering three identically-weighted buttons, and
+  // every consumer seat independently reported choosing between three options instead of following
+  // one path. The owner's law settles it: "secondary actions must not compete with the primary."
+  // The accent still never argues for an unsafe apply — in that state it moves to "Show me how",
+  // which only navigates. What is guarded is the COUNT: exactly one primary, in every state.
+  it("every state offers exactly one accented action — never three of equal weight", () => {
     const cantSet = renderDeck({ isAppliable: () => false });
-    expect(cantSet.querySelector(".ld-move-actions .ld-btn-primary")).toBeNull();
-    cleanup();
-
-    const advanced = renderDeck({ recs: [rec({ severity: "advanced" })] });
-    expect(advanced.querySelector(".ld-move-actions .ld-btn-primary")).toBeNull();
+    expect(cantSet.querySelectorAll(".ld-move-actions .ld-btn-primary").length).toBe(1);
+    // …and it is the navigating action, not an apply Compy cannot perform.
+    expect(text(cantSet.querySelector(".ld-move-actions .ld-btn-primary"))).toBe("Show me how");
+    // The alternatives are still there, still reachable, just no longer competing.
+    const cantSetActions = Array.from(cantSet.querySelectorAll(".ld-move-actions .ld-btn")).map((b) =>
+      text(b),
+    );
+    expect(cantSetActions).toContain("Not for me");
     cleanup();
 
     // …and it IS still spent on the ordinary reversible apply, or the accent would mean nothing.
     const safe = renderDeck();
+    expect(safe.querySelectorAll(".ld-move-actions .ld-btn-primary").length).toBe(1);
     expect(text(safe.querySelector(".ld-move-actions .ld-btn-primary"))).toBe("Apply this");
+  });
+
+  // GUARD (bug→guard, consumer panel 2026-07-29 — 4/5 seats, Burned Skeptic's top fix). Compy may
+  // only promise rollback for changes Compy itself makes. These two strings used to render together
+  // on every non-appliable rec: "Compy records how to put this back" immediately above "Compy won't
+  // set this one for you" — a promise-shaped sentence on top of a feature that structurally cannot
+  // exist for that item. They must be mutually exclusive, and the honest branch must still tell the
+  // user how to reverse it by hand (safety information may be moved, never deleted).
+  it("never promises Compy-recorded rollback for a rec Compy does not apply", () => {
+    const cantSet = renderDeck({ isAppliable: () => false });
+    fireEvent.click(cantSet.querySelector<HTMLButtonElement>(".ld-more")!);
+    const detail = text(cantSet.querySelector(".ld-move-detail"));
+    expect(detail).not.toContain("Compy records how to put this back");
+    expect(cantSet.querySelector(".ld-move-safe")).toBeNull();
+    // The undo route survives the removal, in words the user can act on.
+    expect(text(cantSet.querySelector(".ld-move-note"))).toContain("nothing for Compy to put back");
+    expect(text(cantSet.querySelector(".ld-move-note"))).toContain("turns it off again");
+    cleanup();
+
+    // …and the promise IS still made where Compy really does capture the rollback contract.
+    const appliable = renderDeck();
+    fireEvent.click(appliable.querySelector<HTMLButtonElement>(".ld-more")!);
+    expect(text(appliable.querySelector(".ld-move-safe"))).toContain("put this back");
+    expect(appliable.querySelector(".ld-move-note")).toBeNull();
+  });
+
+  // GUARD (bug→guard, consumer panel 2026-07-29 — 4/5 seats). Opening the detail used to lead with
+  // the catalog's prose paragraph, and on a long-description rec several seats stopped reading before
+  // they reached the trade-off underneath. The fix was ORDER, not deletion: the three labelled facts
+  // (what it is now, what changes, the downside) answer the decision, so they come first; the prose
+  // is the background behind them. This guard pins both halves — facts before prose, and every word
+  // still present — because "reduce the text" is exactly how safety information gets quietly cut.
+  it("the opened detail leads with the labelled facts, and still contains every word", () => {
+    const c = renderDeck({ recs: [rec({ downside: "Slightly higher idle power draw." })] });
+    fireEvent.click(c.querySelector<HTMLButtonElement>(".ld-more")!);
+    const detail = c.querySelector(".ld-move-detail")!;
+    const facts = detail.querySelector(".ld-move-facts")!;
+    const prose = Array.from(detail.querySelectorAll(".ld-move-line")).find((p) =>
+      text(p).includes("stops the CPU idling"),
+    )!;
+    expect(facts).not.toBeNull();
+    expect(prose).not.toBeUndefined();
+    // Bitwise, because that is the only order assertion that survives a wrapper being added.
+    expect(facts.compareDocumentPosition(prose) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Nothing was traded for the reorder: the labelled trio, the prose, the reversibility promise
+    // and the do-nothing line are all still rendered.
+    expect(detail.querySelectorAll(".ld-move-fact dt").length).toBe(3);
+    expect(text(detail)).toContain("Slightly higher idle power draw.");
+    expect(text(detail)).toContain("stops the CPU idling");
+    expect(text(detail)).toContain("put this back");
+    expect(text(detail)).toContain("Skip it and nothing changes");
   });
 });
 
