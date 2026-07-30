@@ -73,11 +73,11 @@ match these exactly or point back to this section rather than restate its own co
 | Ceiling | 150k | "Avoid working above" (§3, unchanged) | this doc only |
 | `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | **300000 on `feat/user-feedback-lab-recovery` (§7 trial, provisional); 150000 elsewhere** | The one literal env-var value; native auto-compact fires at ~92–95% of it (≈276–285k at 300000, ~140k at 150000) | `.claude/settings.json` — the ONLY place this literal should be set. Project-level only; the global `~/.claude/settings.json` does not set it |
 | Advisor warn threshold | 85% of the window above, computed at runtime | When the Stop hook injects a persist-to-disk instruction | `.claude/hooks/context-size-advisor.mjs` — reads the env var, does not hardcode a copy |
-| Audit red-flag | 200k peak context — **but see §7: a hard-coded literal that is WRONG for a 300000 window** | Sanity check only — should never be reached if auto-compact is working; hitting it means compaction failed to fire, not a target to approach | `.claude/skills/usage-audit/SKILL.md`, `scripts/usage-audit.mjs` (hard-codes `200_000`; does not derive from the window) |
+| Audit red-flag | the effective window above, **derived at runtime — no literal** | Sanity check only — should never be reached if auto-compact is working; a peak above the window means compaction failed to fire, not a target to approach. The report prints the resolved window + its source, so the basis is never guessed | `scripts/lib/compaction-window.mjs` (resolver + flag), consumed by `scripts/usage-audit.mjs`; guarded by `scripts/compaction-window-guard.test.mjs` |
 | Autopilot continuation cap | 2 | Hard code clamp (was: unenforced doc convention) on how many tasks autopilot chains in one session, so it can't manufacture a >150k context on its own | `.claude/hooks/stop-continue.mjs` (`MAX_CONTINUES`) |
 
-Unrelated metric that happens to also round to "200k" and should not be confused with the audit
-red-flag above: `docs/LANE_WORKFLOW.md`'s **~200k output tokens per shipped burst item** — a
+Unrelated metric that used to be confused with the audit red-flag above (they were both "200k" until
+2026-07-29): `docs/LANE_WORKFLOW.md`'s **~200k output tokens per shipped burst item** — a
 cost-estimation constant for sizing parallel build bursts, nothing to do with context-window size.
 
 ## 6. Code-enforced guards (2026-07-18, round 2 — closing the "policy-only" gaps)
@@ -178,13 +178,18 @@ are untouched — a bigger window is not licence to run longer without persistin
 - **~255k warn vs the 150k ceiling (§3) is a real, deliberate contradiction during the trial.** The
   ceiling is the hypothesis under test; measure 1–4 decide whether it returns as written, moves, or
   is retired. Until then §3's ceiling stands off-branch.
-- **`scripts/usage-audit.mjs`'s `200_000` red flag is wrong for a 300000 window** and will emit a
-  false 🔴 for peaks that are simply normal pre-compaction context (compaction fires ≈276–285k).
-  **When reading a weekly report against this branch, treat >300k — not >200k — as "compaction
-  failed to fire."** Deferred, not done: deriving that flag from the configured window is a
-  `scripts/` change outside #15's claimed scope, and the script has no guard test, so under the
-  bug→guard law it needs a guard authored with it. **Do that before 300000 is adopted anywhere
-  beyond this branch.**
+- ~~`scripts/usage-audit.mjs`'s `200_000` red flag is wrong for a 300000 window~~ — **FIXED
+  2026-07-29 (issue #16).** The flag now derives from the effective window
+  (`scripts/lib/compaction-window.mjs`: env → project settings → documented 150000 fallback, invalid
+  values ignored *and* reported), the report prints the resolved window + source, and
+  `scripts/compaction-window-guard.test.mjs` holds the three owner-named cases. The interim
+  "read >300k not >200k" human rule is retired — the instrument reads correctly on its own.
+- **The 300000 window only applies to sessions ROOTED in this worktree.** Measured 2026-07-29:
+  a session rooted in `C:\Users\Kuya\code\sentinel-rel` (editing `sentinel-feedback` by absolute
+  path) runs with `CLAUDE_CODE_AUTO_COMPACT_WINDOW=150000` — `sentinel-rel`'s own project settings
+  win, because the value is injected from the session's root project, not from the files being
+  edited. **A trial session must therefore be launched with `sentinel-feedback` as its working
+  directory, or measures 1–4 record the 150000 control, not the experiment.**
 - **`.claude/hooks/` is gitignored (`.gitignore:49`) and absent from the `sentinel-feedback`
   worktree** — the hooks exist only under `C:\Users\Kuya\code\sentinel\.claude\hooks\`. Auto-compaction
   is native and env-var-driven, so **the trial is valid here**, but the advisory Stop-hook nudge and

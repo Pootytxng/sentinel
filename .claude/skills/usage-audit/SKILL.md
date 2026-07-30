@@ -25,12 +25,14 @@ Streams every transcript under `~/.claude/projects` (main lanes + subagents), de
 message.id, and prints: token totals, avg carried context/turn, per-session peaks, tool mix,
 skills, subagent model routing, boot-tax read paths, error classes — plus **health flags**:
 
-- 🔴 sessions past 200k peak context — this is a sanity-check red-flag, not a target: it should
-  never be reached if native auto-compact is working (see `.claude/USAGE_ECONOMICS.md` §5 for
-  the full reconciled number set; the owner's actual working target is 80–120k). Cache-read cost
-  per turn scales with carried context, and it is the #1 spend driver (measured 2026-07-13: 1.38B
-  cache-read vs 7.2M output over 80 sessions). Not to be confused with `docs/LANE_WORKFLOW.md`'s
-  unrelated ~200k-output-tokens-per-burst-item metric — same round number, different thing.
+- 🔴 sessions whose peak context passed **the effective auto-compaction window** — derived at
+  runtime from `CLAUDE_CODE_AUTO_COMPACT_WINDOW` (env → project `.claude/settings.json` → documented
+  150000 fallback), never a literal, and the resolved window + source is printed in the report's
+  header so the basis is never guessed. It is a sanity-check red-flag, not a target: it should never
+  be reached if native auto-compact is working (see `.claude/USAGE_ECONOMICS.md` §5 for the full
+  reconciled number set; the owner's actual working target is 80–120k). Cache-read cost per turn
+  scales with carried context, and it is the #1 spend driver (measured 2026-07-13: 1.38B cache-read
+  vs 7.2M output over 80 sessions).
 - 🟡 subagents on opus/fable — routing law says cheapest capable model (sonnet default via
   `settings.json`; pre-2026-07-05 runs explain historical hits).
 - 🟡 BACKLOG.md > 120 KB — boot tax; archive steering-log cycles to `docs/BACKLOG_ARCHIVE.md`

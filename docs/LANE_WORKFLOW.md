@@ -38,10 +38,10 @@ other) and **productivity** (parallel, fast) while making **cost bounded** (fini
 
 ## 3. Cost model (gauge output vs remaining budget) — CALIBRATED 2026-06-25 (first real burst)
 - Per burst ≈ **(N builds + triage + verify)** agents. **Real data: ~200k output tokens per built item**
-  (~402k output / **~660k TOTAL** for a 2-item burst); triage/verify are cheap. (Unrelated to the
-  usage-audit skill's "200k peak context" red-flag — same round number, two different metrics:
-  this one is output-tokens-per-shipped-item for sizing burst width, that one is a live
-  context-size sanity check. See `.claude/USAGE_ECONOMICS.md` §5.)
+  (~402k output / **~660k TOTAL** for a 2-item burst); triage/verify are cheap. (This is
+  output-tokens-per-shipped-item for sizing burst width — unrelated to the usage-audit's peak-context
+  red-flag, which since 2026-07-29 derives from the configured auto-compaction window rather than a
+  coincidentally-similar literal. See `.claude/USAGE_ECONOMICS.md` §5.)
 - The script **sizes N to the budget**: with a target set, `N ≈ floor(remaining / 200k) − 1`, capped at 6. With no
   target it defaults to 3 — but at ~200k/item that's ~600k output, so **prefer giving a budget**.
 - Rule of thumb: **~300k budget → ~1 item · ~600k → ~2 · ~1M → ~4.** Predictable, never runaway.
