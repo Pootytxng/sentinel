@@ -81,9 +81,10 @@ if ($Repair) {
 
 # --- 3. The verdict -----------------------------------------------------------
 Write-Head 'Preflight'
-$args = @('preflight')
-if ($Issue -gt 0) { $args += @('--issue', "$Issue") }
-node (Join-Path $ControlDir 'tools/entry/cli.mjs') @args
+# NOT $args -- that is an automatic variable in PowerShell and assigning to it is a trap.
+$cliArgs = @('preflight')
+if ($Issue -gt 0) { $cliArgs += @('--issue', "$Issue") }
+node (Join-Path $ControlDir 'tools/entry/cli.mjs') @cliArgs
 $verdictCode = $LASTEXITCODE
 
 if ($verdictCode -eq 2) { exit 2 }   # nothing to do, or a choice is needed -- cli.mjs already said so
