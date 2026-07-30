@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import "../../i18n";
 import type { HardwareInfo } from "../../App";
 import { useManualParts, MANUAL_KINDS, manualKindLabel, type ManualKind } from "./manual-parts";
+import { buildRigParts, type RigPartKind } from "./rig-parts";
 import { readHologramV2 } from "../../design/theme";
 import "./RigViewer.css";
 
@@ -28,6 +29,7 @@ const RigHologram = lazy(() =>
 export const RigViewer = memo(function RigViewer({
   hw,
   chromeless = false,
+  focusKind,
 }: {
   hw: HardwareInfo;
   // chromeless: render ONLY the 3D hologram canvas (no control bar, honesty caption, monitor nudge,
@@ -35,6 +37,17 @@ export const RigViewer = memo(function RigViewer({
   // Console, whose corner gauges would otherwise collide with the viewer's bottom form). Manual
   // parts still render in the model; only the management CHROME is hidden.
   chromeless?: boolean;
+  // focusKind: let the HOST point the hologram at a part — the Lab's Rig Evidence Map, where the
+  // recommendation or instrument you opened highlights the hardware it actually touches. Three
+  // distinct values, and the difference matters:
+  //   undefined  → uncontrolled. Home, the Ops Console and every existing caller stay exactly as
+  //                they were; the effect below never runs, so selection is the user's clicks alone.
+  //   a kind     → highlight the first real part of that kind in THIS rig.
+  //   null       → highlight nothing. The host is saying "what I'm showing isn't one component."
+  //                It must clear, or the map would keep pointing at a part nothing is about.
+  // A KIND, not an id, on purpose: `ram-N` / `gpu-N` / `disk-N` are index-suffixed and depend on how
+  // many modules this machine reports, so an id passed from outside would be a guess about the rig.
+  focusKind?: RigPartKind | null;
 }) {
   const { t } = useTranslation();
   const [exploded, setExploded] = useState(false);
@@ -44,6 +57,19 @@ export const RigViewer = memo(function RigViewer({
   const [autoRotate, setAutoRotate] = useState(() => !readHologramV2());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  // Host-driven focus resolves through the SAME `selectedId` the user's own clicks set, so there is
+  // one selection in this component, not two competing ones — and the hologram's click/hover/miss
+  // behaviour is untouched. `buildRigParts` is pure and ids don't depend on `t`, so resolving here
+  // costs a list walk on a real change and nothing on a repaint.
+  useEffect(() => {
+    if (focusKind === undefined) return; // uncontrolled host — never touch the user's selection
+    if (focusKind === null) {
+      setSelectedId(null);
+      return;
+    }
+    setSelectedId(buildRigParts(hw).find((p) => p.kind === focusKind)?.id ?? null);
+  }, [focusKind, hw]);
 
   const { parts: manualParts, add, remove } = useManualParts();
   const [kind, setKind] = useState<ManualKind>("psu");
