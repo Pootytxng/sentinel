@@ -218,8 +218,19 @@
   margin: 0;
   font-size: 12.5px;
   line-height: 1.5;
-  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
   max-width: 66ch;
+}
+/* …and one step further (owner verdict 2026-07-29: "too much similarly muted copy"). text-2 already
+   cleared the 4.5:1 floor, so this is a HIERARCHY fix, not a contrast fix: the rollback promise and
+   the can't-apply route were legible but weighted like a footnote because every supporting line on
+   the deck shared one ink. Text the user needs in order to decide, or to stay safe, is primary ink.
+   Only genuinely optional metadata — how many recs are left — stays supporting. */
+.ld-move-note,
+.ld-move-safe {
+  color: var(--ix-text-1, var(--v2-text, #fff));
+}
+.ld-move-remaining {
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
 }
 
 /* The four facts every recommendation must answer, as a definition list so a screen reader hears
@@ -422,6 +433,14 @@
   color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
   max-width: 44ch;
 }
+/* When no single part is lit, this line is not an aside — it is the ANSWER to "why is nothing
+   highlighted", and 4/5 consumer seats read the unlit rig as broken decoration without it. Primary
+   ink in that state only; where the rig IS lit, the same element is just source attribution and
+   stays supporting. Nothing about the hologram itself changes — the honest state is carried by
+   words, not by dimming a real asset into looking like it failed to load. */
+.ld-map[data-focus="whole"] .ld-map-src {
+  color: var(--ix-text-1, var(--v2-text, #fff));
+}
 
 /* ── buttons ── */
 .ld-btn {
@@ -570,14 +589,17 @@
 /* The live reading, in the instrument voice. `data-measured="no"` is the honesty state: an
    instrument with nothing to report says so, in the muted tone, and never shows a placeholder
    number. */
+/* The reading IS the evidence this room is built to show, and it was the smallest, faintest type on
+   the deck — supporting ink at 11.5px for the one number the user came to see. Primary ink, one step
+   up in size. Still the mono/right-aligned readout, so the row's shape is unchanged. */
 .ld-row-reading {
   flex: 0 1 auto;
   max-width: 38%;
   font-family: var(--v2-font-mono, var(--font-mono, ui-monospace, monospace));
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.35;
   text-align: right;
-  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
+  color: var(--ix-text-1, var(--v2-text, #fff));
 }
 /* The absence state stays fully legible — it is a reading the user has to interpret and act on, so it
    keeps the same ink and says so in words. Italic, not dim, carries "this is not a value yet". */

@@ -280,6 +280,36 @@ describe("P3 — ink rank follows meaning, not tidiness", () => {
     for (const r of hits) expect(r.body).not.toContain("--ix-text-3");
   });
 
+  // GUARD (bug→guard, consumer panel 2026-07-29 — 4/5 seats, and the owner's own verdict: "too much
+  // similarly muted copy"). The guard above only bans the FAINT step. That wasn't enough: the
+  // rollback promise, the can't-apply route and the instrument's reading were all legible (the
+  // supporting token composites at 5.76:1, over the 4.5:1 floor) and still read as footnotes, because
+  // every supporting line on the deck shared one ink and nothing sat above it. This is a hierarchy
+  // rule, not a contrast rule: text the user needs in order to DECIDE or to stay SAFE, and the
+  // measured reading this room exists to show, are primary ink. Supporting ink is for what's optional.
+  const mustBePrimaryInk = [
+    ".ld-move-safe", // the rollback promise — safety
+    ".ld-move-note", // the can't-apply route, which is now the ONLY undo route stated — safety
+    ".ld-row-reading", // the reading itself — the evidence the Lab is built to show
+  ];
+
+  it.each(mustBePrimaryInk)("%s is primary ink, not one more muted supporting line", (sel) => {
+    const hits = rulesTouching(sel);
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.some((r) => r.body.includes("--ix-text-1"))).toBe(true);
+    // …and no later rule quietly demotes it back onto the shared supporting step.
+    for (const r of hits) expect(r.body).not.toContain("--ix-text-2");
+  });
+
+  it("the demotion is deliberate: what's genuinely optional still reads as supporting", () => {
+    // If EVERYTHING became primary there would be no hierarchy either — the count of recommendations
+    // still waiting is optional metadata and must stay a step down.
+    const hits = rulesTouching(".ld-move-remaining");
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.some((r) => r.body.includes("--ix-text-2"))).toBe(true);
+    for (const r of hits) expect(r.body).not.toContain("--ix-text-1");
+  });
+
   it("an absent reading stays legible — italic says 'not a value yet', dimming just hides it", () => {
     const hits = rulesTouching('.ld-row-reading[data-measured="no"]');
     expect(hits.length).toBeGreaterThan(0);
