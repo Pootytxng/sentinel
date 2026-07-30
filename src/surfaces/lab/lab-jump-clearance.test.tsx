@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, act } from "@testing-library/react";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -36,9 +36,14 @@ vi.stubGlobal("IntersectionObserver", IOStub);
 
 const { LabDeck } = await import("./LabDeck");
 const { ConfirmProvider } = await import("../../design/ConfirmDialog");
-const { computeJumpInset, scrollportOf, JUMP_GAP, FALLBACK_JUMP_INSET } = await import(
-  "./jump-inset"
-);
+const {
+  atScrollEnd,
+  computeJumpInset,
+  pickHere,
+  scrollportOf,
+  JUMP_GAP,
+  FALLBACK_JUMP_INSET,
+} = await import("./jump-inset");
 
 // The geometry the review actually measured on the installed candidate at 1280×720.
 const PORT_TOP = 79.8; // .v2-content's padding-box top edge, in viewport coords
@@ -136,7 +141,7 @@ describe("a nav jump lands the destination heading below the sticky nav, not beh
 //
 // This pins the shape so neither half can be undone by a later "tidy up that whitespace":
 //   · the terminator must be the deck's LAST child (delete it → fail)
-//   · the travel may grow but never shrink below the measured 34vh/280px (trim it → fail)
+//   · the travel is bounded on BOTH sides (round 4 rewrote this — see that test's own note)
 //   · and it must not be re-added as bare padding on .lab-deck as well (double room → fail)
 describe("the deck ends on something, and the room that ends it is not bare", () => {
   const css = () =>
@@ -201,6 +206,82 @@ describe("the deck ends on something, and the room that ends it is not bare", ()
 
     const deck = sheet.match(/\.lab-deck\s*\{([\s\S]*?)\}/)?.[1] ?? "";
     expect(deck).not.toMatch(/padding-bottom/);
+  });
+});
+
+// BUG → GUARD (self-review round 5, 2026-07-30). The same clamp that forced the trailing room also
+// broke the "you are here" pill, and for the same reason: the page stops scrolling before the LAST
+// step can own the viewport. At max scroll the tall "Diagnose a problem" section and the short
+// "Advanced instruments" section are both fully in frame — intersectionRatio 1.0 each — and the
+// ratio comparison keeps the earlier one. Measured at 1484×971: click step 5, the page jumps, the
+// nav still says step 4. Reproduced two ways (nav pill, and scrollTop = scrollHeight).
+//
+// Shrinking the trailing room in d7cf825 made it MORE likely, not less, which is why it surfaced
+// this round: less travel means section 4 stays fuller in view at the clamp.
+//
+// No ratio rule can fix this — the ratios are genuinely tied and genuinely correct. The end of the
+// page is the end of the path, so that is the rule. Everything short of the end is untouched.
+describe("the last step lights when the page runs out of room", () => {
+  const JOURNEY = ["move", "optimize", "prove", "diagnose", "advanced"] as const;
+
+  it("at max scroll the journey's end wins, whatever the ratios say", () => {
+    // The exact tie the review measured: both fully visible, the earlier one taller.
+    const tied = (k: string) => (k === "diagnose" || k === "advanced" ? 1 : 0);
+    expect(pickHere(JOURNEY, tied, false)).toBe("diagnose"); // the shipped behaviour…
+    expect(pickHere(JOURNEY, tied, true)).toBe("advanced"); // …and the fix, which only applies AT the end.
+  });
+
+  it("and changes nothing before the end — including ties", () => {
+    // Arriving at the top with two short sections both fully in frame must still light step 1.
+    // Breaking ties toward the LATER section would have "fixed" the end at the cost of the start.
+    const top = (k: string) => (k === "move" || k === "optimize" ? 1 : 0);
+    expect(pickHere(JOURNEY, top, false)).toBe("move");
+    expect(pickHere(JOURNEY, (k) => (k === "prove" ? 0.8 : 0.2), false)).toBe("prove");
+    // Nothing in frame at all (jsdom, pre-layout): no claim rather than a wrong one.
+    expect(pickHere(JOURNEY, () => 0, false)).toBeNull();
+    expect(pickHere([], () => 1, true)).toBeNull();
+  });
+
+  it("recognises the end of a scroller, and refuses to invent one", () => {
+    expect(atScrollEnd({ scrollTop: 2903, scrollHeight: 3794, clientHeight: 891 })).toBe(true);
+    expect(atScrollEnd({ scrollTop: 2902, scrollHeight: 3794, clientHeight: 891 })).toBe(true); // slack
+    expect(atScrollEnd({ scrollTop: 2890, scrollHeight: 3794, clientHeight: 891 })).toBe(false);
+    // A page that doesn't scroll has no end — otherwise the last pill would light on arrival.
+    expect(atScrollEnd({ scrollTop: 0, scrollHeight: 900, clientHeight: 900 })).toBe(false);
+    expect(atScrollEnd(null)).toBe(false);
+  });
+
+  it("the deck re-decides on scroll, not only on threshold crossings", () => {
+    // The observer is why this needs a scroll listener at all: the last few pixels before the clamp
+    // cross no threshold, so nothing would re-run the choice and the pill would stay stale.
+    const { container } = render(
+      <div style={{ overflowY: "auto" }} data-testid="scrollport">
+        <ConfirmProvider>
+          <LabDeck fast={fast()} diagnostics={<div />} diagnosticsCaptured priorities={null} activeCount={0} />
+        </ConfirmProvider>
+      </div>,
+    );
+    const port = container.querySelector<HTMLElement>('[data-testid="scrollport"]')!;
+    const pills = Array.from(container.querySelectorAll(".ld-nav-item"));
+    expect(pills).toHaveLength(JOURNEY.length);
+    expect(pills.findIndex((p) => p.getAttribute("aria-current") === "true")).toBe(0);
+
+    // jsdom has no layout, so hand it the geometry the review recorded on the real window.
+    for (const [k, v] of [
+      ["scrollHeight", 3794],
+      ["clientHeight", 891],
+      ["scrollTop", 2903],
+    ] as const) {
+      Object.defineProperty(port, k, { value: v, configurable: true });
+    }
+    act(() => {
+      port.dispatchEvent(new Event("scroll"));
+    });
+
+    const lit = Array.from(container.querySelectorAll(".ld-nav-item")).findIndex(
+      (p) => p.getAttribute("aria-current") === "true",
+    );
+    expect(lit).toBe(JOURNEY.length - 1);
   });
 });
 

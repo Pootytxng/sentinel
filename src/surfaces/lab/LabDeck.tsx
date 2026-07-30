@@ -49,7 +49,13 @@ import {
   type LabSubsystem,
 } from "./lab-deck-data";
 import { subsystemReadings } from "./lab-evidence-map";
-import { computeJumpInset, scrollportOf, scrollportTop } from "./jump-inset";
+import {
+  atScrollEnd,
+  computeJumpInset,
+  pickHere,
+  scrollportOf,
+  scrollportTop,
+} from "./jump-inset";
 import type {
   ArmedComparison,
   BenchmarkState,
@@ -230,31 +236,35 @@ export function LabDeck({
   // the journey rail for whichever section owns the viewport, so the five-step path is always
   // visible AND you can always see your place on it. Falls back to "move" where IntersectionObserver
   // is missing (jsdom): a wrong-but-stable highlight beats a crash, and nothing depends on it.
+  // ...and at the very bottom the ratios stop being able to answer at all — the page clamps before
+  // the last step can own the viewport, so `pickHere` hands the end of the page to the end of the
+  // path (see jump-inset.ts). The scroll listener is why the observer alone isn't enough: the last
+  // few pixels before max cross no threshold, so nothing would re-run the choice.
   const [here, setHere] = useState<DeckSection>("move");
   useEffect(() => {
     if (typeof IntersectionObserver !== "function") return;
     const seen = new Map<DeckSection, number>();
+    const port = scrollportOf(deckRef.current);
+    const choose = () => {
+      const best = pickHere(NAV, (k) => seen.get(k) ?? 0, atScrollEnd(port));
+      if (best) setHere(best);
+    };
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
           const key = (e.target as HTMLElement).dataset.section as DeckSection | undefined;
           if (key) seen.set(key, e.intersectionRatio);
         }
-        let best: DeckSection | null = null;
-        let bestRatio = 0;
-        for (const k of NAV) {
-          const r = seen.get(k) ?? 0;
-          if (r > bestRatio) {
-            bestRatio = r;
-            best = k;
-          }
-        }
-        if (best) setHere(best);
+        choose();
       },
       { threshold: [0, 0.15, 0.4, 0.75, 1] },
     );
     for (const el of Object.values(sections.current)) if (el) io.observe(el);
-    return () => io.disconnect();
+    port?.addEventListener?.("scroll", choose, { passive: true });
+    return () => {
+      io.disconnect();
+      port?.removeEventListener?.("scroll", choose);
+    };
   }, []);
 
   // ───────────────────────── the check → optimize handoff ─────────────────────────

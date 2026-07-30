@@ -68,3 +68,53 @@ export function computeJumpInset(
   if (!Number.isFinite(covered) || covered <= 0) return null;
   return Math.round(covered) + gap;
 }
+
+// ─────────────────────── WHERE AM I, once the page stops scrolling ───────────────────────
+//
+// The nav lights the pill for whichever section owns the viewport, chosen by intersection ratio.
+// That rule cannot answer for the LAST step, and the reason is the same geometry as above: the
+// browser clamps the scroll at the end of the page, so "Advanced instruments" never gets to own the
+// viewport. At maximum scroll a tall earlier section and the short last one are BOTH fully in frame
+// — ratio 1.0 each — and the earlier one wins the comparison. Self-review round 5 measured exactly
+// that at 1484×971: click step 5, the page jumps, and the nav still says step 4.
+//
+// Ratio is not the thing to fix; no ratio rule can be right when the page runs out of room. The
+// path ends where the page ends: AT the end of the scroller, the last step is where you are,
+// whatever the ratios say. Everywhere else this changes nothing — ties included, so arriving at the
+// top still lights step 1 when two short sections are both fully visible.
+
+/** Slack for fractional scroll positions — a clamped scroller can land a hair under its own max. */
+export const AT_END_SLACK = 2;
+
+/** True when the scroller can no longer move down. A page that doesn't scroll has no end. */
+export function atScrollEnd(
+  port: { scrollTop: number; scrollHeight: number; clientHeight: number } | null,
+): boolean {
+  if (!port) return false;
+  const max = port.scrollHeight - port.clientHeight;
+  if (!Number.isFinite(max) || max <= 0) return false;
+  return port.scrollTop >= max - AT_END_SLACK;
+}
+
+/**
+ * Which step to light. `order` is the journey, `ratio` reports how much of each section is in frame,
+ * `atEnd` is `atScrollEnd` for the deck's scrollport. Returns null only for an empty journey.
+ */
+export function pickHere<T extends string>(
+  order: readonly T[],
+  ratio: (key: T) => number,
+  atEnd: boolean,
+): T | null {
+  if (order.length === 0) return null;
+  if (atEnd) return order[order.length - 1];
+  let best: T | null = null;
+  let bestRatio = 0;
+  for (const k of order) {
+    const r = ratio(k);
+    if (Number.isFinite(r) && r > bestRatio) {
+      bestRatio = r;
+      best = k;
+    }
+  }
+  return best;
+}
