@@ -100,10 +100,12 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   writeToken(token);
   say(`  launch token written (expires ${token.expiresAt})`);
 
-  // 4. overlay -- Class A only: the assert hook, never behaviour
+  // 4. overlay -- Class A only: the assert hook, never behaviour. Skipped entirely when the branch
+  //    already registers the assert in its own tracked settings (owner decision 3): two copies would
+  //    run the assert twice and the second would refuse the token the first consumed.
   if (!noOverlay) {
     const o = writeOverlay({ dir: target.path, controlDir });
-    say(o.wrote ? `  installed the session-root assert into ${o.file}` : "  session-root assert already installed");
+    say(o.wrote ? `  installed the session-root assert into ${o.file}` : `  session-root assert not installed — ${o.reason}`);
   } else {
     say("  --no-overlay: the in-session root assert will NOT run for this launch");
   }

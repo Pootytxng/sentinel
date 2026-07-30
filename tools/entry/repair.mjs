@@ -5,20 +5,29 @@
 // into while none of them exist — but writing into a folder another lane may own is mutation, so it
 // takes an explicit flag and it announces every file before writing it.
 //
-// The canonical payload lives at tools/entry/hooks/ and is TRACKED, so a fresh clone of the control
-// folder can repair. That path is deliberately not .claude/hooks/: nothing auto-activates anywhere,
-// and materialization stays explicit. Whether .claude/hooks/ itself should be tracked -- which
-// would make the hooks live in every checkout with no verification step at all -- is Kuya's
-// decision, and this deliberately does not take it.
+// Kuya took the tracking decision this file used to defer (owner decisions 2 and 4, Issue #18,
+// 2026-07-30): `.claude/hooks/` is now the single canonical source AND it is tracked, so the hooks
+// travel with the branch. Repair still exists, and both halves matter — every branch that predates
+// that commit still carries settings registering hooks it does not have, and merging to `main` does
+// not reach into those checkouts. Repair is how they are brought forward, one explicit flag at a time.
+//
+// The payload copy at tools/entry/hooks/ is gone. Two canonical sources is none: the day they differ,
+// repair writes the stale one into a folder and the drift is invisible precisely because a file IS
+// present. Repair now copies the same set this branch runs on.
+//
+// One constraint follows and it is not cosmetic: repairHooks copies FLAT FILES only, so a hook that
+// imports from a subdirectory would arrive broken in the folders that most needed repairing. The
+// hooks stay self-contained; tracked-hooks.test.mjs enforces it for the assert.
 
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { HERE, readBoard } from "./gather.mjs";
 import { repairHooks, verifyHooks } from "./hooks-verify.mjs";
 import { parseWorktreeField } from "./worktree-field.mjs";
 
-export const CANONICAL_HOOKS = join(HERE, "hooks");
+export const CANONICAL_HOOKS = join(HERE, "..", "..", ".claude", "hooks");
 
-function main(argv) {
+export function main(argv) {
   const arg = (n) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : null);
   const issue = Number(arg("--issue"));
   const apply = !argv.includes("--dry-run");
@@ -67,4 +76,13 @@ function main(argv) {
   return after.ok ? 0 : 1;
 }
 
-process.exit(main(process.argv.slice(2)));
+// Only when invoked directly — importing this module (the guards do) must not exit the process.
+const invokedDirectly = (() => {
+  try {
+    return process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+})();
+
+if (invokedDirectly) process.exit(main(process.argv.slice(2)));

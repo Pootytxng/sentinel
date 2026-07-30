@@ -1,9 +1,14 @@
 // Verify that every hook a folder's settings REGISTER actually exists there. Refuse if not.
 //
-// The defect this catches (finding 4): `.claude/hooks/` is gitignored as "machine-local, not
-// shared" while the tracked `.claude/settings.json` wires seven hooks by `$CLAUDE_PROJECT_DIR`
-// path. Five of six checkouts therefore run with every hook missing — including a real DENY — and
-// nothing announces it. The #14 marathon ran hookless start to finish.
+// The defect this catches (finding 4): `.claude/hooks/` was gitignored as "machine-local, not
+// shared" while the tracked `.claude/settings.json` wired seven hooks by `$CLAUDE_PROJECT_DIR`
+// path. Five of six checkouts therefore ran with every hook missing — including a real DENY — and
+// nothing announced it. The #14 marathon ran hookless start to finish.
+//
+// Owner decision 2 (Issue #18) fixed the cause: the hooks are tracked now. This check stays anyway,
+// and decision 4 says so explicitly — every branch cut before that commit still registers hooks it
+// does not have, and merging to `main` does not reach into those checkouts. The class of defect is
+// "settings promise a file that is not there", which tracking makes rarer, not impossible.
 //
 // Verify and refuse (owner-approved). Writing hook files into a folder another lane may own is
 // mutation, so only `--repair` copies them, and it prints what it will write first.
@@ -84,9 +89,10 @@ export function verifyHooks({ dir, home = homedir(), env = process.env }) {
     dir,
     remediation:
       `${missing.length} registered hook${missing.length === 1 ? "" : "s"} do not exist in ${dir}: ` +
-      `${names.join(", ")}. These are registered by tracked settings but .claude/hooks/ is gitignored, ` +
-      `so they never travel with a branch. Run the launcher with --repair to copy the canonical set ` +
-      `from the control folder, or decide with Kuya whether .claude/hooks/ should be tracked.`,
+      `${names.join(", ")}. .claude/hooks/ is tracked now, so a branch that carries this commit ` +
+      `carries its hooks — this folder is on an older commit, and merging to main does not reach ` +
+      `into it. Run the launcher with --repair to copy the canonical set from the control folder, or ` +
+      `bring the folder forward (merge, rebase, or recreate it from the new main).`,
   };
 }
 
