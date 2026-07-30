@@ -1,9 +1,17 @@
 // @vitest-environment node
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+
+// Every case here SPAWNS PowerShell and lets it do real Git work in a sandbox — seconds of wall
+// clock each, ~4s when this file runs alone. The global testTimeout (15s, vitest.config.ts) is sized
+// for jsdom unit tests, so inside a loaded full-suite run one of these spawns loses the race and the
+// file fails while passing 26/26 in isolation (caught 2026-07-29). The budget below matches the
+// spawnSync timeout the invoke helper already enforces, so a genuinely hung adapter still fails —
+// it fails on the child's own deadline instead of on suite contention.
+vi.setConfig({ testTimeout: 130_000, hookTimeout: 60_000 });
 
 const root = join(import.meta.dirname, "..");
 const sandboxes = [];

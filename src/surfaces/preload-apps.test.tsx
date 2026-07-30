@@ -64,8 +64,11 @@ describe("PreloadApps (Phase-B, BUILT DARK)", () => {
     preloadView(true, ["solitaire-collection", "feedback-hub"]);
     render(<Fix {...baseProps} />);
     fireEvent.click(await screen.findByText("Preinstalled apps"));
-    expect(screen.getByText("Solitaire Collection")).toBeTruthy();
-    expect(screen.getByText("Feedback Hub")).toBeTruthy();
+    // findBy*, not getBy*: opening the group renders the rows off a resolved probe, so a synchronous
+    // read raced the flush and failed this file ~1-in-N inside a loaded full-suite run (caught
+    // 2026-07-29). findBy retries for up to a second — a genuinely missing row still fails.
+    expect(await screen.findByText("Solitaire Collection")).toBeTruthy();
+    expect(await screen.findByText("Feedback Hub")).toBeTruthy();
     // Not installed → never offered (no "remove something that isn't there").
     expect(screen.queryByText("Microsoft News")).toBeNull();
     expect(screen.queryByText("Microsoft 365 (Office) hub")).toBeNull();
@@ -75,7 +78,7 @@ describe("PreloadApps (Phase-B, BUILT DARK)", () => {
     preloadView(true, ["solitaire-collection"]);
     render(<Fix {...baseProps} />);
     fireEvent.click(await screen.findByText("Preinstalled apps"));
-    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith("remove_known_preload_app", {
         appId: "solitaire-collection",
@@ -94,7 +97,7 @@ describe("PreloadApps (Phase-B, BUILT DARK)", () => {
     });
     render(<Fix {...baseProps} />);
     fireEvent.click(await screen.findByText("Preinstalled apps"));
-    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
     expect(
       await screen.findByText("Couldn't remove it — nothing changed; try again."),
     ).toBeTruthy();
