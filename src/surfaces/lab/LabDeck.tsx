@@ -1,4 +1,13 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
 import "../../i18n";
 import { invoke } from "@tauri-apps/api/core";
@@ -28,12 +37,18 @@ import { measureTuning, tuningEvidence } from "../../data/tuning-measure";
 import { tuningGuideForVendorForLanguage } from "../../data/tuning-guides";
 import {
   groupByGoal,
+  labComparison,
   labGoals,
   labProblems,
   nextBestMove,
   proofStationFor,
+  rigKindForSubsystem,
+  subsystemForStation,
+  subsystemOf,
   type LabGoal,
+  type LabSubsystem,
 } from "./lab-deck-data";
+import { subsystemReadings } from "./lab-evidence-map";
 import { computeJumpInset, scrollportOf, scrollportTop } from "./jump-inset";
 import type {
   ArmedComparison,
@@ -45,7 +60,14 @@ import type {
   SessionSummary,
 } from "../../types";
 import type { GpuVendor } from "../walkthroughs";
+import type { HardwareInfo } from "../../App";
 import "./LabDeck.css";
+
+// The REAL rig hologram — the same component Home and the Ops Console mount, not a copy and not a
+// stock stand-in. Lazy so the ~600KB three.js bundle is not in the deck's chunk (RigViewer lazies
+// the scene itself too; this keeps the viewer's own module out as well) and so the jsdom guards
+// render the Suspense fallback instead of WebGL.
+const RigViewer = lazy(() => import("../rig/RigViewer").then((m) => ({ default: m.RigViewer })));
 
 // LabDeck — the DECISION-JOURNEY Lab candidate (product-recovery train, 2026-07-28; recovery
 // items 9/10/11/12/13/14/15). TEMPORARY, behind `compy_lab_deck` (DEFAULT OFF): this is the
@@ -87,6 +109,10 @@ function DeckRow(props: {
   sub: string;
   reading?: string;
   measured?: boolean;
+  // Status ink for the reading, for the one row whose reading is a VERDICT on a real measurement.
+  // Optional and unset everywhere else: an instrument's live value is a number, not a judgement, and
+  // colouring it would be decoration.
+  tone?: "ready" | "attention";
   expanded: boolean;
   onToggle: () => void;
   children?: ReactNode;
@@ -105,7 +131,11 @@ function DeckRow(props: {
           <span className="ld-row-sub">{props.sub}</span>
         </span>
         {props.reading != null && (
-          <span className="ld-row-reading" data-measured={props.measured ? "yes" : "no"}>
+          <span
+            className="ld-row-reading"
+            data-measured={props.measured ? "yes" : "no"}
+            data-tone={props.tone}
+          >
             {props.reading}
           </span>
         )}
@@ -130,6 +160,10 @@ export type LabDeckProps = {
   // and the fix rows can never disagree about which rig this is.)
   priorities?: Priorities | null;
   activeCount?: number;
+  // The live hardware snapshot, for the Rig Evidence Map. OPTIONAL and honestly absent: with no
+  // snapshot there is no map at all, rather than a hologram of a machine we haven't read. (Several
+  // guards mount the deck without hardware; they must keep working.)
+  hw?: HardwareInfo | null;
 };
 
 export function LabDeck({
@@ -138,6 +172,7 @@ export function LabDeck({
   diagnosticsCaptured = false,
   priorities = null,
   activeCount = 0,
+  hw = null,
 }: LabDeckProps) {
   const vendor: GpuVendor = fast.vendor ?? "any";
   const { t, i18n } = useTranslation();
@@ -325,21 +360,28 @@ export function LabDeck({
     )
       .then(setLatency)
       .catch(() => {});
-    if (tuningGuide) {
-      invoke<SessionSummary[]>("get_session_summaries")
-        .then(setSessions)
-        .catch(() => {});
-      invoke<ArmedComparison | null>("get_armed_comparison")
-        .then(setArmed)
-        .catch(() => {});
-      invoke<ComparisonResult | null>("get_latest_comparison")
-        .then(setLatestCmp)
-        .catch(() => {});
-    }
-  }, [tuningGuide]);
+    // NOT gated on the tuning guide any more. LabConsole reads these three only when the rig has an
+    // AMD/NVIDIA tuning walkthrough, because there they feed the Tuning instrument alone. Here they
+    // also feed the before/after receipt in "Measure & prove" — which is about an APPLIED FIX, not
+    // about vendor tuning — so gating it on the vendor would have hidden a measured result from every
+    // rig without a guide. Same three existing commands, same read-only reads; no new IPC.
+    invoke<SessionSummary[]>("get_session_summaries")
+      .then(setSessions)
+      .catch(() => {});
+    invoke<ArmedComparison | null>("get_armed_comparison")
+      .then(setArmed)
+      .catch(() => {});
+    invoke<ComparisonResult | null>("get_latest_comparison")
+      .then(setLatestCmp)
+      .catch(() => {});
+  }, []);
 
   const measurement = measureTuning(armed, sessions, latestCmp);
   const tuningEvidenceVerdict = tuningEvidence(sessions);
+  // The before/after receipt for an APPLIED FIX. `measurement` above is the vendor-tuning half of the
+  // same three reads; this is the fix half, and the data module keeps the two apart so neither can
+  // borrow the other's numbers.
+  const compare = labComparison(latestCmp, armed, sessions);
   const safeReady =
     fast.recs != null
       ? safeFixesReady(
@@ -444,6 +486,260 @@ export function LabDeck({
     jump(host);
   };
 
+  // ──────────────────── the before/after receipt (section 3, first row) ────────────────────
+  // "Measure & prove" listed five instruments and not one RESULT: the deck could send you off to take
+  // a reading, but never showed the reading it already had. Compy's strongest piece of evidence — a
+  // baseline measured before a change and the same game measured after it — only ever appeared on the
+  // Monitor surface's session debrief, so a user who came to the Lab to answer "did that help?" left
+  // with a tool list. This row leads the section because the finished evidence outranks the tools that
+  // produce it.
+  //
+  // WHAT IT MAY AND MAY NOT SAY. Every branch is a state from `labComparison`, and the states carry
+  // the honesty rules so no render has to remember them: only a fair verdict is allowed numbers,
+  // confounded/expired say why they are holding them back, an armed baseline is the before half and
+  // says what is still owed, and the two empty states name the real next action. Nothing here grades,
+  // recomputes or estimates — the percentages are the backend's own, and an expected impact is never
+  // dressed up as a measured one. The GLANCE layer gets the verdict alone; the values, the method and
+  // the noise floor live behind the row's own door.
+  const compareRow = (() => {
+    const c = compare;
+    const fps = (v: number) => String(Math.round(v));
+    const pct = (v: number) => (v >= 0 ? `+${v}` : String(v));
+    const arrow = (before: number, after: number) =>
+      t("lab.labDeck.compare.arrow", { before: fps(before), after: fps(after) });
+    // ONE NAME PER REC: the comparison receipt stores the raw catalog title, so the display name is
+    // resolved the same way every other surface resolves it. The user meets one name per tweak.
+    const changeName = (r: { rec_id: string; rec_title: string }) =>
+      recDisplayLabel(r.rec_id, r.rec_title).headline;
+
+    // The two fact pairs, shared by every branch that is allowed to show values.
+    const facts = (rows: { label: string; value: string }[]) => (
+      <dl className="ld-cmp-facts">
+        {rows.map((f) => (
+          <div className="ld-cmp-fact" key={f.label}>
+            <dt>{f.label}</dt>
+            <dd>{f.value}</dd>
+          </div>
+        ))}
+      </dl>
+    );
+
+    let sub: string;
+    let reading: string;
+    let measured = false;
+    let tone: "ready" | "attention" | undefined;
+    let body: ReactNode;
+
+    if (c.state === "measured") {
+      const r = c.result;
+      measured = true;
+      sub = t("lab.labDeck.compare.subMeasured", { change: changeName(r), game: r.game });
+      reading =
+        r.verdict === "no-change"
+          ? t("lab.labDeck.compare.readingNoChange", { noiseFloor: r.noise_floor_pct })
+          : t("lab.labDeck.compare.readingDelta", { pct: pct(r.delta_low1_pct) });
+      tone = r.verdict === "improved" ? "ready" : r.verdict === "regressed" ? "attention" : undefined;
+      body = (
+        <div className="ld-cmp">
+          <p className="ld-cmp-line">
+            {t(`lab.labDeck.compare.${r.verdict === "no-change" ? "noChange" : r.verdict}`, {
+              game: r.game,
+            })}
+          </p>
+          {facts([
+            {
+              label: t("lab.labDeck.compare.avgLabel"),
+              value: arrow(r.baseline_avg_fps, r.after_avg_fps),
+            },
+            {
+              label: t("lab.labDeck.compare.lowLabel"),
+              value: arrow(r.baseline_low1_fps, r.after_low1_fps),
+            },
+          ])}
+          <p className="ld-cmp-method">
+            {t("lab.labDeck.compare.method", {
+              avgPct: pct(r.delta_avg_pct),
+              lowPct: pct(r.delta_low1_pct),
+              noiseFloor: r.noise_floor_pct,
+            })}
+          </p>
+          {/* A measured regression is decision information, so the row says where the undo lives and
+              takes the user there. Navigation only — the applied list owns the rollback itself. */}
+          {r.verdict === "regressed" && (
+            <div className="ld-cmp-actions">
+              <button type="button" className="ld-btn" onClick={() => jump("optimize")}>
+                {t("lab.labDeck.compare.undoCta")}
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    } else if (c.state === "unfair") {
+      const r = c.result;
+      sub = t("lab.labDeck.compare.subUnfair", { change: changeName(r), game: r.game });
+      reading = t(`lab.labDeck.compare.reading${r.verdict === "expired" ? "Expired" : "Confounded"}`);
+      body = (
+        <div className="ld-cmp">
+          <p className="ld-cmp-line">
+            {t(`lab.labDeck.compare.${r.verdict === "expired" ? "expired" : "confounded"}`)}
+          </p>
+          <p className="ld-cmp-method">{t("lab.labDeck.compare.unfairMethod")}</p>
+          <div className="ld-cmp-actions">
+            {/* The bench measures a change under repeatable conditions, which is the honest way past a
+                baseline the session path can no longer judge. Opening it closes this row — the deck
+                keeps one region open at a time — so no disabled state is reachable here. */}
+            <button type="button" className="ld-btn" onClick={() => toggle("optimize", "prove")}>
+              {t("lab.labDeck.compare.benchCta")}
+            </button>
+          </div>
+        </div>
+      );
+    } else if (c.state === "armed") {
+      const b = c.baseline;
+      sub = t("lab.labDeck.compare.subArmed", { change: changeName(b), game: b.game });
+      reading = t("lab.labDeck.compare.readingArmed");
+      body = (
+        <div className="ld-cmp">
+          <p className="ld-cmp-line">{t("lab.labDeck.compare.armed", { game: b.game })}</p>
+          {facts([
+            { label: t("lab.labDeck.compare.baseAvgLabel"), value: fps(b.baseline_avg_fps) },
+            { label: t("lab.labDeck.compare.baseLowLabel"), value: fps(b.baseline_low1_fps) },
+          ])}
+        </div>
+      );
+    } else {
+      const none = c.state === "no-sessions";
+      sub = t("lab.labDeck.compare.subNone");
+      reading = t(none ? "lab.labDeck.compare.readingNoSessions" : "lab.labDeck.compare.readingIdle");
+      body = (
+        <div className="ld-cmp">
+          <p className="ld-cmp-line">
+            {t(none ? "lab.labDeck.compare.noSessions" : "lab.labDeck.compare.idle")}
+          </p>
+          {/* The bench is a real alternative only once there is something applied to test; with no
+              measured session at all it would be a door onto an empty room. */}
+          {!none && (
+            <div className="ld-cmp-actions">
+              <button type="button" className="ld-btn" onClick={() => toggle("optimize", "prove")}>
+                {t("lab.labDeck.compare.benchCta")}
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <DeckRow
+        id="ld-prove-compare"
+        name={t("lab.labDeck.compare.name")}
+        sub={sub}
+        reading={reading}
+        measured={measured}
+        tone={tone}
+        expanded={isOpen("compare", "prove")}
+        onToggle={() => toggle("compare", "prove")}
+      >
+        {body}
+      </DeckRow>
+    );
+  })();
+
+  // ───────────────────────── the Rig Evidence Map ─────────────────────────
+  // The Lab's hologram has a job Home's does not, which is the whole reason it earns a second
+  // appearance in the app. Home answers "what IS this machine, and is it healthy". This one answers
+  // "which part does the thing I'm looking at touch, and what does that part read right now" — the
+  // SAME RigViewer component (not a copy, not a stand-in asset), pointed at a subsystem by the SAME
+  // single-slot `open` state every row already uses. No second router and no new selection machine.
+  //
+  // And no proof door: work through the reachable states and every one of them already carries its
+  // own door in the interaction that selected the subject — the move card's Prove button sits a few
+  // lines above, and an instrument or symptom subject means the user just expanded that very row. A
+  // door here would be the duplicate instrument, not a shortcut.
+  const mapSubject: { sub: LabSubsystem; forName: string | null } = (() => {
+    const row = open?.row;
+    // The experiments row is hosted in "prove" but keyed "optimize" (a deliberate upstream
+    // disambiguation) — without this branch it would borrow the Optimize station's name.
+    if (row === "optimize" && open?.host === "prove") {
+      return { sub: "system", forName: t("lab.labDeck.prove.experimentsName") };
+    }
+    if (row && row in stations) {
+      const key = row as LabStationKey;
+      return { sub: subsystemForStation(key), forName: stations[key].name };
+    }
+    const problem = problems.find((p) => p.key === row);
+    if (problem) return { sub: subsystemForStation(problem.station), forName: problem.symptom };
+    // "move-detail" and "nothing open" both land here: the map's resting subject is the next move.
+    // No `forName` for it — its headline is the h3 a few lines up, and reprinting it would be the
+    // duplication the glance pass exists to remove.
+    if (move.state === "move") return { sub: subsystemOf(move.move.rec), forName: null };
+    return { sub: "system", forName: null };
+  })();
+  const mapReadings = hw ? subsystemReadings(mapSubject.sub, hw) : [];
+  // No hardware snapshot → no map at all. A hologram of a machine Compy hasn't read would be a
+  // picture, not evidence.
+  const evidenceMap = hw ? (
+    <div className="ld-map">
+      <div className="ld-map-stage">
+        <Suspense fallback={<div className="ld-map-wait">{t("lab.labDeck.map.wait")}</div>}>
+          <RigViewer hw={hw} chromeless focusKind={rigKindForSubsystem(mapSubject.sub)} />
+        </Suspense>
+      </div>
+      <div className="ld-map-facts">
+        <p className="ld-map-part">
+          <span className="ld-map-part-name">
+            {mapSubject.sub === "system"
+              ? t("lab.labDeck.map.touchesSystem")
+              : t("lab.labDeck.map.touches", {
+                  part: t(`lab.labDeck.map.subsystem.${mapSubject.sub}`),
+                })}
+          </span>
+          {mapSubject.forName && (
+            <span className="ld-map-for">
+              {t("lab.labDeck.map.for", { name: mapSubject.forName })}
+            </span>
+          )}
+        </p>
+        {mapReadings.length > 0 ? (
+          <>
+            <dl className="ld-map-list">
+              {mapReadings.map((r) => (
+                <div key={r.key} className="ld-map-item">
+                  <dt className="ld-map-name">{t(`lab.labDeck.map.reading.${r.key}`)}</dt>
+                  <dd className="ld-map-val">
+                    <span className="ld-map-num">{r.value}</span>
+                    {r.kind === "gauge" && (
+                      <>
+                        <span className="ld-map-den">
+                          {t("lab.labDeck.map.of", { value: r.den })}
+                        </span>
+                        {/* The bar is redundant BY DESIGN — the two numbers already carry the
+                            reading, so it is aria-hidden and no screen-reader user loses anything.
+                            Its width is a real ratio of two real fields; there is no threshold
+                            colour because no audited threshold covers these fields. */}
+                        <span className="ld-map-bar" aria-hidden="true">
+                          <span
+                            className="ld-map-bar-fill"
+                            style={{ width: `${Math.round(r.pct * 100)}%` }}
+                          />
+                        </span>
+                      </>
+                    )}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <p className="ld-map-src">{t("lab.labDeck.map.source")}</p>
+          </>
+        ) : (
+          // Honest absence, in words. `system` needs none — the line above already said this isn't
+          // one part, so a second sentence would only add density.
+          mapSubject.sub !== "system" && <p className="ld-map-src">{t("lab.labDeck.map.none")}</p>
+        )}
+      </div>
+    </div>
+  ) : null;
+
   // ───────────────────────── section 1 render ─────────────────────────
   const moveCard = (() => {
     if (move.state === "unknown") {
@@ -511,36 +807,27 @@ export function LabDeck({
     // ONE NAME PER REC: resolved through the shared display-label layer, so the tweak this card
     // nominates reads IDENTICALLY here, in the arrival banner, and in the row you land on.
     const name = recDisplayLabel(rec.id, rec.title);
+    // GLANCE FIRST (owner verdict 2026-07-29). The card used to print eleven blocks — goal eyebrow,
+    // headline, tech line, evidence line, the full catalog description, a three-fact list, the
+    // reversible promise, the do-nothing line, the buttons, the can't-apply note and the remaining
+    // line — 282 words and 678px tall inside a 711px viewport, which is how the trade-off column came
+    // to overlap the fixed status readout at 1280×720 (panel P4). Nothing is deleted: everything the
+    // user needs to DECIDE stays one labelled interaction away, in `detail` below.
+    const detailOpen = isOpen("move-detail", "move");
+    // Accent discipline (panel P5): the solid primary is spent only where a click really applies a
+    // change Compy can undo. When Compy won't set it, or the catalog itself marks it `advanced`, both
+    // branches carry equal weight — the card's own framing says the choice is the user's, so its
+    // buttons must not argue otherwise. Both are typed catalog facts; nothing is inferred.
+    const consentFirst = !canApply || rec.severity === "advanced";
     return (
       <div className="ld-move">
-        <p className="ld-move-goal">{goalInfo[goal].name}</p>
         <h3 className="ld-move-head">{name.headline}</h3>
-        {name.tech && <p className="ld-move-tech">{name.tech}</p>}
         <p className="ld-move-why">{why}</p>
-        <p className="ld-move-line">{rec.description}</p>
-        <dl className="ld-move-facts">
-          <div className="ld-move-fact">
-            <dt>{t("lab.labDeck.move.stateLabel")}</dt>
-            <dd>{rec.applies_to}</dd>
-          </div>
-          <div className="ld-move-fact">
-            <dt>{t("lab.labDeck.move.changeLabel")}</dt>
-            <dd>{rec.impact}</dd>
-          </div>
-          {rec.downside && (
-            <div className="ld-move-fact">
-              <dt>{t("lab.labDeck.move.downsideLabel")}</dt>
-              <dd>{rec.downside}</dd>
-            </div>
-          )}
-        </dl>
-        <p className="ld-move-safe">{t("lab.labDeck.move.reversible")}</p>
-        <p className="ld-move-line">{t("lab.labDeck.move.doNothing")}</p>
         <div className="ld-move-actions">
           {canApply ? (
             <button
               type="button"
-              className="ld-btn ld-btn-primary"
+              className={consentFirst ? "ld-btn" : "ld-btn ld-btn-primary"}
               disabled={busy}
               data-busy={busy ? "1" : undefined}
               onClick={() => fast.onToggleRec(rec.id)}
@@ -552,7 +839,7 @@ export function LabDeck({
             // which owns the guided steps — instead of offering a button that can't deliver.
             <button
               type="button"
-              className="ld-btn ld-btn-primary"
+              className="ld-btn"
               onClick={() => {
                 setGoalFilter(goal);
                 jump("optimize");
@@ -570,7 +857,54 @@ export function LabDeck({
             </button>
           )}
         </div>
-        {!canApply && <p className="ld-move-note">{t("lab.labDeck.move.canApplyNo")}</p>}
+        <p className="ld-move-meta">
+          <span className="ld-move-goal">{goalInfo[goal].name}</span>
+          {name.tech && (
+            <>
+              <span className="ld-move-sep" aria-hidden="true">
+                {" · "}
+              </span>
+              <span className="ld-move-tech">{name.tech}</span>
+            </>
+          )}
+        </p>
+        {/* The label NAMES what is inside — what changes, the trade-off, how to undo it — so the
+            disclosure never reads like a place safety information went to hide. Same single-slot
+            grammar as every instrument row: opening this closes whatever else was open. */}
+        <button
+          type="button"
+          className="ld-more"
+          aria-expanded={detailOpen}
+          aria-controls="ld-move-detail"
+          onClick={() => toggle("move-detail", "move")}
+        >
+          <span>{t("lab.labDeck.move.detailCta")}</span>
+          <span className="ld-more-chev" aria-hidden="true" />
+        </button>
+        {detailOpen && (
+          <div className="ld-move-detail" id="ld-move-detail">
+            <p className="ld-move-line">{rec.description}</p>
+            <dl className="ld-move-facts">
+              <div className="ld-move-fact">
+                <dt>{t("lab.labDeck.move.stateLabel")}</dt>
+                <dd>{rec.applies_to}</dd>
+              </div>
+              <div className="ld-move-fact">
+                <dt>{t("lab.labDeck.move.changeLabel")}</dt>
+                <dd>{rec.impact}</dd>
+              </div>
+              {rec.downside && (
+                <div className="ld-move-fact">
+                  <dt>{t("lab.labDeck.move.downsideLabel")}</dt>
+                  <dd>{rec.downside}</dd>
+                </div>
+              )}
+            </dl>
+            <p className="ld-move-safe">{t("lab.labDeck.move.reversible")}</p>
+            <p className="ld-move-line">{t("lab.labDeck.move.doNothing")}</p>
+            {!canApply && <p className="ld-move-note">{t("lab.labDeck.move.canApplyNo")}</p>}
+          </div>
+        )}
         <p className="ld-move-remaining">
           {move.remaining > 0 ? (
             <>
@@ -633,7 +967,13 @@ export function LabDeck({
         ))}
       </nav>
 
-      {section("move", moveCard)}
+      {section(
+        "move",
+        <>
+          {moveCard}
+          {evidenceMap}
+        </>,
+      )}
 
       {section(
         "optimize",
@@ -675,6 +1015,8 @@ export function LabDeck({
       {section(
         "prove",
         <div className="ld-rows">
+          {/* Result before tools: the receipt Compy already holds leads the instruments that make one. */}
+          {compareRow}
           {proveKeys.map((k) => instrumentRow(k, "prove"))}
           <DeckRow
             id="ld-prove-experiments"
@@ -697,8 +1039,12 @@ export function LabDeck({
               id={`ld-problem-${p.key}`}
               name={p.symptom}
               sub={p.because}
-              reading={stationReading(p.station, facts, t)}
-              measured={stationHasReading(p.station, facts)}
+              // ONE PLACE PER READING (panel P2). A reading belongs to the instrument that took
+              // it, and every instrument already prints its own on its own row. Repeating it here
+              // put the SAME sentence on screen three times — "it stutters" and "my fps swings"
+              // both route to the benchmark, whose row sits one section up. So a symptom row names
+              // the symptom and opens the tool; it does not take readings. Nothing is deleted: the
+              // instrument's row states it, and opening this row mounts that instrument in place.
               expanded={isOpen(p.key, "diagnose")}
               onToggle={() => toggle(p.key, "diagnose")}
             >

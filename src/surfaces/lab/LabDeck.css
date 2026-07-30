@@ -129,11 +129,13 @@
   line-height: 1.25;
   color: var(--ix-text-1, var(--v2-text, #fff));
 }
+/* The section's one orienting line. It tells the user what this station is FOR, so it is supporting
+   meaning, not optional metadata. */
 .ld-h-line {
   margin: -6px 0 0;
   font-size: 13px;
   line-height: 1.45;
-  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
   max-width: 62ch;
 }
 
@@ -158,14 +160,6 @@
 .ld-move-quiet {
   background: var(--ix-surface-2, rgba(255, 255, 255, 0.02));
 }
-.ld-move-goal {
-  margin: 0;
-  font-family: var(--v2-font-mono, var(--font-mono, ui-monospace, monospace));
-  font-size: 11px;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--ix-accent-text, var(--ix-accent, #7c5cff));
-}
 .ld-move-head {
   margin: 0;
   font-size: 21px;
@@ -174,20 +168,15 @@
   color: var(--ix-text-1, var(--v2-text, #fff));
   max-width: 34ch;
 }
-/* The real technical name, quiet beneath the plain headline — same friendly-first/name-still-visible
-   treatment the Optimize rows use, so the power user still recognises the tweak. */
-.ld-move-tech {
-  margin: 2px 0 0;
-  font-size: 11.5px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: var(--ix-text-3, var(--faint, #7b7f8c));
-}
+/* The one measured/status line the glance layer keeps. It used to be accent-coloured prose; the
+   accent is now spent only on the primary action and the current selection, so this line earns its
+   rank through size and full-ink contrast instead of hue. */
 .ld-move-why {
   margin: 0;
-  font-size: 13px;
+  font-size: 13.5px;
+  font-weight: 500;
   line-height: 1.5;
-  color: var(--ix-accent-text, var(--ix-accent, #7c5cff));
+  color: var(--ix-text-1, var(--v2-text, #fff));
   max-width: 62ch;
 }
 .ld-move-line {
@@ -197,13 +186,39 @@
   color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
   max-width: 66ch;
 }
+/* Goal and the real technical name are quiet metadata BELOW the decision — a name the power user
+   recognises, not an eyebrow the beginner has to read before the headline. No uppercase tracking
+   (that reflex is an Impeccable absolute ban) and no accent: this line is neither a decision nor a
+   section marker. */
+.ld-move-meta {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
+  max-width: 66ch;
+  overflow-wrap: anywhere; /* a long registry-ish name wraps, never widens the card */
+}
+.ld-move-goal {
+  font-weight: 600;
+}
+.ld-move-sep {
+  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+}
+.ld-move-tech {
+  font-family: var(--v2-font-mono, var(--font-mono, ui-monospace, monospace));
+  font-size: 11.5px;
+}
+/* These three carry the rollback promise, the do-nothing choice and the can't-apply warning — safety
+   and decision text. They were the quietest type on the card, which is the dim-safety-text red flag
+   the panel named 4/5: --ix-text-3 is for optional metadata, never for a caveat the user must act
+   on. */
 .ld-move-note,
 .ld-move-safe,
 .ld-move-remaining {
   margin: 0;
   font-size: 12.5px;
   line-height: 1.5;
-  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
   max-width: 66ch;
 }
 
@@ -221,12 +236,12 @@
   gap: 2px;
   min-width: 0;
 }
+/* Sentence-case label at readable size, distinguished from its value by weight — not by the tiny
+   tracked all-caps treatment, and not by dimming a label that names a trade-off. */
 .ld-move-fact dt {
-  font-family: var(--v2-font-mono, var(--font-mono, ui-monospace, monospace));
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
 }
 .ld-move-fact dd {
   margin: 0;
@@ -241,6 +256,171 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 4px;
+}
+
+/* ── the proof-on-demand door ──
+   Its label NAMES what is inside (what changes, the trade-off, how to undo it), so the disclosure can
+   never read as the place safety information went to hide. Same chevron grammar as every instrument
+   row, and it shares the deck's single open slot: opening this closes whatever else was open. */
+.ld-more {
+  appearance: none;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  padding: 6px 0;
+  background: none;
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+.ld-more:hover {
+  color: var(--ix-text-1, var(--v2-text, #fff));
+}
+.ld-more:focus-visible {
+  outline: 2px solid var(--ix-accent, #7c5cff);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+.ld-more-chev {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translate(-1px, -1px);
+  transition: transform 160ms ease;
+}
+.ld-more[aria-expanded="true"] .ld-more-chev {
+  transform: rotate(-135deg) translate(-1px, -1px);
+}
+/* A rule, not another container — the detail layer is grouped by a divider and spacing, because a
+   bordered panel inside the move card would be a card inside a card. */
+.ld-move-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ix-line, rgba(255, 255, 255, 0.07));
+}
+
+/* ── the Rig Evidence Map ──
+   Deliberately NOT a card: it sits as a sibling of the move card inside the same section, so a second
+   bordered panel would be two cards saying one thing. The only edge here is the hologram's own canvas
+   border, which is a viewport, not a container. Hierarchy comes from the picture beside the words. */
+.ld-map {
+  display: grid;
+  gap: 12px 22px;
+  grid-template-columns: minmax(0, 1.5fr) minmax(180px, 1fr);
+  align-items: center;
+}
+/* The host sizes its own stage. RigViewer.css clamps the canvas to 360–560px, which is right for
+   Home (where the hologram IS the subject) and far too tall for a glance region that must share a
+   711px viewport with the primary decision. Scoped here rather than edited there, the same way
+   SetupTour.css keeps its own sizing. */
+.ld-map-stage .rig-canvas {
+  height: clamp(170px, 22vh, 240px);
+}
+.ld-map-wait {
+  height: clamp(170px, 22vh, 240px);
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ix-glass-border, rgba(255, 255, 255, 0.1));
+  border-radius: var(--ix-radius, 12px);
+  font-size: 12.5px;
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
+}
+.ld-map-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+/* The map's one sentence: which part this touches, and (only when the subject isn't the card above)
+   what it is the part of. Full ink — it's the meaning of the whole region, not a caption. */
+.ld-map-part {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ix-text-1, var(--v2-text, #fff));
+}
+.ld-map-part-name {
+  font-weight: 600;
+}
+.ld-map-for {
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
+  overflow-wrap: anywhere;
+}
+.ld-map-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.ld-map-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  min-width: 0;
+}
+/* Sentence-case label, ranked by weight rather than by the tiny tracked all-caps reflex, and never
+   dimmed to the faint step: it names a reading the user has to interpret (panel P8). */
+.ld-map-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
+}
+.ld-map-val {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  min-width: 0;
+}
+.ld-map-num {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ix-text-1, var(--v2-text, #fff));
+  overflow-wrap: anywhere;
+}
+.ld-map-den {
+  font-size: 12px;
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
+}
+/* A slim linear proportion, not a second ring: Optimize already renders a ring in this same deck,
+   and two dials would read as two instruments. No accent and no threshold colour — the numbers carry
+   the reading, and no audited threshold covers these fields. */
+.ld-map-bar {
+  flex: 0 0 100%;
+  height: 3px;
+  margin-top: 3px;
+  border-radius: 999px;
+  background: var(--ix-line, rgba(255, 255, 255, 0.1));
+  overflow: hidden;
+}
+.ld-map-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
+}
+/* Provenance, and the honest-absence line when this part has no reading. Both are supporting
+   meaning, so neither whispers at the faint step. */
+.ld-map-src {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
+  max-width: 44ch;
 }
 
 /* ── buttons ── */
@@ -335,7 +515,7 @@
   margin: -4px 0 0;
   font-size: 12.5px;
   line-height: 1.45;
-  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
 }
 
 /* ── sections 3–5: rows that open in place ── */
@@ -385,7 +565,7 @@
 .ld-row-sub {
   font-size: 12.5px;
   line-height: 1.4;
-  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
 }
 /* The live reading, in the instrument voice. `data-measured="no"` is the honesty state: an
    instrument with nothing to report says so, in the muted tone, and never shows a placeholder
@@ -399,9 +579,10 @@
   text-align: right;
   color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
 }
+/* The absence state stays fully legible — it is a reading the user has to interpret and act on, so it
+   keeps the same ink and says so in words. Italic, not dim, carries "this is not a value yet". */
 .ld-row-reading[data-measured="no"] {
-  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
-  opacity: 0.85;
+  font-style: italic;
 }
 /* The chevron IS the door affordance — it points down when closed, up when open, so a row never
    looks like a static card (the "needs your call" lesson). */
@@ -420,6 +601,74 @@
 .ld-row-body {
   padding: 4px 16px 16px;
   border-top: 1px solid var(--ix-line, rgba(255, 255, 255, 0.07));
+}
+
+/* Semantic status ink on a reading, and ONLY where the state is genuinely measured: a resolved
+   comparison verdict. The sign already in the string ("+8% 1% lows" / "-8% 1% lows") carries the
+   same meaning without hue, so colour is reinforcement and never the only channel — and both are the
+   app's existing status tokens, not a parallel palette. */
+.ld-row-reading[data-tone="ready"] {
+  color: var(--ready, #46d98a);
+}
+.ld-row-reading[data-tone="attention"] {
+  color: var(--attention, #f5b740);
+}
+
+/* ── the before/after receipt, inside its row's proof layer ──
+   Its own block rather than a reuse of .ld-move-*: these values are a numeric pair (before → after)
+   that has to align down the column, which the move card's prose facts deliberately don't. No border
+   and no background — the row is already the container, and a panel in here would be a card in a
+   card. */
+.ld-cmp {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* The verdict in plain English. Full ink: this is the sentence the user acts on, not metadata. */
+.ld-cmp-line {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ix-text-1, var(--v2-text, #fff));
+  max-width: 62ch;
+}
+.ld-cmp-facts {
+  margin: 0;
+  display: grid;
+  gap: 8px 18px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+.ld-cmp-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ld-cmp-fact dt {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
+}
+.ld-cmp-fact dd {
+  margin: 0;
+  font-family: var(--v2-font-mono, var(--font-mono, ui-monospace, monospace));
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ix-text-1, var(--v2-text, #fff));
+}
+/* How the verdict was reached — the one line that belongs to method rather than result. Supporting
+   ink, never faint: a user who wants to trust the number has to be able to read how it was judged. */
+.ld-cmp-method {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
+  max-width: 66ch;
+}
+.ld-cmp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* ── section 5: advanced instruments, behind progressive disclosure ── */
@@ -449,6 +698,8 @@
 .ld-advanced[open] > .ld-advanced-summary::before {
   transform: rotate(45deg);
 }
+/* Why an instrument can't run on THIS rig is a fact the user needs, not a footnote — the dashed edge
+   already says "nothing here", so the type doesn't have to whisper it too. */
 .ld-unavailable {
   margin: 0;
   padding: 10px 14px;
@@ -456,7 +707,7 @@
   border-radius: var(--ix-radius, 12px);
   font-size: 12.5px;
   line-height: 1.5;
-  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
 }
 
 /* ── 1280×720: the deck must stay usable on the owner's floor resolution ──
@@ -476,6 +727,15 @@
   .ld-move-head {
     font-size: 19px;
   }
+  /* The evidence map's two columns become two rows: side by side, a 180px reading column would
+     wrap "Cores · threads" onto three lines while squeezing the hologram to a sliver. Stacked, the
+     part keeps a readable stage and every reading keeps its own line. Nothing is hidden. */
+  .ld-map {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ld-map-stage .rig-canvas {
+    height: clamp(150px, 18vh, 200px);
+  }
   /* The rail costs 26px of a narrow stage. Below 640px it steps aside entirely — the nav still
      says where you are in words, so no information is lost, only the picture of it. */
 }
@@ -492,6 +752,8 @@
    stop dead. The rail still LIGHTS on the current step (that's information, not animation); it
    just stops fading between states. */
 .lab-deck[data-motion="reduced"] .ld-row-chev,
+.lab-deck[data-motion="reduced"] .ld-more,
+.lab-deck[data-motion="reduced"] .ld-more-chev,
 .lab-deck[data-motion="reduced"] .ld-advanced > .ld-advanced-summary::before,
 .lab-deck[data-motion="reduced"] .ld-btn,
 .lab-deck[data-motion="reduced"] .ld-chip,
@@ -502,6 +764,8 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .ld-row-chev,
+  .ld-more,
+  .ld-more-chev,
   .ld-btn,
   .ld-chip,
   .ld-nav-item,

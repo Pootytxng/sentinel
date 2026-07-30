@@ -205,7 +205,28 @@ describe("item 9 — the decline stays available on the headline move", () => {
     const actions = Array.from(c.querySelectorAll(".ld-move-actions .ld-btn")).map((b) => text(b));
     expect(actions).toContain("Show me how");
     expect(actions).not.toContain("Apply this");
+    // The "Compy won't set this one for you" note moved into the proof layer with the rest of the
+    // detail (glance-first, 2026-07-29) — it is one labelled interaction away, never deleted.
+    fireEvent.click(c.querySelector<HTMLButtonElement>(".ld-more")!);
     expect(text(c.querySelector(".ld-move-note"))).toContain("won't set this one for you");
+  });
+
+  // Accent discipline (panel P5): the solid primary is spent only where a click really applies a
+  // change Compy can undo. On a rec Compy won't set, and on anything the catalog itself marks
+  // `advanced`, both branches carry equal weight — the card's framing says the choice is the user's,
+  // so its buttons must not argue otherwise.
+  it("neither branch takes the accent fill when the choice is the user's to make", () => {
+    const cantSet = renderDeck({ isAppliable: () => false });
+    expect(cantSet.querySelector(".ld-move-actions .ld-btn-primary")).toBeNull();
+    cleanup();
+
+    const advanced = renderDeck({ recs: [rec({ severity: "advanced" })] });
+    expect(advanced.querySelector(".ld-move-actions .ld-btn-primary")).toBeNull();
+    cleanup();
+
+    // …and it IS still spent on the ordinary reversible apply, or the accent would mean nothing.
+    const safe = renderDeck();
+    expect(text(safe.querySelector(".ld-move-actions .ld-btn-primary"))).toBe("Apply this");
   });
 });
 
@@ -344,6 +365,30 @@ describe("item 14 — diagnostics is reachable by saying what's wrong, not by kn
     expect(stutter.getAttribute("aria-expanded")).toBe("false");
     expect(unstable.getAttribute("aria-expanded")).toBe("true");
     expect(c.querySelectorAll(".ld-row-body").length).toBe(1);
+  });
+
+  // bug→guard (consumer panel P2, 2026-07-29): the same reading was printed in three places at
+  // once. The benchmark's line appeared on its own instrument row in "Measure & prove" AND on both
+  // symptom rows that open it; the latency line appeared on its row plus "It feels delayed or
+  // floaty". A reading belongs to the instrument that took it. A symptom row names the symptom and
+  // opens the tool — it does not take readings. The first draft of this fix exempted instruments
+  // that live inside collapsed Advanced, which only hid the duplication until the user opened it;
+  // the rule is exception-free so it holds at every disclosure state.
+  it("a reading appears in exactly one place — on the instrument that took it", () => {
+    const c = renderDeck();
+    const readings = Array.from(c.querySelectorAll(".ld-row-reading")).map((n) => text(n).trim());
+    expect(readings.filter((r, i) => readings.indexOf(r) !== i)).toEqual([]);
+
+    // No symptom row carries one, whether its instrument sits in Prove or inside Advanced.
+    // (Selected by aria-controls, not id: `id` only lands on the body, which exists while open —
+    // an id-based selector would match nothing here and pass on an empty set.)
+    const symptoms = Array.from(c.querySelectorAll('[aria-controls^="ld-problem-"]'));
+    expect(symptoms.length).toBeGreaterThan(3);
+    for (const p of symptoms) expect(p.querySelector(".ld-row-reading")).toBeNull();
+    // Nothing was deleted: every instrument still states its own, and it stays reachable.
+    for (const id of ["ld-prove-benchmark", "ld-advanced-diagnostics"]) {
+      expect(door(c, id)!.querySelector(".ld-row-reading")).not.toBeNull();
+    }
   });
 });
 

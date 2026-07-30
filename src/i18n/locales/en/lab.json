@@ -151,7 +151,36 @@
       "canApplyNo": "Compy won't set this one for you — it lives outside what Compy can safely change. The steps are below in Optimize.",
       "notForMe": "Not for me",
       "proveCta": "How you'd prove it",
+      "detailCta": "What changes, the trade-off, and how to undo it",
       "seeAll": "See everything in Optimize"
+    },
+    "map": {
+      "wait": "Drawing your PC…",
+      "touches": "Touches your {{part}}",
+      "touchesSystem": "Touches how Windows behaves, not one part",
+      "for": "for “{{name}}”",
+      "of": "of {{value}}",
+      "source": "Read from this PC.",
+      "none": "Compy has no reading for this part on this PC.",
+      "subsystem": {
+        "cpu": "processor",
+        "gpu": "graphics card",
+        "memory": "memory",
+        "storage": "system drive",
+        "display": "display",
+        "network": "network adapter",
+        "audio": "sound device",
+        "thermals": "cooling"
+      },
+      "reading": {
+        "cores": "Cores · threads",
+        "clock": "Clock",
+        "vram": "Video memory",
+        "driver": "Driver",
+        "memory": "In use",
+        "storage": "Free",
+        "refresh": "Refresh rate"
+      }
     },
     "optimize": {
       "allChip": "All",
@@ -160,6 +189,37 @@
     "prove": {
       "experimentsName": "Experiments",
       "experimentsLine": "Run a change as a controlled test and keep the numbers."
+    },
+    "compare": {
+      "name": "Your last before and after",
+      "arrow": "{{before}} → {{after}} fps",
+      "subMeasured": "{{change}}, measured in {{game}}",
+      "subUnfair": "{{change}}, baseline from {{game}}",
+      "subArmed": "{{change}} — baseline captured in {{game}}",
+      "subNone": "Apply a fix from a monitored session's summary and Compy records the before half",
+      "readingDelta": "{{pct}}% 1% lows",
+      "readingNoChange": "Inside the ±{{noiseFloor}}% noise floor",
+      "readingConfounded": "Not a fair comparison",
+      "readingExpired": "Baseline too old",
+      "readingArmed": "Waiting on the after",
+      "readingNoSessions": "No measured session yet",
+      "readingIdle": "No baseline captured",
+      "improved": "Your 1% lows came up in {{game}} after this change.",
+      "noChange": "Nothing measurably changed in {{game}} — the difference stayed inside Compy's noise floor.",
+      "regressed": "Your 1% lows dropped in {{game}} after this change. Compy can put it back.",
+      "confounded": "Another change landed between the two sessions, so Compy can't tell you which one moved the numbers.",
+      "expired": "The baseline is too old to compare against fairly, so Compy is holding the numbers back.",
+      "armed": "Baseline captured. Play {{game}} again with Compy monitoring and Compy finishes the comparison.",
+      "noSessions": "Compy hasn't measured a session yet. Monitor a game, then apply a fix from its summary — that's what captures a baseline.",
+      "idle": "No baseline captured yet. Apply a fix from a monitored session's summary and Compy records the before half.",
+      "avgLabel": "Average FPS",
+      "lowLabel": "1% lows",
+      "baseAvgLabel": "Baseline average FPS",
+      "baseLowLabel": "Baseline 1% lows",
+      "method": "Judged on the 1% lows: {{lowPct}}% against a ±{{noiseFloor}}% noise floor. Average FPS moved {{avgPct}}%.",
+      "unfairMethod": "Compy shows before and after numbers only when one change sits between the two sessions and the baseline is still recent. That isn't true here, so there's nothing fair to report.",
+      "undoCta": "Undo it in Optimize",
+      "benchCta": "Measure it on the bench instead"
     },
     "advanced": {
       "summary": "Show the advanced instruments"

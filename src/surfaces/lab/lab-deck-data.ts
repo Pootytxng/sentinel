@@ -1,7 +1,15 @@
 import type { TFunction } from "i18next";
-import type { Confidence, Priorities, Recommendation } from "../../types";
+import type {
+  ArmedComparison,
+  ComparisonResult,
+  Confidence,
+  Priorities,
+  Recommendation,
+  SessionSummary,
+} from "../../types";
 import { EMPTY_DISMISSED, safeFixesReadyList } from "../optimize-v2-data";
 import type { LabStationKey } from "../lab-guided-data";
+import type { RigPartKind } from "../rig/rig-parts";
 
 // THE LAB DECK — pure data for the decision-journey Lab (product-recovery train, 2026-07-28).
 //
@@ -324,4 +332,171 @@ export function proofStationFor(
 ): LabStationKey | null {
   const station = PROOF_STATION_BY_GOAL[goal];
   return station && available.has(station) ? station : null;
+}
+
+// ── the before/after receipt (owner verdict 2026-07-29: restore baseline/current comparison) ──
+//
+// "Measure & prove" listed five instruments and not one RESULT: the Lab could send you off to take a
+// reading but never showed the reading it already had. Compy's strongest evidence is the cross-session
+// comparison — a baseline measured before a change, the same game measured after it — and until now
+// that receipt only ever appeared on the Monitor surface's session debrief. This derives the deck's
+// honest state from the THREE reads the deck already performs; it invents nothing and grades nothing.
+//
+// THE HONESTY RULES, encoded as states rather than remembered:
+//   • A TUNING comparison is not this receipt. It has no ledger entry behind it and the Tuning
+//     instrument already renders it (measureTuning) — including it here would print the same result
+//     twice and offer a revert for a change that was never applied. Same filter SessionDebrief uses.
+//   • confounded / expired resolve to `unfair`, NOT to a number. The backend already decided the
+//     window was polluted or stale; printing a delta from it would convert noise into a claim.
+//   • An armed baseline is a real measurement of the BEFORE half only. It is never a verdict, so it
+//     gets its own state and says what is still owed.
+//   • Nothing measured yet is a state, not an empty card — and it splits, because "play a game first"
+//     and "apply a fix from a session summary" are different next actions and only the session count
+//     can tell them apart.
+export type LabComparison =
+  | { state: "measured"; result: ComparisonResult }
+  | { state: "unfair"; result: ComparisonResult }
+  | { state: "armed"; baseline: ArmedComparison }
+  | { state: "no-sessions" }
+  | { state: "idle" };
+
+// A resolved fix comparison outranks a pending one: it is the finished evidence, and the row names
+// the change and the game it measured, so there is never a question of WHICH comparison this is.
+export function labComparison(
+  latest: ComparisonResult | null | undefined,
+  armed: ArmedComparison | null | undefined,
+  sessions: readonly SessionSummary[],
+): LabComparison {
+  if (latest && latest.kind !== "tuning") {
+    const fair =
+      latest.verdict === "improved" ||
+      latest.verdict === "no-change" ||
+      latest.verdict === "regressed";
+    return fair ? { state: "measured", result: latest } : { state: "unfair", result: latest };
+  }
+  if (armed && armed.kind !== "tuning") return { state: "armed", baseline: armed };
+  return sessions.length === 0 ? { state: "no-sessions" } : { state: "idle" };
+}
+
+// NOTE (2026-07-29): there is deliberately no `comparisonDelta` helper here. The receipt shows both
+// endpoints ("58 → 72 fps"), which is the difference in the unit the user feels, and the PERCENTAGES
+// are quoted from the backend (delta_avg_pct / delta_low1_pct — the ones the noise floor is expressed
+// in) so the deck can never disagree with the debrief about the same comparison. A local subtraction
+// helper sitting next to that would be an unused invitation to print a number Compy did not decide.
+
+// ─────────────────────── the Rig Evidence Map (owner verdict, 2026-07-29) ───────────────────────
+//
+// Home's hologram answers "what IS my rig, and is it healthy?". The Lab's must answer something
+// Home cannot, or it is decoration with a duplicate 3D asset attached. Its job here: **what part of
+// this machine does the thing I'm looking at actually touch, and what does that part read right
+// now?** So the selected recommendation / symptom / instrument drives which logical subsystem the
+// hologram highlights, and the highlight carries that subsystem's real readings.
+//
+// THE HONESTY RULE THAT SHAPES THIS WHOLE TABLE: a mapping is a claim about the machine. Every
+// entry below is a claim I can defend from what the setting literally changes, and anything I
+// cannot defend that way stays `"system"` — the neutral, nothing-highlighted answer. Guessing a
+// component to make the hologram look busier would be fabricating physical topology.
+export type LabSubsystem =
+  | "cpu" // scheduling, core/frequency behaviour
+  | "gpu"
+  | "memory"
+  | "storage"
+  | "display" // refresh, output path — NOT a modelled rig part
+  | "network" // NOT a modelled rig part
+  | "audio" // NOT a modelled rig part
+  | "thermals"
+  | "system"; // system-wide, ambiguous, or unknown → highlight nothing
+
+// Per-id, justified by what the setting CHANGES (src-tauri/src/recommendations.rs), not by which
+// goal group it lands in. Pinned by lab-deck-data.test.ts the same way GOAL_BY_REC_ID is: a new
+// catalog id must be placed deliberately here or the guard fails.
+//
+//   power-ultimate        processor performance state + core parking are the plan's real levers → cpu
+//   hags-enable           GPU-scheduling mode, a display-driver setting                         → gpu
+//   nvidia-low-latency    driver-side render queue depth                                        → gpu
+//   gpu-prefer-discrete   which GPU a game is routed to                                        → gpu
+//   gpu-driver-update     the GPU driver itself                                                 → gpu
+//   nvidia-telemetry      an NVIDIA display-driver service                                      → gpu
+//   amd-uxp               an AMD display-driver service                                         → gpu
+//   monitor-max-refresh   the monitor's refresh rate — display path, no modelled part           → display
+//   storage-c-low         free space on the system volume                                       → storage
+//   ssd-upgrade-advisory  the system drive                                                      → storage
+//   reserved-storage-off  Windows' reserved space on C:                                         → storage
+//   sysmain-disable       the disk prefetcher; the RAM it holds is the cache it fills from disk  → storage
+//   fast-startup-off      hybrid shutdown is a session/kernel behaviour, no one component        → system
+const SUBSYSTEM_BY_REC_ID: Record<string, LabSubsystem> = {
+  "power-ultimate": "cpu",
+  "hags-enable": "gpu",
+  "nvidia-low-latency": "gpu",
+  "gpu-prefer-discrete": "gpu",
+  "gpu-driver-update": "gpu",
+  "nvidia-telemetry": "gpu",
+  "amd-uxp": "gpu",
+  "monitor-max-refresh": "display",
+  "storage-c-low": "storage",
+  "ssd-upgrade-advisory": "storage",
+  "reserved-storage-off": "storage",
+  "sysmain-disable": "storage",
+  "fast-startup-off": "system",
+};
+
+// Fallback for an id this table doesn't name (a signed remote rule, a future tweak). Category is
+// the only structured field left, and an unknown category resolves to "system" — highlighting
+// nothing — because the failure mode of a wrong guess here is a false statement about the rig.
+const SUBSYSTEM_BY_CATEGORY: Record<string, LabSubsystem> = {
+  GPU: "gpu",
+  Display: "display",
+  Storage: "storage",
+  // "Power" and "Windows" are deliberately absent: both hold recs that touch different components
+  // (a power plan is CPU-led, hybrid shutdown is system-wide), so the category alone cannot answer.
+};
+
+export function subsystemOf(rec: Pick<Recommendation, "id" | "category">): LabSubsystem {
+  return SUBSYSTEM_BY_REC_ID[rec.id] ?? SUBSYSTEM_BY_CATEGORY[rec.category] ?? "system";
+}
+
+/** The DELIBERATE placement for an id, or null if it only lands via the category fallback — the
+ *  catalog-coverage guard reads this, exactly as it reads `explicitGoal`. */
+export function explicitSubsystem(id: string): LabSubsystem | null {
+  return SUBSYSTEM_BY_REC_ID[id] ?? null;
+}
+
+// What an INSTRUMENT is looking at. Nearly all of them measure the whole pipeline, and saying so is
+// the honest answer: a frametime trace is produced by CPU and GPU together, and a mouse-to-screen
+// latency figure walks the entire input path. Only the AMD tuning surface addresses one component.
+const SUBSYSTEM_BY_STATION: Record<LabStationKey, LabSubsystem> = {
+  benchmark: "system",
+  latency: "system",
+  tuning: "gpu",
+  blackbox: "system",
+  diagnostics: "system",
+  optimize: "system",
+};
+
+export function subsystemForStation(key: LabStationKey): LabSubsystem {
+  return SUBSYSTEM_BY_STATION[key] ?? "system";
+}
+
+// The one place a subsystem becomes a highlighted piece of hardware. `null` means "this rig model
+// has no such part" — the display path, the NIC and the audio device are not modelled by
+// buildRigParts, and "system" is neutral by definition. A null resolves to NO highlight, never to
+// the nearest-looking part.
+export function rigKindForSubsystem(sub: LabSubsystem): RigPartKind | null {
+  switch (sub) {
+    case "cpu":
+      return "cpu";
+    case "gpu":
+      return "gpu";
+    case "memory":
+      return "ram";
+    case "storage":
+      return "storage";
+    case "thermals":
+      return "cooler";
+    case "display":
+    case "network":
+    case "audio":
+    case "system":
+      return null;
+  }
 }

@@ -129,6 +129,7 @@ export function LabGround(props: LabFastPathProps & {
           diagnosticsCaptured={diagnosticsCaptured}
           priorities={priorities}
           activeCount={activeCount}
+          hw={hw}
         />
       ) : (
         <>
