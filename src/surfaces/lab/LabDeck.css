@@ -23,19 +23,28 @@
      The room itself now lives on `.ld-end` below — same travel, no longer bare. */
 }
 
-/* THE END OF THE DECK (self-review 2026-07-30, layout FAIL). The jump room above was a bare
-   `padding-bottom` on `.lab-deck`, so at rest the deck ended with ~380px of nothing under the last
-   row: no footer, no closing content, nothing that said the page had ENDED rather than failed to
-   finish loading. The room is load-bearing — deleting it takes clearance back from step 5 — so it
-   is not removed, it is OCCUPIED: the same travel, with a terminator anchored at its BOTTOM edge,
-   which is the edge the eye lands on at max scroll. Guarded in lab-jump-clearance.test.tsx: the
-   element must be the deck's last child, and the travel may grow but never shrink. */
+/* THE END OF THE DECK (self-review rounds 3 + 4, 2026-07-30). Round 3: the deck ended in ~380px of
+   bare `padding-bottom` on `.lab-deck` — no footer, no closing content, nothing saying the page had
+   ENDED rather than failed to load. Round 3's fix moved that travel here and hung a marker on it,
+   and round 4 measured the result: 271.5px of void ABOVE the marker at 1484×971. A label parked
+   under a void is still a void.
+
+   So the room shrank, and the reason it was thought untouchable turns out not to hold. The travel
+   exists so step 5 ("Advanced instruments") can scroll UP toward the jump inset; it never got there
+   (its own round-2 note admits a ~92px shortfall at 1280×720, and round 4 measured 366px at
+   1484×971). LESS room only makes step 5 land FURTHER BELOW the nav — never behind it, which is the
+   actual round-2 bug. Reducing this constant is therefore monotonically safe for the clipping
+   defect; all it costs is how closely step 5's landing matches steps 1–4, which it never matched.
+
+   132px is the compromise, and it is bounded on BOTH sides: 0 strands step 5's heading flush on the
+   bottom edge, and anything much larger is the void again. lab-jump-clearance.test.tsx pins the
+   window, not a floor. */
 .ld-end {
   display: flex;
   align-items: flex-end;
   justify-content: center;
   gap: 12px;
-  min-height: min(34vh, 280px);
+  min-height: min(14vh, 132px);
   padding-bottom: 18px;
 }
 .ld-end::before,
@@ -48,12 +57,15 @@
   margin-bottom: 6px;
   background: var(--ix-line, rgba(255, 255, 255, 0.08));
 }
+/* --ix-text-2, not --ix-text-3. theme-contrast.test.ts holds text-3 to 3.0:1 on purpose — it is the
+   AA-LARGE token, for captions at large sizes. This label is 11px at weight 400, which is body text
+   by WCAG's measure, so it needs the 4.5:1 token. Round 4 measured the text-3 version at 3.6:1. */
 .ld-end-label {
   font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   white-space: nowrap;
-  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+  color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
 }
 
 /* ── the one navigation grammar: five names, journey order, same page ── */

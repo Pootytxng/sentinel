@@ -173,15 +173,31 @@ describe("the deck ends on something, and the room that ends it is not bare", ()
     }
   });
 
-  it("the marker carries the jump travel, and .lab-deck no longer doubles it", () => {
+  it("the marker's ink is the AA-body token, not the AA-large one", () => {
+    // Round 4 measured the first attempt at 3.6:1. --ix-text-3 is DESIGNED to sit there —
+    // theme-contrast.test.ts holds it to a 3.0 floor because it is for large muted captions — so
+    // reaching for it on 11px/400 text is the defect, not the token. --ix-text-2 is pinned at 4.5.
+    const label = css().match(/\.ld-end-label\s*\{([\s\S]*?)\}/)?.[1] ?? "";
+    expect(label).toMatch(/color:\s*var\(--ix-text-2/);
+    expect(label).not.toMatch(/--ix-text-3/);
+  });
+
+  it("the trailing room is bounded on BOTH sides, and .lab-deck does not double it", () => {
     const sheet = css();
     const end = sheet.match(/\.ld-end\s*\{([\s\S]*?)\}/)?.[1] ?? "";
     const travel = end.match(/min-height:\s*min\((\d+)vh,\s*(\d+)px\)/);
     expect(travel).not.toBeNull();
-    // The two constants the 1280×720 measurement settled on. Raising them gives step 5 MORE
-    // clearance, which is safe; lowering them is the regression this guard exists to catch.
-    expect(Number(travel![1])).toBeGreaterThanOrEqual(34);
-    expect(Number(travel![2])).toBeGreaterThanOrEqual(280);
+    const [, vh, px] = [travel![0], Number(travel![1]), Number(travel![2])];
+
+    // A floor, because 0 strands step 5's heading flush against the bottom edge — you click
+    // "Advanced instruments" and nothing appears to move.
+    expect(vh).toBeGreaterThanOrEqual(10);
+    expect(px).toBeGreaterThanOrEqual(96);
+    // A CEILING, because that is the failure this guard was rewritten for. Round 3 set 34vh/280px
+    // reasoning that the travel could only ever be too small; round 4 measured 271.5px of void
+    // above the marker at 1484×971 and proved the opposite. Growing it back is a regression.
+    expect(vh).toBeLessThanOrEqual(18);
+    expect(px).toBeLessThanOrEqual(140);
 
     const deck = sheet.match(/\.lab-deck\s*\{([\s\S]*?)\}/)?.[1] ?? "";
     expect(deck).not.toMatch(/padding-bottom/);
