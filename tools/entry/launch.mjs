@@ -10,8 +10,9 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { CODE_ROOT, gatherFacts, readBoard, readProjectIds } from "./gather.mjs";
+import { CODE_ROOT, gatherFacts, loadPolicy, readBoard, readProjectIds } from "./gather.mjs";
 import { reconcile, selectTask } from "./preflight.mjs";
+import { contextLabel } from "./select.mjs";
 import { postClaim, planRenew, execPlan } from "./claim.mjs";
 import { makeToken, writeToken } from "./session-assert.mjs";
 import { writeOverlay } from "./overlay.mjs";
@@ -40,8 +41,8 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   const board = readBoard();
   if (!board.reachable) throw new Refused({ verdict: "REFUSE", reason: `Work Control unreachable: ${board.error}` });
 
-  const picked = selectTask(board.items, { issue });
-  if (picked.kind !== "task") throw new Refused({ verdict: picked.kind.toUpperCase(), reason: picked.reason, options: picked.options ?? [] });
+  const picked = selectTask(board.items, { issue, self, policy: loadPolicy() });
+  if (picked.kind !== "task") throw new Refused({ verdict: picked.kind.toUpperCase(), reason: picked.reason, options: picked.options ?? [], recommended: picked.recommended ?? null });
 
   const task = picked.task;
   const { facts, target } = gatherFacts({ issue: task.number, task, board, self });
@@ -52,9 +53,15 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   }
   if (!target) throw new Refused({ verdict: "REFUSE", reason: "No target folder resolved from the board field." });
 
+  // Say the window out loud before anything is written. A 300k trial that looks like a standard
+  // 150k launch is the confusion the addendum on #18 closed; the label is not decoration.
+  const intended = facts.window.intended;
+  const label = contextLabel(intended.window, { trial: intended.trial });
+  say(`  context window: ${label}${intended.trial ? "  (trial — not accepted)" : ""}`);
+
   if (dryRun) {
     say("  dry run: verdict PASS, stopping before any write.");
-    return { dryRun: true, issue: task.number, folder: target.path, branch: target.branch, verdict };
+    return { dryRun: true, issue: task.number, folder: target.path, branch: target.branch, window: intended.window, contextLabel: label, trial: intended.trial, verdict };
   }
 
   // 1. worktree (only when the verdict said it was safely creatable)
@@ -110,7 +117,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     say("  --no-overlay: the in-session root assert will NOT run for this launch");
   }
 
-  return { issue: task.number, folder: target.path, branch: target.branch, window: facts.window.intended.window, verdict };
+  return { issue: task.number, folder: target.path, branch: target.branch, window: intended.window, contextLabel: label, trial: intended.trial, verdict };
 }
 
 if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, "/")}`) {

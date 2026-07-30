@@ -12,6 +12,7 @@
 // expired claim yields a takeover DRAFT for a human to post — collision rule 5, expiry is an alarm,
 // not a takeover.
 
+import { buildMenu, FALLBACK_POLICY } from "./select.mjs";
 import { parseWorktreeField, samePath } from "./worktree-field.mjs";
 
 export const STARTABLE_STATUS = ["Ready", "Active"];
@@ -24,25 +25,32 @@ const norm = (s) => String(s ?? "").trim().replace(/\s+/g, " ").replace(/[.\s]+$
  * Choose which task to run.
  * An explicit issue is always honoured, even when unstartable, so the CHECKS explain the refusal
  * instead of the selector silently reporting "no task found".
+ *
+ * WITHOUT an explicit issue this returns a CHOICE and never a task — not even when only one task
+ * is on offer (owner addendum on #18: one Ready #13 was enough for the old code to start it while
+ * our own Active #18 sat unread). Killing the silent path here covers every caller, not just the
+ * menu. The recommendation, the ordering and the context labels live in select.mjs.
  */
-export function selectTask(items, { issue = null } = {}) {
+export function selectTask(items, { issue = null, self = { lane: "Claude Code" }, now = new Date(), policy = null } = {}) {
   if (issue !== null) {
     const task = (items ?? []).find((i) => Number(i.number) === Number(issue));
     if (!task) return { kind: "none", reason: `Issue #${issue} is not on the board.` };
     return { kind: "task", task };
   }
-  const ready = (items ?? []).filter((i) => i.status === "Ready");
-  if (ready.length === 0) {
-    return { kind: "none", reason: "No task is Ready — nothing to start. (Never invent work.)" };
+
+  const menu = buildMenu(items ?? [], { self, now, policy: policy ?? FALLBACK_POLICY });
+  if (menu.options.length === 0) {
+    return { kind: "none", reason: "No task is Ready and nothing you own is resumable — nothing to start. (Never invent work.)" };
   }
-  if (ready.length > 1) {
-    return {
-      kind: "choice",
-      options: ready.map((t) => ({ number: t.number, title: t.title, lane: t.lane, gate: t.gate })),
-      reason: `${ready.length} tasks are Ready. Choose one — there is deliberately no default.`,
-    };
-  }
-  return { kind: "task", task: ready[0] };
+  return {
+    kind: "choice",
+    menu,
+    options: menu.options,
+    recommended: menu.recommended,
+    reason: menu.recommended
+      ? `#${menu.recommended} is yours and resumable. Confirm it, or choose another — the shortcut does not pick for you.`
+      : `${menu.options.length} task${menu.options.length === 1 ? " is" : "s are"} on offer. Choose one — there is deliberately no default.`,
+  };
 }
 
 const mk = (name, expected, actual, ok, remediation = null) => ({ name, expected, actual, ok, remediation });

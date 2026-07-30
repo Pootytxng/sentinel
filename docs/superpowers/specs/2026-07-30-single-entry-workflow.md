@@ -259,8 +259,10 @@ prepared **Verified takeover** draft for a human to post.
 
 | Situation | Behaviour |
 |---|---|
-| No active task | List Ready items; if none, say so and stop. Never invent work. |
-| Several Ready tasks | Numbered choice; no default, no "most recent" heuristic. |
+| No issue given | Ask. Build a menu of everything on offer and read an answer; the shortcut never selects on Kuya's behalf, not even when exactly one task is on the menu (owner addendum, §7.1). |
+| A task we already own | A self-owned Active claim that has not expired is listed FIRST and marked *Recommended*; Enter accepts it. Unrelated Ready work is never chosen over it. |
+| Nothing on the menu | Say so and stop. Never invent work. |
+| Several tasks on offer | Numbered choice, no "most recent" heuristic; the only default that may exist is a single self-owned resumable task, and it still requires a keypress. |
 | Owner-gated task | REFUSE naming the gate, and print what Kuya must decide. |
 | Expired claim | REFUSE + prepared **Verified takeover** draft. Never an automatic takeover (rule 5). |
 | Overlapping claims | REFUSE. Two writers is the failure this exists to prevent. |
@@ -272,6 +274,36 @@ prepared **Verified takeover** draft for a human to post.
 | Launcher fails halfway | Ordering makes this recoverable: verdict → claim → overlay → launch. A failure after the claim leaves a valid claim and a printed resume command; the launch step itself writes nothing to the repo. |
 | Work Control unavailable | REFUSE. Offline is not a licence to start unclaimed. Read-only inspection still prints. |
 | User cancellation | Any cancellation before launch leaves zero side effects; after the claim is posted, the launcher prints the exact release command. |
+
+### 7.1 The selection correction (owner addendum, 2026-07-30)
+
+Observed after restarting VS Code and its extensions: #18 was **Active** under Kuya's own Claude Code
+claim, #13 was the only **Ready** task. The no-argument shortcut ignored #18, silently selected #13,
+refused on that unrelated folder, and exited — and by the time "18" was typed at the prompt, nothing
+was reading input. Not user error: a violation of the single-entry outcome.
+
+Four invariants follow, and `tools/entry/select.mjs` exists to hold them:
+
+1. after an editor, extension or terminal restart, a **self-owned resumable Active task is offered
+   before unrelated Ready tasks** — the board is the durable resume source, so no local "last task"
+   cache is used and no process inspection can erase it;
+2. a generic shortcut **never silently launches a different task** while such a task exists —
+   `selectTask` without an explicit issue now returns a *choice* and never a task, which closes the
+   path for every caller rather than only the menu;
+3. a displayed choice accepts **both its menu position and its issue number** during the same run;
+   invalid input explains the valid choices and re-prompts; `Q` cancels with zero writes;
+4. the launcher **displays the resolved context policy before launch** — `150k — standard` and
+   `300k — experimental` are printed per option, on the confirmation line, and again before the first
+   write, so the two can never be confused.
+
+`--issue <n>` remains supported for automation and is unchanged; Kuya should never need it. An
+expired or other-writer Active claim is not resumable: another lane's is not offered at all, and our
+own expired one is offered but marked as needing a verified takeover (rule 5), never recommended.
+
+**300k sequencing.** #18 does not adopt 300k globally. It makes #19 *discoverable* and *visibly
+experimental*: `context-policy.json` scopes 300000 to #15, #16 and #19, so #19 renders as
+`300k — experimental` while every other train renders `150k — standard`. #19 owns the retry and the
+decision.
 
 ---
 
@@ -291,8 +323,12 @@ did not catch.
 | 6 | Linked-worktree Git metadata | `.git` as a **file**, common-dir resolution, and discovery of the separate clone `git worktree list` omits |
 | 7 | Board `Next action` drifts from the newest durable handoff | compare the field to the newest Handoff comment's `Exact next action` → refuse |
 | 8 | Launcher changes shell directory without changing the real project root | `cd` performed, root unchanged → assert refuses |
+| 9 | **The first-run selection guard** (§7.1) | self-owned Active #18 + Ready #13 → resume #18 recommended, #13 never auto-selected; one Ready task still asks; ordinal and issue number both accepted; invalid re-prompts; `Q` writes nothing; expired / other-writer Active excluded; label matches the resolved window; `--issue` unchanged |
 
 Guards 1, 3 and 4 depend on §5.1 landing first. Guard 2 is the direct mechanization of the #14 lesson.
+Guard 9 is the mechanization of the 2026-07-30 addendum: `tools/entry/select.test.mjs` plus the
+rewritten `selectTask` block in `preflight.test.mjs`, which previously *encoded* the defect by
+asserting that one Ready task selects itself.
 
 **Guard-premise law (carried from #14):** a guard built on a premise later disproven must be
 **rewritten, not extended**. Each guard above names the condition it detects, not the constant it

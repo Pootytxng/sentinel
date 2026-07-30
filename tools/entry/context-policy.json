@@ -16,8 +16,8 @@
   "trials": [
     {
       "window": 300000,
-      "issues": [15, 16],
-      "note": "context-window trial (#15) and its measurement instrument (#16) — not accepted"
+      "issues": [15, 16, 19],
+      "note": "context-window trial (#15), its measurement instrument (#16), and the re-run that decides it (#19, owner addendum on #18, 2026-07-30) — not accepted; #19 owns the decision"
     }
   ]
 }

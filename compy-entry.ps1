@@ -79,8 +79,23 @@ if ($Repair) {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
+# --- 2.5 With no issue given, ASK. Never pick ---------------------------------
+# The defect this closes (owner addendum on #18): with #18 Active under our own claim and one
+# unrelated #13 Ready, the no-argument shortcut selected #13 by itself, refused on that worktree,
+# and exited -- so "18", typed a second later, went nowhere. Now the choice is made here, while the
+# window is still open, and it accepts either the menu position or the issue number.
+$ChosenLabel = $null
+if ($Issue -le 0) {
+    $chosenJson = node (Join-Path $ControlDir 'tools/entry/cli.mjs') choose
+    if ($LASTEXITCODE -ne 0) { exit 2 }   # cancelled, unreachable, or nothing on offer -- already said
+    $chosen = $chosenJson | ConvertFrom-Json
+    $Issue = [int] $chosen.issue
+    $ChosenLabel = $chosen.contextLabel
+}
+
 # --- 3. The verdict -----------------------------------------------------------
-Write-Head 'Preflight'
+Write-Head "Preflight #$Issue"
+if ($ChosenLabel) { Write-Host "  context: $ChosenLabel" -ForegroundColor DarkGray }
 # NOT $args -- that is an automatic variable in PowerShell and assigning to it is a trap.
 $cliArgs = @('preflight')
 if ($Issue -gt 0) { $cliArgs += @('--issue', "$Issue") }
@@ -127,7 +142,7 @@ code -n $folder
 
 Write-Host ''
 Write-Good "#$($result.issue) is ready in $folder"
-Write-Host "  branch $($result.branch) - context window $($result.window)" -ForegroundColor DarkGray
+Write-Host "  branch $($result.branch) - context $($result.contextLabel)" -ForegroundColor DarkGray
 Write-Host '  The new window is rooted in that folder. Open Claude there and start.' -ForegroundColor DarkGray
 Write-Host '  When you stop, release the claim so the next session can see the handoff.' -ForegroundColor DarkGray
 Write-Host ''
