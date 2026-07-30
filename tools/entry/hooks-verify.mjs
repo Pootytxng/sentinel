@@ -20,6 +20,15 @@ import { resolveSettings } from "./settings-resolve.mjs";
 
 export const HOOKS_SUBDIR = join(".claude", "hooks");
 
+const norm = (p) => String(p ?? "").replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase();
+
+/** Is this file inside the folder being verified, or does it address somewhere else entirely? */
+export function isUnder(file, dir) {
+  const f = norm(file);
+  const d = norm(dir);
+  return f === d || f.startsWith(`${d}\\`);
+}
+
 /**
  * Concatenate hook groups per event across settings layers.
  *
@@ -81,19 +90,36 @@ export function verifyHooks({ dir, home = homedir(), env = process.env }) {
 
   if (missing.length === 0) return { ok: true, checked, missing: [], remediation: null, dir };
 
-  const names = [...new Set(missing.map((m) => m.name))];
-  return {
-    ok: false,
-    checked,
-    missing,
-    dir,
-    remediation:
-      `${missing.length} registered hook${missing.length === 1 ? "" : "s"} do not exist in ${dir}: ` +
-      `${names.join(", ")}. .claude/hooks/ is tracked now, so a branch that carries this commit ` +
-      `carries its hooks — this folder is on an older commit, and merging to main does not reach ` +
-      `into it. Run the launcher with --repair to copy the canonical set from the control folder, or ` +
-      `bring the folder forward (merge, rebase, or recreate it from the new main).`,
-  };
+  // Two different failures wear the same "hook is missing" face, and they take opposite remedies.
+  // A path UNDER this folder means the folder is behind — --repair fixes that. A path outside it is a
+  // stale settings.local.json overlay addressed at the control folder, which --repair cannot reach:
+  // it writes into <dir>\.claude\hooks\, where that path does not point. Telling the owner to --repair
+  // a folder that is already current is a remedy that cannot work, which is worse than none.
+  const inside = missing.filter((m) => isUnder(m.file, dir));
+  const foreign = missing.filter((m) => !isUnder(m.file, dir));
+  const names = (list) => [...new Set(list.map((m) => m.name))].join(", ");
+  const count = (n) => `${n} registered hook${n === 1 ? " does" : "s do"} not exist`;
+
+  const parts = [];
+  if (inside.length > 0) {
+    parts.push(
+      `${count(inside.length)} in ${dir}: ${names(inside)}. .claude/hooks/ is tracked now, so a branch ` +
+        `that carries this commit carries its hooks — this folder is on an older commit, and merging to ` +
+        `main does not reach into it. Run the launcher with --repair to copy the canonical set from the ` +
+        `control folder, or bring the folder forward (merge, rebase, or recreate it from the new main).`,
+    );
+  }
+  if (foreign.length > 0) {
+    parts.push(
+      `${count(foreign.length)}, and ${foreign.length === 1 ? "it is" : "they are"} registered by absolute ` +
+        `path from outside ${dir}: ${foreign.map((m) => m.file).join(", ")}. That is a stale ` +
+        `.claude\\settings.local.json overlay from an earlier launch, not a folder that is behind — the ` +
+        `control folder has since moved the file it points at. Relaunch through the entrypoint, which ` +
+        `takes its own overlay back, or delete the "compy-entry:session-assert" block from that file.`,
+    );
+  }
+
+  return { ok: false, checked, missing, dir, remediation: parts.join(" ") };
 }
 
 /**

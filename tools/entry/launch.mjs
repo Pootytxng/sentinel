@@ -112,7 +112,9 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   //    run the assert twice and the second would refuse the token the first consumed.
   if (!noOverlay) {
     const o = writeOverlay({ dir: target.path, controlDir });
-    say(o.wrote ? `  installed the session-root assert into ${o.file}` : `  session-root assert not installed — ${o.reason}`);
+    if (o.wrote) say(`  installed the session-root assert into ${o.file}`);
+    else if (o.removed) say(`  removed a leftover session-assert overlay from ${o.file} — ${o.reason}`);
+    else say(`  session-root assert not installed — ${o.reason}`);
   } else {
     say("  --no-overlay: the in-session root assert will NOT run for this launch");
   }

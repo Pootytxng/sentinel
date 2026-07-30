@@ -216,11 +216,29 @@ A named line, because "the launcher writes settings" needs a limit:
   hooks, plugin enablement. **Verify and refuse.** Only an explicit `--repair` writes, and it prints
   what it will write first.
 
+**What it installs, it takes back (2026-07-30, measured while proving decision 8).** The overlay
+addresses the control folder by absolute path, so it is only true while that folder stands still. A
+launch had registered `compy-control\tools\entry\session-assert-hook.mjs`; decision 2 renamed that file
+to `.claude/hooks/session-root-assert.mjs`, the control folder moved forward, and every later launch
+into that worktree refused on a hook the launcher itself had put there. Standing down silently was the
+bug: an unwanted overlay still *runs* — a second assert consuming the token the first needs — and still
+*rots*. So the overlay now **removes** its own group when the branch registers the assert itself, and
+**refreshes** rather than accepts a group whose command points somewhere the control folder no longer
+keeps it. Presence is not correctness. Guarded by `overlay.test.mjs` → *"a stale overlay is worse than
+no overlay"*.
+
 ### 5.4 Hooks: tracked, and verified anyway (owner-approved)
 
 Missing hooks abort the launch with an exact remediation command. Writing hook files into a
 possibly-claimed worktree is mutation; `--repair` is the only path that copies the canonical set from
 `compy-control`.
+
+A missing hook has two causes and they take opposite remedies, so the refusal names which one it is: a
+path **under** the target folder means the folder is behind, and `--repair` fixes it; a path **outside**
+it is a stale `settings.local.json` overlay addressed at the control folder, which `--repair` cannot
+reach — it writes into the target's own `.claude/hooks/`. Prescribing `--repair` for an already-current
+folder is a remedy that cannot work, which costs more than no remedy. Guarded by
+`hooks-verify.test.mjs` → *"a missing hook outside this folder is a different failure"*.
 
 The permanent fix was an **owner decision, surfaced not taken**. Kuya took both halves (§12.1):
 `.claude/hooks/` is tracked — reversing the deliberate `.gitignore` "not shared" decision — *and*
@@ -324,11 +342,15 @@ did not catch.
 | 7 | Board `Next action` drifts from the newest durable handoff | compare the field to the newest Handoff comment's `Exact next action` → refuse |
 | 8 | Launcher changes shell directory without changing the real project root | `cd` performed, root unchanged → assert refuses |
 | 9 | **The first-run selection guard** (§7.1) | self-owned Active #18 + Ready #13 → resume #18 recommended, #13 never auto-selected; one Ready task still asks; ordinal and issue number both accepted; invalid re-prompts; `Q` writes nothing; expired / other-writer Active excluded; label matches the resolved window; `--issue` unchanged |
+| 10 | **The launcher's own leftover** (§5.3) | overlay installed, then the branch begins registering the assert itself → the overlay is REMOVED, not merely skipped; a group whose command points where the control folder no longer keeps the file is refreshed, not called "already in place"; a hook missing from *outside* the folder is never answered with `--repair` |
 
 Guards 1, 3 and 4 depend on §5.1 landing first. Guard 2 is the direct mechanization of the #14 lesson.
 Guard 9 is the mechanization of the 2026-07-30 addendum: `tools/entry/select.test.mjs` plus the
 rewritten `selectTask` block in `preflight.test.mjs`, which previously *encoded* the defect by
-asserting that one Ready task selects itself.
+asserting that one Ready task selects itself. Guard 10 is the mechanization of the first live
+decision-8 launch, which the launcher's own earlier overlay refused: `tools/entry/overlay.test.mjs`
+→ *"a stale overlay is worse than no overlay"* and `tools/entry/hooks-verify.test.mjs` → *"a missing
+hook outside this folder is a different failure"*.
 
 **Guard-premise law (carried from #14):** a guard built on a premise later disproven must be
 **rewritten, not extended**. Each guard above names the condition it detects, not the constant it

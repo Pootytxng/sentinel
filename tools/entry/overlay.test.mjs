@@ -166,3 +166,89 @@ describe("the overlay is a fallback, not a second copy", () => {
     expect(writeOverlay({ dir, controlDir: CONTROL }).wrote).toBe(true);
   });
 });
+
+// Measured live on 2026-07-30 while proving decision 8. The launch that opened the session wrote an
+// overlay pointing at `compy-control\tools\entry\session-assert-hook.mjs`. Decision 2 then moved that
+// file to `.claude/hooks/session-root-assert.mjs`, the control folder fast-forwarded, and the old path
+// stopped existing — so the next launch into that same folder refused, permanently, on a hook the
+// launcher itself had registered. Standing down is not enough: an overlay that is no longer wanted has
+// to be TAKEN BACK, or the launcher leaves a landmine addressed to itself.
+describe("a stale overlay is worse than no overlay", () => {
+  const PROJECT_DIR_VAR = "${CLAUDE_PROJECT_DIR}";
+  const tracked = {
+    hooks: {
+      SessionStart: [
+        {
+          hooks: [
+            {
+              type: "command",
+              command: `node "${join(PROJECT_DIR_VAR, ".claude", "hooks", "session-root-assert.mjs")}"`,
+              statusMessage: ASSERT_HOOK_MARKER,
+            },
+          ],
+        },
+      ],
+    },
+  };
+  const OLD_CONTROL = "C:\\Users\\Kuya\\code\\compy-control-old";
+  const staleGroup = {
+    hooks: [
+      {
+        type: "command",
+        command: `node "${join(OLD_CONTROL, "tools", "entry", "session-assert-hook.mjs")}"`,
+        timeout: 10,
+        statusMessage: ASSERT_HOOK_MARKER,
+      },
+    ],
+  };
+  const withStale = (name, trackedSettings = null) => {
+    const dir = fresh(name, {
+      permissions: { allow: ["Bash(git status)"] },
+      hooks: { SessionStart: [staleGroup], PostToolUse: [{ matcher: "Write", hooks: [] }] },
+    });
+    if (trackedSettings) writeFileSync(join(dir, ".claude", "settings.json"), JSON.stringify(trackedSettings, null, 2));
+    return dir;
+  };
+
+  it("plans to REMOVE the old overlay when the branch now registers the assert itself", () => {
+    const plan = planOverlay({ dir: withStale("n", tracked), controlDir: CONTROL });
+    expect(plan.changed).toBe(true);
+    expect(plan.removes).toContain("hooks.SessionStart");
+    expect(plan.adds).toEqual([]);
+  });
+
+  it("takes it back, leaving everything else in the file untouched", () => {
+    const dir = withStale("o", tracked);
+    const r = writeOverlay({ dir, controlDir: CONTROL });
+    expect(r.wrote).toBe(false);
+    expect(r.removed).toBe(true);
+    const after = JSON.parse(readFileSync(join(dir, ".claude", "settings.local.json"), "utf8"));
+    expect(JSON.stringify(after)).not.toContain(ASSERT_HOOK_MARKER);
+    expect(after.permissions).toEqual({ allow: ["Bash(git status)"] });
+    expect(after.hooks.PostToolUse).toHaveLength(1);
+  });
+
+  it("refreshes a stale path instead of calling it 'already in place'", () => {
+    // The fallback branch has the same rot: an overlay whose command points at a file the control
+    // folder no longer has is present, so the old check called it done — and left it pointing at
+    // nothing. Presence is not correctness.
+    const dir = withStale("p");
+    const plan = planOverlay({ dir, controlDir: CONTROL });
+    expect(plan.changed).toBe(true);
+    expect(writeOverlay({ dir, controlDir: CONTROL }).wrote).toBe(true);
+    const after = JSON.parse(readFileSync(join(dir, ".claude", "settings.local.json"), "utf8"));
+    expect(after.hooks.SessionStart).toHaveLength(1);
+    const cmd = after.hooks.SessionStart[0].hooks[0].command;
+    expect(cmd).toContain(CONTROL);
+    expect(cmd).not.toContain("session-assert-hook.mjs");
+  });
+
+  it("still writes nothing when there is no overlay to take back", () => {
+    const dir = fresh("q");
+    writeFileSync(join(dir, ".claude", "settings.json"), JSON.stringify(tracked, null, 2));
+    const r = writeOverlay({ dir, controlDir: CONTROL });
+    expect(r.wrote).toBe(false);
+    expect(r.removed).toBe(false);
+    expect(existsSync(join(dir, ".claude", "settings.local.json"))).toBe(false);
+  });
+});

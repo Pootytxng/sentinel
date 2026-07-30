@@ -55,34 +55,56 @@ const isOurs = (group) => JSON.stringify(group ?? {}).includes(ASSERT_HOOK_MARKE
 /** What writeOverlay WOULD do. Nothing is written unannounced. */
 export function planOverlay({ dir, controlDir }) {
   const current = readLocal(dir);
-  const next = { hooks: { SessionStart: [assertHookGroup(controlDir)] } };
+  const desired = assertHookGroup(controlDir);
+  const next = { hooks: { SessionStart: [desired] } };
+  const file = join(dir, OVERLAY_FILE);
+  const ours = (current.hooks?.SessionStart ?? []).filter(isOurs);
 
+  // Standing down is not the same as leaving the last one lying there. An overlay we no longer want
+  // still RUNS — a second assert that consumes the token the first one needed — and it addresses the
+  // control folder by absolute path, so it also breaks the moment that folder renames the file it
+  // points at. Both were measured on 2026-07-30. What we installed, we take back.
   if (trackedRegistersAssert(dir)) {
+    const stale = ours.length > 0;
     return {
-      file: join(dir, OVERLAY_FILE),
+      file,
       next,
       adds: [],
-      changed: false,
+      removes: stale ? ["hooks.SessionStart"] : [],
+      changed: stale,
       current,
-      reason: "the branch's tracked settings already register the root assert — a second copy would consume the launch token twice",
+      reason: stale
+        ? "the branch registers the root assert itself now, so this leftover overlay is a second copy — removing it"
+        : "the branch's tracked settings already register the root assert — a second copy would consume the launch token twice",
     };
   }
 
-  const already = (current.hooks?.SessionStart ?? []).some(isOurs);
+  // Present is not correct: an overlay pointing at a path the control folder has since moved is worse
+  // than none, because it fails closed on every later launch into this folder.
+  const upToDate = ours.length === 1 && JSON.stringify(ours[0]) === JSON.stringify(desired);
   return {
-    file: join(dir, OVERLAY_FILE),
+    file,
     next,
-    adds: already ? [] : ["hooks.SessionStart"],
-    changed: !already,
+    adds: upToDate ? [] : ["hooks.SessionStart"],
+    removes: [],
+    changed: !upToDate,
     current,
-    reason: already ? "the overlay is already in place" : null,
+    reason: upToDate
+      ? "the overlay is already in place"
+      : ours.length
+        ? "the overlay points at a different control folder path — refreshing it"
+        : null,
   };
 }
 
 /** Merge the assert hook in, preserving everything already present. Idempotent. */
 export function writeOverlay({ dir, controlDir }) {
   const plan = planOverlay({ dir, controlDir });
-  if (!plan.changed) return { ...plan, wrote: false };
+  if (!plan.changed) return { ...plan, wrote: false, removed: false };
+  if (plan.removes.length > 0) {
+    removeOverlay({ dir });
+    return { ...plan, wrote: false, removed: true };
+  }
 
   const merged = { ...plan.current, hooks: { ...(plan.current.hooks ?? {}) } };
   merged.hooks.SessionStart = [
@@ -92,7 +114,7 @@ export function writeOverlay({ dir, controlDir }) {
 
   mkdirSync(join(dir, ".claude"), { recursive: true });
   writeFileSync(plan.file, `${JSON.stringify(merged, null, 2)}\n`);
-  return { ...plan, wrote: true };
+  return { ...plan, wrote: true, removed: false };
 }
 
 /** Take back exactly what was added, and nothing else. */
