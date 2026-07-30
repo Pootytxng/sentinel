@@ -14,6 +14,15 @@
 //   G12 UNMEASURED SUPERLATIVE. The catalog reason claimed "the safest change left for your rig" on
 //       a recommendation whose own trade-off section names a real security regression. Two seats
 //       caught the contradiction. Superlatives are a measured claim; this string is not measured.
+//   G13 COLLIDING DENIAL. The card carries a provenance badge reading "Measured", which in
+//       src/data/provenance.ts:25 means "Backed by third-party / community measurement" — NOT "Compy
+//       measured this on your rig". The reason next to it said "Nothing measured points at one thing
+//       yet", so one card asserted MEASURED and denied measurement in the same breath. 4/5 consumer
+//       seats made it their top fix, three graded it major, and one wrote that "a card that can't
+//       agree with its own label is the last thing I want next to an apply button". Relabelling the
+//       badge is app-wide vocabulary (16 consumers across Fix/ActionDrawer/App/rec-detail/types) and
+//       stays owner-gated; the half this room owns is the reason, which must scope its denial to the
+//       user's own machine and never issue a bare denial in the badge's own word.
 //
 // The two `stations.reading.*` singular forms below are PRE-EXISTING gaps outside this train's
 // scope. They are named rather than filtered by pattern so that adding a third gap fails here.
@@ -83,6 +92,19 @@ describe("LabDeck copy contract", () => {
       expect(en.get(k)).not.toMatch(/\b(safest|best|most safe|optimal|guaranteed)\b/i);
       if (zh.has(k)) expect(zh.get(k)).not.toMatch(/最安全|最好|最佳|保证/);
     }
+  });
+
+  it("the catalog reason denies measurement only about the user's own PC", () => {
+    const key = "labDeck.move.whyCatalog";
+    expect(en.has(key) && zh.has(key)).toBe(true);
+    // Scoped to the user's own machine, so the denial and the badge are talking about different
+    // things — which they always were.
+    expect(en.get(key)).toMatch(/your own PC|your PC|this PC|your rig/i);
+    expect(zh.get(key)).toMatch(/你自己这台电脑|你的电脑|本机|你的机器/);
+    // And never a bare denial in the badge's own vocabulary. This is the exact string that shipped
+    // and collided; if it comes back, this fails.
+    expect(en.get(key)).not.toMatch(/nothing measured|no measurement|not measured/i);
+    expect(zh.get(key)).not.toMatch(/没有实测|无实测|未实测/);
   });
 
   it("the whole-machine marker stays a marker, and the sentence stays a sentence", () => {

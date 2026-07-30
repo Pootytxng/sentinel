@@ -129,7 +129,7 @@
       "unknownCta": "运行检测",
       "whyCheck": "你刚才的检测点名了这一项。",
       "whyLimiter": "在你的机器上实测:{{reason}}",
-      "whyCatalog": "目前没有实测数据指向某一项,所以这一项来自 Compy 审核过的清单 — 先看下面的取舍再决定。",
+      "whyCatalog": "你自己这台电脑上还没有读数指向某一项,所以这一项来自 Compy 审核过的清单 — 先看下面的取舍再决定。",
       "remaining_one": "还有 {{count}} 项在下方的优化区等着。",
       "remaining_other": "还有 {{count}} 项在下方的优化区等着。",
       "remainingNone": "这是仅剩的一项。",

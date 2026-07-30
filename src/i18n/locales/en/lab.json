@@ -129,7 +129,7 @@
       "unknownCta": "Run a check",
       "whyCheck": "Your check just named this one.",
       "whyLimiter": "Measured on your rig: {{reason}}",
-      "whyCatalog": "Nothing measured points at one thing yet, so this one comes from Compy's audited list — read the trade-off below before you decide.",
+      "whyCatalog": "No reading from your own PC points at one thing yet, so this one comes from Compy's audited list — read the trade-off below before you decide.",
       "remaining_one": "{{count}} more is waiting in Optimize below.",
       "remaining_other": "{{count}} more are waiting in Optimize below.",
       "remainingNone": "It's the only one left.",
