@@ -408,7 +408,7 @@ export type LabSubsystem =
   | "system"; // system-wide, ambiguous, or unknown → highlight nothing
 
 // Per-id, justified by what the setting CHANGES (src-tauri/src/recommendations.rs), not by which
-// goal group it lands in. Pinned by lab-deck-data.test.ts the same way GOAL_BY_REC_ID is: a new
+// goal group it lands in. Pinned by lab-evidence-map.test.tsx the same way GOAL_BY_REC_ID is: a new
 // catalog id must be placed deliberately here or the guard fails.
 //
 //   power-ultimate        processor performance state + core parking are the plan's real levers → cpu

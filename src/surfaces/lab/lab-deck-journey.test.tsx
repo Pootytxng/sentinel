@@ -287,6 +287,44 @@ describe("item 9 — the decline stays available on the headline move", () => {
     expect(text(detail)).toContain("put this back");
     expect(text(detail)).toContain("Skip it and nothing changes");
   });
+
+  // GUARD (bug→guard, consumer panel 2026-07-29 — 2/5 seats, and both of them named it their TOP fix).
+  // Ordering the facts first was right and still not enough. On the VBS rec the labelled trio is
+  // dense security jargon ("Hypervisor-protected code integrity", "DMA attacks",
+  // "vulnerable-signed-driver exploits"), and the two lines that actually calm a non-technical reader —
+  // Compy can put this back, and you may simply decline — sat UNDERNEATH a 90-word catalog paragraph
+  // written for someone else. Both seats stopped reading at the jargon. So the reassurance now follows
+  // the facts immediately and the prose goes last: reassurance before the jargon's explanation, never
+  // after it. Pure reorder — nothing here may be removed to achieve it, which is why every element is
+  // also asserted PRESENT.
+  it("the reassurance and the decline reach the reader before the catalog's prose", () => {
+    const c = renderDeck();
+    fireEvent.click(c.querySelector<HTMLButtonElement>(".ld-more")!);
+    const detail = c.querySelector("#ld-move-detail")!;
+    const prose = detail.querySelector(".ld-move-prose")!;
+    const choice = detail.querySelector(".ld-move-choice")!;
+    const safe = detail.querySelector(".ld-move-safe")!;
+    expect(prose).not.toBeNull();
+    expect(choice).not.toBeNull();
+    expect(safe).not.toBeNull();
+    const precedes = (a: Element, b: Element) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(precedes(safe, prose)).toBe(true);
+    expect(precedes(choice, prose)).toBe(true);
+    // …and the reversibility promise still comes before the choice to walk away from it, so the
+    // reader learns it is undoable before being offered the exit.
+    expect(precedes(safe, choice)).toBe(true);
+
+    // The same holds on the branch where Compy CANNOT apply the rec: there the note is the only undo
+    // route stated at all, so burying it under the prose would be the worse version of this defect.
+    cleanup();
+    const cantSet = renderDeck({ isAppliable: () => false });
+    fireEvent.click(cantSet.querySelector<HTMLButtonElement>(".ld-more")!);
+    const d2 = cantSet.querySelector("#ld-move-detail")!;
+    expect(precedes(d2.querySelector(".ld-move-note")!, d2.querySelector(".ld-move-prose")!)).toBe(
+      true,
+    );
+  });
 });
 
 describe("item 12 — goal groups exist only where this rig really has recommendations", () => {

@@ -232,6 +232,17 @@
 .ld-move-remaining {
   color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
 }
+/* Same rule, one line further: "skip it and nothing changes" is the OTHER half of the decision — the
+   reassurance the non-technical seats needed most — so it earns primary ink beside the undo promise.
+   The catalog paragraph below it is genuine background reading and stays supporting, which is what
+   finally makes the expanded panel a hierarchy (facts → your two choices → the explanation) instead of
+   five paragraphs in one voice. */
+.ld-move-choice {
+  color: var(--ix-text-1, var(--v2-text, #fff));
+}
+.ld-move-prose {
+  margin-top: 2px;
+}
 
 /* The four facts every recommendation must answer, as a definition list so a screen reader hears
    label→value pairs instead of a run-on sentence. */
@@ -333,8 +344,35 @@
    Home (where the hologram IS the subject) and far too tall for a glance region that must share a
    711px viewport with the primary decision. Scoped here rather than edited there, the same way
    SetupTour.css keeps its own sizing. */
+.ld-map-stage {
+  position: relative; /* the whole-machine marker is placed against the stage, not the page */
+}
 .ld-map-stage .rig-canvas {
   height: clamp(170px, 22vh, 240px);
+}
+/* THE WHOLE-MACHINE STATE, DECLARED ON THE PICTURE.
+   `data-focus="part"` lights one component inside the canvas. `data-focus="whole"` had nothing to
+   light, so the rig rendered exactly as it does at rest — and 2/5 consumer seats (the two least
+   technical) read that as a failed render rather than an answer. The fix is not to dim a real asset
+   into looking broken: it is to bracket the WHOLE rig and name it, so "nothing to single out" arrives
+   as a deliberate selection at machine scale. Accent is the app's own single accent, and it never
+   carries the meaning alone — the chip says it in a word and `.ld-map-src` says it in a sentence. */
+.ld-map[data-focus="whole"] .ld-map-stage .rig-canvas {
+  border-color: color-mix(in srgb, var(--ix-accent, #2ee6c0) 38%, transparent);
+}
+.ld-map-all {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--ix-accent, #2ee6c0) 45%, transparent);
+  border-radius: 999px;
+  background: var(--ix-base, #0b0c10);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ix-accent-text, var(--accent, #2ee6c0));
+  pointer-events: none;
 }
 .ld-map-wait {
   height: clamp(170px, 22vh, 240px);
@@ -368,6 +406,16 @@
 .ld-map-for {
   color: var(--ix-text-2, var(--v2-muted, rgba(255, 255, 255, 0.72)));
   overflow-wrap: anywhere;
+}
+/* WHOSE EVIDENCE IS THIS? The map sits under the hero move card, so when the card IS the subject the
+   attribution is redundant and stays supporting. But open an instrument row further down and the map
+   silently retargets to THAT row — at which point `for "Tuning"` is the single most important word in
+   the region, and rendering it as a trailing aside is what let a consumer seat read the map and the
+   card above it as "talking about two different things at once". Same words, same DOM order; the ink
+   just follows which thing the region is currently answering for. */
+.ld-map[data-subject="row"] .ld-map-for {
+  color: var(--ix-text-1, var(--v2-text, #fff));
+  font-weight: 600;
 }
 .ld-map-list {
   margin: 0;

@@ -20,6 +20,11 @@
 //   Guard 4  SELECTION REALLY MOVES THE MAP, and the map stays a map: no snapshot → no map, no
 //            second hologram, and not one button inside it (no second router, no duplicate
 //            instrument, no hidden mutation path).
+//   Guard 5  THE WHOLE-MACHINE ANSWER LOOKS LIKE AN ANSWER, and the region says whose evidence it
+//            is. Two consumer seats read the unlit rig as a broken render, and one read the map and
+//            the card above it as two unrelated things — so the state is marked ON the picture, the
+//            two states are provably not pixel-identical, and the attribution takes primary ink
+//            exactly when the subject is a row rather than the card it sits under.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup, fireEvent, act } from "@testing-library/react";
 import { readFileSync } from "fs";
@@ -637,5 +642,126 @@ describe("guard 4 — the map answers to the selection, and never becomes a seco
     for (const r of rowReadings.filter((s) => s.length > 0)) {
       expect(mapText).not.toContain(r);
     }
+  });
+});
+
+// ── the stylesheet, read as text ────────────────────────────────────────────────────────────────
+// Innermost rules only: an @media wrapper's body contains braces, so the wrapper never matches
+// while the rules nested inside it do. Written locally rather than imported from another test file —
+// a shared helper would couple two independent guards, and one editing the other's reader is exactly
+// the kind of silent weakening these guards exist to prevent.
+const cssRules = (() => {
+  const css = readFileSync(join("src", "surfaces", "lab", "LabDeck.css"), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
+  return Array.from(css.matchAll(/([^{}]+)\{([^{}]*)\}/g)).map((m) => ({
+    selector: m[1].trim().replace(/\s+/g, " "),
+    body: m[2],
+  }));
+})();
+const ruleFor = (sel: string) => cssRules.filter((r) => r.selector === sel);
+
+describe("guard 5 — the whole-machine answer reads as an answer, and names whose evidence it is", () => {
+  // GUARD (bug→guard, consumer panel 2026-07-29). Verbatim: "the picture alone tells me something's
+  // broken" (Casual Owner) · "yeah it looks broken, not intentional. The caption saves it if you read
+  // it, but I skim" (Budget Teen). The sentence in `.ld-map-src` was already correct and already
+  // guarded — it just wasn't where the eye was. Nothing may be faked to fix that: the rig model has
+  // no honest system-wide highlight, so the state is declared as a marker ON the stage plus an edge
+  // treatment on the frame, and the marker is aria-hidden because the sentence is what AT reads.
+  it("the whole-machine state is marked on the picture, not only in the sentence beside it", async () => {
+    const c = await renderDeck({
+      recs: [rec({ id: "fast-startup-off", title: "Turn off Fast Startup" })] as never,
+    });
+    expect(c.querySelector(".ld-map")?.getAttribute("data-focus")).toBe("whole");
+    const chip = c.querySelector(".ld-map-all");
+    expect(chip).not.toBeNull();
+    expect(text(chip)).toBe("Whole machine");
+    // The sentence already carries this for a screen reader; the marker is for the eye alone.
+    expect(chip!.getAttribute("aria-hidden")).toBe("true");
+    // …and it is drawn over the stage, i.e. on the asset, not appended after the picture.
+    expect(chip!.parentElement?.className).toBe("ld-map-stage");
+  });
+
+  it("a state that DOES light a part wears no whole-machine marker", async () => {
+    const c = await renderDeck({ recs: [GPU_REC] as never });
+    expect(c.querySelector(".ld-map")?.getAttribute("data-focus")).toBe("part");
+    expect(c.querySelector(".ld-map-all")).toBeNull();
+  });
+
+  it("the two states cannot render pixel-identical: the whole state restyles the frame itself", () => {
+    // The marker alone would be one word in a corner. The Tinkerer asked for the frame to say it too
+    // ("either fully lit up … or went flat gray … so I can tell 'targets nothing specific' from
+    // 'this is just how the model always renders'"), and a marker with no frame change is one CSS
+    // deletion away from being invisible again. So: a rule must exist that keys off the whole state
+    // and changes the canvas border.
+    const framed = cssRules.filter(
+      (r) => r.selector.includes('.ld-map[data-focus="whole"]') && r.selector.includes(".rig-canvas"),
+    );
+    expect(framed.length).toBeGreaterThan(0);
+    expect(framed.some((r) => /border(-color)?\s*:/.test(r.body))).toBe(true);
+  });
+
+  it("the marker is a label, not a revived tiny-uppercase eyebrow", () => {
+    const [chip] = ruleFor(".ld-map-all");
+    expect(chip).toBeDefined();
+    expect(chip.body).not.toMatch(/text-transform\s*:\s*uppercase/);
+    expect(chip.body).not.toMatch(/letter-spacing\s*:/);
+    expect(chip.body).not.toContain("--ix-text-3");
+    // It sits ON a rendered canvas, so it must occlude what's behind it or it is unreadable by luck.
+    expect(chip.body).toMatch(/background\s*:/);
+  });
+
+  // GUARD (bug→guard, my own defect on this train). The marker first shipped with
+  // `background: var(--ix-bg, …)`. There is no `--ix-bg` token — the app defines `--ix-base` and
+  // `--ix-bg-1` — so the declaration silently fell through to its hardcoded literal and stopped
+  // tracking the violet and red themes. A phantom custom property is invisible: no build error, no
+  // console warning, just a colour frozen out of the theme system. Cheap to check, so check it.
+  it("every --ix-* the deck's stylesheet reaches for is a token that actually exists", () => {
+    const raw = (f: string) => readFileSync(join("src", "surfaces", "lab", f), "utf8");
+    const declared = new Set(
+      Array.from(
+        readFileSync(join("src", "design", "instrument.css"), "utf8").matchAll(
+          /(--ix-[a-z0-9-]+)\s*:/g,
+        ),
+      ).map((m) => m[1]),
+    );
+    expect(declared.size).toBeGreaterThan(10); // the token table was found, not silently empty
+    for (const file of ["LabDeck.css", "OptimizeStation.css"]) {
+      const css = raw(file);
+      // A stylesheet may also define its own; those count as real.
+      for (const m of css.matchAll(/(--ix-[a-z0-9-]+)\s*:/g)) declared.add(m[1]);
+      const phantom = Array.from(css.matchAll(/var\(\s*(--ix-[a-z0-9-]+)/g))
+        .map((m) => m[1])
+        .filter((t) => !declared.has(t));
+      expect(Array.from(new Set(phantom))).toEqual([]);
+    }
+  });
+
+  // GUARD (bug→guard, consumer panel 2026-07-29, Competitive Grinder). The map retargets to a row
+  // opened further down the page while the hero card above it still shows a different move — read as
+  // "the map and the recommendation above it are talking about two different things at once". The
+  // words were already there (`for "Tuning"`); they were set as a trailing aside. So the region types
+  // its own subject and the ink follows it. No new copy, no new container, no moved DOM.
+  it("the region declares whether it is answering for the card above it or for an opened row", async () => {
+    const c = await renderDeck();
+    expect(c.querySelector(".ld-map")?.getAttribute("data-subject")).toBe("move");
+    fireEvent.click(door(c, "ld-prove-tuning")!);
+    expect(c.querySelector(".ld-map")?.getAttribute("data-subject")).toBe("row");
+    expect(text(c.querySelector(".ld-map-for"))).toContain("Tuning");
+    // Closing returns the subject to the card, so the promotion can't stick after the reason for it
+    // has gone away.
+    fireEvent.click(door(c, "ld-prove-tuning")!);
+    expect(c.querySelector(".ld-map")?.getAttribute("data-subject")).toBe("move");
+  });
+
+  it("and the attribution takes primary ink in that state — the flag has to change the ink", () => {
+    const promoted = ruleFor('.ld-map[data-subject="row"] .ld-map-for');
+    expect(promoted.length).toBe(1);
+    expect(promoted[0].body).toContain("--ix-text-1");
+    // The promotion is only meaningful if the resting state is genuinely a step down.
+    const base = ruleFor(".ld-map-for");
+    expect(base.length).toBe(1);
+    expect(base[0].body).toContain("--ix-text-2");
   });
 });

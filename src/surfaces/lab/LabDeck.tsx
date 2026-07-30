@@ -685,11 +685,32 @@ export function LabDeck({
   // highlight. The value is the same typed mapping the highlight already uses — no new inference.
   const mapFocus = rigKindForSubsystem(mapSubject.sub);
   const evidenceMap = hw ? (
-    <div className="ld-map" data-focus={mapFocus ? "part" : "whole"}>
+    <div
+      className="ld-map"
+      data-focus={mapFocus ? "part" : "whole"}
+      // Which thing the map is currently the evidence FOR: the move card directly above it, or an
+      // instrument row further down the page that the user opened. When it's a row, the row's name is
+      // the most important word in this region — not a trailing aside (panel: "the map and the
+      // recommendation above it are talking about two different things at once").
+      data-subject={mapSubject.forName ? "row" : "move"}
+    >
       <div className="ld-map-stage">
         <Suspense fallback={<div className="ld-map-wait">{t("lab.labDeck.map.wait")}</div>}>
           <RigViewer hw={hw} chromeless focusKind={mapFocus} />
         </Suspense>
+        {/* The whole-machine state has no part to light, and a rig with nothing lit read as a FAILED
+            RENDER to 2 of 5 consumer seats — the two least technical, which is exactly the user this
+            app is for ("did this fail to load?", "yeah it looks broken, not intentional"). Words alone
+            didn't fix it because they skim. So the state now declares itself ON the picture: the frame
+            brackets the entire rig and names it, which is the same "this is the subject" grammar the
+            part highlight uses inside the canvas, one step up at machine scale. Nothing is invented —
+            it marks the same typed system-wide mapping `.ld-map-src` states in a full sentence, and
+            it's aria-hidden because that sentence is what AT already reads. */}
+        {!mapFocus && (
+          <span className="ld-map-all" aria-hidden="true">
+            {t("lab.labDeck.map.wholeTag")}
+          </span>
+        )}
       </div>
       <div className="ld-map-facts">
         <p className="ld-map-part">
@@ -916,8 +937,13 @@ export function LabDeck({
                 </div>
               )}
             </dl>
-            <p className="ld-move-line">{rec.description}</p>
-            {/* MUTUALLY EXCLUSIVE, and it has to be. These two used to render together whenever
+            {/* REASSURANCE BEFORE THE JARGON (panel round 2, both non-technical seats' top fix). These
+                two lines and the do-nothing line used to sit BELOW the catalog paragraph, so the seat
+                that most needed "you can undo this" / "you can skip this" bounced at "Memory Integrity
+                (also called HVCI) and the broader Virtualization-Based Security stack run kernel-mode
+                code under a hypervisor…" and never reached them. Pure reorder — the paragraph is
+                untouched and still here, it just no longer stands between the reader and the exit.
+                MUTUALLY EXCLUSIVE, and it has to be. These two used to render together whenever
                 Compy can't apply a rec: "Compy records how to put this back" directly above "Compy
                 won't set this one for you" — a rollback promise sitting on top of an item Compy
                 never touches, which 4/5 consumer seats read as the app overselling its own undo.
@@ -929,7 +955,8 @@ export function LabDeck({
             ) : (
               <p className="ld-move-note">{t("lab.labDeck.move.canApplyNo")}</p>
             )}
-            <p className="ld-move-line">{t("lab.labDeck.move.doNothing")}</p>
+            <p className="ld-move-line ld-move-choice">{t("lab.labDeck.move.doNothing")}</p>
+            <p className="ld-move-line ld-move-prose">{rec.description}</p>
           </div>
         )}
         <p className="ld-move-remaining">

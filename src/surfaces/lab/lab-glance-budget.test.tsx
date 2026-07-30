@@ -291,6 +291,7 @@ describe("P3 — ink rank follows meaning, not tidiness", () => {
     ".ld-move-safe", // the rollback promise — safety
     ".ld-move-note", // the can't-apply route, which is now the ONLY undo route stated — safety
     ".ld-row-reading", // the reading itself — the evidence the Lab is built to show
+    ".ld-move-choice", // "skip it and nothing changes" — the other half of the decision
   ];
 
   it.each(mustBePrimaryInk)("%s is primary ink, not one more muted supporting line", (sel) => {
@@ -308,6 +309,34 @@ describe("P3 — ink rank follows meaning, not tidiness", () => {
     expect(hits.length).toBeGreaterThan(0);
     expect(hits.some((r) => r.body.includes("--ix-text-2"))).toBe(true);
     for (const r of hits) expect(r.body).not.toContain("--ix-text-1");
+  });
+
+  // GUARD (bug→guard, consumer panel G4, 2026-07-29 — 2/5 seats, both filing it as their TOP FIX).
+  // The expanded panel used to be five paragraphs in one voice, so the two calming lines drowned in
+  // the catalog's jargon. The fix promotes the decision lines and leaves the catalog paragraph a step
+  // down — a three-token hierarchy that only works while BOTH halves hold. These two guards pin the
+  // half that has no visible symptom when it breaks: the paragraph must NOT be promoted with them.
+  it("the catalog paragraph stays a step down — it declares no ink of its own", () => {
+    const hits = rulesTouching(".ld-move-prose");
+    expect(hits.length).toBeGreaterThan(0);
+    // It inherits the supporting step from `.ld-move-line`. Declaring any colour here — even the
+    // "right" one — pins the paragraph to a literal and silently breaks the moment the shared
+    // supporting token moves. Absence of the declaration IS the mechanism.
+    for (const r of hits) expect(r.body).not.toMatch(/(^|[;{\s])color\s*:/);
+  });
+
+  it("and the promotion still wins the cascade: the shared rule comes first, the promotion later", () => {
+    // `.ld-move-line` and `.ld-move-choice` are the same specificity (one class each) and the element
+    // carries both, so source order alone decides which colour lands. Move `.ld-move-line` below the
+    // promotion — a plausible tidy-up, alphabetising, or a merge — and the decision line reverts to
+    // supporting ink with green tests and no visual error anywhere in the build.
+    const idx = (sel: string) =>
+      rules.findIndex((r) => r.selectors.some((s) => s === sel) && /color\s*:/.test(r.body));
+    const shared = idx(".ld-move-line");
+    const promoted = idx(".ld-move-choice");
+    expect(shared).toBeGreaterThanOrEqual(0);
+    expect(promoted).toBeGreaterThanOrEqual(0);
+    expect(promoted).toBeGreaterThan(shared);
   });
 
   it("an absent reading stays legible — italic says 'not a value yet', dimming just hides it", () => {
