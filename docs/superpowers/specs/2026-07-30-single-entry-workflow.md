@@ -322,7 +322,26 @@ merging this branch; and globally adopting the 300k context window.
 
 ---
 
-## 11. Open owner decisions surfaced by this design
+## 11. What implementation changed (recorded, not silently absorbed)
+
+1. **The tooling branch is `tooling/compy-entry`.** §3.1 left it unnamed. `compy-control` is a
+   `--single-branch` clone pinned to it, and `compy-entry.ps1` asserts that pin at startup.
+2. **The canonical hook payload is tracked at `tools/entry/hooks/`.** §5.4 said `--repair` copies
+   "the canonical set from the control folder" — but the control folder is a *clone*, so the payload
+   had to travel with the branch or `--repair` would only ever work on this one machine. It is
+   deliberately **not** `.claude/hooks/`: nothing auto-activates anywhere, and materialization stays
+   an explicit `--repair` that prints every file before writing it. The owner decision in §12 —
+   whether `.claude/hooks/` itself should be tracked, which *would* activate them everywhere with no
+   verification step — is untouched by this and remains open.
+3. **The board migration ran (`--apply`).** Six items rewritten, one already canonical, **#12
+   refused** as ambiguous and left exactly as it was. Item 13's `(preserve)` note was moved into its
+   `Next action` rather than dropped.
+4. **Process classification** (§4.2 `processes`) grew an explicit rule: disclose by default, refuse
+   only for a build/test running against *this* folder, or an installer anywhere. A launcher that
+   refuses because the installed Compy is open gets bypassed, and a bypassed launcher enforces
+   nothing.
+
+## 12. Open owner decisions surfaced by this design
 
 1. **Track `.claude/hooks/` or keep `--repair`?** (§5.4) — tracking reverses the deliberate
    `.gitignore:49` decision; the design ships `--repair` and asks.
