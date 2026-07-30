@@ -862,7 +862,35 @@ Lab or its rollback path during this train."_).
 | 7 | journey tests + pruning plan | `3e22a7c` (28 journey tests) + `896f1c2` (§3 inventory — six Lab generations read out of the router) |
 | 8 | installed-review fixes | `0937137` (rounds 1–3) + `c783d63` (round 4: one name on the whole action path + class guard) + `c15d1e2` (round 5: the arc is a real modal for the keyboard) + `a079edd` (round 6: the confirm is never buried; one click never opens two rows) + `75ebc91` (round 7: a proof door lands on its instrument wherever it lives) + `d310220` (round 8: one dismissal set, and a ring that counts it) + `ff8de44` (round 9: the decline reaches every surface that claims work, Home and the ranker included) + `63a3538` (round 10: one phrase one owner; keyboard focus is visible) + `ba17397` (round 11: an override reaches every surface that counts work, and the row says where it landed) + `c55eb15` (round 12: the destination sentence names the heading THIS surface draws) |
 
-Round 6 found two **pre-existing** defects neither the tests nor five prior review rounds caught,
+| 9 | LabDeck glance-first presentation pilot (issue #14) | `be4636c` (checkpoint) → `d46a525` (portable capture harness + framing guard) → `bda15f1` (the empty comparison state states its method) → `490d465` (the deck ends on something) → `d7cf825` (end room shrunk, label ink lifted to the AA-body token) → `294db4f` (the end of the page is the end of the path) |
+
+**CURRENT INSTALLED BUILD (owner's machine): `294db4f · release`**, NSIS SHA-256
+`2C223B870D34741CCA85148AE814C486FC00838EB47CB12E51EBB6687BDBC450`, silent-installed by Claude, one
+installer on the Desktop, stamp-verified over CDP. This is a **branch** build of
+`feat/user-feedback-lab-recovery`, NOT the published v0.9.11 — `docs/RELEASE_STATE.md` still
+describes the published release and is correct about it. `compy_lab_deck` is **armed in localStorage
+on this machine** for the owner's comparison; the shipped default is still OFF.
+
+Issue #14's installed-review sequence ran four rounds against real installed binaries, each defect
+mutation-tested into a guard before its fix counted. Every round's fix caused the next round's
+failure, which is the record worth keeping:
+
+- **Round 3** (`be4636c`) — the expanded comparison row restated the collapsed row; and the deck
+  ended in ~380px of bare padding. Guards: `lab-copy-contract` G14, `lab-jump-clearance` ×3.
+- **Round 4** (`490d465`) — round 3's marker was parked *under* the void (271.5px above it), and its
+  ink used `--ix-text-3`, which `theme-contrast` holds to 3.0:1 on purpose because it is the
+  AA-**large** token; 11px/400 is body text. Round 3's guard had asserted `travel >= 280px`,
+  encoding the belief round 4 disproved — a one-sided guard that would have blocked its own fix. It
+  was **rewritten** as a two-sided window (10–18vh, 96–140px).
+- **Round 5** (`d7cf825`) — the same clamp, one layer up: at max scroll the nav lit step 4 while
+  step 5 was on screen, because both were at `intersectionRatio` 1.0 and the strict `>` kept
+  whichever `NAV` order reached first. Shrinking the room made it *likelier*. Fixed by `atEnd`-gating
+  rather than tie-breaking toward the later section, which would have broken the top of the page.
+- **Round 6** (`294db4f`) — **VERDICT PASS**, all nine rubric items, measured on the installed
+  binary: `.ld-end-label` 6.37:1, nav clearances 26 / 84.0 / 83.6 / 83.7 / 514.3px (all positive),
+  41-sample 5px scroll across the clamp with zero pill oscillation.
+
+Round 6 of the EARLIER sequence (commit `a079edd`, above) found two **pre-existing** defects neither the tests nor five prior review rounds caught,
 both structural, both now guarded:
 
 - **The confirm dialog was buried under every full-screen overlay.** `.cmp-confirm-backdrop` sat at
