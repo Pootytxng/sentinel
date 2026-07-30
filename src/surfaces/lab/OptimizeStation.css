@@ -59,7 +59,9 @@
 }
 .lab-gauge-den {
   font-size: 12px;
-  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+  /* The denominator of the ring's reading — "8 of 9", not decoration. A number the user has to
+     interpret does not belong on the faint step (consumer panel P8). */
+  color: var(--ix-text-2, var(--v2-text, rgba(255, 255, 255, 0.8)));
 }
 .lab-gauge-caption {
   margin: 0;
@@ -70,12 +72,13 @@
   line-height: 1.4;
   color: var(--ix-text-2, var(--v2-text, rgba(255, 255, 255, 0.8)));
 }
-.lab-gauge-caption-k {
-  font-family: var(--v2-font-mono, var(--font-mono, ui-monospace, monospace));
-  font-size: 10.5px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+/* The ring's NAME (consumer panel P8, 2026-07-29). This was a 10.5px mono uppercase tracked
+   kicker at the faint step — the banned eyebrow costume, and the only thing on screen that said
+   what "8/9" counted. The number can't be named by the dimmest type above it. Now it reads as the
+   caption's own first line: same size as the sentence under it, heavier, at full ink. */
+.lab-gauge-caption-name {
+  font-weight: 600;
+  color: var(--ix-text-1, var(--v2-text, #fff));
 }
 
 /* Optional sections below the enable-all hero. REVISED 2026-07-23 (tester Matthew, owner-backed

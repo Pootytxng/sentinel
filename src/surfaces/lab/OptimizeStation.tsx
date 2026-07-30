@@ -234,7 +234,7 @@ export function OptimizeStation(
             </span>
           </div>
           <p className="lab-gauge-caption">
-            <span className="lab-gauge-caption-k">{t("lab.optimizeStation.yourSafeStack")}</span>
+            <span className="lab-gauge-caption-name">{t("lab.optimizeStation.yourSafeStack")}</span>
             {/* State observation, never an action claim (consumer-panel Phase 0/1): currently_applied
                 is a live system probe — a setting can be on because Windows shipped that way or the
                 user set it themselves, not because Compy applied anything. "Fully applied" read as
