@@ -5,7 +5,7 @@
 // the SessionStart assert hook and nothing else. Any `env` key — the context window above all —
 // would change how the session behaves, and that is Class B: verify and refuse, never write.
 
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -48,7 +48,9 @@ describe("what the overlay is allowed to contain", () => {
     const plan = planOverlay({ dir: fresh("c"), controlDir: CONTROL });
     const cmd = plan.next.hooks.SessionStart[0].hooks[0].command;
     expect(cmd).toContain(CONTROL);
-    expect(cmd).toContain("session-assert");
+    // The one canonical hook (decision 2), reached from the control folder — not the retired
+    // tools/entry/session-assert-hook.mjs, which no longer exists to be pointed at.
+    expect(cmd).toContain(join(".claude", "hooks", "session-root-assert.mjs"));
   });
 
   it("marks itself, so it is identifiable and removable", () => {
@@ -101,5 +103,66 @@ describe("it preserves whatever was already there", () => {
     const dir = fresh("i", existing);
     writeOverlay({ dir, controlDir: CONTROL });
     expect(planOverlay({ dir, controlDir: CONTROL }).changed).toBe(false);
+  });
+});
+
+// Owner decision 3 (Issue #18, 2026-07-30): the TRACKED SessionStart registration is primary; this
+// overlay is demoted to a fallback for branches that predate it.
+//
+// This is not tidiness — it is the difference between a working launcher and a bricked one. Hook
+// groups CONCATENATE across settings layers, so a tracked registration plus a local overlay means
+// the assert runs TWICE. The first run consumes the single-use launch token; the second finds it
+// consumed and refuses. Every launch into an up-to-date branch would fail. The overlay must
+// therefore stand down whenever the target already registers the assert itself.
+describe("the overlay is a fallback, not a second copy", () => {
+  // A plain string literal, so `${...}` stays literal text — this is what settings.json really holds.
+  const PROJECT_DIR_VAR = "${CLAUDE_PROJECT_DIR}";
+  const trackedSettings = {
+    hooks: {
+      SessionStart: [
+        {
+          hooks: [
+            {
+              type: "command",
+              command: `node "${join(PROJECT_DIR_VAR, ".claude", "hooks", "session-root-assert.mjs")}"`,
+              timeout: 10,
+              statusMessage: ASSERT_HOOK_MARKER,
+            },
+          ],
+        },
+      ],
+    },
+  };
+
+  const withTracked = (name, tracked) => {
+    const dir = fresh(name);
+    writeFileSync(join(dir, ".claude", "settings.json"), JSON.stringify(tracked, null, 2));
+    return dir;
+  };
+
+  it("stands down when the target's tracked settings already register the assert", () => {
+    const plan = planOverlay({ dir: withTracked("j", trackedSettings), controlDir: CONTROL });
+    expect(plan.changed).toBe(false);
+    expect(plan.adds).toEqual([]);
+    expect(plan.reason).toMatch(/tracked/i);
+  });
+
+  it("writes nothing at all in that case — two asserts would consume the token twice", () => {
+    const dir = withTracked("k", trackedSettings);
+    const r = writeOverlay({ dir, controlDir: CONTROL });
+    expect(r.wrote).toBe(false);
+    expect(existsSync(join(dir, ".claude", "settings.local.json"))).toBe(false);
+  });
+
+  it("still installs itself on a branch whose tracked settings carry no assert", () => {
+    const dir = withTracked("l", { hooks: { PostToolUse: [] } });
+    expect(planOverlay({ dir, controlDir: CONTROL }).changed).toBe(true);
+    expect(writeOverlay({ dir, controlDir: CONTROL }).wrote).toBe(true);
+  });
+
+  it("still installs itself on a branch with no tracked settings file at all", () => {
+    const dir = fresh("m");
+    expect(planOverlay({ dir, controlDir: CONTROL }).changed).toBe(true);
+    expect(writeOverlay({ dir, controlDir: CONTROL }).wrote).toBe(true);
   });
 });
