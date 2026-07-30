@@ -51,8 +51,9 @@ ordinary branch content inherits every problem it exists to solve.
 
 **Correction to the issue body.** Issue #18 describes the hooks as "untracked". They are *deliberately
 gitignored*, which is a stronger and different fact: the defect is **tracked registration of
-untracked files**, not a forgotten `git add`. Tracking them would reverse a deliberate ignore
-decision and is therefore an owner call, not a repair — see §5.4.
+untracked files**, not a forgotten `git add`. Tracking them reverses a deliberate ignore decision and
+was therefore an owner call, not a repair; Kuya took it on 2026-07-30 — see §5.4 and §12.1. The
+findings above stand as measured on that date, before the correction.
 
 ---
 
@@ -159,12 +160,13 @@ from inside it.
 | Path | How the assert runs | Available |
 |---|---|---|
 | CLI (`claude`) | `--settings` overlay naming a `SessionStart` hook | now |
-| VS Code extension | `SessionStart` hook in the worktree's `settings.local.json` (gitignored, written by the launcher — see §5.3) | now, via the Class A rule |
-| Permanent | `SessionStart` hook in tracked `settings.json` | **only after this branch merges — owner-gated** |
+| VS Code extension | `SessionStart` hook in tracked `.claude/settings.json` (owner decision 3) | now on this branch — **no existing worktree** gets it until it is itself merged, rebased, or recreated |
+| Fallback | the same hook in a worktree's `settings.local.json`, gitignored, written by the launcher (§5.3) | now, via the Class A rule — for the folders that predate decision 3 |
 
 The assert is unit-tested independently of injection path (given root X and token Y → refuse), so the
-guard is real today; the *automatic* injection under VS Code is what the merge upgrades from
-launcher-written overlay to tracked branch content.
+guard is real today. The tracked registration is primary; the launcher-written overlay stands down the
+moment it sees it, because hook groups concatenate across settings layers — two copies would run the
+assert twice, and the second would refuse the single-use token the first consumed.
 
 ---
 
@@ -204,23 +206,26 @@ got invalidated.
 
 A named line, because "the launcher writes settings" needs a limit:
 
-- **Class A — verification only.** The `SessionStart` assert hook. Written by default into the
-  target's gitignored `settings.local.json`, *after* preflight PASS and *after* the claim is held,
-  disclosed in the launcher's output and recorded in the claim, minimal in content, and followed by a
-  re-resolution of effective settings to prove nothing else moved. `--no-overlay` opts out.
+- **Class A — verification only.** The `SessionStart` assert hook. Its primary form is the tracked
+  registration in `.claude/settings.json` (owner decision 3); the launcher writes it into the target's
+  gitignored `settings.local.json` only where that registration is absent, *after* preflight PASS and
+  *after* the claim is held, disclosed in the launcher's output and recorded in the claim, minimal in
+  content, and followed by a re-resolution of effective settings to prove nothing else moved.
+  `--no-overlay` opts out.
 - **Class B — anything that changes how the session behaves.** Context window, subagent model, other
   hooks, plugin enablement. **Verify and refuse.** Only an explicit `--repair` writes, and it prints
   what it will write first.
 
-### 5.4 Hooks: verify and refuse (owner-approved)
+### 5.4 Hooks: tracked, and verified anyway (owner-approved)
 
 Missing hooks abort the launch with an exact remediation command. Writing hook files into a
 possibly-claimed worktree is mutation; `--repair` is the only path that copies the canonical set from
 `compy-control`.
 
-The permanent fix is an **owner decision, surfaced not taken**: either track `.claude/hooks/` (which
-reverses the deliberate `.gitignore:49` "not shared" decision) or keep `--repair` as the supported
-materialization path. This design implements the second and asks for the first.
+The permanent fix was an **owner decision, surfaced not taken**. Kuya took both halves (§12.1):
+`.claude/hooks/` is tracked — reversing the deliberate `.gitignore` "not shared" decision — *and*
+`--repair` stays the supported materialization path, because tracking a file only helps a folder that
+carries the commit which tracks it.
 
 ### 5.5 No hidden mutation, no destructive Git
 
@@ -326,13 +331,16 @@ merging this branch; and globally adopting the 300k context window.
 
 1. **The tooling branch is `tooling/compy-entry`.** §3.1 left it unnamed. `compy-control` is a
    `--single-branch` clone pinned to it, and `compy-entry.ps1` asserts that pin at startup.
-2. **The canonical hook payload is tracked at `tools/entry/hooks/`.** §5.4 said `--repair` copies
-   "the canonical set from the control folder" — but the control folder is a *clone*, so the payload
-   had to travel with the branch or `--repair` would only ever work on this one machine. It is
-   deliberately **not** `.claude/hooks/`: nothing auto-activates anywhere, and materialization stays
-   an explicit `--repair` that prints every file before writing it. The owner decision in §12 —
-   whether `.claude/hooks/` itself should be tracked, which *would* activate them everywhere with no
-   verification step — is untouched by this and remains open.
+2. **The canonical hook payload is tracked at `.claude/hooks/`** (owner decision 2, which superseded
+   this entry's first form). §5.4 said `--repair` copies "the canonical set from the control folder" —
+   but the control folder is a *clone*, so the payload had to travel with the branch or `--repair`
+   would only ever work on this one machine. The first implementation parked it at
+   `tools/entry/hooks/` to keep `.claude/hooks/` inert; Kuya decided instead that `.claude/hooks/` is
+   tracked and is the single canonical source, with `--repair` kept for the folders that predate it
+   (§12.1). Two canonical copies is none: the day they differ, `--repair` writes the stale one and the
+   drift is invisible precisely because a file *is* present. One constraint follows — `repairHooks`
+   copies flat files only, so the hooks stay self-contained with no imports from subdirectories, and
+   `tracked-hooks.test.mjs` enforces it.
 3. **The board migration ran (`--apply`).** Six items rewritten, one already canonical, **#12
    refused** as ambiguous and left exactly as it was. Item 13's `(preserve)` note was moved into its
    `Next action` rather than dropped.
@@ -341,11 +349,22 @@ merging this branch; and globally adopting the 300k context window.
    refuses because the installed Compy is open gets bypassed, and a bypassed launcher enforces
    nothing.
 
-## 12. Open owner decisions surfaced by this design
+## 12. Owner decisions on this design
 
-1. **Track `.claude/hooks/` or keep `--repair`?** (§5.4) — tracking reverses the deliberate
-   `.gitignore:49` decision; the design ships `--repair` and asks.
-2. **Merging this branch** is the step that turns the session-root assert from a launcher-written
-   overlay into tracked branch content (§4.3) and makes `docs/WORK_CONTROL.md` and the shared tooling
-   readable from every worktree (findings 6, 7). Owner-gated, separate authorization.
-3. **Board migration `--apply`** (§5.1) rewrites fields on Kuya's board; dry-run diff first.
+Surfaced by the design, answered by Kuya on 2026-07-30 (Issue #18, Phase 0). Recorded here because the
+shape of the tooling depends on them.
+
+1. **Track `.claude/hooks/` AND keep `--repair`** (§5.4) — both, not either. Tracking reverses the
+   deliberate `.gitignore` decision so the hooks travel with the branch, and a checkout can no longer
+   register seven hooks it does not have (finding 4). `--repair` stays because every branch cut before
+   that commit still does exactly that. Machine-local settings and autopilot state stay ignored
+   (decision 5), so the tracked hook has to work with no `settings.local.json` at all.
+2. **Merging this branch into `main` updates no existing worktree.** A merge moves `main`; every other
+   checkout stays on the commit it was already on until it is itself merged, rebased, or recreated
+   from the new `main`. So the merge makes the tracked session-root assert (§4.3) and the shared
+   tooling reachable from *new* and *brought-forward* folders — never retroactively from the ones that
+   exist today (findings 6, 7). Bringing each one forward is separate, deliberate work; until then the
+   launcher's preflight is what makes those folders refuse rather than launch quietly. The merge
+   itself stays owner-gated, separate authorization.
+3. **Board migration `--apply`** (§5.1) rewrites fields on Kuya's board; dry-run diff first. It ran —
+   §11.3, with #12 refused as ambiguous and left untouched.
