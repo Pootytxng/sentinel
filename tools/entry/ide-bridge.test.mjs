@@ -58,10 +58,15 @@ describe("reading the extension's lock files", () => {
 
 describe("choosing the bridge", () => {
   const alive = (pids) => (pid) => pids.includes(pid);
+  // These cases are about FOLDER and PROCESS matching. The third readiness clause -- the bridge port
+  // actually answering -- is held open here so each test still measures the one thing it is named
+  // for; bridge-readiness.test.mjs drives that clause on its own, including the case where a live
+  // window's port is closed.
+  const listening = () => true;
 
   it("picks the window that is open on this folder", () => {
-    const locks = [parseLock(lock(OTHER, 1)), parseLock(lock(FOLDER, 2))];
-    const r = pickBridge(locks, { folder: FOLDER, alive: alive([1, 2]) });
+    const locks = [parseLock(lock(OTHER, 1), { file: "111.lock" }), parseLock(lock(FOLDER, 2), { file: "222.lock" })];
+    const r = pickBridge(locks, { folder: FOLDER, alive: alive([1, 2]), listening });
     expect(r.ok).toBe(true);
     expect(r.lock.pid).toBe(2);
   });
@@ -69,7 +74,7 @@ describe("choosing the bridge", () => {
   // The live machine case: three of four locks name windows closed weeks ago.
   it("refuses a lock whose window is gone — a stale lock is not readiness", () => {
     const locks = [parseLock(lock(FOLDER, 34864))];
-    const r = pickBridge(locks, { folder: FOLDER, alive: alive([]) });
+    const r = pickBridge(locks, { folder: FOLDER, alive: alive([]), listening });
     expect(r.ok).toBe(false);
     expect(r.stale).toHaveLength(1);
     expect(r.reason).toMatch(/no window behind it is running/i);
@@ -77,19 +82,19 @@ describe("choosing the bridge", () => {
 
   it("does not accept a live window that is open on a different folder", () => {
     const locks = [parseLock(lock(OTHER, 7))];
-    const r = pickBridge(locks, { folder: FOLDER, alive: alive([7]) });
+    const r = pickBridge(locks, { folder: FOLDER, alive: alive([7]), listening });
     expect(r.ok).toBe(false);
     expect(r.reason).toMatch(/no editor window is open on this folder/i);
   });
 
   it("matches the folder however the editor spelled it", () => {
-    const locks = [parseLock(lock("c:/users/kuya/code/sentinel-marathon/", 9))];
-    expect(pickBridge(locks, { folder: FOLDER, alive: alive([9]) }).ok).toBe(true);
+    const locks = [parseLock(lock("c:/users/kuya/code/sentinel-marathon/", 9), { file: "999.lock" })];
+    expect(pickBridge(locks, { folder: FOLDER, alive: alive([9]), listening }).ok).toBe(true);
   });
 
   it("leaves stale locks alone — they belong to the extension, not to us", () => {
     writeFileSync(join(dir, "12561.lock"), lock(FOLDER, 34864));
-    pickBridge(readLocks({ dir }), { folder: FOLDER, alive: alive([]) });
+    pickBridge(readLocks({ dir }), { folder: FOLDER, alive: alive([]), listening });
     expect(readLocks({ dir })).toHaveLength(1);
   });
 });
