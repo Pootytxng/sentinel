@@ -56,6 +56,15 @@ if (Test-Path variable:PSNativeCommandUseErrorActionPreference) {
     $PSNativeCommandUseErrorActionPreference = $false
 }
 
+# Everything Kuya reads on success comes back through node's stdout, and PowerShell decodes a native
+# command's output with whatever [Console]::OutputEncoding says -- which on this machine is the OEM
+# code page. The first log that carried the success line proved it: "150k ΓÇö standard", the em dash
+# of an ASCII-safe label arriving as three characters of noise. The corruption is in the STRING, not
+# the file, so it reaches the console too, and it would reach a task name in the picker or a sentence
+# in a refusal the same way. Process-local, set before the first node call.
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+
 $ControlDir = $PSScriptRoot
 $CONTROL_BRANCH = 'main'
 $EXPECTED_REMOTE = 'Pootytxng/sentinel'
