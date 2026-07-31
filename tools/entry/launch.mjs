@@ -16,6 +16,7 @@
 // stderr so the two never get mixed up.
 
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
@@ -332,12 +333,18 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   say(`  launch brief written to ${brief}`);
 
   // 5. token -- what the in-session assert checks the real root against
+  //
+  // The conversation id is assigned HERE, before anything is written, so one value reaches the CLI
+  // (`--session-id`), the launch token and the lineage record. That is what lets the SessionStart
+  // hook ask "is this the session I started" instead of only "is this the right folder".
+  const sessionId = randomUUID();
   const token = makeToken({
     issue: task.number,
     repo: REPO,
     folder: target.path,
     branch: target.branch,
     window: intended.window,
+    sessionId,
     now: facts.now,
   });
   writeToken(token);
@@ -377,6 +384,9 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     window: intended.window,
     contextLabel: label,
     marathon: intended.marathon,
+    // The conversation the launcher named. The shell hands it to the CLI so the session that starts
+    // IS the session the token was written for.
+    sessionId,
     brief,
     verdict,
   };

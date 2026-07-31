@@ -70,6 +70,9 @@ describe("severity — a tracked hook must block on disagreement and only advise
     "LINEAGE_FOREIGN",
     "TOKEN_CORRUPT",
     "LINEAGE_CORRUPT",
+    "BRANCH_UNREADABLE",
+    "REPO_UNREADABLE",
+    "SESSION_FOREIGN",
   ];
   const ADVISE = ["NO_TOKEN", "TOKEN_EXPIRED", "LINEAGE_EXPIRED"];
 

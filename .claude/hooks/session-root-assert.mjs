@@ -88,7 +88,7 @@ export function normalizeRepo(url) {
 
 // ── the launch ───────────────────────────────────────────────────────────────────────────────────
 
-export function makeToken({ issue, folder, branch, window, repo = null, nonce = null, expiresAt = null, now = new Date() }) {
+export function makeToken({ issue, folder, branch, window, repo = null, nonce = null, sessionId = null, expiresAt = null, now = new Date() }) {
   return {
     issue,
     folder: canonicalizePath(folder),
@@ -96,6 +96,11 @@ export function makeToken({ issue, folder, branch, window, repo = null, nonce = 
     window,
     repo: normalizeRepo(repo),
     nonce: nonce ?? randomUUID(),
+    // The conversation id the launcher ASSIGNED to the session it is about to start (`--session-id`),
+    // so "is this the session I launched" is a question with an answer. Without it, lineage could only
+    // ask "is this the same folder", and any later Claude process rooted there inherited the
+    // authorization of the one before it.
+    sessionId,
     issuedAt: now.toISOString(),
     expiresAt: expiresAt ?? new Date(now.getTime() + DEFAULT_TTL_MINUTES * 60_000).toISOString(),
     claimedAt: null,
@@ -197,13 +202,17 @@ export function sweepLineage({ dir = TOKEN_DIR, now = new Date() } = {}) {
   return removed;
 }
 
-const lineageFromLaunch = ({ token, root, now }) => ({
+const lineageFromLaunch = ({ token, root, now, sessionId = null }) => ({
   issue: token.issue,
   folder: canonicalizePath(root),
   branch: token.branch,
   window: token.window,
   repo: token.repo ?? null,
   nonce: token.nonce ?? null,
+  // Bound at the moment the launch is taken up: the launcher's assigned id when it assigned one,
+  // otherwise the id of the session that actually answered. Either way the folder's record now names
+  // ONE conversation, and a different one cannot resume on it.
+  sessionId: token.sessionId ?? sessionId ?? null,
   launchedAt: token.issuedAt ?? null,
   firstSeenAt: now.toISOString(),
   lastSeenAt: now.toISOString(),
@@ -323,7 +332,20 @@ function checkIdentity({ claim, resolved, cwd, env, live, what }) {
       { expected: claim.branch, actual: live.branch, root: resolved.root },
     );
   }
-  if (claim.branch && !live?.branch) notes.push(`the live branch could not be read (expected ${claim.branch})`);
+  // Looked and could not read is NOT the same as did not look. When a real observation was taken and
+  // came back empty, the branch this session would write on is unknown -- and every resume claims to
+  // re-verify it. A note under a green verdict said "verified" about something nobody could see.
+  // `live === null` means no observation was attempted at all (a pure probe, `persist:false`), and
+  // that stays a note: it is the caller declining to measure, not a measurement that failed.
+  if (claim.branch && live && !live.branch) {
+    return refuse(
+      "BRANCH_UNREADABLE",
+      `${what} branch ${claim.branch}, but the live branch in ${resolved.root} could not be read. ` +
+        "An unknown branch is not a verified one, and this session would be writing on it.",
+      { expected: claim.branch, actual: null, root: resolved.root },
+    );
+  }
+  if (claim.branch && !live) notes.push(`the live branch was not observed (expected ${claim.branch})`);
 
   if (claim.repo && live?.repo && live.repo !== claim.repo) {
     return refuse(
@@ -332,7 +354,15 @@ function checkIdentity({ claim, resolved, cwd, env, live, what }) {
       { expected: claim.repo, actual: live.repo, root: resolved.root },
     );
   }
-  if (claim.repo && !live?.repo) notes.push(`the live repository could not be read (expected ${claim.repo})`);
+  if (claim.repo && live && !live.repo) {
+    return refuse(
+      "REPO_UNREADABLE",
+      `${what} the ${claim.repo} repository, but the origin of ${resolved.root} could not be read. ` +
+        "A folder that cannot say which repository it belongs to has not been verified as this one.",
+      { expected: claim.repo, actual: null, root: resolved.root },
+    );
+  }
+  if (claim.repo && !live) notes.push(`the live repository was not observed (expected ${claim.repo})`);
 
   return { ok: true, notes };
 }
@@ -393,6 +423,20 @@ export function assertSessionRoot({
     }
     const verdict = checkIdentity({ claim: token, resolved, cwd, env, live, what: "The launch claimed" });
     if (!verdict.ok) return verdict;
+
+    // When the launcher assigned the conversation id (`--session-id`), the session that takes the
+    // launch up must be that conversation. Otherwise a window that happened to be open in the folder
+    // could answer a launch meant for the one the launcher started.
+    const liveSession = hookInput?.session_id ?? null;
+    if (token.sessionId && liveSession && token.sessionId !== liveSession) {
+      return refuse(
+        "SESSION_FOREIGN",
+        "This launch was started for a different conversation than the one answering it. " +
+          "The launcher names the session it starts, and only that session may take up its launch.",
+        { expected: token.sessionId, actual: liveSession, root: resolved.root },
+      );
+    }
+
     return {
       ok: true,
       mode: "launch",
@@ -426,6 +470,25 @@ export function assertSessionRoot({
     }
     const verdict = checkIdentity({ claim: lineage, resolved, cwd, env, live, what: "This folder's session was launched on" });
     if (!verdict.ok) return verdict;
+
+    // The clause that makes this a SESSION lineage rather than a folder one. Same root, same branch,
+    // same repo and same window describe the FOLDER; they say nothing about which conversation is
+    // running in it. A brand-new Claude process started in a verified folder used to inherit the
+    // whole authorization -- 12 hours of it, sliding forward on every sighting. It now has to be the
+    // conversation the record was bound to.
+    //
+    // An extension restart that genuinely resumes keeps its id, so it still passes. A record from
+    // before ids were bound has none, and is carried rather than broken.
+    const liveSession = hookInput?.session_id ?? null;
+    if (lineage.sessionId && liveSession && lineage.sessionId !== liveSession) {
+      return refuse(
+        "SESSION_FOREIGN",
+        `${resolved.root} has a verified session record, but it belongs to a different conversation. ` +
+          "A new session in a verified folder does not inherit the folder's authorization — relaunch through the entrypoint.",
+        { expected: lineage.sessionId, actual: liveSession, root: resolved.root },
+      );
+    }
+
     return {
       ok: true,
       mode: "resume",
@@ -472,7 +535,7 @@ export function verifySession({
   if (!persist) return result;
 
   if (result.ok && result.mode === "launch") {
-    writeLineage(lineageFromLaunch({ token, root: result.root, now }), { dir });
+    writeLineage(lineageFromLaunch({ token, root: result.root, now, sessionId: hookInput?.session_id ?? null }), { dir });
     claimToken({ dir }, now);
   } else if (result.ok && result.mode === "resume") {
     writeLineage(touchLineage(lineage, now), { dir });

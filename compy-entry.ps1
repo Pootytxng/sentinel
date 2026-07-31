@@ -368,7 +368,10 @@ if ($handoff -ne 0) {
 # its hooks and the brief from exactly the folder that was prepared. Nothing is typed for Kuya -- the
 # brief arrives from the SessionStart hook, the same carrier the panel path uses.
 if ($handoff -ne 0) {
-    $startJson = node (Join-Path $ControlDir 'tools/entry/claude-start.mjs') --folder $folder
+    # Started AS the conversation the launcher named, not as whichever session happens to appear.
+    $startArgs = @('--folder', $folder)
+    if ($result.sessionId) { $startArgs += @('--session-id', $result.sessionId) }
+    $startJson = node (Join-Path $ControlDir 'tools/entry/claude-start.mjs') @startArgs
     $startPlan = if ($startJson) { $startJson | ConvertFrom-Json } else { $null }
 
     if ($startPlan -and $startPlan.ok) {
