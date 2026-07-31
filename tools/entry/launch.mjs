@@ -20,6 +20,7 @@ import { existsSync } from "node:fs";
 import {
   FULL_SHA,
   HOST_DIR,
+  REPO,
   gatherFacts,
   loadPolicy,
   readBoard,
@@ -30,6 +31,9 @@ import {
 import { reconcile, selectTask } from "./preflight.mjs";
 import { contextLabel } from "./select.mjs";
 import { postClaim, planRenew, execPlan } from "./claim.mjs";
+import { writeBrief } from "./brief.mjs";
+import { resolveWindow } from "./settings-resolve.mjs";
+import { establishTier } from "./tier.mjs";
 import { makeToken, writeToken } from "./session-assert.mjs";
 import { pruneDeadOverlay, writeOverlay } from "./overlay.mjs";
 
@@ -134,7 +138,31 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     createdFrom = staged.created;
   }
 
-  // 2. claim -- refuses on its own if the verdict is not PASS
+  // 2. tier -- keep the promise the `settings.window` row made.
+  //
+  // The row may now PASS on an intended window nothing configures yet, because this step is what
+  // configures it (#23): the launcher writes the tier into its own gitignored layer, in a file it can
+  // prove it wrote, and refuses anybody else's. That is a stronger guarantee than the old comparison,
+  // not a weaker one — but only if the write is CHECKED. So the effective window is resolved again
+  // from disk afterwards, and a launch that did not actually get its tier stops here, before the
+  // claim is posted and before VS Code opens on a session the root assert would hard-stop.
+  const tier = establishTier({ dir: target.path, intended });
+  if (tier.action === "refuse") {
+    throw new Refused({ ...verdict, verdict: "REFUSE", task, reason: tier.reason, remediation: [tier.reason] });
+  }
+  if (tier.wrote) say(`  ${tier.disclosure}`);
+  const settled = resolveWindow({ dir: target.path });
+  if (settled.window !== intended.window) {
+    const from = settled.configured ? settled.file : "nothing — that is the documented fallback";
+    throw new Refused({
+      ...verdict,
+      verdict: "REFUSE",
+      task,
+      reason: `This train intends ${intended.window} (${intended.reason}), but ${target.path} still resolves ${settled.window} from ${from}. Refusing to start a session at a window the launch did not establish.`,
+    });
+  }
+
+  // 3. claim -- refuses on its own if the verdict is not PASS
   const ids = readProjectIds(task.itemId);
   const expires = new Date(facts.now.getTime() + 12 * 3600_000).toISOString().slice(0, 10);
   if (facts.claim) {
@@ -149,7 +177,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
       facts: {
         lane: self.lane,
         executor: self.executor ?? self.lane,
-        repository: "Pootytxng/sentinel",
+        repository: REPO,
         folder: target.path,
         branch: target.branch,
         scope: task.title,
@@ -161,18 +189,38 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     });
   }
 
-  // 3. token -- what the in-session assert checks the real root against
-  const token = makeToken({
+  // 4. brief -- the durable instructions, written BEFORE the token that admits a session.
+  //
+  // The token is what lets a session start; the brief is what the session starts with. Written in
+  // this order, a session can never be admitted to a task whose instructions are not on disk yet —
+  // and that is the whole point of the brief, because the thing it replaces is Kuya pasting a prompt.
+  const brief = writeBrief({
     issue: task.number,
+    title: task.title,
+    lane: self.lane,
     folder: target.path,
     branch: target.branch,
-    window: facts.window.intended.window,
+    base: createdFrom,
+    window: intended.window,
+    marathon: intended.marathon,
+    claimExpires: expires,
+    nextAction: task.nextAction ?? null,
+  });
+  say(`  launch brief written to ${brief}`);
+
+  // 5. token -- what the in-session assert checks the real root against
+  const token = makeToken({
+    issue: task.number,
+    repo: REPO,
+    folder: target.path,
+    branch: target.branch,
+    window: intended.window,
     now: facts.now,
   });
   writeToken(token);
   say(`  launch token written (expires ${token.expiresAt})`);
 
-  // 4. overlay -- Class A only: the assert hook, never behaviour. Skipped entirely when the branch
+  // 6. overlay -- Class A only: the assert hook, never behaviour. Skipped entirely when the branch
   //    already registers the assert in its own tracked settings (owner decision 3): two copies would
   //    run the assert twice and the second would refuse the token the first consumed.
   if (!noOverlay) {

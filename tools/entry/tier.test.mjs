@@ -52,7 +52,7 @@ describe("guard 8 — a marathon task must not be left at 150k", () => {
     const dir = mkFolder("marathon");
     expect(effective(dir).window).toBe(150000);
 
-    const result = establishTier({ dir, intended: MARATHON, stateDir, home });
+    const result = establishTier({ dir, intended: MARATHON, stateDir, home, env: {} });
 
     expect(result.action).toBe("write");
     expect(result.window).toBe(300000);
@@ -66,7 +66,7 @@ describe("guard 8 — a marathon task must not be left at 150k", () => {
 
   it("records what it wrote, so the next run can prove the file is its own", () => {
     const dir = mkFolder("marathon");
-    establishTier({ dir, intended: MARATHON, stateDir, home });
+    establishTier({ dir, intended: MARATHON, stateDir, home, env: {} });
 
     const record = readTierRecord({ dir, stateDir });
     expect(record).not.toBeNull();
@@ -74,7 +74,7 @@ describe("guard 8 — a marathon task must not be left at 150k", () => {
     expect(record.hash).toEqual(expect.any(String));
 
     // Second run is a no-op: same folder, same tier, file already ours and already right.
-    const again = establishTier({ dir, intended: MARATHON, stateDir, home });
+    const again = establishTier({ dir, intended: MARATHON, stateDir, home, env: {} });
     expect(again.action).toBe("keep");
     expect(again.wrote).toBe(false);
   });
@@ -83,10 +83,10 @@ describe("guard 8 — a marathon task must not be left at 150k", () => {
 describe("guard 7 — a standard task must not be left at 300k", () => {
   it("rewrites a launcher-owned 300000 back down to the standard window", () => {
     const dir = mkFolder("was-marathon");
-    establishTier({ dir, intended: MARATHON, stateDir, home });
+    establishTier({ dir, intended: MARATHON, stateDir, home, env: {} });
     expect(effective(dir).window).toBe(300000);
 
-    const result = establishTier({ dir, intended: STANDARD, stateDir, home });
+    const result = establishTier({ dir, intended: STANDARD, stateDir, home, env: {} });
 
     expect(result.action).toBe("write");
     expect(effective(dir).window).toBe(150000);
@@ -95,7 +95,7 @@ describe("guard 7 — a standard task must not be left at 300k", () => {
 
   it("writes nothing when the tracked settings already configure the standard window", () => {
     const dir = mkFolder("standard");
-    const result = establishTier({ dir, intended: STANDARD, stateDir, home });
+    const result = establishTier({ dir, intended: STANDARD, stateDir, home, env: {} });
 
     expect(result.action).toBe("keep");
     expect(result.wrote).toBe(false);
@@ -109,7 +109,7 @@ describe("a local settings file the launcher cannot prove it wrote is not its to
     const dir = mkFolder("foreign", { local: foreign });
     const before = readFileSync(localPath(dir), "utf8");
 
-    const result = establishTier({ dir, intended: MARATHON, stateDir, home });
+    const result = establishTier({ dir, intended: MARATHON, stateDir, home, env: {} });
 
     expect(result.action).toBe("refuse");
     expect(result.reason).toMatch(/not written by the launcher/i);
@@ -120,7 +120,7 @@ describe("a local settings file the launcher cannot prove it wrote is not its to
     const dir = mkFolder("foreign-ok", { local: { env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: "300000" } } });
     const before = readFileSync(localPath(dir), "utf8");
 
-    const result = establishTier({ dir, intended: MARATHON, stateDir, home });
+    const result = establishTier({ dir, intended: MARATHON, stateDir, home, env: {} });
 
     expect(result.action).toBe("keep");
     expect(result.wrote).toBe(false);
@@ -130,7 +130,7 @@ describe("a local settings file the launcher cannot prove it wrote is not its to
   it("refuses an unparseable local file rather than replacing it", () => {
     const dir = mkFolder("broken", { local: "{ this is not json" });
 
-    const result = establishTier({ dir, intended: MARATHON, stateDir, home });
+    const result = establishTier({ dir, intended: MARATHON, stateDir, home, env: {} });
 
     expect(result.action).toBe("refuse");
     expect(result.reason).toMatch(/could not be read/i);
@@ -139,10 +139,10 @@ describe("a local settings file the launcher cannot prove it wrote is not its to
 
   it("refuses a file that was ours until somebody edited it", () => {
     const dir = mkFolder("edited");
-    establishTier({ dir, intended: MARATHON, stateDir, home });
+    establishTier({ dir, intended: MARATHON, stateDir, home, env: {} });
     writeFileSync(localPath(dir), JSON.stringify({ env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: "500000" } }, null, 2));
 
-    const result = establishTier({ dir, intended: MARATHON, stateDir, home });
+    const result = establishTier({ dir, intended: MARATHON, stateDir, home, env: {} });
 
     expect(result.action).toBe("refuse");
     expect(effective(dir).window).toBe(500000);
@@ -164,5 +164,37 @@ describe("planTier is pure and states its own evidence", () => {
   it("names the window it would write", () => {
     const plan = planTier({ intended: MARATHON, projectWindow: 150000, local: { present: false }, record: null });
     expect(plan).toMatchObject({ action: "write", window: 300000 });
+  });
+});
+
+describe("a window pinned in the environment is not the launcher's to establish", () => {
+  // The process environment beats every settings file. Writing one anyway would produce the worst
+  // outcome available: a launcher reporting PASS, and a session that gets the other window and is
+  // hard-STOPped by the root assert once VS Code is already open. Refusing here is the honest place.
+  it("refuses rather than writing a file the environment will overrule", () => {
+    const plan = planTier({ intended: MARATHON, projectWindow: 150000, local: { present: false }, envWindow: 150000 });
+    expect(plan.action).toBe("refuse");
+    expect(plan.reason).toMatch(/environment/i);
+    expect(plan.reason).toMatch(/150000/);
+  });
+
+  it("is content when the environment already sets the intended window", () => {
+    const plan = planTier({ intended: MARATHON, projectWindow: 150000, local: { present: false }, envWindow: 300000 });
+    expect(plan.action).toBe("keep");
+  });
+
+  // Found while wiring this in: the launcher runs inside a session whose own settings export
+  // WINDOW_KEY, so `process.env` really does carry one. Reading it is right in production and wrong
+  // in a test — every guard above passes `env: {}` for that reason, and this one pins the behaviour.
+  it("writes nothing on a real folder the environment already overrules", () => {
+    const dir = mkFolder("env-pinned");
+    const result = establishTier({
+      dir, intended: MARATHON, stateDir, home,
+      env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: "150000" },
+    });
+
+    expect(result.action).toBe("refuse");
+    expect(result.wrote).toBe(false);
+    expect(existsSync(localPath(dir))).toBe(false);
   });
 });

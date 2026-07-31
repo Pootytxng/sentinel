@@ -53,6 +53,9 @@ const windowIn = (data) => {
   return Number.isFinite(n) ? n : null;
 };
 
+/** The window pinned in the process environment, which no settings file can override. */
+export const envWindowOf = (env = process.env) => windowIn({ env });
+
 /** What the local layer currently is: present, readable, and what window it sets. */
 export function readLocalLayer(dir) {
   const file = localSettingsFile(dir);
@@ -80,8 +83,20 @@ export function readProjectWindow(dir) {
  * Pure: what should happen to the local layer, and why.
  * @returns {{action: "keep"|"write"|"refuse", window: number, reason: string}}
  */
-export function planTier({ intended, projectWindow = null, local = { present: false }, record = null }) {
+export function planTier({ intended, projectWindow = null, local = { present: false }, record = null, envWindow = null }) {
   const want = intended.window;
+
+  // The process environment beats every settings file, so a disagreement there is not ours to
+  // settle. Writing the local layer anyway would report a PASS the session then contradicts.
+  if (envWindow !== null && envWindow !== want) {
+    return {
+      action: "refuse",
+      window: want,
+      reason:
+        `${WINDOW_KEY} is ${envWindow} in the process environment, which overrules every settings file. ` +
+        `This train intends ${want} (${intended.reason}). Clear it from the environment and launch again.`,
+    };
+  }
 
   if (local.present && !local.ok) {
     return {
@@ -91,14 +106,16 @@ export function planTier({ intended, projectWindow = null, local = { present: fa
     };
   }
 
-  const effective = local.present && local.window !== null ? local.window : projectWindow;
+  const effective = envWindow ?? (local.present && local.window !== null ? local.window : projectWindow);
   if (effective === want) {
     return {
       action: "keep",
       window: want,
-      reason: local.present && local.window !== null
-        ? `${LOCAL_SETTINGS_PATH} already sets ${want}`
-        : `the tracked settings already configure ${want}`,
+      reason: envWindow !== null
+        ? `${WINDOW_KEY} is already ${want} in the process environment`
+        : local.present && local.window !== null
+          ? `${LOCAL_SETTINGS_PATH} already sets ${want}`
+          : `the tracked settings already configure ${want}`,
     };
   }
 
@@ -124,7 +141,7 @@ export function planTier({ intended, projectWindow = null, local = { present: fa
  * Do it. Writes at most one gitignored file and one record; never touches tracked content.
  * @returns {{action, window, wrote: boolean, file: string, reason: string, disclosure: string|null}}
  */
-export function establishTier({ dir, intended, stateDir = TIER_STATE_DIR, home = homedir() }) {
+export function establishTier({ dir, intended, stateDir = TIER_STATE_DIR, home = homedir(), env = process.env }) {
   void home;
   const local = readLocalLayer(dir);
   const plan = planTier({
@@ -132,6 +149,7 @@ export function establishTier({ dir, intended, stateDir = TIER_STATE_DIR, home =
     projectWindow: readProjectWindow(dir),
     local,
     record: readTierRecord({ dir, stateDir }),
+    envWindow: envWindowOf(env),
   });
 
   if (plan.action !== "write") {

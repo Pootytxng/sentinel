@@ -13,6 +13,7 @@
 // not a takeover.
 
 import { buildMenu, FALLBACK_POLICY } from "./select.mjs";
+import { LOCAL_SETTINGS_PATH } from "./tier.mjs";
 import { parseWorktreeField, samePath } from "./worktree-field.mjs";
 
 export const STARTABLE_STATUS = ["Ready", "Active"];
@@ -247,14 +248,35 @@ export function reconcile(facts) {
     // not against any folder on disk. The passing row says so — where a value came from is the
     // whole point of this check, and a green row that hides its source is the drift it prevents.
     const snapshot = win.effective.snapshot ?? null;
+
+    // Comparing was all this row could ever do, and a launcher that can only complain is the chore
+    // #23 exists to delete: the marathon tier is never in tracked settings (correctly — 150000 is
+    // right for every standard train), so the row refused forever and Kuya set an environment
+    // variable by hand. `tier.mjs` decides whether the disagreement is one the launcher may settle
+    // in its own gitignored layer; this row reports that decision and never makes it.
+    const plan = win.plan ?? null;
+    const establishing = plan?.action === "write";
+    const ok = establishing ? true : plan?.action === "refuse" ? false : same && configured;
+    const provenance = configured
+      ? `${win.effective.window} from ${win.effective.file}`
+      : `nothing configures it${snapshot ? ` in ${snapshot}` : ""}, so ${win.effective.window} is the documented fallback`;
+
     checks.push(
-      mk("settings.window", win.intended.window, win.effective.window, same && configured,
-        same && configured
+      mk("settings.window", win.intended.window, win.effective.window, ok,
+        ok
           ? null
-          : !configured
-            ? `Not configured${snapshot ? ` in ${snapshot}` : ""} — ${win.effective.window} is the documented fallback, not a decision.`
-            : `Comes from ${win.effective.file}. Change it there, or route to the folder whose policy matches — do not adopt a different window to make the mismatch go away.`,
-        same && configured && snapshot ? `from ${snapshot} — the folder does not exist yet, so this is the snapshot it will be created from` : null),
+          : plan?.action === "refuse"
+            ? plan.reason
+            : !configured
+              ? `Not configured${snapshot ? ` in ${snapshot}` : ""} — ${win.effective.window} is the documented fallback, not a decision.`
+              : `Comes from ${win.effective.file}. Change it there, or route to the folder whose policy matches — do not adopt a different window to make the mismatch go away.`,
+        // A green row must never hide a pending write, so establishment states what it found and
+        // what it will do about it — the same disclosure a stale hook overlay gets below.
+        establishing
+          ? `${provenance} — the launcher will establish ${win.intended.window} for this folder in ${LOCAL_SETTINGS_PATH} (per-machine, not tracked): ${win.intended.reason}`
+          : ok && snapshot
+            ? `from ${snapshot} — the folder does not exist yet, so this is the snapshot it will be created from`
+            : null),
     );
   }
   if (subagentModel) {

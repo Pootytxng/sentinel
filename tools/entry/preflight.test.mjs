@@ -185,6 +185,55 @@ describe("guard 2 — the effective context window", () => {
     expect(check(reconcile(large), "settings.window").ok).toBe(false);
   });
 
+  // Comparing was all it could ever do, and a launcher that can only complain is the chore this
+  // program deletes (#23). When the tier module says the disagreement is one the launcher may safely
+  // settle in its own gitignored layer, the row passes and SAYS it will be established — a green row
+  // that hides a pending write is the drift these checks exist to prevent.
+  it("accepts a disagreement the launcher can safely establish, and says so on the row", () => {
+    const w = baseWorld();
+    w.window = {
+      intended: { window: 300000, reason: "issue #23 is scoped to the 300000 marathon tier", marathon: true },
+      effective: { window: 150000, configured: true, file: "x", ignored: [] },
+      plan: { action: "write", window: 300000, reason: "the tracked settings configure 150000" },
+    };
+    const row = check(reconcile(w), "settings.window");
+    expect(row.ok).toBe(true);
+    expect(`${row.note ?? ""}`).toMatch(/establish/i);
+  });
+
+  // The exact line Kuya was shown, and the exact reason it was useless: 150000 against 150000, FAIL,
+  // with nothing on the row explaining that the number was a fallback rather than a decision. It is
+  // now a green row that names the provenance defect and what the launcher will do about it.
+  it("establishes a window nothing configured, instead of failing on a number that matches", () => {
+    const w = baseWorld();
+    w.window = {
+      intended: { window: 150000, reason: "default policy window", marathon: false },
+      effective: { window: 150000, configured: false, file: null, ignored: [] },
+      plan: { action: "write", window: 150000, reason: "the tracked settings configure nothing" },
+    };
+    const row = check(reconcile(w), "settings.window");
+    expect(row.ok).toBe(true);
+    expect(`${row.note ?? ""}`).toMatch(/configure/i);
+  });
+
+  it("still refuses when the file that would have to change is not the launcher's", () => {
+    const w = baseWorld();
+    w.window = {
+      intended: { window: 300000, reason: "marathon tier", marathon: true },
+      effective: { window: 150000, configured: true, file: "x", ignored: [] },
+      plan: { action: "refuse", window: 300000, reason: ".claude/settings.local.json was not written by the launcher, so it is not the launcher's to change." },
+    };
+    const row = check(reconcile(w), "settings.window");
+    expect(row.ok).toBe(false);
+    expect(row.remediation).toMatch(/not written by the launcher/);
+  });
+
+  it("refuses a mismatch with no plan at all — an unexamined disagreement is not an establishable one", () => {
+    const w = baseWorld();
+    w.window = { intended: { window: 300000, reason: "marathon tier" }, effective: { window: 150000, configured: true, file: "x", ignored: [] } };
+    expect(check(reconcile(w), "settings.window").ok).toBe(false);
+  });
+
   it("refuses a subagent model that is not sonnet", () => {
     const w = baseWorld({ subagentModel: { value: "opus", source: "x" } });
     expect(check(reconcile(w), "settings.subagentModel").ok).toBe(false);

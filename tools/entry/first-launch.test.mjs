@@ -36,6 +36,7 @@ import {
   resolveWindow,
   resolveWindowFromSnapshot,
 } from "./settings-resolve.mjs";
+import { establishTier } from "./tier.mjs";
 
 const POLICY = { default: 150000, tiers: [{ window: 300000, issues: [15, 16, 19], note: "the marathon tier" }] };
 
@@ -51,6 +52,9 @@ const snapshots = {
   missing: () => null,
   unparseable: () => '{ "env": { "CLAUDE_CODE_AUTO_COMPACT_WINDOW": ',
   typo: () => JSON.stringify({ env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: "300k" } }),
+  // A disagreement the launcher has no business settling: it owns the context window in its own
+  // gitignored layer and nothing else. Used by the TOCTOU guard below.
+  wrongModel: () => JSON.stringify({ env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: "150000", CLAUDE_CODE_SUBAGENT_MODEL: "opus" } }),
 };
 
 let root;
@@ -343,15 +347,44 @@ describe("time of check == time of use — the base is pinned to one commit", ()
 
   it("a base that moves to a DISAGREEING commit refuses, and creates nothing", () => {
     // Re-verifying after the fetch is only worth anything if the second verdict can still say no.
+    //
+    // The disagreement used to be the window. It no longer can be: #23 gave the launcher the power to
+    // ESTABLISH the window in its own gitignored layer, so a window mismatch is now settled rather
+    // than refused (the test below proves it, end to end). The TOCTOU property is unchanged and is
+    // proven here with a disagreement the launcher has no business settling — the subagent model,
+    // which it neither owns nor writes.
     const preliminary = resolveCreateBase({ hostDir: host });
-    advance(snapshots.marathon()); // upstream now configures the marathon tier; this train does not
+    advance(snapshots.wrongModel());
     const target = { path: join(bed, "wt-refused"), branch: "fix/refused-base" };
     const out = refreshAndCreate({ facts: worldFor(target, preliminary), target, base: preliminary, hostDir: host, env: {} });
 
     expect(out.verdict.verdict).toBe("REFUSE");
-    expect(out.verdict.checks.find((c) => c.name === "settings.window")).toMatchObject({ ok: false, expected: 150000, actual: 300000 });
+    expect(out.verdict.checks.find((c) => c.name === "settings.subagentModel")).toMatchObject({ ok: false, actual: "opus" });
     expect(out.created).toBe(null);
     expect(existsSync(target.path)).toBe(false);
+  });
+
+  // Guard 7, end to end and at the worst possible moment: the base moves to a commit whose TRACKED
+  // settings carry the marathon tier while this train is standard. Refusing was the old answer and it
+  // left Kuya with a folder he could not create; adopting 300000 would be worse. The launcher creates
+  // from the refreshed commit, says on the row what it will establish, and then establishes it — the
+  // session runs at the window its policy names, not the one its branch happened to carry.
+  it("a base that moves to a window this train does not intend is ESTABLISHED, never adopted", () => {
+    const preliminary = resolveCreateBase({ hostDir: host });
+    const moved = advance(snapshots.marathon());
+    const target = { path: join(bed, "wt-established"), branch: "fix/established-base" };
+    const out = refreshAndCreate({ facts: worldFor(target, preliminary), target, base: preliminary, hostDir: host, env: {} });
+
+    expect(out.verdict.verdict).toBe("PASS");
+    expect(out.created).toBe(moved);
+    const row = out.verdict.checks.find((c) => c.name === "settings.window");
+    expect(row.ok).toBe(true);
+    expect(row.note).toMatch(/establish 150000/);
+    expect(resolveWindow({ dir: target.path, home: emptyHome, env: {} }).window).toBe(300000); // as created
+
+    const established = establishTier({ dir: target.path, intended: STANDARD, stateDir: join(root, "toctou-tiers"), home: emptyHome, env: {} });
+    expect(established.wrote).toBe(true);
+    expect(resolveWindow({ dir: target.path, home: emptyHome, env: {} }).window).toBe(150000);
   });
 
   it("createWorktree refuses anything that is not a pinned commit id, rather than falling back", () => {
