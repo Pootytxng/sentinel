@@ -134,9 +134,11 @@ than papered over:
 
 ## 7. The 300k window trial (2026-07-29, `feat/user-feedback-lab-recovery` only)
 
-**Status: DECIDED 2026-07-31 (issue #19) — KEEP, as a named non-default policy. See §7.1 for the
-verdict, the measured cost, and what still is not proven.** The text below records the experiment as
-it was designed; §7.1 is what it returned.
+**Status: ACCEPTED BY THE OWNER 2026-07-31 — 300000 is Compy's scoped MARATHON TIER. It is not the
+default; routine work remains 150000.** Decided by issue #19; see §7.1 for the verdict, the measured
+cost, and what still is not proven. The text below records the experiment as it was designed; §7.1 is
+what it returned. The trial is over — "experimental" and "not accepted" no longer describe 300000,
+and any surface still saying so is stale.
 `CLAUDE_CODE_AUTO_COMPACT_WINDOW` is `300000` in this branch's `.claude/settings.json` and `150000`
 everywhere else. Nothing about the trial makes 300000 correct; it makes it *measured*. Work Control
 issue **#15**.
@@ -202,7 +204,7 @@ are untouched — a bigger window is not licence to run longer without persistin
   number in the same sentence, and `docs/` is outside #15's claimed scope. This file stays the single
   reconciled home for the window value.
 
-### 7.1 Verdict — KEEP as a named non-default policy (issue #19, 2026-07-31)
+### 7.1 Verdict — KEEP as a named non-default policy (issue #19, 2026-07-31; owner-accepted same day as the **marathon tier**)
 
 **Window provenance, proven four ways** — a trial that cannot prove its own window is what
 invalidated #14: env `CLAUDE_CODE_AUTO_COMPACT_WINDOW=300000` · this branch's `.claude/settings.json` `300000` ·
@@ -246,6 +248,11 @@ in `tools/entry/context-policy.json`, each grant a recorded decision — which s
 global rollout" by construction, since a train can only get 300000 by being named. Qualifying shape:
 long single-context trains where one thread must hold design → implementation → verification. Short
 or mechanical trains gain nothing and pay the 27%.
+
+**Owner acceptance, 2026-07-31:** *"300k is accepted as Compy's scoped marathon tier. It is not the
+default; routine work remains 150k."* The tier now has a name, and the name is load-bearing —
+`marathon` states what qualifies (a long single-context train) where `experimental` only stated that
+nobody had decided yet. Grants remain per-issue; adding one is still a decision, not a fix.
 
 **Why not "adjust to a new measured target": no third window has been measured.** A 200000 or 250000
 recommendation would be an unmeasured claim, and the honest-measurement law forbids it. If a finer
