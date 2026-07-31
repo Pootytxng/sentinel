@@ -12,11 +12,14 @@
 // expired claim yields a takeover DRAFT for a human to post — collision rule 5, expiry is an alarm,
 // not a takeover.
 
-import { buildMenu, FALLBACK_POLICY } from "./select.mjs";
+import { BLOCKING_GATES, buildMenu, FALLBACK_POLICY } from "./select.mjs";
+import { LOCAL_SETTINGS_PATH } from "./tier.mjs";
 import { parseWorktreeField, samePath } from "./worktree-field.mjs";
 
 export const STARTABLE_STATUS = ["Ready", "Active"];
-export const BLOCKING_GATES = ["Kuya", "Security / System", "Release / Distribution", "External / Account"];
+// Owned by the SELECTOR now (#23) — a gated task has to be unavailable on the menu, not refused after
+// a worktree has been offered. Re-exported here so existing importers keep one definition, not two.
+export { BLOCKING_GATES };
 export const EXPECTED_SUBAGENT_MODEL = "sonnet";
 
 const norm = (s) => String(s ?? "").trim().replace(/\s+/g, " ").replace(/[.\s]+$/, "").toLowerCase();
@@ -26,10 +29,16 @@ const norm = (s) => String(s ?? "").trim().replace(/\s+/g, " ").replace(/[.\s]+$
  * An explicit issue is always honoured, even when unstartable, so the CHECKS explain the refusal
  * instead of the selector silently reporting "no task found".
  *
- * WITHOUT an explicit issue this returns a CHOICE and never a task — not even when only one task
- * is on offer (owner addendum on #18: one Ready #13 was enough for the old code to start it while
- * our own Active #18 sat unread). Killing the silent path here covers every caller, not just the
- * menu. The recommendation, the ordering and the context labels live in select.mjs.
+ * Without an explicit issue there are exactly two outcomes, and the line between them is ownership:
+ *
+ *   - ONE task that is ours, Active, claimed and ungated -> that task, marked `auto`. Nobody is
+ *     asked, because nobody has a decision to make: the claim on the board IS the decision, and the
+ *     window Kuya closed is not a retraction of it.
+ *   - anything else -> a CHOICE, never a task. In particular a lone READY task is still a choice
+ *     (owner addendum on #18: one Ready #13 was enough for the old code to start it while our own
+ *     Active #18 sat unread). Ready work is offered; it is never assumed.
+ *
+ * Ordering, availability, the plain-language reasons and the context labels all live in select.mjs.
  */
 export function selectTask(items, { issue = null, self = { lane: "Claude Code" }, now = new Date(), policy = null } = {}) {
   if (issue !== null) {
@@ -39,17 +48,31 @@ export function selectTask(items, { issue = null, self = { lane: "Claude Code" }
   }
 
   const menu = buildMenu(items ?? [], { self, now, policy: policy ?? FALLBACK_POLICY });
-  if (menu.options.length === 0) {
-    return { kind: "none", reason: "No task is Ready and nothing you own is resumable — nothing to start. (Never invent work.)" };
+
+  if (menu.autoResume !== null) {
+    const task = (items ?? []).find((i) => Number(i.number) === menu.autoResume);
+    return {
+      kind: "task",
+      task,
+      auto: true,
+      menu,
+      reason: `#${task.number} is already yours and still claimed — resuming it.`,
+    };
   }
+
+  if (menu.options.length === 0) {
+    const why = menu.unavailable.length
+      ? `Nothing is available to start. ${menu.unavailable.map((u) => `#${u.number} ${u.reason}`).join("; ")}.`
+      : "No task is Ready and nothing you own is resumable — nothing to start. (Never invent work.)";
+    return { kind: "none", reason: why, menu, options: [], unavailable: menu.unavailable };
+  }
+
   return {
     kind: "choice",
     menu,
     options: menu.options,
-    recommended: menu.recommended,
-    reason: menu.recommended
-      ? `#${menu.recommended} is yours and resumable. Confirm it, or choose another — the shortcut does not pick for you.`
-      : `${menu.options.length} task${menu.options.length === 1 ? " is" : "s are"} on offer. Choose one — there is deliberately no default.`,
+    unavailable: menu.unavailable,
+    reason: `${menu.options.length} task${menu.options.length === 1 ? " is" : "s are"} on offer. Choose one — the shortcut does not start work you did not ask for.`,
   };
 }
 
@@ -247,14 +270,35 @@ export function reconcile(facts) {
     // not against any folder on disk. The passing row says so — where a value came from is the
     // whole point of this check, and a green row that hides its source is the drift it prevents.
     const snapshot = win.effective.snapshot ?? null;
+
+    // Comparing was all this row could ever do, and a launcher that can only complain is the chore
+    // #23 exists to delete: the marathon tier is never in tracked settings (correctly — 150000 is
+    // right for every standard train), so the row refused forever and Kuya set an environment
+    // variable by hand. `tier.mjs` decides whether the disagreement is one the launcher may settle
+    // in its own gitignored layer; this row reports that decision and never makes it.
+    const plan = win.plan ?? null;
+    const establishing = plan?.action === "write";
+    const ok = establishing ? true : plan?.action === "refuse" ? false : same && configured;
+    const provenance = configured
+      ? `${win.effective.window} from ${win.effective.file}`
+      : `nothing configures it${snapshot ? ` in ${snapshot}` : ""}, so ${win.effective.window} is the documented fallback`;
+
     checks.push(
-      mk("settings.window", win.intended.window, win.effective.window, same && configured,
-        same && configured
+      mk("settings.window", win.intended.window, win.effective.window, ok,
+        ok
           ? null
-          : !configured
-            ? `Not configured${snapshot ? ` in ${snapshot}` : ""} — ${win.effective.window} is the documented fallback, not a decision.`
-            : `Comes from ${win.effective.file}. Change it there, or route to the folder whose policy matches — do not adopt a different window to make the mismatch go away.`,
-        same && configured && snapshot ? `from ${snapshot} — the folder does not exist yet, so this is the snapshot it will be created from` : null),
+          : plan?.action === "refuse"
+            ? plan.reason
+            : !configured
+              ? `Not configured${snapshot ? ` in ${snapshot}` : ""} — ${win.effective.window} is the documented fallback, not a decision.`
+              : `Comes from ${win.effective.file}. Change it there, or route to the folder whose policy matches — do not adopt a different window to make the mismatch go away.`,
+        // A green row must never hide a pending write, so establishment states what it found and
+        // what it will do about it — the same disclosure a stale hook overlay gets below.
+        establishing
+          ? `${provenance} — the launcher will establish ${win.intended.window} for this folder in ${LOCAL_SETTINGS_PATH} (per-machine, not tracked): ${win.intended.reason}`
+          : ok && snapshot
+            ? `from ${snapshot} — the folder does not exist yet, so this is the snapshot it will be created from`
+            : null),
     );
   }
   if (subagentModel) {

@@ -13,9 +13,10 @@
 // Verify and refuse (owner-approved). Writing hook files into a folder another lane may own is
 // mutation, so only `--repair` copies them, and it prints what it will write first.
 
+import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { ASSERT_HOOK_MARKER } from "./overlay.mjs";
 import { resolveSettings } from "./settings-resolve.mjs";
 
@@ -135,16 +136,25 @@ export function verifyHooks({ dir, home = homedir(), env = process.env }) {
 }
 
 /**
- * Copy the canonical hook set into a target folder. Only ever reached via an explicit --repair.
+ * Copy the canonical hook set into a target folder.
+ *
+ * `only` narrows it to named files, which is what the automatic repair uses: it writes the files that
+ * are MISSING and nothing else. Copying the whole set would overwrite hook files the folder already
+ * has, and a folder that carries a locally-edited hook has user work in it — the one thing automatic
+ * repair may never quietly replace. Explicit `--repair` still restores the full set, because there a
+ * human asked for exactly that.
+ *
  * Returns what it wrote; with `dryRun` it returns what it WOULD write and touches nothing.
  */
-export function repairHooks({ dir, canonicalDir, dryRun = false }) {
+export function repairHooks({ dir, canonicalDir, dryRun = false, only = null }) {
   if (!existsSync(canonicalDir)) {
     throw new Error(`Canonical hook set not found at ${canonicalDir}`);
   }
+  const wanted = only ? new Set(only) : null;
   const target = join(dir, HOOKS_SUBDIR);
   const planned = readdirSync(canonicalDir, { withFileTypes: true })
     .filter((e) => e.isFile())
+    .filter((e) => !wanted || wanted.has(e.name))
     .map((e) => ({ from: join(canonicalDir, e.name), to: join(target, e.name), name: e.name }));
 
   if (dryRun) return { wrote: [], planned, target };
@@ -152,4 +162,100 @@ export function repairHooks({ dir, canonicalDir, dryRun = false }) {
   mkdirSync(target, { recursive: true });
   for (const p of planned) copyFileSync(p.from, p.to);
   return { wrote: planned, planned, target };
+}
+
+const defaultGit = (cwd, args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+
+/** Is this file part of the control folder's committed payload, or just something sitting there? */
+export function isTracked(file, { git = defaultGit } = {}) {
+  try {
+    git(dirname(file), ["ls-files", "--error-unmatch", "--", basename(file)]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Can the launcher fix these missing hooks by itself, right now, without touching anything else?
+ *
+ * The owner's line is "repair missing canonical hooks when provably the versioned control payload and
+ * the target are safe to write", and every clause of that is a separate refusal here:
+ *
+ *   - a hook registered from OUTSIDE the folder is not this folder's to fix (an absolute-path overlay
+ *     somebody else installed); copying into `.claude/hooks/` would not even satisfy the registration
+ *   - a hook inside the folder but not at `.claude/hooks/<name>` has the same problem: the file we
+ *     would write is not the file the settings name, so the repair would "succeed" and change nothing
+ *   - a name the canonical set does not carry cannot be restored from it — inventing one is not repair
+ *   - a canonical file that is UNTRACKED is not the versioned payload, it is a stray file in the
+ *     control folder, and copying strays into a worktree is how an unreviewed hook starts running
+ *
+ * Anything that fails a clause makes the WHOLE repair refuse rather than repairing the rest. A partial
+ * repair leaves the folder still failing verification and the owner still reading a wall of text, with
+ * writes already done — worse than the honest refusal, and it spends the one thing refusals protect.
+ */
+export function hookRepairPlan({ verify, canonicalDir, tracked = isTracked }) {
+  const dir = verify?.dir ?? "";
+  const missing = verify?.missing ?? [];
+  if (missing.length === 0) return { ok: false, needed: false, files: [], reason: "nothing is missing" };
+
+  const foreign = missing.filter((m) => !isUnder(m.file, dir));
+  if (foreign.length > 0) {
+    return {
+      ok: false,
+      needed: true,
+      files: [],
+      reason:
+        `${foreign.length === 1 ? "a hook is" : `${foreign.length} hooks are`} registered by absolute path from outside ` +
+        `${dir} (${foreign.map((m) => m.file).join(", ")}). That registration is not this folder's to repair, and ` +
+        `copying files into ${join(dir, HOOKS_SUBDIR)} would not satisfy it.`,
+    };
+  }
+
+  const misplaced = missing.filter((m) => !m.name || norm(m.file) !== norm(join(dir, HOOKS_SUBDIR, m.name)));
+  if (misplaced.length > 0) {
+    return {
+      ok: false,
+      needed: true,
+      files: [],
+      reason:
+        `${misplaced.map((m) => m.file).join(", ")} ${misplaced.length === 1 ? "is" : "are"} registered from somewhere ` +
+        `other than ${join(dir, HOOKS_SUBDIR)}. Repair writes the canonical set into that folder, so it would not put ` +
+        `the file where the settings look for it.`,
+    };
+  }
+
+  if (!existsSync(canonicalDir)) {
+    return { ok: false, needed: true, files: [], reason: `the canonical hook set is not at ${canonicalDir}, so there is nothing proven to copy from.` };
+  }
+
+  const names = [...new Set(missing.map((m) => m.name))];
+  const have = new Set(readdirSync(canonicalDir, { withFileTypes: true }).filter((e) => e.isFile()).map((e) => e.name));
+  const unknown = names.filter((n) => !have.has(n));
+  if (unknown.length > 0) {
+    return {
+      ok: false,
+      needed: true,
+      files: [],
+      reason: `the canonical set in ${canonicalDir} does not carry ${unknown.join(", ")}, so this cannot be repaired from it.`,
+    };
+  }
+
+  const stray = names.filter((n) => !tracked(join(canonicalDir, n)));
+  if (stray.length > 0) {
+    return {
+      ok: false,
+      needed: true,
+      files: [],
+      reason: `${stray.join(", ")} in ${canonicalDir} ${stray.length === 1 ? "is" : "are"} not tracked by git, so ${stray.length === 1 ? "it is" : "they are"} not the versioned control payload.`,
+    };
+  }
+
+  return {
+    ok: true,
+    needed: true,
+    files: names,
+    reason: null,
+    disclosure: `${names.length} hook${names.length === 1 ? " was" : "s were"} missing from ${dir} — copied the versioned ${names.join(", ")} from the control folder.`,
+  };
 }

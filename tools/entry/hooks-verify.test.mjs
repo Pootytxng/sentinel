@@ -10,10 +10,11 @@
 // it. Writing hook files into a folder another lane may own is mutation, so only --repair writes.
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { hookCommandsOf, verifyHooks } from "./hooks-verify.mjs";
+import { hookCommandsOf, hookRepairPlan, repairHooks, verifyHooks } from "./hooks-verify.mjs";
 import { ASSERT_HOOK_MARKER } from "./overlay.mjs";
 
 /** The real shape, trimmed: two events, three hooks, `$CLAUDE_PROJECT_DIR` in every command. */
@@ -312,5 +313,133 @@ describe("the launcher's own leftover is not the folder's defect", () => {
     expect(r.missing).toHaveLength(1);
     expect(r.stale).toHaveLength(1);
     expect(r.remediation).toMatch(/--repair/);
+  });
+});
+
+// Guards 5 and 6 of the #23 program: "missing canonical hooks safely auto-repairable" and "foreign or
+// ambiguous hooks that must refuse". Until now every missing hook — including the ordinary case of a
+// folder cut before the hooks were tracked — refused and handed Kuya a --repair command to type. That
+// is the chore this program deletes, but only for the case the launcher can PROVE, and the proving is
+// what these guards pin: the plan must fail closed on every clause, and it must never write over work.
+describe("deciding whether the launcher may repair the hooks itself", () => {
+  let folder;
+  let canonical;
+  const all = () => true;
+  const none = () => false;
+
+  const plan = (over = {}) =>
+    hookRepairPlan({ verify: verifyHooks({ dir: folder, home: join(root, "no-home") }), canonicalDir: canonical, tracked: all, ...over });
+
+  beforeAll(() => {
+    canonical = join(root, "control", ".claude", "hooks");
+    mkdirSync(canonical, { recursive: true });
+    for (const f of ["stop-continue.mjs", "context-size-advisor.mjs", "subagent-model-guard.mjs"]) {
+      writeFileSync(join(canonical, f), "// canonical\n");
+    }
+  });
+
+  const settingsAt = (name, hooks) => {
+    folder = join(root, name);
+    mkdirSync(join(folder, ".claude"), { recursive: true });
+    writeFileSync(join(folder, ".claude", "settings.json"), JSON.stringify({ hooks }, null, 2));
+    return folder;
+  };
+  const inside = (file) => ({ Stop: [{ hooks: [{ type: "command", command: `node "$CLAUDE_PROJECT_DIR/${file}"` }] }] });
+
+  it("repairs the ordinary case: the folder registers the canonical set and has none of it", () => {
+    settingsAt("repair-ok", SETTINGS.hooks);
+    const p = plan();
+    expect(p).toMatchObject({ ok: true, needed: true });
+    expect(p.files.sort()).toEqual(["context-size-advisor.mjs", "stop-continue.mjs", "subagent-model-guard.mjs"]);
+    expect(p.disclosure).toMatch(/3 hooks were missing/);
+  });
+
+  it("has nothing to say when nothing is missing", () => {
+    expect(plan({ verify: verifyHooks({ dir: completeDir, home: join(root, "no-home") }) })).toMatchObject({ ok: false, needed: false });
+  });
+
+  // Guard 6, the case the owner named: a hook registered by absolute path from somewhere else.
+  it("refuses a hook registered from outside the folder — not ours to repair", () => {
+    settingsAt("repair-foreign", {
+      SessionStart: [{ hooks: [{ type: "command", command: `node "${join(root, "elsewhere", "some-hook.mjs")}"` }] }],
+    });
+    const p = plan();
+    expect(p).toMatchObject({ ok: false, needed: true });
+    expect(p.reason).toMatch(/outside/);
+    expect(p.files).toEqual([]);
+  });
+
+  // Same class, quieter: inside the folder, but not where repair writes. Copying would "succeed" and
+  // leave the registration still pointing at nothing — the remedy-that-cannot-work defect again.
+  it("refuses a hook registered inside the folder but not at .claude/hooks/", () => {
+    settingsAt("repair-misplaced", inside("tools/odd/stop-continue.mjs"));
+    const p = plan();
+    expect(p.ok).toBe(false);
+    expect(p.reason).toMatch(/other than/);
+  });
+
+  it("refuses a name the canonical set does not carry — inventing a hook is not repair", () => {
+    settingsAt("repair-unknown", inside(".claude/hooks/not-in-the-payload.mjs"));
+    const p = plan();
+    expect(p.ok).toBe(false);
+    expect(p.reason).toMatch(/does not carry not-in-the-payload\.mjs/);
+  });
+
+  it("refuses an untracked canonical file — a stray in the control folder is not the payload", () => {
+    settingsAt("repair-untracked", SETTINGS.hooks);
+    const p = plan({ tracked: none });
+    expect(p.ok).toBe(false);
+    expect(p.reason).toMatch(/not tracked by git/);
+  });
+
+  it("refuses when the control folder has no canonical set at all", () => {
+    settingsAt("repair-nocanon", SETTINGS.hooks);
+    expect(plan({ canonicalDir: join(root, "no-such-control") })).toMatchObject({ ok: false, needed: true });
+  });
+
+  // All-or-nothing on purpose: a partial repair writes files AND leaves the folder still failing.
+  it("repairs none of them when one of them cannot be proven", () => {
+    settingsAt("repair-mixed", {
+      Stop: [{ hooks: [{ type: "command", command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/stop-continue.mjs"' }] }],
+      SessionStart: [{ hooks: [{ type: "command", command: `node "${join(root, "elsewhere", "some-hook.mjs")}"` }] }],
+    });
+    expect(plan().files).toEqual([]);
+  });
+});
+
+describe("performing the repair", () => {
+  let target;
+  let canonical;
+
+  beforeAll(() => {
+    canonical = join(root, "control2", ".claude", "hooks");
+    mkdirSync(canonical, { recursive: true });
+    writeFileSync(join(canonical, "a.mjs"), "// canonical a\n");
+    writeFileSync(join(canonical, "b.mjs"), "// canonical b\n");
+  });
+
+  it("writes only the files it was asked for, and leaves the rest of the folder alone", () => {
+    target = join(root, "narrow");
+    mkdirSync(join(target, ".claude", "hooks"), { recursive: true });
+    // b.mjs is already there and has been edited locally. Automatic repair may never overwrite work.
+    writeFileSync(join(target, ".claude", "hooks", "b.mjs"), "// EDITED BY HAND\n");
+
+    repairHooks({ dir: target, canonicalDir: canonical, only: ["a.mjs"] });
+    expect(existsSync(join(target, ".claude", "hooks", "a.mjs"))).toBe(true);
+    expect(readFileSync(join(target, ".claude", "hooks", "b.mjs"), "utf8")).toMatch(/EDITED BY HAND/);
+  });
+
+  it("still restores the whole set when a human asked for that explicitly", () => {
+    const full = join(root, "full");
+    mkdirSync(full, { recursive: true });
+    expect(repairHooks({ dir: full, canonicalDir: canonical }).wrote.map((w) => w.name).sort()).toEqual(["a.mjs", "b.mjs"]);
+  });
+
+  it("plans without writing when asked to look first", () => {
+    const dry = join(root, "dry");
+    const r = repairHooks({ dir: dry, canonicalDir: canonical, dryRun: true, only: ["a.mjs"] });
+    expect(r.wrote).toEqual([]);
+    expect(r.planned.map((p) => p.name)).toEqual(["a.mjs"]);
+    expect(existsSync(dry)).toBe(false);
   });
 });

@@ -19,6 +19,11 @@
       "window": 300000,
       "issues": [15, 16, 19],
       "note": "the marathon tier — run on #15, measured by #16, decided by #19 (accepted by Kuya, 2026-07-31); accepted is not default"
+    },
+    {
+      "window": 300000,
+      "issues": [23],
+      "note": "the one-selection entrypoint program — Kuya scoped it as marathon-class in the authorizing message (2026-07-31) so future resumes get the tier automatically"
     }
   ]
 }

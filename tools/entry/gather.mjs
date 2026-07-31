@@ -20,6 +20,7 @@ import {
   resolveWindow,
   resolveWindowFromSnapshot,
 } from "./settings-resolve.mjs";
+import { envWindowOf, planTier, readLocalLayer, readProjectWindow, readTierRecord } from "./tier.mjs";
 import { parseWorktreeField } from "./worktree-field.mjs";
 
 export const HERE = dirname(fileURLToPath(import.meta.url));
@@ -165,6 +166,29 @@ export function settingsSourceFor(target, { exists, hostDir = HOST_DIR, base = n
 }
 
 /**
+ * What the launcher would DO about the window, measured the same way `establishTier` will decide it
+ * — so the verdict row and the write that follows it cannot disagree.
+ *
+ * An EXISTING folder is asked directly. A folder that does not exist yet has no local layer to own
+ * and no project file to read, so its underlying value is the snapshot's — env excluded, because
+ * `planTier` weighs the environment itself and would otherwise count it twice.
+ */
+export function planTierFor({ dir, exists, intended, effective, env = process.env, stateDir = undefined }) {
+  const opts = stateDir === undefined ? {} : { stateDir };
+  if (exists && dir) {
+    return planTier({
+      intended,
+      projectWindow: readProjectWindow(dir),
+      local: readLocalLayer(dir),
+      record: readTierRecord({ dir, ...opts }),
+      envWindow: envWindowOf(env),
+    });
+  }
+  const underlying = effective?.configured && effective.layer !== "env" ? effective.window : null;
+  return planTier({ intended, projectWindow: underlying, local: { present: false }, record: null, envWindow: envWindowOf(env) });
+}
+
+/**
  * Re-measure ONLY what a fetch can change, so the final verdict is about the commit that will
  * actually be used. The board, the claim, the checkouts, the hooks and the processes are untouched
  * by a fetch, so they are carried over rather than re-read — re-reading them would make the final
@@ -173,10 +197,12 @@ export function settingsSourceFor(target, { exists, hostDir = HOST_DIR, base = n
 export function refetchSnapshotFacts({ facts, base, hostDir = HOST_DIR, env = process.env }) {
   const ref = base?.ok ? base.sha : null;
   const resolved = resolveSettingsFromSnapshot({ hostDir, ref, env });
+  const effective = resolveWindowFromSnapshot({ hostDir, ref, env });
+  const intended = facts.window.intended;
   return {
     ...facts,
     base,
-    window: { intended: facts.window.intended, effective: resolveWindowFromSnapshot({ hostDir, ref, env }) },
+    window: { intended, effective, plan: planTierFor({ dir: null, exists: false, intended, effective, env }) },
     subagentModel: resolved.envValues.CLAUDE_CODE_SUBAGENT_MODEL ?? null,
   };
 }
@@ -212,6 +238,7 @@ export function gatherFacts({ issue, task, self = { lane: "Claude Code" }, now =
     source.kind === "folder"
       ? resolveSettings({ dir: source.dir, env: process.env })
       : resolveSettingsFromSnapshot({ hostDir: source.hostDir, ref: source.ref, env: process.env });
+  const intended = intendedWindow(thePolicy, { issue: theTask?.number ?? issue });
 
   return {
     board: theBoard,
@@ -228,7 +255,7 @@ export function gatherFacts({ issue, task, self = { lane: "Claude Code" }, now =
       gitState,
       expectedCommonDir: EXPECTED_COMMON_DIR,
       codeRoot: CODE_ROOT,
-      window: { intended: intendedWindow(thePolicy, { issue: theTask?.number ?? issue }), effective },
+      window: { intended, effective, plan: planTierFor({ dir: target?.path ?? null, exists, intended, effective }) },
       subagentModel: resolved.envValues.CLAUDE_CODE_SUBAGENT_MODEL ?? null,
       hooks: exists ? verifyHooks({ dir: target.path, env: process.env }) : null,
       processes: inspectProcesses({ folder: target?.path ?? "" }),

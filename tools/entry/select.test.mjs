@@ -1,24 +1,33 @@
-// GUARD: the first-run selection guard (bug->guard, owner addendum on Issue #18, 2026-07-30).
+// GUARD: what the shortcut does when it is given no issue number.
 //
-// The reproduced defect: after restarting VS Code, #18 was Active under our own claim and #13 was
-// the only Ready task. The no-argument shortcut ignored #18, silently selected #13, refused on that
-// unrelated worktree, and exited — and by the time Kuya typed "18", nothing was reading input.
+// Two owner defects are mechanized here, and they pull in opposite directions, which is the whole
+// reason this file is long.
 //
-// Four invariants come out of that, and this file is where they are mechanized:
-//   1. a self-owned resumable Active task is offered BEFORE unrelated Ready tasks;
-//   2. a generic shortcut never silently launches a different task while one exists;
-//   3. a displayed choice accepts its menu position AND its issue number in the same run;
-//   4. the resolved context policy is displayed, so 150k standard and 300k marathon cannot be
-//      confused for one another again.
+// 1. (bug->guard, addendum on #18, 2026-07-30) After restarting VS Code, #18 was Active under our own
+//    claim and #13 was the only Ready task. The shortcut ignored #18, silently selected #13, refused
+//    on that unrelated worktree, and exited — and by the time Kuya typed "18", nothing was reading
+//    input. => an unrelated Ready task is NEVER started on our behalf.
 //
-// Everything here is pure over injected facts — board items, a policy object, a scripted `ask`.
-// The interactive loop is tested by feeding it answers, never by driving a real terminal.
+// 2. (bug->guard, #23, 2026-07-31) The fix for (1) was "never pick", so every launch — including the
+//    one where a single task was already ours, Active and claimed — cost a keypress for a decision
+//    that had already been made and posted to the board. => ONE valid owned Active task resumes with
+//    no question asked.
+//
+// Both hold at once because the line between them is OWNERSHIP, not count. On top of that:
+//   - work that cannot be started is still shown, each line saying plainly why, and typing its number
+//     returns that reason;
+//   - menu position and issue number both select, and the prompt says so;
+//   - the context tier is on every line, so 150k standard and 300k marathon cannot be confused.
+//
+// Everything here is pure over injected facts — board items, a policy object, a scripted `ask`. The
+// interactive loop is tested by feeding it answers, never by driving a real terminal.
 
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  availability,
   buildMenu,
   chooseInteractively,
   contextLabel,
@@ -32,7 +41,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 
 const POLICY = {
   default: 150000,
-  tiers: [{ window: 300000, issues: [15, 16, 19], note: "the accepted marathon tier and the issues scoped to it" }],
+  tiers: [{ window: 300000, issues: [15, 16, 19, 23], note: "the accepted marathon tier and the issues scoped to it" }],
 };
 const NOW = new Date("2026-07-30T23:30:00Z");
 const SELF = { lane: "Claude Code" };
@@ -48,6 +57,9 @@ const BOARD = [
 
 const menu = (items = BOARD, over = {}) => buildMenu(items, { self: SELF, now: NOW, policy: POLICY, ...over });
 
+/** The same board minus our own Active task — what Kuya sees on a genuinely fresh start. */
+const NO_CLAIM_OF_OURS = BOARD.filter((i) => i.number !== 18);
+
 /** A scripted terminal: hands back queued answers, records what it was asked. */
 function scriptedAsk(answers) {
   const asked = [];
@@ -60,79 +72,147 @@ function scriptedAsk(answers) {
   return ask;
 }
 
-describe("the recommendation: a self-owned resumable Active task comes first", () => {
-  it("#18 Active under our own claim + #13 Ready → resume #18 is the recommendation", () => {
+describe("GUARD 3: one task already ours resumes without asking", () => {
+  it("#18 Active under our own live claim → auto-resume, no question", () => {
     const m = menu();
-    expect(m.recommended).toBe(18);
+    expect(m.autoResume).toBe(18);
     expect(m.options[0].number).toBe(18);
     expect(m.options[0].action).toBe("Resume");
-    expect(m.options[0].recommended).toBe(true);
   });
 
-  it("#13 is offered, but never selected on our behalf", () => {
-    const m = menu();
-    expect(m.options.map((o) => o.number)).toContain(13);
-    expect(m.options.find((o) => o.number === 13).recommended).toBe(false);
-    expect(m.options.find((o) => o.number === 13).action).toBe("Start");
-  });
-
-  it("selectTask with no explicit issue returns a CHOICE — it never picks a task itself", () => {
-    // This is the line the old behaviour crossed: one Ready task, so it started #13.
+  it("selectTask returns the TASK, marked auto — the caller never prompts", () => {
     const picked = selectTask(BOARD, { self: SELF, now: NOW, policy: POLICY });
-    expect(picked.kind).toBe("choice");
-    expect(picked.task).toBeUndefined();
-    expect(picked.recommended).toBe(18);
+    expect(picked.kind).toBe("task");
+    expect(picked.task.number).toBe(18);
+    expect(picked.auto).toBe(true);
+    expect(picked.reason).toMatch(/already yours|still claimed/i);
   });
 
-  it("a lone Ready task with no resumable Active is still a confirmation, not a silent start", () => {
-    const onlyReady = BOARD.filter((i) => i.number === 13);
-    const picked = selectTask(onlyReady, { self: SELF, now: NOW, policy: POLICY });
-    expect(picked.kind).toBe("choice");
-    expect(picked.task).toBeUndefined();
-    expect(picked.recommended).toBe(null);
+  it("a restarted editor changes nothing: the claim lives on the board, not in a window", () => {
+    // If this module could see the machine, closing VS Code could erase a claim. It cannot see it.
+    const src = readFileSync(join(HERE, "select.mjs"), "utf8");
+    expect(src).not.toMatch(/child_process|inspectProcesses|discoverCheckouts|\.claude\/ide/);
+    expect(menu().autoResume).toBe(18);
   });
 
-  it("nothing startable at all → says so, and never invents work", () => {
-    const picked = selectTask([BOARD[1], BOARD[2]], { self: SELF, now: NOW, policy: POLICY });
-    expect(picked.kind).toBe("none");
-    expect(picked.reason).toMatch(/nothing .*start|no .*task/i);
+  it("auto-resume survives other work being on offer — #19 Ready does not make it a question", () => {
+    expect(menu().options.map((o) => o.number)).toContain(19);
+    expect(menu().autoResume).toBe(18);
   });
 
-  it("two self-owned resumable Actives → no default; ambiguity is not a place to guess", () => {
-    const two = [...BOARD, { number: 20, title: "[OPS] Another", status: "Active", lane: "Claude Code", gate: "None", claimExpires: "2026-07-31" }];
-    const m = menu(two);
-    expect(m.recommended).toBe(null);
-    expect(m.options.filter((o) => o.recommended)).toHaveLength(0);
+  it("cmdChoose auto-resumes with an empty answer queue — nothing was asked at all", async () => {
+    const out = [];
+    const said = [];
+    const ask = scriptedAsk([]);
+    const code = await cmdChoose({
+      board: { reachable: true, items: BOARD },
+      self: SELF, now: NOW, policy: POLICY,
+      ask, say: (s) => said.push(s), out: (s) => out.push(s),
+    });
+    expect(code).toBe(0);
+    expect(ask.asked).toHaveLength(0);
+    expect(JSON.parse(out.join(""))).toMatchObject({ issue: 18, auto: true, contextLabel: "150k — standard" });
+    expect(said.join("\n")).toMatch(/Resuming #18/);
   });
 });
 
-describe("resumability is a property of the board, not of this machine", () => {
-  it("an expired claim is not resumable — offered, never recommended", () => {
-    const expired = BOARD.map((i) => (i.number === 18 ? { ...i, claimExpires: "2026-07-28" } : i));
-    const m = menu(expired);
-    expect(m.recommended).toBe(null);
-    const eighteen = m.options.find((o) => o.number === 18);
-    expect(eighteen.resumable).toBe(false);
-    expect(eighteen.note).toMatch(/expired|takeover/i);
+describe("GUARD 4: nothing else is ever selected for us", () => {
+  it("several Ready tasks and nothing of ours → a choice, never a start", () => {
+    const many = [
+      ...NO_CLAIM_OF_OURS,
+      { number: 20, title: "[OPS] Another ready one", status: "Ready", lane: "Claude Code", gate: "None" },
+    ];
+    const picked = selectTask(many, { self: SELF, now: NOW, policy: POLICY });
+    expect(picked.kind).toBe("choice");
+    expect(picked.task).toBeUndefined();
+    expect(picked.options.map((o) => o.number)).toEqual([19, 20]);
   });
 
-  it("another lane's Active task is not ours to resume — it is not offered at all", () => {
+  it("ONE Ready task and nothing of ours is still a choice — this is defect (1) exactly", () => {
+    const onlyReady = [BOARD[0]]; // #13, the unrelated Codex task the old code started
+    const picked = selectTask(onlyReady, { self: SELF, now: NOW, policy: POLICY });
+    expect(picked.kind).not.toBe("task");
+  });
+
+  it("even a Ready task in OUR lane is only ever offered", () => {
+    const picked = selectTask([BOARD[4]], { self: SELF, now: NOW, policy: POLICY });
+    expect(picked.kind).toBe("choice");
+    expect(picked.options).toHaveLength(1);
+  });
+
+  it("two Actives of ours → no auto-resume; two claims is the ambiguity a person settles", () => {
+    const two = [...BOARD, { number: 20, title: "[OPS] Another", status: "Active", lane: "Claude Code", gate: "None", claimExpires: "2026-07-31" }];
+    expect(menu(two).autoResume).toBe(null);
+    expect(selectTask(two, { self: SELF, now: NOW, policy: POLICY }).kind).toBe("choice");
+  });
+
+  it("Enter selects nothing on the picker — there is no default to press", () => {
+    const m = menu(NO_CLAIM_OF_OURS);
+    expect(m.autoResume).toBe(null);
+    expect(resolveChoice("", m).kind).toBe("invalid");
+  });
+
+  it("nothing available at all → says so, and never invents work", () => {
+    const picked = selectTask([BOARD[1], BOARD[2]], { self: SELF, now: NOW, policy: POLICY });
+    expect(picked.kind).toBe("none");
+    expect(picked.reason).toMatch(/nothing .*(available|start)|no .*task/i);
+  });
+});
+
+describe("what is ours, what is not, and why", () => {
+  it("another lane's Active task is unavailable and says whose it is", () => {
     const theirs = BOARD.map((i) => (i.number === 18 ? { ...i, lane: "Codex" } : i));
     const m = menu(theirs);
+    expect(m.autoResume).toBe(null);
     expect(m.options.map((o) => o.number)).not.toContain(18);
-    expect(m.recommended).toBe(null);
+    expect(m.unavailable.find((u) => u.number === 18).reason).toMatch(/Codex lane is working on it/);
   });
 
-  it("an Active task with no claim expiry recorded is not treated as a live claim", () => {
+  it("an expired claim is unavailable, not silently resumed — a takeover is verified first", () => {
+    const expired = BOARD.map((i) => (i.number === 18 ? { ...i, claimExpires: "2026-07-28" } : i));
+    const m = menu(expired);
+    expect(m.autoResume).toBe(null);
+    expect(m.options.map((o) => o.number)).not.toContain(18);
+    expect(m.unavailable.find((u) => u.number === 18).reason).toMatch(/expired.*2026-07-28.*takeover/i);
+  });
+
+  it("an Active row with no claim expiry recorded is not treated as a live claim", () => {
     const noExpiry = BOARD.map((i) => (i.number === 18 ? { ...i, claimExpires: null } : i));
-    expect(menu(noExpiry).recommended).toBe(null);
+    expect(menu(noExpiry).autoResume).toBe(null);
   });
 
-  it("no editor, no session, no processes — the board still carries the resume across a restart", () => {
-    // buildMenu takes items and a clock. If it could see the machine, a restart could erase a claim.
-    const src = readFileSync(join(HERE, "select.mjs"), "utf8");
-    expect(src).not.toMatch(/child_process|inspectProcesses|discoverCheckouts/);
-    expect(menu().recommended).toBe(18);
+  it("a Ready task assigned to another lane is not ours to take", () => {
+    const m = menu();
+    expect(m.options.map((o) => o.number)).not.toContain(13);
+    expect(m.unavailable.find((u) => u.number === 13).reason).toMatch(/assigned to the Codex lane/);
+  });
+
+  it("an unassigned Ready task is open to whoever asks for it", () => {
+    const orphan = [{ number: 21, title: "[OPS] Nobody's yet", status: "Ready", lane: null, gate: "None" }];
+    expect(menu(orphan).options.map((o) => o.number)).toEqual([21]);
+  });
+
+  it("owner-gated work is unavailable and names the gate", () => {
+    const m = menu();
+    expect(m.unavailable.find((u) => u.number === 14).reason).toMatch(/gated on Kuya/);
+    for (const gate of ["Security / System", "Release / Distribution", "External / Account"]) {
+      const item = { number: 30, title: "x", status: "Ready", lane: "Claude Code", gate };
+      expect(availability(item, { self: SELF, now: NOW }).available).toBe(false);
+      expect(availability(item, { self: SELF, now: NOW }).reason).toContain(gate);
+    }
+  });
+
+  it("a gate blocks even our own live claim — the next step is not ours to take", () => {
+    const gated = BOARD.map((i) => (i.number === 18 ? { ...i, gate: "Security / System" } : i));
+    expect(menu(gated).autoResume).toBe(null);
+    expect(menu(gated).unavailable.find((u) => u.number === 18).reason).toMatch(/Security \/ System/);
+  });
+
+  it("Done and Review work is not listed at all — it is not noise the owner has to read past", () => {
+    const m = menu([...BOARD, { number: 22, title: "[X] finished", status: "Done", lane: "Claude Code", gate: "None" }]);
+    const listed = [...m.options, ...m.unavailable].map((r) => r.number);
+    expect(listed).not.toContain(17);
+    expect(listed).not.toContain(22);
   });
 });
 
@@ -150,97 +230,117 @@ describe("the displayed context policy", () => {
     expect(m.options.find((o) => o.number === 18).marathon).toBe(false);
   });
 
-  it("every option carries a label, and it is derived from the policy — never invented", () => {
+  it("every row carries a label derived from the policy — never invented", () => {
     for (const o of menu().options) {
       expect(o.contextLabel).toMatch(/^\d+k — (standard|marathon)$/);
       expect(o.window).toBe(o.number === 19 ? 300000 : 150000);
     }
     expect(() => buildMenu(BOARD, { self: SELF, now: NOW, policy: null })).toThrow(/policy/i);
   });
+});
 
-  it("renders the menu Kuya asked for", () => {
-    const text = renderMenu(menu());
-    expect(text).toMatch(/What would you like to do\?/);
-    expect(text).toMatch(/1\. Resume #18 .*\(Recommended\)/);
-    expect(text).toMatch(/Context: 150k — standard/);
-    expect(text).toMatch(/Context: 300k — marathon/);
-    expect(text).toMatch(/Press Enter to resume #18\./);
-    expect(menu().question).toMatch(/type 1, 2, 3, 18, 13, 19, or Q to cancel/i);
+describe("the menu Kuya reads", () => {
+  const picker = () => menu(NO_CLAIM_OF_OURS);
+
+  it("states what to type, both ways, in plain words", () => {
+    const text = renderMenu(picker());
+    expect(text).toMatch(/Which task would you like to work on\?/);
+    expect(text).toMatch(/1\.  Start #19/);
+    expect(text).toMatch(/Type the number on the left \(1\)/);
+    expect(text).toMatch(/issue\s*\n?\s*number \(#19\)/);
+    expect(picker().question).toMatch(/Type a number from the list \(1\) or an issue number \(#19\), or Q to cancel/);
   });
 
-  it("with no recommendation there is no Enter shortcut to press", () => {
-    const m = menu(BOARD.filter((i) => i.number === 13 || i.number === 19));
-    expect(renderMenu(m)).not.toMatch(/Press Enter/);
-    expect(m.question).toMatch(/Q to cancel/i);
+  it("shows what cannot be started, with the reason on the line", () => {
+    const text = renderMenu(picker());
+    expect(text).toMatch(/Not available right now:/);
+    expect(text).toMatch(/#13 —.*\n\s+it is assigned to the Codex lane\./);
+    expect(text).toMatch(/#14 —.*\n\s+it is gated on Kuya/);
+  });
+
+  it("never advertises an Enter shortcut, because there is no longer one", () => {
+    expect(renderMenu(picker())).not.toMatch(/Press Enter|Recommended/i);
+    expect(picker().question).not.toMatch(/Enter/);
+  });
+
+  it("reads as a sentence with three options, not as an array", () => {
+    const m = menu([
+      { number: 19, title: "a", status: "Ready", lane: "Claude Code", gate: "None" },
+      { number: 20, title: "b", status: "Ready", lane: "Claude Code", gate: "None" },
+      { number: 21, title: "c", status: "Ready", lane: "Claude Code", gate: "None" },
+    ]);
+    expect(m.question).toMatch(/list \(1, 2 or 3\)/);
+    expect(m.question).toMatch(/issue number \(#19, #20 or #21\)/);
   });
 });
 
-describe("what the launcher accepts", () => {
-  it("the ordinal and the issue number both select #18, in the same run", () => {
-    const m = menu();
-    expect(resolveChoice("1", m)).toMatchObject({ kind: "task", number: 18 });
-    expect(resolveChoice("18", m)).toMatchObject({ kind: "task", number: 18 });
-    expect(resolveChoice("#18", m)).toMatchObject({ kind: "task", number: 18 });
-    expect(resolveChoice(" 2 ", m)).toMatchObject({ kind: "task", number: 13 });
-    expect(resolveChoice("13", m)).toMatchObject({ kind: "task", number: 13 });
+describe("what the picker accepts", () => {
+  const m = () => menu(NO_CLAIM_OF_OURS); // 1 => #19
+
+  it("the ordinal and the issue number both select, in the same run", () => {
+    expect(resolveChoice("1", m())).toMatchObject({ kind: "task", number: 19 });
+    expect(resolveChoice("19", m())).toMatchObject({ kind: "task", number: 19 });
+    expect(resolveChoice("#19", m())).toMatchObject({ kind: "task", number: 19 });
+    expect(resolveChoice(" 19 ", m())).toMatchObject({ kind: "task", number: 19 });
   });
 
-  it("Enter takes the recommendation", () => {
-    expect(resolveChoice("", menu())).toMatchObject({ kind: "task", number: 18 });
-  });
-
-  it("Enter with no recommendation is not a silent start", () => {
-    const m = menu(BOARD.filter((i) => i.number === 13));
-    expect(resolveChoice("", m).kind).toBe("invalid");
+  it("typing an UNAVAILABLE issue returns that row's reason, not a shrug", () => {
+    const r = resolveChoice("13", m());
+    expect(r.kind).toBe("invalid");
+    expect(r.reason).toMatch(/#13 cannot be started: it is assigned to the Codex lane/);
+    expect(resolveChoice("14", m()).reason).toMatch(/gated on Kuya/);
   });
 
   it("Q cancels", () => {
-    expect(resolveChoice("q", menu()).kind).toBe("cancel");
-    expect(resolveChoice("Q", menu()).kind).toBe("cancel");
+    expect(resolveChoice("q", m()).kind).toBe("cancel");
+    expect(resolveChoice("Q", m()).kind).toBe("cancel");
   });
 
-  it("an issue that is not on the menu explains the valid choices", () => {
-    const r = resolveChoice("17", menu());
+  it("an issue that is nowhere on the menu explains the valid choices", () => {
+    const r = resolveChoice("99", m());
     expect(r.kind).toBe("invalid");
-    expect(r.reason).toMatch(/1, 2, 3, 18, 13, 19/);
+    expect(r.reason).toMatch(/not on this menu/);
+    expect(r.reason).toMatch(/#19/);
   });
 
   it("junk is invalid, not an accidental selection", () => {
-    for (const junk of ["x", "-1", "0", "4", "1.5", "18 13"]) {
-      expect(resolveChoice(junk, menu()).kind).toBe("invalid");
+    for (const junk of ["x", "-1", "0", "4", "1.5", "19 13", ""]) {
+      expect(resolveChoice(junk, m()).kind).toBe("invalid");
     }
   });
 });
 
 describe("the interactive loop", () => {
+  const m = () => menu(NO_CLAIM_OF_OURS);
+
   it("re-prompts after invalid input instead of exiting", async () => {
-    const ask = scriptedAsk(["zzz", "18"]);
+    const ask = scriptedAsk(["zzz", "19"]);
     const said = [];
-    const r = await chooseInteractively({ menu: menu(), ask, say: (s) => said.push(s) });
-    expect(r).toMatchObject({ kind: "task", number: 18 });
+    const r = await chooseInteractively({ menu: m(), ask, say: (s) => said.push(s) });
+    expect(r).toMatchObject({ kind: "task", number: 19 });
     expect(ask.asked).toHaveLength(2);
-    expect(said.join("\n")).toMatch(/1, 2, 3, 18, 13, 19/);
+    expect(said.join("\n")).toMatch(/not one of the choices/);
   });
 
-  it("keeps reading until it gets an answer — the window that lost Kuya's '18' stayed open", async () => {
-    const ask = scriptedAsk(["", ""]);
-    const r = await chooseInteractively({ menu: menu(), ask, say: () => {} });
-    expect(r).toMatchObject({ kind: "task", number: 18 });
+  it("keeps the prompt alive across empty input — the window that lost Kuya's '18' had closed", async () => {
+    const ask = scriptedAsk(["", "", "19"]);
+    const r = await chooseInteractively({ menu: m(), ask, say: () => {} });
+    expect(r).toMatchObject({ kind: "task", number: 19 });
   });
 
   it("Q leaves without a selection", async () => {
-    const r = await chooseInteractively({ menu: menu(), ask: scriptedAsk(["q"]), say: () => {} });
+    const r = await chooseInteractively({ menu: m(), ask: scriptedAsk(["q"]), say: () => {} });
     expect(r.kind).toBe("cancel");
   });
 
   it("a closed stdin cancels rather than hanging or guessing", async () => {
-    const r = await chooseInteractively({ menu: menu(), ask: scriptedAsk([]), say: () => {} });
+    const r = await chooseInteractively({ menu: m(), ask: scriptedAsk([]), say: () => {} });
     expect(r.kind).toBe("cancel");
   });
 
   it("stops asking eventually instead of looping forever", async () => {
     const ask = scriptedAsk(Array(50).fill("nope"));
-    const r = await chooseInteractively({ menu: menu(), ask, say: () => {} });
+    const r = await chooseInteractively({ menu: m(), ask, say: () => {} });
     expect(r.kind).toBe("cancel");
     expect(ask.asked.length).toBeLessThanOrEqual(10);
   });
@@ -251,7 +351,7 @@ describe("cmdChoose: the command the shortcut runs when it is given no issue", (
     const out = [];
     const said = [];
     return cmdChoose({
-      board: { reachable: true, items: BOARD },
+      board: { reachable: true, items: NO_CLAIM_OF_OURS },
       self: SELF,
       now: NOW,
       policy: POLICY,
@@ -262,15 +362,15 @@ describe("cmdChoose: the command the shortcut runs when it is given no issue", (
     }).then((code) => ({ code, out, said }));
   };
 
-  it("Enter resumes #18: exit 0, and the issue is the only thing on stdout", async () => {
-    const { code, out } = await run([""]);
+  it("a choice: exit 0, and the issue is the only thing on stdout", async () => {
+    const { code, out } = await run(["19"]);
     expect(code).toBe(0);
-    expect(JSON.parse(out.join(""))).toMatchObject({ issue: 18, contextLabel: "150k — standard" });
+    expect(JSON.parse(out.join(""))).toMatchObject({ issue: 19, auto: false, contextLabel: "300k — marathon" });
   });
 
-  it("typing 18 does the same thing as pressing Enter", async () => {
-    const { out } = await run(["18"]);
-    expect(JSON.parse(out.join("")).issue).toBe(18);
+  it("the ordinal does the same thing as the issue number", async () => {
+    const { out } = await run(["1"]);
+    expect(JSON.parse(out.join("")).issue).toBe(19);
   });
 
   it("Q exits 2 with nothing on stdout — the launcher then writes nothing at all", async () => {
@@ -278,6 +378,13 @@ describe("cmdChoose: the command the shortcut runs when it is given no issue", (
     expect(code).toBe(2);
     expect(out).toEqual([]);
     expect(said.join("\n")).toMatch(/nothing was written|cancel/i);
+  });
+
+  it("nothing available exits 2 and prints the reasons, not an empty screen", async () => {
+    const { code, out, said } = await run([""], { board: { reachable: true, items: [BOARD[0], BOARD[1]] } });
+    expect(code).toBe(2);
+    expect(out).toEqual([]);
+    expect(said.join("\n")).toMatch(/Codex lane/);
   });
 
   it("an unreachable board refuses instead of offering a menu it cannot vouch for", async () => {
@@ -297,6 +404,7 @@ describe("automation is unaffected", () => {
     const picked = selectTask(BOARD, { issue: 18, self: SELF, now: NOW, policy: POLICY });
     expect(picked.kind).toBe("task");
     expect(picked.task.number).toBe(18);
+    expect(picked.auto).toBeUndefined();
   });
 
   it("--issue is honoured even when the task is unstartable, so the CHECKS explain the refusal", () => {
