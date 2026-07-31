@@ -153,8 +153,14 @@ export function refreshAndCreate({ facts, target, base = null, hostDir = HOST_DI
  * Afterwards the FULL preflight runs again — not just the hooks row. The repair wrote files into the
  * folder, and the honest question after a write is "does everything still hold", not "did my write
  * land". Same discipline as the base refresh: the last verdict before the next write is a complete one.
+ *
+ * That paragraph used to be untrue. The code re-measured `facts.hooks` and spread every other key
+ * from the object captured BEFORE the write — so board, folder, git, settings, claim and process
+ * state were all re-used unread, and `reconcile` is a pure function over whatever it is handed. A
+ * comment claiming a full preflight is not a full preflight. `regather` is now how the caller hands
+ * back a genuinely fresh reading, and it is injected so the guard can prove it was called.
  */
-export function repairHooksIfSafe({ facts, verdict, controlDir, dryRun = false, canonicalDir = null }) {
+export function repairHooksIfSafe({ facts, verdict, controlDir, dryRun = false, canonicalDir = null, regather = null }) {
   const failed = (verdict.checks ?? []).filter((c) => !c.ok);
   // `preflight.mjs` builds every row with mk(name, ...) -> { name, expected, actual, ok, ... }. There
   // is no `id` on a check, and reading one compared `undefined` against a string on every launch --
@@ -172,8 +178,13 @@ export function repairHooksIfSafe({ facts, verdict, controlDir, dryRun = false, 
   }
 
   repairHooks({ dir: facts.hooks.dir, canonicalDir: canonical, only: plan.files });
-  const repairedFacts = { ...facts, hooks: verifyHooks({ dir: facts.hooks.dir, env: process.env }) };
-  return { attempted: true, ok: true, verdict: reconcile(repairedFacts), facts: repairedFacts, disclosure: plan.disclosure };
+
+  // A fresh reading of everything, not of the one row we touched.
+  const fresh = regather ? regather() : null;
+  const repairedFacts = fresh
+    ? (fresh.facts ?? fresh)
+    : { ...facts, hooks: verifyHooks({ dir: facts.hooks.dir, env: process.env, canonicalDir: canonical }) };
+  return { attempted: true, ok: true, verdict: reconcile(repairedFacts), facts: repairedFacts, disclosure: plan.disclosure, regathered: Boolean(fresh) };
 }
 
 export async function launch({ issue = null, dryRun = false, noOverlay = false, controlDir, self = { lane: "Claude Code" } }) {
@@ -198,7 +209,14 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   // A folder missing its own registered hooks is a chore the owner should never be handed — it is
   // the launcher's payload, and the launcher can prove it. Repair, disclose in one line, re-verify.
   if (verdict.verdict !== "PASS") {
-    const repair = repairHooksIfSafe({ facts, verdict, controlDir, dryRun });
+    const repair = repairHooksIfSafe({
+      facts,
+      verdict,
+      controlDir,
+      dryRun,
+      // The same call that produced the pre-write facts, run again against the folder as it is now.
+      regather: () => gatherFacts({ issue: task.number, task, board, self }),
+    });
     if (repair.attempted) {
       if (repair.ok) {
         say(`  ${repair.disclosure}`);
