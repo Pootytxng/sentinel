@@ -115,6 +115,33 @@ catch {
     exit 3
 }
 
+# --- 1b. ...and then catches itself up, once -----------------------------------
+# Guard 11, which was live on this machine: the control folder ran a launcher two merges behind the
+# one every test in the repo had verified. Merging to main does not reach the folder the shortcut
+# executes, so the folder fetches its own pinned branch and fast-forwards -- never a merge, a rebase
+# or a reset, never over a dirty clone, never onto another branch. control-update.mjs holds those
+# rules and the guards that hold IT.
+#
+# A refusal here refuses the UPDATE, not the launch: being a commit behind is worth one line, not a
+# dead shortcut. Then it re-executes ITSELF, because the script already parsed is the old one -- the
+# env var makes that exactly once, so a machine that cannot fast-forward can never loop.
+if (-not $env:COMPY_ENTRY_RESTARTED) {
+    $updateJson = node (Join-Path $ControlDir 'tools/entry/control-update.mjs') --dir $ControlDir --branch $CONTROL_BRANCH
+    $updateCode = $LASTEXITCODE
+    $update = if ($updateJson) { $updateJson | ConvertFrom-Json } else { $null }
+
+    if ($updateCode -eq 10) {
+        Note "launcher updated: $($update.reason). restarting into it."
+        $env:COMPY_ENTRY_RESTARTED = '1'
+        & $PSCommandPath @PSBoundParameters
+        exit $LASTEXITCODE
+    }
+    if ($updateCode -ne 0 -and $update -and $update.reason) {
+        # Disclosure, not a chore: it says what it is running and why it stayed there.
+        Note "running launcher $($update.short) -- not updated: $($update.reason)"
+    }
+}
+
 # --- 2. Optional full repair, before the verdict, and only when asked ---------
 if ($Repair) {
     if ($Issue -le 0) { Bad 'Use -Repair together with -Issue <n> so there is a folder to repair.'; Hold-Window; exit 2 }
