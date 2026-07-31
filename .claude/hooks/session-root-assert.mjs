@@ -479,6 +479,50 @@ export function verdictFor(result) {
   };
 }
 
+// ── the launch brief ─────────────────────────────────────────────────────────────────────────────
+// Reading only. The brief is COMPOSED by tools/entry/brief.mjs, which the launcher runs and which
+// re-exports these two; this file is copied alone into folders where tools/entry does not exist, so
+// it carries the text rather than deciding what it says.
+
+export const BRIEF_DIR = join(TOKEN_DIR, "briefs");
+
+export function briefFile({ issue, dir = BRIEF_DIR }) {
+  return join(dir, `${Number(issue)}.json`);
+}
+
+export function readBrief({ issue, dir = BRIEF_DIR }) {
+  if (issue === null || issue === undefined) return null;
+  try {
+    const parsed = JSON.parse(readFileSync(briefFile({ issue, dir }), "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What this SessionStart hands the session — the mechanism that means Kuya never pastes a prompt.
+ *
+ * `additionalContext` carries the brief and is supplied on EVERY start, so compaction costs the
+ * conversation and not the task. `initialUserMessage` opens the work, and only on `startup`: the
+ * other sources (compact, resume, clear, fork) are a live conversation restarting, where an injected
+ * instruction would arrive as a fresh order from Kuya and throw away what the session was doing.
+ *
+ * Both fields are the CLI's own documented SessionStart output (validated by 2.1.220), not a
+ * side-channel. A refused session gets nothing at all.
+ */
+export function sessionStartOutput(result, { briefDir = BRIEF_DIR, source = null } = {}) {
+  if (!result?.ok) return null;
+  const brief = readBrief({ issue: result.issue, dir: briefDir });
+  if (!brief?.text) return null;
+
+  const out = { hookEventName: "SessionStart", additionalContext: brief.text };
+  if (brief.sessionTitle) out.sessionTitle = brief.sessionTitle;
+  const opening = brief.opening?.[result.mode === "resume" ? "resume" : "launch"];
+  if (source === "startup" && opening) out.initialUserMessage = opening;
+  return out;
+}
+
 // ── hook entry point ─────────────────────────────────────────────────────────────────────────────
 
 const readStdin = async () => {
@@ -499,10 +543,18 @@ export async function main() {
   const result = verifySession({ env: process.env, hookInput, cwd: process.cwd() });
   const verdict = verdictFor(result);
 
-  if (verdict.exit === 0) console.log(verdict.message);
-  else console.error(verdict.message);
+  if (verdict.exit !== 0) {
+    console.error(verdict.message);
+    return verdict.exit;
+  }
 
-  return verdict.exit;
+  const payload = sessionStartOutput(result, { source: hookInput?.source ?? null });
+  // Plain text when there is no brief: stdout alone is still added to the session, and a folder with
+  // no launch of its own must not be handed someone else's instructions.
+  if (payload) console.log(JSON.stringify({ systemMessage: verdict.message, hookSpecificOutput: payload }));
+  else console.log(verdict.message);
+
+  return 0;
 }
 
 // Only when invoked directly. Imported — by the shim, by the guards — it must stay inert.
