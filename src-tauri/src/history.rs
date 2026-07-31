@@ -2192,3 +2192,199 @@ mod history_tests {
         std::fs::remove_file(&path).ok();
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Property/fuzz coverage for Trust Ledger persistence (blueprint §11, Q4).
+//
+// history.json is a user-writable file in %APPDATA% that the rollback path trusts completely:
+// "rollback resolves from local history ALONE" (LOCKED rule 3). So every byte sequence that can
+// exist at that path is a reachable input, and the invariants below are claims about the whole
+// input space rather than about a list of cases someone happened to think of.
+//
+// Deterministic by construction — fixed seeds, no clock, no thread of randomness. A failure prints
+// the seed and the offending input so it replays by hand.
+// ─────────────────────────────────────────────────────────────────────────────
+#[cfg(test)]
+mod ledger_fuzz_tests {
+    use super::*;
+    use crate::fuzz_support::{hostile_string, Rng, SEEDS};
+    use serde_json::json;
+
+    fn fuzz_dir(tag: &str) -> std::path::PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("compy-ledger-fuzz-{tag}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        dir
+    }
+
+    /// Wipe the ledger AND any set-aside/temp copy, so no case can ever assert on the previous
+    /// iteration's residue.
+    fn clear(dir: &std::path::Path) {
+        for name in ["history.json", "history.json.corrupt", "history.json.tmp"] {
+            std::fs::remove_file(dir.join(name)).ok();
+        }
+    }
+
+    /// An `AppliedChange` whose every string field is hostile. Persistence is deliberately
+    /// content-agnostic: refusing a bad *value* is the allowlist's job at apply time (proved in
+    /// `actions.rs::ipc_input_fuzz_tests`), not the ledger's. What the ledger owes us is that
+    /// whatever went in comes back out unchanged.
+    fn fuzz_change(rng: &mut Rng) -> AppliedChange {
+        let rec_id = if rng.flag() {
+            (*rng.pick(APPLIABLE_REC_IDS)).to_string()
+        } else {
+            hostile_string(rng, 2)
+        };
+        let prior = rng.next_u64();
+        let note = hostile_string(rng, 2);
+        let hw = if rng.flag() {
+            let hash = hostile_string(rng, 1);
+            let gpu = hostile_string(rng, 1);
+            let gpu_driver = hostile_string(rng, 1);
+            let ram_gb = rng.next_u64() as u32;
+            let display = hostile_string(rng, 1);
+            Some(crate::hardware::HwFingerprint { hash, gpu, gpu_driver, ram_gb, display })
+        } else {
+            None
+        };
+        AppliedChange {
+            id: hostile_string(rng, 2),
+            rec_id,
+            rec_title: hostile_string(rng, 2),
+            applied_at: hostile_string(rng, 2),
+            snapshot: json!({ "prior": prior, "note": note }),
+            status: if rng.flag() { "applied".into() } else { "rolled_back".into() },
+            applied_action: None,
+            rollback_action: None,
+            app_version_at_apply: if rng.flag() { Some(hostile_string(rng, 1)) } else { None },
+            ruleset_version_at_apply: if rng.flag() { Some(hostile_string(rng, 1)) } else { None },
+            elevation_used: if rng.flag() { Some(rng.flag()) } else { None },
+            provenance: if rng.flag() { Some(hostile_string(rng, 1)) } else { None },
+            hw_fingerprint: hw,
+            rolled_back_at: if rng.flag() { Some(hostile_string(rng, 1)) } else { None },
+        }
+    }
+
+    /// The H1 invariant, stated over the whole input space: an EXISTING ledger either loads because
+    /// it genuinely is a valid ledger, or it fails loud with its bytes preserved somewhere. It is
+    /// never silently reported as "no history" — that would let the next save overwrite a
+    /// recoverable file and erase every rollback contract on the machine.
+    #[test]
+    fn arbitrary_ledger_bytes_never_panic_and_are_never_silently_read_as_empty() {
+        let dir = fuzz_dir("bytes");
+        let path = dir.join("history.json");
+        let corrupt = path.with_extension("json.corrupt");
+        for seed in SEEDS {
+            let mut rng = Rng::seeded(seed);
+            for case in 0..40 {
+                clear(&dir);
+                let text = hostile_string(&mut rng, 6);
+                std::fs::write(&path, &text).expect("write case");
+
+                match load_history_from(&path) {
+                    Ok(loaded) => {
+                        // Acceptance must be exactly serde's acceptance — in particular an EMPTY
+                        // result may only come from bytes that genuinely are an empty ledger.
+                        let reparsed: Vec<AppliedChange> = serde_json::from_str(&text)
+                            .unwrap_or_else(|e| {
+                                panic!("seed {seed} case {case}: load accepted bytes serde rejects ({e}): {text:?}")
+                            });
+                        assert_eq!(
+                            reparsed.len(),
+                            loaded.len(),
+                            "seed {seed} case {case}: loaded a different ledger than the bytes hold: {text:?}"
+                        );
+                    }
+                    Err(_) => {
+                        // Fail-loud path: the damaged bytes must still exist, unchanged, either set
+                        // aside as .corrupt or left exactly where they were.
+                        let survivor = if corrupt.exists() { &corrupt } else { &path };
+                        let kept = std::fs::read_to_string(survivor).unwrap_or_else(|e| {
+                            panic!("seed {seed} case {case}: unreadable ledger was destroyed ({e}): {text:?}")
+                        });
+                        assert_eq!(
+                            kept, text,
+                            "seed {seed} case {case}: damaged ledger bytes must be preserved byte-for-byte"
+                        );
+                    }
+                }
+            }
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The round-trip contract: anything the ledger stored, it returns unchanged — including string
+    /// fields carrying quotes, backslashes, NULs, bidi controls, and multi-byte characters. Proved
+    /// through the REAL atomic save (`.json.tmp` write + same-volume rename) and the real load, not
+    /// through serde in isolation.
+    #[test]
+    fn hostile_ledger_content_round_trips_through_the_real_save_and_load_path() {
+        let dir = fuzz_dir("roundtrip");
+        let path = dir.join("history.json");
+        for seed in SEEDS {
+            clear(&dir);
+            let mut rng = Rng::seeded(seed);
+            let n = 1 + rng.below(6);
+            let ledger: Vec<AppliedChange> = (0..n).map(|_| fuzz_change(&mut rng)).collect();
+
+            save_history_to(&path, &ledger).expect("save the generated ledger");
+            let back = load_history_from(&path).expect("load what we just saved");
+
+            // AppliedChange derives no PartialEq, so compare the serialized forms — which is also
+            // the exact property that matters on disk.
+            assert_eq!(
+                serde_json::to_string(&back).unwrap(),
+                serde_json::to_string(&ledger).unwrap(),
+                "seed {seed}: the ledger did not survive its own save/load path"
+            );
+            assert!(
+                !path.with_extension("json.tmp").exists(),
+                "seed {seed}: no tmp residue after a successful swap"
+            );
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Torn-write property: EVERY strict prefix of a valid ledger is refused. The atomic save makes
+    /// a torn ledger unreachable in normal operation; this proves that if one ever appears anyway
+    /// (a foreign tool killed mid-write, a full volume, a filesystem that lies about rename
+    /// atomicity), it is refused rather than silently read as fewer changes than were applied —
+    /// which would strand real machine mutations with no rollback contract.
+    #[test]
+    fn every_truncated_prefix_of_a_valid_ledger_is_refused() {
+        let dir = fuzz_dir("torn");
+        let path = dir.join("history.json");
+        let corrupt = path.with_extension("json.corrupt");
+        let mut rng = Rng::seeded(SEEDS[0]);
+        let ledger = vec![fuzz_change(&mut rng), fuzz_change(&mut rng)];
+        let full = serde_json::to_string_pretty(&ledger).expect("serialize");
+        let chars: Vec<char> = full.chars().collect();
+
+        for cut in 0..chars.len() {
+            clear(&dir);
+            let prefix: String = chars[..cut].iter().collect();
+            std::fs::write(&path, &prefix).expect("write prefix");
+            assert!(
+                load_history_from(&path).is_err(),
+                "a ledger truncated at char {cut} of {} must never load",
+                chars.len()
+            );
+            let survivor = if corrupt.exists() { &corrupt } else { &path };
+            assert_eq!(
+                std::fs::read_to_string(survivor).expect("torn ledger still readable"),
+                prefix,
+                "torn ledger bytes must be preserved (cut {cut})"
+            );
+        }
+
+        // Control: the untruncated ledger DOES load, so the property above is about truncation and
+        // not about the generator producing something unloadable in the first place.
+        clear(&dir);
+        std::fs::write(&path, &full).expect("write full");
+        assert_eq!(
+            load_history_from(&path).expect("the complete ledger loads").len(),
+            2
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+}
