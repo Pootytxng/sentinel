@@ -1,16 +1,32 @@
 // The launch sequence, in the order that makes a half-finished run recoverable (spec §7):
 //
-//   verdict -> worktree -> claim -> token -> overlay -> (the shell opens the window)
+//   preliminary verdict -> [refresh -> final verdict] -> worktree -> claim -> token -> overlay -> (window)
 //
-// Every prefix of that is a legal state with a printed next command. Nothing before the verdict
+// Every prefix of that is a legal state with a printed next command. Nothing before a verdict
 // writes anything at all, so a REFUSE leaves the machine exactly as it found it.
+//
+// The bracketed stage runs ONLY when a worktree is to be created, and only after the preliminary
+// verdict passed (spec §5.6, #21). Creating needs a current base, refreshing one is a fetch, and a
+// fetch between the check and the use is precisely what let the launcher verify commit A and create
+// commit B. So the fetch is staged: it touches remote-tracking refs and the object store only — no
+// worktree, no branch, no claim, no file — and preflight then runs AGAIN, in full, against the
+// pinned commit that will actually be used. The last verdict before any write is a complete one.
 //
 // Prints one JSON object on stdout for the launcher to consume. Human-facing narration goes to
 // stderr so the two never get mixed up.
 
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { CODE_ROOT, gatherFacts, loadPolicy, readBoard, readProjectIds } from "./gather.mjs";
+import {
+  FULL_SHA,
+  HOST_DIR,
+  gatherFacts,
+  loadPolicy,
+  readBoard,
+  readProjectIds,
+  refetchSnapshotFacts,
+  refreshCreateBase,
+} from "./gather.mjs";
 import { reconcile, selectTask } from "./preflight.mjs";
 import { contextLabel } from "./select.mjs";
 import { postClaim, planRenew, execPlan } from "./claim.mjs";
@@ -27,14 +43,48 @@ class Refused extends Error {
   }
 }
 
-function createWorktree({ path, branch, hostDir }) {
+/**
+ * Create the worktree from the COMMIT ID the final verdict was about — never from a ref name.
+ *
+ * No ref is resolved here and no fetch happens here (#21). Both were the defect: the settings were
+ * verified against one resolution of `origin/main` and the worktree was created from a second one
+ * taken after a fetch, so "verified" and "created" could name different commits while the launcher
+ * printed them as the same thing. This function cannot re-resolve anything — it is handed an id, and
+ * it refuses anything that is not one, rather than falling back to a movable name.
+ */
+export function createWorktree({ path, branch, base, hostDir = HOST_DIR }) {
+  if (!base?.ok || !FULL_SHA.test(base.sha ?? "")) {
+    throw new Error(`Refusing to create a worktree from an unpinned base (${base?.ref ?? "no ref"}: ${base?.error ?? "no commit id"}).`);
+  }
   if (existsSync(path)) throw new Error(`Refusing to create over an existing path: ${path}`);
   say(`  creating worktree ${path} on ${branch}`);
-  git(hostDir, ["fetch", "origin", "--quiet"]);
-  const base = git(hostDir, ["rev-parse", "--short", "origin/main"]);
-  say(`  base: origin/main (${base})`);
-  git(hostDir, ["worktree", "add", "-b", branch, path, "origin/main"]);
-  return base;
+  say(`  base: ${base.sha} (${base.ref}, as verified)`);
+  git(hostDir, ["worktree", "add", "-b", branch, path, base.sha]);
+  return base.sha;
+}
+
+/**
+ * STAGE 2 (spec §5.6). Refresh the base, run the FULL preflight again against the refreshed commit,
+ * and create only from that exact id.
+ *
+ * Split out of `launch()` so the sequence a real launch runs is the sequence the guards can drive
+ * against a repository whose base actually moves — a source-text assertion that two call sites
+ * mention the same constant cannot tell you whether the commit verified is the commit created.
+ *
+ * Creates nothing on a REFUSE: it returns `created:null` and the verdict that stopped it.
+ */
+export function refreshAndCreate({ facts, target, base = null, hostDir = HOST_DIR, env = process.env }) {
+  const refreshed = refreshCreateBase({ hostDir });
+  if (base?.sha && refreshed.sha && refreshed.sha !== base.sha) {
+    say(`  ${refreshed.ref} moved ${base.sha.slice(0, 7)} -> ${refreshed.sha.slice(0, 7)} while preflight ran — re-verifying against the commit that will be used`);
+  }
+  const verdict = reconcile(refetchSnapshotFacts({ facts, base: refreshed, hostDir, env }));
+  if (verdict.verdict !== "PASS") return { created: null, verdict, base: refreshed };
+  return {
+    created: createWorktree({ path: target.path, branch: target.branch, base: refreshed, hostDir }),
+    verdict,
+    base: refreshed,
+  };
 }
 
 export async function launch({ issue = null, dryRun = false, noOverlay = false, controlDir, self = { lane: "Claude Code" } }) {
@@ -45,28 +95,43 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   if (picked.kind !== "task") throw new Refused({ verdict: picked.kind.toUpperCase(), reason: picked.reason, options: picked.options ?? [], recommended: picked.recommended ?? null });
 
   const task = picked.task;
-  const { facts, target } = gatherFacts({ issue: task.number, task, board, self });
-  const verdict = reconcile(facts);
+  // STAGE 1 — the preliminary verdict. Read-only: no fetch, no writes, and it already names the
+  // exact commit an absent worktree would be created from.
+  const { facts, target, base } = gatherFacts({ issue: task.number, task, board, self });
+  let verdict = reconcile(facts);
 
   if (verdict.verdict !== "PASS") {
     throw new Refused({ ...verdict, task, reason: `preflight refused #${task.number}` });
   }
   if (!target) throw new Refused({ verdict: "REFUSE", reason: "No target folder resolved from the board field." });
 
-  // Say the window out loud before anything is written. A 300k trial that looks like a standard
-  // 150k launch is the confusion the addendum on #18 closed; the label is not decoration.
+  // Say the window out loud before anything is written. A marathon-tier launch that looks like a
+  // standard one is the confusion the addendum on #18 closed; the label is not decoration. The tier
+  // is accepted (#19), so the line states which tier it is and that it is not the default — it no
+  // longer describes an experiment.
   const intended = facts.window.intended;
-  const label = contextLabel(intended.window, { trial: intended.trial });
-  say(`  context window: ${label}${intended.trial ? "  (trial — not accepted)" : ""}`);
+  const label = contextLabel(intended.window, { marathon: intended.marathon });
+  say(`  context window: ${label}${intended.marathon ? "  (accepted tier, scoped to this issue — not the default)" : ""}`);
 
   if (dryRun) {
-    say("  dry run: verdict PASS, stopping before any write.");
-    return { dryRun: true, issue: task.number, folder: target.path, branch: target.branch, window: intended.window, contextLabel: label, trial: intended.trial, verdict };
+    say("  dry run: preliminary verdict PASS, stopping before any write.");
+    if (verdict.actions.includes("create-worktree")) {
+      say("  (a real launch would refresh origin and re-run preflight against the refreshed commit before creating anything.)");
+    }
+    return { dryRun: true, issue: task.number, folder: target.path, branch: target.branch, window: intended.window, contextLabel: label, marathon: intended.marathon, verdict };
   }
 
-  // 1. worktree (only when the verdict said it was safely creatable)
+  // 1. worktree — refresh, RE-VERIFY, then create from the commit that final verdict was about.
+  let createdFrom = null;
   if (verdict.actions.includes("create-worktree")) {
-    createWorktree({ path: target.path, branch: target.branch, hostDir: `${CODE_ROOT}\\sentinel` });
+    // The only fetch in the toolchain, and it is followed by a full second preflight; the
+    // preliminary verdict above authorized the fetch, never the creation.
+    const staged = refreshAndCreate({ facts, target, base });
+    verdict = staged.verdict;
+    if (!staged.created) {
+      throw new Refused({ ...verdict, task, reason: `preflight refused #${task.number} against the refreshed base — nothing was created` });
+    }
+    createdFrom = staged.created;
   }
 
   // 2. claim -- refuses on its own if the verdict is not PASS
@@ -122,7 +187,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     say("  --no-overlay: the in-session root assert will NOT run for this launch");
   }
 
-  return { issue: task.number, folder: target.path, branch: target.branch, window: intended.window, contextLabel: label, trial: intended.trial, verdict };
+  return { issue: task.number, folder: target.path, branch: target.branch, base: createdFrom, window: intended.window, contextLabel: label, marathon: intended.marathon, verdict };
 }
 
 if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, "/")}`) {

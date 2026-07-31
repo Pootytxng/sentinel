@@ -197,10 +197,29 @@ are listed for Kuya rather than resolved by the tool.
 the **effective** value it computes from the settings layers, and refuses on mismatch, naming the
 file and key.
 
-The 300k window is **not** globally adopted. It stays an explicitly-scoped trial (#15/#16) until
-formally accepted. This design must never be the vehicle that quietly makes a routing mistake
-invisible — the whole point of finding 3 is that a silently-different window is how the last claim
-got invalidated.
+The 300k window is **not** globally adopted. It is the **marathon tier**: accepted by Kuya on
+2026-07-31 (#19 — *"accepted as Compy's scoped marathon tier. It is not the default; routine work
+remains 150k"*), granted per issue, and `default` stays `150000`. Acceptance settled the tier's name
+and status, not its scoping (#21). This design must never be the vehicle that quietly makes a routing
+mistake invisible — the whole point of finding 3 is that a silently-different window is how the last
+claim got invalidated — so widening `default` to make a refusal go away is the named failure mode,
+before and after acceptance.
+
+**A train can begin before its folder does.** Where the target worktree does not exist yet, the
+effective settings are resolved from the tracked `.claude/settings.json` of the **exact commit the
+worktree will be created from** (`CREATE_BASE_REF`, one constant shared with the creation call), never
+from the launcher's own directory.
+
+**Why that is a rule and not an implementation detail (measured, first live launch, #21).** The
+launcher substituted its own directory for the absent target. `tools/entry/` configures nothing, so
+the resolver reported the documented `150000` fallback as `configured:false`; `origin/main` happens to
+carry `150000`; preflight printed **`expected 150000 / actual 150000` and refused**, and a
+safely-creatable worktree became impossible to create through the entrypoint. The numbers were never
+the defect — the **provenance** was. A folder that does not exist yet has no settings of its own; the
+only honest answer is the commit it will be created from, and the launcher's directory is not that
+commit. Loosening the deadlock does not loosen the guard: a snapshot that is missing, unreadable,
+unparseable, smaller or larger still refuses, and the passing row discloses that it measured a
+snapshot rather than a folder.
 
 ### 5.3 The launcher may install verification; it may never install behaviour
 
@@ -271,6 +290,44 @@ kills another tool's process. Dirty state is *reported*, never *cleared*. Collis
 an alarm, not a takeover — is implemented literally: an expired claim produces a REFUSE plus a
 prepared **Verified takeover** draft for a human to post.
 
+### 5.6 One commit, verified and created — the staged preflight
+
+The fix in §5.2 gave a not-yet-created worktree an honest settings source: the tracked
+`.claude/settings.json` of the base it will be created from. It named that base `origin/main` — a
+**movable name**, resolved once to read the settings and a second time by `git worktree add`, with a
+`git fetch` in between. Two resolutions of one name are two questions. The launcher could verify
+commit A, create commit B, and print them as the same thing; a source-text check that both call sites
+mentioned the same constant was green throughout, because the constant was never the problem.
+
+So the base is **pinned to one 40-character commit id** (`resolveCreateBase`) before a single setting
+is read, and that exact id is what `git show <sha>:.claude/settings.json` reads and what
+`git worktree add … <sha>` creates from. Time of check and time of use are the same object, not the
+same label. Nothing downstream may re-resolve a ref: `createWorktree()` performs no fetch and no
+`rev-parse`, and refuses anything that is not a full id rather than falling back to a name.
+
+Creating still needs a *current* base, and refreshing one is a fetch — which is exactly the write-ish
+step that must not sit between the check and the use. The sequence is therefore **staged**, and the
+staging is the contract:
+
+1. **Preliminary verdict** — fully read-only. The base is pinned from the host checkout as it stands;
+   the settings of that commit are read; the complete check table runs. A REFUSE here has touched
+   nothing, and `--dry-run` stops at this stage and says the refresh it did not perform.
+2. **Refresh** — only when the preliminary verdict PASSed *and* it authorized `create-worktree`.
+   `refreshCreateBase()` is the only fetch in the toolchain; it touches remote-tracking refs and the
+   object store, never a worktree, branch, claim, or file, then pins again.
+3. **Final verdict** — the **whole** `reconcile()` again, over facts re-measured against the refreshed
+   commit (`refetchSnapshotFacts`). Not a delta and not a re-check of one row: the last verdict before
+   any write is a complete one, and it can still REFUSE. A base that moved to a commit this train
+   disagrees with stops the launch with nothing created.
+4. **Create** — from the id that final verdict was about.
+
+The preflight contract is unchanged by this: it remains read-only and fail-closed. The fetch is not
+part of preflight — it is authorized *by* a passing preflight and followed *by* another one. An
+unresolvable or unfetchable base yields no commit id, which reads no project settings layer, which
+refuses; `base.pinned` is a check of its own so the refusal names the cause instead of surfacing as a
+confusing "not configured", and the row states the commit out loud on a PASS so a green report cannot
+hide which base it was about.
+
 ---
 
 ## 6. Required behaviour → mechanism
@@ -279,7 +336,7 @@ prepared **Verified takeover** draft for a human to post.
 |---|---|---|
 | 1 | Read the live Work Control task and status | `preflight` → `board.reachable`, `task.status` |
 | 2 | Refuse Needs Kuya / Blocked / already-claimed | `task.status`, `task.gate`, `task.claim` |
-| 3 | Resolve or safely create the correct worktree and branch | `checkouts.mjs` + `folder.exists`; creation only via `git worktree add -b` from a fetched base, never over an existing folder |
+| 3 | Resolve or safely create the correct worktree and branch | `checkouts.mjs` + `folder.exists`; creation only via `git worktree add -b` from the pinned commit id the verdict named (§5.6), never from a ref name and never over an existing folder |
 | 4 | Detect dirty / untracked / staged / stashed / divergent before reuse | `git.clean` (all five counted separately) |
 | 5 | Open Claude with the worktree as its **actual project root** | launcher opens the folder as the VS Code workspace folder; §4.3 proves it, rather than trusting it |
 | 6 | Resolve the intended context window and other settings | `settings-resolve.mjs` + `context-policy.json` (§5.2) |
@@ -303,7 +360,8 @@ prepared **Verified takeover** draft for a human to post.
 | Owner-gated task | REFUSE naming the gate, and print what Kuya must decide. |
 | Expired claim | REFUSE + prepared **Verified takeover** draft. Never an automatic takeover (rule 5). |
 | Overlapping claims | REFUSE. Two writers is the failure this exists to prevent. |
-| Missing worktree | Offer creation from a freshly fetched base; create only into a non-existent path, on a branch checked out nowhere. |
+| Missing worktree | Offer creation from a freshly fetched base, **pinned to one commit id and re-verified after the fetch** (§5.6); create only into a non-existent path, on a branch checked out nowhere. |
+| The base moves mid-launch | The refreshed commit is re-verified in full before anything is created. If it no longer agrees, REFUSE — and nothing was created. |
 | Dirty worktree | REFUSE with the file inventory. Never stash, reset or clean. |
 | Branch already checked out elsewhere | REFUSE naming the other folder — Git would refuse too, but later and less legibly. |
 | Live Compy / build / helper processes | Inventory and disclose; refuse only when a process would contend with this train's writes. Never kill another tool's process (rule 6). |
@@ -330,7 +388,7 @@ Four invariants follow, and `tools/entry/select.mjs` exists to hold them:
 3. a displayed choice accepts **both its menu position and its issue number** during the same run;
    invalid input explains the valid choices and re-prompts; `Q` cancels with zero writes;
 4. the launcher **displays the resolved context policy before launch** — `150k — standard` and
-   `300k — experimental` are printed per option, on the confirmation line, and again before the first
+   `300k — marathon` are printed per option, on the confirmation line, and again before the first
    write, so the two can never be confused.
 
 `--issue <n>` remains supported for automation and is unchanged; Kuya should never need it. An
@@ -338,9 +396,10 @@ expired or other-writer Active claim is not resumable: another lane's is not off
 own expired one is offered but marked as needing a verified takeover (rule 5), never recommended.
 
 **300k sequencing.** #18 does not adopt 300k globally. It makes #19 *discoverable* and *visibly
-experimental*: `context-policy.json` scopes 300000 to #15, #16 and #19, so #19 renders as
-`300k — experimental` while every other train renders `150k — standard`. #19 owns the retry and the
-decision.
+scoped*: `context-policy.json` scopes 300000 to #15, #16 and #19, so #19 renders as `300k — marathon`
+while every other train renders `150k — standard`. #19 owned the retry and the decision, and closed
+it on 2026-07-31 — the tier is accepted, still granted per issue, and the label names it instead of
+hedging about it (#21). The scoping is unchanged by acceptance; only the vocabulary moved.
 
 ---
 
@@ -362,6 +421,9 @@ did not catch.
 | 8 | Launcher changes shell directory without changing the real project root | `cd` performed, root unchanged → assert refuses |
 | 9 | **The first-run selection guard** (§7.1) | self-owned Active #18 + Ready #13 → resume #18 recommended, #13 never auto-selected; one Ready task still asks; ordinal and issue number both accepted; invalid re-prompts; `Q` writes nothing; expired / other-writer Active excluded; label matches the resolved window; `--issue` unchanged |
 | 10 | **The launcher's own leftover** (§5.3) | overlay installed, then the branch begins registering the assert itself → the overlay is REMOVED, not merely skipped; a group whose command points where the control folder no longer keeps the file is refreshed, not called "already in place"; a hook missing from *outside* the folder is never answered with `--repair`; our own marked, dead, outside registration is `stale` — disclosed and cleared, never a refusal — while an unmarked one, or a marked one inside the folder, still refuses; `--no-overlay` prunes it too |
+| 11 | **The first-launch deadlock** (§5.2) | absent target + snapshot configured `150000` → PASS, with the row disclosing the snapshot it measured; the launcher's own directory still refuses `expected 150000 / actual 150000`; missing file / unparseable file / unparseable value / smaller / larger each refuse; a process env override stays visible as an env value; `settingsSourceFor` never returns the launcher's directory; a real `git init` fixture proves the `git show <ref>:<path>` argv form, and an unknown ref fails closed |
+| 12 | **Vocabulary drift after a decision** (§5.2) | no surface under `tools/entry/` calls the tier experimental, a trial or unaccepted; the policy key is `tiers` with no `trials` remnant; `default` is still `150000`; the tier is still granted per issue; `contextLabel(300000, {marathon:true})` is `300k — marathon` |
+| 13 | **The base moves between the check and the use** (§5.6) | a real upstream that ADVANCES between the two stages: the commit whose settings were verified is byte-identical to the commit `git worktree add` created, proven by reading the created worktree's own `HEAD` — not by two call sites naming the same constant; the passing `base.pinned` row says the id out loud; a moved-to-DISAGREEING commit refuses and leaves no folder behind; `createWorktree` throws on anything that is not a 40-hex id rather than falling back to the name; `refreshCreateBase` is the only fetch and re-pins to what it just fetched; an unresolvable base fails closed and the verdict names it |
 
 Guards 1, 3 and 4 depend on §5.1 landing first. Guard 2 is the direct mechanization of the #14 lesson.
 Guard 9 is the mechanization of the 2026-07-30 addendum: `tools/entry/select.test.mjs` plus the
@@ -373,7 +435,14 @@ hook outside this folder is a different failure"*. The **second** live launch fo
 two left standing — the verdict precedes the overlay step, so the launcher refused on its own leftover
 — mechanized by *"the launcher's own leftover is not the folder's defect"* and *"the leftover is
 cleared even when the assert is not installed"* (§5.4). The **third** found that the forgiveness was
-also silent, mechanized by `preflight.test.mjs` → *"what the owner actually reads"*.
+also silent, mechanized by `preflight.test.mjs` → *"what the owner actually reads"*. The **first launch
+of all** — the one that had to create its folder — found the deadlock in guard 11, mechanized by
+`tools/entry/first-launch.test.mjs`; guard 12 (`tools/entry/tier-vocabulary.test.mjs`) is the one that
+is not a crash at all, but a decision the launcher kept contradicting out loud. Guard 13 came from
+review of guard 11's own fix: that fix verified a *name*, so a fetch between the check and the use
+could substitute a different commit while the launcher reported one — the guard now drives a real
+upstream that moves mid-launch and compares the created worktree's `HEAD` to the commit whose
+settings were read.
 
 **Guard-premise law (carried from #14):** a guard built on a premise later disproven must be
 **rewritten, not extended**. Each guard above names the condition it detects, not the constant it

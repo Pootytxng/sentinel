@@ -50,7 +50,7 @@ function baseWorld(overrides = {}) {
     gitState: { ok: true, branch: BRANCH, detached: false, clean: true, workingTreeClean: true, modified: 0, untracked: 0, staged: 0, stashed: 0, ahead: 0, behind: 0, unmerged: 0, files: { modified: [], untracked: [], staged: [], unmerged: [] } },
     expectedCommonDir: "C:\\Users\\Kuya\\code\\sentinel\\.git",
     window: {
-      intended: { window: 150000, reason: "default policy window", trial: false },
+      intended: { window: 150000, reason: "default policy window", marathon: false },
       effective: { window: 150000, configured: true, source: "settings", file: `${FOLDER}\\.claude\\settings.json`, ignored: [] },
     },
     subagentModel: { value: "sonnet", source: `${FOLDER}\\.claude\\settings.json` },
@@ -177,7 +177,7 @@ describe("guard 5 — dirty worktree reuse", () => {
 describe("guard 2 — the effective context window", () => {
   it("refuses a window that disagrees with policy, in either direction", () => {
     const small = baseWorld();
-    small.window = { intended: { window: 300000, reason: "trial" }, effective: { window: 150000, configured: true, file: "x", ignored: [] } };
+    small.window = { intended: { window: 300000, reason: "marathon tier" }, effective: { window: 150000, configured: true, file: "x", ignored: [] } };
     expect(check(reconcile(small), "settings.window").ok).toBe(false);
 
     const large = baseWorld();

@@ -5,9 +5,10 @@
 // other five. Opening the wrong folder silently changes the context window — no mistake is required
 // beyond opening the wrong door, and that is exactly how the 300k claim in #14 was invalidated.
 //
-// Two-sided on purpose: a guard that only catches "too small" would happily let the 300k trial
-// window leak into an unrelated train, which is the failure the owner explicitly forbade
-// ("do not globally adopt the 300k window merely to conceal routing mistakes").
+// Two-sided on purpose: a guard that only catches "too small" would happily let the 300k marathon
+// tier leak into an unrelated train, which is the failure the owner explicitly forbade
+// ("do not globally adopt the 300k window merely to conceal routing mistakes"). Acceptance of the
+// tier (#19, 2026-07-31) did not relax that — accepted is not default.
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,7 +23,7 @@ import {
 
 const POLICY = {
   default: 150000,
-  trials: [{ window: 300000, issues: [15, 16], note: "context-window trial, not accepted" }],
+  tiers: [{ window: 300000, issues: [15, 16], note: "the accepted marathon tier, scoped per issue" }],
 };
 
 let root;
@@ -134,15 +135,20 @@ describe("the window comes from policy per train, never from whichever folder wa
     expect(intendedWindow(POLICY, { issue: 18 })).toMatchObject({ window: 150000 });
   });
 
-  it("the 300k trial stays scoped to its own issues", () => {
+  it("the 300k marathon tier stays scoped to its own issues", () => {
     expect(intendedWindow(POLICY, { issue: 15 }).window).toBe(300000);
     expect(intendedWindow(POLICY, { issue: 16 }).window).toBe(300000);
     expect(intendedWindow(POLICY, { issue: 17 }).window).toBe(150000);
   });
 
   it("gives a reason, so the number is never unexplained", () => {
-    expect(intendedWindow(POLICY, { issue: 15 }).reason).toMatch(/trial/i);
+    expect(intendedWindow(POLICY, { issue: 15 }).reason).toMatch(/marathon/i);
     expect(intendedWindow(POLICY, { issue: 18 }).reason).toMatch(/default/i);
+  });
+
+  it("flags the marathon tier as such, and everything else as standard", () => {
+    expect(intendedWindow(POLICY, { issue: 15 }).marathon).toBe(true);
+    expect(intendedWindow(POLICY, { issue: 18 }).marathon).toBe(false);
   });
 });
 
@@ -155,8 +161,8 @@ describe("guard 2 — the comparison, in both directions", () => {
   });
 
   it("refuses when the effective window is LARGER than the train intends", () => {
-    // The #14 failure, inverted: opening the feedback folder for a non-trial train would silently
-    // adopt 300k. Refusing here is what keeps the trial a trial.
+    // The #14 failure, inverted: opening the feedback folder for a standard-tier train would
+    // silently adopt 300k. Refusing here is what keeps the marathon tier scoped.
     const c = compareWindow(intendedWindow(POLICY, { issue: 18 }), resolveWindow({ dir: dirs.feedback, env: {} }));
     expect(c.ok).toBe(false);
     expect(c.expected).toBe(150000);

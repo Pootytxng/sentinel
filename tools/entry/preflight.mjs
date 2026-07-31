@@ -68,6 +68,7 @@ export function reconcile(facts) {
     handoff = null,
     checkouts = [],
     gitState = null,
+    base = null,
     expectedCommonDir = null,
     window: win = null,
     subagentModel = null,
@@ -188,8 +189,25 @@ export function reconcile(facts) {
     mk("folder.exists", "exists, or is safely creatable",
       existing ? "exists" : branchElsewhere ? "absent, and its branch is taken" : "absent (creatable)",
       Boolean(existing) || (Boolean(targetPath) && !branchElsewhere),
-      existing ? null : "The worktree will be created from a freshly fetched base, into a path that does not yet exist."),
+      existing ? null : "The worktree will be created from the exact commit this verdict names, into a path that does not yet exist."),
   );
+
+  // --- The base commit ----------------------------------------------------
+  // Present only when a worktree is to be created. `origin/main` is a MOVABLE name: reading the
+  // future worktree's settings through it and then creating through it are two resolutions of the
+  // same name, and a fetch in between makes them two different commits (TOCTOU, #21). So the verdict
+  // is about ONE commit id, and this row states which — the settings rows below were read from it,
+  // and `git worktree add` is given the same id.
+  if (base) {
+    const pinned = Boolean(base.ok && /^[0-9a-f]{40}$/.test(base.sha ?? ""));
+    checks.push(
+      mk("base.pinned", "one immutable commit id", pinned ? base.sha : `unresolved — ${base.error ?? "no commit id"}`, pinned,
+        pinned
+          ? null
+          : `${base.ref ?? "The base ref"} does not resolve to a commit in the host checkout, so there is nothing to verify the settings against and nothing safe to create from. Repair the checkout's remote first — the launcher will not guess a base.`,
+        pinned ? `${base.ref} pinned at ${base.sha.slice(0, 7)} — every settings row below was read from this commit, and the worktree is created from it` : null),
+    );
+  }
 
   checks.push(
     mk("git.branchElsewhere", "branch checked out nowhere else",
@@ -225,13 +243,18 @@ export function reconcile(facts) {
   if (win) {
     const same = win.effective.window === win.intended.window;
     const configured = win.effective.configured !== false;
+    // A folder that does not exist yet was measured against the snapshot it will be created from,
+    // not against any folder on disk. The passing row says so — where a value came from is the
+    // whole point of this check, and a green row that hides its source is the drift it prevents.
+    const snapshot = win.effective.snapshot ?? null;
     checks.push(
       mk("settings.window", win.intended.window, win.effective.window, same && configured,
         same && configured
           ? null
           : !configured
-            ? `Not configured — ${win.effective.window} is the documented fallback, not a decision.`
-            : `Comes from ${win.effective.file}. Change it there, or route to the folder whose policy matches — do not adopt a different window to make the mismatch go away.`),
+            ? `Not configured${snapshot ? ` in ${snapshot}` : ""} — ${win.effective.window} is the documented fallback, not a decision.`
+            : `Comes from ${win.effective.file}. Change it there, or route to the folder whose policy matches — do not adopt a different window to make the mismatch go away.`,
+        same && configured && snapshot ? `from ${snapshot} — the folder does not exist yet, so this is the snapshot it will be created from` : null),
     );
   }
   if (subagentModel) {

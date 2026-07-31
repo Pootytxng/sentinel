@@ -107,7 +107,7 @@ export async function cmdChoose({
 
   const o = chosen.option;
   say(`\n  ${C.bold}${o.action} #${o.number}${C.off} — ${o.label}   ${C.dim}context ${o.contextLabel}${C.off}\n`);
-  out(JSON.stringify({ issue: o.number, action: o.action, title: o.title, window: o.window, trial: o.trial, contextLabel: o.contextLabel }));
+  out(JSON.stringify({ issue: o.number, action: o.action, title: o.title, window: o.window, marathon: o.marathon, contextLabel: o.contextLabel }));
   return 0;
 }
 
