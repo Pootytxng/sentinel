@@ -28,7 +28,11 @@
 - [ ] **P0 before the next release or wider beta:** Q1 privacy/storage/trust-copy truth → Q2
   main-vs-overlay custom-command authority (owner capability/security GO) → Q3 FPS PID-recycle
   attribution correctness.
-- [ ] **P1 stabilization:** reproducible local supply-chain/release gate · local-only redacted support
+- [ ] **P1 stabilization:** ~~reproducible local supply-chain/release gate~~ **Q4 DELIVERED** (issue
+  [#35](https://github.com/Pootytxng/sentinel/issues/35)) — one command `powershell -NoProfile -File
+  scripts/verify-release.ps1`, 14 checks, PASS/FAIL/BLOCKED/PENDING, reachability-classified npm +
+  cargo audits with expiring acknowledgements, evidence pack JSON; see RELEASE_AUTONOMY.md → "The one
+  local command". Open: property/fuzz tests for persistence parsing + bounded IPC inputs · local-only redacted support
   evidence · current-state/doc consolidation · native accessibility and measured performance budgets.
 - [ ] **P2 product completion:** owner-accepted canonical Lab + reversible generation pruning →
   first-win action/rollback/proof journey → Consumer/Technical/Support evidence exports.
