@@ -50,13 +50,26 @@ const ANSI = /\u001b\[[0-9;]*m/g;
 let narrate = (line) => console.error(line);
 const say = (...a) => narrate(a.map((x) => String(x)).join(" "));
 
+/**
+ * Whether the log actually received anything, and why not when it did not.
+ *
+ * A healthy launch must not depend on optional logging -- that part was right. What was wrong is
+ * that every failure was swallowed in silence while the shell went on to tell Kuya "the full check
+ * table is in <path>", unconditionally, on the quiet path where the terminal copy had been
+ * suppressed. So a refusal could destroy the only detailed account of itself and then point at a
+ * file that was never created. Losing the evidence is survivable; claiming it exists is not.
+ */
+let sink = { file: null, wrote: false, error: null };
+export const narrationHealth = () => ({ ...sink });
+
 export function setNarration({ quiet = false, logFile = null, now = () => new Date() } = {}) {
   let ready = false;
+  sink = { file: logFile, wrote: false, error: null };
   narrate = (line) => {
     if (!quiet) console.error(line);
     if (!logFile) return;
     // A log that cannot be written is a worse thing to fail a launch over than to lose. It is
-    // evidence, not a precondition.
+    // evidence, not a precondition -- but its health is now a fact the caller can read.
     try {
       if (!ready) {
         mkdirSync(dirname(logFile), { recursive: true });
@@ -66,8 +79,10 @@ export function setNarration({ quiet = false, logFile = null, now = () => new Da
       // nothing and cost the log the shape that makes it readable in the first place.
       const text = line.replace(ANSI, "");
       appendFileSync(logFile, text.trim() === "" ? "\n" : `${now().toISOString()} ${text}\n`);
-    } catch {
-      /* ignore */
+      sink.wrote = true;
+    } catch (e) {
+      // First failure wins: it is the one that explains the gap.
+      if (!sink.error) sink.error = String(e?.message ?? e);
     }
   };
 }
@@ -86,7 +101,9 @@ export function setNarration({ quiet = false, logFile = null, now = () => new Da
 export function reportRefusal(payload) {
   if (!payload?.checks?.length) return false;
   for (const line of verdictLines(payload.task, payload)) say(line);
-  return true;
+  // The table went to `say`. Whether any of it reached disk is a different question, and the shell
+  // needs the answer before it promises a file.
+  return { reported: true, durable: Boolean(sink.file) ? sink.wrote && !sink.error : false, log: sink.file, error: sink.error };
 }
 
 const git = (cwd, args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -95,6 +112,35 @@ class Refused extends Error {
   constructor(payload) {
     super(payload.reason ?? "preflight refused");
     this.payload = payload;
+  }
+}
+
+/**
+ * What this run has actually done to the machine, in the order it did it.
+ *
+ * `launch` is a legal-prefix sequence: every stage leaves a state that is recoverable, and any of
+ * them can refuse. The shell printed "#N was not started, and nothing was written." for EVERY
+ * nonzero exit -- true only of a refusal before the first write, and false after a worktree was
+ * created, a tier established, a claim posted, or a token, brief or overlay written. Telling the
+ * owner nothing happened while a claim sits on the board with his name on it is the launcher lying
+ * about the one thing he would need to clean up.
+ *
+ * So the effects are recorded as they happen and travel with the refusal. "Nothing was written" is
+ * now something the payload can PROVE rather than something the shell assumes.
+ */
+export class Effects {
+  constructor() {
+    this.done = [];
+  }
+  record(what, detail = null) {
+    this.done.push(detail ? { what, detail } : { what });
+    return this;
+  }
+  get wroteAnything() {
+    return this.done.length > 0;
+  }
+  payload() {
+    return { effects: this.done, wroteAnything: this.wroteAnything };
   }
 }
 
@@ -189,12 +235,15 @@ export function repairHooksIfSafe({ facts, verdict, controlDir, dryRun = false, 
 }
 
 export async function launch({ issue = null, dryRun = false, noOverlay = false, controlDir, self = { lane: "Claude Code" } }) {
+  // Every refusal below carries this, so "nothing was written" is proven rather than assumed.
+  const effects = new Effects();
+
   const board = readBoard();
-  if (!board.reachable) throw new Refused({ verdict: "REFUSE", reason: `Work Control unreachable: ${board.error}` });
+  if (!board.reachable) throw new Refused({ verdict: "REFUSE", reason: `Work Control unreachable: ${board.error}`, ...effects.payload() });
 
   const picked = selectTask(board.items, { issue, self, policy: loadPolicy() });
   if (picked.kind !== "task") {
-    throw new Refused({ verdict: picked.kind.toUpperCase(), reason: picked.reason, options: picked.options ?? [], unavailable: picked.unavailable ?? [] });
+    throw new Refused({ verdict: picked.kind.toUpperCase(), reason: picked.reason, options: picked.options ?? [], unavailable: picked.unavailable ?? [], ...effects.payload() });
   }
 
   const task = picked.task;
@@ -220,6 +269,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     });
     if (repair.attempted) {
       if (repair.ok) {
+        effects.record("repaired missing hooks", repair.disclosure);
         say(`  ${repair.disclosure}`);
         ({ facts, verdict } = repair);
       } else {
@@ -229,9 +279,9 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   }
 
   if (verdict.verdict !== "PASS") {
-    throw new Refused({ ...verdict, task, reason: `preflight refused #${task.number}` });
+    throw new Refused({ ...verdict, task, reason: `preflight refused #${task.number}`, ...effects.payload() });
   }
-  if (!target) throw new Refused({ verdict: "REFUSE", reason: "No target folder resolved from the board field." });
+  if (!target) throw new Refused({ verdict: "REFUSE", reason: "No target folder resolved from the board field.", ...effects.payload() });
 
   // Say the window out loud before anything is written. A marathon-tier launch that looks like a
   // standard one is the confusion the addendum on #18 closed; the label is not decoration. The tier
@@ -257,9 +307,10 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     const staged = refreshAndCreate({ facts, target, base });
     verdict = staged.verdict;
     if (!staged.created) {
-      throw new Refused({ ...verdict, task, reason: `preflight refused #${task.number} against the refreshed base — nothing was created` });
+      throw new Refused({ ...verdict, task, reason: `preflight refused #${task.number} against the refreshed base — nothing was created`, ...effects.payload() });
     }
     createdFrom = staged.created;
+    effects.record("created the worktree", `${target.path} @ ${target.branch} from ${String(createdFrom).slice(0, 7)}`);
   }
 
   // 2. tier -- keep the promise the `settings.window` row made.
@@ -271,8 +322,9 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   // from disk afterwards, and a launch that did not actually get its tier stops here, before the
   // claim is posted and before VS Code opens on a session the root assert would hard-stop.
   const tier = establishTier({ dir: target.path, intended });
+  if (tier.wrote) effects.record("established the context tier", `${target.path}\\.claude\\settings.local.json → ${intended.window}`);
   if (tier.action === "refuse") {
-    throw new Refused({ ...verdict, verdict: "REFUSE", task, reason: tier.reason, remediation: [tier.reason] });
+    throw new Refused({ ...verdict, verdict: "REFUSE", task, reason: tier.reason, remediation: [tier.reason], ...effects.payload() });
   }
   if (tier.wrote) say(`  ${tier.disclosure}`);
   const settled = resolveWindow({ dir: target.path });
@@ -292,6 +344,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   if (facts.claim) {
     say("  renewing the existing claim");
     execPlan(planRenew({ issue: task.number, ids, until: expires }), {});
+    effects.record("renewed the ownership claim", `#${task.number} until ${expires}`);
   } else {
     say("  posting the ownership claim");
     postClaim({
@@ -311,6 +364,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
         processes: facts.processes,
       },
     });
+    effects.record("posted the ownership claim", `#${task.number} until ${expires}`);
   }
 
   // 4. brief -- the durable instructions, written BEFORE the token that admits a session.
@@ -331,6 +385,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     nextAction: task.nextAction ?? null,
   });
   say(`  launch brief written to ${brief}`);
+  effects.record("wrote the durable task brief", brief.file);
 
   // 5. token -- what the in-session assert checks the real root against
   //
@@ -351,6 +406,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     now: facts.now,
   });
   writeToken(token);
+  effects.record("wrote the launch token", "%LOCALAPPDATA%\\CompyEntry\\launch.json");
   say(`  launch token written (expires ${token.expiresAt})`);
 
   // 6. overlay -- Class A only: the assert hook, never behaviour. Skipped entirely when the branch
@@ -358,6 +414,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   //    run the assert twice and the second would refuse the token the first consumed.
   if (!noOverlay) {
     const o = writeOverlay({ dir: target.path, controlDir });
+    if (o.wrote) effects.record("installed the session-root assert overlay", o.file);
     if (o.wrote) say(`  installed the session-root assert into ${o.file}`);
     else if (o.removed) say(`  removed a leftover session-assert overlay from ${o.file} — ${o.reason}`);
     else say(`  session-root assert not installed — ${o.reason}`);
@@ -391,6 +448,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     // IS the session the token was written for.
     sessionId,
     brief: brief.file,
+    ...effects.payload(),
     verdict,
   };
 }
@@ -410,8 +468,9 @@ if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, "/")}`) {
     process.exit(0);
   } catch (e) {
     if (e instanceof Refused) {
-      reportRefusal(e.payload);
-      console.log(JSON.stringify(e.payload));
+      const sink = reportRefusal(e.payload);
+      // The shell decides whether to promise the log, so it needs to know whether the log happened.
+      console.log(JSON.stringify({ ...e.payload, logDurable: sink === false ? false : Boolean(sink.durable), logError: sink === false ? null : sink.error }));
       process.exit(1);
     }
     console.log(JSON.stringify({ verdict: "ERROR", reason: String(e.message ?? e) }));

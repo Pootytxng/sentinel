@@ -280,13 +280,38 @@ $result = if ($json) { $json | ConvertFrom-Json } else { $null }
 
 if ($launchCode -ne 0) {
     Write-Host ''
-    Bad "#$Issue was not started, and nothing was written."
+    # "nothing was written" is a claim about the machine, and it used to be printed for EVERY nonzero
+    # exit -- true only of a refusal before the first write. launch.mjs is a legal-prefix sequence: it
+    # can create a worktree, establish a tier, post a claim and write a token, brief and overlay, and
+    # then refuse. Telling Kuya nothing happened while a claim sits on the board under his name is the
+    # launcher lying about the one thing he would have to clean up. So it reports what the run
+    # actually did, and reserves the old sentence for the case the payload proves.
+    $effects = if ($result -and $result.effects) { @($result.effects) } else { @() }
+    if ($effects.Count -gt 0) {
+        Bad "#$Issue was not started, but this run had already done the following:"
+        foreach ($e in $effects) {
+            if ($e.detail) { Write-Host "    - $($e.what) -- $($e.detail)" }
+            else { Write-Host "    - $($e.what)" }
+        }
+        Write-Host ''
+    }
+    else {
+        Bad "#$Issue was not started, and nothing was written."
+    }
     if ($result -and $result.reason) { Note $result.reason }
     $next = if ($result -and $result.remediation) { @($result.remediation)[0] } else { $null }
     if ($next) { Write-Host ''; Write-Host "  Do this: $next" }
     Write-Host ''
-    Note "the full check table is in $LogFile"
-    if (-not $Details) { Note 'or re-run with -Details to watch it happen on screen' }
+    # And the log is only promised when it exists. On the quiet path the terminal copy is suppressed,
+    # so pointing at a file that was never written would leave a refusal with no account of itself at
+    # all -- while claiming the opposite.
+    if ($result -and $result.logDurable) {
+        Note "the full check table is in $LogFile"
+        if (-not $Details) { Note 'or re-run with -Details to watch it happen on screen' }
+    }
+    else {
+        Note 'the detailed check table could not be written to disk -- re-run with -Details to watch it on screen'
+    }
     Hold-Window
     exit 1
 }
