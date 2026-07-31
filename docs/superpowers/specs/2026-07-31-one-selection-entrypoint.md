@@ -16,27 +16,49 @@ VS Code `1.131.0`, extension `anthropic.claude-code@2.1.220`.
 
 | Candidate | Exists | Can be aimed at a folder | Starts a turn | Verdict |
 |---|---|---|---|---|
-| `vscode://anthropic.claude-code/open?prompt=` | yes — runtime `registerUriHandler`; `contributes.uriHandler` is `null` | **no** | no | rejected |
+| `vscode://anthropic.claude-code/open` | yes — runtime `registerUriHandler`; `contributes.uriHandler` is `null` | **no** | not by itself | **chosen — first attempt, bounded** |
+| the same URI's `?prompt=` | yes | no | no — prefills the composer, never submits | rejected as a carrier |
 | `claude-cli://open?cwd=&q=` | yes (HKCU) | cwd only | no — prefill, 5 000-char cap, opens no editor | rejected |
 | `code --open-url` / `code --command` | absent from `code --help` | — | — | unavailable |
 | `code chat "<prompt>"` | yes | cwd | yes | Copilot, not Claude |
 | `.vscode/tasks.json` + `runOn: folderOpen` | yes | yes | yes | rejected — needs `task.allowAutomaticTasks`, a security setting |
 | `code --disable-workspace-trust` | yes | yes | n/a | rejected — weakens a security control |
-| **Claude CLI, cwd = worktree, positional prompt, `--ide`** | yes | **yes** | **yes** | **chosen** |
-| SessionStart hook `additionalContext` | yes, already canonical and tracked | **yes, folder-scoped** | no — delivers context | **chosen carrier for the durable brief** |
+| **Claude CLI, cwd = worktree, `--ide`** | yes (`--ide`: "Automatically connect to IDE on startup") | **yes, by construction** | yes, via the hook | **chosen — fallback** |
+| **SessionStart `initialUserMessage`** | yes — present in `claude.exe` 2.1.220 | **yes, folder-scoped** | **yes** | **chosen — the only thing that starts a turn** |
+| SessionStart `additionalContext` | yes, already canonical and tracked | **yes, folder-scoped** | no — delivers context | **chosen — what survives compaction** |
 
-Two measurements decided it:
+Three measurements decided it:
 
 - **The URI cannot be aimed.** Two probes (`PROBE-OK`, `PROBE2-OK`) both landed in the window that
   had already activated the handler, never in the freshly opened folder. The handler is registered at
   activation; `contributes.uriHandler: null` means no on-demand activation, so the URI goes wherever
   the runtime handler already lives. Codex measured the same independently (#23, comment 2).
-- **The extension pre-fills, it does not submit.** `webview/index.js`:
-  `de(()=>{ if(ge) a.current?.setInputText(ge), e.initialPrompt.value=void 0 },[e,ge])`.
+- **The extension pre-fills, it does not submit.** `handleUri` in the installed `extension.js`:
+  `case"/open":{let w=x.get("session")??void 0,E=x.get("prompt")??void 0;
+  Pe.commands.executeCommand("claude-vscode.primaryEditor.open",w,E);return}` — and the composer end,
+  `webview/index.js`: `de(()=>{ if(ge) a.current?.setInputText(ge), e.initialPrompt.value=void 0 },[e,ge])`.
+- **The turn is started by the hook, not by whatever opened the session.** `initialUserMessage` is
+  present in the installed CLI binary, and the tracked `session-root-assert.mjs` emits it **only when
+  `source === "startup"`** — on `compact`, `resume`, `clear` or `fork` an injected instruction would
+  read as a fresh order from Kuya and discard what the session was mid-way through.
 
-**Honest limitation, disclosed rather than engineered around:** nothing installed can start a turn
-inside the VS Code Claude *panel* from outside. Only the CLI submits. So the session runs in its own
-console, bound to the VS Code window by `--ide`; VS Code is where the work is read and edited.
+So the opener is not the thing that has to work; the hook is. That turns an un-aimable URI from a
+blocker into a *first attempt*:
+
+    code <folder>  →  wait for a LIVE bridge on that exact folder
+                   →  fire the open-URI, wait 45 s for the nonce
+                   →  not claimed? start the CLI with cwd = <folder>, wait 90 s
+                   →  one line, then exit
+
+Both paths end at the same SessionStart hook in the same folder, so they start identically. The CLI
+carries **no positional prompt** even though it accepts one: a second copy of the brief is a copy that
+can disagree with the first, and the command-line copy is the one that dies at compaction.
+
+**Honest limitation, disclosed rather than engineered around:** the URI may open a Claude panel in an
+unrelated VS Code window that had already activated the extension. It cannot turn a wrong-folder
+launch into a reported success — the handoff nonce is per-folder — and the visible cost is a panel the
+owner closes. The fallback is what makes the journey finish anyway, and `--ide` is added only when a
+live bridge names the target folder.
 
 **Workspace Trust.** The extension declares `capabilities.untrustedWorkspaces.supported = false`, so
 it is disabled in any untrusted folder — and every freshly created worktree is untrusted. VS Code's
@@ -76,11 +98,13 @@ launch cannot manufacture its own PASS.
 A durable, plain-English brief naming the issue, its title, the branch, the folder, the tier, the
 board's Next action and the newest handoff. It lives at `%LOCALAPPDATA%\CompyEntry\briefs\<issue>.md`
 — **outside the worktree**, because an untracked file inside it would trip the launcher's own
-dirty-tree refusal. It is delivered twice, deliberately:
+dirty-tree refusal. One mechanism delivers it — the tracked SessionStart hook in that folder — in two
+shapes, deliberately:
 
-1. as the Claude CLI's positional prompt — this is what makes the session *begin*;
-2. as SessionStart `additionalContext` from the tracked hook — this is what makes it *survive*
-   compaction, an extension restart, and any session started later in that folder.
+1. `initialUserMessage`, on a `startup` start only — this is what makes the session *begin*, in the
+   panel and at the CLI alike;
+2. `additionalContext`, on *every* start — this is what makes it *survive* compaction, an extension
+   restart, and any session started later in that folder.
 
 ## 5. Session verification, resumable
 
@@ -116,7 +140,9 @@ when they are attached to the target folder, which also gives the resume path it
 
 ## 8. Control activation
 
-`main` is not the launcher. The control clone is pinned to a launcher commit and knows it:
+`main` is not the launcher — this was live while the program was being written, with the control
+clone two merges behind on a branch that would never receive the finished work. The control clone is
+pinned to a launcher commit and knows it:
 fetch, verify, **fast-forward only**, never over a dirty tree, restart into the verified code, and
 refuse rather than guess. The Desktop shortcut keeps one stable target and stops passing `-NoExit`.
 

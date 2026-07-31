@@ -237,10 +237,37 @@ if ($LASTEXITCODE -ne 0) {
 # is why the brief was written to disk before the token that admits a session.
 Start-Process $OPEN_URI
 
-# --- 7. Prove it, then get out of the way ------------------------------------
-node $Cli handoff --folder $folder
+# --- 7. Give the panel a bounded turn ----------------------------------------
+# The URI is the nicer path and it is also the only step here that cannot be AIMED: the extension
+# registers its handler at activation, so the open lands in whichever window activated it. Opening
+# the workspace first makes the right window likely, not certain. It therefore gets a turn, not the
+# whole budget -- and the nonce decides, so a URI that went to the wrong window cannot pass for this.
+node $Cli handoff --folder $folder --timeout 45000
 $handoff = $LASTEXITCODE
 
+# --- 7b. ...then start the session in the folder itself ----------------------
+# No window to guess at: the working directory IS the project root, so Claude resolves its settings,
+# its hooks and the brief from exactly the folder that was prepared. Nothing is typed for Kuya -- the
+# brief arrives from the SessionStart hook, the same carrier the panel path uses.
+if ($handoff -ne 0) {
+    $startJson = node (Join-Path $ControlDir 'tools/entry/claude-start.mjs') --folder $folder
+    $startPlan = if ($startJson) { $startJson | ConvertFrom-Json } else { $null }
+
+    if ($startPlan -and $startPlan.ok) {
+        Note $startPlan.reason
+        # -ArgumentList rejects an empty array, and "no arguments" is a real plan here (no bridge).
+        $spawn = @{ FilePath = $startPlan.exe; WorkingDirectory = $startPlan.cwd }
+        if ($startPlan.args -and @($startPlan.args).Count -gt 0) { $spawn.ArgumentList = @($startPlan.args) }
+        Start-Process @spawn
+        node $Cli handoff --folder $folder --timeout 90000
+        $handoff = $LASTEXITCODE
+    }
+    elseif ($startPlan -and $startPlan.reason) {
+        Note $startPlan.reason
+    }
+}
+
+# --- 8. Prove it, then get out of the way ------------------------------------
 Write-Host ''
 if ($handoff -eq 0) {
     Good "$($result.action) #$($result.issue) - $($result.title)"
@@ -249,8 +276,8 @@ if ($handoff -eq 0) {
     exit 0
 }
 
-Warn "#$($result.issue) is prepared and the window is open, but Claude has not taken it up yet."
-Note 'Press Ctrl+Esc in that window. The brief is on disk and the session will pick it up.'
+Warn "#$($result.issue) is prepared and the editor is open, but no session took the launch up."
+Note 'Do this: press Ctrl+Esc in that window. The brief is on disk and the session will pick it up.'
 Note "account of this run: $LogFile"
 Hold-Window
 exit 5
