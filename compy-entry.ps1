@@ -67,11 +67,32 @@ $OPEN_URI = 'vscode://anthropic.claude-code/open'
 $LogFile = Join-Path $env:LOCALAPPDATA ('CompyEntry\logs\launch-{0}.log' -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
 $Cli = Join-Path $ControlDir 'tools/entry/cli.mjs'
 
-function Note($t) { Write-Host "  $t" -ForegroundColor DarkGray }
-function Bad($t) { Write-Host "  $t" -ForegroundColor Red }
-function Good($t) { Write-Host "  $t" -ForegroundColor Green }
-function Warn($t) { Write-Host "  $t" -ForegroundColor Yellow }
-function Head($t) { Write-Host ''; Write-Host "  $t" -ForegroundColor Cyan }
+# The account of a run has to include the part where it went wrong. launch.mjs writes the check table
+# into $LogFile and stops there, so everything after it -- the editor, the two waits, the fallback,
+# the verdict -- was console-only, and a successful launch closes its window (guard 13). Scoring
+# journey 5 of the acceptance run proved the cost: the log ended at "launch token written" while the
+# journey ran on for another 18s. §8's refusal cites this file as "the account of this run"; it must
+# not stop before the failure it is cited for.
+#
+# Buffered until the file exists, which is launch.mjs's doing: a run that ends at the picker still
+# writes nothing at all, and that is a property, not an accident.
+$script:Journey = [System.Collections.Generic.List[string]]::new()
+function Write-Journey($t) {
+    $script:Journey.Add(('{0}   {1}' -f (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ'), $t))
+    if (-not (Test-Path -LiteralPath $LogFile)) { return }
+    # Losing the account is a bad day; failing the launch over it is a worse one.
+    try {
+        Add-Content -LiteralPath $LogFile -Value $script:Journey.ToArray() -Encoding utf8
+        $script:Journey.Clear()
+    }
+    catch { }
+}
+
+function Note($t) { Write-Host "  $t" -ForegroundColor DarkGray; Write-Journey $t }
+function Bad($t) { Write-Host "  $t" -ForegroundColor Red; Write-Journey $t }
+function Good($t) { Write-Host "  $t" -ForegroundColor Green; Write-Journey $t }
+function Warn($t) { Write-Host "  $t" -ForegroundColor Yellow; Write-Journey $t }
+function Head($t) { Write-Host ''; Write-Host "  $t" -ForegroundColor Cyan; Write-Journey $t }
 
 # Only trouble holds the window. A launch that worked has nothing left to say, and a window Kuya has
 # to close is a chore this entrypoint exists to delete.
@@ -262,6 +283,8 @@ if ($LASTEXITCODE -ne 0) {
 # gets the first turn, and only the silence after it justifies the URI.
 node $Cli handoff --folder $folder --timeout 15000
 $handoff = $LASTEXITCODE
+# Silent on the console -- node already said it there. The log is the half that outlives the window.
+Write-Journey ('restored panel: {0}' -f $(if ($handoff -eq 0) { 'took the launch up' } else { 'nothing in 15s' }))
 
 # --- 7. Ask only the window that had nothing to restore ----------------------
 # No prompt rides on the URI: prompt= only PRE-FILLS the box, and a prefilled box is still something
@@ -276,6 +299,7 @@ if ($handoff -ne 0) {
     Start-Process $OPEN_URI
     node $Cli handoff --folder $folder --timeout 45000
     $handoff = $LASTEXITCODE
+    Write-Journey ('open-URI: {0}' -f $(if ($handoff -eq 0) { 'a session took the launch up' } else { 'nothing in 45s' }))
 }
 
 # --- 7b. ...then start the session in the folder itself ----------------------
@@ -294,6 +318,7 @@ if ($handoff -ne 0) {
         Start-Process @spawn
         node $Cli handoff --folder $folder --timeout 90000
         $handoff = $LASTEXITCODE
+        Write-Journey ('CLI in the folder: {0}' -f $(if ($handoff -eq 0) { 'a session took the launch up' } else { 'nothing in 90s' }))
     }
     elseif ($startPlan -and $startPlan.reason) {
         Note $startPlan.reason
