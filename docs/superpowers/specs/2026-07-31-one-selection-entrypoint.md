@@ -61,7 +61,12 @@ owner closes. The fallback is what makes the journey finish anyway, and `--ide` 
 live bridge names the target folder.
 
 **Workspace Trust.** The extension declares `capabilities.untrustedWorkspaces.supported = false`, so
-it is disabled in any untrusted folder — and every freshly created worktree is untrusted. VS Code's
+it is disabled in any untrusted folder. Whether a *freshly created worktree* is untrusted was **not**
+established: the probe that showed the extension inert was created under `%LOCALAPPDATA%\Temp`, not
+under `C:\Users\Kuya\code`, and VS Code can inherit trust from an ancestor — so the measurement
+proves the scratch case and says nothing about a new folder beside the others in the code root. Treat
+it as a possibility to disclose, not a certainty to design around, until the real `code`-root path is
+measured in the sandbox journey. VS Code's
 trusted-folder store could not be located on this machine (absent from `globalStorage/state.vscdb`,
 `.backup`, `storage.json`, and the workspace state DB), so trust cannot be *detected* and must never
 be *written*. The launcher discloses in one line and continues; the trust prompt is a legitimate
@@ -85,13 +90,39 @@ The launcher now writes the intended window into `.claude/settings.local.json` (
 documented per-machine layer), and only ever a launcher-owned one. Ownership is proved by a sidecar
 under `%LOCALAPPDATA%\CompyEntry\tiers\` recording the exact content hash last written:
 
-- no local file, no sidecar → write it, disclose one line;
-- file matches its sidecar hash → rewrite freely (ours);
-- file exists with no sidecar, or its hash differs → **foreign: refuse, never overwrite**;
-- anything above the local layer (process env) disagreeing → refuse, as before.
+Ownership is proved three ways, each giving up strictly less than the one above it:
 
-Establishment happens only after the verdict PASSes, and the verdict is re-taken afterwards, so a
-launch cannot manufacture its own PASS.
+- **the exact bytes recorded** — the sidecar hash matches the file. The usual case.
+- **the window recorded**, in a file holding nothing but launcher-written material. `writeOverlay`
+  rewrites this same file after `establishTier` to merge the marked session-root assert, which changes
+  the bytes and never the window; byte equality alone therefore called the launcher's own folder
+  foreign after every launch that installed the assert.
+- **no window at all**, in a file holding nothing but launcher-written material — a pre-sidecar folder
+  (overlay-only, written before tier records existed) or an empty stub. It configures nothing, so
+  adopting it takes nothing from anybody.
+
+"Launcher-written material" is exact: `env.CLAUDE_CODE_AUTO_COMPACT_WINDOW`, and `hooks.SessionStart`
+groups carrying the assert marker. One key of the owner's own — any other env var, any unmarked hook,
+any other top-level key — and none of the three clauses apply.
+
+What none of them give up: **a window the launcher did not record is the owner's own pin.** Refuse,
+never overwrite, not even to reach a PASS. And the tracked `settings.json` must be *readable* before
+any of this: absent and unreadable are different facts, and establishing a tier over settings that
+could not be parsed is the same mistake aimed at the tracked layer.
+
+Both writes go through temp+rename, and the sidecar is re-stamped after the overlay writes, so the
+exact-bytes proof stays primary instead of degrading to the fallback on every folder.
+
+**Sequence.** The `settings.window` row is a failing check whenever the intended tier is absent or
+mismatched, so "establish only after the verdict PASSes" could never fire — the first verdict cannot
+pass, and the write that would fix it never happens. That is the first-launch deadlock #21 closed,
+one layer along. The real order is: full preliminary measurement; the tier row is permitted to pass
+*while establishing* and only for a specifically launcher-repairable tier defect, every other
+non-repairable safety check still holding; write the owned local tier; then re-resolve the effective
+window from disk and refuse if the launch did not actually get it.
+
+That last step is a re-read of the window, not a second full preflight — stated plainly here because
+the earlier wording claimed a re-taken verdict that the code does not perform.
 
 ## 4. The launch brief
 
