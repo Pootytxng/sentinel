@@ -151,17 +151,18 @@ export function verifyHooks({ dir, home = homedir(), env = process.env, canonica
     parts.push(
       `${count(inside.length)} in ${dir}: ${names(inside)}. .claude/hooks/ is tracked now, so a branch ` +
         `that carries this commit carries its hooks — this folder is on an older commit, and merging to ` +
-        `main does not reach into it. Run the launcher with --repair to copy the canonical set from the ` +
-        `control folder, or bring the folder forward (merge, rebase, or recreate it from the new main).`,
+        `main does not reach into it. The launcher restores the canonical set by itself when this is the ` +
+        `only thing wrong; bringing the folder forward (merge, rebase, or recreate it from the new main) ` +
+        `is the durable fix.`,
     );
   }
   if (foreign.length > 0) {
     parts.push(
       `${count(foreign.length)}, and ${foreign.length === 1 ? "it is" : "they are"} registered by absolute ` +
-        `path from outside ${dir}: ${foreign.map((m) => m.file).join(", ")}. --repair cannot reach that — it ` +
-        `writes into ${join(dir, HOOKS_SUBDIR)}, which is not where the registration points, and this is not ` +
-        `the launcher's own overlay (no "${ASSERT_HOOK_MARKER}" marker). Remove that registration from the ` +
-        `settings file that adds it, or restore the file it names.`,
+        `path from outside ${dir}: ${foreign.map((m) => m.file).join(", ")}. The launcher can only restore ` +
+        `hooks that belong to this folder (${join(dir, HOOKS_SUBDIR)}), which is not where that registration ` +
+        `points, and it is not the launcher's own overlay either (no "${ASSERT_HOOK_MARKER}" marker). Remove ` +
+        `that registration from the settings file that adds it, or restore the file it names.`,
     );
   }
 

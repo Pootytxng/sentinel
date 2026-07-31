@@ -84,6 +84,43 @@ export function selectTask(items, { issue = null, self = { lane: "Claude Code" }
 const mk = (name, expected, actual, ok, remediation = null, note = null) => ({ name, expected, actual, ok, remediation, note });
 
 /**
+ * What Kuya is told FIRST when several checks fail.
+ *
+ * A refusal prints one "Do this:" line, and until this list existed the winner was whichever check
+ * happened to be pushed earliest — an implementation detail deciding what the owner reads. The order
+ * below is a judgement instead: the root cause before its symptoms, work that could be lost before
+ * anything cosmetic, and the checks the launcher settles by itself LAST, because a line about them
+ * is never the reason a launch stopped.
+ *
+ * Every check name must appear here (`refusal-order.test.mjs` fails if one does not), so a check
+ * added later cannot land at an arbitrary position by accident.
+ */
+export const REMEDIATION_ORDER = [
+  "board.reachable", // nothing below is trustworthy if the ledger never answered
+  "task.status", // owner territory: Blocked / Needs Kuya
+  "task.gate",
+  "task.claim", // another writer holds it
+  "folder.writer",
+  "processes", // something live is in there right now
+  "git.clean", // work that can be lost outranks every convenience below
+  "git.branchElsewhere",
+  "git.commonDir",
+  "git.branch",
+  "field.canonical",
+  "base.pinned",
+  "folder.exists",
+  "settings.window",
+  "settings.subagentModel",
+  "board.nextAction",
+  "hooks.present", // the launcher repairs this itself when it is the only thing wrong
+];
+
+const remediationRank = (name) => {
+  const i = REMEDIATION_ORDER.indexOf(name);
+  return i === -1 ? REMEDIATION_ORDER.length : i;
+};
+
+/**
  * @returns {{verdict: "PASS"|"REFUSE", checks: Array, remediation: string[], actions: string[], takeoverDraft: string|null}}
  */
 export function reconcile(facts) {
@@ -351,7 +388,11 @@ export function reconcile(facts) {
     checks,
     actions,
     takeoverDraft,
-    remediation: failed.map((c) => c.remediation).filter(Boolean),
+    // Ranked, not pushed: the first entry is the one the owner sees on screen.
+    remediation: [...failed]
+      .sort((a, b) => remediationRank(a.name) - remediationRank(b.name))
+      .map((c) => c.remediation)
+      .filter(Boolean),
   };
 }
 

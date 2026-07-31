@@ -216,7 +216,18 @@ first one hid the second:
    on Kuya's screen. `output-encoding.test.mjs` puts code page 850 on a real console and proves the
    fix repairs it.
 
-Honest limits: the open-URI cannot be aimed at a specific window, so the launcher waits for a session
+A later review found two more, both in what a refusal *says* and one in a repair that never ran:
+the single "Do this:" line was chosen by the order checks happen to be pushed in, so a launch could
+lead with the hook set the launcher repairs itself and bury the owner gate only Kuya can settle — and
+that hooks line told him to "run the launcher with --repair", the exact chore outcome 6 deletes.
+`preflight.mjs` now ranks remediations explicitly (self-repairing checks last, unsaved work high),
+no remediation names a flag, a multi-failure refusal says how many, and `refusal-order.test.mjs`
+fails if a new check has no rank. The same guard caught `repairHooksIfSafe` keying off `check.id`
+when checks carry `name`: the automatic hook repair had never once fired.
+
+Honest limits: the restored-panel grace is a tuned 15s, so a panel slower than that can still be
+followed by the URI and become a second session on one claim (ordering is guarded; the timeout is a
+constant); the open-URI cannot be aimed at a specific window, so the launcher waits for a session
 to claim the token rather than assuming the right one appeared; the conflicting-writer refusal is
 covered by `preflight.test.mjs` and a pre-merge live proof rather than a fresh live board conflict;
 and a fully cold "no VS Code running at all" start cannot be proven from inside a VS Code session.

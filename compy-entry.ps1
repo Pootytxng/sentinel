@@ -329,8 +329,16 @@ if ($launchCode -ne 0) {
         Bad "#$Issue was not started, and nothing was written."
     }
     if ($result -and $result.reason) { Note $result.reason }
-    $next = if ($result -and $result.remediation) { @($result.remediation)[0] } else { $null }
-    if ($next) { Write-Host ''; Write-Host "  Do this: $next" }
+    # One "Do this:" is the glance; the count is what stops it reading as the whole story when it
+    # is one of several. launch.mjs ranks them, so the first is the one to settle first.
+    # @() around the whole assignment: a one-element array unrolls to a bare string on the way out
+    # of an if-block, and then $rem[0] indexes a CHARACTER — "Do this: s".
+    $rem = @(if ($result -and $result.remediation) { $result.remediation } else { @() })
+    if ($rem.Count -gt 0) {
+        Write-Host ''
+        if ($rem.Count -gt 1) { Note "$($rem.Count) checks need settling — this is the one to start with" }
+        Write-Host "  Do this: $($rem[0])"
+    }
     Write-Host ''
     # And the log is only promised when it exists. On the quiet path the terminal copy is suppressed,
     # so pointing at a file that was never written would leave a refusal with no account of itself at
