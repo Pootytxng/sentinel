@@ -380,10 +380,10 @@ describe("edge cases (spec §7)", () => {
 });
 
 describe("selectTask", () => {
-  // Rewritten 2026-07-30 (owner addendum on #18). This block used to assert that one Ready task
-  // selects itself — which is exactly how the shortcut skipped Kuya's own Active #18 and silently
-  // launched #13. Without an explicit issue, selectTask now returns a CHOICE and never a task.
-  // The menu's shape and its recommendation are guarded in select.test.mjs.
+  // Rewritten 2026-07-30 (owner addendum on #18), narrowed 2026-07-31 (#23). It once asserted that
+  // one Ready task selects itself — exactly how the shortcut skipped Kuya's own Active #18 and
+  // silently launched #13. Now: READY work is only ever a choice, and a task that is already OURS,
+  // Active and claimed resumes with no question. Menu shape and reasons live in select.test.mjs.
   const items = [
     { number: 13, status: "Ready", lane: "Codex", gate: "None" },
     { number: 14, status: "Needs Kuya", lane: "Kuya", gate: "Kuya" },
@@ -393,30 +393,30 @@ describe("selectTask", () => {
   it("no startable task → says so, and never invents work", () => {
     const r = selectTask([{ number: 14, status: "Needs Kuya", gate: "Kuya" }], {});
     expect(r.kind).toBe("none");
-    expect(r.reason).toMatch(/no .*ready/i);
+    expect(r.reason).toMatch(/nothing is available|no .*ready/i);
   });
 
   it("several Ready tasks → a numbered choice", () => {
     const r = selectTask([...items, { number: 19, status: "Ready", lane: "Claude Code", gate: "None" }], {});
     expect(r.kind).toBe("choice");
-    expect(r.options.map((o) => o.number)).toEqual([13, 19]);
+    expect(r.options.map((o) => o.number)).toEqual([19]); // #13 is Codex's — offered to Codex, not to us
+    expect(r.unavailable.map((o) => o.number)).toContain(13);
     expect(r.task).toBeUndefined();
   });
 
-  it("exactly one Ready task → still a choice: the shortcut asks, it does not pick", () => {
-    const r = selectTask(items, {});
+  it("exactly one Ready task in our lane → still a choice: the shortcut asks, it does not pick", () => {
+    const r = selectTask([...items, { number: 19, status: "Ready", lane: "Claude Code", gate: "None" }], { self: { lane: "Claude Code" } });
     expect(r.kind).toBe("choice");
     expect(r.task).toBeUndefined();
-    expect(r.options.map((o) => o.number)).toEqual([13]);
-    expect(r.recommended).toBe(null);
+    expect(r.options.map((o) => o.number)).toEqual([19]);
   });
 
-  it("our own unexpired Active outranks an unrelated Ready task", () => {
+  it("our own unexpired Active resumes itself — the claim on the board IS the decision", () => {
     const withMine = [...items, { number: 18, status: "Active", lane: "Claude Code", gate: "None", claimExpires: "2026-07-31" }];
     const r = selectTask(withMine, { self: { lane: "Claude Code" }, now: new Date("2026-07-30T23:30:00Z") });
-    expect(r.kind).toBe("choice");
-    expect(r.recommended).toBe(18);
-    expect(r.options[0].number).toBe(18);
+    expect(r.kind).toBe("task");
+    expect(r.auto).toBe(true);
+    expect(r.task.number).toBe(18);
   });
 
   it("an explicit issue is honoured even when unstartable, so the CHECKS explain why", () => {

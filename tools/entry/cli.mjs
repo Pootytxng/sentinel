@@ -93,6 +93,17 @@ export async function cmdChoose({
   }
 
   const menu = buildMenu(theBoard.items, { self, now, policy: policy ?? loadPolicy() });
+
+  // One task, already ours, still claimed: there is no question to ask. Say what is happening and
+  // why in one line — resuming without a word would be the same silence, just pointed the right way.
+  if (menu.autoResume !== null) {
+    const o = menu.options.find((x) => x.number === menu.autoResume);
+    say(`\n  ${C.bold}Resuming #${o.number}${C.off} — ${o.label}`);
+    say(`  ${C.dim}it is still yours and still claimed, so there is nothing to choose. Context ${o.contextLabel}.${C.off}\n`);
+    out(JSON.stringify({ issue: o.number, action: "Resume", auto: true, title: o.title, window: o.window, marathon: o.marathon, contextLabel: o.contextLabel }));
+    return 0;
+  }
+
   if (menu.options.length === 0) {
     say(renderMenu(menu));
     say("  Nothing is Ready and nothing you own is resumable — there is nothing to start.\n");
@@ -107,7 +118,7 @@ export async function cmdChoose({
 
   const o = chosen.option;
   say(`\n  ${C.bold}${o.action} #${o.number}${C.off} — ${o.label}   ${C.dim}context ${o.contextLabel}${C.off}\n`);
-  out(JSON.stringify({ issue: o.number, action: o.action, title: o.title, window: o.window, marathon: o.marathon, contextLabel: o.contextLabel }));
+  out(JSON.stringify({ issue: o.number, action: o.action, auto: false, title: o.title, window: o.window, marathon: o.marathon, contextLabel: o.contextLabel }));
   return 0;
 }
 

@@ -96,9 +96,13 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   if (!board.reachable) throw new Refused({ verdict: "REFUSE", reason: `Work Control unreachable: ${board.error}` });
 
   const picked = selectTask(board.items, { issue, self, policy: loadPolicy() });
-  if (picked.kind !== "task") throw new Refused({ verdict: picked.kind.toUpperCase(), reason: picked.reason, options: picked.options ?? [], recommended: picked.recommended ?? null });
+  if (picked.kind !== "task") {
+    throw new Refused({ verdict: picked.kind.toUpperCase(), reason: picked.reason, options: picked.options ?? [], unavailable: picked.unavailable ?? [] });
+  }
 
   const task = picked.task;
+  // No issue was named and one was already ours — say which, and why nobody was asked (#23).
+  if (picked.auto) say(`  resuming #${task.number} — it is already yours and still claimed, so there was nothing to choose`);
   // STAGE 1 — the preliminary verdict. Read-only: no fetch, no writes, and it already names the
   // exact commit an absent worktree would be created from.
   const { facts, target, base } = gatherFacts({ issue: task.number, task, board, self });
