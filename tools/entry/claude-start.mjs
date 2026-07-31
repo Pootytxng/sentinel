@@ -23,6 +23,16 @@
 //
 // `--ide` is added only when a live bridge names this exact folder, because a flag that means
 // "connect to the editor" is a lie when there is no editor to connect to.
+//
+// And one refusal that had to be learned the expensive way: this spawns a TERMINAL program, so it
+// needs a terminal. When the launcher itself is running without a console — anything that started it
+// headlessly, an automation host, a scheduled task — the spawned CLI inherits that nothing, draws
+// into a buffer with no screen behind it, and never comes up. The launcher then waits out its whole
+// budget on a session that cannot arrive, prints advice about a window Kuya cannot find, and leaves
+// the process running. Measured here during the acceptance run: the console the Desktop shortcut
+// creates reports a real terminal on the launcher's inherited error stream; the headless case reports
+// none. So the console is a fact like the others, and a launcher with no console says so and stops
+// instead of leaking a process nobody can see.
 
 import { existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
@@ -60,7 +70,7 @@ export function resolveClaudeCli({ exists = existsSync, env = process.env, home 
  * Pure over facts so every refusal below is a guard rather than a comment. Returns the exact
  * executable, working directory and argument list, or a plain reason there is nothing to spawn.
  */
-export function planClaudeStart({ folder, exe, folderExists, bridge }) {
+export function planClaudeStart({ folder, exe, folderExists, bridge, terminal }) {
   if (!folder) {
     return { ok: false, reason: "no folder was given, and a session started in the wrong root is worse than no session." };
   }
@@ -72,6 +82,14 @@ export function planClaudeStart({ folder, exe, folderExists, bridge }) {
   }
   if (!folderExists) {
     return { ok: false, reason: `${folder} is not there any more, so there is nothing to start a session in.` };
+  }
+  // Last, because the three above name a different problem entirely and reading this one first would
+  // send Kuya looking at his terminal when the real trouble is a missing folder.
+  if (!terminal) {
+    return {
+      ok: false,
+      reason: "this launcher is not running in a window that can show a Claude session, so starting one here would leave it running where nobody can see or type into it.",
+    };
   }
 
   const cwd = canonicalizePath(folder);
@@ -87,14 +105,29 @@ export function planClaudeStart({ folder, exe, folderExists, bridge }) {
   };
 }
 
-/** The same plan, with the facts read off this machine. Reads only; spawning is the launcher's job. */
-export function planFromMachine({ folder, exists = existsSync, env = process.env, home = homedir(), bridge = null } = {}) {
+/**
+ * The same plan, with the facts read off this machine. Reads only; spawning is the launcher's job.
+ *
+ * The console is read off the ERROR stream on purpose: the launcher captures this program's output
+ * into a variable to parse the plan, so the output stream is a pipe on every real run and would
+ * report "no terminal" even from the Desktop shortcut. The error stream is the one the launcher
+ * leaves attached to the window it was started in, which makes it the honest witness.
+ */
+export function planFromMachine({
+  folder,
+  exists = existsSync,
+  env = process.env,
+  home = homedir(),
+  bridge = null,
+  terminal = process.stderr.isTTY === true,
+} = {}) {
   const live = bridge ?? bridgeState({ folder }).ok;
   return planClaudeStart({
     folder,
     exe: resolveClaudeCli({ exists, env, home }),
     folderExists: Boolean(folder) && exists(folder),
     bridge: live,
+    terminal,
   });
 }
 

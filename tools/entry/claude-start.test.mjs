@@ -14,7 +14,7 @@ const HOME = "C:\\Users\\Kuya";
 const INSTALLED = join(HOME, ".local", "bin", CLI_NAMES[0]);
 const FOLDER = "C:\\Users\\Kuya\\code\\sentinel-marathon";
 
-const ok = { folder: FOLDER, exe: INSTALLED, folderExists: true, bridge: true };
+const ok = { folder: FOLDER, exe: INSTALLED, folderExists: true, bridge: true, terminal: true };
 
 describe("planClaudeStart", () => {
   it("starts in the folder itself — the cwd IS the project root, never a guessed window", () => {
@@ -56,8 +56,30 @@ describe("planClaudeStart", () => {
     expect(p.exe).toBeUndefined();
   });
 
+  // Observed on this machine during the acceptance run: the launcher reached this fallback from a
+  // shell with no console of its own, spawned the CLI, and then waited 90s for a session that could
+  // never arrive — the TUI had been handed a window with no screen buffer to draw on. It ended with
+  // advice Kuya could not act on ("press Ctrl+Esc in that window"), a terminal held open, and an
+  // orphaned claude.exe. A spawn that cannot be seen is not a handoff; it is a leak.
+  it("refuses to spawn a terminal UI into a console that cannot show it", () => {
+    const p = planClaudeStart({ ...ok, terminal: false });
+    expect(p.ok).toBe(false);
+    expect(p.reason).toMatch(/window|terminal|console/i);
+    // Plain-language, per the owner-facing output rule: no isTTY, no stream names, no jargon.
+    expect(p.reason).not.toMatch(/isTTY|stderr|stdout|file descriptor/i);
+  });
+
+  it("checks the folder and the CLI first — the console is the last thing that can be wrong", () => {
+    // Ordering matters for the message Kuya reads: a missing worktree is a different problem from a
+    // console problem, and reporting the console first would send him looking in the wrong place.
+    expect(planClaudeStart({ ...ok, terminal: false, folder: "" }).reason).toMatch(/wrong root/i);
+    expect(planClaudeStart({ ...ok, terminal: false, exe: null }).reason).toMatch(/not installed/i);
+    expect(planClaudeStart({ ...ok, terminal: false, folderExists: false }).reason).toContain(FOLDER);
+  });
+
   it("carries a reason on every path, because the launcher prints one either way", () => {
-    for (const state of [ok, { ...ok, bridge: false }, { ...ok, exe: null }, { ...ok, folderExists: false }]) {
+    const states = [ok, { ...ok, bridge: false }, { ...ok, exe: null }, { ...ok, folderExists: false }, { ...ok, terminal: false }];
+    for (const state of states) {
       expect(planClaudeStart(state).reason.length).toBeGreaterThan(10);
     }
   });
@@ -90,15 +112,23 @@ describe("resolveClaudeCli", () => {
 
 describe("planFromMachine", () => {
   it("--no-ide is honoured without consulting any lock file", () => {
-    const p = planFromMachine({ folder: FOLDER, exists: () => true, env: {}, home: HOME, bridge: false });
+    const p = planFromMachine({ folder: FOLDER, exists: () => true, env: {}, home: HOME, bridge: false, terminal: true });
     expect(p.ok).toBe(true);
     expect(p.args).toEqual([]);
   });
 
   it("refuses when the folder does not exist, before any bridge is read", () => {
-    const p = planFromMachine({ folder: "C:\\nope", exists: (x) => x === INSTALLED, env: {}, home: HOME, bridge: false });
+    const p = planFromMachine({ folder: "C:\\nope", exists: (x) => x === INSTALLED, env: {}, home: HOME, bridge: false, terminal: true });
     expect(p.ok).toBe(false);
     expect(p.reason).toMatch(/not there/i);
+  });
+
+  it("reads the console from the running process when nobody says otherwise", () => {
+    // Under vitest stderr is a pipe, so the default IS the refusing one here — which is exactly the
+    // shape of the failure this guards: a launcher running without a console of its own.
+    const p = planFromMachine({ folder: FOLDER, exists: () => true, env: {}, home: HOME, bridge: false });
+    expect(p.ok).toBe(false);
+    expect(p.reason).toMatch(/window|terminal|console/i);
   });
 
   it("finds the CLI actually installed on this machine", () => {
