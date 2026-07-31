@@ -23,8 +23,31 @@ import { join } from "node:path";
  */
 export const DOCUMENTED_FALLBACK_WINDOW = 150_000;
 
-/** Native auto-compaction fires at ~92-95% of the window (Anthropic default). */
-export const NATIVE_COMPACT_FRACTION = [0.92, 0.95];
+/**
+ * Where native auto-compaction actually fires — a roughly FIXED reserve below the window, not a
+ * fraction of it (bug→guard, issue #19; guarded by scripts/compaction-trigger-guard.test.mjs).
+ *
+ * This used to read `NATIVE_COMPACT_FRACTION = [0.92, 0.95]`, and the docs restated it as
+ * "≈276-285k at 300000, ~140k at 150000". Measurement of 13 real `compact_boundary` records
+ * disproved both: compaction fired at 268-270k under a 300000 window (0.894-0.900) and at
+ * 117-120k under 150000 (0.778-0.800). A single fraction cannot describe both; a fixed reserve can.
+ *
+ * The consequence is the whole point: because the reserve is fixed, it costs 21% of a 150000
+ * window but only 10% of a 300000 one, so doubling the window multiplies USABLE context by ~2.27.
+ */
+export const NATIVE_COMPACT_RESERVE = { min: 29_915, mean: 31_752, max: 33_302 };
+
+/**
+ * The band in which native auto-compaction is expected to fire for a given window.
+ * A larger reserve triggers EARLIER, so max-reserve gives the low end of the band.
+ */
+export function nativeCompactPoint(window) {
+  return {
+    min: window - NATIVE_COMPACT_RESERVE.max,
+    mean: window - NATIVE_COMPACT_RESERVE.mean,
+    max: window - NATIVE_COMPACT_RESERVE.min,
+  };
+}
 
 const ENV_KEY = "CLAUDE_CODE_AUTO_COMPACT_WINDOW";
 
@@ -80,7 +103,7 @@ export function loadProjectSettings(repoRoot) {
 /** Human-readable basis line for the report header, so a reader never has to guess the threshold. */
 export function describeWindow(resolved) {
   const k = (n) => `${Math.round(n / 1000)}k`;
-  const [lo, hi] = NATIVE_COMPACT_FRACTION;
+  const trigger = nativeCompactPoint(resolved.window);
   const basis =
     resolved.source === "env"
       ? `${ENV_KEY} in the environment`
@@ -90,7 +113,7 @@ export function describeWindow(resolved) {
   const ignoredNote = resolved.ignored.length
     ? ` · ignored invalid ${resolved.ignored.map((i) => `${i.from}="${i.value}"`).join(", ")}`
     : "";
-  return `${k(resolved.window)} (${basis}; native compaction fires ≈${k(resolved.window * lo)}-${k(resolved.window * hi)})${ignoredNote}`;
+  return `${k(resolved.window)} (${basis}; native compaction measured at ≈${k(trigger.min)}-${k(trigger.max)}, a fixed ~${k(NATIVE_COMPACT_RESERVE.mean)} reserve below the window)${ignoredNote}`;
 }
 
 /**

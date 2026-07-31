@@ -71,7 +71,7 @@ match these exactly or point back to this section rather than restate its own co
 |---|---|---|---|
 | Handoff target | 80–120k | Ideal working range (§3, unchanged) | this doc only |
 | Ceiling | 150k | "Avoid working above" (§3, unchanged) | this doc only |
-| `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | **300000 on `feat/user-feedback-lab-recovery` (§7 trial, provisional); 150000 elsewhere** | The one literal env-var value; native auto-compact fires at ~92–95% of it (≈276–285k at 300000, ~140k at 150000) | `.claude/settings.json` — the ONLY place this literal should be set. Project-level only; the global `~/.claude/settings.json` does not set it |
+| `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | **300000 on `feat/user-feedback-lab-recovery` (§7 trial, provisional); 150000 elsewhere** | The one literal env-var value; native auto-compact fires a **fixed ~32k reserve below** it — measured, not estimated: ≈269k at 300000, ≈118k at 150000 (§7 verdict). The old "~92–95%, ≈276–285k / ~140k" was an estimate measurement disproved | `.claude/settings.json` — the ONLY place this literal should be set. Project-level only; the global `~/.claude/settings.json` does not set it |
 | Advisor warn threshold | 85% of the window above, computed at runtime | When the Stop hook injects a persist-to-disk instruction | `.claude/hooks/context-size-advisor.mjs` — reads the env var, does not hardcode a copy |
 | Audit red-flag | the effective window above, **derived at runtime — no literal** | Sanity check only — should never be reached if auto-compact is working; a peak above the window means compaction failed to fire, not a target to approach. The report prints the resolved window + its source, so the basis is never guessed | `scripts/lib/compaction-window.mjs` (resolver + flag), consumed by `scripts/usage-audit.mjs`; guarded by `scripts/compaction-window-guard.test.mjs` |
 | Autopilot continuation cap | 2 | Hard code clamp (was: unenforced doc convention) on how many tasks autopilot chains in one session, so it can't manufacture a >150k context on its own | `.claude/hooks/stop-continue.mjs` (`MAX_CONTINUES`) |
@@ -134,7 +134,9 @@ than papered over:
 
 ## 7. The 300k window trial (2026-07-29, `feat/user-feedback-lab-recovery` only)
 
-**Status: PROVISIONAL CONTROLLED EXPERIMENT — not a proven optimum, not a new default.**
+**Status: DECIDED 2026-07-31 (issue #19) — KEEP, as a named non-default policy. See §7.1 for the
+verdict, the measured cost, and what still is not proven.** The text below records the experiment as
+it was designed; §7.1 is what it returned.
 `CLAUDE_CODE_AUTO_COMPACT_WINDOW` is `300000` in this branch's `.claude/settings.json` and `150000`
 everywhere else. Nothing about the trial makes 300000 correct; it makes it *measured*. Work Control
 issue **#15**.
@@ -199,3 +201,70 @@ are untouched — a bigger window is not licence to run longer without persistin
   Left as-is: that section is already marked ⚠️ SUPERSEDED and defers to this file's §5 for the current
   number in the same sentence, and `docs/` is outside #15's claimed scope. This file stays the single
   reconciled home for the window value.
+
+### 7.1 Verdict — KEEP as a named non-default policy (issue #19, 2026-07-31)
+
+**Window provenance, proven four ways** — a trial that cannot prove its own window is what
+invalidated #14: env `CLAUDE_CODE_AUTO_COMPACT_WINDOW=300000` · this branch's `.claude/settings.json` `300000` ·
+`context-policy.json` grants 300000 to #15/#16/#19 with `default: 150000` · and **the behaviour
+itself** — compaction fired at 268–270k, which is impossible under a 150000 window. Provenance by
+measurement outranks provenance by configuration.
+
+| Measure | 150k baseline (§7) | 150k control B | **300k trial** |
+|---|---|---|---|
+| Compaction boundaries | 58 | 10 | **3** |
+| Duration | 18.8 h | 2.0 h | 15.9 h |
+| Boundaries / 100k output | 2.67 | 4.63 | **0.70** |
+| Output per compaction cycle | 36.8k | 20k | **108k** |
+| Peak observed request | ≈119k | 117k | **267k** |
+| First native compaction | — | 120,028 | **269,363** |
+| Re-reads after a boundary / 100k out | — | 18.5 | **1.4** |
+| Cache-read per turn | — | 91k | **158k** |
+| Cache-read per 100k output | — | 12.08M | **15.35M** |
+| Factual-drift regression | — | none | **none** |
+
+Control B is the #18 correction train (`sentinel-workflow`, 2026-07-30, 150000) — an independent
+second 150k sample, not a substitute for the preserved baseline.
+
+**The finding that decides it: the compaction reserve is fixed, not proportional.** ~32k is withheld
+whatever the window, so 150000 yields ~118k usable (79%) while 300000 yields ~269k (90%). Doubling
+the window multiplies *usable* context by **2.27x**, not 2.0x. Constants and guard:
+`scripts/lib/compaction-window.mjs` + `scripts/compaction-trigger-guard.test.mjs`.
+
+**What it buys:** 4–7x fewer boundaries per unit of output, ~13x fewer post-boundary re-reads, 3–5x
+more completed work per stage. Concretely, control B re-read one 26-page spec **15 times**; the trial
+re-read its worst file 3 times.
+
+**What it costs — stated because it is not free:** +27% cache-read per unit of output (15.35M vs
+12.08M per 100k). That decomposes cleanly: 1.74x more context carried per turn against 1.37x more
+output per turn. Cache-read is the #1 spend driver, so **300000 is more expensive per unit of work,
+not cheaper.** It buys coherence, not savings, and the rework it avoids is already netted out of that
+number.
+
+**Therefore KEEP, and explicitly NOT adopt.** `default` stays `150000`. 300000 is granted per issue
+in `tools/entry/context-policy.json`, each grant a recorded decision — which satisfies "no accidental
+global rollout" by construction, since a train can only get 300000 by being named. Qualifying shape:
+long single-context trains where one thread must hold design → implementation → verification. Short
+or mechanical trains gain nothing and pay the 27%.
+
+**Why not "adjust to a new measured target": no third window has been measured.** A 200000 or 250000
+recommendation would be an unmeasured claim, and the honest-measurement law forbids it. If a finer
+optimum is wanted it needs its own trial; the fixed-reserve model now makes that cheap to predict but
+prediction is not measurement.
+
+**Not proven, named rather than papered over:**
+
+- **Acceptance criterion 1 is unmet in form.** The measured session was not a fresh `#19` session: it
+  began 2026-07-30T11:23Z on #14, ran #18's design, and was resumed onto #19 after its 3 boundaries
+  had already occurred. The window is proven by behaviour, so the substance holds — but the ceremony
+  the criterion asked for did not happen, and the verdict rests on retrospective data.
+- **The two samples are not a controlled experiment.** They differ in work type as well as window.
+  The re-read and boundary mechanisms are causal and survive that; the +27% cost figure is
+  directional, not precise.
+- **Factual drift stays the one un-mechanized measure.** No regression was recorded in either arm,
+  but 3 boundaries is a small sample and "no drift observed" is weaker than "no drift occurred".
+- **The audit's peak-context flag judges every session against one window.** Sessions that ran at
+  150000 are measured against 300000, so a 150k session peaking at 214k is invisible. That is a false
+  *negative*, not a false warning — the trial session itself (267k) is correctly unflagged, so
+  criterion 4 holds — but per-session window attribution (derivable from each session's own boundary
+  points) is a real follow-up, not done here.

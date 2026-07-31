@@ -107,8 +107,10 @@ describe("report basis line", () => {
   it("names the source so a reader never has to guess the threshold", () => {
     expect(describeWindow(at300k())).toContain("300k");
     expect(describeWindow(at300k())).toContain("in the environment");
-    // 92-95% of 300k
-    expect(describeWindow(at300k())).toMatch(/276k-285k/);
+    // Was `/276k-285k/` — the 92-95% fraction estimate, disproven by measurement in issue #19.
+    // A guard built on a disproven premise is replaced, not widened: the band below is the
+    // measured one (window minus a fixed ~32k reserve). See compaction-trigger-guard.test.mjs.
+    expect(describeWindow(at300k())).toMatch(/267k-270k/);
     expect(describeWindow(resolveCompactionWindow({}))).toContain("documented fallback");
     expect(describeWindow(resolveCompactionWindow({ env: { [ENV_KEY]: "oops" } }))).toContain('ignored invalid env="oops"');
   });
