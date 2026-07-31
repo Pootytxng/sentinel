@@ -156,7 +156,8 @@ export function refreshAndCreate({ facts, target, base = null, hostDir = HOST_DI
  */
 export function repairHooksIfSafe({ facts, verdict, controlDir, dryRun = false, canonicalDir = null }) {
   const failed = (verdict.checks ?? []).filter((c) => !c.ok);
-  if (failed.length !== 1 || failed[0].id !== "hooks.present") return { attempted: false, verdict, facts };
+  // `name`, not `id` — checks have never carried an id, so this path silently never ran.
+  if (failed.length !== 1 || failed[0].name !== "hooks.present") return { attempted: false, verdict, facts };
 
   const canonical = canonicalDir ?? join(controlDir ?? "", ".claude", "hooks");
   const plan = hookRepairPlan({ verify: facts.hooks, canonicalDir: canonical });

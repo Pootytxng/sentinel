@@ -101,7 +101,7 @@ describe("verification", () => {
   it("names the guard that is missing, because 'a hook is missing' is not actionable", () => {
     const r = verifyHooks({ dir: missingDir, home: join(root, "no-home") });
     expect(r.remediation).toContain("subagent-model-guard.mjs");
-    expect(r.remediation).toMatch(/--repair/);
+    expect(r.remediation).toMatch(/launcher restores the canonical set/);
   });
 
   it("passes when every registered hook exists", () => {
@@ -178,14 +178,14 @@ describe("a missing hook outside this folder is a different failure", () => {
     expect(r.missing).toHaveLength(1);
   });
 
-  it("does not claim the folder is behind, and rules --repair out instead of prescribing it", () => {
-    // The condition is "never send the owner to run a repair that cannot reach this" — not "never
-    // say the word". Saying so explicitly is the remedy doing its job, so the guard names the
-    // instruction it must not give, not the substring it happens to contain.
+  it("does not claim the folder is behind, and rules the automatic repair out instead of prescribing it", () => {
+    // The condition is "never send the owner to run a repair that cannot reach this" — and, since
+    // refusal-order.test.mjs, never to run anything at all. So the guard is that the text says the
+    // launcher CANNOT restore this one, without naming a flag Kuya would have to type.
     const r = foreignOnly();
-    expect(r.remediation).not.toMatch(/Run the launcher with --repair/);
+    expect(r.remediation).not.toMatch(/--repair/);
     expect(r.remediation).not.toMatch(/older commit/);
-    expect(r.remediation).toMatch(/--repair cannot reach/);
+    expect(r.remediation).toMatch(/can only restore hooks that belong to this folder/);
   });
 
   it("names the file and points at the settings that register it", () => {
@@ -194,9 +194,9 @@ describe("a missing hook outside this folder is a different failure", () => {
     expect(r.remediation).toMatch(/settings file/);
   });
 
-  it("keeps the --repair remedy when the missing hook does belong to this folder", () => {
+  it("keeps the automatic remedy when the missing hook does belong to this folder", () => {
     const r = verifyHooks({ dir: missingDir, home: join(root, "no-home") });
-    expect(r.remediation).toMatch(/--repair/);
+    expect(r.remediation).toMatch(/launcher restores the canonical set/);
   });
 
   it("gives both remedies when both kinds are missing at once", () => {
@@ -207,7 +207,7 @@ describe("a missing hook outside this folder is a different failure", () => {
     );
     const r = verifyHooks({ dir, home: join(root, "no-home") });
     expect(r.missing).toHaveLength(2);
-    expect(r.remediation).toMatch(/--repair/);
+    expect(r.remediation).toMatch(/launcher restores the canonical set/);
     expect(r.remediation).toMatch(/settings file/);
   });
 
@@ -297,7 +297,7 @@ describe("the launcher's own leftover is not the folder's defect", () => {
       home: join(root, "no-home"),
     });
     expect(r.ok).toBe(false);
-    expect(r.remediation).toMatch(/--repair/);
+    expect(r.remediation).toMatch(/launcher restores the canonical set/);
   });
 
   it("still refuses for the real miss when a leftover sits beside it", () => {
@@ -312,7 +312,7 @@ describe("the launcher's own leftover is not the folder's defect", () => {
     expect(r.ok).toBe(false);
     expect(r.missing).toHaveLength(1);
     expect(r.stale).toHaveLength(1);
-    expect(r.remediation).toMatch(/--repair/);
+    expect(r.remediation).toMatch(/launcher restores the canonical set/);
   });
 });
 
