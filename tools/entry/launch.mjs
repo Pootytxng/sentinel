@@ -10,7 +10,7 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { CODE_ROOT, gatherFacts, loadPolicy, readBoard, readProjectIds } from "./gather.mjs";
+import { CREATE_BASE_REF, HOST_DIR, gatherFacts, loadPolicy, readBoard, readProjectIds } from "./gather.mjs";
 import { reconcile, selectTask } from "./preflight.mjs";
 import { contextLabel } from "./select.mjs";
 import { postClaim, planRenew, execPlan } from "./claim.mjs";
@@ -27,13 +27,16 @@ class Refused extends Error {
   }
 }
 
-function createWorktree({ path, branch, hostDir }) {
+// The ref is NOT spelled out here. Preflight verified this train's settings against the snapshot
+// named by CREATE_BASE_REF; creating from a different one would mean the folder that opens is not
+// the folder that was checked. One constant, both sites (#21).
+function createWorktree({ path, branch, hostDir = HOST_DIR, ref = CREATE_BASE_REF }) {
   if (existsSync(path)) throw new Error(`Refusing to create over an existing path: ${path}`);
   say(`  creating worktree ${path} on ${branch}`);
   git(hostDir, ["fetch", "origin", "--quiet"]);
-  const base = git(hostDir, ["rev-parse", "--short", "origin/main"]);
-  say(`  base: origin/main (${base})`);
-  git(hostDir, ["worktree", "add", "-b", branch, path, "origin/main"]);
+  const base = git(hostDir, ["rev-parse", "--short", ref]);
+  say(`  base: ${ref} (${base})`);
+  git(hostDir, ["worktree", "add", "-b", branch, path, ref]);
   return base;
 }
 
@@ -53,20 +56,22 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   }
   if (!target) throw new Refused({ verdict: "REFUSE", reason: "No target folder resolved from the board field." });
 
-  // Say the window out loud before anything is written. A 300k trial that looks like a standard
-  // 150k launch is the confusion the addendum on #18 closed; the label is not decoration.
+  // Say the window out loud before anything is written. A marathon-tier launch that looks like a
+  // standard one is the confusion the addendum on #18 closed; the label is not decoration. The tier
+  // is accepted (#19), so the line states which tier it is and that it is not the default — it no
+  // longer describes an experiment.
   const intended = facts.window.intended;
-  const label = contextLabel(intended.window, { trial: intended.trial });
-  say(`  context window: ${label}${intended.trial ? "  (trial — not accepted)" : ""}`);
+  const label = contextLabel(intended.window, { marathon: intended.marathon });
+  say(`  context window: ${label}${intended.marathon ? "  (accepted tier, scoped to this issue — not the default)" : ""}`);
 
   if (dryRun) {
     say("  dry run: verdict PASS, stopping before any write.");
-    return { dryRun: true, issue: task.number, folder: target.path, branch: target.branch, window: intended.window, contextLabel: label, trial: intended.trial, verdict };
+    return { dryRun: true, issue: task.number, folder: target.path, branch: target.branch, window: intended.window, contextLabel: label, marathon: intended.marathon, verdict };
   }
 
   // 1. worktree (only when the verdict said it was safely creatable)
   if (verdict.actions.includes("create-worktree")) {
-    createWorktree({ path: target.path, branch: target.branch, hostDir: `${CODE_ROOT}\\sentinel` });
+    createWorktree({ path: target.path, branch: target.branch });
   }
 
   // 2. claim -- refuses on its own if the verdict is not PASS
@@ -122,7 +127,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     say("  --no-overlay: the in-session root assert will NOT run for this launch");
   }
 
-  return { issue: task.number, folder: target.path, branch: target.branch, window: intended.window, contextLabel: label, trial: intended.trial, verdict };
+  return { issue: task.number, folder: target.path, branch: target.branch, window: intended.window, contextLabel: label, marathon: intended.marathon, verdict };
 }
 
 if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, "/")}`) {

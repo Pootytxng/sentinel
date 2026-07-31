@@ -225,13 +225,18 @@ export function reconcile(facts) {
   if (win) {
     const same = win.effective.window === win.intended.window;
     const configured = win.effective.configured !== false;
+    // A folder that does not exist yet was measured against the snapshot it will be created from,
+    // not against any folder on disk. The passing row says so — where a value came from is the
+    // whole point of this check, and a green row that hides its source is the drift it prevents.
+    const snapshot = win.effective.snapshot ?? null;
     checks.push(
       mk("settings.window", win.intended.window, win.effective.window, same && configured,
         same && configured
           ? null
           : !configured
-            ? `Not configured — ${win.effective.window} is the documented fallback, not a decision.`
-            : `Comes from ${win.effective.file}. Change it there, or route to the folder whose policy matches — do not adopt a different window to make the mismatch go away.`),
+            ? `Not configured${snapshot ? ` in ${snapshot}` : ""} — ${win.effective.window} is the documented fallback, not a decision.`
+            : `Comes from ${win.effective.file}. Change it there, or route to the folder whose policy matches — do not adopt a different window to make the mismatch go away.`,
+        same && configured && snapshot ? `from ${snapshot} — the folder does not exist yet, so this is the snapshot it will be created from` : null),
     );
   }
   if (subagentModel) {

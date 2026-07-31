@@ -13,7 +13,13 @@ import { inspectGitState } from "./git-state.mjs";
 import { verifyHooks } from "./hooks-verify.mjs";
 import { parseClaim, parseHandoff } from "./claim.mjs";
 import { inspectProcesses } from "./processes.mjs";
-import { intendedWindow, resolveSettings, resolveWindow } from "./settings-resolve.mjs";
+import {
+  intendedWindow,
+  resolveSettings,
+  resolveSettingsFromSnapshot,
+  resolveWindow,
+  resolveWindowFromSnapshot,
+} from "./settings-resolve.mjs";
 import { parseWorktreeField } from "./worktree-field.mjs";
 
 export const HERE = dirname(fileURLToPath(import.meta.url));
@@ -21,6 +27,10 @@ export const PROJECT = { number: 1, owner: "Pootytxng" };
 export const REPO = "Pootytxng/sentinel";
 export const CODE_ROOT = "C:\\Users\\Kuya\\code";
 export const EXPECTED_COMMON_DIR = "C:\\Users\\Kuya\\code\\sentinel\\.git";
+/** The checkout that owns the shared .git — every worktree is added from here. */
+export const HOST_DIR = join(CODE_ROOT, "sentinel");
+/** The commit a missing worktree is created from. launch.mjs creates from this exact ref. */
+export const CREATE_BASE_REF = "origin/main";
 
 const gh = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 
@@ -93,6 +103,21 @@ export function readProjectIds(itemId) {
 }
 
 /**
+ * Where a target's settings come from. An EXISTING folder answers for itself; a folder that does not
+ * exist yet answers with the snapshot it will be created from.
+ *
+ * Never the launcher's own directory (bug->guard, #21). `tools/entry/` configures nothing, so
+ * substituting it for an absent target reported the documented 150000 fallback as the future
+ * worktree's configuration — "expected 150000, actual 150000" that still refused, because an
+ * unconfigured coincidence is not a decision. That made a safely-creatable worktree impossible to
+ * create through the entrypoint. The launcher's settings were never the session's settings.
+ */
+export function settingsSourceFor(target, { exists, hostDir = HOST_DIR, ref = CREATE_BASE_REF } = {}) {
+  if (exists && target?.path) return { kind: "folder", dir: target.path };
+  return { kind: "snapshot", hostDir, ref };
+}
+
+/**
  * Everything `reconcile()` needs, measured.
  * @returns {{facts: object, target: {path, branch}|null, board: object}}
  */
@@ -110,9 +135,15 @@ export function gatherFacts({ issue, task, self = { lane: "Claude Code" }, now =
   const thread = readIssueThread(theTask?.number ?? issue);
   const thePolicy = policy ?? loadPolicy();
 
-  const settingsDir = exists ? target.path : HERE;
-  const effective = resolveWindow({ dir: settingsDir, env: process.env });
-  const resolved = resolveSettings({ dir: settingsDir, env: process.env });
+  const source = settingsSourceFor(target, { exists });
+  const effective =
+    source.kind === "folder"
+      ? resolveWindow({ dir: source.dir, env: process.env })
+      : resolveWindowFromSnapshot({ hostDir: source.hostDir, ref: source.ref, env: process.env });
+  const resolved =
+    source.kind === "folder"
+      ? resolveSettings({ dir: source.dir, env: process.env })
+      : resolveSettingsFromSnapshot({ hostDir: source.hostDir, ref: source.ref, env: process.env });
 
   return {
     board: theBoard,

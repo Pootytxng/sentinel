@@ -13,7 +13,7 @@
 //      not an assumption;
 //   3. the menu position AND the issue number both work, in the same run;
 //   4. every line states its context window in the owner's words, so "150k — standard" and
-//      "300k — experimental" can never be mistaken for one another.
+//      "300k — marathon" can never be mistaken for one another.
 //
 // Pure: board items in, a menu out, an injected `ask` for the answer. It reads no processes and no
 // editor state — a claim lives on the board, so closing a window cannot erase it. It writes nothing
@@ -22,16 +22,21 @@
 import { intendedWindow } from "./settings-resolve.mjs";
 
 /** Only used when a caller wants a selection without labels (tests). The launcher passes the real policy. */
-export const FALLBACK_POLICY = { default: 150000, trials: [] };
+export const FALLBACK_POLICY = { default: 150000, tiers: [] };
 
 const MAX_ATTEMPTS = 5;
 const LABEL_WIDTH = 64;
 
 const lc = (s) => String(s ?? "").trim().toLowerCase();
 
-/** "150k — standard" / "300k — experimental". The trial flag comes from the policy, never from a guess. */
-export function contextLabel(window, { trial = false } = {}) {
-  return `${Math.round(Number(window) / 1000)}k — ${trial ? "experimental" : "standard"}`;
+/**
+ * "150k — standard" / "300k — marathon". The tier comes from the policy, never from a guess.
+ *
+ * 300000 is an ACCEPTED tier (Kuya, 2026-07-31, on #19), so the label names it instead of hedging
+ * about it. It is still not the default — that is scope, and the policy file carries it.
+ */
+export function contextLabel(window, { marathon = false } = {}) {
+  return `${Math.round(Number(window) / 1000)}k — ${marathon ? "marathon" : "standard"}`;
 }
 
 /** A claim is live until the end of its recorded day. Board dates are days, not instants. */
@@ -84,8 +89,8 @@ export function buildMenu(items, { self = { lane: "Claude Code" }, now = new Dat
       recommended: Number(item.number) === recommended,
       note: note ?? null,
       window: window.window,
-      trial: window.trial,
-      contextLabel: contextLabel(window.window, { trial: window.trial }),
+      marathon: window.marathon,
+      contextLabel: contextLabel(window.window, { marathon: window.marathon }),
     };
   };
 

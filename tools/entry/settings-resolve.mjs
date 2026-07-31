@@ -6,9 +6,16 @@
 // value — so the entrypoint must resolve it deliberately from policy and refuse on disagreement,
 // rather than inherit whatever the door happened to be.
 //
+// TWO sources, because a train can begin before its folder does:
+//   - an EXISTING folder resolves from its own layers (user < project < local, then the process env);
+//   - a folder that does NOT EXIST YET resolves from the tracked settings of the exact commit it
+//     will be created from. It may never resolve from the launcher's own directory — see
+//     `resolveWindowFromSnapshot` for the first-launch deadlock that produced (#21).
+//
 // The parsing/validation arithmetic is REUSED from scripts/lib/compaction-window.mjs (#16), not
 // rebuilt. This module adds the layering and the provenance around it.
 
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -19,6 +26,9 @@ import {
 
 export const WINDOW_KEY = "CLAUDE_CODE_AUTO_COMPACT_WINDOW";
 
+/** Repo-relative and forward-slashed on purpose: this is half of a `git show <ref>:<path>` argument. */
+export const PROJECT_SETTINGS_PATH = ".claude/settings.json";
+
 const readJson = (file) => {
   try {
     return JSON.parse(readFileSync(file, "utf8"));
@@ -27,12 +37,61 @@ const readJson = (file) => {
   }
 };
 
+/** The machine-wide layer. Named once, because both sources below share it. */
+export const userSettingsFile = (home = homedir()) => ({
+  layer: "user",
+  path: join(home, ".claude", "settings.json"),
+});
+
 /** Weakest first. Claude Code applies user < project < local; the process env beats all of them. */
 export function settingsFiles({ dir, home = homedir() }) {
   return [
-    { layer: "user", path: join(home, ".claude", "settings.json") },
+    userSettingsFile(home),
     { layer: "project", path: join(dir, ".claude", "settings.json") },
     { layer: "local", path: join(dir, ".claude", "settings.local.json") },
+  ];
+}
+
+const onDisk = (f) => ({ ...f, exists: existsSync(f.path), data: existsSync(f.path) ? readJson(f.path) : null });
+
+/** The layers a real folder runs with. */
+const diskLayers = ({ dir, home }) => settingsFiles({ dir, home }).map(onDisk);
+
+/** One tracked file out of a commit, no working tree involved. Absent/unreadable/unknown ref -> null. */
+function showTrackedFile({ hostDir, ref, path }) {
+  try {
+    return execFileSync("git", ["show", `${ref}:${path}`], {
+      cwd: hostDir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The layers a worktree that DOES NOT EXIST YET will run with: the machine-wide user layer, plus the
+ * tracked project settings of the exact commit the worktree will be created from. There is no local
+ * overlay, because there is no folder to hold one.
+ *
+ * Fail-closed by construction: an unknown ref, an absent file, or unparseable JSON contributes NO
+ * project layer, which resolves to the documented fallback with `configured:false` — a refusal, not
+ * a pass. `read` is injected so the guards can drive every one of those without a repository.
+ */
+export function snapshotLayers({ hostDir, ref, home = homedir(), read = showTrackedFile }) {
+  const raw = read({ hostDir, ref, path: PROJECT_SETTINGS_PATH });
+  let data = null;
+  if (typeof raw === "string") {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = null;
+    }
+  }
+  return [
+    onDisk(userSettingsFile(home)),
+    { layer: "project", path: `${ref}:${PROJECT_SETTINGS_PATH}`, exists: typeof raw === "string", data },
   ];
 }
 
@@ -40,13 +99,7 @@ export function settingsFiles({ dir, home = homedir() }) {
  * Merge the layers and record, per env key, which file supplied the winning value.
  * @returns {{files, merged, envValues: Record<string,{value: string, source: string, layer: string}>}}
  */
-export function resolveSettings({ dir, home = homedir(), env = process.env }) {
-  const files = settingsFiles({ dir, home }).map((f) => ({
-    ...f,
-    exists: existsSync(f.path),
-    data: existsSync(f.path) ? readJson(f.path) : null,
-  }));
-
+function mergeLayers(files, env) {
   const merged = { env: {}, hooks: {} };
   const envValues = {};
   for (const f of files) {
@@ -72,13 +125,21 @@ export function resolveSettings({ dir, home = homedir(), env = process.env }) {
   return { files, merged, envValues };
 }
 
+/** The settings an existing folder runs with. */
+export function resolveSettings({ dir, home = homedir(), env = process.env }) {
+  return mergeLayers(diskLayers({ dir, home }), env);
+}
+
+/** The settings a not-yet-created worktree will run with. Same shape, honest source. */
+export function resolveSettingsFromSnapshot({ hostDir, ref, home = homedir(), env = process.env, read }) {
+  return mergeLayers(snapshotLayers({ hostDir, ref, home, read }), env);
+}
+
 /**
- * The effective auto-compaction window, with the file that set it.
+ * The effective auto-compaction window over a set of layers, with the file that set it.
  * @returns {{window, source, configured, ignored, file: string|null, layer: string|null}}
  */
-export function resolveWindow({ dir, home = homedir(), env = process.env }) {
-  const { files, envValues } = resolveSettings({ dir, home, env });
-
+function windowFromLayers(files, env, extra = {}) {
   // Winning FILE layer only — resolveCompactionWindow decides env-vs-settings itself.
   let fileValue;
   let file = null;
@@ -97,33 +158,57 @@ export function resolveWindow({ dir, home = homedir(), env = process.env }) {
   });
 
   if (resolved.source === "env") {
-    return { ...resolved, file: "process environment", layer: "env" };
+    return { ...resolved, file: "process environment", layer: "env", ...extra };
   }
-  if (resolved.source === "settings") return { ...resolved, file, layer };
+  if (resolved.source === "settings") return { ...resolved, file, layer, ...extra };
   // Fallback: still report the file that TRIED, so an ignored typo is traceable.
-  return { ...resolved, file: resolved.ignored.length ? file : null, layer: null, envValues };
+  return { ...resolved, file: resolved.ignored.length ? file : null, layer: null, ...extra };
+}
+
+/** The window an existing folder runs with. */
+export function resolveWindow({ dir, home = homedir(), env = process.env }) {
+  return windowFromLayers(diskLayers({ dir, home }), env);
+}
+
+/**
+ * The window a worktree that does not exist yet will run with.
+ *
+ * Why this exists (bug->guard, #21): the launcher used to substitute its OWN directory for an absent
+ * target. `tools/entry/` configures nothing, `origin/main` carries WINDOW_KEY=150000 in tracked
+ * settings, and the two collided into "expected 150000, actual 150000" that still REFUSED — because
+ * the coincidentally-equal documented fallback is not configuration. A safely-creatable worktree
+ * became impossible to create through the entrypoint. The launcher's own directory is not, and never
+ * was, the future worktree's effective settings; the commit it will be created from is.
+ */
+export function resolveWindowFromSnapshot({ hostDir, ref, home = homedir(), env = process.env, read }) {
+  return windowFromLayers(snapshotLayers({ hostDir, ref, home, read }), env, {
+    snapshot: `${ref}:${PROJECT_SETTINGS_PATH}`,
+  });
 }
 
 /**
  * What window this train is supposed to run with — policy, not whichever folder was opened.
- * @returns {{window: number, reason: string, trial: boolean}}
+ *
+ * 300000 is the accepted MARATHON tier (Kuya, 2026-07-31, on #19): accepted, and still not the
+ * default. Acceptance renamed the tier and settled its status; it did not widen its scope.
+ * @returns {{window: number, reason: string, marathon: boolean}}
  */
 export function intendedWindow(policy, { issue }) {
-  const trial = (policy?.trials ?? []).find((t) => (t.issues ?? []).includes(Number(issue)));
-  if (trial) {
+  const tier = (policy?.tiers ?? []).find((t) => (t.issues ?? []).includes(Number(issue)));
+  if (tier) {
     return {
-      window: trial.window,
-      trial: true,
-      reason: `issue #${issue} is in the ${trial.window} trial${trial.note ? ` — ${trial.note}` : ""}`,
+      window: tier.window,
+      marathon: true,
+      reason: `issue #${issue} is scoped to the ${tier.window} marathon tier${tier.note ? ` — ${tier.note}` : ""}`,
     };
   }
   const window = policy?.default ?? DOCUMENTED_FALLBACK_WINDOW;
-  return { window, trial: false, reason: `default policy window for a non-trial train (#${issue})` };
+  return { window, marathon: false, reason: `default policy window for a standard-tier train (#${issue})` };
 }
 
 /**
- * Guard 2. Two-sided: too small hides context, too large silently adopts the unaccepted trial
- * window. And an UNCONFIGURED value that coincidentally equals the intended one still fails —
+ * Guard 2. Two-sided: too small hides context, too large silently adopts a tier this train was never
+ * scoped to. And an UNCONFIGURED value that coincidentally equals the intended one still fails —
  * 150000 by accident is not 150000 by decision.
  */
 export function compareWindow(intended, effective) {
@@ -132,13 +217,16 @@ export function compareWindow(intended, effective) {
   const where = effective.file ?? "(nothing configures it)";
 
   if (!effective.configured) {
+    const source = effective.snapshot
+      ? `${effective.snapshot}, the snapshot this worktree would be created from,`
+      : "this folder";
     return {
       ok: false,
       expected,
       actual,
       remediation:
-        `${WINDOW_KEY} is not configured for this folder — the effective ${actual} is the documented ` +
-        `fallback, not a decision. Set ${WINDOW_KEY}="${expected}" in .claude/settings.json ` +
+        `${WINDOW_KEY} is not configured in ${source} — the effective ${actual} is the documented ` +
+        `fallback, not a decision. Set ${WINDOW_KEY}="${expected}" in ${PROJECT_SETTINGS_PATH} ` +
         `(${intended.reason}).` +
         (effective.ignored?.length
           ? ` An unparseable value was ignored: ${effective.ignored.map((i) => `${i.from}="${i.value}"`).join(", ")}.`

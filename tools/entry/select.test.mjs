@@ -8,7 +8,7 @@
 //   1. a self-owned resumable Active task is offered BEFORE unrelated Ready tasks;
 //   2. a generic shortcut never silently launches a different task while one exists;
 //   3. a displayed choice accepts its menu position AND its issue number in the same run;
-//   4. the resolved context policy is displayed, so 150k standard and 300k experimental cannot be
+//   4. the resolved context policy is displayed, so 150k standard and 300k marathon cannot be
 //      confused for one another again.
 //
 // Everything here is pure over injected facts — board items, a policy object, a scripted `ask`.
@@ -32,7 +32,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 
 const POLICY = {
   default: 150000,
-  trials: [{ window: 300000, issues: [15, 16, 19], note: "the context-window trial and its re-run" }],
+  tiers: [{ window: 300000, issues: [15, 16, 19], note: "the accepted marathon tier and the issues scoped to it" }],
 };
 const NOW = new Date("2026-07-30T23:30:00Z");
 const SELF = { lane: "Claude Code" };
@@ -138,19 +138,21 @@ describe("resumability is a property of the board, not of this machine", () => {
 
 describe("the displayed context policy", () => {
   it("labels the window in the owner's words", () => {
-    expect(contextLabel(150000, { trial: false })).toBe("150k — standard");
-    expect(contextLabel(300000, { trial: true })).toBe("300k — experimental");
+    expect(contextLabel(150000, { marathon: false })).toBe("150k — standard");
+    expect(contextLabel(300000, { marathon: true })).toBe("300k — marathon");
   });
 
-  it("#18 shows 150k standard and #19 shows 300k experimental", () => {
+  it("#18 shows 150k standard and #19 shows 300k marathon", () => {
     const m = menu();
     expect(m.options.find((o) => o.number === 18).contextLabel).toBe("150k — standard");
-    expect(m.options.find((o) => o.number === 19).contextLabel).toBe("300k — experimental");
+    expect(m.options.find((o) => o.number === 19).contextLabel).toBe("300k — marathon");
+    expect(m.options.find((o) => o.number === 19).marathon).toBe(true);
+    expect(m.options.find((o) => o.number === 18).marathon).toBe(false);
   });
 
   it("every option carries a label, and it is derived from the policy — never invented", () => {
     for (const o of menu().options) {
-      expect(o.contextLabel).toMatch(/^\d+k — (standard|experimental)$/);
+      expect(o.contextLabel).toMatch(/^\d+k — (standard|marathon)$/);
       expect(o.window).toBe(o.number === 19 ? 300000 : 150000);
     }
     expect(() => buildMenu(BOARD, { self: SELF, now: NOW, policy: null })).toThrow(/policy/i);
@@ -161,7 +163,7 @@ describe("the displayed context policy", () => {
     expect(text).toMatch(/What would you like to do\?/);
     expect(text).toMatch(/1\. Resume #18 .*\(Recommended\)/);
     expect(text).toMatch(/Context: 150k — standard/);
-    expect(text).toMatch(/Context: 300k — experimental/);
+    expect(text).toMatch(/Context: 300k — marathon/);
     expect(text).toMatch(/Press Enter to resume #18\./);
     expect(menu().question).toMatch(/type 1, 2, 3, 18, 13, 19, or Q to cancel/i);
   });
