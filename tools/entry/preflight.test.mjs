@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 import { reconcile, selectTask } from "./preflight.mjs";
+import { verdictLines } from "./render.mjs";
 
 const FOLDER = "C:\\Users\\Kuya\\code\\sentinel-workflow";
 const BRANCH = "feat/single-entry-workflow";
@@ -198,6 +199,44 @@ describe("hooks", () => {
     const r = reconcile(w);
     expect(check(r, "hooks.present").ok).toBe(false);
     expect(r.remediation.join(" ")).toMatch(/--repair/);
+  });
+
+  // Measured on the live 2026-07-30 PASS: the leftover WAS forgiven, and the row went green with no
+  // trace of it, because the renderer prints `actual` only when a check fails. Silently repairing
+  // ourselves behind a green row is how a launcher accumulates state nobody knows about. The
+  // condition is "a leftover reaches the owner's screen", not "a field is populated" — so the guard
+  // asserts against the rendered lines, which is what he actually reads.
+  it("says a forgiven leftover out loud on a green row", () => {
+    const w = baseWorld({
+      hooks: { ok: true, checked: new Array(9).fill({}), missing: [], stale: [{ name: "session-assert-hook.mjs" }], remediation: null },
+    });
+    const c = check(reconcile(w), "hooks.present");
+    expect(c.ok).toBe(true);
+    expect(c.note).toMatch(/1 stale overlay entry to take back/);
+  });
+
+  it("adds no note when there is no leftover", () => {
+    expect(check(reconcile(baseWorld()), "hooks.present").note).toBe(null);
+  });
+});
+
+describe("what the owner actually reads", () => {
+  const world = (hooks) => reconcile(baseWorld({ hooks }));
+
+  it("renders the note under a passing check", () => {
+    const lines = verdictLines({ number: 18, title: "t" }, world({ ok: true, checked: new Array(9).fill({}), missing: [], stale: [{}], remediation: null })).join("\n");
+    expect(lines).toMatch(/ok/);
+    expect(lines).toMatch(/1 stale overlay entry to take back/);
+  });
+
+  it("still renders the actual value under a failing check", () => {
+    const lines = verdictLines({ number: 18, title: "t" }, world({ ok: false, checked: new Array(9).fill({}), missing: [{ name: "x.mjs" }], stale: [], remediation: "run with --repair" })).join("\n");
+    expect(lines).toMatch(/1 missing/);
+  });
+
+  it("prints nothing extra for a check with neither", () => {
+    const lines = verdictLines({ number: 18, title: "t" }, world({ ok: true, checked: new Array(9).fill({}), missing: [], stale: [], remediation: null }));
+    expect(lines.filter((l) => l.includes("hooks.present"))).toHaveLength(1);
   });
 });
 

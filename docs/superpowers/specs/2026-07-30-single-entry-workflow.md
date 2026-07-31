@@ -252,6 +252,13 @@ preserves no behaviour. Guarded by `hooks-verify.test.mjs` → *"the launcher's 
 folder's defect"* and `overlay.test.mjs` → *"the leftover is cleared even when the assert is not
 installed"*.
 
+Forgiven is not the same as hidden. The first live PASS after that fix went green with no trace of
+the leftover, because the renderer prints a check's `actual` only under a FAIL — so a passing check
+that still had something to say said it to nobody, and a launcher that silently repairs itself is a
+launcher accumulating state nobody knows about. A check may therefore carry a `note`, the one line a
+green row still prints, and the verdict renderer moved into `render.mjs` so what the owner *reads* is
+guarded rather than assumed. Guarded by `preflight.test.mjs` → *"what the owner actually reads"*.
+
 The permanent fix was an **owner decision, surfaced not taken**. Kuya took both halves (§12.1):
 `.claude/hooks/` is tracked — reversing the deliberate `.gitignore` "not shared" decision — *and*
 `--repair` stays the supported materialization path, because tracking a file only helps a folder that
@@ -365,7 +372,8 @@ decision-8 launch, which the launcher's own earlier overlay refused: `tools/entr
 hook outside this folder is a different failure"*. The **second** live launch found the deadlock those
 two left standing — the verdict precedes the overlay step, so the launcher refused on its own leftover
 — mechanized by *"the launcher's own leftover is not the folder's defect"* and *"the leftover is
-cleared even when the assert is not installed"* (§5.4).
+cleared even when the assert is not installed"* (§5.4). The **third** found that the forgiveness was
+also silent, mechanized by `preflight.test.mjs` → *"what the owner actually reads"*.
 
 **Guard-premise law (carried from #14):** a guard built on a premise later disproven must be
 **rewritten, not extended**. Each guard above names the condition it detects, not the constant it

@@ -17,29 +17,13 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gatherFacts, loadPolicy, readBoard } from "./gather.mjs";
 import { reconcile, selectTask } from "./preflight.mjs";
+import { verdictLines } from "./render.mjs";
 import { buildMenu, chooseInteractively, renderMenu } from "./select.mjs";
 import { assertSessionRoot, readToken } from "./session-assert.mjs";
 
 const C = { dim: "\x1b[2m", red: "\x1b[31m", green: "\x1b[32m", yellow: "\x1b[33m", bold: "\x1b[1m", off: "\x1b[0m" };
 
-function printVerdict(task, result) {
-  const head = result.verdict === "PASS" ? `${C.green}PASS${C.off}` : `${C.red}REFUSE${C.off}`;
-  console.log(`\n  ${C.bold}#${task?.number} ${task?.title ?? ""}${C.off}`);
-  console.log(`  preflight: ${head}\n`);
-  const width = Math.max(...result.checks.map((c) => c.name.length));
-  for (const c of result.checks) {
-    const mark = c.ok ? `${C.green}ok  ${C.off}` : `${C.red}FAIL${C.off}`;
-    console.log(`  ${mark} ${c.name.padEnd(width)}  ${C.dim}expected${C.off} ${c.expected}`);
-    if (!c.ok) console.log(`       ${" ".repeat(width)}  ${C.dim}actual  ${C.off} ${C.yellow}${c.actual}${C.off}`);
-  }
-  if (result.remediation.length) {
-    console.log(`\n  ${C.bold}What to do${C.off}`);
-    for (const r of result.remediation) console.log(`   · ${r}`);
-  }
-  if (result.actions.length) console.log(`\n  ${C.dim}actions on launch: ${result.actions.join(", ")}${C.off}`);
-  if (result.takeoverDraft) console.log(`\n${result.takeoverDraft}\n`);
-  console.log("");
-}
+const printVerdict = (task, result) => console.log(verdictLines(task, result).join("\n"));
 
 function cmdPreflight(argv) {
   const issueArg = argv.includes("--issue") ? Number(argv[argv.indexOf("--issue") + 1]) : null;

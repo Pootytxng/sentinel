@@ -53,7 +53,9 @@ export function selectTask(items, { issue = null, self = { lane: "Claude Code" }
   };
 }
 
-const mk = (name, expected, actual, ok, remediation = null) => ({ name, expected, actual, ok, remediation });
+// `note` is the one thing a PASSING check may still say out loud. `actual` is not: the renderer shows
+// it only under a FAIL, so anything a green row needs the owner to see has to travel separately.
+const mk = (name, expected, actual, ok, remediation = null, note = null) => ({ name, expected, actual, ok, remediation, note });
 
 /**
  * @returns {{verdict: "PASS"|"REFUSE", checks: Array, remediation: string[], actions: string[], takeoverDraft: string|null}}
@@ -240,13 +242,14 @@ export function reconcile(facts) {
     );
   }
   if (hooks) {
-    // A leftover of our own is disclosed on the row, never hidden behind a green "all present" —
-    // it is not a refusal because the launcher clears it on this same run, but the owner still sees it.
+    // A leftover of our own is disclosed on the row, never hidden behind a green "all present" — it
+    // is not a refusal, because the launcher clears it on this same run, but a launcher that quietly
+    // repairs itself is a launcher accumulating state nobody knows about.
     const staleCount = hooks.stale?.length ?? 0;
-    const stale = staleCount ? `, ${staleCount} stale overlay entr${staleCount === 1 ? "y" : "ies"} to take back` : "";
     checks.push(
       mk("hooks.present", `${hooks.checked?.length ?? 0} registered hooks present`,
-        hooks.ok ? `all present${stale}` : `${hooks.missing.length} missing${stale}`, Boolean(hooks.ok), hooks.remediation),
+        hooks.ok ? "all present" : `${hooks.missing.length} missing`, Boolean(hooks.ok), hooks.remediation,
+        staleCount ? `${staleCount} stale overlay entr${staleCount === 1 ? "y" : "ies"} to take back — the launcher removes ${staleCount === 1 ? "it" : "them"} on this run` : null),
     );
   }
 
