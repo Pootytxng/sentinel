@@ -5083,3 +5083,322 @@ mod restores_label_tests {
         assert!(snapshot_ok, "apply must snapshot the exact prior pair for rollback");
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Property/fuzz coverage for bounded IPC inputs (blueprint §11, Q4).
+//
+// Everything below takes a value the webview (or a tampered history.json) supplies and decides
+// whether it may reach a Windows mutation or an elevated command line. Those domains are BOUNDED —
+// four service names, three task ids, four app ids, one character alphabet per interpolation site —
+// so the property that matters is about the COMPLEMENT of the allowlist: everything outside is
+// refused. That is a claim no finite list of hand-written examples can make, which is exactly why
+// these are generated. The near-miss generator matters most here: "SysMain ", "sysmain", "SysMai"
+// and a Cyrillic-с "сysMain" all have to be refused, and none of them look wrong.
+// ─────────────────────────────────────────────────────────────────────────────
+#[cfg(test)]
+mod ipc_input_fuzz_tests {
+    use super::*;
+    use crate::fuzz_support::{hostile_string, mutate_text, Rng, SEEDS};
+
+    // The documented alphabets, restated so an edit to a guard has to be a deliberate decision that
+    // updates this contract too, not a quiet widening.
+    fn ps_alphabet(c: char) -> bool {
+        c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-')
+    }
+    fn squoted_alphabet(c: char) -> bool {
+        ps_alphabet(c) || matches!(c, ' ' | '\\')
+    }
+    fn nic_alphabet(c: char) -> bool {
+        c.is_ascii_alphanumeric() || matches!(c, '-' | '{' | '}')
+    }
+
+    /// Characters that must never appear in ANY accepted token, whichever guard accepted it. This is
+    /// the security property itself rather than a restatement of the implementation: a quote or a
+    /// `$` reaching an elevated command line is the breakout.
+    const SHELL_BREAKOUT: &[char] =
+        &['\'', '"', '`', '$', ';', '|', '&', '(', ')', '<', '>', '\n', '\r', '\0'];
+
+    /// Real tokens from the curated catalog — service names, a task path, a NIC GUID key, a power
+    /// GUID. Mutating these produces the near-misses that matter.
+    const SAFE_SAMPLES: &[&str] = &[
+        "SysMain",
+        "DiagTrack",
+        "NvTelemetryContainer",
+        "Microsoft Compatibility Appraiser",
+        "\\Microsoft\\Windows\\Application Experience\\",
+        "{2a737441-1930-4402-8d77-b2bebba308a3}",
+        "381b4222-f694-41f0-9685-ff5bb260df2e",
+        "TcpAckFrequency",
+    ];
+
+    const SERVICES: &[&str] = &["SysMain", "DiagTrack", "WSearch", "NvTelemetryContainer"];
+    const TASKS: &[&str] = &["compatibility-appraiser", "ceip-consolidator", "ceip-usb"];
+
+    #[test]
+    fn elevated_command_guards_admit_exactly_their_alphabets_and_never_a_breakout_character() {
+        for seed in SEEDS {
+            let mut rng = Rng::seeded(seed);
+            for case in 0..300 {
+                let s = if rng.flag() {
+                    hostile_string(&mut rng, 4)
+                } else {
+                    let base = *rng.pick(SAFE_SAMPLES);
+                    mutate_text(&mut rng, base)
+                };
+                let nonempty = !s.is_empty();
+
+                assert_eq!(
+                    ps_safe(&s).is_ok(),
+                    nonempty && s.chars().all(ps_alphabet),
+                    "seed {seed} case {case}: ps_safe disagreed with its documented alphabet on {s:?}"
+                );
+                assert_eq!(
+                    ps_safe_squoted(&s).is_ok(),
+                    nonempty && s.chars().all(squoted_alphabet),
+                    "seed {seed} case {case}: ps_safe_squoted disagreed with its documented alphabet on {s:?}"
+                );
+                assert_eq!(
+                    nic_interface_safe(&s).is_ok(),
+                    nonempty && s.chars().all(nic_alphabet),
+                    "seed {seed} case {case}: nic_interface_safe disagreed with its documented alphabet on {s:?}"
+                );
+
+                for (guard, accepted) in [
+                    ("ps_safe", ps_safe(&s).is_ok()),
+                    ("ps_safe_squoted", ps_safe_squoted(&s).is_ok()),
+                    ("nic_interface_safe", nic_interface_safe(&s).is_ok()),
+                ] {
+                    if accepted {
+                        assert!(
+                            !s.chars().any(|c| SHELL_BREAKOUT.contains(&c)),
+                            "seed {seed} case {case}: {guard} accepted a token carrying a breakout character: {s:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn mutation_allowlists_resolve_their_catalog_and_refuse_everything_else() {
+        // Named explicitly, not merely "absent from the list": if a future edit ever made one of
+        // these reachable, this is the test that says so by name.
+        const CRITICAL: &[&str] = &[
+            "csrss",
+            "lsass",
+            "smss",
+            "wininit",
+            "services",
+            "WinDefend",
+            "SecurityHealthService",
+            "Winmgmt",
+            "RpcSs",
+            "wuauserv",
+            "EventLog",
+            "BFE",
+            "mpssvc",
+        ];
+        for name in CRITICAL {
+            assert!(
+                KnownService::from_name(name).is_none(),
+                "a critical service must never resolve to the suspend primitive: {name}"
+            );
+        }
+
+        let apps: Vec<&'static str> = KnownPreloadApp::ALL.iter().map(|a| a.id()).collect();
+
+        // The catalog itself resolves and round-trips — so the refusals below are a real boundary
+        // rather than a guard that refuses everything.
+        for name in SERVICES {
+            assert_eq!(
+                KnownService::from_name(name).expect("catalog service resolves").name(),
+                *name
+            );
+        }
+        for id in TASKS {
+            assert!(KnownBloatTask::from_id(id).is_some(), "catalog task resolves: {id}");
+        }
+        for id in &apps {
+            assert_eq!(
+                KnownPreloadApp::from_id(id).expect("catalog app resolves").id(),
+                *id
+            );
+        }
+
+        for seed in SEEDS {
+            let mut rng = Rng::seeded(seed);
+            for case in 0..400 {
+                let s = match rng.below(4) {
+                    0 => hostile_string(&mut rng, 3),
+                    1 => {
+                        let b = *rng.pick(SERVICES);
+                        mutate_text(&mut rng, b)
+                    }
+                    2 => {
+                        let b = *rng.pick(TASKS);
+                        mutate_text(&mut rng, b)
+                    }
+                    _ => {
+                        let b = *rng.pick(&apps);
+                        mutate_text(&mut rng, b)
+                    }
+                };
+                // A mutation can land back on a legal id, so the property is an EQUIVALENCE with
+                // exact catalog membership — never a blanket "always None", which a mutation that
+                // round-tripped would falsify for the wrong reason.
+                assert_eq!(
+                    KnownService::from_name(&s).is_some(),
+                    SERVICES.contains(&s.as_str()),
+                    "seed {seed} case {case}: KnownService::from_name is not exactly its catalog on {s:?}"
+                );
+                assert_eq!(
+                    KnownBloatTask::from_id(&s).is_some(),
+                    TASKS.contains(&s.as_str()),
+                    "seed {seed} case {case}: KnownBloatTask::from_id is not exactly its catalog on {s:?}"
+                );
+                assert_eq!(
+                    KnownPreloadApp::from_id(&s).is_some(),
+                    apps.contains(&s.as_str()),
+                    "seed {seed} case {case}: KnownPreloadApp::from_id is not exactly its catalog on {s:?}"
+                );
+            }
+        }
+    }
+
+    /// The batch receipt file is written by an elevated child and read back to decide what gets
+    /// ledgered. The fail-safe direction is that a MISSING receipt means not-applied, so the
+    /// property is that every receipt the parser reports is justified by a line that explicitly said
+    /// `ok` or `fail` — a fabricated or inferred receipt would ledger a change that never happened.
+    #[test]
+    fn batch_receipts_only_report_lines_that_explicitly_said_ok_or_fail() {
+        for seed in SEEDS {
+            let mut rng = Rng::seeded(seed);
+            for case in 0..60 {
+                let lines = 1 + rng.below(12);
+                let mut text = String::new();
+                for _ in 0..lines {
+                    match rng.below(5) {
+                        0 => {
+                            let id = *rng.pick(crate::history::APPLIABLE_REC_IDS);
+                            text.push_str(id);
+                            text.push_str(":ok");
+                        }
+                        1 => {
+                            let id = *rng.pick(crate::history::APPLIABLE_REC_IDS);
+                            text.push_str(id);
+                            text.push_str(":fail");
+                        }
+                        2 => {
+                            let junk = hostile_string(&mut rng, 3);
+                            text.push_str(&junk);
+                        }
+                        3 => {
+                            let id = *rng.pick(crate::history::APPLIABLE_REC_IDS);
+                            let base = format!("{id}:ok");
+                            let m = mutate_text(&mut rng, &base);
+                            text.push_str(&m);
+                        }
+                        _ => {
+                            let junk = hostile_string(&mut rng, 2);
+                            text.push_str(&junk);
+                            text.push_str(":ok");
+                        }
+                    }
+                    text.push('\n');
+                }
+
+                for (id, ok) in parse_batch_receipts(&text) {
+                    let want = format!("{id}:{}", if ok { "ok" } else { "fail" });
+                    assert!(
+                        text.lines().any(|l| l.trim() == want),
+                        "seed {seed} case {case}: receipt {id:?}={ok} is justified by no input line"
+                    );
+                }
+            }
+        }
+    }
+
+    fn tampered(rec_id: &str, snapshot: serde_json::Value, typed: Option<RollbackAction>) -> AppliedChange {
+        AppliedChange {
+            id: "fuzz-1".into(),
+            rec_id: rec_id.into(),
+            rec_title: "fuzz".into(),
+            applied_at: "2026-01-01T00:00:00Z".into(),
+            snapshot,
+            status: "applied".into(),
+            applied_action: None,
+            rollback_action: typed,
+            app_version_at_apply: None,
+            ruleset_version_at_apply: None,
+            elevation_used: None,
+            provenance: None,
+            hw_fingerprint: None,
+            rolled_back_at: None,
+        }
+    }
+
+    /// history.json is user-writable, so `resolve_rollback` reads attacker-controllable rec_ids and
+    /// snapshots. Two properties: the legacy synthesizer never invents a contract for a rec_id
+    /// outside the appliable catalog, and the typed path returns the STORED contract verbatim rather
+    /// than substituting one it liked better.
+    #[test]
+    fn a_tampered_ledger_entry_never_yields_a_rollback_contract_it_did_not_earn() {
+        for seed in SEEDS {
+            let mut rng = Rng::seeded(seed);
+            for case in 0..200 {
+                let rec_id = match rng.below(3) {
+                    0 => hostile_string(&mut rng, 3),
+                    1 => {
+                        let b = *rng.pick(crate::history::APPLIABLE_REC_IDS);
+                        mutate_text(&mut rng, b)
+                    }
+                    _ => (*rng.pick(crate::history::APPLIABLE_REC_IDS)).to_string(),
+                };
+                let prior = rng.next_u64();
+                let junk = hostile_string(&mut rng, 2);
+                let snapshot = match rng.below(3) {
+                    0 => serde_json::json!({ "prior": prior }),
+                    1 => serde_json::json!({ "prior": junk.clone() }),
+                    _ => serde_json::Value::String(junk.clone()),
+                };
+
+                // Legacy path (no typed contract stored).
+                if resolve_rollback(&tampered(&rec_id, snapshot.clone(), None)).is_ok() {
+                    assert!(
+                        crate::history::APPLIABLE_REC_IDS.contains(&rec_id.as_str()),
+                        "seed {seed} case {case}: synthesized a rollback contract for off-catalog rec_id {rec_id:?}"
+                    );
+                }
+
+                // Typed path: whatever it returns must be the contract that was stored.
+                let stored = RollbackAction::RestoreGameModeFromSnapshot;
+                if let Ok((got, _)) =
+                    resolve_rollback(&tampered(&rec_id, snapshot, Some(stored.clone())))
+                {
+                    assert_eq!(
+                        serde_json::to_string(&got).expect("serialize"),
+                        serde_json::to_string(&stored).expect("serialize"),
+                        "seed {seed} case {case}: the stored typed contract was substituted"
+                    );
+                }
+            }
+        }
+
+        // Control: a well-formed typed entry DOES resolve, so the Ok branches above are reachable
+        // and the properties are not vacuous.
+        let good = tampered(
+            "game-mode",
+            serde_json::to_value(Snapshot::GameMode {
+                prior_enabled: Some(1),
+                prior_allow: None,
+            })
+            .expect("serialize snapshot"),
+            Some(RollbackAction::RestoreGameModeFromSnapshot),
+        );
+        let (got, _) = resolve_rollback(&good).expect("a well-formed typed entry resolves");
+        assert_eq!(
+            serde_json::to_string(&got).expect("serialize"),
+            serde_json::to_string(&RollbackAction::RestoreGameModeFromSnapshot).expect("serialize")
+        );
+    }
+}

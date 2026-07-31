@@ -18,6 +18,8 @@ mod diagnostics;
 mod experiment; // Intelligence Phase 3 — user-started single-variable experiment engine + optimization simulator. ARMED 2026-07-17 (experiment_gate()==true, owner sign-off; orchestrates the existing audited mutation boundary — no new apply/rollback primitive; user-started only, defense-in-depth gate checks retained).
 mod export;
 mod fps;
+#[cfg(test)]
+mod fuzz_support; // Test-only deterministic input generator for the property/fuzz suites (persistence parsing + bounded IPC inputs). Never compiled into the shipped binary.
 mod game_mode_persist; // Game Mode persistence keeper — option 1(b) mechanism C, DARK behind keep_game_mode_gate().
 mod gaming_orchestrator;
 mod gaming_session;

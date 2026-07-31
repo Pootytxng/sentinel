@@ -407,3 +407,106 @@ mod tests {
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Property/fuzz coverage for session-file parsing (blueprint §11, Q4).
+//
+// gaming-session.json is what orphan recovery reads to learn which live machine changes still need
+// restoring. It is user-writable and it survives a crash, so its parser sees arbitrary bytes by
+// design. `parse_session_json` is fail-safe — a contract it cannot fully trust must be treated as
+// ABSENT, never as partially applied — and that is a claim about every possible input.
+// ─────────────────────────────────────────────────────────────────────────────
+#[cfg(test)]
+mod session_fuzz_tests {
+    use super::*;
+    use crate::fuzz_support::{hostile_string, mutate_text, Rng, SEEDS};
+
+    const STATUSES: [SessionStatus; 4] = [
+        SessionStatus::Active,
+        SessionStatus::Ending,
+        SessionStatus::RestorePending,
+        SessionStatus::RestoreFailed,
+    ];
+
+    fn fuzz_session(rng: &mut Rng) -> SessionFile {
+        let n = rng.below(5);
+        let changes = (0..n)
+            .map(|_| SessionChange {
+                label: hostile_string(rng, 2),
+                rollback_action: RollbackAction::RestoreGameModeFromSnapshot,
+                snapshot: Snapshot::GameMode { prior_enabled: None, prior_allow: None },
+                elevated_restore: rng.flag(),
+            })
+            .collect();
+        SessionFile {
+            schema_version: SESSION_SCHEMA_VERSION,
+            session_id: hostile_string(rng, 2),
+            status: *rng.pick(&STATUSES),
+            started_at: hostile_string(rng, 2),
+            app_version: hostile_string(rng, 1),
+            changes,
+            started_monitoring: rng.flag(),
+        }
+    }
+
+    /// Fail-safe over the whole input space: arbitrary bytes and near-miss mutations of a VALID
+    /// session file never panic, and anything the parser does accept carries the schema version this
+    /// build understands. A parser that accepted a foreign-schema file would hand orphan recovery a
+    /// change list it cannot honestly interpret.
+    #[test]
+    fn parse_session_json_never_panics_and_never_accepts_a_foreign_schema() {
+        let valid =
+            serde_json::to_string(&fuzz_session(&mut Rng::seeded(SEEDS[0]))).expect("serialize");
+        let mut accepted = 0usize;
+        for seed in SEEDS {
+            let mut rng = Rng::seeded(seed);
+            for case in 0..200 {
+                let input = if rng.flag() {
+                    hostile_string(&mut rng, 6)
+                } else {
+                    mutate_text(&mut rng, &valid)
+                };
+                if let Some(f) = parse_session_json(&input) {
+                    accepted += 1;
+                    assert_eq!(
+                        f.schema_version, SESSION_SCHEMA_VERSION,
+                        "seed {seed} case {case}: accepted a foreign schema: {input:?}"
+                    );
+                }
+            }
+        }
+        // The mutation generator must actually be producing some parseable files, or the assertion
+        // above would be vacuously true and prove nothing.
+        assert!(
+            accepted > 0,
+            "the generator never produced a parseable session file — the property was never exercised"
+        );
+    }
+
+    /// Round-trip: a generated session file — hostile labels, ids and timestamps included — parses
+    /// back to exactly what was serialized. And the schema gate is a real gate: change the version
+    /// to ANY other value and the same bytes are refused.
+    #[test]
+    fn a_generated_session_round_trips_and_any_other_schema_version_is_refused() {
+        for seed in SEEDS {
+            let mut rng = Rng::seeded(seed);
+            let f = fuzz_session(&mut rng);
+            let s = serde_json::to_string(&f).expect("serialize");
+
+            let back = parse_session_json(&s).expect("what we serialized must parse back");
+            assert_eq!(
+                serde_json::to_string(&back).expect("reserialize"),
+                s,
+                "seed {seed}: the session file did not survive its own parse"
+            );
+
+            let mut wrong = f.clone();
+            wrong.schema_version = SESSION_SCHEMA_VERSION.wrapping_add(1 + rng.below(4096) as u32);
+            assert!(
+                parse_session_json(&serde_json::to_string(&wrong).expect("serialize")).is_none(),
+                "seed {seed}: schema version {} must be refused",
+                wrong.schema_version
+            );
+        }
+    }
+}
