@@ -156,7 +156,11 @@ export function refreshAndCreate({ facts, target, base = null, hostDir = HOST_DI
  */
 export function repairHooksIfSafe({ facts, verdict, controlDir, dryRun = false, canonicalDir = null }) {
   const failed = (verdict.checks ?? []).filter((c) => !c.ok);
-  if (failed.length !== 1 || failed[0].id !== "hooks.present") return { attempted: false, verdict, facts };
+  // `preflight.mjs` builds every row with mk(name, ...) -> { name, expected, actual, ok, ... }. There
+  // is no `id` on a check, and reading one compared `undefined` against a string on every launch --
+  // always true, so this returned `{attempted:false}` on its first line and the repair below had
+  // never run once. Keyed on `name`, and repair-gate.test.mjs asserts the row shape it keys on.
+  if (failed.length !== 1 || failed[0].name !== "hooks.present") return { attempted: false, verdict, facts };
 
   const canonical = canonicalDir ?? join(controlDir ?? "", ".claude", "hooks");
   const plan = hookRepairPlan({ verify: facts.hooks, canonicalDir: canonical });
