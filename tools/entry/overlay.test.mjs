@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ASSERT_HOOK_MARKER, planOverlay, removeOverlay, writeOverlay } from "./overlay.mjs";
+import { ASSERT_HOOK_MARKER, planOverlay, pruneDeadOverlay, removeOverlay, writeOverlay } from "./overlay.mjs";
 
 let root;
 const CONTROL = "C:\\Users\\Kuya\\code\\compy-control";
@@ -249,6 +249,51 @@ describe("a stale overlay is worse than no overlay", () => {
     const r = writeOverlay({ dir, controlDir: CONTROL });
     expect(r.wrote).toBe(false);
     expect(r.removed).toBe(false);
+    expect(existsSync(join(dir, ".claude", "settings.local.json"))).toBe(false);
+  });
+});
+
+// --no-overlay means "do not install the assert", not "leave a corpse in the settings file". The
+// two write paths above only clear the leftover as a side effect of running; the flag skips both,
+// and then the session starts with a hook registration pointing at a file that is not there.
+describe("the leftover is cleared even when the assert is not installed", () => {
+  const deadCmd = () => `node "${join(root, "gone", "session-assert-hook.mjs")}"`;
+
+  const withGroups = (name, groups) =>
+    fresh(name, { permissions: { allow: ["Bash"] }, hooks: { SessionStart: groups } });
+
+  const ours = (command) => ({ hooks: [{ type: "command", command, timeout: 10, statusMessage: ASSERT_HOOK_MARKER }] });
+
+  it("removes our group when the file it points at is gone", () => {
+    const dir = withGroups("r", [ours(`node "${join(root, "gone", "session-assert-hook.mjs")}"`)]);
+    const r = pruneDeadOverlay({ dir });
+    expect(r.pruned).toHaveLength(1);
+    const after = JSON.parse(readFileSync(join(dir, ".claude", "settings.local.json"), "utf8"));
+    expect(after.hooks.SessionStart).toEqual([]);
+    expect(after.permissions.allow).toEqual(["Bash"]);
+  });
+
+  it("keeps our group when the file it points at exists", () => {
+    const live = join(root, "s-hook.mjs");
+    writeFileSync(live, "// fixture\n");
+    const dir = withGroups("s", [ours(`node "${live}"`)]);
+    const r = pruneDeadOverlay({ dir });
+    expect(r.pruned).toEqual([]);
+    const after = JSON.parse(readFileSync(join(dir, ".claude", "settings.local.json"), "utf8"));
+    expect(after.hooks.SessionStart).toHaveLength(1);
+  });
+
+  it("never touches a group that is not ours, dead or not", () => {
+    const dir = withGroups("t", [{ hooks: [{ type: "command", command: deadCmd() }] }]);
+    const r = pruneDeadOverlay({ dir });
+    expect(r.pruned).toEqual([]);
+    const after = JSON.parse(readFileSync(join(dir, ".claude", "settings.local.json"), "utf8"));
+    expect(after.hooks.SessionStart).toHaveLength(1);
+  });
+
+  it("writes nothing at all when there is no overlay file", () => {
+    const dir = fresh("u");
+    expect(pruneDeadOverlay({ dir }).pruned).toEqual([]);
     expect(existsSync(join(dir, ".claude", "settings.local.json"))).toBe(false);
   });
 });

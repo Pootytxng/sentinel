@@ -16,6 +16,7 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
+import { ASSERT_HOOK_MARKER } from "./overlay.mjs";
 import { resolveSettings } from "./settings-resolve.mjs";
 
 export const HOOKS_SUBDIR = join(".claude", "hooks");
@@ -67,6 +68,7 @@ export function hookCommandsOf(settings, { dir = "" } = {}) {
           event,
           matcher: group?.matcher ?? null,
           command,
+          statusMessage: hook?.statusMessage ?? null,
           file: raw ? join(raw) : null,
           name: raw ? basename(raw) : null,
         });
@@ -86,9 +88,19 @@ export function verifyHooks({ dir, home = homedir(), env = process.env }) {
   const checked = hookCommandsOf(settings, { dir })
     .filter((c) => c.file !== null)
     .map((c) => ({ ...c, exists: existsSync(c.file) }));
-  const missing = checked.filter((c) => !c.exists);
+  const dead = checked.filter((c) => !c.exists);
 
-  if (missing.length === 0) return { ok: true, checked, missing: [], remediation: null, dir };
+  // Our own leftover is not evidence about this folder. The launcher installs the assert overlay by
+  // absolute path into the control folder, so when that folder moves the file, the registration it
+  // left behind points at nothing — and the verdict runs BEFORE the overlay step, so counting it
+  // would refuse every later launch on a defect the launcher created and clears on the same run.
+  // That is a deadlock the owner can only leave by hand-editing settings, which is the one thing the
+  // single entrypoint exists to prevent. Forgiveness is narrow: our marker, dead file, and OUTSIDE
+  // this folder — anything --repair can fix stays a refusal, and an unmarked hook is never ours.
+  const stale = dead.filter((c) => c.statusMessage === ASSERT_HOOK_MARKER && !isUnder(c.file, dir));
+  const missing = dead.filter((c) => !stale.includes(c));
+
+  if (missing.length === 0) return { ok: true, checked, missing: [], stale, remediation: null, dir };
 
   // Two different failures wear the same "hook is missing" face, and they take opposite remedies.
   // A path UNDER this folder means the folder is behind — --repair fixes that. A path outside it is a
@@ -112,14 +124,14 @@ export function verifyHooks({ dir, home = homedir(), env = process.env }) {
   if (foreign.length > 0) {
     parts.push(
       `${count(foreign.length)}, and ${foreign.length === 1 ? "it is" : "they are"} registered by absolute ` +
-        `path from outside ${dir}: ${foreign.map((m) => m.file).join(", ")}. That is a stale ` +
-        `.claude\\settings.local.json overlay from an earlier launch, not a folder that is behind — the ` +
-        `control folder has since moved the file it points at. Relaunch through the entrypoint, which ` +
-        `takes its own overlay back, or delete the "compy-entry:session-assert" block from that file.`,
+        `path from outside ${dir}: ${foreign.map((m) => m.file).join(", ")}. --repair cannot reach that — it ` +
+        `writes into ${join(dir, HOOKS_SUBDIR)}, which is not where the registration points, and this is not ` +
+        `the launcher's own overlay (no "${ASSERT_HOOK_MARKER}" marker). Remove that registration from the ` +
+        `settings file that adds it, or restore the file it names.`,
     );
   }
 
-  return { ok: false, checked, missing, dir, remediation: parts.join(" ") };
+  return { ok: false, checked, missing, stale, dir, remediation: parts.join(" ") };
 }
 
 /**

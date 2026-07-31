@@ -52,6 +52,10 @@ const assertHookGroup = (controlDir) => ({
 
 const isOurs = (group) => JSON.stringify(group ?? {}).includes(ASSERT_HOOK_MARKER);
 
+/** The script a command runs. Ours are always `node "<absolute path>"`, so this stays deliberately
+ *  small — hooks-verify owns the general parser, and importing it here would be a cycle. */
+const fileOf = (command) => String(command).match(/"([^"]+)"/)?.[1] ?? "";
+
 /** What writeOverlay WOULD do. Nothing is written unannounced. */
 export function planOverlay({ dir, controlDir }) {
   const current = readLocal(dir);
@@ -115,6 +119,31 @@ export function writeOverlay({ dir, controlDir }) {
   mkdirSync(join(dir, ".claude"), { recursive: true });
   writeFileSync(plan.file, `${JSON.stringify(merged, null, 2)}\n`);
   return { ...plan, wrote: true, removed: false };
+}
+
+/**
+ * Remove our own groups whose command points at a file that no longer exists.
+ *
+ * `--no-overlay` skips both write paths above, and each of those only clears a leftover as a side
+ * effect of running — so without this, opting out of INSTALLING the assert also means keeping a
+ * registration that can no longer load. Removing a registration for a file that is not there
+ * changes no behaviour: there was none to preserve. It touches only groups carrying our marker.
+ */
+export function pruneDeadOverlay({ dir }) {
+  const file = join(dir, OVERLAY_FILE);
+  if (!existsSync(file)) return { pruned: [], file };
+
+  const current = readLocal(dir);
+  const groups = current.hooks?.SessionStart ?? [];
+  const isDead = (group) =>
+    isOurs(group) && (group.hooks ?? []).some((h) => !existsSync(fileOf(h?.command ?? "")));
+
+  const pruned = groups.filter(isDead);
+  if (pruned.length === 0) return { pruned: [], file };
+
+  const merged = { ...current, hooks: { ...current.hooks, SessionStart: groups.filter((g) => !isDead(g)) } };
+  writeFileSync(file, `${JSON.stringify(merged, null, 2)}\n`);
+  return { pruned, file };
 }
 
 /** Take back exactly what was added, and nothing else. */

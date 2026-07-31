@@ -240,6 +240,18 @@ reach — it writes into the target's own `.claude/hooks/`. Prescribing `--repai
 folder is a remedy that cannot work, which costs more than no remedy. Guarded by
 `hooks-verify.test.mjs` → *"a missing hook outside this folder is a different failure"*.
 
+Naming the cause was not enough, because one of the two causes is **us**. The verdict runs *before* the
+overlay step (§7), so a dead overlay the launcher installed on an earlier run refuses the launch that
+would have cleared it — a deadlock whose only exit is hand-editing settings, the one thing the single
+entrypoint exists to prevent. So a dead registration that carries our marker **and** points outside the
+folder is classified `stale`, not `missing`: disclosed on the preflight row, cleared by the overlay step
+that follows, never a refusal. Forgiveness is that narrow — an unmarked hook is never ours, and a marked
+one *inside* the folder is still a `--repair`. `--no-overlay` skips both write paths, so it prunes the
+dead entry on its own (`pruneDeadOverlay`); removing a registration for a file that is not there
+preserves no behaviour. Guarded by `hooks-verify.test.mjs` → *"the launcher's own leftover is not the
+folder's defect"* and `overlay.test.mjs` → *"the leftover is cleared even when the assert is not
+installed"*.
+
 The permanent fix was an **owner decision, surfaced not taken**. Kuya took both halves (§12.1):
 `.claude/hooks/` is tracked — reversing the deliberate `.gitignore` "not shared" decision — *and*
 `--repair` stays the supported materialization path, because tracking a file only helps a folder that
@@ -342,7 +354,7 @@ did not catch.
 | 7 | Board `Next action` drifts from the newest durable handoff | compare the field to the newest Handoff comment's `Exact next action` → refuse |
 | 8 | Launcher changes shell directory without changing the real project root | `cd` performed, root unchanged → assert refuses |
 | 9 | **The first-run selection guard** (§7.1) | self-owned Active #18 + Ready #13 → resume #18 recommended, #13 never auto-selected; one Ready task still asks; ordinal and issue number both accepted; invalid re-prompts; `Q` writes nothing; expired / other-writer Active excluded; label matches the resolved window; `--issue` unchanged |
-| 10 | **The launcher's own leftover** (§5.3) | overlay installed, then the branch begins registering the assert itself → the overlay is REMOVED, not merely skipped; a group whose command points where the control folder no longer keeps the file is refreshed, not called "already in place"; a hook missing from *outside* the folder is never answered with `--repair` |
+| 10 | **The launcher's own leftover** (§5.3) | overlay installed, then the branch begins registering the assert itself → the overlay is REMOVED, not merely skipped; a group whose command points where the control folder no longer keeps the file is refreshed, not called "already in place"; a hook missing from *outside* the folder is never answered with `--repair`; our own marked, dead, outside registration is `stale` — disclosed and cleared, never a refusal — while an unmarked one, or a marked one inside the folder, still refuses; `--no-overlay` prunes it too |
 
 Guards 1, 3 and 4 depend on §5.1 landing first. Guard 2 is the direct mechanization of the #14 lesson.
 Guard 9 is the mechanization of the 2026-07-30 addendum: `tools/entry/select.test.mjs` plus the
@@ -350,7 +362,10 @@ rewritten `selectTask` block in `preflight.test.mjs`, which previously *encoded*
 asserting that one Ready task selects itself. Guard 10 is the mechanization of the first live
 decision-8 launch, which the launcher's own earlier overlay refused: `tools/entry/overlay.test.mjs`
 → *"a stale overlay is worse than no overlay"* and `tools/entry/hooks-verify.test.mjs` → *"a missing
-hook outside this folder is a different failure"*.
+hook outside this folder is a different failure"*. The **second** live launch found the deadlock those
+two left standing — the verdict precedes the overlay step, so the launcher refused on its own leftover
+— mechanized by *"the launcher's own leftover is not the folder's defect"* and *"the leftover is
+cleared even when the assert is not installed"* (§5.4).
 
 **Guard-premise law (carried from #14):** a guard built on a premise later disproven must be
 **rewritten, not extended**. Each guard above names the condition it detects, not the constant it

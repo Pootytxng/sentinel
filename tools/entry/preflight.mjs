@@ -240,9 +240,13 @@ export function reconcile(facts) {
     );
   }
   if (hooks) {
+    // A leftover of our own is disclosed on the row, never hidden behind a green "all present" —
+    // it is not a refusal because the launcher clears it on this same run, but the owner still sees it.
+    const staleCount = hooks.stale?.length ?? 0;
+    const stale = staleCount ? `, ${staleCount} stale overlay entr${staleCount === 1 ? "y" : "ies"} to take back` : "";
     checks.push(
       mk("hooks.present", `${hooks.checked?.length ?? 0} registered hooks present`,
-        hooks.ok ? "all present" : `${hooks.missing.length} missing`, Boolean(hooks.ok), hooks.remediation),
+        hooks.ok ? `all present${stale}` : `${hooks.missing.length} missing${stale}`, Boolean(hooks.ok), hooks.remediation),
     );
   }
 

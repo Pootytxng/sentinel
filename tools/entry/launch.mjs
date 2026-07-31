@@ -15,7 +15,7 @@ import { reconcile, selectTask } from "./preflight.mjs";
 import { contextLabel } from "./select.mjs";
 import { postClaim, planRenew, execPlan } from "./claim.mjs";
 import { makeToken, writeToken } from "./session-assert.mjs";
-import { writeOverlay } from "./overlay.mjs";
+import { pruneDeadOverlay, writeOverlay } from "./overlay.mjs";
 
 const say = (...a) => console.error(...a);
 const git = (cwd, args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -116,6 +116,9 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     else if (o.removed) say(`  removed a leftover session-assert overlay from ${o.file} — ${o.reason}`);
     else say(`  session-root assert not installed — ${o.reason}`);
   } else {
+    // Opting out of INSTALLING the assert is not opting out of clearing a dead one we left behind.
+    const p = pruneDeadOverlay({ dir: target.path });
+    if (p.pruned.length > 0) say(`  removed ${p.pruned.length} dead session-assert entr${p.pruned.length === 1 ? "y" : "ies"} from ${p.file}`);
     say("  --no-overlay: the in-session root assert will NOT run for this launch");
   }
 

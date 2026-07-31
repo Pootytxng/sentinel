@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hookCommandsOf, verifyHooks } from "./hooks-verify.mjs";
+import { ASSERT_HOOK_MARKER } from "./overlay.mjs";
 
 /** The real shape, trimmed: two events, three hooks, `$CLAUDE_PROJECT_DIR` in every command. */
 const SETTINGS = {
@@ -176,17 +177,20 @@ describe("a missing hook outside this folder is a different failure", () => {
     expect(r.missing).toHaveLength(1);
   });
 
-  it("does not claim the folder is behind, and does not prescribe --repair", () => {
+  it("does not claim the folder is behind, and rules --repair out instead of prescribing it", () => {
+    // The condition is "never send the owner to run a repair that cannot reach this" — not "never
+    // say the word". Saying so explicitly is the remedy doing its job, so the guard names the
+    // instruction it must not give, not the substring it happens to contain.
     const r = foreignOnly();
-    expect(r.remediation).not.toMatch(/--repair/);
+    expect(r.remediation).not.toMatch(/Run the launcher with --repair/);
     expect(r.remediation).not.toMatch(/older commit/);
+    expect(r.remediation).toMatch(/--repair cannot reach/);
   });
 
-  it("names the stale local overlay as the thing to fix", () => {
+  it("names the file and points at the settings that register it", () => {
     const r = foreignOnly();
     expect(r.remediation).toContain("session-assert-hook.mjs");
-    expect(r.remediation).toMatch(/settings\.local\.json/);
-    expect(r.remediation).toMatch(/relaunch/i);
+    expect(r.remediation).toMatch(/settings file/);
   });
 
   it("keeps the --repair remedy when the missing hook does belong to this folder", () => {
@@ -203,7 +207,7 @@ describe("a missing hook outside this folder is a different failure", () => {
     const r = verifyHooks({ dir, home: join(root, "no-home") });
     expect(r.missing).toHaveLength(2);
     expect(r.remediation).toMatch(/--repair/);
-    expect(r.remediation).toMatch(/settings\.local\.json/);
+    expect(r.remediation).toMatch(/settings file/);
   });
 
   it("counts in the grammar the owner reads: one hook does not exist, two do not", () => {
@@ -215,5 +219,98 @@ describe("a missing hook outside this folder is a different failure", () => {
     });
     expect(one.remediation).toMatch(/1 registered hook does not exist/);
     expect(verifyHooks({ dir: missingDir, home: join(root, "no-home") }).remediation).toMatch(/3 registered hooks do not exist/);
+  });
+});
+
+// Measured live on 2026-07-30, one run after the fix above. The corrected remedy printed
+// "relaunch through the entrypoint, which takes its own overlay back" — and that was a lie, because
+// the verdict runs BEFORE the overlay step (spec §7). The launcher refused on its own leftover,
+// every time, forever: the one thing the entrypoint exists to prevent is the owner hand-editing a
+// settings file to get in. A defect the launcher created and will deterministically clear on this
+// same run is not evidence about the FOLDER, so it must not be counted against it. Forgiveness is
+// narrow on purpose: our marker, dead file, outside the folder. Everything else still refuses.
+describe("the launcher's own leftover is not the folder's defect", () => {
+  const GONE = "C:\\Users\\Kuya\\code\\compy-control-gone";
+  const dead = join(GONE, "tools", "entry", "session-assert-hook.mjs");
+  const ourGroup = {
+    hooks: [{ type: "command", command: `node "${dead}"`, timeout: 10, statusMessage: ASSERT_HOOK_MARKER }],
+  };
+
+  const dirWith = (name, local, project = { hooks: {} }) => {
+    const dir = join(root, name);
+    mkdirSync(join(dir, ".claude"), { recursive: true });
+    writeFileSync(join(dir, ".claude", "settings.json"), JSON.stringify(project, null, 2));
+    if (local) writeFileSync(join(dir, ".claude", "settings.local.json"), JSON.stringify(local, null, 2));
+    return dir;
+  };
+
+  const ourLeftover = () =>
+    verifyHooks({
+      dir: dirWith("ours", { hooks: { SessionStart: [ourGroup] } }),
+      home: join(root, "no-home"),
+    });
+
+  it("does not refuse — the launcher takes this back on the run that finds it", () => {
+    const r = ourLeftover();
+    expect(r.ok).toBe(true);
+    expect(r.missing).toEqual([]);
+  });
+
+  it("reports it as stale rather than swallowing it — disclosure, not silence", () => {
+    const r = ourLeftover();
+    expect(r.stale).toHaveLength(1);
+    expect(r.stale[0].file).toBe(dead);
+    expect(r.checked.map((c) => c.file)).toContain(dead);
+  });
+
+  it("forgives only OUR marker — an unmarked dead hook from outside still refuses", () => {
+    const r = verifyHooks({
+      dir: dirWith("ours-unmarked", {
+        hooks: { SessionStart: [{ hooks: [{ type: "command", command: `node "${dead}"` }] }] },
+      }),
+      home: join(root, "no-home"),
+    });
+    expect(r.ok).toBe(false);
+    expect(r.stale).toEqual([]);
+  });
+
+  it("forgives nothing --repair can fix: a marked hook INSIDE the folder still refuses", () => {
+    // A folder that is behind registers the assert at its own path. That is not our leftover; it is
+    // the case --repair exists for, and forgiving it would hide a real missing guard.
+    const r = verifyHooks({
+      dir: dirWith("ours-inside", null, {
+        hooks: {
+          SessionStart: [
+            {
+              hooks: [
+                {
+                  type: "command",
+                  command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/session-root-assert.mjs"',
+                  statusMessage: ASSERT_HOOK_MARKER,
+                },
+              ],
+            },
+          ],
+        },
+      }),
+      home: join(root, "no-home"),
+    });
+    expect(r.ok).toBe(false);
+    expect(r.remediation).toMatch(/--repair/);
+  });
+
+  it("still refuses for the real miss when a leftover sits beside it", () => {
+    const r = verifyHooks({
+      dir: dirWith(
+        "ours-and-real",
+        { hooks: { SessionStart: [ourGroup] } },
+        { hooks: { Stop: [{ hooks: [{ type: "command", command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/stop-continue.mjs"' }] }] } },
+      ),
+      home: join(root, "no-home"),
+    });
+    expect(r.ok).toBe(false);
+    expect(r.missing).toHaveLength(1);
+    expect(r.stale).toHaveLength(1);
+    expect(r.remediation).toMatch(/--repair/);
   });
 });
