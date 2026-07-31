@@ -142,6 +142,25 @@ if (-not $env:COMPY_ENTRY_RESTARTED) {
     }
 }
 
+# --- 1c. ...and looks at the thing Kuya actually double-clicks -----------------
+# The shortcut is the only component of this journey that is not a tracked file, so for the whole of
+# this program nothing had an opinion about it -- and it shipped with -NoExit (a window to close after
+# every success, the exact chore this entrypoint deletes) and a target inside a VERSIONED PowerShell
+# package folder, which the next Store update would have removed. That second one does not fail now;
+# it fails weeks later, silently, at the moment the entrypoint is reached for.
+#
+# REPORT, never repair. Rewriting the owner's Desktop from inside a launch is a surprise, not a
+# preparation, and a shortcut broken badly enough to matter is one this script never runs from.
+try {
+    $lnkJson = node (Join-Path $ControlDir 'tools/entry/shortcut.mjs') --control $ControlDir 2>$null
+    if ($LASTEXITCODE -eq 1 -and $lnkJson) {
+        $lnk = $lnkJson | ConvertFrom-Json
+        Warn "your Desktop shortcut still works, but it will not keep working:"
+        foreach ($d in $lnk.defects) { Warn "  $($d.reason) -- $($d.remediation)" }
+    }
+}
+catch { }
+
 # --- 2. Optional full repair, before the verdict, and only when asked ---------
 if ($Repair) {
     if ($Issue -le 0) { Bad 'Use -Repair together with -Issue <n> so there is a folder to repair.'; Hold-Window; exit 2 }
