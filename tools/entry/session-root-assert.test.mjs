@@ -74,7 +74,7 @@ describe("severity — a tracked hook must block on disagreement and only advise
     "REPO_UNREADABLE",
     "SESSION_FOREIGN",
   ];
-  const ADVISE = ["NO_TOKEN", "TOKEN_EXPIRED", "LINEAGE_EXPIRED"];
+  const ADVISE = ["NO_TOKEN", "TOKEN_EXPIRED", "LINEAGE_EXPIRED", "LAUNCH_SPENT"];
 
   it("classifies every refusal code the assert can actually produce", () => {
     const produced = [...readFileSync(HOOK_FILE, "utf8").matchAll(/refuse\(\s*"([A-Z_]+)"/g)].map((m) => m[1]);
@@ -188,7 +188,9 @@ describe("the assert itself still fails closed on a real disagreement", () => {
       cwd: FOLDER,
     });
     expect(second.ok).toBe(false);
-    expect(second.code).toBe("NO_TOKEN");
+    // A launch that WAS made for this folder and taken up now says exactly that, instead of denying
+    // the entrypoint ever launched it. Still advisory, still exit 0.
+    expect(second.code).toBe("LAUNCH_SPENT");
     expect(verdictOf(second).exit).toBe(0);
   });
 });

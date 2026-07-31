@@ -88,7 +88,7 @@ export function normalizeRepo(url) {
 
 // ── the launch ───────────────────────────────────────────────────────────────────────────────────
 
-export function makeToken({ issue, folder, branch, window, repo = null, nonce = null, sessionId = null, expiresAt = null, now = new Date() }) {
+export function makeToken({ issue, folder, branch, window, repo = null, nonce = null, sessionId = null, briefHash = null, expiresAt = null, now = new Date() }) {
   return {
     issue,
     folder: canonicalizePath(folder),
@@ -96,6 +96,10 @@ export function makeToken({ issue, folder, branch, window, repo = null, nonce = 
     window,
     repo: normalizeRepo(repo),
     nonce: nonce ?? randomUUID(),
+    // The digest of the brief this launch wrote. `sessionStartOutput` refuses to hand over a brief
+    // whose bytes are not these, so a stale or edited file cannot become instructions for a session
+    // this record vouches for.
+    briefHash,
     // The conversation id the launcher ASSIGNED to the session it is about to start (`--session-id`),
     // so "is this the session I launched" is a question with an answer. Without it, lineage could only
     // ask "is this the same folder", and any later Claude process rooted there inherited the
@@ -209,6 +213,7 @@ const lineageFromLaunch = ({ token, root, now, sessionId = null }) => ({
   window: token.window,
   repo: token.repo ?? null,
   nonce: token.nonce ?? null,
+  briefHash: token.briefHash ?? null,
   // Bound at the moment the launch is taken up: the launcher's assigned id when it assigned one,
   // otherwise the id of the session that actually answered. Either way the folder's record now names
   // ONE conversation, and a different one cannot resume on it.
@@ -446,6 +451,7 @@ export function assertSessionRoot({
       branch: token.branch,
       window: token.window,
       repo: token.repo ?? null,
+      briefHash: token.briefHash ?? null,
       notes: verdict.notes,
     };
   }
@@ -498,6 +504,7 @@ export function assertSessionRoot({
       branch: lineage.branch,
       window: lineage.window,
       repo: lineage.repo ?? null,
+      briefHash: lineage.briefHash ?? null,
       notes: verdict.notes,
     };
   }
@@ -506,6 +513,20 @@ export function assertSessionRoot({
   if (token && !claimedAtOf(token) && expiredAt(token.expiresAt)) {
     return refuse("TOKEN_EXPIRED", `The launch token expired at ${token.expiresAt}. Relaunch from the entrypoint.`);
   }
+  // A launch that WAS made for this folder, taken up, and whose session record is gone. Saying "this
+  // session was not started through the entrypoint" here is simply false -- it is what the upgraded
+  // hook told a live #23 session at the 07:16Z compaction, about a session the entrypoint had
+  // launched. The session is still unverified and this is still advisory, but the reason it gives is
+  // now the true one, and it names the way back.
+  if (token && claimedAtOf(token) && resolved.observed && samePath(resolved.root, token.folder)) {
+    return refuse(
+      "LAUNCH_SPENT",
+      `This folder's launch was already taken up at ${claimedAtOf(token)} and its session record is gone, ` +
+        "so this session is unverified. Relaunch through the entrypoint to verify it again.",
+      { root: resolved.root, issue: token.issue },
+    );
+  }
+
   return refuse(
     "NO_TOKEN",
     "No launch pending for this folder and no session record in it, so nothing verified that its " +
@@ -553,13 +574,14 @@ export function verifySession({
  * Refusals that mean "there is nothing live to disagree with" rather than "something is wrong".
  * A session that was never launched through the entrypoint is a normal session, not a broken one.
  */
-export const ADVISORY_CODES = new Set(["NO_TOKEN", "TOKEN_EXPIRED", "LINEAGE_EXPIRED"]);
+export const ADVISORY_CODES = new Set(["NO_TOKEN", "TOKEN_EXPIRED", "LINEAGE_EXPIRED", "LAUNCH_SPENT"]);
 
 /** One line each — this prints on every session that has no token, so it must not be a wall of text. */
 const ADVISORY_LINES = {
   NO_TOKEN: "compy-entry: no launch token — this session was not started through the entrypoint, so its folder, branch and claim are unverified.",
   TOKEN_EXPIRED: "compy-entry: the launch token has expired — this session is unverified.",
   LINEAGE_EXPIRED: "compy-entry: this folder's session record has lapsed — this session is unverified until you relaunch from the entrypoint.",
+  LAUNCH_SPENT: "compy-entry: this folder's launch was already taken up and its session record is gone — this session is unverified until you relaunch from the entrypoint.",
 };
 
 /**
@@ -632,6 +654,17 @@ export function sessionStartOutput(result, { briefDir = BRIEF_DIR, source = null
   if (!result?.ok) return null;
   const brief = readBrief({ issue: result.issue, dir: briefDir });
   if (!brief?.text) return null;
+
+  // The brief becomes authoritative context on every start, so it is exactly the kind of file that
+  // must not be trusted for merely existing. When the launch bound a digest, the bytes have to match
+  // it: a stale brief from an older launch, a half-written one, or an edited one would otherwise
+  // arrive as instructions inside a session this record has already vouched for. Nothing bound (a
+  // record from before hashes existed) is carried, because there is no claim to contradict.
+  // Re-derived from the TEXT, never read off the record. A `hash` field sitting inside the same file
+  // it describes is a claim the file makes about itself: edit the text, leave the field, and a
+  // stored-field comparison waves it through. The digest has to be computed from the bytes that are
+  // about to become context.
+  if (result.briefHash && createHash("sha256").update(String(brief.text), "utf8").digest("hex") !== result.briefHash) return null;
 
   const out = { hookEventName: "SessionStart", additionalContext: brief.text };
   if (brief.sessionTitle) out.sessionTitle = brief.sessionTitle;

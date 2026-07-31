@@ -10,7 +10,8 @@
 // exist (tracked-hooks.test.mjs pins it to `node:` imports only), so it cannot call the renderer. It
 // carries the text; it does not compose it. One writer, no second opinion about what the brief says.
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 
 import { BRIEF_DIR, briefFile, readBrief } from "../../.claude/hooks/session-root-assert.mjs";
 
@@ -71,16 +72,48 @@ export function sessionTitle(brief) {
   return head + (title.length > room ? `${title.slice(0, room - 1).trimEnd()}…` : title);
 }
 
+/**
+ * The digest of exactly what a session will be handed.
+ *
+ * Hashing the RENDERED text, not the whole record: the text is the thing that becomes authoritative
+ * context, and the record also carries fields (the opening lines, the window title) that no session
+ * is instructed by. A hash over the whole file would break on a harmless field and pass on nothing
+ * that matters more.
+ */
+export const briefHash = (text) => createHash("sha256").update(String(text ?? ""), "utf8").digest("hex");
+
+/** Cap the durable brief so an unbounded field cannot become an unbounded instruction. */
+export const MAX_BRIEF_CHARS = 4000;
+
 export function writeBrief(brief, { dir = BRIEF_DIR, now = new Date() } = {}) {
+  let text = renderBrief(brief);
+  // The 2500 ceiling lived only in a test, which is a measurement of the fixture rather than a limit
+  // on production. `nextAction` and the handoff excerpt come off a board field and an issue comment,
+  // and neither has a length anybody controls.
+  let truncated = false;
+  if (text.length > MAX_BRIEF_CHARS) {
+    // Cut at a line boundary and SAY so, rather than stopping mid-sentence and inventing a meaning.
+    const cut = text.slice(0, MAX_BRIEF_CHARS);
+    text = `${cut.slice(0, cut.lastIndexOf("\n") + 1 || cut.length)}\n\n_(brief truncated at ${MAX_BRIEF_CHARS} characters — the issue itself is the full record.)_\n`;
+    truncated = true;
+  }
+
   const record = {
     ...brief,
     createdAt: now.toISOString(),
-    text: renderBrief(brief),
+    text,
+    truncated,
+    // Bound into the launch token and then the lineage, so a session is only handed a brief that is
+    // byte-for-byte the one the launcher wrote. Without it, any stale or edited file under
+    // %LOCALAPPDATA% that still parsed became authoritative instructions for a verified session.
+    hash: briefHash(text),
     opening: { launch: openingMessage({ mode: "launch", brief }), resume: openingMessage({ mode: "resume", brief }) },
     sessionTitle: sessionTitle(brief),
   };
   const file = briefFile({ issue: brief.issue, dir });
   mkdirSync(dir, { recursive: true });
-  writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`);
-  return file;
+  const tmp = `${file}.${randomUUID().slice(0, 8)}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(record, null, 2)}\n`);
+  renameSync(tmp, file);
+  return { file, hash: record.hash, truncated };
 }

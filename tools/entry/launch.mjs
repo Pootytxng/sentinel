@@ -345,6 +345,9 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     branch: target.branch,
     window: intended.window,
     sessionId,
+    // Written before the token on purpose (step 4), so the digest exists by the time the record that
+    // vouches for it does. A session can never be admitted to a brief that is not on disk yet.
+    briefHash: brief.hash,
     now: facts.now,
   });
   writeToken(token);
@@ -387,7 +390,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     // The conversation the launcher named. The shell hands it to the CLI so the session that starts
     // IS the session the token was written for.
     sessionId,
-    brief,
+    brief: brief.file,
     verdict,
   };
 }
