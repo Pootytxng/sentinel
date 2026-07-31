@@ -43,6 +43,27 @@ accepted only when it is positively distinguished from authentication, permissio
 timeout, malformed-response, and other failures. Public release publication stays last, after exact
 draft-asset verification.
 
+## The one local command
+
+Hosted CI is off by owner decision, so one local run is the release proof:
+
+```powershell
+powershell -NoProfile -File scripts/verify-release.ps1
+```
+
+It runs every gate — git cleanliness, encoding, the release-PowerShell static guard, strict
+release-state citations, doc budgets, current `npm audit` and `cargo audit` classified by
+reachability against the shipped Windows target, dependency inventory, updater signature,
+TypeScript, the whole Vitest suite (frontend, hooks, entrypoint, release-pipeline guards), the
+frontend build, Rust tests, and clippy — and never stops at the first failure. Each check reports
+`PASS`, `FAIL`, `BLOCKED` (could not run: missing tool, unreachable advisory database) or `PENDING`
+(the artifact it proves does not exist yet; only the updater signature before staging). Exit codes:
+`1` any FAIL, `3` any BLOCKED, `0` otherwise. A blocked check is never a silent skip and never
+counts as a pass. Every result, including the audited dependency inventory, is written to
+`src-tauri/target/release/bundle/nsis/verify-release-evidence.json` for the evidence pack.
+Supply-chain acknowledgements live in `scripts/audit-policy.json` and expire: an unlisted finding
+fails the gate, and so does a listed one past its `review_by`.
+
 ## Owner stop boundaries
 
 Stop for the owner only at:

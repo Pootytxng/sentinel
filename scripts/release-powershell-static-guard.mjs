@@ -257,6 +257,32 @@ const requiredTokens = new Map([
       "--draft=false",
     ],
   ],
+  [
+    // Hosted CI is off, so this local runner is the only release proof. Each token below is a
+    // check the gate would otherwise be able to lose silently: delete the line, the suite still
+    // goes green, and the run reports a pass it did not earn.
+    "scripts/verify-release.ps1",
+    [
+      '[ValidateSet("PASS", "FAIL", "BLOCKED", "PENDING")]',
+      "Add-GateResult",
+      '"git diff check"',
+      "scripts/encoding-guard.mjs",
+      "scripts/release-powershell-static-guard.mjs",
+      "scripts/verify-release-state.mjs",
+      "scripts/doc-budget.ps1",
+      "scripts/supply-chain-gate.mjs",
+      '$supplyChainChecks = @("npm audit", "Cargo audit", "dependency inventory")',
+      "scripts/verify-updater-signature.mjs",
+      '"updater signature verification"',
+      '"TypeScript"',
+      '"Vitest suite (frontend, hooks, entrypoint, release-pipeline guards)"',
+      '"frontend production build"',
+      '"Rust tests"',
+      '"Rust clippy"',
+      "verify-release-evidence.json",
+      "exit 3",
+    ],
+  ],
 ]);
 
 export function scanReleasePowerShell({ overrides = {} } = {}) {
