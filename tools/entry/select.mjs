@@ -191,10 +191,33 @@ export function renderMenu(menu) {
   }
   lines.push("");
   if (menu.options.length > 0) {
+    // "either works" is a promise, so it is only printed when it is true. When a list position also
+    // spells an issue number on this same menu, saying it would be the menu lying to the owner about
+    // the one thing he has to type.
+    const clashes = ambiguousNumbers(menu);
     lines.push(`Type the number on the left (${humanList(menu.options.map((o) => String(o.ordinal)))}) or the issue`);
-    lines.push(`number (${humanList(menu.options.map((o) => `#${o.number}`))}) — either works. Q cancels; nothing is written.`);
+    if (clashes.length === 0) {
+      lines.push(`number (${humanList(menu.options.map((o) => `#${o.number}`))}) — either works. Q cancels; nothing is written.`);
+    } else {
+      lines.push(`number with a # (${humanList(menu.options.map((o) => `#${o.number}`))}). ${humanList(clashes.map(String))} would mean`);
+      lines.push(`both, so ${clashes.length === 1 ? "it needs" : "they need"} the #. Q cancels; nothing is written.`);
+    }
   }
   return lines.join("\n");
+}
+
+/**
+ * Numbers that name a list position AND a different issue on this same menu. Bare, they are
+ * genuinely ambiguous; with a `#` they are not.
+ */
+export function ambiguousNumbers(menu) {
+  return (menu.options ?? [])
+    .map((o) => o.ordinal)
+    .filter((n) => {
+      const byOrd = (menu.options ?? []).find((o) => o.ordinal === n);
+      const byNum = (menu.options ?? []).find((o) => o.number === n);
+      return Boolean(byOrd && byNum && byOrd.number !== byNum.number);
+    });
 }
 
 /**
@@ -215,12 +238,31 @@ export function resolveChoice(input, menu) {
   if (raw === "") return invalid("Enter does not select anything.");
   if (/^q(uit)?$/i.test(raw)) return { kind: "cancel", reason: "cancelled — nothing was written." };
 
+  const hashed = raw.startsWith("#");
   const digits = raw.replace(/^#/, "");
   if (!/^\d+$/.test(digits)) return invalid(`"${raw}" is not one of the choices.`);
 
   const n = Number(digits);
-  const option = menu.options.find((o) => o.ordinal === n) ?? menu.options.find((o) => o.number === n);
-  if (option) return { kind: "task", number: option.number, option };
+  const byOrdinal = menu.options.find((o) => o.ordinal === n);
+  const byIssue = menu.options.find((o) => o.number === n);
+
+  // `#N` is always the issue number. That is what the prefix is FOR, and it is the escape hatch out
+  // of the collision below -- so it must never be silently reinterpreted as a list position.
+  if (hashed) {
+    if (byIssue) return { kind: "task", number: byIssue.number, option: byIssue };
+  } else {
+    // A bare number that names both a list position and a DIFFERENT issue means neither. Resolving
+    // ordinal-first silently picked one of two honest readings, which is exactly how "18" selected
+    // something else and the menu still claimed both spellings work.
+    if (byOrdinal && byIssue && byOrdinal.number !== byIssue.number) {
+      return invalid(
+        `"${n}" means two things on this menu: list position ${n} is #${byOrdinal.number}, and #${n} is its own task. ` +
+          `Type #${n} for the issue, or a list position that is not also an issue number.`,
+      );
+    }
+    const option = byOrdinal ?? byIssue;
+    if (option) return { kind: "task", number: option.number, option };
+  }
 
   const blocked = menu.unavailable.find((u) => u.number === n);
   if (blocked) return invalid(`#${n} cannot be started: ${blocked.reason}.`);

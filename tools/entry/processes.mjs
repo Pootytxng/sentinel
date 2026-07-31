@@ -14,6 +14,10 @@ import { canonicalizePath } from "./worktree-field.mjs";
 /** Names worth listing at all. Everything else is noise in a report Kuya has to read. */
 export const WATCHED = [
   "compy.exe",
+  // A Claude session writing in the target folder is the one contender that matters most here, and
+  // it was the one name missing: the whole point of a claim is that two writers never share a
+  // worktree, and the probe could not see the other writer at all.
+  "claude.exe",
   "cargo.exe",
   "rustc.exe",
   "node.exe",
@@ -24,6 +28,9 @@ export const WATCHED = [
 
 const isInstaller = (name) => /setup\.exe$|installer\.exe$|^msiexec\.exe$/i.test(name);
 const isBuilder = (name) => /^(cargo|rustc|node|npm|msbuild)\.exe$/i.test(name);
+// An editor open on a folder is not a writer -- Code.exe stays listed and never contends, and the
+// IDE bridge being up says only that a window exists. A Claude CLI session rooted in the folder is.
+const isSession = (name) => /^claude\.exe$/i.test(name);
 
 /**
  * @param {Array<{name: string, commandLine?: string}>|null} raw
@@ -38,7 +45,7 @@ export function classifyProcesses(raw, { folder }) {
     if (!name) continue;
     const cmd = String(p.commandLine ?? "");
     const inFolder = needle !== "" && canonicalizePath(cmd).toLowerCase().includes(needle);
-    const contends = isInstaller(name) || (isBuilder(name) && inFolder);
+    const contends = isInstaller(name) || ((isBuilder(name) || isSession(name)) && inFolder);
 
     const g = groups.get(name) ?? { name, count: 0, contends: false, note: null, samples: [] };
     g.count += 1;
@@ -46,7 +53,9 @@ export function classifyProcesses(raw, { folder }) {
       g.contends = true;
       g.note = isInstaller(name)
         ? "an installer is running — installs are machine-wide"
-        : "running against this folder";
+        : isSession(name)
+          ? "a Claude session is already working in this folder"
+          : "running against this folder";
     }
     if (g.samples.length < 2 && cmd) g.samples.push(cmd);
     groups.set(name, g);
