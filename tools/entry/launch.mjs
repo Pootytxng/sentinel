@@ -36,7 +36,7 @@ import { contextLabel } from "./select.mjs";
 import { postClaim, planRenew, execPlan } from "./claim.mjs";
 import { writeBrief } from "./brief.mjs";
 import { resolveWindow } from "./settings-resolve.mjs";
-import { establishTier } from "./tier.mjs";
+import { establishTier, restampTier } from "./tier.mjs";
 import { makeToken, writeToken } from "./session-assert.mjs";
 import { pruneDeadOverlay, writeOverlay } from "./overlay.mjs";
 
@@ -333,6 +333,10 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     if (o.wrote) say(`  installed the session-root assert into ${o.file}`);
     else if (o.removed) say(`  removed a leftover session-assert overlay from ${o.file} — ${o.reason}`);
     else say(`  session-root assert not installed — ${o.reason}`);
+    // The overlay just rewrote the same file `establishTier` recorded a hash for. Both are the
+    // launcher; only one kept the record. Re-stamp it, or the strong exact-hash proof is stale from
+    // the moment this launch ends and every later tier change leans on the content fallback instead.
+    if (o.wrote) restampTier({ dir: target.path });
   } else {
     // Opting out of INSTALLING the assert is not opting out of clearing a dead one we left behind.
     const p = pruneDeadOverlay({ dir: target.path });
