@@ -69,13 +69,16 @@ describe("guard 1 — claimed one folder, running in another", () => {
     expect(r.actual).toBe(ELSEWHERE);
   });
 
+  // These two are about FOLDER comparison. A launched session also reports the window the launcher
+  // established, and an unobserved window is now its own refusal (see the WINDOW_UNOBSERVED cases
+  // below), so the fixtures carry what a real launched session carries.
   it("passes when they agree", () => {
-    const r = assertSessionRoot({ token: token(), env: { CLAUDE_PROJECT_DIR: CLAIMED }, cwd: CLAIMED, now: NOW });
+    const r = assertSessionRoot({ token: token(), env: { CLAUDE_PROJECT_DIR: CLAIMED, CLAUDE_CODE_AUTO_COMPACT_WINDOW: "300000" }, cwd: CLAIMED, now: NOW });
     expect(r.ok).toBe(true);
   });
 
   it("compares folders case- and separator-insensitively", () => {
-    const r = assertSessionRoot({ token: token(), env: { CLAUDE_PROJECT_DIR: "c:/users/kuya/code/sentinel-feedback" }, cwd: CLAIMED, now: NOW });
+    const r = assertSessionRoot({ token: token(), env: { CLAUDE_PROJECT_DIR: "c:/users/kuya/code/sentinel-feedback", CLAUDE_CODE_AUTO_COMPACT_WINDOW: "300000" }, cwd: CLAIMED, now: NOW });
     expect(r.ok).toBe(true);
   });
 });

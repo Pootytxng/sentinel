@@ -17,6 +17,7 @@ export {
   canonicalizePath,
   claimToken,
   claimedAtOf,
+  CORRUPT,
   DEFAULT_TTL_MINUTES,
   LINEAGE_TTL_MINUTES,
   lineageFile,

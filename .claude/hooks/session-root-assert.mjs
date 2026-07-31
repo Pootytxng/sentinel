@@ -112,11 +112,25 @@ export function writeToken(token, { dir = TOKEN_DIR } = {}) {
   return join(dir, TOKEN_NAME);
 }
 
+/**
+ * A record that exists but cannot be read is NOT the same as no record.
+ *
+ * Both used to collapse to null, so a truncated or half-written launch.json under an active launch
+ * reached the "nothing to check against" branch and printed the cheerful NO_TOKEN advisory — exit 0,
+ * session carries on. The launcher wrote that file precisely so this hook would verify against it;
+ * losing it is a reason to stop, not to shrug. `CORRUPT` is returned so the caller can tell the two
+ * apart, and every read site treats it as evidence destroyed rather than evidence absent.
+ */
+export const CORRUPT = Symbol("corrupt-record");
+
 export function readToken({ dir = TOKEN_DIR } = {}) {
+  const file = join(dir, TOKEN_NAME);
+  if (!existsSync(file)) return null;
   try {
-    return JSON.parse(readFileSync(join(dir, TOKEN_NAME), "utf8"));
+    const parsed = JSON.parse(readFileSync(file, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : CORRUPT;
   } catch {
-    return null;
+    return CORRUPT;
   }
 }
 
@@ -141,10 +155,13 @@ export function lineageFile({ root, dir = TOKEN_DIR }) {
 }
 
 export function readLineage({ root, dir = TOKEN_DIR }) {
+  const file = lineageFile({ root, dir });
+  if (!existsSync(file)) return null;
   try {
-    return JSON.parse(readFileSync(lineageFile({ root, dir }), "utf8"));
+    const parsed = JSON.parse(readFileSync(file, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : CORRUPT;
   } catch {
-    return null;
+    return CORRUPT;
   }
 }
 
@@ -270,7 +287,24 @@ function checkIdentity({ claim, resolved, cwd, env, live, what }) {
     );
   }
 
-  const liveWindow = Number(env?.CLAUDE_CODE_AUTO_COMPACT_WINDOW);
+  // An empty or whitespace variable is not a window of zero -- `Number("")` is 0, which is finite,
+  // and would have been compared as a real observation.
+  const rawWindow = env?.CLAUDE_CODE_AUTO_COMPACT_WINDOW;
+  const liveWindow = String(rawWindow ?? "").trim() === "" ? Number.NaN : Number(rawWindow);
+  // Unobserved is not "matches". The launcher establishes the tier and this hook is the only thing
+  // that confirms the session actually GOT it; when the variable is absent or unreadable there is no
+  // observation to compare, and reporting a verified session on a window nobody measured is the same
+  // class of error as claiming a launch that never happened. Ad-hoc sessions never reach here --
+  // they have no claim at all.
+  if (claim.window && !Number.isFinite(liveWindow)) {
+    return refuse(
+      "WINDOW_UNOBSERVED",
+      `${what.toLowerCase()} a ${claim.window} context window, but this session reports none ` +
+        "(CLAUDE_CODE_AUTO_COMPACT_WINDOW is unset or not a number), so there is nothing to check it against. " +
+        "Relaunch through the entrypoint so the tier is established and observable.",
+      { expected: claim.window, actual: rawWindow ?? null, root: resolved.root },
+    );
+  }
   if (claim.window && Number.isFinite(liveWindow) && liveWindow !== claim.window) {
     return refuse(
       "WINDOW_MISMATCH",
@@ -318,6 +352,26 @@ export function assertSessionRoot({
 }) {
   const resolved = resolveSessionRoot({ env, hookInput, cwd });
   const expiredAt = (iso) => Boolean(iso) && new Date(iso) < now;
+
+  // An artifact that exists and cannot be read has destroyed the evidence this hook was going to
+  // verify against. Failing open there turns a damaged launch record into a silent pass.
+  if (token === CORRUPT) {
+    return refuse(
+      "TOKEN_CORRUPT",
+      "The launch record exists but could not be read. Something wrote it partially or damaged it, so " +
+        "there is no way to tell which folder, branch or window this session was launched for. " +
+        "Relaunch through the entrypoint to write a fresh one.",
+      { root: resolved.root },
+    );
+  }
+  if (lineage === CORRUPT) {
+    return refuse(
+      "LINEAGE_CORRUPT",
+      `This folder's session record exists but could not be read, so nothing about ${resolved.root} is verified. ` +
+        "Relaunch through the entrypoint to establish it again.",
+      { root: resolved.root },
+    );
+  }
 
   const ours = lineage && resolved.observed && samePath(lineage.folder, resolved.root) && !expiredAt(lineage.expiresAt);
   const pending = Boolean(token) && !claimedAtOf(token) && !expiredAt(token.expiresAt);
