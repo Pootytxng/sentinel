@@ -16,7 +16,8 @@
 // stderr so the two never get mixed up.
 
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 import {
   FULL_SHA,
   HOST_DIR,
@@ -29,6 +30,8 @@ import {
   refreshCreateBase,
 } from "./gather.mjs";
 import { reconcile, selectTask } from "./preflight.mjs";
+import { verdictLines } from "./render.mjs";
+import { hookRepairPlan, repairHooks, verifyHooks } from "./hooks-verify.mjs";
 import { contextLabel } from "./select.mjs";
 import { postClaim, planRenew, execPlan } from "./claim.mjs";
 import { writeBrief } from "./brief.mjs";
@@ -37,7 +40,54 @@ import { establishTier } from "./tier.mjs";
 import { makeToken, writeToken } from "./session-assert.mjs";
 import { pruneDeadOverlay, writeOverlay } from "./overlay.mjs";
 
-const say = (...a) => console.error(...a);
+// Narration goes to stderr so stdout stays exactly one JSON line — and, when a log file is named, to
+// that file as well. The two are deliberately separate: on a successful launch the terminal CLOSES
+// (the owner should not be left with a window to tidy up), so the only durable account of what the
+// run did is the log. `--quiet` silences the terminal copy and never the log. "Glance first, proof on
+// demand" is only true if the proof outlives the glance.
+const ANSI = /\u001b\[[0-9;]*m/g;
+let narrate = (line) => console.error(line);
+const say = (...a) => narrate(a.map((x) => String(x)).join(" "));
+
+export function setNarration({ quiet = false, logFile = null, now = () => new Date() } = {}) {
+  let ready = false;
+  narrate = (line) => {
+    if (!quiet) console.error(line);
+    if (!logFile) return;
+    // A log that cannot be written is a worse thing to fail a launch over than to lose. It is
+    // evidence, not a precondition.
+    try {
+      if (!ready) {
+        mkdirSync(dirname(logFile), { recursive: true });
+        ready = true;
+      }
+      // A blank line is the table's spacing, not an event. Stamping it would put a timestamp on
+      // nothing and cost the log the shape that makes it readable in the first place.
+      const text = line.replace(ANSI, "");
+      appendFileSync(logFile, text.trim() === "" ? "\n" : `${now().toISOString()} ${text}\n`);
+    } catch {
+      /* ignore */
+    }
+  };
+}
+
+/**
+ * A refusal's evidence, put where it can still be read after the window is gone.
+ *
+ * The whole check table goes through `say`, so a quiet run still writes every row to the log while
+ * the shortcut prints its own one-line sentence. The owner reads the sentence; the table is there for
+ * whoever asks. Nothing is suppressed, only placed — "glance first, proof on demand" is a promise
+ * about WHERE the proof is, not about whether it was produced.
+ *
+ * It lives here, exported, rather than inline in the dispatch block below, because a report only the
+ * real process can produce is a report no guard can check.
+ */
+export function reportRefusal(payload) {
+  if (!payload?.checks?.length) return false;
+  for (const line of verdictLines(payload.task, payload)) say(line);
+  return true;
+}
+
 const git = (cwd, args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 
 class Refused extends Error {
@@ -91,6 +141,37 @@ export function refreshAndCreate({ facts, target, base = null, hostDir = HOST_DI
   };
 }
 
+/**
+ * The one repair the launcher performs on its own: hook files a folder REGISTERS but does not have.
+ *
+ * It is bounded on both sides. It only runs when `hooks.present` is the ONLY failing row — a folder
+ * that is also dirty, or claimed elsewhere, or on the wrong branch has a problem repair does not
+ * address, and repairing into it would be writing to a folder we just refused. And it only runs when
+ * `hookRepairPlan` can prove every clause (inside the folder, at the registered path, present in the
+ * canonical set, tracked by git); anything short of that refuses with the reason, unrepaired.
+ *
+ * Afterwards the FULL preflight runs again — not just the hooks row. The repair wrote files into the
+ * folder, and the honest question after a write is "does everything still hold", not "did my write
+ * land". Same discipline as the base refresh: the last verdict before the next write is a complete one.
+ */
+export function repairHooksIfSafe({ facts, verdict, controlDir, dryRun = false, canonicalDir = null }) {
+  const failed = (verdict.checks ?? []).filter((c) => !c.ok);
+  if (failed.length !== 1 || failed[0].id !== "hooks.present") return { attempted: false, verdict, facts };
+
+  const canonical = canonicalDir ?? join(controlDir ?? "", ".claude", "hooks");
+  const plan = hookRepairPlan({ verify: facts.hooks, canonicalDir: canonical });
+  if (!plan.ok) return { attempted: true, ok: false, verdict, facts, reason: plan.reason };
+
+  if (dryRun) {
+    say(`  ${plan.files.length} hook${plan.files.length === 1 ? "" : "s"} missing and safely repairable (${plan.files.join(", ")}) — a real launch would copy ${plan.files.length === 1 ? "it" : "them"} and re-verify.`);
+    return { attempted: true, ok: false, verdict, facts, reason: "dry run: nothing was written" };
+  }
+
+  repairHooks({ dir: facts.hooks.dir, canonicalDir: canonical, only: plan.files });
+  const repairedFacts = { ...facts, hooks: verifyHooks({ dir: facts.hooks.dir, env: process.env }) };
+  return { attempted: true, ok: true, verdict: reconcile(repairedFacts), facts: repairedFacts, disclosure: plan.disclosure };
+}
+
 export async function launch({ issue = null, dryRun = false, noOverlay = false, controlDir, self = { lane: "Claude Code" } }) {
   const board = readBoard();
   if (!board.reachable) throw new Refused({ verdict: "REFUSE", reason: `Work Control unreachable: ${board.error}` });
@@ -105,8 +186,24 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   if (picked.auto) say(`  resuming #${task.number} — it is already yours and still claimed, so there was nothing to choose`);
   // STAGE 1 — the preliminary verdict. Read-only: no fetch, no writes, and it already names the
   // exact commit an absent worktree would be created from.
-  const { facts, target, base } = gatherFacts({ issue: task.number, task, board, self });
+  const gathered = gatherFacts({ issue: task.number, task, board, self });
+  const { target, base } = gathered;
+  let facts = gathered.facts;
   let verdict = reconcile(facts);
+
+  // A folder missing its own registered hooks is a chore the owner should never be handed — it is
+  // the launcher's payload, and the launcher can prove it. Repair, disclose in one line, re-verify.
+  if (verdict.verdict !== "PASS") {
+    const repair = repairHooksIfSafe({ facts, verdict, controlDir, dryRun });
+    if (repair.attempted) {
+      if (repair.ok) {
+        say(`  ${repair.disclosure}`);
+        ({ facts, verdict } = repair);
+      } else {
+        say(`  hooks are missing and the launcher will not repair them: ${repair.reason}`);
+      }
+    }
+  }
 
   if (verdict.verdict !== "PASS") {
     throw new Refused({ ...verdict, task, reason: `preflight refused #${task.number}` });
@@ -239,12 +336,30 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     say("  --no-overlay: the in-session root assert will NOT run for this launch");
   }
 
-  return { issue: task.number, folder: target.path, branch: target.branch, base: createdFrom, window: intended.window, contextLabel: label, marathon: intended.marathon, verdict };
+  // Everything the launcher needs to finish the journey without asking again. `title`, `action` and
+  // `brief` are here so the shortcut can name the task, say Resume or Start, and point at the durable
+  // instructions from ONE run of this sequence — the old script ran preflight a second time for
+  // facts it had already been told, and a second read is a second chance to disagree with itself.
+  return {
+    issue: task.number,
+    title: task.title,
+    action: picked.auto ? "Resume" : "Start",
+    auto: Boolean(picked.auto),
+    folder: target.path,
+    branch: target.branch,
+    base: createdFrom,
+    window: intended.window,
+    contextLabel: label,
+    marathon: intended.marathon,
+    brief,
+    verdict,
+  };
 }
 
 if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, "/")}`) {
   const argv = process.argv.slice(2);
   const arg = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : null);
+  setNarration({ quiet: argv.includes("--quiet"), logFile: arg("--log") });
   try {
     const result = await launch({
       issue: arg("--issue") ? Number(arg("--issue")) : null,
@@ -256,6 +371,7 @@ if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, "/")}`) {
     process.exit(0);
   } catch (e) {
     if (e instanceof Refused) {
+      reportRefusal(e.payload);
       console.log(JSON.stringify(e.payload));
       process.exit(1);
     }
