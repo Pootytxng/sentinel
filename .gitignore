@@ -43,10 +43,13 @@ site/assets/og-card*
 *.sln
 *.sw?
 
-# Claude Code — local autopilot hook (machine-local, personal automation; not shared)
+# Claude Code — machine-local settings and state only (owner decision 5, Issue #18, 2026-07-30).
+# `.claude/hooks/` is deliberately NOT here: ignoring it while tracked settings.json registered those
+# hooks by path is finding 4 — five of six checkouts ran with every hook silently missing, a DENY
+# among them. The hooks are now tracked so they travel with the branch; only per-machine settings and
+# autopilot state stay out. Guarded by tools/entry/tracked-hooks.test.mjs.
 .claude/settings.local.json
 .claude/autopilot.json
-.claude/hooks/
 
 # /.agents/ — machine-local, auto-generated `.claude`->Codex mirror of the canonical tracked
 # `.claude/skills/`. It is NOT the source of truth (that is `.claude/skills/`, committed) and it is

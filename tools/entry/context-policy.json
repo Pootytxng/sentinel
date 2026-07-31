@@ -1,0 +1,23 @@
+{
+  "$comment": [
+    "Which auto-compaction window each train is INTENDED to run with (spec §5.2).",
+    "The entrypoint compares this to the effective value resolved from the settings layers and",
+    "refuses on disagreement, in both directions. Too small hides context; too large silently",
+    "adopts an unaccepted trial window.",
+    "",
+    "The 300k window is NOT globally adopted. It is scoped to the issues that ran the trial and",
+    "stays there until the trial is formally accepted by Kuya. Widening `default` to 300000 to make",
+    "a refusal go away would be exactly the failure this file exists to prevent: a routing mistake",
+    "made invisible by a setting.",
+    "",
+    "Adding an issue here is a decision, not a fix. Record why in `note`."
+  ],
+  "default": 150000,
+  "trials": [
+    {
+      "window": 300000,
+      "issues": [15, 16, 19],
+      "note": "context-window trial (#15), its measurement instrument (#16), and the re-run that decides it (#19, owner addendum on #18, 2026-07-30) — not accepted; #19 owns the decision"
+    }
+  ]
+}

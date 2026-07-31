@@ -5,6 +5,18 @@
     "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "150000"
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-root-assert.mjs\"",
+            "timeout": 10,
+            "statusMessage": "compy-entry:session-assert"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
