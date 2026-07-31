@@ -70,6 +70,9 @@ function showTrackedFile({ hostDir, ref, path }) {
   }
 }
 
+/** What the settings of a not-yet-created worktree are named after: one commit, or honestly nothing. */
+const snapshotPath = (ref) => (ref ? `${ref}:${PROJECT_SETTINGS_PATH}` : "(no pinned base commit)");
+
 /**
  * The layers a worktree that DOES NOT EXIST YET will run with: the machine-wide user layer, plus the
  * tracked project settings of the exact commit the worktree will be created from. There is no local
@@ -80,7 +83,9 @@ function showTrackedFile({ hostDir, ref, path }) {
  * a pass. `read` is injected so the guards can drive every one of those without a repository.
  */
 export function snapshotLayers({ hostDir, ref, home = homedir(), read = showTrackedFile }) {
-  const raw = read({ hostDir, ref, path: PROJECT_SETTINGS_PATH });
+  // No pinned base commit — nothing to read, and nothing to guess. `git show null:...` is not a
+  // question worth asking; the missing project layer is the refusal (#21).
+  const raw = ref ? read({ hostDir, ref, path: PROJECT_SETTINGS_PATH }) : null;
   let data = null;
   if (typeof raw === "string") {
     try {
@@ -91,7 +96,7 @@ export function snapshotLayers({ hostDir, ref, home = homedir(), read = showTrac
   }
   return [
     onDisk(userSettingsFile(home)),
-    { layer: "project", path: `${ref}:${PROJECT_SETTINGS_PATH}`, exists: typeof raw === "string", data },
+    { layer: "project", path: snapshotPath(ref), exists: typeof raw === "string", data },
   ];
 }
 
@@ -181,9 +186,7 @@ export function resolveWindow({ dir, home = homedir(), env = process.env }) {
  * was, the future worktree's effective settings; the commit it will be created from is.
  */
 export function resolveWindowFromSnapshot({ hostDir, ref, home = homedir(), env = process.env, read }) {
-  return windowFromLayers(snapshotLayers({ hostDir, ref, home, read }), env, {
-    snapshot: `${ref}:${PROJECT_SETTINGS_PATH}`,
-  });
+  return windowFromLayers(snapshotLayers({ hostDir, ref, home, read }), env, { snapshot: snapshotPath(ref) });
 }
 
 /**

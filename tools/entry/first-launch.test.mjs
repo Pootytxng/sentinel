@@ -21,11 +21,12 @@
 // a snapshot that agrees.
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CREATE_BASE_REF, HERE, HOST_DIR, settingsSourceFor } from "./gather.mjs";
+import { CREATE_BASE_REF, HERE, HOST_DIR, refreshCreateBase, resolveCreateBase, settingsSourceFor } from "./gather.mjs";
+import { createWorktree, refreshAndCreate } from "./launch.mjs";
 import { reconcile } from "./preflight.mjs";
 import {
   PROJECT_SETTINGS_PATH,
@@ -176,22 +177,28 @@ describe("the source of the settings is chosen, never defaulted to whatever is n
     expect(settingsSourceFor(target, { exists: true })).toEqual({ kind: "folder", dir: target.path });
   });
 
-  it("an absent folder answers with the commit it will be created from — never the launcher's own", () => {
-    const src = settingsSourceFor(target, { exists: false });
-    expect(src).toEqual({ kind: "snapshot", hostDir: HOST_DIR, ref: CREATE_BASE_REF });
+  it("an absent folder answers with the COMMIT it will be created from — never a movable name", () => {
+    const base = { ref: CREATE_BASE_REF, sha: "a".repeat(40), ok: true, error: null };
+    const src = settingsSourceFor(target, { exists: false, base });
+    expect(src).toMatchObject({ kind: "snapshot", hostDir: HOST_DIR });
+    // The id, not the name it was looked up under. `origin/main` here IS the TOCTOU defect: a name
+    // resolved once for the settings and again for `git worktree add` is two different questions.
+    expect(src.ref).toBe(base.sha);
+    expect(src.ref).not.toBe(CREATE_BASE_REF);
     expect(Object.values(src)).not.toContain(HERE); // the exact substitution that deadlocked
+  });
+
+  it("an unpinned base reads no settings at all, rather than falling back to the name", () => {
+    const src = settingsSourceFor(target, { exists: false, base: { ref: CREATE_BASE_REF, sha: null, ok: false, error: "no remote" } });
+    expect(src.ref).toBe(null);
+    // `read` would happily answer — it is never asked, because there is no commit to ask about.
+    const e = resolveWindowFromSnapshot({ hostDir: "(unused)", ref: src.ref, home: emptyHome, env: {}, read: snapshots.configured });
+    expect(e.configured).toBe(false);
+    expect(windowCheck(STANDARD, e).ok).toBe(false);
   });
 
   it("a task with no worktree field at all is still a snapshot, not a fallback directory", () => {
     expect(settingsSourceFor(null, { exists: false }).kind).toBe("snapshot");
-  });
-
-  it("launch.mjs creates from the same constant preflight verified, not its own copy of the ref", () => {
-    // If these two ever drift, the folder that opens is not the folder that was checked — and the
-    // check would be worthless while still printing green.
-    const src = readFileSync(join(HERE, "launch.mjs"), "utf8");
-    expect(src).toContain("CREATE_BASE_REF");
-    expect(src).not.toMatch(/["']origin\/main["']/);
   });
 });
 
@@ -226,5 +233,162 @@ describe("against a real repository — the argv form of `git show` survives Win
     const e = resolveWindowFromSnapshot({ hostDir: repo, ref: "origin/nope", home: emptyHome, env: {} });
     expect(e.configured).toBe(false);
     expect(windowCheck(STANDARD, e).ok).toBe(false);
+  });
+});
+
+// bug->guard (#21, second finding) — time of check must be time of USE.
+//
+// The first fix read the future worktree's settings through `origin/main`, then `createWorktree()`
+// ran `git fetch`, then `git worktree add` resolved `origin/main` a SECOND time. Both call sites
+// named the same constant, so a source-text assertion was green — and the launcher could still
+// verify commit A, create commit B, and print the two as identical.
+//
+// A movable ref cannot be raced with injected data, so this fixture is real: a bare upstream, the
+// host checkout that the launcher runs in, and a SECOND clone that pushes mid-launch. Pushing from
+// `host` would update its own remote-tracking ref and destroy the very staleness being tested.
+describe("time of check == time of use — the base is pinned to one commit", () => {
+  let bed;
+  let upstream;
+  let author;
+  let host;
+  let seq = 0;
+  const git = (cwd, args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+
+  /** A second writer lands a commit on the upstream. The host does not see it until it fetches. */
+  const advance = (settings = snapshots.configured()) => {
+    seq += 1;
+    writeFileSync(join(author, ".claude", "settings.json"), JSON.stringify({ ...JSON.parse(settings), _seq: seq }, null, 2));
+    git(author, ["add", "-A"]);
+    git(author, ["-c", "commit.gpgsign=false", "commit", "-q", "-m", `upstream moves (${seq})`]);
+    git(author, ["push", "-q", "origin", "main"]);
+    return git(author, ["rev-parse", "HEAD"]);
+  };
+
+  /** The facts of a first launch: the target folder does not exist, so a create is authorized. */
+  const worldFor = (target, base) => ({
+    board: { reachable: true },
+    self: { lane: "Claude Code" },
+    now: new Date("2026-07-30T12:00:00Z"),
+    task: {
+      number: 21, title: "One owner-facing Compy entrypoint", status: "Active", lane: "Claude Code", gate: "None",
+      worktreeBranch: `${target.path} @ ${target.branch}`, nextAction: "Create the worktree.", claimExpires: "2026-07-31",
+    },
+    items: [{ number: 21, status: "Active", lane: "Claude Code", worktreeBranch: `${target.path} @ ${target.branch}` }],
+    claim: { issue: 21, lane: "Claude Code", folder: target.path, branch: target.branch, expires: "2026-07-31" },
+    handoff: null,
+    checkouts: [{ path: host, branch: "main", kind: "host", commonDir: join(host, ".git"), remote: upstream }],
+    gitState: null,
+    expectedCommonDir: join(host, ".git"),
+    base,
+    window: { intended: STANDARD, effective: null },
+    subagentModel: null,
+    hooks: null,
+    processes: [],
+  });
+
+  beforeAll(() => {
+    bed = join(root, "toctou");
+    upstream = join(bed, "upstream.git");
+    author = join(bed, "author");
+    host = join(bed, "host");
+    mkdirSync(bed, { recursive: true });
+    git(bed, ["-c", "init.defaultBranch=main", "init", "-q", "--bare", upstream]);
+    git(bed, ["clone", "-q", upstream, author]);
+    git(author, ["config", "user.email", "guard@example.invalid"]);
+    git(author, ["config", "user.name", "guard"]);
+    git(author, ["symbolic-ref", "HEAD", "refs/heads/main"]);
+    mkdirSync(join(author, ".claude"), { recursive: true });
+    advance();
+    git(bed, ["clone", "-q", upstream, host]);
+  });
+
+  it("REPRODUCTION: resolving the NAME twice verifies one commit and creates another", () => {
+    // The exact sequence that shipped. Kept permanently, because this is what the fix prevents —
+    // and it is a property of a movable ref, not of any one version of our code.
+    const verified = git(host, ["rev-parse", CREATE_BASE_REF]);
+    const readAt = resolveWindowFromSnapshot({ hostDir: host, ref: CREATE_BASE_REF, home: emptyHome, env: {} });
+    expect(readAt.configured).toBe(true);
+    expect(readAt.snapshot).toBe(`${CREATE_BASE_REF}:${PROJECT_SETTINGS_PATH}`); // names the ref, not a commit
+
+    const moved = advance(); // a second writer pushes while preflight is running
+    git(host, ["fetch", "origin", "--quiet"]); // what createWorktree() used to do, mid-launch
+    const wt = join(bed, "wt-repro");
+    git(host, ["worktree", "add", "-b", "repro/movable-name", wt, CREATE_BASE_REF]);
+
+    expect(git(wt, ["rev-parse", "HEAD"])).toBe(moved);
+    expect(moved).not.toBe(verified); // verified A, created B — and the report said neither
+  });
+
+  it("THE FIX: the commit whose settings were verified IS the commit the worktree is created from", () => {
+    const preliminary = resolveCreateBase({ hostDir: host }); // stage 1 — read-only, no fetch
+    expect(preliminary.ok).toBe(true);
+    expect(preliminary.sha).toBe(git(host, ["rev-parse", CREATE_BASE_REF]));
+
+    const moved = advance(); // the race, again
+    expect(moved).not.toBe(preliminary.sha);
+
+    const target = { path: join(bed, "wt-pinned"), branch: "fix/pinned-base" };
+    const out = refreshAndCreate({ facts: worldFor(target, preliminary), target, base: preliminary, hostDir: host, env: {} });
+
+    expect(out.verdict.verdict).toBe("PASS");
+    expect(out.created).toBe(moved); // the refreshed commit, not the one preflight first saw
+    expect(git(target.path, ["rev-parse", "HEAD"])).toBe(out.created);
+
+    // The identity that matters: the settings this verdict passed on were read from that same id.
+    const window = out.verdict.checks.find((c) => c.name === "settings.window");
+    expect(window.ok).toBe(true);
+    expect(window.note).toContain(`${out.created}:${PROJECT_SETTINGS_PATH}`);
+    expect(out.verdict.checks.find((c) => c.name === "base.pinned").actual).toBe(out.created);
+  });
+
+  it("a base that moves to a DISAGREEING commit refuses, and creates nothing", () => {
+    // Re-verifying after the fetch is only worth anything if the second verdict can still say no.
+    const preliminary = resolveCreateBase({ hostDir: host });
+    advance(snapshots.marathon()); // upstream now configures the marathon tier; this train does not
+    const target = { path: join(bed, "wt-refused"), branch: "fix/refused-base" };
+    const out = refreshAndCreate({ facts: worldFor(target, preliminary), target, base: preliminary, hostDir: host, env: {} });
+
+    expect(out.verdict.verdict).toBe("REFUSE");
+    expect(out.verdict.checks.find((c) => c.name === "settings.window")).toMatchObject({ ok: false, expected: 150000, actual: 300000 });
+    expect(out.created).toBe(null);
+    expect(existsSync(target.path)).toBe(false);
+  });
+
+  it("createWorktree refuses anything that is not a pinned commit id, rather than falling back", () => {
+    const path = join(bed, "wt-never");
+    const branch = "never/created";
+    const unpinned = [
+      null,
+      { ref: CREATE_BASE_REF, sha: null, ok: false, error: "no remote" },
+      { ref: CREATE_BASE_REF, sha: CREATE_BASE_REF, ok: true }, // the movable name itself
+      { ref: CREATE_BASE_REF, sha: git(host, ["rev-parse", "--short", "HEAD"]), ok: true }, // an abbreviation is not an id
+    ];
+    for (const base of unpinned) {
+      expect(() => createWorktree({ path, branch, base, hostDir: host })).toThrow(/unpinned/i);
+    }
+    expect(existsSync(path)).toBe(false);
+  });
+
+  it("refreshCreateBase is the only fetch, and it re-pins to what it just fetched", () => {
+    const moved = advance();
+    expect(resolveCreateBase({ hostDir: host }).sha).not.toBe(moved); // stale until something fetches
+    expect(refreshCreateBase({ hostDir: host })).toMatchObject({ ok: true, fetched: true, sha: moved });
+  });
+
+  it("an unresolvable base fails closed, and the verdict names it as the cause", () => {
+    const b = resolveCreateBase({ hostDir: host, ref: "origin/nope" });
+    expect(b).toMatchObject({ ok: false, sha: null });
+    expect(b.error).toContain("origin/nope");
+    const row = reconcile({ base: b }).checks.find((c) => c.name === "base.pinned");
+    expect(row.ok).toBe(false);
+    expect(row.remediation).toMatch(/will not guess/i);
+  });
+
+  it("the passing base row says which commit out loud, so a green report cannot hide it", () => {
+    const b = resolveCreateBase({ hostDir: host });
+    const row = reconcile({ base: b }).checks.find((c) => c.name === "base.pinned");
+    expect(row.ok).toBe(true);
+    expect(row.actual).toBe(b.sha);
+    expect(row.note).toContain(b.sha.slice(0, 7));
   });
 });
