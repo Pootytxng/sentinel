@@ -24,10 +24,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { planControlUpdate, readControlState, updateControl } from "./control-update.mjs";
+import { planControlUpdate, readControlState, sameRepo, updateControl } from "./control-update.mjs";
 
 const A = "a".repeat(40);
 const B = "b".repeat(40);
+/** A readable FETCH_HEAD describing an OLDER fetch — what a real machine has after a fetch fails. */
+const STALE = "d".repeat(40);
 const C = "c".repeat(40);
 
 /** The state of a clean clone that is one verified commit behind. */
@@ -52,10 +54,51 @@ describe("what a control folder in this state deserves", () => {
     expect(plan.reason).toMatch(/uncommitted/i);
   });
 
-  // Ordering, not politeness: complaining about a clean tree in a folder with nothing to catch up to
-  // would be a warning about a non-event, and the owner would learn to read past this line.
-  it("says nothing about a dirty clone that is already current", () => {
-    expect(planControlUpdate({ ...behind, upstream: A, dirty: true }).action).toBe("none");
+  // Rewritten, not extended. This test used to assert `action: "none"` here -- it encoded the belief
+  // that a dirty clone with nothing to fetch is a non-event, and so it defended the defect: the
+  // launcher read "already running the current launcher", printed nothing, and executed whatever
+  // somebody had edited into compy-entry.ps1 or a launcher module. A commit id vouches for the bytes
+  // in that commit and for nothing else. Being current is not being unmodified.
+  it("refuses a dirty clone that is already current — commit identity does not vouch for edits", () => {
+    const plan = planControlUpdate({ ...behind, upstream: A, dirty: true });
+    expect(plan.action).toBe("refuse");
+    expect(plan.fatal).toBe(true);
+    expect(plan.reason).toMatch(/uncommitted/i);
+    expect(plan.reason).toMatch(/does not vouch/i);
+  });
+
+  // The refusal has to reach the launch. "Refuse the update, run the stale launcher anyway" is the
+  // pin defeating itself, so every refusal is fatal and the shell is required to honour it.
+  it("marks every refusal fatal, and neither ordinary outcome", () => {
+    expect(planControlUpdate({ ...behind, dirty: true }).fatal).toBe(true);
+    expect(planControlUpdate({ ...behind, ancestor: false }).fatal).toBe(true);
+    expect(planControlUpdate({ ...behind, branch: "tooling/compy-entry" }).fatal).toBe(true);
+    expect(planControlUpdate({ ...behind, upstream: null }).fatal).toBe(true);
+    expect(planControlUpdate({ ...behind, upstream: A }).fatal).toBe(false);
+    expect(planControlUpdate({ ...behind }).fatal).toBe(false);
+  });
+
+  // Identity is <owner>/<repo>, matched whole. The old PowerShell pin used `-notlike "*...*"`, and
+  // the fetch/merge path checked the remote not at all.
+  it("refuses a folder whose origin is a different repository", () => {
+    const plan = planControlUpdate({ ...behind, remote: "https://github.com/attacker/Pootytxng-sentinel-fork", expectedRemote: "Pootytxng/sentinel" });
+    expect(plan.action).toBe("refuse");
+    expect(plan.fatal).toBe(true);
+    expect(plan.reason).toMatch(/not Pootytxng\/sentinel/i);
+  });
+
+  it("accepts the spellings git really produces for the same repository", () => {
+    for (const url of [
+      "https://github.com/Pootytxng/sentinel.git",
+      "https://github.com/pootytxng/sentinel",
+      "git@github.com:Pootytxng/sentinel.git",
+      "ssh://git@github.com/Pootytxng/sentinel",
+    ]) {
+      expect(sameRepo(url, "Pootytxng/sentinel")).toBe(true);
+    }
+    for (const url of ["https://github.com/attacker/Pootytxng-sentinel-fork", "https://github.com/other/sentinel", "", null]) {
+      expect(sameRepo(url, "Pootytxng/sentinel")).toBe(false);
+    }
   });
 
   // Divergence means the folder holds commits upstream does not. Moving the branch would strand them.
@@ -167,6 +210,39 @@ describe("what it does to a repository, and what it never does", () => {
     const r = updateControl({ dir: "(fake)", git });
     expect(r.updated).toBe(false);
     expect(r.action).toBe("refuse");
+  });
+
+  // The previous version of the test above ALSO stubbed FETCH_HEAD to throw, which is not what a real
+  // machine does: .git/FETCH_HEAD persists between runs and stays perfectly readable after a fetch
+  // fails. So the guard asserted the right outcome with the dangerous condition removed. Here the
+  // file reads fine and describes a DIFFERENT, older fetch -- and it must not become the upstream
+  // this run merges onto.
+  it("never promotes a readable but stale FETCH_HEAD after the fetch failed", () => {
+    const git = fakeGit({
+      ...cleanBehind(),
+      fetch: new Error("fatal: unable to access ... Could not resolve host"),
+      "rev-parse FETCH_HEAD": STALE,
+      "rev-parse origin/main": new Error("unknown revision"),
+    });
+    const r = updateControl({ dir: "(fake)", git });
+    expect(r.action).toBe("refuse");
+    expect(r.updated).toBe(false);
+    expect(git.log.some((c) => c.startsWith("merge"))).toBe(false);
+  });
+
+  // Offline is allowed to fall back to the explicitly configured remote-tracking ref -- that is the
+  // documented policy. It is the ambient FETCH_HEAD that is never allowed to stand in for it.
+  it("falls back to origin/<branch>, not to FETCH_HEAD, when the fetch failed", () => {
+    const git = fakeGit({
+      ...cleanBehind(),
+      fetch: new Error("offline"),
+      "rev-parse FETCH_HEAD": STALE,
+      "rev-parse origin/main": B,
+    });
+    const r = updateControl({ dir: "(fake)", git, dryRun: true });
+    expect(r.action).toBe("fast-forward");
+    expect(r.reason).toContain(B.slice(0, 7));
+    expect(r.reason).not.toContain(STALE.slice(0, 7));
   });
 
   // Trust the measurement, not the command's exit status: the launcher is about to run whatever code
