@@ -29,6 +29,7 @@ import {
   readProjectIds,
   refetchSnapshotFacts,
   refreshCreateBase,
+  CODE_ROOT,
 } from "./gather.mjs";
 import { reconcile, selectTask } from "./preflight.mjs";
 import { verdictLines } from "./render.mjs";
@@ -241,7 +242,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   const board = readBoard();
   if (!board.reachable) throw new Refused({ verdict: "REFUSE", reason: `Work Control unreachable: ${board.error}`, ...effects.payload() });
 
-  const picked = selectTask(board.items, { issue, self, policy: loadPolicy() });
+  const picked = selectTask(board.items, { issue, self, policy: loadPolicy(), codeRoot: CODE_ROOT });
   if (picked.kind !== "task") {
     throw new Refused({ verdict: picked.kind.toUpperCase(), reason: picked.reason, options: picked.options ?? [], unavailable: picked.unavailable ?? [], ...effects.payload() });
   }

@@ -28,6 +28,7 @@
 // all; the caller does that only after a verdict.
 
 import { intendedWindow } from "./settings-resolve.mjs";
+import { parseWorktreeField, samePath } from "./worktree-field.mjs";
 
 /** Only used when a caller wants a selection without labels (tests). The launcher passes the real policy. */
 export const FALLBACK_POLICY = { default: 150000, tiers: [] };
@@ -88,7 +89,19 @@ export function isResumable(item, { self, now }) {
  * defect impossible rather than merely unlikely, because the Ready task the old code drove at was a
  * Codex-lane one. Unassigned Ready work stays open to whoever asks for it.
  */
-export function availability(item, { self = { lane: "Claude Code" }, now = new Date() } = {}) {
+/**
+ * The folder an item would be worked in, or null when its field does not name one.
+ *
+ * Comparison goes through `samePath`, which canonicalises separators and case — the board is typed by
+ * hand, so `C:/Users/...` and `c:\users\...` name the same folder and a string compare would call
+ * them different.
+ */
+const folderOf = (item, codeRoot) => {
+  const parsed = parseWorktreeField(item?.worktreeBranch ?? "", { codeRoot });
+  return parsed.ok ? (parsed.entries[0]?.path ?? null) : null;
+};
+
+export function availability(item, { self = { lane: "Claude Code" }, now = new Date(), items = [], codeRoot = null } = {}) {
   const gate = item?.gate ?? "None";
   const lane = item?.lane ?? null;
   const mine = sameLane(lane, self?.lane);
@@ -112,6 +125,25 @@ export function availability(item, { self = { lane: "Claude Code" }, now = new D
   }
   if (item?.status === "Ready") {
     if (lane && !mine) return { available: false, action: null, reason: `it is assigned to the ${lane} lane` };
+
+    // One folder, one writer — and the menu is where that has to be said. preflight catches this
+    // too, but only AFTER the folder has been offered and chosen, which is the "refused after a
+    // worktree has been offered" shape this selector exists to prevent (see the header). An item
+    // whose folder another Active task is already writing in is visible and unavailable, with the
+    // reason on screen rather than three steps later.
+    const mine2 = folderOf(item, codeRoot);
+    if (mine2) {
+      const occupant = (items ?? []).find(
+        (o) => o && o !== item && o.status === "Active" && Number(o.number) !== Number(item.number) && samePath(folderOf(o, codeRoot) ?? "", mine2),
+      );
+      if (occupant) {
+        return {
+          available: false,
+          action: null,
+          reason: `#${occupant.number} is already working in ${mine2} — one folder, one writer`,
+        };
+      }
+    }
     return { available: true, action: "Start", reason: null };
   }
   return { available: false, action: null, reason: `its status is ${item?.status ?? "unknown"}` };
@@ -134,7 +166,7 @@ const shorten = (title) => {
  *
  * @returns {{options: Array, unavailable: Array, autoResume: number|null, question: string, choices: string}}
  */
-export function buildMenu(items, { self = { lane: "Claude Code" }, now = new Date(), policy } = {}) {
+export function buildMenu(items, { self = { lane: "Claude Code" }, now = new Date(), policy, codeRoot = null } = {}) {
   if (!policy || typeof policy.default !== "number") {
     throw new Error("buildMenu needs the context policy — a window label may never be invented.");
   }
@@ -160,7 +192,9 @@ export function buildMenu(items, { self = { lane: "Claude Code" }, now = new Dat
     };
   };
 
-  const rows = listed.map((i) => describe(i, availability(i, { self, now })));
+  // The whole board is passed in, because folder occupancy is a fact ABOUT the set, not about
+  // one row: an item is unavailable because of what another Active item is doing.
+  const rows = listed.map((i) => describe(i, availability(i, { self, now, items, codeRoot })));
   const resumable = rows.filter((r) => r.action === "Resume");
   const startable = rows.filter((r) => r.action === "Start");
   const unavailable = rows.filter((r) => !r.available);

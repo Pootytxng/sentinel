@@ -40,14 +40,17 @@ const norm = (s) => String(s ?? "").trim().replace(/\s+/g, " ").replace(/[.\s]+$
  *
  * Ordering, availability, the plain-language reasons and the context labels all live in select.mjs.
  */
-export function selectTask(items, { issue = null, self = { lane: "Claude Code" }, now = new Date(), policy = null } = {}) {
+export function selectTask(items, { issue = null, self = { lane: "Claude Code" }, now = new Date(), policy = null, codeRoot = null } = {}) {
+  // `codeRoot` is passed rather than imported: preflight is below gather in the import graph, and
+  // reaching upward for a constant would make the cheapest module in the toolchain depend on the
+  // most expensive one.
   if (issue !== null) {
     const task = (items ?? []).find((i) => Number(i.number) === Number(issue));
     if (!task) return { kind: "none", reason: `Issue #${issue} is not on the board.` };
     return { kind: "task", task };
   }
 
-  const menu = buildMenu(items ?? [], { self, now, policy: policy ?? FALLBACK_POLICY });
+  const menu = buildMenu(items ?? [], { self, now, policy: policy ?? FALLBACK_POLICY, codeRoot });
 
   if (menu.autoResume !== null) {
     const task = (items ?? []).find((i) => Number(i.number) === menu.autoResume);

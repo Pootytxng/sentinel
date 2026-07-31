@@ -133,22 +133,54 @@ export function readLocalLayer(dir) {
 }
 
 /** The window the tracked project layer configures, or null when it configures none. */
-export function readProjectWindow(dir) {
+/**
+ * What the tracked project layer configures.
+ *
+ * Four different situations used to collapse to the same `null`: the file is absent, the file cannot
+ * be read, the file is malformed, and the file is fine but sets no window. Only the last is a real
+ * "configures nothing". The other three are missing evidence — and `planTier` then treated the folder
+ * as unconfigured and authorised a local override on top of settings it had failed to read.
+ *
+ * @returns {{window: number|null, readable: boolean, reason: string|null}}
+ */
+export function readProjectSettings(dir) {
   const file = join(dir, ".claude", "settings.json");
-  if (!existsSync(file)) return null;
+  if (!existsSync(file)) return { window: null, readable: true, reason: null };
+  let text;
   try {
-    return windowIn(JSON.parse(readFileSync(file, "utf8")));
-  } catch {
-    return null;
+    text = readFileSync(file, "utf8");
+  } catch (e) {
+    return { window: null, readable: false, reason: `${file} could not be read (${String(e?.message ?? e)})` };
   }
+  try {
+    return { window: windowIn(JSON.parse(text)), readable: true, reason: null };
+  } catch {
+    return { window: null, readable: false, reason: `${file} is not valid JSON` };
+  }
+}
+
+/** Back-compat: the number alone, for callers that only ever wanted the number. */
+export function readProjectWindow(dir) {
+  return readProjectSettings(dir).window;
 }
 
 /**
  * Pure: what should happen to the local layer, and why.
  * @returns {{action: "keep"|"write"|"refuse", window: number, reason: string}}
  */
-export function planTier({ intended, projectWindow = null, local = { present: false }, record = null, envWindow = null }) {
+export function planTier({ intended, projectWindow = null, local = { present: false }, record = null, envWindow = null, projectReadable = true, projectReason = null }) {
   const want = intended.window;
+
+  // Missing evidence is not evidence of nothing. An unreadable or malformed tracked settings.json
+  // was previously indistinguishable from one that simply sets no window, so the launcher wrote a
+  // local override on top of a file whose contents it had failed to read -- and the row PASSED.
+  if (!projectReadable) {
+    return {
+      action: "refuse",
+      window: want,
+      reason: `${projectReason ?? "the tracked project settings could not be read"}, so the launcher cannot tell what this folder already configures. Fix that file before establishing a tier over it.`,
+    };
+  }
 
   // The process environment beats every settings file, so a disagreement there is not ours to
   // settle. Writing the local layer anyway would report a PASS the session then contradicts.
@@ -226,9 +258,12 @@ export function planTier({ intended, projectWindow = null, local = { present: fa
 export function establishTier({ dir, intended, stateDir = TIER_STATE_DIR, home = homedir(), env = process.env }) {
   void home;
   const local = readLocalLayer(dir);
+  const project = readProjectSettings(dir);
   const plan = planTier({
     intended,
-    projectWindow: readProjectWindow(dir),
+    projectWindow: project.window,
+    projectReadable: project.readable,
+    projectReason: project.reason,
     local,
     record: readTierRecord({ dir, stateDir }),
     envWindow: envWindowOf(env),

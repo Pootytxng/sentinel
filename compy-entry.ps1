@@ -252,6 +252,36 @@ if ($Repair) {
     if ($LASTEXITCODE -ne 0) { Hold-Window; exit $LASTEXITCODE }
 }
 
+# --- 2b. One launcher at a time ------------------------------------------------
+# Double-clicking twice is a normal thing to do when the first click looks like it did nothing, and
+# nothing stopped it: both runs passed preflight, both posted or renewed the same claim, and both
+# wrote the SINGLETON %LOCALAPPDATA%\CompyEntry\launch.json -- the second overwriting the first's
+# nonce. Then both handoff waiters read whichever token was current, so one session could take up the
+# other's launch while the other waited out its budget for a record that had been replaced.
+#
+# The lock is held from here through handoff, which is the whole span in which that singleton is
+# live. A second run writes nothing and says one calm sentence, then exits 0: Kuya clicking twice is
+# not an error, and telling him it is teaches him to ignore the launcher.
+$LockScript = Join-Path $ControlDir 'tools/entry/single-flight.mjs'
+$lockJson = node $LockScript acquire --pid $PID --issue $Issue
+$lockCode = $LASTEXITCODE
+$lock = if ($lockJson) { $lockJson | ConvertFrom-Json } else { $null }
+
+if ($lockCode -ne 0) {
+    Write-Host ''
+    Note $(if ($lock -and $lock.reason) { $lock.reason } else { 'Compy is already starting.' })
+    Note 'Nothing was written by this second run.'
+    Hold-Window
+    exit 0
+}
+if ($lock -and $lock.stole -and $lock.reason) { Note "took over a stale launcher lock -- $($lock.reason)" }
+
+# Give it back on the way out, however this run ends. Staleness covers the case where the process
+# dies without getting here at all; this covers every ordinary exit, including the refusals.
+$null = Register-EngineEvent PowerShell.Exiting -Action {
+    try { node (Join-Path $ControlDir 'tools/entry/single-flight.mjs') release --pid $PID | Out-Null } catch { }
+}
+
 # --- 3. With no issue given, ASK. Never pick ---------------------------------
 # The defect this closes (owner addendum on #18): with #18 Active under our own claim and one
 # unrelated #13 Ready, the no-argument shortcut selected #13 by itself, refused on that worktree,
