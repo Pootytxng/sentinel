@@ -861,13 +861,21 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   presenter, released only when the process actually dies/recycles. `monitoring.rs`'s FPS recorder
   gets a matching freshness gate (<3s mtime) since `fps.json` can now legitimately sit frozen.
   9 new attachment-state-machine tests. cargo 869/869.
-- [ ] fps.rs pid-recycle re-check on the "still presenting" path — 0.9.1 review Warning (rust-tauri
-  reviewer, 2026-07-22): `Attachment::Attached`'s frames-present arm (`fps.rs:411`) never re-verifies
-  the pid still maps to the attached image; only the silent-tick arm calls `alive(pid, name)`. If the
-  OS recycles the exact pid to a different DXGI-presenting image inside the 3s `STALE_AFTER` window,
-  real frametimes get reported under the old game's name (mislabel, not fabrication). Narrow race,
-  non-blocking for 0.9.1 — fix: name/liveness re-check in the `Some(frames)` branch + a test for the
-  recycle-while-presenting path (the existing death test only covers the silent path).
+- [x] **fps.rs pid-recycle re-check on the "still presenting" path — ✅ FIXED (Q3 of the stabilization
+  program).** 0.9.1 review Warning (rust-tauri reviewer, 2026-07-22): `Attachment::Attached`'s
+  frames-present arm never re-verified that the pid still mapped to the attached image; only the
+  silent-tick arm called `alive(pid, name)`. So the one case that produces a wrong measurement — a
+  recycled pid that is actively PRESENTING — was the one case that never reached the check, and real
+  frametimes were reported under the dead game's name into `sessions.json`, comparisons, the
+  scoreboard and every export. The audit under-stated it: the arm also filtered candidates by pid
+  ALONE and reported the STORED name, so a recycled pid arriving under its new ETW-resolved image
+  name was still attributed to the old game. Fix: candidates must match pid AND name; `alive` is
+  consulted on the frame path as well as the silent one; and a pid presenting under a foreign name is
+  treated as a recycle (release) rather than a loading screen (stay attached). Three red-first guards
+  in `fps::attachment_tests` — recycle-while-presenting, foreign-image-name, and replacement must
+  re-earn the full streak — plus one pinning the ordinary live case. Mutation-proven in both
+  directions: dropping the liveness clause fails 1, dropping name matching fails 2. `cargo test
+  --lib` 874 passed · clippy `-D warnings` clean.
 - [ ] vitest 4th flake class (low): under full-suite worker contention, a file can error at
   collection with "Vitest failed to find the current suite" (seen once 2026-07-22 on the two
   `src/surfaces/setup/` files; both pass isolated AND on full-suite re-run). Not one of the three

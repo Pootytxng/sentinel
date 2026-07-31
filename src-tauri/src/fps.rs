@@ -204,16 +204,38 @@ pub(crate) fn advance_attachment(
         Attachment::Attached { pid, name } => {
             // Report the attached game's dominant swapchain — and nothing else,
             // no matter who out-presents it this tick.
-            let frames = candidates
+            //
+            // A pid is not an identity. Windows reuses pids aggressively, and matching on the
+            // number alone let a recycled pid inherit the attachment: the new process's real
+            // frames were published under the dead game's name, into sessions.json, comparisons,
+            // the scoreboard and every export. The name is re-resolved by ETW on each tick, so a
+            // recycled pid arrives here wearing what it now IS — and must not match.
+            let mine: Vec<PresenterCandidate> =
+                candidates.into_iter().filter(|c| c.pid == pid).collect();
+            // Our pid is presenting under a name that is not ours. Whatever `alive` believes, two
+            // identity signals now disagree about the same number, and a measurement taken while
+            // they disagree is a guess. Fail closed rather than pick a winner.
+            let impostor = mine.iter().any(|c| c.name != name);
+            let frames = mine
                 .into_iter()
-                .filter(|c| c.pid == pid && c.recent.len() >= 2)
+                .filter(|c| c.name == name && c.recent.len() >= 2)
                 .max_by_key(|c| (c.recent.len(), std::cmp::Reverse(c.swapchain)))
                 .map(|c| c.recent);
             match frames {
-                Some(f) => {
+                // Identity is proven on the FRAME path too, not only when the tick is silent.
+                // `alive` used to sit on the silent branch alone, so the one case that produces a
+                // wrong measurement — a recycled pid that is actively presenting — was the one
+                // case that never reached it.
+                Some(f) if alive(pid, &name) => {
                     let report = (pid, name.clone(), f);
                     (Attachment::Attached { pid, name }, Some(report))
                 }
+                // Presenting, but no longer ours. Drop the sample and reacquire through the
+                // ordinary positive-window/streak rules — never carry the name forward.
+                Some(_) => (Attachment::new(), None),
+                // Nothing of ours, and the pid is wearing somebody else's name: that is a recycle,
+                // not a loading screen. Release rather than sit attached to a number.
+                None if impostor => (Attachment::new(), None),
                 // Silent tick: between matches / loading / minimized. Emit
                 // nothing; stay attached while the process lives.
                 None if alive(pid, &name) => (Attachment::Attached { pid, name }, None),
@@ -1050,7 +1072,9 @@ mod attachment_tests {
     #[test]
     fn game_death_releases_and_next_game_needs_full_requalification() {
         let (state, _) = attach(|| vec![cand(100, "game.exe", 161, GAME)]);
-        // Game process dies (or its pid is recycled): silent tick + alive=false → released.
+        // Game process dies: silent tick + alive=false → released. (Recycling is NOT covered by
+        // this case — a recycled pid that PRESENTS never reaches the silent path at all; see
+        // `a_recycled_pid_that_presents_never_reports_the_old_game`.)
         let (state, report) = advance_attachment(state, vec![], &never_alive);
         assert!(report.is_none());
         assert!(matches!(state, Attachment::Unattached { .. }), "death must release");
@@ -1070,6 +1094,63 @@ mod attachment_tests {
         let (state, report) = advance_attachment(state, vec![cand(100, "a.exe", 100, GAME)], &always_alive);
         assert!(report.is_none(), "a flapping winner must never reach the streak");
         assert!(matches!(state, Attachment::Unattached { streak: 1, .. }));
+    }
+
+    // ── pid recycling ────────────────────────────────────────────────────────────────────────
+    //
+    // Windows reuses pids aggressively. The attached branch filtered candidates by `c.pid == pid`
+    // and reported the STORED name, and it consulted `alive` only when the tick was silent. So a
+    // recycled pid that PRESENTS — a new process that happens to inherit the number and render —
+    // never reached the identity check at all, and its real frames were published under the dead
+    // game's name into sessions.json, comparisons, the scoreboard and exports.
+    //
+    // Both halves are guarded: the name the ETW tick resolves must still be the game's, and the
+    // process must still be alive under that image.
+
+    #[test]
+    fn a_recycled_pid_that_presents_never_reports_the_old_game() {
+        let (state, _) = attach(|| vec![cand(100, "game.exe", 161, GAME)]);
+        // Same pid, still presenting, but the process behind it is no longer the game.
+        let (state, report) =
+            advance_attachment(state, vec![cand(100, "game.exe", 161, GAME)], &never_alive);
+        assert!(report.is_none(), "a recycled pid must not emit a sample under the old game's name");
+        assert!(matches!(state, Attachment::Unattached { .. }), "lost identity must release");
+    }
+
+    #[test]
+    fn a_recycled_pid_wearing_a_new_image_name_is_not_the_game() {
+        let (state, _) = attach(|| vec![cand(100, "game.exe", 161, GAME)]);
+        // ETW resolves the name per tick, so the recycled pid arrives as what it now IS. Even with
+        // `alive` answering true (the pid is genuinely running — just not our game), the sample
+        // must not be attributed to the game we attached to.
+        let (state, report) =
+            advance_attachment(state, vec![cand(100, "notepad.exe", 161, GAME)], &always_alive);
+        assert!(report.is_none(), "frames from another image must never wear the game's name");
+        assert!(matches!(state, Attachment::Unattached { .. }));
+    }
+
+    #[test]
+    fn the_replacement_process_must_earn_attachment_from_scratch() {
+        let (state, _) = attach(|| vec![cand(100, "game.exe", 161, GAME)]);
+        let (state, _) =
+            advance_attachment(state, vec![cand(100, "notepad.exe", 161, GAME)], &always_alive);
+        // One qualified tick is not attachment — the replacement goes through the full streak gate.
+        let (state, report) =
+            advance_attachment(state, vec![cand(100, "notepad.exe", 161, GAME)], &always_alive);
+        assert!(report.is_none(), "no instant re-attach onto the recycled pid");
+        assert!(matches!(state, Attachment::Unattached { streak: 1, .. }));
+    }
+
+    #[test]
+    fn a_live_game_still_reports_every_frame_tick() {
+        // The identity re-check must not cost the ordinary case: same pid, same name, alive.
+        let (state, _) = attach(|| vec![cand(100, "game.exe", 161, GAME)]);
+        let (state, report) =
+            advance_attachment(state, vec![cand(100, "game.exe", 161, GAME)], &always_alive);
+        let (pid, name, frames) = report.expect("a live attached game keeps reporting");
+        assert_eq!((pid, name.as_str()), (100, "game.exe"));
+        assert_eq!(frames.len(), 161);
+        assert!(matches!(state, Attachment::Attached { pid: 100, .. }));
     }
 
     #[test]
