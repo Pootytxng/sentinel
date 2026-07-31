@@ -109,10 +109,12 @@ describe("failing closed", () => {
     expect(r.code).toBe("TOKEN_EXPIRED");
   });
 
-  it("refuses a token already consumed by an earlier session", () => {
-    const r = assertSessionRoot({ token: token({ consumedAt: "2026-07-30T09:00:00Z" }), env: { CLAUDE_PROJECT_DIR: CLAIMED }, cwd: CLAIMED, now: NOW });
+  it("refuses a token already claimed by an earlier session, with no lineage to stand on", () => {
+    // Claimed once, still once. What a later session in this folder resumes is the FOLDER's lineage
+    // (session-lineage.test.mjs); a spent token with no such record verifies nothing on its own.
+    const r = assertSessionRoot({ token: token({ claimedAt: "2026-07-30T09:00:00Z" }), lineage: null, env: { CLAUDE_PROJECT_DIR: CLAIMED }, cwd: CLAIMED, now: NOW });
     expect(r.ok).toBe(false);
-    expect(r.code).toBe("TOKEN_CONSUMED");
+    expect(r.code).toBe("NO_TOKEN");
   });
 
   it("refuses when the root could not be observed at all", () => {

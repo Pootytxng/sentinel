@@ -56,8 +56,8 @@ const liveToken = (over = {}) =>
 const verdictOf = (result) => tracked.verdictFor(result);
 
 describe("severity — a tracked hook must block on disagreement and only advise otherwise", () => {
-  const STOP = ["ROOT_MISMATCH", "CD_WITHOUT_ROOT", "WINDOW_MISMATCH", "ROOT_UNOBSERVED"];
-  const ADVISE = ["NO_TOKEN", "TOKEN_CONSUMED", "TOKEN_EXPIRED"];
+  const STOP = ["ROOT_MISMATCH", "CD_WITHOUT_ROOT", "WINDOW_MISMATCH", "ROOT_UNOBSERVED", "BRANCH_MISMATCH", "REPO_MISMATCH", "LINEAGE_FOREIGN"];
+  const ADVISE = ["NO_TOKEN", "TOKEN_EXPIRED", "LINEAGE_EXPIRED"];
 
   it("classifies every refusal code the assert can actually produce", () => {
     const produced = [...readFileSync(HOOK_FILE, "utf8").matchAll(/refuse\(\s*"([A-Z_]+)"/g)].map((m) => m[1]);
@@ -146,7 +146,10 @@ describe("the assert itself still fails closed on a real disagreement", () => {
     expect(verdictOf(r).exit).toBe(0);
   });
 
-  it("consumes the token on success, so a second session cannot reuse it", () => {
+  it("claims the launch once, so the token alone cannot verify a later session", () => {
+    // The launch is still single-use. What changed is what a later session leans on: its FOLDER's
+    // lineage, established by that claim (session-lineage.test.mjs), not the spent token. A session
+    // with neither is unverified — advisory, exactly as an ad-hoc window is.
     const dir = tokenDir();
     tracked.writeToken(liveToken(), { dir });
 
@@ -156,14 +159,17 @@ describe("the assert itself still fails closed on a real disagreement", () => {
       cwd: FOLDER,
     });
     expect(first.ok).toBe(true);
-    tracked.consumeToken({ dir });
+    expect(first.mode).toBe("launch");
+    tracked.claimToken({ dir });
 
     const second = tracked.assertSessionRoot({
       token: tracked.readToken({ dir }),
+      lineage: null,
       env: { CLAUDE_PROJECT_DIR: FOLDER },
       cwd: FOLDER,
     });
-    expect(second.code).toBe("TOKEN_CONSUMED");
+    expect(second.ok).toBe(false);
+    expect(second.code).toBe("NO_TOKEN");
     expect(verdictOf(second).exit).toBe(0);
   });
 });
@@ -173,7 +179,9 @@ describe("one implementation, two entry points", () => {
     expect(shim.assertSessionRoot).toBe(tracked.assertSessionRoot);
     expect(shim.makeToken).toBe(tracked.makeToken);
     expect(shim.readToken).toBe(tracked.readToken);
-    expect(shim.consumeToken).toBe(tracked.consumeToken);
+    expect(shim.claimToken).toBe(tracked.claimToken);
+    expect(shim.verifySession).toBe(tracked.verifySession);
+    expect(shim.readLineage).toBe(tracked.readLineage);
     expect(shim.resolveSessionRoot).toBe(tracked.resolveSessionRoot);
     expect(shim.TOKEN_NAME).toBe(tracked.TOKEN_NAME);
   });
