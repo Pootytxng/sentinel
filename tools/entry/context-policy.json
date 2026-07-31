@@ -1,0 +1,29 @@
+{
+  "$comment": [
+    "Which auto-compaction window each train is INTENDED to run with (spec §5.2).",
+    "The entrypoint compares this to the effective value resolved from the settings layers and",
+    "refuses on disagreement, in both directions. Too small hides context; too large silently",
+    "adopts a tier the train was never scoped to.",
+    "",
+    "300000 is the ACCEPTED marathon tier — Kuya, 2026-07-31, on #19: 'accepted as Compy's scoped",
+    "marathon tier. It is not the default; routine work remains 150k.' Acceptance settled the tier's",
+    "name and status, not its scoping: it is still granted per issue, and `default` stays 150000.",
+    "Widening `default` to 300000 to make a refusal go away would be exactly the failure this file",
+    "exists to prevent: a routing mistake made invisible by a setting.",
+    "",
+    "Adding an issue here is a decision, not a fix. Record why in `note`."
+  ],
+  "default": 150000,
+  "tiers": [
+    {
+      "window": 300000,
+      "issues": [15, 16, 19],
+      "note": "the marathon tier — run on #15, measured by #16, decided by #19 (accepted by Kuya, 2026-07-31); accepted is not default"
+    },
+    {
+      "window": 300000,
+      "issues": [23],
+      "note": "the one-selection entrypoint program — Kuya scoped it as marathon-class in the authorizing message (2026-07-31) so future resumes get the tier automatically"
+    }
+  ]
+}
