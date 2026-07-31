@@ -152,3 +152,40 @@ Glance first, proof on demand. Success is one confirmation naming task, folder, 
 started. Automatic repair is disclosed in one calm line. A refusal leads with the human consequence
 and one exact next action. The full check table lives behind `--details`. A provenance failure is
 never printed as `expected 150000 / actual 150000 FAIL` without saying what is actually wrong.
+
+## 10. What is live, and what proved it
+
+Live on this machine at `8bc937f`: the Desktop shortcut runs `compy-control`, which fast-forwarded
+itself `d14f031 → 0bdd8c9 → 754a451 → 8bc937f` across the program and re-executed into each verified
+commit. Kuya double-clicks, answers at most one question, and the window closes on him.
+
+Proven by running it, not by reading it (2026-07-31, fixture issue #25 in a throwaway worktree):
+
+- **One launch, one session.** The lineage record ended a full journey at `seenCount 1`; a new launch
+  resets it, so a second session on one claim is arithmetic, not judgement.
+- **Claude begins without pasting.** `SessionStart:startup` returned the `# Task #25` brief as
+  `additionalContext` and an opening turn was enqueued; the first thing in the transcript is Claude
+  working, not a prompt waiting to be copied.
+- **The terminal leaves.** 19s, exit 0, no launcher process alive.
+- **Resume is not "unverified".** A session started 8 minutes after the token was consumed was told
+  *session resumed*, lineage `1 → 2`, sliding expiry renewed, same brief.
+- **Replay refuses without spending anything.** Wrong root, wrong branch and wrong repo each stopped
+  with `consumedAt=null` — a replay neither writes nor burns the launch.
+
+Two defects surfaced *after* the acceptance run and are fixed and guarded, in this order because the
+first one hid the second:
+
+1. The account of a run stopped at the check table, so everything the launcher did after opening the
+   editor lived only in a window that closes on success — including the failure §8 cites the log for.
+   `run-account.test.mjs` executes the real source and pins both halves: nothing on disk before there
+   is a verdict to write about, then the whole run in order.
+2. With the run finally on disk, the success line read `150k ΓÇö standard`. PowerShell was decoding
+   node's stdout as the OEM code page, so every word the launcher speaks on success — and every task
+   name in the picker, and every sentence of a refusal — was one non-ASCII character away from noise
+   on Kuya's screen. `output-encoding.test.mjs` puts code page 850 on a real console and proves the
+   fix repairs it.
+
+Honest limits: the open-URI cannot be aimed at a specific window, so the launcher waits for a session
+to claim the token rather than assuming the right one appeared; the conflicting-writer refusal is
+covered by `preflight.test.mjs` and a pre-merge live proof rather than a fresh live board conflict;
+and a fully cold "no VS Code running at all" start cannot be proven from inside a VS Code session.

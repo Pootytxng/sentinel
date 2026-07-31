@@ -10,7 +10,8 @@
 #   choose -> launch.mjs (verdict, worktree, tier, claim, brief, token, overlay)
 #          -> code <folder>        the workspace root Claude will resolve everything from
 #          -> cli.mjs bridge       wait for a LIVE extension window on that exact folder
-#          -> vscode://...  /open  ask that window for a Claude session
+#          -> cli.mjs handoff      a window restoring its own panel needs nothing else
+#          -> vscode://...  /open  and only if it had no panel to restore, ask for one
 #          -> cli.mjs handoff      wait for that session to claim THIS launch token
 #          -> one line, then exit
 #
@@ -55,6 +56,15 @@ if (Test-Path variable:PSNativeCommandUseErrorActionPreference) {
     $PSNativeCommandUseErrorActionPreference = $false
 }
 
+# Everything Kuya reads on success comes back through node's stdout, and PowerShell decodes a native
+# command's output with whatever [Console]::OutputEncoding says -- which on this machine is the OEM
+# code page. The first log that carried the success line proved it: "150k ΓÇö standard", the em dash
+# of an ASCII-safe label arriving as three characters of noise. The corruption is in the STRING, not
+# the file, so it reaches the console too, and it would reach a task name in the picker or a sentence
+# in a refusal the same way. Process-local, set before the first node call.
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+
 $ControlDir = $PSScriptRoot
 $CONTROL_BRANCH = 'main'
 $EXPECTED_REMOTE = 'Pootytxng/sentinel'
@@ -66,11 +76,32 @@ $OPEN_URI = 'vscode://anthropic.claude-code/open'
 $LogFile = Join-Path $env:LOCALAPPDATA ('CompyEntry\logs\launch-{0}.log' -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
 $Cli = Join-Path $ControlDir 'tools/entry/cli.mjs'
 
-function Note($t) { Write-Host "  $t" -ForegroundColor DarkGray }
-function Bad($t) { Write-Host "  $t" -ForegroundColor Red }
-function Good($t) { Write-Host "  $t" -ForegroundColor Green }
-function Warn($t) { Write-Host "  $t" -ForegroundColor Yellow }
-function Head($t) { Write-Host ''; Write-Host "  $t" -ForegroundColor Cyan }
+# The account of a run has to include the part where it went wrong. launch.mjs writes the check table
+# into $LogFile and stops there, so everything after it -- the editor, the two waits, the fallback,
+# the verdict -- was console-only, and a successful launch closes its window (guard 13). Scoring
+# journey 5 of the acceptance run proved the cost: the log ended at "launch token written" while the
+# journey ran on for another 18s. §8's refusal cites this file as "the account of this run"; it must
+# not stop before the failure it is cited for.
+#
+# Buffered until the file exists, which is launch.mjs's doing: a run that ends at the picker still
+# writes nothing at all, and that is a property, not an accident.
+$script:Journey = [System.Collections.Generic.List[string]]::new()
+function Write-Journey($t) {
+    $script:Journey.Add(('{0}   {1}' -f (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ'), $t))
+    if (-not (Test-Path -LiteralPath $LogFile)) { return }
+    # Losing the account is a bad day; failing the launch over it is a worse one.
+    try {
+        Add-Content -LiteralPath $LogFile -Value $script:Journey.ToArray() -Encoding utf8
+        $script:Journey.Clear()
+    }
+    catch { }
+}
+
+function Note($t) { Write-Host "  $t" -ForegroundColor DarkGray; Write-Journey $t }
+function Bad($t) { Write-Host "  $t" -ForegroundColor Red; Write-Journey $t }
+function Good($t) { Write-Host "  $t" -ForegroundColor Green; Write-Journey $t }
+function Warn($t) { Write-Host "  $t" -ForegroundColor Yellow; Write-Journey $t }
+function Head($t) { Write-Host ''; Write-Host "  $t" -ForegroundColor Cyan; Write-Journey $t }
 
 # Only trouble holds the window. A launch that worked has nothing left to say, and a window Kuya has
 # to close is a chore this entrypoint exists to delete.
@@ -302,19 +333,35 @@ if ($LASTEXITCODE -ne 0) {
     exit 4
 }
 
-# --- 6. Ask that window for a Claude session ---------------------------------
+# --- 6. Let a window that restores its own panel finish on its own -----------
+# Opening the workspace is often the whole handoff: VS Code restores the Claude panel that folder had
+# open, the panel starts a session, and the SessionStart hook takes the launch up unasked. Measured
+# here on 2026-07-31: `code <folder>` alone, no URI, claimed a freshly minted token in 10s.
+#
+# Asking that window for a session anyway opens a SECOND panel on the same claim -- two agents in one
+# worktree, which is the one thing the claim protocol exists to prevent. It happened: journey 4 of
+# the acceptance run started two sessions 0.8s apart on one launch. So the panel already coming up
+# gets the first turn, and only the silence after it justifies the URI.
+node $Cli handoff --folder $folder --timeout 15000
+$handoff = $LASTEXITCODE
+# Silent on the console -- node already said it there. The log is the half that outlives the window.
+Write-Journey ('restored panel: {0}' -f $(if ($handoff -eq 0) { 'took the launch up' } else { 'nothing in 15s' }))
+
+# --- 7. Ask only the window that had nothing to restore ----------------------
 # No prompt rides on the URI: prompt= only PRE-FILLS the box, and a prefilled box is still something
 # Kuya has to press Enter on. The instructions arrive the other way, from the SessionStart hook, which
 # is why the brief was written to disk before the token that admits a session.
-Start-Process $OPEN_URI
-
-# --- 7. Give the panel a bounded turn ----------------------------------------
-# The URI is the nicer path and it is also the only step here that cannot be AIMED: the extension
-# registers its handler at activation, so the open lands in whichever window activated it. Opening
-# the workspace first makes the right window likely, not certain. It therefore gets a turn, not the
-# whole budget -- and the nonce decides, so a URI that went to the wrong window cannot pass for this.
-node $Cli handoff --folder $folder --timeout 45000
-$handoff = $LASTEXITCODE
+#
+# This is also the only step here that cannot be AIMED: the extension registers its handler at
+# activation, so the open lands in whichever window activated it. Opening the workspace first makes
+# the right window likely, not certain. It therefore gets a turn, not the whole budget -- and the
+# nonce decides, so a URI that went to the wrong window cannot pass for this.
+if ($handoff -ne 0) {
+    Start-Process $OPEN_URI
+    node $Cli handoff --folder $folder --timeout 45000
+    $handoff = $LASTEXITCODE
+    Write-Journey ('open-URI: {0}' -f $(if ($handoff -eq 0) { 'a session took the launch up' } else { 'nothing in 45s' }))
+}
 
 # --- 7b. ...then start the session in the folder itself ----------------------
 # No window to guess at: the working directory IS the project root, so Claude resolves its settings,
@@ -332,6 +379,7 @@ if ($handoff -ne 0) {
         Start-Process @spawn
         node $Cli handoff --folder $folder --timeout 90000
         $handoff = $LASTEXITCODE
+        Write-Journey ('CLI in the folder: {0}' -f $(if ($handoff -eq 0) { 'a session took the launch up' } else { 'nothing in 90s' }))
     }
     elseif ($startPlan -and $startPlan.reason) {
         Note $startPlan.reason
