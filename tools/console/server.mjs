@@ -15,7 +15,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 
-import { snapshot, CODE_ROOT } from "./sources.mjs";
+import { snapshot, CODE_ROOT, CONTROL_DIR } from "./sources.mjs";
 import { planAgentSpawn } from "./agents.mjs";
 import { PROVIDERS, addIdea, addLink, providerOf, readNotes, remove } from "./notes.mjs";
 
@@ -131,6 +131,30 @@ export function createConsoleServer({ repoDir = join(HERE, "..", "..") } = {}) {
 
       if (url.pathname === "/api/audit") {
         return streamAudit(res, { repoDir });
+      }
+
+      // Hand off to the launcher, in a REAL console window.
+      //
+      // The console can start a thread in a folder that already exists, but creating one — worktree,
+      // branch, hooks, the seventeen preflight checks, the claim on the board — is compy-entry.ps1's
+      // job and it asks questions while it works. Reimplementing that here would be a second opinion
+      // about the most safety-critical path in the project, which is the one thing this console
+      // refuses to do anywhere else. So it spawns the real launcher, visibly, and gets out of the way.
+      //
+      // `-WindowStyle Normal` and detached on purpose: it must own a console of its own. The launcher
+      // itself refuses to run without one (claude-start.mjs checks), and a hidden window would leave
+      // a process the owner cannot see or answer — the exact failure that check exists to prevent.
+      if (url.pathname === "/api/launcher" && req.method === "POST") {
+        const entry = join(CONTROL_DIR, "compy-entry.ps1");
+        if (!existsSync(entry)) return send(res, 404, { error: `${entry} is not there` });
+        spawn("pwsh", ["-NoExit", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", entry], {
+          cwd: CONTROL_DIR,
+          detached: true,
+          stdio: "ignore",
+          windowsHide: false,
+          shell: false,
+        }).unref();
+        return send(res, 200, { started: entry });
       }
 
       // Compy's own typefaces, served from the repo. Bundled locally (OFL 1.1) — zero network,

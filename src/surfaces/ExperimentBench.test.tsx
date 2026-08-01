@@ -175,12 +175,22 @@ describe("ExperimentBench (armed)", () => {
 
     // Honest simulator card renders the verdict label + the disproof + the real baseline numbers.
     expect(await screen.findByText("Worth testing")).toBeInTheDocument();
+
+    // bug->guard (CI, 2026-08-01): everything below used to be a synchronous getBy after that one
+    // findBy. The card does not commit in a single pass — the verdict label can be on screen a frame
+    // before the baseline numbers and the Start button are, and the suite already said so out loud:
+    // "An update to ExperimentBench inside a test was not wrapped in act(...)". Under parallel load
+    // on a CI runner that gap widens and the assertions read a half-rendered card. This failed once
+    // on the runner and passes 5/5 in isolation, which is the signature of a race rather than a
+    // defect. Waiting for the TERMINAL state — an enabled Start button, which cannot exist until the
+    // simulation has fully landed — makes everything below true instead of usually-true.
+    const start = await screen.findByRole("button", { name: /Start experiment/ });
+    await waitFor(() => expect(start).toBeEnabled());
+
     // The card names the exact change under test — the mutation target the Start button will apply.
     expect(document.querySelector(".exp-sim-rec")?.textContent).toBe("Test tweak");
     expect(screen.getByText(/Disproved if:/)).toBeInTheDocument();
     expect(screen.getByText(/244/)).toBeInTheDocument(); // baseline avg fps
-    const start = screen.getByRole("button", { name: /Start experiment/ });
-    expect(start).toBeEnabled();
   });
 
   // Guard for W1 (mutation-boundary race, 2026-07-17): a fast reselect mid-simulation could leave the

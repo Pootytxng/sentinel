@@ -63,9 +63,13 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
+      # No explicit toolchain here on purpose: rustup on the runner reads rust-toolchain.toml, so CI
+      # and the owner's desk resolve the SAME channel and components from one file. Naming @stable
+      # here as well would be a second source of truth for the same fact, and the first time they
+      # disagreed the local release gate would silently be the weaker one — which is exactly what
+      # happened on 2026-08-01 (local 1.95 vs CI 1.97, two clippy lints apart).
+      - name: show the toolchain rust-toolchain.toml selected
+        run: rustc --version && cargo clippy --version
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri

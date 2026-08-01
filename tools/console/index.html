@@ -365,11 +365,26 @@ function renderWork() {
   }).join("");
   $("wk").innerHTML = `<h2>Board</h2>
     <p class="lede">Every item carries the launcher's own startability rule, decided before you click — so a green
-      button here cannot be refused three steps later, and a missing one tells you why in a sentence.</p>
+      button here cannot be refused three steps later, and a missing one tells you why in a sentence.
+      <strong>Start</strong> opens a thread in a folder that already exists; <strong>Run the launcher</strong>
+      hands off to <code>compy-entry.ps1</code> in its own window for anything that needs a folder created,
+      a branch checked out, or the full preflight — that path is not reimplemented here on purpose.</p>
+    <div class="row" style="border-left:2px solid var(--accent)">
+      <div><div class="rt">The launcher <span class="tag v">creates folders · full preflight</span></div>
+        <div class="rd">Everything the desktop shortcut used to do, from here. Opens a real console window because it
+          asks questions while it works — and refuses to run without one.</div></div>
+      <div class="acts"><button class="btn" id="runLauncher">Run the launcher</button></div>
+    </div>
     ${S.work.startable ? "" : `<div class="note warn"><div><b>Nothing is startable right now.</b>
       <p>Every open item is either owner-gated or belongs to another lane.</p></div></div>`}
     ${rows || `<div class="empty">No open items on the board.</div>`}`;
   for (const b of $("wk").querySelectorAll("[data-open]")) b.addEventListener("click", () => openChat(b.dataset.open, b.dataset.title));
+  $("runLauncher").addEventListener("click", async function () {
+    this.disabled = true;
+    const r = await post("/api/launcher", {});
+    this.textContent = r.error ? "Could not start" : "Opened — see the new window";
+    setTimeout(() => { this.disabled = false; this.textContent = "Run the launcher"; }, 3000);
+  });
 }
 
 // ── Discussions ──────────────────────────────────────────────────────────────────────────────
