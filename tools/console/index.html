@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compy Console</title>
+<style>
+  :root{--bg:#0d0e10;--panel:#15171a;--panel2:#1b1e22;--line:#2a2e34;--line2:#383d45;
+    --tp:#f2f3f5;--ts:#a8adb6;--tm:#70767f;--good:#2bb673;--warn:#e0a32e;--bad:#e5484d;--acc:#4c8dff;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--tp);font:14px/1.55 ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  .app{display:grid;grid-template-columns:212px 1fr;min-height:100vh}
+  aside{background:#0a0b0d;border-right:1px solid var(--line);padding:18px 0;display:flex;flex-direction:column}
+  .brand{padding:0 18px 16px;display:flex;align-items:center;gap:10px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--tm)}
+  .dot.ok{background:var(--good);box-shadow:0 0 10px var(--good)}
+  .dot.bad{background:var(--bad);box-shadow:0 0 10px var(--bad)}
+  .brand b{font-size:15px;letter-spacing:-.01em}.brand span{font-size:10.5px;color:var(--tm);display:block;font-family:var(--mono)}
+  nav{display:flex;flex-direction:column;gap:1px;padding:0 8px}
+  nav button{background:none;border:0;color:var(--ts);font:inherit;text-align:left;padding:9px 11px;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:10px}
+  nav button:hover{background:var(--panel);color:var(--tp)}
+  nav button.on{background:var(--panel2);color:var(--tp);box-shadow:inset 2px 0 0 var(--acc)}
+  nav .ico{width:16px;text-align:center;opacity:.75}
+  nav .cnt{margin-left:auto;font:600 10.5px var(--mono);padding:1px 6px;border-radius:20px;background:var(--line);color:var(--ts)}
+  nav .cnt.bad{background:rgba(229,72,77,.18);color:#ff8b8e}
+  nav .cnt.warn{background:rgba(224,163,46,.16);color:#f0c25f}
+  nav .cnt.good{background:rgba(43,182,115,.18);color:#4ed69a}
+  .side-foot{margin-top:auto;padding:14px 10px 0;margin:auto 8px 0;font-size:11px;color:var(--tm);border-top:1px solid var(--line)}
+  .side-foot button{background:none;border:0;color:var(--acc);font:inherit;cursor:pointer;padding:0}
+  main{display:flex;flex-direction:column;min-width:0}
+  .vitals{display:grid;grid-template-columns:repeat(6,1fr);border-bottom:1px solid var(--line);background:var(--panel)}
+  .v{padding:11px 15px;border-right:1px solid var(--line)}.v:last-child{border-right:0}
+  .v .lab{font:600 9.5px var(--mono);letter-spacing:.09em;color:var(--tm);text-transform:uppercase}
+  .v .val{font:600 16px/1.25 var(--mono);margin-top:4px}.v .sub{font-size:11px;color:var(--tm);margin-top:2px}
+  .ok{color:var(--good)}.wn{color:var(--warn)}.bd{color:var(--bad)}
+  .body{padding:20px 24px 60px;overflow:auto}
+  .pane{display:none}.pane.on{display:block}
+  h2{font-size:17px;margin-bottom:3px}
+  .lede{color:var(--ts);font-size:13px;margin-bottom:16px;max-width:74ch}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:15px 16px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}
+  .card h3{font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--tm);margin-bottom:10px}
+  .kv{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid var(--line);font-size:12.7px}
+  .kv:first-of-type{border-top:0}.kv .k{color:var(--ts)}.kv .val{font-family:var(--mono);font-size:12px;text-align:right}
+  .row{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:9px;display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center}
+  .row.red{border-color:rgba(229,72,77,.4)}.row.amber{border-color:rgba(224,163,46,.35)}.row.green{border-color:rgba(43,182,115,.35)}
+  .rt{font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .rd{color:var(--ts);font-size:12.7px;margin-top:5px;max-width:92ch}
+  .rf{color:var(--tm);font:11.5px var(--mono);margin-top:5px}
+  .tag{font:700 9.5px var(--mono);letter-spacing:.07em;padding:2px 7px;border-radius:5px;background:var(--line);color:var(--ts);text-transform:uppercase}
+  .tag.g{background:rgba(43,182,115,.16);color:#4ed69a}.tag.a{background:rgba(224,163,46,.16);color:#f0c25f}
+  .tag.r{background:rgba(229,72,77,.16);color:#ff8b8e}.tag.b{background:rgba(76,141,255,.16);color:#7fb0ff}
+  .btn{background:var(--panel2);border:1px solid var(--line2);color:var(--tp);font:600 12.5px inherit;padding:7px 13px;border-radius:8px;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:#252a30;border-color:#4a515b}
+  .btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}.btn.pri:hover{background:#3b7cf0}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .acts{display:flex;gap:7px;align-items:center}
+  table{width:100%;border-collapse:collapse;font-size:12.7px}
+  th{text-align:left;font:600 9.5px var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--tm);padding:0 10px 8px;border-bottom:1px solid var(--line)}
+  td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  td.m{font-family:var(--mono);font-size:11.8px;color:var(--ts)}
+  .banner{border-radius:11px;padding:14px 16px;margin-bottom:16px;display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center}
+  .banner.red{background:rgba(229,72,77,.09);border:1px solid rgba(229,72,77,.35)}
+  .banner.blue{background:rgba(76,141,255,.08);border:1px solid rgba(76,141,255,.3)}
+  .banner.green{background:rgba(43,182,115,.08);border:1px solid rgba(43,182,115,.3)}
+  .banner b{display:block;margin-bottom:3px}.banner p{color:var(--ts);font-size:12.7px;max-width:88ch}
+  code{font-family:var(--mono);font-size:11.8px;background:var(--panel2);padding:1.5px 5px;border-radius:4px}
+  .term{background:#08090a;border:1px solid var(--line);border-radius:10px;padding:13px 15px;font:12px/1.7 var(--mono);color:#b9c0c9;white-space:pre-wrap;max-height:52vh;overflow:auto}
+  .unreach{color:var(--bad);font-style:italic}
+  /* chat */
+  .chat{position:fixed;inset:0 0 0 auto;width:min(620px,50vw);background:var(--panel);border-left:1px solid var(--line2);display:none;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,.5);z-index:20}
+  .chat.on{display:flex}
+  .chat-head{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .chat-head .t{font-weight:650;flex:1;min-width:160px}
+  .chat-head select{background:var(--panel2);color:var(--tp);border:1px solid var(--line2);border-radius:7px;padding:5px 8px;font:12px inherit}
+  .chat-log{flex:1;overflow:auto;padding:14px 16px;font-size:13px}
+  .msg{margin-bottom:12px}.msg .who{font:600 9.5px var(--mono);letter-spacing:.08em;color:var(--tm);text-transform:uppercase;margin-bottom:3px}
+  .msg.me .who{color:var(--acc)}.msg pre{white-space:pre-wrap;font:12px/1.65 var(--mono);color:#cfd4dc;background:#0a0b0d;border:1px solid var(--line);border-radius:8px;padding:9px 11px}
+  .msg .tool{font:11.5px var(--mono);color:var(--tm)}
+  .chat-in{border-top:1px solid var(--line);padding:11px 14px;display:flex;gap:9px}
+  .chat-in textarea{flex:1;background:var(--panel2);color:var(--tp);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;font:13px inherit;resize:none;min-height:44px;max-height:160px}
+  .strip{font:11px var(--mono);color:var(--good);padding:0 16px 9px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand"><div class="dot" id="health"></div><div><b>Compy Console</b><span id="brandsub">loading…</span></div></div>
+    <nav>
+      <button class="on" data-t="ov"><span class="ico">◉</span>Overview</button>
+      <button data-t="wk"><span class="ico">▤</span>Work<span class="cnt" id="c-wk">–</span></button>
+      <button data-t="dc"><span class="ico">✦</span>Decisions<span class="cnt" id="c-dc">–</span></button>
+      <button data-t="lf"><span class="ico">⌕</span>Lost &amp; found<span class="cnt" id="c-lf">–</span></button>
+      <button data-t="au"><span class="ico">⏻</span>Audit</button>
+    </nav>
+    <div class="side-foot">Read live from git, GitHub and disk.<br><span id="stamp">—</span><br><button id="refresh">Refresh</button></div>
+  </aside>
+  <main>
+    <div class="vitals" id="vitals"></div>
+    <div class="body">
+      <section class="pane on" id="ov"></section>
+      <section class="pane" id="wk"></section>
+      <section class="pane" id="dc"></section>
+      <section class="pane" id="lf"></section>
+      <section class="pane" id="au">
+        <h2>Audit</h2>
+        <p class="lede">Runs <code>scripts/verify-release.ps1</code> — the whole release gate, locally and offline. It reports; it never fixes.</p>
+        <div class="row green"><div><div class="rt">Full release gate</div>
+          <div class="rd">Encoding · doc budgets · tsc · vitest · cargo test · clippy · audits · PowerShell static guard · supply chain · release-state drift.</div></div>
+          <div class="acts"><button class="btn pri" id="runAudit">Run audit</button></div></div>
+        <div class="term" id="auditOut">Not run yet.</div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div class="chat" id="chat">
+  <div class="chat-head">
+    <div class="t" id="chatTitle">Thread</div>
+    <select id="chatAgent"><option value="claude">Claude</option><option value="codex">Codex</option></select>
+    <select id="chatModel"><option value="">model: default</option><option value="sonnet">sonnet</option><option value="opus">opus</option></select>
+    <select id="chatEffort"><option value="">effort: default</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select>
+    <button class="btn" id="chatClose">Close</button>
+  </div>
+  <div class="strip" id="chatStrip"></div>
+  <div class="chat-log" id="chatLog"></div>
+  <div class="chat-in">
+    <textarea id="chatBox" placeholder="Type here. Enter sends, Shift+Enter for a new line."></textarea>
+    <button class="btn pri" id="chatSend">Send</button>
+  </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------------------------
+// The page holds NO state of its own beyond the snapshot it just fetched. Every render starts from
+// `S`, and `S` is replaced wholesale by a fresh read. There is nothing here to go stale.
+// ---------------------------------------------------------------------------------------------
+let S = null;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+
+/** Unwrap an `attempt()` result. An unreachable source renders as a visible failure, never a blank. */
+const V = (a, fallback = null) => (a && typeof a === "object" && "ok" in a ? (a.ok ? a.value : fallback) : a);
+const bad = (a) => a && typeof a === "object" && "ok" in a && !a.ok;
+const cell = (a, render = (v) => esc(v)) => (bad(a) ? `<span class="unreach">unreachable — ${esc(a.error)}</span>` : render(V(a)));
+
+async function load() {
+  $("stamp").textContent = "reading…";
+  try {
+    S = await (await fetch("/api/state")).json();
+  } catch (e) {
+    $("stamp").innerHTML = `<span class="unreach">server unreachable</span>`;
+    return;
+  }
+  render();
+}
+
+function render() {
+  const ci = V(S.ci, {}) || {};
+  const dirty = (V(S.host.dirty) || []).length;
+  const decisions = (V(S.pulls) || []).length + (S.work.items || []).filter((i) => !i.availability.available).length + (ci.meaningful ? 0 : 1);
+
+  $("health").className = "dot " + (S.agents.billing.ok ? "ok" : "bad");
+  $("brandsub").textContent = S.agents.billing.ok ? `${S.agents.billing.plan} plan · no API spend` : "AUTH PROBLEM";
+  $("stamp").textContent = new Date(S.generatedAt).toLocaleTimeString();
+  $("c-wk").textContent = S.work.startable ?? "–";
+  $("c-wk").className = "cnt " + (S.work.startable ? "good" : "bad");
+  $("c-dc").textContent = decisions; $("c-dc").className = "cnt warn";
+  $("c-lf").textContent = S.lostAndFound.length;
+
+  $("vitals").innerHTML = [
+    ["Who pays", S.agents.billing.ok ? `<span class="ok">${esc(S.agents.billing.plan)}</span>` : `<span class="bd">API?</span>`,
+      S.agents.billing.ok ? "subscription · 0 API spend" : esc(S.agents.billing.reason || "")],
+    ["origin/main", cell(S.host.mainSha), "host repo"],
+    ["Host branch", cell(S.host.branch, (v) => (v === "main" ? `<span class="ok">${esc(v)}</span>` : `<span class="wn">${esc(v)}</span>`)), "code\\sentinel"],
+    ["Uncommitted", dirty ? `<span class="wn">${dirty}</span>` : `<span class="ok">0</span>`, "in the host repo"],
+    ["Startable", S.work.startable ? `<span class="ok">${S.work.startable}</span>` : `<span class="bd">0</span>`, "on the board"],
+    ["CI", ci.meaningful ? `<span class="ok">live</span>` : `<span class="bd">DEAD</span>`, ci.meaningful ? "signal is real" : "verdicts are noise"],
+  ].map(([lab, val, sub]) => `<div class="v"><div class="lab">${lab}</div><div class="val">${val}</div><div class="sub">${sub}</div></div>`).join("");
+
+  renderOverview(ci); renderWork(); renderDecisions(ci); renderLost();
+}
+
+function renderOverview(ci) {
+  const banner = ci.meaningful ? "" : `<div class="banner red"><div><b>GitHub Actions is not running your tests.</b>
+    <p>${esc(ci.reason || "")} Every red check on every PR is therefore meaningless — no test produced it. This is a payment
+    setting, not a code problem. The local audit is your real gate until it clears.</p></div>
+    <a class="btn pri" href="https://github.com/settings/billing" target="_blank">Open GitHub billing</a></div>`;
+
+  const kv = (k, v) => `<div class="kv"><span class="k">${k}</span><span class="val">${v}</span></div>`;
+  $("ov").innerHTML = banner + `<h2>Where things actually are</h2>
+    <p class="lede">Read ${new Date(S.generatedAt).toLocaleString()}. Anything unreachable says so rather than showing a leftover.</p>
+    <div class="grid3">
+      <div class="card"><h3>Agents &amp; billing</h3>
+        ${kv("Claude", cell(S.agents.claude.version))}
+        ${kv("Codex", cell(S.agents.codex.version))}
+        ${kv("Paying with", S.agents.billing.ok ? `<span class="ok">${esc(S.agents.billing.plan)} subscription</span>` : `<span class="bd">${esc(S.agents.billing.code)}</span>`)}
+        ${kv("API keys in env", `<span class="ok">stripped on every spawn</span>`)}
+      </div>
+      <div class="card"><h3>Repository</h3>
+        ${kv("origin/main", cell(S.host.mainSha))}
+        ${kv("Open PRs", (V(S.pulls) || []).length)}
+        ${kv("Branches", (V(S.branches) || []).length)}
+        ${kv("Unpushed work", (V(S.branches) || []).filter((b) => b.ahead > 0).reduce((n, b) => n + b.ahead, 0) + " commits")}
+      </div>
+      <div class="card"><h3>This machine</h3>
+        ${kv("Host repo", "code\\sentinel")}
+        ${kv("Parked on", cell(S.host.branch))}
+        ${kv("Uncommitted", (V(S.host.dirty) || []).length + " files")}
+        ${kv("Stashes", (V(S.host.stashes) || []).length === 0 ? `<span class="ok">none</span>` : (V(S.host.stashes) || []).length)}
+      </div>
+    </div>`;
+}
+
+function renderWork() {
+  if (!S.work.ok) { $("wk").innerHTML = `<h2>Work</h2><p class="unreach">Board unreachable — ${esc(S.work.error)}</p>`; return; }
+  const rows = S.work.items.map((i) => {
+    const a = i.availability;
+    const folder = (i.worktreeBranch || "").split(" @ ")[0] || "";
+    return `<div class="row ${a.available ? "green" : "amber"}">
+      <div><div class="rt">#${i.number} ${esc(i.title)}
+        <span class="tag ${a.available ? "g" : "a"}">${esc(i.status)}</span>
+        <span class="tag">${esc(i.lane || "no lane")}</span></div>
+        ${a.available ? "" : `<div class="rd">Not startable: ${esc(a.reason)}</div>`}
+        <div class="rf">${esc(i.worktreeBranch || "no folder yet")}</div></div>
+      <div class="acts">${a.available && folder
+        ? `<button class="btn pri" data-open="${esc(folder)}" data-title="#${i.number} ${esc(i.title)}">${esc(a.action)}</button>` : ""}
+        <a class="btn" href="https://github.com/Pootytxng/sentinel/issues/${i.number}" target="_blank">Issue</a></div></div>`;
+  }).join("");
+  $("wk").innerHTML = `<h2>Work</h2><p class="lede">The board, with each item's startability decided by the same rule the launcher uses — so a green button here cannot be refused later.</p>
+    ${S.work.startable ? "" : `<div class="banner blue"><div><b>Nothing is startable right now.</b><p>Every open item is owner-gated or belongs to another lane.</p></div></div>`}
+    ${rows || "<p class='lede'>No open items.</p>"}`;
+  for (const b of $("wk").querySelectorAll("[data-open]")) {
+    b.addEventListener("click", () => openChat(b.dataset.open, b.dataset.title));
+  }
+}
+
+function renderDecisions(ci) {
+  const parts = [];
+  if (!ci.meaningful) parts.push(`<div class="row red"><div><div class="rt">GitHub Actions billing <span class="tag r">blocks everything</span></div>
+    <div class="rd">${esc(ci.reason || "")} Until it clears, no PR can show a real green.</div></div>
+    <div class="acts"><a class="btn pri" href="https://github.com/settings/billing" target="_blank">Open billing</a></div></div>`);
+  for (const p of V(S.pulls) || []) {
+    parts.push(`<div class="row amber"><div><div class="rt">Merge PR #${p.number} ${p.draft ? '<span class="tag a">draft</span>' : ""}
+      <span class="tag ${p.mergeable === "MERGEABLE" ? "g" : "r"}">${esc(p.mergeable || "?")}</span></div>
+      <div class="rd">${esc(p.title)}</div><div class="rf">${esc(p.branch)}${ci.meaningful ? "" : " · checks unverifiable while CI is blocked"}</div></div>
+      <div class="acts"><a class="btn" href="https://github.com/Pootytxng/sentinel/pull/${p.number}" target="_blank">Review</a></div></div>`);
+  }
+  for (const i of (S.work.items || []).filter((x) => !x.availability.available)) {
+    parts.push(`<div class="row amber"><div><div class="rt">#${i.number} ${esc(i.title)} <span class="tag a">${esc(i.status)}</span></div>
+      <div class="rd">${esc(i.availability.reason)}</div></div>
+      <div class="acts"><a class="btn" href="https://github.com/Pootytxng/sentinel/issues/${i.number}" target="_blank">Open</a></div></div>`);
+  }
+  $("dc").innerHTML = `<h2>Waiting on you</h2><p class="lede">Everything that cannot move without a decision from you.</p>${parts.join("")}`;
+}
+
+function renderLost() {
+  const rows = S.lostAndFound.map((f) => `<tr><td class="m">${esc(f.name)}</td><td><span class="tag ${/nothing points|uncommitted/.test(f.risk) ? "r" : "a"}">${esc(f.risk)}</span></td><td>${esc(f.why)}</td></tr>`).join("");
+  $("lf").innerHTML = `<h2>Lost &amp; found</h2>
+    <p class="lede">Everything on this disk holding work or occupying a name that no open PR and no live board item points at.</p>
+    <table><thead><tr><th style="width:30%">What</th><th style="width:16%">Risk</th><th>Why it's here</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// --- tabs ---
+for (const b of document.querySelectorAll("nav button")) {
+  b.addEventListener("click", () => {
+    document.querySelectorAll("nav button").forEach((x) => x.classList.remove("on"));
+    document.querySelectorAll(".pane").forEach((p) => p.classList.remove("on"));
+    b.classList.add("on"); $(b.dataset.t).classList.add("on");
+  });
+}
+$("refresh").addEventListener("click", load);
+
+// --- chat: one thread per task, running inside that task's folder ---
+let thread = { folder: null, id: null };
+function openChat(folder, title) {
+  thread = { folder, id: null };
+  $("chatTitle").textContent = title;
+  $("chatLog").innerHTML = "";
+  $("chatStrip").textContent = "";
+  $("chat").classList.add("on");
+  $("chatBox").focus();
+}
+$("chatClose").addEventListener("click", () => $("chat").classList.remove("on"));
+
+function bubble(who, cls) {
+  const d = document.createElement("div");
+  d.className = "msg " + (cls || "");
+  d.innerHTML = `<div class="who">${esc(who)}</div><pre></pre>`;
+  $("chatLog").appendChild(d);
+  $("chatLog").scrollTop = $("chatLog").scrollHeight;
+  return d.querySelector("pre");
+}
+
+async function send() {
+  const text = $("chatBox").value.trim();
+  if (!text || !thread.folder) return;
+  $("chatBox").value = "";
+  bubble("you", "me").textContent = text;
+  const agent = $("chatAgent").value;
+  const out = bubble(agent);
+  const body = {
+    agent, folder: thread.folder, message: text,
+    threadId: thread.id, sessionId: thread.id ? null : (thread.id = crypto.randomUUID()),
+    model: $("chatModel").value || null, effort: $("chatEffort").value || null,
+  };
+  const res = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok || !res.body) { out.textContent = "refused: " + (await res.text()); return; }
+  const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read(); if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const frames = buf.split("\n\n"); buf = frames.pop() ?? "";
+    for (const f of frames) {
+      const ev = /^event: (.+)$/m.exec(f)?.[1]; const dm = /^data: (.+)$/m.exec(f)?.[1];
+      if (!ev || !dm) continue;
+      let d; try { d = JSON.parse(dm); } catch { continue; }
+      if (ev === "start" && d.stripped?.length) $("chatStrip").textContent = `billing guard: stripped ${d.stripped.join(", ")} from this run`;
+      else if (ev === "start") $("chatStrip").textContent = "billing guard: no API credentials present · subscription only";
+      if (ev === "event") {
+        const c = d?.message?.content ?? d?.delta ?? null;
+        if (typeof c === "string") out.textContent += c;
+        else if (Array.isArray(c)) for (const p of c) { if (p.type === "text") out.textContent += p.text; if (p.type === "tool_use") out.textContent += `\n[${p.name}]\n`; }
+        else if (d?.type === "item.completed" && d?.item?.text) out.textContent += d.item.text;
+      }
+      if (ev === "text") out.textContent += d.text;
+      if (ev === "stderr") out.textContent += d.text;
+      if (ev === "fatal") out.textContent += "\n" + d.error;
+      $("chatLog").scrollTop = $("chatLog").scrollHeight;
+    }
+  }
+}
+$("chatSend").addEventListener("click", send);
+$("chatBox").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+
+// --- audit ---
+$("runAudit").addEventListener("click", async function () {
+  this.disabled = true; this.textContent = "Running…";
+  const out = $("auditOut"); out.textContent = "";
+  const res = await fetch("/api/audit");
+  const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read(); if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const frames = buf.split("\n\n"); buf = frames.pop() ?? "";
+    for (const f of frames) {
+      const ev = /^event: (.+)$/m.exec(f)?.[1]; const dm = /^data: (.+)$/m.exec(f)?.[1];
+      if (!ev || !dm) continue;
+      const d = JSON.parse(dm);
+      if (ev === "start") out.textContent += `$ ${d.script}\n\n`;
+      if (ev === "text") out.textContent += d.text;
+      if (ev === "fatal") out.textContent += `\n${d.error}\n`;
+      if (ev === "done") out.textContent += `\n[exit ${d.code}]\n`;
+      out.scrollTop = out.scrollHeight;
+    }
+  }
+  this.disabled = false; this.textContent = "Run audit";
+});
+
+load();
+</script>
+</body>
+</html>
