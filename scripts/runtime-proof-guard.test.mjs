@@ -17,6 +17,7 @@
 // Every fixture is ASCII on the wire: the stamp's U+00B7 is emitted as UTF-8 by node and returned as
 // code points, so a code-page decoding regression in the capture helper fails test 2 loudly.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { windows } from "./lib/windows-only.mjs";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -24,7 +25,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const windows = process.platform === "win32";
 
 // Escapes, not literals: every generated fixture below must be pure ASCII on disk, so the only
 // place U+00B7 exists as a byte is where the code under test puts it.

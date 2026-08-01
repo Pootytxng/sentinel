@@ -40,8 +40,14 @@ const fail = (code, reason, raw) => ({ ok: false, code, reason, raw });
  * not cosmetic, so it is stored exactly as given and only compared loosely.
  */
 export function canonicalizePath(p) {
-  let out = String(p ?? "").trim().replace(/\//g, "\\");
-  out = out.replace(/\\+$/, "");
+  const raw = String(p ?? "").trim();
+  // bug->guard: this used to rewrite "/" to "\" UNCONDITIONALLY, which is right for a Windows path
+  // and nonsense for any other -- "/tmp/x" became "\tmp\x". Invisible on the owner's machine, and
+  // the reason every checkouts.mjs test failed the moment CI ran it on Linux. A Windows-path
+  // canonicalizer must only canonicalize Windows paths.
+  const isWindowsPath = /^[A-Za-z]:/.test(raw) || raw.startsWith("\\\\") || raw.includes("\\");
+  if (!isWindowsPath) return raw.length > 1 ? raw.replace(/\/+$/, "") : raw;
+  let out = raw.replace(/\//g, "\\").replace(/\\+$/, "");
   if (/^[a-z]:/.test(out)) out = out[0].toUpperCase() + out.slice(1);
   return out;
 }
@@ -119,7 +125,12 @@ function parseEntry(rawEntry, codeRoot) {
     );
   }
 
-  const isAbsolute = /^[A-Za-z]:/.test(pathPart) || pathPart.startsWith("\\\\");
+  // A POSIX root counts as absolute too. It is not part of the board grammar — that is a Windows
+  // path — but treating "/tmp/x" as RELATIVE and joining it onto the code root produced
+  // "C:\Users\Kuya\code\/tmp/x", which is not a path anywhere. The launcher's own first-launch
+  // tests build real worktrees in real temp directories, so this is the difference between those
+  // proofs running and being provable on exactly one desk.
+  const isAbsolute = /^[A-Za-z]:/.test(pathPart) || pathPart.startsWith("\\\\") || pathPart.startsWith("/");
   if (!isAbsolute) {
     if (!codeRoot) {
       return fail(

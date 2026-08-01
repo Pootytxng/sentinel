@@ -1,0 +1,63 @@
+name: Dependency audit
+
+# Split out of ci.yml on 2026-08-01, because it was the most expensive job in the repository and
+# the least able to act on what it found.
+#
+# Measured over July: 645 raw minutes across 122 runs -- the single largest consumer of the free
+# allowance -- for a job carrying `continue-on-error: true`, meaning it could never fail a build.
+# It cost more than the Rust build and decided nothing. Most of that time was
+# `cargo install cargo-audit --locked` compiling the auditor from source on every single run.
+#
+# A dependency advisory does not change between two commits pushed ten minutes apart; it changes
+# when an advisory is published. So this now runs weekly, and on demand when someone wants it.
+# Weekly is roughly 4-5 runs a month instead of 122 -- about 25 minutes instead of 645.
+#
+# It is deliberately still `continue-on-error`. An informational job that can fail the build is not
+# informational, and a red mark nobody is allowed to act on is the same drift this repo keeps
+# fighting.
+
+on:
+  schedule:
+    # 07:00 UTC every Monday. A fixed weekday, so a missed week is visible rather than ambiguous.
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: audit
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Dependency audit (informational)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: npm audit (high+)
+        run: npm audit --audit-level=high
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Cache the compiled auditor itself. Keyed on the runner OS only: cargo-audit is a tool, not a
+      # dependency of this project, so it does not need to be rebuilt when Cargo.lock changes -- and
+      # rebuilding it on every run is exactly what made this job the most expensive one here.
+      - name: cache cargo-audit
+        id: cache-audit
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-${{ runner.os }}
+
+      - name: install cargo-audit
+        if: steps.cache-audit.outputs.cache-hit != 'true'
+        run: cargo install cargo-audit --locked
+
+      - name: cargo audit
+        run: cargo audit --file src-tauri/Cargo.lock
