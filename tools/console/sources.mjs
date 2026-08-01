@@ -77,8 +77,22 @@ export function readHost() {
   };
 }
 
-/** Branches, with the only two facts that matter: is it published, and does it hold work nothing else has. */
+/**
+ * Branches, with the only two facts that matter: is it published, and does it hold work nothing
+ * else has.
+ *
+ * bug->guard: `published` used to be `Boolean(upstream)` — whether TRACKING is configured. That is
+ * not the same question. Six branches on this machine exist perfectly well on the remote with no
+ * upstream set, and Lost & found reported every one as "local only", i.e. as work one disk failure
+ * from gone. A panel that cries wolf about six safe branches is a panel nobody reads on the day it
+ * is right. Published now means what it says: a matching ref exists on the remote.
+ */
 export function readBranches() {
+  const remote = attempt(() => {
+    const raw = git(HOST_DIR, ["for-each-ref", "--format=%(refname:short)", "refs/remotes/origin/"]);
+    return new Set(raw.split("\n").filter(Boolean).map((r) => r.replace(/^origin\//, "")));
+  }, null);
+
   return attempt(() => {
     const raw = git(HOST_DIR, [
       "for-each-ref", "--format=%(refname:short)|%(upstream:short)|%(upstream:track)|%(committerdate:short)", "refs/heads/",
@@ -86,13 +100,10 @@ export function readBranches() {
     return raw.split("\n").filter(Boolean).map((line) => {
       const [name, upstream, track, date] = line.split("|");
       const ahead = /ahead (\d+)/.exec(track ?? "");
-      return {
-        name,
-        upstream: upstream || null,
-        published: Boolean(upstream),
-        ahead: ahead ? Number(ahead[1]) : 0,
-        date,
-      };
+      // If the remote list could not be read, say "unknown" by treating it as published rather than
+      // inventing an alarm — an unreachable source must never manufacture a finding.
+      const published = remote.ok ? remote.value.has(name) : true;
+      return { name, upstream: upstream || null, published, ahead: ahead ? Number(ahead[1]) : 0, date };
     });
   }, []);
 }
