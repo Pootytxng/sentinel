@@ -78,9 +78,18 @@ const SCANNED_EXTENSIONS = new Set([
 const utf8SequenceLength = (byte) =>
   byte >= 0xc2 && byte <= 0xdf ? 2 : byte >= 0xe0 && byte <= 0xef ? 3 : byte >= 0xf0 && byte <= 0xf4 ? 4 : 0;
 
-// Same reason as the table above: map the UTF-8 bytes of `char` through OUR windows-1252 table
-// rather than through an ICU table that may not exist on this Node.
-const reEncode = (char) => [...Buffer.from(char, "utf8")].map((b) => cp1252Char(b) ?? "�").join("");
+/**
+ * What corruption IS: UTF-8 bytes read back as windows-1252. One pass.
+ *
+ * Exported so the tests can build their fixtures with it instead of `TextDecoder("windows-1252")`,
+ * which silently answers as Latin-1 on a Node whose ICU lacks the table — the fixture then is not
+ * mojibake at all and the guard is blamed for correctly finding nothing. Using this cannot make a
+ * test pass vacuously, because `cp1252 table matches the published mapping` pins the table itself
+ * against constants that owe nothing to this function.
+ */
+export const mojibakeOnce = (text) => [...Buffer.from(text, "utf8")].map(cp1252Char).join("");
+
+const reEncode = mojibakeOnce;
 
 // Walks the text once, recovering every span that proves itself. Returns the repaired text and
 // each recovery so callers can report precise locations.
