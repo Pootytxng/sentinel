@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it } from "vitest";
+import { windows, WINDOWS_ONLY } from "./lib/windows-only.mjs";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -54,7 +55,7 @@ const stages = [
   "public_assets_verified",
 ];
 
-describe("production release adapter over sandboxed native transports", () => {
+describe.runIf(windows)(`production release adapter over sandboxed native transports ${WINDOWS_ONLY}`, () => {
   it("runs real Git/GitHub handlers through first publish and a non-mutating retry", () => {
     const output = invoke();
     const lines = output.stdout.trim().split(/\r?\n/);

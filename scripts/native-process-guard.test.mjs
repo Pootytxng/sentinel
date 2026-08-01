@@ -20,6 +20,7 @@
 //   round-trips an argument containing spaces.
 // Coverage (10) -- the CDP transient-retry behaviour -- lives in runtime-proof-guard.test.mjs.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { windows } from "./lib/windows-only.mjs";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -27,7 +28,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const windows = process.platform === "win32";
 
 const OK_SHA = "1111111111111111111111111111111111111111";
 const JSON_SHA = "2222222222222222222222222222222222222222";

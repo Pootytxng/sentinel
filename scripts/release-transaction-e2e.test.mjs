@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it } from "vitest";
+import { windows, WINDOWS_ONLY } from "./lib/windows-only.mjs";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -53,7 +54,7 @@ const expectFailure = (scenario, pattern) => {
   expect(output.payload.error).toMatch(pattern);
 };
 
-describe("sandboxed end-to-end release publication", () => {
+describe.runIf(windows)(`sandboxed end-to-end release publication ${WINDOWS_ONLY}`, () => {
   it("1. expected first-publish 404 is data and reaches the create branch", () => {
     const payload = expectSuccess("first-publish-404");
     expect(payload.events).toContain("inspect:expected-404");
