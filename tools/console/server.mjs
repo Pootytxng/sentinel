@@ -9,19 +9,30 @@
 // so it must not be reachable from the network. That is not configurable either.
 
 import { createServer } from "node:http";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomUUID } from "node:crypto";
+import { promisify } from "node:util";
 
 import { snapshot, CODE_ROOT, CONTROL_DIR } from "./sources.mjs";
-import { planAgentSpawn } from "./agents.mjs";
+import { assertAgentSubscription, authArgsFor, planAgentSpawn, threadIdFromAgentEvent } from "./agents.mjs";
 import { PROVIDERS, addIdea, addLink, providerOf, readNotes, remove } from "./notes.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const HOST = "127.0.0.1";
 export const DEFAULT_PORT = 4517;
+const execFileAsync = promisify(execFile);
+const TRUSTED_HOSTS = new Set([HOST, "localhost", "[::1]"]);
+const ORIGIN_GUARDED_ROUTES = new Set([
+  "/api/chat",
+  "/api/audit",
+  "/api/launcher",
+  "/api/notes/idea",
+  "/api/notes/link",
+  "/api/notes/remove",
+  "/api/open",
+]);
 
 const send = (res, code, body, type = "application/json") => {
   res.writeHead(code, { "content-type": type, "cache-control": "no-store" });
@@ -39,6 +50,48 @@ function readBody(req, limit = 256 * 1024) {
     req.on("end", () => resolve(data));
     req.on("error", reject);
   });
+}
+
+/**
+ * Browsers always send Origin for a cross-site request. Local scripts do not, so origin-less
+ * loopback clients remain supported while a web page on another site is stopped before it can
+ * reach a process-starting or state-changing route.
+ */
+export function trustedOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  try {
+    const source = new URL(origin);
+    const target = new URL(`http://${req.headers.host ?? ""}`);
+    return source.protocol === "http:"
+      && TRUSTED_HOSTS.has(source.hostname)
+      && TRUSTED_HOSTS.has(target.hostname)
+      && source.host.toLowerCase() === target.host.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
+/** Verify the live CLI account immediately before a process is started. */
+export async function verifyPlanSubscription(plan, { run = execFileAsync } = {}) {
+  const args = authArgsFor(plan.agent);
+  if (!args) return { ok: false, code: "UNKNOWN_AGENT", reason: `cannot verify billing for ${plan.agent}.` };
+  try {
+    const { stdout, stderr } = await run(plan.file, args, {
+      cwd: plan.cwd,
+      env: plan.env,
+      windowsHide: true,
+      timeout: 15_000,
+      maxBuffer: 1024 * 1024,
+    });
+    return assertAgentSubscription(plan.agent, `${stdout ?? ""}\n${stderr ?? ""}`);
+  } catch (error) {
+    return {
+      ok: false,
+      code: "AUTH_CHECK_FAILED",
+      reason: `${plan.agent} account status could not be verified: ${String(error?.message ?? error)}`,
+    };
+  }
 }
 
 /**
@@ -64,7 +117,12 @@ function streamTurn(res, plan, { message = null } = {}) {
     buf = lines.pop() ?? "";
     for (const line of lines) {
       if (!line.trim()) continue;
-      try { emit("event", JSON.parse(line)); } catch { emit("text", { text: line }); }
+      try {
+        const event = JSON.parse(line);
+        const threadId = threadIdFromAgentEvent(plan.agent, event);
+        if (threadId) emit("thread", { threadId });
+        emit("event", event);
+      } catch { emit("text", { text: line }); }
     }
   });
   child.stderr.on("data", (c) => emit("stderr", { text: c.toString("utf8") }));
@@ -96,10 +154,48 @@ function streamAudit(res, { repoDir }) {
   res.on("close", () => { if (!child.killed) child.kill(); });
 }
 
-export function createConsoleServer({ repoDir = join(HERE, "..", "..") } = {}) {
+export function launcherCommand(entry, { issue = null } = {}) {
+  const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", entry];
+  if (Number.isInteger(issue) && issue > 0) args.push("-Issue", String(issue));
+  return {
+    file: "pwsh",
+    args,
+  };
+}
+
+/** Resolve only after Windows confirms that the detached launcher process exists. */
+export function startDetachedProcess(command, options, { spawnProcess = spawn } = {}) {
+  return new Promise((resolve) => {
+    const child = spawnProcess(command.file, command.args, options);
+    let settled = false;
+    child.once("spawn", () => {
+      if (settled) return;
+      settled = true;
+      child.unref();
+      resolve({ ok: true });
+    });
+    child.once("error", (error) => {
+      if (settled) return;
+      settled = true;
+      resolve({ ok: false, error: String(error?.message ?? error) });
+    });
+  });
+}
+
+export function createConsoleServer({
+  repoDir = join(HERE, "..", ".."),
+  planSpawn = planAgentSpawn,
+  subscriptionCheck = verifyPlanSubscription,
+  launchProcess = startDetachedProcess,
+  launcherExists = existsSync,
+} = {}) {
   return createServer(async (req, res) => {
     const url = new URL(req.url, `http://${HOST}`);
     try {
+      if (ORIGIN_GUARDED_ROUTES.has(url.pathname) && !trustedOrigin(req)) {
+        return send(res, 403, { error: "This request did not come from the local Compy Console.", code: "FOREIGN_ORIGIN" });
+      }
+
       if (url.pathname === "/" || url.pathname === "/index.html") {
         return send(res, 200, readFileSync(join(HERE, "index.html"), "utf8"), "text/html; charset=utf-8");
       }
@@ -109,23 +205,20 @@ export function createConsoleServer({ repoDir = join(HERE, "..", "..") } = {}) {
         return send(res, 200, snapshot());
       }
 
-      // A new thread id, minted by the console so it owns thread identity rather than scraping it back.
-      if (url.pathname === "/api/thread/new") {
-        return send(res, 200, { threadId: randomUUID() });
-      }
-
       if (url.pathname === "/api/chat" && req.method === "POST") {
         const body = JSON.parse(await readBody(req));
-        const plan = planAgentSpawn({
+        const plan = planSpawn({
           agent: body.agent ?? "claude",
           folder: body.folder,
           threadId: body.threadId ?? null,
           prompt: body.message ?? null,
           model: body.model ?? null,
           effort: body.effort ?? null,
-          extraArgs: body.sessionId ? Object.assign([], { sessionId: body.sessionId }) : [],
+          extraArgs: [],
         });
         if (!plan.ok) return send(res, 400, { error: plan.reason, code: plan.code });
+        const entitlement = await subscriptionCheck(plan);
+        if (!entitlement.ok) return send(res, 403, { error: entitlement.reason, code: entitlement.code });
         return streamTurn(res, plan, { message: body.message ?? null });
       }
 
@@ -133,28 +226,43 @@ export function createConsoleServer({ repoDir = join(HERE, "..", "..") } = {}) {
         return streamAudit(res, { repoDir });
       }
 
-      // Hand off to the launcher, in a REAL console window.
+      // Hand off to the canonical launcher instead of reimplementing its safety decisions here.
       //
       // The console can start a thread in a folder that already exists, but creating one — worktree,
       // branch, hooks, the seventeen preflight checks, the claim on the board — is compy-entry.ps1's
-      // job and it asks questions while it works. Reimplementing that here would be a second opinion
+      // job. Reimplementing that here would be a second opinion
       // about the most safety-critical path in the project, which is the one thing this console
-      // refuses to do anywhere else. So it spawns the real launcher, visibly, and gets out of the way.
+      // refuses to do anywhere else.
       //
-      // `-WindowStyle Normal` and detached on purpose: it must own a console of its own. The launcher
-      // itself refuses to run without one (claude-start.mjs checks), and a hidden window would leave
-      // a process the owner cannot see or answer — the exact failure that check exists to prevent.
+      // A selected issue is a complete non-interactive answer, so its terminal stays hidden and
+      // exits with the launcher. The no-issue compatibility route remains visible because that path
+      // genuinely presents a picker; the normal Console UI never needs it.
       if (url.pathname === "/api/launcher" && req.method === "POST") {
         const entry = join(CONTROL_DIR, "compy-entry.ps1");
-        if (!existsSync(entry)) return send(res, 404, { error: `${entry} is not there` });
-        spawn("pwsh", ["-NoExit", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", entry], {
+        if (!launcherExists(entry)) return send(res, 404, { error: `${entry} is not there` });
+        const text = await readBody(req);
+        const body = text.trim() ? JSON.parse(text) : {};
+        const issue = body.issue == null ? null : Number(body.issue);
+        if (issue !== null && (!Number.isInteger(issue) || issue <= 0)) {
+          return send(res, 400, { error: "Choose a real work item number.", code: "INVALID_ISSUE" });
+        }
+        const command = launcherCommand(entry, { issue });
+        const launched = await launchProcess(command, {
           cwd: CONTROL_DIR,
           detached: true,
           stdio: "ignore",
-          windowsHide: false,
+          // A chosen issue needs no terminal input. Keep that plumbing invisible. The no-issue
+          // fallback still opens the picker's real window because it genuinely asks a question.
+          windowsHide: issue !== null,
           shell: false,
-        }).unref();
-        return send(res, 200, { started: entry });
+        });
+        if (!launched.ok) {
+          return send(res, 500, {
+            error: `Compy could not start the safe launcher: ${launched.error}`,
+            code: "LAUNCH_FAILED",
+          });
+        }
+        return send(res, 200, { started: entry, issue, terminalRequired: issue === null });
       }
 
       // Compy's own typefaces, served from the repo. Bundled locally (OFL 1.1) — zero network,

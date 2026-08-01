@@ -234,40 +234,102 @@ select{background:var(--panel-2);color:var(--text);border:1px solid var(--line-s
 .alert .aw{font:400 12px/1.5 var(--sans);color:var(--muted);margin-top:3px}
 .alert .aa{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
 
-/* ── batch runs ───────────────────────────────────────────────────────────── */
-.pick{display:flex;align-items:center;gap:9px}
-.pick input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
-.run{border:1px solid var(--line-strong);border-radius:var(--r);margin-bottom:11px;overflow:hidden;background:var(--panel)}
-.run-h{display:flex;align-items:center;gap:9px;padding:10px 13px;border-bottom:1px solid var(--line)}
-.run-h .rn{font:600 13px var(--sans);flex:1;letter-spacing:-.01em}
-.run-out{font:400 11.5px/1.6 var(--mono);color:#aeb6c4;background:#06070a;padding:10px 13px;
-  max-height:230px;overflow-y:auto;white-space:pre-wrap;letter-spacing:-.01em}
-.run.done{border-color:var(--ok-line,var(--ok))} .run.failed{border-color:var(--bad)}
+/* ── owner journey: glance first, proof on demand ─────────────────────────── */
+body[data-view="ch"] .vitals{display:none}
+body[data-view="ch"] .scroll{background:
+  radial-gradient(circle at 72% 12%,rgba(167,139,250,.075),transparent 29%),
+  linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);
+  background-size:auto,42px 42px,42px 42px}
+body[data-view="ch"] .body{max-width:1060px;margin:0 auto;padding:30px 34px 34px}
+
+.rail-more{margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
+.rail-more summary{list-style:none;color:var(--muted);font:450 13.5px var(--sans);padding:8px 11px;
+  border-radius:var(--r-sm);cursor:pointer;display:flex;align-items:center;gap:10px}
+.rail-more summary::-webkit-details-marker{display:none}
+.rail-more summary::before{content:"＋";width:15px;text-align:center;color:var(--faint)}
+.rail-more[open] summary{color:var(--text);background:var(--panel)}
+.rail-more[open] summary::before{content:"−";color:var(--accent)}
+.rail-menu{padding:5px 0 2px 12px;border-left:1px solid var(--line-strong);margin-left:18px}
+.rail-menu button{font-size:12.5px;padding:6px 9px}
+
+.console-intro{display:grid;grid-template-columns:70px 1fr;gap:18px;align-items:center;margin:2px 0 22px}
+.signal-orbit{width:62px;height:62px;border:1px solid var(--accent-line);border-radius:50%;position:relative;
+  background:radial-gradient(circle,rgba(167,139,250,.18) 0 11%,transparent 12% 100%)}
+.signal-orbit::before,.signal-orbit::after{content:"";position:absolute;border-radius:50%;border:1px solid var(--line-strong)}
+.signal-orbit::before{inset:8px}.signal-orbit::after{inset:18px;border-color:var(--accent-line)}
+.signal-orbit span{position:absolute;width:6px;height:6px;border-radius:50%;background:var(--ok);right:5px;top:28px;
+  box-shadow:0 0 10px rgba(61,220,151,.5)}
+.eyebrow{font:600 9.5px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:5px}
+.console-intro h2{font-size:26px;letter-spacing:-.035em}
+.console-intro .lede{margin:7px 0 0;max-width:70ch;font-size:14px}
+
+.chat{height:calc(100vh - 210px);min-height:520px;background:rgba(16,19,26,.94);border-color:var(--line-strong);
+  box-shadow:0 24px 80px rgba(0,0,0,.38),0 0 0 1px rgba(167,139,250,.035)}
+.chat-head{padding:10px 14px;background:rgba(8,10,13,.7);display:flex;flex-wrap:nowrap}
+.route-state{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12.5px;min-width:0;flex:1}
+.route-state .route-copy{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.route-details{position:relative;flex:none}
+.route-details>summary{list-style:none;cursor:pointer;color:var(--muted);font:550 11.5px var(--sans);
+  border:1px solid var(--line-strong);border-radius:99px;padding:5px 10px;background:var(--panel-2)}
+.route-details>summary::-webkit-details-marker{display:none}
+.route-details[open]>summary{color:var(--text);border-color:var(--accent-line)}
+.route-controls{position:absolute;right:0;top:36px;width:min(520px,76vw);z-index:40;padding:14px;
+  display:grid;grid-template-columns:1fr 1fr;gap:9px;background:#10131a;border:1px solid var(--line-strong);
+  border-radius:var(--r);box-shadow:0 20px 60px var(--shadow)}
+.route-controls #chatFolder{grid-column:1/-1}
+.route-controls .route-actions{grid-column:1/-1;display:flex;justify-content:flex-end}
+.guard{font:500 11.5px var(--sans);color:var(--ok);padding:7px 14px;background:rgba(61,220,151,.075)}
+.welcome{height:100%;display:grid;place-content:center;text-align:center;padding:36px;color:var(--muted)}
+.welcome .mini-signal{width:34px;height:34px;border:1px solid var(--accent-line);border-radius:50%;margin:0 auto 13px;
+  display:grid;place-items:center;color:var(--accent);background:var(--accent-dim)}
+.welcome h3{font:600 17px var(--sans);color:var(--text);letter-spacing:-.02em}
+.welcome p{max-width:52ch;margin:7px auto 0;font-size:13px;line-height:1.6}
+.msg pre{font:400 13.5px/1.7 var(--sans);letter-spacing:0;background:#0b0e13}
+.msg.me pre{background:rgba(167,139,250,.11)}
+.chat-in{padding:14px;background:rgba(8,10,13,.65)}
+.chat-in textarea{min-height:46px;padding:11px 13px;background:#121722}
+.chat-in .btn.pri{height:46px;padding-inline:18px;border-radius:9px}
+.sugg{padding:10px 14px 2px;background:rgba(8,10,13,.35)}
+.sugg-chip{max-width:230px}
+.sugg-chip .sb{display:none}
+
+@media (max-width:820px){
+  .app{grid-template-columns:74px 1fr}
+  .brand{padding:0 16px 18px}.brand .who,.rail-foot,.navgroup{display:none}
+  nav{padding:0 8px}nav button{justify-content:center;padding:10px 8px;font-size:0}nav .ico{font-size:14px}
+  nav .pip{display:none}.rail-more summary{font-size:0;justify-content:center}.rail-menu{margin-left:0;padding-left:0;border:0}
+  .console-intro{grid-template-columns:1fr}.signal-orbit{display:none}
+  body[data-view="ch"] .body{padding:22px 18px}.chat{height:calc(100vh - 180px)}
+}
+
+@media (prefers-reduced-motion:reduce){.pane,.spin,.dot.pulse,.thinking::after{animation:none!important}}
 </style>
 </head>
-<body>
+<body data-view="ch">
 <div class="app">
   <aside>
     <div class="brand">
       <div class="mark">C</div>
       <div class="who"><b>Compy Console</b><span id="brandsub">connecting…</span></div>
     </div>
-    <nav>
-      <button class="on" data-t="ch"><span class="ico">▮</span>Chat</button>
-      <div class="navgroup">Work</div>
-      <button data-t="ov"><span class="ico">◈</span>Overview</button>
-      <button data-t="wk"><span class="ico">▤</span>Board<span class="pip" id="p-wk">–</span></button>
-      <button data-t="rn"><span class="ico">⣿</span>Runs<span class="pip" id="p-rn">0</span></button>
-      <div class="navgroup">Thinking</div>
-      <button data-t="ds"><span class="ico">◇</span>Discussions<span class="pip" id="p-ds">–</span></button>
-      <button data-t="id"><span class="ico">✎</span>Ideas<span class="pip" id="p-id">–</span></button>
-      <div class="navgroup">Health</div>
-      <button data-t="dc"><span class="ico">✦</span>Decisions<span class="pip" id="p-dc">–</span></button>
-      <button data-t="lf"><span class="ico">⌕</span>Lost &amp; found<span class="pip" id="p-lf">–</span></button>
-      <button data-t="au"><span class="ico">⏻</span>Audit</button>
+    <nav aria-label="Compy Console">
+      <button class="on" data-t="ch"><span class="ico">●</span>Now</button>
+      <button data-t="wk"><span class="ico">▤</span>Work<span class="pip" id="p-wk">–</span></button>
+      <details class="rail-more" id="railMore">
+        <summary>Details</summary>
+        <div class="rail-menu">
+          <button data-t="ov"><span class="ico">◈</span>System check</button>
+          <button data-t="ds"><span class="ico">◇</span>Questions<span class="pip" id="p-ds">–</span></button>
+          <button data-t="id"><span class="ico">✎</span>Ideas<span class="pip" id="p-id">–</span></button>
+          <button data-t="dc"><span class="ico">✦</span>Your decisions<span class="pip" id="p-dc">–</span></button>
+          <button data-t="lf"><span class="ico">⌕</span>Loose work<span class="pip" id="p-lf">–</span></button>
+          <button data-t="au"><span class="ico">✓</span>Proof</button>
+        </div>
+      </details>
     </nav>
     <div class="rail-foot">
-      Read live from git, GitHub and disk.<br>
+      Live proof when you need it.<br>
       <span class="t" id="stamp">—</span>
       <button id="refresh">Refresh now</button>
     </div>
@@ -282,19 +344,30 @@ select{background:var(--panel-2);color:var(--text);border:1px solid var(--line-s
     <div class="vitals" id="vitals"></div>
     <div class="scroll"><div class="body">
       <section class="pane on" id="ch">
-        <h2>Chat</h2>
-        <p class="lede">One conversation, in a folder you choose. Same thing as talking to Claude or Codex anywhere else,
-          except it is already sitting in the code — there is nothing to paste and no window to switch to.
-          <strong>Enter</strong> sends. Changing the folder or the agent starts a fresh thread.</p>
+        <div class="console-intro">
+          <div class="signal-orbit" aria-hidden="true"><span></span></div>
+          <div>
+            <div class="eyebrow">Compy is ready</div>
+            <h2>What are we working on?</h2>
+            <p class="lede">Tell Compy what you want in plain English. It chooses a sensible route, keeps this
+              conversation read-only, and sends implementation through Work so the safety checks happen automatically.</p>
+          </div>
+        </div>
         <div class="chat" id="chat">
           <div class="chat-head">
-            <select id="chatFolder" style="flex:1;min-width:210px"></select>
-            <select id="chatAgent"><option value="claude">Claude</option><option value="codex">Codex</option></select>
-            <select id="chatModel"></select>
-            <select id="chatEffort"></select>
-            <button class="btn sm" id="chatNew">New thread</button>
+            <div class="route-state"><span class="dot g"></span><span class="route-copy" id="routeSummary">Choosing the safest route…</span></div>
+            <details id="routeDetails" class="route-details">
+              <summary>Change route</summary>
+              <div class="route-controls">
+                <select id="chatFolder" aria-label="Project folder"></select>
+                <select id="chatAgent" aria-label="Helper"><option value="claude">Claude</option><option value="codex">Codex</option></select>
+                <select id="chatModel" aria-label="Model"></select>
+                <select id="chatEffort" aria-label="Effort"></select>
+                <div class="route-actions"><button class="btn sm" id="chatNew">New conversation</button></div>
+              </div>
+            </details>
           </div>
-          <div class="guard" id="chatGuard">subscription only · no API credentials in this process</div>
+          <div class="guard" id="chatGuard">Read-only conversation · subscription protected · no API credentials</div>
           <div class="working hide" id="chatWorking">
             <span class="spin"></span><span id="chatWorkingText">Working…</span>
             <span class="el" id="chatElapsed">0s</span>
@@ -303,14 +376,13 @@ select{background:var(--panel-2);color:var(--text);border:1px solid var(--line-s
           <div class="chat-log" id="chatLog"></div>
           <div class="sugg" id="sugg"></div>
           <div class="chat-in">
-            <textarea id="chatBox" rows="1" placeholder="Ask anything. Enter sends, Shift+Enter for a new line."></textarea>
+            <textarea id="chatBox" rows="1" placeholder="Describe the outcome you want, or type a work number like 18."></textarea>
             <button class="btn pri" id="chatSend">Send</button>
           </div>
         </div>
       </section>
       <section class="pane" id="ov"></section>
       <section class="pane" id="wk"></section>
-      <section class="pane" id="rn"></section>
       <section class="pane" id="ds"></section>
       <section class="pane" id="id"></section>
       <section class="pane" id="dc"></section>
@@ -372,8 +444,7 @@ let seeded = false;
 function render() {
   const ci = V(S.ci, {}) || {};
   const dirty = (V(S.host.dirty) || []).length;
-  const stuck = (S.work.items || []).filter((i) => !i.availability.available).length;
-  const decisions = (V(S.pulls) || []).length + stuck + (ci.meaningful ? 0 : 1);
+  const decisions = (S.work.items || []).filter((i) => i.status === "Needs Kuya" || i.gate === "Kuya").length;
 
   $("brandsub").textContent = S.agents.billing.ok ? `${S.agents.billing.plan} plan · no API spend` : "check authentication";
   $("stamp").textContent = new Date(S.generatedAt).toLocaleTimeString();
@@ -394,7 +465,7 @@ function render() {
     ["CI", ci.meaningful ? `<span class="ok">live</span>` : `<span class="bd">blocked</span>`, ci.meaningful ? "verdicts are real" : "verdicts mean nothing"],
   ].map(([l, v, s]) => `<div class="v"><div class="lab">${l}</div><div class="val">${v}</div><div class="sub">${s}</div></div>`).join("");
 
-  renderChat(); renderOverview(ci); renderWork(); renderRuns(); renderDiscussions(); renderIdeas(); renderDecisions(ci); renderLost();
+  renderChat(); renderOverview(ci); renderWork(); renderDiscussions(); renderIdeas(); renderDecisions(ci); renderLost();
   paintBell(); paintLive();
 }
 
@@ -406,9 +477,17 @@ function renderChat() {
   const keep = sel.value;
   const folders = V(S.folders) || [];
   sel.innerHTML = folders.length
-    ? folders.map((f) => `<option value="${esc(f.path)}">${esc(f.name)}${f.host ? " · host" : ""}${f.branch ? "  —  " + esc(f.branch) : ""}</option>`).join("")
-    : `<option value="">no checkouts found under ${esc(S.codeRoot)}</option>`;
-  if (keep && folders.some((f) => f.path === keep)) sel.value = keep;
+    ? folders.map((f) => `<option value="${esc(f.path)}">${esc(f.name)}${f.host ? " · main project" : ""}</option>`).join("")
+    : `<option value="">No project folders found</option>`;
+  const automatic = folders.find((f) => f.host)?.path ?? folders[0]?.path ?? "";
+  sel.value = keep && folders.some((f) => f.path === keep) ? keep : automatic;
+  syncRouteSummary();
+}
+
+function syncRouteSummary() {
+  const folder = $("chatFolder").selectedOptions?.[0]?.textContent?.replace(" · main project", "") || "No project";
+  const agent = $("chatAgent").value === "codex" ? "Codex" : "Claude";
+  $("routeSummary").textContent = `${folder} · ${agent} · read-only`;
 }
 
 // ── Overview ─────────────────────────────────────────────────────────────────────────────────
@@ -464,88 +543,24 @@ function renderWork() {
     const a = i.availability;
     const folder = (i.worktreeBranch || "").split(" @ ")[0] || "";
     return `<div class="row ${a.available ? "go" : (i.status === "Needs Kuya" || i.gate === "Kuya" ? "stop" : "hold")}">
-      <div class="pick" style="flex:1">
-        ${a.available && folder ? `<input type="checkbox" data-batch="${i.number}" title="include in a bulk run">` : `<span style="width:16px;flex:none"></span>`}
-        <div><div class="rt">#${i.number} ${esc(i.title)}
+      <div><div class="rt">#${i.number} ${esc(i.title)}
           <span class="tag ${a.available ? "g" : "a"}">${esc(i.status)}</span>
           <span class="tag">${esc(i.lane || "unassigned")}</span></div>
           ${a.available ? "" : `<div class="rd">${esc(a.reason)}</div>`}
-          <div class="rf">${esc(i.worktreeBranch || "no folder assigned")}</div></div>
-      </div>
+          <div class="rf">${esc(i.worktreeBranch || "No work folder assigned")}</div></div>
       <div class="acts">
-        ${folder ? `<button class="btn ${a.available ? "pri" : ""}" data-open="${esc(folder)}" data-item="${i.number}">${a.available ? esc(a.action) : "Ask about it"}</button>` : ""}
+        ${a.available ? `<button class="btn pri" data-launch="${i.number}">Start safely</button>`
+          : folder ? `<button class="btn" data-open="${esc(folder)}" data-item="${i.number}">Ask about it</button>` : ""}
         <button class="btn sm" data-explain="${i.number}">Explain it</button>
       </div></div>`;
   }).join("");
-  $("wk").innerHTML = `<h2>Board</h2>
-    <p class="lede">Every item carries the launcher's own startability rule, decided before you click — so a green
-      button here cannot be refused three steps later, and a missing one tells you why in a sentence.
-      <strong>Start</strong> opens a thread in a folder that already exists; <strong>Run the launcher</strong>
-      hands off to <code>compy-entry.ps1</code> in its own window for anything that needs a folder created,
-      a branch checked out, or the full preflight — that path is not reimplemented here on purpose.</p>
-    <div class="row" style="border-left:2px solid var(--accent)">
-      <div><div class="rt">The launcher <span class="tag v">creates folders · full preflight</span></div>
-        <div class="rd">Everything the desktop shortcut used to do, from here. Opens a real console window because it
-          asks questions while it works — and refuses to run without one.</div></div>
-      <div class="acts"><button class="btn" id="runLauncher">Run the launcher</button></div>
-    </div>
+  $("wk").innerHTML = `<h2>Work</h2>
+    <p class="lede">Choose the outcome, once. <strong>Start safely</strong> sends that exact item through the existing
+      ownership, folder, branch, hook, context, and collision checks. The terminal plumbing stays out of your way.</p>
     ${S.work.startable ? "" : `<div class="note warn"><div><b>Nothing is startable right now.</b>
-      <p>Every open item is either owner-gated or belongs to another lane. That does not stop you asking about any of
-      them — <b>Ask about it</b> opens a chat in that item's folder without claiming the work.</p></div></div>`}
-    <div class="sec"><div class="sec-h">Bulk run</div>
-      <div class="card">
-        <div id="batchPlan" style="font-size:13px;color:var(--muted);line-height:1.6">
-          Tick the boxes on any green items above. The console will tell you which of them can run
-          <b>at the same time</b> and which have to wait — and it is not a guess.
-        </div>
-        <div class="acts" style="margin-top:12px">
-          <button class="btn pri" id="batchGo" disabled>Run these together</button>
-          <button class="btn" id="batchClear">Clear</button>
-        </div>
-      </div>
-    </div>
+      <p>The items below need a decision, belong to another active lane, or have a safety refusal. You can still ask
+      what any of them means without claiming or changing its files.</p></div></div>`}
     ${rows || `<div class="empty">No open items on the board.</div>`}`;
-
-  // Which ticked items may run side by side. One run per FOLDER, never two — a worktree is a
-  // separate checkout, so two agents in different folders cannot see, let alone overwrite, each
-  // other's files. Two in the same folder would fight over one working tree.
-  const picked = () => [...$("wk").querySelectorAll("[data-batch]:checked")]
-    .map((c) => S.work.items.find((x) => String(x.number) === c.dataset.batch)).filter(Boolean);
-
-  function paintPlan() {
-    const p = picked();
-    const { parallel, queued } = planBatch(p);
-    $("batchGo").disabled = parallel.length === 0;
-    $("batchGo").textContent = parallel.length > 1
-      ? `Run ${parallel.length} at the same time` : parallel.length === 1 ? "Run it" : "Run these together";
-    $("batchPlan").innerHTML = p.length === 0
-      ? `Tick the boxes on any green items above. The console will tell you which of them can run
-         <b>at the same time</b> and which have to wait — and it is not a guess.`
-      : `<div><span class="dot g" style="display:inline-block;margin-right:7px"></span>
-           <b>${parallel.length} can run at once</b> — ${parallel.map((x) => "#" + x.item.number).join(", ")}.
-           Each one is in its own folder, so they cannot touch the same files.</div>
-         ${queued.length ? `<div style="margin-top:7px"><span class="dot a" style="display:inline-block;margin-right:7px"></span>
-           <b>${queued.length} must wait</b> — ${queued.map((x) => "#" + x.item.number).join(", ")}.
-           ${queued.length === 1 ? "It shares" : "They share"} a folder with something already in the batch, and two agents in one folder collide.</div>` : ""}`;
-  }
-
-  for (const c of $("wk").querySelectorAll("[data-batch]")) c.addEventListener("change", paintPlan);
-  $("batchClear").addEventListener("click", () => {
-    for (const c of $("wk").querySelectorAll("[data-batch]")) c.checked = false;
-    paintPlan();
-  });
-  $("batchGo").addEventListener("click", async function () {
-    const { parallel } = planBatch(picked());
-    this.disabled = true;
-    switchTo("rn");
-    await Promise.all(parallel.map(({ folder, item }) => startRun({
-      folder, agent: $("chatAgent").value,
-      label: `#${item.number} ${item.title}`,
-      prompt: `Work on #${item.number} ("${item.title}") in this folder. Read the issue and the code first. Follow the conventions already here rather than inventing new ones. When you believe it is done, run the tests and show me the output — do not tell me it "should work". If you hit something that needs my decision, stop and say so instead of guessing.`,
-    })));
-    this.disabled = false;
-  });
-  paintPlan();
 
   // "anything gated or needing review should not take me to github ... idk wtf github even does."
   for (const b of $("wk").querySelectorAll("[data-explain]")) {
@@ -555,6 +570,10 @@ function renderWork() {
       const folder = (i.worktreeBranch || "").split(" @ ")[0] || HOST;
       askNow(folder, `Explain #${i.number} ("${i.title}") to me. Use gh to read the issue. What is being asked for, why does it matter, what would it touch, and what would "done" look like? Assume I do not know how GitHub works — plain English, no jargon.`);
     });
+  }
+
+  for (const b of $("wk").querySelectorAll("[data-launch]")) {
+    b.addEventListener("click", () => launchIssue(Number(b.dataset.launch), b));
   }
 
   for (const b of $("wk").querySelectorAll("[data-open]")) {
@@ -567,148 +586,36 @@ function renderWork() {
     });
   }
 
-  // The launcher opens a SEPARATE console window, and on a two-monitor desk that window can land
-  // where you are not looking. It then claims work and checks out a branch — real, invisible
-  // consequences. The owner clicked this, a branch and a commit appeared, and the page still showed
-  // the old world: "nothing happens" was actually "everything happened, somewhere else". So say
-  // where it went, leave the message up, and re-read the world so the board catches up on its own.
-  $("runLauncher").addEventListener("click", async function () {
-    this.disabled = true;
-    this.textContent = "Starting…";
-    const r = await post("/api/launcher", {});
-    const note = document.createElement("div");
-    note.className = "note " + (r.error ? "bad" : "warn");
-    note.innerHTML = r.error
-      ? `<div><b>The launcher did not start.</b><p>${esc(r.error)}</p></div>`
-      : `<div><b>A launcher window just opened — it may be on your other monitor.</b>
-           <p>It asks questions while it works, and it can create a branch or a folder before you
-           answer anything. Go find that window. This page will re-read itself in a few seconds so
-           the board shows whatever it did.</p></div>`;
-    this.parentElement.parentElement.insertAdjacentElement("afterend", note);
-    this.textContent = "Run the launcher";
-    this.disabled = false;
-    if (!r.error) setTimeout(load, 6000);
-  });
 }
 
-// ── Runs: several at once, only where they cannot collide ────────────────────────────────────
-// "what task allow for me to bundle together into one big bulk run or mutiple parallel runs that
-// are guaranteed not to conflict or collide."
-//
-// There IS a guarantee available here, and it is not a guess. Every work item names its own folder,
-// and each folder is a separate git worktree — its own checkout, its own working files, its own
-// branch. Two agents in two different worktrees cannot touch the same file, because they are not
-// looking at the same files. Two agents in the SAME folder absolutely can, and would.
-//
-// So the rule is exactly one line: one run per folder, and never two. Everything below is that rule
-// made visible. Nothing is bundled on a hope.
-const RUNS = [];
-let runSeq = 0;
-
-function planBatch(picked) {
-  const byFolder = new Map();
-  for (const i of picked) {
-    const folder = (i.worktreeBranch || "").split(" @ ")[0] || "";
-    if (!folder) continue;
-    if (!byFolder.has(folder)) byFolder.set(folder, []);
-    byFolder.get(folder).push(i);
-  }
-  const parallel = [], queued = [];
-  for (const [folder, items] of byFolder) {
-    parallel.push({ folder, item: items[0] });
-    for (const later of items.slice(1)) queued.push({ folder, item: later });
-  }
-  return { parallel, queued };
-}
-
-function renderRuns() {
-  const busy = RUNS.filter((r) => r.status === "running").length;
-  $("p-rn").textContent = RUNS.length;
-  $("p-rn").className = "pip " + (busy ? "warn" : RUNS.some((r) => r.status === "failed") ? "bad" : RUNS.length ? "ok" : "");
-  $("rn").innerHTML = `<h2>Runs</h2>
-    <p class="lede">Everything the console has started, live. Each run is one agent working in one folder.
-      Two runs never share a folder — that is the whole reason they can be trusted side by side.</p>
-    <div id="runList">${RUNS.length ? "" : `<div class="empty">Nothing has been run yet. Pick work on the Board and press <b>Run these together</b>.</div>`}</div>`;
-  const list = $("runList");
-  for (const r of RUNS) list.appendChild(r.el);
-}
-
-function newRunCard(r) {
-  const el = document.createElement("div");
-  el.className = "run";
-  el.innerHTML = `<div class="run-h">
-      <span class="dot a pulse"></span>
-      <span class="rn">${esc(r.label)}</span>
-      <span class="tag" style="font-family:var(--mono)">${esc(r.folder.split("\\").pop())}</span>
-      <span class="tag" data-el>0s</span>
-      <button class="btn sm" data-stop>Stop</button>
-    </div><div class="run-out" data-out>starting…</div>`;
-  el.querySelector("[data-stop]").addEventListener("click", () => r.ctrl?.abort());
-  return el;
-}
-
-function setRunState(r, status) {
-  r.status = status;
-  const dot = r.el.querySelector(".dot");
-  const stop = r.el.querySelector("[data-stop]");
-  dot.className = "dot " + (status === "running" ? "a pulse" : status === "done" ? "g" : "r");
-  r.el.classList.remove("done", "failed");
-  if (status !== "running") { r.el.classList.add(status); stop.remove(); }
-  renderRuns();
-}
-
-async function startRun({ folder, label, prompt, agent }) {
-  if (RUNS.some((r) => r.status === "running" && r.folder === folder)) {
-    return { skipped: true, why: "already running in that folder" };
-  }
-  const r = { id: ++runSeq, folder, label, status: "running", started: Date.now(), ctrl: new AbortController() };
-  r.el = newRunCard(r);
-  RUNS.unshift(r);
-  renderRuns();
-  const act = actStart(label);
-  const out = r.el.querySelector("[data-out]");
-  const tick = setInterval(() => { r.el.querySelector("[data-el]").textContent = secs(Date.now() - r.started); }, 1000);
-  out.textContent = "";
-  try {
-    const res = await fetch("/api/chat", {
-      method: "POST", headers: { "content-type": "application/json" }, signal: r.ctrl.signal,
-      body: JSON.stringify({ agent, folder, message: prompt, threadId: null, sessionId: crypto.randomUUID() }),
-    });
-    if (!res.ok || !res.body) { out.textContent = "refused — " + (await res.text()); setRunState(r, "failed"); return { ok: false }; }
-    const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
-    for (;;) {
-      const { done, value } = await reader.read(); if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const frames = buf.split("\n\n"); buf = frames.pop() ?? "";
-      for (const f of frames) {
-        const ev = /^event: (.+)$/m.exec(f)?.[1]; const dm = /^data: (.+)$/m.exec(f)?.[1];
-        if (!ev || !dm) continue;
-        let d; try { d = JSON.parse(dm); } catch { continue; }
-        if (ev === "event") {
-          const c = d?.message?.content ?? d?.delta ?? null;
-          if (typeof c === "string") out.textContent += c;
-          else if (Array.isArray(c)) for (const p of c) {
-            if (p.type === "text") out.textContent += p.text;
-            if (p.type === "tool_use") out.textContent += `\n[${p.name}]\n`;
-          }
-          else if (d?.type === "item.completed" && d?.item?.text) out.textContent += d.item.text;
-        }
-        if (ev === "text" || ev === "stderr") out.textContent += d.text;
-        if (ev === "fatal") out.textContent += "\n" + d.error;
-        out.scrollTop = out.scrollHeight;
-      }
-    }
-    setRunState(r, "done");
-    return { ok: true };
-  } catch (e) {
-    out.textContent += String(e?.name) === "AbortError" ? "\n\n— stopped by you —" : `\n\n${String(e?.message ?? e)}`;
-    setRunState(r, "failed");
+async function launchIssue(issue, button = null) {
+  const item = S?.work?.items?.find((x) => Number(x.number) === Number(issue));
+  if (!item) {
+    if (document.body.dataset.view === "ch") bubble("compy").textContent = `I cannot find work item #${issue}. Open Work to see the numbers that are available.`;
+    else switchTo("wk");
     return { ok: false };
-  } finally {
-    clearInterval(tick);
-    actEnd(act);
-    load();
   }
+  if (!item.availability?.available) {
+    const folder = (item.worktreeBranch || "").split(" @ ")[0] || $("chatFolder").value;
+    openChat(folder, { number: item.number, title: item.title, available: false, reason: item.availability?.reason });
+    $("chatBox").value = `Explain why #${item.number} cannot start yet and tell me the one next decision in plain English.`;
+    return { ok: false };
+  }
+
+  if (button) { button.disabled = true; button.textContent = "Preparing…"; }
+  if (document.body.dataset.view === "ch") {
+    bubble("compy").textContent = `Preparing #${item.number} safely. Compy is checking ownership, the work folder, the branch, hooks, context, and collisions.`;
+  }
+  const result = await post("/api/launcher", { issue: item.number });
+  if (result.error) {
+    if (document.body.dataset.view !== "ch") switchTo("ch");
+    bubble("compy").textContent = `I did not start #${item.number}: ${result.error}`;
+  } else if (document.body.dataset.view === "ch") {
+    bubble("compy").textContent = `#${item.number} is being handed to the verified work path. There is no command for you to copy and no terminal you need to keep open.`;
+  }
+  if (button) { button.disabled = false; button.textContent = result.error ? "Try again" : "Starting…"; }
+  if (!result.error) setTimeout(load, 3500);
+  return { ok: !result.error };
 }
 
 // ── Discussions ──────────────────────────────────────────────────────────────────────────────
@@ -836,15 +743,15 @@ function renderDecisions(ci) {
     [{ label: "Explain it to me", folder: HOST, ask: `GitHub Actions is not executing my CI. The console reports: "${ci.reason}". Explain what that means, what it is costing me, and exactly what I have to do — assume I do not know how GitHub works. No jargon.` },
      { label: "Check it again now", folder: HOST, ask: `Check whether GitHub Actions is actually executing my workflows right now. Use gh to look at the most recent runs and tell me whether real jobs ran or whether they were rejected before starting. Answer in plain English.` }]);
 
-  for (const p of V(S.pulls) || []) row("hold",
-    `A finished change is waiting for you — #${p.number}${p.draft ? ` <span class="tag a">draft</span>` : ""}
+  for (const p of (V(S.pulls) || []).filter((p) => !p.draft)) row("hold",
+    `A finished change is waiting for you — #${p.number}
       <span class="tag ${p.mergeable === "MERGEABLE" ? "g" : "r"}">${p.mergeable === "MERGEABLE" ? "ready to merge" : esc(p.mergeable || "unknown")}</span>`,
     p.title,
     `${p.branch}${ci.meaningful ? "" : " · its checks mean nothing while CI is blocked"}`,
     [{ label: "What is this change?", folder: HOST, ask: `Explain pull request #${p.number} ("${p.title}") to me. Use gh to read it and the diff. What does it change, why, what could break, and would you merge it? Assume I do not know how GitHub works — plain English.` },
      { label: "Review it properly", folder: HOST, ask: `Read pull request #${p.number} and review it: correctness, anything unfinished, anything risky, anything that contradicts the conventions in this repo. Give me a verdict with reasons. Do NOT merge it.` }]);
 
-  for (const i of (S.work.items || []).filter((x) => !x.availability.available)) row("hold",
+  for (const i of (S.work.items || []).filter((x) => x.status === "Needs Kuya" || x.gate === "Kuya")) row("hold",
     `#${i.number} ${esc(i.title)} <span class="tag a">${esc(i.status)}</span>`,
     i.availability.reason,
     i.worktreeBranch || null,
@@ -877,6 +784,7 @@ function renderLost() {
 
 // ── navigation ───────────────────────────────────────────────────────────────────────────────
 function switchTo(id) {
+  document.body.dataset.view = id;
   document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("on", x.dataset.t === id));
   document.querySelectorAll(".pane").forEach((p) => p.classList.toggle("on", p.id === id));
 }
@@ -906,7 +814,7 @@ const MODELS = {
 };
 const EFFORTS = {
   claude: [["", "effort · default"], ["low", "low — quick"], ["medium", "medium"], ["high", "high"], ["xhigh", "xhigh — hardest"], ["max", "max"]],
-  codex: [["", "effort · default"], ["low", "low — quick"], ["medium", "medium"], ["high", "high"], ["xhigh", "xhigh"], ["max", "max"]],
+  codex: [["", "effort · default"], ["low", "low — quick"], ["medium", "medium"], ["high", "high"], ["xhigh", "xhigh"], ["ultra", "ultra"], ["max", "max"]],
 };
 
 const fill = (sel, pairs) => {
@@ -920,13 +828,14 @@ function paintModelOptions() {
   fill($("chatEffort"), EFFORTS[a] ?? EFFORTS.claude);
 }
 
-/** Apply a suggestion's recommended rig. Called only when he clicks it — never silently. */
+/** Apply a suggestion's recommended rig, including the default recommendation Compy chooses. */
 function applyBest(best) {
   if (!best) return;
   if (best.agent) $("chatAgent").value = best.agent;
   paintModelOptions();
   $("chatModel").value = best.model ?? "";
   $("chatEffort").value = best.effort ?? "";
+  syncRouteSummary();
 }
 const bestLabel = (b) => b ? `★ ${b.agent === "codex" ? "Codex" : "Claude"} · ${b.model || "default"} · ${b.effort || "default"}` : "";
 
@@ -939,10 +848,10 @@ const FOLDER_SUGGESTIONS = (folderName) => [
     hint: "what changed here lately and what it means",
     best: { agent: "claude", model: "sonnet", effort: "medium" },
     prompt: `Catch me up on ${folderName}. What changed recently, what state is it in right now, and is there anything half-finished I should know about? Read before you answer — don't guess.` },
-  { title: "What's broken?",
-    hint: "run the tests, explain failures in plain English",
+  { title: "Check for problems",
+    hint: "inspect the evidence and explain concerns",
     best: { agent: "claude", model: "sonnet", effort: "medium" },
-    prompt: `Run the tests in this folder. If anything fails, explain in plain English what broke and what it would take to fix — don't fix anything yet.` },
+    prompt: `Inspect the recent test evidence and this folder for likely problems. Explain anything concerning in plain English and what it would take to verify — don't change anything.` },
   { title: "Explain this to me",
     hint: "the tour, no jargon",
     best: { agent: "claude", model: "sonnet", effort: "low" },
@@ -963,10 +872,6 @@ const ITEM_SUGGESTIONS = (item) => {
       prompt: startable
         ? `I want to work on ${ref}. Read the issue and this folder, then tell me: what you'd do, in what order, what you'd touch, and what could break. Do NOT change anything yet — I want the plan first.`
         : `${ref} is on my board but it can't be started: "${item.reason}". Explain what that actually means and what would have to happen to unblock it. Read the repo before answering.` },
-    { title: "Just do it",
-      hint: "implement it end to end, then prove it",
-      best: { agent: "claude", model: "opus", effort: "xhigh" },
-      prompt: `Implement ${ref} end to end in this folder. Follow the conventions already here rather than inventing new ones. When you think it's done, run the tests and show me the output — I don't want "should work".` },
     { title: "What already exists?",
       hint: "the code that already touches this",
       best: { agent: "claude", model: "sonnet", effort: "medium" },
@@ -984,7 +889,7 @@ const ITEM_SUGGESTIONS = (item) => {
 function setSuggestions(list, { prefill = true } = {}) {
   const box = $("sugg");
   if (!list || !list.length) { box.innerHTML = ""; return; }
-  box.innerHTML = `<div class="sugg-lab">Suggested — click one, edit it, press Enter</div>` +
+  box.innerHTML = `<div class="sugg-lab">Pick one, or just type</div>` +
     list.map((s, i) => `<button class="sugg-chip ${s.rec ? "rec" : ""}" data-sugg="${i}">
       <span class="st">${esc(s.title)}</span><span class="sd">${esc(s.hint)}</span>
       ${s.best ? `<span class="sb">${esc(bestLabel(s.best))}</span>` : ""}</button>`).join("");
@@ -1061,8 +966,8 @@ function buildAlerts() {
   const out = [];
   const host = V(S.host.branch);
   const dirty = (V(S.host.dirty) || []).length;
-  const pulls = V(S.pulls) || [];
-  const stuck = (S.work.items || []).filter((i) => !i.availability.available);
+  const ownerItems = (S.work.items || []).filter((i) => i.status === "Needs Kuya" || i.gate === "Kuya");
+  const accountedBranches = new Set((S.work.items || []).map((i) => (i.worktreeBranch || "").split(" @ ")[1]).filter(Boolean));
   const HOST = (V(S.folders) || []).find((f) => f.host)?.path || "";
 
   if (!ci.meaningful) out.push({ sev: "r", title: "Your tests are not actually running",
@@ -1079,22 +984,17 @@ function buildAlerts() {
     why: "Every other work folder hangs off this one. Left on a side branch it gets confusing fast — and anything you do here lands on that branch instead of main.",
     acts: [{ label: "Should I move it back?", folder: HOST, ask: `My host repo is checked out on "${host}" instead of main. Tell me whether anything here is unsaved, whether that branch is pushed, and whether it is safe to go back to main. Do not change anything — just tell me.` }] });
 
-  for (const f of S.lostAndFound || []) out.push({ sev: "a", title: `Unaccounted for: ${f.name}`,
+  for (const f of (S.lostAndFound || []).filter((f) => !accountedBranches.has(f.name))) out.push({ sev: "a", title: `Unaccounted for: ${f.name}`,
     why: `${f.risk} — ${f.why}`,
     acts: [{ label: "What is this?", folder: HOST, ask: `The console found something nothing points at: "${f.name}" (${f.risk}). ${f.why} Look at it and tell me in plain English what it is, whether it matters, and what you would do with it.` },
            { label: "See all of them", tab: "lf" }] });
 
-  for (const p of pulls) out.push({ sev: p.draft ? "a" : "r", title: `Waiting on you: change #${p.number}`,
-    why: `${p.title}${p.draft ? " (still a draft)" : ""}. A change that cannot merge itself — somebody has to decide.`,
-    acts: [{ label: "Explain this change", folder: HOST, ask: `Explain pull request #${p.number} ("${p.title}") to me. Use gh to read it. What does it change, why, what could break, and should I merge it? Assume I do not know how GitHub works — no jargon.` },
-           { label: "Review it with me", folder: HOST, ask: `Read pull request #${p.number} and review it properly: correctness, anything unfinished, anything risky. Give me a verdict and the reasoning. Do not merge anything.` }] });
-
-  for (const i of stuck) out.push({ sev: "a", title: `#${i.number} cannot be started`,
-    why: i.availability.reason,
-    acts: [{ label: "Why not?", item: i.number, ask: `#${i.number} ("${i.title}") is blocked: "${i.availability.reason}". Explain what that actually means and what would have to change to unblock it.` },
+  for (const i of ownerItems) out.push({ sev: "a", title: `#${i.number} needs your decision`,
+    why: i.availability.reason || i.title,
+    acts: [{ label: "Explain the decision", item: i.number, ask: `#${i.number} ("${i.title}") is waiting for my decision. Explain the choice, the evidence already gathered, and the consequence of each option in plain English.` },
            { label: "Open the board", tab: "wk" }] });
 
-  if (!out.length) out.push({ sev: "g", title: "Nothing needs you", why: "No unsaved work, nothing stranded, no change waiting on a decision, and CI is really running.", acts: [] });
+  if (!out.length) out.push({ sev: "g", title: "Nothing needs you", why: "No unsaved host work, unaccounted branch, or owner-gated decision needs attention.", acts: [] });
   return out;
 }
 
@@ -1104,7 +1004,7 @@ function paintBell() {
   const real = list.filter((a) => a.sev !== "g").length;
   $("bell").className = "bell " + worst;
   $("bellDot").className = "dot " + worst;
-  $("bellText").textContent = real ? `${real} need${real === 1 ? "s" : ""} you` : "All clear";
+  $("bellText").textContent = real ? `${real} item${real === 1 ? "" : "s"} need${real === 1 ? "s" : ""} you` : "All clear";
 
   $("alerts").innerHTML = list.map((a, n) => `<div class="alert">
     <span class="dot ${a.sev}" style="margin-top:5px"></span>
@@ -1147,20 +1047,25 @@ let thread = { id: null };
 /** Start over: forget the thread id so the next message opens a new session in the CLI. */
 function newThread(note) {
   thread = { id: null };
-  const f = $("chatFolder").value;
-  $("chatLog").innerHTML = `<div class="empty">${note ? esc(note) + " " : ""}A fresh thread in
-    <span style="font-family:var(--mono)">${esc(f || "—")}</span>. It can already see the code — nothing to paste.</div>`;
+  $("chatLog").innerHTML = `<div class="welcome">
+    <div class="mini-signal">C</div>
+    <h3>${note ? esc(note) : "Start anywhere."}</h3>
+    <p>Describe the outcome in your own words, ask what needs attention, or type a work number like <b>18</b>.
+      Compy already knows where the project lives.</p>
+  </div>`;
 }
 $("chatNew").addEventListener("click", () => { newThread(); $("chatBox").value = ""; folderSuggestions(); $("chatBox").focus(); });
 // A thread is a session in ONE folder with ONE agent. Carrying its id across a switch would resume
 // the wrong conversation in the wrong place, so both reset it — visibly, rather than silently.
-$("chatFolder").addEventListener("change", () => { newThread("Folder changed."); $("chatBox").value = ""; folderSuggestions(); });
-$("chatAgent").addEventListener("change", () => { paintModelOptions(); newThread("Agent changed."); });
+$("chatFolder").addEventListener("change", () => { syncRouteSummary(); newThread("Route changed."); $("chatBox").value = ""; folderSuggestions(); });
+$("chatAgent").addEventListener("change", () => { paintModelOptions(); syncRouteSummary(); newThread("Route changed."); });
+$("chatModel").addEventListener("change", syncRouteSummary);
+$("chatEffort").addEventListener("change", syncRouteSummary);
 paintModelOptions();
 
 /**
  * The board's Start / Ask about it lands here: same chat, folder preselected, and — the part that
- * was missing — a prompt already written for THIS item, plus three other ways to come at it.
+ * was missing — a prompt already written for THIS item, plus two other ways to come at it.
  */
 function openChat(folder, item) {
   const sel = $("chatFolder");
@@ -1173,7 +1078,7 @@ function openChat(folder, item) {
 }
 
 function bubble(who, cls) {
-  if ($("chatLog").querySelector(".empty")) $("chatLog").innerHTML = "";
+  if ($("chatLog").querySelector(".empty,.welcome")) $("chatLog").innerHTML = "";
   const d = document.createElement("div");
   d.className = "msg " + (cls || "");
   d.innerHTML = `<div class="who">${esc(who)}</div><pre></pre>`;
@@ -1192,6 +1097,13 @@ async function send(preset) {
   if (!text) return;
   if ($("chatSend").disabled) return; // one turn at a time — the bar above says so
   if (!folder) { bubble("console").textContent = "No folder selected — nowhere to run."; return; }
+  const issueOnly = text.match(/^#?(\d+)$/);
+  if (issueOnly) {
+    $("chatBox").value = "";
+    bubble("you", "me").textContent = text;
+    await launchIssue(Number(issueOnly[1]));
+    return;
+  }
   $("chatBox").value = ""; $("chatBox").style.height = "";
   bubble("you", "me").textContent = text;
   const agent = $("chatAgent").value;
@@ -1209,7 +1121,6 @@ async function send(preset) {
 
   const body = {
     agent, folder, message: text, threadId: thread.id,
-    sessionId: thread.id ? null : (thread.id = crypto.randomUUID()),
     model: $("chatModel").value || null, effort: $("chatEffort").value || null,
   };
   try {
@@ -1226,9 +1137,10 @@ async function send(preset) {
         let d; try { d = JSON.parse(dm); } catch { continue; }
         if (ev === "start") {
           $("chatGuard").textContent = d.stripped?.length
-            ? `subscription only · stripped ${d.stripped.join(", ")} from this run`
-            : "subscription only · no API credentials in this process";
+            ? `Read-only conversation · subscription protected · removed ${d.stripped.join(", ")} from this run`
+            : "Read-only conversation · subscription protected · no API credentials";
         }
+        if (ev === "thread" && d.threadId) thread.id = d.threadId;
         if (ev === "event") {
           const c = d?.message?.content ?? d?.delta ?? null;
           if (typeof c === "string") out.textContent += c;

@@ -59,19 +59,18 @@ describe("the chat is a destination, not a reward", () => {
     expect(send).not.toMatch(/thread\.folder/);
   });
 
-  it("still lets a board item aim it — Start preselects the folder rather than owning the chat", () => {
+  it("still lets an unavailable board item aim a read-only explanation chat", () => {
     expect(PAGE).toMatch(/function openChat\(folder, item\)/);
     expect(PAGE).toMatch(/switchTo\("ch"\)/);
   });
 
   it("offers a chat on gated items too — asking about work is not claiming it", () => {
     const work = /function renderWork\(\)[\s\S]*?\n}/.exec(PAGE)?.[0] ?? "";
-    // One button per item that HAS a folder, regardless of startability: the label and the emphasis
-    // change with availability, the existence of a way to ask does not.
-    expect(work).toMatch(/\$\{folder \? `<button class="btn \$\{a\.available \? "pri" : ""\}"/);
-    expect(work).toMatch(/a\.available \? esc\(a\.action\) : "Ask about it"/);
-    // …and it must not have gone back to only rendering for available items.
-    expect(work).not.toMatch(/a\.available && folder \? `<button/);
+    // Available work starts through the claim/preflight train. Unavailable work remains askable
+    // without quietly turning that explanation into an unclaimed writer.
+    expect(work).toMatch(/a\.available \? `<button class="btn pri" data-launch=/);
+    expect(work).toMatch(/: folder \? `<button class="btn" data-open=/);
+    expect(work).toMatch(/Ask about it/);
   });
 });
 
