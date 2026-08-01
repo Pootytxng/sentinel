@@ -10,13 +10,14 @@
 
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 
 import { snapshot, CODE_ROOT } from "./sources.mjs";
 import { planAgentSpawn } from "./agents.mjs";
+import { PROVIDERS, addIdea, addLink, providerOf, readNotes, remove } from "./notes.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const HOST = "127.0.0.1";
@@ -130,6 +131,59 @@ export function createConsoleServer({ repoDir = join(HERE, "..", "..") } = {}) {
 
       if (url.pathname === "/api/audit") {
         return streamAudit(res, { repoDir });
+      }
+
+      // Compy's own typefaces, served from the repo. Bundled locally (OFL 1.1) — zero network,
+      // which is the same promise the product itself makes about fonts.
+      if (url.pathname.startsWith("/fonts/")) {
+        const name = url.pathname.slice("/fonts/".length);
+        if (!/^Geist(Mono)?VF\.woff2$/.test(name)) return send(res, 404, { error: "no such font" });
+        res.writeHead(200, { "content-type": "font/woff2", "cache-control": "max-age=31536000, immutable" });
+        return res.end(readFileSync(join(repoDir, "src", "design", "fonts", name)));
+      }
+
+      if (url.pathname === "/api/notes" && req.method === "GET") {
+        return send(res, 200, { ...readNotes(), providers: PROVIDERS });
+      }
+      if (url.pathname === "/api/notes/idea" && req.method === "POST") {
+        const b = JSON.parse(await readBody(req));
+        const r = addIdea({ text: b.text, folder: b.folder ?? null });
+        return send(res, r.ok ? 200 : 400, r.ok ? { notes: r.notes } : { error: r.reason });
+      }
+      if (url.pathname === "/api/notes/link" && req.method === "POST") {
+        const b = JSON.parse(await readBody(req));
+        const r = addLink({ title: b.title, url: b.url, tag: b.tag ?? null });
+        return send(res, r.ok ? 200 : 400, r.ok ? { notes: r.notes } : { error: r.reason });
+      }
+      if (url.pathname === "/api/notes/remove" && req.method === "POST") {
+        const b = JSON.parse(await readBody(req));
+        const r = remove({ kind: b.kind, id: b.id });
+        return send(res, r.ok ? 200 : 400, r.ok ? { notes: r.notes } : { error: r.reason });
+      }
+
+      // Open a provider in its OWN chromeless window.
+      //
+      // Not an iframe, and not a Tauri webview: chatgpt.com and claude.ai both refuse to be framed
+      // (verified 2026-08-01 — Chrome renders the blocked-content page for each), and Google's OAuth
+      // policy rejects embedded user agents outright. So the console does the honest thing and hands
+      // the URL to a real browser window, where login, history, projects and attachments all work
+      // exactly as the provider supports. Allowlisted to provider hosts: this endpoint can start a
+      // process, so it must never take an arbitrary URL from a page.
+      if (url.pathname === "/api/open" && req.method === "POST") {
+        const b = JSON.parse(await readBody(req));
+        const target = String(b.url ?? "");
+        if (!providerOf(target)) return send(res, 400, { error: "only provider URLs may be opened this way" });
+        const browsers = [
+          join(process.env["ProgramFiles"] ?? "", "Google", "Chrome", "Application", "chrome.exe"),
+          join(process.env["ProgramFiles(x86)"] ?? "", "Google", "Chrome", "Application", "chrome.exe"),
+          join(process.env["ProgramFiles(x86)"] ?? "", "Microsoft", "Edge", "Application", "msedge.exe"),
+        ].filter((p) => p && existsSync(p));
+        if (b.ownWindow !== false && browsers.length) {
+          spawn(browsers[0], [`--app=${target}`], { detached: true, stdio: "ignore", windowsHide: false }).unref();
+        } else {
+          spawn("cmd", ["/c", "start", "", target], { detached: true, stdio: "ignore", windowsHide: true }).unref();
+        }
+        return send(res, 200, { opened: target, ownWindow: b.ownWindow !== false && browsers.length > 0 });
       }
 
       return send(res, 404, { error: "no such endpoint" });

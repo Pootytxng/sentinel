@@ -5,113 +5,234 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Compy Console</title>
 <style>
-  :root{--bg:#0d0e10;--panel:#15171a;--panel2:#1b1e22;--line:#2a2e34;--line2:#383d45;
-    --tp:#f2f3f5;--ts:#a8adb6;--tm:#70767f;--good:#2bb673;--warn:#e0a32e;--bad:#e5484d;--acc:#4c8dff;
-    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{background:var(--bg);color:var(--tp);font:14px/1.55 ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-  .app{display:grid;grid-template-columns:212px 1fr;min-height:100vh}
-  aside{background:#0a0b0d;border-right:1px solid var(--line);padding:18px 0;display:flex;flex-direction:column}
-  .brand{padding:0 18px 16px;display:flex;align-items:center;gap:10px}
-  .dot{width:9px;height:9px;border-radius:50%;background:var(--tm)}
-  .dot.ok{background:var(--good);box-shadow:0 0 10px var(--good)}
-  .dot.bad{background:var(--bad);box-shadow:0 0 10px var(--bad)}
-  .brand b{font-size:15px;letter-spacing:-.01em}.brand span{font-size:10.5px;color:var(--tm);display:block;font-family:var(--mono)}
-  nav{display:flex;flex-direction:column;gap:1px;padding:0 8px}
-  nav button{background:none;border:0;color:var(--ts);font:inherit;text-align:left;padding:9px 11px;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:10px}
-  nav button:hover{background:var(--panel);color:var(--tp)}
-  nav button.on{background:var(--panel2);color:var(--tp);box-shadow:inset 2px 0 0 var(--acc)}
-  nav .ico{width:16px;text-align:center;opacity:.75}
-  nav .cnt{margin-left:auto;font:600 10.5px var(--mono);padding:1px 6px;border-radius:20px;background:var(--line);color:var(--ts)}
-  nav .cnt.bad{background:rgba(229,72,77,.18);color:#ff8b8e}
-  nav .cnt.warn{background:rgba(224,163,46,.16);color:#f0c25f}
-  nav .cnt.good{background:rgba(43,182,115,.18);color:#4ed69a}
-  .side-foot{margin-top:auto;padding:14px 10px 0;margin:auto 8px 0;font-size:11px;color:var(--tm);border-top:1px solid var(--line)}
-  .side-foot button{background:none;border:0;color:var(--acc);font:inherit;cursor:pointer;padding:0}
-  main{display:flex;flex-direction:column;min-width:0}
-  .vitals{display:grid;grid-template-columns:repeat(6,1fr);border-bottom:1px solid var(--line);background:var(--panel)}
-  .v{padding:11px 15px;border-right:1px solid var(--line)}.v:last-child{border-right:0}
-  .v .lab{font:600 9.5px var(--mono);letter-spacing:.09em;color:var(--tm);text-transform:uppercase}
-  .v .val{font:600 16px/1.25 var(--mono);margin-top:4px}.v .sub{font-size:11px;color:var(--tm);margin-top:2px}
-  .ok{color:var(--good)}.wn{color:var(--warn)}.bd{color:var(--bad)}
-  .body{padding:20px 24px 60px;overflow:auto}
-  .pane{display:none}.pane.on{display:block}
-  h2{font-size:17px;margin-bottom:3px}
-  .lede{color:var(--ts);font-size:13px;margin-bottom:16px;max-width:74ch}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:15px 16px}
-  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}
-  .card h3{font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--tm);margin-bottom:10px}
-  .kv{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid var(--line);font-size:12.7px}
-  .kv:first-of-type{border-top:0}.kv .k{color:var(--ts)}.kv .val{font-family:var(--mono);font-size:12px;text-align:right}
-  .row{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:9px;display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center}
-  .row.red{border-color:rgba(229,72,77,.4)}.row.amber{border-color:rgba(224,163,46,.35)}.row.green{border-color:rgba(43,182,115,.35)}
-  .rt{font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .rd{color:var(--ts);font-size:12.7px;margin-top:5px;max-width:92ch}
-  .rf{color:var(--tm);font:11.5px var(--mono);margin-top:5px}
-  .tag{font:700 9.5px var(--mono);letter-spacing:.07em;padding:2px 7px;border-radius:5px;background:var(--line);color:var(--ts);text-transform:uppercase}
-  .tag.g{background:rgba(43,182,115,.16);color:#4ed69a}.tag.a{background:rgba(224,163,46,.16);color:#f0c25f}
-  .tag.r{background:rgba(229,72,77,.16);color:#ff8b8e}.tag.b{background:rgba(76,141,255,.16);color:#7fb0ff}
-  .btn{background:var(--panel2);border:1px solid var(--line2);color:var(--tp);font:600 12.5px inherit;padding:7px 13px;border-radius:8px;cursor:pointer;white-space:nowrap}
-  .btn:hover{background:#252a30;border-color:#4a515b}
-  .btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}.btn.pri:hover{background:#3b7cf0}
-  .btn:disabled{opacity:.4;cursor:not-allowed}
-  .acts{display:flex;gap:7px;align-items:center}
-  table{width:100%;border-collapse:collapse;font-size:12.7px}
-  th{text-align:left;font:600 9.5px var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--tm);padding:0 10px 8px;border-bottom:1px solid var(--line)}
-  td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
-  td.m{font-family:var(--mono);font-size:11.8px;color:var(--ts)}
-  .banner{border-radius:11px;padding:14px 16px;margin-bottom:16px;display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center}
-  .banner.red{background:rgba(229,72,77,.09);border:1px solid rgba(229,72,77,.35)}
-  .banner.blue{background:rgba(76,141,255,.08);border:1px solid rgba(76,141,255,.3)}
-  .banner.green{background:rgba(43,182,115,.08);border:1px solid rgba(43,182,115,.3)}
-  .banner b{display:block;margin-bottom:3px}.banner p{color:var(--ts);font-size:12.7px;max-width:88ch}
-  code{font-family:var(--mono);font-size:11.8px;background:var(--panel2);padding:1.5px 5px;border-radius:4px}
-  .term{background:#08090a;border:1px solid var(--line);border-radius:10px;padding:13px 15px;font:12px/1.7 var(--mono);color:#b9c0c9;white-space:pre-wrap;max-height:52vh;overflow:auto}
-  .unreach{color:var(--bad);font-style:italic}
-  /* chat */
-  .chat{position:fixed;inset:0 0 0 auto;width:min(620px,50vw);background:var(--panel);border-left:1px solid var(--line2);display:none;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,.5);z-index:20}
-  .chat.on{display:flex}
-  .chat-head{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  .chat-head .t{font-weight:650;flex:1;min-width:160px}
-  .chat-head select{background:var(--panel2);color:var(--tp);border:1px solid var(--line2);border-radius:7px;padding:5px 8px;font:12px inherit}
-  .chat-log{flex:1;overflow:auto;padding:14px 16px;font-size:13px}
-  .msg{margin-bottom:12px}.msg .who{font:600 9.5px var(--mono);letter-spacing:.08em;color:var(--tm);text-transform:uppercase;margin-bottom:3px}
-  .msg.me .who{color:var(--acc)}.msg pre{white-space:pre-wrap;font:12px/1.65 var(--mono);color:#cfd4dc;background:#0a0b0d;border:1px solid var(--line);border-radius:8px;padding:9px 11px}
-  .msg .tool{font:11.5px var(--mono);color:var(--tm)}
-  .chat-in{border-top:1px solid var(--line);padding:11px 14px;display:flex;gap:9px}
-  .chat-in textarea{flex:1;background:var(--panel2);color:var(--tp);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;font:13px inherit;resize:none;min-height:44px;max-height:160px}
-  .strip{font:11px var(--mono);color:var(--good);padding:0 16px 9px}
+/* ── Compy Console ────────────────────────────────────────────────────────────────────────
+   Dressed in the product's OWN design contract, not a look invented for a side tool:
+   surfaces, text, accent and status values are the V2 token palette from
+   src/design/tokens-v2.css verbatim, and the faces are the Geist pair bundled in
+   src/design/fonts (OFL 1.1), served by this server — zero network, the same promise the
+   product itself makes about fonts.
+
+   The one discipline worth naming, because it is what stops a dashboard looking like slop:
+   the GEIST LAW. Geist Sans is the only UI face. Geist Mono is for MACHINE VALUES ONLY —
+   measured numbers, hashes, paths, timestamps, counts. Never a label, never a sentence.
+   Mono on prose is the tell of a tool that thinks looking technical is the same as being
+   precise. Here, mono means "a machine produced this exact string". */
+
+@font-face { font-family:"Geist Sans"; src:url("/fonts/GeistVF.woff2") format("woff2"); font-weight:100 900; font-display:swap }
+@font-face { font-family:"Geist Mono"; src:url("/fonts/GeistMonoVF.woff2") format("woff2"); font-weight:100 900; font-display:swap }
+
+:root{
+  --bg:#0a0c10; --panel:#10131a; --panel-2:#141824;
+  --line:rgba(255,255,255,.07); --line-strong:rgba(255,255,255,.12);
+  --text:#e8ebf2; --muted:#8b93a7; --faint:#626a80;
+  --accent:#a78bfa; --accent-ink:#1a0a2e; --accent-dim:rgba(167,139,250,.14); --accent-line:rgba(167,139,250,.25);
+  --ok:#3ddc97; --ok-dim:rgba(61,220,151,.12);
+  --warn:#f5c542; --warn-dim:rgba(245,197,66,.12);
+  --info:#6cb8ff; --info-dim:rgba(108,184,255,.12);
+  --bad:#ff6b6b; --bad-dim:rgba(255,107,107,.12);
+  --shadow:rgba(0,0,0,.45);
+  --sans:"Geist Sans","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  --mono:"Geist Mono","Cascadia Mono",Consolas,ui-monospace,monospace;
+  --r:10px; --r-sm:7px; --gap:16px; --pad:16px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font:400 14px/1.55 var(--sans);-webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility}
+::selection{background:var(--accent-dim);color:var(--text)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r-sm)}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:99px;border:3px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:#3a4055}
+
+.app{display:grid;grid-template-columns:230px 1fr;height:100vh;overflow:hidden}
+
+/* ── rail ─────────────────────────────────────────────────────────────────── */
+aside{background:#080a0d;border-right:1px solid var(--line);display:flex;flex-direction:column;padding:20px 0 14px}
+.brand{padding:0 20px 18px;display:flex;align-items:center;gap:11px}
+.mark{width:26px;height:26px;border-radius:8px;background:linear-gradient(140deg,var(--accent),#7c5cf0);
+  display:grid;place-items:center;font:700 13px var(--sans);color:var(--accent-ink);flex:none;
+  box-shadow:0 0 0 1px var(--accent-line),0 4px 14px rgba(167,139,250,.22)}
+.brand .who b{display:block;font-size:14.5px;font-weight:600;letter-spacing:-.012em;line-height:1.2}
+.brand .who span{display:block;font-size:11px;color:var(--faint);margin-top:2px}
+nav{padding:0 10px;overflow-y:auto;flex:1}
+.navgroup{font:600 9.5px var(--sans);letter-spacing:.13em;text-transform:uppercase;color:var(--faint);padding:16px 11px 7px}
+nav button{width:100%;background:none;border:0;color:var(--muted);font:450 13.5px var(--sans);text-align:left;
+  padding:8px 11px;border-radius:var(--r-sm);cursor:pointer;display:flex;align-items:center;gap:10px;
+  transition:background .13s ease,color .13s ease;position:relative;letter-spacing:-.005em}
+nav button:hover{background:var(--panel);color:var(--text)}
+nav button.on{background:var(--accent-dim);color:var(--text);font-weight:550}
+nav button.on::before{content:"";position:absolute;left:-10px;top:50%;transform:translateY(-50%);
+  width:3px;height:17px;border-radius:0 3px 3px 0;background:var(--accent)}
+nav .ico{width:15px;flex:none;opacity:.8;font-size:12.5px;text-align:center}
+nav button.on .ico{opacity:1;color:var(--accent)}
+.pip{margin-left:auto;font:550 10.5px var(--mono);min-width:20px;text-align:center;padding:1px 6px;border-radius:99px;
+  background:var(--line);color:var(--muted)}
+.pip.ok{background:var(--ok-dim);color:var(--ok)} .pip.warn{background:var(--warn-dim);color:var(--warn)}
+.pip.bad{background:var(--bad-dim);color:var(--bad)}
+.rail-foot{margin:10px 18px 0;padding-top:13px;border-top:1px solid var(--line);font-size:11.5px;color:var(--faint);line-height:1.5}
+.rail-foot .t{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.rail-foot button{background:none;border:0;color:var(--accent);font:500 11.5px var(--sans);cursor:pointer;padding:5px 0 0}
+.rail-foot button:hover{text-decoration:underline}
+
+/* ── vitals ───────────────────────────────────────────────────────────────── */
+main{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.vitals{display:grid;grid-template-columns:repeat(6,1fr);background:var(--panel);border-bottom:1px solid var(--line);flex:none}
+.v{padding:13px 18px;border-right:1px solid var(--line);min-width:0}
+.v:last-child{border-right:0}
+.v .lab{font:600 9.5px var(--sans);letter-spacing:.13em;text-transform:uppercase;color:var(--faint)}
+.v .val{font:550 17px/1.2 var(--mono);letter-spacing:-.02em;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v .sub{font-size:11.5px;color:var(--faint);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ok{color:var(--ok)} .wn{color:var(--warn)} .bd{color:var(--bad)} .nf{color:var(--info)}
+
+/* ── panes ────────────────────────────────────────────────────────────────── */
+.scroll{overflow-y:auto;flex:1}
+.body{padding:26px 30px 72px;max-width:1180px}
+.pane{display:none;animation:fade .18s ease}
+.pane.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+h2{font:600 19px/1.25 var(--sans);letter-spacing:-.02em}
+.lede{color:var(--muted);font-size:13.5px;margin:5px 0 20px;max-width:76ch;line-height:1.6}
+.sec{margin-top:32px}
+.sec-h{font:600 10px var(--sans);letter-spacing:.13em;text-transform:uppercase;color:var(--faint);margin-bottom:11px}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:var(--pad)}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(268px,1fr));gap:var(--gap)}
+.card h3{font:600 9.5px var(--sans);letter-spacing:.13em;text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+.kv{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:7px 0;border-top:1px solid var(--line)}
+.kv:first-of-type{border-top:0;padding-top:0}
+.kv .k{color:var(--muted);font-size:13px}
+.kv .val{font:450 12.5px var(--mono);text-align:right;letter-spacing:-.01em;word-break:break-all}
+
+.row{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px var(--pad);
+  margin-bottom:9px;display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center;transition:border-color .14s ease}
+.row:hover{border-color:var(--line-strong)}
+.row.go{border-left:2px solid var(--ok)} .row.hold{border-left:2px solid var(--warn)} .row.stop{border-left:2px solid var(--bad)}
+.rt{font:550 14px var(--sans);letter-spacing:-.01em;display:flex;align-items:center;gap:9px;flex-wrap:wrap;line-height:1.35}
+.rd{color:var(--muted);font-size:13px;margin-top:6px;max-width:90ch;line-height:1.55}
+.rf{color:var(--faint);font:400 11.5px var(--mono);margin-top:7px;letter-spacing:-.01em;word-break:break-all}
+.acts{display:flex;gap:8px;align-items:center;flex:none}
+
+.tag{font:600 9.5px var(--sans);letter-spacing:.09em;text-transform:uppercase;padding:3px 7px;border-radius:5px;
+  background:var(--line);color:var(--muted);white-space:nowrap}
+.tag.g{background:var(--ok-dim);color:var(--ok)} .tag.a{background:var(--warn-dim);color:var(--warn)}
+.tag.r{background:var(--bad-dim);color:var(--bad)} .tag.b{background:var(--info-dim);color:var(--info)}
+.tag.v{background:var(--accent-dim);color:var(--accent)}
+
+.btn{background:var(--panel-2);border:1px solid var(--line-strong);color:var(--text);font:550 12.5px var(--sans);
+  padding:7px 13px;border-radius:var(--r-sm);cursor:pointer;white-space:nowrap;text-decoration:none;display:inline-block;
+  transition:background .13s ease,border-color .13s ease,transform .08s ease;letter-spacing:-.005em}
+.btn:hover{background:#1c2130;border-color:#454c60}
+.btn:active{transform:translateY(1px)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn.pri:hover{background:#b79cfb;border-color:#b79cfb}
+.btn.sm{padding:5px 10px;font-size:11.5px}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+.note{background:var(--panel);border:1px solid var(--line);border-left:2px solid var(--accent);border-radius:var(--r);
+  padding:14px var(--pad);margin-bottom:18px;display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center}
+.note.bad{border-left-color:var(--bad)} .note.warn{border-left-color:var(--warn)}
+.note b{display:block;font:600 14px var(--sans);letter-spacing:-.01em;margin-bottom:4px}
+.note p{color:var(--muted);font-size:13px;max-width:92ch;line-height:1.6}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font:600 9.5px var(--sans);letter-spacing:.13em;text-transform:uppercase;color:var(--faint);
+  padding:0 12px 9px;border-bottom:1px solid var(--line)}
+td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--muted);line-height:1.55}
+td.m{font:450 12px var(--mono);color:var(--text);letter-spacing:-.01em;word-break:break-all}
+tbody tr{transition:background .12s ease}
+tbody tr:hover{background:rgba(255,255,255,.014)}
+
+.empty{border:1px dashed var(--line-strong);border-radius:var(--r);padding:34px 20px;text-align:center;color:var(--faint);font-size:13px}
+.unreach{color:var(--bad);font-style:italic}
+code{font:450 12px var(--mono);background:var(--panel-2);padding:2px 6px;border-radius:5px;color:#cfd4e2;letter-spacing:-.01em}
+.term{background:#06070a;border:1px solid var(--line);border-radius:var(--r);padding:15px var(--pad);
+  font:400 12px/1.75 var(--mono);color:#aeb6c4;white-space:pre-wrap;max-height:54vh;overflow:auto;letter-spacing:-.01em}
+
+input[type=text],textarea{background:var(--panel-2);color:var(--text);border:1px solid var(--line-strong);
+  border-radius:var(--r-sm);padding:9px 12px;font:400 13.5px var(--sans);width:100%;transition:border-color .13s ease}
+input[type=text]:focus,textarea:focus{border-color:var(--accent-line);outline:none}
+textarea{resize:none;line-height:1.55}
+::placeholder{color:var(--faint)}
+select{background:var(--panel-2);color:var(--text);border:1px solid var(--line-strong);border-radius:var(--r-sm);
+  padding:5px 9px;font:450 12px var(--sans);cursor:pointer}
+
+/* ── thread drawer ────────────────────────────────────────────────────────── */
+.chat{position:fixed;top:0;right:0;bottom:0;width:min(660px,52vw);background:var(--panel);
+  border-left:1px solid var(--line-strong);display:none;flex-direction:column;z-index:40;
+  box-shadow:-28px 0 70px var(--shadow)}
+.chat.on{display:flex;animation:slide .2s cubic-bezier(.2,.8,.3,1)}
+@keyframes slide{from{transform:translateX(24px);opacity:.6}to{transform:none;opacity:1}}
+.chat-head{padding:13px var(--pad);border-bottom:1px solid var(--line);display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.chat-head .t{font:600 13.5px var(--sans);letter-spacing:-.01em;flex:1;min-width:170px;line-height:1.35}
+.guard{font:450 11px var(--mono);color:var(--ok);background:var(--ok-dim);padding:6px var(--pad);
+  border-bottom:1px solid var(--line);letter-spacing:-.01em}
+.chat-log{flex:1;overflow-y:auto;padding:var(--pad)}
+.msg{margin-bottom:15px}
+.msg .who{font:600 9.5px var(--sans);letter-spacing:.13em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
+.msg.me .who{color:var(--accent)}
+.msg pre{white-space:pre-wrap;font:400 12.5px/1.7 var(--mono);color:#cfd4e2;background:#06070a;
+  border:1px solid var(--line);border-radius:var(--r-sm);padding:11px 13px;letter-spacing:-.01em;overflow-x:auto}
+.msg.me pre{background:var(--accent-dim);border-color:var(--accent-line);color:var(--text)}
+.chat-in{border-top:1px solid var(--line);padding:12px var(--pad);display:flex;gap:9px;align-items:flex-end}
+.chat-in textarea{min-height:42px;max-height:170px}
+.thinking::after{content:"▌";animation:blink 1.05s step-end infinite;color:var(--accent)}
+@keyframes blink{50%{opacity:0}}
 </style>
 </head>
 <body>
 <div class="app">
   <aside>
-    <div class="brand"><div class="dot" id="health"></div><div><b>Compy Console</b><span id="brandsub">loading…</span></div></div>
+    <div class="brand">
+      <div class="mark">C</div>
+      <div class="who"><b>Compy Console</b><span id="brandsub">connecting…</span></div>
+    </div>
     <nav>
-      <button class="on" data-t="ov"><span class="ico">◉</span>Overview</button>
-      <button data-t="wk"><span class="ico">▤</span>Work<span class="cnt" id="c-wk">–</span></button>
-      <button data-t="dc"><span class="ico">✦</span>Decisions<span class="cnt" id="c-dc">–</span></button>
-      <button data-t="lf"><span class="ico">⌕</span>Lost &amp; found<span class="cnt" id="c-lf">–</span></button>
+      <button class="on" data-t="ov"><span class="ico">◈</span>Overview</button>
+      <div class="navgroup">Work</div>
+      <button data-t="wk"><span class="ico">▤</span>Board<span class="pip" id="p-wk">–</span></button>
+      <div class="navgroup">Thinking</div>
+      <button data-t="ds"><span class="ico">◇</span>Discussions<span class="pip" id="p-ds">–</span></button>
+      <button data-t="id"><span class="ico">✎</span>Ideas<span class="pip" id="p-id">–</span></button>
+      <div class="navgroup">Health</div>
+      <button data-t="dc"><span class="ico">✦</span>Decisions<span class="pip" id="p-dc">–</span></button>
+      <button data-t="lf"><span class="ico">⌕</span>Lost &amp; found<span class="pip" id="p-lf">–</span></button>
       <button data-t="au"><span class="ico">⏻</span>Audit</button>
     </nav>
-    <div class="side-foot">Read live from git, GitHub and disk.<br><span id="stamp">—</span><br><button id="refresh">Refresh</button></div>
+    <div class="rail-foot">
+      Read live from git, GitHub and disk.<br>
+      <span class="t" id="stamp">—</span>
+      <button id="refresh">Refresh now</button>
+    </div>
   </aside>
+
   <main>
     <div class="vitals" id="vitals"></div>
-    <div class="body">
+    <div class="scroll"><div class="body">
       <section class="pane on" id="ov"></section>
       <section class="pane" id="wk"></section>
+      <section class="pane" id="ds"></section>
+      <section class="pane" id="id"></section>
       <section class="pane" id="dc"></section>
       <section class="pane" id="lf"></section>
       <section class="pane" id="au">
         <h2>Audit</h2>
-        <p class="lede">Runs <code>scripts/verify-release.ps1</code> — the whole release gate, locally and offline. It reports; it never fixes.</p>
-        <div class="row green"><div><div class="rt">Full release gate</div>
-          <div class="rd">Encoding · doc budgets · tsc · vitest · cargo test · clippy · audits · PowerShell static guard · supply chain · release-state drift.</div></div>
-          <div class="acts"><button class="btn pri" id="runAudit">Run audit</button></div></div>
-        <div class="term" id="auditOut">Not run yet.</div>
+        <p class="lede">Runs <code>scripts/verify-release.ps1</code> — the whole release gate, locally and offline.
+          It reports what it proved <em>and what it could not</em>. It never fixes anything.</p>
+        <div class="row go">
+          <div>
+            <div class="rt">Full release gate <span class="tag g">local</span><span class="tag">offline</span></div>
+            <div class="rd">Encoding · doc budgets · <code>tsc</code> · vitest · <code>cargo test</code> ·
+              <code>clippy -D warnings</code> · npm and cargo audit · PowerShell static guard · supply-chain gate ·
+              updater signature · release-state drift.</div>
+          </div>
+          <div class="acts"><button class="btn pri" id="runAudit">Run audit</button></div>
+        </div>
+        <div class="term" id="auditOut">Not run in this session.</div>
       </section>
-    </div>
+    </div></div>
   </main>
 </div>
 
@@ -119,37 +240,42 @@
   <div class="chat-head">
     <div class="t" id="chatTitle">Thread</div>
     <select id="chatAgent"><option value="claude">Claude</option><option value="codex">Codex</option></select>
-    <select id="chatModel"><option value="">model: default</option><option value="sonnet">sonnet</option><option value="opus">opus</option></select>
-    <select id="chatEffort"><option value="">effort: default</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select>
-    <button class="btn" id="chatClose">Close</button>
+    <select id="chatModel"><option value="">model · default</option><option value="sonnet">sonnet</option><option value="opus">opus</option></select>
+    <select id="chatEffort"><option value="">effort · default</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select>
+    <button class="btn sm" id="chatClose">Close</button>
   </div>
-  <div class="strip" id="chatStrip"></div>
+  <div class="guard" id="chatGuard">subscription only · no API credentials in this process</div>
   <div class="chat-log" id="chatLog"></div>
   <div class="chat-in">
-    <textarea id="chatBox" placeholder="Type here. Enter sends, Shift+Enter for a new line."></textarea>
+    <textarea id="chatBox" rows="1" placeholder="Ask anything. It is already running in this task's folder. Enter sends."></textarea>
     <button class="btn pri" id="chatSend">Send</button>
   </div>
 </div>
 
 <script>
-// ---------------------------------------------------------------------------------------------
-// The page holds NO state of its own beyond the snapshot it just fetched. Every render starts from
-// `S`, and `S` is replaced wholesale by a fresh read. There is nothing here to go stale.
-// ---------------------------------------------------------------------------------------------
-let S = null;
+// ── The page holds no state beyond the snapshot it just fetched ──────────────────────────────
+// `S` is replaced wholesale by a fresh read; `N` is the owner's own notes. Every render starts
+// from those two. Nothing is computed once and remembered.
+let S = null, N = { ideas: [], links: [] };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const when = (iso) => { try { return new Date(iso).toLocaleDateString(undefined,{month:"short",day:"numeric"}); } catch { return ""; } };
 
-/** Unwrap an `attempt()` result. An unreachable source renders as a visible failure, never a blank. */
-const V = (a, fallback = null) => (a && typeof a === "object" && "ok" in a ? (a.ok ? a.value : fallback) : a);
+/** Unwrap an `attempt()` result. Unreachable renders as a visible failure, never as a blank. */
+const V = (a, fb = null) => (a && typeof a === "object" && "ok" in a ? (a.ok ? a.value : fb) : a);
 const bad = (a) => a && typeof a === "object" && "ok" in a && !a.ok;
-const cell = (a, render = (v) => esc(v)) => (bad(a) ? `<span class="unreach">unreachable — ${esc(a.error)}</span>` : render(V(a)));
+const cell = (a, r = (v) => esc(v)) => (bad(a) ? `<span class="unreach">unreachable — ${esc(a.error)}</span>` : r(V(a)));
+const post = (path, body) => fetch(path, { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify(body) }).then((r) => r.json());
 
 async function load() {
   $("stamp").textContent = "reading…";
   try {
-    S = await (await fetch("/api/state")).json();
-  } catch (e) {
+    const [state, notes] = await Promise.all([
+      fetch("/api/state").then((r) => r.json()),
+      fetch("/api/notes").then((r) => r.json()),
+    ]);
+    S = state; N = { ideas: notes.ideas ?? [], links: notes.links ?? [] };
+  } catch {
     $("stamp").innerHTML = `<span class="unreach">server unreachable</span>`;
     return;
   }
@@ -159,132 +285,257 @@ async function load() {
 function render() {
   const ci = V(S.ci, {}) || {};
   const dirty = (V(S.host.dirty) || []).length;
-  const decisions = (V(S.pulls) || []).length + (S.work.items || []).filter((i) => !i.availability.available).length + (ci.meaningful ? 0 : 1);
+  const stuck = (S.work.items || []).filter((i) => !i.availability.available).length;
+  const decisions = (V(S.pulls) || []).length + stuck + (ci.meaningful ? 0 : 1);
 
-  $("health").className = "dot " + (S.agents.billing.ok ? "ok" : "bad");
-  $("brandsub").textContent = S.agents.billing.ok ? `${S.agents.billing.plan} plan · no API spend` : "AUTH PROBLEM";
+  $("brandsub").textContent = S.agents.billing.ok ? `${S.agents.billing.plan} plan · no API spend` : "check authentication";
   $("stamp").textContent = new Date(S.generatedAt).toLocaleTimeString();
-  $("c-wk").textContent = S.work.startable ?? "–";
-  $("c-wk").className = "cnt " + (S.work.startable ? "good" : "bad");
-  $("c-dc").textContent = decisions; $("c-dc").className = "cnt warn";
-  $("c-lf").textContent = S.lostAndFound.length;
+  const pip = (id, n, cls) => { const e = $(id); e.textContent = n; e.className = "pip " + (cls || ""); };
+  pip("p-wk", S.work.startable ?? "–", S.work.startable ? "ok" : "bad");
+  pip("p-ds", N.links.length, "");
+  pip("p-id", N.ideas.length, N.ideas.length ? "warn" : "");
+  pip("p-dc", decisions, "warn");
+  pip("p-lf", S.lostAndFound.length, "");
 
   $("vitals").innerHTML = [
-    ["Who pays", S.agents.billing.ok ? `<span class="ok">${esc(S.agents.billing.plan)}</span>` : `<span class="bd">API?</span>`,
-      S.agents.billing.ok ? "subscription · 0 API spend" : esc(S.agents.billing.reason || "")],
-    ["origin/main", cell(S.host.mainSha), "host repo"],
-    ["Host branch", cell(S.host.branch, (v) => (v === "main" ? `<span class="ok">${esc(v)}</span>` : `<span class="wn">${esc(v)}</span>`)), "code\\sentinel"],
-    ["Uncommitted", dirty ? `<span class="wn">${dirty}</span>` : `<span class="ok">0</span>`, "in the host repo"],
-    ["Startable", S.work.startable ? `<span class="ok">${S.work.startable}</span>` : `<span class="bd">0</span>`, "on the board"],
-    ["CI", ci.meaningful ? `<span class="ok">live</span>` : `<span class="bd">DEAD</span>`, ci.meaningful ? "signal is real" : "verdicts are noise"],
-  ].map(([lab, val, sub]) => `<div class="v"><div class="lab">${lab}</div><div class="val">${val}</div><div class="sub">${sub}</div></div>`).join("");
+    ["Who pays", S.agents.billing.ok ? `<span class="ok">${esc(S.agents.billing.plan)}</span>` : `<span class="bd">unknown</span>`,
+      S.agents.billing.ok ? "subscription · no API spend" : esc(S.agents.billing.reason || "")],
+    ["origin/main", cell(S.host.mainSha), "host repository"],
+    ["Host branch", cell(S.host.branch, (v) => v === "main" ? `<span class="ok">${esc(v)}</span>` : `<span class="wn">${esc(v)}</span>`), "code\\sentinel"],
+    ["Uncommitted", dirty ? `<span class="wn">${dirty}</span>` : `<span class="ok">0</span>`, dirty ? "files in the host repo" : "host repo is clean"],
+    ["Startable", S.work.startable ? `<span class="ok">${S.work.startable}</span>` : `<span class="bd">0</span>`, "items on the board"],
+    ["CI", ci.meaningful ? `<span class="ok">live</span>` : `<span class="bd">blocked</span>`, ci.meaningful ? "verdicts are real" : "verdicts mean nothing"],
+  ].map(([l, v, s]) => `<div class="v"><div class="lab">${l}</div><div class="val">${v}</div><div class="sub">${s}</div></div>`).join("");
 
-  renderOverview(ci); renderWork(); renderDecisions(ci); renderLost();
+  renderOverview(ci); renderWork(); renderDiscussions(); renderIdeas(); renderDecisions(ci); renderLost();
 }
 
+// ── Overview ─────────────────────────────────────────────────────────────────────────────────
 function renderOverview(ci) {
-  const banner = ci.meaningful ? "" : `<div class="banner red"><div><b>GitHub Actions is not running your tests.</b>
-    <p>${esc(ci.reason || "")} Every red check on every PR is therefore meaningless — no test produced it. This is a payment
-    setting, not a code problem. The local audit is your real gate until it clears.</p></div>
-    <a class="btn pri" href="https://github.com/settings/billing" target="_blank">Open GitHub billing</a></div>`;
+  const banner = ci.meaningful ? "" : `<div class="note bad"><div>
+    <b>GitHub Actions is not running your tests.</b>
+    <p>${esc(ci.reason || "")} Every red check on every pull request is therefore meaningless — no test produced it.
+    This is a payment setting, not a defect in your code. Until it clears, the local audit is your only real gate.</p></div>
+    <a class="btn pri" href="https://github.com/settings/billing" target="_blank" rel="noopener">Open GitHub billing</a></div>`;
 
   const kv = (k, v) => `<div class="kv"><span class="k">${k}</span><span class="val">${v}</span></div>`;
-  $("ov").innerHTML = banner + `<h2>Where things actually are</h2>
-    <p class="lede">Read ${new Date(S.generatedAt).toLocaleString()}. Anything unreachable says so rather than showing a leftover.</p>
+  const branches = V(S.branches) || [];
+  $("ov").innerHTML = banner + `
+    <h2>Where things actually are</h2>
+    <p class="lede">Read ${esc(new Date(S.generatedAt).toLocaleString())}. Nothing here is cached — if a source could not be
+      reached it says so, rather than showing you a value from earlier.</p>
     <div class="grid3">
-      <div class="card"><h3>Agents &amp; billing</h3>
+      <div class="card"><h3>Agents and billing</h3>
         ${kv("Claude", cell(S.agents.claude.version))}
         ${kv("Codex", cell(S.agents.codex.version))}
-        ${kv("Paying with", S.agents.billing.ok ? `<span class="ok">${esc(S.agents.billing.plan)} subscription</span>` : `<span class="bd">${esc(S.agents.billing.code)}</span>`)}
-        ${kv("API keys in env", `<span class="ok">stripped on every spawn</span>`)}
+        ${kv("Paying with", S.agents.billing.ok ? `<span class="ok">${esc(S.agents.billing.plan)} subscription</span>` : `<span class="bd">${esc(S.agents.billing.code || "unknown")}</span>`)}
+        ${kv("API credentials", `<span class="ok">stripped every spawn</span>`)}
       </div>
       <div class="card"><h3>Repository</h3>
         ${kv("origin/main", cell(S.host.mainSha))}
-        ${kv("Open PRs", (V(S.pulls) || []).length)}
-        ${kv("Branches", (V(S.branches) || []).length)}
-        ${kv("Unpushed work", (V(S.branches) || []).filter((b) => b.ahead > 0).reduce((n, b) => n + b.ahead, 0) + " commits")}
+        ${kv("Open pull requests", (V(S.pulls) || []).length)}
+        ${kv("Branches", branches.length)}
+        ${kv("Unpushed commits", branches.reduce((n, b) => n + b.ahead, 0))}
       </div>
       <div class="card"><h3>This machine</h3>
-        ${kv("Host repo", "code\\sentinel")}
+        ${kv("Host repository", "code\\sentinel")}
         ${kv("Parked on", cell(S.host.branch))}
-        ${kv("Uncommitted", (V(S.host.dirty) || []).length + " files")}
+        ${kv("Uncommitted files", (V(S.host.dirty) || []).length)}
         ${kv("Stashes", (V(S.host.stashes) || []).length === 0 ? `<span class="ok">none</span>` : (V(S.host.stashes) || []).length)}
       </div>
     </div>`;
 }
 
+// ── Board ────────────────────────────────────────────────────────────────────────────────────
 function renderWork() {
-  if (!S.work.ok) { $("wk").innerHTML = `<h2>Work</h2><p class="unreach">Board unreachable — ${esc(S.work.error)}</p>`; return; }
+  if (!S.work.ok) { $("wk").innerHTML = `<h2>Board</h2><p class="unreach">Board unreachable — ${esc(S.work.error)}</p>`; return; }
   const rows = S.work.items.map((i) => {
     const a = i.availability;
     const folder = (i.worktreeBranch || "").split(" @ ")[0] || "";
-    return `<div class="row ${a.available ? "green" : "amber"}">
+    return `<div class="row ${a.available ? "go" : (i.status === "Needs Kuya" || i.gate === "Kuya" ? "stop" : "hold")}">
       <div><div class="rt">#${i.number} ${esc(i.title)}
         <span class="tag ${a.available ? "g" : "a"}">${esc(i.status)}</span>
-        <span class="tag">${esc(i.lane || "no lane")}</span></div>
-        ${a.available ? "" : `<div class="rd">Not startable: ${esc(a.reason)}</div>`}
-        <div class="rf">${esc(i.worktreeBranch || "no folder yet")}</div></div>
-      <div class="acts">${a.available && folder
-        ? `<button class="btn pri" data-open="${esc(folder)}" data-title="#${i.number} ${esc(i.title)}">${esc(a.action)}</button>` : ""}
-        <a class="btn" href="https://github.com/Pootytxng/sentinel/issues/${i.number}" target="_blank">Issue</a></div></div>`;
+        <span class="tag">${esc(i.lane || "unassigned")}</span></div>
+        ${a.available ? "" : `<div class="rd">${esc(a.reason)}</div>`}
+        <div class="rf">${esc(i.worktreeBranch || "no folder assigned")}</div></div>
+      <div class="acts">
+        ${a.available && folder ? `<button class="btn pri" data-open="${esc(folder)}" data-title="#${i.number} ${esc(i.title)}">${esc(a.action)}</button>` : ""}
+        <a class="btn" href="https://github.com/Pootytxng/sentinel/issues/${i.number}" target="_blank" rel="noopener">Issue</a>
+      </div></div>`;
   }).join("");
-  $("wk").innerHTML = `<h2>Work</h2><p class="lede">The board, with each item's startability decided by the same rule the launcher uses — so a green button here cannot be refused later.</p>
-    ${S.work.startable ? "" : `<div class="banner blue"><div><b>Nothing is startable right now.</b><p>Every open item is owner-gated or belongs to another lane.</p></div></div>`}
-    ${rows || "<p class='lede'>No open items.</p>"}`;
-  for (const b of $("wk").querySelectorAll("[data-open]")) {
-    b.addEventListener("click", () => openChat(b.dataset.open, b.dataset.title));
+  $("wk").innerHTML = `<h2>Board</h2>
+    <p class="lede">Every item carries the launcher's own startability rule, decided before you click — so a green
+      button here cannot be refused three steps later, and a missing one tells you why in a sentence.</p>
+    ${S.work.startable ? "" : `<div class="note warn"><div><b>Nothing is startable right now.</b>
+      <p>Every open item is either owner-gated or belongs to another lane.</p></div></div>`}
+    ${rows || `<div class="empty">No open items on the board.</div>`}`;
+  for (const b of $("wk").querySelectorAll("[data-open]")) b.addEventListener("click", () => openChat(b.dataset.open, b.dataset.title));
+}
+
+// ── Discussions ──────────────────────────────────────────────────────────────────────────────
+function renderDiscussions() {
+  const card = (key, label, home, blurb) => `<div class="card">
+    <h3>${label}</h3>
+    <p style="color:var(--muted);font-size:13px;line-height:1.55;margin-bottom:13px">${blurb}</p>
+    <div class="acts"><button class="btn pri" data-launch="${home}">Open in its own window</button>
+      <a class="btn" href="${home}" target="_blank" rel="noopener">New tab</a></div></div>`;
+
+  const links = N.links.map((l) => `<tr>
+    <td><a class="btn sm" href="${esc(l.url)}" target="_blank" rel="noopener">Open</a></td>
+    <td>${esc(l.title)}${l.tag ? ` <span class="tag v">${esc(l.tag)}</span>` : ""}</td>
+    <td><span class="tag ${l.provider === "claude" ? "v" : "b"}">${esc(l.provider)}</span></td>
+    <td class="m">${when(l.created)}</td>
+    <td><button class="btn sm" data-del-link="${esc(l.id)}">Remove</button></td></tr>`).join("");
+
+  $("ds").innerHTML = `<h2>Discussions</h2>
+    <p class="lede">The thinking surfaces. These stay on the provider's own site — <strong>ChatGPT and Claude both refuse
+      to be embedded</strong>, verified from this browser, and Google's sign-in policy rejects embedded windows outright.
+      So the console does the honest thing: it opens them properly, in their own chromeless window, with your real login,
+      history, projects and attachments intact. What the console adds is the way back — save the conversation that mattered
+      and reach it from here instead of scrolling a sidebar.</p>
+    <div class="grid3">
+      ${card("chatgpt", "ChatGPT", "https://chatgpt.com/", "Auditing, second opinions, and thinking out loud. Your ChatGPT subscription, untouched.")}
+      ${card("claude", "Claude", "https://claude.ai/", "Brainstorming, mock-ups, and long-form reasoning. Your Max subscription, untouched.")}
+    </div>
+    <div class="sec">
+      <div class="sec-h">Save a conversation worth finding again</div>
+      <div class="card" style="display:grid;grid-template-columns:1fr 1.4fr auto auto;gap:9px;align-items:center">
+        <input type="text" id="linkTitle" placeholder="What was it about?">
+        <input type="text" id="linkUrl" placeholder="Paste the chatgpt.com or claude.ai link">
+        <input type="text" id="linkTag" placeholder="Tag (optional)" style="width:150px">
+        <button class="btn pri" id="linkAdd">Save</button>
+      </div>
+      <div id="linkErr" style="color:var(--bad);font-size:12.5px;margin-top:8px"></div>
+    </div>
+    <div class="sec">
+      <div class="sec-h">Saved (${N.links.length})</div>
+      ${N.links.length
+        ? `<table><thead><tr><th style="width:78px"></th><th>Conversation</th><th style="width:110px">Where</th><th style="width:90px">Saved</th><th style="width:96px"></th></tr></thead><tbody>${links}</tbody></table>`
+        : `<div class="empty">Nothing saved yet. When a conversation turns out to matter, paste its link above and it will be one click from here.</div>`}
+    </div>`;
+
+  for (const b of $("ds").querySelectorAll("[data-launch]")) {
+    b.addEventListener("click", async () => {
+      b.disabled = true;
+      const r = await post("/api/open", { url: b.dataset.launch, ownWindow: true });
+      b.textContent = r.error ? "Blocked" : "Opened";
+      setTimeout(() => { b.disabled = false; b.textContent = "Open in its own window"; }, 1600);
+    });
+  }
+  $("linkAdd").addEventListener("click", async () => {
+    const r = await post("/api/notes/link", { title: $("linkTitle").value, url: $("linkUrl").value, tag: $("linkTag").value });
+    if (r.error) { $("linkErr").textContent = r.error; return; }
+    N = { ideas: r.notes.ideas, links: r.notes.links }; render(); switchTo("ds");
+  });
+  for (const b of $("ds").querySelectorAll("[data-del-link]")) {
+    b.addEventListener("click", async () => {
+      const r = await post("/api/notes/remove", { kind: "links", id: b.dataset.delLink });
+      if (!r.error) { N = { ideas: r.notes.ideas, links: r.notes.links }; render(); switchTo("ds"); }
+    });
   }
 }
 
+// ── Ideas ────────────────────────────────────────────────────────────────────────────────────
+function renderIdeas() {
+  const rows = N.ideas.map((i) => `<div class="row hold">
+    <div><div class="rd" style="margin-top:0;color:var(--text);font-size:13.5px">${esc(i.text)}</div>
+      <div class="rf">${when(i.created)}${i.folder ? " · " + esc(i.folder) : ""}</div></div>
+    <div class="acts"><button class="btn sm" data-del-idea="${esc(i.id)}">Done with it</button></div></div>`).join("");
+
+  $("id").innerHTML = `<h2>Ideas</h2>
+    <p class="lede">Somewhere to put a thought without deciding anything about it. Nothing here is filed, scheduled or acted
+      on — it waits until you either promote it to a train or throw it away. This is the only thing the console remembers,
+      and you typed all of it.</p>
+    <div class="card" style="display:flex;gap:9px;align-items:flex-end">
+      <textarea id="ideaText" rows="2" placeholder="One-off thought, half an idea, something to not forget…"></textarea>
+      <button class="btn pri" id="ideaAdd">Keep it</button>
+    </div>
+    <div id="ideaErr" style="color:var(--bad);font-size:12.5px;margin-top:8px"></div>
+    <div class="sec">
+      <div class="sec-h">Kept (${N.ideas.length})</div>
+      ${N.ideas.length ? rows : `<div class="empty">Nothing kept. The box above is for the thought you would otherwise lose.</div>`}
+    </div>`;
+
+  const add = async () => {
+    const r = await post("/api/notes/idea", { text: $("ideaText").value });
+    if (r.error) { $("ideaErr").textContent = r.error; return; }
+    N = { ideas: r.notes.ideas, links: r.notes.links }; render(); switchTo("id");
+  };
+  $("ideaAdd").addEventListener("click", add);
+  $("ideaText").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) add(); });
+  for (const b of $("id").querySelectorAll("[data-del-idea]")) {
+    b.addEventListener("click", async () => {
+      const r = await post("/api/notes/remove", { kind: "ideas", id: b.dataset.delIdea });
+      if (!r.error) { N = { ideas: r.notes.ideas, links: r.notes.links }; render(); switchTo("id"); }
+    });
+  }
+}
+
+// ── Decisions ────────────────────────────────────────────────────────────────────────────────
 function renderDecisions(ci) {
   const parts = [];
-  if (!ci.meaningful) parts.push(`<div class="row red"><div><div class="rt">GitHub Actions billing <span class="tag r">blocks everything</span></div>
-    <div class="rd">${esc(ci.reason || "")} Until it clears, no PR can show a real green.</div></div>
-    <div class="acts"><a class="btn pri" href="https://github.com/settings/billing" target="_blank">Open billing</a></div></div>`);
+  if (!ci.meaningful) parts.push(`<div class="row stop"><div>
+    <div class="rt">GitHub Actions billing <span class="tag r">blocks everything</span></div>
+    <div class="rd">${esc(ci.reason || "")} Until this clears, no pull request can show a real green, and merging means
+      trusting the local audit alone.</div></div>
+    <div class="acts"><a class="btn pri" href="https://github.com/settings/billing" target="_blank" rel="noopener">Open billing</a></div></div>`);
+
   for (const p of V(S.pulls) || []) {
-    parts.push(`<div class="row amber"><div><div class="rt">Merge PR #${p.number} ${p.draft ? '<span class="tag a">draft</span>' : ""}
-      <span class="tag ${p.mergeable === "MERGEABLE" ? "g" : "r"}">${esc(p.mergeable || "?")}</span></div>
-      <div class="rd">${esc(p.title)}</div><div class="rf">${esc(p.branch)}${ci.meaningful ? "" : " · checks unverifiable while CI is blocked"}</div></div>
-      <div class="acts"><a class="btn" href="https://github.com/Pootytxng/sentinel/pull/${p.number}" target="_blank">Review</a></div></div>`);
+    parts.push(`<div class="row hold"><div>
+      <div class="rt">Merge pull request #${p.number}${p.draft ? ` <span class="tag a">draft</span>` : ""}
+        <span class="tag ${p.mergeable === "MERGEABLE" ? "g" : "r"}">${esc(p.mergeable || "unknown")}</span></div>
+      <div class="rd">${esc(p.title)}</div>
+      <div class="rf">${esc(p.branch)}${ci.meaningful ? "" : " · checks unverifiable while CI is blocked"}</div></div>
+      <div class="acts"><a class="btn" href="https://github.com/Pootytxng/sentinel/pull/${p.number}" target="_blank" rel="noopener">Review</a></div></div>`);
   }
   for (const i of (S.work.items || []).filter((x) => !x.availability.available)) {
-    parts.push(`<div class="row amber"><div><div class="rt">#${i.number} ${esc(i.title)} <span class="tag a">${esc(i.status)}</span></div>
+    parts.push(`<div class="row hold"><div>
+      <div class="rt">#${i.number} ${esc(i.title)} <span class="tag a">${esc(i.status)}</span></div>
       <div class="rd">${esc(i.availability.reason)}</div></div>
-      <div class="acts"><a class="btn" href="https://github.com/Pootytxng/sentinel/issues/${i.number}" target="_blank">Open</a></div></div>`);
+      <div class="acts"><a class="btn" href="https://github.com/Pootytxng/sentinel/issues/${i.number}" target="_blank" rel="noopener">Open</a></div></div>`);
   }
-  $("dc").innerHTML = `<h2>Waiting on you</h2><p class="lede">Everything that cannot move without a decision from you.</p>${parts.join("")}`;
+  $("dc").innerHTML = `<h2>Waiting on you</h2>
+    <p class="lede">Everything that cannot move without a decision only you can make.</p>
+    ${parts.join("") || `<div class="empty">Nothing is waiting on you.</div>`}`;
 }
 
+// ── Lost &amp; found ─────────────────────────────────────────────────────────────────────────
 function renderLost() {
-  const rows = S.lostAndFound.map((f) => `<tr><td class="m">${esc(f.name)}</td><td><span class="tag ${/nothing points|uncommitted/.test(f.risk) ? "r" : "a"}">${esc(f.risk)}</span></td><td>${esc(f.why)}</td></tr>`).join("");
+  const rows = S.lostAndFound.map((f) => `<tr>
+    <td class="m">${esc(f.name)}</td>
+    <td><span class="tag ${/nothing points|uncommitted/.test(f.risk) ? "r" : "a"}">${esc(f.risk)}</span></td>
+    <td>${esc(f.why)}</td></tr>`).join("");
   $("lf").innerHTML = `<h2>Lost &amp; found</h2>
-    <p class="lede">Everything on this disk holding work or occupying a name that no open PR and no live board item points at.</p>
-    <table><thead><tr><th style="width:30%">What</th><th style="width:16%">Risk</th><th>Why it's here</th></tr></thead><tbody>${rows}</tbody></table>`;
+    <p class="lede">Everything on this disk that holds work, or occupies a name, and that no open pull request and no live
+      board item points at. Swept fresh each time you open this.</p>
+    ${S.lostAndFound.length
+      ? `<table><thead><tr><th style="width:29%">What</th><th style="width:17%">Risk</th><th>Why it is here</th></tr></thead><tbody>${rows}</tbody></table>`
+      : `<div class="empty">Nothing is unaccounted for.</div>`}`;
 }
 
-// --- tabs ---
-for (const b of document.querySelectorAll("nav button")) {
-  b.addEventListener("click", () => {
-    document.querySelectorAll("nav button").forEach((x) => x.classList.remove("on"));
-    document.querySelectorAll(".pane").forEach((p) => p.classList.remove("on"));
-    b.classList.add("on"); $(b.dataset.t).classList.add("on");
-  });
+// ── navigation ───────────────────────────────────────────────────────────────────────────────
+function switchTo(id) {
+  document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("on", x.dataset.t === id));
+  document.querySelectorAll(".pane").forEach((p) => p.classList.toggle("on", p.id === id));
 }
+document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => switchTo(b.dataset.t)));
 $("refresh").addEventListener("click", load);
 
-// --- chat: one thread per task, running inside that task's folder ---
+// ── thread drawer: one conversation per task, running inside that task's folder ──────────────
 let thread = { folder: null, id: null };
 function openChat(folder, title) {
   thread = { folder, id: null };
   $("chatTitle").textContent = title;
-  $("chatLog").innerHTML = "";
-  $("chatStrip").textContent = "";
+  $("chatLog").innerHTML = `<div class="empty">A fresh thread in <span style="font-family:var(--mono)">${esc(folder)}</span>.
+    It can already see the code — nothing to paste.</div>`;
   $("chat").classList.add("on");
   $("chatBox").focus();
 }
 $("chatClose").addEventListener("click", () => $("chat").classList.remove("on"));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("chat").classList.remove("on"); });
 
 function bubble(who, cls) {
+  if ($("chatLog").querySelector(".empty")) $("chatLog").innerHTML = "";
   const d = document.createElement("div");
   d.className = "msg " + (cls || "");
   d.innerHTML = `<div class="who">${esc(who)}</div><pre></pre>`;
@@ -296,66 +547,81 @@ function bubble(who, cls) {
 async function send() {
   const text = $("chatBox").value.trim();
   if (!text || !thread.folder) return;
-  $("chatBox").value = "";
+  $("chatBox").value = ""; $("chatBox").style.height = "";
   bubble("you", "me").textContent = text;
   const agent = $("chatAgent").value;
   const out = bubble(agent);
+  out.classList.add("thinking");
+  $("chatSend").disabled = true;
   const body = {
-    agent, folder: thread.folder, message: text,
-    threadId: thread.id, sessionId: thread.id ? null : (thread.id = crypto.randomUUID()),
+    agent, folder: thread.folder, message: text, threadId: thread.id,
+    sessionId: thread.id ? null : (thread.id = crypto.randomUUID()),
     model: $("chatModel").value || null, effort: $("chatEffort").value || null,
   };
-  const res = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  if (!res.ok || !res.body) { out.textContent = "refused: " + (await res.text()); return; }
-  const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
-  for (;;) {
-    const { done, value } = await reader.read(); if (done) break;
-    buf += dec.decode(value, { stream: true });
-    const frames = buf.split("\n\n"); buf = frames.pop() ?? "";
-    for (const f of frames) {
-      const ev = /^event: (.+)$/m.exec(f)?.[1]; const dm = /^data: (.+)$/m.exec(f)?.[1];
-      if (!ev || !dm) continue;
-      let d; try { d = JSON.parse(dm); } catch { continue; }
-      if (ev === "start" && d.stripped?.length) $("chatStrip").textContent = `billing guard: stripped ${d.stripped.join(", ")} from this run`;
-      else if (ev === "start") $("chatStrip").textContent = "billing guard: no API credentials present · subscription only";
-      if (ev === "event") {
-        const c = d?.message?.content ?? d?.delta ?? null;
-        if (typeof c === "string") out.textContent += c;
-        else if (Array.isArray(c)) for (const p of c) { if (p.type === "text") out.textContent += p.text; if (p.type === "tool_use") out.textContent += `\n[${p.name}]\n`; }
-        else if (d?.type === "item.completed" && d?.item?.text) out.textContent += d.item.text;
+  try {
+    const res = await fetch("/api/chat", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify(body) });
+    if (!res.ok || !res.body) { out.textContent = "refused — " + (await res.text()); return; }
+    const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const frames = buf.split("\n\n"); buf = frames.pop() ?? "";
+      for (const f of frames) {
+        const ev = /^event: (.+)$/m.exec(f)?.[1]; const dm = /^data: (.+)$/m.exec(f)?.[1];
+        if (!ev || !dm) continue;
+        let d; try { d = JSON.parse(dm); } catch { continue; }
+        if (ev === "start") {
+          $("chatGuard").textContent = d.stripped?.length
+            ? `subscription only · stripped ${d.stripped.join(", ")} from this run`
+            : "subscription only · no API credentials in this process";
+        }
+        if (ev === "event") {
+          const c = d?.message?.content ?? d?.delta ?? null;
+          if (typeof c === "string") out.textContent += c;
+          else if (Array.isArray(c)) for (const p of c) {
+            if (p.type === "text") out.textContent += p.text;
+            if (p.type === "tool_use") out.textContent += `\n[${p.name}]\n`;
+          }
+          else if (d?.type === "item.completed" && d?.item?.text) out.textContent += d.item.text;
+        }
+        if (ev === "text" || ev === "stderr") out.textContent += d.text;
+        if (ev === "fatal") out.textContent += "\n" + d.error;
+        $("chatLog").scrollTop = $("chatLog").scrollHeight;
       }
-      if (ev === "text") out.textContent += d.text;
-      if (ev === "stderr") out.textContent += d.text;
-      if (ev === "fatal") out.textContent += "\n" + d.error;
-      $("chatLog").scrollTop = $("chatLog").scrollHeight;
     }
+  } finally {
+    out.classList.remove("thinking");
+    $("chatSend").disabled = false;
+    $("chatBox").focus();
   }
 }
 $("chatSend").addEventListener("click", send);
 $("chatBox").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+$("chatBox").addEventListener("input", function () { this.style.height = "auto"; this.style.height = Math.min(this.scrollHeight, 170) + "px"; });
 
-// --- audit ---
+// ── audit ────────────────────────────────────────────────────────────────────────────────────
 $("runAudit").addEventListener("click", async function () {
   this.disabled = true; this.textContent = "Running…";
   const out = $("auditOut"); out.textContent = "";
-  const res = await fetch("/api/audit");
-  const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
-  for (;;) {
-    const { done, value } = await reader.read(); if (done) break;
-    buf += dec.decode(value, { stream: true });
-    const frames = buf.split("\n\n"); buf = frames.pop() ?? "";
-    for (const f of frames) {
-      const ev = /^event: (.+)$/m.exec(f)?.[1]; const dm = /^data: (.+)$/m.exec(f)?.[1];
-      if (!ev || !dm) continue;
-      const d = JSON.parse(dm);
-      if (ev === "start") out.textContent += `$ ${d.script}\n\n`;
-      if (ev === "text") out.textContent += d.text;
-      if (ev === "fatal") out.textContent += `\n${d.error}\n`;
-      if (ev === "done") out.textContent += `\n[exit ${d.code}]\n`;
-      out.scrollTop = out.scrollHeight;
+  try {
+    const res = await fetch("/api/audit");
+    const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const frames = buf.split("\n\n"); buf = frames.pop() ?? "";
+      for (const f of frames) {
+        const ev = /^event: (.+)$/m.exec(f)?.[1]; const dm = /^data: (.+)$/m.exec(f)?.[1];
+        if (!ev || !dm) continue;
+        const d = JSON.parse(dm);
+        if (ev === "start") out.textContent += `${d.script}\n\n`;
+        if (ev === "text") out.textContent += d.text;
+        if (ev === "fatal") out.textContent += `\n${d.error}\n`;
+        if (ev === "done") out.textContent += `\n— finished, exit ${d.code} —\n`;
+        out.scrollTop = out.scrollHeight;
+      }
     }
-  }
-  this.disabled = false; this.textContent = "Run audit";
+  } finally { this.disabled = false; this.textContent = "Run audit"; }
 });
 
 load();
