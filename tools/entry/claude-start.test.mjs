@@ -7,7 +7,11 @@
 // about failing with a sentence rather than a spawn when any of it is unknown.
 
 import { describe, expect, it } from "vitest";
-import { join } from "node:path";
+// win32, matching the module under test. These assertions are about WINDOWS paths; building the
+// expectations with the host's separator made the suite prove something different depending on
+// where it ran.
+import { win32 as winpath } from "node:path";
+const { join } = winpath;
 import { CLI_NAMES, planClaudeStart, planFromMachine, resolveClaudeCli } from "./claude-start.mjs";
 
 const HOME = "C:\\Users\\Kuya";
@@ -131,9 +135,17 @@ describe("planFromMachine", () => {
     expect(p.reason).toMatch(/window|terminal|console/i);
   });
 
-  it("finds the CLI actually installed on this machine", () => {
-    // Not a fixture: if this ever stops being true the fallback is dead, and the launcher should be
-    // the thing that says so rather than the owner discovering it at a shortcut.
+  // This one asserts a fact about THE MACHINE IT RUNS ON, not about the code: that a Claude Code CLI
+  // is really installed where the launcher looks. That is worth knowing — if it stops being true the
+  // fallback is dead, and the launcher should be what says so rather than the owner discovering it
+  // at a shortcut. But it can only hold on a machine that HAS one, and running it unconditionally
+  // asserted that GitHub's runners carry the owner's tools: it failed there every single time and
+  // passed here forever, which is a guard aimed at the wrong thing.
+  //
+  // Scoped to the platform that can satisfy it, and the skip is legible in the output rather than
+  // silent.
+  const OWNER_PLATFORM = process.platform === "win32";
+  it.skipIf(!OWNER_PLATFORM)("finds the CLI actually installed on this machine (Windows only)", () => {
     expect(resolveClaudeCli()).toBeTruthy();
   });
 });

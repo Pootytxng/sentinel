@@ -35,7 +35,15 @@
 // instead of leaking a process nobody can see.
 
 import { existsSync } from "node:fs";
-import { delimiter, join } from "node:path";
+// win32 semantics EXPLICITLY. This resolves a WINDOWS executable out of a WINDOWS PATH on behalf of
+// a Windows .lnk — there is no other machine it runs on.
+//
+// bug->guard: with the platform defaults `delimiter` is ":" off-Windows, so a Windows PATH
+// ("C:\bin;C:\Program Files\nodejs") split into ["C", "\bin;C", "\Program Files\nodejs"] and the CLI
+// was never found. Invisible on the owner's machine; every assertion here proved nothing anywhere
+// else. Pinning win32 makes the behaviour identical on every platform.
+import { win32 as winpath } from "node:path";
+const { delimiter, join } = winpath;
 import { homedir } from "node:os";
 import { bridgeState } from "./ide-bridge.mjs";
 import { canonicalizePath } from "./session-assert.mjs";
