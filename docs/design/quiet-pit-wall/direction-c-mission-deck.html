@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Compy — Direction C · Mission Deck</title>
+<style>
+/* ============================================================
+   PROTOTYPE CHROME  (outside the app stage — not part of the design)
+   ============================================================ */
+:root{
+  --env:  #131417;   /* plane 0 — matte charcoal environment */
+  --work: #1b1d22;   /* plane 1 — active workspace / card face */
+  --over: #24272e;   /* plane 2 — temporary overlay */
+  --edge: #2b2f37;   /* the ONLY border tone, used sparingly */
+
+  --ink:   #ece7e0;  /* warm off-white — human language */
+  --ink-2: #a8a49d;  /* supporting language */
+  --ink-3: #6f6c67;  /* meta / units */
+
+  --focus: #a78bfa;  /* violet — Compy focus & active direction */
+  --proof: #3fd9c2;  /* teal   — measured evidence */
+  --judge: #f0b878;  /* amber  — uncertainty / owner judgment */
+  --fail:  #ff6b6b;  /* red    — actual failure only */
+
+  --focus-dim: #a78bfa26;
+  --proof-dim: #3fd9c226;
+  --judge-dim: #f0b87826;
+
+  --sans: ui-sans-serif, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0;background:#0b0c0e;color:var(--ink);font-family:var(--sans)}
+body{display:flex;flex-direction:column;align-items:center;gap:14px;padding:18px 16px 40px;min-height:100vh}
+
+.chrome{width:1280px;max-width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.chrome h1{font-size:15px;font-weight:600;margin:0;letter-spacing:.01em}
+.chrome .tag{font-family:var(--mono);font-size:11.5px;color:#8a8680;border:1px solid #26282d;
+  border-radius:999px;padding:4px 9px;background:#141518}
+.chrome .spacer{flex:1}
+.chrome button{font-family:var(--sans);font-size:13px;color:#b8b4ad;background:#141518;
+  border:1px solid #26282d;border-radius:8px;padding:7px 12px;cursor:pointer;min-height:28px}
+.chrome button[aria-pressed="true"],.chrome button[aria-selected="true"]{
+  color:#0d0b14;background:var(--focus);border-color:var(--focus);font-weight:600}
+.chrome .grp{display:flex;gap:6px;align-items:center}
+.chrome .lbl{font-size:12px;color:#67645f}
+
+.stagewrap{width:1280px;max-width:100%}
+.stage{width:1280px;height:720px;transform-origin:top left;position:relative;
+  border-radius:12px;overflow:hidden;box-shadow:0 30px 90px #000a,0 0 0 1px #23262c}
+
+/* ============================================================
+   THE DESIGN  —  MISSION DECK
+   the deck is persistent; rooms are where the mission docks
+   ============================================================ */
+.app{position:absolute;inset:0;display:grid;grid-template-rows:50px 1fr 92px;
+  background:
+    radial-gradient(110% 80% at 72% -6%, #1d2028 0%, transparent 58%),
+    radial-gradient(80% 70% at 4% 106%, #191b21 0%, transparent 60%),
+    var(--env);
+  font-size:15px;line-height:1.5;color:var(--ink)}
+.app button:focus-visible,.app a:focus-visible,.app [tabindex]:focus-visible{
+  outline:2px solid var(--focus);outline-offset:2px}
+.mono{font-family:var(--mono)}
+
+/* ---------- header: identity + subordinate room access ---------- */
+.hdr{display:flex;align-items:center;gap:14px;padding:0 34px;border-bottom:1px solid var(--edge);
+  background:#101115}
+.brand{font-size:13px;font-weight:700;letter-spacing:.16em;color:var(--ink-2)}
+.hdr .sep{width:1px;height:18px;background:var(--edge)}
+.hdr .mission{font-family:var(--mono);font-size:13px;letter-spacing:.05em;color:var(--ink-3)}
+.hdr .mission b{color:var(--ink-2);font-weight:500}
+.hdr .spacer{flex:1}
+.rlbl{font-size:13px;color:var(--ink-3);margin-right:2px}
+.rchip{display:inline-flex;align-items:center;gap:6px;background:transparent;border:1px solid transparent;
+  color:var(--ink-3);font-family:var(--sans);font-size:13px;border-radius:7px;padding:5px 9px;
+  cursor:pointer;min-height:26px}
+.rchip::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--cue);opacity:.5}
+.rchip:hover{color:var(--ink-2);background:#17191e}
+.rchip[aria-current="page"]{color:var(--ink);background:#1a1d23;border-color:var(--edge)}
+.rchip[aria-current="page"]::before{opacity:1}
+
+/* ---------- main: room context (left) + persistent deck (right) ---------- */
+.main{display:grid;grid-template-columns:462px 1fr;gap:26px;padding:16px 34px 8px;min-height:0}
+.ctx{display:flex;flex-direction:column;min-width:0;min-height:0}
+h1.verdict{font-size:27px;line-height:1.15;font-weight:600;margin:0 0 7px;letter-spacing:-.015em}
+.lede{font-size:15px;color:var(--ink-2);margin:0;max-width:44ch}
+.sub{font-size:14px;color:var(--ink-3);margin:2px 0 0}
+
+/* chips */
+.chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:13px;
+  letter-spacing:.04em;padding:4px 9px;border-radius:6px;background:#1a1d23;color:var(--ink-2);white-space:nowrap}
+.chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.chip.measured{color:var(--proof);background:var(--proof-dim)}
+.chip.expected{color:var(--focus);background:var(--focus-dim)}
+.chip.unknown{color:var(--judge);background:var(--judge-dim)}
+.chip.done{color:var(--focus);background:var(--focus-dim)}
+.chip.idlechip{color:var(--ink-3);background:#1a1d23}
+
+/* buttons */
+.pill{font-family:var(--sans);font-size:14.5px;border-radius:9px;cursor:pointer;min-height:40px;
+  padding:0 16px;border:1px solid transparent;display:inline-flex;align-items:center;gap:8px;
+  justify-content:center;background:transparent;color:var(--ink-2)}
+.pill.primary{background:var(--focus);color:#160f2b;font-weight:650;min-height:44px;padding:0 20px}
+.pill.primary:hover{background:#b79dff}
+.pill.quiet{background:#1e2128;color:var(--ink);border-color:var(--edge)}
+.pill.quiet:hover{background:#252932}
+.pill.bare:hover{color:var(--ink)}
+.pill.tiny{min-height:34px;font-size:13.5px;padding:0 12px}
+.pill.go{border-color:#463a72;color:#c7b6ff;background:#1a172490}
+.pill.go:hover{background:#221d33;color:#dbcfff}
+.pill:disabled{opacity:.38;cursor:default}
+.mini{font-family:var(--sans);font-size:13px;min-height:28px;padding:0 11px;border-radius:7px;
+  background:#1e2128;border:1px solid var(--edge);color:var(--ink);cursor:pointer}
+.mini:hover{background:#262a32}
+
+/* ---------- HOME context ---------- */
+.intents{display:flex;flex-direction:column;gap:7px;margin-top:16px}
+.intent{text-align:left;padding:9px 13px;border-radius:10px;background:#181b21;border:1px solid var(--edge);
+  color:var(--ink);font-family:var(--sans);font-size:14.5px;cursor:pointer;min-height:44px}
+.intent:hover{background:#1e222a}
+.intent[aria-pressed="true"]{border-color:var(--focus);background:#1d1a2a}
+.intent small{display:block;font-size:13px;color:var(--ink-3);margin-top:1px}
+
+.strip{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--edge);border-radius:10px;
+  overflow:hidden;margin-top:16px}
+.read{background:#16181d;padding:10px 13px}
+.read .k{font-size:13px;color:var(--ink-3);margin-bottom:3px}
+.read .v{font-family:var(--mono);font-size:17px;color:var(--ink);letter-spacing:-.01em}
+.read .i{font-size:13.5px;color:var(--ink-2);margin-top:3px}
+.read .bar{height:2px;border-radius:2px;margin-top:8px;background:#24272e}
+.read .bar i{display:block;height:100%;border-radius:2px;background:var(--proof)}
+.read.warn .bar i{background:var(--judge)}
+.read.na .v,.read.na .i{color:var(--ink-3)}
+.proofline{display:flex;align-items:center;gap:9px;margin-top:14px;font-size:13.5px;color:var(--ink-2)}
+.proofline b{font-weight:600;color:var(--ink)}
+.proofline a{color:var(--proof);text-decoration:none;border-bottom:1px solid #3fd9c255;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;min-height:24px;padding:0 4px}
+
+/* ---------- LAB context ---------- */
+.disc{width:100%;display:flex;justify-content:space-between;align-items:center;background:#16181d;
+  border:1px solid var(--edge);border-radius:11px;color:var(--ink);font-family:var(--sans);
+  font-size:14.5px;cursor:pointer;min-height:44px;padding:0 16px;margin-top:12px}
+.disc:hover{background:#1b1e25}
+.disc .st{color:var(--ink-3);font-size:13px}
+.discbody{background:#141619;border:1px solid var(--edge);border-top:0;border-radius:0 0 11px 11px;
+  margin-top:-1px;padding:10px 16px 12px}
+.discbody ol{margin:0;padding-left:20px;color:var(--ink-2);font-size:14px;line-height:1.85}
+.discbody li::marker{color:var(--ink-3);font-family:var(--mono);font-size:12px}
+.discbody p{margin:0;font-size:14px;color:var(--ink-2)}
+
+/* ---------- MONITOR context ---------- */
+.steps{display:flex;align-items:center;margin-top:14px;font-size:13.5px;color:var(--ink-3)}
+.steps b{color:var(--ink-2);font-weight:500}
+.steps em{font-style:normal;color:#3b3f47;padding:0 8px}
+.recdot{width:9px;height:9px;border-radius:50%;background:var(--fail);display:inline-block;margin-right:9px}
+.cmp{display:grid;grid-template-columns:1fr;gap:1px;background:var(--edge);border-radius:11px;
+  overflow:hidden;margin-top:18px}
+.cmp>div{background:#16181d;padding:11px 15px;display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.cmp .k{font-size:13.5px;color:var(--ink-3)}
+.cmp .v{font-family:var(--mono);font-size:16px;color:#8c919b}
+.cmp .now .v{color:var(--proof)}
+.qual{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:13.5px;color:var(--ink-3);flex-wrap:wrap}
+
+/* ---------- BLACKBOOK context ---------- */
+.recs{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:1px;
+  background:var(--edge);border-radius:11px;overflow:hidden}
+.rec{background:#16181d;padding:9px 13px 10px}
+.rec.out{background:#141518}
+.rtop{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.rt{font-size:14.5px;color:var(--ink)}
+.rd{font-family:var(--mono);font-size:13px;color:var(--ink-3);white-space:nowrap}
+.rmeta{display:flex;align-items:baseline;gap:9px;flex:none}
+.rbot{display:flex;align-items:center;gap:9px;margin-top:6px;flex-wrap:nowrap}
+.rres{font-size:13.5px;color:var(--ink-2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.state{font-family:var(--mono);font-size:13px;color:var(--proof)}
+.state.off{color:var(--ink-3)}
+.sepbar{display:flex;align-items:center;gap:10px;margin:14px 0 0;font-family:var(--mono);font-size:13px;
+  letter-spacing:.08em;color:var(--ink-3)}
+.sepbar::after{content:"";flex:1;height:1px;background:var(--edge)}
+.fg{font-size:13.5px;color:var(--ink-3);margin:12px 0 0}
+
+/* ---------- THE DECK ---------- */
+.deckcol{display:flex;flex-direction:column;min-width:0;min-height:0}
+.decklbl{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink-3);
+  font-family:var(--mono);letter-spacing:.05em;margin-bottom:8px;min-height:32px}
+.decklbl .spacer{flex:1}
+.dhint{font-family:var(--sans);font-size:13px;color:var(--ink-3);letter-spacing:0}
+.deckbtn{width:34px;height:34px;border-radius:8px;background:#1e2128;border:1px solid var(--edge);
+  color:var(--ink);cursor:pointer;font-size:16px;line-height:1}
+.deckbtn:hover{background:#262a32}
+
+.deck{position:relative;flex:1;min-height:0;overflow:hidden;touch-action:pan-y}
+.card{position:absolute;height:364px;border-radius:14px;border:1px solid var(--edge);
+  background:var(--work);box-shadow:0 22px 46px -30px #000,0 1px 0 #ffffff08 inset;
+  display:flex;flex-direction:column;overflow:hidden;will-change:transform}
+.card.isfront{border-color:#343945;box-shadow:0 26px 60px -28px #000,0 1px 0 #ffffff0d inset;cursor:grab}
+.card.isfront:active{cursor:grabbing}
+.cardtop{flex:none;height:26px;display:flex;align-items:center;padding:0 20px;
+  font-family:var(--mono);font-size:13px;letter-spacing:.05em;color:var(--ink-3);
+  border-bottom:1px solid #22252b;background:#00000018}
+.card.isfront .cardtop{color:var(--focus);border-bottom-color:#2f2a44}
+.cardfoot{flex:none;margin-top:auto;height:26px;display:flex;align-items:center;padding:0 20px;
+  font-family:var(--mono);font-size:13px;letter-spacing:.04em;color:var(--ink-2);
+  border-top:1px solid #22252b;background:#00000024;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cardbody{flex:1;min-height:0;padding:14px 20px 16px;display:flex;flex-direction:column}
+.cardhead{display:flex;gap:14px;align-items:flex-start}
+.cardhead .chl{flex:1;min-width:0}
+.card h2{margin:0;font-size:21px;font-weight:600;letter-spacing:-.015em;line-height:1.2}
+.card .csub{margin:6px 0 0;font-size:14.5px;color:var(--ink-2);max-width:46ch}
+.acts{display:flex;gap:9px;align-items:center;margin-top:auto;padding-top:14px}
+
+/* the compact rig — an evidence badge, never the navigation */
+.rig{flex:none;width:236px;display:flex;gap:10px;align-items:center;background:#15171b;
+  border:1px solid var(--edge);border-radius:10px;padding:7px 10px}
+.rig svg{width:96px;height:54px;flex:none}
+.rig .rl{font-size:13px;color:var(--ink-3);line-height:1.35}
+.rig .rl b{display:block;color:#cdc7f5;font-weight:600;font-size:13.5px;margin-bottom:1px}
+.rig .part .face{fill:#1e2128;stroke:#333842;stroke-width:1}
+.rig .part[data-state="target"] .face{fill:#241f36;stroke:#6a58a8;stroke-width:1.4}
+.rig .part[data-state="unknown"] .face{fill:#17191d;stroke:#6d5c3d;stroke-dasharray:2.5 2.5}
+.rig .pip{fill:var(--proof)}
+
+/* stage bodies */
+.sb{flex:1;min-height:0;display:flex;flex-direction:column}
+.facts{display:grid;grid-template-columns:78px 1fr;gap:7px 12px;margin:14px 0 0;font-size:14.5px;align-items:start}
+.facts dt{color:var(--ink-3);font-size:13.5px;padding-top:2px}
+.facts dd{margin:0;color:var(--ink)}
+.evrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.evrow span.t{color:var(--ink-2);font-size:14px}
+.note{font-size:13.5px;color:var(--ink-3);margin:12px 0 0}
+.bigtime{font-family:var(--mono);font-size:34px;color:var(--proof);letter-spacing:-.02em;margin-top:18px}
+.donemark{display:flex;align-items:center;gap:10px;margin-top:16px}
+.donemark .tick{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--focus);
+  display:flex;align-items:center;justify-content:center;color:var(--focus);font-size:14px;flex:none}
+
+/* trace */
+.trace{margin-top:12px;background:#16181d;border:1px solid var(--edge);border-radius:11px;padding:9px 12px 4px}
+.tracehead{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:var(--ink-3);
+  font-family:var(--mono);letter-spacing:.04em}
+.trace svg{display:block;width:100%;height:auto}
+.gridline{stroke:#242830;stroke-width:1.5}
+.budget{stroke:var(--judge);stroke-width:2.4;stroke-dasharray:9 8;opacity:.95}
+.tracepath{fill:none;stroke:var(--proof);stroke-width:2.6;stroke-linejoin:round}
+.tracepath.before{stroke:#4c515c;stroke-width:2.2}
+.spike{fill:none;stroke:var(--fail);stroke-width:1.9}
+.spike circle{fill:#16181d;stroke:var(--fail);stroke-width:2.6}
+.spike[data-sel="true"] circle{fill:var(--fail)}
+.axlbl{font-family:var(--mono);font-size:20px;fill:var(--ink-3)}
+.spikebar{display:flex;align-items:center;gap:9px;margin-top:10px;font-size:13.5px;color:var(--ink-2)}
+.spikebar .val{font-family:var(--mono);color:var(--ink);font-size:14px}
+.stepbtn{width:30px;height:30px;border-radius:8px;background:#1e2128;border:1px solid var(--edge);
+  color:var(--ink);cursor:pointer;font-size:15px;line-height:1}
+.stepbtn:hover{background:#262a32}
+
+/* queued cards */
+.qmeta{margin-top:14px;display:flex;align-items:center;gap:9px}
+
+/* ---------- THE MISSION TRACK (primary orientation device) ---------- */
+.track{display:flex;align-items:center;gap:18px;padding:0 34px;border-top:1px solid var(--edge);
+  background:#101115}
+.thead{flex:none;width:126px}
+.thead .tl{font-family:var(--mono);font-size:13px;letter-spacing:.08em;color:var(--ink-3)}
+.thead .tv{font-size:14px;color:var(--ink);margin-top:2px}
+.rail{flex:1;position:relative;display:flex;justify-content:space-between;align-items:flex-start;
+  padding-top:6px;min-width:0}
+.railline{position:absolute;left:0;right:0;top:19px;height:2px;background:#23262c;border-radius:2px}
+.railfill{position:absolute;left:0;top:19px;height:2px;width:0;background:var(--focus);border-radius:2px}
+.node{position:relative;background:transparent;border:0;padding:0 6px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:5px;min-height:44px;font-family:var(--sans)}
+.node .num{width:26px;height:26px;border-radius:50%;background:#15171b;border:1.5px solid #303540;
+  color:var(--ink-3);font-family:var(--mono);font-size:12.5px;display:flex;align-items:center;
+  justify-content:center;position:relative;z-index:1}
+.node .nl{font-size:13px;color:var(--ink-3);white-space:nowrap}
+.node .nr{font-family:var(--mono);font-size:13px;color:#4e4b47;white-space:nowrap}
+.node:hover .nl{color:var(--ink-2)}
+.node[data-state="done"] .num{border-color:var(--proof);color:var(--proof);background:#12211f}
+.node[data-state="done"] .nl{color:var(--ink-2)}
+.node[data-state="now"] .num{border-color:var(--focus);background:var(--focus);color:#160f2b;font-weight:700}
+.node[data-state="now"] .nl{color:var(--ink);font-weight:600}
+.node[data-state="now"] .nr{color:#8d84c4}
+.tacts{flex:none;display:flex;gap:8px;align-items:center}
+
+/* ============================================================
+   MOTION CONTRACT — one-time, causal, physical. Nothing loops.
+   ============================================================ */
+.card{transition:top .40s cubic-bezier(.2,.72,.3,1),left .40s cubic-bezier(.2,.72,.3,1),
+  right .40s cubic-bezier(.2,.72,.3,1),transform .34s cubic-bezier(.2,.72,.3,1),
+  background-color .3s linear,border-color .2s linear}
+.railfill{transition:width .40s cubic-bezier(.2,.72,.3,1)}
+@keyframes dockF{from{transform:translateX(38px);opacity:.55}to{transform:none;opacity:1}}
+@keyframes dockB{from{transform:translateX(-38px);opacity:.55}to{transform:none;opacity:1}}
+.cardbody.dockF{animation:dockF .30s cubic-bezier(.2,.72,.3,1)}
+.cardbody.dockB{animation:dockB .30s cubic-bezier(.2,.72,.3,1)}
+@media (prefers-reduced-motion:reduce){
+  .card,.railfill{transition:none !important}
+  .cardbody.dockF,.cardbody.dockB{animation:none !important}
+  *{transition-duration:.001ms !important;animation-duration:.001ms !important}
+}
+body[data-rm="on"] .card,body[data-rm="on"] .railfill{transition:none !important}
+body[data-rm="on"] .cardbody.dockF,body[data-rm="on"] .cardbody.dockB{animation:none !important}
+body[data-rm="on"] *{transition-duration:.001ms !important;animation-duration:.001ms !important}
+</style>
+</head>
+<body data-rm="off">
+
+<!-- ============ PROTOTYPE CHROME (not part of the design) ============ -->
+<div class="chrome">
+  <h1>Direction C — Mission Deck</h1>
+  <span class="tag">1280 × 720</span>
+  <span class="tag" style="color:#f0b878;border-color:#3a3226">PROTOTYPE · fixture data · not this PC</span>
+  <span class="spacer"></span>
+  <span class="lbl">Room</span>
+  <div class="grp" role="tablist" aria-label="Room">
+    <button role="tab" data-room="home" aria-selected="true">Home</button>
+    <button role="tab" data-room="lab" aria-selected="false">Lab</button>
+    <button role="tab" data-room="monitor" aria-selected="false">Monitor</button>
+    <button role="tab" data-room="blackbook" aria-selected="false">Blackbook</button>
+  </div>
+  <span class="lbl" data-only="monitor" hidden>Capture</span>
+  <div class="grp" data-only="monitor" hidden>
+    <button data-ms="idle" aria-pressed="false">Idle</button>
+    <button data-ms="rec" aria-pressed="false">Recording</button>
+    <button data-ms="result" aria-pressed="true">Result</button>
+    <button data-ms="incon" aria-pressed="false">Inconclusive</button>
+  </div>
+  <span class="lbl" data-only="lab" hidden>Card</span>
+  <div class="grp" data-only="lab" hidden>
+    <button data-dec="open" aria-pressed="true">Decision</button>
+    <button data-dec="declined" aria-pressed="false">Declined (complete)</button>
+  </div>
+  <button id="rm" aria-pressed="false">Reduced motion</button>
+</div>
+
+<div class="stagewrap"><div class="stage" id="stage">
+<div class="app">
+
+  <!-- ================= HEADER ================= -->
+  <header class="hdr">
+    <span class="brand">COMPY</span>
+    <span class="sep"></span>
+    <span class="mission">ACTIVE MISSION · <b>GRAPHICS CARD</b></span>
+    <span class="spacer"></span>
+    <span class="rlbl">Rooms</span>
+    <nav style="display:flex;gap:2px" aria-label="Rooms">
+      <button class="rchip" data-nav="home" style="--cue:#a78bfa" aria-current="page">Home</button>
+      <button class="rchip" data-nav="lab" style="--cue:#27e08a">Lab</button>
+      <button class="rchip" data-nav="monitor" style="--cue:#3fd9c2">Monitor</button>
+      <button class="rchip" data-nav="blackbook" style="--cue:#f0b878">Blackbook</button>
+    </nav>
+  </header>
+
+  <!-- ================= MAIN ================= -->
+  <div class="main">
+
+    <!-- ---------- LEFT: the room the mission is docked in ---------- -->
+    <div class="ctx" id="ctx">
+
+      <!-- HOME -->
+      <section id="room-home" aria-label="Home">
+        <h1 class="verdict">No urgent issue found</h1>
+        <p class="lede">Compy has read your PC and has one move worth making.</p>
+
+        <div class="intents" role="group" aria-label="What do you want help with?">
+          <button class="intent" aria-pressed="true">Play smoother<small>Frame pacing</small></button>
+          <button class="intent" aria-pressed="false">Fix a problem<small>Something feels wrong</small></button>
+          <button class="intent" aria-pressed="false">Understand my PC<small>What Compy can see</small></button>
+        </div>
+
+        <div class="strip" role="group" aria-label="Four readings">
+          <div class="read"><div class="k">Frame pacing</div><div class="v">11.8 ms</div>
+            <div class="i">Steady last session.</div><div class="bar"><i style="width:78%"></i></div></div>
+          <div class="read"><div class="k">GPU temperature</div><div class="v">71 °C</div>
+            <div class="i">Normal under load.</div><div class="bar"><i style="width:62%"></i></div></div>
+          <div class="read warn"><div class="k">Startup load</div><div class="v">3 apps</div>
+            <div class="i">Your call to trim.</div><div class="bar"><i style="width:44%"></i></div></div>
+          <div class="read na"><div class="k">Display sync</div><div class="v">Not available</div>
+            <div class="i">Compy hasn't read this.</div></div>
+        </div>
+
+        <div class="proofline">
+          <span class="chip measured">KEPT</span>
+          <span style="flex:1;min-width:0"><b>Game Mode off</b> · applied 3 days ago · frame pacing steadier</span>
+          <a tabindex="0" role="button">Roll back</a>
+        </div>
+      </section>
+
+      <!-- LAB -->
+      <section id="room-lab" aria-label="Lab" hidden>
+        <h1 class="verdict">Your next best move</h1>
+        <p class="lede">One decision at a time. Declining finishes a mission just as much as applying.</p>
+
+        <button class="disc" data-disc aria-expanded="false" aria-controls="qlist">
+          <span>5 more decisions</span><span class="st">Show</span></button>
+        <div class="discbody" id="qlist" hidden>
+          <ol>
+            <li>Trim 3 startup apps</li>
+            <li>Set the power plan</li>
+            <li>Check display sync</li>
+            <li>Free 40 GB on C:</li>
+            <li>Update the chipset driver</li>
+          </ol>
+        </div>
+
+        <button class="disc" data-disc aria-expanded="false" aria-controls="advbody">
+          <span>Advanced tools</span><span class="st">Show</span></button>
+        <div class="discbody" id="advbody" hidden>
+          <p>Filters, declined items, cleanup, raw instruments, methodology.</p>
+        </div>
+      </section>
+
+      <!-- MONITOR — four capture states -->
+      <section id="room-monitor" aria-label="Monitor" hidden>
+        <div data-mon="idle" hidden>
+          <h1 class="verdict">Record one match</h1>
+          <p class="lede">Compy watches one real session, then tells you whether the change did anything.</p>
+          <div class="steps"><b>Start</b><em>—</em><span>Play normally</span><em>—</em><span>Come back for the result</span></div>
+        </div>
+
+        <div data-mon="rec" hidden>
+          <h1 class="verdict"><span class="recdot"></span>Recording your session</h1>
+          <p class="lede">Play normally. Compy is reading frame pacing and will stop when the game closes.</p>
+        </div>
+
+        <div data-mon="result">
+          <h1 class="verdict">Frame pacing got steadier</h1>
+          <p class="lede">Measured across one 11-minute session of the same game.</p>
+          <div class="cmp">
+            <div><span class="k">Before this change</span><span class="v">14.2 ms typical · 6 spikes</span></div>
+            <div class="now"><span class="k">After this change</span><span class="v">11.8 ms typical · 2 spikes</span></div>
+          </div>
+          <div class="qual"><span class="chip measured">MEASURED · 1 SESSION · 11 MIN</span>
+            <span>Same game, same settings.</span></div>
+        </div>
+
+        <div data-mon="incon" hidden>
+          <h1 class="verdict">Not enough to call it</h1>
+          <p class="lede">A 4-minute session can't separate this change from normal variation.</p>
+          <div class="cmp">
+            <div><span class="k">Before this change</span><span class="v">14.2 ms typical · 6 spikes</span></div>
+            <div><span class="k">After this change</span><span class="v" style="color:var(--judge)">13.1 ms typical · 2 spikes</span></div>
+          </div>
+          <div class="qual"><span class="chip unknown">INCONCLUSIVE · 4 MIN</span>
+            <span>Compy needs ~10 minutes.</span></div>
+        </div>
+      </section>
+
+      <!-- BLACKBOOK -->
+      <section id="room-blackbook" aria-label="Blackbook" hidden>
+        <h1 class="verdict">Blackbook</h1>
+        <p class="sub">History &amp; undo</p>
+
+        <ul class="recs" aria-label="Changes Compy made">
+          <li class="rec">
+            <div class="rtop"><span class="rt">Hardware GPU scheduling turned on</span><span class="rmeta"><span class="state">Active</span><span class="rd">Today</span></span></div>
+            <div class="rbot"><span class="chip measured">MEASURED</span>
+              <span class="rres">Frame pacing 14.2 → 11.8 ms</span><button class="mini">Roll back</button></div>
+          </li>
+          <li class="rec">
+            <div class="rtop"><span class="rt">Game Mode turned off</span><span class="rmeta"><span class="state">Active</span><span class="rd">3 days ago</span></span></div>
+            <div class="rbot"><span class="chip measured">MEASURED</span>
+              <span class="rres">Frame pacing steadier</span><button class="mini">Roll back</button></div>
+          </li>
+          <li class="rec">
+            <div class="rtop"><span class="rt">Startup app trimmed: Discord</span><span class="rmeta"><span class="state">Active</span><span class="rd">6 days ago</span></span></div>
+            <div class="rbot"><span class="chip expected">EXPECTED</span>
+              <span class="rres">Not measured — no capture yet</span><button class="mini">Roll back</button></div>
+          </li>
+        </ul>
+
+        <div class="sepbar">NOT MADE BY COMPY</div>
+        <ul class="recs" aria-label="Changes Compy did not make">
+          <li class="rec out">
+            <div class="rtop"><span class="rt">NVIDIA driver updated to 566.36</span><span class="rd">8 days ago</span></div>
+            <div class="rbot"><span class="rres">Windows Update did this. Compy can't roll it back.</span></div>
+          </li>
+          <li class="rec out">
+            <div class="rtop"><span class="rt">Power plan set to Balanced</span><span class="rmeta"><span class="state off">Inactive</span><span class="rd">12 days ago</span></span></div>
+            <div class="rbot"><span class="rres">You rolled this back</span></div>
+          </li>
+        </ul>
+
+        <p class="fg">Field Guide is the contextual help and search inside Blackbook — not another product to visit.</p>
+      </section>
+    </div>
+
+    <!-- ---------- RIGHT: THE DECK (persistent across rooms) ---------- -->
+    <section class="deckcol" aria-label="Mission deck">
+      <div class="decklbl">
+        <span>MISSION DECK · 6 MISSIONS</span>
+        <button class="pill tiny quiet" id="backactive" hidden>Back to active mission</button>
+        <span class="spacer"></span>
+        <span class="dhint">Drag the card, or use these buttons / arrow keys</span>
+        <button class="deckbtn" id="prevm" aria-label="Previous mission in the deck">‹</button>
+        <button class="deckbtn" id="nextm" aria-label="Next mission in the deck">›</button>
+      </div>
+
+      <div class="deck" id="deck">
+
+        <!-- ===== THE ACTIVE MISSION CARD — travels every room ===== -->
+        <article class="card isfront" id="cardM" aria-label="Active mission: graphics card">
+          <div class="cardtop">
+            <span class="ctstage" id="ctstage">STAGE 1 OF 5 · RECOMMENDATION</span>
+          </div>
+          <div class="cardbody">
+            <div class="cardhead">
+              <div class="chl">
+                <h2 id="mtitle">Turn on hardware GPU scheduling</h2>
+                <p class="csub" id="msub">Your last session showed uneven frame pacing, and your driver supports this.</p>
+              </div>
+              <div class="rig">
+                <svg viewBox="0 0 150 82" role="img" aria-label="Evidence badge: this mission affects your graphics card. CPU, memory and storage are measured; display sync is unknown.">
+                  <path d="M6 18 L92 18 L104 8 L104 74 L92 82 L6 82 Z" fill="#141619" stroke="#262a31"/>
+                  <path d="M92 18 L104 8 L104 74 L92 82 Z" fill="#101216" stroke="#262a31"/>
+                  <g class="part" data-state="measured"><rect class="face" x="14" y="24" width="20" height="16" rx="2"/>
+                    <circle cx="24" cy="32" r="4" fill="none" stroke="#3a4049"/></g>
+                  <g class="part" data-state="measured"><rect class="face" x="42" y="22" width="5" height="20" rx="1"/>
+                    <rect class="face" x="50" y="22" width="5" height="20" rx="1"/></g>
+                  <g class="part" data-state="measured"><rect class="face" x="62" y="24" width="26" height="11" rx="2"/></g>
+                  <g class="part" data-state="target"><rect class="face" x="12" y="52" width="78" height="18" rx="3"/>
+                    <circle cx="26" cy="61" r="5" fill="none" stroke="#6a58a8"/>
+                    <circle cx="42" cy="61" r="5" fill="none" stroke="#6a58a8"/>
+                    <rect x="60" y="56" width="24" height="10" rx="2" fill="#2f2748"/></g>
+                  <circle class="pip" cx="90" cy="50" r="3"/>
+                  <g class="part" data-state="unknown"><rect class="face" x="116" y="24" width="28" height="20" rx="3"/>
+                    <path d="M130 44 v6 M123 50 h14" stroke="#6d5c3d" stroke-width="1.4" fill="none"/></g>
+                </svg>
+                <div class="rl"><b>Graphics card</b>4 of 5 parts read</div>
+              </div>
+            </div>
+
+            <!-- STAGE 1 · RECOMMENDATION -->
+            <div class="sb" data-sb="s1">
+              <div class="evrow" style="margin-top:14px">
+                <span class="chip measured">MEASURED</span>
+                <span class="t">Affects your graphics card.</span>
+              </div>
+              <button class="disc" data-disc aria-expanded="false" aria-controls="partlist" style="margin-top:12px">
+                <span>What Compy read · 5 parts</span><span class="st">Show</span></button>
+              <div class="discbody" id="partlist" hidden>
+                <p><span class="mono" style="color:var(--proof)">CPU</span> 8 CORES · 61 °C &nbsp;·&nbsp;
+                   <span class="mono" style="color:var(--proof)">MEMORY</span> 32 GB · 41% &nbsp;·&nbsp;
+                   <span class="mono" style="color:var(--proof)">STORAGE</span> 2 TB NVMe<br>
+                   <span class="mono" style="color:var(--focus)">GRAPHICS CARD</span> target of this mission · changed recently &nbsp;·&nbsp;
+                   <span class="mono" style="color:var(--judge)">DISPLAY</span> unknown</p>
+              </div>
+              <div class="acts">
+                <button class="pill primary" data-act="s1go">Show me this move</button>
+                <button class="pill bare" data-act="decline">Not for me</button>
+              </div>
+            </div>
+
+            <!-- STAGE 2 · DECISION -->
+            <div class="sb" data-sb="s2" hidden>
+              <dl class="facts">
+                <dt>Evidence</dt><dd><span class="evrow"><span class="chip measured">MEASURED</span>
+                  <span class="t">from your own 11-minute session.</span></span></dd>
+                <dt>Tradeoff</dt><dd>Needs a restart. Some overlays behave differently until then.</dd>
+                <dt>Undo</dt><dd>One click in Blackbook. Nothing else changes.</dd>
+              </dl>
+              <div class="acts">
+                <button class="pill primary" data-act="apply">Apply this change</button>
+                <button class="pill quiet">Show me how</button>
+                <button class="pill bare" data-act="decline">Not now</button>
+              </div>
+            </div>
+
+            <!-- STAGE 2 · DECISION COMPLETED BY DECLINING -->
+            <div class="sb" data-sb="s2d" hidden>
+              <div class="donemark">
+                <span class="tick" aria-hidden="true">✓</span>
+                <span class="chip done">COMPLETE · DECLINED</span>
+              </div>
+              <p class="note" style="font-size:14.5px;color:var(--ink-2)">
+                This mission is finished. Declining is a complete answer, not a skipped one.</p>
+              <p class="note">Compy won't re-ask this week.</p>
+              <div class="acts">
+                <button class="pill primary" data-act="nextm">Next mission</button>
+                <button class="pill bare" data-act="undecline">Bring it back</button>
+              </div>
+            </div>
+
+            <!-- STAGE 3 · CAPTURE (idle) -->
+            <div class="sb" data-sb="s3i" hidden>
+              <div class="evrow" style="margin-top:14px">
+                <span class="chip expected">APPLIED · NOT YET MEASURED</span>
+              </div>
+              <p class="note">Compy records this mission only. Nothing else changes while recording.</p>
+              <div class="acts">
+                <button class="pill primary" data-act="startrec">Start recording</button>
+              </div>
+            </div>
+
+            <!-- STAGE 3 · CAPTURE (recording) -->
+            <div class="sb" data-sb="s3r" hidden>
+              <div class="evrow" style="margin-top:12px"><span class="recdot"></span>
+                <span class="t">Reading frame pacing.</span></div>
+              <div class="bigtime">04:12</div>
+              <div class="acts">
+                <button class="pill quiet" data-act="stoprec">Stop and keep what we have</button>
+              </div>
+            </div>
+
+            <!-- STAGE 4 · RESULT -->
+            <div class="sb" data-sb="s4" hidden>
+              <div class="trace">
+                <div class="tracehead"><span>FRAME TIME</span>
+                  <span>LOWER IS BETTER · AMBER = YOUR 165 HZ BUDGET</span></div>
+                <svg viewBox="0 0 1000 160" role="img" aria-label="Frame time trace. Grey line is before the change, teal line is after. Two remaining spikes, at 3 minutes 41 seconds and 7 minutes 6 seconds.">
+                  <line class="gridline" x1="52" y1="24" x2="992" y2="24"/>
+                  <line class="gridline" x1="52" y1="64" x2="992" y2="64"/>
+                  <line class="gridline" x1="52" y1="104" x2="992" y2="104"/>
+                  <line class="gridline" x1="52" y1="144" x2="992" y2="144"/>
+                  <text class="axlbl" x="2" y="30">25ms</text><text class="axlbl" x="2" y="70">18ms</text>
+                  <text class="axlbl" x="2" y="110">12ms</text><text class="axlbl" x="8" y="150">6ms</text>
+                  <line class="budget" x1="52" y1="98" x2="992" y2="98"/>
+                  <path class="tracepath before" d="M54 102 L120 93 L180 112 L240 50 L300 106 L360 96 L420 43 L480 107 L540 101 L600 94 L660 56 L720 104 L780 98 L840 109 L900 70 L964 102"/>
+                  <path class="tracepath" d="M54 114 L90 110 L140 117 L190 112 L240 115 L290 110 L330 77 L370 114 L420 112 L470 118 L520 113 L570 116 L620 111 L660 83 L700 115 L750 112 L800 117 L850 113 L900 115 L964 112"/>
+                  <g class="spike" data-sel="true" data-t="3:41" data-msv="19.4"><line x1="330" y1="24" x2="330" y2="150"/><circle cx="330" cy="77" r="8"/></g>
+                  <g class="spike" data-t="7:06" data-msv="17.9"><line x1="660" y1="24" x2="660" y2="150"/><circle cx="660" cy="83" r="8"/></g>
+                </svg>
+              </div>
+              <div class="spikebar" data-spikezone>
+                <button class="stepbtn" aria-label="Previous spike">‹</button>
+                <button class="stepbtn" aria-label="Next spike">›</button>
+                <span>Spike <span class="val" id="sidx">1</span> of 2 · <span class="val" id="stime">3:41</span>
+                  · <span class="val" id="sms">19.4 ms</span></span>
+                <span style="color:var(--ink-3);font-size:13.5px">Buttons or arrow keys — no dragging needed.</span>
+              </div>
+              <div class="acts">
+                <button class="pill primary" data-act="keep">Keep this change</button>
+                <button class="pill quiet" data-act="keep">Roll it back</button>
+                <button class="pill bare" data-act="again">Record another session</button>
+              </div>
+            </div>
+
+            <!-- STAGE 4 · RESULT (inconclusive) -->
+            <div class="sb" data-sb="s4i" hidden>
+              <div class="trace">
+                <div class="tracehead"><span>FRAME TIME</span><span>4:02 RECORDED · TOO SHORT TO CALL</span></div>
+                <svg viewBox="0 0 1000 130" role="img" aria-label="Short frame time trace, too brief to draw a conclusion.">
+                  <line class="gridline" x1="52" y1="40" x2="992" y2="40"/>
+                  <line class="gridline" x1="52" y1="90" x2="992" y2="90"/>
+                  <line class="budget" x1="52" y1="80" x2="992" y2="80"/>
+                  <path class="tracepath" style="stroke:var(--judge)" d="M54 98 L130 90 L210 106 L290 58 L370 100 L450 96 L530 104 L610 70 L690 99 L770 103 L850 97 L930 101 L990 98"/>
+                </svg>
+              </div>
+              <p class="note">One more session of the same game is enough to decide.</p>
+              <div class="acts">
+                <button class="pill primary" data-act="again10">Record 10 more minutes</button>
+                <button class="pill quiet" data-act="keep">Roll it back</button>
+              </div>
+            </div>
+
+            <!-- STAGE 5 · KEEP OR ROLL BACK -->
+            <div class="sb" data-sb="s5" hidden>
+              <div class="evrow" style="margin-top:14px">
+                <span class="chip measured">MEASURED</span>
+                <span class="t">Frame pacing 14.2 → 11.8 ms</span>
+              </div>
+              <p class="note">Filed here as a finished card. Active now, one click to undo.</p>
+              <div class="acts">
+                <button class="pill primary" data-act="file">Keep this change</button>
+                <button class="pill quiet" data-act="file">Roll it back</button>
+              </div>
+            </div>
+          </div>
+          <div class="cardfoot" hidden>01 · Turn on hardware GPU scheduling</div>
+        </article>
+
+        <!-- ===== QUEUED MISSIONS — the rest of the deck ===== -->
+        <article class="card" id="cardQ1" aria-label="Queued mission 2">
+          <div class="cardtop"><span class="ctidx">02 · Trim 3 startup apps</span></div>
+          <div class="cardbody" hidden>
+            <div class="cardhead"><div class="chl"><h2>Trim 3 startup apps</h2>
+              <p class="csub">Three apps launch with Windows. Whether they earn that is your call.</p></div></div>
+            <div class="sb" data-q="open">
+              <div class="qmeta"><span class="chip idlechip">NOT STARTED</span>
+                <span style="font-size:13.5px;color:var(--ink-3)">Compy runs one mission at a time.</span></div>
+              <div class="acts"><button class="pill bare" data-act="qdecline">Not for me</button></div>
+            </div>
+            <div class="sb" data-q="declined" hidden>
+              <div class="donemark"><span class="tick" aria-hidden="true">✓</span>
+                <span class="chip done">COMPLETE · DECLINED</span></div>
+              <p class="note">Nothing changed. Compy won't re-ask this week.</p>
+              <div class="acts"><button class="pill bare" data-act="qundecline">Bring it back</button></div>
+            </div>
+          </div>
+          <div class="cardfoot">02 · Trim 3 startup apps</div>
+        </article>
+
+        <article class="card" id="cardQ2" aria-label="Queued mission 3">
+          <div class="cardtop"><span class="ctidx">03 · Set the power plan</span></div>
+          <div class="cardbody" hidden>
+            <div class="cardhead"><div class="chl"><h2>Set the power plan</h2>
+              <p class="csub">Your plan is Balanced. Compy can check whether that costs you.</p></div></div>
+            <div class="sb" data-q="open">
+              <div class="qmeta"><span class="chip idlechip">NOT STARTED</span>
+                <span style="font-size:13.5px;color:var(--ink-3)">Compy runs one mission at a time.</span></div>
+              <div class="acts"><button class="pill bare" data-act="qdecline">Not for me</button></div>
+            </div>
+            <div class="sb" data-q="declined" hidden>
+              <div class="donemark"><span class="tick" aria-hidden="true">✓</span>
+                <span class="chip done">COMPLETE · DECLINED</span></div>
+              <p class="note">Nothing changed. Compy won't re-ask this week.</p>
+              <div class="acts"><button class="pill bare" data-act="qundecline">Bring it back</button></div>
+            </div>
+          </div>
+          <div class="cardfoot">03 · Set the power plan</div>
+        </article>
+
+        <article class="card" id="cardQ3" aria-label="Queued mission 4">
+          <div class="cardtop"><span class="ctidx">04 · Check display sync</span></div>
+          <div class="cardbody" hidden>
+            <div class="cardhead"><div class="chl"><h2>Check display sync</h2>
+              <p class="csub">Compy hasn't read your display sync yet, so it won't guess.</p></div></div>
+            <div class="sb" data-q="open">
+              <div class="qmeta"><span class="chip unknown">UNKNOWN</span>
+                <span style="font-size:13.5px;color:var(--ink-3)">Nothing measured here yet.</span></div>
+              <div class="acts"><button class="pill bare" data-act="qdecline">Not for me</button></div>
+            </div>
+            <div class="sb" data-q="declined" hidden>
+              <div class="donemark"><span class="tick" aria-hidden="true">✓</span>
+                <span class="chip done">COMPLETE · DECLINED</span></div>
+              <p class="note">Nothing changed. Compy won't re-ask this week.</p>
+              <div class="acts"><button class="pill bare" data-act="qundecline">Bring it back</button></div>
+            </div>
+          </div>
+          <div class="cardfoot">04 · Check display sync</div>
+        </article>
+
+        <article class="card" id="cardQ4" aria-label="Queued mission 5">
+          <div class="cardtop"><span class="ctidx">05 · Free 40 GB on C:</span></div>
+          <div class="cardbody" hidden>
+            <div class="cardhead"><div class="chl"><h2>Free 40 GB on C:</h2>
+              <p class="csub">Your system drive is close to full. Compy lists what it would remove.</p></div></div>
+            <div class="sb" data-q="open">
+              <div class="qmeta"><span class="chip idlechip">NOT STARTED</span>
+                <span style="font-size:13.5px;color:var(--ink-3)">Compy runs one mission at a time.</span></div>
+              <div class="acts"><button class="pill bare" data-act="qdecline">Not for me</button></div>
+            </div>
+            <div class="sb" data-q="declined" hidden>
+              <div class="donemark"><span class="tick" aria-hidden="true">✓</span>
+                <span class="chip done">COMPLETE · DECLINED</span></div>
+              <p class="note">Nothing changed. Compy won't re-ask this week.</p>
+              <div class="acts"><button class="pill bare" data-act="qundecline">Bring it back</button></div>
+            </div>
+          </div>
+          <div class="cardfoot">05 · Free 40 GB on C:</div>
+        </article>
+
+        <article class="card" id="cardQ5" aria-label="Queued mission 6">
+          <div class="cardtop"><span class="ctidx">06 · Update the chipset driver</span></div>
+          <div class="cardbody" hidden>
+            <div class="cardhead"><div class="chl"><h2>Update the chipset driver</h2>
+              <p class="csub">Your chipset driver is older than your board supports.</p></div></div>
+            <div class="sb" data-q="open">
+              <div class="qmeta"><span class="chip idlechip">NOT STARTED</span>
+                <span style="font-size:13.5px;color:var(--ink-3)">Compy runs one mission at a time.</span></div>
+              <div class="acts"><button class="pill bare" data-act="qdecline">Not for me</button></div>
+            </div>
+            <div class="sb" data-q="declined" hidden>
+              <div class="donemark"><span class="tick" aria-hidden="true">✓</span>
+                <span class="chip done">COMPLETE · DECLINED</span></div>
+              <p class="note">Nothing changed. Compy won't re-ask this week.</p>
+              <div class="acts"><button class="pill bare" data-act="qundecline">Bring it back</button></div>
+            </div>
+          </div>
+          <div class="cardfoot">06 · Update the chipset driver</div>
+        </article>
+
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= THE MISSION TRACK ================= -->
+  <nav class="track" aria-label="Mission stages">
+    <div class="thead">
+      <div class="tl">THIS MISSION</div>
+      <div class="tv" id="tstage">Stage 1 of 5</div>
+    </div>
+    <div class="rail" id="rail">
+      <div class="railline"></div><div class="railfill" id="railfill"></div>
+      <button class="node" data-stage="0"><span class="num">1</span><span class="nl">Recommendation</span><span class="nr">HOME</span></button>
+      <button class="node" data-stage="1"><span class="num">2</span><span class="nl">Decision</span><span class="nr">LAB</span></button>
+      <button class="node" data-stage="2"><span class="num">3</span><span class="nl">Capture</span><span class="nr">MONITOR</span></button>
+      <button class="node" data-stage="3"><span class="num">4</span><span class="nl">Result</span><span class="nr">MONITOR</span></button>
+      <button class="node" data-stage="4"><span class="num">5</span><span class="nl">Keep or roll back</span><span class="nr">BLACKBOOK</span></button>
+    </div>
+    <div class="tacts">
+      <button class="pill tiny quiet" id="trackback">‹ Back</button>
+      <button class="pill tiny go" id="trackgo">Continue this mission →</button>
+    </div>
+  </nav>
+
+</div></div></div>
+
+<script>
+(function(){
+"use strict";
+var body=document.body, stage=document.getElementById('stage'), scale=1;
+
+/* scale the native 1280x720 stage down if the window is narrower */
+function fit(){
+  var w=Math.min(document.documentElement.clientWidth-32,1280);
+  scale=w/1280; stage.style.transform='scale('+scale+')';
+  stage.parentElement.style.height=(720*scale)+'px';
+}
+addEventListener('resize',fit); fit();
+
+function reduced(){ return body.dataset.rm==='on' ||
+  matchMedia('(prefers-reduced-motion:reduce)').matches; }
+
+/* ---------------- state ---------------- */
+var STAGES=[
+  {label:'Recommendation',room:'home'},
+  {label:'Decision',room:'lab'},
+  {label:'Capture',room:'monitor'},
+  {label:'Result',room:'monitor'},
+  {label:'Keep or roll back',room:'blackbook'}
+];
+var ROOM2STAGE={home:0,lab:1,monitor:2,blackbook:4};
+var TITLES={
+  s1 :['Turn on hardware GPU scheduling','Your last session showed uneven frame pacing, and your driver supports this.'],
+  s2 :['Turn on hardware GPU scheduling','Your last session showed uneven frame pacing, and your driver supports this.'],
+  s2d:['Turn on hardware GPU scheduling','You declined. Nothing changed on your PC.'],
+  s3i:['Hardware GPU scheduling is on','Applied. One real session tells us whether it worked.'],
+  s3r:['Hardware GPU scheduling is on',''],
+  s4 :['Hardware GPU scheduling is on',''],
+  s4i:['Hardware GPU scheduling is on',''],
+  s5 :['Hardware GPU scheduling turned on','']
+};
+var stageIdx=0, mstate='result', declined=false;
+
+/* ---------------- deck ---------------- */
+var deck=document.getElementById('deck');
+var cards=[].slice.call(deck.querySelectorAll('.card'));
+var BY={}; cards.forEach(function(c){BY[c.id]=c;});
+var order=cards.map(function(c){return c.id;});
+var CARD_H=364, STEP=26, INSET=13;
+var BG=['#1b1d22','#191b20','#17191d','#16171b','#141519','#131418'];
+var bodyTimer=null;
+
+function frontIsMission(){ return order[0]==='cardM'; }
+
+function layout(){
+  order.forEach(function(id,i){
+    var c=BY[id];
+    c.style.zIndex=String(40-i);
+    c.style.background=BG[Math.min(i,BG.length-1)];
+    c.style.transform='';
+    c.style.top=(i*STEP)+'px';
+    c.style.left=(i*INSET)+'px'; c.style.right=(i*INSET)+'px';
+    c.classList.toggle('isfront', i===0);
+  });
+  clearTimeout(bodyTimer);
+  bodyTimer=setTimeout(applyBodies, reduced()?0:420);
+  var ba=document.getElementById('backactive');
+  if(frontIsMission() && document.activeElement===ba) document.getElementById('nextm').focus();
+  ba.hidden = frontIsMission();
+  document.getElementById('trackback').disabled = !frontIsMission();
+  renderTrack();
+}
+/* collapsed / covered card content is REMOVED from focus + AT traversal */
+function applyBodies(){
+  order.forEach(function(id,i){
+    var c=BY[id], front=(i===0);
+    var b=c.querySelector('.cardbody'); if(b) b.hidden=!front;
+    var t=c.querySelector('.cardtop');  if(t) t.hidden=!front;
+    var f=c.querySelector('.cardfoot'); if(f) f.hidden=front;
+  });
+}
+function cycle(d){
+  if(d>0) order.push(order.shift()); else order.unshift(order.pop());
+  layout();
+}
+function bringFront(id){
+  var guard=0;
+  while(order[0]!==id && guard++<12) order.push(order.shift());
+  layout();
+}
+
+/* ---------------- rooms + stage bodies ---------------- */
+var rooms={home:document.getElementById('room-home'),lab:document.getElementById('room-lab'),
+           monitor:document.getElementById('room-monitor'),blackbook:document.getElementById('room-blackbook')};
+
+function bodyKey(){
+  if(stageIdx===0) return 's1';
+  if(stageIdx===1) return declined?'s2d':'s2';
+  if(stageIdx===2) return (mstate==='idle')?'s3i':'s3r';
+  if(stageIdx===3) return (mstate==='incon')?'s4i':'s4';
+  return 's5';
+}
+function renderTrack(){
+  var live=frontIsMission();
+  var ended=live && declined && stageIdx===1;
+  var nodes=[].slice.call(document.querySelectorAll('.node'));
+  nodes.forEach(function(n,i){
+    var s = !live ? 'next' : (ended ? (i<=1?'done':'next')
+          : (i<stageIdx?'done':(i===stageIdx?'now':'next')));
+    n.dataset.state=s;
+    if(s==='now') n.setAttribute('aria-current','step'); else n.removeAttribute('aria-current');
+  });
+  var fill=document.getElementById('railfill');
+  document.getElementById('trackgo').disabled = !live || ended || stageIdx===4;
+  if(!live){ fill.style.width='0px'; document.getElementById('tstage').textContent='Not started'; return; }
+  document.getElementById('tstage').textContent = ended ? 'Finished at stage 2' : 'Stage '+(stageIdx+1)+' of 5';
+  var a=nodes[0], b=nodes[stageIdx];
+  fill.style.width=Math.max(0,(b.offsetLeft+b.offsetWidth/2)-(a.offsetLeft+a.offsetWidth/2))+'px';
+}
+function render(dir){
+  var room=STAGES[stageIdx].room;
+  for(var k in rooms) rooms[k].hidden = (k!==room);
+  document.querySelectorAll('[data-mon]').forEach(function(m){ m.hidden = m.dataset.mon!==mstate; });
+
+  var key=bodyKey();
+  document.querySelectorAll('#cardM .sb').forEach(function(s){ s.hidden = s.dataset.sb!==key; });
+  document.getElementById('ctstage').textContent =
+    'STAGE '+(stageIdx+1)+' OF 5 · '+STAGES[stageIdx].label.toUpperCase()+
+    (key==='s2d'?' · COMPLETE':(key==='s3r'?' · RECORDING':(key==='s4i'?' · INCONCLUSIVE':'')));
+  document.getElementById('mtitle').textContent=TITLES[key][0];
+  var sub=document.getElementById('msub');
+  sub.textContent=TITLES[key][1]; sub.hidden = !TITLES[key][1];
+
+  /* chrome + in-stage room cues */
+  document.querySelectorAll('[role=tab]').forEach(function(t){
+    t.setAttribute('aria-selected', String(t.dataset.room===room)); });
+  document.querySelectorAll('.rchip').forEach(function(b){
+    if(b.dataset.nav===room) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
+  document.querySelectorAll('[data-only]').forEach(function(e){ e.hidden = e.dataset.only!==room; });
+  document.querySelectorAll('[data-ms]').forEach(function(b){
+    b.setAttribute('aria-pressed', String(b.dataset.ms===mstate)); });
+  document.querySelectorAll('[data-dec]').forEach(function(b){
+    b.setAttribute('aria-pressed', String((b.dataset.dec==='declined')===declined)); });
+
+  renderTrack();
+  if(dir) dock(dir);
+}
+function dock(dir){
+  if(reduced()) return;
+  var b=document.querySelector('#cardM .cardbody'); if(!b||b.hidden) return;
+  b.classList.remove('dockF','dockB'); void b.offsetWidth;
+  b.classList.add(dir<0?'dockB':'dockF');
+}
+function go(i,dir){
+  if(!frontIsMission()) bringFront('cardM');
+  i=Math.max(0,Math.min(4,i));
+  var d = (dir!==undefined)?dir:(i>=stageIdx?1:-1);
+  stageIdx=i;
+  if(stageIdx===2 && mstate!=='idle' && mstate!=='rec') mstate='rec';
+  if(stageIdx===3 && mstate!=='result' && mstate!=='incon') mstate='result';
+  render(d);
+}
+
+/* ---------------- controls ---------------- */
+document.getElementById('trackgo').onclick=function(){ go(Math.min(4,stageIdx+1),1); };
+document.getElementById('trackback').onclick=function(){ go(Math.max(0,stageIdx-1),-1); };
+document.querySelectorAll('.node').forEach(function(n){
+  n.onclick=function(){ go(parseInt(n.dataset.stage,10)); }; });
+document.querySelectorAll('[role=tab]').forEach(function(t){
+  t.onclick=function(){ go(ROOM2STAGE[t.dataset.room]); }; });
+document.querySelectorAll('.rchip').forEach(function(b){
+  b.onclick=function(){ go(ROOM2STAGE[b.dataset.nav]); }; });
+document.querySelectorAll('[data-ms]').forEach(function(b){
+  b.onclick=function(){ mstate=b.dataset.ms;
+    var target=(mstate==='idle'||mstate==='rec')?2:3;
+    go(target, target>=stageIdx?1:-1); }; });
+document.querySelectorAll('[data-dec]').forEach(function(b){
+  b.onclick=function(){ declined=(b.dataset.dec==='declined'); go(1); }; });
+
+document.getElementById('prevm').onclick=function(){ cycle(-1); };
+document.getElementById('nextm').onclick=function(){ cycle(1); };
+document.getElementById('backactive').onclick=function(){ bringFront('cardM'); };
+
+/* card actions */
+deck.addEventListener('click',function(e){
+  var b=e.target.closest('[data-act]'); if(!b) return;
+  var a=b.dataset.act;
+  if(a==='s1go'){ declined=false; go(1,1); }
+  else if(a==='apply'){ mstate='idle'; go(2,1); }
+  else if(a==='decline'){ declined=true; go(1,1); }
+  else if(a==='undecline'){ declined=false; go(1,-1); }
+  else if(a==='nextm'){ cycle(1); }
+  else if(a==='startrec'){ mstate='rec'; go(2,1); }
+  else if(a==='stoprec'){ mstate='result'; go(3,1); }
+  else if(a==='keep'){ go(4,1); }
+  else if(a==='file'){ cycle(1); }
+  else if(a==='again'){ mstate='idle'; go(2,-1); }
+  else if(a==='again10'){ mstate='rec'; go(2,-1); }
+  else if(a==='qdecline'||a==='qundecline'){
+    var card=b.closest('.card'), dec=(a==='qdecline');
+    card.querySelectorAll('[data-q]').forEach(function(s){
+      s.hidden = (s.dataset.q==='declined')!==dec; });
+  }
+});
+
+/* intents */
+document.querySelectorAll('.intent').forEach(function(b){
+  b.onclick=function(){ document.querySelectorAll('.intent').forEach(function(x){
+    x.setAttribute('aria-pressed','false'); }); b.setAttribute('aria-pressed','true'); };
+});
+
+/* disclosures — collapsed content uses [hidden], not opacity */
+document.querySelectorAll('[data-disc]').forEach(function(d){
+  d.onclick=function(){
+    var t=document.getElementById(d.getAttribute('aria-controls'));
+    var open=t.hidden; t.hidden=!open;
+    d.setAttribute('aria-expanded',String(open));
+    d.querySelector('.st').textContent = open?'Hide':'Show';
+  };
+});
+
+/* drag the deck — always mirrored by the ‹ › buttons and arrow keys */
+var dragging=false,sx=0,dx=0,dc=null;
+deck.addEventListener('pointerdown',function(e){
+  var c=e.target.closest('.card'); if(!c||c.id!==order[0]) return;
+  if(e.target.closest('button,a,input,select,summary,[tabindex]')) return;
+  dragging=true; dc=c; sx=e.clientX; dx=0;
+  dc.style.transition='none';
+  try{ dc.setPointerCapture(e.pointerId); }catch(err){}
+});
+deck.addEventListener('pointermove',function(e){
+  if(!dragging) return;
+  dx=(e.clientX-sx)/(scale||1);
+  dc.style.transform='translateX('+dx+'px) rotate('+(dx/80)+'deg)';
+});
+function endDrag(){
+  if(!dragging) return; dragging=false;
+  dc.style.transition='';
+  if(dx<-90){ dc.style.transform=''; cycle(1); }
+  else if(dx>90){ dc.style.transform=''; cycle(-1); }
+  else { dc.style.transform=''; }
+  dc=null; dx=0;
+}
+deck.addEventListener('pointerup',endDrag);
+deck.addEventListener('pointercancel',endDrag);
+
+/* spikes — buttons + arrow keys, never drag-only */
+var spikes=[].slice.call(document.querySelectorAll('#cardM .spike')), si=0;
+function sel(i){
+  if(!spikes.length) return;
+  si=(i+spikes.length)%spikes.length;
+  spikes.forEach(function(s,n){ s.dataset.sel=String(n===si); });
+  document.getElementById('sidx').textContent=String(si+1);
+  document.getElementById('stime').textContent=spikes[si].dataset.t;
+  document.getElementById('sms').textContent=spikes[si].dataset.msv+' ms';
+}
+var sb=document.querySelectorAll('.stepbtn');
+if(sb[0]) sb[0].onclick=function(){ sel(si-1); };
+if(sb[1]) sb[1].onclick=function(){ sel(si+1); };
+sel(0);
+
+addEventListener('keydown',function(e){
+  if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight') return;
+  var a=document.activeElement||body;
+  var inSpike = a.closest && a.closest('[data-spikezone]');
+  var inDeckNav = a.closest && a.closest('.decklbl');
+  var resultOpen = !document.querySelector('#cardM .sb[data-sb="s4"]').hidden && frontIsMission();
+  var fwd = e.key==='ArrowRight';
+  if(inSpike || (resultOpen && !inDeckNav)){ sel(fwd?si+1:si-1); }
+  else { cycle(fwd?1:-1); }
+  e.preventDefault();
+});
+
+/* reduced motion toggle (stand-in for the Windows setting) */
+document.getElementById('rm').onclick=function(){
+  var on = body.dataset.rm==='off';
+  body.dataset.rm = on?'on':'off';
+  this.setAttribute('aria-pressed', String(on));
+};
+
+/* boot */
+layout(); applyBodies(); render(0);
+addEventListener('resize',renderTrack);
+})();
+</script>
+</body>
+</html>
