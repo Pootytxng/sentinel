@@ -1661,17 +1661,43 @@ mod leftover_restore_tests {
 
     #[test]
     fn wave2_armed_detectors_reach_elevation_and_a_decline_writes_nothing() {
-        // ARMED world: every wave-2 resolver is admitted by the gate, reads its prior
-        // (non-elevated reads that succeed on any rig — the detector layer runs the same reads
-        // routinely), and reaches the elevation seam; a forced decline leaves ZERO receipt.
+        // ARMED world: every wave-2 resolver is admitted by the gate and refuses WITHOUT mutating.
+        //
+        // bug->guard (CI, 2026-08-01). This used to assert all three reach the elevation seam, on
+        // the stated premise that their prior reads "succeed on any rig". They do not. A clean
+        // Windows VM has no meaningful processor power configuration, so `core-parking-forced`
+        // cannot parse its AC index and refuses BEFORE elevation with "refusing to restore blind" —
+        // the fail-safe idiom working exactly as designed. The PRODUCT was right; the TEST asserted
+        // a property of one desk. It passed here forever and failed on every clean machine, and
+        // nobody saw it for 22 days because CI had spent its minutes and gone silent.
+        //
+        // Rewritten to the idiom this file already uses for rig-state-dependent restores (see
+        // pagefile_armed_pair_contract_and_snapshot_roundtrip_hold): name every honest outcome, pin
+        // the invariant that holds across all of them, and keep the admission proof by requiring at
+        // least one resolver to actually reach the seam.
         let _force = ForceElevationError::begin();
         let before = load_history().expect("real ledger readable").len();
+        let mut reached_elevation = 0;
         for id in ["mpo-disabled", "core-parking-forced", "tcp-autotuning-off"] {
             let err = restore_leftover(id, "armed decline test")
                 .err()
-                .expect("forced elevation decline");
-            assert_eq!(err, ELEVATION_DECLINED_MSG, "{id}: admitted, refused at elevation: {err}");
+                .expect("declined or honestly refused — never a silent success");
+            if err == ELEVATION_DECLINED_MSG {
+                reached_elevation += 1;
+            } else {
+                assert!(
+                    err.contains("refusing to restore blind"),
+                    "{id}: the decline or an honest pre-elevation refusal, nothing else: {err}"
+                );
+            }
         }
+        // Admission is still proven. A world where NONE of the three reaches the seam would mean the
+        // gate stopped admitting them — which is the defect this test was written to catch, and the
+        // thing the rewrite must not quietly give up.
+        assert!(
+            reached_elevation > 0,
+            "no wave-2 resolver reached the elevation seam — the gate is no longer admitting them"
+        );
         let after = load_history().expect("readable").len();
         assert_eq!(before, after, "declined wave-2 restores must never write receipts");
     }

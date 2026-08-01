@@ -84,6 +84,18 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+
+      # The site guards (dist-site staleness, landing, SEO) need site-app's own dependencies and one
+      # staged build; without them three suites fail with "site-app dependencies missing — run
+      # `npm ci` inside site-app/ first", which is a missing setup step wearing the costume of a
+      # broken test. Taken from PR #9, open since 26 July and never able to go green because CI
+      # itself was dead. Adds ~1.7 min per run on a 1x runner; the budget guard's projection
+      # accounts for it.
+      - run: npm ci
+        working-directory: site-app
+      - name: stage the site once, for the site guards
+        run: npm run stage:site
+
       - name: vitest
         run: npm test
       - name: type-check + build

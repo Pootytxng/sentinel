@@ -128,7 +128,10 @@ describe("the projected monthly cost fits inside the free allowance", () => {
     const rust = billable * PER_RUN.rust * MULTIPLIER["windows-latest"];
     const frontend = billable * PER_RUN.frontend * MULTIPLIER["ubuntu-latest"];
     const auditWeekly = 5 * 5.3; // ~5 runs a month, ~5.3 min each, ubuntu 1x
-    const total = rust + frontend + auditWeekly;
+    // site-app `npm ci` + one staged build, added so the three site guards can run at all
+    // (PR #9's fix). ~1.7 min per billable run on a 1x runner — counted, not hand-waved.
+    const siteSetup = billable * 1.7 * MULTIPLIER["ubuntu-latest"];
+    const total = rust + frontend + auditWeekly + siteSetup;
 
     // Recorded so a future reader sees the arithmetic rather than trusting the number.
     expect(Math.round(total)).toBeLessThan(INCLUDED);
