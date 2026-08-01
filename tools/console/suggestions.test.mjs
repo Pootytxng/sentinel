@@ -96,17 +96,15 @@ describe("Start carries the item it was clicked from", () => {
 });
 
 describe("an action with consequences says so", () => {
-  it("the launcher tells you a window opened somewhere else", () => {
-    const w = /function renderWork\(\)[\s\S]*?\n}/.exec(PAGE)?.[0] ?? "";
-    expect(w).toMatch(/other monitor/i);
-    // The old version put the outcome in the BUTTON LABEL and wiped it after 3 seconds — an
-    // announcement that deletes itself is not an announcement.
-    expect(w).not.toMatch(/textContent = .*Opened — see the new window/);
+  it("a selected item explicitly says there is no terminal to find or keep open", () => {
+    const launch = /async function launchIssue\([\s\S]*?\n}/.exec(PAGE)?.[0] ?? "";
+    expect(launch).toMatch(/no terminal you need to keep open/i);
+    expect(launch).not.toMatch(/other monitor/i);
   });
 
   it("re-reads the world after the launcher runs, so the board cannot keep showing the old one", () => {
-    const w = /function renderWork\(\)[\s\S]*?\n}/.exec(PAGE)?.[0] ?? "";
-    expect(w).toMatch(/setTimeout\(load,/);
+    const launch = /async function launchIssue\([\s\S]*?\n}/.exec(PAGE)?.[0] ?? "";
+    expect(launch).toMatch(/setTimeout\(load,/);
   });
 
   it("a refresh does NOT wipe a conversation or a half-typed prompt", () => {

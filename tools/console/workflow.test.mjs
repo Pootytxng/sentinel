@@ -1,4 +1,5 @@
-// Guard: the console must never go quiet, never send him to GitHub, and never bundle work on a hope.
+// Guard: the console must never go quiet, send him to GitHub, or call separate folders a complete
+// collision guarantee when the ownership/claim train has not run.
 //
 // The owner, after using it properly for the first time:
 //
@@ -83,6 +84,19 @@ describe("law 2 — the bell is colour-coded and every alert is actionable", () 
   it("says so plainly when nothing needs him", () => {
     expect(fn("buildAlerts")).toMatch(/Nothing needs you/);
   });
+
+  it("only owner-gated work counts as needing him", () => {
+    const b = fn("buildAlerts");
+    expect(b).toMatch(/status === "Needs Kuya" \|\| i\.gate === "Kuya"/);
+    expect(b).not.toMatch(/for \(const p of pulls\)/);
+    expect(b).not.toMatch(/const stuck = .*availability\.available/);
+  });
+
+  it("does not call a branch lost when an open work item names that exact branch", () => {
+    const b = fn("buildAlerts");
+    expect(b).toMatch(/accountedBranches/);
+    expect(b).toMatch(/!accountedBranches\.has\(f\.name\)/);
+  });
 });
 
 describe("law 3 — GitHub is out of the flow", () => {
@@ -105,39 +119,22 @@ describe("law 3 — GitHub is out of the flow", () => {
   });
 });
 
-describe("law 4 — a bulk run is guaranteed, not hoped for", () => {
-  it("plans by FOLDER — the only thing that actually makes two agents safe", () => {
-    const p = fn("planBatch");
-    expect(p).toMatch(/byFolder/);
-    // One per folder runs; every later item for the same folder waits.
-    expect(p).toMatch(/parallel\.push\(\{ folder, item: items\[0\] \}\)/);
-    expect(p).toMatch(/items\.slice\(1\)/);
-  });
-
-  it("refuses to start a second run in a folder that already has one", () => {
-    expect(fn("startRun")).toMatch(/RUNS\.some\(\(r\) => r\.status === "running" && r\.folder === folder\)/);
-  });
-
-  it("shows the plan BEFORE running, split into can-run-now and must-wait", () => {
+describe("law 4 — a folder is not a claim, so starts use the real safety train", () => {
+  it("startable items carry an issue-number launcher action", () => {
     const w = fn("renderWork");
-    expect(w).toMatch(/can run at once/);
-    expect(w).toMatch(/must wait/);
-    expect(w).toMatch(/cannot touch the same files/);
+    expect(w).toMatch(/data-launch=/);
+    expect(w).toMatch(/launchIssue\(Number\(b\.dataset\.launch\), b\)/);
   });
 
-  it("only offers startable items for bundling", () => {
-    expect(fn("renderWork")).toMatch(/a\.available && folder \? `<input type="checkbox" data-batch=/);
+  it("the disproven bulk-run controls are gone", () => {
+    const w = fn("renderWork");
+    expect(w).not.toMatch(/data-batch|batchGo|Run these together|cannot touch the same files/);
   });
 
-  it("each run is watchable live and stoppable", () => {
-    expect(fn("newRunCard")).toMatch(/data-stop/);
-    expect(fn("newRunCard")).toMatch(/data-out/);
-    expect(fn("startRun")).toMatch(/signal: r\.ctrl\.signal/);
-  });
-
-  it("a run's outcome is a colour, not a guess", () => {
-    const s = fn("setRunState");
-    expect(s).toMatch(/status === "running" \? "a pulse" : status === "done" \? "g" : "r"/);
+  it("unavailable items remain explainable without pretending they can start", () => {
+    const w = fn("renderWork");
+    expect(w).toMatch(/Ask about it/);
+    expect(w).toMatch(/data-explain=/);
   });
 });
 
@@ -179,6 +176,7 @@ describe("law 6 — each suggestion names the rig it wants", () => {
   it("clicking a suggestion APPLIES that rig — a recommendation you must hand-copy is a note", () => {
     expect(fn("setSuggestions")).toMatch(/applyBest\(s\.best\)/);
     expect(fn("setSuggestions")).toMatch(/applyBest\(rec\.best\)/);
+    expect(fn("applyBest")).toMatch(/syncRouteSummary\(\)/);
   });
 
   it("every suggestion in both menus carries one", () => {

@@ -9,10 +9,13 @@ import { describe, expect, it } from "vitest";
 import {
   FORBIDDEN_FLAGS,
   SUBSCRIPTION_KILL_LIST,
+  assertAgentSubscription,
   assertSubscription,
+  authArgsFor,
   planAgentSpawn,
   resolveAgent,
   safeEnv,
+  threadIdFromAgentEvent,
 } from "./agents.mjs";
 
 const FOLDER = "C:\\Users\\Kuya\\code\\sentinel-console";
@@ -90,6 +93,8 @@ describe("auth is checked, never assumed", () => {
     const v = assertSubscription({ loggedIn: true, apiProvider: "firstParty", subscriptionType: "max", email: "k@example.com" });
     expect(v.ok).toBe(true);
     expect(v.plan).toBe("max");
+    expect(v).not.toHaveProperty("account");
+    expect(JSON.stringify(v)).not.toContain("k@example.com");
   });
 
   it("refuses a logged-in account with no subscription — that is the API-billing case", () => {
@@ -112,6 +117,17 @@ describe("auth is checked, never assumed", () => {
     expect(assertSubscription("not json at all").ok).toBe(false);
     expect(assertSubscription("not json at all").code).toBe("AUTH_UNREADABLE");
     expect(assertSubscription(null).ok).toBe(false);
+  });
+
+  it("accepts Codex only when its own CLI confirms the ChatGPT login", () => {
+    expect(assertAgentSubscription("codex", "Logged in using ChatGPT")).toMatchObject({ ok: true, plan: "chatgpt" });
+    expect(assertAgentSubscription("codex", "Logged in using an API key")).toMatchObject({ ok: false, code: "METERED_PROVIDER" });
+    expect(assertAgentSubscription("codex", "")).toMatchObject({ ok: false, code: "AUTH_UNREADABLE" });
+  });
+
+  it("uses each installed CLI's real account-status command", () => {
+    expect(authArgsFor("claude")).toEqual(["auth", "status", "--json"]);
+    expect(authArgsFor("codex")).toEqual(["login", "status"]);
   });
 });
 
@@ -143,11 +159,37 @@ describe("both agents are driven the same way, which is what makes handoff a but
     expect(p.args).toEqual(expect.arrayContaining(["-p", "--input-format", "stream-json", "--output-format", "stream-json"]));
     expect(p.args).toEqual(expect.arrayContaining(["--resume", "abc-123"]));
     expect(p.args).toEqual(expect.arrayContaining(["--model", "sonnet", "--effort", "low"]));
+    expect(p.args).toEqual(expect.arrayContaining(["--permission-mode", "plan"]));
   });
 
-  it("codex runs in the same folder, streams json, and resumes by id", () => {
-    const p = planAgentSpawn({ agent: "codex", folder: FOLDER, threadId: "def-456", exists });
-    expect(p.args).toEqual(expect.arrayContaining(["exec", "resume", "def-456", "--json", "-C", FOLDER]));
+  it("codex puts outer exec flags before resume, matching the installed parser", () => {
+    const p = planAgentSpawn({ agent: "codex", folder: FOLDER, threadId: "def-456", model: "gpt-5.6-sol", effort: "high", prompt: "continue", exists });
+    expect(p.args).toEqual([
+      "exec", "--json", "-C", FOLDER,
+      "--sandbox", "read-only",
+      "resume", "def-456",
+      "--model", "gpt-5.6-sol",
+      "-c", "model_reasoning_effort=high",
+      "continue",
+    ]);
+  });
+
+  it("refuses a model or effort that belongs to the other agent", () => {
+    expect(planAgentSpawn({ agent: "codex", folder: FOLDER, model: "opus", exists })).toMatchObject({ ok: false, code: "UNSUPPORTED_MODEL" });
+    expect(planAgentSpawn({ agent: "claude", folder: FOLDER, effort: "ultra", exists })).toMatchObject({ ok: false, code: "UNSUPPORTED_EFFORT" });
+  });
+
+  it("takes the real thread id from the CLI event instead of trusting a browser UUID", () => {
+    expect(threadIdFromAgentEvent("codex", { type: "thread.started", thread_id: "real-codex-id" })).toBe("real-codex-id");
+    expect(threadIdFromAgentEvent("claude", { type: "system", subtype: "init", session_id: "real-claude-id" })).toBe("real-claude-id");
+    expect(threadIdFromAgentEvent("codex", { type: "item.completed" })).toBeNull();
+  });
+
+  it("does not accept a caller-minted Claude session id", () => {
+    const extraArgs = Object.assign([], { sessionId: "browser-made-id" });
+    const p = planAgentSpawn({ agent: "claude", folder: FOLDER, extraArgs, exists });
+    expect(p.args).not.toContain("--session-id");
+    expect(p.args).not.toContain("browser-made-id");
   });
 
   it("both always run INSIDE the task folder — that is what removes the copy-paste", () => {

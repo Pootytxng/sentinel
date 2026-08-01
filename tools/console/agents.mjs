@@ -50,6 +50,18 @@ export const FORBIDDEN_FLAGS = new Map([
   ["--max-budget-usd", "--max-budget-usd is an API-dollar cap; on a subscription it is meaningless, so its presence means something switched to API billing."],
 ]);
 
+/** Values confirmed against the installed CLIs on 2026-08-01. Empty means use the owner's default. */
+export const AGENT_OPTIONS = {
+  claude: {
+    models: new Set(["", "fable", "opus", "sonnet"]),
+    efforts: new Set(["", "low", "medium", "high", "xhigh", "max"]),
+  },
+  codex: {
+    models: new Set(["", "gpt-5.6-sol", "gpt-5.6-terra"]),
+    efforts: new Set(["", "low", "medium", "high", "xhigh", "ultra", "max"]),
+  },
+};
+
 /**
  * Where each CLI actually lives on this machine.
  *
@@ -106,7 +118,7 @@ export function safeEnv(parent = process.env) {
  * JSON, resume by id. That symmetry is why the console can offer "hand this to the other agent"
  * as a button rather than as a copy-paste.
  *
- *   claude  -p --input-format stream-json --output-format stream-json --session-id <uuid>
+ *   claude  -p --input-format stream-json --output-format stream-json [--resume <id>]
  *   codex   exec --json -C <folder> [resume <id>]
  *
  * @returns {{ok:true, file, args, cwd, env, stripped, agent}|{ok:false, code, reason}}
@@ -134,6 +146,13 @@ export function planAgentSpawn({
     if (why) return { ok: false, code: "FORBIDDEN_FLAG", reason: why };
   }
 
+  if (model && !AGENT_OPTIONS[agent].models.has(model)) {
+    return { ok: false, code: "UNSUPPORTED_MODEL", reason: `${model} is not a model confirmed for ${agent} on this machine.` };
+  }
+  if (effort && !AGENT_OPTIONS[agent].efforts.has(effort)) {
+    return { ok: false, code: "UNSUPPORTED_EFFORT", reason: `${effort} is not an effort level confirmed for ${agent} on this machine.` };
+  }
+
   const found = resolve(agent, { env, exists });
   if (!found.ok) return { ok: false, code: "AGENT_MISSING", reason: found.error };
 
@@ -147,15 +166,16 @@ export function planAgentSpawn({
       "--output-format", "stream-json",
       "--include-partial-messages",
       "--verbose",
+      "--permission-mode", "plan",
     ];
     if (threadId) args.push("--resume", threadId);
-    else if (extraArgs.sessionId) args.push("--session-id", extraArgs.sessionId);
     if (model) args.push("--model", model);
     if (effort) args.push("--effort", effort);
   } else {
-    args = ["exec", "--json", "-C", folder];
-    if (threadId) args = ["exec", "resume", threadId, "--json", "-C", folder];
+    args = ["exec", "--json", "-C", folder, "--sandbox", "read-only"];
+    if (threadId) args.push("resume", threadId);
     if (model) args.push("--model", model);
+    if (effort) args.push("-c", `model_reasoning_effort=${effort}`);
     if (prompt) args.push(prompt);
   }
   args.push(...extraArgs.filter((a) => typeof a === "string"));
@@ -188,5 +208,38 @@ export function assertSubscription(rawStatus) {
   if (!s.subscriptionType) {
     return { ok: false, code: "NO_SUBSCRIPTION", reason: "signed in, but no subscription is attached — usage would be billed to the API account." };
   }
-  return { ok: true, plan: s.subscriptionType, account: s.email ?? null };
+  return { ok: true, plan: s.subscriptionType };
+}
+
+/** The installed commands that answer the only billing question that matters: who pays? */
+export function authArgsFor(agent) {
+  if (agent === "claude") return ["auth", "status", "--json"];
+  if (agent === "codex") return ["login", "status"];
+  return null;
+}
+
+/** Apply the same fail-closed subscription rule to both vendors' different status formats. */
+export function assertAgentSubscription(agent, rawStatus) {
+  if (agent === "claude") return assertSubscription(rawStatus);
+  if (agent !== "codex") return { ok: false, code: "UNKNOWN_AGENT", reason: `cannot verify billing for ${agent}.` };
+
+  const text = String(rawStatus ?? "").trim();
+  if (!text) return { ok: false, code: "AUTH_UNREADABLE", reason: "codex login status returned no account information." };
+  if (/logged in using chatgpt/i.test(text)) return { ok: true, plan: "chatgpt" };
+  if (/api key|openai_api_key|azure/i.test(text)) {
+    return { ok: false, code: "METERED_PROVIDER", reason: "Codex is using API credentials instead of the ChatGPT subscription." };
+  }
+  return { ok: false, code: "AUTH_UNREADABLE", reason: "Codex did not confirm a ChatGPT subscription login, so the Console will not guess who pays." };
+}
+
+/** Read the durable conversation id from each CLI's own first stream event. */
+export function threadIdFromAgentEvent(agent, event) {
+  if (!event || typeof event !== "object") return null;
+  if (agent === "codex" && event.type === "thread.started" && typeof event.thread_id === "string") {
+    return event.thread_id || null;
+  }
+  if (agent === "claude" && event.type === "system" && event.subtype === "init" && typeof event.session_id === "string") {
+    return event.session_id || null;
+  }
+  return null;
 }
