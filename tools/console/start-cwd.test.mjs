@@ -41,17 +41,44 @@ describe("start.ps1 never leaves a process pinning a disposable directory", () =
     }
   });
 
-  it("the browser is handed a directory nobody will ever delete — NOT the repo", () => {
+  it("EVERY browser launch is handed a directory nobody will ever delete — NOT the repo", () => {
+    // Two of them now: the --app window, and the default-browser fallback. A fix applied to only
+    // one of a pair of branches is the oldest way a fixed bug comes back.
     const browser = invocations().filter(({ line }) => /\$url\b/.test(line));
-    expect(browser.length, "no browser launch found to check").toBe(1);
+    expect(browser.length, "no browser launch found to check").toBeGreaterThanOrEqual(2);
 
-    const [{ line, n }] = browser;
-    expect(line, `start.ps1:${n} would pin the repo open`).not.toMatch(
-      /-WorkingDirectory\s+\$repo\b/,
-    );
-    expect(line, `start.ps1:${n} must aim the browser somewhere disposable-safe`).toMatch(
-      /-WorkingDirectory\s+\$env:USERPROFILE\b/,
-    );
+    for (const { line, n } of browser) {
+      expect(line, `start.ps1:${n} would pin the repo open`).not.toMatch(/-WorkingDirectory\s+\$repo\b/);
+      expect(line, `start.ps1:${n} must aim the browser somewhere disposable-safe`).toMatch(
+        /-WorkingDirectory\s+\$env:USERPROFILE\b/,
+      );
+    }
+  });
+
+  // The owner asked for an admin console, not a browser tab. `--app=` is what makes it read as one.
+  it("opens as an application window when Chrome or Edge is present", () => {
+    expect(START_PS1).toMatch(/--app=\$url/);
+    expect(START_PS1).toMatch(/chrome\.exe/);
+    expect(START_PS1).toMatch(/msedge\.exe/);
+    // …and still opens SOMETHING when neither is installed.
+    expect(START_PS1).toMatch(/else \{\s*\n\s*Start-Process \$url -WorkingDirectory \$env:USERPROFILE/);
+  });
+
+  // Two PowerShell traps, both hit for real while writing the block above, both silent in review
+  // and loud at launch. The script runs under $ErrorActionPreference='Stop', so either one does not
+  // degrade — it kills the launch.
+  it("resolves ProgramFiles(x86) in a form that cannot read as null", () => {
+    // `${env:ProgramFiles(x86)}` evaluated to $null here; Join-Path then THREW rather than skipping
+    // a browser that is not installed, so the console came up with no window at all.
+    expect(START_PS1).not.toMatch(/\$\{env:ProgramFiles\(x86\)\}/);
+    expect(START_PS1).toMatch(/GetEnvironmentVariable\('ProgramFiles\(x86\)'\)/);
+  });
+
+  it("collects the candidate browsers as an ARRAY, so indexing cannot slice a string", () => {
+    // A foreach yielding one path collapses to a scalar, and $scalar[0] is its first CHARACTER —
+    // PowerShell then tried to start a program named "C".
+    expect(START_PS1).toMatch(/\$appBrowsers = @\(foreach/);
+    expect(START_PS1).toMatch(/\$appBrowsers\.Count -gt 0/);
   });
 
   it("the SERVER, by contrast, still runs in the repo — it has to resolve tools/console from there", () => {
