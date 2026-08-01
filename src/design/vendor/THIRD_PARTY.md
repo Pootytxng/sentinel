@@ -95,3 +95,30 @@ Full text: `src/design/fonts/OFL.txt`. Variable-weight woff2 (wght 100–900), v
   resolved motion preference (`:root[data-motion="reduced"]` freezes it).
 - **Mono law:** Geist Mono on machine values only (numbers, hashes, timestamps, units).
 - Components render only inside `compy_v2` surfaces until a stage ships default-ON.
+
+## Bklit UI — chart / data-visualization engine (added 2026-08-01)
+
+Source: shadcn registry `@bklit` → `https://ui.bklit.com/r/{name}.json` (Vercel OSS program).
+Registered in `components.json`, so future components install natively:
+`npx shadcn@latest add @bklit/bar-chart`
+
+Vendored 2026-08-01 (11 registry items, 70 files) at the registry's native paths:
+`src/charts/**`, `src/lib/utils.ts`, `src/components/shimmering-text.tsx`.
+Installed: `@bklit/line-chart`, `@bklit/area-chart` and their registry dependencies
+(chart-context, chart-animation, chart-series, chart-tooltip, chart-utils, grid, x-axis,
+shimmering-text, utils).
+
+**Why this is Tailwind-free.** Bklit charts render through `@visx/*` SVG primitives plus
+`motion` (already a Compy dependency) and inline style / CSS-variable theming. Across all of
+`area-chart`'s files exactly two Tailwind utility classes appear (`text-sm`, `font-medium`, in
+`chart-loading-label.tsx`). Compy therefore did NOT adopt Tailwind — those two classes are the
+only port surface. `cn()` in `src/lib/utils.ts` uses clsx + tailwind-merge; with no Tailwind
+classes in play twMerge is an effective passthrough.
+
+Path alias `@/*` → `./src/*` was added to `tsconfig.json` and `vite.config.ts` to satisfy the
+registry's `@/lib/utils` import convention (standard shadcn setup).
+
+## anime.js v4 (added 2026-08-01)
+
+`animejs@^4.5.0`, npm. Motion engine for the JARVIS interaction layer. Sits alongside the
+existing `gsap` and `motion` dependencies — see the design doctrine for which to reach for.
