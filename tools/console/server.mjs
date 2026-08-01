@@ -17,6 +17,7 @@ import { promisify } from "node:util";
 
 import { snapshot, CODE_ROOT, CONTROL_DIR } from "./sources.mjs";
 import { assertAgentSubscription, authArgsFor, planAgentSpawn, threadIdFromAgentEvent } from "./agents.mjs";
+import { createNativeChatStore } from "./chats.mjs";
 import { PROVIDERS, addIdea, addLink, providerOf, readNotes, remove } from "./notes.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -188,11 +189,12 @@ export function createConsoleServer({
   subscriptionCheck = verifyPlanSubscription,
   launchProcess = startDetachedProcess,
   launcherExists = existsSync,
+  chatStore = createNativeChatStore({ codeRoot: CODE_ROOT }),
 } = {}) {
   return createServer(async (req, res) => {
     const url = new URL(req.url, `http://${HOST}`);
     try {
-      if (ORIGIN_GUARDED_ROUTES.has(url.pathname) && !trustedOrigin(req)) {
+      if ((ORIGIN_GUARDED_ROUTES.has(url.pathname) || url.pathname.startsWith("/api/chats")) && !trustedOrigin(req)) {
         return send(res, 403, { error: "This request did not come from the local Compy Console.", code: "FOREIGN_ORIGIN" });
       }
 
@@ -203,6 +205,16 @@ export function createConsoleServer({
       // The whole world, read fresh. No caching layer on purpose — see sources.mjs.
       if (url.pathname === "/api/state") {
         return send(res, 200, snapshot());
+      }
+
+      if (url.pathname === "/api/chats" && req.method === "GET") {
+        return send(res, 200, chatStore.list());
+      }
+
+      const chatMatch = /^\/api\/chats\/(claude|codex)\/([0-9a-f-]+)$/i.exec(url.pathname);
+      if (chatMatch && req.method === "GET") {
+        const chat = chatStore.get(chatMatch[1].toLowerCase(), chatMatch[2]);
+        return chat ? send(res, 200, chat) : send(res, 404, { error: "chat not found" });
       }
 
       if (url.pathname === "/api/chat" && req.method === "POST") {

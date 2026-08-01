@@ -207,11 +207,24 @@ select{background:var(--panel-2);color:var(--text);border:1px solid var(--line-s
 @keyframes spin{to{transform:rotate(360deg)}}
 .working .el{font-family:var(--mono);font-size:11px;opacity:.8;margin-left:auto}
 
+/* ── saved chats: a calm index over the CLIs' own history ─────────────────── */
+.chat-list{display:grid;gap:10px;max-width:920px}
+.chat-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:15px 16px;
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center;transition:border-color .14s ease}
+.chat-card:hover{border-color:var(--accent-line)}
+.chat-card .ct{font:560 14px/1.45 var(--sans);letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-card .cm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;color:var(--faint);font:400 11.5px var(--mono);margin-top:7px}
+.chat-card .cm .agent{font:600 9px var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--accent);
+  background:var(--accent-dim);border-radius:5px;padding:2px 6px}
+.chat-card .acts{align-self:center}
+
 /* ── the hotbar: what is running, and what wants you ──────────────────────── */
 .hotbar{display:flex;align-items:center;gap:10px;padding:0 30px;height:38px;border-bottom:1px solid var(--line);
   background:var(--panel);flex:none}
-.hotbar .live{display:flex;align-items:center;gap:7px;font:450 12px var(--sans);color:var(--muted)}
+.hotbar .live{display:flex;align-items:center;gap:7px;font:450 12px var(--sans);color:var(--muted);
+  background:transparent;border:0;padding:5px 3px;border-radius:var(--r-sm)}
 .hotbar .live.on{color:var(--warn)}
+.hotbar button.live{cursor:pointer}.hotbar button.live:hover{color:var(--text);background:var(--line)}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
 .dot.g{background:var(--ok);box-shadow:0 0 7px var(--ok)}
 .dot.a{background:var(--warn);box-shadow:0 0 7px var(--warn)}
@@ -315,6 +328,7 @@ body[data-view="ch"] .body{max-width:1060px;margin:0 auto;padding:30px 34px 34px
     </div>
     <nav aria-label="Compy Console">
       <button class="on" data-t="ch"><span class="ico">●</span>Now</button>
+      <button data-t="hs"><span class="ico">◌</span>Chats<span class="pip" id="p-hs">–</span></button>
       <button data-t="wk"><span class="ico">▤</span>Work<span class="pip" id="p-wk">–</span></button>
       <details class="rail-more" id="railMore">
         <summary>Details</summary>
@@ -337,7 +351,7 @@ body[data-view="ch"] .body{max-width:1060px;margin:0 auto;padding:30px 34px 34px
 
   <main>
     <div class="hotbar">
-      <span class="live" id="liveState"><span class="dot" id="liveDot"></span><span id="liveText">Idle</span></span>
+      <button class="live" id="liveState" type="button" aria-label="Return to the current chat"><span class="dot" id="liveDot"></span><span id="liveText">Idle</span></button>
       <button class="bell" id="bell"><span class="dot" id="bellDot"></span><span id="bellText">—</span></button>
     </div>
     <div class="alerts" id="alerts"></div>
@@ -381,6 +395,11 @@ body[data-view="ch"] .body{max-width:1060px;margin:0 auto;padding:30px 34px 34px
           </div>
         </div>
       </section>
+      <section class="pane" id="hs">
+        <h2>Your chats</h2>
+        <p class="lede">Answers stay here when you leave the page. Open one to read it again or continue the exact Claude or Codex conversation.</p>
+        <div class="chat-list" id="chatList"></div>
+      </section>
       <section class="pane" id="ov"></section>
       <section class="pane" id="wk"></section>
       <section class="pane" id="ds"></section>
@@ -408,9 +427,9 @@ body[data-view="ch"] .body{max-width:1060px;margin:0 auto;padding:30px 34px 34px
 
 <script>
 // ── The page holds no state beyond the snapshot it just fetched ──────────────────────────────
-// `S` is replaced wholesale by a fresh read; `N` is the owner's own notes. Every render starts
-// from those two. Nothing is computed once and remembered.
-let S = null, N = { ideas: [], links: [] };
+// `S` is replaced wholesale by a fresh read; `N` is the owner's own notes; `H` is a read-only
+// projection of the native Claude/Codex session stores. The Console owns no transcript database.
+let S = null, N = { ideas: [], links: [] }, H = { ok: true, items: [] };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
 const when = (iso) => { try { return new Date(iso).toLocaleDateString(undefined,{month:"short",day:"numeric"}); } catch { return ""; } };
@@ -424,11 +443,15 @@ const post = (path, body) => fetch(path, { method:"POST", headers:{"content-type
 async function load() {
   $("stamp").textContent = "reading…";
   try {
-    const [state, notes] = await Promise.all([
+    const [state, notes, chats] = await Promise.all([
       fetch("/api/state").then((r) => r.json()),
       fetch("/api/notes").then((r) => r.json()),
+      fetch("/api/chats").then(async (r) => r.ok
+        ? ({ ok: true, items: await r.json() })
+        : ({ ok: false, error: `history unavailable (${r.status})`, items: [] }))
+        .catch((error) => ({ ok: false, error: String(error?.message ?? error), items: [] })),
     ]);
-    S = state; N = { ideas: notes.ideas ?? [], links: notes.links ?? [] };
+    S = state; N = { ideas: notes.ideas ?? [], links: notes.links ?? [] }; H = chats;
   } catch {
     $("stamp").innerHTML = `<span class="unreach">server unreachable</span>`;
     return;
@@ -450,6 +473,7 @@ function render() {
   $("stamp").textContent = new Date(S.generatedAt).toLocaleTimeString();
   const pip = (id, n, cls) => { const e = $(id); e.textContent = n; e.className = "pip " + (cls || ""); };
   pip("p-wk", S.work.startable ?? "–", S.work.startable ? "ok" : "bad");
+  pip("p-hs", H.ok ? H.items.length : "!", H.ok ? (H.items.length ? "ok" : "") : "bad");
   pip("p-ds", N.links.length, "");
   pip("p-id", N.ideas.length, N.ideas.length ? "warn" : "");
   pip("p-dc", decisions, "warn");
@@ -465,7 +489,7 @@ function render() {
     ["CI", ci.meaningful ? `<span class="ok">live</span>` : `<span class="bd">blocked</span>`, ci.meaningful ? "verdicts are real" : "verdicts mean nothing"],
   ].map(([l, v, s]) => `<div class="v"><div class="lab">${l}</div><div class="val">${v}</div><div class="sub">${s}</div></div>`).join("");
 
-  renderChat(); renderOverview(ci); renderWork(); renderDiscussions(); renderIdeas(); renderDecisions(ci); renderLost();
+  renderChat(); renderChats(); renderOverview(ci); renderWork(); renderDiscussions(); renderIdeas(); renderDecisions(ci); renderLost();
   paintBell(); paintLive();
 }
 
@@ -782,6 +806,77 @@ function renderLost() {
       : `<div class="empty">Nothing is unaccounted for.</div>`}`;
 }
 
+// ── chats: native history, not a Console transcript database ────────────────────────────────
+function renderChats() {
+  const box = $("chatList");
+  if (!H.ok) {
+    box.innerHTML = `<div class="empty"><span class="unreach">Chat history is unreachable — ${esc(H.error)}</span></div>`;
+    return;
+  }
+  if (!H.items.length) {
+    box.innerHTML = `<div class="empty">No Claude or Codex chats were found in your project folders yet.</div>`;
+    return;
+  }
+  box.innerHTML = H.items.map((chat) => `<article class="chat-card">
+    <div>
+      <div class="ct">${esc(chat.title)}</div>
+      <div class="cm"><span class="agent">${esc(chat.agent)}</span><span>${esc(chat.project)}</span>
+        <span>${esc(when(chat.updatedAt))}</span><span>${chat.messageCount} message${chat.messageCount === 1 ? "" : "s"}</span></div>
+    </div>
+    <div class="acts"><button class="btn pri" data-chat-agent="${esc(chat.agent)}" data-chat-id="${esc(chat.id)}">Open chat</button></div>
+  </article>`).join("");
+  for (const button of box.querySelectorAll("[data-chat-id]")) {
+    button.addEventListener("click", () => openSavedChat(button.dataset.chatAgent, button.dataset.chatId));
+  }
+}
+
+async function openSavedChat(agent, id) {
+  if (chatAbort) {
+    $("chatGuard").textContent = "The current answer is still running — stop it before opening another chat.";
+    switchTo("ch");
+    return;
+  }
+  const response = await fetch(`/api/chats/${encodeURIComponent(agent)}/${encodeURIComponent(id)}`);
+  if (chatAbort) {
+    $("chatGuard").textContent = "The current answer is still running — stop it before opening another chat.";
+    switchTo("ch");
+    return;
+  }
+  if (!response.ok) {
+    $("chatList").insertAdjacentHTML("afterbegin", `<div class="note bad"><div><b>That chat could not be opened.</b><p>Its native session record may have moved or become unreadable.</p></div></div>`);
+    return;
+  }
+  const chat = await response.json();
+  if (chatAbort) {
+    $("chatGuard").textContent = "The current answer is still running — stop it before opening another chat.";
+    switchTo("ch");
+    return;
+  }
+  const folder = $("chatFolder");
+  const canResume = [...folder.options].some((option) => option.value === chat.folder);
+  if (canResume) folder.value = chat.folder;
+  $("chatAgent").value = chat.agent;
+  paintModelOptions();
+  syncRouteSummary();
+  thread = { id: chat.id };
+  $("chatLog").innerHTML = "";
+  for (const message of chat.messages) {
+    bubble(message.role === "user" ? "you" : chat.agent, message.role === "user" ? "me" : "").textContent = message.text;
+  }
+  const historyLabel = chat.truncated
+    ? `Restored the most recent ${esc(chat.shownMessageCount)} of ${esc(chat.messageCount)} saved messages · continue below`
+    : "This is the exact saved conversation · continue below";
+  $("sugg").innerHTML = `<div class="sugg-lab">${historyLabel}</div>`;
+  $("chatGuard").textContent = canResume
+    ? `Restored from ${chat.agent === "claude" ? "Claude" : "Codex"} history · ready to continue · no API credentials`
+    : "Transcript restored · its original project folder is no longer available, so continuing is disabled";
+  $("chatBox").value = "";
+  $("chatBox").disabled = !canResume;
+  $("chatSend").disabled = !canResume;
+  switchTo("ch");
+  if (canResume) $("chatBox").focus();
+}
+
 // ── navigation ───────────────────────────────────────────────────────────────────────────────
 function switchTo(id) {
   document.body.dataset.view = id;
@@ -790,6 +885,7 @@ function switchTo(id) {
 }
 document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => switchTo(b.dataset.t)));
 $("refresh").addEventListener("click", load);
+$("liveState").addEventListener("click", () => switchTo("ch"));
 
 // ── suggested actions ────────────────────────────────────────────────────────────────────────
 // The owner, on first real use: "im clicking the buttons like start and run the launcher and
@@ -948,8 +1044,8 @@ function paintLive() {
       ? `${live[0].label} — ${secs(Date.now() - oldest)}`
       : `${live.length} things running — longest ${secs(Date.now() - oldest)}`;
   }
-  // The chat's own bar mirrors the state of the SEND button, right where the disabled button is.
-  const busy = $("chatSend").disabled;
+  // Disabled can also mean "this old folder is unavailable". Only a live process means working.
+  const busy = Boolean(chatAbort);
   $("chatWorking").classList.toggle("hide", !busy);
   if (busy && chatStarted) $("chatElapsed").textContent = secs(Date.now() - chatStarted);
 }
@@ -1033,6 +1129,11 @@ document.addEventListener("click", (e) => {
 
 /** One click, one answer: aim the chat and send, no second step. */
 function askNow(folder, prompt) {
+  if (chatAbort) {
+    $("chatGuard").textContent = "The current answer is still running — stop it before asking something else.";
+    switchTo("ch");
+    return;
+  }
   const sel = $("chatFolder");
   if (folder && [...sel.options].some((o) => o.value === folder)) sel.value = folder;
   switchTo("ch");
@@ -1044,17 +1145,32 @@ function askNow(folder, prompt) {
 // ── the conversation: one thread at a time, running inside the folder you picked ─────────────
 let thread = { id: null };
 
+function lockChatRoute(locked) {
+  for (const id of ["chatNew", "chatFolder", "chatAgent", "chatModel", "chatEffort"]) $(id).disabled = locked;
+}
+
 /** Start over: forget the thread id so the next message opens a new session in the CLI. */
 function newThread(note) {
+  if (chatAbort) {
+    $("chatGuard").textContent = "The current answer is still running — stop it before starting another chat.";
+    switchTo("ch");
+    return false;
+  }
   thread = { id: null };
+  $("chatBox").disabled = false;
+  $("chatSend").disabled = false;
   $("chatLog").innerHTML = `<div class="welcome">
     <div class="mini-signal">C</div>
     <h3>${note ? esc(note) : "Start anywhere."}</h3>
     <p>Describe the outcome in your own words, ask what needs attention, or type a work number like <b>18</b>.
       Compy already knows where the project lives.</p>
   </div>`;
+  return true;
 }
-$("chatNew").addEventListener("click", () => { newThread(); $("chatBox").value = ""; folderSuggestions(); $("chatBox").focus(); });
+$("chatNew").addEventListener("click", () => {
+  if (!newThread()) return;
+  $("chatBox").value = ""; folderSuggestions(); $("chatBox").focus();
+});
 // A thread is a session in ONE folder with ONE agent. Carrying its id across a switch would resume
 // the wrong conversation in the wrong place, so both reset it — visibly, rather than silently.
 $("chatFolder").addEventListener("change", () => { syncRouteSummary(); newThread("Route changed."); $("chatBox").value = ""; folderSuggestions(); });
@@ -1068,6 +1184,11 @@ paintModelOptions();
  * was missing — a prompt already written for THIS item, plus two other ways to come at it.
  */
 function openChat(folder, item) {
+  if (chatAbort) {
+    $("chatGuard").textContent = "The current answer is still running — stop it before opening other work.";
+    switchTo("ch");
+    return;
+  }
   const sel = $("chatFolder");
   if ([...sel.options].some((o) => o.value === folder)) sel.value = folder;
   newThread(item ? `#${item.number} — ${item.title}.` : undefined);
@@ -1115,6 +1236,7 @@ async function send(preset) {
   $("chatSend").textContent = "Working…";
   chatStarted = Date.now();
   chatAbort = new AbortController();
+  lockChatRoute(true);
   $("chatWorkingText").textContent = `${agent === "claude" ? "Claude" : "Codex"} is working — you can't send another until it finishes`;
   $("chatWorking").classList.remove("hide");
   const act = actStart(`${agent === "claude" ? "Claude" : "Codex"} is answering`);
@@ -1140,7 +1262,9 @@ async function send(preset) {
             ? `Read-only conversation · subscription protected · removed ${d.stripped.join(", ")} from this run`
             : "Read-only conversation · subscription protected · no API credentials";
         }
-        if (ev === "thread" && d.threadId) thread.id = d.threadId;
+        if (ev === "thread" && d.threadId) {
+          thread.id = d.threadId;
+        }
         if (ev === "event") {
           const c = d?.message?.content ?? d?.delta ?? null;
           if (typeof c === "string") out.textContent += c;
@@ -1161,6 +1285,7 @@ async function send(preset) {
     out.classList.remove("thinking");
     actEnd(act);
     chatAbort = null; chatStarted = 0;
+    lockChatRoute(false);
     $("chatSend").disabled = false;
     $("chatSend").textContent = "Send";
     $("chatWorking").classList.add("hide");
