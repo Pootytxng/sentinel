@@ -20,7 +20,13 @@
 // is the same defect wearing a different hat.
 
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+// win32 semantics, for the same reason tools/entry pins them: these are WINDOWS paths to Windows
+// executables. My own test caught this — with the platform default, `join("C:\\Users\\Kuya", ...)`
+// produces "C:\Users\Kuya/.codex/..." off-Windows, the injected `exists` never matches, and
+// resolution silently falls through to the bare name as if the CLI were on PATH. I wrote the same
+// defect I had just spent the night removing from the launcher.
+import { win32 as winpath } from "node:path";
+const { join } = winpath;
 import { homedir } from "node:os";
 
 /** Anything that could route a request to metered API billing instead of the logged-in subscription. */

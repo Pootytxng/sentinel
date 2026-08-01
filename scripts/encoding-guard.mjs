@@ -23,11 +23,51 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
-const cp1252 = new TextDecoder("windows-1252");
+// bug->guard (CI, 2026-08-01): this table used to be built by asking
+// `new TextDecoder("windows-1252")` what each byte decodes to. That decoder is NOT dependable — it
+// depends on how the running Node was built against ICU, and it fails SILENTLY:
+//
+//   node v20   0x80 -> U+0080   0x94 -> U+0094     <- Latin-1 fallback, no windows-1252 table
+//   node v22   0x80 -> U+20AC   0x94 -> U+201D     <- correct
+//
+// CI pins Node 20. So on the exact runtime that is supposed to be enforcing this rule, the map had
+// no entry for the euro sign or the curly quotes — precisely the characters mojibake is made of —
+// and both `findMojibake` and `recoverMojibake` quietly saw nothing. A guard against silent
+// corruption, silently corrupted. It did not throw and it did not warn; it just stopped finding
+// anything, which is the worst failure mode a guard has.
+//
+// The 0x80–0x9F range is the ONLY place windows-1252 differs from Latin-1, and it is a fixed,
+// published 32-entry table. Written out rather than derived, for the same reason the test builds its
+// fixture "from code points, not pasted": a constant cannot be mis-decoded.
+const CP1252_HIGH = {
+  0x80: "€", 0x82: "‚", 0x83: "ƒ", 0x84: "„", 0x85: "…",
+  0x86: "†", 0x87: "‡", 0x88: "ˆ", 0x89: "‰", 0x8a: "Š",
+  0x8b: "‹", 0x8c: "Œ", 0x8e: "Ž", 0x91: "‘", 0x92: "’",
+  0x93: "“", 0x94: "”", 0x95: "•", 0x96: "–", 0x97: "—",
+  0x98: "˜", 0x99: "™", 0x9a: "š", 0x9b: "›", 0x9c: "œ",
+  0x9e: "ž", 0x9f: "Ÿ",
+  // 0x81, 0x8d, 0x8f, 0x90 and 0x9d are absent here ON PURPOSE, and the fallback below is what
+  // makes that correct. Vendor windows-1252 leaves them undefined, but the WHATWG encoding standard
+  // — which is what `TextDecoder("windows-1252")` implements, and therefore what every other tool
+  // touching these files agrees with — maps them to their C1 control characters. My first version
+  // dropped them, and `peels layered corruption` went red immediately: a table that disagrees with
+  // the platform is a different bug wearing the fix's clothes.
+};
+
+/**
+ * byte -> character, matching TextDecoder("windows-1252") on a Node whose ICU has the table.
+ * Total by construction: the 0x80–0x9F specials come from CP1252_HIGH, and every other byte —
+ * including the five WHATWG passes straight through — is its own code point.
+ */
+const cp1252Char = (b) => CP1252_HIGH[b] ?? String.fromCharCode(b);
+
 const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
 
 const CP1252_BYTE = new Map();
-for (let b = 0; b < 256; b += 1) CP1252_BYTE.set(cp1252.decode(Uint8Array.of(b)), b);
+for (let b = 0; b < 256; b += 1) {
+  const ch = cp1252Char(b);
+  if (ch !== undefined) CP1252_BYTE.set(ch, b);
+}
 
 const SCANNED_EXTENSIONS = new Set([
   ".md", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json", ".jsonc",
@@ -38,7 +78,9 @@ const SCANNED_EXTENSIONS = new Set([
 const utf8SequenceLength = (byte) =>
   byte >= 0xc2 && byte <= 0xdf ? 2 : byte >= 0xe0 && byte <= 0xef ? 3 : byte >= 0xf0 && byte <= 0xf4 ? 4 : 0;
 
-const reEncode = (char) => cp1252.decode(Buffer.from(char, "utf8"));
+// Same reason as the table above: map the UTF-8 bytes of `char` through OUR windows-1252 table
+// rather than through an ICU table that may not exist on this Node.
+const reEncode = (char) => [...Buffer.from(char, "utf8")].map((b) => cp1252Char(b) ?? "�").join("");
 
 // Walks the text once, recovering every span that proves itself. Returns the repaired text and
 // each recovery so callers can report precise locations.
