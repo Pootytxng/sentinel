@@ -176,6 +176,20 @@ select{background:var(--panel-2);color:var(--text);border:1px solid var(--line-s
 .msg pre{white-space:pre-wrap;font:400 12.5px/1.7 var(--mono);color:#cfd4e2;background:#06070a;
   border:1px solid var(--line);border-radius:var(--r-sm);padding:11px 13px;letter-spacing:-.01em;overflow-x:auto}
 .msg.me pre{background:var(--accent-dim);border-color:var(--accent-line);color:var(--text)}
+/* ── suggested actions ────────────────────────────────────────────────────── */
+/* "i'm clicking the buttons and nothing happens ... it should auto generate and paste the prompt
+   or give me a multiple choice list of how to proceed with suggested actions highlighted." */
+.sugg{border-top:1px solid var(--line);padding:11px var(--pad) 0;display:flex;gap:8px;flex-wrap:wrap;align-items:stretch}
+.sugg-lab{font:600 9.5px var(--sans);letter-spacing:.13em;text-transform:uppercase;color:var(--faint);
+  width:100%;margin-bottom:2px}
+.sugg-chip{background:var(--panel-2);border:1px solid var(--line-strong);border-radius:var(--r-sm);
+  padding:8px 11px;cursor:pointer;text-align:left;max-width:260px;transition:border-color .13s ease,background .13s ease}
+.sugg-chip:hover{border-color:var(--accent-line);background:var(--accent-dim)}
+.sugg-chip .st{font:600 12.5px var(--sans);color:var(--text);letter-spacing:-.01em;display:block}
+.sugg-chip .sd{font:400 11px var(--sans);color:var(--faint);display:block;margin-top:2px;line-height:1.4}
+.sugg-chip.rec{border-color:var(--accent);background:var(--accent-dim);box-shadow:0 0 0 1px var(--accent-line)}
+.sugg-chip.rec .st::after{content:"RECOMMENDED";font:600 8.5px var(--sans);letter-spacing:.12em;
+  color:var(--accent);margin-left:7px;vertical-align:1px}
 .chat-in{border-top:1px solid var(--line);padding:12px var(--pad);display:flex;gap:9px;align-items:flex-end}
 .chat-in textarea{min-height:42px;max-height:170px}
 .thinking::after{content:"▌";animation:blink 1.05s step-end infinite;color:var(--accent)}
@@ -227,6 +241,7 @@ select{background:var(--panel-2);color:var(--text);border:1px solid var(--line-s
           </div>
           <div class="guard" id="chatGuard">subscription only · no API credentials in this process</div>
           <div class="chat-log" id="chatLog"></div>
+          <div class="sugg" id="sugg"></div>
           <div class="chat-in">
             <textarea id="chatBox" rows="1" placeholder="Ask anything. Enter sends, Shift+Enter for a new line."></textarea>
             <button class="btn pri" id="chatSend">Send</button>
@@ -286,9 +301,10 @@ async function load() {
     return;
   }
   render();
-  // Seed the empty log ONCE, after the folder list exists — never on a later refresh, which would
-  // wipe a conversation in progress just because the page re-read the world.
-  if (!seeded) { seeded = true; newThread(); }
+  // Seed the empty log and the suggestion menu ONCE, after the folder list exists — never on a
+  // later refresh, which would wipe a conversation in progress and overwrite a half-typed prompt
+  // just because the page re-read the world.
+  if (!seeded) { seeded = true; newThread(); folderSuggestions(); }
 }
 let seeded = false;
 
@@ -382,8 +398,7 @@ function renderWork() {
         ${a.available ? "" : `<div class="rd">${esc(a.reason)}</div>`}
         <div class="rf">${esc(i.worktreeBranch || "no folder assigned")}</div></div>
       <div class="acts">
-        ${a.available && folder ? `<button class="btn pri" data-open="${esc(folder)}">${esc(a.action)}</button>` : ""}
-        ${!a.available && folder ? `<button class="btn" data-open="${esc(folder)}">Ask about it</button>` : ""}
+        ${folder ? `<button class="btn ${a.available ? "pri" : ""}" data-open="${esc(folder)}" data-item="${i.number}">${a.available ? esc(a.action) : "Ask about it"}</button>` : ""}
         <a class="btn sm" href="https://github.com/Pootytxng/sentinel/issues/${i.number}" target="_blank" rel="noopener">Issue ↗</a>
       </div></div>`;
   }).join("");
@@ -403,12 +418,37 @@ function renderWork() {
       <p>Every open item is either owner-gated or belongs to another lane. That does not stop you asking about any of
       them — <b>Ask about it</b> opens a chat in that item's folder without claiming the work.</p></div></div>`}
     ${rows || `<div class="empty">No open items on the board.</div>`}`;
-  for (const b of $("wk").querySelectorAll("[data-open]")) b.addEventListener("click", () => openChat(b.dataset.open));
+  for (const b of $("wk").querySelectorAll("[data-open]")) {
+    b.addEventListener("click", () => {
+      const raw = S.work.items.find((x) => String(x.number) === b.dataset.item);
+      openChat(b.dataset.open, raw && {
+        number: raw.number, title: raw.title,
+        available: raw.availability.available, reason: raw.availability.reason,
+      });
+    });
+  }
+
+  // The launcher opens a SEPARATE console window, and on a two-monitor desk that window can land
+  // where you are not looking. It then claims work and checks out a branch — real, invisible
+  // consequences. The owner clicked this, a branch and a commit appeared, and the page still showed
+  // the old world: "nothing happens" was actually "everything happened, somewhere else". So say
+  // where it went, leave the message up, and re-read the world so the board catches up on its own.
   $("runLauncher").addEventListener("click", async function () {
     this.disabled = true;
+    this.textContent = "Starting…";
     const r = await post("/api/launcher", {});
-    this.textContent = r.error ? "Could not start" : "Opened — see the new window";
-    setTimeout(() => { this.disabled = false; this.textContent = "Run the launcher"; }, 3000);
+    const note = document.createElement("div");
+    note.className = "note " + (r.error ? "bad" : "warn");
+    note.innerHTML = r.error
+      ? `<div><b>The launcher did not start.</b><p>${esc(r.error)}</p></div>`
+      : `<div><b>A launcher window just opened — it may be on your other monitor.</b>
+           <p>It asks questions while it works, and it can create a branch or a folder before you
+           answer anything. Go find that window. This page will re-read itself in a few seconds so
+           the board shows whatever it did.</p></div>`;
+    this.parentElement.parentElement.insertAdjacentElement("afterend", note);
+    this.textContent = "Run the launcher";
+    this.disabled = false;
+    if (!r.error) setTimeout(load, 6000);
   });
 }
 
@@ -561,6 +601,86 @@ function switchTo(id) {
 document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => switchTo(b.dataset.t)));
 $("refresh").addEventListener("click", load);
 
+// ── suggested actions ────────────────────────────────────────────────────────────────────────
+// The owner, on first real use: "im clicking the buttons like start and run the launcher and
+// nothing happens like it should auto generate and paste the prompt if i click a button like start
+// or give me a multiple choice list of how to proceed with suggested actions highlighted."
+//
+// He is right, and the old Start was worse than nothing: it silently swapped tabs and left an empty
+// box, so the click read as a no-op. A blank prompt box is a blank page — it asks the person who
+// came here for help to do the hardest part first. Every chat now opens with a short menu of real
+// prompts, the recommended one already IN the box, so the minimum action is pressing Enter.
+//
+// The prompts are written to be edited, not obeyed. That is why they land in the box instead of
+// sending: the point is a starting line, not a decision made on his behalf.
+
+const FOLDER_SUGGESTIONS = (folderName) => [
+  { title: "Catch me up", rec: true,
+    hint: "what changed here lately and what it means",
+    prompt: `Catch me up on ${folderName}. What changed recently, what state is it in right now, and is there anything half-finished I should know about? Read before you answer — don't guess.` },
+  { title: "What's broken?",
+    hint: "run the tests, explain failures in plain English",
+    prompt: `Run the tests in this folder. If anything fails, explain in plain English what broke and what it would take to fix — don't fix anything yet.` },
+  { title: "Explain this to me",
+    hint: "the tour, no jargon",
+    prompt: `Give me a tour of ${folderName} like I've never seen it. What is it, what are the main pieces, and where would I look first to change something? Plain language, no jargon.` },
+  { title: "Find the loose ends",
+    hint: "TODOs, dead code, unfinished work",
+    prompt: `Look through this folder for unfinished work — TODOs, dead code, tests that are skipped, things that were started and abandoned. List them, worst first, and say why each one matters.` },
+];
+
+const ITEM_SUGGESTIONS = (item) => {
+  const ref = `#${item.number} (${item.title})`;
+  const startable = item.available;
+  return [
+    { title: startable ? "Plan it first" : "Why is this stuck?", rec: true,
+      hint: startable ? "read it, tell me the plan, change nothing" : "explain the block in plain English",
+      prompt: startable
+        ? `I want to work on ${ref}. Read the issue and this folder, then tell me: what you'd do, in what order, what you'd touch, and what could break. Do NOT change anything yet — I want the plan first.`
+        : `${ref} is on my board but it can't be started: "${item.reason}". Explain what that actually means and what would have to happen to unblock it. Read the repo before answering.` },
+    { title: "Just do it",
+      hint: "implement it end to end, then prove it",
+      prompt: `Implement ${ref} end to end in this folder. Follow the conventions already here rather than inventing new ones. When you think it's done, run the tests and show me the output — I don't want "should work".` },
+    { title: "What already exists?",
+      hint: "the code that already touches this",
+      prompt: `What in this folder already relates to ${ref}? Show me the files, what each one does, and whether any of it already half-solves the problem.` },
+    { title: "Argue against it",
+      hint: "the case for not doing this",
+      prompt: `Make the strongest case that ${ref} is the wrong thing to build, or the wrong time to build it. What would it cost, what would it break, and what should be done instead? Be blunt.` },
+  ];
+};
+
+/** Render the menu. The recommended one is also pre-loaded into the box, so Enter is enough. */
+function setSuggestions(list, { prefill = true } = {}) {
+  const box = $("sugg");
+  if (!list || !list.length) { box.innerHTML = ""; return; }
+  box.innerHTML = `<div class="sugg-lab">Suggested — click one, edit it, press Enter</div>` +
+    list.map((s, i) => `<button class="sugg-chip ${s.rec ? "rec" : ""}" data-sugg="${i}">
+      <span class="st">${esc(s.title)}</span><span class="sd">${esc(s.hint)}</span></button>`).join("");
+  for (const b of box.querySelectorAll("[data-sugg]")) {
+    b.addEventListener("click", () => {
+      const s = list[Number(b.dataset.sugg)];
+      $("chatBox").value = s.prompt;
+      $("chatBox").style.height = "auto";
+      $("chatBox").style.height = Math.min($("chatBox").scrollHeight, 170) + "px";
+      $("chatBox").focus();
+    });
+  }
+  const rec = list.find((s) => s.rec);
+  if (prefill && rec && !$("chatBox").value.trim()) {
+    $("chatBox").value = rec.prompt;
+    $("chatBox").style.height = "auto";
+    $("chatBox").style.height = Math.min($("chatBox").scrollHeight, 170) + "px";
+  }
+}
+
+/** The menu for whatever folder is selected, when no board item aimed us here. */
+function folderSuggestions() {
+  const sel = $("chatFolder");
+  const name = sel.options[sel.selectedIndex]?.textContent?.split(" ")[0] ?? "this folder";
+  setSuggestions(FOLDER_SUGGESTIONS(name));
+}
+
 // ── the conversation: one thread at a time, running inside the folder you picked ─────────────
 let thread = { id: null };
 
@@ -571,17 +691,22 @@ function newThread(note) {
   $("chatLog").innerHTML = `<div class="empty">${note ? esc(note) + " " : ""}A fresh thread in
     <span style="font-family:var(--mono)">${esc(f || "—")}</span>. It can already see the code — nothing to paste.</div>`;
 }
-$("chatNew").addEventListener("click", () => { newThread(); $("chatBox").focus(); });
+$("chatNew").addEventListener("click", () => { newThread(); $("chatBox").value = ""; folderSuggestions(); $("chatBox").focus(); });
 // A thread is a session in ONE folder with ONE agent. Carrying its id across a switch would resume
 // the wrong conversation in the wrong place, so both reset it — visibly, rather than silently.
-$("chatFolder").addEventListener("change", () => newThread("Folder changed."));
+$("chatFolder").addEventListener("change", () => { newThread("Folder changed."); $("chatBox").value = ""; folderSuggestions(); });
 $("chatAgent").addEventListener("change", () => newThread("Agent changed."));
 
-/** The board's Start button lands here: same chat, folder preselected. */
-function openChat(folder) {
+/**
+ * The board's Start / Ask about it lands here: same chat, folder preselected, and — the part that
+ * was missing — a prompt already written for THIS item, plus three other ways to come at it.
+ */
+function openChat(folder, item) {
   const sel = $("chatFolder");
   if ([...sel.options].some((o) => o.value === folder)) sel.value = folder;
-  newThread();
+  newThread(item ? `#${item.number} — ${item.title}.` : undefined);
+  $("chatBox").value = "";
+  if (item) setSuggestions(ITEM_SUGGESTIONS(item)); else folderSuggestions();
   switchTo("ch");
   $("chatBox").focus();
 }

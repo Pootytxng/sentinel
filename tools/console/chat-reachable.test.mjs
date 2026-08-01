@@ -60,13 +60,18 @@ describe("the chat is a destination, not a reward", () => {
   });
 
   it("still lets a board item aim it — Start preselects the folder rather than owning the chat", () => {
-    expect(PAGE).toMatch(/function openChat\(folder\)/);
+    expect(PAGE).toMatch(/function openChat\(folder, item\)/);
     expect(PAGE).toMatch(/switchTo\("ch"\)/);
   });
 
   it("offers a chat on gated items too — asking about work is not claiming it", () => {
     const work = /function renderWork\(\)[\s\S]*?\n}/.exec(PAGE)?.[0] ?? "";
-    expect(work).toMatch(/!a\.available && folder \? `<button[^`]*data-open=/);
+    // One button per item that HAS a folder, regardless of startability: the label and the emphasis
+    // change with availability, the existence of a way to ask does not.
+    expect(work).toMatch(/\$\{folder \? `<button class="btn \$\{a\.available \? "pri" : ""\}"/);
+    expect(work).toMatch(/a\.available \? esc\(a\.action\) : "Ask about it"/);
+    // …and it must not have gone back to only rendering for available items.
+    expect(work).not.toMatch(/a\.available && folder \? `<button/);
   });
 });
 
