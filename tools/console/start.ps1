@@ -50,4 +50,10 @@ if (Test-Console) {
   Write-Host "  up at $url" -ForegroundColor Green
 }
 
-if (-not $NoBrowser) { Start-Process $url }
+# bug->guard: a browser INHERITS the launching shell's working directory and holds it for its whole
+# lifetime. Launched bare, `Start-Process $url` handed Firefox a cwd of $repo, which pinned that
+# folder open -- `git worktree remove` then failed with ERROR_SHARING_VIOLATION on a directory that
+# was already empty, and the only way to free it was killing the user's browser. Any worktree the
+# console has ever been opened from becomes undeletable until the browser closes. Hand the browser
+# a directory nobody will ever want to remove instead.
+if (-not $NoBrowser) { Start-Process $url -WorkingDirectory $env:USERPROFILE }
