@@ -6,14 +6,48 @@ name: CI
 #
 # Cost note (ZERO-BUDGET LAW): the Rust job runs on windows-latest (2x minute multiplier) because
 # the crate pulls Windows-only deps (windows / winreg / wmi / ferrisetw / runas / adlx) and will not
-# compile elsewhere. The frontend + audit jobs run on ubuntu-latest (1x) to keep minutes down.
+# compile elsewhere. The frontend job runs on ubuntu-latest (1x) to keep minutes down.
 # Triggers are scoped to main + PRs only (not every branch push). Caches keep re-runs cheap.
+#
+# ---------------------------------------------------------------------------------------------
+# 2026-08-01, measured: THIS WORKFLOW EXHAUSTED THE FREE ALLOWANCE AND STOPPED CI FOR 22 DAYS.
+#
+# July's actual usage, from GitHub's own metrics (1,650 raw minutes / 366 job runs):
+#
+#   job                              runner    raw    x    BILLED
+#   Dependency audit (informational) ubuntu    645    1      645   <- moved to audit.yml, weekly
+#   Rust (test + clippy)             windows   545    2    1,090
+#   Frontend (test + build)          ubuntu    460    1      460
+#                                                          -----
+#                                                          2,195   vs 2,000 included
+#
+# It ran out on 9 July. Every run afterwards was rejected before a runner was assigned -- 7 seconds,
+# zero steps, zero billable ms -- which surfaces as three red X's on every PR that no test produced.
+# A dead gate that LOOKS like a failing gate is worse than an absent one, so the cost of this file
+# is now part of its contract and `scripts/ci-budget-guard.test.mjs` fails the build if it drifts.
+#
+# Fix 1 (here): 226 of July's 535 commits to main -- 42% -- touched ONLY docs and markdown. Those
+# cannot change what a test proves, so they no longer start runners.
+# Fix 2 (audit.yml): the informational audit was the largest single consumer and is
+# `continue-on-error`, so it can never fail a build. Weekly is enough for a dependency advisory.
+# ---------------------------------------------------------------------------------------------
 
+# The two paths-ignore lists are written out twice on purpose. A YAML anchor/alias would be the
+# obvious de-duplication, but GitHub Actions' workflow parser does not support anchors, and a
+# workflow that silently fails to parse is precisely the invisible-outage failure this whole change
+# exists to prevent. ci-budget-guard.test.mjs asserts both blocks carry the list, so they cannot
+# drift apart unnoticed.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
 
 # Cancel superseded runs on the same ref to save minutes.
 concurrency:
@@ -54,21 +88,3 @@ jobs:
         run: npm test
       - name: type-check + build
         run: npm run build
-
-  audit:
-    name: Dependency audit (informational)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - name: npm audit (high+)
-        run: npm audit --audit-level=high
-      - uses: dtolnay/rust-toolchain@stable
-      - name: cargo audit
-        run: |
-          cargo install cargo-audit --locked
-          cargo audit --file src-tauri/Cargo.lock
