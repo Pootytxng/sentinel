@@ -51,7 +51,7 @@ describe("the chat is a destination, not a reward", () => {
   });
 
   it("sends to the folder the PICKER names, not to a folder a board item handed it", () => {
-    const send = /async function send\(\)[\s\S]*?\n}/.exec(PAGE)?.[0] ?? "";
+    const send = /async function send\([^)]*\)[\s\S]*?\n}/.exec(PAGE)?.[0] ?? "";
     expect(send, "send() not found").not.toBe("");
     expect(send).toMatch(/\$\("chatFolder"\)\.value/);
     // The old shape: `if (!text || !thread.folder) return;` — a silent refusal whenever no board

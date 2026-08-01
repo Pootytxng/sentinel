@@ -187,6 +187,7 @@ select{background:var(--panel-2);color:var(--text);border:1px solid var(--line-s
 .sugg-chip:hover{border-color:var(--accent-line);background:var(--accent-dim)}
 .sugg-chip .st{font:600 12.5px var(--sans);color:var(--text);letter-spacing:-.01em;display:block}
 .sugg-chip .sd{font:400 11px var(--sans);color:var(--faint);display:block;margin-top:2px;line-height:1.4}
+.sugg-chip .sb{font:450 10px var(--mono);color:var(--accent);display:block;margin-top:5px;letter-spacing:-.01em}
 .sugg-chip.rec{border-color:var(--accent);background:var(--accent-dim);box-shadow:0 0 0 1px var(--accent-line)}
 .sugg-chip.rec .st::after{content:"RECOMMENDED";font:600 8.5px var(--sans);letter-spacing:.12em;
   color:var(--accent);margin-left:7px;vertical-align:1px}
@@ -194,6 +195,54 @@ select{background:var(--panel-2);color:var(--text);border:1px solid var(--line-s
 .chat-in textarea{min-height:42px;max-height:170px}
 .thinking::after{content:"▌";animation:blink 1.05s step-end infinite;color:var(--accent)}
 @keyframes blink{50%{opacity:0}}
+
+/* ── live status ──────────────────────────────────────────────────────────── */
+/* "i tried to send it but it was greyed out at first now its lit again ... i had no idea why."
+   A control that disables itself without saying why is the machine going quiet on you. */
+.working{display:flex;align-items:center;gap:9px;padding:7px var(--pad);border-bottom:1px solid var(--line);
+  background:var(--warn-dim);color:var(--warn);font:450 12px var(--sans)}
+.working.hide{display:none}
+.spin{width:11px;height:11px;border:2px solid var(--warn);border-right-color:transparent;border-radius:50%;
+  animation:spin .7s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.working .el{font-family:var(--mono);font-size:11px;opacity:.8;margin-left:auto}
+
+/* ── the hotbar: what is running, and what wants you ──────────────────────── */
+.hotbar{display:flex;align-items:center;gap:10px;padding:0 30px;height:38px;border-bottom:1px solid var(--line);
+  background:var(--panel);flex:none}
+.hotbar .live{display:flex;align-items:center;gap:7px;font:450 12px var(--sans);color:var(--muted)}
+.hotbar .live.on{color:var(--warn)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
+.dot.g{background:var(--ok);box-shadow:0 0 7px var(--ok)}
+.dot.a{background:var(--warn);box-shadow:0 0 7px var(--warn)}
+.dot.r{background:var(--bad);box-shadow:0 0 7px var(--bad)}
+.dot.pulse{animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+.bell{margin-left:auto;position:relative;display:flex;align-items:center;gap:7px;background:transparent;
+  border:1px solid var(--line-strong);border-radius:var(--r-sm);padding:4px 10px;cursor:pointer;
+  font:600 11.5px var(--sans);color:var(--text)}
+.bell:hover{border-color:var(--accent-line)}
+.bell.r{border-color:var(--bad);color:var(--bad)} .bell.a{border-color:var(--warn);color:var(--warn)}
+.bell.g{border-color:var(--ok);color:var(--ok)}
+.alerts{position:absolute;top:38px;right:30px;width:min(560px,86vw);max-height:70vh;overflow-y:auto;
+  background:var(--panel);border:1px solid var(--line-strong);border-radius:var(--r);z-index:60;
+  box-shadow:0 22px 60px var(--shadow);display:none}
+.alerts.on{display:block;animation:fade .16s ease}
+.alert{padding:13px 15px;border-bottom:1px solid var(--line);display:flex;gap:11px;align-items:flex-start}
+.alert:last-child{border-bottom:none}
+.alert .at{font:600 13px var(--sans);color:var(--text);letter-spacing:-.01em}
+.alert .aw{font:400 12px/1.5 var(--sans);color:var(--muted);margin-top:3px}
+.alert .aa{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
+
+/* ── batch runs ───────────────────────────────────────────────────────────── */
+.pick{display:flex;align-items:center;gap:9px}
+.pick input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+.run{border:1px solid var(--line-strong);border-radius:var(--r);margin-bottom:11px;overflow:hidden;background:var(--panel)}
+.run-h{display:flex;align-items:center;gap:9px;padding:10px 13px;border-bottom:1px solid var(--line)}
+.run-h .rn{font:600 13px var(--sans);flex:1;letter-spacing:-.01em}
+.run-out{font:400 11.5px/1.6 var(--mono);color:#aeb6c4;background:#06070a;padding:10px 13px;
+  max-height:230px;overflow-y:auto;white-space:pre-wrap;letter-spacing:-.01em}
+.run.done{border-color:var(--ok-line,var(--ok))} .run.failed{border-color:var(--bad)}
 </style>
 </head>
 <body>
@@ -208,6 +257,7 @@ select{background:var(--panel-2);color:var(--text);border:1px solid var(--line-s
       <div class="navgroup">Work</div>
       <button data-t="ov"><span class="ico">◈</span>Overview</button>
       <button data-t="wk"><span class="ico">▤</span>Board<span class="pip" id="p-wk">–</span></button>
+      <button data-t="rn"><span class="ico">⣿</span>Runs<span class="pip" id="p-rn">0</span></button>
       <div class="navgroup">Thinking</div>
       <button data-t="ds"><span class="ico">◇</span>Discussions<span class="pip" id="p-ds">–</span></button>
       <button data-t="id"><span class="ico">✎</span>Ideas<span class="pip" id="p-id">–</span></button>
@@ -224,6 +274,11 @@ select{background:var(--panel-2);color:var(--text);border:1px solid var(--line-s
   </aside>
 
   <main>
+    <div class="hotbar">
+      <span class="live" id="liveState"><span class="dot" id="liveDot"></span><span id="liveText">Idle</span></span>
+      <button class="bell" id="bell"><span class="dot" id="bellDot"></span><span id="bellText">—</span></button>
+    </div>
+    <div class="alerts" id="alerts"></div>
     <div class="vitals" id="vitals"></div>
     <div class="scroll"><div class="body">
       <section class="pane on" id="ch">
@@ -235,11 +290,16 @@ select{background:var(--panel-2);color:var(--text);border:1px solid var(--line-s
           <div class="chat-head">
             <select id="chatFolder" style="flex:1;min-width:210px"></select>
             <select id="chatAgent"><option value="claude">Claude</option><option value="codex">Codex</option></select>
-            <select id="chatModel"><option value="">model · default</option><option value="sonnet">sonnet</option><option value="opus">opus</option></select>
-            <select id="chatEffort"><option value="">effort · default</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select>
+            <select id="chatModel"></select>
+            <select id="chatEffort"></select>
             <button class="btn sm" id="chatNew">New thread</button>
           </div>
           <div class="guard" id="chatGuard">subscription only · no API credentials in this process</div>
+          <div class="working hide" id="chatWorking">
+            <span class="spin"></span><span id="chatWorkingText">Working…</span>
+            <span class="el" id="chatElapsed">0s</span>
+            <button class="btn sm" id="chatStop">Stop</button>
+          </div>
           <div class="chat-log" id="chatLog"></div>
           <div class="sugg" id="sugg"></div>
           <div class="chat-in">
@@ -250,6 +310,7 @@ select{background:var(--panel-2);color:var(--text);border:1px solid var(--line-s
       </section>
       <section class="pane" id="ov"></section>
       <section class="pane" id="wk"></section>
+      <section class="pane" id="rn"></section>
       <section class="pane" id="ds"></section>
       <section class="pane" id="id"></section>
       <section class="pane" id="dc"></section>
@@ -333,7 +394,8 @@ function render() {
     ["CI", ci.meaningful ? `<span class="ok">live</span>` : `<span class="bd">blocked</span>`, ci.meaningful ? "verdicts are real" : "verdicts mean nothing"],
   ].map(([l, v, s]) => `<div class="v"><div class="lab">${l}</div><div class="val">${v}</div><div class="sub">${s}</div></div>`).join("");
 
-  renderChat(); renderOverview(ci); renderWork(); renderDiscussions(); renderIdeas(); renderDecisions(ci); renderLost();
+  renderChat(); renderOverview(ci); renderWork(); renderRuns(); renderDiscussions(); renderIdeas(); renderDecisions(ci); renderLost();
+  paintBell(); paintLive();
 }
 
 // ── Chat ─────────────────────────────────────────────────────────────────────────────────────
@@ -352,10 +414,13 @@ function renderChat() {
 // ── Overview ─────────────────────────────────────────────────────────────────────────────────
 function renderOverview(ci) {
   const banner = ci.meaningful ? "" : `<div class="note bad"><div>
-    <b>GitHub Actions is not running your tests.</b>
-    <p>${esc(ci.reason || "")} Every red check on every pull request is therefore meaningless — no test produced it.
-    This is a payment setting, not a defect in your code. Until it clears, the local audit is your only real gate.</p></div>
-    <a class="btn pri" href="https://github.com/settings/billing" target="_blank" rel="noopener">Open GitHub billing</a></div>`;
+    <b>Nothing is actually testing your code right now.</b>
+    <p>${esc(ci.reason || "")} Every red check you can see was produced by no test at all.
+    This is a payment setting, not a defect in your code. Until it clears, the audit on this machine is your only real gate.</p></div>
+    <div class="acts">
+      <button class="btn pri" id="ciExplain">Explain it to me</button>
+      <button class="btn" id="ciAudit">Run the audit here</button>
+    </div></div>`;
 
   const kv = (k, v) => `<div class="kv"><span class="k">${k}</span><span class="val">${v}</span></div>`;
   const branches = V(S.branches) || [];
@@ -383,6 +448,13 @@ function renderOverview(ci) {
         ${kv("Stashes", (V(S.host.stashes) || []).length === 0 ? `<span class="ok">none</span>` : (V(S.host.stashes) || []).length)}
       </div>
     </div>`;
+
+  if (!ci.meaningful) {
+    const HOST = (V(S.folders) || []).find((f) => f.host)?.path || "";
+    $("ciExplain").addEventListener("click", () => askNow(HOST,
+      `GitHub Actions is not executing my CI. The console reports: "${ci.reason}". Explain what that means, what it is costing me, and exactly what I have to do about it. Assume I do not know how GitHub works — plain English, no jargon, and tell me if it is something only I can click.`));
+    $("ciAudit").addEventListener("click", () => { switchTo("au"); $("runAudit").click(); });
+  }
 }
 
 // ── Board ────────────────────────────────────────────────────────────────────────────────────
@@ -392,14 +464,17 @@ function renderWork() {
     const a = i.availability;
     const folder = (i.worktreeBranch || "").split(" @ ")[0] || "";
     return `<div class="row ${a.available ? "go" : (i.status === "Needs Kuya" || i.gate === "Kuya" ? "stop" : "hold")}">
-      <div><div class="rt">#${i.number} ${esc(i.title)}
-        <span class="tag ${a.available ? "g" : "a"}">${esc(i.status)}</span>
-        <span class="tag">${esc(i.lane || "unassigned")}</span></div>
-        ${a.available ? "" : `<div class="rd">${esc(a.reason)}</div>`}
-        <div class="rf">${esc(i.worktreeBranch || "no folder assigned")}</div></div>
+      <div class="pick" style="flex:1">
+        ${a.available && folder ? `<input type="checkbox" data-batch="${i.number}" title="include in a bulk run">` : `<span style="width:16px;flex:none"></span>`}
+        <div><div class="rt">#${i.number} ${esc(i.title)}
+          <span class="tag ${a.available ? "g" : "a"}">${esc(i.status)}</span>
+          <span class="tag">${esc(i.lane || "unassigned")}</span></div>
+          ${a.available ? "" : `<div class="rd">${esc(a.reason)}</div>`}
+          <div class="rf">${esc(i.worktreeBranch || "no folder assigned")}</div></div>
+      </div>
       <div class="acts">
         ${folder ? `<button class="btn ${a.available ? "pri" : ""}" data-open="${esc(folder)}" data-item="${i.number}">${a.available ? esc(a.action) : "Ask about it"}</button>` : ""}
-        <a class="btn sm" href="https://github.com/Pootytxng/sentinel/issues/${i.number}" target="_blank" rel="noopener">Issue ↗</a>
+        <button class="btn sm" data-explain="${i.number}">Explain it</button>
       </div></div>`;
   }).join("");
   $("wk").innerHTML = `<h2>Board</h2>
@@ -417,7 +492,71 @@ function renderWork() {
     ${S.work.startable ? "" : `<div class="note warn"><div><b>Nothing is startable right now.</b>
       <p>Every open item is either owner-gated or belongs to another lane. That does not stop you asking about any of
       them — <b>Ask about it</b> opens a chat in that item's folder without claiming the work.</p></div></div>`}
+    <div class="sec"><div class="sec-h">Bulk run</div>
+      <div class="card">
+        <div id="batchPlan" style="font-size:13px;color:var(--muted);line-height:1.6">
+          Tick the boxes on any green items above. The console will tell you which of them can run
+          <b>at the same time</b> and which have to wait — and it is not a guess.
+        </div>
+        <div class="acts" style="margin-top:12px">
+          <button class="btn pri" id="batchGo" disabled>Run these together</button>
+          <button class="btn" id="batchClear">Clear</button>
+        </div>
+      </div>
+    </div>
     ${rows || `<div class="empty">No open items on the board.</div>`}`;
+
+  // Which ticked items may run side by side. One run per FOLDER, never two — a worktree is a
+  // separate checkout, so two agents in different folders cannot see, let alone overwrite, each
+  // other's files. Two in the same folder would fight over one working tree.
+  const picked = () => [...$("wk").querySelectorAll("[data-batch]:checked")]
+    .map((c) => S.work.items.find((x) => String(x.number) === c.dataset.batch)).filter(Boolean);
+
+  function paintPlan() {
+    const p = picked();
+    const { parallel, queued } = planBatch(p);
+    $("batchGo").disabled = parallel.length === 0;
+    $("batchGo").textContent = parallel.length > 1
+      ? `Run ${parallel.length} at the same time` : parallel.length === 1 ? "Run it" : "Run these together";
+    $("batchPlan").innerHTML = p.length === 0
+      ? `Tick the boxes on any green items above. The console will tell you which of them can run
+         <b>at the same time</b> and which have to wait — and it is not a guess.`
+      : `<div><span class="dot g" style="display:inline-block;margin-right:7px"></span>
+           <b>${parallel.length} can run at once</b> — ${parallel.map((x) => "#" + x.item.number).join(", ")}.
+           Each one is in its own folder, so they cannot touch the same files.</div>
+         ${queued.length ? `<div style="margin-top:7px"><span class="dot a" style="display:inline-block;margin-right:7px"></span>
+           <b>${queued.length} must wait</b> — ${queued.map((x) => "#" + x.item.number).join(", ")}.
+           ${queued.length === 1 ? "It shares" : "They share"} a folder with something already in the batch, and two agents in one folder collide.</div>` : ""}`;
+  }
+
+  for (const c of $("wk").querySelectorAll("[data-batch]")) c.addEventListener("change", paintPlan);
+  $("batchClear").addEventListener("click", () => {
+    for (const c of $("wk").querySelectorAll("[data-batch]")) c.checked = false;
+    paintPlan();
+  });
+  $("batchGo").addEventListener("click", async function () {
+    const { parallel } = planBatch(picked());
+    this.disabled = true;
+    switchTo("rn");
+    await Promise.all(parallel.map(({ folder, item }) => startRun({
+      folder, agent: $("chatAgent").value,
+      label: `#${item.number} ${item.title}`,
+      prompt: `Work on #${item.number} ("${item.title}") in this folder. Read the issue and the code first. Follow the conventions already here rather than inventing new ones. When you believe it is done, run the tests and show me the output — do not tell me it "should work". If you hit something that needs my decision, stop and say so instead of guessing.`,
+    })));
+    this.disabled = false;
+  });
+  paintPlan();
+
+  // "anything gated or needing review should not take me to github ... idk wtf github even does."
+  for (const b of $("wk").querySelectorAll("[data-explain]")) {
+    b.addEventListener("click", () => {
+      const i = S.work.items.find((x) => String(x.number) === b.dataset.explain);
+      const HOST = (V(S.folders) || []).find((f) => f.host)?.path || "";
+      const folder = (i.worktreeBranch || "").split(" @ ")[0] || HOST;
+      askNow(folder, `Explain #${i.number} ("${i.title}") to me. Use gh to read the issue. What is being asked for, why does it matter, what would it touch, and what would "done" look like? Assume I do not know how GitHub works — plain English, no jargon.`);
+    });
+  }
+
   for (const b of $("wk").querySelectorAll("[data-open]")) {
     b.addEventListener("click", () => {
       const raw = S.work.items.find((x) => String(x.number) === b.dataset.item);
@@ -450,6 +589,126 @@ function renderWork() {
     this.disabled = false;
     if (!r.error) setTimeout(load, 6000);
   });
+}
+
+// ── Runs: several at once, only where they cannot collide ────────────────────────────────────
+// "what task allow for me to bundle together into one big bulk run or mutiple parallel runs that
+// are guaranteed not to conflict or collide."
+//
+// There IS a guarantee available here, and it is not a guess. Every work item names its own folder,
+// and each folder is a separate git worktree — its own checkout, its own working files, its own
+// branch. Two agents in two different worktrees cannot touch the same file, because they are not
+// looking at the same files. Two agents in the SAME folder absolutely can, and would.
+//
+// So the rule is exactly one line: one run per folder, and never two. Everything below is that rule
+// made visible. Nothing is bundled on a hope.
+const RUNS = [];
+let runSeq = 0;
+
+function planBatch(picked) {
+  const byFolder = new Map();
+  for (const i of picked) {
+    const folder = (i.worktreeBranch || "").split(" @ ")[0] || "";
+    if (!folder) continue;
+    if (!byFolder.has(folder)) byFolder.set(folder, []);
+    byFolder.get(folder).push(i);
+  }
+  const parallel = [], queued = [];
+  for (const [folder, items] of byFolder) {
+    parallel.push({ folder, item: items[0] });
+    for (const later of items.slice(1)) queued.push({ folder, item: later });
+  }
+  return { parallel, queued };
+}
+
+function renderRuns() {
+  const busy = RUNS.filter((r) => r.status === "running").length;
+  $("p-rn").textContent = RUNS.length;
+  $("p-rn").className = "pip " + (busy ? "warn" : RUNS.some((r) => r.status === "failed") ? "bad" : RUNS.length ? "ok" : "");
+  $("rn").innerHTML = `<h2>Runs</h2>
+    <p class="lede">Everything the console has started, live. Each run is one agent working in one folder.
+      Two runs never share a folder — that is the whole reason they can be trusted side by side.</p>
+    <div id="runList">${RUNS.length ? "" : `<div class="empty">Nothing has been run yet. Pick work on the Board and press <b>Run these together</b>.</div>`}</div>`;
+  const list = $("runList");
+  for (const r of RUNS) list.appendChild(r.el);
+}
+
+function newRunCard(r) {
+  const el = document.createElement("div");
+  el.className = "run";
+  el.innerHTML = `<div class="run-h">
+      <span class="dot a pulse"></span>
+      <span class="rn">${esc(r.label)}</span>
+      <span class="tag" style="font-family:var(--mono)">${esc(r.folder.split("\\").pop())}</span>
+      <span class="tag" data-el>0s</span>
+      <button class="btn sm" data-stop>Stop</button>
+    </div><div class="run-out" data-out>starting…</div>`;
+  el.querySelector("[data-stop]").addEventListener("click", () => r.ctrl?.abort());
+  return el;
+}
+
+function setRunState(r, status) {
+  r.status = status;
+  const dot = r.el.querySelector(".dot");
+  const stop = r.el.querySelector("[data-stop]");
+  dot.className = "dot " + (status === "running" ? "a pulse" : status === "done" ? "g" : "r");
+  r.el.classList.remove("done", "failed");
+  if (status !== "running") { r.el.classList.add(status); stop.remove(); }
+  renderRuns();
+}
+
+async function startRun({ folder, label, prompt, agent }) {
+  if (RUNS.some((r) => r.status === "running" && r.folder === folder)) {
+    return { skipped: true, why: "already running in that folder" };
+  }
+  const r = { id: ++runSeq, folder, label, status: "running", started: Date.now(), ctrl: new AbortController() };
+  r.el = newRunCard(r);
+  RUNS.unshift(r);
+  renderRuns();
+  const act = actStart(label);
+  const out = r.el.querySelector("[data-out]");
+  const tick = setInterval(() => { r.el.querySelector("[data-el]").textContent = secs(Date.now() - r.started); }, 1000);
+  out.textContent = "";
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST", headers: { "content-type": "application/json" }, signal: r.ctrl.signal,
+      body: JSON.stringify({ agent, folder, message: prompt, threadId: null, sessionId: crypto.randomUUID() }),
+    });
+    if (!res.ok || !res.body) { out.textContent = "refused — " + (await res.text()); setRunState(r, "failed"); return { ok: false }; }
+    const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const frames = buf.split("\n\n"); buf = frames.pop() ?? "";
+      for (const f of frames) {
+        const ev = /^event: (.+)$/m.exec(f)?.[1]; const dm = /^data: (.+)$/m.exec(f)?.[1];
+        if (!ev || !dm) continue;
+        let d; try { d = JSON.parse(dm); } catch { continue; }
+        if (ev === "event") {
+          const c = d?.message?.content ?? d?.delta ?? null;
+          if (typeof c === "string") out.textContent += c;
+          else if (Array.isArray(c)) for (const p of c) {
+            if (p.type === "text") out.textContent += p.text;
+            if (p.type === "tool_use") out.textContent += `\n[${p.name}]\n`;
+          }
+          else if (d?.type === "item.completed" && d?.item?.text) out.textContent += d.item.text;
+        }
+        if (ev === "text" || ev === "stderr") out.textContent += d.text;
+        if (ev === "fatal") out.textContent += "\n" + d.error;
+        out.scrollTop = out.scrollHeight;
+      }
+    }
+    setRunState(r, "done");
+    return { ok: true };
+  } catch (e) {
+    out.textContent += String(e?.name) === "AbortError" ? "\n\n— stopped by you —" : `\n\n${String(e?.message ?? e)}`;
+    setRunState(r, "failed");
+    return { ok: false };
+  } finally {
+    clearInterval(tick);
+    actEnd(act);
+    load();
+  }
 }
 
 // ── Discussions ──────────────────────────────────────────────────────────────────────────────
@@ -553,30 +812,53 @@ function renderIdeas() {
 
 // ── Decisions ────────────────────────────────────────────────────────────────────────────────
 function renderDecisions(ci) {
+  // Nothing here sends you to github.com. "idk wtf github even does or how it works and i dont want
+  // to i jsut know i need it" — so the answer is an agent that can read it and explain it in this
+  // window, not a link to a site whose vocabulary is the actual barrier.
+  const HOST = (V(S.folders) || []).find((f) => f.host)?.path || "";
   const parts = [];
-  if (!ci.meaningful) parts.push(`<div class="row stop"><div>
-    <div class="rt">GitHub Actions billing <span class="tag r">blocks everything</span></div>
-    <div class="rd">${esc(ci.reason || "")} Until this clears, no pull request can show a real green, and merging means
-      trusting the local audit alone.</div></div>
-    <div class="acts"><a class="btn pri" href="https://github.com/settings/billing" target="_blank" rel="noopener">Open billing</a></div></div>`);
+  const asks = [];
+  const row = (cls, title, why, meta, actions) => {
+    const base = asks.length;
+    asks.push(...actions);
+    parts.push(`<div class="row ${cls}"><div>
+      <div class="rt">${title}</div>
+      <div class="rd">${esc(why)}</div>
+      ${meta ? `<div class="rf">${esc(meta)}</div>` : ""}</div>
+      <div class="acts">${actions.map((a, n) =>
+        `<button class="btn ${n === 0 ? "pri" : "sm"}" data-dec="${base + n}">${esc(a.label)}</button>`).join("")}</div></div>`);
+  };
 
-  for (const p of V(S.pulls) || []) {
-    parts.push(`<div class="row hold"><div>
-      <div class="rt">Merge pull request #${p.number}${p.draft ? ` <span class="tag a">draft</span>` : ""}
-        <span class="tag ${p.mergeable === "MERGEABLE" ? "g" : "r"}">${esc(p.mergeable || "unknown")}</span></div>
-      <div class="rd">${esc(p.title)}</div>
-      <div class="rf">${esc(p.branch)}${ci.meaningful ? "" : " · checks unverifiable while CI is blocked"}</div></div>
-      <div class="acts"><a class="btn" href="https://github.com/Pootytxng/sentinel/pull/${p.number}" target="_blank" rel="noopener">Review</a></div></div>`);
-  }
-  for (const i of (S.work.items || []).filter((x) => !x.availability.available)) {
-    parts.push(`<div class="row hold"><div>
-      <div class="rt">#${i.number} ${esc(i.title)} <span class="tag a">${esc(i.status)}</span></div>
-      <div class="rd">${esc(i.availability.reason)}</div></div>
-      <div class="acts"><a class="btn" href="https://github.com/Pootytxng/sentinel/issues/${i.number}" target="_blank" rel="noopener">Open</a></div></div>`);
-  }
+  if (!ci.meaningful) row("stop",
+    `Your tests are not running <span class="tag r">nothing is being checked</span>`,
+    `${ci.reason || ""} Until this clears, every green and every red you see was produced by no test at all.`,
+    null,
+    [{ label: "Explain it to me", folder: HOST, ask: `GitHub Actions is not executing my CI. The console reports: "${ci.reason}". Explain what that means, what it is costing me, and exactly what I have to do — assume I do not know how GitHub works. No jargon.` },
+     { label: "Check it again now", folder: HOST, ask: `Check whether GitHub Actions is actually executing my workflows right now. Use gh to look at the most recent runs and tell me whether real jobs ran or whether they were rejected before starting. Answer in plain English.` }]);
+
+  for (const p of V(S.pulls) || []) row("hold",
+    `A finished change is waiting for you — #${p.number}${p.draft ? ` <span class="tag a">draft</span>` : ""}
+      <span class="tag ${p.mergeable === "MERGEABLE" ? "g" : "r"}">${p.mergeable === "MERGEABLE" ? "ready to merge" : esc(p.mergeable || "unknown")}</span>`,
+    p.title,
+    `${p.branch}${ci.meaningful ? "" : " · its checks mean nothing while CI is blocked"}`,
+    [{ label: "What is this change?", folder: HOST, ask: `Explain pull request #${p.number} ("${p.title}") to me. Use gh to read it and the diff. What does it change, why, what could break, and would you merge it? Assume I do not know how GitHub works — plain English.` },
+     { label: "Review it properly", folder: HOST, ask: `Read pull request #${p.number} and review it: correctness, anything unfinished, anything risky, anything that contradicts the conventions in this repo. Give me a verdict with reasons. Do NOT merge it.` }]);
+
+  for (const i of (S.work.items || []).filter((x) => !x.availability.available)) row("hold",
+    `#${i.number} ${esc(i.title)} <span class="tag a">${esc(i.status)}</span>`,
+    i.availability.reason,
+    i.worktreeBranch || null,
+    [{ label: "Why is it stuck?", folder: (i.worktreeBranch || "").split(" @ ")[0] || HOST,
+       ask: `#${i.number} ("${i.title}") cannot be started: "${i.availability.reason}". Explain what that actually means and what would have to change to unblock it. Read the repo before answering.` }]);
+
   $("dc").innerHTML = `<h2>Waiting on you</h2>
-    <p class="lede">Everything that cannot move without a decision only you can make.</p>
+    <p class="lede">Everything that cannot move without a decision only you can make. Nothing here sends you to
+      GitHub — the buttons ask an agent that can already read all of it to explain it here, in English.</p>
     ${parts.join("") || `<div class="empty">Nothing is waiting on you.</div>`}`;
+
+  for (const b of $("dc").querySelectorAll("[data-dec]")) {
+    b.addEventListener("click", () => { const a = asks[Number(b.dataset.dec)]; askNow(a.folder, a.ask); });
+  }
 }
 
 // ── Lost &amp; found ─────────────────────────────────────────────────────────────────────────
@@ -614,18 +896,60 @@ $("refresh").addEventListener("click", load);
 // The prompts are written to be edited, not obeyed. That is why they land in the box instead of
 // sending: the point is a starting line, not a decision made on his behalf.
 
+// The options each CLI actually accepts on THIS machine, read from `claude --help` and
+// ~/.codex/config.toml on 2026-08-01 rather than guessed:
+//   claude --model  fable | opus | sonnet        --effort  low medium high xhigh max
+//   codex  -m       gpt-5.6-sol | gpt-5.6-terra  (enabled-reasoning-efforts in his own config)
+const MODELS = {
+  claude: [["", "model · your default"], ["opus", "opus — deepest"], ["sonnet", "sonnet — fast"], ["fable", "fable"]],
+  codex: [["", "model · your default"], ["gpt-5.6-sol", "gpt-5.6-sol — his main"], ["gpt-5.6-terra", "gpt-5.6-terra — lighter"]],
+};
+const EFFORTS = {
+  claude: [["", "effort · default"], ["low", "low — quick"], ["medium", "medium"], ["high", "high"], ["xhigh", "xhigh — hardest"], ["max", "max"]],
+  codex: [["", "effort · default"], ["low", "low — quick"], ["medium", "medium"], ["high", "high"], ["xhigh", "xhigh"], ["max", "max"]],
+};
+
+const fill = (sel, pairs) => {
+  const keep = sel.value;
+  sel.innerHTML = pairs.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join("");
+  if (pairs.some(([v]) => v === keep)) sel.value = keep;
+};
+function paintModelOptions() {
+  const a = $("chatAgent").value;
+  fill($("chatModel"), MODELS[a] ?? MODELS.claude);
+  fill($("chatEffort"), EFFORTS[a] ?? EFFORTS.claude);
+}
+
+/** Apply a suggestion's recommended rig. Called only when he clicks it — never silently. */
+function applyBest(best) {
+  if (!best) return;
+  if (best.agent) $("chatAgent").value = best.agent;
+  paintModelOptions();
+  $("chatModel").value = best.model ?? "";
+  $("chatEffort").value = best.effort ?? "";
+}
+const bestLabel = (b) => b ? `★ ${b.agent === "codex" ? "Codex" : "Claude"} · ${b.model || "default"} · ${b.effort || "default"}` : "";
+
+// Which rig suits which job. These are my judgement, not measurements: cheap-and-fast for reading
+// and summarising, the heavy model where a wrong answer costs a day, and the OTHER vendor when the
+// whole point is a second opinion — an argument against a plan is worth more from a model that did
+// not help write it.
 const FOLDER_SUGGESTIONS = (folderName) => [
   { title: "Catch me up", rec: true,
     hint: "what changed here lately and what it means",
+    best: { agent: "claude", model: "sonnet", effort: "medium" },
     prompt: `Catch me up on ${folderName}. What changed recently, what state is it in right now, and is there anything half-finished I should know about? Read before you answer — don't guess.` },
   { title: "What's broken?",
     hint: "run the tests, explain failures in plain English",
+    best: { agent: "claude", model: "sonnet", effort: "medium" },
     prompt: `Run the tests in this folder. If anything fails, explain in plain English what broke and what it would take to fix — don't fix anything yet.` },
   { title: "Explain this to me",
     hint: "the tour, no jargon",
+    best: { agent: "claude", model: "sonnet", effort: "low" },
     prompt: `Give me a tour of ${folderName} like I've never seen it. What is it, what are the main pieces, and where would I look first to change something? Plain language, no jargon.` },
   { title: "Find the loose ends",
     hint: "TODOs, dead code, unfinished work",
+    best: { agent: "claude", model: "opus", effort: "high" },
     prompt: `Look through this folder for unfinished work — TODOs, dead code, tests that are skipped, things that were started and abandoned. List them, worst first, and say why each one matters.` },
 ];
 
@@ -635,17 +959,23 @@ const ITEM_SUGGESTIONS = (item) => {
   return [
     { title: startable ? "Plan it first" : "Why is this stuck?", rec: true,
       hint: startable ? "read it, tell me the plan, change nothing" : "explain the block in plain English",
+      best: { agent: "claude", model: "opus", effort: "high" },
       prompt: startable
         ? `I want to work on ${ref}. Read the issue and this folder, then tell me: what you'd do, in what order, what you'd touch, and what could break. Do NOT change anything yet — I want the plan first.`
         : `${ref} is on my board but it can't be started: "${item.reason}". Explain what that actually means and what would have to happen to unblock it. Read the repo before answering.` },
     { title: "Just do it",
       hint: "implement it end to end, then prove it",
+      best: { agent: "claude", model: "opus", effort: "xhigh" },
       prompt: `Implement ${ref} end to end in this folder. Follow the conventions already here rather than inventing new ones. When you think it's done, run the tests and show me the output — I don't want "should work".` },
     { title: "What already exists?",
       hint: "the code that already touches this",
+      best: { agent: "claude", model: "sonnet", effort: "medium" },
       prompt: `What in this folder already relates to ${ref}? Show me the files, what each one does, and whether any of it already half-solves the problem.` },
     { title: "Argue against it",
       hint: "the case for not doing this",
+      // Deliberately the other vendor: an argument against a plan is worth more from a model that
+      // did not help write it.
+      best: { agent: "codex", model: "gpt-5.6-sol", effort: "high" },
       prompt: `Make the strongest case that ${ref} is the wrong thing to build, or the wrong time to build it. What would it cost, what would it break, and what should be done instead? Be blunt.` },
   ];
 };
@@ -656,10 +986,12 @@ function setSuggestions(list, { prefill = true } = {}) {
   if (!list || !list.length) { box.innerHTML = ""; return; }
   box.innerHTML = `<div class="sugg-lab">Suggested — click one, edit it, press Enter</div>` +
     list.map((s, i) => `<button class="sugg-chip ${s.rec ? "rec" : ""}" data-sugg="${i}">
-      <span class="st">${esc(s.title)}</span><span class="sd">${esc(s.hint)}</span></button>`).join("");
+      <span class="st">${esc(s.title)}</span><span class="sd">${esc(s.hint)}</span>
+      ${s.best ? `<span class="sb">${esc(bestLabel(s.best))}</span>` : ""}</button>`).join("");
   for (const b of box.querySelectorAll("[data-sugg]")) {
     b.addEventListener("click", () => {
       const s = list[Number(b.dataset.sugg)];
+      applyBest(s.best);
       $("chatBox").value = s.prompt;
       $("chatBox").style.height = "auto";
       $("chatBox").style.height = Math.min($("chatBox").scrollHeight, 170) + "px";
@@ -668,6 +1000,7 @@ function setSuggestions(list, { prefill = true } = {}) {
   }
   const rec = list.find((s) => s.rec);
   if (prefill && rec && !$("chatBox").value.trim()) {
+    applyBest(rec.best);
     $("chatBox").value = rec.prompt;
     $("chatBox").style.height = "auto";
     $("chatBox").style.height = Math.min($("chatBox").scrollHeight, 170) + "px";
@@ -679,6 +1012,133 @@ function folderSuggestions() {
   const sel = $("chatFolder");
   const name = sel.options[sel.selectedIndex]?.textContent?.split(" ")[0] ?? "this folder";
   setSuggestions(FOLDER_SUGGESTIONS(name));
+}
+
+// ── live status ──────────────────────────────────────────────────────────────────────────────
+// "i tried to send it but it was greyed out at first now its lit again ... had no idea why it was
+// greyed out." A control that disables itself without saying why is the machine going quiet on you
+// mid-task. Everything slow now registers here, and the hotbar says so on every tab.
+const ACT = new Map();
+let actSeq = 0;
+
+function actStart(label) {
+  const id = `a${++actSeq}`;
+  ACT.set(id, { label, started: Date.now() });
+  paintLive();
+  return id;
+}
+function actEnd(id) { ACT.delete(id); paintLive(); }
+
+const secs = (ms) => `${Math.round(ms / 1000)}s`;
+
+function paintLive() {
+  const live = [...ACT.values()];
+  const dot = $("liveDot"), txt = $("liveText"), wrap = $("liveState");
+  if (!live.length) {
+    dot.className = "dot g"; txt.textContent = "Idle — nothing running"; wrap.classList.remove("on");
+  } else {
+    dot.className = "dot a pulse"; wrap.classList.add("on");
+    const oldest = Math.min(...live.map((a) => a.started));
+    txt.textContent = live.length === 1
+      ? `${live[0].label} — ${secs(Date.now() - oldest)}`
+      : `${live.length} things running — longest ${secs(Date.now() - oldest)}`;
+  }
+  // The chat's own bar mirrors the state of the SEND button, right where the disabled button is.
+  const busy = $("chatSend").disabled;
+  $("chatWorking").classList.toggle("hide", !busy);
+  if (busy && chatStarted) $("chatElapsed").textContent = secs(Date.now() - chatStarted);
+}
+setInterval(paintLive, 1000);
+
+// ── alerts: the bell ─────────────────────────────────────────────────────────────────────────
+// "anything gated or needing review should not take me to github because idk wtf github even does
+// or how it works and i dont want to i jsut know i need it."
+//
+// So no alert here links out. Every one carries buttons that either move you to the right tab or
+// ASK — an agent that can read the issue, the diff and the code answers in this window, in English.
+function buildAlerts() {
+  const ci = V(S.ci, {}) || {};
+  const out = [];
+  const host = V(S.host.branch);
+  const dirty = (V(S.host.dirty) || []).length;
+  const pulls = V(S.pulls) || [];
+  const stuck = (S.work.items || []).filter((i) => !i.availability.available);
+  const HOST = (V(S.folders) || []).find((f) => f.host)?.path || "";
+
+  if (!ci.meaningful) out.push({ sev: "r", title: "Your tests are not actually running",
+    why: `${ci.reason || ""} Every red or green check on GitHub right now was produced by nothing.`,
+    acts: [{ label: "Explain it to me", ask: `GitHub Actions is not executing my CI. The console says: "${ci.reason}". Explain what that means in plain English, what it costs me, and exactly what I have to do about it. Assume I do not know how GitHub works.` },
+           { label: "Run the audit here instead", tab: "au" }] });
+
+  if (dirty) out.push({ sev: "r", title: `${dirty} file${dirty === 1 ? "" : "s"} changed and not saved to git`,
+    why: "Work sitting in the host repository that exists on this disk and nowhere else. If this machine died today, it is gone.",
+    acts: [{ label: "Tell me what changed", folder: HOST, ask: "Show me every uncommitted change in this repo. For each one, say in plain English what it does and whether it looks finished. Then tell me whether it is safe to commit." },
+           { label: "Commit it for me", folder: HOST, ask: "Review every uncommitted change here. If they belong together, commit them with a message that explains WHY, not just what. If they do not belong together, tell me how you would split them and wait for me." }] });
+
+  if (host && host !== "main") out.push({ sev: "a", title: `Your main folder is parked on "${host}"`,
+    why: "Every other work folder hangs off this one. Left on a side branch it gets confusing fast — and anything you do here lands on that branch instead of main.",
+    acts: [{ label: "Should I move it back?", folder: HOST, ask: `My host repo is checked out on "${host}" instead of main. Tell me whether anything here is unsaved, whether that branch is pushed, and whether it is safe to go back to main. Do not change anything — just tell me.` }] });
+
+  for (const f of S.lostAndFound || []) out.push({ sev: "a", title: `Unaccounted for: ${f.name}`,
+    why: `${f.risk} — ${f.why}`,
+    acts: [{ label: "What is this?", folder: HOST, ask: `The console found something nothing points at: "${f.name}" (${f.risk}). ${f.why} Look at it and tell me in plain English what it is, whether it matters, and what you would do with it.` },
+           { label: "See all of them", tab: "lf" }] });
+
+  for (const p of pulls) out.push({ sev: p.draft ? "a" : "r", title: `Waiting on you: change #${p.number}`,
+    why: `${p.title}${p.draft ? " (still a draft)" : ""}. A change that cannot merge itself — somebody has to decide.`,
+    acts: [{ label: "Explain this change", folder: HOST, ask: `Explain pull request #${p.number} ("${p.title}") to me. Use gh to read it. What does it change, why, what could break, and should I merge it? Assume I do not know how GitHub works — no jargon.` },
+           { label: "Review it with me", folder: HOST, ask: `Read pull request #${p.number} and review it properly: correctness, anything unfinished, anything risky. Give me a verdict and the reasoning. Do not merge anything.` }] });
+
+  for (const i of stuck) out.push({ sev: "a", title: `#${i.number} cannot be started`,
+    why: i.availability.reason,
+    acts: [{ label: "Why not?", item: i.number, ask: `#${i.number} ("${i.title}") is blocked: "${i.availability.reason}". Explain what that actually means and what would have to change to unblock it.` },
+           { label: "Open the board", tab: "wk" }] });
+
+  if (!out.length) out.push({ sev: "g", title: "Nothing needs you", why: "No unsaved work, nothing stranded, no change waiting on a decision, and CI is really running.", acts: [] });
+  return out;
+}
+
+function paintBell() {
+  const list = buildAlerts();
+  const worst = list.some((a) => a.sev === "r") ? "r" : list.some((a) => a.sev === "a") ? "a" : "g";
+  const real = list.filter((a) => a.sev !== "g").length;
+  $("bell").className = "bell " + worst;
+  $("bellDot").className = "dot " + worst;
+  $("bellText").textContent = real ? `${real} need${real === 1 ? "s" : ""} you` : "All clear";
+
+  $("alerts").innerHTML = list.map((a, n) => `<div class="alert">
+    <span class="dot ${a.sev}" style="margin-top:5px"></span>
+    <div style="flex:1">
+      <div class="at">${esc(a.title)}</div>
+      <div class="aw">${esc(a.why)}</div>
+      ${a.acts.length ? `<div class="aa">${a.acts.map((x, m) =>
+        `<button class="btn ${m === 0 ? "pri" : "sm"}" data-al="${n}" data-ax="${m}">${esc(x.label)}</button>`).join("")}</div>` : ""}
+    </div></div>`).join("");
+
+  for (const b of $("alerts").querySelectorAll("[data-al]")) {
+    b.addEventListener("click", () => {
+      const a = list[Number(b.dataset.al)].acts[Number(b.dataset.ax)];
+      $("alerts").classList.remove("on");
+      if (a.tab) return switchTo(a.tab);
+      const item = a.item != null ? (S.work.items || []).find((x) => x.number === a.item) : null;
+      const folder = a.folder || (item ? (item.worktreeBranch || "").split(" @ ")[0] : "");
+      askNow(folder, a.ask);
+    });
+  }
+}
+$("bell").addEventListener("click", (e) => { e.stopPropagation(); $("alerts").classList.toggle("on"); });
+document.addEventListener("click", (e) => {
+  if (!$("alerts").contains(e.target) && e.target !== $("bell")) $("alerts").classList.remove("on");
+});
+
+/** One click, one answer: aim the chat and send, no second step. */
+function askNow(folder, prompt) {
+  const sel = $("chatFolder");
+  if (folder && [...sel.options].some((o) => o.value === folder)) sel.value = folder;
+  switchTo("ch");
+  newThread();
+  $("chatBox").value = "";
+  send(prompt);
 }
 
 // ── the conversation: one thread at a time, running inside the folder you picked ─────────────
@@ -695,7 +1155,8 @@ $("chatNew").addEventListener("click", () => { newThread(); $("chatBox").value =
 // A thread is a session in ONE folder with ONE agent. Carrying its id across a switch would resume
 // the wrong conversation in the wrong place, so both reset it — visibly, rather than silently.
 $("chatFolder").addEventListener("change", () => { newThread("Folder changed."); $("chatBox").value = ""; folderSuggestions(); });
-$("chatAgent").addEventListener("change", () => newThread("Agent changed."));
+$("chatAgent").addEventListener("change", () => { paintModelOptions(); newThread("Agent changed."); });
+paintModelOptions();
 
 /**
  * The board's Start / Ask about it lands here: same chat, folder preselected, and — the part that
@@ -721,24 +1182,38 @@ function bubble(who, cls) {
   return d.querySelector("pre");
 }
 
-async function send() {
-  const text = $("chatBox").value.trim();
+let chatStarted = 0;
+let chatAbort = null;
+$("chatStop").addEventListener("click", () => { if (chatAbort) chatAbort.abort(); });
+
+async function send(preset) {
+  const text = String(preset ?? $("chatBox").value).trim();
   const folder = $("chatFolder").value;
   if (!text) return;
+  if ($("chatSend").disabled) return; // one turn at a time — the bar above says so
   if (!folder) { bubble("console").textContent = "No folder selected — nowhere to run."; return; }
   $("chatBox").value = ""; $("chatBox").style.height = "";
   bubble("you", "me").textContent = text;
   const agent = $("chatAgent").value;
   const out = bubble(agent);
   out.classList.add("thinking");
+
+  // Say what the greyed-out button means, in the place where the greyed-out button is.
   $("chatSend").disabled = true;
+  $("chatSend").textContent = "Working…";
+  chatStarted = Date.now();
+  chatAbort = new AbortController();
+  $("chatWorkingText").textContent = `${agent === "claude" ? "Claude" : "Codex"} is working — you can't send another until it finishes`;
+  $("chatWorking").classList.remove("hide");
+  const act = actStart(`${agent === "claude" ? "Claude" : "Codex"} is answering`);
+
   const body = {
     agent, folder, message: text, threadId: thread.id,
     sessionId: thread.id ? null : (thread.id = crypto.randomUUID()),
     model: $("chatModel").value || null, effort: $("chatEffort").value || null,
   };
   try {
-    const res = await fetch("/api/chat", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify(body) });
+    const res = await fetch("/api/chat", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify(body), signal: chatAbort.signal });
     if (!res.ok || !res.body) { out.textContent = "refused — " + (await res.text()); return; }
     const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
     for (;;) {
@@ -768,13 +1243,20 @@ async function send() {
         $("chatLog").scrollTop = $("chatLog").scrollHeight;
       }
     }
+  } catch (e) {
+    out.textContent += (String(e?.name) === "AbortError" ? "\n\n— stopped by you —" : `\n\n${String(e?.message ?? e)}`);
   } finally {
     out.classList.remove("thinking");
+    actEnd(act);
+    chatAbort = null; chatStarted = 0;
     $("chatSend").disabled = false;
+    $("chatSend").textContent = "Send";
+    $("chatWorking").classList.add("hide");
     $("chatBox").focus();
+    load(); // the turn may have changed the repo — never leave the page showing the old world
   }
 }
-$("chatSend").addEventListener("click", send);
+$("chatSend").addEventListener("click", () => send());
 $("chatBox").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
 $("chatBox").addEventListener("input", function () { this.style.height = "auto"; this.style.height = Math.min(this.scrollHeight, 170) + "px"; });
 
