@@ -115,7 +115,7 @@ describe("the launcher window belongs only to the handoff", () => {
 
   it("does not report success when Windows refuses to start the launcher", async () => {
     const launchProcess = vi.fn(async () => ({ ok: false, error: "pwsh could not start" }));
-    const { port } = await start({ launchProcess });
+    const { port } = await start({ launchProcess, launcherExists: () => true });
 
     const response = await request(port, { path: "/api/launcher", body: { issue: 39 } });
 

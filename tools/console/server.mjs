@@ -187,6 +187,7 @@ export function createConsoleServer({
   planSpawn = planAgentSpawn,
   subscriptionCheck = verifyPlanSubscription,
   launchProcess = startDetachedProcess,
+  launcherExists = existsSync,
 } = {}) {
   return createServer(async (req, res) => {
     const url = new URL(req.url, `http://${HOST}`);
@@ -238,7 +239,7 @@ export function createConsoleServer({
       // genuinely presents a picker; the normal Console UI never needs it.
       if (url.pathname === "/api/launcher" && req.method === "POST") {
         const entry = join(CONTROL_DIR, "compy-entry.ps1");
-        if (!existsSync(entry)) return send(res, 404, { error: `${entry} is not there` });
+        if (!launcherExists(entry)) return send(res, 404, { error: `${entry} is not there` });
         const text = await readBody(req);
         const body = text.trim() ? JSON.parse(text) : {};
         const issue = body.issue == null ? null : Number(body.issue);
