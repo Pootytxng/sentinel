@@ -14,7 +14,7 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { homedir } from "node:os";
 
 import { readBoard, CODE_ROOT, HOST_DIR, REPO } from "../entry/gather.mjs";
@@ -230,6 +230,32 @@ export function readLostAndFound({ work = null, pulls = null, branches = null, h
   return found;
 }
 
+/**
+ * Every checkout on this disk, as somewhere a conversation can be opened.
+ *
+ * The chat used to be reachable ONLY from a green Start button on the board, so when nothing was
+ * startable — every item owner-gated, which is the normal state most days — there was no way to
+ * open a chat at all. The one surface the owner actually asked for was behind a door that is
+ * usually locked. A chat needs a working directory, not a work item; this is that list.
+ *
+ * Host first, then alphabetical: the host repository is the answer to "just let me ask something".
+ */
+export function readFolders() {
+  return attempt(
+    () =>
+      discoverCheckouts({ roots: [CODE_ROOT] })
+        .map((c) => ({
+          path: c.path,
+          name: basename(c.path),
+          branch: c.detached ? "detached" : (c.branch ?? null),
+          kind: c.kind,
+          host: c.path.toLowerCase() === HOST_DIR.toLowerCase(),
+        }))
+        .sort((a, b) => (a.host === b.host ? a.name.localeCompare(b.name) : a.host ? -1 : 1)),
+    [],
+  );
+}
+
 /** One read of everything, with a timestamp. The page asks for this and renders exactly what it gets. */
 export function snapshot({ self = { lane: "Claude Code" }, now = new Date() } = {}) {
   const host = readHost();
@@ -240,6 +266,7 @@ export function snapshot({ self = { lane: "Claude Code" }, now = new Date() } = 
   return {
     generatedAt: now.toISOString(),
     codeRoot: CODE_ROOT,
+    folders: readFolders(),
     agents: readAgents(),
     host,
     branches,

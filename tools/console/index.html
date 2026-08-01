@@ -159,12 +159,12 @@ textarea{resize:none;line-height:1.55}
 select{background:var(--panel-2);color:var(--text);border:1px solid var(--line-strong);border-radius:var(--r-sm);
   padding:5px 9px;font:450 12px var(--sans);cursor:pointer}
 
-/* ── thread drawer ────────────────────────────────────────────────────────── */
-.chat{position:fixed;top:0;right:0;bottom:0;width:min(660px,52vw);background:var(--panel);
-  border-left:1px solid var(--line-strong);display:none;flex-direction:column;z-index:40;
-  box-shadow:-28px 0 70px var(--shadow)}
-.chat.on{display:flex;animation:slide .2s cubic-bezier(.2,.8,.3,1)}
-@keyframes slide{from{transform:translateX(24px);opacity:.6}to{transform:none;opacity:1}}
+/* ── chat, as a surface in its own right ──────────────────────────────────── */
+/* It used to be a drawer that only a green Start button could open. A conversation needs a working
+   directory, not a work item, so it is now a docked panel on its own tab that is always usable. */
+.chat{background:var(--panel);border:1px solid var(--line-strong);border-radius:var(--r);
+  display:flex;flex-direction:column;overflow:hidden;box-shadow:0 18px 50px var(--shadow);
+  height:calc(100vh - 300px);min-height:440px}
 .chat-head{padding:13px var(--pad);border-bottom:1px solid var(--line);display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 .chat-head .t{font:600 13.5px var(--sans);letter-spacing:-.01em;flex:1;min-width:170px;line-height:1.35}
 .guard{font:450 11px var(--mono);color:var(--ok);background:var(--ok-dim);padding:6px var(--pad);
@@ -190,8 +190,9 @@ select{background:var(--panel-2);color:var(--text);border:1px solid var(--line-s
       <div class="who"><b>Compy Console</b><span id="brandsub">connecting…</span></div>
     </div>
     <nav>
-      <button class="on" data-t="ov"><span class="ico">◈</span>Overview</button>
+      <button class="on" data-t="ch"><span class="ico">▮</span>Chat</button>
       <div class="navgroup">Work</div>
+      <button data-t="ov"><span class="ico">◈</span>Overview</button>
       <button data-t="wk"><span class="ico">▤</span>Board<span class="pip" id="p-wk">–</span></button>
       <div class="navgroup">Thinking</div>
       <button data-t="ds"><span class="ico">◇</span>Discussions<span class="pip" id="p-ds">–</span></button>
@@ -211,7 +212,28 @@ select{background:var(--panel-2);color:var(--text);border:1px solid var(--line-s
   <main>
     <div class="vitals" id="vitals"></div>
     <div class="scroll"><div class="body">
-      <section class="pane on" id="ov"></section>
+      <section class="pane on" id="ch">
+        <h2>Chat</h2>
+        <p class="lede">One conversation, in a folder you choose. Same thing as talking to Claude or Codex anywhere else,
+          except it is already sitting in the code — there is nothing to paste and no window to switch to.
+          <strong>Enter</strong> sends. Changing the folder or the agent starts a fresh thread.</p>
+        <div class="chat" id="chat">
+          <div class="chat-head">
+            <select id="chatFolder" style="flex:1;min-width:210px"></select>
+            <select id="chatAgent"><option value="claude">Claude</option><option value="codex">Codex</option></select>
+            <select id="chatModel"><option value="">model · default</option><option value="sonnet">sonnet</option><option value="opus">opus</option></select>
+            <select id="chatEffort"><option value="">effort · default</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select>
+            <button class="btn sm" id="chatNew">New thread</button>
+          </div>
+          <div class="guard" id="chatGuard">subscription only · no API credentials in this process</div>
+          <div class="chat-log" id="chatLog"></div>
+          <div class="chat-in">
+            <textarea id="chatBox" rows="1" placeholder="Ask anything. Enter sends, Shift+Enter for a new line."></textarea>
+            <button class="btn pri" id="chatSend">Send</button>
+          </div>
+        </div>
+      </section>
+      <section class="pane" id="ov"></section>
       <section class="pane" id="wk"></section>
       <section class="pane" id="ds"></section>
       <section class="pane" id="id"></section>
@@ -234,22 +256,6 @@ select{background:var(--panel-2);color:var(--text);border:1px solid var(--line-s
       </section>
     </div></div>
   </main>
-</div>
-
-<div class="chat" id="chat">
-  <div class="chat-head">
-    <div class="t" id="chatTitle">Thread</div>
-    <select id="chatAgent"><option value="claude">Claude</option><option value="codex">Codex</option></select>
-    <select id="chatModel"><option value="">model · default</option><option value="sonnet">sonnet</option><option value="opus">opus</option></select>
-    <select id="chatEffort"><option value="">effort · default</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select>
-    <button class="btn sm" id="chatClose">Close</button>
-  </div>
-  <div class="guard" id="chatGuard">subscription only · no API credentials in this process</div>
-  <div class="chat-log" id="chatLog"></div>
-  <div class="chat-in">
-    <textarea id="chatBox" rows="1" placeholder="Ask anything. It is already running in this task's folder. Enter sends."></textarea>
-    <button class="btn pri" id="chatSend">Send</button>
-  </div>
 </div>
 
 <script>
@@ -280,7 +286,11 @@ async function load() {
     return;
   }
   render();
+  // Seed the empty log ONCE, after the folder list exists — never on a later refresh, which would
+  // wipe a conversation in progress just because the page re-read the world.
+  if (!seeded) { seeded = true; newThread(); }
 }
+let seeded = false;
 
 function render() {
   const ci = V(S.ci, {}) || {};
@@ -307,7 +317,20 @@ function render() {
     ["CI", ci.meaningful ? `<span class="ok">live</span>` : `<span class="bd">blocked</span>`, ci.meaningful ? "verdicts are real" : "verdicts mean nothing"],
   ].map(([l, v, s]) => `<div class="v"><div class="lab">${l}</div><div class="val">${v}</div><div class="sub">${s}</div></div>`).join("");
 
-  renderOverview(ci); renderWork(); renderDiscussions(); renderIdeas(); renderDecisions(ci); renderLost();
+  renderChat(); renderOverview(ci); renderWork(); renderDiscussions(); renderIdeas(); renderDecisions(ci); renderLost();
+}
+
+// ── Chat ─────────────────────────────────────────────────────────────────────────────────────
+// Only the folder list is re-rendered here. Rebuilding the log would throw away a conversation in
+// progress every time the snapshot refreshed, which is the opposite of what this tab is for.
+function renderChat() {
+  const sel = $("chatFolder");
+  const keep = sel.value;
+  const folders = V(S.folders) || [];
+  sel.innerHTML = folders.length
+    ? folders.map((f) => `<option value="${esc(f.path)}">${esc(f.name)}${f.host ? " · host" : ""}${f.branch ? "  —  " + esc(f.branch) : ""}</option>`).join("")
+    : `<option value="">no checkouts found under ${esc(S.codeRoot)}</option>`;
+  if (keep && folders.some((f) => f.path === keep)) sel.value = keep;
 }
 
 // ── Overview ─────────────────────────────────────────────────────────────────────────────────
@@ -359,8 +382,9 @@ function renderWork() {
         ${a.available ? "" : `<div class="rd">${esc(a.reason)}</div>`}
         <div class="rf">${esc(i.worktreeBranch || "no folder assigned")}</div></div>
       <div class="acts">
-        ${a.available && folder ? `<button class="btn pri" data-open="${esc(folder)}" data-title="#${i.number} ${esc(i.title)}">${esc(a.action)}</button>` : ""}
-        <a class="btn" href="https://github.com/Pootytxng/sentinel/issues/${i.number}" target="_blank" rel="noopener">Issue</a>
+        ${a.available && folder ? `<button class="btn pri" data-open="${esc(folder)}">${esc(a.action)}</button>` : ""}
+        ${!a.available && folder ? `<button class="btn" data-open="${esc(folder)}">Ask about it</button>` : ""}
+        <a class="btn sm" href="https://github.com/Pootytxng/sentinel/issues/${i.number}" target="_blank" rel="noopener">Issue ↗</a>
       </div></div>`;
   }).join("");
   $("wk").innerHTML = `<h2>Board</h2>
@@ -376,9 +400,10 @@ function renderWork() {
       <div class="acts"><button class="btn" id="runLauncher">Run the launcher</button></div>
     </div>
     ${S.work.startable ? "" : `<div class="note warn"><div><b>Nothing is startable right now.</b>
-      <p>Every open item is either owner-gated or belongs to another lane.</p></div></div>`}
+      <p>Every open item is either owner-gated or belongs to another lane. That does not stop you asking about any of
+      them — <b>Ask about it</b> opens a chat in that item's folder without claiming the work.</p></div></div>`}
     ${rows || `<div class="empty">No open items on the board.</div>`}`;
-  for (const b of $("wk").querySelectorAll("[data-open]")) b.addEventListener("click", () => openChat(b.dataset.open, b.dataset.title));
+  for (const b of $("wk").querySelectorAll("[data-open]")) b.addEventListener("click", () => openChat(b.dataset.open));
   $("runLauncher").addEventListener("click", async function () {
     this.disabled = true;
     const r = await post("/api/launcher", {});
@@ -536,18 +561,30 @@ function switchTo(id) {
 document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => switchTo(b.dataset.t)));
 $("refresh").addEventListener("click", load);
 
-// ── thread drawer: one conversation per task, running inside that task's folder ──────────────
-let thread = { folder: null, id: null };
-function openChat(folder, title) {
-  thread = { folder, id: null };
-  $("chatTitle").textContent = title;
-  $("chatLog").innerHTML = `<div class="empty">A fresh thread in <span style="font-family:var(--mono)">${esc(folder)}</span>.
-    It can already see the code — nothing to paste.</div>`;
-  $("chat").classList.add("on");
+// ── the conversation: one thread at a time, running inside the folder you picked ─────────────
+let thread = { id: null };
+
+/** Start over: forget the thread id so the next message opens a new session in the CLI. */
+function newThread(note) {
+  thread = { id: null };
+  const f = $("chatFolder").value;
+  $("chatLog").innerHTML = `<div class="empty">${note ? esc(note) + " " : ""}A fresh thread in
+    <span style="font-family:var(--mono)">${esc(f || "—")}</span>. It can already see the code — nothing to paste.</div>`;
+}
+$("chatNew").addEventListener("click", () => { newThread(); $("chatBox").focus(); });
+// A thread is a session in ONE folder with ONE agent. Carrying its id across a switch would resume
+// the wrong conversation in the wrong place, so both reset it — visibly, rather than silently.
+$("chatFolder").addEventListener("change", () => newThread("Folder changed."));
+$("chatAgent").addEventListener("change", () => newThread("Agent changed."));
+
+/** The board's Start button lands here: same chat, folder preselected. */
+function openChat(folder) {
+  const sel = $("chatFolder");
+  if ([...sel.options].some((o) => o.value === folder)) sel.value = folder;
+  newThread();
+  switchTo("ch");
   $("chatBox").focus();
 }
-$("chatClose").addEventListener("click", () => $("chat").classList.remove("on"));
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("chat").classList.remove("on"); });
 
 function bubble(who, cls) {
   if ($("chatLog").querySelector(".empty")) $("chatLog").innerHTML = "";
@@ -561,7 +598,9 @@ function bubble(who, cls) {
 
 async function send() {
   const text = $("chatBox").value.trim();
-  if (!text || !thread.folder) return;
+  const folder = $("chatFolder").value;
+  if (!text) return;
+  if (!folder) { bubble("console").textContent = "No folder selected — nowhere to run."; return; }
   $("chatBox").value = ""; $("chatBox").style.height = "";
   bubble("you", "me").textContent = text;
   const agent = $("chatAgent").value;
@@ -569,7 +608,7 @@ async function send() {
   out.classList.add("thinking");
   $("chatSend").disabled = true;
   const body = {
-    agent, folder: thread.folder, message: text, threadId: thread.id,
+    agent, folder, message: text, threadId: thread.id,
     sessionId: thread.id ? null : (thread.id = crypto.randomUUID()),
     model: $("chatModel").value || null, effort: $("chatEffort").value || null,
   };
