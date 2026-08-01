@@ -20,6 +20,13 @@ import { dirname, join } from "node:path";
 const here = dirname(fileURLToPath(import.meta.url));
 const START_PS1 = readFileSync(join(here, "start.ps1"), "utf8");
 
+/** The script with its commentary removed. A rule about what the CODE may not contain has to read
+ *  the code — the first version of the ProgramFiles(x86) guard below failed on the comment that
+ *  explains the trap, which is the guard punishing its own documentation. */
+const START_CODE = START_PS1.split(/\r?\n/)
+  .map((l) => l.replace(/(^|\s)#.*$/, ""))
+  .join("\n");
+
 /** Every `Start-Process ...` invocation in the script, one entry per line it appears on. */
 const invocations = () =>
   START_PS1.split(/\r?\n/)
@@ -70,8 +77,8 @@ describe("start.ps1 never leaves a process pinning a disposable directory", () =
   it("resolves ProgramFiles(x86) in a form that cannot read as null", () => {
     // `${env:ProgramFiles(x86)}` evaluated to $null here; Join-Path then THREW rather than skipping
     // a browser that is not installed, so the console came up with no window at all.
-    expect(START_PS1).not.toMatch(/\$\{env:ProgramFiles\(x86\)\}/);
-    expect(START_PS1).toMatch(/GetEnvironmentVariable\('ProgramFiles\(x86\)'\)/);
+    expect(START_CODE).not.toMatch(/\$\{env:ProgramFiles\(x86\)\}/);
+    expect(START_CODE).toMatch(/GetEnvironmentVariable\('ProgramFiles\(x86\)'\)/);
   });
 
   it("collects the candidate browsers as an ARRAY, so indexing cannot slice a string", () => {
