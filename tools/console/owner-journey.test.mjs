@@ -14,6 +14,7 @@ describe("the default Console is one obvious starting surface", () => {
     expect(PAGE).toContain("Tell Compy what you want");
     expect(PAGE).toMatch(/data-t="ch"[^>]*>[\s\S]*?Now<\/button>/);
     expect(PAGE).toMatch(/data-t="wk"[^>]*>[\s\S]*?Work/);
+    expect(PAGE).toMatch(/data-t="hs"[^>]*>[\s\S]*?Chats/);
   });
 
   it("puts folder, agent, model, and effort inside one closed Change route disclosure", () => {
@@ -41,6 +42,55 @@ describe("natural input and durable conversation continuity", () => {
     expect(fn("send")).not.toMatch(/thread\.id\s*=\s*crypto\.randomUUID/);
     expect(fn("send")).not.toMatch(/sessionId|crypto\.randomUUID/);
     expect(fn("send")).toMatch(/ev === "thread"[\s\S]*thread\.id = d\.threadId/);
+  });
+
+  it("makes every saved chat reopenable with its native route and transcript", () => {
+    expect(PAGE).toContain('id="chatList"');
+    expect(fn("renderChats")).toMatch(/data-chat-agent/);
+    expect(fn("renderChats")).toMatch(/Open chat/);
+    expect(fn("openSavedChat")).toMatch(/\/api\/chats\//);
+    expect(fn("openSavedChat")).toMatch(/thread = \{ id: chat\.id/);
+    expect(fn("openSavedChat")).toMatch(/\$\("chatBox"\)\.value = ""/);
+    expect(fn("openSavedChat")).toMatch(/chat\.truncated[\s\S]*most recent/);
+    expect(fn("openSavedChat")).toMatch(/switchTo\("ch"\)/);
+  });
+
+  it("the global working indicator returns to the active conversation", () => {
+    expect(PAGE).toMatch(/<button[^>]*id="liveState"/);
+    expect(SCRIPT).toMatch(/liveState[\s\S]*switchTo\("ch"\)/);
+  });
+
+  it("starting over cannot replace a conversation while its answer is still running", () => {
+    const startOver = fn("newThread");
+    expect(startOver).toMatch(/if \(chatAbort\)/);
+    expect(startOver.indexOf("if (chatAbort)")).toBeLessThan(startOver.indexOf("thread = { id: null }"));
+    expect(startOver).toMatch(/if \(chatAbort\)[\s\S]*switchTo\("ch"\)[\s\S]*return false/);
+  });
+
+  it("opening saved history cannot replace a conversation that is still streaming", () => {
+    const open = fn("openSavedChat");
+    expect(open).toMatch(/if \(chatAbort\)/);
+    expect(open.indexOf("if (chatAbort)")).toBeLessThan(open.indexOf("await fetch"));
+    expect(open).toMatch(/if \(chatAbort\)[\s\S]*switchTo\("ch"\)[\s\S]*return/);
+    expect(open.lastIndexOf("if (chatAbort)")).toBeGreaterThan(open.indexOf("await response.json()"));
+  });
+
+  it("locks route identity for the lifetime of a running turn", () => {
+    expect(fn("lockChatRoute")).toMatch(/chatNew[\s\S]*chatFolder[\s\S]*chatAgent/);
+    expect(fn("send")).toMatch(/lockChatRoute\(true\)[\s\S]*finally[\s\S]*lockChatRoute\(false\)/);
+  });
+
+  it("only a real running chat process can show the working bar", () => {
+    expect(fn("paintLive")).toMatch(/busy = Boolean\(chatAbort\)/);
+    expect(fn("paintLive")).not.toMatch(/chatSend"\)\.disabled/);
+  });
+
+  it("programmatic Ask and Work actions refuse before mutating the live route", () => {
+    for (const name of ["askNow", "openChat"]) {
+      const action = fn(name);
+      expect(action).toMatch(/if \(chatAbort\)/);
+      expect(action.indexOf("if (chatAbort)")).toBeLessThan(action.indexOf('const sel = $("chatFolder")'));
+    }
   });
 });
 

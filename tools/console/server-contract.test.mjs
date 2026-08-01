@@ -102,6 +102,34 @@ describe("thread identity belongs to the agent CLI", () => {
     const response = await request(port, { path: "/api/thread/new", method: "GET" });
     expect(response.status).toBe(404);
   });
+
+  it("exposes native chat metadata and one exact transcript without inventing another id", async () => {
+    const chat = {
+      id: "2594b1c6-c069-4949-8c79-bddea3f7832c",
+      agent: "claude",
+      folder: "C:\\fixture",
+      title: "Catch me up",
+      messages: [{ role: "user", text: "Catch me up", timestamp: "2026-08-01T19:54:06.366Z" }],
+    };
+    const chatStore = { list: vi.fn(() => [{ ...chat, messages: undefined }]), get: vi.fn(() => chat) };
+    const { port } = await start({ chatStore });
+
+    const list = await request(port, { path: "/api/chats", method: "GET" });
+    const transcript = await request(port, { path: `/api/chats/claude/${chat.id}`, method: "GET" });
+
+    expect(list.status).toBe(200);
+    expect(JSON.parse(list.text)[0].id).toBe(chat.id);
+    expect(transcript.status).toBe(200);
+    expect(JSON.parse(transcript.text)).toEqual(chat);
+  });
+
+  it("does not expose transcripts to a foreign browser origin", async () => {
+    const chatStore = { list: vi.fn(() => []), get: vi.fn(() => null) };
+    const { port } = await start({ chatStore });
+    const response = await request(port, { path: "/api/chats", method: "GET", origin: "https://attacker.invalid" });
+    expect(response.status).toBe(403);
+    expect(chatStore.list).not.toHaveBeenCalled();
+  });
 });
 
 describe("the launcher window belongs only to the handoff", () => {
