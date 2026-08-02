@@ -279,7 +279,9 @@ describe("the test suite itself is not silently disabled", () => {
   });
 
   it("NODE_ENV is not production at runtime", () => {
-    expect(process.env.NODE_ENV).not.toBe("production");
+    // Typed access: this repo's tsconfig does not declare the Node `process` global for tests.
+    const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+    expect(env?.NODE_ENV).not.toBe("production");
   });
 
   it("this source-reading guard declares the node environment", () => {
