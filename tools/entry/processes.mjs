@@ -55,22 +55,28 @@ export function classifyProcesses(raw, { folder }) {
   return [...groups.values()];
 }
 
-/** Read live processes via CIM. Returns [] on any failure — a probe that cannot run is not a refusal. */
-export function listProcesses({ names = WATCHED } = {}) {
-  const filter = names.map((n) => `Name='${n}'`).join(" or ");
-  const ps = `Get-CimInstance Win32_Process -Filter "${filter}" | Select-Object Name,CommandLine | ConvertTo-Json -Compress`;
+/** Read live processes via CIM, preserving whether the probe was reachable. */
+export function readProcessSnapshot({ names = WATCHED, run = execFileSync } = {}) {
+  const filter = [...names.map((name) => `Name='${name}'`), "Name LIKE '%setup.exe'", "Name LIKE '%installer.exe'", "Name='msiexec.exe'"].join(" or ");
+  const command = `Get-CimInstance Win32_Process -Filter "${filter}" | Select-Object Name,CommandLine | ConvertTo-Json -Compress`;
   try {
-    const out = execFileSync("pwsh", ["-NoProfile", "-NonInteractive", "-Command", ps], {
+    const out = run("pwsh", ["-NoProfile", "-NonInteractive", "-Command", command], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
+      windowsHide: true,
     }).trim();
-    if (!out) return [];
+    if (!out) return { ok: true, value: [], error: null };
     const parsed = JSON.parse(out);
-    const rows = Array.isArray(parsed) ? parsed : [parsed];
-    return rows.map((r) => ({ name: r.Name, commandLine: r.CommandLine ?? "" }));
-  } catch {
-    return [];
+    const rows = (Array.isArray(parsed) ? parsed : [parsed]).map((row) => ({ name: row.Name, commandLine: row.CommandLine ?? "" }));
+    return { ok: true, value: rows, error: null };
+  } catch (error) {
+    return { ok: false, value: [], error: String(error?.message ?? error).split("\n")[0].slice(0, 240) };
   }
+}
+
+/** Backward-compatible list view for existing entrypoint callers. */
+export function listProcesses({ names = WATCHED } = {}) {
+  return readProcessSnapshot({ names }).value;
 }
 
 export const inspectProcesses = ({ folder }) => classifyProcesses(listProcesses(), { folder });

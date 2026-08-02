@@ -15,14 +15,18 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
-import { homedir } from "node:os";
 
 import { readBoard, CODE_ROOT, HOST_DIR, REPO } from "../entry/gather.mjs";
 import { availability } from "../entry/select.mjs";
 import { discoverCheckouts } from "../entry/checkouts.mjs";
 import { resolveAgent, assertSubscription } from "./agents.mjs";
+import { inspectGitState } from "../entry/git-state.mjs";
+import { classifyProcesses, readProcessSnapshot } from "../entry/processes.mjs";
+import { hookRepairPlan, verifyHooks } from "../entry/hooks-verify.mjs";
+import { readLocks, isAlive } from "../entry/ide-bridge.mjs";
 
 export { CODE_ROOT, HOST_DIR, REPO };
+export { readProcessSnapshot };
 export const CONTROL_DIR = join(CODE_ROOT, "compy-control");
 
 const TIMEOUT_MS = 25_000;
@@ -161,6 +165,29 @@ export function readWork({ self = { lane: "Claude Code" }, now = new Date() } = 
   return { ok: true, error: null, items, startable: items.filter((i) => i.availability.available).length };
 }
 
+/** Checkout-only health projection. It deliberately does not inspect agents or start any chat route. */
+export function readCheckoutHealth({ checkouts = discoverCheckouts({ roots: [CODE_ROOT] }), processRows = [] } = {}) {
+  return checkouts.map((checkout) => {
+    const hooks = verifyHooks({ dir: checkout.path });
+    const repair = hooks.ok ? null : hookRepairPlan({ verify: hooks, canonicalDir: join(CONTROL_DIR, ".claude", "hooks") });
+    return {
+      ...checkout,
+      project: basename(checkout.path),
+      git: inspectGitState(checkout.path),
+      hooks: { ...hooks, repairable: repair?.ok === true, repairReason: repair?.reason ?? null },
+      processes: classifyProcesses(processRows, { folder: checkout.path }),
+    };
+  });
+}
+
+/** Locks are stale only when their recorded process is absent; age and existence prove nothing. */
+export function readProvenStaleIdeLocks({ locks = readLocks(), alive = isAlive } = {}) {
+  return locks.filter((lock) => lock.pid === null || !alive(lock.pid)).map((lock) => ({
+    kind: "stale", name: lock.file, risk: "dead editor lock", why: "Its recorded process is not alive.",
+    provenDead: true, pid: lock.pid,
+  }));
+}
+
 /**
  * Lost & found — everything on this disk that nothing currently points at.
  *
@@ -219,13 +246,7 @@ export function readLostAndFound({ work = null, pulls = null, branches = null, h
     }
   }
 
-  // Dead editor bridges: lock files for VS Code sessions whose process is long gone.
-  const ideDir = join(homedir(), ".claude", "ide");
-  const locks = attempt(() => readdirSync(ideDir).filter((f) => f.endsWith(".lock")), []);
-  if ((locks.value ?? []).length) {
-    found.push({ kind: "stale", name: `${locks.value.length} editor bridge lock files`, date: null, risk: "stale",
-      why: `${ideDir} — left by editor sessions that have exited.` });
-  }
+  found.push(...readProvenStaleIdeLocks());
 
   return found;
 }

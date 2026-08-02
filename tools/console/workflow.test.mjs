@@ -18,11 +18,37 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { readLostAndFound, readProvenStaleIdeLocks } from "./sources.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PAGE = readFileSync(join(here, "index.html"), "utf8");
 const SCRIPT = /<script>([\s\S]*)<\/script>/.exec(PAGE)?.[1] ?? "";
 const fn = (name) => new RegExp(`(?:async )?function ${name}\\([\\s\\S]*?\\n}`).exec(PAGE)?.[0] ?? "";
+
+describe("Project Doctor evidence sources", () => {
+  it("only reports editor locks whose recorded process is dead", () => {
+    const locks = [
+      { file: "C:\\live.lock", pid: 101 },
+      { file: "C:\\dead.lock", pid: 202 },
+      { file: "C:\\unknown.lock", pid: null },
+    ];
+    expect(readProvenStaleIdeLocks({ locks, alive: (pid) => pid === 101 })).toEqual([
+      { kind: "stale", name: "C:\\dead.lock", risk: "dead editor lock", why: "Its recorded process is not alive.", provenDead: true, pid: 202 },
+      { kind: "stale", name: "C:\\unknown.lock", risk: "dead editor lock", why: "Its recorded process is not alive.", provenDead: true, pid: null },
+    ]);
+  });
+
+  it("uses an explicitly supplied failed pull wrapper as data", () => {
+    const pulls = { ok: false, value: [], error: "GitHub unavailable" };
+    const found = readLostAndFound({
+      work: { ok: true, items: [] },
+      pulls,
+      branches: { ok: true, value: [] },
+      host: { dirty: { value: [] }, branch: { value: "main" } },
+    });
+    expect(found).toEqual([]);
+  });
+});
 
 describe("law 1 — a disabled control says why, where it is", () => {
   it("the chat has a working bar next to the button that disables", () => {

@@ -6,8 +6,8 @@
 //
 // Collision rule 6: never stop another tool's build, helper, editor or session to clear a claim.
 
-import { describe, expect, it } from "vitest";
-import { classifyProcesses } from "./processes.mjs";
+import { describe, expect, it, vi } from "vitest";
+import { classifyProcesses, readProcessSnapshot } from "./processes.mjs";
 
 const FOLDER = "C:\\Users\\Kuya\\code\\sentinel-workflow";
 const OTHER = "C:\\Users\\Kuya\\code\\sentinel-rel";
@@ -61,5 +61,17 @@ describe("classification", () => {
   it("returns an empty list rather than throwing when nothing is running", () => {
     expect(classifyProcesses([], { folder: FOLDER })).toEqual([]);
     expect(classifyProcesses(null, { folder: FOLDER })).toEqual([]);
+  });
+
+  it("reports a process-probe failure without changing list compatibility", () => {
+    const run = () => { throw new Error("CIM unavailable\nsecret detail"); };
+    expect(readProcessSnapshot({ run })).toEqual({ ok: false, value: [], error: "CIM unavailable" });
+  });
+
+  it("includes machine-wide installer names in the live probe", () => {
+    const run = vi.fn(() => "");
+    readProcessSnapshot({ run });
+    expect(run.mock.calls[0][1].at(-1)).toMatch(/Name LIKE '%setup\.exe'|Name LIKE '%installer\.exe'/);
+    expect(run.mock.calls[0][1].at(-1)).toContain("Name='msiexec.exe'");
   });
 });
