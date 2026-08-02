@@ -6,12 +6,26 @@
   <title>Project Doctor · Compy Console</title>
   <link rel="stylesheet" href="/doctor.css">
 </head>
-<body>
-  <main class="doctor-preview" aria-labelledby="doctor-title">
-    <p class="eyebrow">Compy Console preview</p>
-    <h1 id="doctor-title">Project Doctor</h1>
-    <p>This read-only preview is not scanning yet.</p>
-  </main>
+<body data-view="checkup">
+  <div class="doctor-shell">
+    <aside class="doctor-rail">
+      <a class="doctor-brand" href="/doctor" aria-label="Compy Project Doctor home">Compy <span>Project Doctor</span></a>
+      <nav aria-label="Project Doctor">
+        <button type="button" data-view="checkup" aria-current="page">Checkup</button>
+        <button type="button" data-view="problems">Problems <span id="problemCount" aria-hidden="true">0</span></button>
+        <button type="button" data-view="repairs">Repairs <span id="repairCount" aria-hidden="true">0</span></button>
+      </nav>
+      <button id="scanNow" type="button">Scan now</button>
+      <div id="scanStatus" role="status">Not checked yet</div>
+      <details><summary>Details</summary><div id="sourceDetails"></div></details>
+    </aside>
+    <main id="doctorMain" tabindex="-1">
+      <section id="checkup" data-pane="checkup"><p class="empty-state">Checking your project…</p></section>
+      <section id="problems" data-pane="problems" hidden></section>
+      <section id="repairs" data-pane="repairs" hidden></section>
+    </main>
+  </div>
+  <div id="doctorAnnouncer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
   <script>const PAGE_REVISION = "__COMPY_PAGE_REVISION__";</script>
   <script type="module" src="/doctor-ui.mjs"></script>
 </body>
