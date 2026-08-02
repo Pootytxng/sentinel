@@ -133,7 +133,7 @@ describe("law 4 — a folder is not a claim, so starts use the real safety train
 
   it("unavailable items remain explainable without pretending they can start", () => {
     const w = fn("renderWork");
-    expect(w).toMatch(/Ask about it/);
+    expect(w).toMatch(/Ask what is blocking it/);
     expect(w).toMatch(/data-explain=/);
   });
 });

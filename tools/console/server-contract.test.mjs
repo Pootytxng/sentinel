@@ -132,6 +132,23 @@ describe("thread identity belongs to the agent CLI", () => {
   });
 });
 
+describe("the loaded owner journey can tell when a newer interface is available", () => {
+  it("serves the journey projection and binds the page to the same live revision as /api/meta", async () => {
+    const { port } = await start();
+
+    const page = await request(port, { path: "/", method: "GET" });
+    const meta = await request(port, { path: "/api/meta", method: "GET" });
+    const journey = await request(port, { path: "/journey.mjs", method: "GET" });
+    const embedded = /const PAGE_REVISION = "([0-9a-f]{12})"/.exec(page.text)?.[1];
+
+    expect(page.status).toBe(200);
+    expect(journey.status).toBe(200);
+    expect(journey.text).toContain("export function projectHistory");
+    expect(embedded).toMatch(/^[0-9a-f]{12}$/);
+    expect(JSON.parse(meta.text).revision).toBe(embedded);
+  });
+});
+
 describe("the launcher window belongs only to the handoff", () => {
   it("does not force PowerShell to remain open after the launcher exits", () => {
     const command = launcherCommand("C:\\control\\compy-entry.ps1", { issue: 39 });
