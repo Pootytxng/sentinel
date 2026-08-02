@@ -1,0 +1,142 @@
+/* ── Quiet Pit Wall token contract (redesign foundation, issue #49) ───────────────────
+   The owner-approved Direction D hybrid (docs/design/quiet-pit-wall/direction-d-hybrid-
+   RECOMMENDED.html, gate 2026-08-01), issued as tokens.
+
+   EVERY selector in this file must be scoped under [data-qpw="on"] — that is the flag-off
+   byte-identity mechanism and it is test-pinned (tokens-qpw-guard.test.ts). The attribute is
+   DEFAULT OFF: nothing in here can touch a shipped pixel until a room is ported and the flag
+   is flipped for it. Old faces stay recoverable until each replacement reaches parity.
+
+   Laws this file mechanizes:
+   · THREE PLANES ONLY — environment, active workspace, temporary overlay. There is no fourth.
+   · EVIDENCE IS COLOUR — violet = Compy focus/active direction, teal = measured evidence,
+     amber = uncertainty/owner judgment, red = ACTUAL FAILURE ONLY. Colour is never decoration.
+   · TYPE FLOOR — human language never goes below --qpw-fs-meta (13px). --qpw-fs-mono (12px) is
+     for telemetry, timestamps, IDs and tabular values ONLY, never labels or prose.
+   · ONE PRIMARY — --qpw-h-primary is the filled action. A viewport gets one.
+   · MOTION IS CAUSAL AND ONE-TIME — micro 140ms, room 220ms, and Windows reduced-motion is the
+     default authority (see the contract at the foot of this file and use-motion.ts).
+
+   Per-room identity survives as a NAVIGATION CUE only (--qpw-cue-*), never a full-surface
+   repaint. The room accents are the owner's existing shipped hues (room-identity.ts). */
+
+:root[data-qpw="on"] {
+  /* ── Plane 0 · environment ─ Plane 1 · active workspace ─ Plane 2 · temporary overlay ── */
+  --qpw-env: #131417;
+  --qpw-work: #1b1d22;
+  --qpw-over: #24272e;
+  --qpw-edge: #2b2f37; /* the ONE border tone — used sparingly, illumination is preferred */
+
+  /* ── Human language. Warm off-white, not clinical white. ── */
+  --qpw-ink: #ece7e0; /* body + conclusions   — 13.7:1 on --qpw-work */
+  --qpw-ink-2: #a8a49d; /* supporting language  —  6.8:1 on --qpw-work */
+  --qpw-ink-3: #918d86; /* meta, units, crumbs  —  5.1:1 on --qpw-work, 4.5:1 on --qpw-over */
+
+  /* ── Evidence semantics. Every one of these MEANS something. ── */
+  --qpw-focus: #a78bfa; /* violet — Compy focus, active direction, the current mission  */
+  --qpw-proof: #3fd9c2; /* teal   — measured evidence, confirmed on this PC             */
+  --qpw-judge: #f0b878; /* amber  — uncertainty, unread, the owner's call to make       */
+  --qpw-fail: #ff6b6b; /* red    — ACTUAL failure or danger. Nothing else. Ever.       */
+
+  --qpw-focus-dim: rgba(167, 139, 250, 0.15);
+  --qpw-proof-dim: rgba(63, 217, 194, 0.15);
+  --qpw-judge-dim: rgba(240, 184, 120, 0.15);
+  --qpw-fail-dim: rgba(255, 107, 107, 0.15);
+
+  /* Ink that sits ON a filled accent. Fixed near-black: legible on every accent in the set
+     (6.8:1 on violet). It must NOT follow a per-room accent override. */
+  --qpw-accent-ink: #160f2b;
+
+  /* ── Evidence STATES. The four honest answers, and the only four. ── */
+  --qpw-state-measured: var(--qpw-proof); /* we read it on this PC                    */
+  --qpw-state-expected: var(--qpw-focus); /* catalog guidance, not measured here      */
+  --qpw-state-unknown: var(--qpw-judge); /* we could read it and haven't yet         */
+  --qpw-state-unavailable: var(--qpw-ink-3); /* we cannot read it on this machine        */
+
+  /* ── Per-room navigation cue. A 3px rail mark and a dot. Not a paint job. ── */
+  --qpw-cue-home: #a78bfa;
+  --qpw-cue-lab: #27e08a;
+  --qpw-cue-monitor: #3fd9c2;
+  --qpw-cue-blackbook: #f0b878;
+
+  /* ── Type. One sans for language, one mono for machine values. ── */
+  --qpw-font-sans: "Geist Sans", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --qpw-font-mono: "Geist Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+
+  --qpw-fs-verdict: 29px; /* the room's ONE conclusion       */
+  --qpw-fs-title: 18px; /* card title — six words or fewer */
+  --qpw-fs-body: 15px; /* human language                  */
+  --qpw-fs-support: 14px; /* secondary language              */
+  --qpw-fs-meta: 13px; /* FLOOR for anything a human reads */
+  --qpw-fs-mono: 12px; /* telemetry / timestamps / tabular ONLY */
+
+  --qpw-lh-verdict: 1.14;
+  --qpw-lh-body: 1.5;
+  --qpw-tracking-verdict: -0.018em;
+
+  /* ── Rhythm. The only sanctioned steps. ── */
+  --qpw-s1: 4px;
+  --qpw-s2: 6px;
+  --qpw-s3: 8px;
+  --qpw-s4: 10px;
+  --qpw-s5: 12px;
+  --qpw-s6: 14px;
+  --qpw-s7: 18px;
+  --qpw-s8: 22px;
+  --qpw-s9: 26px;
+  --qpw-s10: 34px;
+
+  --qpw-r-sm: 6px;
+  --qpw-r: 10px;
+  --qpw-r-lg: 14px;
+  --qpw-r-pill: 999px;
+
+  /* ── Action hierarchy. One filled primary, one quiet secondary, the rest bare. ── */
+  --qpw-h-primary: 44px; /* the single filled action                          */
+  --qpw-h-action: 40px; /* quiet / bare actions                              */
+  --qpw-h-target: 24px; /* WCAG 2.2 AA floor — nothing interactive goes under */
+
+  /* ── Motion. One focal move per viewport, one time, always explaining cause. ── */
+  --qpw-dur-micro: 140ms; /* state feedback  */
+  --qpw-dur-room: 220ms; /* room transition */
+  --qpw-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* ── Depth. Shadow carries plane, not decoration. ── */
+  --qpw-lift-work: 0 18px 40px -28px rgba(0, 0, 0, 0.9);
+  --qpw-lift-over: 0 24px 60px -30px rgba(0, 0, 0, 0.95);
+}
+
+/* ═══ REDUCED-MOTION CONTRACT ══════════════════════════════════════════════════════════
+   Windows is the DEFAULT AUTHORITY. use-motion.ts resolves the pref to <html data-motion>;
+   "system" (the default) mirrors the OS. An explicit user override is honoured — that is why
+   the media-query belt-and-braces below excludes [data-motion="full"] rather than firing
+   unconditionally. Compy may never SILENTLY ignore the system preference.
+
+   Reduced motion removes travel, parallax, loops and orbit. It preserves immediate state
+   feedback: a thing that changes still changes, it just doesn't fly there. */
+
+:root[data-qpw="on"][data-motion="reduced"] *,
+:root[data-qpw="on"][data-motion="reduced"] *::before,
+:root[data-qpw="on"][data-motion="reduced"] *::after {
+  animation-duration: 1ms !important;
+  animation-delay: 0ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+  transition-delay: 0ms !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Applies before JS resolves data-motion, and whenever the user has NOT explicitly asked
+     for full motion. An explicit "full" choice is the one thing that survives this. */
+  :root[data-qpw="on"]:not([data-motion="full"]) *,
+  :root[data-qpw="on"]:not([data-motion="full"]) *::before,
+  :root[data-qpw="on"]:not([data-motion="full"]) *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}

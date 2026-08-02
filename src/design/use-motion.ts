@@ -1,10 +1,26 @@
 import { useEffect, useState } from "react";
 
-// App-wide motion preference. OWNER DECISION (2026-06-19): Compy's "living instrument" motion is ON
-// BY DEFAULT and overrides the OS "reduce motion" setting — with an explicit opt-out for users who
-// want it calm. So the default is "full" (ignore the OS); "system" defers to the OS; "reduced" forces
-// calm. The resolved state is mirrored onto <html data-motion="full|reduced"> so BOTH JS animations
-// (via useReducedMotion) and CSS (via :root[data-motion="reduced"]) read one source of truth.
+// App-wide motion preference.
+//
+// HISTORY — read both entries before changing this default again.
+//   2026-06-19 (superseded): Compy's "living instrument" motion was ON BY DEFAULT and deliberately
+//     OVERRODE the OS "reduce motion" setting, with an explicit opt-out. The default was "full".
+//   2026-08-01 (current, Direction D gate, issue #49): overturned. Windows is the DEFAULT
+//     AUTHORITY. The redesign brief lists the old behaviour under conflicts as "contradicts
+//     accessibility direction; fix", and WCAG 2.2 requires that unnecessary motion be disableable
+//     through the operating-system preference. An explicit user override still exists in both
+//     directions — "full" forces motion on even when the OS asks for calm, "reduced" forces calm
+//     even when it doesn't — but Compy may never SILENTLY ignore the system setting. So the
+//     default is "system".
+//
+// Migration note: users who never touched the setting had no stored value, so they move from
+// "full" to "system" automatically. The only visible change is for someone who has Windows
+// reduce-motion turned ON — which is exactly the person this fix is for. Anyone who explicitly
+// chose "full" keeps it; the stored value wins over the default.
+//
+// The resolved state is mirrored onto <html data-motion="full|reduced"> so BOTH JS animations
+// (via useReducedMotion) and CSS (via :root[data-motion="reduced"], and the Quiet Pit Wall
+// contract in tokens-qpw.css) read one source of truth.
 
 export type MotionPref = "full" | "system" | "reduced";
 
@@ -18,7 +34,7 @@ export function readMotionPref(): MotionPref {
   } catch {
     /* localStorage unavailable */
   }
-  return "full"; // default: motion on, override the OS
+  return "system"; // default: follow the Windows setting — never silently override it
 }
 
 function systemReduced(): boolean {
@@ -33,7 +49,7 @@ function systemReduced(): boolean {
 export function resolveReduced(pref: MotionPref = readMotionPref()): boolean {
   if (pref === "reduced") return true;
   if (pref === "system") return systemReduced();
-  return false; // "full"
+  return false; // "full" — an explicit user override, honoured
 }
 
 // Mirror the resolved state onto <html> so CSS keys off it (:root[data-motion="reduced"]).

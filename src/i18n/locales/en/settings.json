@@ -35,7 +35,7 @@
     },
     "motion": {
       "title": "Motion",
-      "sub": "Compy's living motion is on by default, even if Windows requests reduced motion. Choose Follow system to defer to Windows, or Reduced to keep everything calm.",
+      "sub": "Compy follows the Windows motion setting by default. Choose Full to keep the interface animated even when Windows asks for less, or Reduced to keep everything calm.",
       "full": "Full",
       "system": "Follow system",
       "reduced": "Reduced"

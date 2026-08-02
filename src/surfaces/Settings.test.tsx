@@ -37,15 +37,20 @@ describe("Settings", () => {
     expect(screen.getByText("v0.1.0")).toBeInTheDocument();
   });
 
-  it("Motion is a Full/System/Reduced control (default Full, overrides OS)", () => {
+  // Direction D gate, 2026-08-01: the default is Follow system - Windows is the authority. The
+  // 2026-06-19 "Full overrides the OS" default was overturned as an accessibility conflict
+  // (WCAG 2.2: unnecessary motion must be disableable through the OS preference). An explicit
+  // Full override still exists; what is gone is Compy SILENTLY ignoring the system setting.
+  it("Motion is a Full/System/Reduced control (default Follow system - Windows is the authority)", () => {
     render(<Settings {...baseProps} />);
     const motion = screen.getByRole("group", { name: "Motion" });
     expect(motion).toBeInTheDocument();
+    const system = within(motion).getByRole("button", { name: "Follow system" });
+    expect(system.getAttribute("aria-pressed")).toBe("true");
     const full = within(motion).getByRole("button", { name: "Full" });
-    expect(full.getAttribute("aria-pressed")).toBe("true");
-    expect(within(motion).getByRole("button", { name: "Follow system" })).toBeInTheDocument();
+    expect(full.getAttribute("aria-pressed")).toBe("false");
     expect(within(motion).getByRole("button", { name: "Reduced" })).toBeInTheDocument();
-    expect(screen.getByText(/living motion is on by default/i)).toBeInTheDocument();
+    expect(screen.getByText(/follows the Windows motion setting by default/i)).toBeInTheDocument();
   });
 
   it("Expert view is a genuine preference — present, default OFF, persists on toggle", () => {
