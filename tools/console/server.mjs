@@ -19,6 +19,7 @@ import { promisify } from "node:util";
 import { snapshot, CODE_ROOT, CONTROL_DIR } from "./sources.mjs";
 import { assertAgentSubscription, authArgsFor, planAgentSpawn, threadIdFromAgentEvent } from "./agents.mjs";
 import { createNativeChatStore } from "./chats.mjs";
+import { createDoctorScanner } from "./doctor-scan.mjs";
 import { PROVIDERS, addIdea, addLink, providerOf, readNotes, remove } from "./notes.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -36,9 +37,17 @@ const ORIGIN_GUARDED_ROUTES = new Set([
   "/api/open",
 ]);
 
-const pageSource = () => readFileSync(join(HERE, "index.html"), "utf8");
-const pageRevision = () => createHash("sha256").update(pageSource()).digest("hex").slice(0, 12);
-const renderedPage = () => pageSource().replace("__COMPY_PAGE_REVISION__", pageRevision());
+const pageSource = (name = "index.html") => readFileSync(join(HERE, name), "utf8");
+const pageRevision = (name = "index.html") => createHash("sha256").update(pageSource(name)).digest("hex").slice(0, 12);
+const renderedPage = (name = "index.html") => pageSource(name).replace("__COMPY_PAGE_REVISION__", pageRevision(name));
+
+const DOCTOR_ASSETS = Object.freeze({
+  "/doctor.css": ["doctor.css", "text/css; charset=utf-8"],
+  "/doctor-ui.mjs": ["doctor-ui.mjs", "text/javascript; charset=utf-8"],
+  "/doctor-view.mjs": ["doctor-view.mjs", "text/javascript; charset=utf-8"],
+  "/doctor-findings.mjs": ["doctor-findings.mjs", "text/javascript; charset=utf-8"],
+  "/doctor-playbook.mjs": ["doctor-playbook.mjs", "text/javascript; charset=utf-8"],
+});
 
 const send = (res, code, body, type = "application/json") => {
   res.writeHead(code, { "content-type": type, "cache-control": "no-store" });
@@ -195,11 +204,12 @@ export function createConsoleServer({
   launchProcess = startDetachedProcess,
   launcherExists = existsSync,
   chatStore = createNativeChatStore({ codeRoot: CODE_ROOT }),
+  doctorScanner = createDoctorScanner(),
 } = {}) {
   return createServer(async (req, res) => {
     const url = new URL(req.url, `http://${HOST}`);
     try {
-      if ((ORIGIN_GUARDED_ROUTES.has(url.pathname) || url.pathname.startsWith("/api/chats")) && !trustedOrigin(req)) {
+      if ((ORIGIN_GUARDED_ROUTES.has(url.pathname) || url.pathname.startsWith("/api/chats") || url.pathname.startsWith("/api/doctor/")) && !trustedOrigin(req)) {
         return send(res, 403, { error: "This request did not come from the local Compy Console.", code: "FOREIGN_ORIGIN" });
       }
 
@@ -207,12 +217,30 @@ export function createConsoleServer({
         return send(res, 200, renderedPage(), "text/html; charset=utf-8");
       }
 
+      if (url.pathname === "/doctor") {
+        return send(res, 200, renderedPage("doctor.html"), "text/html; charset=utf-8");
+      }
+
+      if (DOCTOR_ASSETS[url.pathname]) {
+        const [name, type] = DOCTOR_ASSETS[url.pathname];
+        return send(res, 200, readFileSync(join(HERE, name), "utf8"), type);
+      }
+
       if (url.pathname === "/journey.mjs") {
         return send(res, 200, readFileSync(join(HERE, "journey.mjs"), "utf8"), "text/javascript; charset=utf-8");
       }
 
+      if (url.pathname === "/api/meta" && url.searchParams.get("surface") === "doctor") {
+        return send(res, 200, { revision: pageRevision("doctor.html") });
+      }
+
       if (url.pathname === "/api/meta") {
         return send(res, 200, { revision: pageRevision() });
+      }
+
+      if (url.pathname === "/api/doctor/scan" && req.method === "GET") {
+        const result = await doctorScanner.run({ includeSlow: url.searchParams.get("slow") === "1" });
+        return send(res, result.busy ? 409 : 200, result);
       }
 
       // The whole world, read fresh. No caching layer on purpose — see sources.mjs.

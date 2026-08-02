@@ -19,6 +19,7 @@ async function start(options = {}) {
 
 function request(port, { path = "/api/chat", method = "POST", origin, body = {} } = {}) {
   const payload = JSON.stringify(body);
+  const sendsBody = method !== "GET";
   return new Promise((resolve, reject) => {
     const req = http.request({
       hostname: HOST,
@@ -26,8 +27,10 @@ function request(port, { path = "/api/chat", method = "POST", origin, body = {} 
       path,
       method,
       headers: {
-        "content-type": "application/json",
-        "content-length": Buffer.byteLength(payload),
+        ...(sendsBody ? {
+          "content-type": "application/json",
+          "content-length": Buffer.byteLength(payload),
+        } : {}),
         ...(origin === undefined ? {} : { origin }),
       },
     }, (res) => {
@@ -36,7 +39,7 @@ function request(port, { path = "/api/chat", method = "POST", origin, body = {} 
       res.on("end", () => resolve({ status: res.statusCode, text }));
     });
     req.on("error", reject);
-    req.end(payload);
+    req.end(sendsBody ? payload : undefined);
   });
 }
 
@@ -167,5 +170,42 @@ describe("the launcher window belongs only to the handoff", () => {
     expect(response.status).toBe(500);
     expect(response.text).toMatch(/could not start/i);
     expect(launchProcess).toHaveBeenCalledOnce();
+  });
+});
+
+describe("the Project Doctor preview is isolated and read-only", () => {
+  it("serves the preview and its matching revision without changing the legacy root", async () => {
+    const doctorScanner = { run: vi.fn(async () => ({ generatedAt: "now", findings: [] })) };
+    const { port } = await start({ doctorScanner });
+    const legacy = await request(port, { path: "/", method: "GET" });
+    const doctor = await request(port, { path: "/doctor", method: "GET" });
+    const meta = await request(port, { path: "/api/meta?surface=doctor", method: "GET" });
+    expect(legacy.text).toContain("Continue");
+    expect(doctor.text).toContain("Project Doctor");
+    expect(JSON.parse(meta.text).revision).toBe(/PAGE_REVISION = "([0-9a-f]{12})"/.exec(doctor.text)?.[1]);
+  });
+
+  it("rejects a foreign browser before the scanner runs", async () => {
+    const doctorScanner = { run: vi.fn(async () => ({ findings: [] })) };
+    const { port } = await start({ doctorScanner });
+    const response = await request(port, { path: "/api/doctor/scan", method: "GET", origin: "https://attacker.invalid" });
+    expect(response.status).toBe(403);
+    expect(doctorScanner.run).not.toHaveBeenCalled();
+  });
+
+  it("maps only slow=1 to the slow source group", async () => {
+    const doctorScanner = { run: vi.fn(async () => ({ generatedAt: "now", findings: [] })) };
+    const { port } = await start({ doctorScanner });
+    await request(port, { path: "/api/doctor/scan?slow=0", method: "GET" });
+    await request(port, { path: "/api/doctor/scan?slow=1", method: "GET" });
+    expect(doctorScanner.run.mock.calls.map(([x]) => x.includeSlow)).toEqual([false, true]);
+  });
+
+  it("serves only the explicit Doctor asset set", async () => {
+    const { port } = await start();
+    for (const path of ["/doctor.css", "/doctor-ui.mjs", "/doctor-view.mjs", "/doctor-findings.mjs", "/doctor-playbook.mjs"]) {
+      expect((await request(port, { path, method: "GET" })).status).toBe(200);
+    }
+    expect((await request(port, { path: "/doctor-scan.mjs", method: "GET" })).status).toBe(404);
   });
 });
