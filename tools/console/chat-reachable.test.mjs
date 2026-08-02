@@ -32,16 +32,17 @@ describe("the chat is a destination, not a reward", () => {
     expect(openNav).toEqual(["ch"]);
   });
 
-  it("lives inside that pane, not in a drawer something has to open", () => {
+  it("keeps the conversation open while advanced route controls stay under Start", () => {
     const pane = /<section class="pane on" id="ch">([\s\S]*?)<\/section>/.exec(PAGE)?.[1] ?? "";
+    const start = /<section class="pane" id="wk">([\s\S]*?)<\/section>/.exec(PAGE)?.[1] ?? "";
     expect(pane).toMatch(/id="chat"/);
     expect(pane).toMatch(/id="chatLog"/);
     expect(pane).toMatch(/id="chatBox"/);
     expect(pane).toMatch(/id="chatSend"/);
-    expect(pane).toMatch(/id="chatFolder"/);
-    // Both agents, in one place, exactly as asked for.
-    expect(pane).toMatch(/<option value="claude">/);
-    expect(pane).toMatch(/<option value="codex">/);
+    expect(pane).not.toMatch(/id="chatFolder"/);
+    expect(start).toMatch(/id="routeDetails"[\s\S]*id="chatFolder"/);
+    expect(start).toMatch(/<option value="claude">/);
+    expect(start).toMatch(/<option value="codex">/);
   });
 
   it("carries no leftover open/close machinery — a surface you must open can be closed to you", () => {
@@ -70,7 +71,7 @@ describe("the chat is a destination, not a reward", () => {
     // without quietly turning that explanation into an unclaimed writer.
     expect(work).toMatch(/a\.available \? `<button class="btn pri" data-launch=/);
     expect(work).toMatch(/: folder \? `<button class="btn" data-open=/);
-    expect(work).toMatch(/Ask about it/);
+    expect(work).toMatch(/Ask what is blocking it/);
   });
 });
 

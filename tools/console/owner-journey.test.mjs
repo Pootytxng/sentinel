@@ -8,13 +8,14 @@ const PAGE = readFileSync(join(here, "index.html"), "utf8");
 const SCRIPT = /<script>([\s\S]*)<\/script>/.exec(PAGE)?.[1] ?? "";
 const fn = (name) => new RegExp(`(?:async )?function ${name}\\([\\s\\S]*?\\n}`).exec(PAGE)?.[0] ?? "";
 
-describe("the default Console is one obvious starting surface", () => {
-  it("leads with the owner's question, not a tool name or dashboard taxonomy", () => {
-    expect(PAGE).toContain("What are we working on?");
-    expect(PAGE).toContain("Tell Compy what you want");
-    expect(PAGE).toMatch(/data-t="ch"[^>]*>[\s\S]*?Now<\/button>/);
-    expect(PAGE).toMatch(/data-t="wk"[^>]*>[\s\S]*?Work/);
-    expect(PAGE).toMatch(/data-t="hs"[^>]*>[\s\S]*?Chats/);
+describe("the default Console is one obvious owner journey", () => {
+  it("offers exactly Continue, Start, and History as the primary actions", () => {
+    const primaryNav = /<nav aria-label="Compy Console">([\s\S]*?)<details/.exec(PAGE)?.[1] ?? "";
+    expect(primaryNav).toMatch(/data-t="ch"[^>]*>[\s\S]*?Continue<\/button>/);
+    expect(primaryNav).toMatch(/data-t="wk"[^>]*>[\s\S]*?Start/);
+    expect(primaryNav).toMatch(/data-t="hs"[^>]*>[\s\S]*?History/);
+    expect(primaryNav).not.toMatch(/>Now<\/button>|>Work|>Chats/);
+    expect(primaryNav.match(/data-t=/g)).toHaveLength(3);
   });
 
   it("puts folder, agent, model, and effort inside one closed Change route disclosure", () => {
@@ -24,11 +25,35 @@ describe("the default Console is one obvious starting surface", () => {
     expect(start).toBeGreaterThan(0);
     expect(block).toContain("Change route");
     for (const id of ["chatFolder", "chatAgent", "chatModel", "chatEffort"]) expect(block).toContain(`id="${id}"`);
+    expect(PAGE.indexOf('<section class="pane" id="wk">')).toBeLessThan(start);
   });
 
-  it("hides the six-machine-value strip while the conversation is active", () => {
-    expect(PAGE).toMatch(/body\[data-view="ch"\] \.vitals\{display:none}/);
+  it("keeps machine vitals out of all three primary actions", () => {
+    expect(PAGE).toMatch(/body:is\(\[data-view="ch"\],\[data-view="wk"\],\[data-view="hs"\]\) \.vitals\{display:none}/);
     expect(fn("switchTo")).toMatch(/document\.body\.dataset\.view = id/);
+  });
+
+  it("gives Start one plain-language composer and keeps work cards on the same surface", () => {
+    expect(PAGE).toContain('id="startBox"');
+    expect(PAGE).toContain('id="startSend"');
+    expect(PAGE).toContain('id="workList"');
+    expect(fn("startFromPrompt")).toMatch(/newThread[\s\S]*switchTo\("ch"\)[\s\S]*send\(text\)/);
+    expect(fn("render")).toMatch(/pip\("p-wk",[\s\S]*S\.work\.startable \? "ok" : ""/);
+  });
+
+  it("makes History searchable and projects native sessions through the noise filter", () => {
+    expect(PAGE).toContain('id="historySearch"');
+    expect(PAGE).toContain('id="historySummary"');
+    expect(fn("renderChats")).toMatch(/projectHistory/);
+    expect(SCRIPT).toMatch(/historySearch[\s\S]*renderChats/);
+    expect(fn("render")).toMatch(/projectHistory[\s\S]*pip\("p-hs"/);
+  });
+
+  it("shows a clear reload action when the loaded interface is behind the server", () => {
+    expect(PAGE).toContain('id="updateNotice"');
+    expect(PAGE).toContain('id="reloadConsole"');
+    expect(fn("checkRevision")).toMatch(/\/api\/meta/);
+    expect(fn("checkRevision")).toMatch(/PAGE_REVISION/);
   });
 });
 
@@ -47,12 +72,19 @@ describe("natural input and durable conversation continuity", () => {
   it("makes every saved chat reopenable with its native route and transcript", () => {
     expect(PAGE).toContain('id="chatList"');
     expect(fn("renderChats")).toMatch(/data-chat-agent/);
-    expect(fn("renderChats")).toMatch(/Open chat/);
+    expect(fn("renderChats")).toMatch(/Continue/);
     expect(fn("openSavedChat")).toMatch(/\/api\/chats\//);
     expect(fn("openSavedChat")).toMatch(/thread = \{ id: chat\.id/);
     expect(fn("openSavedChat")).toMatch(/\$\("chatBox"\)\.value = ""/);
     expect(fn("openSavedChat")).toMatch(/chat\.truncated[\s\S]*most recent/);
     expect(fn("openSavedChat")).toMatch(/switchTo\("ch"\)/);
+  });
+
+  it("distinguishes readable archives from conversations that can actually continue", () => {
+    const history = fn("renderChats");
+    expect(history).toMatch(/availableFolders/);
+    expect(history).toMatch(/chat\.resumable \? "Continue" : "Read"/);
+    expect(fn("renderContinueLanding")).toMatch(/availableFolders/);
   });
 
   it("the global working indicator returns to the active conversation", () => {
@@ -95,6 +127,12 @@ describe("natural input and durable conversation continuity", () => {
 });
 
 describe("work starts through the safety train", () => {
+  it("never labels unavailable work as Ready", () => {
+    const work = fn("renderWork");
+    expect(work).toMatch(/availabilityLabel\(i\)/);
+    expect(work).not.toMatch(/a\.available \? "Ready" : esc\(i\.status\)/);
+  });
+
   it("a green board action launches its issue instead of directly spawning chat in the folder", () => {
     expect(fn("renderWork")).toMatch(/data-launch=/);
     expect(fn("renderWork")).toMatch(/launchIssue\(Number\(b\.dataset\.launch\), b\)/);

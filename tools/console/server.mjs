@@ -10,6 +10,7 @@
 
 import { createServer } from "node:http";
 import { execFile, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,6 +35,10 @@ const ORIGIN_GUARDED_ROUTES = new Set([
   "/api/notes/remove",
   "/api/open",
 ]);
+
+const pageSource = () => readFileSync(join(HERE, "index.html"), "utf8");
+const pageRevision = () => createHash("sha256").update(pageSource()).digest("hex").slice(0, 12);
+const renderedPage = () => pageSource().replace("__COMPY_PAGE_REVISION__", pageRevision());
 
 const send = (res, code, body, type = "application/json") => {
   res.writeHead(code, { "content-type": type, "cache-control": "no-store" });
@@ -199,7 +204,15 @@ export function createConsoleServer({
       }
 
       if (url.pathname === "/" || url.pathname === "/index.html") {
-        return send(res, 200, readFileSync(join(HERE, "index.html"), "utf8"), "text/html; charset=utf-8");
+        return send(res, 200, renderedPage(), "text/html; charset=utf-8");
+      }
+
+      if (url.pathname === "/journey.mjs") {
+        return send(res, 200, readFileSync(join(HERE, "journey.mjs"), "utf8"), "text/javascript; charset=utf-8");
+      }
+
+      if (url.pathname === "/api/meta") {
+        return send(res, 200, { revision: pageRevision() });
       }
 
       // The whole world, read fresh. No caching layer on purpose — see sources.mjs.
