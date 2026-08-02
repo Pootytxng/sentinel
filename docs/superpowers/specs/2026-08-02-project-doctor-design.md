@@ -311,7 +311,7 @@ Every clause must be true:
 
 Project Doctor must never automatically:
 
-- merge, rebase, reset, checkout over work, force-push, push, publish, release, or distribute;
+- merge (which updates no existing worktree), rebase, reset, checkout over work, force-push, push, publish, release, or distribute;
 - stash, delete, move, or overwrite unknown/dirty work;
 - take over an expired claim;
 - stop an editor, agent, builder, installer, helper, or another tool's process to clear a collision;
