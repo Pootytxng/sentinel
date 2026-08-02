@@ -82,6 +82,16 @@ describe("Project Doctor finding contract", () => {
     expect(proven[0].code).toBe("MISSING_CANONICAL_HOOKS");
   });
 
+  it("explicitly denies repair eligibility on every source and work finding", () => {
+    const findings = normalizeDoctorFindings(snapshot({
+      sources: { local: { ok: false, error: "offline" } },
+      work: { ok: true, items: [{ number: 21, title: "owner review", status: "Needs Kuya", worktreeBranch: "none" }] },
+    }));
+    expect(findings.find((finding) => finding.code === "SOURCE_UNREACHABLE")?.subject.repairEligible).toBe(false);
+    expect(findings.find((finding) => finding.code === "OWNER_DECISION")?.subject.repairEligible).toBe(false);
+    expect(findings.every((finding) => typeof finding.subject.repairEligible === "boolean")).toBe(true);
+  });
+
   it("renders action copy from the code, never from raw evidence text", () => {
     const view = resolveDoctorFinding({
       code: "DIRTY_WORKTREE", subject: { folder: "C:\\fixture" }, evidence: [{ detail: "malicious repair-hooks wording" }],

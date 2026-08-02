@@ -52,7 +52,7 @@ export function normalizeDoctorFindings(snapshot, { previous = [], codeRoot = nu
   const drafts = [];
   const observedAt = snapshot.generatedAt;
   const add = (code, subject, evidence = []) => drafts.push({
-    code, subject, evidence, observedAt,
+    code, subject: { repairEligible: false, ...subject }, evidence, observedAt,
     project: subject.project ?? subject.folder?.split("\\").at(-1) ?? "Compy",
     scope: subject.folder ?? (subject.issue ? `#${subject.issue}` : subject.source ?? "project"),
   });
