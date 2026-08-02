@@ -19,7 +19,7 @@ import "./Walkthrough.css";
 // Auto-advance runs only when motion is allowed AND the user hasn't taken the wheel; when motion is
 // reduced it is a manual stepper — never an auto-loop, never the 5-stack. It NEVER dresses as real
 // OS chrome — it's labeled a schematic. Motion gates on the APP's own signal (useReducedMotion,
-// motion-on-by-default, OS-override), NOT raw prefers-reduced-motion — see src/design/use-motion.ts.
+// which follows Windows by default since the 2026-08-01 Direction D gate), NOT raw prefers-reduced-motion — see src/design/use-motion.ts.
 
 function Stage({ steps, active, cursor }: { steps: WalkthroughStep[]; active: number; cursor: boolean }) {
   const cur = steps[active] ?? steps[0];

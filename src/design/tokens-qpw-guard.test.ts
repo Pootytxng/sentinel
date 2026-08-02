@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 
 // Quiet Pit Wall token guards — the Direction D laws, mechanized (bug→guard tier 1).
@@ -289,5 +289,43 @@ describe("the test suite itself is not silently disabled", () => {
     // "No such built-in module: node:". The directive on line 1 is what makes this file run.
     const self = readFileSync(join("src", "design", "tokens-qpw-guard.test.ts"), "utf8");
     expect(self.split("\n")[0]).toMatch(/@vitest-environment node/);
+  });
+});
+// ── One source of truth for motion ──────────────────────────────────────────────────────
+// use-motion.ts folds the Windows setting into <html data-motion>. Any stylesheet that queries
+// prefers-reduced-motion RAW bypasses that, and an explicit user choice stops working in one or
+// both directions. Found 2026-08-02: ExperimentBench.css gated an infinite pulse on
+// `(prefers-reduced-motion: no-preference)`, so a user who chose "Reduced" still got the loop
+// whenever Windows reported no preference. Fixed to :root[data-motion="full"]; guarded here.
+describe("one source of truth for motion (no raw prefers-reduced-motion in src CSS)", () => {
+  const walk = (dir: string): string[] =>
+    (readdirSync(dir) as string[]).flatMap((name) => {
+      const p = join(dir, name);
+      return statSync(p).isDirectory() ? walk(p) : name.endsWith(".css") ? [p] : [];
+    });
+
+  it("every prefers-reduced-motion block also keys off <html data-motion>", () => {
+    const offenders: string[] = [];
+    for (const file of walk("src")) {
+      const text = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+      let i = text.indexOf("@media");
+      while (i !== -1) {
+        const head = text.slice(i, text.indexOf("{", i) + 1);
+        if (head.includes("prefers-reduced-motion")) {
+          // Take the block body by brace balance from the @media opening brace.
+          let depth = 0;
+          let j = text.indexOf("{", i);
+          const start = j;
+          for (; j < text.length; j++) {
+            if (text[j] === "{") depth++;
+            else if (text[j] === "}" && --depth === 0) break;
+          }
+          const body = text.slice(start, j);
+          if (!body.includes("data-motion")) offenders.push(file);
+        }
+        i = text.indexOf("@media", i + 6);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

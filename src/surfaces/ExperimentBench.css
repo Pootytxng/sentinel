@@ -330,10 +330,13 @@
   color: var(--ix-amber);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .exp-running-dot {
-    animation: exp-pulse 2.4s ease-in-out infinite;
-  }
+/* Motion gates on the APP's resolved signal (<html data-motion>), never a raw
+   prefers-reduced-motion query: use-motion.ts already folds the Windows setting into that
+   attribute, and an explicit user choice must win in BOTH directions. The previous
+   `no-preference` form got it backwards - a user who chose "Reduced" still got this infinite
+   pulse whenever Windows happened to report no preference. Pinned by qpw-contracts.test.tsx. */
+:root[data-motion="full"] .exp-running-dot {
+  animation: exp-pulse 2.4s ease-in-out infinite;
 }
 @keyframes exp-pulse {
   0%, 100% { opacity: 1; }
