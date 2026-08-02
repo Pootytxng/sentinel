@@ -1,8 +1,8 @@
 # Compy Project Doctor — zero-token design specification
 
-**Status:** owner-approved direction; implementation not started  
-**Decision date:** 2026-08-02  
-**Evidence baseline:** `b80991b` (`main`, after PR #52)  
+**Status:** owner-approved direction; implementation not started<br>
+**Decision date:** 2026-08-02<br>
+**Evidence baseline:** `b80991b` (`main`, after PR #52)<br>
 **Owner review gate:** this written specification must be accepted or redirected before an implementation plan is produced
 
 ## 1. Product decision
@@ -99,9 +99,9 @@ Every problem card uses the same four-part grammar:
 
 Example:
 
-> **Two sessions point at the same folder.**  
-> They could overwrite each other's work.  
-> **Compy recommends:** return to the session that already owns it.  
+> **Two sessions point at the same folder.**<br>
+> They could overwrite each other's work.<br>
+> **Compy recommends:** return to the session that already owns it.<br>
 > **Return to Claude**
 
 ### 3.3 Repairs
