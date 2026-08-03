@@ -24,12 +24,12 @@
 <!-- latest_release_version is enforced by check (1) to equal src-tauri/tauri.conf.json's version, so it
      means "the version THIS TREE is configured to build" — NOT "the newest published release".
      Published truth is carried separately by published_release_* below. Do not conflate them. -->
-<!-- STATE:source_main_commit=b80991b -->
+<!-- STATE:source_main_commit=ffea9ab -->
 <!-- STATE:latest_release_version=0.9.11 -->
-<!-- STATE:candidate_version=0.9.11 -->
+<!-- STATE:candidate_version=0.9.12 -->
 <!-- STATE:candidate_branch=main -->
-<!-- STATE:candidate_published=yes-2026-07-28 -->
-<!-- STATE:candidate_installed=yes -->
+<!-- STATE:candidate_published=no -->
+<!-- STATE:candidate_installed=no -->
 <!-- STATE:aborted_source_only_release=v0.9.9-664aa5e -->
 <!-- STATE:v0910_release_debris=deleted-2026-07-28 -->
 <!-- STATE:v0910_source_tag=92c7608-preserved -->
@@ -143,11 +143,13 @@ blocks the shipped v0.9.11 build or the work that follows it.
 
 ## Required owner decisions (live)
 
-1. **Fleet expansion beyond the passed v0.9.11 canary** — publish is done (GO given, 9/9 stages,
-   public assets verified) and the single-tester canary **PASSED** on the normal updater path, which
-   was the stated precondition for widening. The remaining call is whether/when the other invitees
-   move onto the updater-enabled build — a distribution decision, owner territory. Publish GO/NO-GO
-   returns as a decision only for the *next* prepared candidate.
+1. **Fleet expansion onto v0.9.12** — publish for v0.9.12 was authorized by the owner on 2026-08-03
+   (updater/privacy truth fix, issue #59: the absolute "nothing leaves your PC" claims are gone from
+   the app, the legal documents and the marketing site, and automatic update checks are now
+   switchable off). v0.9.11's single-tester canary **PASSED** on the normal updater path, which was
+   the stated precondition for widening. The remaining call is whether/when the other invitees move
+   onto the updater-enabled build — a distribution decision, owner territory. Publish GO/NO-GO
+   returns as a decision only for the *next* prepared candidate after this one.
 2. Code-signing route + legal finalization (PUBLIC gates).
 3. When/whether to arm Receipts (its own security review + owner sign-off).
 
