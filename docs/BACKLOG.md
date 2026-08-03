@@ -25,9 +25,26 @@
 - [~] **Q0 — LabDeck glance-first presentation pilot:** Active in issue
   [#14](https://github.com/Pootytxng/sentinel/issues/14), default OFF; preserve the real RigViewer,
   essential measured gauges, comparison evidence, and the accepted decision-journey organization.
-- [ ] **P0 before the next release or wider beta:** Q1 privacy/storage/trust-copy truth → Q2
-  main-vs-overlay custom-command authority (owner capability/security GO) → Q3 FPS PID-recycle
-  attribution correctness.
+- [x] **P0 before the next release or wider beta — ALL THREE LANDED 2026-08-03.**
+  - **Q1 privacy/storage/trust-copy truth** — shipped as v0.9.12 (issue
+    [#59](https://github.com/Pootytxng/sentinel/issues/59)): absolute offline claims gone from both
+    locales, the legal documents and the marketing site; `docs/PRIVACY.md` at v0.3; automatic update
+    checks switchable off; `src/outbound-claim-guard.test.ts` fails the build on any absolute claim
+    while an outbound surface is live. *Remaining:* a formal pass over the spec's acceptance list
+    (ledger-deletion wording, `compy_data_dir()`/`fps_dir()` exactness, en↔zh-CN meaning parity).
+  - **Q2 main-vs-overlay command authority** — owner GO 2026-08-03, merged as
+    [#62](https://github.com/Pootytxng/sentinel/pull/62). The overlay held all 91 custom commands
+    and needed 3; `build.rs` now declares them via `AppManifest::commands` and the two capability
+    files split main from overlay. Guard: `src/command-authority-guard.test.ts`. *Deferred by
+    decision:* the per-command main-window caller check (the ACL already rejects before the body
+    runs) — see #62 for the reasoning.
+  - **Q3 FPS PID-recycle attribution** — merged as
+    [#34](https://github.com/Pootytxng/sentinel/pull/34). Candidates must match pid AND name,
+    `alive` is consulted on the frame path, and our pid under a foreign name is a recycle. Merged on
+    code evidence (3 red → green, mutation-proven both directions, 891 cargo). *Open, owner/native:*
+    a real game-close probe against an INSTALLED build carrying the fix — attempted 2026-08-03 and
+    not possible, `compy.exe` was not running and `fps.json` was 12 hours stale. Rides the next
+    install rather than blocking the merge.
 - [ ] **P1 stabilization:** ~~reproducible local supply-chain/release gate~~ **Q4 DELIVERED** (issue
   [#35](https://github.com/Pootytxng/sentinel/issues/35)) — one command `powershell -NoProfile -File
   scripts/verify-release.ps1`, 14 checks, PASS/FAIL/BLOCKED/PENDING, reachability-classified npm +

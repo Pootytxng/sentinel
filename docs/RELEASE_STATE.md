@@ -24,7 +24,7 @@
 <!-- latest_release_version is enforced by check (1) to equal src-tauri/tauri.conf.json's version, so it
      means "the version THIS TREE is configured to build" — NOT "the newest published release".
      Published truth is carried separately by published_release_* below. Do not conflate them. -->
-<!-- STATE:source_main_commit=a1be896 -->
+<!-- STATE:source_main_commit=8d8cfb1 -->
 <!-- STATE:latest_release_version=0.9.12 -->
 <!-- STATE:candidate_version=0.9.12 -->
 <!-- STATE:candidate_branch=main -->
@@ -125,6 +125,16 @@ tester is confirmed on 0.9.12 yet. The v0.9.12 release transaction is **complete
   bytes; that command now routes through `Snapshot::StartupApproval` →
   `AppliedAction::SetStartupEntryEnabled` → `RollbackAction::RestoreStartupApprovalFromSnapshot`,
   refuses when the prior value is unreadable, and preserves every byte after the state flag.
+- **ONE command authority, mechanically enforced (Q2, 2026-08-03):** custom commands no longer
+  default to every window. `build.rs` declares all 91 via `tauri_build::AppManifest::commands`;
+  `capabilities/default.json` is main-window-only and `capabilities/overlay.json` grants the
+  telemetry overlay exactly its three sensor reads. Before this, the overlay held authority over all
+  91 — including apply, rollback, license-key and the update-restart barrier — because custom
+  commands were not in the capability system at all, which is why capability files that were
+  otherwise least-privilege never showed it. `src/command-authority-guard.test.ts` keeps the
+  registration, the declaration, the grants and the overlay's real `invoke()` sites in agreement.
+  Owner GO given 2026-08-03. **Open sub-item:** the spec's per-command main-window caller check
+  (defense in depth behind the ACL) is deliberately deferred — see the PR for the reasoning.
 - Rollback resolves from `history.json` alone, never the live catalog (`actions::resolve_rollback` — `history.rs:869`).
 - Ledger save is crash-safe atomic temp-write+rename, test-pinned (`save_history_to` — `history.rs:347`).
 - Elevation: relaunch `compy.exe --run-elevated <hex> <ticket>` (windowless), 4-way honest UAC
