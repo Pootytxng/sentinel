@@ -48,6 +48,18 @@ describe("console session-token guard", () => {
     expect(res.status).toBe(403);
   });
 
+  it("refuses a wrong token of the SAME LENGTH as the real one", async () => {
+    // Mutation testing 2026-08-02 caught this gap: `tokenMatches` short-circuits on a length
+    // mismatch, so a short wrong token is refused by the length check and never reaches the
+    // comparison. Replacing the comparison with `return true` left every other test green.
+    // This one is the only thing standing between a broken compare and an accepted token.
+    const sameLength = "XXXX-token-not-a-real-secret";
+    expect(sameLength).toHaveLength(TOKEN.length);
+    expect(sameLength).not.toBe(TOKEN);
+    const res = await get("/api/meta", { "x-compy-console-token": sameLength });
+    expect(res.status).toBe(403);
+  });
+
   it("accepts the token from the cookie the page was served with", async () => {
     const res = await get("/api/meta", { cookie: `compy_console=${TOKEN}` });
     expect(res.status).toBe(200);
@@ -73,6 +85,16 @@ describe("the casing bypass itself", () => {
   it("serves the transcript to a request that is both same-origin and tokened", async () => {
     const res = await get(`/api/chats/claude/${UUID}`, { cookie: `compy_console=${TOKEN}` });
     expect(res.status).toBe(200);
+  });
+
+  it("still ROUTES a mixed-case path once authenticated, so the normalization stays load-bearing", async () => {
+    // Mutation testing 2026-08-02: deleting `.toLowerCase()` left every security test green,
+    // because deny-by-default refuses an unrecognized mixed-case path either way. That makes the
+    // normalization look like dead code to the next person who tidies this file. It is not — it is
+    // what stops a guard and a route from ever disagreeing about the same URL again. Pinned here.
+    const res = await get("/API/meta", { "x-compy-console-token": TOKEN });
+    expect(res.status).toBe(200);
+    expect((await res.json()).revision).toMatch(/^[0-9a-f]{12}$/);
   });
 });
 
