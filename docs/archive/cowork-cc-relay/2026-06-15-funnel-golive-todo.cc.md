@@ -15,7 +15,7 @@ UNTOUCHED · verification never skipped. **No spend, no send, no installer cut**
 ## Lane 1 — Wire Ko-fi (BLOCKED on: owner's Ko-fi profile URL)
 The $0 tip-jar bridge (Receipts Doctrine §6). The site slot is already built — only the URL is missing.
 - **Blocker:** owner creates a Ko-fi (or BuyMeACoffee) account and pastes the profile URL here.
-- When unblocked: set `KOFI_URL` in [src/data/site.ts](src/data/site.ts) to that URL → `node site/generate.mjs`.
+- When unblocked: set `KOFI_URL` in [src/data/site.ts](../../../src/data/site.ts) to that URL → `node site/generate.mjs`.
 - Verify: the footer "Support Compy ☕" link appears and points at the URL; **it's a static `href`, NOT a
   script/fetch** — confirm the page still makes ZERO third-party *requests* on load (the outbound link is
   fine; a tracker/script would not be). npm/lint green; committed-site regen diff = just the footer link.
