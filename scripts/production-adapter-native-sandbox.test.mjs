@@ -98,7 +98,14 @@ describe.runIf(windows)(`production release adapter over sandboxed native transp
     // the retry policy must not impose a delay on the common case.
     expect(payload.first_alias.latest_alias_verified).toBe(true);
     expect(payload.first_alias.latest_alias_attempts).toBe(1);
-    expect(payload.first_alias.latest_alias_seconds).toBe(0);
+    // latest_alias_seconds is a WALL-CLOCK measurement, so `toBe(0)` was flaky: under a loaded
+    // machine (full suite in parallel) the fast path measures 0.1s and the release gate went red
+    // with nothing wrong. Attempts === 1 above is what actually proves "no retry happened"; this
+    // line proves "no deliberate wait was imposed". Every backoff in the adapter is whole-second
+    // granularity (`Start-Sleep -Seconds`, release-publish-adapter.ps1:544), so anything under a
+    // second means no sleep ran. The slow-path sibling at the bottom of this file already uses a
+    // tolerance (toBeCloseTo(15, 0)) for this same field.
+    expect(payload.first_alias.latest_alias_seconds).toBeLessThan(1);
     expect(payload.first_alias_probes).toEqual({ manifest: 1, installer: 1 });
     // Both aliases are read on every attempt, each with its own cache-busting token, so a cached
     // edge response can never be mistaken for a converged one.

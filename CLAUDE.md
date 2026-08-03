@@ -48,8 +48,11 @@ safe + reversible by default, rollback over raw control. No jargon, no regkey du
   before/afters, aggregate stats, attack-marketing vs the snake-oil lane). "Your PC is probably
   fine" defensive copy is RETIRED.
 - **RETIRED:** no-telemetry absolutism → opt-in Receipts telemetry. It is a NEW outbound-network
-  boundary: own spec + security review + owner sign-off before ship (stop-rule 3). Until then the
-  verified zero-outbound property holds.
+  boundary: own spec + security review + owner sign-off before ship (stop-rule 3). Receipts stays
+  dark; **zero-outbound is RETIRED too** <!-- outbound-claim-allow --> — the signed update check has been live since 2026-07-22
+  (`tauri.conf.json` `plugins.updater.endpoints`), switchable off in Settings → About. Never write
+  an absolute offline claim: `src/outbound-claim-guard.test.ts` fails the build on one while any
+  outbound surface is live.
 - **UNTOUCHABLE (now business-critical):** rollback-first · no fabricated claims · no kernel
   driver/injection · frozen risky-tweak catalog · signed-remote-rules triple gate · every LOCKED
   rule below. One Reddit thread of brand damage kills the funnel — **the gates ARE the moat.**

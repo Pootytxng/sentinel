@@ -64,4 +64,6 @@ export function blackbookVerdict(ledger: AutopsyLedgerEntry[], t: TFunction): Bl
 
 // (The former measured-line header strip was retired 2026-07-10 — owner header-slop law: header
 // space carries header-format text only. Its facts already live in the body: Learn's search states
-// the corpus size, and its link/refuse copy states "never fetches the internet".)
+// the corpus size, and its link/refuse copy states that Autopsy never opens or fetches a pasted
+// link. That copy said "Compy never fetches the internet" until 2026-08-03 — false since the
+// updater armed; the claim is now scoped to Autopsy, which is where it is actually true.)

@@ -4,27 +4,26 @@ import { join } from "path";
 
 // OUTBOUND-CLAIM GUARD (2026-08-03). Replaces the receipts-only copy guard.
 //
-// WHY THIS EXISTS — the defect it is built from:
-// The previous guard (src/receipts-copy-guard.test.ts) keyed ONLY on receipts_gate(). Two failures
-// followed from that single design choice:
+// WHY THIS EXISTS — two defects, both real:
 //
-//   1. When the signed updater was armed on 2026-07-22, Compy gained a real outbound call while
-//      shipping copy still said "nothing leaves your PC". No guard fired, because no guard was
-//      watching the updater. The contradiction shipped for ~12 days.
-//   2. Worse, that guard was written as a WATCH-LIST: while receipts was dark it asserted the
-//      absolute phrases MUST STILL EXIST, so it actively pinned the false copy in place and any
-//      attempt to fix the wording failed the build.
+//   1. The retired src/receipts-copy-guard.test.ts keyed ONLY on receipts_gate(). When the signed
+//      updater armed on 2026-07-22 Compy gained a real outbound call while shipping copy still said
+//      "nothing leaves your PC" — and no guard fired, because none watched the updater. Worse, that
+//      guard was a WATCH-LIST: while receipts was dark it asserted the absolute phrases MUST STILL
+//      EXIST, so it pinned the false copy in place and failed any attempt to reword it.
 //
-// THE INVERSION: this guard derives the set of live outbound surfaces from CONFIG, and FORBIDS
-// absolute "we never talk to the network" claims whenever any surface is live. It never requires a
-// phrase to be present. Adding a new outbound surface to SURFACES is the only maintenance needed;
-// forget to, and you are back to the 2026-07-22 failure mode — so add it in the same change that
-// arms the surface.
+//   2. This guard's FIRST version fixed the logic but kept an allow-list corpus (src/ + site/ +
+//      PRIVACY.md). It therefore missed site-app/ — the actual public marketing site — which still
+//      told visitors the app "makes zero outbound network requests". The logic was never the weak
+//      part. The CORPUS was.
+//
+// So the corpus is now INVERTED: walk the whole repo and exclude explicitly. A new surface is
+// covered by default. Silence means covered, not skipped.
+//
+// Paths are repo-root-relative; vitest runs from the repo root (scripts/run-vitest.mjs). No
+// __dirname — this project is ESM.
 
-// Paths are repo-root-relative: vitest runs from the repo root (see scripts/run-vitest.mjs), the
-// same convention the retired receipts-copy-guard used. No __dirname — this project is ESM.
-
-// ── Live-surface detection, read from the real config rather than a hand-kept list ──────────────
+// ── Live-surface detection, read from real config rather than a hand-kept list ──────────────────
 
 function receiptsArmed(): boolean {
   const src = readFileSync(join("src-tauri", "src", "receipts.rs"), "utf8");
@@ -44,62 +43,81 @@ const SURFACES: { name: string; live: () => boolean }[] = [
   { name: "signed update check", live: updaterArmed },
 ];
 
-// ── What counts as shipped, user-facing copy ────────────────────────────────────────────────────
+// ── Corpus: everything, minus explicit exclusions ───────────────────────────────────────────────
 
-const COPY_ROOTS = [
-  { dir: "src", exts: [".ts", ".tsx", ".json"] },
-  { dir: "site", exts: [".html"] },
-];
-const EXTRA_FILES = [join("docs", "PRIVACY.md")];
+const EXT = /\.(ts|tsx|js|jsx|mjs|json|html|astro|md|css|rs)$/;
 
-// docs/archive/** is deliberately out of scope: historical records may keep the absolutes that were
-// true when they were written. Tests are excluded so this guard's own fixtures cannot trip it.
-const SKIP_DIR = /[\\/](node_modules|dist|dist-site|target|archive|__snapshots__)[\\/]/;
+// Build output and vendored code. Nothing here is authored copy.
+const EXCLUDE_DIRS = new Set([
+  "node_modules", ".git", ".github", "dist", "dist-web", "dist-site", "target",
+  "coverage", "__snapshots__", ".vite", ".astro", ".claude",
+]);
+
+// docs/ is an internal record shelf: dated specs, reviews, audits and changelogs legitimately
+// preserve absolutes that were TRUE when written — rewriting history would be dishonest. The two
+// legal documents are the exception: they are published to the website, so they are live copy.
+const DOCS_LIVE = new Set([join("docs", "PRIVACY.md"), join("docs", "EULA.md")]);
+
+// Tests hold fixtures and quoted examples; this file plants a phrase on purpose.
 const SKIP_FILE = /\.(test|spec)\.[tj]sx?$/;
+
+// Escape hatch for text that NAMES a forbidden phrase in order to retire or forbid it (CLAUDE.md
+// recording that zero-outbound is dead; RELEASE_STATE recording that the claims were removed).
+// Greppable on purpose: `git grep outbound-claim-allow` lists every exemption in the repo.
+const ALLOW_MARKER = "outbound-claim-allow";
 
 function collect(): string[] {
   const out: string[] = [];
-  for (const { dir, exts } of COPY_ROOTS) {
-    const walk = (d: string) => {
-      for (const name of readdirSync(d)) {
-        const p = join(d, name);
-        if (statSync(p).isDirectory()) {
-          if (!SKIP_DIR.test(p + "\\")) walk(p);
-          continue;
-        }
-        if (SKIP_FILE.test(p)) continue;
-        if (exts.some((e) => p.endsWith(e))) out.push(p);
+  const walk = (dir: string) => {
+    for (const name of readdirSync(dir)) {
+      if (name.startsWith("_")) continue; // local scratch
+      const rel = dir === "." ? name : join(dir, name);
+      let st;
+      try { st = statSync(rel); } catch { continue; }
+      if (st.isDirectory()) {
+        if (!EXCLUDE_DIRS.has(name)) walk(rel);
+        continue;
       }
-    };
-    walk(dir);
-  }
-  return [...out, ...EXTRA_FILES];
+      if (!EXT.test(name) || SKIP_FILE.test(name)) continue;
+      if (/^docs[\\/]/.test(rel) && !DOCS_LIVE.has(rel)) continue;
+      out.push(rel);
+    }
+  };
+  walk(".");
+  return out;
 }
 
-// Engineering comments legitimately say things like "zero outbound" about ONE module (BlackBox,
-// hardware.rs) and are true at that scope. Only shipped copy is in scope here, so comments are
-// stripped before matching. The `(?<!:)` guard keeps `https://…` inside a string from being read
-// as a line comment. Worst case this hides a phrase later on a URL line — a false negative, never
-// a false positive, which is the right way for a guard like this to fail.
+// Engineering comments legitimately say "zero outbound" about ONE module (BlackBox, hardware.rs)
+// and are true at that scope. Only shipped copy is in scope, so comments are stripped first. The
+// `(?<!:)` keeps `https://…` inside a string from reading as a line comment. Worst case that hides
+// a phrase later on a URL line — a false negative, never a false positive.
 export function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(?<!:)\/\/[^\n]*/g, " ");
 }
 
-// Absolute claims that stop being true the moment ANY outbound surface is live.
+// Absolute claims that stop being true the moment ANY outbound surface is live. Deliberately
+// unconditional forms only: "Compy makes no network request unless you press Check now" is honest
+// and must stay legal, so this targets the absolutes, not every use of the words.
 const FORBIDDEN = [
   "nothing leaves your pc",
   "never fetches the internet",
   "no network requests",
   "no network connections",
   "zero outbound",
+  "zero-outbound",
   "never sent anywhere",
   "不会离开你的电脑",
   "从不联网",
 ];
 
-export function findAbsolutes(text: string): string[] {
-  const hay = stripComments(text).toLowerCase();
-  return FORBIDDEN.filter((phrase) => hay.includes(phrase));
+export function findAbsolutes(text: string): { phrase: string; line: number }[] {
+  const hits: { phrase: string; line: number }[] = [];
+  stripComments(text).split("\n").forEach((raw, i) => {
+    if (raw.includes(ALLOW_MARKER)) return;
+    const low = raw.toLowerCase();
+    for (const phrase of FORBIDDEN) if (low.includes(phrase)) hits.push({ phrase, line: i + 1 });
+  });
+  return hits;
 }
 
 // ── The guard ───────────────────────────────────────────────────────────────────────────────────
@@ -109,20 +127,32 @@ describe("outbound-claim guard", () => {
     for (const s of SURFACES) expect(() => s.live(), s.name).not.toThrow();
   });
 
-  it("actually scans a real corpus (a broken walker must not make this guard vacuously pass)", () => {
+  it("covers every shipping surface — the corpus is what failed before, so assert it", () => {
     const files = collect();
-    expect(files.length).toBeGreaterThan(40);
-    expect(files.some((f) => f.endsWith("PRIVACY.md"))).toBe(true);
-    expect(files.some((f) => f.includes(join("locales", "zh-CN")))).toBe(true);
-    expect(files.some((f) => f.endsWith("privacy.html"))).toBe(true);
+    // Regression pins for defect #2: surfaces an allow-list corpus silently missed.
+    for (const m of [
+      join("site-app", "src", "pages", "index.astro"),
+      join("site-app", "src", "pages", "compare.astro"),
+      join("site", "privacy.html"),
+      join("site", "generate.mjs"),
+      join("docs", "PRIVACY.md"),
+      join("src", "i18n", "locales", "zh-CN", "settings.json"),
+      "CLAUDE.md",
+      "COMPY_OVERVIEW.md",
+    ]) {
+      expect(files, `corpus must include ${m}`).toContain(m);
+    }
+    expect(files.length).toBeGreaterThan(200);
   });
 
   it("detects a planted absolute (positive control — proves the guard can actually fail)", () => {
     expect(findAbsolutes('const copy = "Nothing leaves your PC, ever";')).toEqual([
-      "nothing leaves your pc",
+      { phrase: "nothing leaves your pc", line: 1 },
     ]);
-    // …and proves the comment-stripping does not make it toothless in the other direction.
-    expect(findAbsolutes('// module note: zero outbound here\nconst copy = "hello";')).toEqual([]);
+    // Comment-stripping must not make it toothless in the other direction.
+    expect(findAbsolutes("// module note: zero outbound here\nconst c = 1;")).toEqual([]);
+    // The escape hatch works, and only on the line that carries it.
+    expect(findAbsolutes(`zero outbound ${ALLOW_MARKER}`)).toEqual([]);
   });
 
   const liveSurfaces = SURFACES.filter((s) => s.live());
@@ -133,15 +163,16 @@ describe("outbound-claim guard", () => {
       .join(", ")}] is live`, () => {
       const offenders: string[] = [];
       for (const file of collect()) {
-        for (const phrase of findAbsolutes(readFileSync(file, "utf8"))) {
-          offenders.push(`${file} → "${phrase}"`);
+        for (const { phrase, line } of findAbsolutes(readFileSync(file, "utf8"))) {
+          offenders.push(`${file}:${line} → "${phrase}"`);
         }
       }
       expect(
         offenders,
         `Compy has a live outbound surface (${liveSurfaces.map((s) => s.name).join(", ")}), so ` +
           `these absolute claims are false. Reword them to state what actually leaves the machine ` +
-          `and when:\n  ${offenders.join("\n  ")}`,
+          `and when — or, if the text names the phrase in order to retire it, put the ` +
+          `${ALLOW_MARKER} marker on that line:\n  ${offenders.join("\n  ")}`,
       ).toEqual([]);
     });
   } else {
@@ -150,8 +181,8 @@ describe("outbound-claim guard", () => {
     });
   }
 
-  // Receipts-specific. "No telemetry" is TRUE today even with the updater live — an update check
-  // is not telemetry — so this claim is gated on receipts alone, not on the surface set above.
+  // Receipts-specific. "No telemetry" is TRUE today even with the updater live — an update check is
+  // not telemetry — so this claim is gated on receipts alone, not on the surface set above.
   it("absolute 'no telemetry' copy is reworded in the same change that arms receipts", () => {
     if (!receiptsArmed()) return;
     const offenders = collect().filter((f) =>
