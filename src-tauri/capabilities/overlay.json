@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "overlay",
+  "description": "TELEMETRY OVERLAY ONLY — the always-on-top HUD. It reads three sensor values and nothing else, so it is granted three commands and nothing else. No mutation, no elevation, no license, no updater, no window controls, no opener, no notifications. Derived from the real call sites in src/Overlay.tsx; src/command-authority-guard.test.ts fails the build if this list and those call sites disagree in either direction.",
+  "windows": ["overlay"],
+  "permissions": [
+    "core:default",
+    "allow-get-cpu-sensors",
+    "allow-get-fps-status",
+    "allow-get-gpu-sensors"
+  ]
+}
