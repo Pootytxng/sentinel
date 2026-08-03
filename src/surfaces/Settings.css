@@ -288,6 +288,14 @@
   border-radius: 4px;
   padding: 4px 10px;
 }
+/* A row carrying two controls (button + toggle) instead of one. */
+.set-row-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
 .set-action {
   flex-shrink: 0;
   padding: 8px 14px;

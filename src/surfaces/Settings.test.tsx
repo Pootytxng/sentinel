@@ -33,7 +33,10 @@ describe("Settings", () => {
     expect(screen.getByText("Appearance")).toBeInTheDocument();
     expect(screen.getByText("Behavior")).toBeInTheDocument();
     expect(screen.getByText(/None of this touches what Compy measures/)).toBeInTheDocument();
-    expect(screen.getByText(/Fully local\. No account, no telemetry/)).toBeInTheDocument();
+    // Privacy line names the ONE outbound call (updater armed 2026-07-22). An absolute
+    // "nothing leaves your PC" here would be false — src/outbound-claim-guard.test.ts enforces it.
+    expect(screen.getByText(/no telemetry — nothing about your rig is ever uploaded/)).toBeInTheDocument();
+    expect(screen.getByText(/signed update check, and you can turn it off/)).toBeInTheDocument();
     expect(screen.getByText("v0.1.0")).toBeInTheDocument();
   });
 

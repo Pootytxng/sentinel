@@ -359,6 +359,16 @@ and the site-glow/"full overhaul" gate.
   Bench Phase-1 build (the drag gallery is deleted, not a build option). Note: your original **"Feature Roadmap Checklist (CC Brief)"**
   is NOT in the repo — if *that's* the list you meant, you'd need to re-share it.
 
+### B_startup. A Windows mutation lives outside `actions.rs` — decide whether that's allowed  ·  ⏳ NEW 2026-08-02
+Found mechanically by `scripts/verify-module-map.mjs` on its first run. `set_startup_entry_enabled`
+(`lib.rs`, a `#[tauri::command]`) writes `HKCU\...\StartupApproved\Run` directly: **no typed rollback
+contract, no snapshot, no Trust Ledger entry.** So a startup app Compy disables never appears in the
+user's history and cannot be undone from the ledger like every other change. It is self-reversing
+from the same toggle, so it is not a hidden one-way door — but LOCKED rule 3 says "never apply a
+change you can't roll back," and the map claimed `actions.rs` was the *only* mutation boundary.
+**Your call:** (a) route it through `actions.rs` + the ledger like every other apply, (b) declare
+startup toggles an explicit, documented exemption, or (c) leave as-is. Nothing changes until you pick.
+
 ---
 
 ## §C — Release gates — your money / legal calls  ·  🔒

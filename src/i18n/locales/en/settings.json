@@ -66,7 +66,12 @@
   },
   "about": {
     "sectionTitle": "About",
-    "privacy": "Fully local. No account, no telemetry, nothing leaves your PC."
+    "privacy": "Runs on your PC. No account, no telemetry — nothing about your rig is ever uploaded. Compy's one outbound call is a signed update check, and you can turn it off.",
+    "updateChecks": {
+      "title": "Automatic update checks",
+      "sub": "Checks a GitHub release page at launch and every 4 hours. Sends nothing about your PC. Turn this off and Compy makes no network request unless you press Check now.",
+      "checkNow": "Check now"
+    }
   },
   "feedback": {
     "sectionTitle": "Feedback & help",

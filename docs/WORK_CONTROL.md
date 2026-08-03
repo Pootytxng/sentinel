@@ -60,6 +60,17 @@ Do not maintain a second status board in Markdown, chat, a VS Code note, or anot
 
 A tool name is not an ownership claim. Ownership belongs to one issue and one bounded scope.
 
+### What "gate" means (clarified 2026-08-03)
+
+A **gate** is a decision that reaches the outside world or cannot be walked back: publishing a
+release, spending money, granting access, handling secrets, changing system settings, and product
+or taste calls.
+
+Routine Git operations are **not** gates. Committing, pushing a branch, opening a pull request, and
+merging a green PR into `main` are ordinary execution — reversible, and invisible to users until a
+release is cut and published. Do not park finished, gate-green work on Kuya for a merge decision;
+merge it and report. Escalate on the release itself, not on the plumbing that precedes it.
+
 ## Claim before write
 
 Before any file, Git, build, install, or system mutation:

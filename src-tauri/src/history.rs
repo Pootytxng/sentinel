@@ -185,6 +185,14 @@ fn applied_label_from_action(action: &Option<AppliedAction>) -> Option<String> {
         SetVisualEffectsBestPerformance => "Best performance",
         SetUltimatePerformancePlan => "Ultimate performance",
         SuspendKnownService { .. } => "Stopped",
+        // The startup toggle runs both ways, so the after-label follows the flag we captured.
+        SetStartupEntryEnabled { enabled, .. } => {
+            if *enabled {
+                "Starts with Windows"
+            } else {
+                "Won't start with Windows"
+            }
+        }
         DisableKnownService { .. } | DisableNagleOnActiveNics
         | DisableEnergyEfficientEthernet | DisableScheduledTask { .. } => "Disabled",
         // Honest wording: the app is removed for THIS USER, not wiped from the machine.
@@ -215,6 +223,16 @@ fn payoff_label_from_action(action: &Option<AppliedAction>) -> Option<&'static s
         DisableNagleOnActiveNics | DisableEnergyEfficientEthernet => "Network responsiveness",
         // Reclaim background CPU/RAM from services + telemetry tasks so games keep more of the rig.
         DisableKnownService { .. } | SuspendKnownService { .. } | DisableScheduledTask { .. } => {
+            "Background CPU & RAM"
+        }
+        // The startup toggle runs both ways. Switching an autostart entry OFF is the same honest
+        // kind of gain as silencing a service: one fewer program racing your session at sign-in.
+        // Switching one back ON is the user putting a program back — that is not a forward gain, so
+        // the meter stays hidden rather than advertising a payoff that does not exist.
+        SetStartupEntryEnabled { enabled, .. } => {
+            if *enabled {
+                return None;
+            }
             "Background CPU & RAM"
         }
         // Compositor / overlay / desktop-effect load off the frame path.
@@ -529,6 +547,39 @@ pub(crate) fn suspend_known_service(service_name: String) -> Result<AppliedChang
     let change = build_applied_change(
         &format!("service-suspend:{}", service_name),
         &format!("Suspend {} for this session", service_name),
+        result,
+    )?;
+    history.push(change.clone());
+    save_history(&history)?;
+    Ok(into_view(change))
+}
+
+/// Startup-entry toggle — the audited replacement for the raw registry write that used to live in
+/// `lib.rs`. Deliberately UNGATED: this is a live, shipped control (Check / Fix / Optimize all call
+/// it), so gating it dark would remove a working feature. What changes is that it now produces a
+/// receipt like every other mutation — typed snapshot of the exact prior value, ledger entry, and
+/// rollback through the normal `rollback_change` → `dispatch_rollback` path.
+///
+/// No allowlist here, unlike its siblings, and that is deliberate: the startup list is per-machine
+/// and user-owned, so there is no curated set to check against. The safety comes from the snapshot,
+/// not from an enum — and `apply_startup_entry_enabled` refuses outright when the prior value
+/// cannot be read.
+#[tauri::command]
+pub(crate) fn set_startup_entry_enabled(
+    name: String,
+    enabled: bool,
+) -> Result<AppliedChangeView, String> {
+    let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
+    let mut history = load_history()?;
+    ensure_ledger_writable(&history)?;
+    let result = crate::actions::apply_startup_entry_enabled(&name, enabled)?;
+    let change = build_applied_change(
+        &format!("startup-entry:{}", name),
+        &format!(
+            "{} startup entry: {}",
+            if enabled { "Enable" } else { "Disable" },
+            name
+        ),
         result,
     )?;
     history.push(change.clone());

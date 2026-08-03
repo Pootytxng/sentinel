@@ -5,19 +5,24 @@ import { HOST, createConsoleServer, launcherCommand, verifyPlanSubscription } fr
 
 const openServers = new Set();
 
+// Every /api/ route is deny-by-default since 2026-08-02 (see server-auth-guard.test.mjs, which owns
+// that contract). These tests are about the routes' OWN behaviour, so they hold a known token and
+// present it by default; pass `token: null` to exercise a refusal.
+const TOKEN = "contract-test-token";
+
 afterEach(async () => {
   await Promise.all([...openServers].map((server) => new Promise((resolve) => server.close(resolve))));
   openServers.clear();
 });
 
 async function start(options = {}) {
-  const server = createConsoleServer(options);
+  const server = createConsoleServer({ token: TOKEN, ...options });
   openServers.add(server);
   await new Promise((resolve) => server.listen(0, HOST, resolve));
   return { server, port: server.address().port };
 }
 
-function request(port, { path = "/api/chat", method = "POST", origin, body = {} } = {}) {
+function request(port, { path = "/api/chat", method = "POST", origin, body = {}, token = TOKEN } = {}) {
   const payload = JSON.stringify(body);
   return new Promise((resolve, reject) => {
     const req = http.request({
@@ -29,6 +34,7 @@ function request(port, { path = "/api/chat", method = "POST", origin, body = {} 
         "content-type": "application/json",
         "content-length": Buffer.byteLength(payload),
         ...(origin === undefined ? {} : { origin }),
+        ...(token === null ? {} : { "x-compy-console-token": token }),
       },
     }, (res) => {
       let text = "";
@@ -129,6 +135,23 @@ describe("thread identity belongs to the agent CLI", () => {
     const response = await request(port, { path: "/api/chats", method: "GET", origin: "https://attacker.invalid" });
     expect(response.status).toBe(403);
     expect(chatStore.list).not.toHaveBeenCalled();
+  });
+});
+
+describe("the loaded owner journey can tell when a newer interface is available", () => {
+  it("serves the journey projection and binds the page to the same live revision as /api/meta", async () => {
+    const { port } = await start();
+
+    const page = await request(port, { path: "/", method: "GET" });
+    const meta = await request(port, { path: "/api/meta", method: "GET" });
+    const journey = await request(port, { path: "/journey.mjs", method: "GET" });
+    const embedded = /const PAGE_REVISION = "([0-9a-f]{12})"/.exec(page.text)?.[1];
+
+    expect(page.status).toBe(200);
+    expect(journey.status).toBe(200);
+    expect(journey.text).toContain("export function projectHistory");
+    expect(embedded).toMatch(/^[0-9a-f]{12}$/);
+    expect(JSON.parse(meta.text).revision).toBe(embedded);
   });
 });
 

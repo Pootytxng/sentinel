@@ -1,7 +1,9 @@
 // In-app update lifecycle (live-updater train, ARMED 2026-07-22 by owner decision).
 //
-// Cadence: one check at launch + every 4h while running. Checking never downloads;
-// download+install happen only after the user chooses "Update now".
+// Cadence: one check at launch + every 4h while running, UNLESS the user turned automatic checks
+// off in Settings (2026-08-03). Checking never downloads; download+install happen only after the
+// user chooses "Update now". `checkNow()` runs a single check regardless of the preference, so a
+// user who disabled polling can still ask. Disabling never weakens signature verification.
 //
 // Honesty rails: failed checks never render "up to date", stale offers are removed,
 // native Update handles are explicitly closed, and an installed package whose relaunch
@@ -10,6 +12,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import {
+  UPDATE_CHECK_NOW_EVENT,
+  autoUpdateChecks,
+  subscribeAutoUpdateChecks,
+} from "../data/update-prefs";
 
 const RECHECK_MS = 4 * 60 * 60 * 1000;
 
@@ -50,11 +57,14 @@ async function cancelSafeUpdateRestart(): Promise<void> {
 export function useUpdate(): {
   phase: UpdatePhase;
   dismissed: boolean;
+  autoChecks: boolean;
   install: () => void;
   dismiss: () => void;
+  checkNow: () => void;
 } {
   const [phase, setPhase] = useState<UpdatePhase>({ kind: "idle" });
   const [dismissed, setDismissed] = useState(false);
+  const [autoChecks, setAutoChecks] = useState<boolean>(autoUpdateChecks);
   const phaseRef = useRef<UpdatePhase>({ kind: "idle" });
   const updateRef = useRef<Update | null>(null);
   const checkingRef = useRef(false);
@@ -140,18 +150,43 @@ export function useUpdate(): {
     }
   }, [clearStaleOffer, closeUpdate, publishPhase]);
 
+  // Lifecycle is kept SEPARATE from polling on purpose. Folding both into one effect would make
+  // toggling the preference tear down the mount guard and close a live Update handle mid-session.
   useEffect(() => {
     mountedRef.current = true;
-    void runCheck();
-    const timer = window.setInterval(() => void runCheck(), RECHECK_MS);
     return () => {
       mountedRef.current = false;
-      window.clearInterval(timer);
       const owned = updateRef.current;
       updateRef.current = null;
       void closeUpdate(owned);
     };
-  }, [closeUpdate, runCheck]);
+  }, [closeUpdate]);
+
+  // Track the preference so flipping the Settings toggle arms/disarms polling without a reload.
+  useEffect(() => subscribeAutoUpdateChecks(() => setAutoChecks(autoUpdateChecks())), []);
+
+  // Polling. When automatic checks are off, Compy makes NO outbound request on its own — no launch
+  // check, no interval. An offer already on screen is left alone; only `checkNow()` can start one.
+  useEffect(() => {
+    if (!autoChecks) return;
+    void runCheck();
+    const timer = window.setInterval(() => void runCheck(), RECHECK_MS);
+    return () => window.clearInterval(timer);
+  }, [autoChecks, runCheck]);
+
+  // Manual check. Deliberately ignores the preference (the user is asking, right now) but still
+  // goes through runCheck, so it shares the `checkingRef` mutex and cannot overlap an interval tick.
+  const checkNow = useCallback(() => {
+    void runCheck();
+  }, [runCheck]);
+
+  // Settings' "Check now" reaches this single hook instance by event rather than by holding its
+  // own useUpdate() — see UPDATE_CHECK_NOW_EVENT in data/update-prefs.ts for why.
+  useEffect(() => {
+    const onRequest = () => void runCheck();
+    window.addEventListener(UPDATE_CHECK_NOW_EVENT, onRequest);
+    return () => window.removeEventListener(UPDATE_CHECK_NOW_EVENT, onRequest);
+  }, [runCheck]);
 
   const install = useCallback(() => {
     if (busyRef.current) return;
@@ -248,5 +283,5 @@ export function useUpdate(): {
     setDismissed(true);
   }, []);
 
-  return { phase, dismissed, install, dismiss };
+  return { phase, dismissed, autoChecks, install, dismiss, checkNow };
 }

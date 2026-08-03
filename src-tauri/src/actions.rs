@@ -180,6 +180,10 @@ impl KnownPreloadApp {
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub(crate) enum AppliedAction {
     DisableKnownService { service: KnownService },
+    // Startup-entry toggle. Not a catalogued recommendation — it is a per-machine list the user
+    // acts on directly — so it gets its own mutation class, exactly like service-suspend and
+    // bloat-task removal do.
+    SetStartupEntryEnabled { name: String, enabled: bool },
     // Session-scoped SUSPEND (Stop only, startup-type untouched) — distinct from the permanent
     // DisableKnownService. Behind service_suspend_gate() — ARMED 2026-06-25 after its UAC QA + owner sign-off.
     SuspendKnownService { service: KnownService },
@@ -226,6 +230,7 @@ pub(crate) enum AppliedAction {
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum RollbackAction {
     RestoreServiceFromSnapshot { service: KnownService },
+    RestoreStartupApprovalFromSnapshot,
     ResumeServiceFromSnapshot { service: KnownService },
     RestoreGameModeFromSnapshot,
     RestoreMouseAccelFromSnapshot,
@@ -263,6 +268,16 @@ pub(crate) enum Snapshot {
     Service {
         prior_state: String,
         prior_start_mode: String,
+    },
+    // Startup-entry approval (HKCU\...\Explorer\StartupApproved\Run). `prior_bytes`/`prior_vtype`
+    // are the EXACT value that was there, so rollback restores it byte-for-byte. `None` means the
+    // value was genuinely ABSENT (Windows treats absent as enabled) and rollback deletes it again.
+    // An UNREADABLE prior is never represented here — the apply refuses instead, because a prior we
+    // cannot prove is not a prior we can promise to restore.
+    StartupApproval {
+        name: String,
+        prior_bytes: Option<Vec<u8>>,
+        prior_vtype: Option<u32>,
     },
     GameMode {
         prior_enabled: Option<u32>,
@@ -422,6 +437,16 @@ fn label_for_snapshot(snap: &Snapshot) -> Option<String> {
                 Some("Manual start".to_string())
             } else {
                 None
+            }
+        }
+        // The "before" for a startup entry, read only from the bytes we actually captured. Byte 0
+        // carries the state; an ABSENT prior is not unknown — Windows treats "no approval value"
+        // as allowed to start, and that is exactly what rollback restores.
+        Snapshot::StartupApproval { prior_bytes, .. } => {
+            match prior_bytes.as_ref().and_then(|b| b.first()).copied() {
+                Some(0x03) => Some("Off".to_string()),
+                Some(_) => Some("On".to_string()),
+                None => Some("On".to_string()),
             }
         }
         // Rollback (re-enable) restores the task to its prior state.
@@ -3657,6 +3682,136 @@ pub(crate) fn rollback_hags_enable_typed(prior: Option<u32>) -> Result<(), Strin
 // Deliberately ABSENT: a Defender-policy resolver. Writing HKLM\...\Policies is the absolute
 // security-settings rail — even a restore-to-stock goes through the owner, never autonomous code.
 
+// ── Startup-entry approval (HKCU) ────────────────────────────────────────────────────────────────
+// Windows records "may this Run entry start?" as a raw value under StartupApproved\Run. Byte 0 is
+// the state (0x02 enabled / 0x03 disabled); the bytes AFTER it are a disable timestamp Windows
+// itself wrote.
+//
+// Until 2026-08-03 this lived in lib.rs, outside the mutation boundary: no snapshot, no receipt, no
+// rollback — and it wrote a SYNTHESISED 12-byte value with a zeroed tail. That did not merely skip
+// the ledger, it destroyed the bytes Windows had put there, so the prior value could not be restored
+// even in principle. Both halves are fixed here: the tail is preserved, and the exact prior value is
+// captured into a typed Snapshot so rollback is byte-for-byte.
+pub(crate) const STARTUP_APPROVED_RUN_KEY: &str =
+    "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run";
+
+const STARTUP_APPROVAL_LEN: usize = 12;
+const STARTUP_APPROVAL_ENABLED: u8 = 0x02;
+const STARTUP_APPROVAL_DISABLED: u8 = 0x03;
+
+/// Pure: the bytes to write, given the EXACT prior value (if any) and the desired state. Preserves
+/// every byte after byte 0 when a prior exists — that tail is Windows' own timestamp, and the
+/// pre-fix code discarded it. A short/empty prior is padded rather than trusted blindly.
+pub(crate) fn compose_startup_approval_bytes(prior: Option<&[u8]>, enabled: bool) -> Vec<u8> {
+    let flag = if enabled {
+        STARTUP_APPROVAL_ENABLED
+    } else {
+        STARTUP_APPROVAL_DISABLED
+    };
+    let mut bytes = match prior {
+        Some(p) if !p.is_empty() => p.to_vec(),
+        _ => vec![0u8; STARTUP_APPROVAL_LEN],
+    };
+    if bytes.len() < STARTUP_APPROVAL_LEN {
+        bytes.resize(STARTUP_APPROVAL_LEN, 0);
+    }
+    bytes[0] = flag;
+    bytes
+}
+
+/// Explicit, dependency-free reverse map for the registry value type we captured. Anything we did
+/// not enumerate restores as REG_BINARY, which is what this key actually holds.
+fn startup_reg_type_from_u32(value: u32) -> winreg::enums::RegType {
+    use winreg::enums::RegType;
+    match value {
+        0 => RegType::REG_NONE,
+        1 => RegType::REG_SZ,
+        2 => RegType::REG_EXPAND_SZ,
+        4 => RegType::REG_DWORD,
+        5 => RegType::REG_DWORD_BIG_ENDIAN,
+        6 => RegType::REG_LINK,
+        7 => RegType::REG_MULTI_SZ,
+        11 => RegType::REG_QWORD,
+        _ => RegType::REG_BINARY,
+    }
+}
+
+/// Toggle one startup entry, capturing a restorable prior. Refuses when the prior cannot be READ:
+/// a prior we cannot prove is not a prior we can promise to restore, and a silent overwrite here is
+/// exactly the defect this replaced.
+pub(crate) fn apply_startup_entry_enabled(name: &str, enabled: bool) -> Result<ApplyResult, String> {
+    if name.trim().is_empty() {
+        return Err("A startup entry name is required.".to_string());
+    }
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let (key, _) = hkcu
+        .create_subkey(STARTUP_APPROVED_RUN_KEY)
+        .map_err(|e| e.to_string())?;
+    let (prior_bytes, prior_vtype) = match key.get_raw_value(name) {
+        Ok(v) => (Some(v.bytes), Some(v.vtype as u32)),
+        // Genuinely absent is a real, restorable prior: Windows treats "no approval value" as
+        // enabled, and rollback deletes the value again.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (None, None),
+        Err(e) => {
+            return Err(format!(
+                "Could not read the current startup approval for '{}': {}. Nothing was changed.",
+                name, e
+            ))
+        }
+    };
+    let bytes = compose_startup_approval_bytes(prior_bytes.as_deref(), enabled);
+    key.set_raw_value(
+        name,
+        &winreg::RegValue {
+            bytes,
+            vtype: winreg::enums::RegType::REG_BINARY,
+        },
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(ApplyResult {
+        applied_action: AppliedAction::SetStartupEntryEnabled {
+            name: name.to_string(),
+            enabled,
+        },
+        rollback_action: RollbackAction::RestoreStartupApprovalFromSnapshot,
+        snapshot: Snapshot::StartupApproval {
+            name: name.to_string(),
+            prior_bytes,
+            prior_vtype,
+        },
+        elevation_used: false,
+    })
+}
+
+/// Byte-for-byte restore. `None` prior means the value did not exist → delete it, returning the
+/// entry to "no approval recorded" rather than inventing an enabled marker.
+fn rollback_startup_approval_typed(
+    name: &str,
+    prior_bytes: Option<&Vec<u8>>,
+    prior_vtype: Option<u32>,
+) -> Result<(), String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let (key, _) = hkcu
+        .create_subkey(STARTUP_APPROVED_RUN_KEY)
+        .map_err(|e| e.to_string())?;
+    match prior_bytes {
+        Some(bytes) => key
+            .set_raw_value(
+                name,
+                &winreg::RegValue {
+                    bytes: bytes.clone(),
+                    vtype: startup_reg_type_from_u32(prior_vtype.unwrap_or(3)),
+                },
+            )
+            .map_err(|e| e.to_string()),
+        None => match key.delete_value(name) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e.to_string()),
+        },
+    }
+}
+
 fn mmcss_path() -> &'static str {
     "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile"
 }
@@ -4376,6 +4531,14 @@ pub(crate) fn dispatch_rollback(action: &RollbackAction, snapshot: &Snapshot) ->
             R::ResumeServiceFromSnapshot { service },
             S::Service { prior_state, .. },
         ) => rollback_service_suspend_typed(service, prior_state),
+        (
+            R::RestoreStartupApprovalFromSnapshot,
+            S::StartupApproval {
+                name,
+                prior_bytes,
+                prior_vtype,
+            },
+        ) => rollback_startup_approval_typed(name, prior_bytes.as_ref(), *prior_vtype),
         (
             R::RestoreGameModeFromSnapshot,
             S::GameMode {
@@ -5400,5 +5563,114 @@ mod ipc_input_fuzz_tests {
             serde_json::to_string(&got).expect("serialize"),
             serde_json::to_string(&RollbackAction::RestoreGameModeFromSnapshot).expect("serialize")
         );
+    }
+}
+
+
+// bug->guard (council review 2026-08-02, P0 "mutation authority not centralized"):
+// set_startup_entry_enabled wrote StartupApproved\\Run straight from lib.rs with no snapshot, no
+// receipt and no rollback -- AND it synthesised a 12-byte value with a zeroed tail, discarding the
+// timestamp bytes Windows itself had written. That is worse than a missing receipt: it made the
+// prior value unrestorable in principle. These pin the composition contract, which is the half that
+// can be proven without touching the real registry.
+#[cfg(test)]
+mod startup_approval_tests {
+    use super::*;
+
+    // A real StartupApproved value: state byte + Windows' own disable timestamp.
+    const PRIOR_WITH_TIMESTAMP: [u8; 12] =
+        [0x03, 0, 0, 0, 0xAB, 0xCD, 0xEF, 0x12, 0x34, 0x56, 0x78, 0x9A];
+
+    #[test]
+    fn enabling_preserves_every_byte_windows_wrote_after_the_state_flag() {
+        let got = compose_startup_approval_bytes(Some(&PRIOR_WITH_TIMESTAMP), true);
+        assert_eq!(got[0], 0x02, "state flag must say enabled");
+        assert_eq!(
+            &got[1..],
+            &PRIOR_WITH_TIMESTAMP[1..],
+            "the timestamp tail is Windows' data - the pre-fix code zeroed it"
+        );
+    }
+
+    #[test]
+    fn disabling_preserves_every_byte_windows_wrote_after_the_state_flag() {
+        let mut prior = PRIOR_WITH_TIMESTAMP;
+        prior[0] = 0x02;
+        let got = compose_startup_approval_bytes(Some(&prior), false);
+        assert_eq!(got[0], 0x03);
+        assert_eq!(&got[1..], &prior[1..]);
+    }
+
+    #[test]
+    fn a_toggle_round_trip_returns_the_exact_original_bytes() {
+        let off = compose_startup_approval_bytes(Some(&PRIOR_WITH_TIMESTAMP), false);
+        let back = compose_startup_approval_bytes(Some(&off), true);
+        let mut expected = PRIOR_WITH_TIMESTAMP;
+        expected[0] = 0x02;
+        assert_eq!(back, expected.to_vec(), "round trip must be byte-identical");
+    }
+
+    #[test]
+    fn an_absent_prior_synthesises_a_well_formed_value() {
+        let got = compose_startup_approval_bytes(None, false);
+        assert_eq!(got.len(), STARTUP_APPROVAL_LEN);
+        assert_eq!(got[0], 0x03);
+        assert!(got[1..].iter().all(|b| *b == 0), "nothing to preserve");
+    }
+
+    #[test]
+    fn a_short_or_empty_prior_is_padded_never_indexed_out_of_bounds() {
+        assert_eq!(compose_startup_approval_bytes(Some(&[]), true).len(), STARTUP_APPROVAL_LEN);
+        let short = compose_startup_approval_bytes(Some(&[0x03, 0x77]), true);
+        assert_eq!(short.len(), STARTUP_APPROVAL_LEN);
+        assert_eq!(short[0], 0x02);
+        assert_eq!(short[1], 0x77, "the one real byte we had is still kept");
+    }
+
+    // The rollback contract must survive a ledger round trip: an entry written today has to
+    // deserialize and dispatch tomorrow.
+    #[test]
+    fn the_snapshot_round_trips_through_the_ledger_representation() {
+        let snap = Snapshot::StartupApproval {
+            name: "OneDrive".to_string(),
+            prior_bytes: Some(PRIOR_WITH_TIMESTAMP.to_vec()),
+            prior_vtype: Some(3),
+        };
+        let json = serde_json::to_value(&snap).expect("serialize");
+        let back: Snapshot = serde_json::from_value(json).expect("deserialize");
+        match back {
+            Snapshot::StartupApproval { name, prior_bytes, prior_vtype } => {
+                assert_eq!(name, "OneDrive");
+                assert_eq!(prior_bytes, Some(PRIOR_WITH_TIMESTAMP.to_vec()));
+                assert_eq!(prior_vtype, Some(3));
+            }
+            other => panic!("wrong variant back from the ledger: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn an_absent_prior_survives_the_ledger_as_absent_not_as_empty() {
+        let snap = Snapshot::StartupApproval {
+            name: "Thing".to_string(),
+            prior_bytes: None,
+            prior_vtype: None,
+        };
+        let back: Snapshot =
+            serde_json::from_value(serde_json::to_value(&snap).expect("serialize")).expect("de");
+        match back {
+            // None must NOT collapse into Some(vec![]) - the two mean different rollbacks
+            // (delete the value vs write an empty one).
+            Snapshot::StartupApproval { prior_bytes, .. } => assert!(prior_bytes.is_none()),
+            other => panic!("wrong variant: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn a_mismatched_action_snapshot_pair_refuses_rather_than_guessing() {
+        let err = dispatch_rollback(
+            &RollbackAction::RestoreStartupApprovalFromSnapshot,
+            &Snapshot::HwSchMode { prior: Some(1) },
+        );
+        assert!(err.is_err(), "a contract mismatch must never perform a rollback");
     }
 }
