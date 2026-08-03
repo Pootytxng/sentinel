@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it } from "vitest";
+import { windows, WINDOWS_ONLY } from "./lib/windows-only.mjs";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -37,7 +38,7 @@ const run = (kase) => {
   return JSON.parse(output.stdout.trim().split(/\r?\n/).at(-1));
 };
 
-describe("latest-download alias propagation primitives", () => {
+describe.runIf(windows)(`latest-download alias propagation primitives ${WINDOWS_ONLY}`, () => {
   it("treats only a real 404 as propagation absence", () => {
     const result = run("http-classification");
     // Every probe really failed, so the classifier is being asked about real error records.

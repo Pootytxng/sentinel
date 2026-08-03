@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "reviewed_on": "2026-07-31",
+  "reviewed_in": "issue #35, Q4 of docs/superpowers/specs/2026-07-29-product-quality-stabilization-program.md",
+  "shipped_target": "x86_64-pc-windows-msvc",
+  "how_this_file_is_used": "scripts/supply-chain-gate.mjs re-runs both audits against the current lockfiles on every verification run. A cargo finding whose package is absent from `cargo tree --target x86_64-pc-windows-msvc --edges normal,build` is classified mechanically and needs no entry here. Everything else must be listed below with a reachability argument and a review date. An unlisted finding fails the gate; a listed finding whose review_by has passed fails the gate. Acknowledgements expire on purpose - the alternative is a permanent excuse.",
+  "npm": {
+    "shipped_artifact": "The Compy installer contains the Rust executable and the Vite build output (tauri.conf.json build.frontendDist = ../dist). bundle.resources and bundle.externalBin are unset, so no node_modules content is packaged. Every npm advisory below is therefore a build-integrity or developer-workstation concern, not a concern for an installed copy of Compy - which is a reachability statement, not a dismissal: a compromised build tool would reach the installer through dist/.",
+    "acknowledged": {
+      "postcss": {
+        "severity": "high",
+        "classification": "build-time-only",
+        "why": "Path traversal in PostCSS source-map auto-loading. Reached through vite (the frontend build) and the shadcn CLI. It processes only this repository's own CSS during a local build; no attacker-controlled source map is ever fed to it, and postcss ships nothing into the installer.",
+        "paths": ["vite@7.3.5 -> postcss", "shadcn@4.13.0 -> postcss"],
+        "review_by": "2026-10-31"
+      },
+      "esbuild": {
+        "severity": "low",
+        "classification": "build-time-only",
+        "why": "The advisory is against the esbuild development server, which allows any website to read responses from it. Compy's build runs `vite build`, not a served dev bundle exposed to a browsing session, and esbuild is not in the installer.",
+        "paths": ["vite@7.3.5 -> esbuild"],
+        "review_by": "2026-10-31"
+      },
+      "fast-uri": {
+        "severity": "high",
+        "classification": "developer-tool-only",
+        "why": "Host confusion via literal backslashes, reached only through ajv inside the @modelcontextprotocol/sdk that the shadcn developer CLI depends on. It is never executed by the frontend build or by Compy at runtime.",
+        "paths": ["shadcn@4.13.0 -> @modelcontextprotocol/sdk -> ajv -> fast-uri"],
+        "review_by": "2026-10-31"
+      },
+      "brace-expansion": {
+        "severity": "high",
+        "classification": "developer-tool-only",
+        "why": "Denial of service via unbounded expansion, reached only through minimatch inside ts-morph inside the shadcn developer CLI. Not executed by the build, not in the installer.",
+        "paths": ["shadcn@4.13.0 -> ts-morph -> @ts-morph/common -> minimatch -> brace-expansion"],
+        "review_by": "2026-10-31"
+      },
+      "@hono/node-server": {
+        "severity": "moderate",
+        "classification": "developer-tool-only",
+        "why": "Path traversal in serve-static. Reached only through the MCP SDK that the shadcn developer CLI depends on; Compy runs no Hono server and ships none.",
+        "paths": ["shadcn@4.13.0 -> @modelcontextprotocol/sdk -> @hono/node-server"],
+        "review_by": "2026-10-31"
+      },
+      "@modelcontextprotocol/sdk": {
+        "severity": "moderate",
+        "classification": "developer-tool-only",
+        "why": "Listed because it depends on the vulnerable @hono/node-server range above. Same path, same reasoning: developer CLI only.",
+        "paths": ["shadcn@4.13.0 -> @modelcontextprotocol/sdk"],
+        "review_by": "2026-10-31"
+      }
+    }
+  },
+  "cargo": {
+    "note": "Compy's own Rust source references none of these crates: a repository-wide search for quick_xml, crossbeam, rayon, anyhow and downcast_mut across src-tauri/**/*.rs and the manifests returns nothing. Every entry below arrives transitively through Tauri.",
+    "acknowledged": {
+      "RUSTSEC-2026-0194": {
+        "package": "quick-xml",
+        "severity": "high",
+        "classification": "shipped-not-reachable-with-untrusted-input",
+        "why": "Quadratic run time when checking a start tag for duplicate attribute names - a denial of service that needs attacker-controlled XML. Both copies in the Windows build parse XML that Compy or Tauri generates: 0.37.5 through tauri-winrt-notification (toast XML the notification plugin builds itself) and 0.39.4 through plist inside tauri-utils (bundle metadata handled at build and codegen time). No user, network, or game-supplied XML reaches either. Patched at >=0.41.0, which is a Tauri-side upgrade, not ours.",
+        "paths": [
+          "quick-xml@0.37.5 <- tauri-winrt-notification <- notify-rust <- tauri-plugin-notification",
+          "quick-xml@0.39.4 <- plist <- tauri-utils <- tauri"
+        ],
+        "review_by": "2026-10-31"
+      },
+      "RUSTSEC-2026-0195": {
+        "package": "quick-xml",
+        "severity": "high",
+        "classification": "shipped-not-reachable-with-untrusted-input",
+        "why": "Unbounded namespace-declaration allocation in NsReader, memory-exhaustion denial of service. Same two paths and the same reasoning as RUSTSEC-2026-0194: the XML is ours, not an attacker's.",
+        "paths": [
+          "quick-xml@0.37.5 <- tauri-winrt-notification <- notify-rust <- tauri-plugin-notification",
+          "quick-xml@0.39.4 <- plist <- tauri-utils <- tauri"
+        ],
+        "review_by": "2026-10-31"
+      },
+      "RUSTSEC-2026-0204": {
+        "package": "crossbeam-epoch",
+        "severity": "unscored",
+        "classification": "shipped-not-reachable",
+        "why": "Invalid pointer dereference in the fmt::Pointer impl for Atomic and Shared. Triggering it requires formatting one of those types with {:p} while the underlying pointer is invalid. crossbeam-epoch reaches the build only through crossbeam-deque <- rayon-core; Compy declares no dependency on rayon or crossbeam and never names either type, so no Compy code can reach the formatting path.",
+        "paths": ["crossbeam-epoch@0.9.18 <- crossbeam-deque <- rayon-core"],
+        "review_by": "2026-10-31"
+      },
+      "RUSTSEC-2026-0190": {
+        "package": "anyhow",
+        "severity": "unsound",
+        "classification": "shipped-not-reachable",
+        "why": "Unsoundness in Error::downcast_mut(). Compy calls downcast_mut nowhere, and anyhow arrives through tauri-build, tauri-plugin and tauri-utils - predominantly build dependencies. No known exploit path, no vulnerability rating.",
+        "paths": ["anyhow@1.0.102 <- tauri-build / tauri-plugin / tauri-utils"],
+        "review_by": "2026-10-31"
+      },
+      "RUSTSEC-2025-0081": {
+        "package": "unic-char-property",
+        "severity": "unmaintained",
+        "classification": "shipped-unmaintained-no-known-vulnerability",
+        "why": "Unmaintained, with no advisory of a defect. Reaches the build through urlpattern <- tauri-utils. Retiring it is a Tauri-side change; it is tracked here so the warning cannot quietly become a vulnerability without a re-review.",
+        "paths": ["unic-char-property@0.9.0 <- urlpattern <- tauri-utils"],
+        "review_by": "2026-10-31"
+      },
+      "RUSTSEC-2025-0075": {
+        "package": "unic-char-range",
+        "severity": "unmaintained",
+        "classification": "shipped-unmaintained-no-known-vulnerability",
+        "why": "Unmaintained, no known defect. Same urlpattern <- tauri-utils path as the rest of the unic family.",
+        "paths": ["unic-char-range@0.9.0 <- urlpattern <- tauri-utils"],
+        "review_by": "2026-10-31"
+      },
+      "RUSTSEC-2025-0080": {
+        "package": "unic-common",
+        "severity": "unmaintained",
+        "classification": "shipped-unmaintained-no-known-vulnerability",
+        "why": "Unmaintained, no known defect. Same urlpattern <- tauri-utils path as the rest of the unic family.",
+        "paths": ["unic-common@0.9.0 <- urlpattern <- tauri-utils"],
+        "review_by": "2026-10-31"
+      },
+      "RUSTSEC-2025-0100": {
+        "package": "unic-ucd-ident",
+        "severity": "unmaintained",
+        "classification": "shipped-unmaintained-no-known-vulnerability",
+        "why": "Unmaintained, no known defect. Same urlpattern <- tauri-utils path as the rest of the unic family.",
+        "paths": ["unic-ucd-ident@0.9.0 <- urlpattern <- tauri-utils"],
+        "review_by": "2026-10-31"
+      },
+      "RUSTSEC-2025-0098": {
+        "package": "unic-ucd-version",
+        "severity": "unmaintained",
+        "classification": "shipped-unmaintained-no-known-vulnerability",
+        "why": "Unmaintained, no known defect. Same urlpattern <- tauri-utils path as the rest of the unic family.",
+        "paths": ["unic-ucd-version@0.9.0 <- urlpattern <- tauri-utils"],
+        "review_by": "2026-10-31"
+      }
+    }
+  }
+}

@@ -13,7 +13,14 @@ const state = vi.hoisted(() => ({
   sessions: [] as unknown[],
   sim: null as unknown,
   simHang: false, // when true, simulate_optimization stays pending → lets a test observe the in-flight lock
+  loadDelayMs: 0, // when >0, the initial ledger reads land LATE → reproduces a loaded CI runner
 }));
+
+/** Resolve after the configured initial-load delay, so `busy` is still true when a test first looks. */
+const afterLoad = <T,>(value: T): Promise<T> =>
+  state.loadDelayMs > 0
+    ? new Promise((resolve) => setTimeout(() => resolve(value), state.loadDelayMs))
+    : Promise.resolve(value);
 
 const KEPT_EXPERIMENT = {
   id: "exp:1-0",
@@ -100,11 +107,11 @@ vi.mock("@tauri-apps/api/core", () => ({
       case "get_experiment_gate":
         return Promise.resolve(state.gate);
       case "get_experiments":
-        return Promise.resolve(state.gate ? state.experiments : []);
+        return afterLoad(state.gate ? state.experiments : []);
       case "get_recommendations":
-        return Promise.resolve(state.recs);
+        return afterLoad(state.recs);
       case "get_session_summaries":
-        return Promise.resolve(state.sessions);
+        return afterLoad(state.sessions);
       case "simulate_optimization":
         if (state.simHang) return new Promise(() => {}); // never resolves
         return state.sim ? Promise.resolve(state.sim) : Promise.reject("no sim");
@@ -128,7 +135,35 @@ afterEach(() => {
   state.sessions = [];
   state.sim = null;
   state.simHang = false;
+  state.loadDelayMs = 0;
 });
+
+// bug->guard (CI run 30696118350, 2026-08-01). Setting a <select> to a value that has NO matching
+// <option> yet is a SILENT NO-OP: the value stays "", React's onChange runs with "", no simulation
+// is requested, and nothing anywhere reports a problem.
+//
+// Every test here used to fire straight at whatever `findByRole("combobox")` returned. That resolves
+// the moment the SELECT exists — but the OPTIONS arrive separately, from get_recommendations. On a
+// fast desk both land in the same microtask flush, so it worked ~always. On a loaded CI runner the
+// recs landed after the change event, the pick evaporated, and the failure surfaced three lines
+// down as "Unable to find an element with the text: Worth testing" — accusing the assertion instead
+// of the interaction that never happened. (The DOM dump in that run showed the options present,
+// because by the time findByText gave up 1s later they had finally loaded. That is what made it
+// read as a rendering bug rather than an ordering one.)
+//
+// So: wait for the option to EXIST, wait for the control to be USABLE, fire, then PROVE the pick
+// took. Do not replace this with a bare fireEvent — the entire failure mode is that a bare
+// fireEvent looks like it worked.
+const pickChange = async (value: string) => {
+  const select = await screen.findByRole("combobox");
+  await waitFor(() =>
+    expect(select.querySelector(`option[value="${value}"]`), `no <option value="${value}"> yet`).not.toBeNull(),
+  );
+  await waitFor(() => expect(select).toBeEnabled());
+  fireEvent.change(select, { target: { value } });
+  await waitFor(() => expect(select).toHaveValue(value));
+  return select;
+};
 
 describe("ExperimentBench (dark)", () => {
   it("renders NOTHING while the backend gate is hard-false (every shipped build today)", async () => {
@@ -171,16 +206,52 @@ describe("ExperimentBench (armed)", () => {
     render(<ExperimentBench />);
     await screen.findByTestId("experiment-bench");
 
-    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "test-rec" } });
+    await pickChange("test-rec");
 
     // Honest simulator card renders the verdict label + the disproof + the real baseline numbers.
     expect(await screen.findByText("Worth testing")).toBeInTheDocument();
+
+    // bug->guard (CI, 2026-08-01): everything below used to be a synchronous getBy after that one
+    // findBy. The card does not commit in a single pass — the verdict label can be on screen a frame
+    // before the baseline numbers and the Start button are, and the suite already said so out loud:
+    // "An update to ExperimentBench inside a test was not wrapped in act(...)". Under parallel load
+    // on a CI runner that gap widens and the assertions read a half-rendered card. This failed once
+    // on the runner and passes 5/5 in isolation, which is the signature of a race rather than a
+    // defect. Waiting for the TERMINAL state — an enabled Start button, which cannot exist until the
+    // simulation has fully landed — makes everything below true instead of usually-true.
+    const start = await screen.findByRole("button", { name: /Start experiment/ });
+    await waitFor(() => expect(start).toBeEnabled());
+
     // The card names the exact change under test — the mutation target the Start button will apply.
     expect(document.querySelector(".exp-sim-rec")?.textContent).toBe("Test tweak");
     expect(screen.getByText(/Disproved if:/)).toBeInTheDocument();
     expect(screen.getByText(/244/)).toBeInTheDocument(); // baseline avg fps
-    const start = screen.getByRole("button", { name: /Start experiment/ });
-    expect(start).toBeEnabled();
+  });
+
+  // The regression test for the CI failure itself, run under the condition that produced it: the
+  // initial ledger reads land LATE, so the picker is still disabled when a test first reaches it.
+  // This is what a loaded runner does to this component. Before the fix the change event vanished
+  // and this test died on "Worth testing"; the assertion below only holds if the interaction waited.
+  it("picks correctly even when the initial ledger reads land LATE (the loaded-CI-runner case)", async () => {
+    state.gate = true;
+    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.sessions = [VALORANT_SESSION];
+    state.sim = WORTH_TESTING_SIM;
+    state.loadDelayMs = 80; // the reads arrive well after the select first exists
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-bench");
+
+    // The precondition that makes this test meaningful: the option really is absent at first, so a
+    // bare fireEvent here would set nothing. If this ever stops being true the repro has rotted and
+    // the test below is passing for the wrong reason.
+    const select = await screen.findByRole("combobox");
+    expect(select.querySelector('option[value="test-rec"]')).toBeNull();
+
+    await pickChange("test-rec");
+
+    expect(await screen.findByText("Worth testing")).toBeInTheDocument();
+    const start = await screen.findByRole("button", { name: /Start experiment/ });
+    await waitFor(() => expect(start).toBeEnabled());
   });
 
   // Guard for W1 (mutation-boundary race, 2026-07-17): a fast reselect mid-simulation could leave the
@@ -197,9 +268,7 @@ describe("ExperimentBench (armed)", () => {
     render(<ExperimentBench />);
     await screen.findByTestId("experiment-bench");
 
-    const select = await screen.findByRole("combobox");
-    expect(select).toBeEnabled();
-    fireEvent.change(select, { target: { value: "test-rec" } });
+    await pickChange("test-rec");
 
     await waitFor(() => expect(screen.getByRole("combobox")).toBeDisabled());
   });
@@ -217,9 +286,9 @@ describe("ExperimentBench (armed)", () => {
     render(<ExperimentBench />);
     await screen.findByTestId("experiment-bench");
 
-    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "test-rec" } });
+    await pickChange("test-rec");
     expect(await screen.findByText("Worth testing")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Start experiment/ })).toBeEnabled();
+    await waitFor(() => expect(screen.getByRole("button", { name: /Start experiment/ })).toBeEnabled());
 
     // A sibling Optimize apply lands: the same rec is now applied and the sim re-reads as already-configured.
     state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: true }];
@@ -247,9 +316,9 @@ describe("ExperimentBench (armed)", () => {
     render(<ExperimentBench />);
     await screen.findByTestId("experiment-bench");
 
-    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "test-rec" } });
+    await pickChange("test-rec");
     expect(await screen.findByText("Worth testing")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Start experiment/ })).toBeEnabled();
+    await waitFor(() => expect(screen.getByRole("button", { name: /Start experiment/ })).toBeEnabled());
 
     // A sibling Optimize apply lands in the same window — no focus/visibilitychange, just the event.
     state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: true }];

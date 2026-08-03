@@ -23,6 +23,11 @@ import { BackButton, ForwardButton } from "../design/BackButton";
 import { readMotionPref, setMotionPref, type MotionPref } from "../design/use-motion";
 import { readExpertView, setExpertView } from "../design/use-expert-view";
 import { APP_LANGUAGES, readLanguage, applyLanguage, type AppLanguage } from "../i18n/language";
+import {
+  autoUpdateChecks,
+  setAutoUpdateChecks,
+  requestUpdateCheck,
+} from "../data/update-prefs";
 import ReceiptsConsent from "./ReceiptsConsent";
 import { LicensePanel } from "./LicensePanel";
 import { FeedbackExport } from "./FeedbackExport";
@@ -124,6 +129,7 @@ export default function Settings({
   const [backdrop, setBackdrop] = useState<OverlayBackdrop>(readOverlayBackdrop);
   const [motion, setMotion] = useState<MotionPref>(readMotionPref);
   const [expertView, setExpertViewState] = useState<boolean>(readExpertView);
+  const [autoUpdates, setAutoUpdates] = useState<boolean>(autoUpdateChecks);
   // Language (2026-07-23): a genuine app-wide preference like Motion/Theme — persists via the same
   // guarded-localStorage convention and flips the live i18next instance immediately (no reload).
   const [language, setLanguageState] = useState<AppLanguage>(readLanguage);
@@ -170,6 +176,12 @@ export default function Settings({
   const changeJarvisMotion = (v: boolean) => {
     setJarvisMotion(v);
     applyJarvisMotion(v);
+  };
+  // Automatic update checks. Default ON; persisted to localStorage and broadcast so the live
+  // update hook arms/disarms its 4h interval without a relaunch.
+  const changeAutoUpdates = (v: boolean) => {
+    setAutoUpdates(v);
+    setAutoUpdateChecks(v);
   };
   // Close-to-tray: persist + sync the backend gate. Default OFF keeps the §1 clean exit until opt-in.
   const changeCloseToTray = (v: boolean) => {
@@ -440,6 +452,26 @@ export default function Settings({
             <p className="set-about-privacy">{t("settings.about.privacy")}</p>
             {/* Rules-source — engineering status, re-homed here from the header (one-rail §1b). */}
             <p className="set-about-rules">{rulesSourceLabel}</p>
+          </div>
+          {/* Update checks (2026-08-03). The signed check is Compy's ONE outbound call, so the
+              privacy line above is only honest if the user can actually stop it. Off disables the
+              launch check and the 4h interval; "Check now" still works on demand. Signature
+              verification is unaffected either way. */}
+          <div className="set-row">
+            <div className="set-row-text">
+              <div className="set-row-title">{t("settings.about.updateChecks.title")}</div>
+              <div className="set-row-sub">{t("settings.about.updateChecks.sub")}</div>
+            </div>
+            <div className="set-row-controls">
+              <button type="button" className="set-action" onClick={() => requestUpdateCheck()}>
+                {t("settings.about.updateChecks.checkNow")}
+              </button>
+              <Toggle
+                on={autoUpdates}
+                onChange={changeAutoUpdates}
+                ariaLabel={t("settings.about.updateChecks.title")}
+              />
+            </div>
           </div>
         </section>
       </div>

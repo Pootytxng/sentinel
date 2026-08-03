@@ -238,7 +238,7 @@
     },
     "applicableTitle": "Relevant to {{label}} rigs",
     "autopsy": {
-      "subLede": "Paste a tweak guide — a forum post, a video description, a \"do these 10 things\" list — and get the autopsy. Nothing leaves your PC; it's matched against this library, offline.",
+      "subLede": "Paste a tweak guide — a forum post, a video description, a \"do these 10 things\" list — and get the autopsy. Your text stays on this PC; it's matched against this library, offline.",
       "recordTitle": "Your autopsy record",
       "recordGuides_one": "{{count}} guide graded",
       "recordGuides_other": "{{count}} guides graded",
@@ -253,7 +253,7 @@
       "textareaPlaceholder": "Paste the guide here…",
       "gradeButton": "Grade this guide",
       "clear": "Clear",
-      "urlLead": "That's a link — and Compy never fetches the internet (nothing leaves your PC; that's the deal). Bring me the words instead:",
+      "urlLead": "That's a link — and Autopsy never opens or fetches one. Bring me the words instead:",
       "urlHowYoutube": "Open the video's transcript (⋯ menu → Show transcript) → copy → paste here.",
       "urlHowWebpage": "Open the page → Ctrl+A, Ctrl+C → paste here. I'll grade every claim.",
       "resultEmpty": "We didn't spot anything we recognize in that. Paste a guide that actually names tweaks or settings and we'll grade each one.",

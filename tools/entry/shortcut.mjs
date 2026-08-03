@@ -27,7 +27,16 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+// win32 semantics EXPLICITLY, not the host's.
+//
+// bug->guard: this module is about a Windows .lnk — every path it touches is a Windows path by
+// definition. With the platform defaults, `basename("c:\...\pwsh.exe")` returned the WHOLE STRING
+// off-Windows (there is no backslash separator there) and `join(home, "Desktop")` produced
+// "C:\u/Desktop". Both are invisible on the owner's machine and made every assertion in
+// shortcut.test.mjs a lie the moment CI ran it on Linux. `path.win32` behaves identically on every
+// platform, which is the only thing that lets these proofs mean something off this desk.
+import { win32 as winpath } from "node:path";
+const { basename, join } = winpath;
 
 /** The Store package folder that moves under the shortcut's feet on every PowerShell update. */
 export const VERSIONED_PACKAGE = /WindowsApps[\\/]Microsoft\.PowerShell_\d+[\d.]*_/i;

@@ -1,0 +1,18 @@
+# One toolchain, everywhere.
+#
+# bug->guard (CI, 2026-08-01): this machine had rustc 1.95.0 (2026-04-14) while CI runs
+# dtolnay/rust-toolchain@stable, which resolved to 1.97.1 (2026-07-14). Two clippy lints exist in
+# 1.97 that 1.95 never emitted, so `cargo clippy -- -D warnings` was GREEN locally and RED on the
+# runner — and scripts/verify-release.ps1, the gate that authorises a release, runs the local one.
+#
+# A gate that is weaker than the one downstream is the same defect as the CI outage that surfaced
+# it: a green light that is not measuring what its reader thinks it is measuring. Work passes, then
+# fails somewhere the owner is not looking.
+#
+# `stable` rather than a pinned version on purpose. rustup reads this file, so any machine that
+# builds this repo — this desk, a fresh clone, a runner — resolves the same channel CI uses, without
+# a version number to remember to bump. If reproducibility ever needs to beat currency, change the
+# channel here to an exact version and CI follows automatically, because it reads this file too.
+[toolchain]
+channel = "stable"
+components = ["clippy", "rustfmt"]

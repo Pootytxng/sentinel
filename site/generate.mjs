@@ -115,9 +115,12 @@ function mdToHtml(md) {
   return out.join("\n");
 }
 
-// Still true today (and test-pinned): the shipped app makes zero outbound requests. If the
-// opt-in Receipts telemetry phase ever ships (owner-gated), this line gets revised WITH it.
-const FOOTER_PROMISE = "Local-only by design · no telemetry · no account";
+// Revised 2026-08-03. The old promise said "Local-only by design" on the strength of a
+// zero-outbound property that stopped being true when the updater armed on 2026-07-22. The
+// footer now states the boundary it can actually keep. If the opt-in Receipts telemetry phase
+// ever ships (owner-gated), this line gets revised WITH it — src/outbound-claim-guard.test.ts
+// fails the build if an absolute offline claim ships while any outbound surface is live.
+const FOOTER_PROMISE = "Local-first · no telemetry · no account · signed updates only";
 
 // ---------- Real-wins strip (library index) — doctrine §5, web-design-director 2026-07-15 ----------
 // The flat alphabetical manifest has no way to FOREGROUND the measured wins — a "Sample" badge in a

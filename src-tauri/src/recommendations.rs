@@ -299,10 +299,11 @@ pub(crate) fn evaluate_rule_spec(spec: &RuleSpec, hw: &HardwareInfo) -> Option<R
         if condition_matches(cond, hw) {
             continue;
         }
-        match hardware_ineligibility_reason(cond, hw) {
-            Some(reason) => ineligible_reason.get_or_insert(reason),
-            None => return None,
-        };
+        // `?` rather than a match: a condition with no hardware-ineligibility reason is a failed
+        // RELEVANCE gate, which omits the recommendation entirely. Same control flow, and clippy on
+        // rustc 1.97 rejects the longer form.
+        let reason = hardware_ineligibility_reason(cond, hw)?;
+        ineligible_reason.get_or_insert(reason);
     }
     let eligible = ineligible_reason.is_none();
 

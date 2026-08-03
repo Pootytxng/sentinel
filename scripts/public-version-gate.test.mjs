@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
+import { windows, WINDOWS_ONLY } from "./lib/windows-only.mjs";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -46,7 +47,7 @@ const write = (text, label) => {
   return path;
 };
 
-describe("public version gate on Windows PowerShell 5.1", () => {
+describe.runIf(windows)(`public version gate on Windows PowerShell 5.1 ${WINDOWS_ONLY}`, () => {
   it("accepts the compatible private draft it once rejected as a prerelease", () => {
     // The regression: draft v0.9.11 is prerelease:false, but @(<pipeline> | ConvertFrom-Json) nested
     // the whole array, $sameTag[0].isPrerelease member-enumerated to @(False, False, ...), and a

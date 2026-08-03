@@ -180,6 +180,10 @@ impl KnownPreloadApp {
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub(crate) enum AppliedAction {
     DisableKnownService { service: KnownService },
+    // Startup-entry toggle. Not a catalogued recommendation — it is a per-machine list the user
+    // acts on directly — so it gets its own mutation class, exactly like service-suspend and
+    // bloat-task removal do.
+    SetStartupEntryEnabled { name: String, enabled: bool },
     // Session-scoped SUSPEND (Stop only, startup-type untouched) — distinct from the permanent
     // DisableKnownService. Behind service_suspend_gate() — ARMED 2026-06-25 after its UAC QA + owner sign-off.
     SuspendKnownService { service: KnownService },
@@ -226,6 +230,7 @@ pub(crate) enum AppliedAction {
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum RollbackAction {
     RestoreServiceFromSnapshot { service: KnownService },
+    RestoreStartupApprovalFromSnapshot,
     ResumeServiceFromSnapshot { service: KnownService },
     RestoreGameModeFromSnapshot,
     RestoreMouseAccelFromSnapshot,
@@ -263,6 +268,16 @@ pub(crate) enum Snapshot {
     Service {
         prior_state: String,
         prior_start_mode: String,
+    },
+    // Startup-entry approval (HKCU\...\Explorer\StartupApproved\Run). `prior_bytes`/`prior_vtype`
+    // are the EXACT value that was there, so rollback restores it byte-for-byte. `None` means the
+    // value was genuinely ABSENT (Windows treats absent as enabled) and rollback deletes it again.
+    // An UNREADABLE prior is never represented here — the apply refuses instead, because a prior we
+    // cannot prove is not a prior we can promise to restore.
+    StartupApproval {
+        name: String,
+        prior_bytes: Option<Vec<u8>>,
+        prior_vtype: Option<u32>,
     },
     GameMode {
         prior_enabled: Option<u32>,
@@ -422,6 +437,16 @@ fn label_for_snapshot(snap: &Snapshot) -> Option<String> {
                 Some("Manual start".to_string())
             } else {
                 None
+            }
+        }
+        // The "before" for a startup entry, read only from the bytes we actually captured. Byte 0
+        // carries the state; an ABSENT prior is not unknown — Windows treats "no approval value"
+        // as allowed to start, and that is exactly what rollback restores.
+        Snapshot::StartupApproval { prior_bytes, .. } => {
+            match prior_bytes.as_ref().and_then(|b| b.first()).copied() {
+                Some(0x03) => Some("Off".to_string()),
+                Some(_) => Some("On".to_string()),
+                None => Some("On".to_string()),
             }
         }
         // Rollback (re-enable) restores the task to its prior state.
@@ -3657,6 +3682,136 @@ pub(crate) fn rollback_hags_enable_typed(prior: Option<u32>) -> Result<(), Strin
 // Deliberately ABSENT: a Defender-policy resolver. Writing HKLM\...\Policies is the absolute
 // security-settings rail — even a restore-to-stock goes through the owner, never autonomous code.
 
+// ── Startup-entry approval (HKCU) ────────────────────────────────────────────────────────────────
+// Windows records "may this Run entry start?" as a raw value under StartupApproved\Run. Byte 0 is
+// the state (0x02 enabled / 0x03 disabled); the bytes AFTER it are a disable timestamp Windows
+// itself wrote.
+//
+// Until 2026-08-03 this lived in lib.rs, outside the mutation boundary: no snapshot, no receipt, no
+// rollback — and it wrote a SYNTHESISED 12-byte value with a zeroed tail. That did not merely skip
+// the ledger, it destroyed the bytes Windows had put there, so the prior value could not be restored
+// even in principle. Both halves are fixed here: the tail is preserved, and the exact prior value is
+// captured into a typed Snapshot so rollback is byte-for-byte.
+pub(crate) const STARTUP_APPROVED_RUN_KEY: &str =
+    "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run";
+
+const STARTUP_APPROVAL_LEN: usize = 12;
+const STARTUP_APPROVAL_ENABLED: u8 = 0x02;
+const STARTUP_APPROVAL_DISABLED: u8 = 0x03;
+
+/// Pure: the bytes to write, given the EXACT prior value (if any) and the desired state. Preserves
+/// every byte after byte 0 when a prior exists — that tail is Windows' own timestamp, and the
+/// pre-fix code discarded it. A short/empty prior is padded rather than trusted blindly.
+pub(crate) fn compose_startup_approval_bytes(prior: Option<&[u8]>, enabled: bool) -> Vec<u8> {
+    let flag = if enabled {
+        STARTUP_APPROVAL_ENABLED
+    } else {
+        STARTUP_APPROVAL_DISABLED
+    };
+    let mut bytes = match prior {
+        Some(p) if !p.is_empty() => p.to_vec(),
+        _ => vec![0u8; STARTUP_APPROVAL_LEN],
+    };
+    if bytes.len() < STARTUP_APPROVAL_LEN {
+        bytes.resize(STARTUP_APPROVAL_LEN, 0);
+    }
+    bytes[0] = flag;
+    bytes
+}
+
+/// Explicit, dependency-free reverse map for the registry value type we captured. Anything we did
+/// not enumerate restores as REG_BINARY, which is what this key actually holds.
+fn startup_reg_type_from_u32(value: u32) -> winreg::enums::RegType {
+    use winreg::enums::RegType;
+    match value {
+        0 => RegType::REG_NONE,
+        1 => RegType::REG_SZ,
+        2 => RegType::REG_EXPAND_SZ,
+        4 => RegType::REG_DWORD,
+        5 => RegType::REG_DWORD_BIG_ENDIAN,
+        6 => RegType::REG_LINK,
+        7 => RegType::REG_MULTI_SZ,
+        11 => RegType::REG_QWORD,
+        _ => RegType::REG_BINARY,
+    }
+}
+
+/// Toggle one startup entry, capturing a restorable prior. Refuses when the prior cannot be READ:
+/// a prior we cannot prove is not a prior we can promise to restore, and a silent overwrite here is
+/// exactly the defect this replaced.
+pub(crate) fn apply_startup_entry_enabled(name: &str, enabled: bool) -> Result<ApplyResult, String> {
+    if name.trim().is_empty() {
+        return Err("A startup entry name is required.".to_string());
+    }
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let (key, _) = hkcu
+        .create_subkey(STARTUP_APPROVED_RUN_KEY)
+        .map_err(|e| e.to_string())?;
+    let (prior_bytes, prior_vtype) = match key.get_raw_value(name) {
+        Ok(v) => (Some(v.bytes), Some(v.vtype as u32)),
+        // Genuinely absent is a real, restorable prior: Windows treats "no approval value" as
+        // enabled, and rollback deletes the value again.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (None, None),
+        Err(e) => {
+            return Err(format!(
+                "Could not read the current startup approval for '{}': {}. Nothing was changed.",
+                name, e
+            ))
+        }
+    };
+    let bytes = compose_startup_approval_bytes(prior_bytes.as_deref(), enabled);
+    key.set_raw_value(
+        name,
+        &winreg::RegValue {
+            bytes,
+            vtype: winreg::enums::RegType::REG_BINARY,
+        },
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(ApplyResult {
+        applied_action: AppliedAction::SetStartupEntryEnabled {
+            name: name.to_string(),
+            enabled,
+        },
+        rollback_action: RollbackAction::RestoreStartupApprovalFromSnapshot,
+        snapshot: Snapshot::StartupApproval {
+            name: name.to_string(),
+            prior_bytes,
+            prior_vtype,
+        },
+        elevation_used: false,
+    })
+}
+
+/// Byte-for-byte restore. `None` prior means the value did not exist → delete it, returning the
+/// entry to "no approval recorded" rather than inventing an enabled marker.
+fn rollback_startup_approval_typed(
+    name: &str,
+    prior_bytes: Option<&Vec<u8>>,
+    prior_vtype: Option<u32>,
+) -> Result<(), String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let (key, _) = hkcu
+        .create_subkey(STARTUP_APPROVED_RUN_KEY)
+        .map_err(|e| e.to_string())?;
+    match prior_bytes {
+        Some(bytes) => key
+            .set_raw_value(
+                name,
+                &winreg::RegValue {
+                    bytes: bytes.clone(),
+                    vtype: startup_reg_type_from_u32(prior_vtype.unwrap_or(3)),
+                },
+            )
+            .map_err(|e| e.to_string()),
+        None => match key.delete_value(name) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e.to_string()),
+        },
+    }
+}
+
 fn mmcss_path() -> &'static str {
     "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile"
 }
@@ -4377,6 +4532,14 @@ pub(crate) fn dispatch_rollback(action: &RollbackAction, snapshot: &Snapshot) ->
             S::Service { prior_state, .. },
         ) => rollback_service_suspend_typed(service, prior_state),
         (
+            R::RestoreStartupApprovalFromSnapshot,
+            S::StartupApproval {
+                name,
+                prior_bytes,
+                prior_vtype,
+            },
+        ) => rollback_startup_approval_typed(name, prior_bytes.as_ref(), *prior_vtype),
+        (
             R::RestoreGameModeFromSnapshot,
             S::GameMode {
                 prior_enabled,
@@ -5081,5 +5244,433 @@ mod restores_label_tests {
 
         assert!(reads_enabled, "detection must read ON immediately after apply (both values set)");
         assert!(snapshot_ok, "apply must snapshot the exact prior pair for rollback");
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Property/fuzz coverage for bounded IPC inputs (blueprint §11, Q4).
+//
+// Everything below takes a value the webview (or a tampered history.json) supplies and decides
+// whether it may reach a Windows mutation or an elevated command line. Those domains are BOUNDED —
+// four service names, three task ids, four app ids, one character alphabet per interpolation site —
+// so the property that matters is about the COMPLEMENT of the allowlist: everything outside is
+// refused. That is a claim no finite list of hand-written examples can make, which is exactly why
+// these are generated. The near-miss generator matters most here: "SysMain ", "sysmain", "SysMai"
+// and a Cyrillic-с "сysMain" all have to be refused, and none of them look wrong.
+// ─────────────────────────────────────────────────────────────────────────────
+#[cfg(test)]
+mod ipc_input_fuzz_tests {
+    use super::*;
+    use crate::fuzz_support::{hostile_string, mutate_text, Rng, SEEDS};
+
+    // The documented alphabets, restated so an edit to a guard has to be a deliberate decision that
+    // updates this contract too, not a quiet widening.
+    fn ps_alphabet(c: char) -> bool {
+        c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-')
+    }
+    fn squoted_alphabet(c: char) -> bool {
+        ps_alphabet(c) || matches!(c, ' ' | '\\')
+    }
+    fn nic_alphabet(c: char) -> bool {
+        c.is_ascii_alphanumeric() || matches!(c, '-' | '{' | '}')
+    }
+
+    /// Characters that must never appear in ANY accepted token, whichever guard accepted it. This is
+    /// the security property itself rather than a restatement of the implementation: a quote or a
+    /// `$` reaching an elevated command line is the breakout.
+    const SHELL_BREAKOUT: &[char] =
+        &['\'', '"', '`', '$', ';', '|', '&', '(', ')', '<', '>', '\n', '\r', '\0'];
+
+    /// Real tokens from the curated catalog — service names, a task path, a NIC GUID key, a power
+    /// GUID. Mutating these produces the near-misses that matter.
+    const SAFE_SAMPLES: &[&str] = &[
+        "SysMain",
+        "DiagTrack",
+        "NvTelemetryContainer",
+        "Microsoft Compatibility Appraiser",
+        "\\Microsoft\\Windows\\Application Experience\\",
+        "{2a737441-1930-4402-8d77-b2bebba308a3}",
+        "381b4222-f694-41f0-9685-ff5bb260df2e",
+        "TcpAckFrequency",
+    ];
+
+    const SERVICES: &[&str] = &["SysMain", "DiagTrack", "WSearch", "NvTelemetryContainer"];
+    const TASKS: &[&str] = &["compatibility-appraiser", "ceip-consolidator", "ceip-usb"];
+
+    #[test]
+    fn elevated_command_guards_admit_exactly_their_alphabets_and_never_a_breakout_character() {
+        for seed in SEEDS {
+            let mut rng = Rng::seeded(seed);
+            for case in 0..300 {
+                let s = if rng.flag() {
+                    hostile_string(&mut rng, 4)
+                } else {
+                    let base = *rng.pick(SAFE_SAMPLES);
+                    mutate_text(&mut rng, base)
+                };
+                let nonempty = !s.is_empty();
+
+                assert_eq!(
+                    ps_safe(&s).is_ok(),
+                    nonempty && s.chars().all(ps_alphabet),
+                    "seed {seed} case {case}: ps_safe disagreed with its documented alphabet on {s:?}"
+                );
+                assert_eq!(
+                    ps_safe_squoted(&s).is_ok(),
+                    nonempty && s.chars().all(squoted_alphabet),
+                    "seed {seed} case {case}: ps_safe_squoted disagreed with its documented alphabet on {s:?}"
+                );
+                assert_eq!(
+                    nic_interface_safe(&s).is_ok(),
+                    nonempty && s.chars().all(nic_alphabet),
+                    "seed {seed} case {case}: nic_interface_safe disagreed with its documented alphabet on {s:?}"
+                );
+
+                for (guard, accepted) in [
+                    ("ps_safe", ps_safe(&s).is_ok()),
+                    ("ps_safe_squoted", ps_safe_squoted(&s).is_ok()),
+                    ("nic_interface_safe", nic_interface_safe(&s).is_ok()),
+                ] {
+                    if accepted {
+                        assert!(
+                            !s.chars().any(|c| SHELL_BREAKOUT.contains(&c)),
+                            "seed {seed} case {case}: {guard} accepted a token carrying a breakout character: {s:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn mutation_allowlists_resolve_their_catalog_and_refuse_everything_else() {
+        // Named explicitly, not merely "absent from the list": if a future edit ever made one of
+        // these reachable, this is the test that says so by name.
+        const CRITICAL: &[&str] = &[
+            "csrss",
+            "lsass",
+            "smss",
+            "wininit",
+            "services",
+            "WinDefend",
+            "SecurityHealthService",
+            "Winmgmt",
+            "RpcSs",
+            "wuauserv",
+            "EventLog",
+            "BFE",
+            "mpssvc",
+        ];
+        for name in CRITICAL {
+            assert!(
+                KnownService::from_name(name).is_none(),
+                "a critical service must never resolve to the suspend primitive: {name}"
+            );
+        }
+
+        let apps: Vec<&'static str> = KnownPreloadApp::ALL.iter().map(|a| a.id()).collect();
+
+        // The catalog itself resolves and round-trips — so the refusals below are a real boundary
+        // rather than a guard that refuses everything.
+        for name in SERVICES {
+            assert_eq!(
+                KnownService::from_name(name).expect("catalog service resolves").name(),
+                *name
+            );
+        }
+        for id in TASKS {
+            assert!(KnownBloatTask::from_id(id).is_some(), "catalog task resolves: {id}");
+        }
+        for id in &apps {
+            assert_eq!(
+                KnownPreloadApp::from_id(id).expect("catalog app resolves").id(),
+                *id
+            );
+        }
+
+        for seed in SEEDS {
+            let mut rng = Rng::seeded(seed);
+            for case in 0..400 {
+                let s = match rng.below(4) {
+                    0 => hostile_string(&mut rng, 3),
+                    1 => {
+                        let b = *rng.pick(SERVICES);
+                        mutate_text(&mut rng, b)
+                    }
+                    2 => {
+                        let b = *rng.pick(TASKS);
+                        mutate_text(&mut rng, b)
+                    }
+                    _ => {
+                        let b = *rng.pick(&apps);
+                        mutate_text(&mut rng, b)
+                    }
+                };
+                // A mutation can land back on a legal id, so the property is an EQUIVALENCE with
+                // exact catalog membership — never a blanket "always None", which a mutation that
+                // round-tripped would falsify for the wrong reason.
+                assert_eq!(
+                    KnownService::from_name(&s).is_some(),
+                    SERVICES.contains(&s.as_str()),
+                    "seed {seed} case {case}: KnownService::from_name is not exactly its catalog on {s:?}"
+                );
+                assert_eq!(
+                    KnownBloatTask::from_id(&s).is_some(),
+                    TASKS.contains(&s.as_str()),
+                    "seed {seed} case {case}: KnownBloatTask::from_id is not exactly its catalog on {s:?}"
+                );
+                assert_eq!(
+                    KnownPreloadApp::from_id(&s).is_some(),
+                    apps.contains(&s.as_str()),
+                    "seed {seed} case {case}: KnownPreloadApp::from_id is not exactly its catalog on {s:?}"
+                );
+            }
+        }
+    }
+
+    /// The batch receipt file is written by an elevated child and read back to decide what gets
+    /// ledgered. The fail-safe direction is that a MISSING receipt means not-applied, so the
+    /// property is that every receipt the parser reports is justified by a line that explicitly said
+    /// `ok` or `fail` — a fabricated or inferred receipt would ledger a change that never happened.
+    #[test]
+    fn batch_receipts_only_report_lines_that_explicitly_said_ok_or_fail() {
+        for seed in SEEDS {
+            let mut rng = Rng::seeded(seed);
+            for case in 0..60 {
+                let lines = 1 + rng.below(12);
+                let mut text = String::new();
+                for _ in 0..lines {
+                    match rng.below(5) {
+                        0 => {
+                            let id = *rng.pick(crate::history::APPLIABLE_REC_IDS);
+                            text.push_str(id);
+                            text.push_str(":ok");
+                        }
+                        1 => {
+                            let id = *rng.pick(crate::history::APPLIABLE_REC_IDS);
+                            text.push_str(id);
+                            text.push_str(":fail");
+                        }
+                        2 => {
+                            let junk = hostile_string(&mut rng, 3);
+                            text.push_str(&junk);
+                        }
+                        3 => {
+                            let id = *rng.pick(crate::history::APPLIABLE_REC_IDS);
+                            let base = format!("{id}:ok");
+                            let m = mutate_text(&mut rng, &base);
+                            text.push_str(&m);
+                        }
+                        _ => {
+                            let junk = hostile_string(&mut rng, 2);
+                            text.push_str(&junk);
+                            text.push_str(":ok");
+                        }
+                    }
+                    text.push('\n');
+                }
+
+                for (id, ok) in parse_batch_receipts(&text) {
+                    let want = format!("{id}:{}", if ok { "ok" } else { "fail" });
+                    assert!(
+                        text.lines().any(|l| l.trim() == want),
+                        "seed {seed} case {case}: receipt {id:?}={ok} is justified by no input line"
+                    );
+                }
+            }
+        }
+    }
+
+    fn tampered(rec_id: &str, snapshot: serde_json::Value, typed: Option<RollbackAction>) -> AppliedChange {
+        AppliedChange {
+            id: "fuzz-1".into(),
+            rec_id: rec_id.into(),
+            rec_title: "fuzz".into(),
+            applied_at: "2026-01-01T00:00:00Z".into(),
+            snapshot,
+            status: "applied".into(),
+            applied_action: None,
+            rollback_action: typed,
+            app_version_at_apply: None,
+            ruleset_version_at_apply: None,
+            elevation_used: None,
+            provenance: None,
+            hw_fingerprint: None,
+            rolled_back_at: None,
+        }
+    }
+
+    /// history.json is user-writable, so `resolve_rollback` reads attacker-controllable rec_ids and
+    /// snapshots. Two properties: the legacy synthesizer never invents a contract for a rec_id
+    /// outside the appliable catalog, and the typed path returns the STORED contract verbatim rather
+    /// than substituting one it liked better.
+    #[test]
+    fn a_tampered_ledger_entry_never_yields_a_rollback_contract_it_did_not_earn() {
+        for seed in SEEDS {
+            let mut rng = Rng::seeded(seed);
+            for case in 0..200 {
+                let rec_id = match rng.below(3) {
+                    0 => hostile_string(&mut rng, 3),
+                    1 => {
+                        let b = *rng.pick(crate::history::APPLIABLE_REC_IDS);
+                        mutate_text(&mut rng, b)
+                    }
+                    _ => (*rng.pick(crate::history::APPLIABLE_REC_IDS)).to_string(),
+                };
+                let prior = rng.next_u64();
+                let junk = hostile_string(&mut rng, 2);
+                let snapshot = match rng.below(3) {
+                    0 => serde_json::json!({ "prior": prior }),
+                    1 => serde_json::json!({ "prior": junk.clone() }),
+                    _ => serde_json::Value::String(junk.clone()),
+                };
+
+                // Legacy path (no typed contract stored).
+                if resolve_rollback(&tampered(&rec_id, snapshot.clone(), None)).is_ok() {
+                    assert!(
+                        crate::history::APPLIABLE_REC_IDS.contains(&rec_id.as_str()),
+                        "seed {seed} case {case}: synthesized a rollback contract for off-catalog rec_id {rec_id:?}"
+                    );
+                }
+
+                // Typed path: whatever it returns must be the contract that was stored.
+                let stored = RollbackAction::RestoreGameModeFromSnapshot;
+                if let Ok((got, _)) =
+                    resolve_rollback(&tampered(&rec_id, snapshot, Some(stored.clone())))
+                {
+                    assert_eq!(
+                        serde_json::to_string(&got).expect("serialize"),
+                        serde_json::to_string(&stored).expect("serialize"),
+                        "seed {seed} case {case}: the stored typed contract was substituted"
+                    );
+                }
+            }
+        }
+
+        // Control: a well-formed typed entry DOES resolve, so the Ok branches above are reachable
+        // and the properties are not vacuous.
+        let good = tampered(
+            "game-mode",
+            serde_json::to_value(Snapshot::GameMode {
+                prior_enabled: Some(1),
+                prior_allow: None,
+            })
+            .expect("serialize snapshot"),
+            Some(RollbackAction::RestoreGameModeFromSnapshot),
+        );
+        let (got, _) = resolve_rollback(&good).expect("a well-formed typed entry resolves");
+        assert_eq!(
+            serde_json::to_string(&got).expect("serialize"),
+            serde_json::to_string(&RollbackAction::RestoreGameModeFromSnapshot).expect("serialize")
+        );
+    }
+}
+
+
+// bug->guard (council review 2026-08-02, P0 "mutation authority not centralized"):
+// set_startup_entry_enabled wrote StartupApproved\\Run straight from lib.rs with no snapshot, no
+// receipt and no rollback -- AND it synthesised a 12-byte value with a zeroed tail, discarding the
+// timestamp bytes Windows itself had written. That is worse than a missing receipt: it made the
+// prior value unrestorable in principle. These pin the composition contract, which is the half that
+// can be proven without touching the real registry.
+#[cfg(test)]
+mod startup_approval_tests {
+    use super::*;
+
+    // A real StartupApproved value: state byte + Windows' own disable timestamp.
+    const PRIOR_WITH_TIMESTAMP: [u8; 12] =
+        [0x03, 0, 0, 0, 0xAB, 0xCD, 0xEF, 0x12, 0x34, 0x56, 0x78, 0x9A];
+
+    #[test]
+    fn enabling_preserves_every_byte_windows_wrote_after_the_state_flag() {
+        let got = compose_startup_approval_bytes(Some(&PRIOR_WITH_TIMESTAMP), true);
+        assert_eq!(got[0], 0x02, "state flag must say enabled");
+        assert_eq!(
+            &got[1..],
+            &PRIOR_WITH_TIMESTAMP[1..],
+            "the timestamp tail is Windows' data - the pre-fix code zeroed it"
+        );
+    }
+
+    #[test]
+    fn disabling_preserves_every_byte_windows_wrote_after_the_state_flag() {
+        let mut prior = PRIOR_WITH_TIMESTAMP;
+        prior[0] = 0x02;
+        let got = compose_startup_approval_bytes(Some(&prior), false);
+        assert_eq!(got[0], 0x03);
+        assert_eq!(&got[1..], &prior[1..]);
+    }
+
+    #[test]
+    fn a_toggle_round_trip_returns_the_exact_original_bytes() {
+        let off = compose_startup_approval_bytes(Some(&PRIOR_WITH_TIMESTAMP), false);
+        let back = compose_startup_approval_bytes(Some(&off), true);
+        let mut expected = PRIOR_WITH_TIMESTAMP;
+        expected[0] = 0x02;
+        assert_eq!(back, expected.to_vec(), "round trip must be byte-identical");
+    }
+
+    #[test]
+    fn an_absent_prior_synthesises_a_well_formed_value() {
+        let got = compose_startup_approval_bytes(None, false);
+        assert_eq!(got.len(), STARTUP_APPROVAL_LEN);
+        assert_eq!(got[0], 0x03);
+        assert!(got[1..].iter().all(|b| *b == 0), "nothing to preserve");
+    }
+
+    #[test]
+    fn a_short_or_empty_prior_is_padded_never_indexed_out_of_bounds() {
+        assert_eq!(compose_startup_approval_bytes(Some(&[]), true).len(), STARTUP_APPROVAL_LEN);
+        let short = compose_startup_approval_bytes(Some(&[0x03, 0x77]), true);
+        assert_eq!(short.len(), STARTUP_APPROVAL_LEN);
+        assert_eq!(short[0], 0x02);
+        assert_eq!(short[1], 0x77, "the one real byte we had is still kept");
+    }
+
+    // The rollback contract must survive a ledger round trip: an entry written today has to
+    // deserialize and dispatch tomorrow.
+    #[test]
+    fn the_snapshot_round_trips_through_the_ledger_representation() {
+        let snap = Snapshot::StartupApproval {
+            name: "OneDrive".to_string(),
+            prior_bytes: Some(PRIOR_WITH_TIMESTAMP.to_vec()),
+            prior_vtype: Some(3),
+        };
+        let json = serde_json::to_value(&snap).expect("serialize");
+        let back: Snapshot = serde_json::from_value(json).expect("deserialize");
+        match back {
+            Snapshot::StartupApproval { name, prior_bytes, prior_vtype } => {
+                assert_eq!(name, "OneDrive");
+                assert_eq!(prior_bytes, Some(PRIOR_WITH_TIMESTAMP.to_vec()));
+                assert_eq!(prior_vtype, Some(3));
+            }
+            other => panic!("wrong variant back from the ledger: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn an_absent_prior_survives_the_ledger_as_absent_not_as_empty() {
+        let snap = Snapshot::StartupApproval {
+            name: "Thing".to_string(),
+            prior_bytes: None,
+            prior_vtype: None,
+        };
+        let back: Snapshot =
+            serde_json::from_value(serde_json::to_value(&snap).expect("serialize")).expect("de");
+        match back {
+            // None must NOT collapse into Some(vec![]) - the two mean different rollbacks
+            // (delete the value vs write an empty one).
+            Snapshot::StartupApproval { prior_bytes, .. } => assert!(prior_bytes.is_none()),
+            other => panic!("wrong variant: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn a_mismatched_action_snapshot_pair_refuses_rather_than_guessing() {
+        let err = dispatch_rollback(
+            &RollbackAction::RestoreStartupApprovalFromSnapshot,
+            &Snapshot::HwSchMode { prior: Some(1) },
+        );
+        assert!(err.is_err(), "a contract mismatch must never perform a rollback");
     }
 }

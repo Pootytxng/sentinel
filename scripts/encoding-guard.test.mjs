@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { findMojibake, recoverMojibake, repairText, repairToFixpoint, trackedTextFiles } from "./encoding-guard.mjs";
+import { findMojibake, mojibakeOnce, recoverMojibake, repairText, repairToFixpoint, trackedTextFiles } from "./encoding-guard.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
@@ -19,16 +19,41 @@ const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
 const CORRUPT_EM_DASH = String.fromCharCode(0xe2, 0x20ac, 0x201d);
 
 describe("mojibake detection", () => {
+  // The table this whole guard stands on, pinned against the published windows-1252 mapping.
+  //
+  // bug->guard (CI, 2026-08-01): the table used to be derived from `TextDecoder("windows-1252")`,
+  // which on node 20 silently answers as Latin-1 (0x80 -> U+0080 instead of U+20AC). CI pins node
+  // 20, so the guard against silent corruption was itself silently broken — it found nothing, and
+  // said so cheerfully. These constants come from the specification, not from this codebase, so
+  // they cannot drift with it.
+  it.each([
+    // clean char, its UTF-8 bytes read back as windows-1252, and the high byte each one exercises
+    ["—", [0xe2, 0x20ac, 0x201d], "0x80 € and 0x94 ”"],
+    ["’", [0xe2, 0x20ac, 0x2122], "0x80 € and 0x99 ™"],
+    ["…", [0xe2, 0x20ac, 0xa6], "0x80 €"],
+    ["€", [0xe2, 0x201a, 0xac], "0x82 ‚"],
+    ["š", [0xc5, 0xa1], "low bytes only — the control group"],
+    ["©", [0xc2, 0xa9], "low bytes only — the control group"],
+  ])("corrupting %s yields the published windows-1252 characters (%s)", (clean, codes) => {
+    // Expectations are written as CODE POINTS from the specification, so they owe nothing to this
+    // codebase and nothing to the host's ICU. Together they pin every high byte node 20 got wrong.
+    expect(mojibakeOnce(clean)).toBe(String.fromCharCode(...codes));
+  });
+
   it("recovers the em-dash corruption that hit RELEASE_STATE.md", () => {
     const corrupt = `RELEASE_STATE.md ${CORRUPT_EM_DASH} Compy gate matrix`;
     expect(recoverMojibake(corrupt).text).toBe("RELEASE_STATE.md — Compy gate matrix");
   });
 
+  // The fixtures below used to be built with `new TextDecoder("windows-1252")`. That decoder
+  // silently answers as Latin-1 on a Node whose ICU lacks the table (node 20 does), so the
+  // "corruption" was not corruption at all and the guard was marked failing for correctly finding
+  // nothing. They now use the module's own one-pass corrupter, which is pinned to the published
+  // mapping by the test directly below — so this cannot pass vacuously.
   it("peels layered corruption, as found in src-tauri/Cargo.toml", () => {
     const clean = "default OFF — close still exits";
-    const cp1252 = new TextDecoder("windows-1252");
     let corrupt = clean;
-    for (let pass = 0; pass < 4; pass += 1) corrupt = cp1252.decode(Buffer.from(corrupt, "utf8"));
+    for (let pass = 0; pass < 4; pass += 1) corrupt = mojibakeOnce(corrupt);
 
     expect(corrupt).not.toBe(clean);
     expect(recoverMojibake(corrupt).text).not.toBe(clean); // one pass is not enough
@@ -57,8 +82,7 @@ describe("mojibake detection", () => {
   });
 
   it("honours the per-line opt-out for text that is corrupt on purpose", () => {
-    const cp1252 = new TextDecoder("windows-1252");
-    const corrupt = cp1252.decode(Buffer.from("looks like —", "utf8"));
+    const corrupt = mojibakeOnce("looks like —");
     expect(findMojibake(corrupt)).toHaveLength(1);
     expect(findMojibake(`${corrupt} encoding-guard:allow`)).toHaveLength(0);
     const exempt = `${corrupt} encoding-guard:allow`;
