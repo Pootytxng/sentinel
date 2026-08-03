@@ -21,8 +21,11 @@ what's worth changing on *your* rig, what's already fine, and — the soul of th
 tweak did nothing, it says so.**
 
 It's a real, working Windows app (Tauri: Rust core, web UI), at private-beta quality. **Core
-promise: optimize + rollback stay free forever, no account required.** Today, nothing leaves your
-PC — the app is verified zero-outbound, full stop. A future opt-in **Receipts telemetry** feature
+promise: optimize + rollback stay free forever, no account required.** Your hardware, sessions and
+history stay on your PC: no telemetry, no account, no upload. The app's one automatic outbound call
+is a signed update check against a pinned GitHub endpoint (live 2026-07-22) — it carries none of
+your data, downloads nothing until you approve, and can be switched off in Settings → About. A
+future opt-in **Receipts telemetry** feature
 (anonymous, default-off, kill-switched) is planned but **not yet built** — there is no toggle to
 turn on yet, and it won't ship without its own security review and owner sign-off. The wedge isn't
 "boost" — it's being the only tool in a snake-oil category that **measures instead of promises.**
@@ -73,8 +76,11 @@ Detect → diagnose → debrief → prove. That loop is built and running today 
   install (private key lives outside the repo). The Export report still leaves only by the user's
   hand. **Receipts telemetry** (anonymous, opt-in, default-off, kill-switched) remains a separate
   gated track requiring its own security review and owner sign-off before it can arm. The old
-  "verified zero-outbound" absolute is RETIRED by the updater decision — the in-app footer now
-  states exactly what leaves the machine: "Outbound: signed update check only."
+  "verified zero-outbound" absolute is RETIRED by the updater decision <!-- outbound-claim-allow --> — the in-app footer now
+  states exactly what leaves the machine: "Outbound: signed update check only." Since 2026-08-03
+  the automatic check is also switchable off (Settings → About → Automatic update checks), with a
+  manual "Check now" beside it; the switch gates checking only and never weakens signature
+  verification.
 
 ## Honesty about the project itself
 

@@ -446,7 +446,7 @@ pub(crate) fn detect_memory_modules_smbios() -> Vec<MemoryModuleInfo> {
     use std::ptr;
 
     // 'RSMB' as the Windows DWORD signature: 'R' in the high byte.
-    const RSMB: u32 = u32::from_be_bytes([b'R', b'S', b'M', b'B']);
+    const RSMB: u32 = u32::from_be_bytes(*b"RSMB");
 
     unsafe {
         // First call with 0 buffer size returns the required size.

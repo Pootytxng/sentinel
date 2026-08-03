@@ -243,7 +243,38 @@ function Invoke-ReleaseTransaction {
         throw "Release transaction stage '$stage' is absent and has no Apply handler."
       }
       Invoke-ReleaseStageHandler -Stage $stage -Phase "apply" -ScriptBlock $handler.Apply -ArgumentList @($Context)
-      $inspection = Invoke-ReleaseStageHandler -Stage $stage -Phase "inspect" -ScriptBlock $handler.Inspect -ArgumentList @($Context)
+
+      # GitHub is read-after-write eventually consistent: a ref or release that our OWN Apply just
+      # created can still answer 404 for a beat. An absence measured immediately after a SUCCESSFUL
+      # Apply is therefore evidence that we asked too early - not that the action failed. v0.9.12
+      # proved it the expensive way: three publish invocations, each completing exactly one stage
+      # and then failing to see the thing it had just created (releases_tag_created, then
+      # draft_created), with the created ref visible in the very same log line.
+      #
+      # Fail-closed is preserved EXACTLY. Only "absent" is retried. A malformed inspection or a
+      # throw from the inspector still fails instantly, and an absence that outlives the whole
+      # budget still fails. Retrying absence here cannot mask a failed Apply: a failed Apply throws
+      # before this loop is ever reached.
+      $verifyAttempts = 6
+      $verifyDelayMs = 1500
+      if ($Context.PSObject.Properties['PostApplyVerifyAttempts']) {
+        $verifyAttempts = [Math]::Max(1, [int]$Context.PostApplyVerifyAttempts)
+      }
+      if ($Context.PSObject.Properties['PostApplyVerifyDelayMs']) {
+        $verifyDelayMs = [Math]::Max(0, [int]$Context.PostApplyVerifyDelayMs)
+      }
+
+      $inspection = $null
+      for ($verifyAttempt = 1; $verifyAttempt -le $verifyAttempts; $verifyAttempt++) {
+        $inspection = Invoke-ReleaseStageHandler -Stage $stage -Phase "inspect" -ScriptBlock $handler.Inspect -ArgumentList @($Context)
+        if (-not $inspection -or @("complete", "absent") -notcontains $inspection.Status) {
+          throw "Release transaction stage '$stage' returned a malformed inspection result after its action."
+        }
+        if ($inspection.Status -eq "complete") { break }
+        if ($verifyAttempt -lt $verifyAttempts -and $verifyDelayMs -gt 0) {
+          Start-Sleep -Milliseconds $verifyDelayMs
+        }
+      }
       if (-not $inspection -or $inspection.Status -ne "complete") {
         throw "Release transaction stage '$stage' did not verify as complete after its action."
       }

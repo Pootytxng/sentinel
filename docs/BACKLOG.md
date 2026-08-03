@@ -13,6 +13,38 @@
 
 ---
 
+## 🎯 CURRENT PROGRAM CUTLINE — PRODUCT QUALITY STABILIZATION (owner request 2026-07-29)
+
+> **This section wins on current product priority.** Full sequencing, dependencies, acceptance,
+> conflict resolutions, and defer/reject rules:
+> `docs/superpowers/specs/2026-07-29-product-quality-stabilization-program.md`.
+> Live execution and claims remain in [Kuya Work Control](WORK_CONTROL.md); gate/release truth remains
+> in [RELEASE_STATE.md](RELEASE_STATE.md). Historical priority sections below remain evidence, not the
+> current pull order.
+
+- [~] **Q0 — LabDeck glance-first presentation pilot:** Active in issue
+  [#14](https://github.com/Pootytxng/sentinel/issues/14), default OFF; preserve the real RigViewer,
+  essential measured gauges, comparison evidence, and the accepted decision-journey organization.
+- [ ] **P0 before the next release or wider beta:** Q1 privacy/storage/trust-copy truth → Q2
+  main-vs-overlay custom-command authority (owner capability/security GO) → Q3 FPS PID-recycle
+  attribution correctness.
+- [ ] **P1 stabilization:** ~~reproducible local supply-chain/release gate~~ **Q4 DELIVERED** (issue
+  [#35](https://github.com/Pootytxng/sentinel/issues/35)) — one command `powershell -NoProfile -File
+  scripts/verify-release.ps1`, 14 checks, PASS/FAIL/BLOCKED/PENDING, reachability-classified npm +
+  cargo audits with expiring acknowledgements, evidence pack JSON; see RELEASE_AUTONOMY.md → "The one
+  local command". §11 property/fuzz coverage for persistence parsing + bounded IPC inputs also DELIVERED
+  (issue [#37](https://github.com/Pootytxng/sentinel/issues/37)) — dependency-free fixed-seed generator,
+  9 properties over the ledger, session file, elevated-command guards, mutation allowlists, batch
+  receipts, and rollback-contract resolution. Open: Q5 local-only redacted support evidence (blocked on
+  Q1's privacy vocabulary + a data-retention review) · Q6 current-state/doc consolidation · Q7 native
+  accessibility and measured performance budgets (blocked on a stable candidate + owner's machine).
+- [ ] **P2 product completion:** owner-accepted canonical Lab + reversible generation pruning →
+  first-win action/rollback/proof journey → Consumer/Technical/Support evidence exports.
+- [ ] **LATER:** Intelligence Phase 4/5, vendor-awareness expansion, Receipts/crowd intelligence,
+  remote rules, Pro/affiliate/B2B, and model-assisted explanation remain behind the blueprint's gates.
+
+---
+
 > **🧰 TOOLCHAIN — Fable-window persistence pack** (2026-07-06) — COMPLETE 2026-07-07: all 4 items shipped; living pointer = CLAUDE.md → PROJECT SKILLS INDEX. Moved verbatim to `BACKLOG_ARCHIVE.md` (2026-07-22 tier-1 board diet).
 
 ## 🚚 LIVE UPDATER — SHIPPED (owner directive 2026-07-22) + FIRST FIELD-QA WAVE (reviews 2026-07-22)

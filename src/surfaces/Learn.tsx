@@ -161,8 +161,10 @@ const VERDICT_FILTER_KEYS: TweakVerdict[] = ["real", "placebo", "risky"];
 // §5 category order for the collapsed browse sections (guides first — they're the "start here" doers).
 const CATEGORY_ORDER: KnowledgeType[] = ["guide", "tweak", "term", "trick"];
 
-// §7 — detect a URL PASTE into the autopsy. Fetching URLs is off the table ("nothing leaves your PC"
-// is a shipped promise), but silent non-registration is a doorknob violation. Returns the source kind
+// §7 — detect a URL PASTE into the autopsy. Autopsy never opens or fetches a pasted link — the
+// signed update check is Compy's only outbound surface, and it is not reachable from here (the
+// production CSP connect-src stays 'self' ipc:). Silent non-registration is still a doorknob
+// violation, so we register the paste and coach. Returns the source kind
 // for in-voice coaching, or null. A mixed paste (URL + substantial prose) returns null → we grade the
 // prose and ignore the URL. NEVER fetches; pure string inspection.
 function detectUrlPaste(text: string): "youtube" | "webpage" | null {

@@ -18,6 +18,8 @@ mod diagnostics;
 mod experiment; // Intelligence Phase 3 — user-started single-variable experiment engine + optimization simulator. ARMED 2026-07-17 (experiment_gate()==true, owner sign-off; orchestrates the existing audited mutation boundary — no new apply/rollback primitive; user-started only, defense-in-depth gate checks retained).
 mod export;
 mod fps;
+#[cfg(test)]
+mod fuzz_support; // Test-only deterministic input generator for the property/fuzz suites (persistence parsing + bounded IPC inputs). Never compiled into the shipped binary.
 mod game_mode_persist; // Game Mode persistence keeper — option 1(b) mechanism C, DARK behind keep_game_mode_gate().
 mod gaming_orchestrator;
 mod gaming_session;
@@ -906,24 +908,11 @@ fn get_preload_apps() -> PreloadAppsView {
     PreloadAppsView { armed, installed }
 }
 
-#[tauri::command]
-fn set_startup_entry_enabled(name: String, enabled: bool) -> Result<(), String> {
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let (key, _) = hkcu
-        .create_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run")
-        .map_err(|e| e.to_string())?;
-    let first_byte = if enabled { 0x02u8 } else { 0x03u8 };
-    let bytes = vec![first_byte, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-    key.set_raw_value(
-        &name,
-        &winreg::RegValue {
-            bytes,
-            vtype: winreg::enums::RegType::REG_BINARY,
-        },
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(())
-}
+// set_startup_entry_enabled MOVED to history.rs (2026-08-03). It used to write
+// StartupApproved\Run directly from here — outside the mutation boundary, with no snapshot, no
+// receipt and no rollback, and it destroyed Windows' own timestamp bytes so the prior value could
+// not be restored even in principle. The command name and its arguments are unchanged; it now
+// returns an AppliedChangeView like every other mutation. See actions::apply_startup_entry_enabled.
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 // ─── Frameless-window maximize fix (Windows) ─────────────────────────────────
@@ -1055,7 +1044,7 @@ pub fn run() {
             rollback_change,
             get_applied_changes,
             get_startup_entries,
-            set_startup_entry_enabled,
+            history::set_startup_entry_enabled,
             get_rules_source,
             get_game_readiness,
             dismiss_readiness_check,

@@ -75,7 +75,7 @@ const modules = [
 
 <Base
   title="Compy — the PC optimizer that shows its receipts"
-  description="Compy reads your actual hardware, recommends only what it can undo, and measures every change on your rig — including the ones that do nothing. The core is free forever — no account, nothing leaves your PC."
+  description="Compy reads your actual hardware, recommends only what it can undo, and measures every change on your rig — including the ones that do nothing. The core is free forever — no account, no telemetry."
   jsonld={JSON.stringify({
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -161,7 +161,7 @@ const modules = [
             <a class="btn btn--primary" href="#waitlist" data-magnetic>Join the waitlist</a>
             <a class="btn btn--ghost" href="/library/" data-magnetic>Sample the Blackbook →</a>
           </div>
-          <p class="flight-note mono">Compy's core is free forever. No account, no ads, nothing leaves your PC.</p>
+          <p class="flight-note mono">Compy's core is free forever. No account, no ads, no telemetry. Signed updates only.</p>
         </div>
       </div>
     </div>
@@ -224,7 +224,7 @@ const modules = [
       <!-- the five vows: the deck's bottom rail -->
       <ul class="vows mono reveal" role="list" aria-label="What Compy will never do">
         <li>rollback-first</li>
-        <li>zero outbound connections</li>
+        <li>signed update checks; downloads need your click</li>
         <li>no kernel driver</li>
         <li>no game injection</li>
         <li>core free forever</li>
@@ -401,9 +401,11 @@ const modules = [
         <details>
           <summary>Does Compy send my data anywhere?</summary>
           <p>
-            No. The app makes zero outbound connections — your hardware info, sessions and
-            history stay on your PC. The only thing this website stores is the waitlist
-            email you choose to give it.
+            Your hardware info, sessions, settings and history stay on your PC. Compy has no
+            telemetry and no account. Its only automatic connection checks GitHub for signed
+            updates — that request carries nothing about you or your PC, nothing downloads
+            until you approve it, and you can switch it off in Settings. This website
+            separately stores only the waitlist email you choose to give it.
           </p>
         </details>
         <details>

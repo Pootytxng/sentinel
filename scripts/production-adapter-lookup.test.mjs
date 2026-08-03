@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
+import { windows, WINDOWS_ONLY } from "./lib/windows-only.mjs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -38,7 +39,7 @@ const invoke = (scenario) => {
 const listCalls = (payload) => payload.calls.filter((call) => /\/releases\?per_page=\d+&page=\d+$/.test(call));
 const idCalls = (payload) => payload.calls.filter((call) => /\/releases\/\d+$/.test(call));
 
-describe("draft-aware production release lookup", () => {
+describe.runIf(windows)(`draft-aware production release lookup ${WINDOWS_ONLY}`, () => {
   it("returns a private draft that the releases-by-tag endpoint answers 404 for", () => {
     const { payload, status, combined } = invoke("private-draft");
     expect(status, combined).toBe(0);

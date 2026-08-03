@@ -57,7 +57,10 @@ describe("landing (Flight Test contract v3)", () => {
     // forever; Pro is paid depth, never a gate — an unscoped absolute must not return.
     for (const vow of [
       "rollback-first",
-      "zero outbound connections",
+      // Was "zero outbound connections" until 2026-08-03. The updater armed 2026-07-22, so that
+      // vow became false — and this assertion was pinning it onto the live marketing page, the
+      // same failure mode as the retired receipts-copy guard. See src/outbound-claim-guard.test.ts.
+      "signed update checks; downloads need your click",
       "no kernel driver",
       "no game injection",
       "core free forever",
