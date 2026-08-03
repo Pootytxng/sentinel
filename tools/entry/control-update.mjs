@@ -36,7 +36,22 @@ const runGit = (dir) => (args) =>
  * `https://github.com/attacker/Pootytxng-sentinel-fork` and any URL that merely mentions the name,
  * and the fetch/merge path here checked the remote not at all. Identity is `<owner>/<repo>`, matched
  * whole, after normalising the two spellings git actually produces.
+ *
+ * 2026-08-02: that first fix compared ONLY the `<owner>/<repo>` tail — because the pin constant is
+ * the bare string `Pootytxng/sentinel` with no host — so `^https?:\/\/[^/]+\/(.+)$` swallowed the
+ * whole authority and discarded it. Any host with the right tail passed:
+ * `https://github.com.attacker.net/Pootytxng/sentinel` pinned clean, and the launcher would fetch,
+ * fast-forward onto it, and run it. Checking the apartment number and ignoring the street. The host
+ * is now checked too, taken from where the connection actually goes (userinfo and port stripped, so
+ * `https://github.com@evil.net/...` reads as evil.net, which is what a browser would dial).
  */
+const GITHUB_HOSTS = new Set(["github.com", "www.github.com"]);
+
+/** The host a URL authority really connects to: anything before the last `@` is userinfo, not host. */
+function hostOf(authority) {
+  return authority.slice(authority.lastIndexOf("@") + 1).replace(/:\d+$/, "");
+}
+
 export function sameRepo(url, expected) {
   const norm = (u) =>
     String(u ?? "")
@@ -46,14 +61,17 @@ export function sameRepo(url, expected) {
       .replace(/^git@([^:]+):/i, "https://$1/")
       .replace(/^ssh:\/\/git@/i, "https://")
       .toLowerCase();
-  const path = (u) => {
+  const parse = (u) => {
     const n = norm(u);
-    const m = n.match(/^https?:\/\/[^/]+\/(.+)$/);
-    return m ? m[1] : n;
+    const m = n.match(/^https?:\/\/([^/]+)\/(.+)$/);
+    return m ? { host: hostOf(m[1]), path: m[2] } : { host: null, path: n };
   };
-  const a = path(url);
-  const b = path(expected);
-  return a !== "" && a === b;
+  const a = parse(url);
+  const b = parse(expected);
+  if (a.path === "" || a.path !== b.path) return false;
+  // A remote that names a host must name GitHub's. A bare `<owner>/<repo>` has no host — that is
+  // the pin constant itself, and the only reason the tail is what gets compared.
+  return [a, b].every((side) => side.host === null || GITHUB_HOSTS.has(side.host));
 }
 
 /**

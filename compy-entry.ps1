@@ -114,21 +114,46 @@ function Hold-Window {
 # Whole-path repository identity, across the spellings git actually produces. Mirrors `sameRepo` in
 # tools/entry/control-update.mjs, which carries the guards for it. `-notlike "*Pootytxng/sentinel*"`
 # accepted https://github.com/attacker/Pootytxng-sentinel-fork -- a spelling test, not a pin.
-function ConvertTo-RepoPath([string]$Url) {
+# 2026-08-02: the first fix compared only the <owner>/<repo> tail, because the pin constant is the
+# bare 'Pootytxng/sentinel' with no host -- so '^https?://[^/]+/(.+)$' swallowed the authority and
+# threw it away, and https://github.com.attacker.net/Pootytxng/sentinel pinned clean. The host is
+# checked too now. Mirrors sameRepo in tools/entry/control-update.mjs; guards live in
+# tools/entry/repo-identity-guard.test.mjs.
+$GITHUB_HOSTS = @('github.com', 'www.github.com')
+
+# Anything before the last '@' is userinfo, not host: https://github.com@evil.net/... dials evil.net.
+function Get-UrlHost([string]$Authority) {
+    $a = $Authority.Substring($Authority.LastIndexOf('@') + 1)
+    return ($a -replace ':\d+$', '')
+}
+
+function Test-GitHubHost([string]$Candidate) {
+    return $GITHUB_HOSTS -contains $Candidate
+}
+
+function ConvertTo-RepoParts([string]$Url) {
     $x = "$Url".Trim()
     $x = $x -replace '\.git$', ''
     $x = $x -replace '/+$', ''
     $x = $x -replace '^git@([^:]+):', 'https://$1/'
     $x = $x -replace '^ssh://git@', 'https://'
     $x = $x.ToLowerInvariant()
-    if ($x -match '^https?://[^/]+/(.+)$') { return $Matches[1] }
-    return $x
+    if ($x -match '^https?://([^/]+)/(.+)$') {
+        return @{ RepoHost = (Get-UrlHost $Matches[1]); RepoPath = $Matches[2] }
+    }
+    return @{ RepoHost = $null; RepoPath = $x }
 }
 
 function Test-SameRepo([string]$Url, [string]$Expected) {
-    $a = ConvertTo-RepoPath $Url
-    $b = ConvertTo-RepoPath $Expected
-    return ($a -ne '') -and ($a -eq $b)
+    $a = ConvertTo-RepoParts $Url
+    $b = ConvertTo-RepoParts $Expected
+    if ($a.RepoPath -eq '' -or $a.RepoPath -ne $b.RepoPath) { return $false }
+    # A remote that names a host must name GitHub's. A bare <owner>/<repo> has no host -- that is
+    # the pin constant itself, and the only reason the tail is what gets compared.
+    foreach ($side in @($a, $b)) {
+        if ($null -ne $side.RepoHost -and -not (Test-GitHubHost $side.RepoHost)) { return $false }
+    }
+    return $true
 }
 
 # --- 1. The control folder asserts its own pin --------------------------------
