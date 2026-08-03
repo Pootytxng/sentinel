@@ -69,13 +69,16 @@ describe("guard 1 — claimed one folder, running in another", () => {
     expect(r.actual).toBe(ELSEWHERE);
   });
 
+  // These two are about FOLDER comparison. A launched session also reports the window the launcher
+  // established, and an unobserved window is now its own refusal (see the WINDOW_UNOBSERVED cases
+  // below), so the fixtures carry what a real launched session carries.
   it("passes when they agree", () => {
-    const r = assertSessionRoot({ token: token(), env: { CLAUDE_PROJECT_DIR: CLAIMED }, cwd: CLAIMED, now: NOW });
+    const r = assertSessionRoot({ token: token(), env: { CLAUDE_PROJECT_DIR: CLAIMED, CLAUDE_CODE_AUTO_COMPACT_WINDOW: "300000" }, cwd: CLAIMED, now: NOW });
     expect(r.ok).toBe(true);
   });
 
   it("compares folders case- and separator-insensitively", () => {
-    const r = assertSessionRoot({ token: token(), env: { CLAUDE_PROJECT_DIR: "c:/users/kuya/code/sentinel-feedback" }, cwd: CLAIMED, now: NOW });
+    const r = assertSessionRoot({ token: token(), env: { CLAUDE_PROJECT_DIR: "c:/users/kuya/code/sentinel-feedback", CLAUDE_CODE_AUTO_COMPACT_WINDOW: "300000" }, cwd: CLAIMED, now: NOW });
     expect(r.ok).toBe(true);
   });
 });
@@ -112,8 +115,25 @@ describe("failing closed", () => {
   it("refuses a token already claimed by an earlier session, with no lineage to stand on", () => {
     // Claimed once, still once. What a later session in this folder resumes is the FOLDER's lineage
     // (session-lineage.test.mjs); a spent token with no such record verifies nothing on its own.
+    //
+    // The REFUSAL is unchanged — what changed is that it no longer claims the entrypoint never
+    // launched this folder. It did; the launch was taken up and the record has gone. LAUNCH_SPENT
+    // says that and stays advisory, exit 0, exactly as NO_TOKEN was.
     const r = assertSessionRoot({ token: token({ claimedAt: "2026-07-30T09:00:00Z" }), lineage: null, env: { CLAUDE_PROJECT_DIR: CLAIMED }, cwd: CLAIMED, now: NOW });
     expect(r.ok).toBe(false);
+    expect(r.code).toBe("LAUNCH_SPENT");
+    expect(r.reason).toMatch(/already taken up/i);
+    expect(r.reason).not.toMatch(/was not started through the entrypoint/i);
+  });
+
+  it("still says NO_TOKEN when the spent launch belongs to a different folder", () => {
+    const r = assertSessionRoot({
+      token: token({ claimedAt: "2026-07-30T09:00:00Z", folder: "C:\\Users\\Kuya\\code\\somewhere-else" }),
+      lineage: null,
+      env: { CLAUDE_PROJECT_DIR: CLAIMED },
+      cwd: CLAIMED,
+      now: NOW,
+    });
     expect(r.code).toBe("NO_TOKEN");
   });
 

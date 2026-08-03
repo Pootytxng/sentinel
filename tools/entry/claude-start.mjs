@@ -78,7 +78,7 @@ export function resolveClaudeCli({ exists = existsSync, env = process.env, home 
  * Pure over facts so every refusal below is a guard rather than a comment. Returns the exact
  * executable, working directory and argument list, or a plain reason there is nothing to spawn.
  */
-export function planClaudeStart({ folder, exe, folderExists, bridge, terminal }) {
+export function planClaudeStart({ folder, exe, folderExists, bridge, terminal, sessionId = null, resume = false }) {
   if (!folder) {
     return { ok: false, reason: "no folder was given, and a session started in the wrong root is worse than no session." };
   }
@@ -101,12 +101,21 @@ export function planClaudeStart({ folder, exe, folderExists, bridge, terminal })
   }
 
   const cwd = canonicalizePath(folder);
+  // The launcher NAMES the conversation it starts, rather than starting one and hoping to recognise
+  // it later. `--session-id` on a fresh start and `--resume` on an owned one are the same id, written
+  // into the launch token before either runs -- so the SessionStart hook can ask "is this the session
+  // I launched" and get an answer, and a different Claude process in the same folder cannot inherit
+  // the authorization by standing in the right place. Omitted when no id was assigned, because a flag
+  // with an empty value is worse than no flag.
+  const identity = sessionId ? [resume ? "--resume" : "--session-id", sessionId] : [];
   return {
     ok: true,
     exe,
     cwd,
-    args: bridge ? ["--ide"] : [],
+    args: [...identity, ...(bridge ? ["--ide"] : [])],
     ide: Boolean(bridge),
+    sessionId: sessionId ?? null,
+    resume: Boolean(sessionId && resume),
     reason: bridge
       ? "starting Claude in that folder and connecting it to the editor window"
       : "starting Claude in that folder (there is no live editor bridge to connect it to)",
@@ -128,6 +137,8 @@ export function planFromMachine({
   home = homedir(),
   bridge = null,
   terminal = process.stderr.isTTY === true,
+  sessionId = null,
+  resume = false,
 } = {}) {
   const live = bridge ?? bridgeState({ folder }).ok;
   return planClaudeStart({
@@ -136,6 +147,8 @@ export function planFromMachine({
     folderExists: Boolean(folder) && exists(folder),
     bridge: live,
     terminal,
+    sessionId,
+    resume,
   });
 }
 
@@ -147,6 +160,8 @@ if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, "/")}`) {
     plan = planFromMachine({
       folder: argOf("--folder"),
       bridge: argv.includes("--no-ide") ? false : null,
+      sessionId: argOf("--session-id"),
+      resume: argv.includes("--resume"),
     });
   } catch (e) {
     plan = { ok: false, reason: `the folder could not be inspected: ${String(e.message ?? e)}` };

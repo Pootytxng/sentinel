@@ -111,6 +111,51 @@ function Hold-Window {
     try { Read-Host '  press Enter to close' | Out-Null } catch { }
 }
 
+# Whole-path repository identity, across the spellings git actually produces. Mirrors `sameRepo` in
+# tools/entry/control-update.mjs, which carries the guards for it. `-notlike "*Pootytxng/sentinel*"`
+# accepted https://github.com/attacker/Pootytxng-sentinel-fork -- a spelling test, not a pin.
+# 2026-08-02: the first fix compared only the <owner>/<repo> tail, because the pin constant is the
+# bare 'Pootytxng/sentinel' with no host -- so '^https?://[^/]+/(.+)$' swallowed the authority and
+# threw it away, and https://github.com.attacker.net/Pootytxng/sentinel pinned clean. The host is
+# checked too now. Mirrors sameRepo in tools/entry/control-update.mjs; guards live in
+# tools/entry/repo-identity-guard.test.mjs.
+$GITHUB_HOSTS = @('github.com', 'www.github.com')
+
+# Anything before the last '@' is userinfo, not host: https://github.com@evil.net/... dials evil.net.
+function Get-UrlHost([string]$Authority) {
+    $a = $Authority.Substring($Authority.LastIndexOf('@') + 1)
+    return ($a -replace ':\d+$', '')
+}
+
+function Test-GitHubHost([string]$Candidate) {
+    return $GITHUB_HOSTS -contains $Candidate
+}
+
+function ConvertTo-RepoParts([string]$Url) {
+    $x = "$Url".Trim()
+    $x = $x -replace '\.git$', ''
+    $x = $x -replace '/+$', ''
+    $x = $x -replace '^git@([^:]+):', 'https://$1/'
+    $x = $x -replace '^ssh://git@', 'https://'
+    $x = $x.ToLowerInvariant()
+    if ($x -match '^https?://([^/]+)/(.+)$') {
+        return @{ RepoHost = (Get-UrlHost $Matches[1]); RepoPath = $Matches[2] }
+    }
+    return @{ RepoHost = $null; RepoPath = $x }
+}
+
+function Test-SameRepo([string]$Url, [string]$Expected) {
+    $a = ConvertTo-RepoParts $Url
+    $b = ConvertTo-RepoParts $Expected
+    if ($a.RepoPath -eq '' -or $a.RepoPath -ne $b.RepoPath) { return $false }
+    # A remote that names a host must name GitHub's. A bare <owner>/<repo> has no host -- that is
+    # the pin constant itself, and the only reason the tail is what gets compared.
+    foreach ($side in @($a, $b)) {
+        if ($null -ne $side.RepoHost -and -not (Test-GitHubHost $side.RepoHost)) { return $false }
+    }
+    return $true
+}
+
 # --- 1. The control folder asserts its own pin --------------------------------
 # If this folder is not what it claims to be, nothing it says about other folders is worth anything.
 function Assert-ControlPin {
@@ -121,13 +166,27 @@ function Assert-ControlPin {
     $branch = (git -C $ControlDir rev-parse --abbrev-ref HEAD).Trim()
     $remote = (git -C $ControlDir remote get-url origin).Trim()
     $common = (git -C $ControlDir rev-parse --git-common-dir).Trim()
+    $head   = (git -C $ControlDir rev-parse HEAD).Trim()
+    $status = (git -C $ControlDir status --porcelain) -join "`n"
 
     if ($branch -ne $CONTROL_BRANCH) {
         throw "The control folder is on '$branch', not '$CONTROL_BRANCH'. It is pinned for a reason: the launcher must not route itself away from the code that does the routing."
     }
-    if ($remote -notlike "*$EXPECTED_REMOTE*") {
+    # Identity is <owner>/<repo>, matched whole. `-notlike "*Pootytxng/sentinel*"` accepted
+    # https://github.com/attacker/Pootytxng-sentinel-fork, which is not a pin, it is a spelling test.
+    if (-not (Test-SameRepo $remote $EXPECTED_REMOTE)) {
         throw "The control folder's origin is '$remote', not $EXPECTED_REMOTE."
     }
+    # A pin that does not look at the working copy pins a commit id, not the code about to run. The
+    # launcher is seconds away from routing work and copying hooks out of this folder; "clean" is the
+    # only thing that makes the commit id describe the bytes that will execute.
+    if ($status) {
+        throw "The control folder has uncommitted changes, so the launcher about to run is not the launcher $($head.Substring(0,7)) describes. Commit or stash them, or run the shortcut from a clean control folder."
+    }
+    if ($head -notmatch '^[0-9a-f]{40}$') {
+        throw "The control folder's HEAD is not a commit id ('$head'), so there is nothing to pin to."
+    }
+    $script:ControlSha = $head
     # A separate clone resolves its common dir inside itself. A linked worktree would resolve it to
     # code\sentinel\.git, which is exactly the coupling that disqualified sentinel as the entrypoint.
     $resolved = (Resolve-Path (Join-Path $ControlDir $common) -ErrorAction SilentlyContinue)
@@ -157,7 +216,7 @@ catch {
 # dead shortcut. Then it re-executes ITSELF, because the script already parsed is the old one -- the
 # env var makes that exactly once, so a machine that cannot fast-forward can never loop.
 if (-not $env:COMPY_ENTRY_RESTARTED) {
-    $updateJson = node (Join-Path $ControlDir 'tools/entry/control-update.mjs') --dir $ControlDir --branch $CONTROL_BRANCH
+    $updateJson = node (Join-Path $ControlDir 'tools/entry/control-update.mjs') --dir $ControlDir --branch $CONTROL_BRANCH --remote $EXPECTED_REMOTE
     $updateCode = $LASTEXITCODE
     $update = if ($updateJson) { $updateJson | ConvertFrom-Json } else { $null }
 
@@ -166,6 +225,24 @@ if (-not $env:COMPY_ENTRY_RESTARTED) {
         $env:COMPY_ENTRY_RESTARTED = '1'
         & $PSCommandPath @PSBoundParameters
         exit $LASTEXITCODE
+    }
+    # Exit 2 is control-update saying the folder cannot vouch for itself: wrong branch, dirty tree,
+    # divergence, a foreign origin, an unreadable folder, or a fast-forward that did not land. The
+    # old code printed a note and launched anyway -- "refuse the update, run the stale launcher"
+    # defeats the entire pin, and spec section 8 says refuse rather than guess. It is one line and a
+    # stop, not a chore: the remedy is named and the shortcut does nothing behind the owner's back.
+    if ($updateCode -eq 2) {
+        Bad 'compy-entry cannot vouch for the launcher it would run:'
+        Bad "  $($update.reason)"
+        Hold-Window
+        exit 3
+    }
+    # A launcher that could not even be parsed leaves $update null. Silence there was the worst case
+    # of all: a total update failure that launched without saying one word.
+    if ($updateCode -ne 0 -and -not $update) {
+        Bad 'compy-entry could not read the launcher update result, so it will not launch on an unproven folder.'
+        Hold-Window
+        exit 3
     }
     if ($updateCode -ne 0 -and $update -and $update.reason) {
         # Disclosure, not a chore: it says what it is running and why it stayed there.
@@ -200,6 +277,36 @@ if ($Repair) {
     if ($LASTEXITCODE -ne 0) { Hold-Window; exit $LASTEXITCODE }
 }
 
+# --- 2b. One launcher at a time ------------------------------------------------
+# Double-clicking twice is a normal thing to do when the first click looks like it did nothing, and
+# nothing stopped it: both runs passed preflight, both posted or renewed the same claim, and both
+# wrote the SINGLETON %LOCALAPPDATA%\CompyEntry\launch.json -- the second overwriting the first's
+# nonce. Then both handoff waiters read whichever token was current, so one session could take up the
+# other's launch while the other waited out its budget for a record that had been replaced.
+#
+# The lock is held from here through handoff, which is the whole span in which that singleton is
+# live. A second run writes nothing and says one calm sentence, then exits 0: Kuya clicking twice is
+# not an error, and telling him it is teaches him to ignore the launcher.
+$LockScript = Join-Path $ControlDir 'tools/entry/single-flight.mjs'
+$lockJson = node $LockScript acquire --pid $PID --issue $Issue
+$lockCode = $LASTEXITCODE
+$lock = if ($lockJson) { $lockJson | ConvertFrom-Json } else { $null }
+
+if ($lockCode -ne 0) {
+    Write-Host ''
+    Note $(if ($lock -and $lock.reason) { $lock.reason } else { 'Compy is already starting.' })
+    Note 'Nothing was written by this second run.'
+    Hold-Window
+    exit 0
+}
+if ($lock -and $lock.stole -and $lock.reason) { Note "took over a stale launcher lock -- $($lock.reason)" }
+
+# Give it back on the way out, however this run ends. Staleness covers the case where the process
+# dies without getting here at all; this covers every ordinary exit, including the refusals.
+$null = Register-EngineEvent PowerShell.Exiting -Action {
+    try { node (Join-Path $ControlDir 'tools/entry/single-flight.mjs') release --pid $PID | Out-Null } catch { }
+}
+
 # --- 3. With no issue given, ASK. Never pick ---------------------------------
 # The defect this closes (owner addendum on #18): with #18 Active under our own claim and one
 # unrelated #13 Ready, the no-argument shortcut selected #13 by itself, refused on that worktree,
@@ -228,7 +335,24 @@ $result = if ($json) { $json | ConvertFrom-Json } else { $null }
 
 if ($launchCode -ne 0) {
     Write-Host ''
-    Bad "#$Issue was not started, and nothing was written."
+    # "nothing was written" is a claim about the machine, and it used to be printed for EVERY nonzero
+    # exit -- true only of a refusal before the first write. launch.mjs is a legal-prefix sequence: it
+    # can create a worktree, establish a tier, post a claim and write a token, brief and overlay, and
+    # then refuse. Telling Kuya nothing happened while a claim sits on the board under his name is the
+    # launcher lying about the one thing he would have to clean up. So it reports what the run
+    # actually did, and reserves the old sentence for the case the payload proves.
+    $effects = if ($result -and $result.effects) { @($result.effects) } else { @() }
+    if ($effects.Count -gt 0) {
+        Bad "#$Issue was not started, but this run had already done the following:"
+        foreach ($e in $effects) {
+            if ($e.detail) { Write-Host "    - $($e.what) -- $($e.detail)" }
+            else { Write-Host "    - $($e.what)" }
+        }
+        Write-Host ''
+    }
+    else {
+        Bad "#$Issue was not started, and nothing was written."
+    }
     if ($result -and $result.reason) { Note $result.reason }
     # One "Do this:" is the glance; the count is what stops it reading as the whole story when it
     # is one of several. launch.mjs ranks them, so the first is the one to settle first.
@@ -241,8 +365,16 @@ if ($launchCode -ne 0) {
         Write-Host "  Do this: $($rem[0])"
     }
     Write-Host ''
-    Note "the full check table is in $LogFile"
-    if (-not $Details) { Note 'or re-run with -Details to watch it happen on screen' }
+    # And the log is only promised when it exists. On the quiet path the terminal copy is suppressed,
+    # so pointing at a file that was never written would leave a refusal with no account of itself at
+    # all -- while claiming the opposite.
+    if ($result -and $result.logDurable) {
+        Note "the full check table is in $LogFile"
+        if (-not $Details) { Note 'or re-run with -Details to watch it happen on screen' }
+    }
+    else {
+        Note 'the detailed check table could not be written to disk -- re-run with -Details to watch it on screen'
+    }
     Hold-Window
     exit 1
 }
@@ -324,7 +456,10 @@ if ($handoff -ne 0) {
 # its hooks and the brief from exactly the folder that was prepared. Nothing is typed for Kuya -- the
 # brief arrives from the SessionStart hook, the same carrier the panel path uses.
 if ($handoff -ne 0) {
-    $startJson = node (Join-Path $ControlDir 'tools/entry/claude-start.mjs') --folder $folder
+    # Started AS the conversation the launcher named, not as whichever session happens to appear.
+    $startArgs = @('--folder', $folder)
+    if ($result.sessionId) { $startArgs += @('--session-id', $result.sessionId) }
+    $startJson = node (Join-Path $ControlDir 'tools/entry/claude-start.mjs') @startArgs
     $startPlan = if ($startJson) { $startJson | ConvertFrom-Json } else { $null }
 
     if ($startPlan -and $startPlan.ok) {
@@ -347,6 +482,9 @@ Write-Host ''
 if ($handoff -eq 0) {
     Good "$($result.action) #$($result.issue) - $($result.title)"
     Note "$folder  |  $($result.contextLabel)  |  Claude started there with the launch brief"
+    # The Desktop proof names the exact launcher commit it ran. "It worked" about unnamed code is not
+    # evidence, and this is the line that makes a screenshot of a successful launch checkable.
+    Note "launcher $($script:ControlSha.Substring(0,7))  |  $CONTROL_BRANCH  |  $EXPECTED_REMOTE"
     Write-Host ''
     exit 0
 }

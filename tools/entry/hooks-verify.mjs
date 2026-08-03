@@ -14,7 +14,7 @@
 // mutation, so only `--repair` copies them, and it prints what it will write first.
 
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { ASSERT_HOOK_MARKER } from "./overlay.mjs";
@@ -82,7 +82,7 @@ export function hookCommandsOf(settings, { dir = "" } = {}) {
 /**
  * @returns {{ok, checked: Array, missing: Array, remediation: string|null, dir: string}}
  */
-export function verifyHooks({ dir, home = homedir(), env = process.env }) {
+export function verifyHooks({ dir, home = homedir(), env = process.env, canonicalDir = null }) {
   const { files } = resolveSettings({ dir, home, env });
   const settings = { hooks: mergeHookLayers(files.map((f) => f.data?.hooks)) };
 
@@ -90,6 +90,24 @@ export function verifyHooks({ dir, home = homedir(), env = process.env }) {
     .filter((c) => c.file !== null)
     .map((c) => ({ ...c, exists: existsSync(c.file) }));
   const dead = checked.filter((c) => !c.exists);
+
+  // Existence was the entire health test. A hook file can exist and be an OLD BRANCH's copy, or one
+  // edited by hand -- `.claude/hooks/` is gitignored, so nothing else notices -- and it still runs a
+  // real ALLOW/DENY. "The path is there" says nothing about what executes. When the canonical set is
+  // known, bytes are compared; a divergent hook is a plain refusal and is never silently overwritten,
+  // because it may be somebody's deliberate local change.
+  const divergent = canonicalDir
+    ? checked.filter((c) => {
+        if (!c.exists || !c.name) return false;
+        const canon = join(canonicalDir, c.name);
+        if (!existsSync(canon)) return false;
+        try {
+          return !readFileSync(c.file).equals(readFileSync(canon));
+        } catch {
+          return false;
+        }
+      })
+    : [];
 
   // Our own leftover is not evidence about this folder. The launcher installs the assert overlay by
   // absolute path into the control folder, so when that folder moves the file, the registration it
@@ -101,7 +119,22 @@ export function verifyHooks({ dir, home = homedir(), env = process.env }) {
   const stale = dead.filter((c) => c.statusMessage === ASSERT_HOOK_MARKER && !isUnder(c.file, dir));
   const missing = dead.filter((c) => !stale.includes(c));
 
-  if (missing.length === 0) return { ok: true, checked, missing: [], stale, remediation: null, dir };
+  if (missing.length === 0 && divergent.length === 0) return { ok: true, checked, missing: [], divergent: [], stale, remediation: null, dir };
+
+  if (missing.length === 0 && divergent.length > 0) {
+    return {
+      ok: false,
+      checked,
+      missing: [],
+      divergent,
+      stale,
+      dir,
+      remediation:
+        `${divergent.length === 1 ? "1 registered hook does" : `${divergent.length} registered hooks do`} not match the versioned control payload ` +
+        `(${divergent.map((c) => c.name).join(", ")}). They exist, so they run — but not the code that was reviewed. ` +
+        `Restore them from the control folder, or decide with Kuya which copy is right. The launcher will not overwrite them.`,
+    };
+  }
 
   // Two different failures wear the same "hook is missing" face, and they take opposite remedies.
   // A path UNDER this folder means the folder is behind — --repair fixes that. A path outside it is a
@@ -171,6 +204,12 @@ const defaultGit = (cwd, args) => execFileSync("git", args, { cwd, encoding: "ut
 export function isTracked(file, { git = defaultGit } = {}) {
   try {
     git(dirname(file), ["ls-files", "--error-unmatch", "--", basename(file)]);
+    // `ls-files --error-unmatch` answers "is this PATH in the index", and repair then copies whatever
+    // bytes are on disk. A tracked file somebody has edited passes that test and its uncommitted
+    // content becomes the "versioned control payload" installed into a worktree -- an unreviewed hook
+    // running a real ALLOW/DENY, which is the exact thing the tracked-source rule exists to stop.
+    // Tracked is not versioned. The working copy has to equal the commit as well.
+    git(dirname(file), ["diff", "--quiet", "HEAD", "--", basename(file)]);
     return true;
   } catch {
     return false;

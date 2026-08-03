@@ -22,7 +22,7 @@
 import { createInterface } from "node:readline/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { gatherFacts, loadPolicy, readBoard } from "./gather.mjs";
+import { gatherFacts, loadPolicy, readBoard, CODE_ROOT } from "./gather.mjs";
 import { BRIDGE_TIMEOUT_MS, HANDOFF_TIMEOUT_MS, waitForBridge, waitForHandoff } from "./ide-bridge.mjs";
 import { reconcile, selectTask } from "./preflight.mjs";
 import { verdictLines } from "./render.mjs";
@@ -44,7 +44,7 @@ function cmdPreflight(argv) {
     return 1;
   }
 
-  const picked = selectTask(board.items, { issue: issueArg, policy: loadPolicy() });
+  const picked = selectTask(board.items, { issue: issueArg, policy: loadPolicy(), codeRoot: CODE_ROOT });
   if (picked.kind !== "task") {
     if (asJson) console.log(JSON.stringify(picked, null, 2));
     else {
@@ -100,7 +100,7 @@ export async function cmdChoose({
     return 2;
   }
 
-  const menu = buildMenu(theBoard.items, { self, now, policy: policy ?? loadPolicy() });
+  const menu = buildMenu(theBoard.items, { self, now, policy: policy ?? loadPolicy(), codeRoot: CODE_ROOT });
 
   // One task, already ours, still claimed: there is no question to ask. Say what is happening and
   // why in one line — resuming without a word would be the same silence, just pointed the right way.

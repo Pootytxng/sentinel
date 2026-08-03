@@ -141,9 +141,32 @@ describe("what counts as evidence worth printing", () => {
     expect(readLog(file)).toBe("");
   });
 
-  it("reports that it printed, so the launcher never has to guess whether proof exists", () => {
+  // `reportRefusal` used to answer "did I print a table". The shell then told Kuya the table was in a
+  // file, unconditionally -- on the quiet path, where the terminal copy had been suppressed. If the
+  // log could not be written that sentence pointed at nothing, and the refusal had no account of
+  // itself anywhere. So the answer now includes whether it reached DISK, which is the thing the
+  // promise is actually about.
+  it("reports that it printed, and whether the proof reached disk", () => {
     captureStderr();
     setNarration({ quiet: true, logFile: logPath() });
-    expect(reportRefusal(refusal())).toBe(true);
+    const r = reportRefusal(refusal());
+    expect(r.reported).toBe(true);
+    expect(r.durable).toBe(true);
+    expect(r.error).toBeNull();
+  });
+
+  it("says the proof is NOT durable when the sink could not be written", () => {
+    captureStderr();
+    setNarration({ quiet: true, logFile: root }); // a directory: appendFileSync will refuse it
+    const r = reportRefusal(refusal());
+    expect(r.reported).toBe(true);
+    expect(r.durable).toBe(false);
+    expect(r.error).toBeTruthy();
+  });
+
+  it("says nothing about durability when no log was asked for", () => {
+    captureStderr();
+    setNarration({ quiet: false });
+    expect(reportRefusal(refusal())).toMatchObject({ reported: true, durable: false, log: null });
   });
 });

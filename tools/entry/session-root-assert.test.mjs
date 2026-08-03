@@ -56,8 +56,25 @@ const liveToken = (over = {}) =>
 const verdictOf = (result) => tracked.verdictFor(result);
 
 describe("severity — a tracked hook must block on disagreement and only advise otherwise", () => {
-  const STOP = ["ROOT_MISMATCH", "CD_WITHOUT_ROOT", "WINDOW_MISMATCH", "ROOT_UNOBSERVED", "BRANCH_MISMATCH", "REPO_MISMATCH", "LINEAGE_FOREIGN"];
-  const ADVISE = ["NO_TOKEN", "TOKEN_EXPIRED", "LINEAGE_EXPIRED"];
+  // WINDOW_UNOBSERVED, TOKEN_CORRUPT and LINEAGE_CORRUPT all mean "the evidence this hook verifies
+  // against is not there", which is a reason to stop rather than a reason to shrug. Only a session
+  // with NO artifacts at all is an ordinary unverified session.
+  const STOP = [
+    "ROOT_MISMATCH",
+    "CD_WITHOUT_ROOT",
+    "WINDOW_MISMATCH",
+    "WINDOW_UNOBSERVED",
+    "ROOT_UNOBSERVED",
+    "BRANCH_MISMATCH",
+    "REPO_MISMATCH",
+    "LINEAGE_FOREIGN",
+    "TOKEN_CORRUPT",
+    "LINEAGE_CORRUPT",
+    "BRANCH_UNREADABLE",
+    "REPO_UNREADABLE",
+    "SESSION_FOREIGN",
+  ];
+  const ADVISE = ["NO_TOKEN", "TOKEN_EXPIRED", "LINEAGE_EXPIRED", "LAUNCH_SPENT"];
 
   it("classifies every refusal code the assert can actually produce", () => {
     const produced = [...readFileSync(HOOK_FILE, "utf8").matchAll(/refuse\(\s*"([A-Z_]+)"/g)].map((m) => m[1]);
@@ -155,7 +172,9 @@ describe("the assert itself still fails closed on a real disagreement", () => {
 
     const first = tracked.assertSessionRoot({
       token: tracked.readToken({ dir }),
-      env: { CLAUDE_PROJECT_DIR: FOLDER },
+      // A launched session reports the window the launcher established; an unobserved one is now its
+      // own refusal, so the fixture carries what the real thing carries.
+      env: { CLAUDE_PROJECT_DIR: FOLDER, CLAUDE_CODE_AUTO_COMPACT_WINDOW: "150000" },
       cwd: FOLDER,
     });
     expect(first.ok).toBe(true);
@@ -165,11 +184,13 @@ describe("the assert itself still fails closed on a real disagreement", () => {
     const second = tracked.assertSessionRoot({
       token: tracked.readToken({ dir }),
       lineage: null,
-      env: { CLAUDE_PROJECT_DIR: FOLDER },
+      env: { CLAUDE_PROJECT_DIR: FOLDER, CLAUDE_CODE_AUTO_COMPACT_WINDOW: "150000" },
       cwd: FOLDER,
     });
     expect(second.ok).toBe(false);
-    expect(second.code).toBe("NO_TOKEN");
+    // A launch that WAS made for this folder and taken up now says exactly that, instead of denying
+    // the entrypoint ever launched it. Still advisory, still exit 0.
+    expect(second.code).toBe("LAUNCH_SPENT");
     expect(verdictOf(second).exit).toBe(0);
   });
 });

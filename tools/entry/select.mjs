@@ -28,6 +28,7 @@
 // all; the caller does that only after a verdict.
 
 import { intendedWindow } from "./settings-resolve.mjs";
+import { parseWorktreeField, samePath } from "./worktree-field.mjs";
 
 /** Only used when a caller wants a selection without labels (tests). The launcher passes the real policy. */
 export const FALLBACK_POLICY = { default: 150000, tiers: [] };
@@ -88,7 +89,19 @@ export function isResumable(item, { self, now }) {
  * defect impossible rather than merely unlikely, because the Ready task the old code drove at was a
  * Codex-lane one. Unassigned Ready work stays open to whoever asks for it.
  */
-export function availability(item, { self = { lane: "Claude Code" }, now = new Date() } = {}) {
+/**
+ * The folder an item would be worked in, or null when its field does not name one.
+ *
+ * Comparison goes through `samePath`, which canonicalises separators and case — the board is typed by
+ * hand, so `C:/Users/...` and `c:\users\...` name the same folder and a string compare would call
+ * them different.
+ */
+const folderOf = (item, codeRoot) => {
+  const parsed = parseWorktreeField(item?.worktreeBranch ?? "", { codeRoot });
+  return parsed.ok ? (parsed.entries[0]?.path ?? null) : null;
+};
+
+export function availability(item, { self = { lane: "Claude Code" }, now = new Date(), items = [], codeRoot = null } = {}) {
   const gate = item?.gate ?? "None";
   const lane = item?.lane ?? null;
   const mine = sameLane(lane, self?.lane);
@@ -112,6 +125,25 @@ export function availability(item, { self = { lane: "Claude Code" }, now = new D
   }
   if (item?.status === "Ready") {
     if (lane && !mine) return { available: false, action: null, reason: `it is assigned to the ${lane} lane` };
+
+    // One folder, one writer — and the menu is where that has to be said. preflight catches this
+    // too, but only AFTER the folder has been offered and chosen, which is the "refused after a
+    // worktree has been offered" shape this selector exists to prevent (see the header). An item
+    // whose folder another Active task is already writing in is visible and unavailable, with the
+    // reason on screen rather than three steps later.
+    const mine2 = folderOf(item, codeRoot);
+    if (mine2) {
+      const occupant = (items ?? []).find(
+        (o) => o && o !== item && o.status === "Active" && Number(o.number) !== Number(item.number) && samePath(folderOf(o, codeRoot) ?? "", mine2),
+      );
+      if (occupant) {
+        return {
+          available: false,
+          action: null,
+          reason: `#${occupant.number} is already working in ${mine2} — one folder, one writer`,
+        };
+      }
+    }
     return { available: true, action: "Start", reason: null };
   }
   return { available: false, action: null, reason: `its status is ${item?.status ?? "unknown"}` };
@@ -134,7 +166,7 @@ const shorten = (title) => {
  *
  * @returns {{options: Array, unavailable: Array, autoResume: number|null, question: string, choices: string}}
  */
-export function buildMenu(items, { self = { lane: "Claude Code" }, now = new Date(), policy } = {}) {
+export function buildMenu(items, { self = { lane: "Claude Code" }, now = new Date(), policy, codeRoot = null } = {}) {
   if (!policy || typeof policy.default !== "number") {
     throw new Error("buildMenu needs the context policy — a window label may never be invented.");
   }
@@ -160,7 +192,9 @@ export function buildMenu(items, { self = { lane: "Claude Code" }, now = new Dat
     };
   };
 
-  const rows = listed.map((i) => describe(i, availability(i, { self, now })));
+  // The whole board is passed in, because folder occupancy is a fact ABOUT the set, not about
+  // one row: an item is unavailable because of what another Active item is doing.
+  const rows = listed.map((i) => describe(i, availability(i, { self, now, items, codeRoot })));
   const resumable = rows.filter((r) => r.action === "Resume");
   const startable = rows.filter((r) => r.action === "Start");
   const unavailable = rows.filter((r) => !r.available);
@@ -191,10 +225,33 @@ export function renderMenu(menu) {
   }
   lines.push("");
   if (menu.options.length > 0) {
+    // "either works" is a promise, so it is only printed when it is true. When a list position also
+    // spells an issue number on this same menu, saying it would be the menu lying to the owner about
+    // the one thing he has to type.
+    const clashes = ambiguousNumbers(menu);
     lines.push(`Type the number on the left (${humanList(menu.options.map((o) => String(o.ordinal)))}) or the issue`);
-    lines.push(`number (${humanList(menu.options.map((o) => `#${o.number}`))}) — either works. Q cancels; nothing is written.`);
+    if (clashes.length === 0) {
+      lines.push(`number (${humanList(menu.options.map((o) => `#${o.number}`))}) — either works. Q cancels; nothing is written.`);
+    } else {
+      lines.push(`number with a # (${humanList(menu.options.map((o) => `#${o.number}`))}). ${humanList(clashes.map(String))} would mean`);
+      lines.push(`both, so ${clashes.length === 1 ? "it needs" : "they need"} the #. Q cancels; nothing is written.`);
+    }
   }
   return lines.join("\n");
+}
+
+/**
+ * Numbers that name a list position AND a different issue on this same menu. Bare, they are
+ * genuinely ambiguous; with a `#` they are not.
+ */
+export function ambiguousNumbers(menu) {
+  return (menu.options ?? [])
+    .map((o) => o.ordinal)
+    .filter((n) => {
+      const byOrd = (menu.options ?? []).find((o) => o.ordinal === n);
+      const byNum = (menu.options ?? []).find((o) => o.number === n);
+      return Boolean(byOrd && byNum && byOrd.number !== byNum.number);
+    });
 }
 
 /**
@@ -215,12 +272,31 @@ export function resolveChoice(input, menu) {
   if (raw === "") return invalid("Enter does not select anything.");
   if (/^q(uit)?$/i.test(raw)) return { kind: "cancel", reason: "cancelled — nothing was written." };
 
+  const hashed = raw.startsWith("#");
   const digits = raw.replace(/^#/, "");
   if (!/^\d+$/.test(digits)) return invalid(`"${raw}" is not one of the choices.`);
 
   const n = Number(digits);
-  const option = menu.options.find((o) => o.ordinal === n) ?? menu.options.find((o) => o.number === n);
-  if (option) return { kind: "task", number: option.number, option };
+  const byOrdinal = menu.options.find((o) => o.ordinal === n);
+  const byIssue = menu.options.find((o) => o.number === n);
+
+  // `#N` is always the issue number. That is what the prefix is FOR, and it is the escape hatch out
+  // of the collision below -- so it must never be silently reinterpreted as a list position.
+  if (hashed) {
+    if (byIssue) return { kind: "task", number: byIssue.number, option: byIssue };
+  } else {
+    // A bare number that names both a list position and a DIFFERENT issue means neither. Resolving
+    // ordinal-first silently picked one of two honest readings, which is exactly how "18" selected
+    // something else and the menu still claimed both spellings work.
+    if (byOrdinal && byIssue && byOrdinal.number !== byIssue.number) {
+      return invalid(
+        `"${n}" means two things on this menu: list position ${n} is #${byOrdinal.number}, and #${n} is its own task. ` +
+          `Type #${n} for the issue, or a list position that is not also an issue number.`,
+      );
+    }
+    const option = byOrdinal ?? byIssue;
+    if (option) return { kind: "task", number: option.number, option };
+  }
 
   const blocked = menu.unavailable.find((u) => u.number === n);
   if (blocked) return invalid(`#${n} cannot be started: ${blocked.reason}.`);

@@ -88,7 +88,7 @@ export function normalizeRepo(url) {
 
 // ── the launch ───────────────────────────────────────────────────────────────────────────────────
 
-export function makeToken({ issue, folder, branch, window, repo = null, nonce = null, expiresAt = null, now = new Date() }) {
+export function makeToken({ issue, folder, branch, window, repo = null, nonce = null, sessionId = null, briefHash = null, expiresAt = null, now = new Date() }) {
   return {
     issue,
     folder: canonicalizePath(folder),
@@ -96,6 +96,15 @@ export function makeToken({ issue, folder, branch, window, repo = null, nonce = 
     window,
     repo: normalizeRepo(repo),
     nonce: nonce ?? randomUUID(),
+    // The digest of the brief this launch wrote. `sessionStartOutput` refuses to hand over a brief
+    // whose bytes are not these, so a stale or edited file cannot become instructions for a session
+    // this record vouches for.
+    briefHash,
+    // The conversation id the launcher ASSIGNED to the session it is about to start (`--session-id`),
+    // so "is this the session I launched" is a question with an answer. Without it, lineage could only
+    // ask "is this the same folder", and any later Claude process rooted there inherited the
+    // authorization of the one before it.
+    sessionId,
     issuedAt: now.toISOString(),
     expiresAt: expiresAt ?? new Date(now.getTime() + DEFAULT_TTL_MINUTES * 60_000).toISOString(),
     claimedAt: null,
@@ -112,11 +121,25 @@ export function writeToken(token, { dir = TOKEN_DIR } = {}) {
   return join(dir, TOKEN_NAME);
 }
 
+/**
+ * A record that exists but cannot be read is NOT the same as no record.
+ *
+ * Both used to collapse to null, so a truncated or half-written launch.json under an active launch
+ * reached the "nothing to check against" branch and printed the cheerful NO_TOKEN advisory — exit 0,
+ * session carries on. The launcher wrote that file precisely so this hook would verify against it;
+ * losing it is a reason to stop, not to shrug. `CORRUPT` is returned so the caller can tell the two
+ * apart, and every read site treats it as evidence destroyed rather than evidence absent.
+ */
+export const CORRUPT = Symbol("corrupt-record");
+
 export function readToken({ dir = TOKEN_DIR } = {}) {
+  const file = join(dir, TOKEN_NAME);
+  if (!existsSync(file)) return null;
   try {
-    return JSON.parse(readFileSync(join(dir, TOKEN_NAME), "utf8"));
+    const parsed = JSON.parse(readFileSync(file, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : CORRUPT;
   } catch {
-    return null;
+    return CORRUPT;
   }
 }
 
@@ -141,10 +164,13 @@ export function lineageFile({ root, dir = TOKEN_DIR }) {
 }
 
 export function readLineage({ root, dir = TOKEN_DIR }) {
+  const file = lineageFile({ root, dir });
+  if (!existsSync(file)) return null;
   try {
-    return JSON.parse(readFileSync(lineageFile({ root, dir }), "utf8"));
+    const parsed = JSON.parse(readFileSync(file, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : CORRUPT;
   } catch {
-    return null;
+    return CORRUPT;
   }
 }
 
@@ -180,13 +206,18 @@ export function sweepLineage({ dir = TOKEN_DIR, now = new Date() } = {}) {
   return removed;
 }
 
-const lineageFromLaunch = ({ token, root, now }) => ({
+const lineageFromLaunch = ({ token, root, now, sessionId = null }) => ({
   issue: token.issue,
   folder: canonicalizePath(root),
   branch: token.branch,
   window: token.window,
   repo: token.repo ?? null,
   nonce: token.nonce ?? null,
+  briefHash: token.briefHash ?? null,
+  // Bound at the moment the launch is taken up: the launcher's assigned id when it assigned one,
+  // otherwise the id of the session that actually answered. Either way the folder's record now names
+  // ONE conversation, and a different one cannot resume on it.
+  sessionId: token.sessionId ?? sessionId ?? null,
   launchedAt: token.issuedAt ?? null,
   firstSeenAt: now.toISOString(),
   lastSeenAt: now.toISOString(),
@@ -270,7 +301,24 @@ function checkIdentity({ claim, resolved, cwd, env, live, what }) {
     );
   }
 
-  const liveWindow = Number(env?.CLAUDE_CODE_AUTO_COMPACT_WINDOW);
+  // An empty or whitespace variable is not a window of zero -- `Number("")` is 0, which is finite,
+  // and would have been compared as a real observation.
+  const rawWindow = env?.CLAUDE_CODE_AUTO_COMPACT_WINDOW;
+  const liveWindow = String(rawWindow ?? "").trim() === "" ? Number.NaN : Number(rawWindow);
+  // Unobserved is not "matches". The launcher establishes the tier and this hook is the only thing
+  // that confirms the session actually GOT it; when the variable is absent or unreadable there is no
+  // observation to compare, and reporting a verified session on a window nobody measured is the same
+  // class of error as claiming a launch that never happened. Ad-hoc sessions never reach here --
+  // they have no claim at all.
+  if (claim.window && !Number.isFinite(liveWindow)) {
+    return refuse(
+      "WINDOW_UNOBSERVED",
+      `${what.toLowerCase()} a ${claim.window} context window, but this session reports none ` +
+        "(CLAUDE_CODE_AUTO_COMPACT_WINDOW is unset or not a number), so there is nothing to check it against. " +
+        "Relaunch through the entrypoint so the tier is established and observable.",
+      { expected: claim.window, actual: rawWindow ?? null, root: resolved.root },
+    );
+  }
   if (claim.window && Number.isFinite(liveWindow) && liveWindow !== claim.window) {
     return refuse(
       "WINDOW_MISMATCH",
@@ -289,7 +337,20 @@ function checkIdentity({ claim, resolved, cwd, env, live, what }) {
       { expected: claim.branch, actual: live.branch, root: resolved.root },
     );
   }
-  if (claim.branch && !live?.branch) notes.push(`the live branch could not be read (expected ${claim.branch})`);
+  // Looked and could not read is NOT the same as did not look. When a real observation was taken and
+  // came back empty, the branch this session would write on is unknown -- and every resume claims to
+  // re-verify it. A note under a green verdict said "verified" about something nobody could see.
+  // `live === null` means no observation was attempted at all (a pure probe, `persist:false`), and
+  // that stays a note: it is the caller declining to measure, not a measurement that failed.
+  if (claim.branch && live && !live.branch) {
+    return refuse(
+      "BRANCH_UNREADABLE",
+      `${what} branch ${claim.branch}, but the live branch in ${resolved.root} could not be read. ` +
+        "An unknown branch is not a verified one, and this session would be writing on it.",
+      { expected: claim.branch, actual: null, root: resolved.root },
+    );
+  }
+  if (claim.branch && !live) notes.push(`the live branch was not observed (expected ${claim.branch})`);
 
   if (claim.repo && live?.repo && live.repo !== claim.repo) {
     return refuse(
@@ -298,7 +359,15 @@ function checkIdentity({ claim, resolved, cwd, env, live, what }) {
       { expected: claim.repo, actual: live.repo, root: resolved.root },
     );
   }
-  if (claim.repo && !live?.repo) notes.push(`the live repository could not be read (expected ${claim.repo})`);
+  if (claim.repo && live && !live.repo) {
+    return refuse(
+      "REPO_UNREADABLE",
+      `${what} the ${claim.repo} repository, but the origin of ${resolved.root} could not be read. ` +
+        "A folder that cannot say which repository it belongs to has not been verified as this one.",
+      { expected: claim.repo, actual: null, root: resolved.root },
+    );
+  }
+  if (claim.repo && !live) notes.push(`the live repository was not observed (expected ${claim.repo})`);
 
   return { ok: true, notes };
 }
@@ -318,6 +387,26 @@ export function assertSessionRoot({
 }) {
   const resolved = resolveSessionRoot({ env, hookInput, cwd });
   const expiredAt = (iso) => Boolean(iso) && new Date(iso) < now;
+
+  // An artifact that exists and cannot be read has destroyed the evidence this hook was going to
+  // verify against. Failing open there turns a damaged launch record into a silent pass.
+  if (token === CORRUPT) {
+    return refuse(
+      "TOKEN_CORRUPT",
+      "The launch record exists but could not be read. Something wrote it partially or damaged it, so " +
+        "there is no way to tell which folder, branch or window this session was launched for. " +
+        "Relaunch through the entrypoint to write a fresh one.",
+      { root: resolved.root },
+    );
+  }
+  if (lineage === CORRUPT) {
+    return refuse(
+      "LINEAGE_CORRUPT",
+      `This folder's session record exists but could not be read, so nothing about ${resolved.root} is verified. ` +
+        "Relaunch through the entrypoint to establish it again.",
+      { root: resolved.root },
+    );
+  }
 
   const ours = lineage && resolved.observed && samePath(lineage.folder, resolved.root) && !expiredAt(lineage.expiresAt);
   const pending = Boolean(token) && !claimedAtOf(token) && !expiredAt(token.expiresAt);
@@ -339,6 +428,20 @@ export function assertSessionRoot({
     }
     const verdict = checkIdentity({ claim: token, resolved, cwd, env, live, what: "The launch claimed" });
     if (!verdict.ok) return verdict;
+
+    // When the launcher assigned the conversation id (`--session-id`), the session that takes the
+    // launch up must be that conversation. Otherwise a window that happened to be open in the folder
+    // could answer a launch meant for the one the launcher started.
+    const liveSession = hookInput?.session_id ?? null;
+    if (token.sessionId && liveSession && token.sessionId !== liveSession) {
+      return refuse(
+        "SESSION_FOREIGN",
+        "This launch was started for a different conversation than the one answering it. " +
+          "The launcher names the session it starts, and only that session may take up its launch.",
+        { expected: token.sessionId, actual: liveSession, root: resolved.root },
+      );
+    }
+
     return {
       ok: true,
       mode: "launch",
@@ -348,6 +451,7 @@ export function assertSessionRoot({
       branch: token.branch,
       window: token.window,
       repo: token.repo ?? null,
+      briefHash: token.briefHash ?? null,
       notes: verdict.notes,
     };
   }
@@ -372,6 +476,25 @@ export function assertSessionRoot({
     }
     const verdict = checkIdentity({ claim: lineage, resolved, cwd, env, live, what: "This folder's session was launched on" });
     if (!verdict.ok) return verdict;
+
+    // The clause that makes this a SESSION lineage rather than a folder one. Same root, same branch,
+    // same repo and same window describe the FOLDER; they say nothing about which conversation is
+    // running in it. A brand-new Claude process started in a verified folder used to inherit the
+    // whole authorization -- 12 hours of it, sliding forward on every sighting. It now has to be the
+    // conversation the record was bound to.
+    //
+    // An extension restart that genuinely resumes keeps its id, so it still passes. A record from
+    // before ids were bound has none, and is carried rather than broken.
+    const liveSession = hookInput?.session_id ?? null;
+    if (lineage.sessionId && liveSession && lineage.sessionId !== liveSession) {
+      return refuse(
+        "SESSION_FOREIGN",
+        `${resolved.root} has a verified session record, but it belongs to a different conversation. ` +
+          "A new session in a verified folder does not inherit the folder's authorization — relaunch through the entrypoint.",
+        { expected: lineage.sessionId, actual: liveSession, root: resolved.root },
+      );
+    }
+
     return {
       ok: true,
       mode: "resume",
@@ -381,6 +504,7 @@ export function assertSessionRoot({
       branch: lineage.branch,
       window: lineage.window,
       repo: lineage.repo ?? null,
+      briefHash: lineage.briefHash ?? null,
       notes: verdict.notes,
     };
   }
@@ -389,6 +513,20 @@ export function assertSessionRoot({
   if (token && !claimedAtOf(token) && expiredAt(token.expiresAt)) {
     return refuse("TOKEN_EXPIRED", `The launch token expired at ${token.expiresAt}. Relaunch from the entrypoint.`);
   }
+  // A launch that WAS made for this folder, taken up, and whose session record is gone. Saying "this
+  // session was not started through the entrypoint" here is simply false -- it is what the upgraded
+  // hook told a live #23 session at the 07:16Z compaction, about a session the entrypoint had
+  // launched. The session is still unverified and this is still advisory, but the reason it gives is
+  // now the true one, and it names the way back.
+  if (token && claimedAtOf(token) && resolved.observed && samePath(resolved.root, token.folder)) {
+    return refuse(
+      "LAUNCH_SPENT",
+      `This folder's launch was already taken up at ${claimedAtOf(token)} and its session record is gone, ` +
+        "so this session is unverified. Relaunch through the entrypoint to verify it again.",
+      { root: resolved.root, issue: token.issue },
+    );
+  }
+
   return refuse(
     "NO_TOKEN",
     "No launch pending for this folder and no session record in it, so nothing verified that its " +
@@ -418,7 +556,7 @@ export function verifySession({
   if (!persist) return result;
 
   if (result.ok && result.mode === "launch") {
-    writeLineage(lineageFromLaunch({ token, root: result.root, now }), { dir });
+    writeLineage(lineageFromLaunch({ token, root: result.root, now, sessionId: hookInput?.session_id ?? null }), { dir });
     claimToken({ dir }, now);
   } else if (result.ok && result.mode === "resume") {
     writeLineage(touchLineage(lineage, now), { dir });
@@ -436,13 +574,14 @@ export function verifySession({
  * Refusals that mean "there is nothing live to disagree with" rather than "something is wrong".
  * A session that was never launched through the entrypoint is a normal session, not a broken one.
  */
-export const ADVISORY_CODES = new Set(["NO_TOKEN", "TOKEN_EXPIRED", "LINEAGE_EXPIRED"]);
+export const ADVISORY_CODES = new Set(["NO_TOKEN", "TOKEN_EXPIRED", "LINEAGE_EXPIRED", "LAUNCH_SPENT"]);
 
 /** One line each — this prints on every session that has no token, so it must not be a wall of text. */
 const ADVISORY_LINES = {
   NO_TOKEN: "compy-entry: no launch token — this session was not started through the entrypoint, so its folder, branch and claim are unverified.",
   TOKEN_EXPIRED: "compy-entry: the launch token has expired — this session is unverified.",
   LINEAGE_EXPIRED: "compy-entry: this folder's session record has lapsed — this session is unverified until you relaunch from the entrypoint.",
+  LAUNCH_SPENT: "compy-entry: this folder's launch was already taken up and its session record is gone — this session is unverified until you relaunch from the entrypoint.",
 };
 
 /**
@@ -515,6 +654,17 @@ export function sessionStartOutput(result, { briefDir = BRIEF_DIR, source = null
   if (!result?.ok) return null;
   const brief = readBrief({ issue: result.issue, dir: briefDir });
   if (!brief?.text) return null;
+
+  // The brief becomes authoritative context on every start, so it is exactly the kind of file that
+  // must not be trusted for merely existing. When the launch bound a digest, the bytes have to match
+  // it: a stale brief from an older launch, a half-written one, or an edited one would otherwise
+  // arrive as instructions inside a session this record has already vouched for. Nothing bound (a
+  // record from before hashes existed) is carried, because there is no claim to contradict.
+  // Re-derived from the TEXT, never read off the record. A `hash` field sitting inside the same file
+  // it describes is a claim the file makes about itself: edit the text, leave the field, and a
+  // stored-field comparison waves it through. The digest has to be computed from the bytes that are
+  // about to become context.
+  if (result.briefHash && createHash("sha256").update(String(brief.text), "utf8").digest("hex") !== result.briefHash) return null;
 
   const out = { hookEventName: "SessionStart", additionalContext: brief.text };
   if (brief.sessionTitle) out.sessionTitle = brief.sessionTitle;

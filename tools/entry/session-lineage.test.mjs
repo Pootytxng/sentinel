@@ -25,6 +25,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   LINEAGE_TTL_MINUTES,
+  assertSessionRoot,
   lineageFile,
   makeToken,
   readLineage,
@@ -219,13 +220,48 @@ describe("guard 10 — a lineage is not a way in", () => {
 });
 
 describe("what cannot be observed is said, not assumed", () => {
-  it("passes but says so when the live branch cannot be read", () => {
+  // REWRITTEN, not extended. This asserted `ok: true` with a note — a green verified session whose
+  // branch nobody could read. But the header of this very file, and the issue's own acceptance text,
+  // both say every resume re-verifies branch and repository, and a note under a pass does not verify
+  // anything. Unknown identity is not verified identity: the session is about to write, and the
+  // branch it would write on is the thing that could not be read.
+  //
+  // The distinction that survives is between "looked and failed" and "did not look". A real
+  // observation that came back empty is a refusal; no observation at all — a pure probe — is still a
+  // note, because that is the caller declining to measure rather than a measurement failing.
+  it("refuses when a real observation of the live branch comes back empty", () => {
     launch();
     sessionStart();
 
     const r = sessionStart({ live: live({ branch: null }), now: at("2026-07-31T11:00:00.000Z") });
+    expect(r.ok).toBe(false);
+    expect(r.code).toBe("BRANCH_UNREADABLE");
+    expect(r.reason).toMatch(/not a verified one/i);
+  });
+
+  it("refuses when the live repository comes back empty for the same reason", () => {
+    launch();
+    sessionStart();
+
+    const r = sessionStart({ live: live({ repo: null }), now: at("2026-07-31T11:00:00.000Z") });
+    expect(r.ok).toBe(false);
+    expect(r.code).toBe("REPO_UNREADABLE");
+  });
+
+  // `verifySession` always observes -- passing it `live: null` means "go and read the folder", which
+  // on a fixture path reads nothing and is therefore a failed observation. The did-not-look case
+  // exists one layer down, where a caller hands the assertion no facts at all.
+  it("still only notes it when no observation was taken at all", () => {
+    launch();
+    const r = assertSessionRoot({
+      token: readToken({ dir }),
+      env: { CLAUDE_PROJECT_DIR: FOLDER, CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(WINDOW) },
+      cwd: FOLDER,
+      now: at(T0),
+      live: null,
+    });
     expect(r.ok).toBe(true);
-    expect(r.notes.join(" ")).toMatch(/branch/i);
+    expect(r.notes.join(" ")).toMatch(/not observed/i);
   });
 
   it("never persists anything when asked not to", () => {

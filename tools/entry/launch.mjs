@@ -16,6 +16,7 @@
 // stderr so the two never get mixed up.
 
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
@@ -28,6 +29,7 @@ import {
   readProjectIds,
   refetchSnapshotFacts,
   refreshCreateBase,
+  CODE_ROOT,
 } from "./gather.mjs";
 import { reconcile, selectTask } from "./preflight.mjs";
 import { verdictLines } from "./render.mjs";
@@ -36,7 +38,7 @@ import { contextLabel } from "./select.mjs";
 import { postClaim, planRenew, execPlan } from "./claim.mjs";
 import { writeBrief } from "./brief.mjs";
 import { resolveWindow } from "./settings-resolve.mjs";
-import { establishTier } from "./tier.mjs";
+import { establishTier, restampTier } from "./tier.mjs";
 import { makeToken, writeToken } from "./session-assert.mjs";
 import { pruneDeadOverlay, writeOverlay } from "./overlay.mjs";
 
@@ -49,13 +51,26 @@ const ANSI = /\u001b\[[0-9;]*m/g;
 let narrate = (line) => console.error(line);
 const say = (...a) => narrate(a.map((x) => String(x)).join(" "));
 
+/**
+ * Whether the log actually received anything, and why not when it did not.
+ *
+ * A healthy launch must not depend on optional logging -- that part was right. What was wrong is
+ * that every failure was swallowed in silence while the shell went on to tell Kuya "the full check
+ * table is in <path>", unconditionally, on the quiet path where the terminal copy had been
+ * suppressed. So a refusal could destroy the only detailed account of itself and then point at a
+ * file that was never created. Losing the evidence is survivable; claiming it exists is not.
+ */
+let sink = { file: null, wrote: false, error: null };
+export const narrationHealth = () => ({ ...sink });
+
 export function setNarration({ quiet = false, logFile = null, now = () => new Date() } = {}) {
   let ready = false;
+  sink = { file: logFile, wrote: false, error: null };
   narrate = (line) => {
     if (!quiet) console.error(line);
     if (!logFile) return;
     // A log that cannot be written is a worse thing to fail a launch over than to lose. It is
-    // evidence, not a precondition.
+    // evidence, not a precondition -- but its health is now a fact the caller can read.
     try {
       if (!ready) {
         mkdirSync(dirname(logFile), { recursive: true });
@@ -65,8 +80,10 @@ export function setNarration({ quiet = false, logFile = null, now = () => new Da
       // nothing and cost the log the shape that makes it readable in the first place.
       const text = line.replace(ANSI, "");
       appendFileSync(logFile, text.trim() === "" ? "\n" : `${now().toISOString()} ${text}\n`);
-    } catch {
-      /* ignore */
+      sink.wrote = true;
+    } catch (e) {
+      // First failure wins: it is the one that explains the gap.
+      if (!sink.error) sink.error = String(e?.message ?? e);
     }
   };
 }
@@ -85,7 +102,9 @@ export function setNarration({ quiet = false, logFile = null, now = () => new Da
 export function reportRefusal(payload) {
   if (!payload?.checks?.length) return false;
   for (const line of verdictLines(payload.task, payload)) say(line);
-  return true;
+  // The table went to `say`. Whether any of it reached disk is a different question, and the shell
+  // needs the answer before it promises a file.
+  return { reported: true, durable: Boolean(sink.file) ? sink.wrote && !sink.error : false, log: sink.file, error: sink.error };
 }
 
 const git = (cwd, args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -94,6 +113,35 @@ class Refused extends Error {
   constructor(payload) {
     super(payload.reason ?? "preflight refused");
     this.payload = payload;
+  }
+}
+
+/**
+ * What this run has actually done to the machine, in the order it did it.
+ *
+ * `launch` is a legal-prefix sequence: every stage leaves a state that is recoverable, and any of
+ * them can refuse. The shell printed "#N was not started, and nothing was written." for EVERY
+ * nonzero exit -- true only of a refusal before the first write, and false after a worktree was
+ * created, a tier established, a claim posted, or a token, brief or overlay written. Telling the
+ * owner nothing happened while a claim sits on the board with his name on it is the launcher lying
+ * about the one thing he would need to clean up.
+ *
+ * So the effects are recorded as they happen and travel with the refusal. "Nothing was written" is
+ * now something the payload can PROVE rather than something the shell assumes.
+ */
+export class Effects {
+  constructor() {
+    this.done = [];
+  }
+  record(what, detail = null) {
+    this.done.push(detail ? { what, detail } : { what });
+    return this;
+  }
+  get wroteAnything() {
+    return this.done.length > 0;
+  }
+  payload() {
+    return { effects: this.done, wroteAnything: this.wroteAnything };
   }
 }
 
@@ -153,10 +201,19 @@ export function refreshAndCreate({ facts, target, base = null, hostDir = HOST_DI
  * Afterwards the FULL preflight runs again — not just the hooks row. The repair wrote files into the
  * folder, and the honest question after a write is "does everything still hold", not "did my write
  * land". Same discipline as the base refresh: the last verdict before the next write is a complete one.
+ *
+ * That paragraph used to be untrue. The code re-measured `facts.hooks` and spread every other key
+ * from the object captured BEFORE the write — so board, folder, git, settings, claim and process
+ * state were all re-used unread, and `reconcile` is a pure function over whatever it is handed. A
+ * comment claiming a full preflight is not a full preflight. `regather` is now how the caller hands
+ * back a genuinely fresh reading, and it is injected so the guard can prove it was called.
  */
-export function repairHooksIfSafe({ facts, verdict, controlDir, dryRun = false, canonicalDir = null }) {
+export function repairHooksIfSafe({ facts, verdict, controlDir, dryRun = false, canonicalDir = null, regather = null }) {
   const failed = (verdict.checks ?? []).filter((c) => !c.ok);
-  // `name`, not `id` — checks have never carried an id, so this path silently never ran.
+  // `preflight.mjs` builds every row with mk(name, ...) -> { name, expected, actual, ok, ... }. There
+  // is no `id` on a check, and reading one compared `undefined` against a string on every launch --
+  // always true, so this returned `{attempted:false}` on its first line and the repair below had
+  // never run once. Keyed on `name`, and repair-gate.test.mjs asserts the row shape it keys on.
   if (failed.length !== 1 || failed[0].name !== "hooks.present") return { attempted: false, verdict, facts };
 
   const canonical = canonicalDir ?? join(controlDir ?? "", ".claude", "hooks");
@@ -169,17 +226,25 @@ export function repairHooksIfSafe({ facts, verdict, controlDir, dryRun = false, 
   }
 
   repairHooks({ dir: facts.hooks.dir, canonicalDir: canonical, only: plan.files });
-  const repairedFacts = { ...facts, hooks: verifyHooks({ dir: facts.hooks.dir, env: process.env }) };
-  return { attempted: true, ok: true, verdict: reconcile(repairedFacts), facts: repairedFacts, disclosure: plan.disclosure };
+
+  // A fresh reading of everything, not of the one row we touched.
+  const fresh = regather ? regather() : null;
+  const repairedFacts = fresh
+    ? (fresh.facts ?? fresh)
+    : { ...facts, hooks: verifyHooks({ dir: facts.hooks.dir, env: process.env, canonicalDir: canonical }) };
+  return { attempted: true, ok: true, verdict: reconcile(repairedFacts), facts: repairedFacts, disclosure: plan.disclosure, regathered: Boolean(fresh) };
 }
 
 export async function launch({ issue = null, dryRun = false, noOverlay = false, controlDir, self = { lane: "Claude Code" } }) {
-  const board = readBoard();
-  if (!board.reachable) throw new Refused({ verdict: "REFUSE", reason: `Work Control unreachable: ${board.error}` });
+  // Every refusal below carries this, so "nothing was written" is proven rather than assumed.
+  const effects = new Effects();
 
-  const picked = selectTask(board.items, { issue, self, policy: loadPolicy() });
+  const board = readBoard();
+  if (!board.reachable) throw new Refused({ verdict: "REFUSE", reason: `Work Control unreachable: ${board.error}`, ...effects.payload() });
+
+  const picked = selectTask(board.items, { issue, self, policy: loadPolicy(), codeRoot: CODE_ROOT });
   if (picked.kind !== "task") {
-    throw new Refused({ verdict: picked.kind.toUpperCase(), reason: picked.reason, options: picked.options ?? [], unavailable: picked.unavailable ?? [] });
+    throw new Refused({ verdict: picked.kind.toUpperCase(), reason: picked.reason, options: picked.options ?? [], unavailable: picked.unavailable ?? [], ...effects.payload() });
   }
 
   const task = picked.task;
@@ -195,9 +260,17 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   // A folder missing its own registered hooks is a chore the owner should never be handed — it is
   // the launcher's payload, and the launcher can prove it. Repair, disclose in one line, re-verify.
   if (verdict.verdict !== "PASS") {
-    const repair = repairHooksIfSafe({ facts, verdict, controlDir, dryRun });
+    const repair = repairHooksIfSafe({
+      facts,
+      verdict,
+      controlDir,
+      dryRun,
+      // The same call that produced the pre-write facts, run again against the folder as it is now.
+      regather: () => gatherFacts({ issue: task.number, task, board, self }),
+    });
     if (repair.attempted) {
       if (repair.ok) {
+        effects.record("repaired missing hooks", repair.disclosure);
         say(`  ${repair.disclosure}`);
         ({ facts, verdict } = repair);
       } else {
@@ -207,9 +280,9 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   }
 
   if (verdict.verdict !== "PASS") {
-    throw new Refused({ ...verdict, task, reason: `preflight refused #${task.number}` });
+    throw new Refused({ ...verdict, task, reason: `preflight refused #${task.number}`, ...effects.payload() });
   }
-  if (!target) throw new Refused({ verdict: "REFUSE", reason: "No target folder resolved from the board field." });
+  if (!target) throw new Refused({ verdict: "REFUSE", reason: "No target folder resolved from the board field.", ...effects.payload() });
 
   // Say the window out loud before anything is written. A marathon-tier launch that looks like a
   // standard one is the confusion the addendum on #18 closed; the label is not decoration. The tier
@@ -235,9 +308,10 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     const staged = refreshAndCreate({ facts, target, base });
     verdict = staged.verdict;
     if (!staged.created) {
-      throw new Refused({ ...verdict, task, reason: `preflight refused #${task.number} against the refreshed base — nothing was created` });
+      throw new Refused({ ...verdict, task, reason: `preflight refused #${task.number} against the refreshed base — nothing was created`, ...effects.payload() });
     }
     createdFrom = staged.created;
+    effects.record("created the worktree", `${target.path} @ ${target.branch} from ${String(createdFrom).slice(0, 7)}`);
   }
 
   // 2. tier -- keep the promise the `settings.window` row made.
@@ -249,8 +323,9 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   // from disk afterwards, and a launch that did not actually get its tier stops here, before the
   // claim is posted and before VS Code opens on a session the root assert would hard-stop.
   const tier = establishTier({ dir: target.path, intended });
+  if (tier.wrote) effects.record("established the context tier", `${target.path}\\.claude\\settings.local.json → ${intended.window}`);
   if (tier.action === "refuse") {
-    throw new Refused({ ...verdict, verdict: "REFUSE", task, reason: tier.reason, remediation: [tier.reason] });
+    throw new Refused({ ...verdict, verdict: "REFUSE", task, reason: tier.reason, remediation: [tier.reason], ...effects.payload() });
   }
   if (tier.wrote) say(`  ${tier.disclosure}`);
   const settled = resolveWindow({ dir: target.path });
@@ -270,6 +345,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   if (facts.claim) {
     say("  renewing the existing claim");
     execPlan(planRenew({ issue: task.number, ids, until: expires }), {});
+    effects.record("renewed the ownership claim", `#${task.number} until ${expires}`);
   } else {
     say("  posting the ownership claim");
     postClaim({
@@ -289,6 +365,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
         processes: facts.processes,
       },
     });
+    effects.record("posted the ownership claim", `#${task.number} until ${expires}`);
   }
 
   // 4. brief -- the durable instructions, written BEFORE the token that admits a session.
@@ -309,17 +386,28 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     nextAction: task.nextAction ?? null,
   });
   say(`  launch brief written to ${brief}`);
+  effects.record("wrote the durable task brief", brief.file);
 
   // 5. token -- what the in-session assert checks the real root against
+  //
+  // The conversation id is assigned HERE, before anything is written, so one value reaches the CLI
+  // (`--session-id`), the launch token and the lineage record. That is what lets the SessionStart
+  // hook ask "is this the session I started" instead of only "is this the right folder".
+  const sessionId = randomUUID();
   const token = makeToken({
     issue: task.number,
     repo: REPO,
     folder: target.path,
     branch: target.branch,
     window: intended.window,
+    sessionId,
+    // Written before the token on purpose (step 4), so the digest exists by the time the record that
+    // vouches for it does. A session can never be admitted to a brief that is not on disk yet.
+    briefHash: brief.hash,
     now: facts.now,
   });
   writeToken(token);
+  effects.record("wrote the launch token", "%LOCALAPPDATA%\\CompyEntry\\launch.json");
   say(`  launch token written (expires ${token.expiresAt})`);
 
   // 6. overlay -- Class A only: the assert hook, never behaviour. Skipped entirely when the branch
@@ -327,9 +415,14 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   //    run the assert twice and the second would refuse the token the first consumed.
   if (!noOverlay) {
     const o = writeOverlay({ dir: target.path, controlDir });
+    if (o.wrote) effects.record("installed the session-root assert overlay", o.file);
     if (o.wrote) say(`  installed the session-root assert into ${o.file}`);
     else if (o.removed) say(`  removed a leftover session-assert overlay from ${o.file} — ${o.reason}`);
     else say(`  session-root assert not installed — ${o.reason}`);
+    // The overlay just rewrote the same file `establishTier` recorded a hash for. Both are the
+    // launcher; only one kept the record. Re-stamp it, or the strong exact-hash proof is stale from
+    // the moment this launch ends and every later tier change leans on the content fallback instead.
+    if (o.wrote) restampTier({ dir: target.path });
   } else {
     // Opting out of INSTALLING the assert is not opting out of clearing a dead one we left behind.
     const p = pruneDeadOverlay({ dir: target.path });
@@ -352,7 +445,11 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     window: intended.window,
     contextLabel: label,
     marathon: intended.marathon,
-    brief,
+    // The conversation the launcher named. The shell hands it to the CLI so the session that starts
+    // IS the session the token was written for.
+    sessionId,
+    brief: brief.file,
+    ...effects.payload(),
     verdict,
   };
 }
@@ -372,8 +469,9 @@ if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, "/")}`) {
     process.exit(0);
   } catch (e) {
     if (e instanceof Refused) {
-      reportRefusal(e.payload);
-      console.log(JSON.stringify(e.payload));
+      const sink = reportRefusal(e.payload);
+      // The shell decides whether to promise the log, so it needs to know whether the log happened.
+      console.log(JSON.stringify({ ...e.payload, logDurable: sink === false ? false : Boolean(sink.durable), logError: sink === false ? null : sink.error }));
       process.exit(1);
     }
     console.log(JSON.stringify({ verdict: "ERROR", reason: String(e.message ?? e) }));

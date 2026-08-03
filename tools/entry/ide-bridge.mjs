@@ -28,6 +28,7 @@
 // Pure over injected facts wherever it matters: the clock, the sleep, the pid probe and both
 // directories are parameters, so the guards drive the waiting loops without waiting.
 
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
@@ -117,29 +118,68 @@ export function isAlive(pid) {
 }
 
 /**
+ * Is anything accepting connections on that loopback port right now?
+ *
+ * Synchronous on purpose: every caller here is a polling loop that has to make one decision before
+ * it decides whether to wait again, and an async probe would have to be threaded through `pickBridge`
+ * into code whose whole job is to be simple enough to guard.
+ *
+ * A refused connection is the answer, not an error -- it means the extension host is not listening.
+ */
+export function isListening(port, { host = "127.0.0.1", timeoutMs = 250 } = {}) {
+  if (!Number.isInteger(port) || port <= 0) return false;
+  const probe = spawnSync(
+    process.execPath,
+    [
+      "-e",
+      `const net=require("node:net");const s=net.connect({host:process.argv[1],port:Number(process.argv[2])});` +
+        `s.setTimeout(Number(process.argv[3]));` +
+        `const done=(c)=>{try{s.destroy()}catch{};process.exit(c)};` +
+        `s.on("connect",()=>done(0));s.on("error",()=>done(1));s.on("timeout",()=>done(1));`,
+      host,
+      String(port),
+      String(timeoutMs),
+    ],
+    { timeout: timeoutMs + 2000, stdio: "ignore" },
+  );
+  return probe.status === 0;
+}
+
+/**
  * The live editor bridge for a folder, or a plain reason there is not one yet.
  *
  * Stale locks are reported rather than deleted. They belong to the extension, not to us, and a
  * launcher that quietly prunes another tool's files is exactly the kind of helpfulness this toolchain
  * refuses — the ones on this machine are noted in the details output and left alone.
  */
-export function pickBridge(locks, { folder, alive = isAlive } = {}) {
+export function pickBridge(locks, { folder, alive = isAlive, listening = isListening } = {}) {
   const want = canonicalizePath(folder);
   const naming = (locks ?? []).filter((l) => l?.folders?.some((f) => samePath(f, want)));
-  const live = naming.filter((l) => l.pid !== null && alive(l.pid));
-  const stale = naming.filter((l) => !live.includes(l));
+  const running = naming.filter((l) => l.pid !== null && alive(l.pid));
+
+  // A live PID is not a live bridge. VS Code can be up while the extension host that owns the socket
+  // has gone, and a recycled PID makes a weeks-old lock look current -- four lock files sit in
+  // ~/.claude/ide on this machine and three of them name windows closed weeks ago. The lock's NAME
+  // is the port, so the only proof that the handoff has somewhere to land is that the port answers
+  // now. Without this, the launcher reported "Claude started there" into a dead socket.
+  const live = running.filter((l) => l.port !== null && listening(l.port));
+  const deaf = running.filter((l) => !live.includes(l));
+  const stale = naming.filter((l) => !running.includes(l));
 
   if (live.length > 0) {
-    return { ok: true, lock: live[0], live, stale, reason: null };
+    return { ok: true, lock: live[0], live, stale, deaf, reason: null };
   }
   return {
     ok: false,
     lock: null,
     live: [],
     stale,
-    reason: stale.length
-      ? `${stale.length} editor lock${stale.length === 1 ? "" : "s"} name${stale.length === 1 ? "s" : ""} this folder but no window behind ${stale.length === 1 ? "it" : "them"} is running`
-      : "no editor window is open on this folder yet",
+    deaf,
+    reason: deaf.length
+      ? `${deaf.length} editor window${deaf.length === 1 ? " is" : "s are"} running on this folder but ${deaf.length === 1 ? "its bridge port is" : "their bridge ports are"} not accepting connections yet`
+      : stale.length
+        ? `${stale.length} editor lock${stale.length === 1 ? "" : "s"} name${stale.length === 1 ? "s" : ""} this folder but no window behind ${stale.length === 1 ? "it" : "them"} is running`
+        : "no editor window is open on this folder yet",
   };
 }
 

@@ -47,8 +47,11 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 describe("the brief survives the conversation it was written for", () => {
   it("round-trips through a file named for the task", () => {
-    const file = writeBrief(brief(), { dir });
-    expect(file).toBe(briefFile({ issue: 23, dir }));
+    // writeBrief now returns what it wrote as well as where: the digest is bound into the launch
+    // token, so the caller needs it and cannot re-derive it from a path.
+    const written = writeBrief(brief(), { dir });
+    expect(written.file).toBe(briefFile({ issue: 23, dir }));
+    expect(written.hash).toMatch(/^[0-9a-f]{64}$/);
     expect(readBrief({ issue: 23, dir })).toMatchObject({ issue: 23, folder: FOLDER, branch: BRANCH, marathon: true });
   });
 
@@ -159,7 +162,7 @@ describe("where briefs live", () => {
   it("keeps them out of the repository — a brief is machine state, not source", () => {
     const file = briefFile({ issue: 23, dir });
     expect(file.startsWith(dir)).toBe(true);
-    expect(readFileSync(writeBrief(brief(), { dir }), "utf8")).toContain("\"issue\": 23");
+    expect(readFileSync(writeBrief(brief(), { dir }).file, "utf8")).toContain("\"issue\": 23");
   });
 });
 
