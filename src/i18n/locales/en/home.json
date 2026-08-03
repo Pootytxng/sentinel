@@ -342,7 +342,7 @@
       "title": "What Compy refuses to do",
       "noKernelDriver": "No kernel driver — stays in user space",
       "noInjection": "No game injection — anti-cheat safe by design",
-      "wifiOff": "Nothing leaves your PC — no account, no telemetry",
+      "wifiOff": "No account, no telemetry — the only call out is a signed update check",
       "kickerPre": "The sketchy tweaks aren't missing.",
       "kickerEmph": "They're refused."
     },
