@@ -83,6 +83,23 @@ describe.runIf(windows)(`sandboxed end-to-end release publication ${WINDOWS_ONLY
     expect(payload.events).not.toContain("apply:releases_tag_created");
   });
 
+  // bug→guard (v0.9.12, 2026-08-03): GitHub answered 404 for the releases-repo tag the engine had
+  // just successfully created, and the one-shot post-Apply verification read that absence as
+  // failure. The publish needed THREE invocations, each completing exactly one stage. The engine
+  // now retries a post-Apply "absent" before concluding failure. This fails on the old engine.
+  it("5b. rides out a post-create 404 (read-after-write lag) inside ONE invocation", () => {
+    const output = run("complete-first-publish", sandbox(), [
+      "-LagOnceAtStage",
+      "releases_tag_created",
+    ]);
+    expect(output.result.status, output.payload.error || output.result.stderr).toBe(0);
+    expect(output.payload.ok).toBe(true);
+    expect(output.payload.completed).toBe(true);
+    expect(output.payload.stages).toHaveLength(9);
+    // The lag must actually have been exercised, or this guard proves nothing.
+    expect(output.payload.events).toContain("inspect:eventual-consistency-lag");
+  });
+
   it("6. resumes when the exact draft already exists", () => {
     const payload = expectSuccess("draft-already-created");
     expect(payload.events).not.toContain("apply:draft_created");

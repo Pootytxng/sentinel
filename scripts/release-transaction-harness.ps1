@@ -16,6 +16,9 @@ param(
   [Parameter(Mandatory = $true)][string]$Sandbox,
   [string]$StopAfterStage,
   [string]$FailOnceAtStage,
+  # Simulate GitHub read-after-write lag: the named stage's ref EXISTS but the first lookup after
+  # its creation still answers 404, exactly as production did during the v0.9.12 publish.
+  [string]$LagOnceAtStage,
   [switch]$AllowPublication
 )
 $ErrorActionPreference = "Stop"
@@ -78,6 +81,7 @@ param(
   [string]$Outcome,
   [string]$StatePath,
   [string]$FailOnceAtStage,
+  [string]$LagOnceAtStage,
   [string]$EncodedGhArgs
 )
 switch ($Outcome) {
@@ -105,6 +109,19 @@ if ($GhArgs[0] -eq "api" -and $endpoint -match "/commits/main$") {
 if ($GhArgs[0] -eq "api" -and $endpoint -match "/git/ref/tags/") {
   if (-not $state.releases_tag_created) {
     $state.events = @($state.events) + "inspect:expected-404"
+    [System.IO.File]::WriteAllText(
+      $StatePath,
+      ($state | ConvertTo-Json -Depth 12),
+      (New-Object System.Text.UTF8Encoding($false))
+    )
+    [Console]::Error.WriteLine("gh: Not Found (HTTP 404)")
+    exit 1
+  }
+  if ($LagOnceAtStage -eq "releases_tag_created" -and
+      @($state.lag_consumed) -notcontains "releases_tag_created") {
+    # The ref EXISTS; GitHub just has not caught up. This is the production v0.9.12 shape.
+    $state.lag_consumed = @($state.lag_consumed) + "releases_tag_created"
+    $state.events = @($state.events) + "inspect:eventual-consistency-lag"
     [System.IO.File]::WriteAllText(
       $StatePath,
       ($state | ConvertTo-Json -Depth 12),
@@ -169,6 +186,7 @@ function Read-HarnessState {
     public_tag = "v0.9.7"
     events = @()
     failures_consumed = @()
+    lag_consumed = @()
   }
   switch ($Scenario) {
     "source-main-already-pushed" { $initial.source_main_pushed = $true }
@@ -266,7 +284,8 @@ $ghArgumentsEncoder = {
   return @(
     "-NoProfile", "-NonInteractive", "-File", $fakeGhPath,
     "-Outcome", $ghOutcome, "-StatePath", $statePath,
-    "-FailOnceAtStage", $FailOnceAtStage, "-EncodedGhArgs", $encoded
+    "-FailOnceAtStage", $FailOnceAtStage, "-LagOnceAtStage", $LagOnceAtStage,
+    "-EncodedGhArgs", $encoded
   )
 }.GetNewClosure()
 $context = [pscustomobject]@{
@@ -279,6 +298,11 @@ $context = [pscustomobject]@{
   DraftAssetsDir = $draftAssetsDir
   PublicAssetsDir = $publicAssetsDir
   Dependencies = @{}
+  # The engine retries a post-Apply "absent" to ride out GitHub's read-after-write lag. The
+  # sandbox has no real lag to wait for, so the wait is zeroed and the attempt budget kept small:
+  # the guard proves the RETRY happens, not that Start-Sleep works.
+  PostApplyVerifyAttempts = 3
+  PostApplyVerifyDelayMs = 0
   Repo = $Sandbox
   ReleasesRepo = "sandbox/compy-releases"
   GhCommand = "powershell.exe"
