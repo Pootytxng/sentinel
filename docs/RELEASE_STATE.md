@@ -96,10 +96,10 @@ tester is confirmed on 0.9.12 yet. The v0.9.12 release transaction is **complete
 | Gate / capability | State | Source | Notes |
 |---|---|---|---|
 | **Gaming Mode (F1)** | **LIVE** (`true`) | `gaming_mode_gate()` — `lib.rs:518` | Flipped 2026-06-18 w/ owner sign-off. §7 QA harness passed; **GAMING_MODE_QA.md 10/10 PASSED 2026-07-14**; **owner SIGNED OFF 2026-07-14** — field-proven for 1.0. |
-| **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:2029` | Armed 2026-06-25. Live exact-restore + UAC-cancel=no-partial + critical-service block proven. Session start/restore ride the ONE batched elevation (T6/T6b). |
-| **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:2102` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. |
+| **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:2054` | Armed 2026-06-25. Live exact-restore + UAC-cancel=no-partial + critical-service block proven. Session start/restore ride the ONE batched elevation (T6/T6b). |
+| **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:2127` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. |
 | **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:170` | REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
-| **Preload-app removal** | **DARK** (`false`) | `preload_removal_gate()` — `actions.rs:2251` | Built dark 2026-07-06. Command refuses while dark; FE renders nothing. Arming needs live remove→reinstall QA + owner sign-off. |
+| **Preload-app removal** | **DARK** (`false`) | `preload_removal_gate()` — `actions.rs:2276` | Built dark 2026-07-06. Command refuses while dark; FE renders nothing. Arming needs live remove→reinstall QA + owner sign-off. |
 | **Aggregate-stack A/B trial (§2a)** | **DARK** (`false`) | `stack_trial_gate()` — `benchmark_trial.rs:274` | Built dark 2026-07-09 (reuses audited batch path; multi-change Drop-guard rollback; corrupt-ledger read ABORTS pre-mutation). No FE surface. |
 | **Experiment engine + simulator (Intelligence P3)** | **ARMED** (`true`, 2026-07-17) | `experiment_gate()` — `experiment.rs:55` | Armed after owner sign-off + live apply→rollback round-trip. No new mutation primitive; resolve stays history-only; simulator reads catalog READ-ONLY. |
 | **Leftovers restore** | **ARMED** (`true`, 2026-07-16) | `restore_gate()` — `leftovers.rs:730` | Armed after owner-present live-UAC QA (3 loops PASS); receipts ride the Trust Ledger (`leftover_adopted`). |
@@ -115,14 +115,24 @@ tester is confirmed on 0.9.12 yet. The v0.9.12 release transaction is **complete
 
 - No kernel driver · no game injection · rollback-first · typed mutation allowlist
   (`KnownService`/`KnownBloatTask`/`AppliedAction`/`RollbackAction`/`Snapshot`, unknown inputs rejected).
-- Rollback resolves from `history.json` alone, never the live catalog (`actions::resolve_rollback` — `history.rs:818`).
-- Ledger save is crash-safe atomic temp-write+rename, test-pinned (`save_history_to` — `history.rs:332`).
+- **ONE mutation boundary, mechanically enforced (2026-08-03):** every Windows change goes through
+  `src-tauri/src/actions.rs`. `src/mutation-boundary-guard.test.ts` walks all of `src-tauri/src` and
+  fails the build on a registry write, service/task change, power-plan switch or package removal
+  anywhere else — `game_mode_persist.rs` is the one reasoned exception (re-asserts a change the
+  ledger already owns), and copy that merely NAMES a command carries a greppable
+  `mutation-boundary-allow` marker. Written after `set_startup_entry_enabled` was found writing
+  `StartupApproved\Run` from `lib.rs` with a SYNTHESISED value that destroyed Windows' timestamp
+  bytes; that command now routes through `Snapshot::StartupApproval` →
+  `AppliedAction::SetStartupEntryEnabled` → `RollbackAction::RestoreStartupApprovalFromSnapshot`,
+  refuses when the prior value is unreadable, and preserves every byte after the state flag.
+- Rollback resolves from `history.json` alone, never the live catalog (`actions::resolve_rollback` — `history.rs:869`).
+- Ledger save is crash-safe atomic temp-write+rename, test-pinned (`save_history_to` — `history.rs:347`).
 - Elevation: relaunch `compy.exe --run-elevated <hex> <ticket>` (windowless), 4-way honest UAC
-  attribution (`elevation_outcome` — `actions.rs:964`); helper runs ONLY hex byte-matching the
-  one-time ticket (`mint_elevation_ticket` — `actions.rs:1149`).
+  attribution (`elevation_outcome` — `actions.rs:989`); helper runs ONLY hex byte-matching the
+  one-time ticket (`mint_elevation_ticket` — `actions.rs:1174`).
 - Gaming-session advanced tier batches to ONE elevation per session start and per restore
   (`apply_elevated_tier` — `gaming_orchestrator.rs:201`); no-partial abort+restore contract;
-  UAC-decline drops only verifiably-never-ran staged entries (`elevation_error_nothing_ran` — `actions.rs:988`).
+  UAC-decline drops only verifiably-never-ran staged entries (`elevation_error_nothing_ran` — `actions.rs:1013`).
 
 ## Release blockers
 

@@ -56,6 +56,14 @@ safe + reversible by default, rollback over raw control. No jargon, no regkey du
 - **UNTOUCHABLE (now business-critical):** rollback-first · no fabricated claims · no kernel
   driver/injection · frozen risky-tweak catalog · signed-remote-rules triple gate · every LOCKED
   rule below. One Reddit thread of brand damage kills the funnel — **the gates ARE the moat.**
+- **ONE MUTATION BOUNDARY (mechanical, 2026-08-03):** Compy changes Windows from
+  `src-tauri/src/actions.rs` and nowhere else — snapshot → apply → verify → receipt → rollback.
+  `src/mutation-boundary-guard.test.ts` fails the build on a registry write, service/task change,
+  power-plan switch or package removal anywhere else in `src-tauri/src`. Written because
+  `set_startup_entry_enabled` sat in `lib.rs` writing `StartupApproved\Run` directly with a
+  SYNTHESISED value, destroying the timestamp bytes — the prior state was unrestorable in
+  principle, and rollback-first lived only in prose, which does not fail a build. Line-level escape
+  hatch for copy that merely NAMES a command: `mutation-boundary-allow` (greppable).
 - **ZERO-BUDGET LAW (owner constraint):** every phase ships $0-first on free tiers; any spend is
   owner-gated with named payback + KPI trigger (domain ← waitlist signal · signing ← first paid
   surface, Azure Trusted Signing route · entity+Paddle ← Pro launch · **paid ads ← never before

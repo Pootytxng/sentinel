@@ -243,14 +243,14 @@ fn detect_memory_compression(probes: &Value) -> Outcome {
         title: "Memory compression disabled".into(),
         current_value: "Disabled (Get-MMAgent → MemoryCompression: False)".into(),
         stock_default: "Enabled — Windows compresses idle memory in RAM".into(),
-        matched_tweak: "\"Disable-MMAgent -mc\" — a guide-era \"cut CPU overhead\" tweak".into(),
+        matched_tweak: "\"Disable-MMAgent -mc\" — a guide-era \"cut CPU overhead\" tweak".into(), // mutation-boundary-allow: names the tweak we FOUND
         mechanism_cost:
             "Cold memory pages go to disk instead of being compressed in RAM — slower exactly when memory is tight."
                 .into(),
         verdict,
         uncertain_source: true,
         restore_note:
-            "Safe to restore (Enable-MMAgent); fully reversible; takes effect after a reboot.".into(),
+            "Safe to restore (Enable-MMAgent); fully reversible; takes effect after a reboot.".into(), // mutation-boundary-allow: tells the user the cmdlet; the restore runs through actions.rs
     })
 }
 
@@ -306,7 +306,7 @@ fn detect_bcdedit_timer_flags(probes: &Value) -> Outcome {
                 .into(),
         verdict: "These flags fight the scheduler Windows actually ships today — the guide that recommended them predates it.".into(),
         uncertain_source: true,
-        restore_note: "Removable with bcdedit /deletevalue (admin); fully reversible; takes effect after a reboot.".into(),
+        restore_note: "Removable with bcdedit /deletevalue (admin); fully reversible; takes effect after a reboot.".into(), // mutation-boundary-allow: names the command; the restore runs through actions.rs
     })
 }
 
