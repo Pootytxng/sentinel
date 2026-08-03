@@ -5,19 +5,24 @@ import { HOST, createConsoleServer, launcherCommand, verifyPlanSubscription } fr
 
 const openServers = new Set();
 
+// Every /api/ route is deny-by-default since 2026-08-02 (see server-auth-guard.test.mjs, which owns
+// that contract). These tests are about the routes' OWN behaviour, so they hold a known token and
+// present it by default; pass `token: null` to exercise a refusal.
+const TOKEN = "contract-test-token";
+
 afterEach(async () => {
   await Promise.all([...openServers].map((server) => new Promise((resolve) => server.close(resolve))));
   openServers.clear();
 });
 
 async function start(options = {}) {
-  const server = createConsoleServer(options);
+  const server = createConsoleServer({ token: TOKEN, ...options });
   openServers.add(server);
   await new Promise((resolve) => server.listen(0, HOST, resolve));
   return { server, port: server.address().port };
 }
 
-function request(port, { path = "/api/chat", method = "POST", origin, body = {} } = {}) {
+function request(port, { path = "/api/chat", method = "POST", origin, body = {}, token = TOKEN } = {}) {
   const payload = JSON.stringify(body);
   return new Promise((resolve, reject) => {
     const req = http.request({
@@ -29,6 +34,7 @@ function request(port, { path = "/api/chat", method = "POST", origin, body = {} 
         "content-type": "application/json",
         "content-length": Buffer.byteLength(payload),
         ...(origin === undefined ? {} : { origin }),
+        ...(token === null ? {} : { "x-compy-console-token": token }),
       },
     }, (res) => {
       let text = "";
