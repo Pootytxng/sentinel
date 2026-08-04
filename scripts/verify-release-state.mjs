@@ -49,6 +49,14 @@ export function validateOwnerDecisionVersions(section, latestVersion, candidateV
   return failures;
 }
 
+// Delimited 7-char lowercase-hex runs in a binary read as latin1 — the exact shape `build.rs` bakes in
+// (`git rev-parse --short HEAD` → `cargo:rustc-env=COMPY_GIT_HASH`), which lands in the executable's
+// rodata as a standalone ASCII token. "Delimited" is the whole trick: a longer hex run is a different
+// string that merely begins with hex, and must NOT yield a 7-char candidate out of its middle.
+export function embeddedStampTokens(text) {
+  return [...new Set(text.match(/(?<![0-9a-f])[0-9a-f]{7}(?![0-9a-f])/g) ?? [])];
+}
+
 const IS_MAIN =
   !!process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
 
@@ -255,6 +263,56 @@ if (!sourceCommit) {
     const lag = Number(gitOut(["rev-list", "--count", `${resolved}..${mainRef}`]));
     if (Number.isFinite(lag) && lag > MAX_ANCHOR_LAG)
       stateFail.push(`SOURCE-COMMIT-STALE: STATE:source_main_commit ${sourceCommit} trails ${mainRef} by ${lag} commits (max ${MAX_ANCHOR_LAG}) — re-stamp it to \`${gitOut(["rev-parse", "--short", mainRef])}\``);
+  }
+}
+
+// (7) owner_installed_stamp must equal the build stamp embedded in the binary actually installed on
+// this machine. Why this exists: the 2026-07-31 Q7 native-baseline recording found the anchor reading
+// `7ba5fb6` while the live window's own stamp read `294db4f` — and nothing failed, because every other
+// anchor here is verified against live source while this one described a binary on a desk rather than
+// a file in the tree. It was enforced by nothing while LOOKING enforced, which is worse than an absent
+// anchor. It then drifted the same way again: the 2026-08-03 local ship at `c7c60d3` re-stamped the
+// desk and left the anchor on the published `a1be896`. The stamp is READABLE offline, so this reads it
+// rather than guessing: scan the installed exe for delimited 7-hex tokens and keep the ones git
+// resolves to a commit, which lets a mismatch name the real value instead of merely rejecting the
+// claimed one. Skipped — never failed — whenever the answer is genuinely unknowable here: no installed
+// exe (CI, another machine), no/shallow git history, or a scan that is empty or ambiguous.
+const INSTALLED_EXE = process.env.LOCALAPPDATA
+  ? join(process.env.LOCALAPPDATA, "Compy", "compy.exe")
+  : null;
+// One `cat-file --batch-check` instead of N spawns. Output lines map 1:1 to input lines, and a resolved
+// object prints its full OID rather than the token it came from — so match by INDEX, never by text.
+const gitCommitsAmong = (tokens) => {
+  if (!tokens.length) return [];
+  try {
+    const lines = execFileSync("git", ["cat-file", "--batch-check"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      input: `${tokens.join("\n")}\n`,
+      stdio: ["pipe", "pipe", "ignore"],
+    }).split("\n");
+    return tokens.filter((_, i) => / commit \d+$/.test(lines[i] ?? ""));
+  } catch {
+    return [];
+  }
+};
+const installedStamp = anchor("owner_installed_stamp");
+if (!installedStamp) {
+  stateFail.push("STATE:owner_installed_stamp anchor missing from CURRENT STATE");
+} else if (!INSTALLED_EXE || !existsSync(INSTALLED_EXE)) {
+  console.log("STATE-SKIP       owner_installed_stamp: no installed compy.exe on this machine — anchor left unverified");
+} else if (gitOut(["rev-parse", "--git-dir"]) === null || gitOut(["rev-parse", "--is-shallow-repository"]) === "true") {
+  console.log("STATE-SKIP       owner_installed_stamp: no full git history to resolve an embedded stamp — anchor left unverified");
+} else {
+  let tokens = null;
+  try { tokens = embeddedStampTokens(readFileSync(INSTALLED_EXE).toString("latin1")); } catch { /* unreadable → skip */ }
+  const stamps = tokens === null ? [] : gitCommitsAmong(tokens);
+  if (tokens === null) {
+    console.log("STATE-SKIP       owner_installed_stamp: installed compy.exe is not readable here — anchor left unverified");
+  } else if (stamps.length !== 1) {
+    console.log(`STATE-SKIP       owner_installed_stamp: ${stamps.length} of ${tokens.length} embedded tokens resolve to a commit (need exactly 1) — anchor left unverified`);
+  } else if (stamps[0] !== installedStamp) {
+    stateFail.push(`INSTALLED-STAMP-DRIFT: STATE:owner_installed_stamp ${installedStamp} != the stamp embedded in the installed compy.exe (${stamps[0]}) — the build on the owner's desk is not the one CURRENT STATE names; re-stamp it to \`${stamps[0]}\` (and reconcile the owner-installed row with it)`);
   }
 }
 

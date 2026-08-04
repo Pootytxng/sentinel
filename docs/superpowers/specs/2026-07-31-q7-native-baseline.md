@@ -35,6 +35,26 @@ Two things follow, and they are separate:
 Not an incident: the owner installed #14's candidate deliberately, to review it. The defect is that
 the state document was never told.
 
+### RESOLVED 2026-08-04 — and it recurred first, which is the point
+
+Item 1 was done at the time; item 2 was not, so the class stayed live and **drifted again**: the
+2026-08-03 local ship at `c7c60d3` replaced the installed build while the anchor stayed on the
+published `a1be896`, and once more nothing failed. Both are fixed now, in the order the finding
+asked for:
+
+- **Item 2 (the real fix):** `scripts/verify-release-state.mjs` check (7) reads `%LOCALAPPDATA%\Compy\compy.exe`,
+  extracts every delimited 7-hex token, keeps the ones git resolves to a commit, and fails
+  `INSTALLED-STAMP-DRIFT` when the surviving stamp disagrees with the anchor. It *discovers* the
+  value rather than testing the claimed one, so the failure names the correct commit. It SKIPs —
+  never fails — with no installed exe, no/shallow git history, an unreadable binary, or a scan that
+  is empty or ambiguous, so a CI clone cannot manufacture a phantom failure.
+  `scripts/verify-release-state-guard.test.mjs` pins the extraction rule (a longer hex run must not
+  yield a 7-char candidate out of its middle).
+- **Item 1:** the anchor now reads `c7c60d3`, and the owner-installed row states plainly that the
+  desk is ahead of the fleet instead of claiming it runs the published artifact.
+- Proven behaviourally, not by assertion: with the stale `a1be896` still in the file the gate exited
+  1 with `INSTALLED-STAMP-DRIFT … re-stamp it to \`c7c60d3\``; after the correction it exits 0.
+
 ## Performance — recorded
 
 Compy `294db4f`, single process, pid 13208, up since 2026-07-30. The window was opened and navigated
