@@ -72,7 +72,11 @@ bottom expandable rows read like footer legalese.
    (`buildSetupSteps` injects the mode's rail line into `steps[0]`/`setup-rig` — `setup-steps.ts`;
    three guards in `setup-steps.test.ts`, incl. a byte-identical pin for the classic six-room
    escape hatch); make each room's first screen answer "what do I do here" above the fold;
-   give the quiet bottom rows real affordance weight.
+   ~~give the quiet bottom rows real affordance weight~~ ✅ **SHIPPED 2026-08-04** (`7e55830`) —
+   `.v2-quiet` was set in `--v2-faint`, the ink reserved for machine metadata, so the expander read
+   fainter than the forward door the P6 law calls "a doorknob, not a CTA"; now door-parity
+   `--v2-muted` ink + a NEUTRAL hover lift (never the door's accent) + one rotating caret.
+   `quiet-affordance-guard.test.ts` pins the parity and the non-accent hover.
 4. ~~**Already in flight elsewhere (do NOT duplicate):** an uncommitted CC-lane train (observed
    2026-07-22, `FirstCheck.tsx` + `guided.ts`)…~~ ✅ **LANDED 2026-07-23 (`46c4cd7`)** — that lane
    committed, so nothing is in flight and no reconciliation is owed. It shipped J's "show me the
@@ -98,10 +102,19 @@ same commit; see finding 4.)
 (c) Blessed-face pruning — **delegated same message.** Direction: the newest shipped face per room
 (the ones the owner has eyeballed and testers now use) is the bless candidate; the pass itself is
 a CC-lane refactor train with full-suite verification, queued behind (b). **Blocker cleared
-2026-08-04** — (b) shipped, so (c) is unblocked. Next step is an inventory + disposition doc, NOT an
-unattended deletion sweep: a face is only safe to delete once its flag is *graduated* (DEFAULT-ON,
+2026-08-04** — (b) shipped, so (c) is unblocked. First step was an inventory + disposition doc, NOT
+an unattended deletion sweep: a face is only safe to delete once its flag is *graduated* (DEFAULT-ON,
 nothing routes to the old branch). `LabGround`/`compy_lab_ground` is explicitly EXCLUDED — the Lab
 overhaul is still in flight (BACKLOG Q0 `[~]`), and deleting a face mid-build is not pruning.
+**✅ Inventory delivered 2026-08-04 → `docs/UI_FACE_INVENTORY.md`** — it deletes nothing; it is the
+evidence a deletion would need. Headline correction to finding 2: the "parallel generations" are
+mostly *nested chains*, not rivals (each newer shell imports the older surface as its renderer), so
+Home, Monitor, Blackbook and the Lab each already have exactly one blessed shell. Only **Optimize**
+has real rivals — three shells over the same `Check` + `Fix` parts — and its convergence belongs to
+the Lab overhaul, not a cleanup sweep. Net actionable: one archivable pair (`CompyHero`), one
+deletable file (`Optimize.tsx`, better folded into retiring the whole `Optimize` tab), two dead JSX
+mount sites, and **one owner fork: `GpuProfile.tsx`** (346 lines, fully tested, zero non-test
+importers — wire it in as advisory, or archive it).
 
 **Execution lane:** direction + audit = this file; the redesign build itself = CC/Fable lane per
 the owner's standing preference (Cowork steers + audits, doesn't blueprint final creative).

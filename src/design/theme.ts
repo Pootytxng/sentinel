@@ -291,10 +291,10 @@ export function applyLabGround(on: boolean): void {
 
 // Setup & Tour stepper progress (React Bits Stepper, round-2 sourcing pass) — the tour's
 // footer progress row as numbered step indicators with animated connectors + check marks,
-// replacing the anonymous ticks. DEFAULT OFF behind `compy_setup_stepper` (Settings →
-// Appearance preview toggle, P-series contract): flag off, today's Setup & Tour renders
-// byte-identical (test-pinned). Presentation only — steps, content, and navigation are
-// untouched.
+// replacing the anonymous ticks. Shipped DEFAULT OFF, GRADUATED to DEFAULT ON 2026-07-06
+// (`96febda`; see readSetupStepper below — the read is the truth); `compy_setup_stepper` survives
+// as the P-series failsafe: an explicit "0" renders today's Setup & Tour byte-identical (test-pinned).
+// Presentation only — steps, content, and navigation are untouched.
 const SETUP_STEPPER_KEY = "compy_setup_stepper";
 
 export function readSetupStepper(): boolean {
@@ -878,7 +878,9 @@ export function applyJarvisMotion(on: boolean): void {
 
 // Dashboard v2 (owner "evolve toward the ui-spec" 2026-06-15) — the premium telemetry-dashboard
 // prototype (health hero + monospace metric cards + gradient area charts), Compy's identity + data.
-// DEFAULT OFF behind `compy_dash_v2`; toggled for review. Evolves the existing app — nothing scrapped.
+// Shipped DEFAULT OFF for review, GRADUATED to DEFAULT ON 2026-06-16 (`c98adb3`; see readDashV2
+// below — the read is the truth); `compy_dash_v2` survives as the reversibility failsafe. Evolves
+// the existing app — nothing scrapped.
 const DASH_V2_KEY = "compy_dash_v2";
 
 export function readDashV2(): boolean {
