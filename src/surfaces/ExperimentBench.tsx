@@ -14,6 +14,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary } from "../types";
 import { LEDGER_CHANGED_EVENT } from "../types";
 import { prettyGameName } from "./game-name";
+import { SectionLabel, VerdictBand, simulationTone } from "./measurement-chrome";
 import "./ExperimentBench.css";
 
 type ExperimentStatus = "running" | "kept" | "restored" | "aborted";
@@ -404,7 +405,7 @@ export default function ExperimentBench() {
             <div className="exp-sim" data-verdict={sim.verdict}>
               <p className="exp-sim-rec">{sim.rec_title}</p>
               <div className="exp-sim-head">
-                <span className="exp-sim-verdict">{simMeta.label}</span>
+                <VerdictBand tone={simulationTone(sim.verdict)}>{simMeta.label}</VerdictBand>
                 <span className="exp-sim-conf">{confidenceCopy(t)[sim.confidence]}</span>
               </div>
               <p className="exp-sim-why">{sim.why}</p>
@@ -470,7 +471,7 @@ export default function ExperimentBench() {
 
       {history.length > 0 && (
         <div className="exp-history">
-          <div className="exp-history-label">{t("lab.experimentBench.pastExperiments")}</div>
+          <SectionLabel>{t("lab.experimentBench.pastExperiments")}</SectionLabel>
           <ul className="exp-bench-list">
             {history.map((x) => (
               <li key={x.id} className="exp-bench-row" data-status={x.status}>

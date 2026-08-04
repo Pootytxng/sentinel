@@ -1,0 +1,41 @@
+/* Measurement chrome — geometry + typography for the shared verdict vocabulary, declared ONCE.
+   Colour comes from --mc-* custom properties that each room declares on its own scope root (.wcp,
+   .exp-bench); this file names no palette token of its own, which is what lets one vocabulary live
+   in two rooms with two token families without either room losing its identity.
+   Sizes sit on Direction D's type floors (mono >= 12px, human-language >= 13px) — the shipped
+   surfaces were below both, at 10.5/11.5px. measurement-chrome-guard.test.ts pins the floors so a
+   later edit cannot quietly shrink them back. */
+
+.mc-eyebrow {
+  display: block;
+  font-family: var(--mc-mono, ui-monospace, monospace);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  line-height: 1.35;
+  text-transform: uppercase;
+  color: var(--mc-eyebrow-ink, var(--mc-neutral));
+  margin-bottom: 6px;
+}
+
+/* The verdict word. State reads through the label's colour — the house idiom (coloured marks, not
+   side stripes). A host card may still carry its own border/wash; that is the CARD's business. */
+.mc-verdict {
+  display: block;
+  font-size: 13px;
+  font-weight: 620;
+  line-height: 1.4;
+  color: var(--mc-ink);
+}
+.mc-verdict[data-tone="good"] {
+  color: var(--mc-good);
+}
+.mc-verdict[data-tone="caution"] {
+  color: var(--mc-caution);
+}
+.mc-verdict[data-tone="bad"] {
+  color: var(--mc-bad);
+}
+.mc-verdict[data-tone="neutral"] {
+  color: var(--mc-neutral);
+}

@@ -7,6 +7,22 @@
   margin-top: 18px;
   padding-top: 18px;
   border-top: 1px solid var(--ix-line);
+
+  /* Palette inputs for the shared measurement chrome (src/surfaces/measurement-chrome.css) —
+     the same vocabulary Monitor's "What changed?" panel wears, in the Lab's --ix-* token family.
+     Declared HERE, same-element on the room root, never at :root: a var() chain inside a custom
+     property substitutes at its DECLARING element, so a hoisted --mc-good could not follow the
+     Lab's tokens. measurement-chrome-guard.test.ts pins this. */
+  --mc-mono: var(--ix-mono, ui-monospace, monospace);
+  --mc-ink: var(--ix-text-1);
+  --mc-eyebrow-ink: var(--ix-text-3);
+  --mc-good: var(--ix-good, var(--ix-accent));
+  --mc-caution: var(--ix-accent-text, var(--ix-accent));
+  --mc-bad: var(--ix-danger);
+  /* Secondary ink, not tertiary: four of the simulator's seven verdicts are honest non-answers
+     ("already configured", "not applicable", "insufficient evidence", "unlikely to matter") and
+     they land here. They should read quieter than a coloured verdict but still be a headline. */
+  --mc-neutral: var(--ix-text-2);
 }
 .exp-bench-title {
   margin: 0 0 6px;
@@ -103,21 +119,10 @@
   justify-content: space-between;
   gap: 12px;
 }
-/* Verdict state reads through the label color (house idiom — colored marks, not side stripes). */
-.exp-sim-verdict {
-  font-size: 13.5px;
-  font-weight: 650;
-  color: var(--ix-text-1);
-}
-.exp-sim[data-verdict="worth-testing"] .exp-sim-verdict {
-  color: var(--ix-good, var(--ix-accent));
-}
-.exp-sim[data-verdict="plausible-unproven"] .exp-sim-verdict {
-  color: var(--ix-accent-text, var(--ix-accent));
-}
-.exp-sim[data-verdict="risk-exceeds-value"] .exp-sim-verdict {
-  color: var(--ix-danger);
-}
+/* Verdict state reads through the label color (house idiom — colored marks, not side stripes).
+   The word is now the shared <VerdictBand> (.mc-verdict); its type and its four tone colours live
+   in measurement-chrome.css, fed by the --mc-* block on .exp-bench above. The data-verdict
+   attribute stays on .exp-sim as the card's own state hook. */
 .exp-sim-conf {
   font-family: var(--ix-mono, ui-monospace, monospace);
   font-size: 11px;
@@ -275,11 +280,9 @@
 .exp-history {
   margin-top: 16px;
 }
-.exp-history-label {
-  font-size: 11.5px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--ix-text-3);
+/* "PAST EXPERIMENTS" is the shared <SectionLabel> (.mc-eyebrow) — typography lives once, in
+   measurement-chrome.css. Only the spacing this room wants is left. */
+.exp-history .mc-eyebrow {
   margin-bottom: 7px;
 }
 .exp-bench-list {
@@ -314,8 +317,10 @@
   color: var(--ix-text-2);
   white-space: nowrap;
 }
+/* A history ROW cell, not a headline verdict — it keeps the row's compact type and borrows only
+   the shared GOOD tone, so the two rooms agree on what "good" is coloured. */
 .exp-bench-row[data-status="kept"] .exp-bench-verdict {
-  color: var(--ix-good, var(--ix-accent));
+  color: var(--mc-good);
 }
 .exp-bench-delta {
   font-family: var(--ix-mono, ui-monospace, monospace);

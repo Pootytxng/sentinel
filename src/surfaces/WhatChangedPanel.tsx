@@ -15,6 +15,7 @@ import type {
 } from "../types";
 import { useIntelligenceFlag } from "../design/use-hud";
 import { useExpertView } from "../design/use-expert-view";
+import { SectionLabel, VerdictBand, COMPARABILITY_TONE } from "./measurement-chrome";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../i18n";
@@ -166,7 +167,7 @@ function EvidenceGraphBlock({ graph }: { graph: EvidenceGraph }) {
   const labelFor = (id: string) => byId.get(id)?.label ?? id;
   return (
     <div className="wcp-graph">
-      <span className="wcp-section-label">{t("optimize.whatChangedPanel.evidenceGraph")}</span>
+      <SectionLabel>{t("optimize.whatChangedPanel.evidenceGraph")}</SectionLabel>
       <p className="wcp-graph-note">{t("optimize.whatChangedPanel.evidenceGraphNote")}</p>
       <ul className="wcp-graph-nodes">
         {graph.nodes.map((n) => (
@@ -233,7 +234,9 @@ function ComparabilityBanner({ c }: { c: SessionComparability }) {
   const why = [...c.reasons, ...c.missing_context];
   return (
     <div className={`wcp-compare wcp-compare-${c.verdict}`}>
-      <span className="wcp-compare-band">{comparabilityLabel(c.verdict, t)}</span>
+      <VerdictBand tone={COMPARABILITY_TONE[c.verdict]}>
+        {comparabilityLabel(c.verdict, t)}
+      </VerdictBand>
       {why.length > 0 && (
         <ul className="wcp-compare-why">
           {why.map((line, i) => (
@@ -254,7 +257,7 @@ function ComparabilityDetail({ c, expert }: { c: SessionComparability; expert: b
   if (c.changed_context.length === 0 && c.shared_metrics.length === 0 && !expert) return null;
   return (
     <div className="wcp-compare-detail">
-      <span className="wcp-section-label">{t("optimize.whatChangedPanel.howComparable")}</span>
+      <SectionLabel>{t("optimize.whatChangedPanel.howComparable")}</SectionLabel>
       {c.changed_context.length > 0 && (
         <div className="wcp-compare-row">
           <span className="wcp-compare-key">{t("optimize.whatChangedPanel.whatDiffered")}</span>
@@ -340,16 +343,14 @@ function WhatChangedReportView({
 
       {showLeader && (
         <>
-          <div className="wcp-section-label">
-            {t("optimize.whatChangedPanel.mostLikelyCause")}
-          </div>
+          <SectionLabel>{t("optimize.whatChangedPanel.mostLikelyCause")}</SectionLabel>
           <HypothesisBlock h={leader} lead />
         </>
       )}
 
       {r.next_action && (
         <p className="wcp-next">
-          <span className="wcp-section-label">{t("optimize.whatChangedPanel.nextTest")}</span>{" "}
+          <SectionLabel>{t("optimize.whatChangedPanel.nextTest")}</SectionLabel>{" "}
           {r.next_action}
         </p>
       )}
@@ -401,9 +402,7 @@ function WhatChangedReportView({
           )}
 
           <div className="wcp-between">
-            <span className="wcp-section-label">
-              {t("optimize.whatChangedPanel.betweenTheseSessions")}
-            </span>
+            <SectionLabel>{t("optimize.whatChangedPanel.betweenTheseSessions")}</SectionLabel>
             {r.events_between.length === 0 ? (
               <p className="wcp-between-none">
                 {t("optimize.whatChangedPanel.nothingRecordedBetween")}
@@ -426,7 +425,7 @@ function WhatChangedReportView({
 
           {others.length > 0 && (
             <div className="wcp-others">
-              <span className="wcp-section-label">{t("optimize.whatChangedPanel.alsoPossible")}</span>
+              <SectionLabel>{t("optimize.whatChangedPanel.alsoPossible")}</SectionLabel>
               {others.map((h) => (
                 <HypothesisBlock h={h} key={h.id} lead={false} />
               ))}
@@ -435,9 +434,7 @@ function WhatChangedReportView({
 
           {r.unknowns.length > 0 && (
             <div className="wcp-unknowns">
-              <span className="wcp-section-label">
-                {t("optimize.whatChangedPanel.whatCompyCantKnow")}
-              </span>
+              <SectionLabel>{t("optimize.whatChangedPanel.whatCompyCantKnow")}</SectionLabel>
               <ul>
                 {r.unknowns.map((u) => (
                   <li key={u}>{u}</li>
@@ -448,7 +445,7 @@ function WhatChangedReportView({
 
           {expert && r.ruled_out.length > 0 && (
             <div className="wcp-ruled-out">
-              <span className="wcp-section-label">{t("optimize.whatChangedPanel.ruledOut")}</span>
+              <SectionLabel>{t("optimize.whatChangedPanel.ruledOut")}</SectionLabel>
               {r.ruled_out.map((h) => (
                 <HypothesisBlock h={h} key={h.id} lead={false} />
               ))}

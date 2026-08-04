@@ -3186,6 +3186,18 @@ body::before {
   background: var(--panel-2);
   padding: 14px 16px;
   margin-bottom: 14px;
+
+  /* Palette inputs for the shared measurement chrome (src/surfaces/measurement-chrome.css).
+     Declared HERE, same-element on the room root — never at :root. A var() chain inside a custom
+     property substitutes using the scope at its DECLARING element, so a :root-level --mc-good
+     could not follow a per-room override. measurement-chrome-guard.test.ts pins this. */
+  --mc-mono: var(--font-mono);
+  --mc-ink: var(--fg-2, var(--fg));
+  --mc-eyebrow-ink: var(--muted);
+  --mc-good: var(--ready, #46d98a);
+  --mc-caution: var(--attention, #f5b740);
+  --mc-bad: var(--danger, #f3716f);
+  --mc-neutral: var(--muted);
 }
 .wcp-no-change,
 .wcp-inconclusive { border-color: var(--border-strong, var(--border)); } /* honest non-answer — neutral */
@@ -3234,15 +3246,8 @@ body::before {
   line-height: 1.5;
   margin: 0 0 10px;
 }
-.wcp-section-label {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.07em;
-  color: var(--muted);
-  text-transform: uppercase;
-  margin-bottom: 4px;
-}
+/* Section eyebrows moved to the shared <SectionLabel> (.mc-eyebrow) — the vocabulary Monitor and
+   the Lab now share. Nothing left to declare here. */
 .wcp-hypo { margin-bottom: 10px; }
 .wcp-hypo-head {
   display: flex;
@@ -3273,7 +3278,7 @@ body::before {
   color: var(--fg-2, var(--fg));
   margin: 0 0 10px;
 }
-.wcp-next .wcp-section-label { display: inline; margin-right: 6px; }
+.wcp-next .mc-eyebrow { display: inline; margin-right: 6px; margin-bottom: 0; }
 .wcp-detail-toggle {
   width: 100%;
   display: flex;
@@ -3358,13 +3363,9 @@ body::before {
   margin: 0 0 10px;
   background: color-mix(in srgb, var(--panel-2) 40%, transparent);
 }
-.wcp-compare-band {
-  display: block;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--fg-2, var(--fg));
-  line-height: 1.4;
-}
+/* The verdict word itself is the shared <VerdictBand> (.mc-verdict) — its type and its four tone
+   colours live in measurement-chrome.css, fed by the --mc-* block on .wcp above. The CARD's border
+   + wash below stay here: they are this panel's own instrument face, not shared vocabulary. */
 .wcp-compare-why {
   margin: 3px 0 0;
   padding-left: 16px;
@@ -3380,18 +3381,14 @@ body::before {
   border-color: color-mix(in srgb, var(--ready, #46d98a) 34%, var(--border));
   background: color-mix(in srgb, var(--ready, #46d98a) 8%, transparent);
 }
-.wcp-compare-comparable .wcp-compare-band { color: var(--ready, #46d98a); }
 .wcp-compare-partial {
   border-color: color-mix(in srgb, var(--attention, #f5b740) 36%, var(--border));
   background: color-mix(in srgb, var(--attention, #f5b740) 9%, transparent);
 }
-.wcp-compare-partial .wcp-compare-band { color: var(--attention, #f5b740); }
 .wcp-compare-not-comparable {
   border-color: color-mix(in srgb, var(--danger, #f3716f) 36%, var(--border));
   background: color-mix(in srgb, var(--danger, #f3716f) 8%, transparent);
 }
-.wcp-compare-not-comparable .wcp-compare-band { color: var(--danger, #f3716f); }
-.wcp-compare-unknown .wcp-compare-band { color: var(--muted); }
 /* The finer comparability specifics, inside the working — terse before→after values + the shared
    metric axes + (Expert) the confidence ceiling. Mono, to read as records, not prose. */
 .wcp-compare-detail {
