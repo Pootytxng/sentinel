@@ -630,6 +630,24 @@
 :root[data-v2="on"] .hc-intake-fast-btn {
   flex: none;
 }
+/* J (2026-07-22): the skipped-tweak disclosure under the fast-path receipt. Subordinate to the
+   receipt line by design - it answers "which one?" on demand without competing with the verdict. */
+:root[data-v2="on"] .hc-intake-fast-skipped {
+  font-size: 12.5px;
+  color: var(--ix-text-3);
+  width: 100%;
+}
+:root[data-v2="on"] .hc-intake-fast-skipped-summary {
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+:root[data-v2="on"] .hc-intake-fast-skipped-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 3px;
+}
 :root[data-v2="on"] .hc-intake-fast-undo {
   flex: none;
   font-size: 11px;

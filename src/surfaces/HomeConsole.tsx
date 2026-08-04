@@ -275,6 +275,10 @@ export function HomeConsole({
   const [fastPathReceipt, setFastPathReceipt] = useState<{
     applied: number;
     skipped: number;
+    // J (2026-07-22): the receipt used to keep only the COUNT, which is why "1 safe tweak not
+    // applied" was a dead end - the batch already returns title+reason per skip and it was thrown
+    // away one line after arriving. Retained so the verdict can name WHICH and WHY.
+    skippedItems: { title: string; reason: string }[];
   } | null>(null);
 
   // Cursor-follow accent spotlight on the stage — a border-masked glow that tracks the pointer
@@ -536,7 +540,11 @@ export function HomeConsole({
     setFastPathBusy(true);
     try {
       const res = await onApplyBatch(eligibleStack.map((r) => r.id));
-      setFastPathReceipt({ applied: res.applied, skipped: res.skipped.length });
+      setFastPathReceipt({
+        applied: res.applied,
+        skipped: res.skipped.length,
+        skippedItems: res.skipped,
+      });
     } finally {
       setFastPathBusy(false);
     }
@@ -584,9 +592,33 @@ export function HomeConsole({
               <div className="hc-intake-fast">
                 <span className="hc-intake-fast-symptom">{fastpath.symptom}</span>
                 {fastPathReceipt ? (
-                  <span className="hc-intake-fast-line">
-                    {fastPathAppliedNote(fastPathReceipt.applied, fastPathReceipt.skipped, t)}
-                  </span>
+                  <>
+                    <span className="hc-intake-fast-line">
+                      {fastPathAppliedNote(fastPathReceipt.applied, fastPathReceipt.skipped, t)}
+                    </span>
+                    {/* J (2026-07-22): "1 safe tweak not applied" named a count and nothing else,
+                        so the verdict was a dead end. The reason comes from the batch primitive -
+                        never synthesised here, so a skip can only ever say what actually happened. */}
+                    {fastPathReceipt.skippedItems.length > 0 && (
+                      <details className="hc-intake-fast-skipped">
+                        <summary className="hc-intake-fast-skipped-summary">
+                          {t("home.homeConsole.intake.fastpath.skippedDisclosure", {
+                            count: fastPathReceipt.skippedItems.length,
+                          })}
+                        </summary>
+                        <ul className="hc-intake-fast-skipped-list">
+                          {fastPathReceipt.skippedItems.map((item) => (
+                            <li key={item.title}>
+                              {t("home.homeConsole.intake.fastpath.skippedItemReason", {
+                                title: item.title,
+                                reason: item.reason,
+                              })}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </>
                 ) : recs === null ? (
                   <span className="hc-intake-fast-line hc-mono">{fastpath.loading}</span>
                 ) : stackReady === 0 ? (

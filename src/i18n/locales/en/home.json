@@ -43,7 +43,10 @@
         "appliedAllReversible": "{{appliedPart}} — all reversible from Applied.",
         "skippedPart_one": "{{count}} was skipped",
         "skippedPart_other": "{{count}} were skipped",
-        "appliedWithSkipped": "{{appliedPart}} · {{skippedPart}} — all reversible from Applied."
+        "appliedWithSkipped": "{{appliedPart}} · {{skippedPart}} — all reversible from Applied.",
+        "skippedDisclosure_one": "See the one that was skipped",
+        "skippedDisclosure_other": "See the {{count}} that were skipped",
+        "skippedItemReason": "{{title}} — {{reason}}"
       }
     },
     "callout": {

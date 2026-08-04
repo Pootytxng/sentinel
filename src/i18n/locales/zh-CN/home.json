@@ -39,7 +39,10 @@
         "appliedPart_other": "已应用 {{count}} 项安全优化",
         "appliedAllReversible": "{{appliedPart}}——可在「已应用」中全部回滚。",
         "skippedPart_other": "{{count}} 项被跳过",
-        "appliedWithSkipped": "{{appliedPart}} · {{skippedPart}}——可在「已应用」中全部回滚。"
+        "appliedWithSkipped": "{{appliedPart}} · {{skippedPart}}——可在「已应用」中全部回滚。",
+        "skippedDisclosure_one": "查看被跳过的 1 项",
+        "skippedDisclosure_other": "查看被跳过的 {{count}} 项",
+        "skippedItemReason": "{{title}}——{{reason}}"
       }
     },
     "callout": {
