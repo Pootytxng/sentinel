@@ -61,7 +61,7 @@
   border: 1px solid var(--ix-glass-border, var(--border-strong));
   border-top-color: var(--ix-glass-top, var(--ix-glass-border, var(--border-strong)));
   border-radius: var(--ix-radius, 12px);
-  background: var(--ix-glass-fill, var(--surface, transparent));
+  background: var(--ix-glass-fill);
 }
 :root[data-v2="on"] .gc-panel-title {
   display: flex;

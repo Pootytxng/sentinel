@@ -31,7 +31,7 @@
 }
 .fct-frame:focus-visible {
   box-shadow: 0 0 0 1px var(--accent-line);
-  border-radius: var(--r-md, 10px);
+  border-radius: var(--r);
 }
 
 /* HUD corner brackets — draw on once when the theater mounts. */

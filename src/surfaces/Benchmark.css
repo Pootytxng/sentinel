@@ -184,7 +184,7 @@
   flex: 1;
   min-width: 200px;
   font-size: 0.88rem;
-  color: var(--ix-text-1, var(--text-1));
+  color: var(--ix-text-1);
 }
 
 .bench-note {

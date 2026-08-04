@@ -142,13 +142,13 @@ html, body, #root {
   border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--ix-text-2, var(--text-2, #9aa4b2));
+  color: var(--ix-text-2);
   cursor: pointer;
   transition: background 140ms ease, color 140ms ease, border-color 140ms ease, opacity 140ms ease;
 }
 .back-btn:hover:not(:disabled) {
   background: var(--ix-glass-fill, rgba(255, 255, 255, 0.05));
-  color: var(--ix-text-1, var(--text-1, #e8edf4));
+  color: var(--ix-text-1);
   border-color: var(--ix-glass-border, var(--hairline, rgba(255, 255, 255, 0.1)));
 }
 .back-btn:disabled {
@@ -342,7 +342,7 @@ html, body, #root {
   color: var(--ix-accent-text, var(--accent, #2ee6c0));
 }
 .hw-tier-mid .hw-tier-value {
-  color: var(--ix-text-1, var(--text));
+  color: var(--ix-text-1);
 }
 .hw-tier-entry .hw-tier-value {
   color: var(--ix-text-2, var(--muted));
@@ -1776,7 +1776,7 @@ html, body, #root {
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
-  color: var(--text, #e8eaf0);
+  color: var(--fg);
   font-family: inherit;
   font-size: 12.5px;
 }
@@ -2994,7 +2994,7 @@ body::before {
 .debrief-tile {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: var(--r-md, 10px);
+  border-radius: var(--r);
   padding: 12px;
   text-align: center;
 }
@@ -3013,7 +3013,7 @@ body::before {
 .debrief-insight {
   border: 1px solid var(--attention, #f5c451);
   background: rgba(245, 196, 81, 0.07);
-  border-radius: var(--r-md, 10px);
+  border-radius: var(--r);
   padding: 12px 14px;
   margin-bottom: 14px;
 }
@@ -3077,7 +3077,7 @@ body::before {
 /* ── Moments 4/4b — comparison verdict card ──────────────────────────────── */
 .cmp {
   border: 1px solid var(--border-strong, var(--border));
-  border-radius: var(--r-md, 10px);
+  border-radius: var(--r);
   background: var(--panel-2);
   padding: 14px 16px;
   margin-bottom: 14px;
@@ -3182,7 +3182,7 @@ body::before {
 /* ── What changed? panel (Intelligence Phase 1) — same instrument face as .cmp ─── */
 .wcp {
   border: 1px solid var(--border-strong, var(--border));
-  border-radius: var(--r-md, 10px);
+  border-radius: var(--r);
   background: var(--panel-2);
   padding: 14px 16px;
   margin-bottom: 14px;
@@ -3205,7 +3205,7 @@ body::before {
 .wcp-regressed { border-color: color-mix(in srgb, var(--danger, #f3716f) 38%, var(--border-strong, var(--border))); }
 .wcp-unavailable {
   border: 1px dashed var(--border);
-  border-radius: var(--r-md, 10px);
+  border-radius: var(--r);
   padding: 10px 14px;
   margin-bottom: 14px;
   color: var(--muted);
@@ -3517,7 +3517,7 @@ body::before {
   flex-direction: column;
   gap: 10px;
   border: 1px solid var(--border-strong, var(--border));
-  border-radius: var(--r-md, 10px);
+  border-radius: var(--r);
   background: var(--panel-2);
   padding: 14px 16px;
   margin-bottom: 14px;
@@ -3656,7 +3656,7 @@ body::before {
 .drift-watch {
   border: 1px solid var(--status-attention-line, rgba(245, 183, 64, 0.32));
   background: var(--status-attention-soft, rgba(245, 183, 64, 0.1));
-  border-radius: var(--r-md, 10px);
+  border-radius: var(--r);
   padding: 12px 14px;
   margin-bottom: 14px;
 }

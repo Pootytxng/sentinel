@@ -9,7 +9,7 @@
   padding: clamp(20px, 4vh, 56px);
   overflow: auto;
   color: var(--ix-text-1, #eef1f7);
-  font-family: var(--font-sans, system-ui, sans-serif);
+  font-family: var(--font-ui);
   background:
     radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--ix-accent) 9%, transparent), transparent 60%),
     var(--ix-base, #0a0c11);

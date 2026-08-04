@@ -168,7 +168,7 @@
 /* Step 2 — demo apply/undo card (VISUAL ONLY). */
 .onb-demo {
   border: 1px solid var(--border-strong, var(--border));
-  border-radius: var(--r-md, 10px);
+  border-radius: var(--r);
   background: var(--panel-2);
   padding: 12px 14px;
   margin: 2px 0 14px;
@@ -212,7 +212,7 @@
   padding: 9px 12px;
   background: var(--panel-2);
   border: 1px solid var(--border);
-  border-radius: var(--r-md, 10px);
+  border-radius: var(--r);
 }
 .onb-rule-icon { color: var(--accent-bright, var(--accent)); flex-shrink: 0; }
 .onb-kicker strong { color: var(--accent-bright, var(--accent)); }

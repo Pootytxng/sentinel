@@ -142,7 +142,7 @@
   border-color: var(--status-ready-line, var(--border-strong));
   background:
     linear-gradient(180deg, var(--status-ready-soft, transparent), transparent 60%),
-    var(--surface, transparent);
+    var(--panel);
 }
 .gaming-restored .gaming-card-head {
   color: var(--status-ready);
@@ -178,7 +178,7 @@
 .gaming-modal {
   max-width: 460px;
   width: calc(100% - 48px);
-  background: var(--surface, #14161a);
+  background: var(--panel);
   border: 1px solid var(--border-strong);
   border-radius: 12px;
   padding: 22px 24px;

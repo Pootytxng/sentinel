@@ -201,7 +201,7 @@
 /* #1 limiter spotlight (teal-edged) */
 .fc-spotlight {
   border: 1px solid var(--ready, #46d98a);
-  border-radius: var(--r-md, 10px);
+  border-radius: var(--r);
   background: rgba(70, 217, 138, 0.06);
   padding: 16px 18px;
   margin-bottom: 14px;
@@ -275,7 +275,7 @@
   padding: 10px 12px;
   background: var(--panel-2);
   border: 1px solid var(--border);
-  border-radius: var(--r-md, 10px);
+  border-radius: var(--r);
   font: inherit;
   font-size: 13.5px;
   text-align: left;
@@ -311,7 +311,7 @@
   padding: 10px 12px 12px;
   border: 1px solid var(--border);
   border-top: none;
-  border-radius: 0 0 var(--r-md, 10px) var(--r-md, 10px);
+  border-radius: 0 0 var(--r) var(--r);
   margin-top: -1px;
 }
 .fc-rest-reason {
@@ -333,7 +333,7 @@
   gap: 12px;
   background: transparent;
   border: 1px dashed var(--border);
-  border-radius: var(--r-md, 10px);
+  border-radius: var(--r);
   padding: 10px 12px;
   color: var(--ready, #46d98a);
   font-size: 12.5px;
