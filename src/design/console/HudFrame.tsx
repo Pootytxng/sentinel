@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useDocumentVisible } from "../../data/use-document-visible";
 import "./hud-frame.css";
 
 // App-wide viewport HUD frame (compy_hud_frame, console-HUD direction §viewport frame,
@@ -16,10 +17,16 @@ function clockNow(): string {
 
 export function HudFrame({ rig }: { rig: string | null }) {
   const [clock, setClock] = useState(clockNow);
+  // Q7 idle-cost: this is app-wide chrome, so its 1Hz tick is the one timer that runs in EVERY room.
+  // Stand it down while the window is hidden — nobody can read a clock they can't see — and re-read
+  // the time on the way back in, so the first frame after returning shows now, not the frozen value.
+  const visible = useDocumentVisible();
   useEffect(() => {
+    if (!visible) return;
+    setClock(clockNow());
     const id = window.setInterval(() => setClock(clockNow()), 1000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [visible]);
 
   const segments = [rig, clock].filter(Boolean);
 

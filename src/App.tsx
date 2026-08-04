@@ -60,6 +60,7 @@ import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { readOptimizeMerged, readMonitorMerged } from "./data/nav-flags";
 import { lsGet, lsSet } from "./data/safe-storage";
 import { invalidateProbe } from "./data/probe-cache";
+import { useDocumentVisible } from "./data/use-document-visible";
 import Play from "./surfaces/Play";
 import Monitor from "./surfaces/Monitor";
 import Lab from "./surfaces/Lab";
@@ -1770,6 +1771,7 @@ function MonitoringTab({ active, embedded = false }: { active: boolean; embedded
     return () => window.removeEventListener("compy:monitor-cards-changed", sync);
   }, []);
   const reduced = useReducedMotion();
+  const visible = useDocumentVisible();
   const [gpuSamples, setGpuSamples] = useState<GpuSensorSnapshot[][]>([]);
   const [cpuSamples, setCpuSamples] = useState<CpuSensorSnapshot[]>([]);
   const [hasGpu, setHasGpu] = useState<boolean | null>(null);
@@ -1814,11 +1816,13 @@ function MonitoringTab({ active, embedded = false }: { active: boolean; embedded
     }
   };
 
-  // Poll only while the tab is active. When the user switches away we drop
-  // the interval so we don't burn cycles on charts that aren't visible. The
-  // sample buffer is preserved in state so coming back doesn't lose history.
+  // Poll only while the tab is active AND the window is on screen. When the user switches away we
+  // drop the interval so we don't burn cycles on charts that aren't visible — and "not visible"
+  // includes minimized/alt-tabbed-into-a-game, which the active flag alone can't see. This is the
+  // app's heaviest poll (five IPC calls a second, one of them the vendor GPU SDK). The sample
+  // buffer is preserved in state so coming back doesn't lose history.
   useEffect(() => {
-    if (!active) return;
+    if (!active || !visible) return;
     let cancelled = false;
     const tick = async () => {
       try {
@@ -1856,7 +1860,7 @@ function MonitoringTab({ active, embedded = false }: { active: boolean; embedded
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [active]);
+  }, [active, visible]);
 
   const enableFps = async () => {
     setFpsBusy(true);

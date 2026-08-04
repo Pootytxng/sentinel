@@ -25,6 +25,7 @@ import {
   fmtLocalWinPercentile,
 } from "./benchmark-view";
 import { useExpertView } from "../design/use-expert-view";
+import { useDocumentVisible } from "../data/use-document-visible";
 import { readTwoFutures } from "../design/theme";
 import { TwoFutures } from "./TwoFutures";
 import type { HardwareInfo } from "../App";
@@ -60,6 +61,7 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
   // Expert view (spec 2026-07-11-expert-layer-middle-ground §2): the receipt shows the TRUE local
   // percentile instead of the rounded "Top N%" bucket. Same already-computed value, display only.
   const expert = useExpertView();
+  const visible = useDocumentVisible();
   // A2 hardware-tier segmentation — the rough, transparent rig class (Entry/Mid/High) the
   // measurements are read against. Reuses the canonical rig-tier bands; LOCAL only, no cohort.
   const [rigTier, setRigTier] = useState<ReturnType<typeof benchRigTier>>(null);
@@ -134,7 +136,11 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
   }, []);
 
   // Poll FPS-monitoring state so the live-game card can offer to start it inline (wayfinding §2).
+  // Q7 idle-cost: only while the window is on screen — this drives a card the user has to see to
+  // act on, and it re-reads on the first tick back. (The two run-scoped polls below stay ungated:
+  // they track a benchmark already in flight, and pausing those could stall the completion state.)
   useEffect(() => {
+    if (!visible) return;
     let cancelled = false;
     const tick = () =>
       invoke<{ active: boolean }>("get_fps_status")
@@ -146,7 +152,7 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
       cancelled = true;
       window.clearInterval(id);
     };
-  }, []);
+  }, [visible]);
 
   // Same command + UAC flow as Play's capture toggle — no trip to another page. The next poll
   // reflects the result (incl. a cancelled UAC, which leaves monitoring off).

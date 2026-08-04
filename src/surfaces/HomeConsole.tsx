@@ -18,6 +18,7 @@ import { readHologramV2 } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
 import { activeChangeCount } from "./dashboard-data";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
+import { useDocumentVisible } from "../data/use-document-visible";
 import { gpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
@@ -333,7 +334,13 @@ export function HomeConsole({
   // 5s poll, ported verbatim ──
   const [gpuTemp, setGpuTemp] = useState<number | null>(null);
   const [mem, setMem] = useState<{ used: number; total: number; level: string } | null>(null);
+  // Q7 idle-cost: pause while the window is hidden. Home is the DEFAULT room, so without this the
+  // canonical face calls into the vendor GPU SDK every 5s for the whole time the owner is alt-tabbed
+  // into a fullscreen game — the exact hidden cost Compy exists to avoid. Values freeze at their last
+  // reading and refresh on the first tick after the window comes back.
+  const visible = useDocumentVisible();
   useEffect(() => {
+    if (!visible) return;
     let cancelled = false;
     const poll = () => {
       invoke<{ temperature_c: number | null }[]>("get_gpu_sensors")
@@ -353,7 +360,7 @@ export function HomeConsole({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, []);
+  }, [visible]);
 
   // ── the Home intelligence line (Intelligence Phase 1, decision 7: Home carries at most ONE
   // concise line). A single read-only fetch, only while the flag is on; the engine returns a

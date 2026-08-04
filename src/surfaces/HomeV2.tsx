@@ -9,6 +9,7 @@ import { useReducedMotion } from "../design/use-motion";
 import { postureLine, liveStrip } from "./command-center-data";
 import { activeChangeCount } from "./dashboard-data";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
+import { useDocumentVisible } from "../data/use-document-visible";
 import { gpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
@@ -128,7 +129,10 @@ export function HomeV2({
   // ── live tag probes (existing read-only commands; a failure just omits the value) ──
   const [gpuTemp, setGpuTemp] = useState<number | null>(null);
   const [mem, setMem] = useState<{ used: number; total: number; level: string } | null>(null);
+  // Q7 idle-cost: pause while the window is hidden (same contract as HomeConsole's port of this poll).
+  const visible = useDocumentVisible();
   useEffect(() => {
+    if (!visible) return;
     let cancelled = false;
     const poll = () => {
       invoke<{ temperature_c: number | null }[]>("get_gpu_sensors")
@@ -148,7 +152,7 @@ export function HomeV2({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, []);
+  }, [visible]);
 
   // ── rig view state (same persisted pref as the classic Home — Cards vs 3D) ──
   const [rig3d, setRig3d] = useState(() => {

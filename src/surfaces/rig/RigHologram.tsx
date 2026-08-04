@@ -125,7 +125,10 @@ export const RigHologram = memo(function RigHologram({
   }, [exploded, holoV2, reduced]);
   const [fanSensors, setFanSensors] = useState<FanSensor[] | null>(null);
 
+  // Q7 idle-cost: the render loop already stands down while hidden; so must this watcher. Nothing
+  // downstream needs a fresh game-active read while the user can't see the bay.
   useEffect(() => {
+    if (!visible) return;
     let cancelled = false;
     const poll = () => {
       invoke<{ active: boolean }>("get_fps_status")
@@ -140,7 +143,7 @@ export const RigHologram = memo(function RigHologram({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, []);
+  }, [visible]);
 
   // Once the user manually adds a kind (cooler/psu), suppress the matching honest ghost.
   const manualKinds = useMemo(() => new Set(manualParts.map((m) => m.kind)), [manualParts]);
@@ -184,9 +187,10 @@ export const RigHologram = memo(function RigHologram({
     });
   }, [manualParts, t]);
 
-  // Live fans — polled only while no game is capturing (the hologram is paused then anyway).
+  // Live fans — polled only while no game is capturing (the hologram is paused then anyway) and
+  // only while the window is on screen (Q7 idle-cost; RPM readings are display-only).
   useEffect(() => {
-    if (gameActive) return;
+    if (gameActive || !visible) return;
     let cancelled = false;
     const poll = () => {
       invoke<FanSensor[]>("get_fan_sensors")
@@ -202,7 +206,7 @@ export const RigHologram = memo(function RigHologram({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [gameActive]);
+  }, [gameActive, visible]);
 
   const fans: FanInfo[] = useMemo(() => {
     if (fanSensors && fanSensors.length > 0) {
