@@ -187,7 +187,11 @@ const requiredTokens = new Map([
       "ProofOnly",
       "Start-NativeProcess",
       "Wait-LoopbackPortClosed -Port $debugPort",
-      "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $null",
+      // issue #60 defect 2: the persistent relaunch is now -Detached (ShellExecute, no handle
+      // inheritance), which cannot carry a child-only env override. The debug-port guarantee is
+      // ASSERTED rather than cleared - require the assertion, so the property survives and is loud.
+      "REFUSING TO RELAUNCH: WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS is set in this process",
+      "Start-NativeProcess -Command $exe -Detached",
       "normal relaunch exited during the health window",
     ],
   ],

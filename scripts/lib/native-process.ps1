@@ -685,15 +685,31 @@ function Start-NativeProcess {
     [Parameter(Position = 1)][string[]]$ArgumentList = @(),
     [string]$WorkingDirectory,
     [hashtable]$Environment,
-    [switch]$CreateNoWindow
+    [switch]$CreateNoWindow,
+    [switch]$Detached
   )
+  # -Detached (issue #60 defect 2, 2026-08-03): launch through ShellExecute instead of
+  # CreateProcess-with-inheritance. A CreateProcess launch hands the child THIS process's stdout and
+  # stderr handles (bInheritHandles=TRUE, and redirecting the child's own streams does not prevent
+  # it). For a launch that is MEANT to outlive us - the installed app after ship-reinstall - that
+  # child then holds the pipe of whatever is upstream (an operator's terminal, CI, a scripting
+  # wrapper) for as long as it runs, which is the phantom prove/publish "hang". Measured against a
+  # 60s child: outer pipe freed at 60297ms inherited vs 240ms detached.
+  #
+  # ShellExecute cannot carry a child-only environment, so the two are mutually exclusive BY
+  # CONTRACT rather than silently ignored - a silently-dropped override is how a debugging port
+  # would survive into a shipped build.
+  if ($Detached -and $Environment) {
+    throw "Start-NativeProcess: -Detached cannot carry -Environment (ShellExecute has no child-only environment). Assert the parent's environment instead."
+  }
   $resolved = Resolve-NativeExecutable $Command
   $startInfo = New-Object System.Diagnostics.ProcessStartInfo
   $startInfo.FileName = $resolved.FilePath
   $startInfo.Arguments = ConvertTo-NativeCommandLine $resolved $ArgumentList
   if ($WorkingDirectory) { $startInfo.WorkingDirectory = $WorkingDirectory }
-  $startInfo.UseShellExecute = $false
-  $startInfo.CreateNoWindow = [bool]$CreateNoWindow
+  $startInfo.UseShellExecute = [bool]$Detached
+  # CreateNoWindow is meaningless under ShellExecute and .NET throws if both are set.
+  $startInfo.CreateNoWindow = (-not $Detached) -and $CreateNoWindow
   Set-NativeEnvironment -StartInfo $startInfo -Environment $Environment
   $process = New-Object System.Diagnostics.Process
   $process.StartInfo = $startInfo

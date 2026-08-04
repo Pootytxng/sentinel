@@ -226,6 +226,15 @@ if ($uninstall.DisplayVersion -ne $ver) {
 # stamp over the existing read-only CDP probe before any source push or fleet publication.
 $runtimeProof = $null
 if (-not $NoLaunch) {
+  # DEBUG-PORT ASSERTION (issue #60 defect 2). The persistent relaunches below are -Detached, and a
+  # detached child inherits THIS process's environment rather than taking a child-only override.
+  # Proving the variable is absent HERE therefore proves no debugging port can reach the relaunched
+  # app - and it fails loud instead of silently clearing. This replaces the old per-child
+  # `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $null` and is strictly stronger. The proof launch below
+  # keeps its child-only override precisely because it NEEDS the port, and is torn down before here.
+  if ($env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS) {
+    throw "REFUSING TO RELAUNCH: WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS is set in this process, so a detached relaunch would inherit it and could leave the shipped build serving a debugging port."
+  }
   if ($VerifyRuntime) {
     # Derive what the running app MUST report before anything is launched: a bad -ExpectedCommit
     # must never leave a release build running with a debugging port open.
@@ -267,16 +276,17 @@ if (-not $NoLaunch) {
       }
     }
     Wait-LoopbackPortClosed -Port $debugPort -TimeoutMs 10000
-    $normalLaunch = Start-NativeProcess -Command $exe -Environment @{
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $null
-    }
+    # -Detached: this app outlives the script, so it must not inherit our stdout/stderr and strand
+    # a caller's pipe (issue #60 defect 2). Port absence is proven by the assertion above.
+    $normalLaunch = Start-NativeProcess -Command $exe -Detached
     Start-Sleep -Seconds 3
     if ($normalLaunch.HasExited) {
       throw "RUNTIME PROOF FAILED: normal relaunch exited during the health window (exit $($normalLaunch.ExitCode))."
     }
     $normalLaunch.Dispose()
   } else {
-    $normalLaunch = Start-NativeProcess -Command $exe
+    # Same reason as the VerifyRuntime relaunch (issue #60 defect 2).
+    $normalLaunch = Start-NativeProcess -Command $exe -Detached
     $normalLaunch.Dispose()
   }
 }
