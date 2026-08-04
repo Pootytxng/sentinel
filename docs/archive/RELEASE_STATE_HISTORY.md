@@ -4,6 +4,26 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-08-04 - local ship at 8b7c232: the desk catches up on 25 commits, Q5's UI included
+
+Installed by Claude + LIVE. Built from `8b7c232` on `main`. Installer
+`Compy_0.9.12_x64-setup.exe` SHA-256
+`CD7DCAE46CDEB927535D49486645082A4DD3DB087A2C6EF851BBAB42957A27F7`. Installed exe embeds `8b7c232`,
+Windows Apps reports 0.9.12, exactly one installer on the Desktop, relaunched and runtime-proved over
+CDP as `8b7c232 · release · shell 0.9.12` (2 proof attempts, 1 expected transient). Local ship only -
+nothing published, no tag, no fleet-visible action. Supersedes the 2026-08-03 ship at `c7c60d3`.
+
+**Why it was due.** The desk had been 25 commits behind since `c7c60d3`, and the gap was not cosmetic:
+it contained the entire Q5 support-record surface (`7c8a03f` backend, `08ad3b1` the inspect-before-
+export UI), the `owner_installed_stamp` gate that reads the installed binary (`270a622`), the module-map
+split and its test-pass wiring (`2d33db2`, `9827728`), the residency guard (`ba609ea`), the branch-
+disposition checker (`6882819`), the Q6 product-truth consolidation (`9bf3bde`), and the unloaded-project
+hook fix (`a4d13bd`). Q5's pending visual self-review had no surface to review until this ship landed.
+
+Verify: `node scripts/verify-release-state.mjs` (check 7 reads the stamp out of
+`%LOCALAPPDATA%\Compy\compy.exe` and now agrees with CURRENT STATE) ·
+`Select-String -Path "$env:LOCALAPPDATA\Compy\compy.exe" -Pattern 8b7c232`.
+
 ### 2026-08-03 - local ship at c7c60d3: the phantom prove/publish hang is FIXED and proven end-to-end
 
 Installed by Claude + LIVE. Built from `c7c60d3` on `main`. Installer
