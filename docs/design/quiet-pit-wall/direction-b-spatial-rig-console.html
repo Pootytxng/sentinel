@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Compy — Direction B · Spatial Rig Console</title>
+<style>
+/* ============================================================
+   PROTOTYPE CHROME  (outside the app stage — not part of the design)
+   ============================================================ */
+:root{
+  --env:   #131417;   /* plane 0 — environment */
+  --work:  #1b1d22;   /* plane 1 — active workspace */
+  --over:  #24272e;   /* plane 2 — temporary overlay */
+  --edge:  #2b2f37;
+
+  --ink:   #ece7e0;
+  --ink-2: #a8a49d;
+  --ink-3: #6f6c67;
+
+  --focus: #a78bfa;   /* violet — Compy focus / active direction */
+  --proof: #3fd9c2;   /* teal   — measured evidence */
+  --judge: #f0b878;   /* amber  — uncertainty / owner judgment */
+  --fail:  #ff6b6b;   /* red    — actual failure only */
+
+  --focus-dim:#a78bfa26;
+  --proof-dim:#3fd9c226;
+  --judge-dim:#f0b87826;
+
+  --sans: ui-sans-serif, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+*{box-sizing:border-box}
+/* [hidden] must beat every display rule below — hidden content leaves the focus
+   order and the screen-reader tree, it is never merely invisible. */
+[hidden]{display:none !important}
+html,body{margin:0;background:#0b0c0e;color:var(--ink);font-family:var(--sans)}
+body{display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px 16px 40px;min-height:100vh}
+
+.chrome{width:1280px;max-width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.chrome h1{font-size:15px;font-weight:600;margin:0;letter-spacing:.01em}
+.chrome .tag{font-family:var(--mono);font-size:12px;color:#8a8680;border:1px solid #26282d;
+  border-radius:999px;padding:4px 9px;background:#141518}
+.chrome .spacer{flex:1}
+.chrome button{font-family:var(--sans);font-size:13px;color:#b8b4ad;background:#141518;
+  border:1px solid #26282d;border-radius:8px;padding:7px 12px;cursor:pointer;min-height:28px}
+.chrome button[aria-pressed="true"],.chrome button[aria-selected="true"]{
+  color:#0d0b14;background:var(--focus);border-color:var(--focus);font-weight:600}
+.chrome .grp{display:flex;gap:6px;align-items:center}
+.chrome .lbl{font-size:12px;color:#67645f}
+.chromenote{width:1280px;max-width:100%;font-size:13px;color:#8a8680;line-height:1.55;margin:0}
+.chromenote b{color:var(--judge);font-weight:600}
+
+.stagewrap{width:1280px;max-width:100%}
+.stage{width:1280px;height:720px;transform-origin:top left;position:relative;
+  border-radius:12px;overflow:hidden;box-shadow:0 30px 90px #000a,0 0 0 1px #23262c}
+
+/* ============================================================
+   THE DESIGN — SPATIAL RIG CONSOLE
+   The machine IS the navigation. Rooms are camera framings.
+   ============================================================ */
+.app{position:absolute;inset:0;overflow:hidden;font-size:15px;line-height:1.5;
+  background:
+    radial-gradient(120% 90% at 62% 12%, #1c1f26 0%, transparent 62%),
+    radial-gradient(90% 80% at 6% 100%, #17191f 0%, transparent 58%),
+    var(--env)}
+
+/* ---------- layer 1: the rig, full-bleed, camera-driven ---------- */
+.world{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
+  transition:filter .34s ease}
+.app[data-depth="mid"]  .world{filter:blur(1.1px) brightness(.86)}
+.app[data-depth="back"] .world{filter:blur(3px) brightness(.6) saturate(.75)}
+.app[data-list="on"]    .world{filter:blur(3.5px) brightness(.5) saturate(.6)}
+.pan{position:absolute;inset:0;cursor:grab;touch-action:none}
+.pan:active{cursor:grabbing}
+
+.halo{fill:none;stroke:var(--proof);stroke-width:1.4;opacity:.32}
+[data-st="unknown"] .halo{stroke:var(--judge);stroke-dasharray:6 5;opacity:.6}
+[data-st="target"] .halo{stroke:var(--focus);stroke-width:2.4;opacity:1}
+.sigpath{fill:none;stroke:#3a4049;stroke-width:2;stroke-dasharray:7 6;opacity:.5}
+.app[data-room="monitor"] .sigpath{stroke:var(--proof);opacity:.85}
+
+/* ---------- layer 2: leader lines (screen space) ---------- */
+.leaders{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#leadpath{fill:none;stroke:var(--focus);stroke-width:1.6;opacity:.9;
+  stroke-dasharray:var(--len,600);stroke-dashoffset:var(--len,600);
+  transition:stroke-dashoffset .5s cubic-bezier(.22,.61,.36,1)}
+#leadpath.drawn{stroke-dashoffset:0}
+#leadring{fill:none;stroke:var(--focus);stroke-width:1.8;opacity:.95}
+#leaddot{fill:var(--focus)}
+
+/* ---------- layer 3: hardware markers = the navigation ---------- */
+.marker{position:absolute;transform:translate(-50%,0);background:transparent;border:0;padding:4px 8px;
+  font-family:var(--sans);cursor:pointer;text-align:center;min-width:44px;min-height:44px;
+  border-radius:8px;line-height:1.25}
+.marker .pin{display:block;width:9px;height:9px;border-radius:50%;margin:0 auto 6px;
+  background:#2c3038;box-shadow:0 0 0 1px #454b56}
+.marker .nm{display:block;font-size:13.5px;color:var(--ink-2);white-space:nowrap}
+.marker .sp{display:block;font-family:var(--mono);font-size:13px;color:var(--ink-3);white-space:nowrap;margin-top:1px}
+.marker:hover{background:#ffffff0f}
+.marker:hover .nm{color:var(--ink)}
+.marker[data-st="measured"] .pin{background:var(--proof);box-shadow:0 0 0 1px #3fd9c255}
+.marker[data-st="unknown"] .pin{background:transparent;box-shadow:0 0 0 1.5px var(--judge)}
+.marker[data-st="unknown"] .nm{color:#c9b491}
+.marker[data-st="unknown"] .sp{color:#8a7b60}
+.marker[data-subject="1"] .pin{background:var(--focus);box-shadow:0 0 0 1px #a78bfa66,0 0 0 5px #a78bfa22}
+.marker[data-subject="1"] .nm{color:#d6ccff}
+.marker[data-subject="1"] .sp{color:#9d92cf}
+.marker .chg{position:absolute;top:2px;right:8px;width:7px;height:7px;border-radius:50%;background:var(--proof)}
+.marker.pulse::after{content:"";position:absolute;left:50%;top:4px;width:9px;height:9px;margin-left:-4.5px;
+  border-radius:50%;border:1.5px solid var(--focus);animation:reanchor .55s ease-out forwards}
+@keyframes reanchor{from{transform:scale(1);opacity:.95}to{transform:scale(4.6);opacity:0}}
+
+/* ---------- layer 4: HUD ---------- */
+.hud{position:absolute;top:16px;left:24px;right:24px;height:36px;display:flex;align-items:center;gap:11px}
+.brand{font-size:13px;font-weight:700;letter-spacing:.16em;color:var(--ink-2)}
+.crumb{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-3);letter-spacing:.05em}
+.crumb button{background:transparent;border:0;color:var(--ink-2);font-family:var(--sans);font-size:13px;
+  letter-spacing:.05em;cursor:pointer;padding:5px 6px;border-radius:6px;min-height:26px}
+.crumb button:hover{color:var(--ink);background:#ffffff0f}
+.crumb .sep{color:#4a4d54}
+.crumb .here{color:var(--ink)}
+.depth{font-family:var(--mono);font-size:13px;color:var(--ink-3);border:1px solid #262a31;
+  border-radius:999px;padding:3px 9px;background:#14161a;white-space:nowrap}
+.hudright{margin-left:auto;display:flex;align-items:center;gap:8px}
+.hudbtn{font-family:var(--sans);font-size:13.5px;color:var(--ink-2);background:#16181d;border:1px solid var(--edge);
+  border-radius:8px;padding:0 12px;height:32px;min-height:32px;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+.hudbtn:hover{background:#1e2128;color:var(--ink)}
+.hudbtn[aria-pressed="true"]{border-color:var(--focus);color:#d6ccff;background:#1e1a2b}
+.camgrp{display:flex;align-items:center;gap:2px;background:#14161a;border:1px solid var(--edge);border-radius:9px;padding:2px}
+.camgrp button{width:28px;height:28px;min-height:28px;border:0;background:transparent;color:var(--ink-2);
+  border-radius:6px;cursor:pointer;font-size:13px;line-height:1;font-family:var(--sans)}
+.camgrp button:hover{background:#23262d;color:var(--ink)}
+
+.carried{position:absolute;top:62px;left:24px;display:inline-flex;align-items:center;gap:9px;
+  background:#1c1830f0;border:1px solid #453a70;border-radius:999px;padding:5px 14px 5px 11px;
+  font-size:13.5px;color:#d6ccff}
+.carried .dotv{width:8px;height:8px;border-radius:50%;background:var(--focus);flex:none}
+.carried b{font-weight:600}
+.carried .sub{color:#9d92cf}
+.walkbar{display:inline-flex;align-items:center;gap:9px;margin-left:3px;padding-left:11px;
+  border-left:1px solid #453a70;font-size:13px;color:#c4b6ff}
+.walkbar button{height:26px;min-height:26px;padding:0 10px;font-size:13px;background:#241f3a;
+  border:1px solid #4a3f78;color:#d6ccff;border-radius:7px;cursor:pointer;font-family:var(--sans)}
+.camhint{position:absolute;top:64px;right:24px;font-size:13px;color:var(--ink-3);text-align:right;
+  max-width:320px;margin:0;line-height:1.45}
+
+/* ---------- shared vocabulary ---------- */
+.chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:13px;
+  letter-spacing:.04em;padding:4px 9px;border-radius:6px;background:#1a1d23;color:var(--ink-2);white-space:nowrap}
+.chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.chip.measured{color:var(--proof);background:var(--proof-dim)}
+.chip.expected{color:var(--focus);background:var(--focus-dim)}
+.chip.unknown{color:var(--judge);background:var(--judge-dim)}
+.pill{font-family:var(--sans);font-size:14.5px;border-radius:9px;cursor:pointer;min-height:40px;padding:0 16px;
+  border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.pill.primary{background:var(--focus);color:#160f2b;font-weight:650;min-height:44px;padding:0 20px}
+.pill.primary:hover{background:#b79dff}
+.pill.quiet{background:#1e2128;color:var(--ink);border-color:var(--edge)}
+.pill.quiet:hover{background:#252932}
+.pill.bare{background:transparent;color:var(--ink-2)}
+.pill.bare:hover{color:var(--ink)}
+.pill.mini{min-height:30px;font-size:13.5px;padding:0 12px}
+.linkish{background:transparent;border:0;color:var(--proof);font-family:var(--sans);font-size:13.5px;cursor:pointer;
+  border-bottom:1px solid #3fd9c255;padding:3px 2px;min-height:26px}
+.soft{color:var(--ink-2)}
+.meta{font-size:13px;color:var(--ink-3)}
+button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+/* ---------- docked panels: anchored to hardware, not to a grid ---------- */
+.dock{position:absolute;left:724px;width:520px;top:100px;bottom:16px;background:var(--work);
+  border:1px solid var(--edge);border-radius:14px;padding:18px 21px;display:flex;flex-direction:column;
+  box-shadow:0 34px 70px -40px #000, -18px 0 60px -50px #000;overflow:hidden}
+.dock::before{content:"";position:absolute;left:0;top:20px;bottom:20px;width:2px;border-radius:2px;background:var(--focus)}
+.app[data-motion="on"] .dock{animation:dockin .2s cubic-bezier(.22,.61,.36,1)}
+@keyframes dockin{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:none}}
+h1.d1{font-size:26px;line-height:1.14;font-weight:600;margin:0 0 5px;letter-spacing:-.015em}
+.dsub{margin:0 0 12px;font-size:15px;color:var(--ink-2)}
+.dock h2{font-size:20px;font-weight:600;margin:2px 0 6px;letter-spacing:-.01em}
+.dock p{margin:0;font-size:15px;color:var(--ink-2)}
+
+/* ---------- HOME: content floats and leader-lines to the rig ---------- */
+.h-head{position:absolute;top:104px;left:40px;width:440px}
+h1.verdict{font-size:33px;line-height:1.1;font-weight:600;margin:0 0 8px;letter-spacing:-.02em}
+.lede{font-size:15px;color:var(--ink-2);margin:0;max-width:38ch}
+.h-intents{position:absolute;top:206px;left:40px;width:400px;display:flex;flex-direction:column;gap:9px}
+.intent{text-align:left;padding:7px 13px;border-radius:10px;background:#181b21e8;border:1px solid var(--edge);
+  color:var(--ink);font-family:var(--sans);font-size:14.5px;cursor:pointer;min-height:44px}
+.intent:hover{background:#1e222aee}
+.intent[aria-pressed="true"]{border-color:var(--focus);background:#1d1a2aee}
+.intent small{display:block;font-size:13px;color:var(--ink-3);margin-top:1px}
+.h-move{position:absolute;top:372px;left:40px;width:404px;background:var(--work);border:1px solid var(--edge);
+  border-radius:12px;padding:14px 17px;box-shadow:0 22px 50px -34px #000}
+.h-move::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:2px;border-radius:2px;background:var(--focus)}
+.h-move h2{margin:0 0 4px;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.h-move p{margin:0;color:var(--ink-2);font-size:15px}
+.h-move .meta-row{display:flex;align-items:center;gap:10px;margin-top:11px}
+.h-move .row{display:flex;align-items:center;gap:10px;margin-top:9px}
+.h-proof{position:absolute;top:576px;left:40px;width:640px;display:flex;align-items:center;gap:11px;
+  font-size:13.5px;color:var(--ink-2);background:#14161af0;border:1px solid var(--edge);
+  border-radius:10px;padding:8px 13px}
+.h-proof b{color:var(--ink);font-weight:600}
+.h-proof .txt{flex:1}
+.h-proof .linkish,.h-proof .chip{flex:none;white-space:nowrap}
+.h-strip{position:absolute;left:0;right:0;bottom:0;height:88px;display:grid;grid-template-columns:repeat(4,1fr);
+  gap:1px;background:var(--edge);border-top:1px solid var(--edge)}
+.read{background:#14161af2;padding:10px 16px;text-align:left;border:0;font-family:var(--sans);cursor:pointer;
+  display:flex;flex-direction:column;gap:1px}
+.read:hover{background:#1b1e25}
+.read .k{font-size:13px;color:var(--ink-3)}
+.read .v{font-family:var(--mono);font-size:17px;color:var(--ink)}
+.read .i{font-size:13.5px;color:var(--ink-2)}
+.read .bar{height:2px;border-radius:2px;margin-top:5px;background:#24272e}
+.read .bar i{display:block;height:100%;border-radius:2px;background:var(--proof)}
+.read.warn .bar i{background:var(--judge)}
+.read.na .v,.read.na .i{color:var(--ink-3)}
+
+/* ---------- LAB ---------- */
+.facts{display:grid;grid-template-columns:92px 1fr;gap:9px 12px;margin:14px 0 0;font-size:15px;align-items:start}
+.facts dt{color:var(--ink-3);font-size:13.5px;padding-top:3px}
+.facts dd{margin:0;color:var(--ink)}
+.acts{display:flex;gap:8px;align-items:center;margin-top:16px;flex-wrap:wrap}
+.note{font-size:14.5px;color:var(--ink-3);margin:11px 0 0}
+.discwrap{flex:1;min-height:0;overflow:auto}
+.recs::-webkit-scrollbar,.discwrap::-webkit-scrollbar{width:8px}
+.recs::-webkit-scrollbar-thumb,.discwrap::-webkit-scrollbar-thumb{background:#31363f;border-radius:4px}
+.recs::-webkit-scrollbar-track,.discwrap::-webkit-scrollbar-track{background:transparent}
+.disc{border-top:1px solid var(--edge);margin-top:9px;padding-top:7px}
+.discbtn{width:100%;display:flex;justify-content:space-between;align-items:center;background:transparent;border:0;
+  color:var(--ink);font-family:var(--sans);font-size:14.5px;cursor:pointer;min-height:32px;padding:0}
+.disc ol{margin:6px 0 0;padding:0 0 0 20px;color:var(--ink-2);font-size:14px;line-height:1.8}
+.disc li::marker{color:var(--ink-3);font-family:var(--mono);font-size:13px}
+.disc .advp{margin:6px 0 0;font-size:14.5px;color:var(--ink-2)}
+
+/* ---------- MONITOR ---------- */
+#p-monitor>[data-ms]{display:block}
+#p-monitor>.centerstate{display:flex}
+.centerstate{flex:1;flex-direction:column;align-items:flex-start;justify-content:center;gap:13px}
+.centerstate h1.d1{font-size:25px}
+.steps{display:flex;align-items:center;font-size:13.5px;color:var(--ink-3);flex-wrap:wrap}
+.steps b{color:var(--ink-2);font-weight:500}
+.steps em{font-style:normal;color:#3b3f47;padding:0 8px}
+.recdot{width:9px;height:9px;border-radius:50%;background:var(--fail);display:inline-block;margin-right:9px}
+.timer{font-family:var(--mono);font-size:30px;color:var(--proof)}
+.trace{background:#15171c;border:1px solid var(--edge);border-radius:11px;padding:9px 12px 5px;margin-top:10px}
+.tracehead{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:var(--ink-3);margin-bottom:1px}
+.trace svg{display:block;width:100%;height:auto}
+.gridline{stroke:#242830;stroke-width:2}
+.budget{stroke:var(--judge);stroke-width:2;stroke-dasharray:8 8;opacity:.75}
+.tp{fill:none;stroke:var(--proof);stroke-width:3.4;stroke-linejoin:round}
+.tp.before{stroke:#4c515c;stroke-width:2.6}
+.tp.incon{stroke:var(--judge)}
+.spike line{stroke:var(--fail);stroke-width:2.4;opacity:.45}
+.spike circle{fill:#15171c;stroke:var(--fail);stroke-width:3}
+.spike[data-sel="true"] line{opacity:1}
+.spike[data-sel="true"] circle{fill:var(--fail)}
+.axlbl{font-family:var(--mono);font-size:30px;fill:var(--ink-3)}
+.spikebar{display:flex;align-items:center;gap:9px;margin-top:8px;font-size:13.5px;color:var(--ink-2);flex-wrap:wrap}
+.stepbtn{width:32px;height:32px;min-height:32px;border-radius:8px;background:#1e2128;border:1px solid var(--edge);
+  color:var(--ink);cursor:pointer;font-size:15px;line-height:1;font-family:var(--sans)}
+.spikebar .val{font-family:var(--mono);color:var(--ink);font-size:14px}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--edge);border-radius:10px;overflow:hidden;margin-top:11px}
+.cmp>div{background:#16181d;padding:10px 14px}
+.cmp .k{font-size:13px;color:var(--ink-3)}
+.cmp .v{font-family:var(--mono);font-size:16px;margin-top:3px;color:#8c919b}
+.cmp .now .v{color:var(--proof)}
+.qual{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+
+/* ---------- BLACKBOOK ---------- */
+#p-blackbook{padding-top:16px;padding-bottom:12px}
+#p-blackbook h1.d1{font-size:24px;margin-bottom:3px}
+#p-blackbook .dsub{margin-bottom:4px}
+.recs{flex:1;min-height:0;overflow:auto;line-height:1.35}
+.rec{background:#16181d;border:1px solid var(--edge);border-radius:10px;padding:6px 11px;margin-bottom:3px}
+.rec[data-cur="true"]{border-color:var(--focus);background:#1c1a27}
+.rectitle{display:block;width:100%;text-align:left;background:transparent;border:0;padding:0;line-height:1.3;
+  font-family:var(--sans);font-size:14.5px;font-weight:600;color:var(--ink);cursor:pointer;min-height:24px}
+.rectitle:hover{color:#fff}
+.rec .m{font-size:13px;color:var(--ink-3);margin-top:1px;display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.rec .m .chip{padding:2px 8px}
+.rec .r{font-size:13.5px;color:var(--ink-2);margin-top:2px}
+.rec .anch{font-family:var(--mono);font-size:13px;color:var(--focus)}
+.rec .st{font-family:var(--mono);font-size:13px;color:var(--proof);background:#16261f;
+  padding:2px 7px;border-radius:5px}
+.rec.off .st{color:var(--ink-3);background:#1d1f24}
+.recrow{display:flex;align-items:center;gap:10px;margin-top:2px}
+.recrow .r{margin:0;flex:1}
+.pill.mini{min-height:26px;font-size:13px}
+.sepline{display:flex;align-items:center;gap:10px;margin:6px 0 4px;font-family:var(--mono);font-size:13px;
+  color:var(--judge);letter-spacing:.08em}
+.sepline i{flex:1;height:1px;background:#3a3226;display:block}
+.fgnote{font-size:14px;color:var(--ink-3);border-top:1px solid var(--edge);margin:5px 0 0;padding-top:6px}
+
+/* ---------- INSPECT ---------- */
+#p-inspect{bottom:auto;max-height:calc(100% - 116px)}
+.inspec{font-family:var(--mono);font-size:16px;color:var(--ink);margin:10px 0 0}
+
+/* ---------- LIST VIEW: the required accessible fallback ---------- */
+.listview{position:absolute;left:40px;top:108px;width:470px;background:var(--over);border:1px solid var(--edge);
+  border-radius:14px;padding:19px 21px;box-shadow:0 34px 70px -40px #000}
+.app[data-room="home"] .listview{left:auto;right:24px}
+.listview h2{margin:0 0 6px;font-size:20px;font-weight:600}
+.listview>p{margin:0 0 13px;font-size:15px;color:var(--ink-2)}
+.dest{width:100%;text-align:left;background:#16181d;border:1px solid var(--edge);border-radius:10px;padding:9px 13px;
+  margin-bottom:7px;color:var(--ink);font-family:var(--sans);font-size:15px;cursor:pointer;min-height:52px}
+.dest:hover{background:#1c1f26}
+.dest[aria-current="page"]{border-color:var(--focus)}
+.dest small{display:block;font-size:13px;color:var(--ink-3);margin-top:1px}
+.reqnote{font-size:13.5px;color:var(--judge);background:#2a2318;border:1px solid #3a3226;border-radius:9px;
+  padding:9px 12px;margin:11px 0 0;line-height:1.45}
+
+/* ---------- motion contract: one-time, causal, never ambient ---------- */
+@media (prefers-reduced-motion:reduce){
+  .world{transition:none !important}
+  #leadpath{transition:none !important;stroke-dashoffset:0 !important}
+  .marker.pulse::after{display:none}
+  .app[data-motion="on"] .dock{animation:none !important}
+  *{animation-duration:.001ms !important;transition-duration:.001ms !important}
+}
+body[data-rm="on"] .world{transition:none !important}
+body[data-rm="on"] #leadpath{transition:none !important;stroke-dashoffset:0 !important}
+body[data-rm="on"] .marker.pulse::after{display:none}
+body[data-rm="on"] .app[data-motion="on"] .dock{animation:none !important}
+body[data-rm="on"] *{animation-duration:.001ms !important;transition-duration:.001ms !important}
+</style>
+</head>
+<body data-rm="off">
+
+<div class="chrome">
+  <h1>Direction B — Spatial Rig Console</h1>
+  <span class="tag">1280 × 720</span>
+  <span class="tag" style="color:#f0b878;border-color:#3a3226">PROTOTYPE · fixture data · not this PC</span>
+  <span class="spacer"></span>
+  <span class="lbl">Room</span>
+  <div class="grp" role="tablist" aria-label="Room">
+    <button role="tab" data-room="home" aria-selected="true">Home</button>
+    <button role="tab" data-room="lab" aria-selected="false">Lab</button>
+    <button role="tab" data-room="monitor" aria-selected="false">Monitor</button>
+    <button role="tab" data-room="blackbook" aria-selected="false">Blackbook</button>
+  </div>
+  <span class="lbl" data-mononly hidden>State</span>
+  <div class="grp" data-mononly hidden>
+    <button data-mstate="idle" aria-pressed="false">Idle</button>
+    <button data-mstate="rec" aria-pressed="false">Recording</button>
+    <button data-mstate="result" aria-pressed="true">Result</button>
+    <button data-mstate="incon" aria-pressed="false">Inconclusive</button>
+  </div>
+  <button id="rm" aria-pressed="false">Reduced motion</button>
+</div>
+<p class="chromenote">
+  There is no room rail: the machine is the navigation, and rooms are camera framings on your own hardware.
+  <b>The “List view” control inside the stage is REQUIRED for this direction, not optional</b> — a camera-driven,
+  spatially-addressed interface cannot be operated by keyboard or screen reader on its own, so the plain
+  four-destination list has to ship beside it, not hidden behind a setting. This prototype shows that cost
+  rather than hiding it. “Follow this evidence →” walks Home → Lab → Monitor → Blackbook carrying the same subject.
+</p>
+
+<div class="stagewrap"><div class="stage" id="stage">
+<div class="app" id="app" data-room="home" data-depth="front" data-list="off" data-motion="on">
+
+  <!-- ============ 1. THE RIG (full-bleed, camera-driven) ============ -->
+  <svg class="world" id="world" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#181a21"/><stop offset="1" stop-color="#0e0f12"/>
+      </linearGradient>
+      <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#ffffff" stop-opacity=".05"/>
+        <stop offset=".45" stop-color="#ffffff" stop-opacity="0"/>
+        <stop offset="1" stop-color="#ffffff" stop-opacity=".03"/>
+      </linearGradient>
+    </defs>
+
+    <rect x="-500" y="630" width="2400" height="600" fill="url(#floor)"/>
+    <line x1="-500" y1="630" x2="1900" y2="630" stroke="#23262d" stroke-width="1.5"/>
+
+    <!-- case shell -->
+    <path d="M470 110 L536 66 L1006 66 L940 110 Z" fill="#1a1d23" stroke="#2b2f37"/>
+    <path d="M940 110 L1006 66 L1006 576 L940 620 Z" fill="#101216" stroke="#2b2f37"/>
+    <path d="M470 110 L940 110 L940 620 L470 620 Z" fill="#15171c" stroke="#2b2f37"/>
+
+    <!-- interior -->
+    <rect x="496" y="138" width="410" height="356" rx="4" fill="#191c22" stroke="#262a31"/>
+    <path d="M520 302 C 560 342, 620 332, 660 362" fill="none" stroke="#20242b" stroke-width="6"/>
+    <path d="M700 322 C 760 352, 800 332, 880 354" fill="none" stroke="#20242b" stroke-width="6"/>
+
+    <g id="pt-cpu" data-st="measured">
+      <rect class="halo" x="524" y="162" width="130" height="108" rx="8"/>
+      <rect x="530" y="168" width="118" height="96" rx="6" fill="#1e2128" stroke="#333842"/>
+      <circle cx="589" cy="216" r="30" fill="none" stroke="#3a4049" stroke-width="1.5"/>
+      <circle cx="589" cy="216" r="11" fill="#242931"/>
+    </g>
+    <g id="pt-ram" data-st="measured">
+      <rect class="halo" x="682" y="154" width="112" height="132" rx="7"/>
+      <rect x="690" y="160" width="18" height="120" rx="3" fill="#1e2128" stroke="#333842"/>
+      <rect x="716" y="160" width="18" height="120" rx="3" fill="#1e2128" stroke="#333842"/>
+      <rect x="742" y="160" width="18" height="120" rx="3" fill="none" stroke="#2a2e35" stroke-dasharray="4 4"/>
+      <rect x="768" y="160" width="18" height="120" rx="3" fill="none" stroke="#2a2e35" stroke-dasharray="4 4"/>
+    </g>
+    <g id="pt-sto" data-st="measured">
+      <rect class="halo" x="770" y="162" width="118" height="56" rx="7"/>
+      <rect x="776" y="168" width="106" height="44" rx="4" fill="#1e2128" stroke="#333842"/>
+      <rect x="786" y="180" width="52" height="7" rx="3" fill="#282d35"/>
+    </g>
+
+    <!-- GRAPHICS CARD — the carried subject -->
+    <g id="pt-gpu" data-st="target">
+      <rect class="halo" x="508" y="392" width="388" height="100" rx="9"/>
+      <rect x="516" y="400" width="372" height="84" rx="6" fill="#231d36" stroke="#5b4b93" stroke-width="1.4"/>
+      <circle cx="586" cy="442" r="26" fill="none" stroke="#5b4b93" stroke-width="1.6"/>
+      <circle cx="586" cy="442" r="9" fill="#2a2440"/>
+      <circle cx="672" cy="442" r="26" fill="none" stroke="#5b4b93" stroke-width="1.6"/>
+      <circle cx="672" cy="442" r="9" fill="#2a2440"/>
+      <rect x="726" y="420" width="140" height="44" rx="4" fill="#2a2440"/>
+      <rect x="888" y="404" width="14" height="76" rx="2" fill="#2a2440" stroke="#5b4b93"/>
+    </g>
+
+    <rect x="496" y="544" width="410" height="44" rx="4" fill="#16191e" stroke="#252930"/>
+    <path d="M470 110 L940 110 L940 620 L470 620 Z" fill="url(#glass)" stroke="none"/>
+
+    <!-- signal path: card → display -->
+    <path class="sigpath" d="M902 442 C 950 442, 980 448, 1030 448"/>
+
+    <!-- DISPLAY — unread -->
+    <g id="pt-dsp" data-st="unknown">
+      <rect class="halo" x="1028" y="372" width="224" height="148" rx="9"/>
+      <rect x="1036" y="380" width="208" height="132" rx="6" fill="#14161b" stroke="#2b2f37"/>
+      <rect x="1046" y="390" width="188" height="112" rx="3" fill="#101216"/>
+      <path d="M1076 470 h128" stroke="#2b2f37" stroke-width="2"/>
+      <rect x="1130" y="512" width="20" height="82" fill="#1a1d23" stroke="#262a31"/>
+      <rect x="1088" y="594" width="104" height="14" rx="3" fill="#1a1d23" stroke="#262a31"/>
+    </g>
+  </svg>
+
+  <!-- drag-to-pan surface; keyboard/button equivalents live in the HUD -->
+  <div class="pan" id="pan"></div>
+
+  <!-- ============ 2. LEADER LINES ============ -->
+  <svg class="leaders" id="leaders" viewBox="0 0 1280 720" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+    <path id="leadpath" d=""/>
+    <circle id="leadring" r="9" cx="-50" cy="-50"/>
+    <circle id="leaddot" r="3" cx="-50" cy="-50"/>
+  </svg>
+
+  <!-- ============ 3. HARDWARE MARKERS = THE NAVIGATION ============ -->
+  <div id="markers"></div>
+
+  <!-- ============ 4. HUD ============ -->
+  <div class="hud">
+    <span class="brand">COMPY</span>
+    <nav class="crumb" id="crumb" aria-label="You are here"></nav>
+    <span class="depth" id="depth">1.0×</span>
+    <button class="hudbtn" id="reset" hidden>Reset view</button>
+    <span class="hudright">
+      <span class="camgrp" role="group" aria-label="Camera controls">
+        <button id="cl" aria-label="Pan left">◀</button>
+        <button id="cr" aria-label="Pan right">▶</button>
+        <button id="cu" aria-label="Pan up">▲</button>
+        <button id="cd" aria-label="Pan down">▼</button>
+        <button id="cout" aria-label="Pull back">−</button>
+        <button id="cin" aria-label="Push in">+</button>
+      </span>
+      <button class="hudbtn" id="follow">Follow this evidence →</button>
+      <button class="hudbtn" id="listtoggle" aria-pressed="false">List view</button>
+    </span>
+  </div>
+
+  <span class="carried" id="carried">
+    <span class="dotv"></span>
+    <span>CARRYING <b>Graphics card</b> <span class="sub">· hardware GPU scheduling</span></span>
+    <span class="walkbar" id="walkbar" hidden>
+      <span id="walkstatus"></span>
+      <button id="walkstop">Stop</button>
+    </span>
+  </span>
+  <p class="camhint">Drag the rig to pan. The ◀▶▲▼ − + buttons and the arrow keys do exactly the same.</p>
+
+  <!-- ============ HOME ============ -->
+  <section id="p-home">
+    <div class="h-head">
+      <h1 class="verdict">No urgent issue found</h1>
+      <p class="lede">Compy has read your PC and has one move worth making.</p>
+    </div>
+
+    <div class="h-intents" role="group" aria-label="What do you want help with?">
+      <button class="intent" aria-pressed="true">Play smoother<small>Frame pacing &amp; latency</small></button>
+      <button class="intent" aria-pressed="false">Fix a problem<small>Something feels wrong</small></button>
+      <button class="intent" aria-pressed="false">Understand my PC<small>What Compy can see</small></button>
+    </div>
+
+    <div class="h-move">
+      <h2>Turn on hardware GPU scheduling</h2>
+      <p>Your last session showed uneven frame pacing, and your driver supports this.</p>
+      <div class="meta-row">
+        <span class="chip measured">MEASURED</span>
+        <span class="meta">Affects your GPU</span>
+      </div>
+      <div class="row">
+        <button class="pill primary" data-goto="lab">Show me this move</button>
+      </div>
+    </div>
+
+    <div class="h-proof">
+      <span class="chip measured">KEPT</span>
+      <span class="txt"><b>Game Mode off</b> · applied 3 days ago · frame pacing steadier</span>
+      <button class="linkish" data-goto="blackbook">Roll back</button>
+    </div>
+
+    <div class="h-strip" role="group" aria-label="Four readings from your PC">
+      <button class="read" data-part="gpu" aria-label="Frame pacing, 11.8 milliseconds. Steady last session. Push in to the graphics card.">
+        <span class="k">Frame pacing</span><span class="v">11.8 ms</span><span class="i">Steady last session.</span>
+        <span class="bar"><i style="width:78%"></i></span></button>
+      <button class="read" data-part="gpu" aria-label="GPU temperature, 71 degrees Celsius. Normal under load. Push in to the graphics card.">
+        <span class="k">GPU temperature</span><span class="v">71 °C</span><span class="i">Normal under load.</span>
+        <span class="bar"><i style="width:62%"></i></span></button>
+      <button class="read warn" data-part="sto" aria-label="Startup load, 3 apps. Your call to trim. Push in to storage.">
+        <span class="k">Startup load</span><span class="v">3 apps</span><span class="i">Your call to trim.</span>
+        <span class="bar"><i style="width:44%"></i></span></button>
+      <button class="read na" data-part="dsp" aria-label="Display sync, not available. Compy hasn't read this. Push in to the display.">
+        <span class="k">Display sync</span><span class="v">Not available</span><span class="i">Compy hasn't read this.</span></button>
+    </div>
+  </section>
+
+  <!-- ============ LAB ============ -->
+  <section class="dock" id="p-lab" hidden>
+    <h1 class="d1">Your next best move</h1>
+    <p class="dsub">Docked to the part it changes.</p>
+    <h2>Turn on hardware GPU scheduling</h2>
+    <p>Your last session showed uneven frame pacing, and your driver supports this.</p>
+    <dl class="facts">
+      <dt>Evidence</dt><dd><span class="chip measured">MEASURED</span>
+        <span class="soft"> — from your own 11-minute session.</span></dd>
+      <dt>Tradeoff</dt><dd>Needs a restart. Some overlays behave differently until then.</dd>
+      <dt>Undo</dt><dd>One click in Blackbook. Nothing else changes.</dd>
+    </dl>
+    <div class="acts">
+      <button class="pill primary">Apply this change</button>
+      <button class="pill quiet">Show me how</button>
+      <button class="pill bare">Not now</button>
+    </div>
+    <p class="note">“Not now” completes the decision. It is not a failure.</p>
+    <div class="discwrap">
+    <div class="disc">
+      <button class="discbtn" id="qdisc" aria-expanded="false" aria-controls="qlist">
+        <span>5 more decisions</span><span class="meta">Show</span></button>
+      <ol id="qlist" hidden>
+        <li>Trim 3 startup apps</li>
+        <li>Set the power plan</li>
+        <li>Check display sync</li>
+        <li>Free 40 GB on C:</li>
+        <li>Update the chipset driver</li>
+      </ol>
+    </div>
+    <div class="disc">
+      <button class="discbtn" id="adisc" aria-expanded="false" aria-controls="alist">
+        <span>Advanced tools</span><span class="meta">Show</span></button>
+      <div id="alist" hidden><p class="advp">Filters, declined items, cleanup, raw instruments, methodology.</p></div>
+    </div>
+    </div>
+  </section>
+
+  <!-- ============ MONITOR ============ -->
+  <section class="dock" id="p-monitor" hidden>
+
+    <div class="centerstate" data-ms="idle" hidden>
+      <h1 class="d1">Record one match</h1>
+      <p>Compy watches one real session, then tells you whether the change did anything.</p>
+      <button class="pill primary">Start recording</button>
+      <div class="steps"><b>Start</b><em>—</em><span>Play normally</span><em>—</em><span>Come back for the result</span></div>
+    </div>
+
+    <div class="centerstate" data-ms="rec" hidden>
+      <h1 class="d1"><span class="recdot"></span>Recording your session</h1>
+      <p>Play normally. Compy is reading frame pacing and will stop when the game closes.</p>
+      <div class="timer">04:12</div>
+      <button class="pill quiet">Stop and keep what we have</button>
+    </div>
+
+    <div data-ms="result">
+      <h1 class="d1">Frame pacing got steadier</h1>
+      <p class="dsub" style="margin-bottom:2px">Measured across one 11-minute session of the same game.</p>
+      <div class="trace">
+        <div class="tracehead"><span>FRAME TIME</span><span>lower is better · amber = 165 Hz budget</span></div>
+        <svg viewBox="0 0 1000 380" role="img"
+             aria-label="Frame time trace. The grey line is before the change, the teal line is after. Two remaining spikes, at 3 minutes 41 seconds and at 7 minutes 6 seconds.">
+          <line class="gridline" x1="96" y1="53.3" x2="990" y2="53.3"/>
+          <line class="gridline" x1="96" y1="142.1" x2="990" y2="142.1"/>
+          <line class="gridline" x1="96" y1="230.8" x2="990" y2="230.8"/>
+          <line class="gridline" x1="96" y1="319.6" x2="990" y2="319.6"/>
+          <text class="axlbl" x="0" y="63">25ms</text><text class="axlbl" x="0" y="152">18ms</text>
+          <text class="axlbl" x="0" y="241">12ms</text><text class="axlbl" x="17" y="329">6ms</text>
+          <line class="budget" x1="96" y1="216.6" x2="990" y2="216.6"/>
+          <path class="tp before" d="M96 227.3 L140 206 L190 248.6 L245 110.1 L300 234.4 L360 213.1 L420 95.9 L480 237.9 L540 223.7 L600 209.5 L660 124.3 L720 230.8 L780 216.6 L840 241.5 L900 156.3 L960 227.3"/>
+          <path class="tp" d="M96 252.1 L130 245 L170 259.3 L210 248.6 L255 255.7 L297 245 L330 170.5 L370 253.9 L420 248.6 L470 261 L520 250.4 L570 257.5 L620 246.8 L660 184.7 L700 255.7 L750 248.6 L800 259.3 L850 250.4 L900 255.7 L960 248.6"/>
+          <g class="spike" data-sel="true" data-t="3:41" data-ms="19.4">
+            <line x1="330" y1="53.3" x2="330" y2="337.4"/><circle cx="330" cy="170.5" r="9"/></g>
+          <g class="spike" data-t="7:06" data-ms="17.9">
+            <line x1="660" y1="53.3" x2="660" y2="337.4"/><circle cx="660" cy="184.7" r="9"/></g>
+        </svg>
+        <div class="spikebar">
+          <button class="stepbtn" id="sprev" aria-label="Previous spike">‹</button>
+          <button class="stepbtn" id="snext" aria-label="Next spike">›</button>
+          <span>Spike <span class="val" id="sidx">1</span> of 2 · <span class="val" id="stime">3:41</span> ·
+            <span class="val" id="sms">19.4 ms</span></span>
+          <span class="meta">Arrow keys step spikes here — nothing needs dragging.</span>
+        </div>
+      </div>
+      <div class="cmp">
+        <div><div class="k">Before this change</div><div class="v">14.2 ms typical · 6 spikes</div></div>
+        <div class="now"><div class="k">After this change</div><div class="v">11.8 ms typical · 2 spikes</div></div>
+      </div>
+      <div class="qual">
+        <span class="chip measured">MEASURED · 1 SESSION · 11 MIN</span>
+        <span class="meta">Same game, same settings.</span>
+      </div>
+      <div class="acts">
+        <button class="pill primary">Keep this change</button>
+        <button class="pill quiet">Roll it back</button>
+        <button class="pill bare">Record another</button>
+      </div>
+    </div>
+
+    <div data-ms="incon" hidden>
+      <h1 class="d1">Not enough to call it</h1>
+      <p class="dsub" style="margin-bottom:2px">A 4-minute session can't separate this change from normal variation.</p>
+      <div class="trace" style="opacity:.75">
+        <div class="tracehead"><span>FRAME TIME</span><span>4:02 recorded</span></div>
+        <svg viewBox="0 0 1000 380" role="img" aria-label="A short frame time trace, too brief to draw a conclusion from.">
+          <line class="gridline" x1="96" y1="142.1" x2="990" y2="142.1"/>
+          <line class="gridline" x1="96" y1="230.8" x2="990" y2="230.8"/>
+          <line class="budget" x1="96" y1="216.6" x2="990" y2="216.6"/>
+          <path class="tp incon" d="M96 248.6 L170 234.4 L245 262.8 L325 177.6 L405 252.1 L480 245 L560 259.3 L640 198.9 L720 250.4 L790 257.5 L860 246.8 L930 253.9 L990 248.6"/>
+        </svg>
+      </div>
+      <div class="cmp">
+        <div><div class="k">Before this change</div><div class="v">14.2 ms typical · 6 spikes</div></div>
+        <div><div class="k">After this change</div><div class="v" style="color:var(--judge)">13.1 ms typical · 2 spikes</div></div>
+      </div>
+      <div class="qual">
+        <span class="chip unknown">INCONCLUSIVE · 4 MIN</span>
+        <span class="meta">Compy needs ~10 minutes.</span>
+      </div>
+      <div class="acts">
+        <button class="pill primary">Record 10 more minutes</button>
+        <button class="pill quiet">Roll it back</button>
+        <button class="pill bare">Keep it anyway</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ BLACKBOOK ============ -->
+  <section class="dock" id="p-blackbook" hidden>
+    <h1 class="d1">Blackbook</h1>
+    <p class="dsub">History &amp; undo — every record points at the part it touched.</p>
+    <div class="recs">
+      <div class="rec" data-anchor="gpu" data-cur="true">
+        <button class="rectitle" aria-label="Hardware GPU scheduling turned on. Show it on the rig.">Hardware GPU scheduling turned on</button>
+        <div class="m"><span>Today</span><span class="chip measured">MEASURED</span>
+          <span class="anch">↳ GRAPHICS CARD</span><span class="st">ACTIVE</span></div>
+        <div class="recrow"><span class="r">Frame pacing 14.2 → 11.8 ms</span>
+          <button class="pill quiet mini">Roll back</button></div>
+      </div>
+      <div class="rec" data-anchor="cpu">
+        <button class="rectitle" aria-label="Game Mode turned off. Show it on the rig.">Game Mode turned off</button>
+        <div class="m"><span>3 days ago</span><span class="chip measured">MEASURED</span>
+          <span class="anch">↳ CPU</span><span class="st">ACTIVE</span></div>
+        <div class="recrow"><span class="r">Frame pacing steadier</span>
+          <button class="pill quiet mini">Roll back</button></div>
+      </div>
+      <div class="rec" data-anchor="sto">
+        <button class="rectitle" aria-label="Startup app trimmed, Discord. Show it on the rig.">Startup app trimmed: Discord</button>
+        <div class="m"><span>6 days ago</span><span class="chip expected">EXPECTED</span><span>(no capture yet)</span>
+          <span class="anch">↳ STORAGE</span><span class="st">ACTIVE</span></div>
+        <div class="recrow"><span class="r">Not measured</span>
+          <button class="pill quiet mini">Roll back</button></div>
+      </div>
+
+      <div class="sepline"><i></i><span>NOT MADE BY COMPY</span><i></i></div>
+
+      <div class="rec off" data-anchor="gpu">
+        <button class="rectitle" aria-label="NVIDIA driver updated to 566.36. Show it on the rig.">NVIDIA driver updated to 566.36</button>
+        <div class="m"><span>8 days ago</span><span class="anch">↳ GRAPHICS CARD</span></div>
+        <div class="r">Windows Update did this. Compy can't roll it back.</div>
+      </div>
+      <div class="rec off" data-anchor="cpu">
+        <button class="rectitle" aria-label="Power plan set to Balanced. Show it on the rig.">Power plan set to Balanced</button>
+        <div class="m"><span>12 days ago</span><span class="anch">↳ CPU</span><span class="st">INACTIVE</span></div>
+        <div class="r">You rolled this back</div>
+      </div>
+    </div>
+    <p class="fgnote">Field Guide is the contextual help and search that lives in here — not a separate product.</p>
+  </section>
+
+  <!-- ============ INSPECT (pushed into one component) ============ -->
+  <section class="dock" id="p-inspect" hidden>
+    <h1 class="d1" id="ins-title">Memory</h1>
+    <p class="dsub" id="ins-sub">Pushed in from the wide view.</p>
+    <div id="ins-chip"></div>
+    <p class="inspec" id="ins-spec"></p>
+    <p id="ins-line" style="margin-top:10px;font-size:15px;color:var(--ink-2)"></p>
+    <div class="acts" id="ins-acts"></div>
+  </section>
+
+  <!-- ============ LIST VIEW — the required fallback ============ -->
+  <nav class="listview" id="listview" aria-label="Destinations" hidden>
+    <h2>List view</h2>
+    <p>The same four places, as plain buttons.</p>
+    <button class="dest" data-room="home" aria-current="page">Home<small>Verdict, your rig, one next move</small></button>
+    <button class="dest" data-room="lab">Lab<small>Your next best move — one decision</small></button>
+    <button class="dest" data-room="monitor">Monitor<small>Record a session, read the proof</small></button>
+    <button class="dest" data-room="blackbook">Blackbook<small>History and undo</small></button>
+    <p class="reqnote">Required, not optional. A camera-driven interface can't be operated by keyboard or a screen
+      reader on its own — so this list ships alongside it, never behind a setting.</p>
+  </nav>
+
+</div></div></div>
+
+<script>
+(function(){
+  var body=document.body, stage=document.getElementById('stage'), app=document.getElementById('app');
+  var world=document.getElementById('world'), leaders=document.getElementById('leaders');
+  var leadpath=document.getElementById('leadpath'), leadring=document.getElementById('leadring'),
+      leaddot=document.getElementById('leaddot');
+  var crumbEl=document.getElementById('crumb'), depthEl=document.getElementById('depth'),
+      resetBtn=document.getElementById('reset');
+  var markersEl=document.getElementById('markers'), listview=document.getElementById('listview');
+
+  /* ---- native 1280x720 stage, transform-scaled to fit narrow windows ---- */
+  function fit(){
+    var w=Math.min(document.documentElement.clientWidth-32,1280);
+    var s=w/1280; stage.style.transform='scale('+s+')';
+    stage.parentElement.style.height=(720*s)+'px';
+  }
+  addEventListener('resize',fit); fit();
+
+  function rmOn(){ return body.dataset.rm==='on' || matchMedia('(prefers-reduced-motion:reduce)').matches; }
+
+  /* ================= the machine, in world coordinates ================= */
+  var PARTS={
+    cpu:{name:'CPU', spec:'8 CORES · 61 °C', x:560, y:296, fx:589, fy:216, st:'measured',
+         chipCls:'measured', chipTxt:'MEASURED', line:'Steady under load. Nothing to decide here.'},
+    ram:{name:'Memory', spec:'32 GB · 41%', x:712, y:296, fx:712, fy:220, st:'measured',
+         chipCls:'measured', chipTxt:'MEASURED', line:'Two slots free. Nothing to decide here.'},
+    sto:{name:'Storage', spec:'2 TB NVMe', x:836, y:228, fx:829, fy:190, st:'measured',
+         chipCls:'measured', chipTxt:'MEASURED', line:'“Free 40 GB on C:” is waiting in the Lab.'},
+    gpu:{name:'Graphics card', spec:'8.2 ms · 71 °C', x:702, y:500, fx:702, fy:442, st:'measured',
+         chipCls:'measured', chipTxt:'MEASURED', line:'This is what the current move changes.',
+         subject:true, changed:true},
+    dsp:{name:'Display', spec:'UNREAD', x:1140, y:314, fx:1140, fy:446, st:'unknown',
+         chipCls:'unknown', chipTxt:'NOT READ', line:'Compy has not read display sync yet.'}
+  };
+  var ORDER=['cpu','ram','sto','gpu','dsp'];
+
+  /* ================= camera: rooms are framings ================= */
+  var CAM={
+    home:      {x:0,   y:0,   w:1280},
+    lab:       {x:511, y:249, w:674},
+    monitor:   {x:473, y:20,  w:1368},
+    blackbook: {x:353, y:-81, w:1500}
+  };
+  var cam={x:0,y:0,w:1280}, flying=false;
+  function K(){ return 1280/cam.w; }
+  function SX(wx){ return (wx-cam.x)*K(); }
+  function SY(wy){ return (wy-cam.y)*K(); }
+
+  function applyCam(){
+    var h=cam.w*720/1280;
+    world.setAttribute('viewBox', cam.x.toFixed(1)+' '+cam.y.toFixed(1)+' '+cam.w.toFixed(1)+' '+h.toFixed(1));
+    depthEl.textContent=(1280/cam.w).toFixed(1)+'×';
+    layoutMarkers();
+    layoutLeader();
+  }
+  function flyTo(t,done){
+    if(rmOn()){ cam.x=t.x; cam.y=t.y; cam.w=t.w; flying=false; applyCam(); if(done)done(); return; }
+    var s={x:cam.x,y:cam.y,w:cam.w}, t0=null, dur=640; flying=true;
+    requestAnimationFrame(function step(ts){
+      if(t0===null)t0=ts;
+      var p=Math.min((ts-t0)/dur,1);
+      var e=p<.5 ? 4*p*p*p : 1-Math.pow(-2*p+2,3)/2;
+      cam.x=s.x+(t.x-s.x)*e; cam.y=s.y+(t.y-s.y)*e; cam.w=s.w+(t.w-s.w)*e;
+      if(p>=1) flying=false;
+      applyCam();
+      if(p<1) requestAnimationFrame(step); else if(done) done();
+    });
+  }
+  /* Frame a part so BOTH its geometry and its own marker stay on screen —
+     otherwise the callout leader points at a component you can no longer see. */
+  function partCam(id){ var p=PARTS[id], w=533, h=w*720/1280;
+    return {x:p.fx-0.28*w, y:(p.fy+p.y)/2-0.5*h, w:w}; }
+
+  /* ================= markers = the navigation ================= */
+  var MK={};
+  ORDER.forEach(function(id){
+    var p=PARTS[id];
+    var b=document.createElement('button');
+    b.className='marker'; b.dataset.part=id; b.dataset.st=p.st;
+    if(p.subject) b.dataset.subject='1';
+    b.innerHTML='<span class="pin"></span><span class="nm">'+p.name+'</span><span class="sp">'+p.spec+'</span>'
+      +(p.changed?'<span class="chg"></span>':'');
+    b.setAttribute('aria-label', p.name+', '+(p.st==='unknown'?'not read yet':'measured')
+      +(p.changed?', changed recently':'')+'. Push in to inspect.');
+    b.onclick=function(){ stopWalk(); showInspect(id); };
+    markersEl.appendChild(b); MK[id]=b;
+  });
+  var VIS={ home:ORDER, lab:['gpu'], monitor:ORDER, blackbook:ORDER };
+
+  function layoutMarkers(){
+    var wide=(room==='home' && !inspect);
+    var maxX = wide?1250:700, maxY = wide?618:690;
+    ORDER.forEach(function(id){
+      var m=MK[id], x=SX(PARTS[id].x), y=SY(PARTS[id].y);
+      var allowed = inspect ? (id===inspect) : (VIS[room].indexOf(id)>=0);
+      var onscreen = x>20 && x<maxX && y>102 && y<maxY;
+      var show = allowed && onscreen && listview.hidden;
+      m.hidden = !show;                       /* [hidden] → out of focus + AT order */
+      if(show){ m.style.left=x.toFixed(1)+'px'; m.style.top=y.toFixed(1)+'px'; }
+    });
+  }
+
+  /* ================= leader lines ================= */
+  var leader={from:null,to:null};
+  function layoutLeader(){
+    if(flying || !leader.to || !leader.from){ leaders.style.visibility='hidden'; return; }
+    leaders.style.visibility='visible';
+    var p=PARTS[leader.to], tx=SX(p.x), ty=SY(p.y)-4;
+    var fx=leader.from[0], fy=leader.from[1];
+    var dir = tx<fx ? -1 : 1;
+    var d='M'+fx+' '+fy+' L'+(fx+dir*18)+' '+fy+' L'+tx.toFixed(1)+' '+ty.toFixed(1);
+    leadpath.setAttribute('d',d);
+    leadring.setAttribute('cx',tx.toFixed(1)); leadring.setAttribute('cy',ty.toFixed(1));
+    leaddot.setAttribute('cx',fx); leaddot.setAttribute('cy',fy);
+    var len=900; try{ len=leadpath.getTotalLength(); }catch(e){}
+    leadpath.style.setProperty('--len',len);
+  }
+  function drawLeader(){
+    layoutLeader();
+    if(!leader.to) return;
+    leadpath.classList.remove('drawn');
+    void leadpath.getBoundingClientRect();
+    if(rmOn()){ leadpath.classList.add('drawn'); return; }
+    requestAnimationFrame(function(){ leadpath.classList.add('drawn'); });
+  }
+  function snapLeader(){ layoutLeader(); leadpath.classList.add('drawn'); }
+  function pulse(id){
+    if(rmOn()) return;
+    var m=MK[id]; if(!m||m.hidden) return;
+    m.classList.remove('pulse'); void m.offsetWidth; m.classList.add('pulse');
+    setTimeout(function(){ m.classList.remove('pulse'); },700);
+  }
+
+  /* ================= rooms ================= */
+  var room='home', inspect=null, INSPECT_BACK='home';
+  var PANELS={home:document.getElementById('p-home'), lab:document.getElementById('p-lab'),
+              monitor:document.getElementById('p-monitor'), blackbook:document.getElementById('p-blackbook')};
+  var pInspect=document.getElementById('p-inspect');
+  var DEPTH={home:'front', lab:'back', monitor:'mid', blackbook:'mid'};
+  var LEADFROM={home:[448,448], lab:[718,404], monitor:[718,392], blackbook:[718,300]};
+  var CRUMB={home:['WIDE VIEW'], lab:['GRAPHICS CARD','THE DECISION'],
+             monitor:['GRAPHICS CARD','THE PROOF'], blackbook:['HISTORY & UNDO']};
+
+  function setCrumb(parts){
+    crumbEl.innerHTML='';
+    var b=document.createElement('button'); b.textContent='YOUR PC';
+    b.onclick=function(){ stopWalk(); goRoom('home'); };
+    crumbEl.appendChild(b);
+    parts.forEach(function(t){
+      var s=document.createElement('span'); s.className='sep'; s.textContent='›'; crumbEl.appendChild(s);
+      var e=document.createElement('span'); e.className='here'; e.textContent=t; crumbEl.appendChild(e);
+    });
+  }
+  function hideAllPanels(){ for(var k in PANELS) PANELS[k].hidden=true; pInspect.hidden=true; }
+
+  function goRoom(name, done){
+    inspect=null; room=name;
+    app.dataset.room=name; app.dataset.depth=DEPTH[name];
+    hideAllPanels();
+    leaders.style.visibility='hidden';
+    document.querySelectorAll('[role=tab]').forEach(function(t){
+      t.setAttribute('aria-selected', String(t.dataset.room===name)); });
+    document.querySelectorAll('.dest').forEach(function(d){
+      if(d.dataset.room===name) d.setAttribute('aria-current','page'); else d.removeAttribute('aria-current'); });
+    document.querySelectorAll('[data-mononly]').forEach(function(e){ e.hidden = name!=='monitor'; });
+    setCrumb(CRUMB[name]);
+    resetBtn.hidden=true;
+    leader.from=LEADFROM[name];
+    leader.to=(name==='blackbook') ? currentRecAnchor() : 'gpu';
+    flyTo(CAM[name], function(){
+      PANELS[name].hidden=false;
+      if(name==='blackbook'){
+        var cur=document.querySelector('.rec[data-cur="true"]');
+        leader.from=[718, recY(cur)];
+        leader.to=cur?cur.dataset.anchor:'gpu';
+      }
+      drawLeader(); pulse(leader.to);
+      if(done) done();
+    });
+  }
+
+  /* ---- inspect: pushing depth into one component ---- */
+  function showInspect(id){
+    if(!inspect) INSPECT_BACK=room;
+    inspect=id;
+    var p=PARTS[id];
+    hideAllPanels();
+    leaders.style.visibility='hidden';
+    app.dataset.depth='mid';
+    setCrumb([p.name.toUpperCase()]);
+    document.getElementById('ins-title').textContent=p.name;
+    document.getElementById('ins-sub').textContent =
+      (p.st==='unknown') ? 'Compy could not read this part.' : 'Pushed in from the wide view.';
+    document.getElementById('ins-chip').innerHTML='<span class="chip '+p.chipCls+'">'+p.chipTxt+'</span>';
+    document.getElementById('ins-spec').textContent = (p.st==='unknown') ? 'Not available' : p.spec;
+    document.getElementById('ins-line').textContent=p.line;
+    var acts=document.getElementById('ins-acts'); acts.innerHTML='';
+    if(id==='gpu'){
+      var a=document.createElement('button'); a.className='pill primary'; a.textContent='Open the decision';
+      a.onclick=function(){ goRoom('lab'); }; acts.appendChild(a);
+    }
+    var bb=document.createElement('button'); bb.className='pill quiet'; bb.textContent='Back to the wide view';
+    bb.onclick=function(){ goRoom(INSPECT_BACK); }; acts.appendChild(bb);
+    leader.from=[718,300]; leader.to=id;
+    resetBtn.hidden=true;
+    flyTo(partCam(id), function(){ pInspect.hidden=false; drawLeader(); pulse(id); });
+  }
+
+  /* ================= chrome + in-stage wiring ================= */
+  document.querySelectorAll('[role=tab]').forEach(function(t){
+    t.onclick=function(){ stopWalk(); goRoom(t.dataset.room); }; });
+  document.querySelectorAll('.dest').forEach(function(d){
+    d.onclick=function(){ stopWalk(); goRoom(d.dataset.room); }; });
+  document.querySelectorAll('[data-goto]').forEach(function(b){
+    b.onclick=function(){ stopWalk(); goRoom(b.dataset.goto); }; });
+
+  document.getElementById('rm').onclick=function(){
+    var on = body.dataset.rm==='off'; body.dataset.rm = on?'on':'off';
+    this.setAttribute('aria-pressed', String(on));
+    if(walking) followBtn.textContent = rmOn() ? 'Next step →' : 'Following…';
+  };
+
+  /* monitor sub-states */
+  var monState='result';
+  function setMonState(s){
+    monState=s;
+    document.querySelectorAll('[data-mstate]').forEach(function(x){
+      x.setAttribute('aria-pressed', String(x.dataset.mstate===s)); });
+    document.querySelectorAll('#p-monitor [data-ms]').forEach(function(m){
+      m.hidden = (m.dataset.ms!==s);   /* [hidden] alone — no opacity tricks */
+    });
+  }
+  document.querySelectorAll('[data-mstate]').forEach(function(b){
+    b.onclick=function(){ setMonState(b.dataset.mstate); }; });
+  setMonState('result');
+
+  /* list view — the required accessible fallback */
+  var listBtn=document.getElementById('listtoggle');
+  listBtn.onclick=function(){
+    var on = listview.hidden;
+    listview.hidden=!on;
+    app.dataset.list = on?'on':'off';
+    this.setAttribute('aria-pressed', String(on));
+    layoutMarkers();
+  };
+
+  /* disclosures — collapsed content REMOVED from focus via [hidden] */
+  [['qdisc','qlist'],['adisc','alist']].forEach(function(pair){
+    var b=document.getElementById(pair[0]), t=document.getElementById(pair[1]);
+    b.onclick=function(){ var open=t.hidden; t.hidden=!open;
+      b.setAttribute('aria-expanded',String(open));
+      b.lastElementChild.textContent = open?'Hide':'Show'; };
+  });
+
+  /* intents */
+  document.querySelectorAll('.intent').forEach(function(b){
+    b.onclick=function(){ document.querySelectorAll('.intent').forEach(function(x){x.setAttribute('aria-pressed','false')});
+      b.setAttribute('aria-pressed','true'); };
+  });
+
+  /* home readings point back at the hardware they came from */
+  var homeCells=[].slice.call(document.querySelectorAll('.read'));
+  function cellLeader(cell){
+    var i=homeCells.indexOf(cell);
+    leader.from=[160+320*i, 634]; leader.to=cell.dataset.part; snapLeader();
+  }
+  function homeLeader(){ leader.from=LEADFROM.home; leader.to='gpu'; snapLeader(); }
+  homeCells.forEach(function(c){
+    function on(){ if(room==='home' && !inspect && !flying) cellLeader(c); }
+    function off(){ if(room==='home' && !inspect && !flying) homeLeader(); }
+    c.addEventListener('mouseenter',on); c.addEventListener('focus',on);
+    c.addEventListener('mouseleave',off); c.addEventListener('blur',off);
+    c.onclick=function(){ stopWalk(); showInspect(c.dataset.part); };
+  });
+
+  /* blackbook records re-anchor the leader to the part they touched */
+  function recY(el){
+    if(!el) return 300;
+    var y=0, n=el;
+    while(n && n!==app){ y+=n.offsetTop; n=n.offsetParent; }
+    var s=el.parentElement;
+    while(s && s!==app){ y-=(s.scrollTop||0); s=s.parentElement; }
+    return Math.max(130, Math.min(690, y+el.offsetHeight/2));
+  }
+  function currentRecAnchor(){
+    var el=document.querySelector('.rec[data-cur="true"]');
+    return el?el.dataset.anchor:'gpu';
+  }
+  document.querySelectorAll('.rec').forEach(function(r){
+    r.querySelector('.rectitle').onclick=function(){
+      document.querySelectorAll('.rec').forEach(function(x){ x.removeAttribute('data-cur'); });
+      r.dataset.cur='true';
+      leader.from=[718, recY(r)]; leader.to=r.dataset.anchor;
+      drawLeader(); pulse(r.dataset.anchor);
+    };
+  });
+
+  /* ================= camera controls: buttons, keys, drag ================= */
+  function markMoved(){ resetBtn.hidden=false; }
+  function clamp(){
+    cam.x=Math.max(-700,Math.min(1500,cam.x));
+    cam.y=Math.max(-520,Math.min(900,cam.y));
+  }
+  function pan(dx,dy){ var s=cam.w/1280*90; cam.x+=dx*s; cam.y+=dy*s; clamp(); applyCam(); markMoved(); }
+  function zoom(f){
+    var cx=cam.x+cam.w/2, cy=cam.y+cam.w*720/1280/2;
+    cam.w=Math.max(340,Math.min(2100,cam.w*f));
+    cam.x=cx-cam.w/2; cam.y=cy-cam.w*720/1280/2; clamp(); applyCam(); markMoved();
+  }
+  document.getElementById('cl').onclick=function(){pan(-1,0)};
+  document.getElementById('cr').onclick=function(){pan(1,0)};
+  document.getElementById('cu').onclick=function(){pan(0,-1)};
+  document.getElementById('cd').onclick=function(){pan(0,1)};
+  document.getElementById('cout').onclick=function(){zoom(1.25)};
+  document.getElementById('cin').onclick=function(){zoom(0.8)};
+  resetBtn.onclick=function(){
+    var t = inspect?partCam(inspect):CAM[room];
+    flyTo(t,function(){ resetBtn.hidden=true; drawLeader(); });
+  };
+
+  /* drag-to-pan — identical in effect to the buttons above and to the arrow keys */
+  var panEl=document.getElementById('pan'), dragging=false, lx=0, ly=0;
+  panEl.addEventListener('pointerdown',function(e){
+    dragging=true; lx=e.clientX; ly=e.clientY;
+    try{ panEl.setPointerCapture(e.pointerId); }catch(err){} });
+  panEl.addEventListener('pointermove',function(e){
+    if(!dragging) return;
+    var sc=stage.getBoundingClientRect().width/1280 || 1;
+    cam.x-=(e.clientX-lx)/sc*cam.w/1280; cam.y-=(e.clientY-ly)/sc*cam.w/1280;
+    lx=e.clientX; ly=e.clientY; clamp(); applyCam(); markMoved(); });
+  ['pointerup','pointercancel','pointerleave'].forEach(function(ev){
+    panEl.addEventListener(ev,function(){ dragging=false; }); });
+
+  /* ================= monitor spikes: buttons + arrow keys, never drag ================= */
+  var spikes=[].slice.call(document.querySelectorAll('#p-monitor .spike')), si=0;
+  function sel(i){ si=(i+spikes.length)%spikes.length;
+    spikes.forEach(function(s,n){ s.dataset.sel=String(n===si); });
+    document.getElementById('sidx').textContent=si+1;
+    document.getElementById('stime').textContent=spikes[si].dataset.t;
+    document.getElementById('sms').textContent=spikes[si].dataset.ms+' ms'; }
+  document.getElementById('sprev').onclick=function(){sel(si-1)};
+  document.getElementById('snext').onclick=function(){sel(si+1)};
+  sel(0);
+
+  addEventListener('keydown',function(e){
+    var a=document.activeElement;
+    if(a && a!==body && !stage.contains(a)) return;          /* keys only while the stage has focus */
+    var inCam = a && a.closest && a.closest('.camgrp');
+    var spikeMode = (room==='monitor' && monState==='result' && !inspect && !inCam);
+    if(e.key==='ArrowLeft'){ spikeMode?sel(si-1):pan(-1,0); e.preventDefault(); }
+    else if(e.key==='ArrowRight'){ spikeMode?sel(si+1):pan(1,0); e.preventDefault(); }
+    else if(e.key==='ArrowUp'){ if(!spikeMode){ pan(0,-1); e.preventDefault(); } }
+    else if(e.key==='ArrowDown'){ if(!spikeMode){ pan(0,1); e.preventDefault(); } }
+    else if(e.key==='+'||e.key==='='){ zoom(0.8); }
+    else if(e.key==='-'||e.key==='_'){ zoom(1.25); }
+  });
+
+  /* ================= THE CONTINUITY WALK — one subject, four framings ================= */
+  var SEQ=['home','lab','monitor','blackbook'], wi=-1, walking=false, wt=null;
+  var followBtn=document.getElementById('follow'), walkbar=document.getElementById('walkbar'),
+      walkstatus=document.getElementById('walkstatus');
+  function stopWalk(){
+    if(wt){ clearTimeout(wt); wt=null; }
+    walking=false; walkbar.hidden=true;
+    followBtn.textContent='Follow this evidence →';
+  }
+  function nextWalk(){
+    wi++;
+    if(wi>=SEQ.length){ stopWalk(); return; }
+    walkbar.hidden=false;
+    walkstatus.textContent='step '+(wi+1)+' of 4 · '+SEQ[wi].toUpperCase();
+    if(SEQ[wi]==='monitor') setMonState('result');
+    goRoom(SEQ[wi], function(){
+      if(!walking) return;
+      if(rmOn()){ followBtn.textContent='Next step →'; return; }
+      wt=setTimeout(nextWalk, 820);
+    });
+  }
+  followBtn.onclick=function(){
+    if(!walking){ walking=true; wi=-1; followBtn.textContent = rmOn()?'Next step →':'Following…'; nextWalk(); }
+    else if(rmOn()){ nextWalk(); }
+    else { stopWalk(); }
+  };
+  document.getElementById('walkstop').onclick=stopWalk;
+
+  /* ================= boot ================= */
+  goRoom('home');
+})();
+</script>
+</body>
+</html>

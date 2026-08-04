@@ -1,3 +1,11 @@
+// Tests must resolve React's DEVELOPMENT export condition: React 19 only exports `act` there, and
+// @testing-library/react needs it. If the launching shell exports NODE_ENV=production (the release
+// and updater lanes do, and it leaks into any tool that inherits that environment), Vite resolves
+// React's production build instead and EVERY render test dies with "React.act is not a function" -
+// 637 assertions across 161 files, none of them a real defect. Pin it before Vite reads it.
+// Proven 2026-08-01: same test, same tree - production => FAIL, development => PASS.
+// Guarded by src/design/tokens-qpw-guard.test.ts ("the suite must actually run").
+process.env.NODE_ENV = "test";
 import { defineConfig, configDefaults } from "vitest/config";
 import react from "@vitejs/plugin-react";
 

@@ -1,0 +1,217 @@
+/* ── Quiet Pit Wall component contracts, styled (Phase B step 3, issue #49) ────────────
+   EVERY selector is scoped under [data-qpw="on"] — same flag-off byte-identity mechanism as
+   tokens-qpw.css, test-pinned in qpw-contracts.test.tsx. Values come ONLY from the token layer:
+   no colour, size, radius or duration literals live here. */
+
+/* screen-reader-only: the spoken meaning of an abbreviated chip travels even though it is not
+   painted. Not display:none — that would remove it from the a11y tree, which is the opposite
+   of what we want here. */
+:root[data-qpw="on"] .qpw-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ═══ PROOF · evidence chip ═══ */
+:root[data-qpw="on"] .qpw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--qpw-s2);
+  font-family: var(--qpw-font-mono);
+  font-size: var(--qpw-fs-mono);
+  letter-spacing: 0.05em;
+  padding: var(--qpw-s1) var(--qpw-s4);
+  border-radius: var(--qpw-r-sm);
+  background: var(--qpw-over);
+  color: var(--qpw-ink-3);
+}
+:root[data-qpw="on"] .qpw-chip-dot {
+  width: var(--qpw-s2);
+  height: var(--qpw-s2);
+  border-radius: var(--qpw-r-pill);
+  background: currentColor;
+  flex: none;
+}
+:root[data-qpw="on"] .qpw-chip[data-state="measured"] {
+  color: var(--qpw-state-measured);
+  background: var(--qpw-proof-dim);
+}
+:root[data-qpw="on"] .qpw-chip[data-state="expected"] {
+  color: var(--qpw-state-expected);
+  background: var(--qpw-focus-dim);
+}
+:root[data-qpw="on"] .qpw-chip[data-state="unknown"] {
+  color: var(--qpw-state-unknown);
+  background: var(--qpw-judge-dim);
+}
+:root[data-qpw="on"] .qpw-chip[data-state="unavailable"] {
+  color: var(--qpw-state-unavailable);
+  background: var(--qpw-over);
+}
+
+/* ═══ ADVANCED · disclosure ═══ */
+:root[data-qpw="on"] .qpw-disc {
+  background: var(--qpw-work);
+  border: 1px solid var(--qpw-edge);
+  border-radius: var(--qpw-r);
+}
+:root[data-qpw="on"] .qpw-disc-btn {
+  width: 100%;
+  min-height: var(--qpw-h-action);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--qpw-s4);
+  padding: var(--qpw-s4) var(--qpw-s6);
+  background: transparent;
+  border: 0;
+  border-radius: var(--qpw-r);
+  cursor: pointer;
+  font-family: var(--qpw-font-sans);
+  font-size: var(--qpw-fs-support);
+  color: var(--qpw-ink);
+  text-align: left;
+}
+:root[data-qpw="on"] .qpw-disc-btn:hover {
+  background: var(--qpw-over);
+}
+:root[data-qpw="on"] .qpw-disc-count {
+  font-family: var(--qpw-font-mono);
+  font-size: var(--qpw-fs-mono);
+  color: var(--qpw-ink-3);
+}
+:root[data-qpw="on"] .qpw-disc-affordance {
+  font-size: var(--qpw-fs-meta);
+  color: var(--qpw-ink-3);
+  flex: none;
+}
+:root[data-qpw="on"] .qpw-disc-panel {
+  padding: 0 var(--qpw-s6) var(--qpw-s5);
+  font-size: var(--qpw-fs-support);
+  color: var(--qpw-ink-2);
+}
+
+/* ═══ GLANCE · verdict ═══ */
+:root[data-qpw="on"] .qpw-crumb {
+  margin: 0 0 var(--qpw-s3);
+  font-size: var(--qpw-fs-meta);
+  letter-spacing: 0.09em;
+  color: var(--qpw-ink-3);
+}
+:root[data-qpw="on"] .qpw-verdict {
+  margin: 0 0 var(--qpw-s2);
+  font-family: var(--qpw-font-sans);
+  font-size: var(--qpw-fs-verdict);
+  line-height: var(--qpw-lh-verdict);
+  letter-spacing: var(--qpw-tracking-verdict);
+  font-weight: 600;
+  color: var(--qpw-ink);
+}
+:root[data-qpw="on"] .qpw-lede {
+  margin: 0;
+  font-size: var(--qpw-fs-body);
+  line-height: var(--qpw-lh-body);
+  color: var(--qpw-ink-2);
+  max-width: 48ch;
+}
+
+/* ═══ GLANCE · reading ═══ */
+:root[data-qpw="on"] .qpw-read {
+  background: var(--qpw-work);
+  padding: var(--qpw-s5) var(--qpw-s5);
+}
+:root[data-qpw="on"] .qpw-read-name {
+  margin: 0 0 var(--qpw-s1);
+  font-size: var(--qpw-fs-meta);
+  color: var(--qpw-ink-3);
+}
+:root[data-qpw="on"] .qpw-read-value {
+  margin: 0;
+  font-family: var(--qpw-font-mono);
+  font-size: var(--qpw-fs-title);
+  color: var(--qpw-ink);
+}
+:root[data-qpw="on"] .qpw-read-interp {
+  margin: var(--qpw-s1) 0 0;
+  font-size: var(--qpw-fs-meta);
+  color: var(--qpw-ink-2);
+}
+:root[data-qpw="on"] .qpw-read[data-unavailable="true"] .qpw-read-value,
+:root[data-qpw="on"] .qpw-read[data-unavailable="true"] .qpw-read-interp {
+  color: var(--qpw-ink-3);
+}
+:root[data-qpw="on"] .qpw-read-bar {
+  height: 2px;
+  margin-top: var(--qpw-s3);
+  border-radius: var(--qpw-r-pill);
+  background: var(--qpw-edge);
+}
+:root[data-qpw="on"] .qpw-read-bar i {
+  display: block;
+  height: 100%;
+  border-radius: var(--qpw-r-pill);
+  background: var(--qpw-proof);
+  transition: width var(--qpw-dur-micro) var(--qpw-ease);
+}
+:root[data-qpw="on"] .qpw-read[data-tone="judge"] .qpw-read-bar i {
+  background: var(--qpw-judge);
+}
+:root[data-qpw="on"] .qpw-read[data-tone="fail"] .qpw-read-bar i {
+  background: var(--qpw-fail);
+}
+
+/* ═══ ACTION HIERARCHY ═══ */
+:root[data-qpw="on"] .qpw-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--qpw-s4);
+}
+:root[data-qpw="on"] .qpw-action {
+  font-family: var(--qpw-font-sans);
+  font-size: var(--qpw-fs-support);
+  min-height: var(--qpw-h-action);
+  padding: 0 var(--qpw-s7);
+  border: 1px solid transparent;
+  border-radius: var(--qpw-r);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--qpw-s3);
+  cursor: pointer;
+}
+:root[data-qpw="on"] .qpw-action[data-variant="primary"] {
+  min-height: var(--qpw-h-primary);
+  padding: 0 var(--qpw-s8);
+  font-weight: 650;
+  background: var(--qpw-focus);
+  color: var(--qpw-accent-ink);
+}
+:root[data-qpw="on"] .qpw-action[data-variant="quiet"] {
+  background: var(--qpw-over);
+  color: var(--qpw-ink);
+  border-color: var(--qpw-edge);
+}
+:root[data-qpw="on"] .qpw-action[data-variant="bare"] {
+  background: transparent;
+  color: var(--qpw-ink-2);
+}
+:root[data-qpw="on"] .qpw-action[data-variant="bare"]:hover {
+  color: var(--qpw-ink);
+}
+:root[data-qpw="on"] .qpw-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Focus is never invisible and never removed. */
+:root[data-qpw="on"] .qpw-action:focus-visible,
+:root[data-qpw="on"] .qpw-disc-btn:focus-visible {
+  outline: 2px solid var(--qpw-focus);
+  outline-offset: 2px;
+}

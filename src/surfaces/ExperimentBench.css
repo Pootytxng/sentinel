@@ -330,10 +330,15 @@
   color: var(--ix-amber);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .exp-running-dot {
-    animation: exp-pulse 2.4s ease-in-out infinite;
-  }
+/* Motion gates on the APP's resolved signal (<html data-motion>), never a raw
+   prefers-reduced-motion query: use-motion.ts already folds the user's choice and the Windows
+   setting into that attribute, and an explicit choice must win in BOTH directions. The previous
+   `no-preference` form got it backwards - a user who chose "Reduced" still got this infinite
+   pulse whenever Windows happened to report no preference, and on a machine reporting `reduce`
+   (the owner's WebView2 does) the dot froze even with motion set to Full. Pinned by
+   src/design/tokens-qpw-guard.test.ts -> "one source of truth for motion". */
+:root[data-motion="full"] .exp-running-dot {
+  animation: exp-pulse 2.4s ease-in-out infinite;
 }
 @keyframes exp-pulse {
   0%, 100% { opacity: 1; }

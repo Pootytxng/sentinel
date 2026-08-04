@@ -286,7 +286,7 @@ describe("type discipline (Geist law)", () => {
   });
 
   it('"Geist" appears in src CSS only in fonts-v2.css (@font-face) + tokens-v2.css (tokens)', () => {
-    const allowed = new Set(["fonts-v2.css", "tokens-v2.css"]);
+    const allowed = new Set(["fonts-v2.css", "tokens-v2.css", "tokens-qpw.css"]);
     const offenders: string[] = [];
     for (const p of listCss("src")) {
       const base = p.replace(/\\/g, "/").split("/").pop() as string;

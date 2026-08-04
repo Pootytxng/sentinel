@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Compy — Direction D · The Hybrid (recommended)</title>
+<style>
+/* ============================================================
+   D — THE HYBRID
+   Quiet Pit Wall  = the environmental shell
+   The functional rig = the visual and navigational signature
+   The proof mission  = the user journey
+   Evidence + rollback = the payoff
+   Advanced detail     = on demand only
+   ============================================================ */
+:root{
+  --env:#131417; --work:#1b1d22; --over:#24272e; --edge:#2b2f37;
+  --ink:#ece7e0; --ink-2:#a8a49d; --ink-3:#6f6c67;
+  --focus:#a78bfa; --proof:#3fd9c2; --judge:#f0b878; --fail:#ff6b6b;
+  --focus-dim:#a78bfa26; --proof-dim:#3fd9c226; --judge-dim:#f0b87826;
+  --sans: ui-sans-serif,"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  --mono: ui-monospace,"Cascadia Mono",Consolas,monospace;
+  --machine:420px;     /* the machine column reframes AND resizes per room */
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:#0b0c0e;color:var(--ink);font-family:var(--sans)}
+body{display:flex;flex-direction:column;align-items:center;gap:14px;padding:18px 16px 40px;min-height:100vh}
+
+/* ---- prototype chrome (not part of the design) ---- */
+.chrome{width:1280px;max-width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.chrome h1{font-size:15px;font-weight:600;margin:0}
+.chrome .tag{font-family:var(--mono);font-size:11.5px;color:#8a8680;border:1px solid #26282d;
+  border-radius:999px;padding:4px 9px;background:#141518}
+.chrome .spacer{flex:1}
+.chrome button{font-family:var(--sans);font-size:13px;color:#b8b4ad;background:#141518;
+  border:1px solid #26282d;border-radius:8px;padding:7px 12px;cursor:pointer;min-height:28px}
+.chrome button[aria-pressed="true"],.chrome button[aria-selected="true"]{color:#0d0b14;background:var(--focus);border-color:var(--focus);font-weight:600}
+.chrome .grp{display:flex;gap:6px;align-items:center}
+.chrome .lbl{font-size:12px;color:#67645f}
+.stagewrap{width:1280px;max-width:100%}
+.stage{width:1280px;height:720px;transform-origin:top left;position:relative;border-radius:12px;
+  overflow:hidden;box-shadow:0 30px 90px #000a,0 0 0 1px #23262c}
+
+/* ---- shell ---- */
+.app{position:absolute;inset:0;display:grid;grid-template-columns:84px 1fr;
+  background:
+    radial-gradient(110% 80% at 74% 4%, #1e212a 0%, transparent 58%),
+    radial-gradient(80% 60% at 4% 100%, #191b21 0%, transparent 55%),
+    var(--env);
+  font-size:15px;line-height:1.5}
+
+/* rail — per-room identity survives as a cue, not a paint job */
+.rail{display:flex;flex-direction:column;gap:2px;padding:14px 7px;background:#101115;border-right:1px solid var(--edge)}
+.rail .brand{font-size:12.5px;font-weight:700;letter-spacing:.16em;color:var(--ink-2);text-align:center;padding:6px 0 14px}
+.rmbtn{display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 3px;border:0;
+  background:transparent;border-radius:10px;cursor:pointer;color:var(--ink-3);font-family:var(--sans);
+  font-size:13px;min-height:54px;position:relative;width:100%}
+.rmbtn svg{width:19px;height:19px}
+.rmbtn:hover{background:#171a1f;color:var(--ink-2)}
+.rmbtn[aria-current="page"]{background:#191c22;color:var(--ink)}
+.rmbtn[aria-current="page"]::before{content:"";position:absolute;left:-7px;top:11px;bottom:11px;width:3px;
+  border-radius:0 3px 3px 0;background:var(--cue)}
+.rmbtn .dot{width:5px;height:5px;border-radius:50%;background:var(--cue);opacity:.5}
+button:focus-visible,[tabindex]:focus-visible,a:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+/* the working area: content | machine, with the mission ribbon pinned under both */
+.work{display:grid;grid-template-rows:1fr 52px;grid-template-columns:minmax(0,1fr);min-width:0}
+.floor{display:grid;grid-template-columns:1fr var(--machine);gap:24px;padding:22px 28px 12px;min-width:0;min-height:0;
+  transition:grid-template-columns .24s cubic-bezier(.22,.61,.36,1)}
+.pane{display:flex;flex-direction:column;min-width:0;min-height:0}
+
+.crumb{font-size:13px;color:var(--ink-3);letter-spacing:.09em;margin-bottom:9px}
+.verdict{font-size:29px;line-height:1.14;font-weight:600;margin:0 0 7px;letter-spacing:-.018em}
+.lede{font-size:15px;color:var(--ink-2);margin:0;max-width:48ch}
+
+.chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;
+  letter-spacing:.05em;padding:4px 9px;border-radius:6px;background:#1a1d23;color:var(--ink-2)}
+.chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.chip.measured{color:var(--proof);background:var(--proof-dim)}
+.chip.expected{color:var(--focus);background:var(--focus-dim)}
+.chip.unknown{color:var(--judge);background:var(--judge-dim)}
+.chip.unavailable{color:var(--ink-3);background:#1a1d23}
+
+.pill{font-family:var(--sans);font-size:14.5px;border-radius:9px;cursor:pointer;min-height:40px;
+  padding:0 17px;border:1px solid transparent;display:inline-flex;align-items:center;gap:8px;justify-content:center}
+.pill.primary{background:var(--focus);color:#160f2b;font-weight:650;min-height:44px;padding:0 22px}
+.pill.primary:hover{background:#b79dff}
+.pill.quiet{background:#1e2128;color:var(--ink);border-color:var(--edge)}
+.pill.quiet:hover{background:#252932}
+.pill.bare{background:transparent;color:var(--ink-2)}
+.pill.bare:hover{color:var(--ink)}
+
+/* ============ THE MISSION RIBBON — the journey, carried across every room ============ */
+.ribbon{display:flex;align-items:center;gap:12px;padding:0 28px;background:#0f1013;
+  border-top:1px solid var(--edge)}
+.ribbon .subj{display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--ink-2);white-space:nowrap;flex:0 0 auto}
+.ribbon .subj b{color:var(--ink);font-weight:600}
+.ribbon .sq{width:9px;height:9px;border-radius:2px;background:var(--focus)}
+.track{display:flex;align-items:center;gap:0;flex:1 1 auto;min-width:0;overflow:hidden}
+.stg{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-3);white-space:nowrap}
+.stg i{width:8px;height:8px;border-radius:50%;background:#2c3038;display:block;flex:none}
+.stg.done i{background:var(--proof)}
+.stg.now{color:var(--ink)}
+.stg.now i{background:var(--focus);box-shadow:0 0 0 4px #a78bfa26}
+.track .seg{height:1px;background:#26292f;flex:1;min-width:6px;margin:0 6px}
+.track .seg.done{background:#2f4a49}
+.ribbon .go{font-size:13.5px;min-height:32px;padding:0 13px;white-space:nowrap}
+.ribbon .why{font-size:13px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+
+/* ============ MACHINE COLUMN — signature + navigation ============ */
+.machine{position:relative;display:flex;flex-direction:column;min-height:0}
+.mhead{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;
+  color:var(--ink-3);letter-spacing:.08em;margin-bottom:2px}
+.mhead .st{font-family:var(--mono);letter-spacing:.02em}
+.rig{flex:0 0 auto;width:100%;display:block;margin:6px 0 0;max-height:100%}
+.part{cursor:pointer}
+.part .face{fill:#1e2128;stroke:#333842;stroke-width:1}
+.part .halo{fill:none;stroke:var(--proof);stroke-width:1.4;opacity:.5}
+.part[data-state="unknown"] .face{fill:#171a1f;stroke:#3a3a34;stroke-dasharray:3 3}
+.part[data-state="unknown"] .halo{stroke:var(--judge);opacity:.5;stroke-dasharray:4 4}
+.part[data-target="true"] .halo{stroke:var(--focus);opacity:1;stroke-width:2}
+.part[data-target="true"] .face{fill:#221d33;stroke:#5b4b93}
+.part:hover .halo,.part:focus-visible .halo{opacity:1}
+.part text{font-family:var(--sans);font-size:15px;fill:var(--ink-2)}
+.part .spec{font-family:var(--mono);font-size:13px;fill:var(--ink-3)}
+#content > div{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
+.rm-monitor > [data-ms]{display:flex;flex-direction:column;flex:1;min-height:0}
+.pip{fill:var(--proof)}
+.rigkey{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--ink-3);margin-top:auto;padding-top:10px}
+.rigkey span{display:inline-flex;align-items:center;gap:6px}
+.rigkey i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.leader{fill:none;stroke:var(--focus);stroke-width:1.4;opacity:.75;
+  stroke-dasharray:var(--len,220);stroke-dashoffset:var(--len,220);transition:stroke-dashoffset .5s cubic-bezier(.22,.61,.36,1)}
+.leader.drawn{stroke-dashoffset:0}
+.mnote{font-size:13px;color:var(--ink-2);background:#16181d;border:1px solid var(--edge);
+  border-radius:9px;padding:9px 12px;margin-top:12px}
+.mnote b{color:var(--ink)}
+
+/* ============ HOME ============ */
+.intents{display:flex;gap:8px;margin:16px 0 0}
+.intent{flex:1;text-align:left;padding:10px 12px;border-radius:10px;background:#181b21;
+  border:1px solid var(--edge);color:var(--ink);font-family:var(--sans);font-size:14px;cursor:pointer;min-height:44px}
+.intent:hover{background:#1e222a}
+.intent[aria-pressed="true"]{border-color:var(--focus);background:#1d1a2a}
+.intent small{display:block;font-size:12.5px;color:var(--ink-3);margin-top:1px}
+.nextmove{margin-top:15px;background:var(--work);border-radius:12px;padding:15px 18px;position:relative}
+.nextmove::before{content:"";position:absolute;left:0;top:15px;bottom:15px;width:2px;border-radius:2px;background:var(--focus)}
+.nextmove h3{margin:0 0 4px;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.nextmove p{margin:0;color:var(--ink-2);font-size:14.5px;max-width:46ch}
+.nextmove .row{display:flex;align-items:center;gap:10px;margin-top:13px;flex-wrap:wrap}
+.strip{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--edge);
+  border-radius:10px;overflow:hidden;margin-top:auto}
+.read{background:#16181d;padding:11px 12px}
+.read .k{font-size:13px;color:var(--ink-3);margin-bottom:4px}
+.read .v{font-family:var(--mono);font-size:16px;color:var(--ink)}
+.read .i{font-size:13px;color:var(--ink-2);margin-top:3px}
+.read.na .v,.read.na .i{color:var(--ink-3)}
+.read .bar{height:2px;border-radius:2px;margin-top:8px;background:#24272e}
+.read .bar i{display:block;height:100%;border-radius:2px;background:var(--proof)}
+.read.warn .bar i{background:var(--judge)}
+.proofline{display:flex;align-items:center;gap:10px;margin-top:11px;font-size:13.5px;color:var(--ink-2)}
+.proofline b{font-weight:600;color:var(--ink)}
+.proofline a{color:var(--proof);text-decoration:none;border-bottom:1px solid #3fd9c255;cursor:pointer}
+
+/* ============ LAB ============ */
+.decision{background:var(--work);border-radius:14px;padding:22px 24px;display:flex;flex-direction:column;flex:0 0 auto}
+.decision h3{margin:0;font-size:24px;font-weight:600;letter-spacing:-.018em}
+.decision .why{margin:9px 0 0;font-size:15px;color:var(--ink-2);max-width:50ch}
+.factrow{display:grid;grid-template-columns:96px 1fr;gap:9px 14px;margin-top:18px;font-size:14.5px;align-items:start}
+.factrow dt{color:var(--ink-3);font-size:13.5px;padding-top:2px}
+.factrow dd{margin:0;color:var(--ink)}
+.decision .acts{display:flex;gap:10px;align-items:center;margin-top:22px}
+.discs{display:flex;gap:10px;margin-top:auto;padding-top:12px}
+.disc{flex:1;background:#16181d;border:1px solid var(--edge);border-radius:10px;padding:11px 14px;
+  color:var(--ink);font-family:var(--sans);font-size:14px;cursor:pointer;min-height:44px;
+  display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left}
+.disc:hover{background:#1c1f26}
+.disc span.c{color:var(--ink-3);font-size:13px}
+.panel{background:#16181d;border:1px solid var(--edge);border-radius:10px;padding:12px 16px;margin-top:12px}
+.panel ol{margin:0;padding-left:19px;color:var(--ink-2);font-size:14px;line-height:1.85}
+.panel li::marker{color:var(--ink-3);font-family:var(--mono);font-size:12px}
+.panel p{margin:0;font-size:13.5px;color:var(--ink-2)}
+
+/* ============ MONITOR ============ */
+.trace{background:var(--work);border-radius:12px;padding:13px 16px 6px;margin-top:12px}
+.trace svg{display:block;width:100%;height:206px}
+.gridline{stroke:#242830;stroke-width:1}
+.budget{stroke:var(--judge);stroke-width:1;stroke-dasharray:4 4;opacity:.7}
+.tracepath{fill:none;stroke:var(--proof);stroke-width:1.6;stroke-linejoin:round}
+.tracepath.before{stroke:#4c515c;stroke-width:1.2}
+.spike line{stroke:var(--fail);stroke-width:1.1;opacity:.55}
+.spike circle{fill:#1b1d22;stroke:var(--fail);stroke-width:1.6}
+.spike[data-sel="true"] line{opacity:1}
+.spike[data-sel="true"] circle{fill:var(--fail)}
+.axlbl{font-family:var(--mono);font-size:17px;fill:var(--ink-3)} /* axis units, telemetry only */
+.tracehead{display:flex;align-items:baseline;gap:12px;font-size:12.5px;color:var(--ink-3)}
+.spikebar{display:flex;align-items:center;gap:10px;margin-top:7px;font-size:13.5px;color:var(--ink-2);flex-wrap:wrap}
+.spikebar .val{font-family:var(--mono);color:var(--ink);font-size:14px}
+.stepbtn{width:34px;height:34px;border-radius:8px;background:#1e2128;border:1px solid var(--edge);color:var(--ink);cursor:pointer;font-size:15px;line-height:1}
+.cmp{display:grid;grid-template-columns:1fr 1fr auto;gap:1px;background:var(--edge);border-radius:11px;overflow:hidden;margin-top:12px}
+.cmp>div{background:#16181d;padding:12px 16px}
+.cmp .k{font-size:13px;color:var(--ink-3)}
+.cmp .v{font-family:var(--mono);font-size:16px;margin-top:3px;white-space:nowrap}
+.cmp .now .v{color:var(--proof)}
+.cmp .qual{display:flex;flex-direction:column;justify-content:center;gap:6px;min-width:238px}
+.monacts{display:flex;gap:10px;align-items:center;margin-top:14px}
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:13px}
+.empty h3{font-size:26px;margin:0;font-weight:600;letter-spacing:-.018em}
+.empty p{margin:0;max-width:40ch;color:var(--ink-2);font-size:15px}
+.steps{display:flex;align-items:center;font-size:13.5px;color:var(--ink-3);margin-top:4px}
+.steps b{color:var(--ink-2);font-weight:500}
+.steps span{padding:0 12px}
+.steps em{font-style:normal;color:#3b3f47}
+.recdot{width:9px;height:9px;border-radius:50%;background:var(--fail);display:inline-block;margin-right:8px}
+
+/* ============ BLACKBOOK ============ */
+.tl{display:flex;flex-direction:column;gap:1px;background:var(--edge);border-radius:12px;overflow:hidden}
+.rec{background:#16181d;padding:12px 16px;display:grid;grid-template-columns:1fr auto;gap:3px 16px;align-items:center}
+.rec.subj{background:#1b1826;box-shadow:inset 3px 0 0 var(--focus)}
+.rec .t{font-size:15.5px;font-weight:600;letter-spacing:-.01em}
+.rec .chain{grid-column:1;font-size:13.5px;color:var(--ink-2);display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:1px}
+.rec .chain em{font-style:normal;color:#3f434b}
+.rec .act{grid-column:2;grid-row:1 / span 2;align-self:center;min-height:34px;font-size:13.5px;padding:0 13px}
+.rec .when{font-family:var(--mono);font-size:12px;color:var(--ink-3);font-weight:400}
+.bbsplit{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--ink-3);letter-spacing:.08em;margin:13px 0 7px}
+.bbsplit::after{content:"";flex:1;height:1px;background:var(--edge)}
+.rec.outside{background:#141519}
+.rec.outside .t,.rec.inactive .t{color:var(--ink-2);font-weight:500}
+.rec.inactive .t{text-decoration:line-through;text-decoration-color:#3a3d44}
+.rec.inactive .when{text-decoration:none;display:inline-block}
+
+[hidden]{display:none !important}
+.hidden{display:none !important}
+
+/* ============ MOTION CONTRACT ============
+   One focal move per viewport, one time, always causal.
+   Windows reduced-motion is the default authority; the toggle mirrors it. */
+.pane-anim{animation:rise .2s cubic-bezier(.22,.61,.36,1)}
+@keyframes rise{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.rig{transition:none}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms !important;transition-duration:.001ms !important}
+  .leader{stroke-dashoffset:0 !important}
+}
+body[data-rm="on"] *{animation-duration:.001ms !important;transition-duration:.001ms !important}
+body[data-rm="on"] .leader{stroke-dashoffset:0 !important}
+</style>
+</head>
+<body data-rm="off">
+
+<div class="chrome">
+  <h1>Direction D — The Hybrid <span style="color:var(--proof);font-weight:500">· recommended</span></h1>
+  <span class="tag">1280 × 720</span>
+  <span class="tag" style="color:#f0b878;border-color:#3a3226">PROTOTYPE · fixture data · not this PC</span>
+  <span class="spacer"></span>
+  <span class="lbl">Room</span>
+  <div class="grp" role="tablist" aria-label="Room">
+    <button role="tab" data-room="home" aria-selected="true">Home</button>
+    <button role="tab" data-room="lab" aria-selected="false">Lab</button>
+    <button role="tab" data-room="monitor" aria-selected="false">Monitor</button>
+    <button role="tab" data-room="blackbook" aria-selected="false">Blackbook</button>
+  </div>
+  <span class="lbl" data-mononly hidden>Monitor state</span>
+  <div class="grp" data-mononly hidden>
+    <button data-mstate="idle" aria-pressed="false">Idle</button>
+    <button data-mstate="rec" aria-pressed="false">Recording</button>
+    <button data-mstate="result" aria-pressed="true">Result</button>
+    <button data-mstate="incon" aria-pressed="false">Inconclusive</button>
+  </div>
+  <button id="rm" aria-pressed="false">Reduced motion</button>
+</div>
+
+<div class="stagewrap"><div class="stage" id="stage">
+<div class="app">
+
+  <nav class="rail" aria-label="Rooms">
+    <div class="brand">COMPY</div>
+    <button class="rmbtn" data-nav="home" aria-current="page" style="--cue:#a78bfa">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>Home<span class="dot"></span></button>
+    <button class="rmbtn" data-nav="lab" style="--cue:#27e08a">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 3v6L4 19a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-10V3"/><path d="M8 3h8"/></svg>Lab<span class="dot"></span></button>
+    <button class="rmbtn" data-nav="monitor" style="--cue:#3fd9c2">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 13h4l3-7 4 14 3-7h4"/></svg>Monitor<span class="dot"></span></button>
+    <button class="rmbtn" data-nav="blackbook" style="--cue:#f0b878">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 4h13a1 1 0 0 1 1 1v15H6a1 1 0 0 1-1-1z"/><path d="M9 4v16"/></svg>Blackbook<span class="dot"></span></button>
+  </nav>
+
+  <div class="work">
+    <div class="floor" id="floor">
+
+      <!-- ================= CONTENT PANE ================= -->
+      <section class="pane" id="content">
+
+        <!-- ---------- HOME ---------- -->
+        <div class="rm-home">
+          <div class="crumb">HOME · WHAT MATTERS RIGHT NOW</div>
+          <h1 class="verdict">No urgent issue found</h1>
+          <p class="lede">Compy has read your PC and has one move worth making.</p>
+          <div class="intents" role="group" aria-label="What do you want help with?">
+            <button class="intent" aria-pressed="true">Play smoother<small>Frame pacing &amp; latency</small></button>
+            <button class="intent" aria-pressed="false">Fix a problem<small>Something feels wrong</small></button>
+            <button class="intent" aria-pressed="false">Understand my PC<small>What Compy can see</small></button>
+          </div>
+          <div class="nextmove">
+            <h3>Turn on hardware GPU scheduling</h3>
+            <p>Your last session showed uneven frame pacing, and your driver supports this.</p>
+            <div class="row">
+              <button class="pill primary" data-go="lab">Show me this move</button>
+              <span class="chip measured">MEASURED</span>
+              <span style="font-size:13px;color:var(--ink-3)">Affects your GPU</span>
+            </div>
+          </div>
+          <div class="strip" role="group" aria-label="Four readings">
+            <div class="read"><div class="k">Frame pacing</div><div class="v">11.8 ms</div>
+              <div class="i">Steady last session.</div><div class="bar"><i style="width:78%"></i></div></div>
+            <div class="read"><div class="k">GPU temperature</div><div class="v">71 °C</div>
+              <div class="i">Normal under load.</div><div class="bar"><i style="width:62%"></i></div></div>
+            <div class="read warn"><div class="k">Startup load</div><div class="v">3 apps</div>
+              <div class="i">Your call to trim.</div><div class="bar"><i style="width:44%"></i></div></div>
+            <div class="read na"><div class="k">Display sync</div><div class="v">Not available</div>
+              <div class="i">Compy hasn't read this.</div><div class="bar"></div></div>
+          </div>
+          <div class="proofline"><span class="chip measured">KEPT</span>
+            <span><b>Game Mode off</b> · applied 3 days ago · frame pacing steadier</span>
+            <button class="pill bare" style="min-height:28px;padding:0 6px;font-size:13.5px;color:var(--proof)">Roll back</button></div>
+        </div>
+
+        <!-- ---------- LAB ---------- -->
+        <div class="rm-lab hidden">
+          <div class="crumb">LAB · YOUR NEXT BEST MOVE</div>
+          <div class="decision">
+            <h3>Turn on hardware GPU scheduling</h3>
+            <p class="why">Your last session showed uneven frame pacing, and your driver supports this.</p>
+            <dl class="factrow">
+              <dt>Evidence</dt><dd><span class="chip measured">MEASURED</span>
+                <span style="color:var(--ink-2);font-size:14px"> — from your own 11-minute session.</span></dd>
+              <dt>Tradeoff</dt><dd>Needs a restart. Some overlays behave differently until then.</dd>
+              <dt>Undo</dt><dd>One click in Blackbook. Nothing else changes.</dd>
+            </dl>
+            <div class="acts">
+              <button class="pill primary" data-go="monitor">Apply this change</button>
+              <button class="pill quiet">Show me how</button>
+              <button class="pill bare" id="decline">Not now</button>
+            </div>
+          </div>
+          <div class="panel" id="p-queue" hidden>
+            <ol><li>Trim 3 startup apps</li><li>Set the power plan</li><li>Check display sync</li>
+                <li>Free 40 GB on C:</li><li>Update the chipset driver</li></ol>
+          </div>
+          <div class="panel" id="p-adv" hidden>
+            <p>Filters · declined items · cleanup · raw instruments · methodology.
+               Saying <b style="color:var(--ink)">Not now</b> completes this decision — it isn't a failure, and Compy won't re-ask this week.</p>
+          </div>
+          <div class="discs">
+            <button class="disc" aria-expanded="false" aria-controls="p-queue" data-disc>
+              <span>5 more decisions</span><span class="c">Show</span></button>
+            <button class="disc" aria-expanded="false" aria-controls="p-adv" data-disc>
+              <span>Advanced tools</span><span class="c">Show</span></button>
+          </div>
+        </div>
+
+        <!-- ---------- MONITOR ---------- -->
+        <div class="rm-monitor hidden">
+          <div class="crumb">MONITOR · DID IT ACTUALLY HELP</div>
+
+          <div class="pane empty" data-ms="idle" hidden>
+            <h3>Record one match</h3>
+            <p>Compy watches one real session, then tells you whether the change did anything.</p>
+            <button class="pill primary">Start recording</button>
+            <div class="steps"><b>Start</b><span><em>—</em></span><span>Play normally</span><em>—</em><span>Come back for the result</span></div>
+          </div>
+
+          <div class="pane empty" data-ms="rec" hidden>
+            <h3><span class="recdot"></span>Recording your session</h3>
+            <p>Play normally. Compy is reading frame pacing and will stop when the game closes.</p>
+            <div style="font-family:var(--mono);font-size:30px;color:var(--proof)">04:12</div>
+            <button class="pill quiet">Stop and keep what we have</button>
+          </div>
+
+          <div data-ms="result">
+            <h1 class="verdict" style="font-size:26px">Frame pacing got steadier</h1>
+            <p class="lede">Measured across one 11-minute session of the same game.</p>
+            <div class="trace">
+              <div class="tracehead"><span>FRAME TIME</span><span>lower is better · amber line = your 165 Hz budget</span></div>
+              <svg viewBox="0 0 1000 206" role="img" aria-label="Frame time trace. Two remaining spikes: 3 minutes 41 seconds at 19.4 milliseconds, and 7 minutes 6 seconds at 17.9 milliseconds.">
+                <line class="gridline" x1="42" y1="26" x2="992" y2="26"/><line class="gridline" x1="42" y1="76" x2="992" y2="76"/>
+                <line class="gridline" x1="42" y1="126" x2="992" y2="126"/><line class="gridline" x1="42" y1="176" x2="992" y2="176"/>
+                <text class="axlbl" x="4" y="30">25ms</text><text class="axlbl" x="4" y="80">18ms</text>
+                <text class="axlbl" x="4" y="130">12ms</text><text class="axlbl" x="4" y="180">6ms</text>
+                <line class="budget" x1="42" y1="118" x2="992" y2="118"/>
+                <path class="tracepath before" d="M42 124 L120 112 L180 136 L240 58 L300 128 L360 116 L420 50 L480 130 L540 122 L600 114 L660 66 L720 126 L780 118 L840 132 L900 84 L960 124"/>
+                <path class="tracepath" d="M42 138 L92 134 L142 142 L192 136 L242 140 L292 134 L332 92 L372 139 L422 136 L472 143 L522 137 L572 141 L622 135 L662 100 L702 140 L752 136 L802 142 L852 137 L902 140 L960 136"/>
+                <g class="spike" data-sel="true" data-t="3:41" data-msv="19.4"><line x1="332" y1="26" x2="332" y2="186"/><circle cx="332" cy="92" r="5"/></g>
+                <g class="spike" data-t="7:06" data-msv="17.9"><line x1="662" y1="26" x2="662" y2="186"/><circle cx="662" cy="100" r="5"/></g>
+              </svg>
+              <div class="spikebar">
+                <button class="stepbtn" aria-label="Previous spike">‹</button>
+                <button class="stepbtn" aria-label="Next spike">›</button>
+                <span>Spike <span class="val" id="sidx">1</span> of 2 · <span class="val" id="stime">3:41</span> · <span class="val" id="sms">19.4 ms</span></span>
+                <span style="color:var(--ink-3);font-size:13px">Arrow keys work too — no dragging needed.</span>
+              </div>
+            </div>
+            <div class="cmp">
+              <div><div class="k">Before this change</div><div class="v" style="color:#8c919b">14.2 ms typical · 6 spikes</div></div>
+              <div class="now"><div class="k">After this change</div><div class="v">11.8 ms typical · 2 spikes</div></div>
+              <div class="qual"><span class="chip measured">MEASURED · 1 SESSION · 11 MIN</span>
+                <span style="font-size:13px;color:var(--ink-3)">Same game, same settings.</span></div>
+            </div>
+            <div class="monacts">
+              <button class="pill primary" data-go="blackbook">Keep this change</button>
+              <button class="pill quiet">Roll it back</button>
+              <button class="pill bare">Record another session</button>
+            </div>
+          </div>
+
+          <div data-ms="incon" hidden>
+            <h1 class="verdict" style="font-size:26px">Not enough to call it</h1>
+            <p class="lede">A 4-minute session can't separate this change from normal variation.</p>
+            <div class="trace" style="opacity:.75">
+              <div class="tracehead"><span>FRAME TIME</span><span>4:02 recorded</span></div>
+              <svg viewBox="0 0 1000 206" role="img" aria-label="A short frame time trace, too brief to draw a conclusion.">
+                <line class="gridline" x1="42" y1="76" x2="992" y2="76"/><line class="gridline" x1="42" y1="126" x2="992" y2="126"/>
+                <line class="budget" x1="42" y1="118" x2="992" y2="118"/>
+                <path class="tracepath" style="stroke:var(--judge)" d="M42 136 L130 128 L220 144 L310 96 L400 138 L490 134 L580 142 L670 108 L760 137 L850 141 L940 135 L992 138"/>
+              </svg>
+            </div>
+            <div class="cmp">
+              <div><div class="k">Before this change</div><div class="v" style="color:#8c919b">14.2 ms typical · 6 spikes</div></div>
+              <div><div class="k">After this change</div><div class="v" style="color:var(--judge)">13.1 ms typical · 2 spikes</div></div>
+              <div class="qual"><span class="chip unknown">INCONCLUSIVE · 4 MIN</span>
+                <span style="font-size:13px;color:var(--ink-3)">Compy needs ~10 minutes.</span></div>
+            </div>
+            <div class="monacts">
+              <button class="pill primary">Record 10 more minutes</button>
+              <button class="pill quiet">Roll it back</button>
+              <button class="pill bare">Keep it anyway</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ---------- BLACKBOOK ---------- -->
+        <div class="rm-blackbook hidden">
+          <div class="crumb">BLACKBOOK · HISTORY &amp; UNDO</div>
+          <h1 class="verdict" style="font-size:26px">What happened, and how to undo it</h1>
+          <p class="lede" style="margin-bottom:14px">Three changes are active. Every one of them has a way back.</p>
+          <div class="tl">
+            <div class="rec subj" id="bb-subject">
+              <div class="t">Hardware GPU scheduling turned on <span class="when">· TODAY</span></div>
+              <div class="chain"><span class="chip measured">MEASURED</span><em>→</em><span>Frame pacing 14.2 → 11.8 ms</span><em>→</em><span style="color:var(--proof)">Active now</span></div>
+              <button class="pill quiet act">Roll back</button></div>
+            <div class="rec">
+              <div class="t">Game Mode turned off <span class="when">· 3 DAYS AGO</span></div>
+              <div class="chain"><span class="chip measured">MEASURED</span><em>→</em><span>Frame pacing steadier</span><em>→</em><span style="color:var(--proof)">Active now</span></div>
+              <button class="pill quiet act">Roll back</button></div>
+            <div class="rec">
+              <div class="t">Startup app trimmed: Discord <span class="when">· 6 DAYS AGO</span></div>
+              <div class="chain"><span class="chip expected">EXPECTED</span><em>→</em><span>Not measured yet</span><em>→</em><span style="color:var(--proof)">Active now</span></div>
+              <button class="pill quiet act">Roll back</button></div>
+          </div>
+          <div class="bbsplit">NOT MADE BY COMPY</div>
+          <div class="tl">
+            <div class="rec outside">
+              <div class="t">NVIDIA driver updated to 566.36 <span class="when">· 8 DAYS AGO</span></div>
+              <div class="chain"><span class="chip unavailable">OUTSIDE CHANGE</span><em>→</em><span>Windows Update did this. Compy can't roll it back.</span></div></div>
+            <div class="rec inactive">
+              <div class="t">Power plan set to Balanced <span class="when">· 12 DAYS AGO</span></div>
+              <div class="chain"><span class="chip unavailable">ROLLED BACK</span><em>→</em><span>You undid this. Nothing is applied.</span></div></div>
+          </div>
+          <div style="margin-top:auto;padding-top:12px;display:flex;align-items:center;gap:12px">
+            <button class="pill quiet">Search the Field Guide</button>
+            <span style="font-size:13px;color:var(--ink-3)">Field Guide is help for the words on this page — not another room.</span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ================= MACHINE PANE — signature + navigation ================= -->
+      <aside class="machine" aria-label="Your PC">
+        <div class="mhead"><span id="mh-l">YOUR PC</span><span class="st" id="mh-r">4 OF 5 PARTS MEASURED</span></div>
+        <svg class="rig" id="rig" viewBox="0 0 430 430" preserveAspectRatio="xMidYMid meet" role="group"
+             aria-label="Your PC as an evidence map. Select a part to see what Compy knows about it.">
+          <path d="M28 78 L300 78 L344 44 L344 396 L300 430 L28 430 Z" fill="#141619" stroke="#262a31"/>
+          <path d="M300 78 L344 44 L344 396 L300 430 Z" fill="#101216" stroke="#262a31"/>
+          <path d="M28 78 L300 78 L344 44 L72 44 Z" fill="#181b1f" stroke="#262a31"/>
+          <path class="leader" id="leader" d="M-20 312 C 20 312, 34 306, 68 306"/>
+
+          <g class="part" data-state="measured" data-part="cpu" tabindex="0" role="button" aria-label="CPU. Measured. 8 cores, 61 degrees.">
+            <rect class="halo" x="62" y="104" width="86" height="72" rx="6"/>
+            <rect class="face" x="66" y="108" width="78" height="64" rx="4"/>
+            <circle cx="105" cy="140" r="19" fill="none" stroke="#3a4049"/><circle cx="105" cy="140" r="7" fill="#232830"/>
+            <text x="66" y="192">CPU</text><text class="spec" x="66" y="207" aria-hidden="true">61 °C</text></g>
+
+          <g class="part" data-state="measured" data-part="mem" tabindex="0" role="button" aria-label="Memory. Measured. 32 gigabytes, 41 percent used.">
+            <rect class="halo" x="170" y="100" width="46" height="84" rx="5"/>
+            <rect class="face" x="175" y="104" width="14" height="76" rx="2"/><rect class="face" x="196" y="104" width="14" height="76" rx="2"/>
+            <text x="168" y="192">Memory</text><text class="spec" x="168" y="207" aria-hidden="true">32 GB</text></g>
+
+          <g class="part" data-state="measured" data-part="ssd" tabindex="0" role="button" aria-label="Storage. Measured. 2 terabyte NVMe.">
+            <rect class="halo" x="238" y="104" width="76" height="42" rx="5"/>
+            <rect class="face" x="242" y="108" width="68" height="34" rx="3"/>
+            <text x="238" y="168">Storage</text><text class="spec" x="238" y="183" aria-hidden="true">2 TB</text></g>
+
+          <g class="part" data-state="measured" data-target="true" data-part="gpu" tabindex="0" role="button"
+             aria-label="Graphics card. Measured, and the subject of the current proof mission.">
+            <rect class="halo" x="70" y="284" width="236" height="60" rx="7"/>
+            <rect class="face" x="74" y="288" width="228" height="52" rx="5"/>
+            <circle cx="126" cy="314" r="15" fill="none" stroke="#5b4b93" stroke-width="1.2"/>
+            <circle cx="182" cy="314" r="15" fill="none" stroke="#5b4b93" stroke-width="1.2"/>
+            <rect x="222" y="302" width="66" height="24" rx="3" fill="#2a2440"/>
+            <circle class="pip" cx="298" cy="292" r="3.6"/>
+            <text x="74" y="362" style="fill:#cdc7f5">Graphics card</text>
+            <text class="spec" x="74" y="375" style="fill:#8d84c4" aria-hidden="true">THIS MISSION</text></g>
+
+          <rect x="60" y="392" width="230" height="20" rx="3" fill="#15171b" stroke="#22252b"/>
+
+          <g class="part" data-state="unknown" data-part="disp" tabindex="0" role="button" aria-label="Display sync. Compy has not read this yet.">
+            <rect class="halo" x="352" y="120" width="66" height="52" rx="6"/>
+            <rect class="face" x="356" y="124" width="58" height="44" rx="4"/>
+            <path d="M377 168 v10 M369 180 h24" stroke="#3a3a34" stroke-width="1.4" fill="none"/>
+            <text x="344" y="200" style="fill:#c2ab86">Display</text>
+            <text class="spec" x="344" y="213" style="fill:#8a7b60" aria-hidden="true">UNREAD</text></g>
+        </svg>
+        <div class="mnote" id="mnote"><b>Graphics card</b> — measured, and what this mission is about. Select any part to read what Compy knows.</div>
+        <div class="rigkey">
+          <span><i style="background:#3fd9c2"></i>Measured</span>
+          <span><i style="background:#a78bfa"></i>This mission</span>
+          <span><i style="background:#f0b878"></i>Not read yet</span>
+          <span><i style="background:#3fd9c2;border-radius:50%"></i>Changed today</span>
+        </div>
+      </aside>
+    </div>
+
+    <!-- ================= MISSION RIBBON ================= -->
+    <div class="ribbon">
+      <span class="subj"><span class="sq"></span><b>Hardware GPU scheduling</b></span>
+      <div class="track" id="track" role="group" aria-label="Proof mission progress">
+        <span class="stg" data-s="1"><i></i>Recommendation</span><span class="seg"></span>
+        <span class="stg" data-s="2"><i></i>Decision</span><span class="seg"></span>
+        <span class="stg" data-s="3"><i></i>Capture</span><span class="seg"></span>
+        <span class="stg" data-s="4"><i></i>Result</span><span class="seg"></span>
+        <span class="stg" data-s="5"><i></i>Keep or undo</span>
+      </div>
+      <span class="why" id="ribwhy">Nothing is applied until you approve it.</span>
+      <button class="pill quiet go" id="continue">Continue this mission →</button>
+    </div>
+  </div>
+</div></div></div>
+
+<script>
+(function(){
+var body=document.body, stage=document.getElementById('stage'), SCALE=1;
+function fit(){var w=Math.min(document.documentElement.clientWidth-32,1280),s=w/1280;
+  SCALE=s;stage.style.transform='scale('+s+')';stage.parentElement.style.height=(720*s)+'px';}
+addEventListener('resize',fit); fit();
+
+var ORDER=['home','lab','monitor','blackbook'];
+/* Each room reframes the machine: viewBox, column width, caption, and stage. */
+var ROOM={
+  home:     {box:'0 20 440 430', col:'420px', l:'YOUR PC',          r:'4 OF 5 PARTS MEASURED', stage:1,
+             note:'<b>Graphics card</b> — measured, and what this mission is about. Select any part to read what Compy knows.',
+             why:'Approval required.'},
+  lab:      {box:'44 258 300 130', col:'330px', l:'GRAPHICS CARD',   r:'THE PART THIS MOVE TOUCHES', stage:2,
+             note:'Only your <b>graphics card</b> changes. Nothing else on this machine is touched.',
+             why:'Declining finishes it.'},
+  monitor:  {box:'60 276 240 88',  col:'250px', l:'UNDER MEASUREMENT', r:'GRAPHICS CARD', stage:4,
+             note:'This trace is <b>your graphics card</b>, recorded on this PC.',
+             why:'The reading decides.'},
+  blackbook:{box:'0 20 440 430',  col:'400px', l:'YOUR PC',          r:'1 PART CHANGED TODAY', stage:5,
+             note:'The teal dot marks the part today’s change touched — your <b>graphics card</b>.',
+             why:'Every change has a way back.'}
+};
+
+function q(s,r){return (r||document).querySelector(s)} function qa(s,r){return [].slice.call((r||document).querySelectorAll(s))}
+var floor=q('#floor'), rig=q('#rig'), leader=q('#leader'), mnote=q('#mnote');
+var cur='home';
+
+function setStage(n,declined){
+  qa('#track .stg').forEach(function(s){
+    var v=+s.dataset.s; s.classList.toggle('done', v<n); s.classList.toggle('now', v===n); });
+  qa('#track .seg').forEach(function(g,i){ g.classList.toggle('done', i+1<n); });
+  if(declined){ q('#ribwhy').textContent='Decision finished — you declined. That counts.';
+    qa('#track .stg').forEach(function(s){ s.classList.remove('now'); s.classList.toggle('done',+s.dataset.s<=2); });
+    q('#continue').disabled=true; q('#continue').style.opacity=.45; }
+}
+
+/* the leader line: drawn ONCE when the decision needs an anchor, never looping */
+function drawLeader(on){
+  if(!on){ leader.classList.remove('drawn'); leader.style.opacity=0; return; }
+  leader.style.opacity=''; var len=leader.getTotalLength();
+  leader.style.setProperty('--len',len); leader.classList.remove('drawn'); void leader.getBoundingClientRect();
+  var reduced = body.dataset.rm==='on'||matchMedia('(prefers-reduced-motion:reduce)').matches;
+  if(reduced){ leader.classList.add('drawn'); return; }
+  requestAnimationFrame(function(){ leader.classList.add('drawn'); });
+}
+
+function show(name){
+  if(!ROOM[name]) return;
+  var prev=cur; cur=name;
+  qa('#content > div').forEach(function(d){ d.classList.add('hidden'); });
+  var pane=q('.rm-'+name); pane.classList.remove('hidden');
+  pane.classList.remove('pane-anim'); void pane.offsetWidth; pane.classList.add('pane-anim');
+
+  var r=ROOM[name];
+  floor.style.setProperty('--machine', r.col);
+  var bx=r.box.split(/\s+/); rig.style.aspectRatio = bx[2]+' / '+bx[3];
+  /* ONE focal move: the machine reframes onto the same subject. */
+  var reduced = body.dataset.rm==='on'||matchMedia('(prefers-reduced-motion:reduce)').matches;
+  reframe(r.box, reduced || prev===name);
+  q('#mh-l').textContent=r.l; q('#mh-r').textContent=r.r;
+  mnote.innerHTML=r.note; q('#ribwhy').textContent=r.why;
+  setStage(monState==='result'||monState==='incon'||name!=='monitor' ? r.stage : 3);
+  drawLeader(name==='lab');
+
+  qa('.rmbtn').forEach(function(b){ if(b.dataset.nav===name) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
+  qa('[role=tab]').forEach(function(t){ t.setAttribute('aria-selected', String(t.dataset.room===name)); });
+  qa('[data-mononly]').forEach(function(e){ e.hidden = name!=='monitor'; });
+  q('#continue').textContent = name==='blackbook' ? 'Start the next mission →' : 'Continue this mission →';
+}
+
+/* animated viewBox — the rig is the one thing that visibly carries the subject between rooms */
+var rafId=null;
+function reframe(target,instant){
+  var from=rig.getAttribute('viewBox').split(/\s+/).map(Number), to=target.split(/\s+/).map(Number);
+  if(rafId) cancelAnimationFrame(rafId);
+  if(instant){ rig.setAttribute('viewBox',target); return; }
+  var t0=null, dur=280;
+  function step(ts){ if(t0===null)t0=ts; var p=Math.min((ts-t0)/dur,1), e=1-Math.pow(1-p,3);
+    var v=from.map(function(f,i){ return (f+(to[i]-f)*e).toFixed(2); });
+    rig.setAttribute('viewBox',v.join(' '));
+    if(p<1) rafId=requestAnimationFrame(step); }
+  rafId=requestAnimationFrame(step);
+}
+
+qa('.rmbtn').forEach(function(b){ b.onclick=function(){ show(b.dataset.nav); }; });
+qa('[role=tab]').forEach(function(t){ t.onclick=function(){ show(t.dataset.room); }; });
+qa('[data-go]').forEach(function(b){ b.onclick=function(){ show(b.dataset.go); }; });
+q('#continue').onclick=function(){ show(ORDER[(ORDER.indexOf(cur)+1)%ORDER.length]); };
+
+/* clicking the mission's part in the rig IS navigation to its decision */
+qa('.part').forEach(function(p){
+  function act(){ if(p.dataset.target==='true'){ show('lab'); }
+    else { mnote.innerHTML='<b>'+p.getAttribute('aria-label').split('.')[0]+'</b> — '+
+           (p.dataset.state==='unknown' ? 'Compy hasn’t read this yet. No recommendation can depend on it.'
+                                        : 'Measured on this PC. No open decision for this part.'); } }
+  p.addEventListener('click',act);
+  p.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){e.preventDefault();act();} });
+});
+
+/* Monitor states */
+var monState='result';
+qa('[data-mstate]').forEach(function(b){
+  b.onclick=function(){ qa('[data-mstate]').forEach(function(x){x.setAttribute('aria-pressed','false')});
+    b.setAttribute('aria-pressed','true'); monState=b.dataset.mstate;
+    qa('.rm-monitor > [data-ms]').forEach(function(m){ m.hidden = m.dataset.ms!==monState; });
+    setStage(monState==='result'?4:monState==='incon'?3:3);
+    q('#ribwhy').textContent = monState==='result' ? 'The reading decides.'
+      : monState==='incon' ? 'Compy says so when it can’t tell.' : 'Compy reads, it doesn’t interfere.'; };
+});
+
+/* disclosures — collapsed content stays out of focus/AT order via [hidden] */
+qa('[data-disc]').forEach(function(d){
+  d.onclick=function(){ var p=document.getElementById(d.getAttribute('aria-controls')), open=p.hidden;
+    p.hidden=!open; d.setAttribute('aria-expanded',String(open));
+    q('.c',d).textContent = open?'Hide':'Show'; };
+});
+q('#decline').onclick=function(){ setStage(2,true); };
+
+/* reduced motion toggle — stands in for the Windows system preference */
+q('#rm').onclick=function(){ var on=body.dataset.rm==='off'; body.dataset.rm=on?'on':'off';
+  this.setAttribute('aria-pressed',String(on)); };
+
+/* spikes: buttons AND arrow keys, never drag-only */
+var spikes=qa('.rm-monitor [data-ms="result"] .spike'), si=0;
+function sel(i){ si=(i+spikes.length)%spikes.length;
+  spikes.forEach(function(s,n){ s.dataset.sel=String(n===si); });
+  q('#sidx').textContent=si+1; q('#stime').textContent=spikes[si].dataset.t; q('#sms').textContent=spikes[si].dataset.msv+' ms'; }
+var sb=qa('.stepbtn'); if(sb[0]) sb[0].onclick=function(){sel(si-1)}; if(sb[1]) sb[1].onclick=function(){sel(si+1)};
+addEventListener('keydown',function(e){ if(cur!=='monitor'||monState!=='result') return;
+  if(e.key==='ArrowRight'){sel(si+1)} if(e.key==='ArrowLeft'){sel(si-1)} });
+sel(0);
+
+show('home');
+})();
+</script>
+</body>
+</html>

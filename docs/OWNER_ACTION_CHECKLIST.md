@@ -407,6 +407,13 @@ exact hexes, anything where your eye is the authority.
   presented. The two-strip's honesty guardrails (real-provenance receipts, no gain claims,
   `scripts/site-landing.test.mjs`) survive into any redesign. Site stays PRE-PUBLISH; deploy GO
   unchanged (§B3).
+- 🔨 **Motion default: keep "on, override Windows" — or let Windows decide? (WELFARE CHECK, 2026-08-04.)**
+  *What:* the `design/quiet-pit-wall` branch (#49) flips `src/design/use-motion.ts`'s default from `"full"`
+  to `"system"`, i.e. Compy would follow the Windows "reduce motion" setting unless a user opts back in.
+  *Why it needs you:* that reverses your explicit 2026-06-19 decision, and your own WebView2 reports
+  `prefers-reduced-motion: reduce` — so on **your** desk the default flip makes the entire app static
+  (the exact failure that decision was written after). *Blast radius:* app-wide, every animation.
+  I landed the rest of #49 and **held this**; the guard still pins `"full"`. Say the word either way.
 - ✅ **Sibling slop sweep — DONE + SHIPPED `f13d10a` (2026-07-08).** The `#1 BIGGEST LIMITER` uppercase
   tags in **FirstCheck** and the **Setup Tour** spotlight are now quiet lowercase "#1 biggest limiter"
   mono tags matching Home's fix (SetupTour de-ambered too); self-reviewer PASS 8/8, guard-pinned, live.

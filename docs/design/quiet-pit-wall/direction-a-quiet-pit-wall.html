@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Compy — Direction A · Quiet Pit Wall</title>
+<style>
+/* ============================================================
+   PROTOTYPE CHROME  (outside the app stage — not part of the design)
+   ============================================================ */
+:root{
+  /* environment */
+  --env:        #131417;   /* plane 0 — matte charcoal environment */
+  --work:       #1b1d22;   /* plane 1 — active workspace */
+  --over:       #24272e;   /* plane 2 — temporary overlay */
+  --edge:       #2b2f37;   /* the ONLY border tone, used sparingly */
+
+  /* language */
+  --ink:        #ece7e0;   /* warm off-white — human language */
+  --ink-2:      #a8a49d;   /* supporting language */
+  --ink-3:      #6f6c67;   /* meta / units */
+
+  /* semantics */
+  --focus:      #a78bfa;   /* violet  — Compy focus & active direction */
+  --proof:      #3fd9c2;   /* teal    — measured evidence */
+  --judge:      #f0b878;   /* amber   — uncertainty / owner judgment */
+  --fail:       #ff6b6b;   /* red     — actual failure only */
+
+  --focus-dim:  #a78bfa26;
+  --proof-dim:  #3fd9c226;
+  --judge-dim:  #f0b87826;
+
+  --sans: ui-sans-serif, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:#0b0c0e;color:var(--ink);font-family:var(--sans);}
+body{display:flex;flex-direction:column;align-items:center;gap:14px;padding:18px 16px 40px;min-height:100vh}
+
+.chrome{width:1280px;max-width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.chrome h1{font-size:15px;font-weight:600;margin:0;letter-spacing:.01em}
+.chrome .tag{font-family:var(--mono);font-size:11.5px;color:#8a8680;border:1px solid #26282d;
+  border-radius:999px;padding:4px 9px;background:#141518}
+.chrome .spacer{flex:1}
+.chrome button{font-family:var(--sans);font-size:13px;color:#b8b4ad;background:#141518;
+  border:1px solid #26282d;border-radius:8px;padding:7px 12px;cursor:pointer;min-height:28px}
+.chrome button[aria-pressed="true"],.chrome button[aria-selected="true"]{color:#0d0b14;background:var(--focus);border-color:var(--focus);font-weight:600}
+.chrome .grp{display:flex;gap:6px;align-items:center}
+.chrome .lbl{font-size:12px;color:#67645f}
+
+.stagewrap{width:1280px;max-width:100%;}
+.stage{width:1280px;height:720px;transform-origin:top left;position:relative;
+  border-radius:12px;overflow:hidden;box-shadow:0 30px 90px #000a,0 0 0 1px #23262c}
+
+/* ============================================================
+   THE DESIGN  —  QUIET PIT WALL
+   ============================================================ */
+.app{position:absolute;inset:0;display:grid;grid-template-columns:92px 1fr;
+  background:
+    radial-gradient(120% 90% at 78% 8%, #1d2028 0%, transparent 62%),
+    radial-gradient(90% 70% at 8% 100%, #191b21 0%, transparent 60%),
+    var(--env);
+  font-size:15px;line-height:1.5}
+
+/* ---- rail: 4 rooms, identity is a cue not a paint job ---- */
+.rail{display:flex;flex-direction:column;gap:2px;padding:14px 8px;background:#101115;
+  border-right:1px solid var(--edge)}
+.rail .brand{font-size:13px;font-weight:700;letter-spacing:.14em;color:var(--ink-2);
+  text-align:center;padding:6px 0 16px}
+.rmbtn{display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 4px;
+  border:0;background:transparent;border-radius:10px;cursor:pointer;color:var(--ink-3);
+  font-family:var(--sans);font-size:13px;min-height:56px;position:relative;width:100%}
+.rmbtn svg{width:20px;height:20px}
+.rmbtn:hover{background:#171a1f;color:var(--ink-2)}
+.rmbtn[aria-current="page"]{background:#191c22;color:var(--ink)}
+.rmbtn[aria-current="page"]::before{content:"";position:absolute;left:-8px;top:12px;bottom:12px;
+  width:3px;border-radius:0 3px 3px 0;background:var(--cue,var(--focus))}
+.rmbtn .dot{width:5px;height:5px;border-radius:50%;background:var(--cue);opacity:.55}
+.rmbtn:focus-visible,.pill:focus-visible,button:focus-visible,[tabindex]:focus-visible{
+  outline:2px solid var(--focus);outline-offset:2px}
+
+/* ---- room canvas ---- */
+.room{padding:26px 34px 22px;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.crumb{font-size:13px;color:var(--ink-3);letter-spacing:.06em;margin-bottom:10px}
+.verdict{font-size:30px;line-height:1.14;font-weight:600;margin:0 0 8px;letter-spacing:-.015em}
+.lede{font-size:15px;color:var(--ink-2);margin:0;max-width:46ch}
+
+/* evidence chips */
+.chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;
+  letter-spacing:.04em;padding:4px 9px;border-radius:6px;background:#1a1d23;color:var(--ink-2)}
+.chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.chip.measured{color:var(--proof);background:var(--proof-dim)}
+.chip.expected{color:var(--focus);background:var(--focus-dim)}
+.chip.unknown{color:var(--judge);background:var(--judge-dim)}
+.chip.unavailable{color:var(--ink-3);background:#1a1d23}
+
+/* actions */
+.pill{font-family:var(--sans);font-size:14.5px;border-radius:9px;cursor:pointer;
+  min-height:40px;padding:0 18px;border:1px solid transparent;display:inline-flex;
+  align-items:center;gap:8px;justify-content:center}
+.pill.primary{background:var(--focus);color:#160f2b;font-weight:650;min-height:44px;padding:0 22px}
+.pill.primary:hover{background:#b79dff}
+.pill.quiet{background:#1e2128;color:var(--ink);border-color:var(--edge)}
+.pill.quiet:hover{background:#252932}
+.pill.bare{background:transparent;color:var(--ink-2)}
+.pill.bare:hover{color:var(--ink)}
+
+/* ---------- HOME ---------- */
+.home{display:grid;grid-template-columns:1fr 430px;gap:26px;flex:1;min-height:0}
+.home .left{display:flex;flex-direction:column;min-height:0}
+.intents{display:flex;gap:8px;margin:18px 0 0}
+.intent{flex:1;text-align:left;padding:11px 13px;border-radius:10px;background:#181b21;
+  border:1px solid var(--edge);color:var(--ink);font-family:var(--sans);font-size:14px;
+  cursor:pointer;min-height:44px}
+.intent:hover{background:#1e222a}
+.intent[aria-pressed="true"]{border-color:var(--focus);background:#1d1a2a}
+.intent small{display:block;font-size:13px;color:var(--ink-3);margin-top:2px}
+
+.nextmove{margin-top:16px;background:var(--work);border-radius:12px;padding:16px 18px;
+  position:relative;box-shadow:0 1px 0 #ffffff08 inset, 0 18px 40px -28px #000}
+.nextmove::before{content:"";position:absolute;left:0;top:16px;bottom:16px;width:2px;
+  border-radius:2px;background:var(--focus)}
+.nextmove h3{margin:0 0 4px;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.nextmove p{margin:0;color:var(--ink-2);font-size:14.5px;max-width:44ch}
+.nextmove .row{display:flex;align-items:center;gap:10px;margin-top:14px}
+
+.strip{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--edge);
+  border-radius:10px;overflow:hidden;margin-top:auto}
+.read{background:#16181d;padding:12px 13px}
+.read .k{font-size:13px;color:var(--ink-3);margin-bottom:5px}
+.read .v{font-family:var(--mono);font-size:17px;color:var(--ink);letter-spacing:-.01em}
+.read .i{font-size:13.5px;color:var(--ink-2);margin-top:4px}
+.read.na .v{color:var(--ink-3)}
+.read.na .i{color:var(--ink-3)}
+.read .bar{height:2px;border-radius:2px;margin-top:9px;background:#24272e}
+.read .bar i{display:block;height:100%;border-radius:2px;background:var(--proof)}
+.read.warn .bar i{background:var(--judge)}
+.read.na .bar i{width:0}
+
+.proofline{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:13.5px;color:var(--ink-2)}
+.proofline b{font-weight:600;color:var(--ink)}
+.proofline a{color:var(--proof);text-decoration:none;border-bottom:1px solid #3fd9c255;cursor:pointer;display:inline-flex;align-items:center;min-height:24px;padding:0 4px}
+
+/* ---- the rig ---- */
+.rigwrap{position:relative;display:flex;flex-direction:column;min-height:0}
+.rigcap{font-size:13px;color:var(--ink-3);display:flex;justify-content:space-between;
+  align-items:center;margin-bottom:4px}
+.rig{flex:1;min-height:0;display:block}
+.part{cursor:pointer}
+.part .face{fill:#1e2128;stroke:#333842;stroke-width:1}
+.part .top{fill:#262a32}
+.part .side{fill:#171a1f}
+.part .halo{fill:none;stroke:var(--proof);stroke-width:1.5;opacity:.55}
+.part[data-state="unknown"] .face{fill:#171a1f;stroke:#3a3a34;stroke-dasharray:3 3}
+.part[data-state="unknown"] .halo{stroke:var(--judge);opacity:.5;stroke-dasharray:4 4}
+.part[data-state="unavailable"] .face{fill:#15171b;stroke:#2a2d33;stroke-dasharray:2 4}
+.part[data-state="unavailable"] .halo{opacity:0}
+.part[data-target="true"] .halo{stroke:var(--focus);opacity:1;stroke-width:2}
+.part[data-target="true"] .face{fill:#221d33;stroke:#5b4b93}
+.part:hover .halo,.part:focus-visible .halo{opacity:1}
+.part text{font-family:var(--sans);font-size:13px;fill:var(--ink-2)}
+.part .spec{font-family:var(--mono);font-size:12px;fill:var(--ink-3)}
+.changed{fill:var(--proof)}
+.connector{fill:none;stroke:var(--focus);stroke-width:1.5;stroke-dasharray:var(--len,300);
+  stroke-dashoffset:var(--len,300);opacity:.8}
+.connector.drawn{stroke-dashoffset:0}
+.spark{fill:var(--focus);opacity:0}
+
+.rigkey{display:flex;gap:14px;font-size:13px;color:var(--ink-3);padding-top:6px}
+.rigkey span{display:inline-flex;align-items:center;gap:6px}
+.rigkey i{width:8px;height:8px;border-radius:2px;display:inline-block}
+
+/* ---------- LAB ---------- */
+.lab{display:grid;grid-template-columns:1fr 340px;gap:26px;flex:1;min-height:0}
+.decision{background:var(--work);border-radius:14px;padding:24px 26px;display:flex;
+  flex-direction:column;box-shadow:0 20px 50px -34px #000}
+.decision h3{margin:0;font-size:25px;font-weight:600;letter-spacing:-.015em}
+.decision .why{margin:10px 0 0;font-size:15px;color:var(--ink-2);max-width:48ch}
+.factrow{display:grid;grid-template-columns:104px 1fr;gap:10px 14px;margin-top:20px;
+  font-size:14.5px;align-items:start}
+.factrow dt{color:var(--ink-3);font-size:13.5px;padding-top:1px}
+.factrow dd{margin:0;color:var(--ink)}
+.decision .acts{display:flex;gap:10px;align-items:center;margin-top:auto;padding-top:22px}
+.queue{background:#16181d;border:1px solid var(--edge);border-radius:11px;padding:14px 16px}
+.queue button.disc{width:100%;display:flex;justify-content:space-between;align-items:center;
+  background:transparent;border:0;color:var(--ink);font-family:var(--sans);font-size:14.5px;
+  cursor:pointer;min-height:32px;padding:0}
+.queue ol{margin:12px 0 0;padding:0 0 0 18px;color:var(--ink-2);font-size:14px;line-height:1.9}
+.queue li::marker{color:var(--ink-3);font-family:var(--mono);font-size:12px}
+.aside h4{font-size:13px;color:var(--ink-3);font-weight:500;margin:0 0 8px;letter-spacing:.04em}
+.aside .card{background:#16181d;border:1px solid var(--edge);border-radius:11px;padding:14px 16px;margin-bottom:12px}
+.aside .card p{margin:0;font-size:13.5px;color:var(--ink-2)}
+
+/* ---------- MONITOR ---------- */
+.mon{display:flex;flex-direction:column;flex:1;min-height:0}
+.trace{background:var(--work);border-radius:12px;padding:14px 16px 8px;margin-top:14px;position:relative}
+.trace svg{display:block;width:100%;height:214px}
+.gridline{stroke:#242830;stroke-width:1}
+.budget{stroke:var(--judge);stroke-width:1;stroke-dasharray:4 4;opacity:.7}
+.tracepath{fill:none;stroke:var(--proof);stroke-width:1.6;stroke-linejoin:round}
+.tracepath.before{stroke:#4c515c;stroke-width:1.2}
+.spike{fill:none;stroke:var(--fail);stroke-width:1.2}
+.spike circle{fill:#1b1d22;stroke:var(--fail);stroke-width:1.6}
+.spike[data-sel="true"] circle{fill:var(--fail)}
+.axlbl{font-family:var(--mono);font-size:17px;fill:var(--ink-3)}
+.tracehead{display:flex;align-items:baseline;gap:12px;font-size:13px;color:var(--ink-3)}
+.tracehead .now{font-family:var(--mono);font-size:13px;color:var(--ink-2)}
+.spikebar{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:13.5px;color:var(--ink-2)}
+.spikebar .val{font-family:var(--mono);color:var(--ink);font-size:14px}
+.stepbtn{width:34px;height:34px;border-radius:8px;background:#1e2128;border:1px solid var(--edge);
+  color:var(--ink);cursor:pointer;font-size:15px;line-height:1}
+.cmp{display:grid;grid-template-columns:1fr 1fr auto;gap:1px;background:var(--edge);
+  border-radius:11px;overflow:hidden;margin-top:14px}
+.cmp>div{background:#16181d;padding:13px 16px}
+.cmp .k{font-size:13px;color:var(--ink-3)}
+.cmp .v{font-family:var(--mono);font-size:19px;margin-top:3px}
+.cmp .now .v{color:var(--proof)}
+.cmp .qual{display:flex;flex-direction:column;justify-content:center;gap:6px;min-width:230px}
+.monacts{display:flex;gap:10px;align-items:center;margin-top:16px}
+
+/* honest empties */
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;gap:14px}
+.empty h3{font-size:26px;margin:0;font-weight:600;letter-spacing:-.015em}
+.empty p{margin:0;max-width:40ch;color:var(--ink-2);font-size:15px}
+.steps{display:flex;gap:0;align-items:center;margin-top:6px;font-size:13.5px;color:var(--ink-3)}
+.steps b{color:var(--ink-2);font-weight:500}
+.steps span{padding:0 12px}
+.steps em{font-style:normal;color:#3b3f47;padding:0 2px}
+.recdot{width:9px;height:9px;border-radius:50%;background:var(--fail)}
+
+/* ---------- CARRIED SUBJECT (cross-room continuity) ---------- */
+.subject{display:inline-flex;align-items:center;gap:8px;background:#1d1a2a;border:1px solid #3b3260;
+  border-radius:999px;padding:5px 12px 5px 9px;font-size:13px;color:#cdc7f5;margin-left:12px;
+  vertical-align:middle}
+.subject .sq{width:8px;height:8px;border-radius:2px;background:var(--focus)}
+.subject .what{color:var(--ink-2)}
+.follow{margin-left:auto;font-size:13.5px}
+.crumbrow{display:flex;align-items:center;margin-bottom:10px}
+
+/* ---------- BLACKBOOK ---------- */
+.bb{display:grid;grid-template-columns:1fr 300px;gap:26px;flex:1;min-height:0}
+.tl{display:flex;flex-direction:column;gap:1px;background:var(--edge);border-radius:12px;overflow:hidden}
+.rec{background:#16181d;padding:14px 18px;display:grid;grid-template-columns:1fr auto;
+  gap:4px 18px;align-items:center}
+.rec.subj{background:#1b1826;box-shadow:inset 3px 0 0 var(--focus)}
+.rec .t{font-size:16px;font-weight:600;letter-spacing:-.01em}
+.rec .chain{grid-column:1;font-size:13.5px;color:var(--ink-2);display:flex;flex-wrap:wrap;
+  align-items:center;gap:8px;margin-top:2px}
+.rec .chain em{font-style:normal;color:#3f434b}
+.rec .act{grid-column:2;grid-row:1 / span 2;align-self:center}
+.rec .when{font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+.bbsplit{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink-3);
+  letter-spacing:.06em;margin:16px 0 8px}
+.bbsplit::after{content:"";flex:1;height:1px;background:var(--edge)}
+.rec.outside{background:#141519}
+.rec.outside .t{color:var(--ink-2);font-weight:500}
+.rec.inactive .t{color:var(--ink-3);font-weight:500;text-decoration:line-through;text-decoration-color:#3a3d44}
+.rec.inactive .when{text-decoration:none;display:inline-block}
+
+.flytoken{position:absolute;z-index:30;pointer-events:none;display:flex;align-items:center;gap:7px;
+  background:#231d38;border:1px solid var(--focus);border-radius:999px;padding:5px 11px;
+  font-size:12.5px;color:#d6cfff;white-space:nowrap;box-shadow:0 10px 28px #0009}
+.flytoken .sq{width:8px;height:8px;border-radius:2px;background:var(--focus)}
+.arrived{animation:arrive .5s ease-out}
+@keyframes arrive{0%{box-shadow:0 0 0 0 #a78bfa55}100%{box-shadow:0 0 0 16px #a78bfa00}}
+
+[hidden]{display:none !important}
+.hidden{display:none !important}
+
+/* motion contract — one focal point, one-time only */
+@media (prefers-reduced-motion:reduce){
+  .connector{transition:none !important;stroke-dashoffset:0 !important}
+  .spark{display:none}
+  *{transition-duration:.001ms !important;animation-duration:.001ms !important}
+}
+body[data-rm="on"] .connector{transition:none !important;stroke-dashoffset:0 !important}
+body[data-rm="on"] .spark{display:none}
+body[data-rm="on"] *{transition-duration:.001ms !important;animation-duration:.001ms !important}
+.connector{transition:stroke-dashoffset .62s cubic-bezier(.22,.61,.36,1)}
+.room{animation:rise .2s cubic-bezier(.22,.61,.36,1)}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body data-rm="off">
+
+<div class="chrome">
+  <h1>Direction A — Quiet Pit Wall</h1>
+  <span class="tag">1280 × 720</span>
+  <span class="tag" style="color:#f0b878;border-color:#3a3226">PROTOTYPE · fixture data · not this PC</span>
+  <span class="spacer"></span>
+  <span class="lbl">Room</span>
+  <div class="grp" role="tablist" aria-label="Room">
+    <button role="tab" data-room="home" aria-selected="true">Home</button>
+    <button role="tab" data-room="lab" aria-selected="false">Lab</button>
+    <button role="tab" data-room="monitor" aria-selected="false">Monitor</button>
+    <button role="tab" data-room="blackbook" aria-selected="false">Blackbook</button>
+  </div>
+  <span class="lbl" data-mononly hidden>State</span>
+  <div class="grp" data-mononly hidden>
+    <button data-mstate="idle" aria-pressed="false">Idle</button>
+    <button data-mstate="rec" aria-pressed="false">Recording</button>
+    <button data-mstate="result" aria-pressed="true">Result</button>
+    <button data-mstate="incon" aria-pressed="false">Inconclusive</button>
+  </div>
+  <button id="rm" aria-pressed="false">Reduced motion</button>
+</div>
+
+<div class="stagewrap"><div class="stage" id="stage">
+<div class="app">
+
+  <!-- ============ RAIL ============ -->
+  <nav class="rail" aria-label="Rooms">
+    <div class="brand">COMPY</div>
+    <button class="rmbtn" data-nav="home" aria-current="page" style="--cue:#a78bfa">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>
+      Home<span class="dot"></span></button>
+    <button class="rmbtn" data-nav="lab" style="--cue:#27e08a">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 3v6L4 19a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-10V3"/><path d="M8 3h8"/></svg>
+      Lab<span class="dot"></span></button>
+    <button class="rmbtn" data-nav="monitor" style="--cue:#3fd9c2">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 13h4l3-7 4 14 3-7h4"/></svg>
+      Monitor<span class="dot"></span></button>
+    <button class="rmbtn" data-nav="blackbook" style="--cue:#f0b878">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 4h13a1 1 0 0 1 1 1v15H6a1 1 0 0 1-1-1z"/><path d="M9 4v16"/></svg>
+      Blackbook<span class="dot"></span></button>
+  </nav>
+
+  <!-- ============ HOME ============ -->
+  <main class="room" id="room-home">
+    <div class="crumbrow"><span class="crumb">HOME · WHAT MATTERS RIGHT NOW</span>
+      <span class="subject"><span class="sq"></span>Graphics card <span class="what">· hardware GPU scheduling</span></span>
+      <button class="pill bare follow" data-follow>Follow this evidence →</button></div>
+    <div class="home">
+      <div class="left">
+        <h1 class="verdict">No urgent issue found</h1>
+        <p class="lede">Compy has read your PC and has one move worth making.</p>
+
+        <div class="intents" role="group" aria-label="What do you want help with?">
+          <button class="intent" aria-pressed="true">Play smoother<small>Frame pacing &amp; latency</small></button>
+          <button class="intent" aria-pressed="false">Fix a problem<small>Something feels wrong</small></button>
+          <button class="intent" aria-pressed="false">Understand my PC<small>What Compy can see</small></button>
+        </div>
+
+        <div class="nextmove">
+          <h3>Turn on hardware GPU scheduling</h3>
+          <p>Your last session showed uneven frame pacing, and your driver supports this.</p>
+          <div class="row">
+            <button class="pill primary">Show me this move</button>
+            <span class="chip measured">MEASURED</span>
+            <span style="font-size:13px;color:var(--ink-3)">Affects your GPU</span>
+          </div>
+        </div>
+
+        <div class="strip" role="group" aria-label="Four readings">
+          <div class="read"><div class="k">Frame pacing</div><div class="v">11.8 ms</div>
+            <div class="i">Steady last session.</div><div class="bar"><i style="width:78%"></i></div></div>
+          <div class="read"><div class="k">GPU temperature</div><div class="v">71 °C</div>
+            <div class="i">Normal under load.</div><div class="bar"><i style="width:62%"></i></div></div>
+          <div class="read warn"><div class="k">Startup load</div><div class="v">3 apps</div>
+            <div class="i">Your call to trim.</div><div class="bar"><i style="width:44%"></i></div></div>
+          <div class="read na"><div class="k">Display sync</div><div class="v">Not available</div>
+            <div class="i">Compy hasn't read this.</div><div class="bar"><i></i></div></div>
+        </div>
+
+        <div class="proofline">
+          <span class="chip measured">KEPT</span>
+          <span><b>Game Mode off</b> · applied 3 days ago · frame pacing steadier</span>
+          <a tabindex="0">Roll back</a>
+        </div>
+      </div>
+
+      <!-- ---- the rig: functional evidence map ---- -->
+      <div class="rigwrap">
+        <div class="rigcap"><span>YOUR PC</span><span>4 of 5 parts measured</span></div>
+        <svg class="rig" viewBox="0 0 430 470" role="img"
+             aria-label="Your PC. GPU is the target of the current recommendation. CPU, memory and storage are measured. Display sync is unread.">
+          <!-- case shell -->
+          <path d="M28 78 L300 78 L344 44 L344 396 L300 430 L28 430 Z" fill="#141619" stroke="#262a31"/>
+          <path d="M300 78 L344 44 L344 396 L300 430 Z" fill="#101216" stroke="#262a31"/>
+          <path d="M28 78 L300 78 L344 44 L72 44 Z" fill="#181b1f" stroke="#262a31"/>
+
+          <!-- connector from the recommendation to the GPU -->
+          <path class="connector" id="conn" d="M-14 236 C 30 236, 40 300, 74 306"/>
+          <circle class="spark" id="spark" r="3.2" cx="-14" cy="236"/>
+
+          <!-- CPU -->
+          <g class="part" data-state="measured" tabindex="0" role="button" aria-label="CPU, measured, 8 cores">
+            <rect class="halo" x="62" y="104" width="86" height="72" rx="6"/>
+            <rect class="face" x="66" y="108" width="78" height="64" rx="4"/>
+            <circle cx="105" cy="140" r="19" fill="none" stroke="#3a4049" stroke-width="1"/>
+            <circle cx="105" cy="140" r="7" fill="#232830"/>
+            <text x="66" y="192">CPU</text><text class="spec" x="66" y="207">61 °C</text>
+          </g>
+
+          <!-- Memory -->
+          <g class="part" data-state="measured" tabindex="0" role="button" aria-label="Memory, measured, 32 gigabytes">
+            <rect class="halo" x="170" y="100" width="46" height="84" rx="5"/>
+            <rect class="face" x="175" y="104" width="14" height="76" rx="2"/>
+            <rect class="face" x="196" y="104" width="14" height="76" rx="2"/>
+            <text x="168" y="192">Memory</text><text class="spec" x="168" y="207">32 GB</text>
+          </g>
+
+          <!-- Storage -->
+          <g class="part" data-state="measured" tabindex="0" role="button" aria-label="Storage, measured, 2 terabytes NVMe">
+            <rect class="halo" x="238" y="104" width="76" height="42" rx="5"/>
+            <rect class="face" x="242" y="108" width="68" height="34" rx="3"/>
+            <text x="238" y="168">Storage</text><text class="spec" x="238" y="183">2 TB</text>
+          </g>
+
+          <!-- GPU — current recommendation target -->
+          <g class="part" data-state="measured" data-target="true" tabindex="0" role="button"
+             aria-label="Graphics card. This is what the current recommendation affects.">
+            <rect class="halo" x="70" y="284" width="236" height="60" rx="7"/>
+            <rect class="face" x="74" y="288" width="228" height="52" rx="5"/>
+            <circle cx="126" cy="314" r="15" fill="none" stroke="#5b4b93" stroke-width="1.2"/>
+            <circle cx="182" cy="314" r="15" fill="none" stroke="#5b4b93" stroke-width="1.2"/>
+            <rect x="222" y="302" width="66" height="24" rx="3" fill="#2a2440"/>
+            <circle class="changed" cx="298" cy="292" r="3.4"/>
+            <text x="74" y="362" style="fill:#cdc7f5">Graphics card</text>
+            <text class="spec" x="74" y="376" style="fill:#8d84c4">TARGET OF THIS MOVE</text>
+          </g>
+
+          <!-- PSU shroud, environment only -->
+          <rect x="60" y="392" width="230" height="22" rx="3" fill="#15171b" stroke="#22252b"/>
+
+          <!-- Display — unread -->
+          <g class="part" data-state="unknown" tabindex="0" role="button"
+             aria-label="Display sync. Compy has not read this yet.">
+            <rect class="halo" x="352" y="120" width="66" height="52" rx="6"/>
+            <rect class="face" x="356" y="124" width="58" height="44" rx="4"/>
+            <path d="M377 168 v10 M369 180 h24" stroke="#3a3a34" stroke-width="1.4" fill="none"/>
+            <text x="342" y="200" style="fill:#c2ab86">Display</text>
+            <text class="spec" x="342" y="214" style="fill:#8a7b60">UNREAD</text>
+          </g>
+        </svg>
+        <div class="rigkey">
+          <span><i style="background:#3fd9c2"></i>Measured</span>
+          <span><i style="background:#a78bfa"></i>This move affects</span>
+          <span><i style="background:#f0b878"></i>Not read yet</span>
+          <span><i style="background:#3fd9c2;border-radius:50%"></i>Changed recently</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============ LAB ============ -->
+  <main class="room hidden" id="room-lab">
+    <div class="crumbrow"><span class="crumb">LAB · YOUR NEXT BEST MOVE</span>
+      <span class="subject"><span class="sq"></span>Graphics card <span class="what">· hardware GPU scheduling</span></span>
+      <button class="pill bare follow" data-follow>Follow this evidence →</button></div>
+    <h1 class="verdict" style="font-size:26px;margin-bottom:16px">One decision at a time</h1>
+    <div class="lab">
+      <div class="decision">
+        <h3>Turn on hardware GPU scheduling</h3>
+        <p class="why">Your last session showed uneven frame pacing, and your driver supports this.</p>
+        <dl class="factrow">
+          <dt>Evidence</dt><dd><span class="chip measured">MEASURED</span>
+            <span style="color:var(--ink-2);font-size:14px"> — from your own 11-minute session.</span></dd>
+          <dt>Tradeoff</dt><dd>Needs a restart. Some overlays behave differently until then.</dd>
+          <dt>Undo</dt><dd>One click in Blackbook. Nothing else changes.</dd>
+        </dl>
+        <div class="acts">
+          <button class="pill primary">Apply this change</button>
+          <button class="pill quiet">Show me how</button>
+          <button class="pill bare">Not now</button>
+        </div>
+      </div>
+
+      <div class="aside">
+        <div class="queue">
+          <button class="disc" id="qdisc" aria-expanded="false" aria-controls="qlist">
+            <span>5 more decisions</span><span style="color:var(--ink-3)">Show</span>
+          </button>
+          <ol id="qlist" hidden>
+            <li>Trim 3 startup apps</li>
+            <li>Set the power plan</li>
+            <li>Check display sync</li>
+            <li>Free 40 GB on C:</li>
+            <li>Update the chipset driver</li>
+          </ol>
+        </div>
+        <h4>WHEN YOU WANT IT</h4>
+        <div class="card"><p><b style="color:var(--ink)">Advanced tools</b><br>Filters, declined items, cleanup, raw instruments, methodology.</p></div>
+        <div class="card"><p><b style="color:var(--ink)">Declining counts</b><br>Saying “not now” completes the decision. Compy won't re-ask this week.</p></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============ MONITOR ============ -->
+  <main class="room hidden" id="room-monitor">
+    <div class="crumbrow"><span class="crumb">MONITOR · DID IT ACTUALLY HELP</span>
+      <span class="subject"><span class="sq"></span>Graphics card <span class="what">· hardware GPU scheduling</span></span>
+      <button class="pill bare follow" data-follow>Follow this evidence →</button></div>
+
+    <!-- IDLE -->
+    <div class="mon empty" data-ms="idle" hidden>
+      <h3>Record one match</h3>
+      <p>Compy watches one real session, then tells you whether the change did anything.</p>
+      <button class="pill primary">Start recording</button>
+      <div class="steps"><b>Start</b><em>—</em><span>Play normally</span><em>—</em><span>Come back for the result</span></div>
+    </div>
+
+    <!-- RECORDING -->
+    <div class="mon empty" data-ms="rec" hidden>
+      <h3><span class="recdot" style="display:inline-block;margin-right:8px"></span>Recording your session</h3>
+      <p>Play normally. Compy is reading frame pacing and will stop when the game closes.</p>
+      <div style="font-family:var(--mono);font-size:28px;color:var(--proof)">04:12</div>
+      <button class="pill quiet">Stop and keep what we have</button>
+    </div>
+
+    <!-- RESULT -->
+    <div class="mon" data-ms="result">
+      <h1 class="verdict" style="font-size:26px">Frame pacing got steadier</h1>
+      <p class="lede">Measured across one 11-minute session of the same game.</p>
+
+      <div class="trace">
+        <div class="tracehead"><span>FRAME TIME</span>
+          <span class="now">lower is better · amber line = your 165 Hz budget</span></div>
+        <svg viewBox="0 0 1000 214" role="img" aria-label="Frame time trace with two remaining spikes at 3 minutes 41 seconds and 7 minutes 6 seconds.">
+          <line class="gridline" x1="40" y1="30" x2="990" y2="30"/>
+          <line class="gridline" x1="40" y1="80" x2="990" y2="80"/>
+          <line class="gridline" x1="40" y1="130" x2="990" y2="130"/>
+          <line class="gridline" x1="40" y1="180" x2="990" y2="180"/>
+          <text class="axlbl" x="4" y="34">25ms</text><text class="axlbl" x="4" y="84">18ms</text>
+          <text class="axlbl" x="4" y="134">12ms</text><text class="axlbl" x="4" y="184">6ms</text>
+          <line class="budget" x1="40" y1="122" x2="990" y2="122"/>
+          <path class="tracepath before" d="M40 128 L120 116 L180 140 L240 62 L300 132 L360 120 L420 54 L480 134 L540 126 L600 118 L660 70 L720 130 L780 122 L840 136 L900 88 L960 128"/>
+          <path class="tracepath" d="M40 142 L90 138 L140 146 L190 140 L240 144 L290 138 L330 96 L370 143 L420 140 L470 147 L520 141 L570 145 L620 139 L660 104 L700 144 L750 140 L800 146 L850 141 L900 144 L960 140"/>
+          <g class="spike" data-sel="true" data-t="3:41" data-ms="19.4"><line x1="330" y1="30" x2="330" y2="190"/><circle cx="330" cy="96" r="5"/></g>
+          <g class="spike" data-t="7:06" data-ms="17.9"><line x1="660" y1="30" x2="660" y2="190"/><circle cx="660" cy="104" r="5"/></g>
+        </svg>
+        <div class="spikebar">
+          <button class="stepbtn" aria-label="Previous spike">‹</button>
+          <button class="stepbtn" aria-label="Next spike">›</button>
+          <span>Spike <span class="val" id="sidx">1</span> of 2 · <span class="val" id="stime">3:41</span> · <span class="val" id="sms">19.4 ms</span></span>
+          <span style="color:var(--ink-3);font-size:13px">Arrow keys work too — no dragging needed.</span>
+        </div>
+      </div>
+
+      <div class="cmp">
+        <div><div class="k">Before this change</div><div class="v" style="color:#8c919b">14.2 ms typical · 6 spikes</div></div>
+        <div class="now"><div class="k">After this change</div><div class="v">11.8 ms typical · 2 spikes</div></div>
+        <div class="qual"><span class="chip measured">MEASURED · 1 SESSION · 11 MIN</span>
+          <span style="font-size:13px;color:var(--ink-3)">Same game, same settings.</span></div>
+      </div>
+
+      <div class="monacts">
+        <button class="pill primary">Keep this change</button>
+        <button class="pill quiet">Roll it back</button>
+        <button class="pill bare">Record another session</button>
+      </div>
+    </div>
+
+    <!-- INCONCLUSIVE -->
+    <div class="mon" data-ms="incon" hidden>
+      <h1 class="verdict" style="font-size:26px">Not enough to call it</h1>
+      <p class="lede">A 4-minute session can't separate this change from normal variation.</p>
+      <div class="trace" style="opacity:.72">
+        <div class="tracehead"><span>FRAME TIME</span><span class="now">4:02 recorded · 2 spikes</span></div>
+        <svg viewBox="0 0 1000 214" role="img" aria-label="Short frame time trace, too brief to draw a conclusion.">
+          <line class="gridline" x1="40" y1="80" x2="990" y2="80"/><line class="gridline" x1="40" y1="130" x2="990" y2="130"/>
+          <line class="budget" x1="40" y1="122" x2="990" y2="122"/>
+          <path class="tracepath" style="stroke:#f0b878" d="M40 140 L120 132 L200 148 L280 100 L360 142 L440 138 L520 146 L600 112 L680 141 L760 145 L840 139 L920 143 L990 140"/>
+        </svg>
+      </div>
+      <div class="cmp">
+        <div><div class="k">Before this change</div><div class="v" style="color:#8c919b">14.2 ms typical · 6 spikes</div></div>
+        <div><div class="k">After this change</div><div class="v" style="color:var(--judge)">13.1 ms typical · 2 spikes</div></div>
+        <div class="qual"><span class="chip unknown">INCONCLUSIVE · 4 MIN</span>
+          <span style="font-size:13px;color:var(--ink-3)">Compy needs ~10 minutes.</span></div>
+      </div>
+      <div class="monacts">
+        <button class="pill primary">Record 10 more minutes</button>
+        <button class="pill quiet">Roll it back</button>
+        <button class="pill bare">Keep it anyway</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============ BLACKBOOK ============ -->
+  <main class="room hidden" id="room-blackbook">
+    <div class="crumbrow"><span class="crumb">BLACKBOOK · HISTORY &amp; UNDO</span>
+      <span class="subject"><span class="sq"></span>Graphics card <span class="what">· hardware GPU scheduling</span></span>
+      <button class="pill bare follow" data-follow>Follow this evidence →</button></div>
+    <h1 class="verdict" style="font-size:26px">What happened, and how to undo it</h1>
+    <div class="bb" style="margin-top:16px">
+      <div>
+        <div class="tl">
+          <div class="rec subj">
+            <div class="t">Hardware GPU scheduling turned on <span class="when">· TODAY</span></div>
+            <div class="chain"><span class="chip measured">MEASURED</span><em>→</em>
+              <span>Frame pacing 14.2 → 11.8 ms</span><em>→</em><span style="color:var(--proof)">Active now</span></div>
+            <button class="pill quiet act">Roll back</button>
+          </div>
+          <div class="rec">
+            <div class="t">Game Mode turned off <span class="when">· 3 DAYS AGO</span></div>
+            <div class="chain"><span class="chip measured">MEASURED</span><em>→</em>
+              <span>Frame pacing steadier</span><em>→</em><span style="color:var(--proof)">Active now</span></div>
+            <button class="pill quiet act">Roll back</button>
+          </div>
+          <div class="rec">
+            <div class="t">Startup app trimmed: Discord <span class="when">· 6 DAYS AGO</span></div>
+            <div class="chain"><span class="chip expected">EXPECTED</span><em>→</em>
+              <span>Not measured yet</span><em>→</em><span style="color:var(--proof)">Active now</span></div>
+            <button class="pill quiet act">Roll back</button>
+          </div>
+        </div>
+
+        <div class="bbsplit">NOT MADE BY COMPY</div>
+        <div class="tl">
+          <div class="rec outside">
+            <div class="t">NVIDIA driver updated to 566.36 <span class="when">· 8 DAYS AGO</span></div>
+            <div class="chain"><span class="chip unavailable">OUTSIDE CHANGE</span><em>→</em>
+              <span>Windows Update did this. Compy can't roll it back.</span></div>
+          </div>
+          <div class="rec inactive">
+            <div class="t">Power plan set to Balanced <span class="when">· 12 DAYS AGO</span></div>
+            <div class="chain"><span class="chip unavailable">ROLLED BACK</span><em>→</em>
+              <span>You undid this. Nothing is applied.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="aside">
+        <h4>THIS PAGE</h4>
+        <div class="card"><p><b style="color:var(--ink)">3 changes active</b><br>Every one of them has a way back.</p></div>
+        <div class="card"><p><b style="color:var(--ink)">Field Guide</b><br>Search any term you see here. It's help, not another room.</p></div>
+        <button class="pill quiet" style="width:100%">Search the Field Guide</button>
+      </div>
+    </div>
+  </main>
+
+</div></div></div>
+
+<script>
+(function(){
+  var body=document.body, stage=document.getElementById('stage'), SCALE=1;
+
+  /* scale the native 1280x720 stage down if the window is narrower */
+  function fit(){
+    var w=Math.min(document.documentElement.clientWidth-32,1280);
+    var s=w/1280; SCALE=s; stage.style.transform='scale('+s+')';
+    stage.parentElement.style.height=(720*s)+'px';
+  }
+  addEventListener('resize',fit); fit();
+
+  /* room switching */
+  var rooms={home:document.getElementById('room-home'),lab:document.getElementById('room-lab'),
+             monitor:document.getElementById('room-monitor'),blackbook:document.getElementById('room-blackbook')};
+  var order=['home','lab','monitor','blackbook'];
+  var anchorSel={home:'#room-home .nextmove',lab:'#room-lab .decision h3',
+                 monitor:'#room-monitor .mon:not([hidden]) .trace, #room-monitor .mon:not([hidden]) h3',
+                 blackbook:'#room-blackbook .rec.subj'};
+  function current(){ for(var i=0;i<order.length;i++) if(!rooms[order[i]].classList.contains('hidden')) return order[i]; return 'home'; }
+  function rectIn(el){
+    var a=document.querySelector('.app').getBoundingClientRect(), r=el.getBoundingClientRect(), s=SCALE||1;
+    return {x:(r.left-a.left)/s, y:(r.top-a.top)/s, w:r.width/s, h:r.height/s};
+  }
+  function show(name){
+    for(var k in rooms) rooms[k].classList.toggle('hidden',k!==name);
+    document.querySelectorAll('[role=tab]').forEach(function(t){
+      t.setAttribute('aria-selected', String(t.dataset.room===name)); });
+    document.querySelectorAll('.rmbtn').forEach(function(b){
+      if(b.dataset.nav===name) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
+    document.querySelectorAll('[data-mononly]').forEach(function(e){ e.hidden = name!=='monitor'; });
+    if(name==='home') drawConnector();
+  }
+  document.querySelectorAll('[role=tab]').forEach(function(t){ t.onclick=function(){show(t.dataset.room)}; });
+  document.querySelectorAll('.rmbtn').forEach(function(b){
+    b.onclick=function(){ if(rooms[b.dataset.nav]) show(b.dataset.nav); }; });
+
+  /* monitor states */
+  document.querySelectorAll('[data-mstate]').forEach(function(b){
+    b.onclick=function(){
+      document.querySelectorAll('[data-mstate]').forEach(function(x){x.setAttribute('aria-pressed','false')});
+      b.setAttribute('aria-pressed','true');
+      document.querySelectorAll('#room-monitor .mon').forEach(function(m){ m.hidden = m.dataset.ms!==b.dataset.mstate; });
+    };
+  });
+
+  /* reduced motion toggle (the prototype's stand-in for the Windows setting) */
+  document.getElementById('rm').onclick=function(){
+    var on = body.dataset.rm==='off'; body.dataset.rm = on?'on':'off';
+    this.setAttribute('aria-pressed', String(on));
+  };
+
+  /* ONE moving focal point, ONE time: the evidence connector draws once on entering Home. */
+  var conn=document.getElementById('conn'), spark=document.getElementById('spark');
+  function drawConnector(){
+    if(!conn) return;
+    var len=conn.getTotalLength(); conn.style.setProperty('--len',len);
+    conn.classList.remove('drawn'); void conn.getBoundingClientRect();
+    if(body.dataset.rm==='on'||matchMedia('(prefers-reduced-motion:reduce)').matches){
+      conn.classList.add('drawn'); return;
+    }
+    requestAnimationFrame(function(){
+      conn.classList.add('drawn');
+      var t0=null, dur=620;
+      function step(ts){
+        if(t0===null)t0=ts; var p=Math.min((ts-t0)/dur,1);
+        var pt=conn.getPointAtLength(len*p);
+        spark.setAttribute('cx',pt.x); spark.setAttribute('cy',pt.y);
+        spark.style.opacity = p<1 ? 1 : 0;
+        if(p<1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    });
+  }
+  drawConnector();
+
+  /* intents */
+  document.querySelectorAll('.intent').forEach(function(b){
+    b.onclick=function(){ document.querySelectorAll('.intent').forEach(function(x){x.setAttribute('aria-pressed','false')});
+      b.setAttribute('aria-pressed','true'); };
+  });
+
+  /* Lab queue: collapsed content is REMOVED from focus/AT traversal via [hidden] */
+  var qd=document.getElementById('qdisc'), ql=document.getElementById('qlist');
+  qd.onclick=function(){ var open=ql.hidden; ql.hidden=!open;
+    qd.setAttribute('aria-expanded',String(open));
+    qd.lastElementChild.textContent = open?'Hide':'Show'; };
+
+  /* Monitor spikes: keyboard + buttons, never drag-only */
+  var spikes=[].slice.call(document.querySelectorAll('#room-monitor .spike')), si=0;
+  function sel(i){ si=(i+spikes.length)%spikes.length;
+    spikes.forEach(function(s,n){ s.dataset.sel = String(n===si); });
+    document.getElementById('sidx').textContent=si+1;
+    document.getElementById('stime').textContent=spikes[si].dataset.t;
+    document.getElementById('sms').textContent=spikes[si].dataset.ms+' ms'; }
+  var sb=document.querySelectorAll('.stepbtn');
+  if(sb[0]) sb[0].onclick=function(){sel(si-1)};
+  if(sb[1]) sb[1].onclick=function(){sel(si+1)};
+  addEventListener('keydown',function(e){
+    if(rooms.monitor.classList.contains('hidden')) return;
+    if(e.key==='ArrowRight'){sel(si+1)} if(e.key==='ArrowLeft'){sel(si-1)} });
+  sel(0);
+
+  /* ============================================================
+     CROSS-ROOM CONTINUITY — the same subject is carried, once, visibly.
+     A single token flies from the old room's anchor to the new room's anchor.
+     Reduced motion: no flight, the destination just arrives selected.
+     ============================================================ */
+  var token=document.createElement('div');
+  token.className='flytoken'; token.hidden=true; token.setAttribute('aria-hidden','true');
+  token.innerHTML='<span class="sq"></span>Graphics card · hardware GPU scheduling';
+  document.querySelector('.app').appendChild(token);
+
+  function anchorOf(room){ return document.querySelector(anchorSel[room]); }
+
+  function carry(to){
+    var from=current();
+    if(from===to){ return; }
+    var a0=anchorOf(from), r0=a0?rectIn(a0):null;
+    show(to);
+    var a1=anchorOf(to); if(!a1) return;
+    a1.classList.remove('arrived'); void a1.offsetWidth; a1.classList.add('arrived');
+    var reduced = body.dataset.rm==='on'||matchMedia('(prefers-reduced-motion:reduce)').matches;
+    if(reduced||!r0){ return; }
+    var r1=rectIn(a1);
+    token.hidden=false;
+    token.style.left='0px'; token.style.top='0px';
+    var t0='translate('+(r0.x+10)+'px,'+(r0.y-14)+'px)';
+    var t1='translate('+(r1.x+10)+'px,'+(r1.y-14)+'px)';
+    var anim=token.animate(
+      [{transform:t0,opacity:0},{transform:t0,opacity:1,offset:.12},
+       {transform:t1,opacity:1,offset:.86},{transform:t1,opacity:0}],
+      {duration:520,easing:'cubic-bezier(.22,.61,.36,1)',fill:'forwards'});
+    anim.onfinish=function(){ token.hidden=true; };
+  }
+
+  document.querySelectorAll('[data-follow]').forEach(function(b){
+    b.onclick=function(){ var i=order.indexOf(current()); carry(order[(i+1)%order.length]); };
+  });
+  /* rail + tabs also carry the subject */
+  document.querySelectorAll('.rmbtn').forEach(function(b){
+    b.onclick=function(){ if(rooms[b.dataset.nav]) carry(b.dataset.nav); }; });
+  document.querySelectorAll('[role=tab]').forEach(function(t){ t.onclick=function(){carry(t.dataset.room)}; });
+
+  /* selecting a rig part re-targets the carried subject and moves you to the decision */
+  document.querySelectorAll('#room-home .part').forEach(function(p){
+    p.addEventListener('click',function(){ if(p.dataset.target==='true') carry('lab'); });
+    p.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault();
+      if(p.dataset.target==='true') carry('lab'); } });
+  });
+})();
+</script>
+</body>
+</html>
