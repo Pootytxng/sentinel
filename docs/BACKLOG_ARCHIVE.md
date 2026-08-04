@@ -7,6 +7,120 @@
 
 ---
 
+## ARCHIVED 2026-08-04 — Q6 doc-truth consolidation: the launch runway (moved verbatim)
+
+> Moved out of `docs/BACKLOG.md` by Q6 (issue #65, `docs/superpowers/specs/2026-07-29-product-quality-stabilization-program.md`)
+> — the live board carries CURRENT state only (TOKEN LAW 1). Written 2026-07-06; by 2026-08-04 its
+> read-only sweep claims (**"zero open code stubs"**, **"no real UI gaps"**) and its gate citations
+> (`actions.rs:1435` / `:1506` / `:1646`) had drifted from the code. Preserved unchanged here rather
+> than corrected in place — history is not retro-edited. Current truth: `docs/RELEASE_STATE.md` (gates),
+> `docs/OWNER_ACTION_CHECKLIST.md` (RUNG 3 + RUNG 4, still owner-gated), `docs/UI_VISION_BACKLOG.md` (UI).
+
+## 🚀 LAUNCH RUNWAY — the ordered cutline to first launch (Cowork consolidation, 2026-07-06)
+
+> Owner asked for the linear path to "MVP final / first launch." Verified against code by a
+> read-only sweep 2026-07-06: **zero open code stubs** (no `todo!`/`unimplemented!`/FIXME across
+> src-tauri + src; the single TODO hit is a resolved-2026-06-11 reference, `latency.rs:944`) and
+> **no real UI gaps** — every "not yet / placeholder" string is an honest-by-design label,
+> loading-state comment, or literal input placeholder. "Unfinished" = the gated features + owner
+> decisions below, not hidden broken code. Gate booleans re-verified at source (drifted lines:
+> service_suspend `actions.rs:1435` · bloat_removal `actions.rs:1506` · preload `actions.rs:1646`).
+
+- **RUNG 0 — in flight now (CC, Fable window):** the 2026-07-06 train
+  (`docs/superpowers/specs/2026-07-06-firstcheck-monitor-mvp-train.md`) — T0 stamp-check ·
+  T1 FirstCheck dedupe · T2 FirstCheck stepper redesign · T3 Monitor summary-first ·
+  T4 owner-picked R&D components (`2026-07-06-design-rnd-options.md`) · T5 optional QA filler.
+- **RUNG 1 — DECIDED (owner, 2026-07-06): beta ships from CURRENT `main`** ("more complete in
+  the way I want it"). Frozen `16069fa` stays archival. Consequence: RUNG 2 is now REQUIRED.
+- **RUNG 2 — REQUIRED before any send, in order:** ① ✅ **single-prompt Gaming Mode elevation
+  fix DONE 2026-07-07 (T6)** — session-start advanced tier batches to ONE elevation
+  (`apply_elevated_tier`, gaming_orchestrator.rs; ≤1-dispatch cargo pin; no-partial +
+  UAC-decline honesty preserved; mutation-gate 10/10; stop/restore side still elevates
+  per change — out of T6 scope, flagged to owner) → ② ✅ **§6/§7 installed-build QA,
+  CC-runnable parts DONE 2026-07-07 (T5, on the `5f765e4` installer):** §7 all-items sweep
+  caught 3 honesty gaps (vendor-honesty line unreachable behind `{!embedded}` · tour never
+  told the no-CPU-temp story · §7 items 1–2 anchored to retired UI) → fixed `ff186e6` +
+  focused self-reviewer PASS on the shipped build; §6 corrupt ledger (fail-loud quarantine
+  to `.corrupt`, empty load, no crash) + missing ledger (empty, no crash) proven live, real
+  ledger + orphan gaming-session restored hash-identical; cancelled-apply covered by §1.
+  **One §6 leg is owner-present by construction — helper-crash** (the FPS helper runs
+  ELEVATED: starting it and killing it each take a UAC consent; fps.rs:11/371) — folds into
+  ③'s owner session →
+  ③ ✅ **owner-run GAMING_MODE_QA.md live case #4 — CLOSED 2026-07-07** (owner ran start →
+  reboot → "Restore now" and confirmed the enable was exactly ONE UAC; CC read-only-verified
+  the restore: session contract cleared — only reachable when every restore confirms — and
+  every probed value matches his standing ledger state; cases #4 + #10 marked PASSED in
+  GAMING_MODE_QA.md). Findings logged: **T6b candidate** (the 2 restore UACs = unbatched
+  restore side, per elevated change) · **UX-gap candidate** (restore success shows NO visible
+  confirmation — owner couldn't tell it worked). The old orphan-session file is GONE from disk,
+  so the pending "~5 old-style prompts" restore-click leg is moot/absorbed by tonight's run.
+  **§6 helper-crash probe CLOSED 2026-07-08 — RUNG 2 fully done:** owner enabled FPS (one
+  UAC) → elevated helper PID 17900 up, `fps.json` writing at ~1s cadence (mtime
+  00:38:16→00:38:20 observed) → owner Task-Manager-killed 17900 → `fps.json` froze at
+  00:39:16, `fps.alive` heartbeat cleaned up, no ghost process (only the main app remained) →
+  owner re-enabled at 00:39:51: NEW helper PID 17820, `fps.json` writing again
+  (00:40:22→00:40:25 observed) — full crash→detect→clean→recover cycle backend-PROVEN, and
+  the owner confirmed (2026-07-08) the Monitor room UI showed the FPS sensor STOPPED after
+  the kill (not frozen/false-live). Closed in RELEASE_QA.md §6 + the RELEASE_STATE Snapshot
+  "Last full installed-build QA" row the same commit; owner-legs memories deleted.
+- **RUNG 3 — private-beta send (owner distribution act):** friends + Discord seed channel per
+  RECEIPTS_DOCTRINE Phase 1 / zero-budget law. BETA_TESTER_README + TRACKER already exist.
+- **RUNG 4 — public-launch gates (owner/$-gated, parallel once beta feedback flows):** code
+  signing (Azure Trusted Signing route) · legal finalization (EULA/PRIVACY drafts → final) ·
+  GitHub repo rename + `compy.gg` domain (bundled at first public exposure, per CLAUDE.md).
+- **NOT launch blockers (each gated by its own track, deliberately dark):** Receipts arming
+  (security review + consent UI) · preload-removal arming (live QA + owner-curated list) ·
+  remote-fetch arming (production key + CDN + semver + rollout) · licensing/Pro enforcement ·
+  A4 advisory items (owner-curated data / outbound-gated) · Phase C/D money items.
+- ✅ **Two Futures measured split — BUILT v1 2026-07-07 (`4df5448`+`eb5df81`), owner pulled it
+  AHEAD of RUNG 2 by explicit same-day order** (frontend-only, flag `compy_two_futures` DEFAULT
+  OFF, zero src-tauri — moves no gate; **RUNG 2 above stays REQUIRED + open**). Benchmark
+  station: baseline-vs-now rig pair (one canvas, ghost vs accent+shell), struct-sourced delta
+  rail, subsumes the efficacy card flag-on. THE LAW pinned by the anti-fabrication guard suite
+  (`two-futures.test.tsx`, 21 tests: empty-state truth-table, no-fallback source grep, flag
+  wiring both ways, partGlow neutrality). v1 scope note in the spec: trial `MetricWindow` never
+  crosses IPC → v1 renders from the benchmark pair only; trial-sourced split = v2 (+persist-
+  latest Rust read). Self-reviewer PASS (fresh full pass at `eb5df81` after subsume + azimuth
+  fixes). ✅ OWNER EYEBALLED 2026-07-07: **"looks really good BUT the hologram itself has no
+  visible purpose or information integrated — just a cool split with no apparent changes
+  before/after."** Verdict: stays preview-OFF; default-ON deferred INTO the Lab-establishment
+  train below (the split's hologram must carry part-anchored, measured information — changed
+  components visibly marked, deltas anchored to parts — not just the composition). Same train,
+  LIVE surface: bay-shell `clearSpot` viewer-facing window (`209e4dc`).
+- ✅ **Hologram shell-blink flicker — ROOT-CAUSED, FIXED + SHIPPED LIVE `d557e70` (2026-07-07):**
+  the owner-clipped bay flicker (evidence `docs/superpowers/specs/assets/2026-07-07-holo-flicker/`)
+  was the vendored shader's UPSTREAM per-frame blink time-hash pumping the whole DoubleSide
+  additive shell (±2–4 mean-Y, Bloom-amplified; orbit-ON only — T1.5's idle fix had merely hidden
+  it at rest; Glitch/clearSpot/b6687b3 guards exonerated). Fix at the callers, vendor file
+  untouched: `enableBlinking={false}` on both mounts + `fresnelOpacity` 0.7→0.42 (matches the
+  approved mid-state look, not the wash peak). bug→guard `holo-shell-blink-guard.test.ts` (every
+  `<HolographicMaterial>` mount must disable blink; off-branch `': 1.0'` constant pinned). tsc 0 ·
+  vitest 1103 (148 files) · self-reviewer PASS (orbit-on luma probe: max ΔY 0.95/1.27 vs the 2–4
+  defect scale, 0 pumps; idle rest 0 draws/16s). Installer rebuilt + silent-reinstalled,
+  **stamp-verified `d557e70` live** (RELEASE_STATE row current). Owner eyeball: orbit ON on the
+  bay (+ Two Futures preview shells if flipped).
+- ✅ **Per-part identity colors + see-through case — SHIPPED LIVE `48ca9ec` (2026-07-07, owner
+  round-2 directive on the bay):** fixed theme-INDEPENDENT `PART_KIND_COLORS` (board slate · cpu
+  amber · ram violet · gpu teal · storage green · cooler ice · psu copper · fan sky; ghosts keep
+  the faint ink — honesty unchanged); shell dropped to a whisper (hologramOpacity 0.08 / fresnel
+  0.2 / wireframe 0.28); theme key lights neutralized in all three rig scenes so the hues read.
+  Guard: `use-rig-colors.test.ts` rewritten (hue uniqueness · theme-independence · ghost honesty).
+  tsc 0 · vitest 1104 (148 files) · self-reviewer all-8-substantive PASS (pixel-sampled hues,
+  Violet→Emerald part-hue identity, idle rest 0 draws/15s ×2); its wording nit + sibling
+  light-wash follow-up fixed same-commit. Installer rebuilt + silent-reinstalled, **stamp-verified
+  `48ca9ec` live**. Owner eyeball: the recolored bay.
+- ~~**PARKED — owner's Lab-establishment train**~~ — **RESOLVED:** owner delivered direction verbally
+  2026-07-08 (`2026-07-08-lab-proving-ground.md`); the train built + shipped `f16d158` (flag OFF), owner
+  **REJECTED the UI direction 2026-07-09** (drag gallery + linear spine), and a new **"Instrument Bench"**
+  direction was researched + council-reviewed + **APPROVED same day**
+  (`docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md`; Phase-1 plan
+  `docs/superpowers/plans/2026-07-09-lab-instrument-bench-p1.md`). See the 🛰️ HQ STEERING LOG below
+  (Cycle 2026-07-09c) for the live thread. Still-honored folds-in: Two Futures hologram-information
+  feedback · Two Futures v2 · interactive hologram work under the honest-measurement law (anything on a
+  part must trace to a measured struct).
+
+---
+
 ## ARCHIVED 2026-07-22 — tier-1 board diet: completed non-cycle sections (moved verbatim, owner-approved)
 
 > BACKLOG.md hit 128 KB (past the usage-audit 120 KB flag) with the cycle log already at its
