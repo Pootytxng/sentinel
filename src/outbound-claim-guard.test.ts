@@ -177,7 +177,14 @@ describe("outbound-claim guard", () => {
     });
   } else {
     it("no outbound surface is live, so absolutes would be permitted (nothing to enforce)", () => {
-      expect(liveSurfaces).toEqual([]);
+      // NOT `expect(liveSurfaces).toEqual([])` — liveSurfaces was filtered to empty three lines
+      // above, so that asserted `[] === []` and this branch would stay green even if SURFACES itself
+      // had been emptied out from under the guard. The real risk in this branch is that the surface
+      // REGISTRY silently loses its entries, which would disarm the whole file while still reading
+      // as a passing suite. Assert the registry is populated; the emptiness of the filter is the
+      // branch condition, not a finding.
+      expect(SURFACES.length, "the outbound-surface registry is empty — this guard is disarmed").toBeGreaterThan(0);
+      expect(SURFACES.every((s) => typeof s.live === "function")).toBe(true);
     });
   }
 

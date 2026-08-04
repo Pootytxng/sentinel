@@ -70,7 +70,11 @@ describe("REC_MUTATIONS", () => {
     expect(m).toBeDefined();
     expect(m.elevated).toBeUndefined();
     expect(m.restart).toBeUndefined();
-    expect(m.changes).toBe(REC_MUTATIONS["game-mode"].changes);
+    // Removed 2026-08-03: this line read `expect(m.changes).toBe(REC_MUTATIONS["game-mode"].changes)`
+    // where `m` IS `REC_MUTATIONS["game-mode"]` — algebraically `a === a`, true no matter what
+    // `changes` ever held. Non-emptiness is already covered for every entry by the loop above, so
+    // the line added no coverage in either direction. The two assertions above are the real subject
+    // of this test (non-elevated, no restart), and they can fail.
   });
 
   it("'hags-enable' is both elevated and restart-required (per the data)", () => {
