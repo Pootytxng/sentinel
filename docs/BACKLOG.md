@@ -1212,7 +1212,12 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   (renders nothing while dark, test-pinned). **Arming rides its own gate:** live QA harness
   (`qa_remove_then_reinstall_round_trip`, #[ignore]) + Store ProductId link-verification + owner curates the final
   list + explicit sign-off.
-- [~] one-click re-apply (`APPLIABLE_REC_IDS`) — **covered:** `apply_recommendations_batch` (`history.rs:528`,
+- [~] one-click re-apply — **SPLIT (audit 2026-08-03), because the single `[~]` read as one
+  half-built thing and it is two separate states.** ① **batch-apply primitive: DONE + guarded** —
+  `apply_recommendations_batch`, IPC-registered, invoked from App; parity guard
+  `src/appliable-parity.test.ts` pins the FE/BE `APPLIABLE_REC_IDS` lists against drift.
+  ② **a dedicated "re-apply everything that drifted" button: NOT BUILT** — only per-item re-apply
+  exists. Original note: `apply_recommendations_batch` (`history.rs:528`,
   validates `APPLIABLE_REC_IDS`, single-consent + ONE UAC) wired at `App.tsx:772` on the QA-closed apply path.
   A dedicated "re-apply everything that drifted off in one click" button would be a small UI add on top if wanted.
 - Gaming Mode (F1) — built, **gate still false**; needs physical-reboot QA + owner sign-off.
