@@ -42,6 +42,7 @@ mod recommendations;
 mod remote_rules;
 mod services; // A4 read-only service inventory — categorised, informational, mutates nothing.
 mod sessions;
+mod support_evidence; // Local support evidence — bounded, redacted, on-disk-only record of the moments support actually asks about. No outbound path; export is user-initiated and preview-gated.
 mod tray; // Opt-in "minimize to tray" (default OFF — §1 clean-exit unless the user opts in).
 use actions::*;
 use diagnostics::*;
@@ -533,13 +534,43 @@ static UPDATE_RESTART_BARRIER: std::sync::Mutex<bool> = std::sync::Mutex::new(fa
 
 #[tauri::command]
 fn begin_update_restart() -> Result<(), String> {
-    let mut barrier = UPDATE_RESTART_BARRIER
-        .lock()
-        .map_err(|_| "Update safety barrier is unavailable; restart/update refused.".to_string())?;
+    // Support evidence (spec §12): "I clicked Update and it just refused" is a report support
+    // cannot resolve from the UI alone, because the refusal is CORRECT — a pending Gaming Mode
+    // contract means a real machine change has no completed rollback yet, and an update that
+    // restarts the process would strand it. Recording it as REFUSED (not Failed) is the honest
+    // reading: nothing is broken, the barrier did its job, and the fix is to finish or recover
+    // the session. The poisoned-lock arm is the genuinely broken one.
+    let mut barrier = match UPDATE_RESTART_BARRIER.lock() {
+        Ok(b) => b,
+        Err(_) => {
+            support_evidence::record(
+                support_evidence::EventKind::Lifecycle,
+                "update_restart",
+                "barrier_unavailable",
+                support_evidence::Outcome::Failed,
+                "the update safety barrier could not be read, so the update was refused",
+            );
+            return Err("Update safety barrier is unavailable; restart/update refused.".into());
+        }
+    };
     if gaming_session::has_pending_contract()? {
+        support_evidence::record(
+            support_evidence::EventKind::Lifecycle,
+            "update_restart",
+            "pending_contract",
+            support_evidence::Outcome::Refused,
+            "a Gaming Mode session still has changes to restore, so the update was held back",
+        );
         return Err("Finish Gaming Mode or recover its pending changes before updating Compy.".into());
     }
     *barrier = true;
+    support_evidence::record(
+        support_evidence::EventKind::Lifecycle,
+        "update_restart",
+        "armed",
+        support_evidence::Outcome::Ok,
+        "the update was allowed to proceed and the process may restart",
+    );
     Ok(())
 }
 
@@ -1057,6 +1088,9 @@ pub fn run() {
             get_build_stamp,
             receipts::get_receipts_gate,
             receipts::preview_receipt_payload,
+            support_evidence::preview_support_evidence,
+            support_evidence::export_support_evidence,
+            support_evidence::clear_support_evidence,
             get_latency_diagnostics,
             latency_measure_wake,
             latency_measure_mouse,
@@ -1130,6 +1164,18 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            // Support evidence (spec §12) — the anchor record. Every event after this one in the
+            // file belongs to this launch of this build, which is what makes "it broke after the
+            // update" answerable: the stamp is right there above the failure. Written first, and
+            // synchronously, so ordering in the file is real ordering. It can never fail loudly —
+            // record() swallows its own errors by contract.
+            support_evidence::record(
+                support_evidence::EventKind::Lifecycle,
+                "app_start",
+                "launched",
+                support_evidence::Outcome::Ok,
+                &format!("Compy {} started ({})", env!("CARGO_PKG_VERSION"), build_stamp()),
+            );
             // Capture the handle so the session recorder thread can fire the debrief toast.
             let _ = APP_HANDLE.set(app.handle().clone());
             // Build the (always-present) tray icon; the close-to-tray BEHAVIOR stays gated on the

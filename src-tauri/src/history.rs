@@ -309,7 +309,21 @@ fn history_path() -> PathBuf {
 // pub(crate): intelligence.rs reads the persisted structs (read-only) for the timeline —
 // the view types drop fields (provenance) the engine needs as evidence.
 pub(crate) fn load_history() -> Result<Vec<AppliedChange>, String> {
-    load_history_from(&history_path())
+    let loaded = load_history_from(&history_path());
+    // Support evidence (spec §12): a ledger that will not load is the single most important thing
+    // support can be told, because it blocks every apply and every rollback until it is resolved.
+    // Recorded HERE in the wrapper, not in the path-parameterized core, so the corrupt-ledger unit
+    // tests stay hermetic — they exercise the core and never write into %APPDATA%.
+    if let Err(e) = &loaded {
+        crate::support_evidence::record(
+            crate::support_evidence::EventKind::Ledger,
+            "ledger_load",
+            "unreadable",
+            crate::support_evidence::Outcome::Failed,
+            e,
+        );
+    }
+    loaded
 }
 
 fn load_history_from(path: &Path) -> Result<Vec<AppliedChange>, String> {
@@ -343,8 +357,21 @@ fn load_history_from(path: &Path) -> Result<Vec<AppliedChange>, String> {
 }
 
 fn save_history(h: &[AppliedChange]) -> Result<(), String> {
-    std::fs::create_dir_all(compy_data_dir()).map_err(|e| e.to_string())?;
-    save_history_to(&history_path(), h)
+    let saved = std::fs::create_dir_all(compy_data_dir())
+        .map_err(|e| e.to_string())
+        .and_then(|()| save_history_to(&history_path(), h));
+    // The write side of the same story: a receipt that cannot be persisted is the failure that
+    // strands a real machine change with no rollback contract. Support needs to see it happened.
+    if let Err(e) = &saved {
+        crate::support_evidence::record(
+            crate::support_evidence::EventKind::Ledger,
+            "ledger_save",
+            "unwritable",
+            crate::support_evidence::Outcome::Failed,
+            e,
+        );
+    }
+    saved
 }
 
 fn save_history_to(path: &Path, h: &[AppliedChange]) -> Result<(), String> {
@@ -508,8 +535,39 @@ pub(crate) fn restore_leftover(
     Ok(into_view(change))
 }
 
+/// Support evidence (spec §12) for the mutation boundary. Only FAILURES are recorded: a
+/// successful apply or rollback already has a far better record — its Trust Ledger receipt, with
+/// the typed rollback contract and snapshot. Duplicating successes here would spend the bounded
+/// 400-record ceiling re-stating what `history.json` says properly, and push the actual failures
+/// out of the window. A decline is separated from a failure by the ONE canonical message allowed
+/// to claim the user declined (`actions::ELEVATION_DECLINED_MSG`, itself test-pinned), so support
+/// is never told a user cancelled when they didn't — the same trust rule `elevation_outcome`
+/// exists to protect.
+fn record_operation_failure(operation: &str, code: &str, err: &str) {
+    let outcome = if err == crate::actions::ELEVATION_DECLINED_MSG {
+        crate::support_evidence::Outcome::Refused
+    } else {
+        crate::support_evidence::Outcome::Failed
+    };
+    crate::support_evidence::record(
+        crate::support_evidence::EventKind::Operation,
+        operation,
+        code,
+        outcome,
+        err,
+    );
+}
+
 #[tauri::command]
 pub(crate) fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChangeView, String> {
+    let applied = apply_recommendation_inner(&rec_id, &rec_title);
+    if let Err(e) = &applied {
+        record_operation_failure(&format!("apply:{rec_id}"), "apply_failed", e);
+    }
+    applied
+}
+
+fn apply_recommendation_inner(rec_id: &str, rec_title: &str) -> Result<AppliedChangeView, String> {
     let _lock = HISTORY_LOCK
         .lock()
         .map_err(|_| "history lock poisoned".to_string())?;
@@ -520,8 +578,8 @@ pub(crate) fn apply_recommendation(rec_id: String, rec_title: String) -> Result<
     // ...and prove the ledger is WRITABLE too (H1 write side): a readable-but-unwritable ledger
     // would let the mutation succeed and then orphan its receipt. Refuse before elevation.
     ensure_ledger_writable(&history)?;
-    let result = dispatch_apply(&rec_id)?;
-    let change = build_applied_change(&rec_id, &rec_title, result)?;
+    let result = dispatch_apply(rec_id)?;
+    let change = build_applied_change(rec_id, rec_title, result)?;
     history.push(change.clone());
     save_history(&history)?;
     Ok(into_view(change))
@@ -849,6 +907,17 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
 
 #[tauri::command]
 pub(crate) fn rollback_change(change_id: String) -> Result<(), String> {
+    let rolled = rollback_change_inner(&change_id);
+    // A rollback that will not complete is the worst thing that can happen in a rollback-first
+    // product, and it is the one report support must be able to act on. The change id is a local
+    // uuid, not user data.
+    if let Err(e) = &rolled {
+        record_operation_failure(&format!("rollback:{change_id}"), "rollback_failed", e);
+    }
+    rolled
+}
+
+fn rollback_change_inner(change_id: &str) -> Result<(), String> {
     let _lock = HISTORY_LOCK
         .lock()
         .map_err(|_| "history lock poisoned".to_string())?;

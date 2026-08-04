@@ -1,10 +1,12 @@
 # Compy — Privacy Policy
 
-**Status: DRAFT v0.3 (2026-08-03).** Reflects how the software AND the website behave today — v0.3
-discloses the signed, consent-first app updater that went live on 2026-07-22, and the Settings
-switch that turns its automatic checks off. It is **not legal advice** — the owner should still have
-it reviewed by a qualified professional before public distribution. Owner/contact identity:
-Pootytxng (GitHub issues).
+**Status: DRAFT v0.4 (2026-08-04).** Reflects how the software AND the website behave today, with one
+stated exception: v0.4 adds the **local support record**, which is written and tested in the source
+but is not yet in a released installer — it is disclosed here ahead of shipping rather than after,
+so no build can ever collect something this policy has not already described. (v0.3 disclosed the
+signed, consent-first app updater that went live on 2026-07-22, and the Settings switch that turns
+its automatic checks off.) It is **not legal advice** — the owner should still have it reviewed by a
+qualified professional before public distribution. Owner/contact identity: Pootytxng (GitHub issues).
 
 > **Doctrine pointer (2026-08-03):** Receipts telemetry remains disabled and no send path exists. Per `docs/RECEIPTS_DOCTRINE.md`, an opt-in default-OFF Receipts phase is planned — if it is ever armed, this policy must be revised in the SAME release. The same rule applied to the updater and is now enforced by a build guard (`src/outbound-claim-guard.test.ts`).
 
@@ -44,14 +46,28 @@ in the update request, and does not upload it anywhere.
   (`fps.json`, `fps.alive`) used to pass live capture data between Compy and its local
   capture helper. Local only.
 - **A first-run flag** in the app's local storage so it doesn't replay the intro every launch.
+- **Support record:** a short rolling log of what Compy itself did — app starts, reads and writes of
+  the Trust Ledger, the FPS capture helper starting and stopping, and whether each apply or rollback
+  succeeded, failed, or was declined at the Windows admin prompt. Stored at
+  `%APPDATA%\Compy\support\evidence.jsonl`, capped at 400 entries (about 250 KB); older entries drop
+  off as new ones arrive. It is **redacted as it is written and again when you export it** —
+  usernames, your computer name, file paths, IP addresses, license keys and hardware serials are
+  replaced with `<user>`, `<host>`, `<path>`, `<ip>`, `<key>`, `<serial>`. It records outcomes, not
+  content: no file contents, no keystrokes, no browsing, no game data.
 
-The FPS working files and the first-run flag are safe to delete — Compy just recreates them as needed. Deleting `history.json` is different: it erases your Trust Ledger, so past changes stop being reversible from it. Compy will start a fresh, empty ledger, not restore the old one.
+**Nothing sends the support record.** Compy has no way to upload it. You can read it in the app,
+export it to a file under `%APPDATA%\Compy\exports\`, and attach that file to a support conversation
+yourself — you are the transport, and you can read exactly what you are sending before you send it.
+
+The FPS working files and the first-run flag are safe to delete — Compy just recreates them as needed. Deleting `history.json` is different: it erases your Trust Ledger, so past changes stop being reversible from it. Compy will start a fresh, empty ledger, not restore the old one. The support record can be cleared or deleted at any time and Compy simply starts a new empty one; the only consequence is that if you later ask for help with something that already went wrong, there is no record of it left to show — so clear it *after* a support conversation, not before.
 
 ## What Compy does NOT do
 
-- No telemetry, usage analytics, or crash reporting. (Compy does ask GitHub whether a newer signed
-  version exists — see **Network use** below — but that request carries nothing about you or your
-  PC, and you can switch it off.)
+- No telemetry, usage analytics, or crash reporting. (Two clarifications, so this can't be
+  misread: Compy does ask GitHub whether a newer signed version exists — see **Network use**
+  below — but that request carries nothing about you or your PC, and you can switch it off. And
+  Compy does keep the **local support record** described above — that is a file on your disk that
+  only you can read or send, not reporting, because nothing transmits it.)
 - No account, login, or cloud sync.
 - No advertising or tracking identifiers.
 - No selling or sharing of data with third parties.

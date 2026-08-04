@@ -58,8 +58,15 @@
   local command". §11 property/fuzz coverage for persistence parsing + bounded IPC inputs also DELIVERED
   (issue [#37](https://github.com/Pootytxng/sentinel/issues/37)) — dependency-free fixed-seed generator,
   9 properties over the ledger, session file, elevated-command guards, mutation allowlists, batch
-  receipts, and rollback-contract resolution. Open: Q5 local-only redacted support evidence (blocked on
-  Q1's privacy vocabulary + a data-retention review) · Q7 native accessibility and measured
+  receipts, and rollback-contract resolution. **Q5 BACKEND + POLICY DELIVERED 2026-08-04** — local-only
+  redacted support evidence: `src-tauri/src/support_evidence.rs` (bounded rotating JSONL at
+  `%APPDATA%\Compy\support\`, 400 records / ~250 KB, redaction at write *and* again at export, three
+  projections, preview-gated export), 17 cargo tests, `src/support-evidence-outbound-guard.test.ts`
+  turning the spec's "zero new outbound surface" acceptance line into a build-failing fact (proven
+  load-bearing by injecting a real `reqwest` call and watching it fail), and the `docs/PRIVACY.md`
+  disclosure + deletion consequences. **STILL OPEN: the in-app preview/export UI and its copy** —
+  spec §12 names in-app copy in its acceptance, so Q5 is NOT complete; deferred only because its
+  visual self-review would seize the owner's screen mid-game. Also open: Q7 native accessibility and measured
   performance budgets (blocked on a stable candidate + owner's machine). **Q6 DELIVERED 2026-08-04**
   (issue [#65](https://github.com/Pootytxng/sentinel/issues/65), `9bf3bde`) — three stale live claims
   retired: `GAMING_MODE_PLAN.md` reconciled against the QA record (8 rows mapped, 3 left unchecked as

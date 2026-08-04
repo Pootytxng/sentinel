@@ -818,6 +818,33 @@ pub(crate) struct FpsStatus {
     sample: Option<FpsSample>,
 }
 
+// Support evidence for the FPS helper (spec §12). The helper is the one part of Compy that can
+// fail silently from the user's side: the button does not stick, and start / clean-exit / crash /
+// declined-UAC all look identical in the UI. These two shims keep the emission calls below to one
+// line each; the detail strings are hand-written prose, never a command line — a raw argv could
+// carry the user's paths, and the store's own redaction is the second gate, not the first.
+use crate::support_evidence::Outcome as SupportOutcome;
+
+fn support_record(outcome: SupportOutcome, code: &str, detail: &str) {
+    crate::support_evidence::record(
+        crate::support_evidence::EventKind::Helper,
+        "fps_helper_start",
+        code,
+        outcome,
+        detail,
+    );
+}
+
+fn support_stop(outcome: SupportOutcome, code: &str, detail: &str) {
+    crate::support_evidence::record(
+        crate::support_evidence::EventKind::Helper,
+        "fps_helper_stop",
+        code,
+        outcome,
+        detail,
+    );
+}
+
 #[tauri::command]
 pub(crate) fn start_fps_capture() -> Result<(), String> {
     use std::sync::atomic::Ordering;
@@ -887,17 +914,24 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
             Ok(mut child) => {
                 helper_running().store(true, Ordering::Release);
                 *lock_status() = "running".into();
+                support_record(SupportOutcome::Ok, "direct_spawn", "helper started without a UAC prompt (EnableLUA=0)");
                 // Reflect helper exit (self-exit on heartbeat stale, or crash).
                 std::thread::spawn(move || {
-                    let _ = child.wait();
+                    let status = child.wait();
                     helper_running().store(false, Ordering::Release);
                     fps_active().store(false, Ordering::Release);
                     *lock_status() = "stopped".into();
+                    match status {
+                        Ok(s) if s.success() => support_stop(SupportOutcome::Ok, "exit_clean", "helper exited cleanly"),
+                        Ok(s) => support_stop(SupportOutcome::Failed, "exit_nonzero", &format!("helper exited with status {s}")),
+                        Err(e) => support_stop(SupportOutcome::Failed, "wait_failed", &format!("could not observe helper exit: {e}")),
+                    }
                 });
             }
             Err(e) => {
                 fps_active().store(false, Ordering::Release);
                 *lock_status() = format!("failed to launch helper: {e}");
+                support_record(SupportOutcome::Failed, "spawn_failed", &format!("helper did not launch: {e}"));
             }
         }
     } else {
@@ -937,6 +971,30 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                 _ => "declined",
             };
             *lock_status() = msg.into();
+            // Support evidence (spec §12): "I pressed start and nothing happened" is the most
+            // common monitoring report, and the three causes below are indistinguishable in the
+            // UI. os error 1223 is specifically the user dismissing the UAC prompt — a REFUSED
+            // outcome, not a failure, and not something to fix.
+            match &res {
+                Ok(s) if s.success() => {
+                    support_stop(SupportOutcome::Ok, "exit_clean", "elevated helper exited cleanly")
+                }
+                Ok(s) => support_stop(
+                    SupportOutcome::Failed,
+                    "exit_nonzero",
+                    &format!("elevated helper exited with status {s}"),
+                ),
+                Err(e) if e.raw_os_error() == Some(1223) => support_record(
+                    SupportOutcome::Refused,
+                    "uac_declined",
+                    "the UAC prompt was dismissed, so the helper never started",
+                ),
+                Err(e) => support_record(
+                    SupportOutcome::Failed,
+                    "elevation_failed",
+                    &format!("elevation did not complete: {e}"),
+                ),
+            }
         });
     }
 
