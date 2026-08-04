@@ -50,6 +50,14 @@
   Authenticode enrollment, publication, distribution, and external timing are owner territory;
   protected use of the existing updater key inside an authorized local release train is engineering.
 
+### A0c. NEW 2026-08-04 — Tester retention/PMF interviews (no telemetry needed)
+
+- ⏳ **Ask your confirmed v0.9.11 tester the retention questions** — why/full question set:
+  `docs/BACKLOG.md` P2.5 · `docs/RECEIPTS_DOCTRINE.md` §8. Core ones: what did Compy help you
+  decide · what didn't you trust · what would stop you using it again · would you pay for
+  continued history/monitoring. PMF is unproven and is the #1 business risk; this is the only real
+  signal available before Receipts telemetry ships. Reaching a tester is yours, not mine.
+
 ### A0b. zh-CN (Simplified Chinese) — ✅ CLOSED: merged AND published in v0.9.11 (updated 2026-07-28)
 
 The full zh-CN translation (`100ace3`) and the reversible ship/QA fixes (`e22be5e`, `719408b`) are
