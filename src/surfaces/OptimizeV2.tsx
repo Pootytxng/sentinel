@@ -248,7 +248,9 @@ export function OptimizeV2({
                 aria-expanded={pileOpen}
                 aria-controls="ov2-sidepile-body"
               >
-                <span aria-hidden="true">{pileOpen ? "▾" : "▸"}</span>
+                <span aria-hidden="true" className="v2-quiet-caret">
+                  ▸
+                </span>
                 {t("optimize.optimizeV2.sidepileTitle")}
                 <span className="ov2-quiet-hint">
                   {t("optimize.optimizeV2.sidepileHint")}

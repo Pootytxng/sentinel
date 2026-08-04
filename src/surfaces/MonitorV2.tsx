@@ -155,7 +155,9 @@ export function MonitorV2(props: Props) {
               aria-expanded={presetsOpen}
               aria-controls="mv2-presets-body"
             >
-              <span aria-hidden="true">{presetsOpen ? "▾" : "▸"}</span>
+              <span aria-hidden="true" className="v2-quiet-caret">
+                ▸
+              </span>
               {t("monitor.monitorV2.tuningPresetsLabel")}
               <span className="mv2-quiet-hint">
                 {t("monitor.monitorV2.tuningPresetsHint")}
