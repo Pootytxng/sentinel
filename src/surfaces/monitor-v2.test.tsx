@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from "vitest";
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
+import { invoke } from "@tauri-apps/api/core";
 import { MonitorV2 } from "./MonitorV2";
 import Monitor from "./Monitor";
 import { monitorVerdict as monitorVerdictRaw } from "./monitor-v2-data";
@@ -232,6 +233,103 @@ describe("MonitorV2 — RoomShell composition", () => {
     await waitFor(() => expect(container.querySelectorAll(".v2-door").length).toBe(1), {
       timeout: 3000,
     });
+  });
+});
+
+// bug→guard (Q7 acceptance §398 "one owner supplies each sensor stream to all consumers that need
+// it", + §397 idle cost). The test above proves the shell's fallback poll EXISTS; these prove it
+// stays a fallback. §398 is a RUNTIME-ownership rule, so the original guard (`segment === "live"`)
+// was too narrow: in Basic mode a face is mounted at EVERY segment value and already polls
+// get_fps_status at 1 Hz, and that composition is reachable on all-default flags (Basic's
+// last-session door sets Advanced+Sessions; switching back to Basic leaves segment "sessions").
+// Own timers are the measurement here — invoke is only ever called by MonitorV2 itself in this
+// suite (Play/MonitorBasic are stubs, the console flag is off), so a get_fps_status call count IS
+// the shell's ownership of the stream.
+describe("MonitorV2 — the shell owns get_fps_status only where no face does", () => {
+  const fpsCalls = () =>
+    vi.mocked(invoke).mock.calls.filter((c) => c[0] === "get_fps_status").length;
+
+  /** jsdom's `hidden`/`visibilityState` are read-only; the hook reads them and listens for the event. */
+  const setHidden = (hidden: boolean) => {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => (hidden ? "hidden" : "visible"),
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  };
+
+  // Own describe on purpose: the off-Live door test above runs on REAL timers (waitFor), and mixing
+  // the two modes in one block is how a suite starts passing for the wrong reason.
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.mocked(invoke).mockClear();
+    ipc.fpsActive = true;
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    setHidden(false);
+  });
+
+  /** Flush the mocked-IPC promise the tick fires (advanceTimersByTimeAsync drains microtasks). */
+  const settle = async (ms: number) => {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  };
+
+  it("polls in Advanced+Sessions — the one composition where no face is mounted to own it", async () => {
+    useReduced();
+    useAdvanced();
+    const { container } = mount();
+    fireEvent.click(screen.getByText("stub-play-capture-on"));
+    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
+    expect(container.querySelectorAll(".v2-door").length).toBe(0); // capture live, door closed
+    expect(fpsCalls()).toBe(1); // immediate re-read on mount of the effect
+    await settle(2000);
+    expect(fpsCalls()).toBe(2); // …then the 2s interval
+  });
+
+  it("stands down on Advanced+Live — the live face owns the stream there", async () => {
+    useReduced();
+    useAdvanced();
+    mount();
+    fireEvent.click(screen.getByText("stub-play-capture-on"));
+    vi.mocked(invoke).mockClear();
+    await settle(6000);
+    expect(fpsCalls()).toBe(0);
+  });
+
+  it("stands down in Basic at any segment — a face is mounted there and already polls it", async () => {
+    useReduced();
+    const { container } = mount();
+    fireEvent.click(screen.getByText("stub-open-sessions")); // → Advanced + Sessions
+    fireEvent.click(screen.getByRole("tab", { name: "Basic" })); // → Basic, segment stays "sessions"
+    fireEvent.click(screen.getByText("stub-capture-on"));
+    expect(screen.getByTestId("monitor-basic")).toBeTruthy(); // the face IS mounted…
+    expect(container.querySelectorAll(".v2-door").length).toBe(0); // …and a capture IS live
+    vi.mocked(invoke).mockClear();
+    await settle(6000);
+    expect(fpsCalls()).toBe(0); // …so the shell must not be a second poller
+  });
+
+  it("stands down while the window is hidden, and re-reads the instant it comes back", async () => {
+    useReduced();
+    useAdvanced();
+    const { container } = mount();
+    fireEvent.click(screen.getByText("stub-play-capture-on"));
+    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
+
+    act(() => setHidden(true)); // alt-tab into the fullscreen game
+    vi.mocked(invoke).mockClear();
+    await settle(10_000);
+    expect(fpsCalls()).toBe(0); // five ticks' worth of nothing, behind the game
+
+    ipc.fpsActive = false; // the session ends while nobody is looking
+    act(() => setHidden(false));
+    await settle(0); // no interval elapsed — only the effect's immediate tick
+    expect(fpsCalls()).toBe(1);
+    expect(container.querySelectorAll(".v2-door").length).toBe(1); // door correct before it's seen
   });
 });
 

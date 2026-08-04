@@ -7,6 +7,7 @@ import { TuningPresets } from "./Monitor";
 import { RoomShell } from "../design/room-shell";
 import { SegmentedControl } from "../design/SegmentedControl";
 import { useReducedMotion } from "../design/use-motion";
+import { useDocumentVisible } from "../data/use-document-visible";
 import { useHudFlag, useMonitorConsoleFlag } from "../design/use-hud";
 import { MonitorConsole } from "./MonitorConsole";
 import { HudMasthead } from "./hud-masthead";
@@ -65,6 +66,8 @@ export function MonitorV2(props: Props) {
   const monitorConsole = useMonitorConsoleFlag();
   const [segment, setSegment] = useState<Segment>("live");
   const [mode, setMode] = useState<ViewMode>(readViewMode);
+  const basic = mode === "basic";
+  const visible = useDocumentVisible();
   const [presetsOpen, setPresetsOpen] = useState(false);
   // Live capture state, mirrored up from whichever face is polling it (Play live / Basic tiles).
   // While a session is being captured the forward door closes (P6 §2 — the door belongs to the
@@ -80,15 +83,27 @@ export function MonitorV2(props: Props) {
   // get_gpu_sensors on ITS mount, so the pre-warm had become a duplicate IPC round-trip on
   // every nav-in. Nav-mount follow-up, BACKLOG cycle 2026-07-15d.)
 
-  // Self-correcting capture poll — ONLY while we believe a capture is live AND the normal poller
-  // (the Live face) is unmounted (segment !== "live"). Without this, leaving the Live segment
-  // mid-capture strands `capturing` at true: no mounted face polls get_fps_status, so when the
-  // session actually ends the forward door never reopens until the user returns to Live. This
-  // re-reads REAL backend state only — it never opens the door speculatively (honours the
+  // Self-correcting capture poll — the shell's FALLBACK ownership of get_fps_status. Q7 §398 is a
+  // runtime-ownership rule ("one owner supplies each sensor stream"), so the guard has to name the
+  // one composition where no face is polling, not just the one segment: advanced + Sessions. In
+  // basic mode a face (MonitorConsole basic / MonitorBasic) is mounted at EVERY segment value and
+  // already polls get_fps_status at 1 Hz, mirroring up through onFpsActive — the shell adding a 2s
+  // poll there is a second owner of the same stream, reachable on all-default flags (onOpenSessions
+  // leaves segment at "sessions", then switching back to Basic remounts a face). Advanced + Live
+  // has an owner too (MonitorConsole advanced, or Play's live view). That leaves advanced+Sessions:
+  // Play stands its poll down on that view, so without this the `capturing` flag strands at true
+  // and the forward door never reopens when the session actually ends.
+  //
+  // `visible` is Q7 §397 (idle cost): `capturing` feeds nothing but the door (doorOpen={!capturing})
+  // and the masthead LED — both invisible while the window is hidden, which is exactly when a
+  // capture is running behind a fullscreen game. Standing down costs nothing because tick() fires
+  // immediately when the effect re-runs, so the door is correct by the time it can be seen again.
+  //
+  // This re-reads REAL backend state only — it never opens the door speculatively (honours the
   // conservative "door never opens mid-capture just because the user changed segment" contract):
   // once s.active reads false, capturing flips false, this effect re-runs and its guard stops it.
   useEffect(() => {
-    if (!capturing || segment === "live") return;
+    if (!capturing || basic || segment === "live" || !visible) return;
     let live = true;
     const tick = () =>
       invoke<{ active: boolean }>("get_fps_status")
@@ -102,9 +117,8 @@ export function MonitorV2(props: Props) {
       live = false;
       window.clearInterval(id);
     };
-  }, [capturing, segment]);
+  }, [capturing, basic, segment, visible]);
 
-  const basic = mode === "basic";
   const verdict = monitorVerdict(props.sessions, t);
 
   return (

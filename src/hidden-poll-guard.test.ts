@@ -42,14 +42,18 @@ const SENSOR_COMMANDS = [
 ];
 
 // Exemptions carry a REASON, never a bare path — an unexplained exemption is how a guard rots into
-// a formality. Both of these are refusals on the merits, not deferrals.
+// a formality. The one below is a refusal on the merits, not a deferral.
+//
+// RETRACTED 2026-08-04: `src/surfaces/MonitorV2.tsx` was exempted here on the claim that pausing
+// its capture-door poll "could strand the door". Auditing the file disproved that — `capturing`
+// feeds exactly two things, `doorOpen={!capturing}` and the masthead LED, both of which are
+// invisible while the window is hidden, and the effect's tick() fires immediately when it re-runs.
+// The exemption was reasoning, not evidence, and this is what an exemption-with-a-reason is for:
+// the reason is a claim, and a claim can be checked. MonitorV2 now gates like everything else.
 const EXEMPT: Record<string, string> = {
   "src/Overlay.tsx":
     "The in-game HUD. use-document-visible.ts forbids this surface BY NAME: a wrong 'hidden' read " +
     "here blanks the overlay over a fullscreen game. It gates on its own explicit show/hide signal.",
-  "src/surfaces/MonitorV2.tsx":
-    "Capture-door state machine, not a live readout — the poll decides whether a capture is still " +
-    "running. Its conservative contract is documented at the effect; pausing it could strand the door.",
 };
 
 // ── Corpus ──────────────────────────────────────────────────────────────────────────────────────
