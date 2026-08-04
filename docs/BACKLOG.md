@@ -379,6 +379,36 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
+### Cycle 2026-08-03a — ✅ STANDING AUTONOMY GRANT + Q2b TRIPWIRE · ⚠️ #60 part 2 REFUTED TWICE: `bb390cf` · `7013602`
+
+- **Owner grant (`bb390cf`).** Kuya: he green-lights ~99% of what agents stop to ask about, so the
+  stopping is itself the defect. `docs/RELEASE_AUTONOMY.md` now carries the standing grant (binds
+  every lane) and `.claude/hooks/stop-continue.mjs` `MAX_CONTINUES` rises 2→8. Still stops: secrets/
+  signing keys · authenticating as him · anything reaching another person's machine · spending ·
+  destructive Git + frozen beta refs. **Rigor untouched** — the grant removes check-ins, not
+  verification.
+- **Q2b tripwire (`7013602`)** — `src/q2b-deferral-tripwire.test.ts`. #64's deferral of the
+  in-command `require_main()` still holds (all four triggers unmet), so this mechanizes the
+  *premises* instead of implementing the check: no window may load a remote origin, and the
+  production CSP may not widen. Proven both directions. Trigger 3 already lives in
+  `command-authority-guard.test.ts`; trigger 4 is not statically detectable.
+- **Baseline re-verified after a disk sweep cleared `node_modules` + `target`:** cargo 891/891 ·
+  clippy clean · vitest 272 files / 2991 · tsc 0 · encoding-guard 1176 · verify-release-state 24/24
+  zero drift · module-map 44 · doc-budget ALL PASS.
+- **Real defect caught by the staleness guard:** `dist-site/` (gitignored deploy staging tree) still
+  carried BOTH errors `ad4f150` fixed in `site/privacy.html` — the wrong FPS path
+  (`%LOCALAPPDATA%\Compy\` vs `%APPDATA%\Compy\runtime\`) and the blanket "Compy will recreate what
+  it needs" that hides `history.json` deletion erasing the Trust Ledger. That commit fixed the
+  source and never re-staged. Re-staged; guard 4/4. **Deploying it is a publication act — NOT done.**
+- **🔴 issue [#60](https://github.com/Pootytxng/sentinel/issues/60) part 1 is DONE and stale on the
+  issue** (bounded retry in `release-transaction.ps1` + guard `release-transaction-e2e.test.mjs:90`,
+  both already on `main`). **Part 2 (phantom prove/publish hang) remains OPEN with two hypotheses
+  measured and REFUTED** — `-NoInheritStreams`, and bounding the parameterless `WaitForExit()`.
+  Decisive: an inner script run with **no wrapper pipe at all** still took 9106 ms. Stream
+  inheritance is not the mechanism; the launching PowerShell does not terminate until the launched
+  app exits. A 223 ms reading that looked like a fix was an artifact of an unknown-parameter error —
+  flagged on the issue so it is not re-derived as evidence. Nothing kept; tree clean.
+
 ### Cycle 2026-07-28a — ✅ RELEASE AUTONOMY + RESUMABILITY REPAIR → **v0.9.11 PUBLISHED**
 
 - Live verification superseded the 2026-07-27a release snapshot below: source `main` and source tag
