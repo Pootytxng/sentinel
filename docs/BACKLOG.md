@@ -64,7 +64,9 @@
   (issue [#65](https://github.com/Pootytxng/sentinel/issues/65), `9bf3bde`) — three stale live claims
   retired: `GAMING_MODE_PLAN.md` reconciled against the QA record (8 rows mapped, 3 left unchecked as
   *unproven, not failing*), the 2026-07-06 launch runway archived verbatim with its "no real UI gaps"
-  sweep claim, and "every branch has a verified disposition" superseded by a 13-branch merge-tree pass.
+  sweep claim, and "every branch has a verified disposition" made true rather than retired — all 20
+  origin branches dispositioned in `docs/BRANCH_DISPOSITIONS.md`, enforced by
+  `scripts/branch-disposition-audit.mjs`.
 - [ ] **P2 product completion:** owner-accepted canonical Lab + reversible generation pruning →
   first-win action/rollback/proof journey → Consumer/Technical/Support evidence exports.
 - [ ] **LATER:** Intelligence Phase 4/5, vendor-awareness expansion, Receipts/crowd intelligence,
@@ -833,7 +835,7 @@ When running a `/loop` or scheduled session against "the checklist":
    the merge is a no-op → already shipped → prune, don't surface. Only a tree-changing merge is real unmerged work.
    And re-RUN cargo/vitest for counts each cycle — never carry an assumed number forward. ([[branch-redundancy-detect-by-mergetree]])
 
-> **🌿 Branch-integration health** — the 2026-06-24e sweep (every branch dispositioned, `main` the single product truth) is a **point-in-time record**, moved verbatim to `BACKLOG_ARCHIVE.md` (2026-07-22). **Its standing claim is superseded 2026-08-04 (Q6): it is no longer true that every branch is dispositioned.** A merge-tree pass that day found **13 distinct refs carrying work that is not on `main`** — Codex lanes (`codex/work-control`, `codex/fix-main-ci-site-stage`, `codex/tool-shed-hygiene`), feature/design lanes (`feat/console-project-doctor`, `feat/bklit-anime-design-system`, `feat/user-feedback-lab-recovery`, `design/quiet-pit-wall`, `docs/claude-md-split`, `i18n/zh-CN`, `chore/ci-encoding-and-state-truth`) and three that DO have a recorded disposition (`latency-capture` = don't-land, and the two `recovery/failed-v0.9.9-*` preservation branches required by `RELEASE_AUTONOMY.md`). `main` remains the **release** truth — every shipped build is built from it — but that is not a claim that no work lives elsewhere; live lane ownership is governed by `docs/WORK_CONTROL.md`. The durable merge-tree law stays in protocol rule 5 above; re-run it before asserting a branch is stranded.
+> **🌿 Branch-integration health** — the 2026-06-24e sweep (every branch dispositioned, `main` the single product truth) is a **point-in-time record**, moved verbatim to `BACKLOG_ARCHIVE.md` (2026-07-22). **Its standing claim was false when written and is now enforced instead of asserted (2026-08-04, Q6):** every one of the **20** origin branches carries a row in **`docs/BRANCH_DISPOSITIONS.md`**, and `scripts/branch-disposition-audit.mjs` fails the build when a ref has no row, a row names a dead ref, or a `MERGED` row stops being a no-op. Result: 6 MERGED · 5 SUPERSEDED (content reached `main` by another path) · 3 PRESERVE (the frozen beta ref + two failed v0.9.9 candidates `RELEASE_AUTONOMY.md` requires kept) · 1 CLAIMED by the Codex lane (`feat/console-project-doctor`, no automatic takeover) · **5 UNLANDED** carrying real work — `docs/claude-md-split`, `codex/tool-shed-hygiene` (partial), `feat/bklit-anime-design-system` (owner taste), `feat/user-feedback-lab-recovery` (owner review), `design/quiet-pit-wall` (deferred, needs a visual self-review). `main` remains the **release** truth — every shipped build is built from it — but that is not a claim that no work lives elsewhere; live lane ownership is governed by `docs/WORK_CONTROL.md`. The durable merge-tree law stays in protocol rule 5 above; re-run it before asserting a branch is stranded.
 
 ---
 

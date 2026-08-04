@@ -8,6 +8,7 @@ $budgets = @{
   "docs/BACKLOG.md" = 1400
   "docs/OWNER_ACTION_CHECKLIST.md" = 450
   "docs/BETA_DISTRIBUTION_RECORD.md" = 250
+  "docs/BRANCH_DISPOSITIONS.md" = 120
   "docs/RELEASE_AUTONOMY.md" = 120
   "docs/RELEASE_TRANSACTION.md" = 120
   "CLAUDE.md" = 400
