@@ -64,9 +64,10 @@
   projections, preview-gated export), 17 cargo tests, `src/support-evidence-outbound-guard.test.ts`
   turning the spec's "zero new outbound surface" acceptance line into a build-failing fact (proven
   load-bearing by injecting a real `reqwest` call and watching it fail), and the `docs/PRIVACY.md`
-  disclosure + deletion consequences. **STILL OPEN: the in-app preview/export UI and its copy** —
-  spec §12 names in-app copy in its acceptance, so Q5 is NOT complete; deferred only because its
-  visual self-review would seize the owner's screen mid-game. Also open: Q7 native accessibility and measured
+  disclosure + deletion consequences. The **in-app preview/export UI and its copy are BUILT**
+  (`08ad3b1`, `src/surfaces/SupportEvidence.tsx`, 8 tests, en/zh-CN parity) but **Q5 is still NOT
+  complete**: its visual self-review is outstanding, deferred because the rubric's captures would
+  seize the owner's screen mid-game, and no UI ships as done without a PASS verdict. Also open: Q7 native accessibility and measured
   performance budgets (blocked on a stable candidate + owner's machine). **Q6 DELIVERED 2026-08-04**
   (issue [#65](https://github.com/Pootytxng/sentinel/issues/65), `9bf3bde`) — three stale live claims
   retired: `GAMING_MODE_PLAN.md` reconciled against the QA record (8 rows mapped, 3 left unchecked as
@@ -322,9 +323,15 @@ queued).
   (no launch token ⇒ folder/branch/claim unverified) and no longer asserts the consequence. A hook
   that fabricates a finding about its own supervision poisons every session that reads it.
 - **Q5 backend + policy (`7c8a03f`)** and **Q6 (`9bf3bde` · `1a513cb`)** — detail in the program
-  cutline above. **Q5's in-app preview/export UI and its copy stay OPEN**, deferred only because the
-  visual self-review would seize the owner's screen mid-game; spec §12 names in-app copy in its
-  acceptance, so Q5 is not complete and is not being reported as such.
+  cutline above.
+- **Q5's in-app surface is BUILT, not yet done (`08ad3b1`).** `src/surfaces/SupportEvidence.tsx` +
+  33 keys at en/zh-CN parity give §12 its missing half: the save control does not exist until a
+  preview has come back (presence, not a disabled button, expresses the backend's ordering gate),
+  one preview call carries all three projections of one bundle, retention renders from
+  `bundle.retention` so the copy cannot drift from the caps, and clearing is a two-step that names
+  what it costs. 8 tests, disarm-checked. **Still OPEN:** the visual self-review is outstanding,
+  deferred because the rubric's captures move real windows while the owner is gaming. No PASS
+  verdict ⇒ Q5 is not complete and is not being reported as such.
 - **Branch dispositions (`6882819`)** — 20 origin refs, every one with a row, re-proven by
   `scripts/branch-disposition-audit.mjs`; see the branch-integration note below for the split.
 - **`owner_installed_stamp` enforced instead of asserted (`270a622`).** The 2026-07-31 Q7 baseline
