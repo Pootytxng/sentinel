@@ -135,7 +135,7 @@ importers — wire it in as advisory, or archive it).
 **Execution lane:** direction + audit = this file; the redesign build itself = CC/Fable lane per
 the owner's standing preference (Cowork steers + audits, doesn't blueprint final creative).
 
-### A0. Monitor console v3 — "up the ante" rework (owner, 2026-07-10, post-Phase-3 ship) 🔴 OPEN
+### A0. Monitor console v3 — "up the ante" rework (owner, 2026-07-10, post-Phase-3 ship) — ✅ ALL 7 ITEMS BUILT (v5 owner-approved 2026-07-12; items 3–5 verified shipped 2026-08-04)
 
 **Owner's FULL response, retained verbatim at his explicit request** ("please be sure to retain the
 full response ive written here seeing how things seem to get lost in translation in the past"):
@@ -249,28 +249,52 @@ full response ive written here seeing how things seem to get lost in translation
    an internal accent mismatch under non-Violet themes; owner-taste call, BACKLOG Cycle 2026-07-12g.**
    → ✅ **RESOLVED direction: owner picked "per-room identity" (2026-07-12)** — each room gets its OWN
    accent (Monitor = teal), so the SessionStack sparkline now matches the room chrome instead of clashing.
-   Built behind `compy_room_identity` **DEFAULT OFF** (`72fa005`, installer `D23DE073…9EBA9`, stamp-verified).
+   Built behind `compy_room_identity` **DEFAULT OFF** (`72fa005`, installer `D23DE073…9EBA9`, stamp-verified)
+   — **later flipped DEFAULT-ON 2026-07-13 (`18272be`, the default-ON graduation)** with the "(preview)"
+   Settings row removed (owner: "everything was supposed to be default on to avoid the QA toggle
+   section"); live check is `src/main.tsx:111` (`!== "0"`) + the flag comment at `src/design/room-identity.ts:7`.
    **Extended 2026-07-12 with a per-room color PICKER** (owner Cycle-12i follow-up "the freedom to shift
    around the colors they want on each page"): an accent dot in each room's top-right corner opens a curated
    swatch popover to recolor THAT room, persisted per-room (`20e2b50`). **Palette expanded to 20 then PRUNED
    to a differentiated 15 2026-07-13** (owner "more neon or bright/dark tone mixed" → "prune and widen
-   variety more differentiation"): 9 bright + 6 dark tones with adaptive light ink so dark FILLS stay
+   variety more differentiation"): 9 bright + 6 dark tones *(then-state — superseded, see below)* with adaptive light ink so dark FILLS stay
    legible; CIEDE2000-verified differentiation (`8e6920f`, installer `51B0A754…3862F39A`, stamp-verified).
-   Owner one-flip eyeball on the pruned palette pending. ✅ **Follow-up SHIPPED:** the dark-accent-as-TEXT
+   **Palette reworked again 2026-07-16** (owner's favourites, duos grown to half the palette): the live
+   `ROOM_ACCENT_SWATCHES` is now **8 bright singles + 7 duos, zero dark singles** — the dark-ink and
+   dark-accent-as-TEXT legibility guards stay in `src/design/room-accents.test.tsx` and disclose in-test
+   that the dark set is currently empty, so any future dark swatch is still held to the law.
+   Owner one-flip eyeball ✅ **RESOLVED** — he called the palette finished 2026-07-13; §A9 archived to
+   `docs/archive/OWNER_ACTION_HISTORY.md`, nothing left on him. ✅ **Follow-up SHIPPED:** the dark-accent-as-TEXT
    legibility train landed `cc9adb8` (dark-tone chrome ≥4.5:1 via legibility-adaptive accent-TEXT; live per
    `72ded53` doc-sync, installer `B7931E4E…`) — the FILLS-only gap is closed (BACKLOG Cycle 2026-07-12l).
 3. **Graphs are a MUST + spike-moment indicators:** measurable finite detail required — the
    frametime graph must mark the EXACT moment of a latency spike (per-sample indicator, not just
    an average). This is a hard requirement for v3, not a nice-to-have.
+   ✅ **BUILT** (verified 2026-08-04): `spikeIndices(win, budget)` in `src/design/console/Oscilloscope.tsx`
+   flags every sample that is ≥2× the window median AND ≥ the frame budget; each draws an `.osc-spike`
+   line at that sample's OWN x, the worst carrying an `.osc-spike-worst` class + a ms callout. Wired to
+   the frametime scope via the `spikes` + `budget` props (`src/surfaces/monitor/DeckScope.tsx:121`), on a
+   zero-anchored ms scale so smooth reads flat and spikes tower. Guard-pinned in
+   `src/design/console/oscilloscope.test.tsx` — including "flat real data ⇒ zero markers, no callout
+   (never a fabricated spike)", so the indicator can't invent a moment the data doesn't contain.
 4. **Bug (fold into v3): frametime trace stops ~halfway across the grid** while the fps trace runs
    full length. Cause: `Oscilloscope` scales x to the fixed `cap` (240), but the backend window
    carries fewer samples at sub-240 fps → partial width. v3: scale to the drawn window so the
    trace always spans the grid.
+   ✅ **FIXED** (verified 2026-08-04): the full-width law is live at `src/design/console/Oscilloscope.tsx:123`
+   — x divides by `win.length - 1`, never `cap`, so a sub-cap window still reaches the right edge.
+   Guard-pinned at `src/design/console/oscilloscope.test.tsx:67` ("a window smaller than cap still spans
+   the full grid width"), a test that names this bug by date so the regression can't come back quietly.
 5. **3D / parallax telemetry is BACK ON THE TABLE (direction amendment):** the "NO hologram / NO
    parallax" line in the Monitor concept (direction spec 2026-07-09, Monitor row + Phase-3 plan)
    is NOT a standing ban. Owner: the 3D/parallax layer is what's felt most appealing and on-par
    with the direction — don't rule it out "unless reasonably so" (a stated, specific reason).
    Fold this amendment into the direction spec with the v3 train.
+   ✅ **FOLDED IN** (verified 2026-08-04): the amendment is carried verbatim at
+   `docs/superpowers/specs/2026-07-09-compy-console-hud-direction.md:163`, with the one retained rail —
+   depth may move the panel/chrome UNIFORMLY, never warp the data ink; a spike's plotted position stays
+   truthful. The spec's anti-pattern column was updated to match (differential parallax BETWEEN plot
+   layers is still barred; uniform stage depth + honest 3D data geometry are IN).
 6. **Copy direction (app-wide, not just Monitor): consumer-market terms** — prefer "MAX FPS",
    "Lowest latency", "HIGH RESOLUTION" over abstract wording like "visual fidelity / smooth /
    clarity". These are the sought-after terms in this market. Honesty laws unchanged — the terms
@@ -418,15 +442,20 @@ and asked for a *blended* room. Rebuilt on ONE numbered spine + the marathon pha
 
 tsc 0 · full vitest **1145/1145** · cargo **688** + clippy clean · flag-off byte-identity test-pinned · `git diff --
 src-tauri` empty for §3/§5/§8 (the only src-tauri change is §2a's DARK-gated trial) · self-reviewer **PASS** (re-review
-f16d158). **Still OPEN:** Phase 4 (catalog-expansion pipeline — a SEPARATE gated track, per-tweak mutation-gate); the
-slice-1 Optimize-rail TAB removal + full rail collapse (**deferred, owner call — the standalone Optimize tab still
-coexists with Lab station 1 during preview; this is the ONE open eyeball decision**). **Still NOT built from §A (this
+f16d158). **Still OPEN:** Phase 4 (catalog-expansion pipeline — a SEPARATE gated track, per-tweak mutation-gate);
+~~the slice-1 Optimize-rail TAB removal + full rail collapse (**deferred, owner call — the standalone Optimize tab
+still coexists with Lab station 1 during preview; this is the ONE open eyeball decision**)~~ → ✅ **DECIDED + SHIPPED
+2026-07-10 (`59249bb`)** — the owner's round-4 "ALL GOOD" cleared it: the standalone Optimize tab is gone, "the Lab's
+Optimize station is the one door", the ground rail is Home · Monitor · Blackbook · Lab (`src/design/homeRail.ts:36`),
+and `compy_lab_ground="0"` still restores the classic rail/tabs/rooms live. **Still NOT built from §A (this
 marathon only realized A.1's gallery):** ~~the rest of the JARVIS motion stack — GSAP data-reactivity (A.2), magnetic
 cursor (A.3), Lenis smooth-scroll spine (A.5), room-transition wipe (A.6) — remain 🔴 OPEN~~ → **built 2026-07-12
 (`1d310e1`, flag `compy_jarvis_motion` DEFAULT OFF — see §A above).**
-⏳ Owner eyeball: flip Settings → Appearance → "Lab proving ground (preview)", open Lab — station 1 leads with the
-enable-all + Power features, the measure stations follow, the Gallery closes the room. React + confirm the deferred
-Optimize-tab call before it flips default-ON.
+~~⏳ Owner eyeball: flip Settings → Appearance → "Lab proving ground (preview)", open Lab … React + confirm the
+deferred Optimize-tab call before it flips default-ON.~~ → ✅ **DONE — nothing to flip any more** (verified
+2026-08-04): `compy_lab_ground` is DEFAULT ON (`src/design/theme.ts:273`, `!== "0"`) and the Settings row was
+retired with the flag — `setLabGround` has zero callers left, so that instruction pointed at a toggle that no
+longer exists. The Lab opens on station 1 (enable-all + Power features) by default; devtools `"0"` is the failsafe.
 
 **🟢 REDIRECTED AGAIN → "OPS CONSOLE" Phase 1 SHIPPED behind flag (`403be45`→`63585e9`, installer `62DF3FF1…604DD`,
 DEFAULT OFF, 2026-07-09):** the owner eyeballed the Instrument-Bench bento and **rejected it too** ("generic slop / wide
@@ -476,7 +505,9 @@ descriptive lines relocate to their context element. Shipped: the four rooms' `.
 header cut to eyebrow + headline, the console lede deleted (undo promise → the Optimize panel), law mechanized as
 self-reviewer rubric item 6. Every Phase 2…N tab adoption must pass this as an exit check.
 
-**Still 🔴 OPEN after Ops Console Phase 1:** Phases 2–4 = the per-tab Console rollout (Home cold-open · Monitor gauges + a
+**~~Still 🔴 OPEN after Ops Console Phase 1~~ → ✅ CLOSED — this block resolves itself below ("the per-tab Console
+rollout list is CLOSED — every phase is live"); the 🔴 is kept struck, not deleted, so the history reads straight:**
+Phases 2–4 = the per-tab Console rollout (Home cold-open · Monitor gauges + a
 real `Oscilloscope` kit bound to live telemetry · History/Black Box flight-recorder log · Gaming Mode arm/engage console ·
 Settings quiet chrome · then the app-wide viewport HUD frame + global reticle). **→ 2026-07-15 batch closes three of
 these:** Gaming Mode arm/engage console (`compy_gaming_console` DEFAULT ON, `"0"` classic failsafe — status strip + armed
@@ -509,19 +540,23 @@ parallax, reduced ⇒ still. ✅ **OWNER APPROVED 2026-07-10 ("everything looks 
 written:** `docs/superpowers/plans/2026-07-10-console-hud-phase3-monitor.md` (flag `compy_monitor_console`
 DEFAULT OFF · NEW `Oscilloscope` kit component on the real live telemetry · builds in a fresh session).
 
-**🟢 PHASE 4 (Blackbook console) — BUILT + SHIPPED behind flag `617db5b` (2026-07-12, installer `43234A53…943D5`, stamp-verified); owner eyeball is the open gate.**
+**🟢 PHASE 4 (Blackbook console) — BUILT + SHIPPED behind flag `617db5b` (2026-07-12, installer `43234A53…943D5`, stamp-verified); ~~owner eyeball is the open gate~~ → ✅ CLEARED — flipped DEFAULT-ON 2026-07-13 (`18272be`).**
 Committed `617db5b` (`feat(blackbook): Console Phase 4 Logbook behind compy_blackbook_console DEFAULT OFF`),
 silent-reinstalled + stamp-verified live. The Logbook face renders behind `compy_blackbook_console` (DEFAULT
 OFF; Settings → Appearance → "Blackbook console (preview)"): a hairline flight-recorder tape of your
 changes/sessions/guide-checks synthesized by the pure `buildLogbook` over EXISTING data (zero new IPC/`src-tauri`),
 field guide reachable via a Logbook|Field-guide toggle, `"0"`/absent = today's Learn library byte-identical. Pure
 READ view — an active change routes to the Lab (the one undo home), zero mutations. tsc 0 · vitest 1560/175 ·
-self-reviewer round-2 PASS. **Open:** owner one-flip eyeball → default-ON or iterate (same pattern as Home/Monitor/JARVIS).
+self-reviewer round-2 PASS. ~~**Open:** owner one-flip eyeball → default-ON or iterate (same pattern as
+Home/Monitor/JARVIS).~~ → ✅ **FLIPPED DEFAULT-ON 2026-07-13 (`18272be`)** in the graduation batch (owner:
+"everything was supposed to be default on to avoid the QA toggle section") — the "(preview)" Settings row
+is gone, `src/design/theme.ts:578` reads `!== "0"`, devtools `"0"` remains the classic failsafe.
 One known follow-up folded into the shared accent-lock owner-taste call (room `.bc-*` chrome locks to `#a78bfa`
 under Crimson via the systemic `--ix-accent → --v2-accent` re-point; identical on Monitor/Lab, 0 vendor-purple).
 → ✅ **RESOLVED direction (owner 2026-07-12): "per-room identity"** — Blackbook = amber, built behind
-`compy_room_identity` **DEFAULT OFF** (`72fa005`); owner one-flip eyeball pending (BACKLOG Cycle 2026-07-12i,
-OWNER_ACTION_CHECKLIST §A9).
+`compy_room_identity` **DEFAULT OFF** (`72fa005`) → **DEFAULT-ON 2026-07-13 (`18272be`)**; the owner
+one-flip eyeball is ✅ **RESOLVED** — he called the palette finished, and OWNER_ACTION_CHECKLIST §A9 is
+archived to `docs/archive/OWNER_ACTION_HISTORY.md` (nothing left on him).
 
 **Superseded (history):** ~~CONCEPT OUT + owner PICKED "A · The Logbook" (2026-07-12); build queued.~~
 Per the per-tab signature process rule (concept before code), the Blackbook rollout opened with a spitball.

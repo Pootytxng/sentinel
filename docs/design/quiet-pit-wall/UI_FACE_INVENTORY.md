@@ -39,9 +39,12 @@ The rest are **not faces**: persisted user state and seen-markers (`onboarded_v1
 redesign (`theme`, `motion`, `lang`, `view_mode`, `expert_view`, `display_refresh_hz`, `overlay_*`,
 `room_accents`, `score_face`, `learn_mode`, `settings_v2`, `trust_moment`, `home_rig_3d`).
 
-**One correction to the record:** `compy_monitor_console` is documented in
-`docs/UI_VISION_BACKLOG.md` (A0 item 2) as "still DEFAULT OFF" as of 2026-07-11. It is
-**default ON** on `main` today — `theme.ts:544` reads `!== "0"`. The backlog line is stale.
+**One note on the record (corrected 2026-08-04):** `docs/UI_VISION_BACKLOG.md` §A0 item 2 says
+"flag `compy_monitor_console` still DEFAULT OFF" twice — but both are **era-scoped to the v4/v5
+build commits** (`85eb8c6` / `960734c`, 2026-07-11) and the same item records the flip four lines
+later ("✅ OWNER APPROVED 2026-07-12 → FLIPPED DEFAULT-ON `e195f70`"). The backlog is NOT stale
+here; an earlier draft of this inventory said it was. Live truth: **default ON** —
+`src/design/theme.ts:543` `readMonitorConsole` returns `!== "0"`.
 
 ## Per room
 
