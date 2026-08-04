@@ -11,7 +11,12 @@ $budgets = @{
   "docs/BRANCH_DISPOSITIONS.md" = 120
   "docs/RELEASE_AUTONOMY.md" = 120
   "docs/RELEASE_TRANSACTION.md" = 120
-  "CLAUDE.md" = 400
+  # Tightened 400 -> 380 on 2026-08-04, when the module map's read-only half moved to
+  # src-tauri/CLAUDE.md. Without the tightening the root just refills to 400 and the split bought
+  # nothing; the banked headroom is what keeps the always-loaded doc smaller.
+  "CLAUDE.md" = 380
+  # The half that only loads for Rust work. Budgeted so it cannot become the new dumping ground.
+  "src-tauri/CLAUDE.md" = 120
 }
 $root = Split-Path $PSScriptRoot -Parent
 $fail = 0

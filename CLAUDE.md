@@ -278,7 +278,7 @@ feel/look right). This is the operational meaning of "keep the installer on his 
 
 ### Rust module map (post-refactor — `lib.rs` carved into safety-boundary modules)
 
-Complete as of 2026-08-02 (44 `.rs` files; line counts drift, treat as rough). **Mechanically verified — run `node scripts/verify-module-map.mjs` before trusting this map; it fails on a missing module, a ghost, a wrong file count, or an unstarred module that writes Windows state.** **Mutation/rollback + gate-relevant modules are starred ★ — scope any mutation-gate change against these first.**
+Complete as of 2026-08-04 (45 `.rs` files; line counts drift, treat as rough). **Mutation/rollback + gate-relevant modules are starred ★ — scope any mutation-gate change against these first**, which is why they live here, in the always-loaded half. The **read-only remainder** — hardware/sensors, monitoring/FPS, benchmark/Lab, advisory/ranking/export, intelligence/measurement — is in **`src-tauri/CLAUDE.md`**, which auto-loads only when work touches `src-tauri/`. **Mechanically verified — run `node scripts/verify-module-map.mjs` before trusting either half; it reads both together and fails on a missing module, a ghost, a wrong file count, a module declared in both halves, an unstarred module that writes Windows state, or a delegated half that has gone missing.**
 
 **Core wiring & entry**
 - `main.rs` — argv router: `--fps-capture` → headless ETW helper (`run_fps_capture`); `--run-elevated <hex>` → elevated-PowerShell child (elevation boundary, owner territory); else `run()`. Runs BEFORE any window.
@@ -296,35 +296,6 @@ Complete as of 2026-08-02 (44 `.rs` files; line counts drift, treat as rough). *
 - ★ `receipts.rs` (~415) — Receipts telemetry gate (built dark, opt-in, default-OFF; new outbound boundary).
 - ★ `license.rs` (~355) — Compy Pro license gate (built dark).
 - ★ `drift.rs` (~351) — applied-change drift detection vs live machine state.
-
-**Hardware, sensors & detection (read-only probes)**
-- `hardware.rs` (~3350) — `HardwareInfo` probe (CPU/GPU/RAM/storage/network); Rust↔TS serde contract.
-- `cpu_temp.rs` (~520) — HWiNFO shared-memory CPU-temp/fan read (SEH-crash risk noted in audit). GPU temp via vendor SDK elsewhere.
-- `amd_freesync.rs` (~250), `overlay_tools.rs` (~230), `hwchange.rs` (~190) — FreeSync detection, overlay-tool detection, hardware-change tracking.
-
-**Monitoring, FPS & sessions**
-- `monitoring.rs` (~1300) — monitor-tool orchestration + sensor coverage.
-- `fps.rs` (~1092) — FPS/frametime IPC (`fps.json`/`fps.alive`) from the ETW helper.
-- `sessions.rs` (~569) — session-summary persistence (`sessions.json`).
-- `stutter.rs` (~135) — stutter/1%-low derivation.
-
-**Benchmark & Lab**
-- `benchmark.rs` (~1330), `benchmark_trial.rs` (~615), `benchmark_verdict.rs` (~580), `benchmark_scoreboard.rs` (~460), `comparison.rs` (~475) — the Lab proving-ground bench: trials, verdicts, scoreboard, A/B comparison.
-- `latency.rs` (~2255) — input/network latency probes.
-- `blackbox.rs` (~2150) — diagnostic black-box capture.
-
-**Advisory, ranking & export**
-- `recommendations.rs` (~970), `readiness.rs` (~1615), `priorities.rs` (~707), `diagnostics.rs` (~637), `leftovers.rs` (~1200) — recs catalog, gaming-readiness, priority ranking, diagnostics, leftover-cleanup advisory.
-- `export.rs` (~814) — evidence-pack / share-card export.
-- `tray.rs` (~177) — system-tray integration.
-
-**Intelligence & Measurement Platform (read-only, additive — no mutation markers, verified 2026-08-02)**
-- `intelligence.rs` (~3614) — Phase 1: canonical intelligence types, local event timeline, deterministic "What changed?" engine. READ-ONLY by doctrine; never mutates Windows, never networks.
-- `intelligence_patterns.rs` (~903) — Phase 2: cross-session pattern detection over `sessions.json`.
-- `experiment.rs` (~1420) — Phase 3: single-variable experiment engine + optimization simulator (DARK groundwork).
-- `component_evidence.rs` (~332) — Phase 4: component-level evidence attribution. READ-ONLY.
-- `comparability.rs` (~730), `game_state.rs` (~276), `capture.rs` (~279) — Measurement Platform 2.0 tasks E/F: session-comparability gate, conditions fingerprint, capture-backend/capability model.
-- `fuzz_support.rs` (~184) — test-only input generator for the property/fuzz suites.
 
 ## LOCKED safety rules — do not cross without an explicit product-owner decision
 

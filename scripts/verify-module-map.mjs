@@ -8,17 +8,49 @@
 // the core) were invisible to every session that trusted it. This script makes that class of drift
 // mechanically impossible to reintroduce, instead of relying on someone remembering to update prose.
 //
+// The map lives in TWO files since 2026-08-04: the always-loaded root CLAUDE.md carries the ★
+// mutation/rollback/gate half, and src-tauri/CLAUDE.md carries the read-only remainder, which
+// auto-loads only when work touches src-tauri/. This script reads both as one map. The root's own
+// prose declares where the rest lives; delegatesToSubmap() turns that sentence into an enforced
+// contract, so the split cannot degrade into a half-map that verifies vacuously.
+//
 // Sibling of scripts/verify-release-state.mjs (same gate-drift-audit family, same exit contract).
 // Run from anywhere: node scripts/verify-module-map.mjs [--strict] [--json]
 //   exit 0 = map matches the tree (line-count drift WARNs unless --strict)
-//   exit 1 = MISSING / GHOST / COUNT / UNSTARRED-MUTATOR, or the map section is absent entirely.
-// That last case guards the f21c170 gutted-doc class: a verifier that passes vacuously on a deleted
-// contract is worse than no verifier, so an absent section is a hard failure, never a silent pass.
+//   exit 1 = MISSING / GHOST / COUNT / UNSTARRED-MUTATOR / DUPLICATE, the map section is absent
+//            entirely, or the root delegates to a submap that is gone (SUBMAP-MISSING).
+// The absent-section cases guard the f21c170 gutted-doc class: a verifier that passes vacuously on a
+// deleted contract is worse than no verifier, so an absent section is a hard failure, never a silent
+// pass - and after the split that has to hold for BOTH halves, not just the one it started with.
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const MAP_HEADING = "### Rust module map";
+
+// Where the read-only half lives. Named in the root's map prose; naming it is what arms the check.
+export const SUBMAP_REL = "src-tauri/CLAUDE.md";
+
+// The root section either points at the submap or it does not. Re-merging both halves back into one
+// file stays a valid configuration - it just disarms the submap requirement, because then there is
+// no second half to go missing.
+export function delegatesToSubmap(section) {
+  return section.includes(SUBMAP_REL);
+}
+
+// Root first, first-wins, and deliberately so: if the two halves disagree about a star, the
+// always-loaded half is the one every session actually reads, and letting it win means an
+// unstarred-in-root mutator still trips UNSTARRED-MUTATOR instead of being excused by the other
+// file. Overlap is reported either way - the split is only sound while the halves are disjoint.
+export function mergeDeclared(rootDeclared, subDeclared) {
+  const merged = new Map(rootDeclared);
+  const duplicates = [];
+  for (const [name, info] of subDeclared) {
+    if (merged.has(name)) duplicates.push(name);
+    else merged.set(name, info);
+  }
+  return { merged, duplicates };
+}
 
 // Conservative on purpose. `Command::new` is deliberately NOT a marker: read-only probes spawn
 // processes all over this codebase (hardware.rs, monitoring.rs, cpu_temp.rs), and a detector that
@@ -159,9 +191,26 @@ if (IS_MAIN) {
     process.exit(1);
   }
 
-  const declared = declaredModules(section);
+  // Resolved before compare() rather than folded into it: a vanished submap would otherwise surface
+  // as nineteen MISSING lines with the actual cause buried, and the root cause has to read first.
+  let subDeclared = new Map();
+  if (delegatesToSubmap(section)) {
+    const submap = join(repo, ...SUBMAP_REL.split("/"));
+    const subSection = existsSync(submap) ? extractMapSection(readFileSync(submap, "utf8")) : null;
+    if (subSection === null) {
+      console.error(`FAIL: CLAUDE.md delegates the read-only half of the map to ${SUBMAP_REL}, but that file has no "${MAP_HEADING}" section - SUBMAP-MISSING. Restore it or fold the modules back into CLAUDE.md; a half-map that verifies vacuously is worse than no map.`);
+      process.exit(1);
+    }
+    subDeclared = declaredModules(subSection);
+  }
+
+  const { merged: declared, duplicates } = mergeDeclared(declaredModules(section), subDeclared);
   const actual = actualModules(rustSrc);
-  const { failures, warnings } = compare(declared, actual, declaredCount(section));
+  const { failures: driftFailures, warnings } = compare(declared, actual, declaredCount(section));
+  const failures = [
+    ...duplicates.map((name) => `DUPLICATE: ${name} is declared in both CLAUDE.md and ${SUBMAP_REL} - the halves must stay disjoint or the map can contradict itself about a star`),
+    ...driftFailures,
+  ];
   const hard = strict ? [...failures, ...warnings] : failures;
 
   if (asJson) {

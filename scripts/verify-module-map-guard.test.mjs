@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  SUBMAP_REL,
   compare,
   declaredCount,
   declaredModules,
+  delegatesToSubmap,
   extractMapSection,
+  mergeDeclared,
   productionSource,
 } from "./verify-module-map.mjs";
 
@@ -109,5 +112,66 @@ describe("gutted-contract guard", () => {
 
   it("reads the declared file count out of the header line", () => {
     expect(declaredCount("\n\nComplete as of 2026-08-02 (44 `.rs` files; rough).\n")).toBe(44);
+  });
+});
+
+// The map was split across two files on 2026-08-04 so the read-only half stops loading into every
+// session. The split is only honest while both halves are enforced together — otherwise deleting the
+// half that no longer auto-loads would make 19 modules invisible AND leave the gate green.
+describe("split map (root ★ half + src-tauri read-only half)", () => {
+  it("arms the submap requirement only when the root actually delegates", () => {
+    expect(delegatesToSubmap(`the remainder is in \`${SUBMAP_REL}\`, which auto-loads`)).toBe(true);
+    // Folding both halves back into one file is a legal configuration, not a failure: there is then
+    // no second half to go missing, so nothing to enforce.
+    expect(delegatesToSubmap("- `lib.rs` — everything is right here.\n")).toBe(false);
+  });
+
+  it("verifies the union, so a module declared only in the submap is not MISSING", () => {
+    const { merged } = mergeDeclared(
+      declaredModules("- ★ `actions.rs` — the boundary.\n"),
+      declaredModules("- `fps.rs` — IPC.\n"),
+    );
+    const { failures } = compare(merged, disk({
+      "actions.rs": { lines: 10, mutates: ["run_elevated_powershell"] },
+      "fps.rs": { lines: 20, mutates: [] },
+    }), 2);
+    expect(failures).toEqual([]);
+  });
+
+  it("reports overlap, because two halves that both declare a module can contradict each other", () => {
+    const { merged, duplicates } = mergeDeclared(
+      declaredModules("- ★ `actions.rs` — the boundary.\n"),
+      declaredModules("- `actions.rs` — a stale copy left behind by the split.\n"),
+    );
+    expect(duplicates).toEqual(["actions.rs"]);
+    expect(merged.size).toBe(1);
+  });
+
+  it("lets the root win a star disagreement, so an unstarred mutator still trips the check", () => {
+    // Fail-safe direction on purpose: the root is the half every session loads. If it says unstarred
+    // and the submap says starred, the loud outcome is the correct one.
+    const { merged } = mergeDeclared(
+      declaredModules("- `services.rs` — moved out of the starred block by mistake.\n"),
+      declaredModules("- ★ `services.rs` — still starred over here.\n"),
+    );
+    const { failures } = compare(merged, disk({
+      "services.rs": { lines: 10, mutates: ["set_value"] },
+    }), 1);
+    expect(failures).toEqual([
+      "UNSTARRED-MUTATOR: services.rs touches Windows state (set_value) but carries no star in the map",
+    ]);
+  });
+
+  it("finds a map section in the submap under its own continued-from heading", () => {
+    const submap = "# src-tauri\n\n### Rust module map — read-only modules (continued from the root `CLAUDE.md`)\n\n- `fps.rs` (~1092) — IPC.\n";
+    const section = extractMapSection(submap);
+    expect(section).not.toBeNull();
+    expect(declaredModules(section).has("fps.rs")).toBe(true);
+  });
+
+  it("keeps the .rs count in the root alone, so the halves cannot disagree about the total", () => {
+    // The submap deliberately restates no count; reading one out of it would create a second source
+    // of truth for the same number.
+    expect(declaredCount("### Rust module map — read-only modules (continued)\n- `fps.rs` — IPC.\n")).toBeNull();
   });
 });
