@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   LIVING INSTRUMENT — the "feel refresh" skin (prototype, 2026-06-15).
+   LIVING INSTRUMENT — the "feel refresh" skin (shipped default since 2026-06-15).
    Direction (owner-picked + dialed BOLDER 2026-06-15): keep the instrument
    identity, make it feel PREMIUM and CONFIDENT, not utilitarian or mellow.
    Five moves —
@@ -16,8 +16,9 @@
 
    HONESTY / A11Y: the glow lights only instrument SURFACES (a lit dial, a live
    status dot) — it never invents or amplifies a number. Every animation is disabled
-   under prefers-reduced-motion (block at the end + the global reset in tokens.css),
-   so motion-sensitive users get the depth + glow with zero movement.
+   under :root[data-motion="reduced"] — Compy's OWN resolved motion pref, never the raw
+   OS media query (motion law 2026-06-19) — via the block at the end + the global reset
+   in tokens.css, so motion-sensitive users get the depth + glow with zero movement.
    ════════════════════════════════════════════════════════════════════════════ */
 
 /* Registered as an animatable number so the gauge arc can sweep from 0 → its real

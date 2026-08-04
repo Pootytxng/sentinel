@@ -85,14 +85,14 @@ import { useConfirm } from "./design/ConfirmDialog";
 import "./design/instrument.css"; // Instrument token layer — after App.css so the accent re-point wins
 import "./Onboarding.css";
 import "./arc-instrument.css"; // arc re-dress skin (scoped under .arc-v2; after the classics)
-import "./design/living-instrument.css"; // "Living Instrument" feel-refresh skin — scoped under [data-living], default OFF
-import "./design/dashboard-skin.css"; // "dashboard-energy" premium skin — scoped under [data-dash-v2], default OFF
+import "./design/living-instrument.css"; // "Living Instrument" feel-refresh skin — scoped under [data-living], default ON
+import "./design/dashboard-skin.css"; // "dashboard-energy" premium skin — scoped under [data-dash-v2], default ON
 import "./design/fonts-v2.css"; // Geist Sans/Mono @font-face (OFL, bundled) — inert until tokens-v2 uses them
-import "./design/tokens-v2.css"; // V2 shell tokens — every rule scoped under [data-v2="on"], default OFF
-import "./surfaces/room-identity.css"; // per-room identity accents — scoped [data-room-identity="on"], default OFF
+import "./design/tokens-v2.css"; // V2 shell tokens — scoped under [data-v2="on"], default ON (main.tsx sets that attribute unconditionally; the compy_v2 flag was removed)
+import "./surfaces/room-identity.css"; // per-room identity accents — scoped [data-room-identity="on"], default ON
 import "./design/tokens-qpw.css"; // Quiet Pit Wall redesign tokens - scoped [data-qpw="on"], DEFAULT OFF (issue #49)
 import "./design/qpw/qpw-components.css"; // Quiet Pit Wall component contracts - same scope, same default
-import "./design/tokens-hud.css"; // Instrument-HUD tokens — scoped under [data-hud="on"], DEFAULT OFF
+import "./design/tokens-hud.css"; // Instrument-HUD tokens — scoped under [data-hud="on"], DEFAULT ON
 import "./surfaces/ambient-hud.css"; // T4c ambient skin (grain · glass · holo-foil) — scoped [data-v2][data-hud]
 
 type DiskInfo = {
@@ -1675,9 +1675,10 @@ function App() {
                   the classic path; no door — Lab is the journey's last chapter. */}
               {activeTab === "Lab" &&
                 (labGround ? (
-                  // Proving-ground merge (phase 1, DEFAULT OFF): Optimize's fixes + the enable-all
-                  // fast path fold INTO the Lab. Same audited apply/batch handlers OptimizeV2 gets
-                  // (zero new IPC) + Lab's own instruments. Flag off → the LabV2 branch below.
+                  // Proving-ground merge (phase 1, compy_lab_ground DEFAULT ON since 2026-07-10):
+                  // Optimize's fixes + the enable-all fast path fold INTO the Lab. Same audited
+                  // apply/batch handlers OptimizeV2 gets (zero new IPC) + Lab's own instruments.
+                  // The "0" failsafe falls back to the LabV2 branch below.
                   // hw-gated: the Ops Console's center hologram (RigViewer) needs the real hardware
                   // read; hw is null only for the brief detection window before first refresh.
                   hw && (

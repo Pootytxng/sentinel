@@ -132,11 +132,12 @@ export function persistOverlayDensity(d: OverlayDensity): void {
   }
 }
 
-// Living Instrument (preview, 2026-06-15) — the "feel refresh" skin: material depth, live-data glow,
+// Living Instrument (shipped 2026-06-15) — the "feel refresh" skin: material depth, live-data glow,
 // and an entrance-motion layer, all scoped under [data-living="on"] in living-instrument.css. DEFAULT
-// OFF — purely cosmetic and reversible (drop the attribute + the stylesheet and the app is identical).
-// The CSS disables every animation under prefers-reduced-motion, so this flag governs the LOOK only,
-// never logic, data, or what Compy measures.
+// ON — purely cosmetic and reversible (drop the attribute + the stylesheet and the app is identical).
+// The CSS drops its animations under :root[data-motion="reduced"] — Compy's OWN resolved motion pref,
+// never the raw OS media query (motion law 2026-06-19) — so this flag governs the LOOK only, never
+// logic, data, or what Compy measures.
 const LIVING_KEY = "compy_living_instrument";
 
 export function readLivingInstrument(): boolean {
