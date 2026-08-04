@@ -313,7 +313,7 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
-### Cycle 2026-08-04a — ✅ Q5 BACKEND · Q6 · BRANCH DISPOSITIONS · TWO GUARDS THAT WERE MISSING: `a4d13bd` · `28ebcc5` · `9bf3bde` · `1a513cb` · `6882819` · `7c8a03f` · `270a622` · `2d33db2` · `9827728` · GATE-RESIDENCY SWEEP `c7c5a8d`
+### Cycle 2026-08-04a — ✅ Q5 BACKEND · Q6 · BRANCH DISPOSITIONS · TWO GUARDS THAT WERE MISSING: `a4d13bd` · `28ebcc5` · `9bf3bde` · `1a513cb` · `6882819` · `7c8a03f` · `270a622` · `2d33db2` · `9827728` · GATE-RESIDENCY SWEEP `c7c5a8d` · `ba609ea`
 
 - **The session's own supervision hook was the first defect (`a4d13bd`).** `compy-entry` reported the
   project harness "not loaded" from the absence of a launch token alone — a claim about state it
@@ -396,9 +396,38 @@ queued).
   `dev-relaunch`, `ship-reinstall`, `run-vitest`, `export-library`, the `release-*.ps1` family). Two
   gates of fourteen had no runner, and both were the two written most recently — a gate is at its most
   useless the week it is authored, which is the pattern to watch on the next one.
-- **Baseline:** vitest 278 files / 3068 · tsc clean · verify-module-map --strict OK (45 `.rs`, 12
+- **So residency stopped being a thing I remember (`ba609ea`).** Finding the two unrun gates by hand
+  only fixes the two; `scripts/gate-residency-guard.test.mjs` classifies **all 32** non-test scripts
+  in `scripts/` by residency kind — `npm-test` · `npm-script` · `release` (runner-invoked) ·
+  `release-entry` (human-typed, pinned by a static guard) · `scheduled` · `manual` — so adding a
+  script without answering "what runs this?" turns `npm test` red at the moment someone is thinking
+  about the answer, and demoting a drift detector to release-only takes a deliberate diff.
+  **Anti-vacuous by construction:** a name-mention scan would have gone GREEN on both defects it
+  exists to prevent, so the checks are structural — an `npm-test` subject must export a callable
+  surface **and** its paired test must `from "./<subject>"` (that pair is exactly the `IS_MAIN` trap:
+  a check body wholly inside `if (IS_MAIN)` has no callable surface, so no test *can* exercise it);
+  a `release` subject's call site must survive comment-stripping (a command named only in prose is
+  not a runner); every non-`npm-test` entry must carry a written `why` of ≥40 chars; every declared
+  drift detector must be `npm-test`. **Proven by mutation, not asserted:** five probes, five catches
+  — wrong runner · unclassified script · drift detector demoted to `manual` · a release runner that
+  does not invoke its subject · `why: "TODO"` — file restored byte-identical after each. (The fifth
+  first read MISSED; the probe was wrong, not the guard — it *lengthened* the `why` string.)
+  Corrected against the code while writing it: `release.ps1` only `Write-Host`s the next stage's
+  command, so the three release stages are human-typed entries, not runner-invoked — each
+  irreversible step keeps its own decision point, and the table now says so rather than assuming.
+- **Third instance of the same rot, closed in that commit: `doc-budget.ps1`.** A repo-drift detector
+  whose answer changes on any commit that adds lines to a hot doc, whose only automatic runner was
+  the release gate nobody runs between releases — so an overage could sit on `main` for weeks and
+  surface at ship time. `scripts/doc-budget-guard.test.mjs` makes it resident in `npm test`,
+  re-implementing the CHECK in JS but **parsing the BUDGETS out of the `.ps1`**, so the gate and the
+  test cannot disagree about a number and no third source of truth exists. Cross-checked against a
+  real `doc-budget.ps1` run: identical counts and budgets for all nine files.
+- **One negative re-verified rather than trusted:** the `supply-chain-gate` entry in the sweep's
+  "everything else IS wired" list is correct — real invocation at `verify-release.ps1:142`, pinned by
+  `release-powershell-static-guard.mjs:277` and `verify-release-gate.test.mjs:73`. No correction owed.
+- **Baseline:** vitest 280 files / 3084 · tsc clean · verify-module-map --strict OK (45 `.rs`, 12
   starred) · verify-release-state 24/24 zero drift · doc-budget ALL PASS · branch-disposition-audit
-  OK. `main` = `c7c5a8d`; tree clean.
+  OK. `main` = `ba609ea`; tree clean.
 
 ### Cycle 2026-08-03a — ✅ STANDING AUTONOMY GRANT + Q2b TRIPWIRE · ⚠️ #60 part 2 REFUTED TWICE: `bb390cf` · `7013602`
 
