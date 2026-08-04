@@ -304,6 +304,117 @@ list has not been fully worked. The next-up, highest-leverage, non-gated work is
 
 ---
 
+## ARCHIVED 2026-08-04 — steering-log retention: the four oldest cycles (moved verbatim)
+
+> Moved out of `docs/BACKLOG.md` to hold the live board at the newest ~12 cycles (retention rule
+> 2026-07-13). Point-in-time records, preserved unchanged — current truth is `docs/RELEASE_STATE.md`.
+
+### Cycle 2026-07-15b — ✅ DIRECTOR #5 BUILT: SCROLL-SCRUBBED TELEMETRY THROUGHLINE — site-only, NO gate moved, zero src-tauri, zero src/
+
+**The queued Director change #5 got its own train** (owner green light: "proceed with the
+conclusions made by the council and design director"). The `.record` replay deck's ▶ button replay
+is RETIRED — the page scroll is now the Monitor's transport: with JS + motion allowed the section
+becomes a 240vh runway (200vh ≤720px), the deck sticky-pins, and scroll scrubs the REAL 3:00:05
+Diablo IV session bidirectionally — new event-timeline canvas (51 real events at true timestamps,
+hour graticule, playhead), session clock, ~1Hz sample counter, events-passed n/51, live event feed —
+landing on the measured-results grid ("T+3:00:05 · end of record") as the deck unpins.
+
+- **Honesty boundary held:** that record has NO per-second fps series (guard-enforced), so nothing
+  per-frame is animated or invented; fps numbers appear only as end results. Reduced-motion/no-JS
+  get the finished static summary with ZERO dead runway (doorknob law) — new guard pins in
+  `scripts/site-landing.test.mjs` ban `record--scrub`/timeline/hint from static markup.
+- **Director seat-6 sat on the BUILT result: SHIP-WITH-CHANGES** ("the first mechanic on this site
+  I'd actually remember"; clears both slop altitudes). Both named fixes applied same train:
+  (1) **density-weighted transport** — all 51 events live in the session's first ~38%, so the linear
+  scroll→time map idled for ~60% of the runway; `timeOf()` (ACTIVE_SHARE 0.85) now spends 85% of
+  scroll on the event-dense span and fast-forwards the quiet 6,730s tail — transport SPEED only,
+  every reading stays true to the record; samples + track fill follow session time. (2) the new
+  scrub strings + canvas hour labels bumped `--fg-faint` → `--fg-dim` (AA).
+- **Restraint call:** the deck scrub is the ONLY new scrolled motion — receipts/features/pricing/hero
+  untouched (fourth-taste-FAIL risk from scattering motion).
+- **Verify:** astro build + stage clean · vitest **25/25** (site-landing + staleness guard) ·
+  self-review ran 4 rounds to PASS: round-2 caught a live→results swap-height jump (~20px desktop,
+  `.rhud-swap` min-height was calibrated to the shorter results state) → fixed 252→276px; round-3
+  confirmed desktop flat but caught the SAME class at mobile 390w (~84px, taller 2-col live state)
+  → mobile-scoped 364px override in the 720px block; **round-4 full fresh review PASS** — swap +
+  deck heights flat through the DONE_AT boundary at BOTH 1500×980 and 390×844 (and 700×900),
+  contrast rgb(168,159,146) ~7.8:1, density transport climbing, bidirectional determinism,
+  reduced-motion static fallback, no overflow, console clean. **Site stays PRE-PUBLISH; owner
+  taste sign-off on the live scroll feel is the remaining gate; deploy owner-gated.**
+
+### Cycle 2026-07-15 — ✅ COUNCIL SEAT 6 + BLACKBOOK TEASER SPLIT ("samples, not free meals") — site-only, PRE-PUBLISH, NO gate moved, zero src-tauri, zero src/
+
+**Owner decree:** council the Flight Test landing, ADD a sixth council seat (award-winning web
+design director) to own site taste + content-exposure calls, and fix the Blackbook giveaway —
+"we just have the whole blackbook on display like were giving out free meals instead of samples."
+**Built:** `.claude/agents/web-design-director.md` (opus — adversarial-judgment exception) +
+`COUNCIL_PROTOCOL.md` seat 6. **Full six-seat council convened; Chairman adopted the TEASER-TIER
+SPLIT** (Executor's `config.picks` branch + Contrarian's answer-the-query rule) over the Director's
+full-kill minority — teasers keep every URL/guard/SEO surface while confining the payload to the app.
+
+- **generate.mjs:** 14 curated ids stay full write-ups (the public sample); the other 177 entries
+  now emit `teaserPage()` — header + summary + honest verdict + one short per-type section + an
+  `.in-the-app` panel. Every page still ANSWERS its query in visible text (Contrarian rule — no
+  fake-blur paywall tease). Index copy fixed (Outsider 🔴: it literally said "the same library that
+  ships inside the app") → "14 full write-ups… the complete graded book ships inside the app."
+- **library.css:** full amber unification (Director #2 — the teal/violet/magenta /library/ palette
+  was a brand fracture vs the amber landing); verdict colors stay semantic; `.in-the-app` dashed
+  panel styling. Impeccable hook's 3 findings classified, not edited: stance/blockquote side-tabs =
+  classical quote idiom (pre-existing), gradient-text = dormant legacy-landing rule no generated
+  page renders.
+- **index.astro:** nav demoted Blackbook to slot 2 (Receipts first) · hero ghost CTA "Sample the
+  Blackbook →" · module copy reframed ("EVERY VERDICT PUBLIC · THE BOOK SHIPS IN THE APP") · "1% low"
+  glossed in trace label + strip tooltip (Outsider) · pricing gained "THE MANIFEST" rail + ledger-row
+  manifest lists (Director #3) · below-fold h3 type confidence (Director #4).
+- **Director #5 (scroll-scrubbed telemetry throughline) QUEUED, not built** → UI_VISION_BACKLOG
+  §G.1 with reasoning (page-length motion rushed = fourth taste-FAIL risk; needs its own
+  storyboard→build→self-review train).
+- **Expansionist note (forward-looking, small):** extract the landing's session-receipt rendering
+  into a reusable `<SessionReceipt>` share-card component — the same real-session receipt block is
+  the natural unit for the Receipts-doctrine share cards (web reports, social proof). Not queued as
+  a train; pick up when the share-card lane opens.
+- **Verify:** `node site/generate.mjs` → 191 entries (14 full, 177 teasers) · astro build + stage
+  clean · vitest **25/25** (site-landing + staleness guard) · self-reviewer **PASS 8/8** (agent
+  `a715291cc90eb9c73`: .btn amber/ink 9.22:1 AAA · stale "same library" phrase grep-absent · zero
+  teal/violet remnants · manifest ledger clean at 1500 + 390 · teaser pages honest + styled ·
+  title-law h1s). **Site stays PRE-PUBLISH: owner taste gate before any deploy; deploy owner-gated.**
+
+### Cycle 2026-07-14b — ✅ SITE MAKEOVER P1: MISSION CONTROL LANDING ON ASTRO — site-only, PRE-PUBLISH, NO gate moved, zero src-tauri, zero src/
+
+**The landing moved out of `site/` into a new Astro + React-islands app (`site-app/`)** per the
+owner-decided makeover (spec `docs/superpowers/specs/2026-07-14-site-makeover-research-spitball.md`:
+Direction A "Mission Control" + Monitor replay demo + Astro rebuild). Home = topbar · hero with
+**ReplayHUD** (the owner's REAL recorded Diablo IV session — session clock + ~1Hz sample counter +
+real events at time-compressed real timestamps, measured results as the end-of-session reveal;
+**no per-frame fps series exists, so none is animated — nothing fabricated**) · trust bar · features
+bento · receipts (Game Mode null-result + Diablo IV, pinned to `site/src/*-receipt.json`) · honest
+Pro teaser (no price, no button) · FAQ (NVIDIA sensor stays "not yet hardware-verified") · same-origin
+waitlist. Design tokens mirrored from App.css; ONE self-hosted font (Fontsource JetBrains Mono);
+zero third-party runtime requests (test-pinned). SSR = measured summary (no-JS visitors see real
+results, no dead button); reduced-motion respected on the WEB (app-side motion law is app-only).
+**Pipeline:** `site/generate.mjs` now content-pages-only; `scripts/stage-dist-site.mjs` dual-builds
+and overlays `site-app/dist/`; `site-landing.test.mjs` rewritten against the BUILT artifact
+(24 tests: provenance pinning, zero-third-party bundle scans, doorknob/pricing/FAQ honesty);
+staleness guard expects the overlay. Verify: vitest **177 files / 1631 green** · self-review
+round 2 **PASS** (round 1 caught 2 real 390px bugs — topbar CTA overflow + clipped receipt card —
+fixed + re-captured). **Site stays PRE-PUBLISH: owner taste gate before any deploy; deploy owner-gated.**
+Next: P2 (/pricing + /compare + FAQ JSON-LD + llms.txt), P3 videos (owner-flagged LATER).
+
+### Cycle 2026-07-14a — ✅ JARVIS DEVIATIONS RATIFIED + DIRTY-STAMP FALSE-POSITIVE FIXED & GATED — no ship, NO gate moved, zero mutation-boundary code
+
+**Owner ruling (checklist item 2, evidence-first):** both `1d310e1` motion deviations **STAND** —
+Dock keeps lift-only (no magnetic pull; rail tabs own the 4px pull, both captured live) and no
+hologram shader-pulse (gauge data-tick stays the vehicle; 0 GL draws in 15s idle re-proven on the
+live build). Evidence: `docs/ui-sweep/shots/deviation-*.png` + `motion-evidence-log.json`; verdict
+recorded in OWNER_ACTION_CHECKLIST A7 + UI_VISION_BACKLOG §A.2/A.3. Future option (noted, NOT
+queued): change-triggered pulse. **Dirty-stamp incident (self-caught during the captures):** live
+PART B stamp read `2eda4eb+dirty` — audited benign (tracked tree clean; 89 untracked `docs/` files
+tripped `git status --porcelain`'s `??` count; binary code-identical to `2eda4eb`, no re-cut).
+**Fix + bug→guard:** `src-tauri/build.rs` dirty check now `:(exclude)docs` (untracked non-docs
+still counts) · new **DIRTY-STAMP GATE** step 0b in `scripts/ship-reinstall.ps1` (throws on
+non-docs tree dirt pre-install, `-AllowDirty` override; red→green proven with a non-docs probe).
+RELEASE_STATE update 2026-07-14b carries the audit. Next build/ship stamps clean.
+
 ### Cycle 2026-07-13f — ✅ 390px LANDING PAGE-EDGE OVERFLOW FIXED (the pre-existing defect 13e logged) — site-only, NO gate moved, zero src-tauri, zero src/
 
 **Root cause (probed, not guessed):** `.topbar`, `.hero`, and `.article` each share their element
