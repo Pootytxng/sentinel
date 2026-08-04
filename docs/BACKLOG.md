@@ -925,7 +925,9 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 
 ### A1 · DETECTION layer — **effectively complete** (feasibility-bounded)
 - [x] core-parking state (policy/registry + powercfg) — `hardware.rs`, `lib.rs:288`
-- [~] XMP/EXPO active — honest "running below rated" only; never claims "profile active" — `hardware.rs:497`
+- [x] XMP/EXPO active — ✅ DONE + GUARDED (audit 2026-08-03): honest "running below rated", never
+  claims "profile active" — `mem_speed_status` `hardware.rs:511`, surfaced via `xmp_expo_status`;
+  guards `hardware.rs:3176` `mem_speed_status_is_honest` + `HardwareGrid.test.tsx:92`.
 - [⛔] Intel Speedshift/EPB — user-mode feasibility wall ([[detection-feasibility-walls-usermode]])
 - [⛔] AMD PBO — feasibility wall (detect-only impossible without vendor SDK)
 - [⛔] thermal-throttle (ACPI) — feasibility wall; only post-hoc noisy-run flag exists
@@ -1027,7 +1029,10 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] monitor model detection (EDID / WmiMonitorID, read-only) — `hardware.rs:1879`
 
 **GPU**
-- [~] vendor profile detection + advisory badges — vendor detected; AMD sensors verified, NVIDIA gated (Rule 5); AMD read-only advisory badges shipped (`vendorProfileInsights`, GpuProfile — Adrenalin-named HAGS/power-mode/thermal insights, no perf promise; NVIDIA/Intel get none)
+- [~] vendor profile detection + advisory badges — **AMD half DONE + guarded** (`vendorProfileInsights`,
+  GpuProfile — Adrenalin-named HAGS/power-mode/thermal insights, no perf promise; guard
+  `src/data/gpu-sensor.test.ts`). **NVIDIA/Intel deliberately WITHHELD under LOCKED Rule 5**, not
+  unfinished — this `[~]` means "as complete as the honesty rule permits", never a to-do.
 - [x] GPU-temp honesty gate consolidated to ONE source (`gradeGpuTempForVendor`, gpu-sensor.ts) — fixed a LIVE Rule-#5 violation (SessionDebrief graded NVIDIA temp bare); Play + DashboardV2 dedup'd onto it so it can't drift again (found by the 2026-06-24 workable-now audit; guard test added)
 - [x] **[honesty]** tweak-debunk corpus fact-check (`tweaks.json`, all 84 entries) — **COMPLETE** (8 adversarial web-verified sub-agents): zero false-`real`/`risky` verdicts, zero surviving fabricated numbers. Three factual fixes landed by honesty (sysmain GB-number · fTPM misattribution · defrag-SSD "not a defrag" falsehood); verdict/voice handoff (timer-resolution re-grade + wording nits) processed by content. Regression guard `tweak-honesty-guard.test.ts` pins the three corpus fixes. Ledger: `docs/HONESTY_AUDIT_TWEAKS.md`
 - [x] **[honesty]** new-Learn-entry audit + terms-corpus regression guard — audited all 8 net-new term explainers (human-eye-fps-myth · powerline/MoCA · keyboard×3 · amd-undervolting · eDPI) + the driver-update-guide Intel fix = CLEAN; caught + fixed one falsehood (`rapid-trigger` claimed Snap Tap/SOCD "banned in CS2 & Valorant" — Valorant actually PERMITS it, VCT §2.3.5). bug→guard: new `terms-honesty-guard.test.ts` pins that Valorant is framed as currently allowing it (the content keyboard guard only pins the generic ban/restrict/rules property, so the false game-list could have regressed green) — `terms-honesty-guard.test.ts`
