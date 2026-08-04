@@ -2,7 +2,7 @@
 
 > A rollback-first Windows configuration safety layer for everyday gamers that happens to optimize. Compy reads your actual PC and tailors safe, reversible settings to your hardware — plain-English, no jargon, undo attached to everything.
 
-Compy is a free desktop app (Windows, AMD verified; NVIDIA detection verified, sensors pending). Its public site is a measurement brand: every number shown was read on a real PC, including the ones that show no gain. No fabricated benchmarks, no third-party runtime requests, no account.
+Compy's core is free forever (Windows, AMD verified; NVIDIA detection verified, sensors pending), with a Pro tier in the works. Its public site is a measurement brand: every number shown was read on a real PC, including the ones that show no gain. No fabricated benchmarks, no third-party runtime requests, no account.
 
 ## Start here
 - [Home](https://compy.gg/): what Compy is, real-session replay, and the launch waitlist.
