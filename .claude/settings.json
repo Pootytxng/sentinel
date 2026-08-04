@@ -4,6 +4,16 @@
     "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
     "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "150000"
   },
+  "permissions": {
+    "deny": [
+      "Bash(npm publish*)",
+      "PowerShell(npm publish*)",
+      "Bash(cargo publish*)",
+      "PowerShell(cargo publish*)",
+      "Bash(gh release create*)",
+      "PowerShell(gh release create*)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
