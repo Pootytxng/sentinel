@@ -40,12 +40,12 @@ in the update request, and does not upload it anywhere.
 - **Change history / "Trust Ledger":** a local audit log of changes you chose to apply, so
   they can be rolled back. Stored at `%APPDATA%\Compy\history.json`. It records what was
   changed, the prior value (so it can be restored), and a timestamp. It stays on your device.
-- **FPS monitoring working files:** temporary data under `%LOCALAPPDATA%\Compy\`
+- **FPS monitoring working files:** temporary data under `%APPDATA%\Compy\runtime\`
   (`fps.json`, `fps.alive`) used to pass live capture data between Compy and its local
   capture helper. Local only.
 - **A first-run flag** in the app's local storage so it doesn't replay the intro every launch.
 
-You can delete any of these files; Compy will recreate what it needs.
+The FPS working files and the first-run flag are safe to delete — Compy just recreates them as needed. Deleting `history.json` is different: it erases your Trust Ledger, so past changes stop being reversible from it. Compy will start a fresh, empty ledger, not restore the old one.
 
 ## What Compy does NOT do
 

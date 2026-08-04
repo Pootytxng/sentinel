@@ -30,8 +30,14 @@
     [#59](https://github.com/Pootytxng/sentinel/issues/59)): absolute offline claims gone from both
     locales, the legal documents and the marketing site; `docs/PRIVACY.md` at v0.3; automatic update
     checks switchable off; `src/outbound-claim-guard.test.ts` fails the build on any absolute claim
-    while an outbound surface is live. *Remaining:* a formal pass over the spec's acceptance list
-    (ledger-deletion wording, `compy_data_dir()`/`fps_dir()` exactness, en↔zh-CN meaning parity).
+    while an outbound surface is live. **Acceptance-list pass done 2026-08-04 (Cowork):**
+    `docs/PRIVACY.md`/`site/privacy.html` wrongly named `%LOCALAPPDATA%\Compy\` for FPS runtime
+    files (`fps_dir()` is `compy_data_dir().join("runtime")` = `%APPDATA%\Compy\runtime\`) and
+    blanketed "Compy will recreate what it needs" over `history.json`, hiding that deleting it
+    erases the Trust Ledger. Both fixed in both files; pinned by
+    `src/privacy-data-dir-guard.test.ts`. en↔zh-CN parity spot-checked on the Trust-Ledger/
+    deletion strings in `home.json` and the network-check line in `settings.json` — meaning
+    matches; not a full line-by-line diff of all 8 locale-file pairs.
   - **Q2 main-vs-overlay command authority** — owner GO 2026-08-03, merged as
     [#62](https://github.com/Pootytxng/sentinel/pull/62). The overlay held all 91 custom commands
     and needed 3; `build.rs` now declares them via `AppManifest::commands` and the two capability
