@@ -313,7 +313,7 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
-### Cycle 2026-08-04a — ✅ Q5 BACKEND · Q6 · BRANCH DISPOSITIONS · TWO GUARDS THAT WERE MISSING: `a4d13bd` · `28ebcc5` · `9bf3bde` · `1a513cb` · `6882819` · `7c8a03f` · `270a622`
+### Cycle 2026-08-04a — ✅ Q5 BACKEND · Q6 · BRANCH DISPOSITIONS · TWO GUARDS THAT WERE MISSING: `a4d13bd` · `28ebcc5` · `9bf3bde` · `1a513cb` · `6882819` · `7c8a03f` · `270a622` · `2d33db2`
 
 - **The session's own supervision hook was the first defect (`a4d13bd`).** `compy-entry` reported the
   project harness "not loaded" from the absence of a launch token alone — a claim about state it
@@ -340,8 +340,26 @@ queued).
   naming `c7c60d3` with the stale value still in the file, exit 0 after the correction. Three
   pre-existing gate failures fixed in the same pass — `resolve_rollback` cited in the wrong file and
   69 lines off, `save_history_to` near-drift, and `source_main_commit` 14 commits behind a max of 10.
-- **Baseline:** vitest 278 files / 3046 · verify-release-state 24/24 zero drift · doc-budget ALL PASS
-  · branch-disposition-audit OK. `main` = `270a622`; tree clean.
+- **The module map split, and the verifier learned the split (`2d33db2`).** 19 read-only modules moved
+  to `src-tauri/CLAUDE.md`, which auto-loads only for Rust work; the 12 ★ mutation/rollback/gate
+  modules stay in the always-loaded root, because scoping against the safety boundary is a safety
+  step and not a lookup. This **re-authors** `origin/docs/claude-md-split` rather than merging it —
+  `353967f` predates `verify-module-map.mjs` by a day, so landing it verbatim would have turned all
+  19 moved modules into `MISSING` and reddened the map's own gate on arrival. The verifier now reads
+  both halves as one map, and the root's prose naming the submap is what **arms** the check: delete
+  the half that no longer auto-loads — the half nobody would notice going missing — and you get
+  `SUBMAP-MISSING`, not a green run over 19 invisible modules (proven by moving the file aside, not
+  asserted). `DUPLICATE` keeps the halves disjoint; star disagreements resolve root-first so an
+  unstarred mutator still trips `UNSTARRED-MUTATOR`; the `.rs` count stays in the root alone.
+  `doc-budget` tightens the root 400 → 380 — banked, not refilled, or the split buys nothing.
+- **The notable finding: `verify-module-map.mjs` had been RED on `origin/main` since `7c8a03f`.**
+  That commit added `support_evidence.rs` without touching the map (declared 44, tree had 45), so the
+  gate created on 2026-08-02 was already failing two days later — the exact drift class it exists to
+  prevent, reintroduced by the next feature commit. Fixed in the same train; the module is mapped and
+  correctly unstarred (zero mutation markers).
+- **Baseline:** vitest 278 files / 3052 · tsc clean · verify-module-map --strict OK (45 `.rs`, 12
+  starred) · verify-release-state 24/24 zero drift · doc-budget ALL PASS · branch-disposition-audit
+  OK. `main` = `2d33db2`; tree clean.
 
 ### Cycle 2026-08-03a — ✅ STANDING AUTONOMY GRANT + Q2b TRIPWIRE · ⚠️ #60 part 2 REFUTED TWICE: `bb390cf` · `7013602`
 
