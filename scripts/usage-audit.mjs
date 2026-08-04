@@ -12,7 +12,8 @@
 //   node scripts/usage-audit.mjs --report        -> also write docs/usage-audit/REPORT-<date>.md
 //
 // Health flags it raises (the audit's standing findings, 2026-07-13):
-//   - peak main-lane context > 200k in any session (owner rule: hand off at 80-120k)
+//   - peak main-lane context > the configured CLAUDE_CODE_AUTO_COMPACT_WINDOW in any session
+//     (derived via lib/compaction-window.mjs, issue #16 — not a hardcoded 200k)
 //   - subagent runs on opus/fable (routing law: cheapest capable model, sonnet default)
 //   - docs/BACKLOG.md > 120 KB (boot tax — archive steering-log cycles per its retention rule)
 //   - "File has not been read yet" Edit errors (read-before-edit discipline)
@@ -22,6 +23,7 @@ import { createInterface } from "node:readline";
 import { join, basename, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
+import { resolveCompactionWindow, loadProjectSettings, flagPeakContext, describeWindow } from "./lib/compaction-window.mjs";
 
 const ROOT = join(homedir(), ".claude", "projects");
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -157,8 +159,9 @@ for (const t of sessions) {
 const agents = await scanAgents();
 
 const flags = [];
-const hot = rows.filter((r) => r.peakCtx > 200_000);
-if (hot.length) flags.push(`🔴 ${hot.length}/${rows.length} sessions ran past 200k context (owner rule: hand off at 80-120k). Worst: ${hot.slice(0, 3).map((r) => `${r.date} ${K(r.peakCtx)}`).join(", ")}. Cache-read cost per turn scales with carried context.`);
+const compactionWindow = resolveCompactionWindow({ env: process.env, settings: loadProjectSettings(REPO) });
+const { flag: peakCtxFlag } = flagPeakContext(rows, compactionWindow);
+if (peakCtxFlag) flags.push(peakCtxFlag);
 if (agents.offRouted) flags.push(`🟡 ${agents.offRouted}/${agents.total} subagent runs on opus/fable (routing law: cheapest capable model). Check spawn sites pass no model override.`);
 try {
   const bl = statSync(join(REPO, "docs", "BACKLOG.md")).size;
@@ -172,6 +175,7 @@ lines.push(`# Usage audit — ${new Date().toISOString().slice(0, 10)} (${rows.l
 lines.push("");
 lines.push(`Main-lane totals: **${M(g.out)} output** · **${(g.cacheRead / 1e9).toFixed(2)}B cache-read** · ${M(g.cacheWrite)} cache-write · ${g.msgs} assistant msgs`);
 lines.push(`Avg carried context: **${K(g.cacheRead / Math.max(1, g.msgs))}/turn** (cache-read per assistant msg)`);
+lines.push(`Compaction window: ${describeWindow(compactionWindow)}`);
 lines.push("");
 lines.push("## Health flags");
 for (const f of flags) lines.push(`- ${f}`);

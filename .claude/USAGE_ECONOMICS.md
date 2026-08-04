@@ -37,11 +37,14 @@ genuinely reduces mistakes.
 
 ## 3. Session length — the #1 lever
 
-Compact around 80–120k context; avoid working above 150k. **This is why the auto-compact window
-in `.claude/settings.json` is set to 150000, not higher** — it's not a technical ceiling (Opus's
-real window is far larger), it's this deliberate quality/cost target: smaller working sets mean
-less "lost in the middle" degradation on long threads, on top of the direct token savings.
-Refresh is now automatic (§5) — don't manually `/clear`/`/compact` unless the driver prompt says
+Compact around 80–120k context as the ideal handoff target — smaller working sets mean less "lost
+in the middle" degradation on long threads, on top of the direct token savings. **The auto-compact
+window in `.claude/settings.json` was raised 150000 → 300000 on 2026-08-04** (owner directive,
+after a worktree hit its hard context ceiling without native auto-compact ever getting a chance to
+fire): 150k had been a deliberate quality/cost target, not a technical ceiling, but it left too
+little headroom on long review/audit sessions. 300000 is now the standing repo-wide value, not the
+issue #15 single-branch trial it started as — that trial's finding (§6) motivated the change but
+this supersedes its scope. Refresh is now automatic (§5) — don't manually `/clear`/`/compact` unless the driver prompt says
 "NO REFRESH." Don't keep one giant thread alive because it "knows everything"; persist state to
 disk (BACKLOG/spec/handoff) instead, per the context-size-advisor hook's own instruction.
 
@@ -63,11 +66,11 @@ match these exactly or point back to this section rather than restate its own co
 | Name | Value | Meaning | Lives in |
 |---|---|---|---|
 | Handoff target | 80–120k | Ideal working range (§3, unchanged) | this doc only |
-| Ceiling | 150k | "Avoid working above" (§3, unchanged) | this doc only |
-| `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | 150000 | The one literal env-var value; native auto-compact fires at ~92–95% of it (~140k) | `.claude/settings.json` — the ONLY place this literal should be set |
+| Auto-compact window | 300k | Raised from 150k 2026-08-04 (§3) — not a technical ceiling, a quality/cost target | this doc only |
+| `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | 300000 | The one literal env-var value; native auto-compact fires at ~92–95% of it (~276k-285k) | `.claude/settings.json` — the ONLY place this literal should be set |
 | Advisor warn threshold | 85% of the window above, computed at runtime | When the Stop hook injects a persist-to-disk instruction | `.claude/hooks/context-size-advisor.mjs` — reads the env var, does not hardcode a copy |
-| Audit red-flag | 200k peak context | Sanity check only — should never be reached if auto-compact is working; hitting it means compaction failed to fire, not a target to approach | `.claude/skills/usage-audit/SKILL.md`, `scripts/usage-audit.mjs` |
-| Autopilot continuation cap | 2 | Hard code clamp (was: unenforced doc convention) on how many tasks autopilot chains in one session, so it can't manufacture a >150k context on its own | `.claude/hooks/stop-continue.mjs` (`MAX_CONTINUES`) |
+| Audit red-flag | the configured window itself, computed at runtime | Sanity check only — should never be reached if auto-compact is working; hitting it means compaction failed to fire, not a target to approach | `scripts/lib/compaction-window.mjs` (`flagPeakContext`), wired into `scripts/usage-audit.mjs` (2026-08-04 — previously a stale hardcoded 200k literal the #16 fix had built a replacement for but never wired in) |
+| Autopilot continuation cap | 2 | Hard code clamp (was: unenforced doc convention) on how many tasks autopilot chains in one session, so it can't manufacture a >window context on its own | `.claude/hooks/stop-continue.mjs` (`MAX_CONTINUES`) |
 
 Unrelated metric that happens to also round to "200k" and should not be confused with the audit
 red-flag above: `docs/LANE_WORKFLOW.md`'s **~200k output tokens per shipped burst item** — a
@@ -109,9 +112,20 @@ than papered over:
   pointers left — ~21 KB off the board, back under the flag (107 KB). Remaining size is inherent
   cycle-log verbosity; next lever if it regrows past the flag: Phase-A detail (~37 KB, needs
   cross-reference re-pointing first — its Phase-D row and closure note cite lines inside it).
-- **The 150k window number itself is inherited, not re-derived.** It was set 2026-07-02 from that
-  period's burn pattern; nobody has re-tested whether 150k is still the right cutoff specifically
-  for Opus 4.8. Internally consistent now (§5), not empirically re-proven optimal.
+- **The window number is owner-directed, not empirically re-derived.** 150k was set 2026-07-02
+  from that period's burn pattern; the 2026-08-04 raise to 300000 was an owner directive after a
+  worktree hit its hard context ceiling with no compaction headroom left, not a re-measurement of
+  the "lost in the middle" tradeoff. Internally consistent now (§5), not empirically re-proven
+  optimal at either value.
+- **`scripts/usage-audit.mjs`'s peak-context flag — WIRED IN (2026-08-04).** Issue #16 built
+  `resolveCompactionWindow`/`flagPeakContext` and a full guard suite
+  (`scripts/compaction-window-guard.test.mjs`) but the fix was never actually imported into the
+  live script: `usage-audit.mjs` still hardcoded `peakCtx > 200_000` — a literal disconnected from
+  `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, exactly the bug #16 described, just never closed. Found while
+  reconciling this doc against the 300000 change (it would have started false-flagging every
+  healthy 276-285k session the next time the audit ran). Now imports the real library; the report
+  also prints the resolved basis line (`describeWindow`) so a reader never has to guess the
+  threshold.
 - **`docs/LANE_WORKFLOW.md`'s "Workflow tool" — CONFIRMED + GUARDED (2026-07-22).** The live
   PreToolUse `tool_name` is `Workflow`, captured empirically via a temporary catch-all logging
   hook + a no-op workflow run (0 agents), not assumed. Now guarded:
