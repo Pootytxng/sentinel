@@ -112,9 +112,13 @@ function ComparisonCard({
         <>
           <h2 className="cmp-headline cmp-bad">{t("monitor.sessionDebrief.regressedHeadline")}</h2>
           <p className="cmp-sub">
-            {t("monitor.sessionDebrief.regressedSubPre")}
+            {/* Every prose segment gets the SAME bag: which segment holds {{game}} is the
+                translator's call, not ours. English trails it ("… in Valorant"); Chinese leads
+                with it ("你在 Valorant 中的 …"). Feeding only one segment renders raw braces in
+                whichever locale disagrees — see src/i18n/locale-parity-guard.test.ts. */}
+            {t("monitor.sessionDebrief.regressedSubPre", { game: prettyGameName(r.game) })}
             <Term id="one-percent-lows">{t("monitor.sessionDebrief.regressedSubEmph1")}</Term>
-            {t("monitor.sessionDebrief.regressedSubMid")}
+            {t("monitor.sessionDebrief.regressedSubMid", { game: prettyGameName(r.game) })}
             <Term id="noise-floor">{t("monitor.sessionDebrief.regressedSubEmph2")}</Term>
             {t("monitor.sessionDebrief.regressedSubPost", { game: prettyGameName(r.game) })}
           </p>

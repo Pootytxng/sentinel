@@ -35,9 +35,15 @@
     files (`fps_dir()` is `compy_data_dir().join("runtime")` = `%APPDATA%\Compy\runtime\`) and
     blanketed "Compy will recreate what it needs" over `history.json`, hiding that deleting it
     erases the Trust Ledger. Both fixed in both files; pinned by
-    `src/privacy-data-dir-guard.test.ts`. en↔zh-CN parity spot-checked on the Trust-Ledger/
-    deletion strings in `home.json` and the network-check line in `settings.json` — meaning
-    matches; not a full line-by-line diff of all 8 locale-file pairs.
+    `src/privacy-data-dir-guard.test.ts`. **en↔zh-CN parity now fully diffed (2026-08-04),
+    closing the spot-check gap this line used to admit** — all **9** file pairs (the old "8" was
+    miscounted), 2234 en keys. The 59 keys zh-CN "lacks" are all `_one` plural variants Chinese
+    has no grammatical category for — correct by design, so the guard derives categories from
+    `Intl.PluralRules` rather than demanding raw key equality. 0 extra keys. The one REAL defect
+    was a placeholder, not a missing string: the regression debrief splits a sentence across five
+    keys, English trails `{{game}}` and Chinese leads with it, and `SessionDebrief.tsx` fed the
+    var to the trailing segment only — Chinese users saw literal `你在 {{game}} 中的`. Fixed by
+    feeding every prose segment the same bag; pinned by `src/i18n/locale-parity-guard.test.ts`.
   - **Q2 main-vs-overlay command authority** — owner GO 2026-08-03, merged as
     [#62](https://github.com/Pootytxng/sentinel/pull/62). The overlay held all 91 custom commands
     and needed 3; `build.rs` now declares them via `AppManifest::commands` and the two capability
