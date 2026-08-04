@@ -31,6 +31,7 @@ import {
 import ReceiptsConsent from "./ReceiptsConsent";
 import { LicensePanel } from "./LicensePanel";
 import { FeedbackExport } from "./FeedbackExport";
+import { SupportEvidence } from "./SupportEvidence";
 import "./Settings.css";
 
 // Settings / Appearance surface (spec 2026-06-06-settings-and-icon §A). Frontend + localStorage only;
@@ -439,6 +440,10 @@ export default function Settings({
         {/* ── Feedback & help (always visible — the beta/help path; local bundle + one-click email,
             nothing auto-sent). ── */}
         <FeedbackExport appVersion={appVersion} buildStamp={buildStamp} />
+
+        {/* ── Support record (Q5) — sits under Feedback because it is the same errand: the thing
+            you attach when you ask for help. Read it here, save it, send it yourself. ── */}
+        <SupportEvidence />
 
         {/* ── About ── */}
 

@@ -14,6 +14,56 @@ export type ExportResult = {
   discord: string;
 };
 
+// Q5 support evidence — mirrors src-tauri/src/support_evidence.rs. Those structs carry no
+// `rename_all`, so the wire fields are snake_case; only the two enums are renamed, and their
+// variants are lowercase words. The record is local-only: Compy has no way to upload it.
+export type SupportEventKind = "lifecycle" | "ledger" | "helper" | "operation";
+export type SupportOutcome = "ok" | "failed" | "refused";
+export type SupportProjection = "consumer" | "technical" | "support";
+
+export type SupportEvent = {
+  at: string;
+  kind: SupportEventKind;
+  operation: string;
+  code: string;
+  outcome: SupportOutcome;
+  detail: string;
+};
+
+// The caps the on-disk log is trimmed to. Rendered from the bundle rather than hard-coded in the
+// UI so the numbers can never drift from the ones the backend actually enforces.
+export type EvidenceRetention = {
+  max_events: number;
+  max_bytes: number;
+  max_record_bytes: number;
+};
+
+export type EvidenceBundle = {
+  app_version: string;
+  build_stamp: string;
+  generated_at: string;
+  retention: EvidenceRetention;
+  location: string;
+  events: SupportEvent[];
+  unreadable_records: number;
+};
+
+// `preview_support_evidence` returns all three projections of the SAME bundle at once — no
+// projection can show something another one hides, and switching between them costs no round-trip.
+export type EvidencePreview = {
+  bundle: EvidenceBundle;
+  consumer: string;
+  technical: string;
+  support: string;
+};
+
+export type SupportExport = {
+  path: string;
+  json_path: string;
+  projection: string;
+  events: number;
+};
+
 export type ReadinessStatus = "ready" | "attention" | "unknown" | "advisory";
 export type PriorityStatus = "ready" | "attention" | "unknown";
 export type Confidence = "high" | "medium" | "low";

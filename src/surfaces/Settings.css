@@ -561,3 +561,34 @@
 .fb-summary {
   margin-top: 12px;
 }
+
+/* ── Q5 support evidence — reuses the feedback/receipts vocabulary; only the bits the record
+   itself needs are new. ── */
+.sev-preview {
+  margin-top: 14px;
+  padding-top: 4px;
+  border-top: 1px solid var(--ix-glass-border);
+}
+/* 400 records is a long scroll: cap the height so the section stays navigable, and keep the
+   horizontal scroll .receipts-preview already has so the technical table stays aligned. */
+.sev-text {
+  max-height: 340px;
+  overflow-y: auto;
+}
+.sev-meta {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--ix-text-3);
+}
+.sev-notice {
+  color: var(--ix-text-1);
+}
+.sev-clear {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ix-glass-border);
+}
+.sev-warn {
+  margin: 0;
+  color: var(--ix-text-1);
+}
