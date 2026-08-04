@@ -53,6 +53,9 @@ if (mode === "ok") { console.log("${OK_SHA}"); process.exit(0); }
 if (mode === "json") { console.log(JSON.stringify({ ref: "refs/tags/v0.9.10", object: { sha: "${JSON_SHA}", type: "commit" } })); process.exit(0); }
 if (mode === "noisy-ok") { console.error("warning: reusing cached credentials"); console.log("${NOISY_SHA}"); process.exit(0); }
 if (mode === "empty-ok") { process.exit(0); }
+// A child that OUTLIVES the script that launched it and lives far longer than the drain budget --
+// the shape of the installed app after ship-reinstall returns. Writes nothing; surviving is the point.
+if (mode === "linger") { setTimeout(() => process.exit(0), Number(rest[0]) || 60000); }
 if (mode === "echo-args") { console.log(JSON.stringify(rest)); process.exit(0); }
 if (mode === "environment") {
   console.log(JSON.stringify({
@@ -221,6 +224,29 @@ if ($modes.ContainsKey($Scenario)) {
   $result = Invoke-CheckedProcess "expected-404 lookup" $NodeExe @($FakeGh, "notfound") -TimeoutMs 30000 -AllowExitCodes @(1)
   Write-Output ("EXIT=" + $result.ExitCode)
   Write-Output ("STDERR_FIRST=" + (Get-FirstNonEmptyLine $result.StdErr))
+} elseif ($Scenario -eq "streamed-surviving-grandchild") {
+  # issue #60 defect 2. An inner script launches a child that OUTLIVES it by 60s, exactly as
+  # ship-reinstall leaves the installed app running. .NET's CreateProcess inherits handles wholesale
+  # (bInheritHandles=TRUE), so that grandchild holds a duplicate of the wrapper's pipe no matter
+  # where its own stdout points -- redirection cannot prevent it. The property that MUST hold is
+  # therefore not "no inheritance" but "the wrapper gives up on its own schedule".
+  $innerPath = Join-Path ([IO.Path]::GetTempPath()) ("compy-survivor-" + [Guid]::NewGuid().ToString("N") + ".ps1")
+  $innerBody = @(
+    (". " + [char]34 + $LibPath + [char]34),
+    ("$" + "child = Start-NativeProcess -Command " + [char]34 + $NodeExe + [char]34 + " -ArgumentList @(" + [char]34 + $FakeGh + [char]34 + "," + [char]34 + "linger" + [char]34 + "," + [char]34 + "60000" + [char]34 + ")"),
+    ("$" + "child.Dispose()"),
+    "Write-Output 'INNER-OK'"
+  ) -join [Environment]::NewLine
+  Set-Content -LiteralPath $innerPath -Value $innerBody -Encoding UTF8
+  $sw = [Diagnostics.Stopwatch]::StartNew()
+  $result = Invoke-StreamedProcess "survivor gate" "powershell" @("-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", $innerPath) -TimeoutMs 120000 6>$null
+  $sw.Stop()
+  Remove-Item -LiteralPath $innerPath -Force -ErrorAction SilentlyContinue
+  Write-Output ("ELAPSEDMS=" + $sw.ElapsedMilliseconds)
+  Write-Output ("EXIT=" + $result.ExitCode)
+  Write-Output ("TIMEDOUT=" + $result.TimedOut)
+  Write-Output ("STDOUT=" + (($result.StdOut -replace "[
+]+", "|").Trim("|")))
 } elseif ($Scenario -eq "streamed-success") {
   $result = Invoke-StreamedProcess "streamed gate" $NodeExe @($FakeGh, "ok") -TimeoutMs 30000
   Write-Output ("EXIT=" + $result.ExitCode)
@@ -515,6 +541,33 @@ describe.runIf(windows)("native-process behaviour (bug->guard, both failed v0.9.
     expect(field("EXIT")).toBe("0");
     expect(field("TIMEDOUT")).toBe("False");
   }, 60000);
+
+  // bug->guard (issue #60 defect 2, the v0.9.12 publish): release-prove.ps1 / release-publish.ps1
+  // printed their success banner and appeared to HANG -- proof finished 11:28, wrapper still alive
+  // at 11:37 -- until the owner closed Compy by hand. The runtime proof leaves the installed app
+  // RUNNING by design, and .NET's CreateProcess inherits handles wholesale (bInheritHandles=TRUE),
+  // so that survivor holds a duplicate of the wrapper's pipe. Redirecting the child's own streams
+  // does NOT prevent this (measured: stdout EOF still arrived only when the survivor exited).
+  //
+  // So the property worth pinning is that the wrapper gives up on its OWN schedule rather than the
+  // survivor's. Measured on current main: a 60s survivor costs ~10.4s, not 60s -- the two bounded
+  // Complete-NativeStreamLines drains (DrainMs each), and nothing else.
+  //
+  // Note precisely WHY the parameterless $process.WaitForExit() on the non-timeout path is harmless
+  // here, because it looks like the culprit and is not: that overload only blocks for stream EOF
+  // when asynchronous reads are outstanding, and this helper deliberately does NOT use
+  // BeginOutputReadLine (see the ordering comment in Invoke-StreamedProcess). Swapping in async
+  // reads WITHOUT bounding that wait is exactly the regression this test exists to catch -- it
+  // would grow to the survivor's full lifetime. The bound, not the overload, is the contract.
+  it("gives up on its own schedule when a grandchild outlives the script", () => {
+    const { field } = run("streamed-surviving-grandchild");
+    // The inner script's own work completes immediately; only teardown is at issue.
+    expect(field("STDOUT")).toBe("INNER-OK");
+    expect(field("EXIT")).toBe("0");
+    expect(field("TIMEDOUT")).toBe("False");
+    // Comfortably under the 60s survivor, comfortably over the ~10.4s bounded cost.
+    expect(Number(field("ELAPSEDMS"))).toBeLessThan(30000);
+  }, 120000);
 
   // bug->guard (2026-07-28, the v0.9.11 publish): the whole failure arrived as
   // "release publish failed (exit 1)." An outer wrapper's exit status is not a diagnosis; the
