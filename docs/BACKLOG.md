@@ -64,10 +64,10 @@
   projections, preview-gated export), 17 cargo tests, `src/support-evidence-outbound-guard.test.ts`
   turning the spec's "zero new outbound surface" acceptance line into a build-failing fact (proven
   load-bearing by injecting a real `reqwest` call and watching it fail), and the `docs/PRIVACY.md`
-  disclosure + deletion consequences. The **in-app preview/export UI and its copy are BUILT**
-  (`08ad3b1`, `src/surfaces/SupportEvidence.tsx`, 8 tests, en/zh-CN parity) but **Q5 is still NOT
-  complete**: its visual self-review is outstanding, deferred because the rubric's captures would
-  seize the owner's screen mid-game, and no UI ships as done without a PASS verdict. Also open: Q7 native accessibility and measured
+  disclosure + deletion consequences. **Q5 COMPLETE 2026-08-04** — the in-app preview/export UI
+  (`08ad3b1`, `src/surfaces/SupportEvidence.tsx`, 9 tests, en/zh-CN parity) took its visual
+  self-review on the installed `5ff6963` release build and PASSed 9/9; the first pass FAILed on a
+  real user-facing defect and its fix is now guarded both sides (see the cycle entry below). Also open: Q7 native accessibility and measured
   performance budgets (blocked on a stable candidate + owner's machine). **Q6 DELIVERED 2026-08-04**
   (issue [#65](https://github.com/Pootytxng/sentinel/issues/65), `9bf3bde`) — three stale live claims
   retired: `GAMING_MODE_PLAN.md` reconciled against the QA record (8 rows mapped, 3 left unchecked as
@@ -314,7 +314,7 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
-### Cycle 2026-08-04a — ✅ Q5 BACKEND · Q6 · BRANCH DISPOSITIONS · TWO GUARDS THAT WERE MISSING: `a4d13bd` · `28ebcc5` · `9bf3bde` · `1a513cb` · `6882819` · `7c8a03f` · `270a622` · `2d33db2` · `9827728` · GATE-RESIDENCY SWEEP `c7c5a8d` · `ba609ea`
+### Cycle 2026-08-04a — ✅ Q5 COMPLETE (backend + UI, self-review PASSed) · Q6 · BRANCH DISPOSITIONS · TWO GUARDS THAT WERE MISSING: `a4d13bd` · `28ebcc5` · `9bf3bde` · `1a513cb` · `6882819` · `7c8a03f` · `270a622` · `2d33db2` · `9827728` · GATE-RESIDENCY SWEEP `c7c5a8d` · `ba609ea`
 
 - **The session's own supervision hook was the first defect (`a4d13bd`).** `compy-entry` reported the
   project harness "not loaded" from the absence of a launch token alone — a claim about state it
@@ -324,14 +324,21 @@ queued).
   that fabricates a finding about its own supervision poisons every session that reads it.
 - **Q5 backend + policy (`7c8a03f`)** and **Q6 (`9bf3bde` · `1a513cb`)** — detail in the program
   cutline above.
-- **Q5's in-app surface is BUILT, not yet done (`08ad3b1`).** `src/surfaces/SupportEvidence.tsx` +
+- **Q5's in-app surface shipped and is now SIGNED OFF (`08ad3b1` → `00d06b0`).** `src/surfaces/SupportEvidence.tsx` +
   33 keys at en/zh-CN parity give §12 its missing half: the save control does not exist until a
   preview has come back (presence, not a disabled button, expresses the backend's ordering gate),
   one preview call carries all three projections of one bundle, retention renders from
   `bundle.retention` so the copy cannot drift from the caps, and clearing is a two-step that names
-  what it costs. 8 tests, disarm-checked. **Still OPEN:** the visual self-review is outstanding,
-  deferred because the rubric's captures move real windows while the owner is gaming. No PASS
-  verdict ⇒ Q5 is not complete and is not being reported as such.
+  what it costs. Disarm-checked. **The visual self-review FAILed first, on a real user-facing
+  defect (`00d06b0`):** the always-visible meta line read `2 records · <path>` — the backend put the
+  storage location through the same aggressive `redact_paths()` it uses for free-text detail, so the
+  panel named the redaction mask as if it were somewhere the user could go. `display_location` now
+  emits `%APPDATA%\Compy\support`, pinned by a Rust guard *and* by a 9th UI test, because the old
+  fixture encoded a path shape no Rust code produces — which is exactly why 8 green tests never saw
+  it. Re-review on the installed `5ff6963` release build: **PASS, 9/9 rubric items**, live captures
+  at the owner's real resolution. One noted non-defect: **clear** is not preview-gated the way
+  **export** is; it substitutes a stated consequence plus a two-step confirm (pre-existing design,
+  unchanged here). Citations re-anchored in `5ff6963`, gate matrix flipped in `docs/RELEASE_STATE.md`.
 - **Branch dispositions (`6882819`)** — 20 origin refs, every one with a row, re-proven by
   `scripts/branch-disposition-audit.mjs`; see the branch-integration note below for the split.
 - **`owner_installed_stamp` enforced instead of asserted (`270a622`).** The 2026-07-31 Q7 baseline
