@@ -313,7 +313,7 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
-### Cycle 2026-08-04a — ✅ Q5 BACKEND · Q6 · BRANCH DISPOSITIONS · TWO GUARDS THAT WERE MISSING: `a4d13bd` · `28ebcc5` · `9bf3bde` · `1a513cb` · `6882819` · `7c8a03f` · `270a622` · `2d33db2` · `9827728`
+### Cycle 2026-08-04a — ✅ Q5 BACKEND · Q6 · BRANCH DISPOSITIONS · TWO GUARDS THAT WERE MISSING: `a4d13bd` · `28ebcc5` · `9bf3bde` · `1a513cb` · `6882819` · `7c8a03f` · `270a622` · `2d33db2` · `9827728` · GATE-RESIDENCY SWEEP `c7c5a8d`
 
 - **The session's own supervision hook was the first defect (`a4d13bd`).** `compy-entry` reported the
   project harness "not loaded" from the absence of a launch token alone — a claim about state it
@@ -371,9 +371,34 @@ queued).
   `src-tauri/src` turns `npm test` red with `MISSING: drift_probe.rs` + `COUNT: … 45 … 46`, green on
   removal. Failures only, never warnings — `STALE-LOC` drifts constantly and a suite that reddens on a
   rounded line count gets muted rather than fixed.
-- **Baseline:** vitest 278 files / 3056 · tsc clean · verify-module-map --strict OK (45 `.rs`, 12
+- **The same defect in its sibling, swept and closed (`c7c5a8d`).** `verify-release-state.mjs` had the
+  identical shape — every check inside `if (IS_MAIN)`, reachable only through `verify-release.ps1`, the
+  full release gate nobody runs between releases — and it rots FASTER, because RELEASE_STATE.md's 24
+  `file:line` citations break on any commit that shifts a line. Same fix: `verifyRepo(root, { machine })`,
+  a pure function of a repo path, CLI reduced to a printer with its exit contract unchanged. Two checks
+  stay CLI-only behind `machine: true` — `source_main_commit` (asks about `origin/main`) and
+  `owner_installed_stamp` (reads a binary on one desk); both would redden `npm test` for reasons no
+  commit in the tree caused, so their VALUES are deferred while their ANCHORS stay required in both
+  modes. 4 → 20 tests: fixture repos on disk for the resolution/anchoring half no synthetic string
+  reaches, extraction pins for the four citation shapes the doc actually uses, `DOC-MISSING` instead of
+  a throw, and the live check against this tree with `citations.length > 10` so a silently empty walk
+  cannot pass forever. Disarm-proven, not merely green: renaming a cited symbol turns `npm test` red
+  with `GONE lib.rs:4 symbol 'no_such_symbol_xyz' absent`.
+- **Second defect, found in passing: the guard test was a BINARY file.** Four raw NUL bytes (and one
+  SOH) sat in the stamp-extraction assertions, so git refused to diff it and ripgrep skipped it — the
+  file was invisible to every grep-based audit in this repo, including the sweep that found it. Now
+  written `\0`; encoding-guard's tracked-text-file count rose to 1188.
+- **The sweep's negatives, worth keeping.** Every other gate script IS wired, checked one by one:
+  `branch-disposition-audit` · `markdown-link-guard` · `release-powershell-static-guard` ·
+  `encoding-guard` · `supply-chain-gate` · `verify-updater-signature` · `doc-budget.ps1` ·
+  `stage-dist-site` · `ci-budget-guard` · `e2e-updater-probe` · the five `*-harness.ps1`. The rest are
+  tools, not gates (`usage-audit`, `repo-hygiene`, `build-icon-ico`, `license-tool`, `lane-*`,
+  `dev-relaunch`, `ship-reinstall`, `run-vitest`, `export-library`, the `release-*.ps1` family). Two
+  gates of fourteen had no runner, and both were the two written most recently — a gate is at its most
+  useless the week it is authored, which is the pattern to watch on the next one.
+- **Baseline:** vitest 278 files / 3068 · tsc clean · verify-module-map --strict OK (45 `.rs`, 12
   starred) · verify-release-state 24/24 zero drift · doc-budget ALL PASS · branch-disposition-audit
-  OK. `main` = `9827728`; tree clean.
+  OK. `main` = `c7c5a8d`; tree clean.
 
 ### Cycle 2026-08-03a — ✅ STANDING AUTONOMY GRANT + Q2b TRIPWIRE · ⚠️ #60 part 2 REFUTED TWICE: `bb390cf` · `7013602`
 
