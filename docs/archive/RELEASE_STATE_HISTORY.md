@@ -4,6 +4,31 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-08-03 - local ship at c7c60d3: the phantom prove/publish hang is FIXED and proven end-to-end
+
+Installed by Claude + LIVE. Built from `c7c60d3` on `main`. Installer
+`Compy_0.9.12_x64-setup.exe` SHA-256
+`307919349D06F941AF7F555F3E4D592D1E57739171BD581EED61D6AD53ADE07C`. Installed exe embeds `c7c60d3`
+(Select-String verified), Windows Apps reports 0.9.12, exactly one installer on the Desktop, app
+running as PID 23340. Local ship only - nothing published, no tag, no fleet-visible action.
+
+**The proof that matters.** This is the first ship-reinstall run under the issue #60 defect-2 fix.
+The SAME command, on the SAME script, earlier this session had to be killed after 600s despite having
+completed all of its work (install done, installer staged, launched exe stamp-verified) - the wrapper
+was stranded on a pipe the launched app inherited and held for as long as it ran. Under the fix the
+run returned in **4 seconds, exit 0**. That is the reported defect reproduced and then closed against
+the real failure, not against a probe.
+
+Mechanism and the two guardrails that shaped the fix are in the `c7c60d3` commit body: the launch was
+handing the child this process's stdout/stderr (bInheritHandles=TRUE); `Start-Process` is correctly
+banned by the process-bypass rule so the capability went INTO `Start-NativeProcess` as `-Detached`;
+and because ShellExecute cannot carry a child-only environment, the debug-port guarantee moved from a
+silent per-child clear to a LOUD assertion that the variable is absent from this process, with
+`-Detached` and `-Environment` mutually exclusive by contract.
+
+Verify: `Select-String -Path "$env:LOCALAPPDATA\Compy\compy.exe" -Pattern c7c60d3` ·
+`scripts/release-powershell-static-guard.mjs` (88/88 across the release guard suites).
+
 ### 2026-07-28 — v0.9.10: preserved private-draft checkpoint after partial publish
 
 Live verification found the v0.9.10 train had advanced beyond the prior state document before the
