@@ -92,13 +92,30 @@ experiments + logbook. Matthew praised: guided-setup rail line, simple home, Opt
 - [x] **J: bigger 3D PC window** — ✅ SHIPPED v0.9.6 (`5c74ba2`/`29e5217`, through the updater):
   Home stage 420→540, live canvas 362→482px; cards-band guard upgraded to DERIVE its bound from
   the stage css (drift-proof).
-- [ ] **J: cursor consistency** — native Windows cursor appears over sidebar items + some buttons
-  (Monitor "Overlay", "Start Capture") instead of the Compy reticle cursor; keep ONE cursor.
-  (Matthew separately finds the square crosshair "a little weird" — treat as one cursor pass.)
-- [ ] **J: "1 safe tweak not applied" is a dead end** — post-check verdict names a count but not the
-  tweak; add a dropdown/expand showing WHICH tweak + apply/ignore inline.
-- [ ] **J: post-check routing** — landing on the dashboard after a check feels directionless; add a
-  second CTA ("take me to the lab") that opens the Lab's Optimize tab directly.
+- [x] **J: cursor consistency** — ✅ FIX ALREADY SHIPPED (reticle.css `cursor: none !important` on
+  a universal descendant selector, which is required because an explicit same-element
+  `cursor: pointer` beats an inherited `cursor: none`). It had **no guard**; added
+  `src/design/console/reticle-cursor-contract.test.ts` (`e2f1322`) pinning the selector, the
+  `!important`, both escapes (text entry, `:disabled`) and the z-index band. Matthew's separate
+  "square crosshair is a little weird" is a TASTE call on the reticle's shape and stays OPEN as
+  owner territory — it was never the same defect as the two-cursor bug.
+- [x] **J: "1 safe tweak not applied" is a dead end** — ✅ SHIPPED 2026-08-03 (`17d5f84`). The
+  detail was never missing: `apply_recommendations_batch` already returns `{ title, reason }` per
+  skip and HomeConsole discarded it one line after arrival, keeping only `.length`. The receipt now
+  retains the items and offers a subordinate disclosure naming each skipped tweak with the reason
+  the batch primitive gave (never synthesised here). Copy in en + zh-CN. bug→guard:
+  `src/surfaces/fastpath-skipped-detail-guard.test.ts`, proven both directions. **NOT taken:**
+  apply/ignore inline — a skip can come from a failed elevated step, so re-applying needs the
+  elevation flow rather than a button; larger than the dead end it would close.
+  **Visual self-review OUTSTANDING** — the disclosure only renders after a real batch produces a
+  skip, so it was not capturable this pass. Do not report it as visually done.
+- [x] **J: post-check routing** — ✅ ALREADY SHIPPED (found 2026-08-03, stale entry). FirstCheck
+  renders "Take me to the Lab" beside "Open the dashboard" and deep-links the Optimize station via
+  the one-shot `compy_lab_open_station` handoff (App writes before `navHome("lab")`; LabConsole
+  reads + clears on mount). It had **no guard** — added `src/surfaces/post-check-lab-route-guard.test.ts`
+  (`06c047a`), which pins all three halves; the `removeItem` is load-bearing (without it every later
+  Lab visit force-opens Optimize). 🔻 **NEW, logged not fixed:** FirstCheck's CTA copy and verdict
+  prose are hardcoded English — that surface is un-i18n'd, so zh-CN users read English.
 - [x] **J: "Needs your call" cards not interactive** — ✅ SHIPPED v0.9.6+v0.9.7: whole card head is
   a door (chevron, hover accent), opens the guided steps or an HONEST no-switch answer; What's-this
   + bordered Not-for-me in a visible actions row. Live-verified via CDP (6 doors, no-guide case).
