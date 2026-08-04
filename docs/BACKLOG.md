@@ -313,7 +313,7 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
-### Cycle 2026-08-04a — ✅ Q5 BACKEND · Q6 · BRANCH DISPOSITIONS · TWO GUARDS THAT WERE MISSING: `a4d13bd` · `28ebcc5` · `9bf3bde` · `1a513cb` · `6882819` · `7c8a03f` · `270a622` · `2d33db2`
+### Cycle 2026-08-04a — ✅ Q5 BACKEND · Q6 · BRANCH DISPOSITIONS · TWO GUARDS THAT WERE MISSING: `a4d13bd` · `28ebcc5` · `9bf3bde` · `1a513cb` · `6882819` · `7c8a03f` · `270a622` · `2d33db2` · `9827728`
 
 - **The session's own supervision hook was the first defect (`a4d13bd`).** `compy-entry` reported the
   project harness "not loaded" from the absence of a launch token alone — a claim about state it
@@ -357,9 +357,23 @@ queued).
   gate created on 2026-08-02 was already failing two days later — the exact drift class it exists to
   prevent, reintroduced by the next feature commit. Fixed in the same train; the module is mapped and
   correctly unstarred (zero mutation markers).
-- **Baseline:** vitest 278 files / 3052 · tsc clean · verify-module-map --strict OK (45 `.rs`, 12
+- **…and the root cause was that nothing ran it (`9827728`).** `3adb589` logged the finding and left
+  it there. The script had **zero automatic callers** — not `package.json`, not `ci.yml`, not
+  `audit.yml`, not `verify-release.ps1`; its only importer was its own guard test, which exercises the
+  detector against synthetic input and never points it at the repo. The detector was right the whole
+  time and simply aimed at nothing. Residency is **vitest, not a new CI job**: under the zero-budget
+  law and the 2026-08-01 minutes exhaustion, the right home is the run already paid for — `npm test`
+  executes on every local verify pass and in CI's `frontend` job for zero extra minutes, and
+  `paths-ignore` skips only doc-only commits while map drift is always caused by `.rs` changes. The
+  check is now `verifyRepo(repo)`, a pure function of a repo path, so the CLI and the test cannot
+  drift apart; the two absent-section early exits became named returned failures (`NO-MAP`,
+  `SUBMAP-MISSING`) a test can assert. Proven behaviourally per `c7c60d3`: an unmapped `.rs` file in
+  `src-tauri/src` turns `npm test` red with `MISSING: drift_probe.rs` + `COUNT: … 45 … 46`, green on
+  removal. Failures only, never warnings — `STALE-LOC` drifts constantly and a suite that reddens on a
+  rounded line count gets muted rather than fixed.
+- **Baseline:** vitest 278 files / 3056 · tsc clean · verify-module-map --strict OK (45 `.rs`, 12
   starred) · verify-release-state 24/24 zero drift · doc-budget ALL PASS · branch-disposition-audit
-  OK. `main` = `2d33db2`; tree clean.
+  OK. `main` = `9827728`; tree clean.
 
 ### Cycle 2026-08-03a — ✅ STANDING AUTONOMY GRANT + Q2b TRIPWIRE · ⚠️ #60 part 2 REFUTED TWICE: `bb390cf` · `7013602`
 
