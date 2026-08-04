@@ -107,8 +107,13 @@ experiments + logbook. Matthew praised: guided-setup rail line, simple home, Opt
   `src/surfaces/fastpath-skipped-detail-guard.test.ts`, proven both directions. **NOT taken:**
   apply/ignore inline — a skip can come from a failed elevated step, so re-applying needs the
   elevation flow rather than a button; larger than the dead end it would close.
-  **Visual self-review OUTSTANDING** — the disclosure only renders after a real batch produces a
-  skip, so it was not capturable this pass. Do not report it as visually done.
+  **Visual self-review ✅ PASS 2026-08-04** (supersedes `17d5f84`'s "NOT RUN" note and the earlier
+  OUTSTANDING line here): captured natively via a live-fixture mount of the real HomeConsole with a
+  skip-bearing batch receipt — no machine mutation. 7/7 rubric PASS. One flag, not new to this diff:
+  the skip-reason line inherits the muted caption token at 3.44:1 on 12.5px — sub-AA for body text,
+  but it is the same token already shipping one line above and it clears the deliberate AA-large
+  floor `src/theme-contrast.test.ts:100` pins for `--ix-text-3`. Raising that floor is a theme-hex
+  call (owner territory), so it is logged here, not changed under a T4 review.
 - [x] **J: post-check routing** — ✅ ALREADY SHIPPED (found 2026-08-03, stale entry). FirstCheck
   renders "Take me to the Lab" beside "Open the dashboard" and deep-links the Optimize station via
   the one-shot `compy_lab_open_station` handoff (App writes before `navHome("lab")`; LabConsole
