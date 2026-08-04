@@ -43,7 +43,7 @@ import "./home-console.css";
 // Phase 2 of the Console HUD; design source 2026-07-09-compy-console-hud-direction, owner-
 // approved). The Lab Ops Console's language on the app's opening screen: the real 3D rig
 // hologram center-stage inside a bracketed console stage, four honest corner arc gauges,
-// and (Task 3) a Dock that navigates into the rooms. Behind compy_home_console, DEFAULT OFF.
+// and (Task 3) a Dock that navigates into the rooms. Behind compy_home_console, DEFAULT ON ("0" is the failsafe).
 //
 // Honesty contract (identical to HomeHud — presentation only, zero new IPC): every gauge
 // value traces to a real measured source; an absent reading is `null` → ArcGauge's NOT-YET,

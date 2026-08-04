@@ -6,9 +6,10 @@
      (1) material depth   (2) accent glow on LIVE data   (3) an entrance-motion
      layer   (4) more breathing room + sharper, bolder type   (5) Home extra love.
 
-   FULLY REVERSIBLE + DEFAULT OFF. Every rule is scoped under :root[data-living="on"]
+   FULLY REVERSIBLE, DEFAULT ON. Every rule is scoped under :root[data-living="on"]
    — the attribute is set by src/design/theme.ts + main.tsx behind the
-   `compy_living_instrument` flag (default OFF). Drop this file + the attribute and
+   `compy_living_instrument` flag (default ON; "0" is the failsafe). Drop this file
+   + the attribute and
    the app is byte-identical to before. Cosmetic only: touches no logic, data, IPC,
    capability, or anything Compy measures. Loaded after the classics (App.tsx) so it
    layers on top — same pattern as arc-instrument.css.

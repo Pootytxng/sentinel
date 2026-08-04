@@ -36,7 +36,7 @@ import "./blackbook-v2.css";
 // would demote the other.
 //
 // Phase 4 (plan 2026-07-12-console-hud-phase4-blackbook, direction A "The Logbook"): behind
-// compy_blackbook_console (DEFAULT OFF), the room gains a flight-recorder LOGBOOK face — one
+// compy_blackbook_console (DEFAULT ON), the room gains a flight-recorder LOGBOOK face — one
 // reverse-chronological tape unifying the user's real changes, sessions and guide checks
 // (buildLogbook, a PURE view over data App already holds). Phase 4 itself added zero IPC;
 // Intelligence Phase 1 adds exactly ONE read-only fetch here (get_intelligence_timeline) so the

@@ -83,7 +83,7 @@ export default function Lab({
   // spec 2026-07-05) — the strip must never claim "captured" for an empty report.
   diagnosticsCaptured?: boolean;
   // Proving-ground mode (spec 2026-07-08-lab-proving-ground, phase 1): rendered ONLY inside the
-  // merged LabGround room (behind `compy_lab_ground`, DEFAULT OFF). Collapses the three nav idioms
+  // merged LabGround room (behind `compy_lab_ground`, DEFAULT ON). Collapses the three nav idioms
   // into ONE slim linear spine — the intake router as front door + the numbered station
   // progression — suppressing bento/guided/classic/welcome/readings. Additive: `ground` defaults
   // false, so every existing (flag-off) render path is byte-identical (test-pinned). Same

@@ -66,12 +66,28 @@ bottom expandable rows read like footer legalese.
    copy/affordances drift between faces, and "which app am I in" inconsistencies (J's theming
    complaint is partly this). **Candidate: a pruning pass — bless one face per room, delete or
    archive the rest** (mechanical once the owner blesses faces; big token/complexity payoff).
+   Partial mitigation shipped 2026-08-04: `flag-default-drift-guard.test.ts` fails the build when a
+   comment claims a default the flag's reader contradicts — nine had drifted, incl. MonitorV2 and
+   BlackbookV2 still calling their LIVE console faces "DEFAULT OFF". Faces still multiply; they can
+   no longer lie about which one ships.
 3. **Orientation lives in copy, not chrome.** The room's purpose is a one-line crumb in the
    topbar; the strongest wayfinding line ships at the END of onboarding. **Candidates:**
    ~~surface the rail-reads-top-to-bottom framing at guided-setup START~~ ✅ **SHIPPED 2026-07-23**
    (`buildSetupSteps` injects the mode's rail line into `steps[0]`/`setup-rig` — `setup-steps.ts`;
    three guards in `setup-steps.test.ts`, incl. a byte-identical pin for the classic six-room
-   escape hatch); make each room's first screen answer "what do I do here" above the fold;
+   escape hatch); ~~make each room's first screen answer "what do I do here" above the fold~~
+   ✅ **ALREADY SATISFIED at live default flags (audited 2026-08-04)** — every room that CAN be
+   empty answers in its own body rather than a header lede: Monitor's `SessionStack.tsx:251` renders
+   "no sessions on record yet — play with capture on", Blackbook's `BlackbookConsole.tsx:339` renders
+   "No record yet" + what Compy will log there. **Excluded, with reasons (no silent caps):** Home
+   (`HomeConsole` always carries a verdict + primaryAction — never empty) · Lab (`LabGround`'s
+   stations always render and it passes no `sub`; a lede would be invented copy) · Optimize
+   (recommendations are always present on a fresh install) · `MonitorBasic` (dark failsafe face,
+   reachable only at `compy_monitor_console=0`; `{latest && (` renders nothing when empty).
+   **One sliver held as an owner copy call:** Blackbook's empty sub is *descriptive* where a
+   *directive* line would be stronger. Recommendation — LEAVE IT: the owner iterated that room's
+   copy twice (Phase 4 direction A + tester feedback), and the only directive available points at
+   a sibling face, which edges into the "go to another tab" dead-end he banned;
    ~~give the quiet bottom rows real affordance weight~~ ✅ **SHIPPED 2026-08-04** (`7e55830`) —
    `.v2-quiet` was set in `--v2-faint`, the ink reserved for machine metadata, so the expander read
    fainter than the forward door the P6 law calls "a doorknob, not a CTA"; now door-parity

@@ -39,7 +39,7 @@ import "./monitor-v2.css";
 // tiles; they mirror that state up via the additive onFpsActive callback (no second IPC).
 //
 // Phase 3 (plan 2026-07-10-console-hud-phase3-monitor): behind compy_monitor_console (DEFAULT
-// OFF), the LIVE face swaps for the console instrument cluster (MonitorConsole) — Basic core
+// ON), the LIVE face swaps for the console instrument cluster (MonitorConsole) — Basic core
 // set, Advanced full cluster. The Sessions face, TuningPresets, and the onFpsActive door
 // mirror are UNCHANGED; flag off renders exactly this file's classic branches (test-pinned).
 

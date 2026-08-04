@@ -42,7 +42,7 @@ import "./monitor-console.css";
 // scope hero with scrub + drag-zoom · the plain-number session delta row) and the SESSION STACK
 // below (every recent session a flat row on ONE shared 1%-low axis — the stack IS the session
 // shelf). Chain law from v3→v4: no depth/perspective over data ink on this face, ever again.
-// Behind compy_monitor_console, DEFAULT OFF; flag off, MonitorV2 renders exactly today's faces
+// Behind compy_monitor_console, DEFAULT ON; flag off ("0" failsafe), MonitorV2 renders the classic faces
 // (pinned by monitor-console-flag.test.tsx).
 //
 // Honesty contract: presentation only over the SAME audited read-only polls MonitorBasic /

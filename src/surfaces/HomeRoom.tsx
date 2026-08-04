@@ -12,7 +12,7 @@ import { HomeHud } from "./HomeHud";
 import { HomeConsole } from "./HomeConsole";
 
 // HomeRoom — the presentation switch for the Home room. Highest priority: the Home console
-// cold-open (plan 2026-07-10-console-hud-phase2-home, compy_home_console DEFAULT OFF — its
+// cold-open (plan 2026-07-10-console-hud-phase2-home, compy_home_console DEFAULT ON — its
 // Settings toggle fires compy:home-console-changed). Console off: the Instrument-HUD switch
 // (spec 2026-07-05-ui-deslop-organic-directive, CORRECTED direction; P-series preview
 // contract) — hud flag off ("0" failsafe), HomeV2 renders byte-identical. All three branches

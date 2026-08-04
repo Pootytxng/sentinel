@@ -1312,7 +1312,7 @@ function App() {
       {activeTab === "Play" &&
         (() => {
           // Same props for both surfaces; the Monitor shell adds the Sessions/Live segmented
-          // control and drives Play's `view`. Behind compy_monitor (default off this phase).
+          // control and drives Play's `view`. Behind compy_monitor (DEFAULT ON; "0" is the failsafe).
           const monitorProps = {
             active: activeTab === "Play",
             sessions,

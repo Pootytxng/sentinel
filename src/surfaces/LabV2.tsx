@@ -27,8 +27,10 @@ import "./lab-v2.css";
 // rooms use; classic CSS/DOM untouched.
 //
 // Deliberately NO primaryAction — like Blackbook (the P6 spec's "may have none" room), Lab's
-// work IS its instruments, and hoisting one would demote the rest. The verdict's own sub
-// already coaches "start with Benchmark".
+// work IS its instruments, and hoisting one would demote the rest. Under the HUD default the
+// verdict's sub is dropped (`sub={hud ? undefined : verdict.sub}` below), so nothing in the
+// header coaches "start with Benchmark" — the instrument list is the coaching, Benchmark first
+// in it. Flag off, the sub returns and says it in words.
 
 export function LabV2({
   diagnostics,

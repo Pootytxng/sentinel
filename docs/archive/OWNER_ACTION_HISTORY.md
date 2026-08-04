@@ -35,7 +35,7 @@ gate on 2026-07-16 (B7). It is a settled configuration, **not an open owner obli
 waiting on you to "restore CI," and you will not be asked for a billing change or budget raise again.
 The full gate set runs locally instead.
 
-### A1. Gaming Mode QA — ✅ CLOSED: SIGNED OFF (owner, 2026-07-14)  ·  full list: [`GAMING_MODE_QA.md`](GAMING_MODE_QA.md)
+### A1. Gaming Mode QA — ✅ CLOSED: SIGNED OFF (owner, 2026-07-14)  ·  full list: [`GAMING_MODE_QA.md`](../GAMING_MODE_QA.md)
 
 **Owner said "gaming mode qa signed off" 2026-07-14 — F1 is field-proven for 1.0.** Nothing left on
 this item. The feature is live. **ALL 10 cases are PASSED** (#4/#10 owner-run 2026-07-07; #1/#2/#3/#5/#8/#9
@@ -49,7 +49,7 @@ QA doc):
   contract (`restore-failed`, no false success), retry restored everything.
 - ✅ Sign-off — given 2026-07-14, recorded in the QA doc, CLAUDE.md, and RELEASE_STATE.
 
-### A2. Beta smoke pass — before any invites go out  ·  full list: [`BETA_SMOKE_CHECKLIST.md`](BETA_SMOKE_CHECKLIST.md)
+### A2. Beta smoke pass — before any invites go out  ·  full list: [`BETA_SMOKE_CHECKLIST.md`](../BETA_SMOKE_CHECKLIST.md)
 **Status 2026-07-22 (supersedes "0 run"):** the **headless half is machine-verified** — see the
 checklist's "HQ automated pass" block (§1 partial · §3 · §4-auto · §7 · §8; suites re-derived
 cargo 858 / npm 1777; a real §6 presenter bug was caught and fixed same-day — `970f801` is on YOUR
@@ -69,7 +69,7 @@ build): the **Ops Console Lab is the default** and the **standalone Optimize tab
 Home · Monitor · Blackbook · Lab, and the Lab's Optimize station (open-on-click, your "cleaner" call) is
 the one door to the toggles, with "Applied & history" undo inside the panel. Nothing on you here anymore;
 if anything feels off, Settings → Appearance → "Lab proving ground" OFF restores the classic look
-instantly. Full thread: [`BACKLOG.md`](BACKLOG.md) Cycles 2026-07-09f / 2026-07-10a–d.
+instantly. Full thread: [`BACKLOG.md`](../BACKLOG.md) Cycles 2026-07-09f / 2026-07-10a–d.
 
 ### A4. Home console preview — your eyeball  ·  ✅ DONE 2026-07-10 ("everything looks good")
 Approved and **shipped default-ON** (`bce72d6` live): Home now opens as the console for everyone;
@@ -87,7 +87,7 @@ side-by-side scoreboard in words and bars). All keep your musts (real graphs, ex
 MAX FPS-style terms, session comparison, overlay control, honest empties).
 - ~~Result → tell Claude: "A" / "B" / "C" / a combine~~ → ✅ **PICKED 2026-07-11: "A's top +
   B's stack"** ("ooooo ya i like the mockups"). Build plan:
-  [`2026-07-11-monitor-v5-deck-stack.md`](superpowers/plans/2026-07-11-monitor-v5-deck-stack.md).
+  [`2026-07-11-monitor-v5-deck-stack.md`](../superpowers/plans/2026-07-11-monitor-v5-deck-stack.md).
 - **→ ✅ RESOLVED 2026-07-12:** you approved the flight deck and said "flip it default on and silent
   reinstall" — done. Monitor now opens on the flight deck for EVERYONE (live `e195f70`, installer
   `3B855DD1…FB003`, stamp-verified); Settings → Appearance → "Monitor console" OFF is the classic
@@ -136,7 +136,7 @@ History: you picked **A · The Logbook** from the 2026-07-12 concept round ("bla
 it shipped default-OFF `617db5b`, your 2026-07-13 eyeball approved it, and the A+B intuitiveness pick came
 from [the 2026-07-13 concepts](https://claude.ai/code/artifact/88345144-e138-4b44-a71a-de487aa42929).
 Room = "Blackbook", timeline = "the logbook"; still a read-only view that routes undo to the Lab.
-Plan: [`2026-07-12-console-hud-phase4-blackbook.md`](superpowers/plans/2026-07-12-console-hud-phase4-blackbook.md).
+Plan: [`2026-07-12-console-hud-phase4-blackbook.md`](../superpowers/plans/2026-07-12-console-hud-phase4-blackbook.md).
 
 ### A9. Per-room identity accents **+ per-room color picker** — ✅ RESOLVED 2026-07-13 (your palette directive) → shipped DEFAULT-ON, preview row removed
 Closed by your 2026-07-13 directive: the earth tones (Rust/Olive/Pine) are **gone**, three **two-color
@@ -167,5 +167,5 @@ metric so no two read as near-twins. The dark tones (Rust, Olive, Pine, Slate, P
   (`cc9adb8`, on your live build):** dark picks are now legible EVERYWHERE — buttons/pills (adaptive ink) AND
   the accent-as-text spots (Lab station tabs, Home dock labels, blackbook tags — each dark tone carries a
   paired light text tint, ≥4.5:1 guard-pinned). **Nothing holds the eyeball anymore** — flip the preview on,
-  try a dark tone anywhere, and give the verdict. Full thread: [`BACKLOG.md`](BACKLOG.md) Cycle 2026-07-12l.
+  try a dark tone anywhere, and give the verdict. Full thread: [`BACKLOG.md`](../BACKLOG.md) Cycle 2026-07-12l.
 
