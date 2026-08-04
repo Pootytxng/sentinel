@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   SUBMAP_REL,
   compare,
@@ -8,10 +12,19 @@ import {
   extractMapSection,
   mergeDeclared,
   productionSource,
+  verifyRepo,
 } from "./verify-module-map.mjs";
 
-// These test the DETECTOR against synthetic input, not today's map. A guard that only asserts
-// "the current map passes" goes green the moment someone edits the map to match a broken tree.
+// TWO kinds of test live here, and neither substitutes for the other. Delete either and the guard
+// stops guarding:
+//
+//   * everything down to the last describe tests the DETECTOR against synthetic input. A guard that
+//     only asserts "the current map passes" goes green the moment someone edits the map to match a
+//     broken tree.
+//   * the last describe runs the detector against THIS tree. A detector nobody points at the repo is
+//     the failure that actually happened: verify-module-map.mjs was written 2026-08-02 and `main`
+//     was red by 2026-08-04, because nothing ran it. Being a vitest file is the whole fix - vitest
+//     runs on every local verify pass and in CI's frontend job, for no extra CI minutes.
 
 const disk = (entries) => new Map(Object.entries(entries));
 
@@ -173,5 +186,84 @@ describe("split map (root ★ half + src-tauri read-only half)", () => {
     // The submap deliberately restates no count; reading one out of it would create a second source
     // of truth for the same number.
     expect(declaredCount("### Rust module map — read-only modules (continued)\n- `fps.rs` — IPC.\n")).toBeNull();
+  });
+});
+
+// A miniature repo on disk, because verifyRepo()'s job is reading two files and a directory - the
+// part compare() never sees, and the part that broke.
+function fixtureRepo(files) {
+  const root = mkdtempSync(join(tmpdir(), "module-map-"));
+  for (const [rel, body] of Object.entries(files)) {
+    const path = join(root, ...rel.split("/"));
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, body);
+  }
+  return root;
+}
+
+const CLEAN_FIXTURE = {
+  "CLAUDE.md": [
+    "### Rust module map",
+    "",
+    "Complete as of today (2 `.rs` files). The read-only remainder is in `src-tauri/CLAUDE.md`.",
+    "",
+    "- ★ `actions.rs` (~10) — the mutation boundary.",
+    "",
+  ].join("\n"),
+  "src-tauri/CLAUDE.md": "### Rust module map — read-only (continued)\n\n- `fps.rs` (~20) — IPC.\n",
+  "src-tauri/src/actions.rs": 'fn apply() { key.set_value("x"); }\n',
+  "src-tauri/src/fps.rs": "fn read() {}\n",
+};
+
+describe("verifyRepo against a repo on disk (the wiring, not the comparison)", () => {
+  it("assembles both halves into one map and passes when they cover the tree", () => {
+    const root = fixtureRepo(CLEAN_FIXTURE);
+    try {
+      const result = verifyRepo(root);
+      expect(result.failures).toEqual([]);
+      // Proof it read the submap rather than passing vacuously: fps.rs is declared only there.
+      expect(result.declared).toBe(2);
+      expect(result.starred).toBe(1);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("goes red on the exact defect that sat on main for two days: a new .rs file, no map entry", () => {
+    // 7c8a03f, reproduced in miniature - support_evidence.rs landed and the map still said 44.
+    const root = fixtureRepo({ ...CLEAN_FIXTURE, "src-tauri/src/support_evidence.rs": "fn record() {}\n" });
+    try {
+      expect(verifyRepo(root).failures).toEqual([
+        "MISSING: support_evidence.rs (2 lines) is on disk but absent from the map",
+        "COUNT: map declares 2 .rs files, tree has 3",
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("names SUBMAP-MISSING first when the delegated half is gone, instead of burying it in MISSING lines", () => {
+    const { "src-tauri/CLAUDE.md": _gone, ...withoutSubmap } = CLEAN_FIXTURE;
+    const root = fixtureRepo(withoutSubmap);
+    try {
+      const { failures } = verifyRepo(root);
+      expect(failures).toHaveLength(1);
+      expect(failures[0]).toContain("SUBMAP-MISSING");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+// The live check. Everything above proves the detector works; this is the one that fails when the
+// map and the tree part company, on the next test run rather than at the next audit.
+describe("the map as it stands, against the tree it describes", () => {
+  it("has no drift", () => {
+    const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+    const { failures, actual } = verifyRepo(repo);
+    expect(failures).toEqual([]);
+    // Line-count drift stays a WARN here as it does at the CLI - `--strict` is a release-gate
+    // concern, and failing `npm test` on a rounded line count would get this muted rather than fixed.
+    expect(actual).toBeGreaterThan(0);
   });
 });

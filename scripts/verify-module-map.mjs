@@ -17,8 +17,12 @@
 // Sibling of scripts/verify-release-state.mjs (same gate-drift-audit family, same exit contract).
 // Run from anywhere: node scripts/verify-module-map.mjs [--strict] [--json]
 //   exit 0 = map matches the tree (line-count drift WARNs unless --strict)
-//   exit 1 = MISSING / GHOST / COUNT / UNSTARRED-MUTATOR / DUPLICATE, the map section is absent
-//            entirely, or the root delegates to a submap that is gone (SUBMAP-MISSING).
+//   exit 1 = MISSING / GHOST / COUNT / UNSTARRED-MUTATOR / DUPLICATE / NO-MAP / SUBMAP-MISSING.
+// The whole check is verifyRepo(), a pure function of a repo path, because the CLI is NOT the only
+// caller: scripts/verify-module-map-guard.test.mjs runs it against this tree on every `npm test`.
+// That residency is the point. This script existed from 2026-08-02 and `main` was already red by
+// 2026-08-04 - 7c8a03f added support_evidence.rs and updated no map - because nothing ever ran it.
+// A gate nobody runs is a gate that rots.
 // The absent-section cases guard the f21c170 gutted-doc class: a verifier that passes vacuously on a
 // deleted contract is worse than no verifier, so an absent section is a hard failure, never a silent
 // pass - and after the split that has to hold for BOTH halves, not just the one it started with.
@@ -175,51 +179,69 @@ export function compare(declared, actual, count) {
   return { failures, warnings };
 }
 
-const IS_MAIN =
-  !!process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
-
-if (IS_MAIN) {
-  const strict = process.argv.includes("--strict");
-  const asJson = process.argv.includes("--json");
-  const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  const brief = join(repo, "CLAUDE.md");
-  const rustSrc = join(repo, "src-tauri", "src");
-
-  const section = existsSync(brief) ? extractMapSection(readFileSync(brief, "utf8")) : null;
+// The entire check, as a pure function of a repo root, so the CLI and the vitest guard cannot drift
+// apart. An absent half returns a single named failure rather than throwing: the caller decides how
+// to report it, and a test can assert the reason instead of a stack trace.
+export function verifyRepo(repo) {
+  const empty = { warnings: [], declared: 0, actual: 0, starred: 0 };
+  const section = readMapSection(join(repo, "CLAUDE.md"));
   if (section === null) {
-    console.error(`FAIL: "${MAP_HEADING}" section not found in CLAUDE.md - an absent contract is a failure, not a pass.`);
-    process.exit(1);
+    return {
+      ...empty,
+      failures: [`NO-MAP: "${MAP_HEADING}" section not found in CLAUDE.md - an absent contract is a failure, not a pass.`],
+    };
   }
 
   // Resolved before compare() rather than folded into it: a vanished submap would otherwise surface
   // as nineteen MISSING lines with the actual cause buried, and the root cause has to read first.
   let subDeclared = new Map();
   if (delegatesToSubmap(section)) {
-    const submap = join(repo, ...SUBMAP_REL.split("/"));
-    const subSection = existsSync(submap) ? extractMapSection(readFileSync(submap, "utf8")) : null;
+    const subSection = readMapSection(join(repo, ...SUBMAP_REL.split("/")));
     if (subSection === null) {
-      console.error(`FAIL: CLAUDE.md delegates the read-only half of the map to ${SUBMAP_REL}, but that file has no "${MAP_HEADING}" section - SUBMAP-MISSING. Restore it or fold the modules back into CLAUDE.md; a half-map that verifies vacuously is worse than no map.`);
-      process.exit(1);
+      return {
+        ...empty,
+        failures: [`SUBMAP-MISSING: CLAUDE.md delegates the read-only half of the map to ${SUBMAP_REL}, but that file has no "${MAP_HEADING}" section. Restore it or fold the modules back into CLAUDE.md; a half-map that verifies vacuously is worse than no map.`],
+      };
     }
     subDeclared = declaredModules(subSection);
   }
 
   const { merged: declared, duplicates } = mergeDeclared(declaredModules(section), subDeclared);
-  const actual = actualModules(rustSrc);
-  const { failures: driftFailures, warnings } = compare(declared, actual, declaredCount(section));
-  const failures = [
-    ...duplicates.map((name) => `DUPLICATE: ${name} is declared in both CLAUDE.md and ${SUBMAP_REL} - the halves must stay disjoint or the map can contradict itself about a star`),
-    ...driftFailures,
-  ];
+  const actual = actualModules(join(repo, "src-tauri", "src"));
+  const { failures, warnings } = compare(declared, actual, declaredCount(section));
+  return {
+    failures: [
+      ...duplicates.map((name) => `DUPLICATE: ${name} is declared in both CLAUDE.md and ${SUBMAP_REL} - the halves must stay disjoint or the map can contradict itself about a star`),
+      ...failures,
+    ],
+    warnings,
+    declared: declared.size,
+    actual: actual.size,
+    starred: [...declared.values()].filter((d) => d.starred).length,
+  };
+}
+
+function readMapSection(path) {
+  return existsSync(path) ? extractMapSection(readFileSync(path, "utf8")) : null;
+}
+
+const IS_MAIN =
+  !!process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
+
+if (IS_MAIN) {
+  const strict = process.argv.includes("--strict");
+  const asJson = process.argv.includes("--json");
+  const result = verifyRepo(resolve(dirname(fileURLToPath(import.meta.url)), ".."));
+  const { failures, warnings } = result;
   const hard = strict ? [...failures, ...warnings] : failures;
 
   if (asJson) {
-    console.log(JSON.stringify({ declared: declared.size, actual: actual.size, failures, warnings }, null, 2));
+    console.log(JSON.stringify({ declared: result.declared, actual: result.actual, failures, warnings }, null, 2));
   } else {
     for (const w of warnings) console.log(`WARN  ${w}`);
     for (const f of failures) console.error(`FAIL  ${f}`);
     if (!hard.length) {
-      console.log(`OK    module map matches the tree (${actual.size} .rs files, ${[...declared.values()].filter((d) => d.starred).length} starred).`);
+      console.log(`OK    module map matches the tree (${result.actual} .rs files, ${result.starred} starred).`);
     }
   }
   process.exit(hard.length ? 1 : 0);
