@@ -417,8 +417,22 @@ queued).
   (`%LOCALAPPDATA%\Compy\` vs `%APPDATA%\Compy\runtime\`) and the blanket "Compy will recreate what
   it needs" that hides `history.json` deletion erasing the Trust Ledger. That commit fixed the
   source and never re-staged. Re-staged; guard 4/4. **Deploying it is a publication act — NOT done.**
-- **🔴 issue [#60](https://github.com/Pootytxng/sentinel/issues/60) part 1 is DONE and stale on the
-  issue** (bounded retry in `release-transaction.ps1` + guard `release-transaction-e2e.test.mjs:90`,
+- **✅ issue [#60](https://github.com/Pootytxng/sentinel/issues/60) BOTH PARTS RESOLVED
+  (`c7c60d3` fix · `9e48bbf` ship record · `97e00fd` behavioural guard).** Part 2 WAS real — my
+  earlier "not reproducible" call was wrong and is retracted on the issue. Reproduced live:
+  ship-reinstall completed all its work and the wrapper had to be killed at 600s; under the fix the
+  same command returned in **4s, exit 0**. Cause: a CreateProcess launch hands the child our
+  stdout/stderr (`bInheritHandles=TRUE`) and the installed app is meant to outlive the script, so it
+  held the *outermost* caller's pipe — bounding one middle link never fixed the chain. Fix:
+  `Start-NativeProcess -Detached` (ShellExecute; `Start-Process` is correctly banned by the
+  process-bypass rule, so the capability went INTO the abstraction). The debug-port guarantee was
+  **strengthened** — ShellExecute cannot carry a child-only env, so the silent
+  `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` clear became a LOUD assertion that it is absent, with
+  `-Detached`/`-Environment` mutually exclusive by contract. 🔻 **Self-caught:** the `linger` fixture
+  added in `df8e48a` was never registered in FAKE_GH's known-mode list, so that guard passed
+  VACUOUSLY; found only because the new inherited-case assertion demands the opposite outcome.
+  A guard whose fixture cannot fail reads as coverage and is worse than none.
+- **(superseded) issue #60 part 1 was DONE and stale on the issue** (bounded retry in `release-transaction.ps1` + guard `release-transaction-e2e.test.mjs:90`,
   both already on `main`). **Part 2 (phantom prove/publish hang) remains OPEN with two hypotheses
   measured and REFUTED** — `-NoInheritStreams`, and bounding the parameterless `WaitForExit()`.
   Decisive: an inner script run with **no wrapper pipe at all** still took 9106 ms. Stream
