@@ -35,7 +35,7 @@ const panelStyle: React.CSSProperties = {
   padding: "14px 16px",
 };
 
-const headingStyle: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: "var(--ix-text)" };
+const headingStyle: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: "var(--ix-text-1)" };
 
 function GpuProfileScopePicker() {
   const { t } = useTranslation();
@@ -124,11 +124,11 @@ function DeltaRow({ d }: { d: FieldDelta }) {
   const changed = d.status === "changed";
   const color =
     changed && d.key === "peakTempC" && d.direction === "down"
-      ? "var(--ix-good, var(--ix-text))"
+      ? "var(--ix-good)"
       : changed && d.key === "peakTempC" && d.direction === "up"
-        ? "var(--ix-warn, var(--ix-text))"
+        ? "var(--ix-warn)"
         : changed
-          ? "var(--ix-text)"
+          ? "var(--ix-text-1)"
           : "var(--ix-text-2)";
   const cell: React.CSSProperties = { padding: "5px 8px", fontSize: 12.5, color };
   return (
@@ -209,7 +209,7 @@ function GpuProfileDelta({ currentSnapshot }: { currentSnapshot?: GpuProfileSnap
         </p>
       ) : (
         <>
-          <p style={{ ...muted, fontWeight: changed ? 600 : 400, color: "var(--ix-text)" }}>
+          <p style={{ ...muted, fontWeight: changed ? 600 : 400, color: "var(--ix-text-1)" }}>
             {deltaSummary(deltas)}
           </p>
           {mismatch && (
@@ -319,7 +319,7 @@ function GpuVendorInsights({ currentSnapshot }: { currentSnapshot?: GpuProfileSn
               }}
             />
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ix-text)" }}>{i.title}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ix-text-1)" }}>{i.title}</span>
               <span style={{ fontSize: 12.5, lineHeight: 1.5, color: "var(--ix-text-2)" }}>{i.detail}</span>
             </div>
           </li>

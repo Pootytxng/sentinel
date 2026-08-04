@@ -16,8 +16,8 @@
   --mc-mono: var(--ix-mono, ui-monospace, monospace);
   --mc-ink: var(--ix-text-1);
   --mc-eyebrow-ink: var(--ix-text-3);
-  --mc-good: var(--ix-good, var(--ix-accent));
-  --mc-caution: var(--ix-accent-text, var(--ix-accent));
+  --mc-good: var(--ix-good);
+  --mc-caution: var(--ix-warn);
   --mc-bad: var(--ix-danger);
   /* Secondary ink, not tertiary: four of the simulator's seven verdicts are honest non-answers
      ("already configured", "not applicable", "insufficient evidence", "unlikely to matter") and

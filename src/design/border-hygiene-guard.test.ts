@@ -7,31 +7,87 @@ import { join } from "path";
 const cssFiles = (): string[] =>
   (readdirSync("src", { recursive: true }) as string[]).filter((f) => f.endsWith(".css"));
 
-// Guard 1 — every `var(--ix-foo)` used WITHOUT a fallback must resolve to a DEFINED token.
-// Undefined-token references with no fallback are invalid CSS: the whole declaration is dropped
-// silently. That's exactly how borders vanished on BlackBox/ProGate/Settings/Tuning/Check, and how
-// BlackBox's readouts lost their monospace (--ix-mono) and the assessment card lost its bg
-// (--ix-accent-wash). This makes the regression grep-provable.
-describe("token hygiene: no undefined --ix-* token used without a fallback", () => {
-  it("every fallback-less var(--ix-…) resolves to a defined token", () => {
-    const files = cssFiles();
-    // Collect every --ix-* DEFINITION across the CSS (instrument.css holds them, but scan all).
+/** Every file the shipped UI is built from — stylesheets AND the components that write inline
+ *  styles. Test files are excluded: they quote token names as fixtures (this one names `--ix-foo`
+ *  in its own prose two lines down) and they ship to nobody. */
+const sourceFiles = (): string[] =>
+  (readdirSync("src", { recursive: true }) as string[]).filter(
+    (f) => /\.(css|ts|tsx)$/.test(f) && !/\.test\.tsx?$/.test(f),
+  );
+
+/** Blank out comment BODIES, newlines preserved so reported line numbers stay true. Prose that
+ *  NAMES a token is not a use of it. `//` only when it opens the line, so a `https://` URL sitting
+ *  mid-line can never swallow a real reference after it. */
+const blankComments = (text: string): string =>
+  text
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+    .replace(/^\s*\/\/.*$/gm, (m) => m.replace(/[^\n]/g, " "));
+
+// Guard 1 — every `var(--ix-foo)` anywhere in src/ must name a token that EXISTS.
+//
+// Original form (2026-06): CSS files only, and only references with NO fallback — because a
+// fallback-less reference to a phantom token is invalid CSS and the whole declaration is dropped
+// silently. That is how borders vanished on BlackBox/ProGate/Settings/Tuning/Check, how BlackBox's
+// readouts lost their monospace (--ix-mono) and how the assessment card lost its bg
+// (--ix-accent-wash).
+//
+// WIDENED 2026-08-04 on both axes, after a self-reviewer pass found a phantom the guard could not
+// see through either of them:
+//   · FILE TYPE — GpuProfile.tsx wrote `color: "var(--ix-text)"` in six inline styles across four
+//     components. --ix-text has never existed (only --ix-text-1/2/3), so every one of those colour
+//     declarations was dropped and the headings and delta rows silently inherited. A .tsx file is
+//     as capable of naming a token as a .css file, so it is scanned like one.
+//   · MATCH SHAPE — `var(--ix-good, var(--ix-accent))` passed the old check because it carries a
+//     fallback. But a fallback only stops the DECLARATION dying; the fallback then becomes the
+//     permanent value, forever, invisibly. That is how the Lab reported a GOOD verdict in the same
+//     violet as its call-to-action: --ix-good was never defined, so "good" silently meant "brand
+//     accent". A fallback is a safety net for a token that exists, not a licence for one that
+//     doesn't — so EVERY reference must resolve, fallback or no.
+describe("token hygiene: every --ix-* token referenced in src/ is defined", () => {
+  it("no var(--ix-…) — with or without a fallback, in CSS or in a component — names a phantom", () => {
+    const files = sourceFiles();
     const defined = new Set<string>();
     for (const rel of files) {
-      const css = readFileSync(join("src", rel), "utf8");
-      for (const m of css.matchAll(/(--ix-[a-z0-9-]+)\s*:/g)) defined.add(m[1]);
+      const text = blankComments(readFileSync(join("src", rel), "utf8"));
+      for (const m of text.matchAll(/(--ix-[a-z0-9-]+)\s*:/g)) defined.add(m[1]);
     }
+
     const offenders: string[] = [];
+    let refs = 0;
+    let componentRefs = 0;
     for (const rel of files) {
-      const css = readFileSync(join("src", rel), "utf8");
-      css.split("\n").forEach((line, i) => {
-        // var(--ix-name) with the close paren right after the name = no fallback supplied.
-        for (const m of line.matchAll(/var\(\s*(--ix-[a-z0-9-]+)\s*\)/g)) {
+      const text = blankComments(readFileSync(join("src", rel), "utf8"));
+      text.split("\n").forEach((line, i) => {
+        // Deliberately NOT anchored on the close paren — that anchor is what let the fallback
+        // form through for two months.
+        for (const m of line.matchAll(/var\(\s*(--ix-[a-z0-9-]+)/g)) {
+          refs++;
+          if (/\.tsx?$/.test(rel)) componentRefs++;
           if (!defined.has(m[1])) offenders.push(`${rel}:${i + 1}: ${m[1]} — ${line.trim()}`);
         }
       });
     }
+
+    // Positive controls — an empty offender list is only meaningful if the scan actually saw the
+    // tree. Each control pins one half of the 2026-08-04 blind spot.
+    expect(defined.has("--ix-accent"), "definition scan found nothing — this guard is vacuous").toBe(true);
+    expect(refs, "reference scan found nothing — this guard is vacuous").toBeGreaterThan(50);
+    expect(
+      componentRefs,
+      "no .ts/.tsx reference matched — the file-type blind spot is back and inline styles are unguarded",
+    ).toBeGreaterThan(0);
     expect(offenders).toEqual([]);
+  });
+
+  it("defines the two semantic verdict states exactly once — constant across every theme", () => {
+    // --ix-good / --ix-warn are the pair that went missing. They are declared in the base :root and
+    // NOT re-declared per theme, like --ix-amber/--ix-danger beside them: a verdict must not change
+    // meaning when the owner changes theme. One declaration each is the mechanical form of that.
+    const base = readFileSync(join("src", "design", "instrument.css"), "utf8");
+    for (const token of ["--ix-good", "--ix-warn", "--ix-amber", "--ix-danger"]) {
+      const decls = base.match(new RegExp(`${token}\\s*:`, "g")) ?? [];
+      expect(decls.length, `${token} must be declared exactly once in instrument.css`).toBe(1);
+    }
   });
 });
 

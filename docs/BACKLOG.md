@@ -234,12 +234,14 @@ never be conflatable in any doc, commit message, or report).
   hypothesis engine can emit a real, OPTIONAL rec-id where a safe mapping provably exists; until then the
   connection stays a plain-language instruction, not a button. Decision doc
   `docs/decisions/2026-07-18-prove-a-change-overlap.md` §5. No mutation / network / gate change.
-- [ ] **Measurement Platform 2.0 follow-up — comparability vocabulary chrome convergence (cosmetic).**
-  "What Changed" and `ExperimentBench` now share the comparability WORDS at the domain level (Task G surfaced
-  `SessionComparability` in the shared `WhatChangedReportView`); a later pass could unify their visual chrome
-  (badges / section labels) into one shared component vocabulary. Cosmetic, additive. Any **surface-level
-  reshape** (merging/renaming the "prove a change" rooms themselves) is **owner territory**, not autonomous —
-  logged so the option stays visible. Decision doc `2026-07-18-prove-a-change-overlap.md` §1/§5.
+- [x] **Measurement Platform 2.0 follow-up — comparability vocabulary chrome convergence (cosmetic).** ✅ LANDED
+  `921f49e`. `src/surfaces/measurement-chrome.tsx` + `.css` are now the ONE vocabulary both rooms wear —
+  `<VerdictBand>` / `<SectionLabel>` / `<ComparabilityNote>`, fed per-room by a `--mc-*` palette block declared
+  same-element on each room root (never `:root` — [[css-var-declaring-element-substitution]]). Pinned by
+  `measurement-chrome-guard.test.ts` (11 tests, 3 positive controls). **Still open, deliberately:** the
+  **surface-level reshape** (merging/renaming the "prove a change" rooms themselves) remains **owner territory**,
+  not autonomous — this train unified chrome only, it did not touch room structure. Decision doc
+  `2026-07-18-prove-a-change-overlap.md` §1/§5.
 - [~] **Intelligence Phase 4 — hardware-twin intelligence integration (IN PROGRESS):**
   - [x] **Component-level evidence highlighting (slice 1)** — ✅ BUILT this cycle. `component_evidence.rs`
     is a READ-ONLY projection: it re-keys the existing Intelligence Phase 2 pattern findings

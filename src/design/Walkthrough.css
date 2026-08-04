@@ -41,7 +41,7 @@
   width: 100%;
   border-radius: 12px;
   border: 1px solid var(--ix-glass-border, var(--hairline));
-  background: var(--ix-base-2, rgba(255, 255, 255, 0.03));
+  background: var(--ix-surface-2);
   overflow: hidden;
 }
 .wt-titlebar {
@@ -248,7 +248,7 @@
   height: 28px;
   border-radius: 8px;
   border: 1px solid var(--ix-glass-border, var(--hairline));
-  background: var(--ix-base-2, rgba(255, 255, 255, 0.04));
+  background: var(--ix-surface-2);
   color: var(--ix-text-1, inherit);
   font-size: 16px;
   line-height: 1;

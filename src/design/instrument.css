@@ -32,6 +32,15 @@
   --ix-text-3: #828896;
   --ix-amber: #fbbf3c; /* semantic, constant across themes */
   --ix-danger: #f0726f;
+  /* The other two semantic states. Same story as the aliases above, found 2026-08-04: both were
+     REFERENCED — --ix-good by the Lab's verdict palette and GpuProfile's delta rows, --ix-warn by
+     the same rows — and never defined, so "cooler is good" and "warmer is a warning" fell through
+     to their fallback (the brand accent) and the Lab announced a GOOD verdict in the same violet as
+     its CTA. Constant across themes like --ix-amber/--ix-danger, deliberately: a verdict must not
+     change meaning when the theme changes. --ix-good is App.css's --ready green, so Monitor's
+     "What changed?" panel and the Lab agree on what good is coloured. */
+  --ix-good: #46d98a;
+  --ix-warn: var(--ix-amber);
 
   --ix-accent: #2ee6c0; /* brand teal — controls, active states, key numbers ONLY */
   --ix-accent-text: #7defcf; /* teal label text on neutral surfaces */
