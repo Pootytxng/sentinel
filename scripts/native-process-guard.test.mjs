@@ -126,7 +126,7 @@ if (mode === "tree-hang") {
   console.log("CHILD_PID=" + child.pid);
   setInterval(() => {}, 60000);
 }
-if (!["hang", "child-hang", "tree-hang"].includes(mode)) {
+if (!["hang", "child-hang", "tree-hang", "linger"].includes(mode)) {
   console.error("unknown mode " + mode);
   process.exit(2);
 }
@@ -224,6 +224,39 @@ if ($modes.ContainsKey($Scenario)) {
   $result = Invoke-CheckedProcess "expected-404 lookup" $NodeExe @($FakeGh, "notfound") -TimeoutMs 30000 -AllowExitCodes @(1)
   Write-Output ("EXIT=" + $result.ExitCode)
   Write-Output ("STDERR_FIRST=" + (Get-FirstNonEmptyLine $result.StdErr))
+} elseif ($Scenario -eq "detached-frees-caller" -or $Scenario -eq "inherited-strands-caller") {
+  # issue #60 defect 2, the BEHAVIOURAL half. An inner script launches a child that outlives it and
+  # then exits. The caller reads the inner script's stdout to EOF - exactly what a terminal, CI job
+  # or scripting wrapper does. An INHERITED child holds that pipe for its whole life; a -Detached
+  # child (ShellExecute) cannot, because it never receives the handle.
+  $detach = ""
+  if ($Scenario -eq "detached-frees-caller") { $detach = "-Detached" }
+  $innerPath = Join-Path ([IO.Path]::GetTempPath()) ("compy-detach-" + [Guid]::NewGuid().ToString("N") + ".ps1")
+  $innerBody = @(
+    (". " + [char]34 + $LibPath + [char]34),
+    ("$" + "child = Start-NativeProcess -Command " + [char]34 + $NodeExe + [char]34 + " -ArgumentList @(" + [char]34 + $FakeGh + [char]34 + "," + [char]34 + "linger" + [char]34 + "," + [char]34 + "15000" + [char]34 + ") " + $detach),
+    ("Write-Output ('CHILDALIVE=' + (-not $" + "child.HasExited))"),
+    ("$" + "child.Dispose()")
+  ) -join [Environment]::NewLine
+  Set-Content -LiteralPath $innerPath -Value $innerBody -Encoding UTF8
+  $psi = New-Object System.Diagnostics.ProcessStartInfo
+  $psi.FileName = (Get-Command powershell).Source
+  $psi.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $innerPath + '"'
+  $psi.UseShellExecute = $false
+  $psi.RedirectStandardOutput = $true
+  $psi.RedirectStandardError = $true
+  $proc = [System.Diagnostics.Process]::Start($psi)
+  $sw = [Diagnostics.Stopwatch]::StartNew()
+  $proc.WaitForExit(60000) | Out-Null
+  $innerExit = $sw.ElapsedMilliseconds
+  # Reading to EOF is the caller behaviour under test: it completes only when every writer closes.
+  $inner = $proc.StandardOutput.ReadToEnd()
+  $sw.Stop()
+  Remove-Item -LiteralPath $innerPath -Force -ErrorAction SilentlyContinue
+  Write-Output ("INNEREXITMS=" + $innerExit)
+  Write-Output ("PIPEEOFMS=" + $sw.ElapsedMilliseconds)
+  Write-Output ("INNEROUT=" + (($inner -replace "[
+]+", "|").Trim("|")))
 } elseif ($Scenario -eq "streamed-surviving-grandchild") {
   # issue #60 defect 2. An inner script launches a child that OUTLIVES it by 60s, exactly as
   # ship-reinstall leaves the installed app running. .NET's CreateProcess inherits handles wholesale
@@ -541,6 +574,35 @@ describe.runIf(windows)("native-process behaviour (bug->guard, both failed v0.9.
     expect(field("EXIT")).toBe("0");
     expect(field("TIMEDOUT")).toBe("False");
   }, 60000);
+
+  // bug->guard (issue #60 defect 2) - the BEHAVIOURAL pair, and the one that proves the fix.
+  //
+  // Reproduced live 2026-08-03: ship-reinstall.ps1 completed all of its work (install done, one
+  // installer staged, launched exe stamp-verified) and the wrapper running it had to be KILLED at
+  // 600s. Under -Detached the same command returned in 4 seconds. The cause is that a CreateProcess
+  // launch hands the child this process's stdout/stderr (bInheritHandles=TRUE) and the installed app
+  // is MEANT to outlive the script, so it held the caller's pipe for as long as it ran. Redirecting
+  // the child's own streams does NOT prevent this - the handle is inherited regardless.
+  //
+  // These two cases differ ONLY by the -Detached switch, so the pair proves the switch is what does
+  // the work rather than the timing being incidental. The inherited case is the regression detector:
+  // if -Detached ever stops using ShellExecute, "detached" starts behaving like "inherited" and the
+  // first assertion fails.
+  it("strands the caller's pipe when a surviving child INHERITS its handles", () => {
+    const { field } = run("inherited-strands-caller");
+    // The inner script's own work is instant; only the pipe is held.
+    expect(Number(field("INNEREXITMS"))).toBeLessThan(5000);
+    expect(field("INNEROUT")).toBe("CHILDALIVE=True");
+    // Held until the 15s child exits. Anything under that means inheritance stopped happening.
+    expect(Number(field("PIPEEOFMS"))).toBeGreaterThan(10000);
+  }, 120000);
+
+  it("frees the caller's pipe immediately when the surviving child is -Detached", () => {
+    const { field } = run("detached-frees-caller");
+    expect(field("INNEROUT")).toBe("CHILDALIVE=True");
+    // The child is still alive for another ~15s; the caller must not be waiting on it.
+    expect(Number(field("PIPEEOFMS"))).toBeLessThan(5000);
+  }, 120000);
 
   // bug->guard (issue #60 defect 2, the v0.9.12 publish): release-prove.ps1 / release-publish.ps1
   // printed their success banner and appeared to HANG -- proof finished 11:28, wrapper still alive
