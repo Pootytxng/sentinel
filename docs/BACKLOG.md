@@ -59,8 +59,12 @@
   (issue [#37](https://github.com/Pootytxng/sentinel/issues/37)) — dependency-free fixed-seed generator,
   9 properties over the ledger, session file, elevated-command guards, mutation allowlists, batch
   receipts, and rollback-contract resolution. Open: Q5 local-only redacted support evidence (blocked on
-  Q1's privacy vocabulary + a data-retention review) · Q6 current-state/doc consolidation · Q7 native
-  accessibility and measured performance budgets (blocked on a stable candidate + owner's machine).
+  Q1's privacy vocabulary + a data-retention review) · Q7 native accessibility and measured
+  performance budgets (blocked on a stable candidate + owner's machine). **Q6 DELIVERED 2026-08-04**
+  (issue [#65](https://github.com/Pootytxng/sentinel/issues/65), `9bf3bde`) — three stale live claims
+  retired: `GAMING_MODE_PLAN.md` reconciled against the QA record (8 rows mapped, 3 left unchecked as
+  *unproven, not failing*), the 2026-07-06 launch runway archived verbatim with its "no real UI gaps"
+  sweep claim, and "every branch has a verified disposition" superseded by a 13-branch merge-tree pass.
 - [ ] **P2 product completion:** owner-accepted canonical Lab + reversible generation pruning →
   first-win action/rollback/proof journey → Consumer/Technical/Support evidence exports.
 - [ ] **LATER:** Intelligence Phase 4/5, vendor-awareness expansion, Receipts/crowd intelligence,
