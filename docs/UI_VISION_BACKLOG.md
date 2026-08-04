@@ -67,13 +67,19 @@ bottom expandable rows read like footer legalese.
    complaint is partly this). **Candidate: a pruning pass — bless one face per room, delete or
    archive the rest** (mechanical once the owner blesses faces; big token/complexity payoff).
 3. **Orientation lives in copy, not chrome.** The room's purpose is a one-line crumb in the
-   topbar; the strongest wayfinding line ships at the END of onboarding. **Candidates:** surface
-   the rail-reads-top-to-bottom framing at guided-setup START; make each room's first screen
-   answer "what do I do here" above the fold; give the quiet bottom rows real affordance weight.
-4. **Already in flight elsewhere (do NOT duplicate):** an uncommitted CC-lane train (observed
-   2026-07-22, `FirstCheck.tsx` + `guided.ts`) is building per-item guided steps with deep links
-   (VBS, Defender exclusions, VRR) — likely covers J's "show me the tweak + let me act" class.
-   Reconcile with that lane before assigning NAV work.
+   topbar; the strongest wayfinding line ships at the END of onboarding. **Candidates:**
+   ~~surface the rail-reads-top-to-bottom framing at guided-setup START~~ ✅ **SHIPPED 2026-07-23**
+   (`buildSetupSteps` injects the mode's rail line into `steps[0]`/`setup-rig` — `setup-steps.ts`;
+   three guards in `setup-steps.test.ts`, incl. a byte-identical pin for the classic six-room
+   escape hatch); make each room's first screen answer "what do I do here" above the fold;
+   give the quiet bottom rows real affordance weight.
+4. ~~**Already in flight elsewhere (do NOT duplicate):** an uncommitted CC-lane train (observed
+   2026-07-22, `FirstCheck.tsx` + `guided.ts`)…~~ ✅ **LANDED 2026-07-23 (`46c4cd7`)** — that lane
+   committed, so nothing is in flight and no reconciliation is owed. It shipped J's "show me the
+   tweak + let me act" class: `FirstCheck.tsx:204` reveals the named tweak behind the "1 safe tweak
+   not applied" verdict, and `guided.ts` carries per-item deep links (VBS/Defender →
+   `ms-settings:windowsdefender`, VRR, HAGS → `ms-settings:display-advancedgraphics`) behind an
+   explicit `startsWith("ms-settings:")` allowlist — Settings pages only, never an arbitrary URL.
 
 **Owner taste calls — status 2026-07-23b:**
 (a) ✅ **RESOLVED + SHIPPED (v0.9.5, `67541e4`/`ac518f1`)** — owner picked "apply to all": per-room
@@ -81,14 +87,21 @@ accents stay (his 2026-07-12b feature), plus a one-shot "Apply to all rooms" act
 popover (accent-tinted primary action above the muted reset; no mode, no hidden state; per-room
 picking untouched). Live-proven on the owner's rig: all five rooms stamped in one tap, owner's own
 duo picks restored after the test. Delivered to his box through the updater.
-(b) Post-check landing — **owner delegated the call 2026-07-23 ("you decide whats seems most
-tasteful")**; direction per his taste record: J's own ask, a "take me to the lab" CTA routing into
-Lab→Optimize through the front door (navigation-never-teleports law). **BUILD HELD pending
-reconciliation with the CC-lane's uncommitted FirstCheck/guided WIP (finding 4)** — building on a
-colliding file mid-flight would be lane sabotage, not momentum.
+(b) Post-check landing — **✅ RESOLVED + SHIPPED 2026-07-23 (`46c4cd7`)**, owner having delegated
+the call ("you decide whats seems most tasteful"). Built as his taste record pointed: J's own ask,
+a "Take me to the Lab" CTA on the check verdict routing into Lab→Optimize **through the front door**
+(navigation-never-teleports law) — `FirstCheck` fires `onGoToLab` → `App.tsx:1373` persists the
+intent and `navHome('lab')` → `LabConsole` reads it on mount and auto-opens the Optimize station,
+race-free and one-shot. Pinned by `src/surfaces/post-check-lab-route-guard.test.ts`. (The earlier
+"BUILD HELD pending reconciliation with the CC-lane WIP" note is stale — that lane landed in the
+same commit; see finding 4.)
 (c) Blessed-face pruning — **delegated same message.** Direction: the newest shipped face per room
 (the ones the owner has eyeballed and testers now use) is the bless candidate; the pass itself is
-a CC-lane refactor train with full-suite verification, queued behind (b).
+a CC-lane refactor train with full-suite verification, queued behind (b). **Blocker cleared
+2026-08-04** — (b) shipped, so (c) is unblocked. Next step is an inventory + disposition doc, NOT an
+unattended deletion sweep: a face is only safe to delete once its flag is *graduated* (DEFAULT-ON,
+nothing routes to the old branch). `LabGround`/`compy_lab_ground` is explicitly EXCLUDED — the Lab
+overhaul is still in flight (BACKLOG Q0 `[~]`), and deleting a face mid-build is not pruning.
 
 **Execution lane:** direction + audit = this file; the redesign build itself = CC/Fable lane per
 the owner's standing preference (Cowork steers + audits, doesn't blueprint final creative).
