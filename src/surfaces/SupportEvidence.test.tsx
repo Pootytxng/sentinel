@@ -18,7 +18,11 @@ const BUNDLE = {
   build_stamp: "aa3c610 · release",
   generated_at: "2026-08-04T09:12:00+00:00",
   retention: { max_events: 400, max_bytes: 256000, max_record_bytes: 640 },
-  location: "C:\\Users\\<user>\\AppData\\Roaming\\Compy\\support",
+  // The shape the backend actually emits — support_evidence.rs's display_location rewrites the
+  // root to its %VAR% form. The old fixture encoded "C:\Users\<user>\AppData\Roaming\Compy\support",
+  // a shape no Rust path produces, which is why a green suite never noticed the surface was
+  // rendering the bare "<path>" mask to the user (Q5 self-review FAIL, 2026-08-04).
+  location: "%APPDATA%\\Compy\\support",
   events: [
     { at: "2026-08-04T09:00:00+00:00", kind: "lifecycle", operation: "app_start", code: "start", outcome: "ok", detail: "" },
     { at: "2026-08-04T09:05:00+00:00", kind: "operation", operation: "apply", code: "power_plan", outcome: "refused", detail: "declined at the admin prompt" },
@@ -104,6 +108,19 @@ describe("SupportEvidence — inspect before export", () => {
       expect(invokeMock).toHaveBeenCalledWith("export_support_evidence", { projection: "support" }),
     );
     expect(await screen.findByText(EXPORTED.path)).toBeInTheDocument();
+  });
+
+  it("names a location the user can open, never the internal redaction mask", async () => {
+    // The Q5 self-review FAIL (2026-08-04): this always-visible line rendered "2 records · <path>"
+    // because the backend put the location through the same redact() it uses for free-text detail.
+    // The Rust guards pin the shape the backend emits; this pins that the surface renders it
+    // verbatim, and that no future fixture can smuggle the mask back through the UI unnoticed.
+    render(<SupportEvidence />);
+    await readIt();
+    const meta = screen.getByText(/records ·/);
+    expect(meta.textContent).toContain("%APPDATA%\\Compy\\support");
+    // Matches the bare mask and any escaped rendering of it.
+    expect(meta.textContent).not.toMatch(/path>/);
   });
 
   it("renders the retention caps from the bundle rather than a hard-coded copy of them", async () => {

@@ -136,6 +136,71 @@ fn replace_ignore_case(haystack: &str, needle: &str, mask: &str) -> String {
     out
 }
 
+/// The literal scrub on its own — the identity half of `redact_with`, without the structural
+/// path/IP/key/serial passes. Used where a value must stay *readable* but must still never carry
+/// the account or machine name.
+fn scrub_literals(input: &str) -> String {
+    let mut out = input.to_string();
+    for (value, mask) in sensitive_literals() {
+        out = replace_ignore_case(&out, &value, mask);
+    }
+    out
+}
+
+/// Where the record lives, rendered so a human can act on it.
+///
+/// `redact()` is the wrong tool for this one field. `redact_paths` collapses an entire path run to
+/// the bare `<path>` sentinel, so the panel's meta line read "3 records · <path>" and the support
+/// export's header read "- Stored at: <path>" — an internal mask shown as a location, in the very
+/// file the user is told to hand to support. Caught by the Q5 visual self-review (2026-08-04),
+/// which read the exported `.md` off disk; the vitest fixture had encoded a *shape the backend
+/// never produced*, so a green suite proved nothing about it.
+///
+/// The fix rewrites the *root* to its environment-variable form (`%APPDATA%\Compy\support`) — the
+/// same form `docs/PRIVACY.md` shows, readable and free of the account name — and keeps the literal
+/// scrub as the safety net for anything below the root. If no known root matches (a redirected data
+/// dir, a portable layout) it falls back to the full redaction: unreadable beats leaky.
+fn display_location(path: &Path) -> String {
+    let raw = path.to_string_lossy().to_string();
+    // Deepest roots first — USERPROFILE is a prefix of both AppData roots, so it must lose.
+    let roots: Vec<(&str, String)> = ["LOCALAPPDATA", "APPDATA", "USERPROFILE"]
+        .into_iter()
+        .filter_map(|var| std::env::var(var).ok().map(|root| (var, root)))
+        .collect();
+    match env_form(&raw, &roots) {
+        Some(form) => scrub_literals(&form),
+        None => redact(&raw),
+    }
+}
+
+/// The pure half of [`display_location`]: rewrite `raw`'s root to its `%VAR%` form, or `None` when
+/// no supplied root owns it. Split out so it can be proven against fixed roots — reading the real
+/// environment in a test would either race other tests or silently pass on a machine that has no
+/// `APPDATA`.
+///
+/// The `%VAR%` result must never be fed back through [`redact_paths`]: `path_root_len` already
+/// recognises `%APPDATA%\` as a path root, so a second pass would eat the readable form we just
+/// built and put `<path>` right back.
+fn env_form(raw: &str, roots: &[(&str, String)]) -> Option<String> {
+    for (var, root) in roots {
+        let root = root.trim_end_matches(['\\', '/']);
+        if root.len() < 3 {
+            continue;
+        }
+        // `raw.get(..)`, not `raw[..]` — a byte index may not land on a char boundary.
+        let Some(head) = raw.get(..root.len()) else { continue };
+        if !head.eq_ignore_ascii_case(root) {
+            continue;
+        }
+        let rest = &raw[root.len()..];
+        // The match must end on a separator, or `C:\Users\Kuya2` would claim `C:\Users\Kuya`'s root.
+        if rest.is_empty() || rest.starts_with('\\') || rest.starts_with('/') {
+            return Some(format!("%{var}%{rest}"));
+        }
+    }
+    None
+}
+
 fn redact_paths(input: &str) -> String {
     let chars: Vec<char> = input.chars().collect();
     let mut out = String::with_capacity(input.len());
@@ -628,7 +693,7 @@ pub fn preview_support_evidence() -> Result<EvidencePreview, String> {
     let bundle = build_bundle(
         &evidence_path(),
         chrono::Utc::now().to_rfc3339(),
-        redact(&support_dir().to_string_lossy()),
+        display_location(&support_dir()),
     );
     previewed().store(true, Ordering::Release);
     Ok(EvidencePreview {
@@ -658,7 +723,7 @@ pub fn export_support_evidence(projection: String) -> Result<SupportExport, Stri
     let mut bundle = build_bundle(
         &evidence_path(),
         chrono::Utc::now().to_rfc3339(),
-        redact(&support_dir().to_string_lossy()),
+        display_location(&support_dir()),
     );
     bundle.events = bundle.events.iter().map(SupportEvent::redacted_again).collect();
 
@@ -747,6 +812,74 @@ mod tests {
         assert_eq!(redact_ips("at fe80::1c2d:3e4f:5a6b unreachable"), "at <ip> unreachable");
         assert_eq!(redact_ips("elapsed 12:30:00 total"), "elapsed 12:30:00 total");
         assert_eq!(redact_ips("saw 10.0.0.4, then more"), "saw <ip>, then more");
+    }
+
+    // -- the location field: readable AND leak-free, the one value redact() must not touch --------
+    //
+    // Guard for the Q5 self-review FAIL (2026-08-04): the panel's meta line rendered "3 records ·
+    // <path>" and the exported support .md said "- Stored at: <path>" — an internal mask presented
+    // to the user as a location. bug→guard: these three tests, not a memory of the review.
+
+    fn fixed_roots() -> Vec<(&'static str, String)> {
+        vec![
+            ("LOCALAPPDATA", r"C:\Users\Kuya\AppData\Local".to_string()),
+            ("APPDATA", r"C:\Users\Kuya\AppData\Roaming".to_string()),
+            ("USERPROFILE", r"C:\Users\Kuya".to_string()),
+        ]
+    }
+
+    #[test]
+    fn a_known_root_becomes_its_env_var_form_instead_of_collapsing_to_the_mask() {
+        let r = fixed_roots();
+        assert_eq!(
+            env_form(r"C:\Users\Kuya\AppData\Roaming\Compy\support", &r).as_deref(),
+            Some(r"%APPDATA%\Compy\support"),
+        );
+        // Windows paths are case-insensitive; the rewrite must be too.
+        assert_eq!(
+            env_form(r"c:\users\kuya\AppData\Local\Compy", &r).as_deref(),
+            Some(r"%LOCALAPPDATA%\Compy"),
+        );
+        // USERPROFILE is a prefix of both AppData roots and must lose to them, but still win alone.
+        assert_eq!(env_form(r"C:\Users\Kuya\Desktop", &r).as_deref(), Some(r"%USERPROFILE%\Desktop"));
+        // A root match that does not end on a separator is a different directory, not a match.
+        assert_eq!(env_form(r"C:\Users\Kuya2\stuff", &r), None);
+        // An unknown root yields None, so display_location falls back to the full redaction.
+        assert_eq!(env_form(r"D:\portable\Compy\support", &r), None);
+    }
+
+    #[test]
+    fn the_real_location_is_findable_and_never_carries_the_account_name() {
+        // Uses the real environment deliberately — this is the value the owner's machine renders.
+        // Builds the path by hand rather than calling support_dir(), which would run the legacy
+        // data-dir migration as a side effect.
+        let Ok(app_data) = std::env::var("APPDATA") else { return };
+        let shown = display_location(&PathBuf::from(&app_data).join("Compy").join("support"));
+
+        assert_ne!(shown, MASK_PATH, "the location must not render as the bare path mask");
+        assert!(shown.contains("Compy") && shown.contains("support"), "unusable location: {shown}");
+        if let Ok(user) = std::env::var("USERNAME") {
+            if user.len() >= 3 {
+                assert!(
+                    !shown.to_lowercase().contains(&user.to_lowercase()),
+                    "the account name leaked into the location: {shown}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn both_commands_still_route_the_location_through_the_readable_renderer() {
+        // The tests above prove display_location behaves; this proves the two #[tauri::command]s
+        // still USE it. Wiring the support dir back through the general redactor is exactly how the
+        // defect shipped, and no behavioural test can see it — both calls type-check and both
+        // return a String. The needles are assembled at runtime so the assertions' own text cannot
+        // satisfy them; prose must avoid the banned form too, since this scans the whole file.
+        let src = include_str!("support_evidence.rs");
+        let wired = format!("{}(&support_dir())", "display_location");
+        assert_eq!(src.matches(wired.as_str()).count(), 2, "both call sites must use it");
+        let banned = format!("{}(&support_dir()", "redact");
+        assert!(!src.contains(banned.as_str()), "the location must not go through redact()");
     }
 
     #[test]
@@ -876,7 +1009,10 @@ mod tests {
                 max_bytes: MAX_BYTES,
                 max_record_bytes: MAX_RECORD_BYTES,
             },
-            location: "<path>".into(),
+            // The shape the backend actually emits (see `display_location`) — NOT `MASK_PATH`. A
+            // fixture that encodes a shape the real code never produces is how the `<path>` defect
+            // survived a green suite in the first place.
+            location: r"%APPDATA%\Compy\support".into(),
             events,
             unreadable_records: 0,
         }
@@ -902,6 +1038,14 @@ mod tests {
         // Only the support projection carries the build header and the retention policy.
         assert!(support.contains("abc1234 · release") && support.contains("Retention"));
         assert!(!technical.contains("abc1234") && !consumer.contains("abc1234"));
+    }
+
+    #[test]
+    fn the_support_header_names_a_location_the_user_can_open() {
+        // The export is the file the user hands to support — "Stored at: <path>" told them nothing.
+        let out = render(&bundle_of(Vec::new()), Projection::Support);
+        assert!(out.contains(r"- Stored at: %APPDATA%\Compy\support"), "{out}");
+        assert!(!out.contains(&format!("Stored at: {MASK_PATH}")), "{out}");
     }
 
     #[test]
