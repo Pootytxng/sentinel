@@ -69,6 +69,16 @@
   `scripts/branch-disposition-audit.mjs`.
 - [ ] **P2 product completion:** owner-accepted canonical Lab + reversible generation pruning →
   first-win action/rollback/proof journey → Consumer/Technical/Support evidence exports.
+- [ ] **P2.5 retention/PMF signal — NOT blocked on P2 or telemetry** (owner-provided startup-term
+  analysis, `docs/superpowers/specs/2026-08-04-startup-term-analysis-review.md`; adopted
+  `docs/RECEIPTS_DOCTRINE.md` §8): PMF is unproven and is the #1 business risk, ahead of remaining
+  feature work. Run the spec's structured tester-interview question set (what did Compy help you
+  decide / what didn't you trust / what would stop you using it again / would you pay for continued
+  history or monitoring) against the confirmed v0.9.11 tester now, and every tester going forward —
+  A/B testing and NPS are statistically premature at this cohort size. Track manually: 7/30-day
+  return, second evidence-loop completion, willingness to pay. This is the honest substitute for the
+  North Star Metric (weekly active rigs completing a verified evidence loop) until Receipts
+  telemetry (§4 Phase 3 of the doctrine) exists to measure it at scale.
 - [ ] **LATER:** Intelligence Phase 4/5, vendor-awareness expansion, Receipts/crowd intelligence,
   remote rules, Pro/affiliate/B2B, and model-assisted explanation remain behind the blueprint's gates.
 

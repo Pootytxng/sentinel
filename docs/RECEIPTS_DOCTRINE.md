@@ -133,3 +133,37 @@ audit: *"does this serve the money stack or the trust that feeds it?"* Sport-mod
 token discipline, and ALL security rules are unchanged. The owner's integrity constraint is hard:
 aggressive is sanctioned, dirty is not — anything that would brand him a scammer is rejected on
 ROI grounds before ethics even enters the room.
+
+## 8. North Star Metric + KPI hierarchy (owner-provided startup-term analysis, 2026-08-04)
+
+Full analysis: `docs/superpowers/specs/2026-08-04-startup-term-analysis-review.md`. Its core
+finding: **Compy's engineering maturity has outrun its market validation.** The codebase is not the
+main uncertainty anymore — user dependence is. PMF/retention is the #1 business risk, ahead of any
+remaining feature work; a technically finished 1.0 does not by itself prove PMF, only creates a
+stable object PMF can finally be tested against.
+
+- **North Star Metric:** **Weekly Active Rigs Completing a Verified Evidence Loop.** A verified
+  evidence loop = diagnosis/recommendation → informed decision → apply/reject/rollback → recorded
+  outcome or receipt. Deliberately counts honest no-change and regression findings as loop
+  completions too, so the metric never rewards recommending more aggressive changes just to move
+  the number. Supporting quality measure: verified evidence loops per retained rig.
+- **The one conversion that matters most pre-revenue:** successful install → first verified
+  evidence loop. Not website conversion, not download count.
+- **KPI hierarchy (product / retention / business / trust)** — full lists in the spec §39. Track
+  these, not vanity metrics: total commits, test count, feature count, repo size, downloads without
+  activation, waitlist size without conversion, AI-generated TAM/valuation estimates.
+- **Positioning discipline:** never reframe Compy as an "AI operating system" — it dilutes the
+  actual differentiator and produces meaningless market-size numbers. The defensible position stays
+  narrow: cross-vendor performance diagnosis with reversible actions and proof of what changed on
+  *this* rig — something no single vendor (Microsoft PC Manager, Razer Cortex, AMD Adrenalin,
+  NVIDIA App) has a reason to build, because each is scoped to its own surface.
+- **Unit-economics reality check:** at ~$25/yr Pro pricing, even moderate human support cost
+  destroys the economics. This is the business case for the support-evidence/inspect-before-export
+  design already built — it's not just a privacy feature, it's a margin feature.
+- **Until Compy has real distribution, A/B testing and NPS are statistically premature** (a beta
+  cohort of ~6–10 personally-connected testers cannot support either). Direct interviews using the
+  spec's suggested question set are the honest substitute for retention signal right now.
+
+This section does not change the money-stack build order (§3) or phase gates (§4) — Receipts
+telemetry (§4 Phase 3) is already the infrastructure this North Star needs to measure at scale
+beyond manual tester interviews.
