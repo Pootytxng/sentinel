@@ -18,6 +18,7 @@ import { Term } from "./design/Term";
 import { Wordmark } from "./design/Wordmark";
 import { readCloseToTray, persistDisplayRefreshHz } from "./design/theme";
 import { ShellV2 } from "./design/ShellV2";
+import { KeepaliveRoom } from "./design/KeepaliveRoom";
 import { fmtGB } from "./surfaces/hardware-format";
 // Deep Monitoring panels + their sensor types — moved verbatim to surfaces/monitor-panels (T3)
 // so the summary-first MonitorDomainCards can reuse them as its expanded detail.
@@ -1251,7 +1252,7 @@ function App() {
         />
       )}
       {optimizeMountedRef.current && (
-        <div style={activeTab === "Optimize" ? undefined : { display: "none" }}>
+        <KeepaliveRoom active={activeTab === "Optimize"}>
           {optimizeMerged ? (
           // Merged shell: Check + Gaming + Fix under Fixes / Applied / History segments + the
           // persistent active-undo chip. Same props the standalone surfaces receive — pure
@@ -1308,7 +1309,7 @@ function App() {
             />
           </>
           )}
-        </div>
+        </KeepaliveRoom>
       )}
       {activeTab === "Play" &&
         (() => {
@@ -1564,7 +1565,7 @@ function App() {
               profiled Optimize-enter hitch). Mounted once, it now stays warm; returning is a cheap
               display toggle. Perf-only: same component, same props, same audited handlers. */}
           {optimizeV2MountedRef.current && optimizeMerged && hw && (
-            <div style={activeTab === "Optimize" ? undefined : { display: "none" }}>
+            <KeepaliveRoom active={activeTab === "Optimize"}>
               <OptimizeV2
                 isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
                 onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
@@ -1591,7 +1592,7 @@ function App() {
                 onExport={onExport}
                 exporting={exporting}
               />
-            </div>
+            </KeepaliveRoom>
           )}
           {activeTab === "Overview" && hw ? (
             <>

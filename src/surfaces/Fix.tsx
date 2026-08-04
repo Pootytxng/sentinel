@@ -6,7 +6,7 @@ import type { TFunction } from "i18next";
 import type { AppliedChange, StartupEntry } from "../types";
 import { TrustSwitch, TrustSnapshotLine } from "../design/TrustSwitch";
 import { WhatsThis } from "../design/WhatsThis";
-import { Walkthrough } from "../design/Walkthrough";
+import { WalkthroughDisclosure } from "../design/WalkthroughDisclosure";
 import { walkthroughForKeyForLanguage, type GpuVendor } from "./walkthroughs";
 import { useDismissed } from "./dismissed";
 import { useEligibilityOverrides } from "./eligibility-override";
@@ -391,10 +391,11 @@ export function SlimFixRow({
       )}
       <div className="slimrow-acts">
         {walkthrough && (
-          <details className="fix-walkthrough">
-            <summary>{t("optimize.fix.showMeTheWay")}</summary>
-            <Walkthrough walkthrough={walkthrough} vendor={vendor ?? "any"} />
-          </details>
+          <WalkthroughDisclosure
+            label={t("optimize.fix.showMeTheWay")}
+            walkthrough={walkthrough}
+            vendor={vendor ?? "any"}
+          />
         )}
         <WhatsThis id={rec.id} onOpen={onWhatsThis} />
         {/* Deliberate, reversible decline — applied rows can't be dismissed (roll back instead). */}
@@ -689,10 +690,11 @@ function GuidedRow({
               </p>
             )}
             {walkthrough && (
-              <details className="fix-walkthrough">
-                <summary>{t("optimize.fix.showMeTheWay")}</summary>
-                <Walkthrough walkthrough={walkthrough} vendor={vendor} />
-              </details>
+              <WalkthroughDisclosure
+                label={t("optimize.fix.showMeTheWay")}
+                walkthrough={walkthrough}
+                vendor={vendor}
+              />
             )}
           </div>
         )}

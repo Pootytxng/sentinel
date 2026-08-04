@@ -6,7 +6,7 @@ import type { PriorityItem, SessionSummary, StartupEntry } from "../types";
 import { TrustSwitch } from "../design/TrustSwitch";
 import { WhatsThis } from "../design/WhatsThis";
 import { useConfirm } from "../design/ConfirmDialog";
-import { Walkthrough } from "../design/Walkthrough";
+import { WalkthroughDisclosure } from "../design/WalkthroughDisclosure";
 import { walkthroughForKeyForLanguage, gpuVendor, type GpuVendor } from "./walkthroughs";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
 import { gpuRunningHot } from "../data/tuning-measure";
@@ -734,13 +734,11 @@ export default function Check({
                       {/* Advisory checks that need action outside Compy finally show the way
                           (walkthroughs §3) — the readiness check is no longer a dead "verify it yourself". */}
                       {!canApply(lim) && walkthroughForKeyForLanguage(lim.linked ?? lim.id, i18n.language) && (
-                        <details className="fix-walkthrough">
-                          <summary>{t("optimize.check.showMeTheWay")}</summary>
-                          <Walkthrough
-                            walkthrough={walkthroughForKeyForLanguage(lim.linked ?? lim.id, i18n.language)!}
-                            vendor={vendor}
-                          />
-                        </details>
+                        <WalkthroughDisclosure
+                          label={t("optimize.check.showMeTheWay")}
+                          walkthrough={walkthroughForKeyForLanguage(lim.linked ?? lim.id, i18n.language)!}
+                          vendor={vendor}
+                        />
                       )}
                     </div>
                     {canApply(lim) ? (
