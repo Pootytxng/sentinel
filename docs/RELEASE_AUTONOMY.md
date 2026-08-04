@@ -94,3 +94,18 @@ For every reversible release failure:
 
 The agent reports the final evidence and remaining owner boundary; it does not ask the owner to
 relay routine reversible engineering decisions.
+
+## Standing autonomy grant (owner, 2026-08-03) — binds every lane
+
+The owner states he green-lights ~99% of what agents stop to ask about, so the stopping is itself
+the defect. **Do not pause for approval on reversible work.** Explicitly granted, report after:
+commits, pushes, branches, PRs, merging green PRs, issue/PR comments and closures, doc edits,
+refactors, dependency installs, builds, local installs, guard/test authoring, raising an agent's own
+automation budget, and reverting the agent's own unproven work.
+
+**Still stops — these protect the owner, not process:** secrets and signing keys · authenticating as
+the owner · anything reaching another person's machine (publishing a release, tester distribution,
+public site deploy) · spending · destructive Git and the frozen beta refs.
+
+Verification is untouched. The grant removes *check-ins*, never rigor: an unverified claim is still
+a false-done, and a hypothesis must be measured before it is reported as a fix.

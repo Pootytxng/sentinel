@@ -32,7 +32,12 @@ import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STATE = join(__dirname, "..", "autopilot.json");
-const MAX_CONTINUES = 2; // matches the doc convention in USAGE_ECONOMICS.md §5
+// 2026-08-03 (owner standing grant): raised 2 -> 8. The clamp existed because chaining tasks in one
+// session manufactured >150k contexts and a weekly cap-out. The owner's instruction is to stop
+// stalling on approvals he grants anyway, so the budget rises — but the TOKEN LAW does not relax:
+// terse reports, section reads, minimal anchors. If context-size-advisor starts firing, lower this
+// again rather than absorbing the cost silently. Budget-capped and stop_hook_active-guarded as before.
+const MAX_CONTINUES = 8;
 
 /** Allow the stop. Optional one-line note shown to the user. */
 function allow(msg) {
