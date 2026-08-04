@@ -1,11 +1,10 @@
 # Compy — Gaming Mode (F1) Plan
 
-> **⚠️ STATUS (current): Gaming Mode is LIVE and signed off, not planned.** `gaming_mode_gate()`
-> (`src-tauri/src/lib.rs:520`) returns `true` — flipped 2026-06-18 after the §7 harness passed 6/6, and
-> **field QA closed 10/10 with owner sign-off on 2026-07-14** (`docs/GAMING_MODE_QA.md`, incl. the live
-> reboot-while-active case). Nothing about this feature is owner-pending. Read the sections below as the
-> standing **design + QA contract for the shipped feature**, not as "a feature still to be built."
-> `docs/RELEASE_STATE.md` remains authoritative on gate state.
+> **⚠️ STATUS (2026-06-27): Gaming Mode is now LIVE, not planned.** `gaming_mode_gate()` (`lib.rs:499`)
+> returns `true` — the gate was flipped on 2026-06-18 with owner sign-off after the §7 QA harness passed
+> 6/6 scenarios. Only the live reboot-while-active QA remains owner-pending (see `docs/GAMING_MODE_QA.md`
+> and `docs/RELEASE_STATE.md`). Read the sections below as the standing **design + QA contract for the
+> shipped feature**, not as "a feature still to be built."
 
 This is the design + QA contract for Gaming Mode, the only feature that introduces **mutation**. It was
 built deliberately, behind its own QA gate.
@@ -116,43 +115,24 @@ recovery never applies new changes — only restores.**
 
 Each verified on a UAC-on machine; restore must always reach the exact prior state or fail loudly.
 
-**Execution and results live in `docs/GAMING_MODE_QA.md`** — that doc is the record, this is the
-contract. It ran 10 field cases and **owner-signed-off 2026-07-14**. Its case numbering is its own;
-the `→ QA #n` pointers below are the mapping. The three items it did **not** cover stay unchecked.
-
-- [x] **Normal start → end:** prior plan restored exactly; summary saved; file cleared. → QA #1 (the *summary saved* sub-clause rides the still-open item below).
-- [x] **App crash while Active:** next launch detects the session, prompts, restores on confirm. → QA #3
-- [x] **PC reboot while Active:** same — survives a full reboot via the on-disk contract. → QA #4, the headline case
-- [x] **Game exits unexpectedly:** end triggers, restores, summary saved. → QA #5
-- [x] **UAC cancel during start:** no partial state left (→ `RestorePending` undo); clear message; no session file lingering as `active` without a contract. → QA #6
-- [x] **UAC cancel during restore:** → `RestoreFailed`; contract retained; clear retry path; never reports success. → QA #7 (this run exposed the runas-decline misattribution bug; fixed and re-proven before sign-off)
-- [x] **Missing power plan at restore:** fail safe with a clear message (reuse `070c3c9` behavior); never silent fallback. → QA #8
-- [x] **External power-plan change mid-session:** restore still targets the **stored** GUID; honest "still active?" recompute. → QA #9
+- [ ] **Normal start → end:** prior plan restored exactly; summary saved; file cleared.
+- [ ] **App crash while Active:** next launch detects the session, prompts, restores on confirm.
+- [ ] **PC reboot while Active:** same — survives a full reboot via the on-disk contract.
+- [ ] **Game exits unexpectedly:** end triggers, restores, summary saved.
+- [ ] **UAC cancel during start:** no partial state left (→ `RestorePending` undo); clear message; no session file lingering as `active` without a contract.
+- [ ] **UAC cancel during restore:** → `RestoreFailed`; contract retained; clear retry path; never reports success.
+- [ ] **Missing power plan at restore:** fail safe with a clear message (reuse `070c3c9` behavior); never silent fallback.
+- [ ] **External power-plan change mid-session:** restore still targets the **stored** GUID; honest "still active?" recompute.
 - [ ] **Monitoring start failure:** Gaming Mode still applies/ restores correctly; monitoring failure is non-fatal and surfaced.
 - [ ] **Overlay failure:** same — non-fatal, surfaced, doesn't block restore.
 - [ ] **Session summary still saved when safe** (game presented frames), and absent cleanly when not.
 
-The last three are **unproven, not failing** — no field case and no named automated test covers them.
-They sit off the restore contract (monitoring and the overlay are non-fatal side effects; the summary
-is written after restore), which is why the gate flipped without them. Do not report them as passed,
-and do not report them as blocking: QA #2 and #10 — consent gate, and advanced tier = one UAC prompt —
-were field-proven *beyond* this list and have no row here.
-
 ## 9. Release gate
 
-**This gate is CLOSED — it was satisfied, not waived.** `gaming_mode_gate()` returns `true`
-(`src-tauri/src/lib.rs:520`).
-
-The requirement it imposed: Gaming Mode could not ship on the 2026-05-31 manual-mutation QA sign-off,
-because that sign-off covered the recommendation apply/rollback engine and **not** Gaming Mode's
-session lifecycle or crash-recovery — so it demanded a green §8 plus an owner sign-off naming Gaming
-Mode specifically. Both were produced: the §7 restore-contract harness passed 6/6 (gate flipped
-2026-06-18), and the field checklist in `docs/GAMING_MODE_QA.md` closed **10/10 on real hardware with
-real UAC prompts and a real reboot — owner sign-off 2026-07-14**, on its own terms rather than by
-inheriting the 2026-05-31 one.
-
-Three §8 rows remain unchecked (monitoring-start failure, overlay failure, summary-saved-when-safe).
-They are off the restore contract and were never part of what this gate demanded; see §8.
+**Gaming Mode cannot ship until its own mutation QA (§8) passes.** The existing manual-mutation QA
+sign-off (2026-05-31) covers the recommendation apply/rollback engine — it does **not** cover
+Gaming Mode's session lifecycle or crash-recovery. Gaming Mode stays gated until §8 is green and
+the owner signs off on it specifically.
 
 ## 10. Implementation sequence
 
@@ -167,6 +147,4 @@ They are off the restore contract and were never part of what this gate demanded
 6. **Optional per-game auto-detection** — opt-in, OFF by default; reuse the ETW presenter detection
    (Compy-safe, no injection). Auto-detect may *prompt*, but does not silently mutate.
 
-Gaming Mode has left that gate (§9): §8's restore-contract rows and the owner sign-off are recorded.
-This sequence is kept as the build order that was followed, not as outstanding work — for what is
-actually shipped today, read the code and `docs/RELEASE_STATE.md`, not this list.
+Only after all of the above + §8 QA + owner sign-off does Gaming Mode leave its gate.
