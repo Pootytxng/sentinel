@@ -20,6 +20,7 @@
 | `guard-forge` | a defect was caught, BEFORE its fix is claimed done | any | bug→guard law; red→green proof required; tiers: test > rubric > memory. |
 | `doc-sync` | any state change; any two docs disagreeing | any | Precedence (RELEASE_STATE=state, CLAUDE.md=law, code>both) + same-commit ordering. |
 | `usage-audit` | owner asks about usage/tokens/budget; a 🔴 in `docs/usage-audit/LATEST.md` | layer 1: `node scripts/usage-audit.mjs` (no LLM) · layer 2: any (terse) | Session/token discipline meter. Weekly report auto-written by the `CompyUsageAudit` scheduled task (Mondays, zero tokens). |
+| `status` | "where are we" / "what's left" / "show me" / end of any train | dispatcher: any · doc reads: **sonnet** | Added 2026-08-05: >50% of the owner's short messages are status questions and there was no surface for them. Reconstructs from git + the state docs; never answers from session memory. |
 
 **Subagent routing (condensed):** haiku = mechanical search/read/format · sonnet = research/verify/
 audit/review (the default worker — CC pins it via `settings.json` `CLAUDE_CODE_SUBAGENT_MODEL`) ·
