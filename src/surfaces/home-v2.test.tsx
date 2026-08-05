@@ -260,7 +260,10 @@ describe("HomeV2 — glance cards (fill pass)", () => {
     useReduced();
     mount();
     expect(screen.getByText("Nothing's drifted")).toBeTruthy();
-    expect(screen.getByText("every applied change is still holding")).toBeTruthy();
+    // The note names what drift actually folds — readiness-check observations, never the
+    // applied-change list (readiness.rs). It used to say "every applied change is still holding",
+    // which claimed a set drift never reads; see ledger-health-home-guard.test.tsx.
+    expect(screen.getByText("no check Compy watches has slipped since last time")).toBeTruthy();
   });
 
   it("N drifts → honest count + names ≤2 with 'and N more' (warn)", () => {

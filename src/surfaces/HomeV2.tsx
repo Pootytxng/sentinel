@@ -225,6 +225,8 @@ export function HomeV2({
   // see design/LedgerHealthNotice.tsx.
   const health = useLedgerHealth(changes);
   const ledgerBlank = changes.length === 0 && !!knownIncomplete(health);
+  // See HomeHud: the absolute reversibility promise is withdrawn on health alone, not on the count.
+  const ledgerUnvouched = !!knownIncomplete(health);
 
   // ── Glanceable fill (spec 2026-07-05) — measured-only sources for the two glance cards ──
   // Drift watch: the A5 drift signal, surfaced on Home for the first time (no one-mention clash).
@@ -469,7 +471,11 @@ export function HomeV2({
                 <span className="hv2-stat-n hv2-mono">
                   {reduced ? activeCount : <CountUp to={activeCount} duration={0.9} />}
                 </span>
-                <span className="hv2-stat-d">{t("home.homeV2.stats.activeChangesNote")}</span>
+                <span className="hv2-stat-d">
+                  {ledgerUnvouched
+                    ? t("common.ledgerHealth.activeChangesUnvouched")
+                    : t("home.homeV2.stats.activeChangesNote")}
+                </span>
               </>
             )}
           </SpotlightCard>

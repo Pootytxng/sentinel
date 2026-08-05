@@ -300,6 +300,12 @@ export function HomeHud({
   // disabled) leaves everything byte-identical to healthy — see design/LedgerHealthNotice.tsx.
   const health = useLedgerHealth(changes);
   const ledgerBlank = changes.length === 0 && !!knownIncomplete(health);
+  // The EMPTY branch is not the only place this record can lie. With a PARTIAL list the count is
+  // still real (a floor), so the reading stays — but "every one reversible from the ledger" is an
+  // absolute, and it is false in both incomplete shapes: unreadable refuses undo outright, and
+  // quarantined keeps the pre-quarantine changes off this list and out of reach. So the promise is
+  // withdrawn on health alone, independent of the count.
+  const ledgerUnvouched = !!knownIncomplete(health);
 
   const drifts = readiness?.drifts ?? [];
   const driftNames =
@@ -585,7 +591,11 @@ export function HomeHud({
                 <span className="hud-reading hud-mono">
                   {reduced ? activeCount : <CountUp to={activeCount} duration={0.9} />}
                 </span>
-                <span className="hud-note">{t("home.homeHud.ledger.activeChangesNote")}</span>
+                <span className="hud-note">
+                  {ledgerUnvouched
+                    ? t("common.ledgerHealth.activeChangesUnvouched")
+                    : t("home.homeHud.ledger.activeChangesNote")}
+                </span>
               </>
             )}
           </Module>

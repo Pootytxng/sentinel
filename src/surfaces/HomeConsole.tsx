@@ -16,6 +16,7 @@ import { useReducedMotion } from "../design/use-motion";
 import { useIntelligenceFlag, useHomeIntakeFlag } from "../design/use-hud";
 import { readHologramV2 } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
+import { LedgerHealthNotice, useLedgerHealth } from "../design/LedgerHealthNotice";
 import { activeChangeCount } from "./dashboard-data";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { useDocumentVisible } from "../data/use-document-visible";
@@ -411,6 +412,15 @@ export function HomeConsole({
 
   // ── measured derivations (all real, all honestly empty when absent — HomeHud's exact logic) ──
   const posture = postureLine(readiness, priorities, activeChangeCount(changes), t);
+  // This is the Home a default-flag user actually lands on (compy_home_console DEFAULT ON), so it
+  // is where the ledger-completeness disclosure matters most. postureLine already declines to print
+  // a count it doesn't have — at zero changes the change-note is omitted rather than rendered as
+  // "0" — so this surface was silent, not lying. Silence is still the wrong answer when the reason
+  // for the silence is that Compy cannot read its own record: the verdict below reassures, and an
+  // unexplained reassurance over an unreadable ledger reads as "nothing happened". The notice says
+  // which of the two it is. Self-nulling when health is complete or UNKNOWN, so the healthy
+  // cold-open stays byte-identical.
+  const ledgerHealth = useLedgerHealth(changes);
   const strip = liveStrip(sessions, t);
   const rig = { refreshHz: hw.display?.current_refresh_rate_hz ?? null };
   const avgFps = strip.kind === "data" ? strip.avgFps : null;
@@ -579,6 +589,9 @@ export function HomeConsole({
         {/* THE COLD-OPEN VERDICT — relocated out of the h1 (title-header law): postureLine's
             real headline + its trimmed sentence, tone-inked, rendered exactly ONCE on this
             screen (one-mention law). */}
+        {/* Above the verdict it qualifies — a caveat printed under its subject has already failed
+            at its job. */}
+        <LedgerHealthNotice health={ledgerHealth} />
         <div className={`hc-verdict hc-verdict-${posture.tone}`}>
           <span className="hc-verdict-line" key={posture.headline}>
             {posture.headline}

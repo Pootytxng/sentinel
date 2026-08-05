@@ -2,7 +2,9 @@
 // by `b60a314`/`a1d5f53`, the Blackbook Logbook by `61e092c`, the Benchmark tab by `4150eb3`).
 //
 // `get_applied_changes` degrades a Trust Ledger it cannot READ to an empty array. Home is the first
-// surface every user sees, and BOTH its faces print that emptiness as two readings plus a sentence:
+// surface every user sees, and it has THREE faces, not two: HomeConsole (compy_home_console, DEFAULT
+// ON — what a real user lands on) plus HomeHud and HomeV2 behind the "0" failsafe. The two failsafe
+// faces print that emptiness as two readings plus a sentence:
 //
 //     Active changes   0    every one reversible from the ledger
 //     Trust ledger     0    nothing applied yet — your PC is untouched
@@ -24,7 +26,16 @@
 // byte for byte — claiming incompleteness from a failed read is the same sin, mirrored.
 //
 // Narrowing applies to the EMPTY branch only. A PARTIAL list still names its real (floor) count and
-// its latest change; the notice above it discloses that the number is a floor.
+// its latest change; the notice above it discloses that the number is a floor. But the SENTENCE beside
+// that count is not a measurement — "every one reversible from the ledger" is an absolute, and it is
+// false in both incomplete shapes (unreadable refuses undo outright; quarantined keeps the earlier
+// changes off the list and out of reach). So the count survives the partial case and the promise does
+// not — pinned below, because a guard that only checks the number would pass on the bigger lie.
+//
+// HomeConsole fails differently and is pinned separately at the bottom: postureLine() omits the change
+// note entirely at zero rather than printing a "0", so that face was SILENT, not lying. Silence is
+// still wrong when the reason for it is an unreadable record — the verdict beside it reassures, and an
+// unexplained reassurance reads as "nothing happened".
 import { describe, it, expect, vi, afterEach, beforeEach, beforeAll } from "vitest";
 import { render, screen, cleanup, act } from "@testing-library/react";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
@@ -61,6 +72,7 @@ vi.mock("./rig/RigHologram", () => ({
 
 import { HomeHud } from "./HomeHud";
 import { HomeV2 } from "./HomeV2";
+import { HomeConsole } from "./HomeConsole";
 import { HomeRoom } from "./HomeRoom";
 import { ShellV2 } from "../design/ShellV2";
 import { railFor } from "../design/homeRail";
@@ -178,6 +190,7 @@ const FABRICATED = "nothing applied yet — your PC is untouched";
 const REVERSIBLE_NOTE = "every one reversible from the ledger";
 const ACTIVE_WITHDRAWN = "unknown — Compy can't read its own record";
 const TRACKED_WITHDRAWN = "unknown — not the same as nothing applied";
+const UNVOUCHED = "Compy can't promise every change here can be undone";
 
 type Face = {
   name: string;
@@ -347,6 +360,55 @@ describe.each(FACES)("$name may not report a ledger it can't read as an untouche
     const ledger = cardFor(container, face, face.ledgerLabel);
     expect(ledger.textContent).toContain("Hardware-accelerated GPU scheduling");
     expect(container.querySelector(".ledger-health")).toBeTruthy();
+
+    // The count is a measurement and survives; the sentence beside it is an absolute and does not.
+    // Both incomplete shapes falsify it, so it is withdrawn on health alone — checking only the
+    // number here would have passed while the page still promised undo it cannot deliver.
+    expect(active.textContent).not.toContain(REVERSIBLE_NOTE);
+    expect(active.textContent).toContain(UNVOUCHED);
+  });
+
+  it("an unreadable PARTIAL list withdraws the same promise — undo is refusing outright there", async () => {
+    health.value = UNREADABLE;
+    const { container } = await mount(face, [CHANGE]);
+
+    const active = cardFor(container, face, face.activeLabel);
+    expect(active.querySelector(face.num)?.textContent).toContain("1");
+    expect(active.textContent).not.toContain(REVERSIBLE_NOTE);
+    expect(active.textContent).toContain(UNVOUCHED);
+  });
+
+  it("a HEALTHY list keeps the promise at the same count — the swap is health-gated, not count-gated", async () => {
+    const { container } = await mount(face, [CHANGE]);
+
+    const active = cardFor(container, face, face.activeLabel);
+    expect(active.querySelector(face.num)?.textContent).toContain("1");
+    expect(active.textContent).toContain(REVERSIBLE_NOTE);
+    expect(active.textContent).not.toContain(UNVOUCHED);
+    expect(container.querySelector(".ledger-health")).toBeNull();
+  });
+
+  // Drift watch sits a few modules below the two readings above, ungated by health — and it used to
+  // end the same page with "nothing's drifted — every applied change is still holding", a green LED
+  // over a set Compy had just admitted it could not enumerate. But the fix is NOT to gate it: drift
+  // is folded from readiness-check observations and never reads history.json (readiness.rs — the
+  // observations are `r.checks`), so the reading itself stays true under any ledger health, and
+  // withdrawing a real measurement would be the mirrored sin. What was false was the CLAUSE, on
+  // every path including the healthy one — drift watches checks, not the applied-change list, so an
+  // applied change with no matching check could revert unseen. Correcting it to name what drift
+  // actually measures removes the contradiction without a branch. Both halves are pinned here.
+  it.each([
+    ["healthy", HEALTHY],
+    ["quarantined", QUARANTINED],
+    ["unreadable", UNREADABLE],
+    ["UNKNOWN", null],
+  ])("drift watch reads the same under a %s ledger, and speaks only for what it measures", async (_shape, value) => {
+    health.value = value;
+    const { container } = await mount(face, [CHANGE]);
+    const text = container.textContent ?? "";
+    expect(text.toLowerCase()).toContain("nothing's drifted");
+    expect(text).toMatch(/no check Compy watches has slipped/i);
+    expect(text).not.toMatch(/applied change is still holding/i);
   });
 });
 
@@ -417,5 +479,104 @@ describe("the refusal reaches the user, not just the component", () => {
 
     expect(cardFor(container, face, face.activeLabel).textContent).toContain(ACTIVE_WITHDRAWN);
     expect(container.textContent).not.toContain(FABRICATED);
+  });
+});
+
+// The third face, and the one that actually ships: compy_home_console is DEFAULT ON, so the two
+// faces above are the failsafe and this is the cold open a real user sees. It never printed a false
+// claim — postureLine() omits the change note at zero rather than rendering a "0" — so there is no
+// sentence to withdraw here, only a silence to explain. Same three states, same failsafe: a notice
+// when the record is known-incomplete, nothing at all when it is healthy or UNKNOWN.
+describe("HomeConsole — the face a default-flag user actually lands on", () => {
+  async function mountConsole(changes: AppliedChange[] = []) {
+    useReduced();
+    const r = render(
+      <ShellV2
+        items={railFor(true)}
+        activeId="home"
+        onNavigate={() => {}}
+        ledgerCount={changes.length}
+        version="0.1.0"
+      >
+        <HomeConsole {...props(changes)} />
+      </ShellV2>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    return r;
+  }
+
+  it.each([
+    ["quarantined", QUARANTINED, QUARANTINED_TITLE],
+    ["unreadable", UNREADABLE, UNREADABLE_TITLE],
+  ])("a %s ledger is disclosed ABOVE the verdict it qualifies", async (_shape, value, title) => {
+    health.value = value;
+    const { container } = await mountConsole();
+
+    const box = container.querySelector(".ledger-health");
+    expect(box).toBeTruthy();
+    expect(screen.getByText(title)).toBeTruthy();
+
+    const verdict = container.querySelector(".hc-verdict");
+    expect(verdict).toBeTruthy();
+    // The verdict is the reassurance; a caveat printed under it has already failed at its job.
+    expect(box!.compareDocumentPosition(verdict!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.querySelectorAll(".ledger-health").length).toBe(1);
+  });
+
+  it("a healthy ledger renders no notice — the cold open is untouched", async () => {
+    const { container } = await mountConsole();
+
+    expect(container.querySelector(".ledger-health")).toBeNull();
+    expect(container.querySelector(".hc-verdict")).toBeTruthy();
+  });
+
+  it("UNKNOWN health leaves the room BYTE-IDENTICAL to a healthy ledger", async () => {
+    // Same failsafe the two faces above carry, and the same reason for freezing Date: the console
+    // prints a dateline, so a midnight straddle would read as a false red on a byte-identity pin.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-07-17T12:00:00"));
+    try {
+      const healthy = (await mountConsole()).container.innerHTML;
+      cleanup();
+
+      health.reject = true;
+      const unknown = (await mountConsole()).container.innerHTML;
+
+      expect(unknown).toBe(healthy);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("is reachable from HomeRoom on the DEFAULT flags — nothing set in localStorage", async () => {
+    // The other two faces need a flag written to reach them. This one is what you get by doing
+    // nothing, which is why a fix that skipped it would have missed nearly every real user.
+    useReduced();
+    health.value = QUARANTINED;
+
+    const { container } = render(
+      <ShellV2
+        items={railFor(true)}
+        activeId="home"
+        onNavigate={() => {}}
+        ledgerCount={0}
+        version="0.1.0"
+      >
+        <HomeRoom {...props([])} />
+      </ShellV2>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector(".hc-verdict")).toBeTruthy();
+    expect(container.querySelector(".ledger-health")).toBeTruthy();
+    expect(screen.getByText(QUARANTINED_TITLE)).toBeTruthy();
   });
 });

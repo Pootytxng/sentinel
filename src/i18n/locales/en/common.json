@@ -174,6 +174,7 @@
   },
   "ledgerHealth": {
     "activeUnknown": "unknown — Compy can't read its own record",
+    "activeChangesUnvouched": "Compy can't promise every change here can be undone",
     "trackedUnknown": "unknown — not the same as nothing applied",
     "unreadableTitle": "Compy can't read its own record right now",
     "unreadableBody": "So this list isn't the whole story. Compy won't apply or undo anything until it can read the record again — it refuses rather than guessing at what's on your PC.",
