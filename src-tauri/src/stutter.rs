@@ -136,4 +136,24 @@ mod stutter_tests {
         let events = vec![ev(31, "OneDrive.exe starting"), ev(59, "OneDrive.exe starting")];
         assert!(analyze(&t, &events).is_none());
     }
+
+    #[test]
+    fn tied_signal_counts_break_deterministically_by_label() {
+        // Two DIFFERENT signals each line up with both worst dips (tied count = 2). The pick must be
+        // deterministic across runs (HashMap iteration order is randomized), broken by ascending
+        // label — this pins the `ranked.sort_by` tie-break so it can't silently regress to
+        // "whichever HashMap happened to iterate first" and name a different culprit each run.
+        let events = vec![
+            ev(31, "Zed.exe starting"),
+            ev(59, "Zed.exe starting"),
+            ev(31, "Alpha.exe starting"),
+            ev(59, "Alpha.exe starting"),
+        ];
+        let out = analyze(&timeline_with_dips(), &events).expect("a pattern");
+        assert!(
+            out.contains("Alpha.exe starting"),
+            "tie must break to the alphabetically-first label, got: {out}"
+        );
+        assert!(!out.contains("Zed.exe starting"));
+    }
 }

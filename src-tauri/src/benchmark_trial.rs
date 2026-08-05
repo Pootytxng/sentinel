@@ -574,6 +574,21 @@ mod trial_tests {
         assert!(run_to_run_noise(&loose) > run_to_run_noise(&tight));
     }
 
+    #[test]
+    fn noise_is_zero_for_a_single_window() {
+        // Fewer than 2 windows → no variance is computable; must not divide by (n - 1) = 0.
+        assert_eq!(run_to_run_noise(&[win(100.0)]), 0.0);
+        assert_eq!(run_to_run_noise(&[]), 0.0);
+    }
+
+    #[test]
+    fn noise_is_zero_when_mean_is_non_positive() {
+        // A zero/negative mean 1%-low would divide-by-near-zero into a nonsense percentage — the
+        // honest answer is 0.0 (no claim), never a fabricated or infinite noise figure.
+        let ws = vec![win(0.0), win(0.0), win(0.0)];
+        assert_eq!(run_to_run_noise(&ws), 0.0);
+    }
+
     // ── §2a aggregate-stack A/B guards (mutation-gate item 7 + 8) ──
 
     #[test]

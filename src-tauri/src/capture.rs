@@ -275,4 +275,39 @@ mod capture_tests {
             CaptureCapabilities::etw_dxgi(Some("t".to_string()))
         );
     }
+
+    #[test]
+    fn shared_metrics_is_empty_when_backends_share_nothing() {
+        // Task H guard: a future backend that captures NONE of the same axes must offer nothing for
+        // comparison — an empty intersection, never a fabricated shared metric.
+        let mut disjoint = CaptureCapabilities::etw_dxgi(None);
+        disjoint.backend_id = "hypothetical-disjoint".to_string();
+        disjoint.supports_app_fps = false;
+        disjoint.supports_gpu_telemetry = true;
+        let etw = CaptureCapabilities::etw_dxgi(None);
+        assert!(etw.shared_metrics(&disjoint).is_empty());
+    }
+
+    #[test]
+    fn parse_sample_default_impl_parses_the_wire_format() {
+        // The default `parse_sample` on the CaptureBackend trait is what the monitoring read site
+        // actually calls for the live ETW helper — untested until now. Valid JSON round-trips.
+        let b = EtwDxgiBackend;
+        let raw = r#"{"pid":123,"process_name":"cs2.exe","fps":144.0,"avg_frametime_ms":6.9,
+            "low1_fps":120.0,"frames_last_sec":144,"recent_frametimes_ms":[6.9,7.1,6.8]}"#;
+        let sample = b.parse_sample(raw).expect("valid sample line parses");
+        let rt = serde_json::to_value(&sample).unwrap();
+        assert_eq!(rt["pid"], 123);
+        assert_eq!(rt["process_name"], "cs2.exe");
+    }
+
+    #[test]
+    fn parse_sample_default_impl_rejects_malformed_input() {
+        // A malformed or partial line (e.g. a torn write, a future field-set the helper hasn't
+        // caught up to) must yield `None`, never panic the monitoring read loop.
+        let b = EtwDxgiBackend;
+        assert!(b.parse_sample("not json").is_none());
+        assert!(b.parse_sample("{}").is_none(), "missing required fields must not parse");
+        assert!(b.parse_sample("").is_none());
+    }
 }
