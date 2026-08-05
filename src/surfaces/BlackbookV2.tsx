@@ -10,6 +10,7 @@ import { HudMasthead } from "./hud-masthead";
 import { readAutopsyLedger } from "../data/autopsy-ledger";
 import { blackbookVerdict } from "./blackbook-v2-data";
 import { BlackbookConsole } from "./blackbook/BlackbookConsole";
+import { useLedgerHealth } from "../design/LedgerHealthNotice";
 import { PatternsTile } from "./blackbook/PatternsTile";
 import { buildLogbook } from "./blackbook/logbook";
 import type { AppliedChange, SessionSummary, IntelEvent, IntelligenceTimeline } from "../types";
@@ -107,6 +108,14 @@ export function BlackbookV2({
     [changes, sessions, ledger, observed],
   );
 
+  // Whether the Trust Ledger behind the tape's Change records is the WHOLE story. `get_applied_changes`
+  // degrades a ledger it cannot READ to an empty array, and the tape renders that emptiness as a
+  // claim about the machine ("since <date>", "nothing changed yet") — the same defect the Optimize
+  // ledger fixed, on the same file. Keyed on `changes` so health is read on the same tick as the rows
+  // it qualifies, and only while the console face can render the disclosure (classic mode makes no
+  // IPC). UNKNOWN leaves every line below exactly as it was — see `design/LedgerHealthNotice.tsx`.
+  const health = useLedgerHealth(changes, consoleOn);
+
   return (
     <RoomShell
       room="learn"
@@ -172,6 +181,7 @@ export function BlackbookV2({
               <PatternsTile />
               <BlackbookConsole
                 records={records}
+                health={health}
                 vendor={vendor}
                 onOpenLab={() => onOpenLab?.()}
                 onOpenGuide={(fid) => {

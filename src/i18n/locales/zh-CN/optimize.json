@@ -289,14 +289,6 @@
     "applyAllCount": "全部应用({{count}})",
     "activeOnThisPc": "在这台电脑上生效中",
     "nothingActiveOnThisPc": "这台电脑上目前没有生效中的更改——Compy 应用的任何更改都会显示在这里,可一键撤销。",
-    "ledgerHealth": {
-      "unreadableTitle": "Compy 目前读不到自己的记录",
-      "unreadableBody": "所以这份列表并不完整。在能重新读取记录之前,Compy 不会应用或撤销任何更改——它宁可拒绝,也不会靠猜测去改动你的电脑。",
-      "quarantinedTitle": "Compy 无法告诉你它做过的全部更改",
-      "quarantinedBody": "记录在此前某次运行中损坏了,Compy 没有删除它,而是原封不动地把原文件挪到了一旁。没有任何东西被丢弃——但在那之前所做的更改不会出现在这份列表里,也无法从这里撤销。",
-      "revealFile": "看看 Compy 挪走的那个文件",
-      "revealFolder": "打开 Compy 文件夹"
-    },
     "history": "历史记录",
     "historyIntro": "完整记录——应用、回滚、被取代,一应俱全。点击任意一行即可查看详情凭证。",
     "thisRigOnly": "仅此主机",

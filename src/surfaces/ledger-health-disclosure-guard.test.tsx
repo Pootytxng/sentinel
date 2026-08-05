@@ -104,10 +104,10 @@ describe("the ledger cannot vouch for itself", () => {
     expect(claim(container)).toBeNull();
 
     expect(screen.getByText(QUARANTINED_TITLE)).toBeTruthy();
-    expect(container.querySelector(".fix-ledger-health")).toBeTruthy();
+    expect(container.querySelector(".ledger-health")).toBeTruthy();
     // The durable half of the message: the bytes were preserved, but the pre-quarantine changes are
     // gone from this list and unrollbackable from here. Both halves must survive a copy edit.
-    const body = container.querySelector(".fix-ledger-health-body")?.textContent ?? "";
+    const body = container.querySelector(".ledger-health-body")?.textContent ?? "";
     expect(body).toMatch(/set the original aside/i);
     expect(body).toMatch(/can't be undone from here/i);
   });
@@ -123,11 +123,11 @@ describe("the ledger cannot vouch for itself", () => {
     expect(claim(container)).toBeNull();
     expect(screen.getByText(UNREADABLE_TITLE)).toBeTruthy();
     // Support evidence: the OS message is the diagnostic. Summarising it away loses the only clue.
-    expect(container.querySelector(".fix-ledger-health-detail")?.textContent).toBe(
+    expect(container.querySelector(".ledger-health-detail")?.textContent).toBe(
       "failed to read history.json: The process cannot access the file",
     );
     // The transient half must say applies and rollbacks are refusing — not merely that a list is short.
-    expect(container.querySelector(".fix-ledger-health-body")?.textContent ?? "").toMatch(
+    expect(container.querySelector(".ledger-health-body")?.textContent ?? "").toMatch(
       /won't apply or undo anything/i,
     );
   });
@@ -136,11 +136,11 @@ describe("the ledger cannot vouch for itself", () => {
     health.value = { complete: false, error: "invalid JSON at line 1", quarantined: true };
     const { container } = await mountFix();
 
-    const bodies = container.querySelectorAll(".fix-ledger-health-body");
+    const bodies = container.querySelectorAll(".ledger-health-body");
     expect(bodies.length).toBe(2);
-    expect(container.querySelectorAll(".fix-ledger-health").length).toBe(1);
-    expect(container.querySelectorAll(".fix-ledger-health-title").length).toBe(1);
-    expect(container.querySelector(".fix-ledger-health-detail")?.textContent).toBe(
+    expect(container.querySelectorAll(".ledger-health").length).toBe(1);
+    expect(container.querySelectorAll(".ledger-health-title").length).toBe(1);
+    expect(container.querySelector(".ledger-health-detail")?.textContent).toBe(
       "invalid JSON at line 1",
     );
   });
@@ -150,7 +150,7 @@ describe("the ledger cannot vouch for itself", () => {
     const { container } = await mountFix();
 
     expect(claim(container)?.textContent).toMatch(/^Nothing active on this PC/);
-    expect(container.querySelector(".fix-ledger-health")).toBeNull();
+    expect(container.querySelector(".ledger-health")).toBeNull();
   });
 
   it("UNKNOWN health is not incompleteness — a failed probe may not manufacture a warning either", async () => {
@@ -158,7 +158,7 @@ describe("the ledger cannot vouch for itself", () => {
     const { container } = await mountFix();
 
     expect(claim(container)?.textContent).toMatch(/^Nothing active on this PC/);
-    expect(container.querySelector(".fix-ledger-health")).toBeNull();
+    expect(container.querySelector(".ledger-health")).toBeNull();
   });
 
   it("the disclosure qualifies rows too, and is read before them", async () => {
@@ -166,7 +166,7 @@ describe("the ledger cannot vouch for itself", () => {
     health.value = { complete: false, error: null, quarantined: true };
     const { container } = await mountFix([CHANGE]);
 
-    const box = container.querySelector(".fix-ledger-health");
+    const box = container.querySelector(".ledger-health");
     const rows = screen.getByText("Active on this PC");
     expect(box).toBeTruthy();
     expect(screen.getByText("Hardware-accelerated GPU scheduling")).toBeTruthy();
@@ -179,14 +179,14 @@ describe("the disclosure carries its own fix ([[flags-name-it-and-fix-it-inline]
   it("points at the preserved file when there is one, and at the folder when there is not", async () => {
     health.value = { complete: false, error: null, quarantined: true };
     const { container } = await mountFix();
-    expect(container.querySelector(".fix-ledger-health-action")?.textContent).toBe(
+    expect(container.querySelector(".ledger-health-action")?.textContent).toBe(
       "Show me the file Compy set aside",
     );
 
     cleanup();
     health.value = { complete: false, error: "locked", quarantined: false };
     const second = await mountFix();
-    expect(second.container.querySelector(".fix-ledger-health-action")?.textContent).toBe(
+    expect(second.container.querySelector(".ledger-health-action")?.textContent).toBe(
       "Open the Compy folder",
     );
   });
@@ -197,7 +197,7 @@ describe("the disclosure carries its own fix ([[flags-name-it-and-fix-it-inline]
     const { container } = await mountFix();
 
     await act(async () => {
-      fireEvent.click(container.querySelector(".fix-ledger-health-action")!);
+      fireEvent.click(container.querySelector(".ledger-health-action")!);
       await Promise.resolve();
     });
 

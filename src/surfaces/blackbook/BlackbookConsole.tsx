@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useReducedMotion } from "../../design/use-motion";
 import { Term } from "../../design/Term";
+import { LedgerHealthNotice, knownIncomplete } from "../../design/LedgerHealthNotice";
 import { prettyGameName } from "../game-name";
+import type { LedgerHealth } from "../../types";
 import type { GpuVendor } from "../walkthroughs";
 import {
   startHereEntries,
@@ -195,11 +197,16 @@ function ObservedBody({ r }: { r: LogbookObserved }) {
 
 export function BlackbookConsole({
   records,
+  health = null,
   vendor,
   onOpenLab,
   onOpenGuide,
 }: {
   records: LogbookRecord[];
+  /** Whether the Trust Ledger behind the Change records is the WHOLE story (BlackbookV2 probes it).
+   *  UNKNOWN — null, the default — leaves every line of this room exactly as it was; only a KNOWN
+   *  incomplete ledger narrows the claims below. See `design/LedgerHealthNotice.tsx`. */
+  health?: LedgerHealth | null;
   vendor: GpuVendor;
   /** Route to the Lab's Optimize station — the ONE audited undo home (owner decision 2026-07-10). */
   onOpenLab: () => void;
@@ -256,8 +263,20 @@ export function BlackbookConsole({
   const toggleFilter = (kind: LogbookRecord["kind"]) =>
     setFilter((cur) => (cur === kind ? null : kind));
 
+  // KNOWN incomplete, or null. Every claim below that speaks for the WHOLE change record — the
+  // changes tile, the empty state, the "since <date>" scent — narrows when this is set, and is
+  // untouched when it isn't. `.error` splits the two shapes: an unreadable ledger makes the count
+  // itself meaningless (show a dash), while a ledger quarantined on an earlier run still counts
+  // what survived accurately — it just can't claim that's everything.
+  const incomplete = knownIncomplete(health);
+
   return (
     <div className="blackbook-console" data-motion={reduced ? "reduced" : "full"}>
+      {/* FIRST, above the strip: the strip itself carries a claim, and a caveat printed under its
+          subject has already failed at its job. Renders nothing unless the ledger is KNOWN
+          incomplete — the same one box the Optimize ledger shows, so the two surfaces cannot drift
+          into two different warnings about the same file. */}
+      <LedgerHealthNotice health={health} />
       {/* The Receipts Strip (owner pick 2026-07-13, concept A) — replaces the bare "N records ·
           since <date>" status line with the same facts made self-explanatory: three tappable tiles
           NAME the three things this room records, carry live counts, and filter the tape. The page
@@ -275,13 +294,27 @@ export function BlackbookConsole({
             onClick={() => toggleFilter("change")}
           >
             <span className="bc-tile-k">{t("blackbook.blackbookConsole.tiles.changesTitle")}</span>
-            <span className="bc-tile-n bc-mono">{counts.change}</span>
+            {/* A count read off a ledger that would not open is not a count. An em dash says
+                "no number", where a 0 would say "nothing ever happened here". */}
+            <span className="bc-tile-n bc-mono">{incomplete?.error ? "—" : counts.change}</span>
             <span className="bc-tile-d">
-              {counts.change === 0
-                ? t("blackbook.blackbookConsole.tiles.changesNone")
-                : activeChanges > 0
-                  ? t("blackbook.blackbookConsole.tiles.changesActive", { count: activeChanges })
-                  : t("blackbook.blackbookConsole.tiles.changesInactive")}
+              {incomplete ? (
+                incomplete.error
+                  ? t("blackbook.blackbookConsole.tiles.changesUnknown")
+                  : counts.change === 0
+                    ? t("blackbook.blackbookConsole.tiles.changesNonePartial")
+                    : activeChanges > 0
+                      ? t("blackbook.blackbookConsole.tiles.changesActivePartial", {
+                          count: activeChanges,
+                        })
+                      : t("blackbook.blackbookConsole.tiles.changesInactivePartial")
+              ) : counts.change === 0 ? (
+                t("blackbook.blackbookConsole.tiles.changesNone")
+              ) : activeChanges > 0 ? (
+                t("blackbook.blackbookConsole.tiles.changesActive", { count: activeChanges })
+              ) : (
+                t("blackbook.blackbookConsole.tiles.changesInactive")
+              )}
             </span>
           </button>
           <button
@@ -338,8 +371,23 @@ export function BlackbookConsole({
 
       {records.length === 0 ? (
         <div className="bc-empty">
-          <span className="bc-empty-title">{t("blackbook.blackbookConsole.empty.title")}</span>
-          <span className="bc-empty-sub">{t("blackbook.blackbookConsole.empty.sub")}</span>
+          {/* "No record yet" is a claim about the MACHINE, and an unreadable ledger is the one
+              state where Compy cannot make it. The notice above already says what's missing, so
+              this narrows to the kinds Compy can still vouch for rather than repeating it. */}
+          <span className="bc-empty-title">
+            {t(
+              incomplete
+                ? "blackbook.blackbookConsole.emptyIncomplete.title"
+                : "blackbook.blackbookConsole.empty.title",
+            )}
+          </span>
+          <span className="bc-empty-sub">
+            {t(
+              incomplete
+                ? "blackbook.blackbookConsole.emptyIncomplete.sub"
+                : "blackbook.blackbookConsole.empty.sub",
+            )}
+          </span>
         </div>
       ) : (
         <>
@@ -355,7 +403,14 @@ export function BlackbookConsole({
             </span>
             <span className="bc-sect-rule" aria-hidden="true" />
             <span className="bc-sect-s">
-              {t("blackbook.blackbookConsole.sectionHead.since")}
+              {/* "everything Compy has done on this PC" is the room's widest claim — it is exactly
+                  the sentence a partial ledger makes false. The date stays: it still marks where
+                  the readable record begins. */}
+              {t(
+                incomplete
+                  ? "blackbook.blackbookConsole.sectionHead.sinceIncomplete"
+                  : "blackbook.blackbookConsole.sectionHead.since",
+              )}
               <span className="bc-mono">{sinceDate}</span>
             </span>
           </div>
