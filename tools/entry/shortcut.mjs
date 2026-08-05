@@ -25,6 +25,7 @@
 // preparation, it is the kind of surprise the welfare-check rule exists for.
 
 import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 // win32 semantics EXPLICITLY, not the host's.
@@ -146,7 +147,7 @@ export function readShortcut({ path, run = null }) {
   }
 }
 
-if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, "/")}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = process.argv.slice(2);
   const argOf = (n) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : null);
   const path = argOf("--lnk") ?? findDesktopShortcut();

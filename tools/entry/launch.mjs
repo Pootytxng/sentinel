@@ -16,6 +16,7 @@
 // stderr so the two never get mixed up.
 
 import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -454,7 +455,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   };
 }
 
-if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, "/")}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = process.argv.slice(2);
   const arg = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : null);
   setNarration({ quiet: argv.includes("--quiet"), logFile: arg("--log") });

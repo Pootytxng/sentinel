@@ -9,7 +9,7 @@
 // Real clones, not a fake git. The point of the test is that a genuinely dirty folder on the pinned
 // branch produces the fatal code, and a fake that returns whatever it was told cannot prove that.
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,13 +21,36 @@ let clone;
 
 const git = (dir, args) => execFileSync("git", args, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 
+// A CLI that prints nothing must fail LOUDLY, naming what it did instead.
+//
+// The old helper wrapped everything in one try/catch, so a JSON.parse SyntaxError raised on the
+// SUCCESS path landed in the catch -- where `e.status` and `e.stdout` are both undefined, because
+// the error came from JSON.parse and not from a child that exited. It returned `{code: undefined,
+// json: {}}`, and every assertion downstream read "expected undefined to be 2". That is precisely
+// what a CLI printing nothing looks like, and it is what two days of red CI looked like when this
+// CLI's main-module guard silently failed on Linux: an error message pointing nowhere near the
+// cause. spawnSync keeps the exit code and the child's own output separate from our parsing of it.
 /** @returns {{code:number, json:object}} */
 function runCli(dir, extra = []) {
+  const args = [CLI, "--dir", dir, "--branch", "main", "--no-fetch", ...extra];
+  const r = spawnSync(process.execPath, args, { encoding: "utf8" });
+  if (r.error) throw r.error;
+  return { code: r.status, json: parseVerdict(r, args) };
+}
+
+/** Parse the CLI's stdout, or throw an error that says what it actually wrote. */
+function parseVerdict(r, args) {
   try {
-    const out = execFileSync(process.execPath, [CLI, "--dir", dir, "--branch", "main", "--no-fetch", ...extra], { encoding: "utf8" });
-    return { code: 0, json: JSON.parse(out) };
+    return JSON.parse(r.stdout);
   } catch (e) {
-    return { code: e.status, json: JSON.parse(String(e.stdout || "{}")) };
+    throw new Error(
+      `${CLI} printed no JSON verdict.\n` +
+        `  argv   : ${args.slice(1).join(" ")}\n` +
+        `  exit   : ${r.status}${r.signal ? ` (signal ${r.signal})` : ""}\n` +
+        `  stdout : ${r.stdout === "" ? "(empty)" : r.stdout}\n` +
+        `  stderr : ${r.stderr === "" ? "(empty)" : r.stderr}\n` +
+        `  parse  : ${e.message}`,
+    );
   }
 }
 

@@ -45,9 +45,69 @@ export function listRemoteRefs(repoRoot) {
     .filter((l) => l && !NOT_A_BRANCH.has(l));
 }
 
-/** `main` if it exists locally, else `origin/main` — worktrees do not always carry the branch. */
+/**
+ * What this checkout is entitled to SAY about origin.
+ *
+ * `listRemoteRefs` reads a cache, not the remote, and a cache can be degraded in two independent
+ * ways — each silencing a different half of this audit:
+ *
+ *   tracksEveryBranch  Does `refs/remotes/origin/*` describe origin at all? `actions/checkout@v4`
+ *                      clones single-branch by default, so the cache holds ONE ref. It is then a
+ *                      picture of one branch, not of the remote, and absence proves nothing in
+ *                      either direction.
+ *   shallow            Is the history present? merge-tree needs real ancestry; against a depth-1
+ *                      clone it reports a conflict for branches that are genuinely merged.
+ *
+ * The two are independent: a full-depth single-branch clone has history and no ref set; a depth-1
+ * all-branches fetch has the ref set and no history.
+ *
+ * This is the same defect the Trust Ledger lane just closed, one layer down. An unreadable ledger
+ * used to be spoken as "your PC is untouched"; an unfetched ref was spoken as "that branch no
+ * longer exists — drop the row." On CI that came out as 21 instructions to delete 21 true rows,
+ * one of them the frozen beta ref. A degraded read must produce silence, never a claim.
+ */
+export function refSetCoverage(repoRoot) {
+  let refspecs = "";
+  try {
+    refspecs = git(repoRoot, ["config", "--get-all", "remote.origin.fetch"]);
+  } catch {
+    // `git config --get-all` exits 1 when the key is unset — no origin, or a checkout that
+    // configured none. Either way this clone tracks nothing, which is the answer we want.
+  }
+  const tracksEveryBranch = /:\s*refs\/remotes\/origin\/\*\s*$/m.test(refspecs);
+
+  let shallow = false;
+  try {
+    shallow = git(repoRoot, ["rev-parse", "--is-shallow-repository"]).trim() === "true";
+  } catch {
+    // A git too old to know the flag: treat as full. The cost of being wrong is one merge-tree run.
+  }
+
+  const spec = refspecs.trim().replace(/\n/g, ", ") || "unset";
+  return {
+    tracksEveryBranch,
+    shallow,
+    reason: !tracksEveryBranch
+      ? `this checkout does not track every origin branch (remote.origin.fetch = ${spec})`
+      : shallow
+        ? "this checkout is shallow, so merge-tree cannot re-prove a merge"
+        : null,
+  };
+}
+
+/**
+ * The trunk every disposition is measured against: `origin/main` first, local `main` only as a
+ * fallback.
+ *
+ * The order used to be the other way round, and it produced a confident false failure the first
+ * time this ran in a worktree: local `main` sat at `c74d80e` while origin had moved to `6712c14`,
+ * so a genuinely MERGED branch "still changes the tree" — the tree it changed was a week old. A
+ * disposition is a claim about what the SHARED trunk contains, and a local branch pointer is a
+ * private bookmark that no one is obliged to move. Reading it as the trunk is the same mistake as
+ * reading an unfetched ref cache as the remote, which is what the rest of this file exists to stop.
+ */
 export function resolveBase(repoRoot) {
-  for (const candidate of ["main", "origin/main"]) {
+  for (const candidate of ["origin/main", "main"]) {
     try {
       git(repoRoot, ["rev-parse", "--verify", "--quiet", `${candidate}^{commit}`]);
       return candidate;
@@ -93,8 +153,12 @@ export function parseDispositions(markdown) {
   return rows;
 }
 
-/** Returns a list of human-readable problems. Empty means the record is true right now. */
-export function audit({ repoRoot, docPath = join(repoRoot, DOC) } = {}) {
+/**
+ * Returns a list of human-readable problems. Empty means: nothing this checkout could check is
+ * wrong. On a degraded checkout that is a WEAKER statement than "the record is true" — ask
+ * `refSetCoverage` which claims were actually available, and see `main` for how it is reported.
+ */
+export function audit({ repoRoot, docPath = join(repoRoot, DOC), coverage } = {}) {
   const problems = [];
   const rows = parseDispositions(readFileSync(docPath, "utf8"));
   if (rows.length === 0) {
@@ -102,11 +166,26 @@ export function audit({ repoRoot, docPath = join(repoRoot, DOC) } = {}) {
     return problems;
   }
 
+  // --- Claims about the DOCUMENT. These read no refs, so they hold on any checkout. ---
   const seen = new Set();
   for (const { ref } of rows) {
     if (seen.has(ref)) problems.push(`${ref} appears twice in ${DOC} — one row per ref.`);
     seen.add(ref);
   }
+  // Vocabulary used to be checked inside the merge-tree loop, below a `live.has(ref)` guard — so a
+  // nonsense disposition on a ref this clone had not fetched went unreported. It is a property of
+  // the row, not of the remote; it belongs here.
+  for (const { ref, disposition } of rows) {
+    if (!DISPOSITIONS[disposition]) {
+      problems.push(
+        `${ref} has disposition "${disposition}", which is not one of ${Object.keys(DISPOSITIONS).join(", ")}.`,
+      );
+    }
+  }
+
+  // --- Claims about ORIGIN. Only a checkout that can see origin is allowed to make them. ---
+  const cover = coverage ?? refSetCoverage(repoRoot);
+  if (!cover.tracksEveryBranch) return problems;
 
   const live = new Set(listRemoteRefs(repoRoot));
   for (const ref of live) {
@@ -120,17 +199,14 @@ export function audit({ repoRoot, docPath = join(repoRoot, DOC) } = {}) {
     }
   }
 
+  // --- Re-proof. Needs ancestry as well as the refs. ---
+  if (cover.shallow) return problems;
+
   const base = resolveBase(repoRoot);
   for (const { ref, disposition } of rows) {
     if (!live.has(ref)) continue; // already reported; merge-tree would just throw
     const rule = DISPOSITIONS[disposition];
-    if (!rule) {
-      problems.push(
-        `${ref} has disposition "${disposition}", which is not one of ${Object.keys(DISPOSITIONS).join(", ")}.`,
-      );
-      continue;
-    }
-    if (rule.noop === null) continue;
+    if (!rule || rule.noop === null) continue; // unknown word already reported; PRESERVE/CLAIMED claim nothing
     const noop = isNoop(repoRoot, base, ref);
     if (rule.noop && !noop) {
       problems.push(`${ref} is recorded MERGED but merging it into ${base} still changes the tree.`);
@@ -145,14 +221,33 @@ export function audit({ repoRoot, docPath = join(repoRoot, DOC) } = {}) {
 
 export function main(argv) {
   const repoRoot = argv[0] || join(dirname(fileURLToPath(import.meta.url)), "..");
-  const problems = audit({ repoRoot });
-  if (problems.length === 0) {
-    console.log(`branch-disposition-audit: OK — every origin ref has a proven row in ${DOC}.`);
+  const cover = refSetCoverage(repoRoot);
+  const problems = audit({ repoRoot, coverage: cover });
+
+  if (problems.length > 0) {
+    console.error("branch-disposition-audit: FAIL");
+    for (const p of problems) console.error(`  - ${p}`);
+    return 1;
+  }
+
+  // A pass on a degraded checkout is not the same sentence as a pass on a full one, and printing
+  // the full one anyway is how a checker starts lying on the checker's own behalf.
+  if (!cover.tracksEveryBranch) {
+    console.log(
+      `branch-disposition-audit: PARTIAL — ${cover.reason}.\n` +
+        `  The rows in ${DOC} are internally consistent. Whether they match origin was NOT checked.`,
+    );
     return 0;
   }
-  console.error("branch-disposition-audit: FAIL");
-  for (const p of problems) console.error(`  - ${p}`);
-  return 1;
+  if (cover.shallow) {
+    console.log(
+      `branch-disposition-audit: PARTIAL — ${cover.reason}.\n` +
+        `  Every origin ref has a row and no row names a dead ref. MERGED rows were NOT re-proven.`,
+    );
+    return 0;
+  }
+  console.log(`branch-disposition-audit: OK — every origin ref has a proven row in ${DOC}.`);
+  return 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
