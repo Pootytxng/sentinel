@@ -355,6 +355,35 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
+### Cycle 2026-08-04f — ✅ THE LEDGER NO LONGER SAYS "NOTHING IS ACTIVE" WHEN IT CANNOT READ ITSELF (CC): `b60a314` · `a1d5f53` on `claude/harness-context-cleanup-700535` — **unpushed, unmerged** (owner decides the merge)
+
+`get_applied_changes` degrades an unreadable Trust Ledger to an empty array, and the Active layer renders
+empty as *"Nothing active on this PC"* — an affirmative claim about the MACHINE, spoken at the exact moment
+every apply and every rollback is refusing. `history.rs` had carried this as an open follow-up against
+itself since the H1 quarantine fix; closed here by two read-only commands, `get_ledger_health` +
+`reveal_ledger_folder`, main-window only (`build.rs` `APP_COMMANDS` + `capabilities/default.json`,
+deliberately absent from `overlay.json`).
+
+Both failure shapes are checked, because either alone is a false negative: the **transient** `Err` from the
+load, and the **durable** quarantine marker — after that rename every later load returns `Ok(vec![])`
+forever, byte-identical to a first run, so `complete` can never come from a row count. `ledger_health_at`
+loads FIRST then reads the marker (a failing load performs the rename as part of failing) and calls the
+private `load_history_from`, not the public wrapper, which records a support-evidence event on every `Err` —
+a UI-refresh-driven probe would push 400 identical records through a ring with no dedup. Third state kept
+honest: probe UNKNOWN claims nothing and leaves the surface as it was. The disclosure carries its own fix
+([[flags-name-it-and-fix-it-inline]]) — names the shape, quotes the raw OS error, reveals the preserved
+`.corrupt` file, and surfaces a failed reveal rather than no-opping. Guard
+`src/surfaces/ledger-health-disclosure-guard.test.tsx`, 8 cases, mutation-verified four ways. cargo 922 ·
+npm 3262 · tsc clean · doc-budget PASS · self-reviewer **VERDICT: PASS** (title 10.43:1, hover 14.17:1, no
+duplicate banner, long OS path contained). `a1d5f53` split a `BRANCH_DISPOSITIONS.md` sentence the doc-truth
+guard read as a merge claim — the prose moved, not the regex (bug→guard).
+
+- **Board retention:** the 5 oldest cycles (16c/16b/16a/15d/15c) moved verbatim to `BACKLOG_ARCHIVE.md`,
+  per the retention rule above — 17 cycles back down to 12, and `docs/BACKLOG.md` from 1368 to 1178 lines.
+- **Still open, deliberately not folded in:** `get_intelligence_timeline` shrinks silently on the same
+  unreadable ledger (see the follow-up under Cycle 2026-08-04d). Same honesty class, but a view rather than
+  a claim, and it needs a `TimelineView` field plus frontend work.
+
 ### Cycle 2026-08-04e — ✅ THE NEXT TEST MAY NAME A REC — BECAUSE IT READS THE ID (CC): `83ebfd8` on `claude/harness-context-cleanup-700535` — **unpushed, unmerged** (owner decides the merge)
 
 The deferral premise was wrong. Routing `next_test` structurally looked like it needed a prose→catalog
@@ -762,225 +791,6 @@ owner's machine and a stable candidate, not more code. Evidence rows updated in
   self-reviewer PASS 9/9 (contrast 11.3:1 header, no dup mount, pre-run/busy/result/fixture states) ·
   installer re-cut + silent reinstall — SHA + stamp in the RELEASE_STATE 2026-07-16b banner.
 
-### Cycle 2026-07-16c — ✅ PANEL-REVIEW EXECUTION CONTINUED (Cowork): research + content stage on the remaining 4.x items — doc/content only, zero src-tauri, zero site-build changes committed
-
-**Owner's operative mandate:** *"do whatever needs to be done to move forward with all those review
-suggestions"* — picking up where Cycle 2026-07-16b's doc triage left off, moving the still-open 4.x
-items from "logged" to "researched/drafted."
-
-- **`801ea62` — landed CC's COMPY_OVERVIEW.md staleness rewrite** (was sitting uncommitted per
-  2026-07-16b's note) + closed the one Receipts-phrasing nit CC had flagged but not fixed (TL;DR
-  read as if an opt-in sharing toggle already exists; it doesn't yet).
-- **4.1 "Optimization Cleanup" — research stage done, spec drafted:** headline finding — this is
-  mostly already built (`leftovers.rs` live read-only, 7/9 detectors already have dark tested restore
-  resolvers in `actions.rs`). Full spec + the one unresolved architectural fork (Trust-Ledger-reuse
-  vs. the BACKLOG's stated separate mechanism) at
-  `docs/superpowers/specs/2026-07-16-optimization-cleanup-research-spec.md`. Detail folded into the
-  4.1 entry above (PHASE B). **Not scope-gated or mutation-gated — nothing authorized to build yet.**
-- **4.4 export tiers — audited, correction made:** `export.rs` has exactly one render path today; no
-  share-card exists either (the brief assumed one did). All three proposed tiers are genuinely new,
-  not a light pass — resized in the entry above.
-- **4.2 intent router / 4.8 basic mode — gap-checked against real code, not assumed:** confirmed the
-  Lab's in-Lab router is real and shouldn't be rebuilt (4.2 gap is specifically the pre-room entry
-  point, unbuilt). FirstCheck audited against the persona's 5-point basic-mode ask: 3 of 5 already
-  covered, 1 partial (what-changes isn't stated on the verdict card), 1 real gap (the
-  restore-guarantee line is hidden inside the post-click confirm dialog, not on the verdict card
-  itself). Both scoped down to small, concrete additions in the entries above.
-- **4.5 methodology page — content drafted, not yet placed:** `docs/METHODOLOGY.md`, every claim
-  cited to `fps.rs`/`benchmark_verdict.rs`/`comparison.rs`/`recommendations.rs`/`benchmark-view.ts`
-  line numbers (capture mechanism, sample cadence, process/swapchain selection + the real
-  msedgewebview2/323-vs-161 bug history, noise floors, 1%-low method, missing-data handling,
-  Verified/Measured/Expected definitions, combined-effect logic). ⚠️ **Attempted to wire this into
-  `site/generate.mjs` as a new reference page (parallel to the legal-pages pattern) — REVERTED,
-  unverified.** The sandbox's file view of a same-session edit went stale/truncated mid-verification
-  (known failure mode, see [[sandbox-fuse-git-view-unreliable]] memory, now confirmed for non-git
-  file reads too) so `node site/generate.mjs` + the site test suite could not be run reliably this
-  session. Reverted the generate.mjs edit rather than leave an unverified change in a tested build
-  pipeline; the content (docs/METHODOLOGY.md) is safe and ready, the wiring is a small, scoped TODO
-  for CC to apply + verify Windows-side (referencePages array + sitemap line + llms.txt line, design
-  already worked out, ~20 lines).
-- **4.6 non-competitive consumer story — content drafted, placement flagged:**
-  `docs/content-drafts/2026-07-16-non-competitive-consumer-story.md`. Doesn't fit the
-  `debunks.config.json` schema (that's graded tweak verdicts, this is a use-case narrative) — needs a
-  placement decision (site section vs. in-app) from CC/owner, plus a grounding check against what
-  Monitor actually correlates at a stutter timestamp before it ships (flagged in the draft, not
-  independently re-verified here to avoid overclaiming on a time budget).
-- **Verify:** COMPY_OVERVIEW.md commit confirmed via `git log`/`git show` at the time of commit;
-  given this session's own sandbox-staleness finding, CC should re-confirm `801ea62` landed cleanly
-  Windows-side rather than trusting this session's git output alone. No cargo/vitest run this
-  session (no src-tauri or src/ code changed) — the generate.mjs syntax scare was the sandbox's stale
-  copy, not a real defect; the actual file was reverted to its pre-session state via the Edit tool.
-- ⛳ **RESUME:** the honest state of the review is: doc-triage (2026-07-16b) + research/content
-  (2026-07-16c) are done; the two flagship items (4.1 build, 4.4 build) are NOT started and are the
-  real remaining work — everything else here is either shipped, small, or a placement/wiring TODO.
-  Next real decision: does 4.1 Phase 0 (ship the already-live `leftovers.rs` audit under the
-  "Optimization Cleanup" name, near-zero cost) get scope-gated on its own ahead of anything else?
-
-### Cycle 2026-07-16b — ✅ PANEL-REVIEW BRIEF EXECUTED (Cowork triage): combined-effect attribution `850dde2` · site copy scoping `60eea80` · 9-item doc triage — NO gate moved, zero src-tauri
-
-**Owner's operative mandate:** *"Read docs/reviews/2026-07-15-cc-brief-panel-review-execution.md and
-execute it"* — Cowork's triage of the 2026-07-15 consumer-panel review, executed in its Part-6 order
-(app lane, parallel to the hero-site lane).
-
-- **`60eea80` — Brief 3.1, site copy scoping:** "free forever" → "**core** stays free forever"
-  (site-only; keeps the promise honest against the dark Compy Pro lane). ⚠️ **Deploy PENDING** — the
-  permission classifier denied `wrangler pages deploy` this session (not retried per protocol);
-  `dist-site` is built + staged, one command when the owner greenlights.
-- **`850dde2` — Brief Part 2, combined-effect attribution audit (honest-measurement law):** a
-  multi-change benchmark delta belongs to the STACK, never one change's win. Single sources in
-  `benchmark-view.ts`: `changesBetweenRuns()` (the ONE graded-window filter — applied_at strictly >
-  baseline_at, ≤ latest_at, unparseable → `[]`) + `changeAttribution(count)` (plural lead + the
-  credit-refusing caveat). Every attributing surface re-pointed: Benchmark EfficacyCard · TwoFutures ·
-  LabV2 room verdict (`labVerdict`) · Bento Checkup Report + guided/ground station readings
-  (`stationReading` via `LabStationFacts.stackedCount`) · LabConsole facts. Singular ≤1-change
-  readings stay byte-identical (pinned). Three self-review rounds — round 1 caught `labVerdict`
-  hardcoded singular, round 2 caught the Checkup Report disagreeing with the room header on the SAME
-  screen — round-3 **PASS** (both renderings live-verified agreeing, 2-change + 1-change states,
-  flags restored). bug→guard: 3 new pinned tests.
-- **Brief Part 4 — 9-item doc triage (this commit):** BACKLOG items 4.1/4.4/4.2/4.8/4.7 ·
-  MONETIZATION_PLAN 4.5+4.6 (non-competitive consumer story + methodology page, Layer 2, $0) ·
-  OWNER_ACTION_CHECKLIST §B2 4.10 (cold-start protocol folded into beta-send planning) + §D 4.9
-  (version policy: `docs/superpowers/specs/2026-07-16-version-policy-proposal.md` drafted, numbering
-  decision FLAGGED to owner, not decided) · UI_VISION_BACKLOG §F cross-ref · self-reviewer rubric
-  item 9 ("earn its place", 4.3).
-- **Brief Part 5 — cross-references confirmed resolving (no new entries, per the brief):** signing /
-  legal venue / domain / beta smoke / tester GO → OWNER_ACTION_CHECKLIST §A2·§B2·§C ✓ · NVIDIA
-  hardware verification → NVIDIA_VALIDATION_PLAN.md (still blocked on hardware, reaffirmed) ✓ ·
-  design-tooling + upgrade-path forks → §B4 + UI_VISION §E/§F ✓ · B2B licensing → MONETIZATION_PLAN
-  Layer 4, parked ✓.
-- **COMPY_OVERVIEW.md drift check (brief's standing ask): PASS** — one Receipts-phrasing nit
-  (reported to the Cowork lane; that file is Cowork-owned, NOT committed here).
-- **Verify:** tsc 0 · vitest **1682/1682** (181 files, +3 guards) · site copy through the existing
-  site test pipeline at `60eea80`.
-- ⛳ **RESUME:** brief fully executed. Owner flags: ① site deploy pending (classifier denial — one
-  `wrangler pages deploy dist-site` when greenlit) · ② version-policy numbering call (§D) · ③
-  standing gates unchanged. Next: the owner's announced "biggest app orientation refinement workflow".
-
-### Cycle 2026-07-16a — ✅ APP LANE TASK LIST CLOSED: room-palette 8+7 rework · App.css gradient-ink de-slop · nav-mount cost FIXED + SHIPPED LIVE — frontend-only, NO gate moved, zero src-tauri
-
-**Owner's operative mandate:** the three-part order (*"make half of them some good 2 color shift
-options and the remaining half all the standard color spectrum… follow through with [the App.css
-gradient text] as well… that should allow for you to ccompletely finish this task list before i send
-the biggest app orientation refinement workflow"*) — every item executed; **the app-lane task list is
-now EMPTY** ahead of the owner's announced orientation-refinement workflow.
-
-- **`92596d6` — room-accent palette reworked 8 duo + 7 solo** (owner pick: duos are the favorites):
-  8 curated two-color shift options + 7 standard-spectrum solids, adaptive-ink law kept per swatch.
-  self-reviewer **PASS 8/8** (duo-fill ink measured legible live).
-- **`47300d9` — App.css gradient-text de-slop + CoreBar scaleX** (the agent-consultant suggestion the
-  owner greenlit): static gradient headline ink retired to solid tokens where it read as template
-  slop; CoreBar bar animates via transform (no layout thrash). Covered by the same PASS.
-- **`b2d775d` — UI_VISION_BACKLOG stale-list fix:** the "Remaining 🔴" per-tab console rollout list
-  was stale — Monitor gauges/oscilloscope + Blackbook flight-recorder had ALREADY shipped (2026-07-12/13);
-  both recorded 🟢 with their ship hashes.
-- **`d0392c9` — nav-mount cost FIXED (closes Cycle 2026-07-15d's open follow-up).** Investigation
-  (delegated, then code-verified) found three root causes: ① MonitorV2's classic-shell one-shot sensor
-  pre-warm duplicated the IPC every face already fires on its own mount → deleted; ② SessionStack ran
-  `readInk`/`getComputedStyle` (forced whole-document style recalc) per-row ×4 tokens (up to 15 recalcs
-  per mount) → ONE hoisted `compy:room-identity-changed` listener + shared memoized ink cache keyed on
-  (identity-flag · accentTick · model), ≤4 reads per mount, in-place accent repaint preserved
-  (guard re-pinned); ③ **Blackbook tape rendered the machine's ENTIRE lifetime history** (dominant cost
-  + the 80–152ms variance) → first render caps at `TAPE_CAP=30` rows with a quiet mono
-  "show N older records" disclosure (`.bc-tape-more`); Receipts Strip counts/sinceDate still derive
-  from the FULL record set. bug→guard: 2 vitest cases pin cap + disclosure + full-count tiles + unroll.
-  Ruled out & left alone: logbook.ts O(n²) same-game lookback (sub-ms), corpus imports, ArcGauge/gsap.
-- **Verify:** tsc 0 · vitest **1666/1666** (181 files) · self-reviewer **PASS 8/8** on the nav-mount
-  train (live 73-record ledger: 30 rows + "show 43 older records" → unroll to 73, button gone; accent
-  pick teal→magenta repainted traces in place; only-new-element check passed — strip counts 53/20
-  unchanged, code-verified full-set).
-- ✅ **SHIPPED 2026-07-16:** `npm run tauri build` → `ship-reinstall.ps1` (dirty-stamp guard tripped on
-  parallel-lane-only dirt — Cowork `COMPY_OVERVIEW.md` + a stray scratchpad png; app inputs
-  porcelain-clean at build → deliberate `-AllowDirty`, 2026-07-15f precedent) → installer SHA-256
-  `832B7CF3BDBD2603F925EDD18DD9A1669B0AB74CC441A7675769B46F48687A4E`, **stamp-verified `b968f0a` live,
-  CLEAN (no `+dirty`)**, one installer on the Desktop. (`b968f0a` = HEAD at build: `d0392c9` + the site
-  lane's site-only `b968f0a` on top; no other app diff.)
-- ⛳ **RESUME:** app-lane list EMPTY; standing owner gates unchanged (room-identity one-flip eyeball ·
-  outbound walls). Non-blocking note for the owner: CoreBar's "Per-core load" detail is only reachable
-  with `compy_monitor_console=0` (non-default) — pre-existing routing, surfaced for awareness. Next:
-  the owner's announced "biggest app orientation refinement workflow".
-
-### Cycle 2026-07-15d — ✅ APP LANE: CONSOLE TRAINS 1–4 DEFAULT-ON + OVERLAY BACKDROP FIX, SHIPPED LIVE — frontend-only, NO gate moved, zero src-tauri
-
-**Owner's operative mandate:** *"i want this session to be activel finishing remaining work
-pertaining to the app directly seperate from the hero site"* + green light *"ok lets get it all done
-lets go"*. The app lane's four console trains, executed end-to-end and shipped.
-
-- **`50b505e` Train 1 — Monitor console density/backdrop fold-in** (MonitorConsole.tsx/.css;
-  UI_VISION_BACKLOG updated same commit).
-- **`f4b4ada` Train 2 — Settings quiet chrome** (Settings.css only, +75/−33).
-- **`40bce4e` Trains 3+4 — Gaming Mode arm/engage console face** (`compy_gaming_console` DEFAULT ON)
-  **+ app-wide viewport HUD frame & global reticle** (`compy_hud_frame` DEFAULT ON): corner
-  brackets + bottom-right real-values-only mono readout (rig probe · clock — unfetchable segments
-  omitted, never fabricated) + ReticleCursor scoped to the shell. Classic stays reachable via the
-  "0" failsafe — flag-off byte-identity test-pinned (a HudFrame live-clock flake in the
-  byte-identical suite was caught + frozen with fake timers, bug→guard). Nav-timing self-review
-  round 2 caught `.v2-shell:has(> .hud-frame)` taxing the biggest room swaps → replaced with a
-  plain `.v2-shell-hud` class; round-3 A/B (flag on vs "0") proved this train adds no nav cost —
-  **residual Monitor (52–57ms) / Blackbook (80–152ms) nav-mount slowness is PRE-EXISTING**
-  (equally slow flag-off) → open follow-up below.
-- **`f160839` — owner defect FIXED** (*"overlay seems to have a full screen or window size backdrop
-  thats feint but visible… on my fullscreen applications"*): main.tsx sets every skin attribute on
-  documentElement BEFORE branching on the overlay window label, so document-level ambient pseudo
-  layers (App.css `body::before` aurora, seasonal `::after`) painted a faint wash over games.
-  Overlay.css now blanket-kills all six document-level pseudo slots (`content: none !important`);
-  live-verified in the real overlay window over CDP (all six computed `none`). Bug→guard:
-  `src/overlay-ambient-guard.test.ts` (kill rule pinned · bans `content !important` on
-  document-level pseudos · bans `:has()` on the nav-hot shell).
-- **Shipped:** installer SHA-256 `B87B3B3C…B3D20C`, silent-reinstalled, **stamp-verified `f160839`
-  live (clean, no `+dirty`)**, one installer on the Desktop. Dirty-stamp guard overridden
-  deliberately — the dirt was exclusively parallel-lane files (Cowork `COMPY_OVERVIEW.md` + site
-  `site/*.html`), app inputs porcelain-clean.
-- **Verify:** tsc 0 · vitest **1656/1656** (181 files, 8 skipped) · no Rust diff (cargo n/a) ·
-  self-reviewer round-3 **PASS** 7/7 (consent modal exercised + cancelled without starting a
-  session; 52px readout clearance verified at true scrollHeight).
-- **Open follow-up (non-blocking, from round-3 verdict):** investigate what Monitor + Blackbook
-  mount on nav-switch (pre-existing cost, separate from HudFrame/ShellV2 — both proven innocent
-  by the A/B).
-
-### Cycle 2026-07-15c — ✅ SITE COMPLETION: SEO/LAUNCH PLUMBING + /compare LIVE + DEPLOYED — site-only, NO gate moved, zero src-tauri, zero src/
-
-**Owner's operative directive:** *"deploy go looks good for now… go about doing the full completion
-of the site, everything necessary for completion so we can prepare to launch compy"* (a separate
-session handles app finishing touches — this lane stays strictly site: `site/`, `site-app/`,
-`dist-site`, `scripts/site-*`, `functions/`, docs). Executed end-to-end.
-
-- **SEO / launch plumbing:** canonical URL scheme on every page (landing `/`; picks canonicalize to
-  `https://compy.gg/<id>` from BOTH the top-level and `library/` copies — no duplicate-content split;
-  non-picks → `/library/<id>`; legal → `/privacy`, `/eula`; compare → `/compare`); `robots.txt`
-  (Allow all + sitemap pointer); `sitemap.xml` (196 URLs, picks listed once at top level, **no
-  lastmod/priority/changefreq** — honesty law, never fabricate freshness); favicons (bracket-mark
-  `favicon.svg` + hand-built 197-byte `favicon.ico`); static `404.html` (noindex, root-absolute
-  links, no JS — CF Pages serves it with a real HTTP 404); honest JSON-LD (TechArticle on
-  article/teaser pages, SoftwareApplication on landing — guard bans `aggregateRating`/`reviewCount`/
-  `ratingValue`; `<`-escaped); og/twitter card meta pointing at the real `assets/og.png`;
-  skip-link a11y on the generated pages + templates.
-- **NEW `/compare` page (`site-app/src/pages/compare.astro`)** — Design Director spec, full six-seat
-  council 2026-07-15. Five **construction-practice** axes (rollback · kernel/anti-cheat · catalog
-  transparency · telemetry default · cost model), Compy's practice on the record vs "the usual
-  playbook", **each admitting the tradeoff it costs us**. Room laws now guard-pinned: **never names a
-  competitor** (bans CCleaner/Razer Cortex/Wise Care/Advanced SystemCare/Hone/ExitLag), **never
-  invents a performance number** (bans `boost`/`faster`/`+N fps|%`), no gain claims. Kicker: "We
-  don't have the other tools' rigs — or yours — so we won't invent benchmark numbers." Wired into the
-  landing nav (Receipts→Blackbook→Compare→FAQ) + the FAQ FPS answer.
-- **Legal contact fix:** the dead `github.com/Pootytxng/compy` contact links in `PRIVACY.md`/`EULA.md`
-  are replaced with a real channel (reply to the waitlist email); the `[STATE]` venue blank stays
-  intact + test-pinned (owner's to fill).
-- **Guard:** new `scripts/site-seo.test.mjs` companion suite (robots/sitemap honesty, canonicals,
-  favicons, 404, compare axes + competitor/hype bans, landing JSON-LD). Full pipeline **40/40 green**
-  (site-landing + staleness + seo, regenerate/rebuild-if-stale). Self-review **PASS** (agent
-  `adae2dc1b4d75fff8`: computed contrast `#f2ede4` on `#0d0b07` + `#140a00` on `#ff9a1e`; mobile
-  390px no overflow; single footer; nav order; skip-links resolve; no retired-brand copy).
-- **DEPLOYED** (owner's deploy GO): `npx wrangler pages deploy dist-site` → `d8a40fc5.compy-bd6.pages.dev`,
-  **apex promoted + verified** (apex HTML md5 `458dc641203451a34e7eb44eeeb47ec1` == deploy hash;
-  `/compare` + `/sitemap.xml` + `/robots.txt` + favicons 200; real HTTP 404 on unknown routes).
-- **⚠️ Doc reconciliation:** the owner's **deploy GO supersedes** the "Site stays PRE-PUBLISH; owner
-  taste gate before any deploy; deploy owner-gated" language in the older cycles below and in
-  RELEASE_STATE — the site now **deploys autonomously**. Remaining launch gate is owner-only: the
-  **`compy.gg` domain purchase** (canonicals/sitemap/JSON-LD all point at it; site currently lives
-  only on `compy-bd6.pages.dev`).
-- **P2 status:** `/compare` ✅ done, FAQ JSON-LD (`SoftwareApplication` on landing) ✅ done. **Still
-  open P2 candidates:** `/pricing` page · `llms.txt` · the owner-flagged **mini playable demo** of one
-  real Compy tool (UI_VISION_BACKLOG §G). P3 walkthrough/tour videos stay owner-flagged LATER.
 
 ## ⛔ Persistent-workflow protocol (read before declaring "done")
 
