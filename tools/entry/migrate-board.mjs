@@ -8,6 +8,7 @@
 // touching it; only main() talks to `gh`.
 
 import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { normalizeWorktreeField } from "./worktree-field.mjs";
 
 export const PROJECT_NUMBER = 1;
@@ -93,6 +94,6 @@ function main(argv) {
   return 0;
 }
 
-if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, "/")}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   process.exit(main(process.argv.slice(2)));
 }

@@ -23,6 +23,7 @@
 // a paragraph. Only `updateControl` touches a repository.
 
 import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 export const FULL_SHA = /^[0-9a-f]{40}$/;
 
@@ -231,7 +232,7 @@ export function updateControl({ dir, expected = "main", git = runGit(dir), dryRu
   return { updated: true, head, from: plan.from, action: "fast-forward", reason: plan.reason };
 }
 
-if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, "/")}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = process.argv.slice(2);
   const argOf = (n) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : null);
   // Even total failure leaves the launcher a sentence and a shape, never a stack trace: the caller
