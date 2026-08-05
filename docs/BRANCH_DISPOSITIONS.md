@@ -40,6 +40,8 @@ unmerged. Pinned in `scripts/branch-disposition-audit.test.mjs`.
 | `UNLANDED` | carries real work that is not on `main` | needs a decision |
 
 The audit reads **local remote-tracking refs** — it reflects the last `git fetch`, not the server.
+It measures against **`origin/main`**, not a local `main`: a disposition is a claim about the shared
+trunk, and a worktree's `main` pointer can sit weeks behind without anyone noticing.
 
 ## The refs
 
@@ -52,6 +54,7 @@ Swept 2026-08-04 against `main` @ `1a513cb`; the `origin/claude/*` rows added 20
 | `origin/recovery/failed-v0.9.9-prepare-1fa06a8` | PRESERVE | A preserved failed release candidate. `docs/RELEASE_AUTONOMY.md`: "Preserve every failed candidate before reset, replacement, or abandonment." Never a merge target. |
 | `origin/recovery/failed-v0.9.9-runtime-proof-2bd649d` | PRESERVE | Same rule — the runtime-proof half of the same failed v0.9.9 attempt. |
 | `origin/feat/console-project-doctor` | CLAIMED | Codex lane, worktree `C:\Users\Kuya\code\sentinel-project-doctor`, issue [#55](https://github.com/Pootytxng/sentinel/issues/55). The claim carries a 12-hour alarm with **no automatic takeover**, so an expired clock is not a licence to touch it. `tools/console/doctor.html` is absent from `main`. |
+| `origin/claude/ci-entry-mainmodule-posix` | MERGED | Landed as [#69](https://github.com/Pootytxng/sentinel/pull/69) (squash `066c57b`) — the red-`main` CI repair, issue [#68](https://github.com/Pootytxng/sentinel/issues/68). The merge deleted this ref and GitHub closed the two PRs stacked on it; it was **restored at its pre-squash tip `fcb2a22`** so they could be reopened and retargeted to `main`. It is a merged ref kept only for that reason — prunable once #71 and #72 land. |
 | `origin/claude/harness-context-cleanup-700535` | MERGED | Landed as [#66](https://github.com/Pootytxng/sentinel/pull/66) (squash `6712c14`), so `origin` still carries the pre-squash tip `3808b00`; merge-tree against `main` is a no-op. |
 | `origin/fix/fps-pid-identity` | MERGED | Zero commits ahead of `main`; merge-tree no-op. |
 | `origin/recovery/codex-019fb092` | MERGED | Zero commits ahead of `main`; merge-tree no-op. |
