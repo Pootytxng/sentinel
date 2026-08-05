@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync, readdirSync, statSync } from "fs";
 import { join } from "path";
+import { homedir } from "os";
+import { execFileSync } from "child_process";
 
 // AGENT-MACHINERY REFERENCE GUARD (2026-08-05).
 //
@@ -10,9 +12,15 @@ import { join } from "path";
 // true, in a file nothing tests because it isn't shipped code:
 //
 //   1. `.claude/agents/rust-tauri-reviewer.md` deferred to a `check` skill and a `security` skill.
-//      Neither exists. An agent was routing work to nowhere.
-//   2. `.codex/agents/rust-tauri-reviewer.toml` carried the identical dead reference (mirror rot —
-//      fixing one lane leaves the other broken, and nothing notices).
+//      CORRECTED 2026-08-05, same day: that call was WRONG. Both skills exist, machine-global, in
+//      `~/.claude/skills/` — the sweep only looked in `.claude/skills/` and read "not here" as "not
+//      anywhere," then deleted two live pointers as rot. The routing sentence those agents carry now
+//      (mutation-gate + guard-forge, and deep security audits back to `security`) is the better one,
+//      so it stands; but the reason recorded for the edit was false, and this guard was built on it.
+//      The lesson is kept because it is the sharper one: a reference checker that does not know the
+//      whole search path does not find rot, it manufactures it. See SKILL_ROOTS below.
+//   2. `.codex/agents/rust-tauri-reviewer.toml` carried the identical reference (mirror rot is real
+//      even though this instance of it was not — fixing one lane leaves the other broken).
 //   3. `.claude/hooks/subagent-model-guard.mjs` cited "CLAUDE.md SUBAGENT-MODEL ORCHESTRATION" in
 //      both its header and its DENY message. The 2026-08-05 CLAUDE.md trim renamed that section, so
 //      the hook was telling the model to go read a heading that no longer exists — at the exact
@@ -67,12 +75,17 @@ describe("agent machinery — the scanned surface itself", () => {
 
 // ── ROT CLASS 1: dead skill references (defects 1 + 2) ──────────────────────────────────────────
 
-const SKILLS_DIR = ".claude/skills";
-const REAL_SKILLS = new Set(
-  existsSync(SKILLS_DIR)
-    ? readdirSync(SKILLS_DIR).filter((d) => statSync(join(SKILLS_DIR, d)).isDirectory())
-    : []
-);
+// A skill name resolves against TWO roots, and this guard's first version only knew about the first:
+//   (a) `.claude/skills/` — project skills, in git, portable with the repo.
+//   (b) `~/.claude/skills/` — machine-global skills, loaded in every session on this machine
+//       regardless of repo root. `check`, `security` and `qa-harness` live here.
+// Missing (b) is what made this guard's own opening premise wrong: it declared the reviewer agents'
+// pointers to `check`/`security` dead and they were removed as rot, when both skills were live the
+// whole time. A guard that cannot see half the search path does not find rot, it manufactures it.
+const SKILL_ROOTS = [".claude/skills", join(homedir(), ".claude", "skills")];
+const skillsIn = (root: string) =>
+  existsSync(root) ? readdirSync(root).filter((d) => statSync(join(root, d)).isDirectory()) : [];
+const REAL_SKILLS = new Set(SKILL_ROOTS.flatMap(skillsIn));
 
 // Two ways a skill gets named in prose. Both are how the real defects were written:
 //   (a) an explicit path — `.claude/skills/self-review/SKILL.md`
@@ -107,6 +120,9 @@ const NOT_A_SKILL = new Set([
 
 describe("rot class 1 — every referenced skill exists", () => {
   it("has skills on disk to check against", () => {
+    // Floor the PROJECT root specifically: a present global root must never be what makes this pass,
+    // or the guard goes vacuous the moment the repo's own skills directory is renamed or emptied.
+    expect(skillsIn(".claude/skills").length).toBeGreaterThan(5);
     expect(REAL_SKILLS.size).toBeGreaterThan(5);
   });
 
@@ -184,12 +200,34 @@ const PATH_EXCEPTIONS = new Set<string>([
 // Rejoin at a trailing `-` or `/` so the guard checks the real path instead of a truncated stub.
 const unwrap = (s: string) => s.replace(/([/-])\r?\n[ \t]*(?:\/\/|#|\*)?[ \t]*/g, "$1");
 
+// A cited path that is absent but GITIGNORED is local-only machine config, not rot: `.claude/
+// autopilot.json` is ignored at .gitignore:52, so it exists in the primary checkout and in no
+// worktree, clone, or CI runner. Failing on it made this guard green on exactly one directory on one
+// machine — the first worktree cut after it landed went red on a file that is absent BY DESIGN.
+// Ask git rather than keeping a hand-written exception list, so the excuse expires the moment the
+// path stops being ignored.
+function isGitIgnored(paths: string[]): Set<string> {
+  if (!paths.length) return new Set();
+  try {
+    const out = execFileSync("git", ["check-ignore", "--stdin"], {
+      input: paths.join("\n"),
+      encoding: "utf8",
+    });
+    return new Set(out.split(/\r?\n/).filter(Boolean));
+  } catch {
+    // Exit 1 means "none of them are ignored" — a normal answer, not a failure.
+    return new Set();
+  }
+}
+
 describe("rot class 3 — every cited repo path exists", () => {
   it.each(SOURCES)("$path cites no repo file that is gone", ({ text }) => {
-    const dead = [...unwrap(text).matchAll(PATH_RE)]
+    const missing = [...unwrap(text).matchAll(PATH_RE)]
       .map((m) => m[1])
       .filter((p) => !p.includes("*") && !PATH_EXCEPTIONS.has(p))
       .filter((p) => !existsSync(p));
+    const ignored = isGitIgnored([...new Set(missing)]);
+    const dead = missing.filter((p) => !ignored.has(p));
     // Upstream codex-rs paths (codex-rs/.../src/engine/output_parser.rs) are excluded by the
     // lookbehind: they are always preceded by a `/`, so they never match as repo-relative.
     expect([...new Set(dead)]).toEqual([]);

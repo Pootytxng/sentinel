@@ -39,4 +39,5 @@ a concrete suggested fix. End with a one-line verdict (safe to proceed / fix-bef
 diff is unclear, say what you could not verify rather than guessing. Any finding that touches the
 mutation/rollback boundary (`actions.rs`, `history.rs`, gate flips, elevation) is the `mutation-gate`
 skill's territory — name it in your verdict and let the implementing lane run that checklist; and any
-defect you confirm is owed a permanent guard via `guard-forge` before its fix counts."""
+defect you confirm is owed a permanent guard via `guard-forge` before its fix counts. Defer deep
+security-only audits to the `security` skill."""
