@@ -50,25 +50,35 @@
   Authenticode enrollment, publication, distribution, and external timing are owner territory;
   protected use of the existing updater key inside an authorized local release train is engineering.
 
-### A_ci. Branch protection on `main` — two checkboxes only you can tick  ·  ⏳ NEW 2026-08-05
+### A_ci. Branch protection on `main` — **not available on this plan; no action needed from you**  ·  ⏳ NEW 2026-08-05, revised same day
 `main`'s CI sat **red for two days** and nobody noticed ([#68](https://github.com/Pootytxng/sentinel/issues/68)).
 The detection half is built and green — a daily watchdog that files an issue when the trunk goes red
-([#72](https://github.com/Pootytxng/sentinel/pull/72)). **The prevention half is a repository
-setting, which is yours, not mine.** Detection cannot substitute for it: the watchdog notices a red
-`main`, it cannot stop one being merged into.
+([#72](https://github.com/Pootytxng/sentinel/pull/72)). The prevention half would be a rule on `main`
+requiring the two CI jobs to pass, and requiring a branch to be up to date before it merges.
 
-On `main`'s protection rule: **(1) Require status checks to pass** — naming *Frontend (test +
-build)* and *Rust (test + clippy)* — and **(2) Require branches to be up to date before merging.**
+**I tried to set it and GitHub refused.** Both `repos/…/branches/main/protection` and
+`repos/…/rulesets` return `403 — Upgrade to GitHub Pro or make this repository public`. This account
+is a free User plan and the repo is private, so **the checkboxes do not exist to be ticked** — by
+either of us. This item was first written as "two checkboxes only you can tick"; that was wrong, and
+this is the correction.
 
-The second is the one with a concrete hole behind it, found 2026-08-05. `ci.yml` triggers on
+That leaves three real options, and **my recommendation is the third**: (1) pay for GitHub Pro —
+a recurring spend for one guard, against the zero-budget law; (2) make the repo public now —
+that is the first-public-exposure decision, which CLAUDE.md already schedules alongside the
+`compy.gg` domain step, and it should not be forced early by a CI rule; (3) **accept the watchdog as
+the only guard until the repo goes public anyway**, at which point protection becomes available for
+free and this item closes itself.
+
+The concrete hole the rule would have closed, found 2026-08-05: `ci.yml` triggers on
 `pull_request: branches: [main]`, and that filter matches the **base**, so a stacked PR runs no CI
 at all. When its parent merges, GitHub auto-retargets it — and a base change fires `edited`, which
 is **not** one of the default trigger events. **So a stacked PR can land on `main` having never run
-CI once.** That is the default path for the current stack; I forced a run by hand
-([31018664664](https://github.com/Pootytxng/sentinel/actions/runs/31018664664), green, covers
-#69+#72) rather than merge unproven. Checkbox 2 makes that automatic instead of dependent on me
-remembering. Widening the trigger to all branches would also fix it and was rejected — that is the
-unbounded spend that exhausted July's allowance and killed CI for 22 days in the first place.
+CI once.** That was the default path for this very stack. Without the rule available, the standing
+mitigation is procedural and mine to keep: **after every merge into `main`, the next PR in a stack
+gets `origin/main` merged into it and must show a green run on that result before it lands** — done
+for #71 ([31022512767](https://github.com/Pootytxng/sentinel/actions/runs/31022512767)) and for #72.
+Widening the CI trigger to all branches would also fix it and was rejected — that is the unbounded
+spend that exhausted July's allowance and killed CI for 22 days in the first place.
 
 ### A-closed. Nine §A items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
