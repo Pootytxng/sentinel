@@ -104,12 +104,14 @@ Recorded honestly, because a partial matrix presented as a pass is the thing Q7 
 | Narrator / NVDA names, roles, states | ⬜ not run — needs a screen reader driving the app |
 | 200% scaling | ⬜ not run |
 | forced colors / High Contrast | ⬜ not run |
-| reduced motion / step-aside | ⬜ not run |
+| reduced motion / step-aside | ⚠️ partial — **mechanized, not swept.** `src/idle-motion-guard.test.ts` (2026-08-04) now fails the build if the `:root[data-motion="reduced"]` reset leaves tokens.css, or if any `<Canvas>` frameloop stops naming the stand-down axes. One real violation was found and fixed by it (`HardwareTourScene` painted at full rate unconditionally) and **measured**: 0 GL draw calls over ~21 s hands-off under reduced motion, 24,690 within ~2 s of flipping back. What is still **not run** is the human sweep — the app driven end-to-end with the pref on, looking for an element that reads as broken rather than merely still. |
 | hologram semantic equivalent | ⬜ not run |
 
-**Nothing above should be read as a pass.** The only accessibility fact recorded here is the window
-size, and it is recorded because it contradicts an assumption: the 1280×720 acceptance case cannot be
-observed on a machine whose window state says otherwise.
+**Nothing above should be read as a pass.** Two rows carry real facts, and both are recorded because
+they contradict an assumption rather than confirm one: the window size (the 1280×720 acceptance case
+cannot be observed on a machine whose window state says otherwise) and reduced motion (a scene that
+checked `reduced` in every animation still paid full GPU cost, because nothing checked the render
+loop). A guard proves a rule holds in code; it does not prove the result looks right to a person.
 
 ## Next
 

@@ -322,6 +322,35 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
+### Cycle 2026-08-04b — ✅ Q7 IDLE-COST ACCEPTANCE LINES §397–§399 CLOSED (CC): `75ce9b3` · `452a990` · `2c01d5b` · `64cdaa6` on `claude/harness-context-cleanup-700535` — **unpushed, unmerged** (owner decides the merge)
+
+The three Q7 acceptance lines that are *code* rather than *machine time* (spec
+`2026-07-29-product-quality-stabilization-program.md:397–399`). Each defect became a guard before its
+fix was done; each guard was negative-proved by breaking the code and watching it fail.
+
+- **§397 — hidden windows kept polling sensors (`75ce9b3`).** Rooms polled `get_cpu_sensors` /
+  `get_gpu_sensors` / `get_fps_status` behind a fully hidden window. `useDocumentVisible()` +
+  `src/hidden-poll-guard.test.ts` (file-level, deliberately not AST).
+- **§397 — a COLLAPSED disclosure still ticked (`452a990`).** `WalkthroughDisclosure` mounted its
+  carousel while closed, so an unopened explainer animated forever and counted itself as a step.
+  `useRoomActive()` is the second axis (inactive room), distinct from the window axis above;
+  `src/keepalive-idle-guard.test.ts`.
+- **§398 — two owners on one sensor stream (`2c01d5b`).** MonitorV2's shell polled `get_fps_status`
+  in compositions where a mounted face already owned it. §398 is a **runtime-ownership** rule, not a
+  code-duplication one — the fix names the one composition (advanced + Sessions) with no owner.
+- **§399 — the tour's render loop never stood down (`64cdaa6`).** `HardwareTourScene` derived
+  `frameloop` from a `paused` prop its only mount site hardcoded to `false`. Every animation inside
+  checked `reduced`; nothing checked the loop — full GPU cost producing an identical frame.
+  `src/idle-motion-guard.test.ts` now also pins the `:root[data-motion="reduced"]` reset that 32
+  `infinite` declarations across 21 stylesheets silently depend on. Measured: 0 GL draws over ~21 s
+  hands-off under reduced motion, 24,690 within ~2 s of flipping back.
+
+**Deliberately NOT done:** no game-active (step-aside) axis on the tour canvas — it would need a
+second `get_fps_status` poller, re-creating the §398 violation fixed one commit earlier. **Still
+open in Q7:** the native accessibility sweep and the recorded performance baselines — both need the
+owner's machine and a stable candidate, not more code. Evidence rows updated in
+`docs/superpowers/specs/2026-07-31-q7-native-baseline.md`.
+
 ### Cycle 2026-08-04a — ✅ Q5 COMPLETE (backend + UI, self-review PASSed) · Q6 · BRANCH DISPOSITIONS · TWO GUARDS THAT WERE MISSING: `a4d13bd` · `28ebcc5` · `9bf3bde` · `1a513cb` · `6882819` · `7c8a03f` · `270a622` · `2d33db2` · `9827728` · GATE-RESIDENCY SWEEP `c7c5a8d` · `ba609ea`
 
 - **The session's own supervision hook was the first defect (`a4d13bd`).** `compy-entry` reported the
