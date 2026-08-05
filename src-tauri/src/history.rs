@@ -986,6 +986,23 @@ pub(crate) fn ledger_len_checked() -> Result<usize, String> {
     load_history().map(|h| h.len())
 }
 
+/// Whether a damaged Trust Ledger was ever set aside as `history.json.corrupt`.
+///
+/// The DURABLE half of "is this the whole ledger?". `load_history_from` quarantines a ledger it
+/// cannot parse and then fails loud — but only that once. After the rename the real path is simply
+/// gone, so every later load succeeds with an empty vec, indistinguishable from a first run,
+/// forever. A caller that turns ledger silence into a CLAIM ("Compy changed nothing between these
+/// sessions") would keep fabricating that claim off the fresh, empty file; the marker on disk is
+/// the only evidence left that the silence is a LOSS and not a fresh start.
+///
+/// Pair it with the `Err` from a load, which covers the transient half (locked file, IO error,
+/// permissions). Callers that merely DISPLAY history need neither — an empty view is honest.
+/// Best-effort and read-only: an unreadable directory reads `false`, the same answer every caller
+/// had before this existed.
+pub(crate) fn ledger_was_quarantined() -> bool {
+    history_path().with_extension("json.corrupt").exists()
+}
+
 /// Count of DISTINCT recs whose LATEST ledger entry is an active apply (status "applied"). Powers the
 /// experiment engine's single-variable warning (Intelligence Phase 3 §4F): "N other Compy changes are
 /// already active". Latest-wins per rec_id (a later rollback clears an earlier apply). Read-only,
@@ -2268,6 +2285,39 @@ mod history_tests {
             "the recoverable bytes are preserved EXACTLY, where no save will touch them"
         );
         assert!(!path.exists(), "the damaged live file was set aside");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_quarantined_ledger_reads_empty_forever_and_leaves_only_a_marker() {
+        // The trap that makes `ledger_was_quarantined` necessary. The loud error above fires
+        // exactly ONCE: the rename removes the live path, so every load after it is a clean
+        // Ok(vec![]) — byte-identical to a genuine first run. Nothing in the returned value can
+        // tell a caller that entries were lost, which is why a caller that turns ledger silence
+        // into a CLAIM has to consult the marker on disk instead of the load result.
+        let dir =
+            std::env::temp_dir().join(format!("compy-hist-quarantine-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("history.json");
+        std::fs::write(&path, b"{ not json ]]]").unwrap();
+        assert!(load_history_from(&path).is_err(), "the first load fails loud");
+
+        let after = load_history_from(&path).expect("every load after it succeeds");
+        assert!(
+            after.is_empty(),
+            "…and reads empty, indistinguishable from a first run"
+        );
+
+        // The marker name is derived independently by the rename and by `ledger_was_quarantined`.
+        // If those two ever disagree the completeness signal goes false-negative in silence, so
+        // pin the literal name rather than re-deriving it the same way twice.
+        let marker = path.with_extension("json.corrupt");
+        assert!(marker.exists(), "the marker is the only surviving evidence");
+        assert_eq!(
+            marker.file_name().and_then(|n| n.to_str()),
+            Some("history.json.corrupt"),
+            "the exact name ledger_was_quarantined looks for"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 

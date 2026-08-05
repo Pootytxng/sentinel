@@ -1071,6 +1071,23 @@ impl HypoEval {
     }
 }
 
+/// Whether the Trust Ledger the engine reasoned over is the WHOLE ledger.
+///
+/// `compy-config-change` is the only hypothesis allowed to read SILENCE as contradicting evidence,
+/// and it earns that with a premise: the ledger is a complete record of what Compy itself did. A
+/// ledger that will not load — or one whose damaged predecessor was quarantined, after which every
+/// load reads empty forever — breaks that premise while looking exactly like a quiet machine.
+/// Supplying it keeps the engine deterministic (same inputs → same report) and makes the difference
+/// between "Compy did nothing" and "Compy can't tell you what it did" a fact the caller passes in
+/// rather than one the report invents.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum LedgerHealth {
+    /// Loaded cleanly and no quarantine marker on disk — silence is real evidence.
+    Complete,
+    /// Unreadable now, or a damaged ledger was set aside earlier. Silence proves nothing.
+    Incomplete,
+}
+
 pub(crate) struct WhatChangedInputs<'a> {
     pub baseline: &'a crate::sessions::SessionSummary,
     pub current: &'a crate::sessions::SessionSummary,
@@ -1429,15 +1446,15 @@ pub(crate) fn evidence_graph(r: &WhatChangedReport) -> EvidenceGraph {
 /// "What changed?" between two sessions — the plain-language report PLUS its §4C evidence
 /// graph. The graph is a pure re-projection of the finished report (no new data), so it
 /// stays perfectly in sync with the words the normal view shows.
-pub(crate) fn what_changed(inp: &WhatChangedInputs) -> WhatChangedReport {
-    let mut r = what_changed_inner(inp);
+pub(crate) fn what_changed(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChangedReport {
+    let mut r = what_changed_inner(inp, ledger);
     r.evidence_graph = evidence_graph(&r);
     r
 }
 
 /// The deterministic core: same inputs → same report, every time. No randomness, no
 /// learned weights, every branch inspectable.
-fn what_changed_inner(inp: &WhatChangedInputs) -> WhatChangedReport {
+fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChangedReport {
     let floor = crate::benchmark::DEFAULT_NOISE_FLOOR_PCT;
     let b = inp.baseline;
     let c = inp.current;
@@ -1698,7 +1715,8 @@ fn what_changed_inner(inp: &WhatChangedInputs) -> WhatChangedReport {
     }
 
     // compy-config-change: the Trust Ledger is a complete record of what Compy itself did,
-    // so silence here is real contradicting evidence (unlike the observed sources).
+    // so silence here is real contradicting evidence (unlike the observed sources) — but ONLY
+    // while `ledger` says the record is whole. See `LedgerHealth`.
     {
         let mut h = HypoEval::new("compy-config-change");
         h.direct = true;
@@ -1717,10 +1735,20 @@ fn what_changed_inner(inp: &WhatChangedInputs) -> WhatChangedReport {
             ));
         }
         if h.supporting.is_empty() {
-            h.contradicting.push(format!(
-                "No Compy changes were applied or rolled back between these sessions and the active-change count matches ({}).",
-                c.compy_changes_active
-            ));
+            match ledger {
+                LedgerHealth::Complete => h.contradicting.push(format!(
+                    "No Compy changes were applied or rolled back between these sessions and the active-change count matches ({}).",
+                    c.compy_changes_active
+                )),
+                // Silence from a ledger we could not read is the ABSENCE of evidence, not
+                // evidence of absence. Route it to `missing` so the hypothesis lands in
+                // unknowns instead of ruled_out — Compy never clears itself off a record it
+                // couldn't read. Same idiom as the Windows-build gap above.
+                LedgerHealth::Incomplete => h.missing.push(
+                    "Compy's own change record couldn't be read for this window — a Compy change can't be ruled in or out."
+                        .into(),
+                ),
+            }
         } else {
             h.next_test = Some(
                 "Roll back the change in the Trust Ledger, play one more session, and compare — that isolates it.".into(),
@@ -2076,11 +2104,25 @@ struct Gathered {
     comparison: Option<crate::comparison::ComparisonResult>,
     snapshots: Vec<IdentitySnapshot>,
     drift_notices: Vec<crate::drift::DriftNotice>,
+    /// Whether `applied` is the whole ledger. The timeline can honestly show fewer rows; the
+    /// "What changed?" engine cannot honestly claim Compy was quiet, so it needs this told to it.
+    ledger: LedgerHealth,
 }
 
 fn gather() -> Gathered {
+    // One load, two readings. `unwrap_or_default` is fine for the timeline VIEW below — an empty
+    // view is honest — but the error it swallows is exactly what the engine needs, so capture the
+    // health before collapsing it. Transient failure (Err) and durable loss (a quarantined ledger,
+    // which loads Ok and empty forever after) are both incompleteness.
+    let loaded = crate::history::load_history();
+    let ledger = if loaded.is_err() || crate::history::ledger_was_quarantined() {
+        LedgerHealth::Incomplete
+    } else {
+        LedgerHealth::Complete
+    };
     Gathered {
-        applied: crate::history::load_history().unwrap_or_default(),
+        ledger,
+        applied: loaded.unwrap_or_default(),
         sessions: crate::sessions::get_session_summaries(),
         gaming_slot: crate::gaming_session::load_session()
             .map(|f| (f.started_at.clone(), gaming_status_label(f.status))),
@@ -2153,13 +2195,16 @@ fn what_changed_impl(g: &Gathered, started_at: &str) -> WhatChangedOutcome {
     let bt = parse_utc(&baseline.started_at).unwrap_or(ct);
     let asm = assemble_from(g);
     let (events_window, events_ambiguous) = split_window_events(&asm.events, bt, ct);
-    WhatChangedOutcome::Report(Box::new(what_changed(&WhatChangedInputs {
-        baseline,
-        current,
-        events_window,
-        events_ambiguous,
-        snapshots: &g.snapshots,
-    })))
+    WhatChangedOutcome::Report(Box::new(what_changed(
+        &WhatChangedInputs {
+            baseline,
+            current,
+            events_window,
+            events_ambiguous,
+            snapshots: &g.snapshots,
+        },
+        g.ledger,
+    )))
 }
 
 /// "What changed?" for one monitored session vs the previous session of the same game.
@@ -2218,13 +2263,16 @@ fn what_changed_between_impl(
     }
     let asm = assemble_from(g);
     let (events_window, events_ambiguous) = split_window_events(&asm.events, bt, ct);
-    WhatChangedOutcome::Report(Box::new(what_changed(&WhatChangedInputs {
-        baseline,
-        current,
-        events_window,
-        events_ambiguous,
-        snapshots: &g.snapshots,
-    })))
+    WhatChangedOutcome::Report(Box::new(what_changed(
+        &WhatChangedInputs {
+            baseline,
+            current,
+            events_window,
+            events_ambiguous,
+            snapshots: &g.snapshots,
+        },
+        g.ledger,
+    )))
 }
 
 /// "What changed?" between two sessions the user picked (the good-vs-bad workflow, §4D).
@@ -2382,8 +2430,12 @@ mod tests {
         }
     }
 
+    /// The engine under a ledger that is known-good — the case every hypothesis test below is
+    /// about. The incomplete-ledger case has its own guard (see
+    /// `an_unreadable_ledger_never_clears_compy_of_a_regression`) and must be spelled out
+    /// explicitly, so it can never be reached by accident from a default.
     fn report(inp: &WhatChangedInputs) -> WhatChangedReport {
-        what_changed(inp)
+        what_changed(inp, LedgerHealth::Complete)
     }
 
     // ── Timeline guards ──
@@ -2968,6 +3020,54 @@ mod tests {
     }
 
     #[test]
+    fn an_unreadable_ledger_never_clears_compy_of_a_regression() {
+        // The whole reason `LedgerHealth` exists. `compy-config-change` is the ONE hypothesis
+        // allowed to read SILENCE as contradicting evidence, and it earns that from a premise:
+        // the Trust Ledger is a complete record of what Compy itself did. A ledger that won't
+        // load — or one whose damaged predecessor was quarantined, after which every load reads
+        // empty forever — looks exactly like a quiet machine. Compy must never clear ITSELF of a
+        // regression using a record it could not read.
+        let (b, c) = two_sessions(100.0, 82.0); // a real regression, needing a cause
+        let inp = WhatChangedInputs {
+            baseline: &b,
+            current: &c,
+            events_window: vec![],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        };
+
+        // Known-good ledger: silence IS evidence, and eliminating the hypothesis is correct.
+        // Pinned so the fix below can only narrow the claim, never delete it.
+        let whole = what_changed(&inp, LedgerHealth::Complete);
+        assert!(
+            whole
+                .ruled_out
+                .iter()
+                .any(|h| h.id == "compy-config-change"),
+            "a whole, quiet ledger still rules Compy out — that behaviour must survive"
+        );
+
+        // Identical inputs, unreadable ledger: the hypothesis has to stay open.
+        let r = what_changed(&inp, LedgerHealth::Incomplete);
+        assert!(
+            !r.ruled_out.iter().any(|h| h.id == "compy-config-change"),
+            "an unreadable ledger cleared Compy of the regression; ruled out: {:?}",
+            r.ruled_out.iter().map(|h| h.id.as_str()).collect::<Vec<_>>()
+        );
+        assert!(
+            !format!("{r:?}").contains("No Compy changes were applied"),
+            "the report asserts as fact something the ledger could not tell it"
+        );
+        // Staying open is not enough — a silently dropped hypothesis reads as "nothing to see".
+        // The gap itself has to reach the reader.
+        assert!(
+            r.unknowns.iter().any(|u| u.contains("couldn't be read")),
+            "the unreadable ledger was never disclosed; unknowns: {:?}",
+            r.unknowns
+        );
+    }
+
+    #[test]
     fn unknown_stays_unknown_and_insufficient_evidence_leads() {
         // No fingerprints, no gaming-mode stamps, no snapshots: everything unknowable
         // stays in `unknowns`; the only leader is honest insufficient-evidence at Low.
@@ -3329,6 +3429,7 @@ mod tests {
             comparison: None,
             snapshots: vec![],
             drift_notices: vec![],
+            ledger: LedgerHealth::Complete,
         }
     }
 
