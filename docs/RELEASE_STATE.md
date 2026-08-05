@@ -25,7 +25,7 @@
 <!-- latest_release_version is enforced by check (1) to equal src-tauri/tauri.conf.json's version, so it
      means "the version THIS TREE is configured to build" — NOT "the newest published release".
      Published truth is carried separately by published_release_* below. Do not conflate them. -->
-<!-- STATE:source_main_commit=8b7c232 -->
+<!-- STATE:source_main_commit=76cb48f -->
 <!-- STATE:latest_release_version=0.9.12 -->
 <!-- STATE:candidate_version=0.9.12 -->
 <!-- STATE:candidate_branch=main -->
@@ -42,7 +42,7 @@
 <!-- STATE:published_manifest_sha256=12d7dfe9887e5827e4cf59e839977fc27e2caac4eb2c84734e6a08f5e41272de -->
 <!-- STATE:release_transaction_stages=9-of-9 -->
 <!-- STATE:owner_installed_version=0.9.12 -->
-<!-- STATE:owner_installed_stamp=5ff6963 -->
+<!-- STATE:owner_installed_stamp=dc4d55e -->
 <!-- STATE:manifest_version=0.9.12 -->
 <!-- STATE:hosted_ci=off-by-owner-decision-2026-07-16 -->
 <!-- STATE:zh_cn_localization=base-and-vocabulary-on-main-d000295 -->
@@ -60,19 +60,19 @@
 | **v0.9.11 — PUBLISHED (2026-07-28)** | Cut from `main` after the autonomy, native-process, resumable-transaction, simulation, and static-guard repairs, then published under owner GO. Public release id **`361056355`**, tag `v0.9.11`, `draft: false`, `prerelease: false`, published `2026-07-28T14:44:17Z`. Public installer `Compy_0.9.11_x64-setup.exe` SHA-256 **`bb2b85a43c2bf5119666f7b0709e7cee0409e0eb5ed7c4da2e4998da5438384f`**; public `latest.json` SHA-256 `6bcd6cea96bd610e8be1c44765cfc4e6f3b8c2b4e4594774251fa3cceb76b007`; both byte-match the signed receipt and the updater signature verifies against the pinned key. Releases-repository tag `v0.9.11` → `a628c9b`. The resumable transaction is **complete: 9 of 9 stages**, closing on `public_assets_verified` after the `/releases/latest/download/` aliases converged. | `gh release view v0.9.11 --repo Pootytxng/compy-releases --json id,isDraft,isPrerelease,publishedAt` · `src-tauri/target/release/bundle/nsis/release-transaction-v0.9.11.json` |
 | **Configured build version (this tree)** | Carried by the `STATE:latest_release_version` anchor above — check (1) pins that anchor to `src-tauri/tauri.conf.json`'s version, and the release pipeline moves both in the same commit as the bump. This is what the tree *would* build — it is **not** a released version (published truth is the row below). Do not restate the number here; it would drift. | `grep '"version"' src-tauri/tauri.conf.json package.json` |
 | **Latest PUBLISHED release + source commit** | **v0.9.12**, source `a1be896` (full `a1be896fb5853f729d77525374a4242c6672d5a8`), published tag `v0.9.12` on `Pootytxng/compy-releases`, release id `364422895`, published `2026-08-03T18:42:41Z`, `draft: false`, `prerelease: false`. Installer `Compy_0.9.12_x64-setup.exe` SHA-256 **`07a5f638be34607af03206f1d04263a1878b219134adad8520f0ffd367d5ceea`** — re-downloaded from the public alias and byte-matched against the local receipt artifact; public `latest.json` SHA-256 `12d7dfe9887e5827e4cf59e839977fc27e2caac4eb2c84734e6a08f5e41272de`. It supersedes v0.9.11 (`7ba5fb6`, id `361056355`). There is still no v0.9.8, v0.9.9, or v0.9.10 release or tag in the releases repository — the abandoned v0.9.10 draft and its tag were deleted 2026-07-28. | `gh release view --repo Pootytxng/compy-releases --json tagName,isDraft,publishedAt` · `Get-FileHash` on the re-downloaded public assets |
-| **Owner-installed version + embedded stamp** | **0.9.12**, embedded stamp **`5ff6963`** — registry `DisplayVersion` reads 0.9.12 (Windows Apps: 0.9.12). Installer `Compy_0.9.12_x64-setup.exe` SHA-256 **`1878998910A4861226B4BE53C11BBFE3D255BB7D9DD5301B4ECAC4823D315EB6`**, **installed by Claude + LIVE** 2026-08-04, runtime-proved over CDP as `5ff6963 · release · shell 0.9.12`; it supersedes the earlier 2026-08-04 local ship at `8b7c232`. **The desk is deliberately AHEAD of the fleet:** the owner installed the published `a1be896` on 2026-08-03, then took successive local ships off post-release `main` (`c7c60d3` → `8b7c232` → `5ff6963`) at the same declared version 0.9.12 with no new release cut — [archive/RELEASE_STATE_HISTORY.md](archive/RELEASE_STATE_HISTORY.md) records each. So this is **not** the published artifact, and it is not evidence about what any tester runs — the fleet's published truth is the row above. Enforced since 2026-08-04: check (7) reads the stamp out of the installed binary, so this row can no longer drift silently the way it did on 2026-07-31. | `node scripts/verify-release-state.mjs` (check 7) · `Select-String -Path "$env:LOCALAPPDATA\Compy\compy.exe" -Pattern 5ff6963` · HKCU uninstall `DisplayVersion` |
+| **Owner-installed version + embedded stamp** | **0.9.12**, embedded stamp **`dc4d55e`** — registry `DisplayVersion` reads 0.9.12 (Windows Apps: 0.9.12). Installer `Compy_0.9.12_x64-setup.exe` SHA-256 **`3509A6E6B5DC062DC4D87A1FFA953D957157B24268CCDD43BA0F1DADE608A8D2`** (5,101,892 bytes), **installed by Claude + LIVE** 2026-08-05 09:17, carrying the ledger-honesty train. Stamp proved by `Select-String` on the installed binary, **not** CDP-runtime-proved this time — the weaker of the two proofs, said plainly. It supersedes the 2026-08-04 local ship at `5ff6963`. **The desk is deliberately AHEAD of the fleet:** the owner installed the published `a1be896` on 2026-08-03, then took successive local ships off post-release `main` (`c7c60d3` → `8b7c232` → `5ff6963` → `dc4d55e`) at the same declared version 0.9.12 with no new release cut — [archive/RELEASE_STATE_HISTORY.md](archive/RELEASE_STATE_HISTORY.md) records each. So this is **not** the published artifact, and it is not evidence about what any tester runs — the fleet's published truth is the row above. Enforced since 2026-08-04: check (7) reads the stamp out of the installed binary, so this row can no longer drift silently the way it did on 2026-07-31. | `node scripts/verify-release-state.mjs` (check 7) · `Select-String -Path "$env:LOCALAPPDATA\Compy\compy.exe" -Pattern 5ff6963` · HKCU uninstall `DisplayVersion` |
 | **Latest updater manifest version** | **v0.9.12** — `latest.json` at `releases/latest/download/` reports `"version": "0.9.12"` and names the v0.9.12 asset (`.../releases/download/v0.9.12/Compy_0.9.12_x64-setup.exe`); the installer alias answers HTTP 200 at 5,021,579 bytes, matching the published asset exactly; the signature verifies against the pinned minisign key. | unauthenticated fetch of `latest.json` + HEAD on the installer alias + `scripts/verify-updater-signature.mjs` |
 | **Hand-distributed tester version** | **0.9.0** — the `37a166c` NSIS (SHA-256 `6BC2F7DF…F5A2C4`) is what the six invitees were sent (Drive link). That remains the only hand-send; nothing has been mailed out since. | `BETA_DISTRIBUTION_RECORD.md` |
 | **A0 single-tester canary** | **PASS.** A tester completed the canary through Compy's **normal public updater** and is **currently running v0.9.11**; **no updater failure was reported.** That is the whole recorded result — the tester's prior version, the update timestamp, and any per-step detail were never captured, so they are not reconstructible and must not be inferred. | owner report only |
-| **Known tester installation state** | **One confirmed: the canary tester on 0.9.11** (owner-reported). **Nobody is confirmed on 0.9.12 yet** — it published 2026-08-03 and testers reach it only when their own consent-first update check runs. The other invitees remain **UNKNOWN** — no telemetry, no remote inventory by design; six invitees hold the 0.9.0 link and what each actually installed is owner-confirmable only. | owner report only |
+| **Known tester installation state** | **At least two, possibly three, testers are on 0.9.12** — the owner reported on 2026-08-05 that they auto-updated to the latest published build on 2026-08-03/04, which is v0.9.12. **Two is the floor; the third and the exact identities were not captured and must not be inferred.** Separately, the canary tester was last confirmed on 0.9.11 and may be among them. The remaining invitees stay **UNKNOWN** — no telemetry, no remote inventory by design; six hold the 0.9.0 link and what each installed is owner-confirmable only. | owner report only |
 | **Public artifact exposure** | **YES — `Pootytxng/compy-releases` is a PUBLIC repo.** Every updater installer + `latest.json` is unauthenticated-downloadable (required for the updater; same discoverability as a shared link). **Source repo `Pootytxng/sentinel` stays PRIVATE.** No store listing, no marketing page, no Authenticode-signed public artifact. | `gh repo view Pootytxng/compy-releases --json visibility` |
 | **Code-signing status** | **OPEN** — installers are Authenticode **NotSigned**. Gates a PUBLIC (store/marketing) release, not the private-beta updater. | `Get-AuthenticodeSignature` on the NSIS |
 | **Legal status** | **OPEN** — EULA + privacy are DRAFTS only. Gates a PUBLIC release. | `docs/` legal drafts |
 
 **Bottom line:** the newest **published** release and the public updater manifest are both
 **v0.9.12 (`a1be896`)**, released 2026-08-03 — it replaced v0.9.11 (`7ba5fb6`) as the fleet-visible
-build. The owner box is one step ahead of it by design — it runs the 2026-08-04 local ship at
-`8b7c232` off post-release `main`, same declared version 0.9.12, nothing published from it.
+build. The owner box is one step ahead of it by design — it runs the 2026-08-05 local ship at
+`dc4d55e` off post-release `main`, same declared version 0.9.12, nothing published from it.
 v0.9.12 carries the
 updater/privacy truth fix (issue #59): the absolute "nothing leaves your PC" claims are gone from
 the app, both locales, the legal documents and the marketing site, automatic update checks are now
@@ -86,8 +86,9 @@ source tag, recovery branches and local evidence intact. Hosted Actions remain i
 under the owner's $0-budget decision; local gates plus the sandboxed publish simulation are
 operative. **No build has been distributed to another person by hand since the 0.9.0 link** — the
 fleet reaches 0.9.12 only through the consent-first updater, and **the A0 single-tester canary
-PASSED** on that path for v0.9.11: the tester updated in-app and reported no updater failure. No
-tester is confirmed on 0.9.12 yet. The v0.9.12 release transaction is **complete: 9 of 9 stages**,
+PASSED** on that path for v0.9.11: the tester updated in-app and reported no updater failure. **The
+fleet path has since carried real traffic — the owner reports at least two testers auto-updated onto
+0.9.12 on 2026-08-03/04.** The v0.9.12 release transaction is **complete: 9 of 9 stages**,
 **no active release blocker remains, and normal product development may resume.**
 
 ## Gate matrix
@@ -168,6 +169,16 @@ tester is confirmed on 0.9.12 yet. The v0.9.12 release transaction is **complete
 passed on the same updater path, and the debris is cleared, so **normal product development may
 resume.** Every row still marked OPEN above gates a *future* PUBLIC (store/marketing) release or the
 arming of a dark feature; none of them blocks the shipped v0.9.12 build or the work that follows it.
+
+**⚠️ VERSION DEBT — the next release cut MUST bump to 0.9.13 before anything can reach a tester.**
+`main` has moved past the published v0.9.12 (ledger-honesty fixes, `dc4d55e` and later) while still
+*declaring* version 0.9.12. The updater offers a download only on a **higher** number, so under the
+current version every one of those fixes is unreachable by the fleet — including the two-plus testers
+now confirmed on 0.9.12. This is not a blocker on development; it is a debt that comes due at the
+next cut. Bump `src-tauri/tauri.conf.json` + `package.json`, build **with** `TAURI_SIGNING_PRIVATE_KEY`
+(owner-held; an unsigned build cannot be published, by design), then the normal publish GO/NO-GO.
+Recorded 2026-08-05 at the owner's direction to defer the cut until the next session's work lands, so
+one bump covers both.
 
 ## Required owner decisions (live)
 
