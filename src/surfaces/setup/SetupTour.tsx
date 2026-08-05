@@ -159,7 +159,7 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
               Decorative: the text panel carries the meaning, so hide the canvas from the a11y tree. */}
           <div className="st-stage" aria-hidden="true">
             <Suspense fallback={<div className="st-loading">{t("home.setupTour.stageLoading")}</div>}>
-              <HardwareTourScene hw={hw} focusId={focusId} reduced={reduced} paused={false} />
+              <HardwareTourScene hw={hw} focusId={focusId} reduced={reduced} />
             </Suspense>
           </div>
 
