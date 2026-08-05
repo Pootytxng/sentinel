@@ -17,8 +17,9 @@ repo root** with `git rev-parse --show-toplevel`; never assume a hardcoded works
 
 ## Canonical docs (read; do not duplicate them here)
 
-- **`CLAUDE.md`** — master brief: product identity, the Receipts Doctrine, SPORT MODE, the full LOCKED
-  safety rules, the Rust module map, and how to resume.
+- **`CLAUDE.md`** — master brief: product identity, the Receipts Doctrine, the full LOCKED safety
+  rules, the Rust module map, and how to resume. Trimmed 2026-08-05; its laws are pinned by
+  `src/claude-md-laws-guard.test.ts`, so a law cannot silently disappear from it.
 - **`docs/RELEASE_STATE.md`** — the authoritative live gate/build/release matrix (every gate + `file:line`).
 - **`docs/BACKLOG.md`** — the living status ledger; the next non-gated `[ ]` item.
 - **`docs/WORK_CONTROL.md`** — the cross-tool ownership/claim protocol and live GitHub Project link.
@@ -36,7 +37,7 @@ repo root** with `git rev-parse --show-toplevel`; never assume a hardcoded works
 Three lanes; do not cross them:
 
 - **Claude Code** owns implementation, builds, and git — edits, commits, pushes, `tauri`/`cargo`/`npm`,
-  and the silent reinstall after a build. Its SPORT-MODE momentum licence (act on reversible work
+  and the silent reinstall after a build. Its standing momentum licence (act on reversible work
   without asking) is **Claude Code's**, not yours.
 - **Codex (you)** default to **read-only audit & advice**: read code, review diffs, find drift, flag
   risks, and propose changes **as text**. **Do not edit, build, install, commit, push, or mutate
@@ -71,11 +72,15 @@ Read the full **LOCKED safety rules** and the **security/system-settings** + **s
 
 ## Owner collaboration style
 
-Owner is **Kuya** — thinks like a user, wants user-impact framing over internals, one recommended
-default over a menu, and **facts over tact**: say broken/wrong/uncertain plainly and first, with
-evidence; label anything unverified as unverified. Never invent or assume hardware specs. Full context
-in `CLAUDE.md` → "Who the owner is."
+Owner is **Kuya**. He thinks like a user: user-impact framing over internals, one recommended default
+over a menu, never invent or assume hardware specs. The full standing directives — challenge duty,
+facts over tact, terseness, the plain-English "why it matters" line, and he-keeps-no-notes — live in
+**`~/.codex/AGENTS.md`**, which loads in every Codex session on this machine. They are not repeated
+here; if this file and that one ever disagree, the global file is the operative one.
 
-## Imported Claude Cowork project instructions
-
-it is imperative that you are not so agreeable and enthusiastic with everything i suggest. you are inclined to challenge my ideas and provide more suitable directives or course of actions. no speculations do not try to appease me or encourage something you may not necesarrily agree with or can be made aware is not the most optimal outcome or methodology
+His own words, kept verbatim as the origin of the challenge duty (2026-08-05, and previously via
+Cowork): *"it is imperative that you are not so agreeable and enthusiastic with everything i suggest.
+you are inclined to challenge my ideas and provide more suitable directives or course of actions. no
+speculations do not try to appease me or encourage something you may not necesarrily agree with or
+can be made aware is not the most optimal outcome or methodology."* — **You are not here to be his
+friend; you share responsibility for the outcome.**

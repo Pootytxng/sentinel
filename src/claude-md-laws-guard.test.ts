@@ -206,22 +206,32 @@ describe("CLAUDE.md stays within its boot-tax budget", () => {
 
 // ── 3. Every repo path CLAUDE.md points at must exist ───────────────────────────────────────────
 
-describe("CLAUDE.md has no dead pointers", () => {
+// AGENTS.md is the Codex-lane equivalent: it auto-loads for Codex and consists almost entirely of
+// pointers into CLAUDE.md and docs/. On 2026-08-05 it was found pointing at two CLAUDE.md sections
+// that the trim had removed ("SPORT MODE", "Who the owner is") — a control file quietly directing a
+// whole agent lane at content that no longer existed. Same failure mode, so the same check.
+const POINTER_FILES = ["CLAUDE.md", "AGENTS.md"];
+
+describe.each(POINTER_FILES)("%s has no dead pointers", (file) => {
   it("every referenced repo path exists on disk", () => {
-    // `(?<!~\/)` drops `~/.claude/CLAUDE.md` — that is the machine-global laws file in the home
-    // directory, deliberately outside this repo, so existsSync() against the repo root would always
-    // call it dead. Only repo-relative pointers are in scope here.
+    const body = readFileSync(file, "utf8");
+    // `(?<!~\/)` drops `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md` — machine-global files in the
+    // home directory, deliberately outside this repo, so existsSync() against the repo root would
+    // always call them dead. Only repo-relative pointers are in scope here.
     const cited = new Set(
-      text.match(
+      body.match(
         /(?<!~\/)(?:docs|scripts|src|src-tauri|\.claude)\/[A-Za-z0-9_\-./]+\.(?:md|mjs|ps1|ts|tsx|json|rs)/g,
       ) ?? [],
     );
-    expect(cited.size, "path-extraction regex matched nothing — the guard would pass vacuously").toBeGreaterThan(10);
+    expect(
+      cited.size,
+      `path-extraction regex matched nothing in ${file} — the guard would pass vacuously`,
+    ).toBeGreaterThan(5);
 
     const dead = [...cited].filter((p) => !existsSync(p));
     expect(
       dead,
-      `CLAUDE.md points at ${dead.length} path(s) that do not exist. The 2026-08-05 trim replaced ` +
+      `${file} points at ${dead.length} path(s) that do not exist. The 2026-08-05 trim replaced ` +
         `narrative with pointers, so a moved or renamed file now silently costs a law its content.`,
     ).toEqual([]);
   });
