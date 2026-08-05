@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // PreToolUse(Agent) hook — subagent model-routing guard (2026-07-18).
 //
-// CLAUDE.md's SUBAGENT-MODEL ORCHESTRATION rule: cheapest capable model by default (sonnet,
+// CLAUDE.md's "Subagent routing" rule (§ Reports, subagents, self-review; the full table lives in
+// docs/COWORK_HANDOFF.md → Subagent-model orchestration): cheapest capable model by default (sonnet,
 // via CLAUDE_CODE_SUBAGENT_MODEL), opus only where adversarial judgment is provably the point
 // (the one standing exception: web-design-director), fable never. That's been true by
 // construction for every NAMED custom agent (checked 2026-07-18: 3 of 4 in .claude/agents/*.md
@@ -52,7 +53,7 @@ if (allowedTypes.includes(subagentType)) {
 
 const reason =
   `Blocked: Agent call requests model="${requestedModel}" for subagent_type="${subagentType}", ` +
-  `which is not the documented exception (CLAUDE.md SUBAGENT-MODEL ORCHESTRATION: sonnet is the ` +
+  `which is not the documented exception (CLAUDE.md "Subagent routing": sonnet is the ` +
   `default, opus only for web-design-director, fable never for subagents). If this override is ` +
   `deliberate and the exception list is stale, update ALLOWED_NON_SONNET in ` +
   `.claude/hooks/subagent-model-guard.mjs and CLAUDE.md together — don't just retry past this.`;

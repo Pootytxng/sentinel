@@ -65,9 +65,9 @@ const sid = () => `selftest-${process.pid}-${Date.now()}-${seq++}`;
 // Codex-shaped apply_patch bodies. apply_patch carries the edit as a patch envelope whose file
 // headers are `*** Update/Add/Delete/Move File: <path>`. A UI edit touches src/**/*.{tsx,css}.
 const APPLY_UI_TSX =
-  "*** Begin Patch\n*** Update File: src/surfaces/home/HomeHud.tsx\n@@\n-const a = 1;\n+const a = 2;\n*** End Patch";
+  "*** Begin Patch\n*** Update File: src/surfaces/HomeHud.tsx\n@@\n-const a = 1;\n+const a = 2;\n*** End Patch";
 const APPLY_UI_CSS =
-  "*** Begin Patch\n*** Update File: src/theme.css\n@@\n-.a{color:red}\n+.a{color:blue}\n*** End Patch";
+  "*** Begin Patch\n*** Update File: src/App.css\n@@\n-.a{color:red}\n+.a{color:blue}\n*** End Patch";
 const APPLY_BACKEND =
   "*** Begin Patch\n*** Update File: src-tauri/src/lib.rs\n@@\n-let a = 1;\n+let a = 2;\n*** End Patch";
 // Negative fixtures for the header-anchored UI detector (corrective follow-up 2026-07-20): the
@@ -78,7 +78,7 @@ const APPLY_BACKEND =
 const APPLY_DIST_CSS =
   "*** Begin Patch\n*** Add File: dist/src/generated.css\n@@\n+.x{color:red}\n*** End Patch";
 const APPLY_BACKEND_MENTIONS_FRONTEND =
-  "*** Begin Patch\n*** Update File: src-tauri/src/lib.rs\n@@\n-// see src/App.tsx for the TS contract\n+// see src/App.tsx and src/theme.css for the TS contract\n*** End Patch";
+  "*** Begin Patch\n*** Update File: src-tauri/src/lib.rs\n@@\n-// see src/App.tsx for the TS contract\n+// see src/App.tsx and src/App.css for the TS contract\n*** End Patch";
 
 // Run self-review-reminder.mjs directly under node with a JSON event on stdin. Returns {stdout,status}.
 function runHook(payload, cwd = REPO_ROOT) {

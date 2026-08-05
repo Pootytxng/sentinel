@@ -41,5 +41,7 @@ Review rubric (report only what you can evidence from the code):
 
 Output: a prioritized list (Critical / Warning / Nit), each with file path, line, the problem, and
 a concrete suggested fix. End with a one-line verdict (safe to proceed / fix-before-merge). If the
-diff is unclear, say what you could not verify rather than guessing. This complements the existing
-`check` and `security` skills; defer deep security-only audits to the `security` skill.
+diff is unclear, say what you could not verify rather than guessing. Any finding that touches the
+mutation/rollback boundary (`actions.rs`, `history.rs`, gate flips, elevation) is the `mutation-gate`
+skill's territory — name it in your verdict and let the orchestrator run that checklist; and any
+defect you confirm is owed a permanent guard via `guard-forge` before its fix counts.

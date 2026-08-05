@@ -67,7 +67,7 @@ match these exactly or point back to this section rather than restate its own co
 | `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | 150000 | The one literal env-var value; native auto-compact fires at ~92–95% of it (~140k) | `.claude/settings.json` — the ONLY place this literal should be set |
 | Advisor warn threshold | 85% of the window above, computed at runtime | When the Stop hook injects a persist-to-disk instruction | `.claude/hooks/context-size-advisor.mjs` — reads the env var, does not hardcode a copy |
 | Audit red-flag | 200k peak context | Sanity check only — should never be reached if auto-compact is working; hitting it means compaction failed to fire, not a target to approach | `.claude/skills/usage-audit/SKILL.md`, `scripts/usage-audit.mjs` |
-| Autopilot continuation cap | 2 | Hard code clamp (was: unenforced doc convention) on how many tasks autopilot chains in one session, so it can't manufacture a >150k context on its own | `.claude/hooks/stop-continue.mjs` (`MAX_CONTINUES`) |
+| Autopilot continuation cap | 8 (was 2) | Hard code clamp (was: unenforced doc convention) on how many tasks autopilot chains in one session, so it can't manufacture a >150k context on its own. Raised 2→8 on 2026-08-03 under the owner's standing autonomy grant; lower it again if the context advisor starts firing | `.claude/hooks/stop-continue.mjs` (`MAX_CONTINUES`) — the code is the source, this row mirrors it |
 
 Unrelated metric that happens to also round to "200k" and should not be confused with the audit
 red-flag above: `docs/LANE_WORKFLOW.md`'s **~200k output tokens per shipped burst item** — a
@@ -79,8 +79,9 @@ The 2026-07-18 audit's remaining open items were all policy sentences with nothi
 in the moment. Two are now real code, one is fixed, two are named honestly as still open rather
 than papered over:
 
-- **Autopilot continuation cap — FIXED (§5).** `MAX_CONTINUES=2` hard-clamped in
-  `stop-continue.mjs`, closing the exact gap the 2026-07-01 spec flagged as unenforced.
+- **Autopilot continuation cap — FIXED (§5).** `MAX_CONTINUES` hard-clamped in
+  `stop-continue.mjs`, closing the exact gap the 2026-07-01 spec flagged as unenforced. The clamp
+  VALUE lives only in that file (2 originally, 8 since 2026-08-03) — never restate a literal here.
 - **Subagent model-routing override — NOW ENFORCED.** `.claude/hooks/subagent-model-guard.mjs`
   (PreToolUse on the `Agent` tool) denies any call whose `model` field requests opus/fable
   outside the one documented exception (`web-design-director`, opus). Verified against the real
@@ -118,8 +119,7 @@ than papered over:
   `.claude/hooks/workflow-usage-guard.mjs` (PreToolUse, matcher `Workflow`) injects the §2
   reminder on every call — advisory like `subagent-throttle.mjs`, since "was this workflow
   warranted" is judgment, not mechanics. Live-fired in-session: the reminder reached the model.
-  Unlike the Agent-tool guards above, which were verified against the documented schema before
-  shipping, a matcher here would be a guess — per the project's own no-speculation rule, it was
-  deliberately NOT built. To close this: in a live CC session, run a Workflow-tool call once and
-  check `tool_name` in the hook debug log (`--debug`) or via a temporary catch-all PreToolUse
-  logging hook, then wire the real matcher.
+  **This item is CLOSED.** The paragraph that used to trail here ("a matcher would be a guess …
+  to close this, run a Workflow call and check `tool_name`") described the PRE-measurement state
+  and was left standing after the measurement was actually taken — removed 2026-08-05. The
+  empirical confirmation is recorded in `.claude/hooks/workflow-usage-guard.mjs`'s header.
