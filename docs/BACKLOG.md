@@ -322,6 +322,31 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
+### Cycle 2026-08-04d — ✅ AN UNREADABLE LEDGER NO LONGER EXONERATES COMPY (CC): `8798616` on `claude/harness-context-cleanup-700535` — **unpushed, unmerged** (owner decides the merge)
+
+Swept every `load_history().unwrap_or_default()` against one test: *does the collapse make the app
+**assert something false**, or merely **show less**?* Four sites merely show less (an empty history
+view is honest) — documented, left alone. The fifth, `intelligence.rs::gather()`, asserts.
+`compy-config-change` is the only hypothesis allowed to read ledger silence as *contradicting*
+evidence, and it earns that from a premise in its own comment: the ledger is a complete record of
+what Compy did. `unwrap_or_default` breaks that premise while looking exactly like a quiet machine —
+so an unreadable ledger made the engine state *"No Compy changes were applied…"* as fact and **rule
+Compy out** as the cause of a regression it may have caused.
+
+Completeness has two legs and both are now checked: the transient `Err` from the load, and the
+durable `ledger_was_quarantined()` — because the quarantine fails loud exactly ONCE, and after the
+rename every load reads `Ok(vec![])` forever, indistinguishable from a first run. `gather()` loads
+once and derives `LedgerHealth` before collapsing (a second load would double-record the support
+evidence); it is passed to `what_changed` as a named parameter, so the engine stays deterministic.
+Under `Incomplete` the silence routes to `missing`, not `contradicting` — the hypothesis lands in
+**unknowns** with the gap disclosed, matching the file's existing Windows-build idiom. Red proven on
+the assertion first (`ruled out: ["compy-config-change"]`), not on a compile error. 916 pass (+2) ·
+clippy clean · npm 3239.
+
+Follow-up, deliberately not folded in: `get_intelligence_timeline` also shrinks silently on an
+unreadable ledger. It's a view, not a claim — disclosing it needs a `TimelineView` field (sibling of
+`dropped_unparseable`) plus frontend work.
+
 ### Cycle 2026-08-04c — ✅ Q9 CONFOUND WATERMARK: THE COMMENT WAS THE ONLY GUARD (CC): `e97a6e3` on `claude/harness-context-cleanup-700535` — **unpushed, unmerged** (owner decides the merge)
 
 Q9 acceptance: *"before/after attribution never credits one change when several changed."* The
