@@ -45,9 +45,24 @@ export function listRemoteRefs(repoRoot) {
     .filter((l) => l && !NOT_A_BRANCH.has(l));
 }
 
-/** `main` if it exists locally, else `origin/main` — worktrees do not always carry the branch. */
+/**
+ * `origin/main` if it exists, else the local `main` — not the other way round.
+ *
+ * The local `main` is a *checkout*, and in a multi-worktree repo it belongs to whichever worktree
+ * holds it; nothing obliges that worktree to be current. Preferring it made every MERGED row's
+ * re-proof depend on when an unrelated lane last ran `git pull`. That is not a theoretical risk: on
+ * 2026-08-05 this audit called `origin/claude/harness-context-cleanup-700535` unmerged — it had
+ * landed as PR #66 and is a merge-tree no-op against the real trunk — purely because the primary
+ * worktree's `main` sat 4 commits behind. It fails the other way too: a stale base can re-prove a
+ * MERGED row that the true trunk no longer contains, which is the silent direction.
+ *
+ * `origin/main` is a remote-tracking ref, so it is only as fresh as the last `git fetch` — the same
+ * caveat the whole audit already carries and documents. But it tracks the server by construction
+ * rather than by an unrelated lane's habits, and that is the difference that matters. The local
+ * fallback stays for repos and CI checkouts that have no `origin/main` at all.
+ */
 export function resolveBase(repoRoot) {
-  for (const candidate of ["main", "origin/main"]) {
+  for (const candidate of ["origin/main", "main"]) {
     try {
       git(repoRoot, ["rev-parse", "--verify", "--quiet", `${candidate}^{commit}`]);
       return candidate;

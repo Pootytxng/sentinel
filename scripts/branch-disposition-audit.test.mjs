@@ -118,7 +118,22 @@ describe("git facts the audit rests on", () => {
     git(fixture, ["update-ref", "-d", "refs/remotes/origin/main"]);
   });
 
-  it("resolves main as the base", () => {
+  // bug → guard. This preference was the other way round until 2026-08-05, when the audit called
+  // `origin/claude/harness-context-cleanup-700535` unmerged — it had landed as PR #66 and is a
+  // merge-tree no-op against the real trunk — purely because the primary worktree's local `main` sat
+  // 4 commits behind. A local branch is a checkout owned by whichever worktree holds it; every
+  // MERGED re-proof was resting on when an unrelated lane last pulled. Pinned with the two refs
+  // pointing at DIFFERENT commits, because when they agree the assertion proves nothing.
+  it("prefers origin/main over a stale local main", () => {
+    git(fixture, ["update-ref", "refs/remotes/origin/main", git(fixture, ["rev-parse", "origin/ahead"])]);
+    expect(git(fixture, ["rev-parse", "origin/main"])).not.toBe(git(fixture, ["rev-parse", "main"]));
+
+    expect(resolveBase(fixture)).toBe("origin/main");
+
+    git(fixture, ["update-ref", "-d", "refs/remotes/origin/main"]);
+  });
+
+  it("falls back to local main where there is no origin/main at all", () => {
     expect(resolveBase(fixture)).toBe("main");
   });
 

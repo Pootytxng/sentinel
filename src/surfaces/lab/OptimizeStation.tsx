@@ -7,6 +7,7 @@ import { GamingMode } from "../GamingMode";
 import { deriveReverted } from "../use-scan";
 import { useReducedMotion } from "../../design/use-motion";
 import { useExpertView } from "../../design/use-expert-view";
+import { knownIncomplete, useLedgerHealth } from "../../design/LedgerHealthNotice";
 import { useCountTo } from "./use-count-to";
 import type {
   Recommendation,
@@ -75,6 +76,17 @@ export function OptimizeStation(props: LabFastPathProps) {
   // Power-features bay deliberately stays collapsed: it's a mode door with a lazy-mount polling
   // cost, not de-emphasized long-tail data.
   const expert = useExpertView();
+
+  // The ledger cannot vouch for itself. `get_applied_changes` degrades a Trust Ledger it cannot READ
+  // to an empty array, so the disclosure's summary — "every change, undoable" — would keep promising
+  // undoability for a set Compy never enumerated. Worse than the sibling surfaces this class already
+  // fixed: the amber `LedgerHealthNotice` DOES render inside this disclosure (Fix view="ledger"
+  // mounts it), but the claim sits on the `<summary>`, OUTSIDE the container that holds its own
+  // caveat — and that container is collapsed by default. A caveat sealed behind the claim it
+  // qualifies has already failed at its job, so KNOWN-INCOMPLETE both withdraws the vouch AND opens
+  // the section. UNKNOWN (a failed probe → null) leaves every byte as it was: claiming incompleteness
+  // off a read that failed is the same sin, mirrored.
+  const ledgerIncomplete = knownIncomplete(useLedgerHealth(props.changes)) != null;
 
   // Data-reactive hero gauge (Task 4) — bound to a REAL measured number: how much of THIS rig's
   // safe, one-click stack is already applied. The stack = safe-tier, eligible, appliable recs; the
@@ -183,8 +195,15 @@ export function OptimizeStation(props: LabFastPathProps) {
           ledger surface the classic room's "Applied" segment rendered (Fix view="ledger": active
           changes with per-row undo + the full history), one disclosure below the toggles it
           records. Zero new IPC; rollback resolves from history.json alone, same as everywhere. */}
-      <details className="lab-optimize-more lab-optimize-ledger" open={expert || undefined}>
-        <summary className="lab-optimize-more-summary">{t("lab.optimizeStation.appliedHistorySummary")}</summary>
+      <details
+        className="lab-optimize-more lab-optimize-ledger"
+        open={expert || ledgerIncomplete || undefined}
+      >
+        <summary className="lab-optimize-more-summary">
+          {ledgerIncomplete
+            ? t("lab.optimizeStation.appliedHistorySummaryUnvouched")
+            : t("lab.optimizeStation.appliedHistorySummary")}
+        </summary>
         <div className="lab-optimize-more-body">
           <Fix
             recs={props.recs ?? []}
