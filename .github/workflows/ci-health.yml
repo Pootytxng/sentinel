@@ -1,0 +1,53 @@
+# CI health — asks once a day whether `main` is green, and files an issue when it is not.
+#
+# main's CI was red for two days and nobody noticed, because the only thing that ever reads a run's
+# conclusion is a human who happens to open the Actions tab. This job is that reader, on a schedule,
+# so a broken trunk does not wait for someone to show up.
+#
+# Deliberately NOT triggered by push or pull_request. A push-triggered health check tells you about
+# the run it was triggered by, which you can already see; the whole point is to notice on a day when
+# nobody pushes anything.
+#
+# Cost (see the July 2026 table in ci.yml and the projection in scripts/ci-budget-guard.test.mjs):
+# ubuntu-latest at 1x, one sparse checkout + one API read, ~30 runs a month. Budgeted at 30 min/month
+# against a 2,000-minute allowance. If this ever grows a build step, it stops being free and the
+# budget guard is where that argument has to be won.
+#
+# The workflow's own red/green means exactly ONE thing: whether the reporter could do its job. A red
+# `main` is reported through the issue it files, never by failing this workflow — otherwise "main is
+# broken" and "the reporter is broken" would look identical in the Actions tab, and the second one
+# would go unfixed.
+
+name: CI health
+
+on:
+  schedule:
+    # 15:00 UTC — morning in the owner's timezone, so a red trunk is the first thing waiting.
+    - cron: "0 15 * * *"
+  workflow_dispatch:
+
+concurrency: ci-health
+
+permissions:
+  contents: read
+  issues: write
+  actions: read # reading CI's own run conclusions is an Actions read, not a contents read
+
+jobs:
+  report:
+    name: Report main's CI health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # One file is all this needs. A full checkout would cost more than the job.
+          sparse-checkout: scripts/ci-health-report.mjs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Assess and report
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/ci-health-report.mjs

@@ -60,6 +60,12 @@ const RESIDENCY = {
     kind: "manual",
     why: "Regenerates the .ico from source art. Run when the icon changes, which is a design event, not a commit event — there is no drift for a resident check to detect between those.",
   },
+  // Also runs daily in .github/workflows/ci-health.yml — but that copy watches the trunk, it does
+  // not check itself. The judgment (GREEN/RED/UNKNOWN) is pure and pinned here, on every commit.
+  "ci-health-report.mjs": {
+    kind: "npm-test",
+    runner: "scripts/ci-health-report.test.mjs",
+  },
   "compy-burst.workflow.js": {
     kind: "manual",
     why: "A Workflow script the orchestrator invokes on request, plus lane-runner.ps1. It spends tokens by design, so a resident runner would be a standing bill.",
