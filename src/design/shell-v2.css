@@ -126,6 +126,25 @@
   box-shadow: 0 0 6px var(--v2-ok);
   flex: none;
 }
+/* The reversible/ledger line when the record is KNOWN incomplete. Deliberately NOT the flex row
+   `.v2-zero` uses: this line's tail is a nowrap mono span, and as a flex sibling it would sit
+   beside the prose and overflow the 216px rail instead of wrapping under it. A plain block flows
+   exactly like the healthy line it replaces. Amber over the footer's faint default because the
+   line stopped being nominal chrome — it now reports a state, and a 7px dot alone is too quiet to
+   carry that at 11.5px. Same `--v2-warn` the room-level LedgerHealthNotice uses, so the two
+   disclosures read as one voice. */
+:root[data-v2="on"] .v2-ledger-state {
+  color: var(--v2-warn);
+}
+:root[data-v2="on"] .v2-ledger-led {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--v2-warn);
+  box-shadow: 0 0 6px var(--v2-warn);
+}
 :root[data-v2="on"] .v2-foot .v2-mono {
   font: 10px var(--v2-font-mono);
   white-space: nowrap; /* "ledger 48" never breaks mid-value */
@@ -201,13 +220,20 @@
   color: var(--v2-faint);
   margin-bottom: var(--v2-gap);
 }
+/* The quiet slot's expander head — "more, not attention-needing" (P5 calm chrome), but it
+   still has to READ as a control. It used to be set in --v2-faint, the ink this system
+   reserves for machine metadata (.v2-measured, .v2-version), with a colour-only hover — i.e.
+   fainter and deader than the forward door that the P6 law explicitly calls "a doorknob, not
+   a CTA". That inversion is what testers read as footer legalese. Fix is affordance weight,
+   not attention weight: door-parity ink, and a NEUTRAL hover lift — deliberately not the
+   door's accent lift, because the door is where you go NEXT and this is more of THIS room. */
 :root[data-v2="on"] .v2-quiet {
   margin-top: var(--v2-gap);
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
-  color: var(--v2-faint);
+  color: var(--v2-muted);
   font-family: var(--v2-font-sans);
   font-size: 12px;
   padding: 10px var(--v2-pad);
@@ -216,10 +242,26 @@
   background: transparent;
   text-align: left;
   cursor: pointer;
-  transition: color 0.12s ease;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 :root[data-v2="on"] .v2-quiet:hover {
-  color: var(--v2-muted);
+  color: var(--v2-text);
+  border-color: var(--v2-line-strong);
+  background: var(--v2-panel-2);
+}
+/* One caret that ROTATES open, rather than two swapped text glyphs — the universal
+   disclosure silhouette, and it survives the label being translated. */
+:root[data-v2="on"] .v2-quiet-caret {
+  flex: none;
+  width: 10px;
+  text-align: center;
+  transition: transform 0.14s ease;
+}
+:root[data-v2="on"] .v2-quiet[aria-expanded="true"] .v2-quiet-caret {
+  transform: rotate(90deg);
+}
+:root[data-v2="on"][data-motion="reduced"] .v2-quiet-caret {
+  transition: none;
 }
 :root[data-v2="on"] .v2-quiet .v2-quiet-n {
   margin-left: auto;

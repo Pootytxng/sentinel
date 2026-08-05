@@ -953,7 +953,9 @@ pub(crate) fn get_applied_changes() -> Vec<AppliedChangeView> {
     // consume it), so a corrupt ledger degrades to an empty view here — but never to data
     // loss: load_history has already set the damaged file aside untouched, and every
     // MUTATING command (apply / batch / rollback) refuses loudly instead of saving over it.
-    // Surfacing ledger health in the Fix surface is a recorded follow-up.
+    // The empty view is never left to speak for itself: `get_ledger_health` is the companion read
+    // that tells the surface whether this list is the whole story, so "nothing is active" can only
+    // render when that is a fact.
     load_history().unwrap_or_default().into_iter().map(into_view).collect()
 }
 
@@ -972,13 +974,118 @@ pub(crate) fn rec_is_active(rec_id: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Total Trust-Ledger entry count (append-only, so monotonic). Used as a confound watermark by the
-/// cross-session comparison engine: if the ledger advanced between arming and the next session,
-/// another change landed and the delta can't be honestly attributed.
-pub(crate) fn ledger_len() -> usize {
-    // On an unreadable ledger this reads 0 — which DIFFERS from any non-zero armed watermark,
-    // so the comparison engine refuses attribution (the fail-safe direction for honesty).
-    load_history().unwrap_or_default().len()
+/// Total Trust-Ledger entry count — the confound watermark for the cross-session comparison engine.
+/// The ledger is append-only in code, so the SAME ledger can only ever read the same count or more;
+/// any other reading means it is not the same ledger, and the delta can't be honestly attributed.
+///
+/// Returns `Err` rather than a number, deliberately, and there is no `unwrap_or_default` sibling:
+/// a collapsed read here is not a missing count, it is a FABRICATED one. `load_history_from`
+/// quarantines a corrupt ledger to `history.json.corrupt`, after which every load returns empty
+/// forever — so the collapsed value (0) sits BELOW any armed watermark while real changes are free
+/// to land into the fresh ledger. The comparison engine's callers must decide what to do with that
+/// (refuse to arm; refuse to attribute), and they can only decide it if they can see it.
+pub(crate) fn ledger_len_checked() -> Result<usize, String> {
+    load_history().map(|h| h.len())
+}
+
+/// Whether a damaged Trust Ledger was ever set aside as `history.json.corrupt`.
+///
+/// The DURABLE half of "is this the whole ledger?". `load_history_from` quarantines a ledger it
+/// cannot parse and then fails loud — but only that once. After the rename the real path is simply
+/// gone, so every later load succeeds with an empty vec, indistinguishable from a first run,
+/// forever. A caller that turns ledger silence into a CLAIM ("Compy changed nothing between these
+/// sessions") would keep fabricating that claim off the fresh, empty file; the marker on disk is
+/// the only evidence left that the silence is a LOSS and not a fresh start.
+///
+/// Pair it with the `Err` from a load, which covers the transient half (locked file, IO error,
+/// permissions). Callers that merely DISPLAY history need neither — an empty view is honest.
+/// Best-effort and read-only: an unreadable directory reads `false`, the same answer every caller
+/// had before this existed.
+pub(crate) fn ledger_was_quarantined() -> bool {
+    history_path().with_extension("json.corrupt").exists()
+}
+
+/// What Compy can honestly say about its OWN record right now — the read side of the question
+/// `intelligence::LedgerHealth` already answers for the "What changed?" engine.
+///
+/// `get_applied_changes` degrades a broken ledger to an empty view. That is honest as a LIST and a
+/// lie as an ANSWER: the Trust Ledger surface renders "Nothing is active on this PC" — an
+/// affirmative claim about the machine — at the exact moment every apply and every rollback is
+/// refusing loudly. This is what the surface needs in order to say *"Compy can't tell you what it
+/// did"* instead. It resolves the follow-up recorded at `get_applied_changes`.
+///
+/// Read-only and additive: no mutation, no elevation, no network.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct LedgerHealthView {
+    /// True only when the ledger loads AND no damaged predecessor was ever set aside. When this is
+    /// false the entry list is not evidence of anything — least of all of a quiet machine.
+    pub complete: bool,
+    /// The load failure verbatim. Already user-readable prose that names what happened to the
+    /// damaged file, so the surface can show it rather than invent its own account.
+    ///
+    /// `None` while the loss is purely historical: a quarantined ledger loads clean-and-empty
+    /// forever after, so `complete: false` with no error is the durable shape, not a contradiction.
+    pub error: Option<String>,
+    /// `history.json.corrupt` sits beside the ledger — the original bytes are still on disk, which
+    /// is the difference between "your record is gone" and "your record is set aside, unopened".
+    pub quarantined: bool,
+}
+
+fn ledger_health_at(path: &Path) -> LedgerHealthView {
+    // Load FIRST. A load that fails performs the quarantine rename as part of failing, so reading
+    // the marker afterwards catches the damage discovered on THIS call as well as an older one;
+    // reading it first would miss a fresh quarantine by one run.
+    let error = load_history_from(path).err();
+    let quarantined = path.with_extension("json.corrupt").exists();
+    LedgerHealthView { complete: error.is_none() && !quarantined, error, quarantined }
+}
+
+#[tauri::command]
+pub(crate) fn get_ledger_health() -> LedgerHealthView {
+    // The path-parameterized core deliberately, NOT the `load_history` wrapper: the wrapper records
+    // a support-evidence event on every failure, and support evidence is a 400-slot ring that drops
+    // its oldest on append. A probe the UI re-runs on every refresh would push 400 identical
+    // "ledger unreadable" records through it and erase the diagnostic history support actually
+    // needs. The failure is already recorded once per tick by `get_applied_changes`'s own load —
+    // the load whose result the user is looking at.
+    ledger_health_at(&history_path())
+}
+
+/// The Explorer argument that shows the user their own record. `/select,` reveals the quarantined
+/// file *highlighted inside its folder* rather than opening it — the bytes are damaged JSON, so
+/// launching them would hand the user a text editor full of noise; showing them the file proves it
+/// still exists, which is the whole point of quarantine over deletion.
+///
+/// Falls back to the folder itself when nothing was quarantined, because the transient failure
+/// shape (locked file, IO error) leaves the ledger where it always was.
+fn ledger_reveal_arg(path: &Path) -> std::ffi::OsString {
+    let quarantined = path.with_extension("json.corrupt");
+    if quarantined.exists() {
+        let mut arg = std::ffi::OsString::from("/select,");
+        arg.push(quarantined.as_os_str());
+        return arg;
+    }
+    path.parent().unwrap_or(path).as_os_str().to_os_string()
+}
+
+/// Show the user the ledger folder — the inline action for the "Compy can't tell you what it did"
+/// disclosure. [[flags-name-it-and-fix-it-inline]]: naming a path the user must then hunt for by
+/// hand is exactly the dead-end that rule forbids.
+///
+/// Read-only: reveals a folder, spawns no shell, elevates nothing, mutates no Windows state. Same
+/// `explorer` idiom as `export::open_export_folder`.
+#[tauri::command]
+pub(crate) fn reveal_ledger_folder() -> Result<(), String> {
+    let path = history_path();
+    if let Some(dir) = path.parent() {
+        // A first run that never wrote a ledger still has a folder to show.
+        std::fs::create_dir_all(dir).map_err(|e| format!("could not open the Compy folder: {e}"))?;
+    }
+    std::process::Command::new("explorer")
+        .arg(ledger_reveal_arg(&path))
+        .spawn()
+        .map_err(|e| format!("could not open the folder: {e}"))?;
+    Ok(())
 }
 
 /// Count of DISTINCT recs whose LATEST ledger entry is an active apply (status "applied"). Powers the
@@ -2263,6 +2370,153 @@ mod history_tests {
             "the recoverable bytes are preserved EXACTLY, where no save will touch them"
         );
         assert!(!path.exists(), "the damaged live file was set aside");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_quarantined_ledger_reads_empty_forever_and_leaves_only_a_marker() {
+        // The trap that makes `ledger_was_quarantined` necessary. The loud error above fires
+        // exactly ONCE: the rename removes the live path, so every load after it is a clean
+        // Ok(vec![]) — byte-identical to a genuine first run. Nothing in the returned value can
+        // tell a caller that entries were lost, which is why a caller that turns ledger silence
+        // into a CLAIM has to consult the marker on disk instead of the load result.
+        let dir =
+            std::env::temp_dir().join(format!("compy-hist-quarantine-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("history.json");
+        std::fs::write(&path, b"{ not json ]]]").unwrap();
+        assert!(load_history_from(&path).is_err(), "the first load fails loud");
+
+        let after = load_history_from(&path).expect("every load after it succeeds");
+        assert!(
+            after.is_empty(),
+            "…and reads empty, indistinguishable from a first run"
+        );
+
+        // The marker name is derived independently by the rename and by `ledger_was_quarantined`.
+        // If those two ever disagree the completeness signal goes false-negative in silence, so
+        // pin the literal name rather than re-deriving it the same way twice.
+        let marker = path.with_extension("json.corrupt");
+        assert!(marker.exists(), "the marker is the only surviving evidence");
+        assert_eq!(
+            marker.file_name().and_then(|n| n.to_str()),
+            Some("history.json.corrupt"),
+            "the exact name ledger_was_quarantined looks for"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn ledger_health_reads_complete_for_a_ledger_that_loads() {
+        let dir = std::env::temp_dir().join(format!("compy-hist-health-ok-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("history.json");
+        save_history_to(&path, &[record("game-mode", "applied")]).unwrap();
+
+        let h = ledger_health_at(&path);
+        assert!(h.complete, "a ledger that loads is the whole ledger");
+        assert_eq!(h.error, None);
+        assert!(!h.quarantined);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn ledger_health_on_a_genuine_first_run_is_complete_not_a_warning() {
+        // The false-alarm guard, and the reason `complete` keys off the load rather than off row
+        // count. An absent ledger is a first run: an empty Trust Ledger there is the TRUTH, and a
+        // disclosure that fired on every fresh install would be its own honesty defect — it would
+        // train the user to dismiss the one banner that matters.
+        let dir =
+            std::env::temp_dir().join(format!("compy-hist-health-firstrun-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let h = ledger_health_at(&dir.join("history.json"));
+        assert!(h.complete, "no file yet is a first run, not a loss");
+        assert_eq!(h.error, None);
+        assert!(!h.quarantined);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn ledger_health_carries_the_load_failure_verbatim_for_the_surface_to_show() {
+        // The transient half. The error is the one `load_history_from` already wrote in
+        // plain English — the surface shows it rather than inventing its own account of the damage.
+        let dir =
+            std::env::temp_dir().join(format!("compy-hist-health-damaged-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("history.json");
+        std::fs::write(&path, b"{ not json ]]]").unwrap();
+
+        let h = ledger_health_at(&path);
+        assert!(!h.complete, "an unreadable ledger is not a quiet machine");
+        let err = h.error.expect("the failure reaches the caller, not just the log");
+        assert!(err.contains("could not be read"), "plain-English prose: {err}");
+        assert!(
+            h.quarantined,
+            "the read that failed quarantined the bytes on the way out — health must see the \
+             marker the SAME call, not one run later"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn ledger_health_stays_incomplete_after_the_load_starts_succeeding_again() {
+        // THE case this type exists for, and the one a `complete = load.is_ok()` implementation
+        // gets wrong. The loud error fires exactly once; from the next load onward a quarantined
+        // ledger is a clean, empty, permanently-plausible Ok. If completeness followed the load
+        // result, the disclosure would vanish on the second read and the Trust Ledger would go
+        // back to claiming "nothing is active on this PC" forever — over lost rollback contracts.
+        let dir =
+            std::env::temp_dir().join(format!("compy-hist-health-durable-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("history.json");
+        std::fs::write(&path, b"{ not json ]]]").unwrap();
+        assert!(!ledger_health_at(&path).complete, "the damaged read");
+
+        let h = ledger_health_at(&path);
+        assert!(
+            load_history_from(&path).expect("loads clean now").is_empty(),
+            "precondition: the ledger reads as an ordinary first run again"
+        );
+        assert!(!h.complete, "…but the loss is durable, so the disclosure is too");
+        assert_eq!(
+            h.error, None,
+            "no error to show — `complete: false` with no error IS the durable shape"
+        );
+        assert!(h.quarantined, "the preserved bytes are the only surviving evidence");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn reveal_points_at_the_preserved_bytes_only_when_they_exist() {
+        // The disclosure's inline action. `/select,` is what turns "your record was set aside" from
+        // a claim into something the user can SEE — but pointed at a path that isn't there,
+        // Explorer opens Documents instead, which reads as Compy losing the file it just promised
+        // it kept. So the flag is earned by the marker, never assumed from the failure.
+        let dir =
+            std::env::temp_dir().join(format!("compy-hist-reveal-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("history.json");
+
+        let folder_only = ledger_reveal_arg(&path);
+        assert_eq!(
+            folder_only,
+            dir.as_os_str(),
+            "nothing was quarantined — the honest target is the folder, with no /select, flag \
+             aimed at a file that does not exist"
+        );
+
+        std::fs::write(path.with_extension("json.corrupt"), b"{ not json ]]]").unwrap();
+        let selected = ledger_reveal_arg(&path);
+        let expected = {
+            let mut s = std::ffi::OsString::from("/select,");
+            s.push(path.with_extension("json.corrupt").as_os_str());
+            s
+        };
+        assert_eq!(
+            selected, expected,
+            "the marker exists, so reveal highlights the preserved bytes themselves"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 

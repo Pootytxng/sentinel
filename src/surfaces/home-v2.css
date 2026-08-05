@@ -6,6 +6,18 @@
    check-activity sweep; it is inert flag-off (only a [data-v2] rule references it) and
    frozen under reduced motion. */
 
+/* Room-accent re-point. Home needs exactly ONE token, not the ~35-line block its siblings carry:
+   blackbook/lab/monitor/optimize re-skin composed CLASSIC surfaces that resolve every color from
+   the --ix-* layer, whereas this room was built on --hv2-* and --v2-* directly — which is why it
+   never grew a re-point. But the SHARED LedgerHealthNotice renders here too and colors itself from
+   --ix-amber, so without this line it paints the base instrument amber instead of the room's warn,
+   and LedgerHealthNotice.css's "--ix-amber re-points to --v2-warn inside the v2 rooms" is false for
+   Home alone. Carrying only the token that must shift is the siblings' own idiom — monitor-v2.css
+   deliberately OMITS --ix-danger for the mirror-image reason (a semantic red must stay red). */
+:root[data-v2="on"] .v2-room[data-room="home"] {
+  --ix-amber: var(--v2-warn);
+}
+
 :root[data-v2="on"] .hv2-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;

@@ -18,6 +18,7 @@ import { Term } from "./design/Term";
 import { Wordmark } from "./design/Wordmark";
 import { readCloseToTray, persistDisplayRefreshHz } from "./design/theme";
 import { ShellV2 } from "./design/ShellV2";
+import { KeepaliveRoom } from "./design/KeepaliveRoom";
 import { fmtGB } from "./surfaces/hardware-format";
 // Deep Monitoring panels + their sensor types — moved verbatim to surfaces/monitor-panels (T3)
 // so the summary-first MonitorDomainCards can reuse them as its expanded detail.
@@ -60,6 +61,7 @@ import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { readOptimizeMerged, readMonitorMerged } from "./data/nav-flags";
 import { lsGet, lsSet } from "./data/safe-storage";
 import { invalidateProbe } from "./data/probe-cache";
+import { useDocumentVisible } from "./data/use-document-visible";
 import Play from "./surfaces/Play";
 import Monitor from "./surfaces/Monitor";
 import Lab from "./surfaces/Lab";
@@ -85,14 +87,14 @@ import { useConfirm } from "./design/ConfirmDialog";
 import "./design/instrument.css"; // Instrument token layer — after App.css so the accent re-point wins
 import "./Onboarding.css";
 import "./arc-instrument.css"; // arc re-dress skin (scoped under .arc-v2; after the classics)
-import "./design/living-instrument.css"; // "Living Instrument" feel-refresh skin — scoped under [data-living], default OFF
-import "./design/dashboard-skin.css"; // "dashboard-energy" premium skin — scoped under [data-dash-v2], default OFF
+import "./design/living-instrument.css"; // "Living Instrument" feel-refresh skin — scoped under [data-living], default ON
+import "./design/dashboard-skin.css"; // "dashboard-energy" premium skin — scoped under [data-dash-v2], default ON
 import "./design/fonts-v2.css"; // Geist Sans/Mono @font-face (OFL, bundled) — inert until tokens-v2 uses them
-import "./design/tokens-v2.css"; // V2 shell tokens — every rule scoped under [data-v2="on"], default OFF
-import "./surfaces/room-identity.css"; // per-room identity accents — scoped [data-room-identity="on"], default OFF
+import "./design/tokens-v2.css"; // V2 shell tokens — scoped under [data-v2="on"], default ON (main.tsx sets that attribute unconditionally; the compy_v2 flag was removed)
+import "./surfaces/room-identity.css"; // per-room identity accents — scoped [data-room-identity="on"], default ON
 import "./design/tokens-qpw.css"; // Quiet Pit Wall redesign tokens - scoped [data-qpw="on"], DEFAULT OFF (issue #49)
 import "./design/qpw/qpw-components.css"; // Quiet Pit Wall component contracts - same scope, same default
-import "./design/tokens-hud.css"; // Instrument-HUD tokens — scoped under [data-hud="on"], DEFAULT OFF
+import "./design/tokens-hud.css"; // Instrument-HUD tokens — scoped under [data-hud="on"], DEFAULT ON
 import "./surfaces/ambient-hud.css"; // T4c ambient skin (grain · glass · holo-foil) — scoped [data-v2][data-hud]
 
 type DiskInfo = {
@@ -1250,7 +1252,7 @@ function App() {
         />
       )}
       {optimizeMountedRef.current && (
-        <div style={activeTab === "Optimize" ? undefined : { display: "none" }}>
+        <KeepaliveRoom active={activeTab === "Optimize"}>
           {optimizeMerged ? (
           // Merged shell: Check + Gaming + Fix under Fixes / Applied / History segments + the
           // persistent active-undo chip. Same props the standalone surfaces receive — pure
@@ -1307,12 +1309,12 @@ function App() {
             />
           </>
           )}
-        </div>
+        </KeepaliveRoom>
       )}
       {activeTab === "Play" &&
         (() => {
           // Same props for both surfaces; the Monitor shell adds the Sessions/Live segmented
-          // control and drives Play's `view`. Behind compy_monitor (default off this phase).
+          // control and drives Play's `view`. Behind compy_monitor (DEFAULT ON; "0" is the failsafe).
           const monitorProps = {
             active: activeTab === "Play",
             sessions,
@@ -1324,6 +1326,7 @@ function App() {
             onExport,
             changes,
             rollback,
+            activeChangeFor: findActiveChangeForRec,
             deepMonitoring: <MonitoringTab active={activeTab === "Play"} embedded />,
             vendor: detectedVendor,
           };
@@ -1563,7 +1566,7 @@ function App() {
               profiled Optimize-enter hitch). Mounted once, it now stays warm; returning is a cheap
               display toggle. Perf-only: same component, same props, same audited handlers. */}
           {optimizeV2MountedRef.current && optimizeMerged && hw && (
-            <div style={activeTab === "Optimize" ? undefined : { display: "none" }}>
+            <KeepaliveRoom active={activeTab === "Optimize"}>
               <OptimizeV2
                 isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
                 onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
@@ -1590,7 +1593,7 @@ function App() {
                 onExport={onExport}
                 exporting={exporting}
               />
-            </div>
+            </KeepaliveRoom>
           )}
           {activeTab === "Overview" && hw ? (
             <>
@@ -1675,9 +1678,10 @@ function App() {
                   the classic path; no door — Lab is the journey's last chapter. */}
               {activeTab === "Lab" &&
                 (labGround ? (
-                  // Proving-ground merge (phase 1, DEFAULT OFF): Optimize's fixes + the enable-all
-                  // fast path fold INTO the Lab. Same audited apply/batch handlers OptimizeV2 gets
-                  // (zero new IPC) + Lab's own instruments. Flag off → the LabV2 branch below.
+                  // Proving-ground merge (phase 1, compy_lab_ground DEFAULT ON since 2026-07-10):
+                  // Optimize's fixes + the enable-all fast path fold INTO the Lab. Same audited
+                  // apply/batch handlers OptimizeV2 gets (zero new IPC) + Lab's own instruments.
+                  // The "0" failsafe falls back to the LabV2 branch below.
                   // hw-gated: the Ops Console's center hologram (RigViewer) needs the real hardware
                   // read; hw is null only for the brief detection window before first refresh.
                   hw && (
@@ -1769,6 +1773,7 @@ function MonitoringTab({ active, embedded = false }: { active: boolean; embedded
     return () => window.removeEventListener("compy:monitor-cards-changed", sync);
   }, []);
   const reduced = useReducedMotion();
+  const visible = useDocumentVisible();
   const [gpuSamples, setGpuSamples] = useState<GpuSensorSnapshot[][]>([]);
   const [cpuSamples, setCpuSamples] = useState<CpuSensorSnapshot[]>([]);
   const [hasGpu, setHasGpu] = useState<boolean | null>(null);
@@ -1813,11 +1818,13 @@ function MonitoringTab({ active, embedded = false }: { active: boolean; embedded
     }
   };
 
-  // Poll only while the tab is active. When the user switches away we drop
-  // the interval so we don't burn cycles on charts that aren't visible. The
-  // sample buffer is preserved in state so coming back doesn't lose history.
+  // Poll only while the tab is active AND the window is on screen. When the user switches away we
+  // drop the interval so we don't burn cycles on charts that aren't visible — and "not visible"
+  // includes minimized/alt-tabbed-into-a-game, which the active flag alone can't see. This is the
+  // app's heaviest poll (five IPC calls a second, one of them the vendor GPU SDK). The sample
+  // buffer is preserved in state so coming back doesn't lose history.
   useEffect(() => {
-    if (!active) return;
+    if (!active || !visible) return;
     let cancelled = false;
     const tick = async () => {
       try {
@@ -1855,7 +1862,7 @@ function MonitoringTab({ active, embedded = false }: { active: boolean; embedded
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [active]);
+  }, [active, visible]);
 
   const enableFps = async () => {
     setFpsBusy(true);

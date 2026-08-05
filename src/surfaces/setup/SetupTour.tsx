@@ -58,7 +58,7 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
   const [i, setI] = useState(0);
   const step = steps[i];
   const reduced = useReducedMotion();
-  // Stepper progress preview (compy_setup_stepper, DEFAULT OFF): the footer's progress row as
+  // Stepper progress preview (compy_setup_stepper, DEFAULT ON): the footer's progress row as
   // numbered React Bits step indicators instead of the anonymous ticks. Presentation only.
   const [stepper, setStepper] = useState(readSetupStepper);
   useEffect(() => {
@@ -159,7 +159,7 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
               Decorative: the text panel carries the meaning, so hide the canvas from the a11y tree. */}
           <div className="st-stage" aria-hidden="true">
             <Suspense fallback={<div className="st-loading">{t("home.setupTour.stageLoading")}</div>}>
-              <HardwareTourScene hw={hw} focusId={focusId} reduced={reduced} paused={false} />
+              <HardwareTourScene hw={hw} focusId={focusId} reduced={reduced} />
             </Suspense>
           </div>
 

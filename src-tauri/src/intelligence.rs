@@ -90,6 +90,14 @@ pub(crate) struct EventRecord {
     /// dated `change-rolled-back` event; older rollbacks have no recorded time, so this
     /// flag is their only honest trace — never retro-dated into an event.
     pub since_rolled_back: bool,
+    /// Trust-Ledger events ONLY: the catalog recommendation id, copied verbatim off the
+    /// ledger row. `None` for every other source, which has no rec behind it.
+    ///
+    /// It exists so a downstream suggestion can name a REAL rec instead of matching prose.
+    /// The id is READ, never inferred — nothing here parses `summary`, guesses from a title,
+    /// or maps free text onto the catalog. That is the whole point: the alternative
+    /// (prose → rec) would be fabrication.
+    pub rec_id: Option<String>,
 }
 
 /// The assembled timeline plus honesty counters.
@@ -478,6 +486,7 @@ impl IdentityDeltaScan {
                     ),
                     observed_between: Some((from_at, at.to_string())),
                     since_rolled_back: false,
+                    rec_id: None,
                 },
             });
         }
@@ -505,6 +514,7 @@ impl IdentityDeltaScan {
                             ),
                             observed_between: Some((prev_at.clone(), at.to_string())),
                             since_rolled_back: false,
+                            rec_id: None,
                         },
                     });
                 }
@@ -540,6 +550,7 @@ impl IdentityDeltaScan {
                                 ),
                                 observed_between: Some((prev_at.clone(), at.to_string())),
                                 since_rolled_back: false,
+                                rec_id: None,
                             },
                         });
                     }
@@ -566,6 +577,7 @@ impl IdentityDeltaScan {
                             ),
                             observed_between: Some((prev_at.clone(), at.to_string())),
                             since_rolled_back: false,
+                            rec_id: None,
                         },
                     });
                 }
@@ -650,6 +662,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             detail: adopted.then(|| "Adopted leftover — restored to stock via Compy.".to_string()),
             observed_between: None,
             since_rolled_back: rolled_back,
+            rec_id: Some(c.rec_id.clone()),
         });
         if let Some(rb) = &c.rolled_back_at {
             if parse_utc(rb).is_none() {
@@ -666,6 +679,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
                     detail: None,
                     observed_between: None,
                     since_rolled_back: false,
+                    rec_id: Some(c.rec_id.clone()),
                 });
             }
         }
@@ -699,6 +713,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             ),
             observed_between: window,
             since_rolled_back: false,
+            rec_id: None,
         });
     }
 
@@ -725,6 +740,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             detail: None,
             observed_between: None,
             since_rolled_back: false,
+            rec_id: None,
         });
     }
 
@@ -743,6 +759,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
                 detail: None,
                 observed_between: None,
                 since_rolled_back: false,
+                rec_id: None,
             });
         } else {
             dropped += 1;
@@ -769,6 +786,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             detail: None,
             observed_between: None,
             since_rolled_back: false,
+            rec_id: None,
         });
     }
 
@@ -786,6 +804,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
                 detail: None,
                 observed_between: None,
                 since_rolled_back: false,
+                rec_id: None,
             });
         } else {
             dropped += 1;
@@ -806,6 +825,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
                 detail: None,
                 observed_between: None,
                 since_rolled_back: false,
+                rec_id: None,
             });
         } else {
             dropped += 1;
@@ -938,6 +958,12 @@ pub(crate) struct Hypothesis {
     pub contradicting_evidence: Vec<String>,
     pub missing_evidence: Vec<String>,
     pub next_test: Option<String>,
+    /// The catalog rec `next_test` refers to — present ONLY where the engine can point at a
+    /// real id it READ (today: a single still-applied Trust-Ledger change). `None` everywhere
+    /// else, permanently: matching the prose against the catalog would be fabrication, and a
+    /// surface that gets `None` renders the sentence and nothing more. See
+    /// `next_test_rec_id_is_read_from_the_ledger_never_matched_from_prose`.
+    pub next_test_rec_id: Option<String>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -958,6 +984,16 @@ pub(crate) struct WhatChangedReport {
     /// Honest gaps: what Compy wasn't recording, so can neither rule in nor out.
     pub unknowns: Vec<String>,
     pub next_action: Option<String>,
+    /// The leading hypothesis's `next_test_rec_id`, mirrored so a surface can offer a real
+    /// affordance instead of prose alone. `None` unless the leader carries one — and the
+    /// confounded path never does, because the honest advice there is "change one thing,"
+    /// not "change this thing."
+    ///
+    /// **Destination is the Trust Ledger, not the experiment bench.** The only next test that
+    /// can carry an id today prescribes a ROLLBACK, and the bench applies; feeding it a
+    /// still-active rec returns `already-configured` (`experiment.rs`'s `simulate`) — a
+    /// dead end. A surface that routes this id anywhere it cannot be rolled back is wrong.
+    pub next_action_rec_id: Option<String>,
     /// ≥2 discrete changes landed between the sessions — attribution refused.
     pub confounded: bool,
     pub gap_days: i64,
@@ -1055,6 +1091,8 @@ struct HypoEval {
     /// drift — real evidence with an honest ceiling below the change family.
     environment: bool,
     next_test: Option<String>,
+    /// Set ONLY alongside a `next_test` whose subject is a rec the engine read an id for.
+    next_test_rec_id: Option<String>,
 }
 
 impl HypoEval {
@@ -1067,8 +1105,26 @@ impl HypoEval {
             direct: false,
             environment: false,
             next_test: None,
+            next_test_rec_id: None,
         }
     }
+}
+
+/// Whether the Trust Ledger the engine reasoned over is the WHOLE ledger.
+///
+/// `compy-config-change` is the only hypothesis allowed to read SILENCE as contradicting evidence,
+/// and it earns that with a premise: the ledger is a complete record of what Compy itself did. A
+/// ledger that will not load — or one whose damaged predecessor was quarantined, after which every
+/// load reads empty forever — breaks that premise while looking exactly like a quiet machine.
+/// Supplying it keeps the engine deterministic (same inputs → same report) and makes the difference
+/// between "Compy did nothing" and "Compy can't tell you what it did" a fact the caller passes in
+/// rather than one the report invents.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum LedgerHealth {
+    /// Loaded cleanly and no quarantine marker on disk — silence is real evidence.
+    Complete,
+    /// Unreadable now, or a damaged ledger was set aside earlier. Silence proves nothing.
+    Incomplete,
 }
 
 pub(crate) struct WhatChangedInputs<'a> {
@@ -1429,15 +1485,15 @@ pub(crate) fn evidence_graph(r: &WhatChangedReport) -> EvidenceGraph {
 /// "What changed?" between two sessions — the plain-language report PLUS its §4C evidence
 /// graph. The graph is a pure re-projection of the finished report (no new data), so it
 /// stays perfectly in sync with the words the normal view shows.
-pub(crate) fn what_changed(inp: &WhatChangedInputs) -> WhatChangedReport {
-    let mut r = what_changed_inner(inp);
+pub(crate) fn what_changed(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChangedReport {
+    let mut r = what_changed_inner(inp, ledger);
     r.evidence_graph = evidence_graph(&r);
     r
 }
 
 /// The deterministic core: same inputs → same report, every time. No randomness, no
 /// learned weights, every branch inspectable.
-fn what_changed_inner(inp: &WhatChangedInputs) -> WhatChangedReport {
+fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChangedReport {
     let floor = crate::benchmark::DEFAULT_NOISE_FLOOR_PCT;
     let b = inp.baseline;
     let c = inp.current;
@@ -1458,6 +1514,7 @@ fn what_changed_inner(inp: &WhatChangedInputs) -> WhatChangedReport {
         ruled_out: Vec::new(),
         unknowns: Vec::new(),
         next_action: None,
+        next_action_rec_id: None,
         confounded: false,
         gap_days: 0,
         notes: Vec::new(),
@@ -1698,7 +1755,8 @@ fn what_changed_inner(inp: &WhatChangedInputs) -> WhatChangedReport {
     }
 
     // compy-config-change: the Trust Ledger is a complete record of what Compy itself did,
-    // so silence here is real contradicting evidence (unlike the observed sources).
+    // so silence here is real contradicting evidence (unlike the observed sources) — but ONLY
+    // while `ledger` says the record is whole. See `LedgerHealth`.
     {
         let mut h = HypoEval::new("compy-config-change");
         h.direct = true;
@@ -1717,14 +1775,48 @@ fn what_changed_inner(inp: &WhatChangedInputs) -> WhatChangedReport {
             ));
         }
         if h.supporting.is_empty() {
-            h.contradicting.push(format!(
-                "No Compy changes were applied or rolled back between these sessions and the active-change count matches ({}).",
-                c.compy_changes_active
-            ));
+            match ledger {
+                LedgerHealth::Complete => h.contradicting.push(format!(
+                    "No Compy changes were applied or rolled back between these sessions and the active-change count matches ({}).",
+                    c.compy_changes_active
+                )),
+                // Silence from a ledger we could not read is the ABSENCE of evidence, not
+                // evidence of absence. Route it to `missing` so the hypothesis lands in
+                // unknowns instead of ruled_out — Compy never clears itself off a record it
+                // couldn't read. Same idiom as the Windows-build gap above.
+                LedgerHealth::Incomplete => h.missing.push(
+                    "Compy's own change record couldn't be read for this window — a Compy change can't be ruled in or out."
+                        .into(),
+                ),
+            }
         } else {
             h.next_test = Some(
                 "Roll back the change in the Trust Ledger, play one more session, and compare — that isolates it.".into(),
             );
+            // The one place an id can be named honestly. Three conditions, all read — none
+            // inferred:
+            //   1. the window's ledger events name exactly ONE distinct rec. The sentence says
+            //      "the change", singular; with two candidates, picking one would be
+            //      fabrication-by-selection, and with none (support came only from the
+            //      active-count delta, which carries no ids) there is nothing to name;
+            //   2. that rec has an apply event here — a rollback alone is not a thing to undo;
+            //   3. the apply is not `since_rolled_back`. You can only roll back what is still
+            //      applied. Deliberately NOT gated on `is_appliable`: LOCKED rule 3 resolves
+            //      rollback from history.json alone, so a rec that has since left the apply
+            //      allowlist is still undoable and suppressing it would be the wrong answer.
+            let mut distinct: Vec<&str> = ledger_events.iter().filter_map(|e| e.rec_id.as_deref()).collect();
+            distinct.sort_unstable();
+            distinct.dedup();
+            if let [only] = distinct[..] {
+                let still_applied = ledger_events.iter().any(|e| {
+                    e.event_type == "change-applied"
+                        && e.rec_id.as_deref() == Some(only)
+                        && !e.since_rolled_back
+                });
+                if still_applied {
+                    h.next_test_rec_id = Some(only.to_string());
+                }
+            }
         }
         evals.push(h);
     }
@@ -1967,6 +2059,8 @@ fn what_changed_inner(inp: &WhatChangedInputs) -> WhatChangedReport {
                     contradicting_evidence: h.contradicting,
                     missing_evidence: h.missing,
                     next_test: None,
+                    // Ruled out — there is no test to route, so there is no id to carry.
+                    next_test_rec_id: None,
                 });
             } else {
                 unknowns.extend(h.missing);
@@ -1998,6 +2092,7 @@ fn what_changed_inner(inp: &WhatChangedInputs) -> WhatChangedReport {
             contradicting_evidence: h.contradicting,
             missing_evidence: h.missing,
             next_test: h.next_test,
+            next_test_rec_id: h.next_test_rec_id,
         });
     }
 
@@ -2015,6 +2110,7 @@ fn what_changed_inner(inp: &WhatChangedInputs) -> WhatChangedReport {
         "1% lows {direction_word} {abs_delta:.1}% vs your previous {game} session."
     );
     let next_action: Option<String>;
+    let mut next_action_rec_id: Option<String> = None;
     if confounded {
         headline.push_str(" Several things changed in between — no single cause can be honestly isolated.");
         next_action = Some(format!(
@@ -2039,6 +2135,7 @@ fn what_changed_inner(inp: &WhatChangedInputs) -> WhatChangedReport {
             ));
         }
         next_action = leader.next_test.clone();
+        next_action_rec_id = leader.next_test_rec_id.clone();
     } else {
         next_action = None;
     }
@@ -2049,6 +2146,7 @@ fn what_changed_inner(inp: &WhatChangedInputs) -> WhatChangedReport {
     r.ruled_out = ruled_out;
     r.unknowns = unknowns;
     r.next_action = next_action;
+    r.next_action_rec_id = next_action_rec_id;
     r.confounded = confounded;
     r.gap_days = gap_days;
     r.notes = notes;
@@ -2076,11 +2174,25 @@ struct Gathered {
     comparison: Option<crate::comparison::ComparisonResult>,
     snapshots: Vec<IdentitySnapshot>,
     drift_notices: Vec<crate::drift::DriftNotice>,
+    /// Whether `applied` is the whole ledger. The timeline can honestly show fewer rows; the
+    /// "What changed?" engine cannot honestly claim Compy was quiet, so it needs this told to it.
+    ledger: LedgerHealth,
 }
 
 fn gather() -> Gathered {
+    // One load, two readings. `unwrap_or_default` is fine for the timeline VIEW below — an empty
+    // view is honest — but the error it swallows is exactly what the engine needs, so capture the
+    // health before collapsing it. Transient failure (Err) and durable loss (a quarantined ledger,
+    // which loads Ok and empty forever after) are both incompleteness.
+    let loaded = crate::history::load_history();
+    let ledger = if loaded.is_err() || crate::history::ledger_was_quarantined() {
+        LedgerHealth::Incomplete
+    } else {
+        LedgerHealth::Complete
+    };
     Gathered {
-        applied: crate::history::load_history().unwrap_or_default(),
+        ledger,
+        applied: loaded.unwrap_or_default(),
         sessions: crate::sessions::get_session_summaries(),
         gaming_slot: crate::gaming_session::load_session()
             .map(|f| (f.started_at.clone(), gaming_status_label(f.status))),
@@ -2153,13 +2265,16 @@ fn what_changed_impl(g: &Gathered, started_at: &str) -> WhatChangedOutcome {
     let bt = parse_utc(&baseline.started_at).unwrap_or(ct);
     let asm = assemble_from(g);
     let (events_window, events_ambiguous) = split_window_events(&asm.events, bt, ct);
-    WhatChangedOutcome::Report(Box::new(what_changed(&WhatChangedInputs {
-        baseline,
-        current,
-        events_window,
-        events_ambiguous,
-        snapshots: &g.snapshots,
-    })))
+    WhatChangedOutcome::Report(Box::new(what_changed(
+        &WhatChangedInputs {
+            baseline,
+            current,
+            events_window,
+            events_ambiguous,
+            snapshots: &g.snapshots,
+        },
+        g.ledger,
+    )))
 }
 
 /// "What changed?" for one monitored session vs the previous session of the same game.
@@ -2218,13 +2333,16 @@ fn what_changed_between_impl(
     }
     let asm = assemble_from(g);
     let (events_window, events_ambiguous) = split_window_events(&asm.events, bt, ct);
-    WhatChangedOutcome::Report(Box::new(what_changed(&WhatChangedInputs {
-        baseline,
-        current,
-        events_window,
-        events_ambiguous,
-        snapshots: &g.snapshots,
-    })))
+    WhatChangedOutcome::Report(Box::new(what_changed(
+        &WhatChangedInputs {
+            baseline,
+            current,
+            events_window,
+            events_ambiguous,
+            snapshots: &g.snapshots,
+        },
+        g.ledger,
+    )))
 }
 
 /// "What changed?" between two sessions the user picked (the good-vs-bad workflow, §4D).
@@ -2379,11 +2497,16 @@ mod tests {
             detail: None,
             observed_between: None,
             since_rolled_back: false,
+            rec_id: None,
         }
     }
 
+    /// The engine under a ledger that is known-good — the case every hypothesis test below is
+    /// about. The incomplete-ledger case has its own guard (see
+    /// `an_unreadable_ledger_never_clears_compy_of_a_regression`) and must be spelled out
+    /// explicitly, so it can never be reached by accident from a default.
     fn report(inp: &WhatChangedInputs) -> WhatChangedReport {
-        what_changed(inp)
+        what_changed(inp, LedgerHealth::Complete)
     }
 
     // ── Timeline guards ──
@@ -2834,6 +2957,130 @@ mod tests {
             detail: None,
             observed_between: None,
             since_rolled_back: false,
+            rec_id: None,
+        }
+    }
+
+    fn applied_event(ts: &str, title: &str, rec_id: &str, rolled_back: bool) -> EventRecord {
+        EventRecord {
+            id: format!("applied:{ts}"),
+            timestamp: ts.into(),
+            event_type: "change-applied".into(),
+            source: "trust-ledger".into(),
+            scope: EventScope::CompyApplied,
+            game: None,
+            summary: format!("{title} applied"),
+            detail: None,
+            observed_between: None,
+            since_rolled_back: rolled_back,
+            rec_id: Some(rec_id.into()),
+        }
+    }
+
+    /// The whole contract of `next_test_rec_id`: it is COPIED off a Trust-Ledger row or it is
+    /// `None`. Nothing anywhere parses `summary`, matches a title, or maps the prose sentence
+    /// onto the catalog — that would be fabrication, and it is the reason this feature sat
+    /// deferred. Every `None` case below is a case where naming an id would require a guess.
+    #[test]
+    fn next_test_rec_id_is_read_from_the_ledger_never_matched_from_prose() {
+        let base = || {
+            let (mut b, mut c) = two_sessions(100.0, 88.0);
+            b.hw_fingerprint = Some(mk_fp("25.5.1"));
+            c.hw_fingerprint = Some(mk_fp("25.5.1"));
+            b.gaming_mode_active = Some(false);
+            c.gaming_mode_active = Some(false);
+            (b, c)
+        };
+        let run = |b: &SessionSummary, c: &SessionSummary, ev: Vec<EventRecord>| {
+            report(&WhatChangedInputs {
+                baseline: b,
+                current: c,
+                events_window: ev,
+                events_ambiguous: vec![],
+                snapshots: &[],
+            })
+        };
+
+        // 1. ONE rec, still applied → the id is named, and it is verbatim the ledger's.
+        let (b, c) = base();
+        let r = run(
+            &b,
+            &c,
+            vec![applied_event("2026-07-11T10:00:00Z", "HAGS on", "gpu-hags", false)],
+        );
+        let leader = r.leading_hypotheses.first().expect("has a leader");
+        assert_eq!(leader.id, "compy-config-change");
+        assert_eq!(leader.next_test_rec_id.as_deref(), Some("gpu-hags"));
+        assert_eq!(r.next_action_rec_id.as_deref(), Some("gpu-hags"));
+        assert!(leader.next_test.is_some(), "the id rides WITH the sentence, never alone");
+
+        // 2. TWO distinct recs → `None`. The sentence says "the change", singular; choosing
+        //    one of two would be fabrication-by-selection.
+        let (b, c) = base();
+        let r = run(
+            &b,
+            &c,
+            vec![
+                applied_event("2026-07-11T10:00:00Z", "HAGS on", "gpu-hags", false),
+                applied_event("2026-07-11T11:00:00Z", "Power plan", "power-plan", false),
+            ],
+        );
+        assert_eq!(r.next_action_rec_id, None);
+
+        // 3. The one rec has since been rolled back → `None`. You cannot undo what is
+        //    already undone; offering the affordance would be a dead button.
+        let (b, c) = base();
+        let r = run(
+            &b,
+            &c,
+            vec![applied_event("2026-07-11T10:00:00Z", "HAGS on", "gpu-hags", true)],
+        );
+        assert_eq!(r.next_action_rec_id, None);
+
+        // 4. A rollback event alone → `None`. A rollback is not a thing to roll back.
+        let (b, c) = base();
+        let mut only_rollback = rollback_event("2026-07-11T10:00:00Z", "HAGS on");
+        only_rollback.rec_id = Some("gpu-hags".into());
+        let r = run(&b, &c, vec![only_rollback]);
+        assert!(r.next_action.is_some(), "the prose still stands");
+        assert_eq!(r.next_action_rec_id, None);
+
+        // 5. Support came only from the active-change COUNT delta, which carries no ids at
+        //    all (that is exactly why it exists — undated legacy rollbacks). Sentence yes,
+        //    id no.
+        let (mut b, mut c) = base();
+        b.compy_changes_active = 3;
+        c.compy_changes_active = 1;
+        let r = run(&b, &c, vec![]);
+        let leader = r.leading_hypotheses.first().expect("has a leader");
+        assert_eq!(leader.id, "compy-config-change");
+        assert!(leader.next_test.is_some());
+        assert_eq!(r.next_action_rec_id, None);
+
+        // 6. No OTHER hypothesis may ever emit an id — none of them has a rec behind it.
+        //    Sweep every hypothesis this engine can produce across the fixtures above.
+        let (drift_b, drift_c) = base();
+        let (mut drv_b, mut drv_c) = base();
+        drv_b.hw_fingerprint = Some(mk_fp("25.5.1"));
+        drv_c.hw_fingerprint = Some(mk_fp("25.6.2"));
+        let (gm_b, mut gm_c) = base();
+        gm_c.gaming_mode_active = Some(true);
+        let (plain_b, plain_c) = base();
+        for (b, c, ev) in [
+            (&drift_b, &drift_c, vec![drift_event("2026-07-11T10:00:00Z", "Game Mode")]),
+            (&drv_b, &drv_c, vec![]),
+            (&gm_b, &gm_c, vec![]),
+            (&plain_b, &plain_c, vec![]),
+        ] {
+            let r = run(b, c, ev);
+            for h in r.leading_hypotheses.iter().chain(r.ruled_out.iter()) {
+                assert!(
+                    h.id == "compy-config-change" || h.next_test_rec_id.is_none(),
+                    "{} must never name a rec — it has none to read",
+                    h.id
+                );
+            }
+            assert_eq!(r.next_action_rec_id, None, "no ledger apply in this window");
         }
     }
 
@@ -2849,6 +3096,7 @@ mod tests {
             detail: None,
             observed_between: None,
             since_rolled_back: false,
+            rec_id: None,
         }
     }
 
@@ -2965,6 +3213,54 @@ mod tests {
             .expect("same driver on both sessions rules the driver out");
         assert!(drv.contradicting_evidence[0].contains("same GPU driver"));
         assert!(drv.supporting_evidence.is_empty());
+    }
+
+    #[test]
+    fn an_unreadable_ledger_never_clears_compy_of_a_regression() {
+        // The whole reason `LedgerHealth` exists. `compy-config-change` is the ONE hypothesis
+        // allowed to read SILENCE as contradicting evidence, and it earns that from a premise:
+        // the Trust Ledger is a complete record of what Compy itself did. A ledger that won't
+        // load — or one whose damaged predecessor was quarantined, after which every load reads
+        // empty forever — looks exactly like a quiet machine. Compy must never clear ITSELF of a
+        // regression using a record it could not read.
+        let (b, c) = two_sessions(100.0, 82.0); // a real regression, needing a cause
+        let inp = WhatChangedInputs {
+            baseline: &b,
+            current: &c,
+            events_window: vec![],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        };
+
+        // Known-good ledger: silence IS evidence, and eliminating the hypothesis is correct.
+        // Pinned so the fix below can only narrow the claim, never delete it.
+        let whole = what_changed(&inp, LedgerHealth::Complete);
+        assert!(
+            whole
+                .ruled_out
+                .iter()
+                .any(|h| h.id == "compy-config-change"),
+            "a whole, quiet ledger still rules Compy out — that behaviour must survive"
+        );
+
+        // Identical inputs, unreadable ledger: the hypothesis has to stay open.
+        let r = what_changed(&inp, LedgerHealth::Incomplete);
+        assert!(
+            !r.ruled_out.iter().any(|h| h.id == "compy-config-change"),
+            "an unreadable ledger cleared Compy of the regression; ruled out: {:?}",
+            r.ruled_out.iter().map(|h| h.id.as_str()).collect::<Vec<_>>()
+        );
+        assert!(
+            !format!("{r:?}").contains("No Compy changes were applied"),
+            "the report asserts as fact something the ledger could not tell it"
+        );
+        // Staying open is not enough — a silently dropped hypothesis reads as "nothing to see".
+        // The gap itself has to reach the reader.
+        assert!(
+            r.unknowns.iter().any(|u| u.contains("couldn't be read")),
+            "the unreadable ledger was never disclosed; unknowns: {:?}",
+            r.unknowns
+        );
     }
 
     #[test]
@@ -3184,6 +3480,7 @@ mod tests {
                 "2026-07-13T09:00:00Z".into(), // after the current session
             )),
             since_rolled_back: false,
+            rec_id: None,
         };
         let r = report(&WhatChangedInputs {
             baseline: &b,
@@ -3215,6 +3512,7 @@ mod tests {
             detail: None,
             observed_between: None,
             since_rolled_back: false,
+            rec_id: None,
         };
         let all = vec![
             mk_ev("before", "2026-07-09T09:59:00Z", "change-applied", EventScope::CompyApplied),
@@ -3329,6 +3627,7 @@ mod tests {
             comparison: None,
             snapshots: vec![],
             drift_notices: vec![],
+            ledger: LedgerHealth::Complete,
         }
     }
 

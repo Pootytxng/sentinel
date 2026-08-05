@@ -118,6 +118,23 @@ export type AppliedChange = {
   on_this_rig?: boolean | null;
 };
 
+/** Whether the AppliedChange[] above is the whole story — `get_ledger_health`.
+ *
+ *  A ledger Compy cannot read degrades to an empty list, and an empty list renders as "nothing is
+ *  active on this PC", which is an affirmative claim about the machine made at the exact moment
+ *  every apply and every rollback is refusing. This is what lets the surface say "Compy can't tell
+ *  you what it did" instead. snake_case: the IPC boundary is not renamed. */
+export type LedgerHealth = {
+  /** False → the list is not evidence of anything, least of all of a quiet machine. */
+  complete: boolean;
+  /** The load failure verbatim, already user-readable. `null` while the loss is purely historical
+   *  — a quarantined ledger loads clean-and-empty forever after, so `complete: false` with no
+   *  error is the durable shape, not a contradiction. */
+  error: string | null;
+  /** `history.json.corrupt` sits beside the ledger: set aside unopened, not deleted. */
+  quarantined: boolean;
+};
+
 export type ReadinessCheck = { id: string; label: string; status: ReadinessStatus; detail: string; value: string | null; action_uri?: string | null; action_label?: string | null };
 export type Drift = { id: string; label: string; detail: string; noticed_at: string };
 export type GameReadiness = { checks: ReadinessCheck[]; ready_count: number; attention_count: number; unknown_count: number; advisory_count: number; advisory: string; dismissed_ids: string[]; drifts: Drift[] };
@@ -523,6 +540,9 @@ export type IntelEvent = {
   observed_between: [string, string] | null;
   /** Apply events only: the ledger says this change was later rolled back. */
   since_rolled_back: boolean;
+  /** Trust-Ledger events only: the catalog rec id, copied verbatim off the ledger row.
+   *  `null` for every other source, which has no rec behind it. */
+  rec_id: string | null;
 };
 
 export type IntelligenceTimeline = {
@@ -565,6 +585,11 @@ export type IntelHypothesis = {
   contradicting_evidence: string[];
   missing_evidence: string[];
   next_test: string | null;
+  /** The catalog rec `next_test` refers to — present ONLY where the engine could point at a
+   *  real id it READ off the Trust Ledger. `null` everywhere else, permanently: matching the
+   *  prose against the catalog would be fabrication. A surface that gets `null` renders the
+   *  sentence and nothing more. */
+  next_test_rec_id: string | null;
 };
 
 // ─── Measurement Platform 2.0 (Task F): session comparability ────────────────
@@ -619,6 +644,14 @@ export type WhatChangedReport = {
   /** What Compy genuinely cannot know here — stated, never papered over. */
   unknowns: string[];
   next_action: string | null;
+  /** The leading hypothesis's `next_test_rec_id`, mirrored so a surface can offer a real
+   *  affordance instead of prose alone. `null` unless the leader carries one.
+   *
+   *  **Destination is the Trust Ledger, not the experiment bench.** The only next test that
+   *  can carry an id today prescribes a ROLLBACK, and the bench applies — feeding it a
+   *  still-active rec simulates to `already-configured`, a dead end. Route this id only
+   *  somewhere the change can actually be rolled back. */
+  next_action_rec_id: string | null;
   /** ≥2 change families moved between sessions — single-cause attribution refused. */
   confounded: boolean;
   gap_days: number;

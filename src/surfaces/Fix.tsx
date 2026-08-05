@@ -4,9 +4,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { AppliedChange, StartupEntry } from "../types";
+import {
+  LedgerHealthNotice,
+  knownIncomplete,
+  useLedgerHealth,
+} from "../design/LedgerHealthNotice";
 import { TrustSwitch, TrustSnapshotLine } from "../design/TrustSwitch";
 import { WhatsThis } from "../design/WhatsThis";
-import { Walkthrough } from "../design/Walkthrough";
+import { WalkthroughDisclosure } from "../design/WalkthroughDisclosure";
 import { walkthroughForKeyForLanguage, type GpuVendor } from "./walkthroughs";
 import { useDismissed } from "./dismissed";
 import { useEligibilityOverrides } from "./eligibility-override";
@@ -391,10 +396,11 @@ export function SlimFixRow({
       )}
       <div className="slimrow-acts">
         {walkthrough && (
-          <details className="fix-walkthrough">
-            <summary>{t("optimize.fix.showMeTheWay")}</summary>
-            <Walkthrough walkthrough={walkthrough} vendor={vendor ?? "any"} />
-          </details>
+          <WalkthroughDisclosure
+            label={t("optimize.fix.showMeTheWay")}
+            walkthrough={walkthrough}
+            vendor={vendor ?? "any"}
+          />
         )}
         <WhatsThis id={rec.id} onOpen={onWhatsThis} />
         {/* Deliberate, reversible decline — applied rows can't be dismissed (roll back instead). */}
@@ -689,10 +695,11 @@ function GuidedRow({
               </p>
             )}
             {walkthrough && (
-              <details className="fix-walkthrough">
-                <summary>{t("optimize.fix.showMeTheWay")}</summary>
-                <Walkthrough walkthrough={walkthrough} vendor={vendor} />
-              </details>
+              <WalkthroughDisclosure
+                label={t("optimize.fix.showMeTheWay")}
+                walkthrough={walkthrough}
+                vendor={vendor}
+              />
             )}
           </div>
         )}
@@ -923,6 +930,13 @@ export default function Fix({
   const showFixes = view === "all" || view === "fixes";
   const showActive = view === "all" || view === "ledger" || view === "applied";
   const showHistory = view === "all" || view === "ledger" || view === "history";
+  // Whether the ledger rendered below is the WHOLE story. Keyed on `changes` — a fresh array
+  // identity from IPC on every refresh — so health is read on the same tick as the rows the user is
+  // actually looking at, with no prop drilled through the three shells that mount this surface.
+  // Shared with the Blackbook Logbook, which renders the same claim off the same file; see
+  // `design/LedgerHealthNotice.tsx` for why UNKNOWN is neither complete nor incomplete.
+  const health = useLedgerHealth(changes);
+  const ledgerIncomplete = knownIncomplete(health);
   // Applicability gating (eligibility train): hardware-ineligible recs leave the active lists +
   // the completion denominator entirely — they sit in a quiet "Not for this rig" bucket with the
   // plain-English reason, never silently dropped, never falsely offered.
@@ -1296,6 +1310,11 @@ export default function Fix({
       </>
       )}
 
+      {/* Rendered above the rows so the caveat is read before anything it qualifies. Draws nothing
+          unless health is KNOWN incomplete — an unknown health leaves this surface exactly as it
+          was. */}
+      {showActive && <LedgerHealthNotice health={health} />}
+
       {/* Active on this PC (ledger Layer 1) — what Compy is currently doing, deduped, ghost rollback.
           Answers Sarah's only question: "what is Compy doing to my machine right now?" */}
       {showActive && active.length > 0 && (
@@ -1328,8 +1347,10 @@ export default function Fix({
 
       {/* Honest empty state for the ledger room (P5.5) — the Applied segment must never be a bare
           empty room; say plainly that nothing is active and where applies will land. Scoped to the
-          ledger/applied views so standalone Tune (view="all") renders exactly as before. */}
-      {(view === "applied" || view === "ledger") && active.length === 0 && (
+          ledger/applied views so standalone Tune (view="all") renders exactly as before.
+          Withheld when the ledger is known-incomplete: "nothing active" would then be an
+          affirmative claim about the machine sourced from a list Compy could not read. */}
+      {(view === "applied" || view === "ledger") && active.length === 0 && !ledgerIncomplete && (
         <p className="fix-empty">
           {t("optimize.fix.nothingActiveOnThisPc")}
         </p>

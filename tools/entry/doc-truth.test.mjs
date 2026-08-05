@@ -25,6 +25,19 @@ const ROOT = join(HERE, "..", "..");
 const SPEC = join("docs", "superpowers", "specs", "2026-07-30-single-entry-workflow.md");
 const PLAN = join("docs", "superpowers", "plans", "2026-07-30-single-entry-workflow.md");
 
+/**
+ * Archives are records, not claims. TOKEN LAW keeps point-in-time history in `docs/archive/*` and the
+ * `*_ARCHIVE.md` / `*_HISTORY.md` files, and this guard's scope has always been the documents a train
+ * OWNS — "older records elsewhere in the repo stand as history and are deliberately not rewritten".
+ * Moving a finished section INTO an archive touches the file without authoring a word of it, so
+ * without this line the first train to archive anything inherits every historical sentence in there
+ * as its own claim. That is not hypothetical: on 2026-08-04 a branch whose only archive change was a
+ * move failed on three branch-reconciliation notes written in 1c2a0a2 / 4619689, byte-identical to
+ * main's copy. Rewriting them to satisfy a scan would have been falsifying the record to pass a test.
+ */
+const isHistory = (rel) =>
+  /(^|[\\/])docs[\\/]archive[\\/]|_ARCHIVE\.md$|_HISTORY\.md$/i.test(rel);
+
 /** Every doc this branch adds or changes — so a NEW doc cannot smuggle the claim back in. */
 function scannedDocs() {
   const files = new Set([SPEC, PLAN]);
@@ -39,7 +52,7 @@ function scannedDocs() {
   } catch {
     /* no origin/main locally is not a reason to skip the two documents we know about */
   }
-  return [...files].filter((f) => existsSync(join(ROOT, f)));
+  return [...files].filter((f) => existsSync(join(ROOT, f)) && !isHistory(f));
 }
 
 /** Fenced blocks are commands and payloads, not prose claims. */
@@ -62,6 +75,11 @@ const MENTIONS_WORKTREE = /\bworktree|\bcheckout|\bevery folder|\ball six\b/i;
 const DENIES_PROPAGATION =
   /\bno existing worktree|does not update|never updates|not automatically|only when it is itself|until (it|each|they) (is|are)|must itself be|stays on the commit/i;
 
+const offendersIn = (text) =>
+  sentences(text).filter(
+    (s) => MENTIONS_MERGE.test(s) && MENTIONS_WORKTREE.test(s) && !DENIES_PROPAGATION.test(s),
+  );
+
 describe("decision 7 — the docs must not imply a merge updates existing worktrees", () => {
   const docs = scannedDocs();
 
@@ -70,11 +88,28 @@ describe("decision 7 — the docs must not imply a merge updates existing worktr
     expect(docs.length).toBeGreaterThan(0);
   });
 
+  it("scans live documents and not the archives that merely record history", () => {
+    // Both halves matter. Skipping the archives is only defensible while the exclusion stays this
+    // narrow — the moment it swallows a document a future session would READ for guidance, the guard
+    // has a hole rather than a scope.
+    expect(docs.filter(isHistory)).toEqual([]);
+    expect(isHistory(join("docs", "BACKLOG_ARCHIVE.md"))).toBe(true);
+    expect(isHistory(join("docs", "archive", "RELEASE_STATE_HISTORY.md"))).toBe(true);
+    expect(isHistory(SPEC)).toBe(false);
+    expect(isHistory(join("docs", "WORK_CONTROL.md"))).toBe(false);
+    expect(isHistory(join("docs", "BACKLOG.md"))).toBe(false);
+  });
+
+  it("still catches the claim it was written for", () => {
+    // The detector is pinned separately from the corpus so that a green run can never mean "the
+    // scan set narrowed to nothing" — the failure mode a scope fix invites.
+    expect(offendersIn("Merging this makes the tooling readable from every worktree.")).toHaveLength(1);
+    expect(offendersIn("A merge updates no existing worktree; each stays on its own commit.")).toEqual([]);
+  });
+
   for (const rel of docs) {
     it(`${rel} pairs merge and worktrees only while denying propagation`, () => {
-      const offenders = sentences(readFileSync(join(ROOT, rel), "utf8")).filter(
-        (s) => MENTIONS_MERGE.test(s) && MENTIONS_WORKTREE.test(s) && !DENIES_PROPAGATION.test(s),
-      );
+      const offenders = offendersIn(readFileSync(join(ROOT, rel), "utf8"));
       expect(offenders, `${rel} implies a merge reaches existing worktrees:\n  - ${offenders.join("\n  - ")}`).toEqual(
         [],
       );

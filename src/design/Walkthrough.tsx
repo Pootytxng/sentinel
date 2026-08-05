@@ -10,16 +10,24 @@ import {
 } from "../surfaces/walkthroughs";
 import { openGuidedUri } from "../surfaces/guided";
 import { bumpLocalStat } from "../data/local-stats";
+import { useDocumentVisible } from "../data/use-document-visible";
+import { useRoomActive } from "../data/use-room-active";
 import { useReducedMotion } from "./use-motion";
 import "./Walkthrough.css";
 
 // Animated schematic walkthrough (spec 2026-06-06; presentation reworked 2026-06-12 §B — the
 // stacked five-panel storyboard read as clutter). ONE token-only abstracted window + a stepper
 // (prev/next + jump dots, keyboard accessible): step N highlights in place, captions rail along.
-// Auto-advance runs only when motion is allowed AND the user hasn't taken the wheel; when motion is
+// Auto-advance runs only when motion is allowed, the user hasn't taken the wheel, AND the thing is
+// actually on screen (window visible + room active — Q7 idle cost, 2026-08-04); when motion is
 // reduced it is a manual stepper — never an auto-loop, never the 5-stack. It NEVER dresses as real
 // OS chrome — it's labeled a schematic. Motion gates on the APP's own signal (useReducedMotion,
 // motion-on-by-default, OS-override), NOT raw prefers-reduced-motion — see src/design/use-motion.ts.
+//
+// MOUNT MEANS OPENED. Callers must mount this only when the user has actually opened it —
+// `WalkthroughDisclosure` is the shared way to do that, and Monitor does it inline. Mounting it
+// inside a closed `<details>` is the trap that made both the timer below and the "opened" counter
+// lie (see WalkthroughDisclosure.tsx for the full account).
 
 function Stage({ steps, active, cursor }: { steps: WalkthroughStep[]; active: number; cursor: boolean }) {
   const cur = steps[active] ?? steps[0];
@@ -61,6 +69,8 @@ function Stage({ steps, active, cursor }: { steps: WalkthroughStep[]; active: nu
 export function Walkthrough({ walkthrough, vendor }: { walkthrough: WT; vendor: GpuVendor }) {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
+  const visible = useDocumentVisible();
+  const roomActive = useRoomActive();
   const [variantIdx, setVariantIdx] = useState(() => {
     const i = walkthrough.variants.findIndex((v) => v.vendor === vendor);
     return i >= 0 ? i : 0;
@@ -77,7 +87,10 @@ export function Walkthrough({ walkthrough, vendor }: { walkthrough: WT; vendor: 
     setActive(0);
   }, [variantIdx]);
 
-  // R3 Lane D — count each walkthrough actually shown (mount = the user opened it). Local-only.
+  // R3 Lane D — count each walkthrough actually shown. Local-only. "Mount = the user opened it" is
+  // load-bearing, not a turn of phrase: this number is shown back to the user in the Export modal
+  // ("N walkthroughs opened"), so a caller that mounts us inside a closed disclosure doesn't just
+  // waste a tick — it fabricates a stat. See the MOUNT MEANS OPENED note at the top.
   // Ref guard: StrictMode re-runs mount effects in dev (refs persist) — keep the count honest.
   const counted = useRef(false);
   useEffect(() => {
@@ -86,11 +99,17 @@ export function Walkthrough({ walkthrough, vendor }: { walkthrough: WT; vendor: 
     bumpLocalStat("walkthroughsOpened");
   }, []);
 
+  // Q7 idle cost: a carousel nobody can see is pure waste. `visible` covers the window (minimized,
+  // or alt-tabbed into a fullscreen game — the case Compy exists to protect); `roomActive` covers
+  // the room, because Optimize stays mounted behind `display: none` and the window stays perfectly
+  // visible the whole time. Standing down leaves the current step on screen and resumes from it —
+  // no jump, nothing to re-read.
   useEffect(() => {
     if (reduced || manual || paused || steps.length <= 1) return;
+    if (!visible || !roomActive) return;
     const id = window.setInterval(() => setActive((a) => (a + 1) % steps.length), 2200);
     return () => window.clearInterval(id);
-  }, [reduced, manual, paused, steps.length]);
+  }, [reduced, manual, paused, steps.length, visible, roomActive]);
 
   const goTo = (i: number) => {
     setManual(true);

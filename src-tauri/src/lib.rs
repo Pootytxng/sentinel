@@ -1074,6 +1074,8 @@ pub fn run() {
             get_preload_apps,
             rollback_change,
             get_applied_changes,
+            history::get_ledger_health,
+            history::reveal_ledger_folder,
             get_startup_entries,
             history::set_startup_entry_enabled,
             get_rules_source,

@@ -381,7 +381,7 @@ pub(crate) fn conclude_outcome(
     treatment_samples: u32,
     crashed: bool,
     treatment_game: Option<&str>,
-    ledger_now: usize,
+    ledger_now: Option<usize>,
     now: DateTime<Utc>,
 ) -> ConcludeOutcome {
     let delta = delta_low1_pct(rec.baseline_low1_fps, treatment_low1);
@@ -661,7 +661,10 @@ pub(crate) fn start_experiment(
         .map_err(|e| format!("experiment aborted — apply failed, nothing changed: {e}"))?;
 
     // Watermark AFTER our apply so a LATER external change trips the confound guard, not our own.
-    let ledger_watermark = crate::history::ledger_len();
+    // An unreadable ledger refuses to start the experiment rather than banking a fabricated count —
+    // the change is already applied and stays applied, but nothing is recorded that would later
+    // claim a fair before/after it could never prove. See `comparison::arm_watermark`.
+    let ledger_watermark = crate::comparison::arm_watermark()?;
     let now = Utc::now();
     // One store read serves both the id counter and the read-modify-write under this single lock.
     let mut store = load_store();
@@ -740,7 +743,9 @@ pub(crate) fn conclude_experiment(
         treatment_game.map(|g| g.chars().take(MAX_TEXT_LEN).collect());
 
     let now = Utc::now();
-    let ledger_now = crate::history::ledger_len();
+    // `.ok()` is the honest direction here, not a collapse: an unreadable ledger becomes `None`,
+    // which the confound guard REFUSES to attribute. It is never silently treated as a count.
+    let ledger_now = crate::history::ledger_len_checked().ok();
     let outcome = conclude_outcome(
         &store.experiments[idx],
         treatment_low1_fps,
@@ -1036,7 +1041,7 @@ mod experiment_tests {
     fn improvement_beyond_noise_is_kept() {
         let r = rec(90.0, 5);
         // +11% on the 1% low, no confound (ledger unchanged), plenty of samples.
-        let o = conclude_outcome(&r, 100.0, 5000, false, None, 5, Utc::now());
+        let o = conclude_outcome(&r, 100.0, 5000, false, None, Some(5), Utc::now());
         assert_eq!(o.verdict, "improved");
         assert!(o.keep, "a clean improvement is kept");
         assert!(o.stop_reason.is_none());
@@ -1046,7 +1051,7 @@ mod experiment_tests {
     fn a_gain_inside_the_noise_floor_is_no_change_and_restores() {
         let r = rec(100.0, 5);
         // +2% < 3% floor → no-change, never "improved" (never credit inside the noise).
-        let o = conclude_outcome(&r, 102.0, 5000, false, None, 5, Utc::now());
+        let o = conclude_outcome(&r, 102.0, 5000, false, None, Some(5), Utc::now());
         assert_eq!(o.verdict, "no-change");
         assert!(!o.keep, "no measurable benefit ⇒ restore to the clean baseline");
     }
@@ -1054,7 +1059,7 @@ mod experiment_tests {
     #[test]
     fn a_regression_restores() {
         let r = rec(100.0, 5);
-        let o = conclude_outcome(&r, 80.0, 5000, false, None, 5, Utc::now());
+        let o = conclude_outcome(&r, 80.0, 5000, false, None, Some(5), Utc::now());
         assert_eq!(o.verdict, "regressed");
         assert!(!o.keep);
     }
@@ -1063,16 +1068,33 @@ mod experiment_tests {
     fn a_confound_refuses_attribution_and_restores() {
         let r = rec(90.0, 5);
         // Ledger advanced past the watermark → another change landed → confounded, even on a big gain.
-        let o = conclude_outcome(&r, 120.0, 5000, false, None, 6, Utc::now());
+        let o = conclude_outcome(&r, 120.0, 5000, false, None, Some(6), Utc::now());
         assert_eq!(o.verdict, "confounded");
         assert!(!o.keep, "can't attribute a confounded result → restore");
+    }
+
+    #[test]
+    fn a_ledger_that_is_not_the_armed_one_also_refuses_attribution() {
+        // The mirror of the case above, and the one that actually happens: the ledger reads BELOW
+        // the watermark. `load_history_from` quarantines a corrupt ledger to `history.json.corrupt`,
+        // and every load after that returns empty forever — so a `>` test saw "nothing landed" while
+        // real changes were free to land into the fresh ledger, and kept the change on that reading.
+        // The watermark means "the same ledger", so any difference refuses attribution.
+        let r = rec(90.0, 5);
+        let o = conclude_outcome(&r, 120.0, 5000, false, None, Some(0), Utc::now());
+        assert_eq!(o.verdict, "confounded");
+        assert!(!o.keep, "an unattributable reading is never kept");
+        // An outright unreadable ledger is the strictest case of the same thing.
+        let o = conclude_outcome(&r, 120.0, 5000, false, None, None, Utc::now());
+        assert_eq!(o.verdict, "confounded");
+        assert!(!o.keep, "an unreadable ledger can never justify keeping a change");
     }
 
     #[test]
     fn a_crash_forces_restore_regardless_of_fps() {
         let r = rec(90.0, 5);
         // Even a big apparent gain: a crash means unstable/unsupported → restore + honest stop reason.
-        let o = conclude_outcome(&r, 130.0, 5000, true, None, 5, Utc::now());
+        let o = conclude_outcome(&r, 130.0, 5000, true, None, Some(5), Utc::now());
         assert_eq!(o.verdict, "regressed");
         assert!(!o.keep);
         assert_eq!(o.stop_reason.as_deref(), Some("crash-during-treatment"));
@@ -1081,7 +1103,7 @@ mod experiment_tests {
     #[test]
     fn too_few_samples_is_insufficient_evidence_not_a_verdict() {
         let r = rec(90.0, 5);
-        let o = conclude_outcome(&r, 120.0, MIN_TREATMENT_SAMPLES - 1, false, None, 5, Utc::now());
+        let o = conclude_outcome(&r, 120.0, MIN_TREATMENT_SAMPLES - 1, false, None, Some(5), Utc::now());
         assert_eq!(o.verdict, "insufficient-evidence");
         assert!(!o.keep, "no verdict on thin evidence ⇒ restore");
         assert_eq!(o.stop_reason.as_deref(), Some("insufficient-samples"));
@@ -1108,7 +1130,7 @@ mod experiment_tests {
     fn a_different_treatment_game_is_not_comparable_and_restores() {
         let r = rec(90.0, 5); // baseline game = "Test"
         // Even a big apparent gain on the 1% low can't count — it's a different workload.
-        let o = conclude_outcome(&r, 130.0, 5000, false, Some("Other Game"), 5, Utc::now());
+        let o = conclude_outcome(&r, 130.0, 5000, false, Some("Other Game"), Some(5), Utc::now());
         assert_eq!(o.verdict, "not-comparable");
         assert!(!o.keep, "a wrong-game reading must never keep the change");
         assert_eq!(o.stop_reason.as_deref(), Some("treatment-game-differs-from-baseline"));
@@ -1122,7 +1144,7 @@ mod experiment_tests {
     #[test]
     fn game_mismatch_takes_precedence_over_crash() {
         let r = rec(90.0, 5);
-        let o = conclude_outcome(&r, 130.0, 5000, true, Some("Other Game"), 5, Utc::now());
+        let o = conclude_outcome(&r, 130.0, 5000, true, Some("Other Game"), Some(5), Utc::now());
         assert_eq!(o.verdict, "not-comparable", "wrong game beats the crash signal");
         assert_eq!(o.confidence, Confidence::Unknown);
         assert!(!o.keep, "still restores — identical safety to the crash path");
@@ -1133,7 +1155,7 @@ mod experiment_tests {
     #[test]
     fn a_verified_same_game_keeps_the_normal_verdict_and_claims_same_game() {
         let r = rec(90.0, 5); // baseline game = "Test"
-        let o = conclude_outcome(&r, 100.0, 5000, false, Some("test"), 5, Utc::now());
+        let o = conclude_outcome(&r, 100.0, 5000, false, Some("test"), Some(5), Utc::now());
         assert_eq!(o.verdict, "improved", "the guard must not disturb a clean same-game result");
         assert!(o.keep);
         assert!(o.note.contains("same rig and game"), "a verified match earns the full claim");
@@ -1144,7 +1166,7 @@ mod experiment_tests {
     #[test]
     fn an_unverified_game_proceeds_but_drops_the_same_game_claim() {
         let r = rec(90.0, 5);
-        let o = conclude_outcome(&r, 100.0, 5000, false, None, 5, Utc::now());
+        let o = conclude_outcome(&r, 100.0, 5000, false, None, Some(5), Utc::now());
         assert_eq!(o.verdict, "improved", "no identity ⇒ behaviour unchanged from before the guard");
         assert!(o.keep);
         assert!(o.note.contains("on the same rig,"), "still a same-rig single-variable compare");
@@ -1158,7 +1180,7 @@ mod experiment_tests {
     #[test]
     fn a_crash_verdict_is_high_confidence_and_says_it_does_not_rely_on_fps() {
         let r = rec(90.0, 5);
-        let o = conclude_outcome(&r, 130.0, 5000, true, None, 5, Utc::now());
+        let o = conclude_outcome(&r, 130.0, 5000, true, None, Some(5), Utc::now());
         assert_eq!(o.confidence, Confidence::High);
         assert!(o.note.to_lowercase().contains("crash"));
         assert!(o.note.contains("does not rely on the frame-rate reading"));
@@ -1168,7 +1190,7 @@ mod experiment_tests {
     #[test]
     fn insufficient_samples_leave_confidence_unknown() {
         let r = rec(90.0, 5);
-        let o = conclude_outcome(&r, 120.0, MIN_TREATMENT_SAMPLES - 1, false, None, 5, Utc::now());
+        let o = conclude_outcome(&r, 120.0, MIN_TREATMENT_SAMPLES - 1, false, None, Some(5), Utc::now());
         assert_eq!(o.confidence, Confidence::Unknown);
         assert!(o.note.contains("not enough comparable evidence"));
     }
@@ -1177,7 +1199,7 @@ mod experiment_tests {
     #[test]
     fn a_clean_verdict_on_a_short_sample_is_medium() {
         let r = rec(90.0, 5);
-        let o = conclude_outcome(&r, 100.0, MIN_TREATMENT_SAMPLES, false, None, 5, Utc::now());
+        let o = conclude_outcome(&r, 100.0, MIN_TREATMENT_SAMPLES, false, None, Some(5), Utc::now());
         assert_eq!(o.verdict, "improved");
         assert_eq!(o.confidence, Confidence::Medium);
         assert!(o.note.contains("single-variable comparison"));
@@ -1193,7 +1215,7 @@ mod experiment_tests {
             MIN_TREATMENT_SAMPLES.saturating_mul(2),
             false,
             None,
-            5,
+            Some(5),
             Utc::now(),
         );
         assert_eq!(o.verdict, "improved");
@@ -1204,7 +1226,7 @@ mod experiment_tests {
     #[test]
     fn a_confounded_verdict_is_low_confidence_regardless_of_gain() {
         let r = rec(90.0, 5);
-        let o = conclude_outcome(&r, 120.0, 5000, false, None, 6, Utc::now());
+        let o = conclude_outcome(&r, 120.0, 5000, false, None, Some(6), Utc::now());
         assert_eq!(o.verdict, "confounded");
         assert_eq!(o.confidence, Confidence::Low);
         assert!(o.note.contains("can't be attributed"));
@@ -1216,11 +1238,11 @@ mod experiment_tests {
         let banned = ["% confidence", "confidence:", "score", "% bottleneck", "%bottleneck"];
         let r = rec(90.0, 5);
         let cases = [
-            conclude_outcome(&r, 130.0, 5000, true, None, 5, Utc::now()), // crash
-            conclude_outcome(&r, 120.0, MIN_TREATMENT_SAMPLES - 1, false, None, 5, Utc::now()), // insufficient
-            conclude_outcome(&r, 100.0, 5000, false, None, 5, Utc::now()), // improved
-            conclude_outcome(&r, 120.0, 5000, false, None, 6, Utc::now()), // confounded
-            conclude_outcome(&r, 100.0, 5000, false, Some("Other Game"), 5, Utc::now()), // not-comparable
+            conclude_outcome(&r, 130.0, 5000, true, None, Some(5), Utc::now()), // crash
+            conclude_outcome(&r, 120.0, MIN_TREATMENT_SAMPLES - 1, false, None, Some(5), Utc::now()), // insufficient
+            conclude_outcome(&r, 100.0, 5000, false, None, Some(5), Utc::now()), // improved
+            conclude_outcome(&r, 120.0, 5000, false, None, Some(6), Utc::now()), // confounded
+            conclude_outcome(&r, 100.0, 5000, false, Some("Other Game"), Some(5), Utc::now()), // not-comparable
         ];
         for o in cases {
             let lc = o.note.to_lowercase();

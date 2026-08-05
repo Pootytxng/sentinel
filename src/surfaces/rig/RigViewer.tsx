@@ -8,6 +8,7 @@ import "../../i18n";
 import type { HardwareInfo } from "../../App";
 import { useManualParts, MANUAL_KINDS, manualKindLabel, type ManualKind } from "./manual-parts";
 import { readHologramV2 } from "../../design/theme";
+import { useDocumentVisible } from "../../data/use-document-visible";
 import "./RigViewer.css";
 
 // Official download page — opened EXTERNALLY via the allowlisted opener plugin (capabilities). A fixed
@@ -51,10 +52,12 @@ export const RigViewer = memo(function RigViewer({
 
   // No fan sensors publishing → no monitor running → offer the honest "light up sensors" nudge.
   const [noMonitor, setNoMonitor] = useState(false);
+  const visible = useDocumentVisible();
   useEffect(() => {
     // The only consumer of noMonitor is the fan/monitor nudge, which lives behind {!chromeless}.
     // In chromeless mode (the Ops Console) polling get_fan_sensors every 6s buys nothing — skip it.
-    if (chromeless) return;
+    // Q7 idle-cost: same for a hidden window — the nudge can't be read, so don't re-read sensors.
+    if (chromeless || !visible) return;
     let cancelled = false;
     const poll = () => {
       invoke<{ label: string; rpm: number; source: string }[]>("get_fan_sensors")
@@ -67,7 +70,7 @@ export const RigViewer = memo(function RigViewer({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [chromeless]);
+  }, [chromeless, visible]);
 
   const onAdd = (e: FormEvent) => {
     e.preventDefault();

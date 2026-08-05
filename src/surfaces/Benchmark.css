@@ -144,6 +144,12 @@
   height: 100%;
   background: var(--accent);
   border-radius: 999px;
+  /* Triaged 2026-08-04 and kept ON PURPOSE — do not "fix" this to transform: scaleX().
+     RunCard renders a FINISHED RunReport, so this width changes at most once per completed
+     benchmark run, on four childless spans; there is no continuous animation to thrash.
+     scaleX() on a 999px pill also squashes the rounded caps horizontally, which is a visible
+     regression traded for a layout pass that happens once. */
+  /* impeccable-disable-next-line layout-transition -- fires once per completed run; scaleX distorts the pill caps */
   transition: width 240ms ease;
 }
 

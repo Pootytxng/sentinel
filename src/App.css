@@ -3279,6 +3279,31 @@ body::before {
   margin: 0 0 10px;
 }
 .wcp-next .mc-eyebrow { display: inline; margin-right: 6px; margin-bottom: 0; }
+/* BACKLOG:236, Ledger half. The next-test sentence names the Trust Ledger on its own and always
+   stands alone as the route; this button is the shortcut, rendered only when the engine named a
+   rec id that still resolves to a live applied row. The wrapper takes over the sentence's bottom
+   margin so the pair reads as one block instead of two stacked ones. */
+.wcp-next-block { margin: 0 0 10px; }
+.wcp-next-block .wcp-next { margin-bottom: 0; }
+.wcp-next-rollback {
+  margin-top: 8px;
+  padding: 5px 12px;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-2, var(--fg));
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    border-color 140ms ease;
+}
+.wcp-next-rollback:hover:not(:disabled) {
+  color: var(--accent-bright);
+  border-color: var(--accent-bright);
+}
+.wcp-next-rollback:disabled { opacity: 0.6; cursor: progress; }
 .wcp-detail-toggle {
   width: 100%;
   display: flex;

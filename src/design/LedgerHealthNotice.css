@@ -1,0 +1,53 @@
+/* ── Ledger health ────────────────────────────────────────────────────────────
+   Sits where a claim about the machine would have been, and replaces it: an
+   unreadable ledger renders as an empty list, and an empty list reads as a claim
+   about the machine. Amber, not red — the PC is fine; the RECORD is what Compy
+   can't vouch for. Full-border box, never a side-stripe, matching .fix-amd-note.
+   --ix-amber re-points to --v2-warn inside the v2 rooms, so this follows the room.
+   Lived in Fix.css until the Blackbook Logbook needed the same disclosure; moved
+   here unchanged so the two surfaces cannot drift into two different warnings. */
+.ledger-health {
+  margin: 6px 2px 12px;
+  padding: 11px 13px;
+  background: color-mix(in srgb, var(--ix-amber, #fbbf3c) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ix-amber, #fbbf3c) 26%, transparent);
+  border-radius: 10px;
+}
+.ledger-health-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ix-amber, #fbbf3c);
+}
+.ledger-health-body {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ix-text-2);
+}
+/* The load failure verbatim — a path or an OS message, so it must wrap rather than
+   push the box wide. Quieter than the body: it is evidence, not the explanation. */
+.ledger-health-detail {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ix-text-3);
+  overflow-wrap: anywhere;
+}
+/* Ghost, and deliberately NOT accent-filled on hover: this reveals a folder, it does
+   not repair anything, so it must not out-shout the rollback controls below it. */
+.ledger-health-action {
+  margin-top: 10px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--ix-amber, #fbbf3c) 34%, transparent);
+  background: transparent;
+  color: var(--ix-text-2);
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+.ledger-health-action:hover {
+  color: var(--ix-text-1);
+  border-color: var(--ix-amber, #fbbf3c);
+}

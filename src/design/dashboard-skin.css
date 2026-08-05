@@ -1,7 +1,7 @@
 /* Dashboard-energy skin (owner: "keep up this energy in the other tabs", 2026-06-15).
    When compy_dash_v2 is on, the premium telemetry-dashboard look carries app-wide: the shared cards +
    the main surface cards get the dark-premium treatment (subtle top sheen, hairline border) and the d2
-   signature ACCENT HOVER-GLOW. Scoped under [data-dash-v2="on"]; default OFF; reversible (drop the
+   signature ACCENT HOVER-GLOW. Scoped under [data-dash-v2="on"]; default ON; reversible (drop the
    attribute + this file). Tokens-only so it follows the active theme. Loaded after the classics. */
 
 :root[data-dash-v2="on"] {

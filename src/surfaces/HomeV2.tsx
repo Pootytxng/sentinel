@@ -4,11 +4,13 @@ import { useTranslation } from "react-i18next";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
 import { RoomShell } from "../design/room-shell";
+import { LedgerHealthNotice, knownIncomplete, useLedgerHealth } from "../design/LedgerHealthNotice";
 import { Sparkline } from "../design/Sparkline";
 import { useReducedMotion } from "../design/use-motion";
 import { postureLine, liveStrip } from "./command-center-data";
 import { activeChangeCount } from "./dashboard-data";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
+import { useDocumentVisible } from "../data/use-document-visible";
 import { gpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
@@ -128,7 +130,10 @@ export function HomeV2({
   // ── live tag probes (existing read-only commands; a failure just omits the value) ──
   const [gpuTemp, setGpuTemp] = useState<number | null>(null);
   const [mem, setMem] = useState<{ used: number; total: number; level: string } | null>(null);
+  // Q7 idle-cost: pause while the window is hidden (same contract as HomeConsole's port of this poll).
+  const visible = useDocumentVisible();
   useEffect(() => {
+    if (!visible) return;
     let cancelled = false;
     const poll = () => {
       invoke<{ temperature_c: number | null }[]>("get_gpu_sensors")
@@ -148,7 +153,7 @@ export function HomeV2({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, []);
+  }, [visible]);
 
   // ── rig view state (same persisted pref as the classic Home — Cards vs 3D) ──
   const [rig3d, setRig3d] = useState(() => {
@@ -209,6 +214,19 @@ export function HomeV2({
     ? new Date(latest.applied_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : null;
   const activeCount = activeChangeCount(changes);
+
+  // An unreadable ledger loads as an EMPTY one, and these two cards paint an empty one as "0" +
+  // "nothing applied yet — your PC is untouched": a claim ABOUT THE MACHINE, read off a record
+  // Compy cannot read. At zero the two are indistinguishable, so here zero is an ABSENCE, not a
+  // measurement — and the honest render is the one the card above already uses for a session it
+  // can't report: drop the reading, keep the note. Only the EMPTY branch narrows; a PARTIAL list
+  // still names its real (floor) count, with the notice above disclosing that it is a floor.
+  // UNKNOWN health (probe failed or disabled) leaves everything byte-identical to healthy —
+  // see design/LedgerHealthNotice.tsx.
+  const health = useLedgerHealth(changes);
+  const ledgerBlank = changes.length === 0 && !!knownIncomplete(health);
+  // See HomeHud: the absolute reversibility promise is withdrawn on health alone, not on the count.
+  const ledgerUnvouched = !!knownIncomplete(health);
 
   // ── Glanceable fill (spec 2026-07-05) — measured-only sources for the two glance cards ──
   // Drift watch: the A5 drift signal, surfaced on Home for the first time (no one-mention clash).
@@ -440,33 +458,53 @@ export function HomeV2({
             )}
           </SpotlightCard>
 
+          {/* Above the two readings it qualifies — a caveat printed under its subject has
+              already failed at its job. Self-nulling when health is complete or UNKNOWN. */}
+          <LedgerHealthNotice health={health} />
+
           <SpotlightCard className="hv2-stat" spotlightColor="rgba(167, 139, 250, 0.10)">
             <span className="hv2-stat-k">{t("home.homeV2.stats.activeChangesLabel")}</span>
-            <span className="hv2-stat-n hv2-mono">
-              {reduced ? activeCount : <CountUp to={activeCount} duration={0.9} />}
-            </span>
-            <span className="hv2-stat-d">{t("home.homeV2.stats.activeChangesNote")}</span>
+            {ledgerBlank ? (
+              <span className="hv2-stat-d">{t("common.ledgerHealth.activeUnknown")}</span>
+            ) : (
+              <>
+                <span className="hv2-stat-n hv2-mono">
+                  {reduced ? activeCount : <CountUp to={activeCount} duration={0.9} />}
+                </span>
+                <span className="hv2-stat-d">
+                  {ledgerUnvouched
+                    ? t("common.ledgerHealth.activeChangesUnvouched")
+                    : t("home.homeV2.stats.activeChangesNote")}
+                </span>
+              </>
+            )}
           </SpotlightCard>
 
           <SpotlightCard className="hv2-stat" spotlightColor="rgba(167, 139, 250, 0.10)">
             <span className="hv2-stat-k">{t("home.homeV2.stats.trustLedgerLabel")}</span>
-            <span className="hv2-stat-n hv2-mono">
-              {reduced ? changes.length : <CountUp to={changes.length} duration={0.9} />}
-              <span className="hv2-stat-unit">
-                {t("home.homeV2.stats.changesTracked", { count: changes.length })}
-              </span>
-            </span>
-            {latest ? (
-              // Long titles/task ids truncate with an ellipsis (V2-9 punch b — the wrap produced
-              // a mid-word break artifact); the full name stays reachable via the title attr.
-              <span className="hv2-stat-d hv2-stat-latest">
-                <span className="hv2-stat-latest-t" title={latest.rec_title}>
-                  {t("home.homeV2.stats.latest", { title: latest.rec_title })}
-                </span>
-                <span className="hv2-mono">· {latestTime}</span>
-              </span>
+            {ledgerBlank ? (
+              <span className="hv2-stat-d">{t("common.ledgerHealth.trackedUnknown")}</span>
             ) : (
-              <span className="hv2-stat-d">{t("home.homeV2.stats.nothingApplied")}</span>
+              <>
+                <span className="hv2-stat-n hv2-mono">
+                  {reduced ? changes.length : <CountUp to={changes.length} duration={0.9} />}
+                  <span className="hv2-stat-unit">
+                    {t("home.homeV2.stats.changesTracked", { count: changes.length })}
+                  </span>
+                </span>
+                {latest ? (
+                  // Long titles/task ids truncate with an ellipsis (V2-9 punch b — the wrap
+                  // produced a mid-word break artifact); the full name stays reachable via title.
+                  <span className="hv2-stat-d hv2-stat-latest">
+                    <span className="hv2-stat-latest-t" title={latest.rec_title}>
+                      {t("home.homeV2.stats.latest", { title: latest.rec_title })}
+                    </span>
+                    <span className="hv2-mono">· {latestTime}</span>
+                  </span>
+                ) : (
+                  <span className="hv2-stat-d">{t("home.homeV2.stats.nothingApplied")}</span>
+                )}
+              </>
             )}
           </SpotlightCard>
 

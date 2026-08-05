@@ -16,8 +16,10 @@ import { useReducedMotion } from "../design/use-motion";
 import { useIntelligenceFlag, useHomeIntakeFlag } from "../design/use-hud";
 import { readHologramV2 } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
+import { LedgerHealthNotice, useLedgerHealth } from "../design/LedgerHealthNotice";
 import { activeChangeCount } from "./dashboard-data";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
+import { useDocumentVisible } from "../data/use-document-visible";
 import { gpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
@@ -43,7 +45,7 @@ import "./home-console.css";
 // Phase 2 of the Console HUD; design source 2026-07-09-compy-console-hud-direction, owner-
 // approved). The Lab Ops Console's language on the app's opening screen: the real 3D rig
 // hologram center-stage inside a bracketed console stage, four honest corner arc gauges,
-// and (Task 3) a Dock that navigates into the rooms. Behind compy_home_console, DEFAULT OFF.
+// and (Task 3) a Dock that navigates into the rooms. Behind compy_home_console, DEFAULT ON ("0" is the failsafe).
 //
 // Honesty contract (identical to HomeHud — presentation only, zero new IPC): every gauge
 // value traces to a real measured source; an absent reading is `null` → ArcGauge's NOT-YET,
@@ -333,7 +335,13 @@ export function HomeConsole({
   // 5s poll, ported verbatim ──
   const [gpuTemp, setGpuTemp] = useState<number | null>(null);
   const [mem, setMem] = useState<{ used: number; total: number; level: string } | null>(null);
+  // Q7 idle-cost: pause while the window is hidden. Home is the DEFAULT room, so without this the
+  // canonical face calls into the vendor GPU SDK every 5s for the whole time the owner is alt-tabbed
+  // into a fullscreen game — the exact hidden cost Compy exists to avoid. Values freeze at their last
+  // reading and refresh on the first tick after the window comes back.
+  const visible = useDocumentVisible();
   useEffect(() => {
+    if (!visible) return;
     let cancelled = false;
     const poll = () => {
       invoke<{ temperature_c: number | null }[]>("get_gpu_sensors")
@@ -353,7 +361,7 @@ export function HomeConsole({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, []);
+  }, [visible]);
 
   // ── the Home intelligence line (Intelligence Phase 1, decision 7: Home carries at most ONE
   // concise line). A single read-only fetch, only while the flag is on; the engine returns a
@@ -404,6 +412,15 @@ export function HomeConsole({
 
   // ── measured derivations (all real, all honestly empty when absent — HomeHud's exact logic) ──
   const posture = postureLine(readiness, priorities, activeChangeCount(changes), t);
+  // This is the Home a default-flag user actually lands on (compy_home_console DEFAULT ON), so it
+  // is where the ledger-completeness disclosure matters most. postureLine already declines to print
+  // a count it doesn't have — at zero changes the change-note is omitted rather than rendered as
+  // "0" — so this surface was silent, not lying. Silence is still the wrong answer when the reason
+  // for the silence is that Compy cannot read its own record: the verdict below reassures, and an
+  // unexplained reassurance over an unreadable ledger reads as "nothing happened". The notice says
+  // which of the two it is. Self-nulling when health is complete or UNKNOWN, so the healthy
+  // cold-open stays byte-identical.
+  const ledgerHealth = useLedgerHealth(changes);
   const strip = liveStrip(sessions, t);
   const rig = { refreshHz: hw.display?.current_refresh_rate_hz ?? null };
   const avgFps = strip.kind === "data" ? strip.avgFps : null;
@@ -572,6 +589,9 @@ export function HomeConsole({
         {/* THE COLD-OPEN VERDICT — relocated out of the h1 (title-header law): postureLine's
             real headline + its trimmed sentence, tone-inked, rendered exactly ONCE on this
             screen (one-mention law). */}
+        {/* Above the verdict it qualifies — a caveat printed under its subject has already failed
+            at its job. */}
+        <LedgerHealthNotice health={ledgerHealth} />
         <div className={`hc-verdict hc-verdict-${posture.tone}`}>
           <span className="hc-verdict-line" key={posture.headline}>
             {posture.headline}

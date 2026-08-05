@@ -10,6 +10,7 @@ import { HudMasthead } from "./hud-masthead";
 import { readAutopsyLedger } from "../data/autopsy-ledger";
 import { blackbookVerdict } from "./blackbook-v2-data";
 import { BlackbookConsole } from "./blackbook/BlackbookConsole";
+import { useLedgerHealth } from "../design/LedgerHealthNotice";
 import { PatternsTile } from "./blackbook/PatternsTile";
 import { buildLogbook } from "./blackbook/logbook";
 import type { AppliedChange, SessionSummary, IntelEvent, IntelligenceTimeline } from "../types";
@@ -36,7 +37,7 @@ import "./blackbook-v2.css";
 // would demote the other.
 //
 // Phase 4 (plan 2026-07-12-console-hud-phase4-blackbook, direction A "The Logbook"): behind
-// compy_blackbook_console (DEFAULT OFF), the room gains a flight-recorder LOGBOOK face — one
+// compy_blackbook_console (DEFAULT ON), the room gains a flight-recorder LOGBOOK face — one
 // reverse-chronological tape unifying the user's real changes, sessions and guide checks
 // (buildLogbook, a PURE view over data App already holds). Phase 4 itself added zero IPC;
 // Intelligence Phase 1 adds exactly ONE read-only fetch here (get_intelligence_timeline) so the
@@ -107,6 +108,14 @@ export function BlackbookV2({
     [changes, sessions, ledger, observed],
   );
 
+  // Whether the Trust Ledger behind the tape's Change records is the WHOLE story. `get_applied_changes`
+  // degrades a ledger it cannot READ to an empty array, and the tape renders that emptiness as a
+  // claim about the machine ("since <date>", "nothing changed yet") — the same defect the Optimize
+  // ledger fixed, on the same file. Keyed on `changes` so health is read on the same tick as the rows
+  // it qualifies, and only while the console face can render the disclosure (classic mode makes no
+  // IPC). UNKNOWN leaves every line below exactly as it was — see `design/LedgerHealthNotice.tsx`.
+  const health = useLedgerHealth(changes, consoleOn);
+
   return (
     <RoomShell
       room="learn"
@@ -172,6 +181,7 @@ export function BlackbookV2({
               <PatternsTile />
               <BlackbookConsole
                 records={records}
+                health={health}
                 vendor={vendor}
                 onOpenLab={() => onOpenLab?.()}
                 onOpenGuide={(fid) => {

@@ -79,6 +79,10 @@
   color: var(--ix-text-2);
 }
 
+/* The ledger-health disclosure that used to live here moved to
+   `design/LedgerHealthNotice.css` when the Blackbook Logbook needed the same warning about the
+   same file — one box, two surfaces, no drift. */
+
 /* ── Rows ─────────────────────────────────────────────────────────────────── */
 .fix-list {
   list-style: none;

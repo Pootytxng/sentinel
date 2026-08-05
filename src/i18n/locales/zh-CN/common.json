@@ -20,6 +20,9 @@
     },
     "footerPre": "每一项更改均可撤销 ·",
     "footerEmph": "台账 {{n}}",
+    "footerIncompletePre": "台账不完整 ·",
+    "footerEmphFloor": "至少 {{n}} 项",
+    "footerEmphUnknown": "数量未知",
     "fallbackTitle": "Compy"
   },
   "confirmDialog": {
@@ -168,5 +171,17 @@
   },
   "sparkline": {
     "trendAriaLabel": "趋势"
+  },
+  "ledgerHealth": {
+    "activeUnknown": "未知 —— Compy 读不到自己的记录",
+    "activeChangesUnvouched": "Compy 无法保证这里的每一项更改都能撤销",
+    "trackedUnknown": "未知 —— 这和「什么都没应用」不是一回事",
+    "unreadableTitle": "Compy 目前读不到自己的记录",
+    "unreadableBody": "所以这份列表并不完整。在能重新读取记录之前,Compy 不会应用或撤销任何更改——它宁可拒绝,也不会靠猜测去改动你的电脑。",
+    "quarantinedTitle": "Compy 无法告诉你它做过的全部更改",
+    "quarantinedBody": "记录在此前某次运行中损坏了,Compy 没有删除它,而是原封不动地把原文件挪到了一旁。没有任何东西被丢弃——但在那之前所做的更改不会出现在这份列表里,也无法从这里撤销。",
+    "attributionUnknown": "Compy 读不到自己的记录,因此无法判断这个结果里是否包含它做过的更改。",
+    "revealFile": "看看 Compy 挪走的那个文件",
+    "revealFolder": "打开 Compy 文件夹"
   }
 }

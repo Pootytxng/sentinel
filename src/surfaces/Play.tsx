@@ -27,6 +27,7 @@ import {
   type Grade,
 } from "../data/metric-grade";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
+import { useDocumentVisible } from "../data/use-document-visible";
 import "../i18n";
 import "./Play.css";
 
@@ -107,6 +108,7 @@ export default function Play({
   onExport,
   changes,
   rollback,
+  activeChangeFor,
   deepMonitoring,
   vendor = "any",
   view = "all",
@@ -123,6 +125,10 @@ export default function Play({
   onExport: () => void;
   changes: AppliedChange[];
   rollback: (c: AppliedChange) => Promise<void>;
+  // BACKLOG:236 Ledger half (additive — absent = prose only): resolves a rec id to its still-active
+  // ledger row so the session debrief's "next test" can carry a real rollback button. Same pair
+  // (`activeChangeFor` + `rollback`) the Fix/Optimize surfaces already take.
+  activeChangeFor?: (recId: string) => AppliedChange | undefined;
   deepMonitoring?: ReactNode;
   vendor?: GpuVendor;
   // Monitor restructure (spec 2026-06-21): the Monitor shell renders Play twice under a segmented
@@ -159,6 +165,7 @@ export default function Play({
   // Hardware-tailored grade context (this rig's monitor refresh) — the same source SessionDebrief
   // uses, so Play's FPS/frametime grade matches Home / debrief / overlay.
   const rig = { refreshHz: readDisplayRefreshHz() };
+  const visible = useDocumentVisible();
   // NVIDIA NVML sensors aren't hardware-verified yet (LOCKED rule #5) — don't grade their temp as
   // authoritative; AMD/unknown stay graded. Routed through the shared gpu-sensor helper (one source).
   const tempGrade = (c: number | null | undefined): Grade => gradeGpuTempForVendor(vendor, c);
@@ -168,8 +175,11 @@ export default function Play({
   // aren't rendered, so polling there was pure waste that also kept the backend sensor threads awake —
   // demand-gate it on the segment, not just the tab. (LiveCharts + the deep MonitoringTab are already
   // mount-gated on `showLive`, so they never polled on Sessions; this closes the last segment-leak.)
+  // Q7 idle-cost: and only while the window is on screen — a minimized/alt-tabbed window keeps both
+  // `active` and `view` unchanged, so without this the live cards poll three sensors a second for
+  // the whole time the user is inside a game.
   useEffect(() => {
-    if (!active || view === "sessions") return;
+    if (!active || view === "sessions" || !visible) return;
     let cancelled = false;
     const tick = () => {
       invoke<GpuLite[]>("get_gpu_sensors").then((g) => !cancelled && setGpu(pickGpu(g))).catch(() => {});
@@ -184,7 +194,7 @@ export default function Play({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [active, view]);
+  }, [active, view, visible]);
 
   // V2-8: mirror the already-polled capture state up to the shell (no-op without the callback).
   const fpsActive = fps?.active ?? false;
@@ -484,6 +494,7 @@ export default function Play({
                         onExport={onExport}
                         changes={changes}
                         rollback={rollback}
+                        activeChangeFor={activeChangeFor}
                         vendor={vendor}
                         sessions={sessions}
                       />
