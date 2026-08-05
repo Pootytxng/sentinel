@@ -297,19 +297,14 @@ exact hexes, anything where your eye is the authority.
   presented. The two-strip's honesty guardrails (real-provenance receipts, no gain claims,
   `scripts/site-landing.test.mjs`) survive into any redesign. Site stays PRE-PUBLISH; deploy GO
   unchanged (§B3).
-- 🔨 **Motion default: keep "on, override Windows" — or let Windows decide? (WELFARE CHECK, 2026-08-04.)**
-  *What:* the `design/quiet-pit-wall` branch (#49) flips `src/design/use-motion.ts`'s default from `"full"`
-  to `"system"`, i.e. Compy would follow the Windows "reduce motion" setting unless a user opts back in.
-  *Why it needs you:* that reverses your explicit 2026-06-19 decision, and your own WebView2 reports
-  `prefers-reduced-motion: reduce` — so on **your** desk the default flip makes the entire app static
-  (the exact failure that decision was written after). *Blast radius:* app-wide, every animation.
-  I landed the rest of #49 and **held this**; the guard still pins `"full"`.
-  *My recommendation: **keep `"full"`.*** The accessibility case the flip argues for is already served —
-  Settings → Motion already ships all three choices (`full` / `system` / `reduced`,
-  [`Settings.tsx:345`](../src/surfaces/Settings.tsx)), so anyone who wants Windows to decide is one
-  click away. The flip changes only what a *first-run* user gets, and on your rig a first run would be
-  a dead-still app. **One word closes this: "keep" (I close the entry) or "flip" (I land it and
-  repoint the guard).**
+- ✅ **Motion default — RESOLVED 2026-08-05 as "keep `full`", on your standing 2026-06-19 decision.**
+  The `design/quiet-pit-wall` branch (#49) wanted `src/design/use-motion.ts` to follow the Windows
+  "reduce motion" setting by default. Your WebView2 reports `prefers-reduced-motion: reduce`, so that
+  flip would have made the whole app static on your own desk — the exact failure your 2026-06-19
+  decision was written after. Held, not landed; the guard still pins `"full"`, and anyone who *wants*
+  Windows to decide already has it one click away in Settings → Motion (all three choices ship).
+  Nothing changed in the app; this entry only ever existed to tell you a branch disagreed with you.
+  Re-open it if you ever want the flip.
 - ✅ **Sibling slop sweep — DONE + SHIPPED `f13d10a` (2026-07-08).** The `#1 BIGGEST LIMITER` uppercase
   tags in **FirstCheck** and the **Setup Tour** spotlight are now quiet lowercase "#1 biggest limiter"
   mono tags matching Home's fix (SetupTour de-ambered too); self-reviewer PASS 8/8, guard-pinned, live.
