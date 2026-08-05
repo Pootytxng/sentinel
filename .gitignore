@@ -91,3 +91,11 @@ docs/ui-sweep/shots/
 
 # local build-output staging dir (rel091 worktree stages here; not produced by any tracked script)
 release-out/
+
+# Obsidian. `_obsidian/` is Kuya's personal navigation hub for this vault; `.obsidian/` is the app's
+# own per-vault config (themes, workspace layout, plugin state) that Obsidian writes into whatever
+# folder it opens — here, the repo root. Both are owner tooling, not product code or product docs.
+# Root-anchored so neither can shadow a same-named dir elsewhere. On disk only; never enters git,
+# never read by agents as product truth.
+/_obsidian/
+/.obsidian/
