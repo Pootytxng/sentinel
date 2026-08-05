@@ -322,6 +322,22 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
+### Cycle 2026-08-04c — ✅ Q9 CONFOUND WATERMARK: THE COMMENT WAS THE ONLY GUARD (CC): `e97a6e3` on `claude/harness-context-cleanup-700535` — **unpushed, unmerged** (owner decides the merge)
+
+Q9 acceptance: *"before/after attribution never credits one change when several changed."* The
+Trust-Ledger watermark is the mechanism. `history.rs` documented it as refusing on a ledger that
+**DIFFERS** from the armed count; `comparison.rs` implemented `ledger_now > watermark` — **advanced**,
+not differs. The comment described a guard nobody wrote.
+
+Reachable, not theoretical: `load_history_from` quarantines a corrupt ledger to `history.json.corrupt`,
+after which every load returns empty **forever**. The count then sits *below* the watermark while
+apply resumes into the fresh ledger — so real confounding changes land unseen and `0 > 3` reads as
+"nothing happened." Both engines credited the delta to the armed change. Proven red first
+(`left: "improved"` / `right: "confounded"` at `comparison.rs:371` + `experiment.rs:1080`), then fixed:
+`ledger_len()` **deleted** for `ledger_len_checked() -> Result`, one shared `arm_watermark()` that
+refuses to arm on an unreadable ledger, and `!= Some(watermark)` over `Option<usize>` at the single
+comparison site. Equality is sound because the ledger is append-only in code. 914 pass · clippy clean.
+
 ### Cycle 2026-08-04b — ✅ Q7 IDLE-COST ACCEPTANCE LINES §397–§399 CLOSED (CC): `75ce9b3` · `452a990` · `2c01d5b` · `64cdaa6` on `claude/harness-context-cleanup-700535` — **unpushed, unmerged** (owner decides the merge)
 
 The three Q7 acceptance lines that are *code* rather than *machine time* (spec
