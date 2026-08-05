@@ -19,11 +19,17 @@ The authoritative test is **merge-tree**, not ahead/behind: lanes land through P
 lines for `latency-capture`, every symbol of which is already on `main`).
 
 ```bash
-git merge-tree --write-tree main origin/<branch>
+git merge-tree --write-tree origin/main origin/<branch>
 ```
 
-Equal to `git rev-parse main^{tree}` → merging changes nothing → the branch is **MERGED**. Otherwise
-the branch is compared file-by-file against `main` and dispositioned on that evidence.
+Equal to `git rev-parse origin/main^{tree}` → merging changes nothing → the branch is **MERGED**.
+Otherwise the branch is compared file-by-file against the trunk and dispositioned on that evidence.
+
+**The base is `origin/main`, not the local `main`** (the local branch is only the fallback where no
+`origin/main` exists). A local `main` is a checkout owned by whichever worktree holds it, and a merge
+that lands on the trunk does not update it — that worktree stays on the commit it had until someone
+pulls. On 2026-08-05 a `main` sitting 4 commits behind made the audit call a genuinely-merged branch
+unmerged. Pinned in `scripts/branch-disposition-audit.test.mjs`.
 
 | disposition | meaning | action |
 | --- | --- | --- |
@@ -39,7 +45,8 @@ trunk, and a worktree's `main` pointer can sit weeks behind without anyone notic
 
 ## The refs
 
-Swept 2026-08-04 against `main` @ `1a513cb`.
+Swept 2026-08-04 against `main` @ `1a513cb`; the `origin/claude/*` rows added 2026-08-05 against
+`origin/main` @ `6712c14`.
 
 | ref | disposition | evidence |
 | --- | --- | --- |
@@ -47,7 +54,7 @@ Swept 2026-08-04 against `main` @ `1a513cb`.
 | `origin/recovery/failed-v0.9.9-prepare-1fa06a8` | PRESERVE | A preserved failed release candidate. `docs/RELEASE_AUTONOMY.md`: "Preserve every failed candidate before reset, replacement, or abandonment." Never a merge target. |
 | `origin/recovery/failed-v0.9.9-runtime-proof-2bd649d` | PRESERVE | Same rule — the runtime-proof half of the same failed v0.9.9 attempt. |
 | `origin/feat/console-project-doctor` | CLAIMED | Codex lane, worktree `C:\Users\Kuya\code\sentinel-project-doctor`, issue [#55](https://github.com/Pootytxng/sentinel/issues/55). The claim carries a 12-hour alarm with **no automatic takeover**, so an expired clock is not a licence to touch it. `tools/console/doctor.html` is absent from `main`. |
-| `origin/claude/ci-entry-mainmodule-posix` | CLAIMED | This lane, worktree `C:\Users\Kuya\code\sentinel-worktrees\harness-context-cleanup-700535`, issue [#68](https://github.com/Pootytxng/sentinel/issues/68) — the red-`main` CI repair. Not yet a merge target. |
+| `origin/claude/ci-entry-mainmodule-posix` | MERGED | Landed as [#69](https://github.com/Pootytxng/sentinel/pull/69) (squash `066c57b`) — the red-`main` CI repair, issue [#68](https://github.com/Pootytxng/sentinel/issues/68). The merge deleted this ref and GitHub closed the two PRs stacked on it; it was **restored at its pre-squash tip `fcb2a22`** so they could be reopened and retargeted to `main`. It is a merged ref kept only for that reason — prunable once #71 and #72 land. |
 | `origin/claude/harness-context-cleanup-700535` | MERGED | Landed as [#66](https://github.com/Pootytxng/sentinel/pull/66) (squash `6712c14`), so `origin` still carries the pre-squash tip `3808b00`; merge-tree against `main` is a no-op. |
 | `origin/fix/fps-pid-identity` | MERGED | Zero commits ahead of `main`; merge-tree no-op. |
 | `origin/recovery/codex-019fb092` | MERGED | Zero commits ahead of `main`; merge-tree no-op. |
@@ -65,6 +72,8 @@ Swept 2026-08-04 against `main` @ `1a513cb`.
 | `origin/feat/bklit-anime-design-system` | UNLANDED | One commit `6fac5c1`, 76 files / 10739 insertions — vendors the Bklit UI chart engine + anime.js v4, no Tailwind adopted. Merges clean. **Owner taste call**, not an engineering one. |
 | `origin/feat/user-feedback-lab-recovery` | UNLANDED | 49 commits, 120 files, 14703 insertions; 42 files absent from `main` (LabDeck, RecDetailCard, the decision-journey IA and its guards). The compaction-window work from this branch *did* land. The Lab candidate sits behind a temporary owner flag and is a large product/design train — **owner review**, and a visual self-review, before any of it moves. |
 | `origin/claude/review-consolidation-structure-9d13f2` | UNLANDED | A sibling Claude Code worktree branch, 7 commits ahead / 27 behind `main`. Carries four things `main` does not have: `docs/decisions/2026-08-04-startup-term-analysis-review.md` (absent from `main`), the `CLAUDE_CODE_AUTO_COMPACT_WINDOW` 150k→300k bump, Rust test-only coverage in `stutter.rs` / `capture.rs` / `benchmark_trial.rs`, and **a one-line `site/llms.txt` fix — `main` still says "free desktop app", which contradicts the owner's 2026-07-21 monetization decree and is currently live on `compy.gg`.** Predates `support_evidence.rs`, so merging it whole would delete 1,074 lines; the landing path is per-file, not a merge. Not this lane's branch — dispositioned, untouched. |
+| `origin/claude/ledger-honesty-optimize-station` | UNLANDED | This lane's branch, issue [#70](https://github.com/Pootytxng/sentinel/issues/70) — closes the last known open instance of the ledger-completeness honesty class (the Lab Optimize station's "every change, undoable" summary), plus the audit-base repair that this very row depends on. **Owner authorized the merge 2026-08-05**; lands as [#71](https://github.com/Pootytxng/sentinel/pull/71), second of three. |
+| `origin/claude/ci-health-reporter` | UNLANDED | This lane's branch, issue [#68](https://github.com/Pootytxng/sentinel/issues/68)'s last success criterion — a daily watchdog that files an issue when `main`'s CI goes red, and stays silent rather than guessing when it cannot read the world. **Owner authorized the merge 2026-08-05**; lands as [#72](https://github.com/Pootytxng/sentinel/pull/72), third of three. |
 | `origin/design/quiet-pit-wall` | UNLANDED | **Partially landed.** 22 files / 5147 insertions vs merge-base `36bdf6b`, issue [#49](https://github.com/Pootytxng/sentinel/issues/49). **Half A landed** — the inert `[data-qpw="on"]` token + component-contract layer, its two guard suites, the four prototypes + inventory docs, the `vitest.config.ts` `NODE_ENV` pin, and the `ExperimentBench.css` motion-gate fix. Applied in this commit by `git checkout <branch> -- <paths>`. Not a merge — the branch is ~100 files behind `main`, and merging would drag stale copies. **Half B held — owner territory:** the branch flips `use-motion.ts`'s default from `"full"` to `"system"`, reversing the owner's explicit 2026-06-19 decision; on his own WebView2 (`prefers-reduced-motion: reduce`) that makes the whole app static. Welfare check filed in `OWNER_ACTION_CHECKLIST.md` §D. Held with it: `use-motion.test.ts`, the two `settings.json` locales, `Settings.test.tsx`, the `Walkthrough.tsx` comment. The branch's own guard asserted the flipped default; that assertion was re-pinned to the owner's decision rather than landed. |
 
 ## Standing rule

@@ -83,18 +83,20 @@
   `scripts/branch-disposition-audit.mjs`.
 - [ ] **P2 product completion:** owner-accepted canonical Lab + reversible generation pruning →
   first-win action/rollback/proof journey → Consumer/Technical/Support evidence exports.
-- [ ] **Ledger-completeness honesty class — last known open instance (found 2026-08-05 during the Home
-  train's completeness-critic sweep).** `src/surfaces/lab/OptimizeStation.tsx:187` renders
-  `lab.optimizeStation.appliedHistorySummary` — "Applied & history — every change, undoable" — as a
-  section label, ungated by ledger health. When `get_applied_changes` degrades an unreadable
-  `history.json` to `[]`, that label vouches for a set Compy could not enumerate: the same defect
-  already fixed on Optimize/Fix (`b60a314`/`a1d5f53`), Blackbook (`61e092c`), Benchmark (`4150eb3`)
-  and Home (this train). Real, but a different surface from the Home scope, so recorded rather than
-  scope-crept. Fix shape is settled: consume the existing ledger-health probe, and under
-  KNOWN-INCOMPLETE (quarantined **or** unreadable) withdraw the "every change" vouch — leaving
-  UNKNOWN (`null`) byte-identical to healthy, since claiming incompleteness off a failed read is the
-  same sin mirrored. Guard it in `src/surfaces/ledger-health-home-guard.test.tsx`'s sibling pattern
-  before the fix counts.
+- [x] **Ledger-completeness honesty class — last known open instance CLOSED (found 2026-08-05 during
+  the Home train's completeness-critic sweep, fixed the same day, issue #70).** The Lab Optimize
+  station's "Applied & history — **every change, undoable**" summary vouched for a set Compy may
+  never have enumerated: `get_applied_changes` degrades an unreadable `history.json` to `[]`.
+  **One correction to how this was first written up:** the disclosure was *not* ungated — `Fix`
+  already mounts `LedgerHealthNotice` for `view="ledger"` and already withholds its `.fix-empty`
+  claim when the ledger is known-incomplete. The residual defect was narrower and worse: the vouch
+  sat on the `<summary>`, *outside* the `<details>` holding its own caveat, and that `<details>` is
+  collapsed unless expert view is on — so the caveat was sealed **behind** the claim it qualifies,
+  one step past the "printed under it" failure `ledger-health-disclosure-guard.test.tsx` pins. Fix:
+  under KNOWN-INCOMPLETE the summary swaps to `appliedHistorySummaryUnvouched` **and** the section
+  opens itself; UNKNOWN (`null`) stays byte-identical to healthy. Guarded by
+  `src/surfaces/lab/ledger-health-optimize-station-guard.test.tsx` (11 pins, falsified by reverting
+  the fix: exactly the 6 defect pins go red, the 5 controls stay green).
 - [ ] **LATER:** Intelligence Phase 4/5, vendor-awareness expansion, Receipts/crowd intelligence,
   remote rules, Pro/affiliate/B2B, and model-assisted explanation remain behind the blueprint's gates.
 
