@@ -118,6 +118,23 @@ export type AppliedChange = {
   on_this_rig?: boolean | null;
 };
 
+/** Whether the AppliedChange[] above is the whole story — `get_ledger_health`.
+ *
+ *  A ledger Compy cannot read degrades to an empty list, and an empty list renders as "nothing is
+ *  active on this PC", which is an affirmative claim about the machine made at the exact moment
+ *  every apply and every rollback is refusing. This is what lets the surface say "Compy can't tell
+ *  you what it did" instead. snake_case: the IPC boundary is not renamed. */
+export type LedgerHealth = {
+  /** False → the list is not evidence of anything, least of all of a quiet machine. */
+  complete: boolean;
+  /** The load failure verbatim, already user-readable. `null` while the loss is purely historical
+   *  — a quarantined ledger loads clean-and-empty forever after, so `complete: false` with no
+   *  error is the durable shape, not a contradiction. */
+  error: string | null;
+  /** `history.json.corrupt` sits beside the ledger: set aside unopened, not deleted. */
+  quarantined: boolean;
+};
+
 export type ReadinessCheck = { id: string; label: string; status: ReadinessStatus; detail: string; value: string | null; action_uri?: string | null; action_label?: string | null };
 export type Drift = { id: string; label: string; detail: string; noticed_at: string };
 export type GameReadiness = { checks: ReadinessCheck[]; ready_count: number; attention_count: number; unknown_count: number; advisory_count: number; advisory: string; dismissed_ids: string[]; drifts: Drift[] };

@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import type { AppliedChange, StartupEntry } from "../types";
+import type { AppliedChange, LedgerHealth, StartupEntry } from "../types";
 import { TrustSwitch, TrustSnapshotLine } from "../design/TrustSwitch";
 import { WhatsThis } from "../design/WhatsThis";
 import { WalkthroughDisclosure } from "../design/WalkthroughDisclosure";
@@ -925,6 +925,33 @@ export default function Fix({
   const showFixes = view === "all" || view === "fixes";
   const showActive = view === "all" || view === "ledger" || view === "applied";
   const showHistory = view === "all" || view === "ledger" || view === "history";
+  // Whether the ledger rendered below is the WHOLE story. `get_applied_changes` degrades a ledger
+  // it cannot read to an empty array, and an empty array renders as a claim about the machine —
+  // "nothing active on this PC" — at the exact moment every apply and every rollback is refusing.
+  // Read on the same tick as the list itself: `changes` is a fresh array identity from IPC on every
+  // refresh, so keying the effect on it ties health to the data the user is actually looking at,
+  // with no prop to drill through the three shells that mount this surface (four <Fix> mounts, no
+  // other consumer — the PreloadApps self-fetch below is the in-file precedent).
+  // A failed read stays `null`. Unknown is NOT `complete: true`: fabricating completeness because
+  // the probe itself failed would be the very defect this exists to fix.
+  const [health, setHealth] = useState<LedgerHealth | null>(null);
+  const [revealError, setRevealError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    invoke<LedgerHealth>("get_ledger_health")
+      .then((h) => {
+        if (live) setHealth(h);
+      })
+      .catch(() => {
+        if (live) setHealth(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [changes]);
+  // Narrowed to the health object itself, so the disclosure reads its fields without re-testing for
+  // null: truthy here means KNOWN incomplete, never merely unknown.
+  const ledgerIncomplete = health && !health.complete ? health : null;
   // Applicability gating (eligibility train): hardware-ineligible recs leave the active lists +
   // the completion denominator entirely — they sit in a quiet "Not for this rig" bucket with the
   // plain-English reason, never silently dropped, never falsely offered.
@@ -1298,6 +1325,48 @@ export default function Fix({
       </>
       )}
 
+      {/* The ledger cannot vouch for itself (the follow-up history.rs recorded against the H1
+          quarantine fix). An unreadable ledger degrades to an empty array, and an empty array reads
+          as a statement ABOUT THE MACHINE. Rendered above the rows so the caveat is read before
+          anything it qualifies, and only when health is KNOWN incomplete — an unknown health leaves
+          this surface exactly as it was. */}
+      {showActive && ledgerIncomplete && (
+        <div className="fix-ledger-health" role="status">
+          <div className="fix-ledger-health-title">
+            {ledgerIncomplete.error
+              ? t("optimize.fix.ledgerHealth.unreadableTitle")
+              : t("optimize.fix.ledgerHealth.quarantinedTitle")}
+          </div>
+          {ledgerIncomplete.error && (
+            <p className="fix-ledger-health-body">{t("optimize.fix.ledgerHealth.unreadableBody")}</p>
+          )}
+          {ledgerIncomplete.quarantined && (
+            <p className="fix-ledger-health-body">
+              {t("optimize.fix.ledgerHealth.quarantinedBody")}
+            </p>
+          )}
+          {ledgerIncomplete.error && (
+            <p className="fix-ledger-health-detail">{ledgerIncomplete.error}</p>
+          )}
+          {/* [[flags-name-it-and-fix-it-inline]]: naming a folder the user then has to hunt for by
+              hand is the dead-end that rule forbids. Read-only — it reveals, it never repairs. */}
+          <button
+            type="button"
+            className="fix-ledger-health-action"
+            onClick={() => {
+              setRevealError(null);
+              invoke("reveal_ledger_folder").catch((e) => setRevealError(String(e)));
+            }}
+          >
+            {ledgerIncomplete.quarantined
+              ? t("optimize.fix.ledgerHealth.revealFile")
+              : t("optimize.fix.ledgerHealth.revealFolder")}
+          </button>
+          {/* A button that appears to do nothing is the same dead-end in miniature. */}
+          {revealError && <p className="fix-ledger-health-detail">{revealError}</p>}
+        </div>
+      )}
+
       {/* Active on this PC (ledger Layer 1) — what Compy is currently doing, deduped, ghost rollback.
           Answers Sarah's only question: "what is Compy doing to my machine right now?" */}
       {showActive && active.length > 0 && (
@@ -1330,8 +1399,10 @@ export default function Fix({
 
       {/* Honest empty state for the ledger room (P5.5) — the Applied segment must never be a bare
           empty room; say plainly that nothing is active and where applies will land. Scoped to the
-          ledger/applied views so standalone Tune (view="all") renders exactly as before. */}
-      {(view === "applied" || view === "ledger") && active.length === 0 && (
+          ledger/applied views so standalone Tune (view="all") renders exactly as before.
+          Withheld when the ledger is known-incomplete: "nothing active" would then be an
+          affirmative claim about the machine sourced from a list Compy could not read. */}
+      {(view === "applied" || view === "ledger") && active.length === 0 && !ledgerIncomplete && (
         <p className="fix-empty">
           {t("optimize.fix.nothingActiveOnThisPc")}
         </p>
