@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { invoke } from "@tauri-apps/api/core";
@@ -214,6 +214,7 @@ export function SessionDebrief({
   onExport,
   changes,
   rollback,
+  activeChangeFor,
   arcV2 = false,
   vendor,
   sessions,
@@ -226,6 +227,9 @@ export function SessionDebrief({
   onExport: () => void;
   changes: AppliedChange[];
   rollback: (c: AppliedChange) => Promise<void>;
+  /** BACKLOG:236 Ledger half (additive — absent = prose only): lets the "What changed?" next-test
+   *  line carry a real rollback button when the engine named a still-active rec id. */
+  activeChangeFor?: (recId: string) => AppliedChange | undefined;
   arcV2?: boolean;
   /** Tuning before/after (spec 2026-06-08) — provided only where the full session list + GPU vendor
    *  are available (Play). Absent → the tuning cluster doesn't render (classic Sessions tab). */
@@ -288,6 +292,23 @@ export function SessionDebrief({
     : undefined;
   const canArm = !!topRec && !topRec.currently_applied;
   const cleanSession = ratio >= 0.75 && !shownInsight && !canArm;
+
+  // BACKLOG:236 Ledger half — the ComparisonCard above already owns the rollback control for ITS
+  // rec ("Revert it"). In the common flow (apply a fix from this debrief → `arm_comparison` for that
+  // rec → the next same-game session resolves it) that rec is exactly the one the What-changed
+  // engine names in `next_action_rec_id`, so an unguarded shortcut would put TWO differently-worded
+  // buttons for ONE action in one card — the duplication [[flags-name-it-and-fix-it-inline]] exists
+  // to prevent. The card stays canonical for its own rec; the shortcut stands down. Nothing is lost:
+  // the engine's prose still names the Trust Ledger, which is why that sentence was left intact.
+  // Suppressed for EVERY verdict, not only the ones showing "Revert it" — a "Roll back X" hanging
+  // under an improved card that just said "Keep it" would contradict it outright.
+  const rollbackShortcutFor = useMemo(
+    () =>
+      activeChangeFor
+        ? (recId: string) => (recId === comparison?.rec_id ? undefined : activeChangeFor(recId))
+        : undefined,
+    [activeChangeFor, comparison?.rec_id],
+  );
 
   const nextSuspect = priorities?.limiters?.[1]?.title ?? null;
   const dismissCmp = async () => {
@@ -362,11 +383,25 @@ export function SessionDebrief({
 
       {/* Intelligence Phase 1 — this session vs the previous session of the same game. Additive:
           ComparisonCard above keeps the rec-scoped A/B story; this answers "vs last time". */}
-      <WhatChangedPanel startedAt={s.started_at} arcV2={arcV2} />
+      <WhatChangedPanel
+        startedAt={s.started_at}
+        arcV2={arcV2}
+        activeChangeFor={rollbackShortcutFor}
+        onRollback={rollback}
+        busy={busyId !== null}
+      />
 
       {/* Intelligence Phase 2 — §4D good-vs-bad investigator (Expert view only). Pick any two
           same-game sessions; the same deterministic engine explains the delta. */}
-      {sessions && <SessionInvestigator sessions={sessions} arcV2={arcV2} />}
+      {sessions && (
+        <SessionInvestigator
+          sessions={sessions}
+          arcV2={arcV2}
+          activeChangeFor={rollbackShortcutFor}
+          onRollback={rollback}
+          rollbackBusy={busyId !== null}
+        />
+      )}
 
       {/* Tuning before/after — temp + stability delta beside the FPS delta (spec §3). Read-only +
           advisory: arming records a vendor-tool undervolt session-side, never a mutating ledger entry. */}

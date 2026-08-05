@@ -12,6 +12,7 @@ import type {
   SessionSummary,
   Comparability,
   SessionComparability,
+  AppliedChange,
 } from "../types";
 import { useIntelligenceFlag } from "../design/use-hud";
 import { useExpertView } from "../design/use-expert-view";
@@ -291,12 +292,21 @@ function WhatChangedReportView({
   expert,
   arcV2,
   headline,
+  activeChangeFor,
+  onRollback,
+  busy = false,
 }: {
   outcome: WhatChangedOutcome;
   expert: boolean;
   arcV2: boolean;
   /** Overrides the "vs your previous X session" head line — the investigator names both picks. */
   headline?: string;
+  /** BACKLOG:236 — resolves `next_action_rec_id` against the LIVE ledger. All three below are
+   *  optional together: absent (or no live row) → the next-test sentence renders alone, exactly as
+   *  before. The engine's own doc comment fixes the destination: the Trust Ledger, never the bench. */
+  activeChangeFor?: (recId: string) => AppliedChange | undefined;
+  onRollback?: (c: AppliedChange) => Promise<void>;
+  busy?: boolean;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -324,6 +334,17 @@ function WhatChangedReportView({
   const showLeader =
     !r.confounded && !notComparable && leader != null && leader.id !== "insufficient-evidence";
 
+  // BACKLOG:236, Ledger half. The engine hands over a rec id only where it READ one still-active
+  // apply row off the Trust Ledger for this window (intelligence.rs); the confounded path never
+  // carries one. Here that id is resolved against the LIVE ledger, so the button reflects the
+  // machine as it is now, not the snapshot the report was built from — and after the rollback lands
+  // it stops resolving and the button disappears on its own. Anything missing (no id, no live row,
+  // no handler) leaves the sentence standing by itself, which is why it names its own destination.
+  const rollbackTarget =
+    r.next_action_rec_id && activeChangeFor && onRollback
+      ? activeChangeFor(r.next_action_rec_id)
+      : undefined;
+
   return (
     <div className={`wcp wcp-${r.verdict}${arcV2 ? " arc-v2" : ""}`}>
       <div className="wcp-head">
@@ -349,10 +370,28 @@ function WhatChangedReportView({
       )}
 
       {r.next_action && (
-        <p className="wcp-next">
-          <SectionLabel>{t("optimize.whatChangedPanel.nextTest")}</SectionLabel>{" "}
-          {r.next_action}
-        </p>
+        <div className="wcp-next-block">
+          <p className="wcp-next">
+            <SectionLabel>{t("optimize.whatChangedPanel.nextTest")}</SectionLabel>{" "}
+            {r.next_action}
+          </p>
+          {rollbackTarget && (
+            <button
+              type="button"
+              className="wcp-next-rollback"
+              disabled={busy}
+              onClick={() => {
+                void onRollback!(rollbackTarget);
+              }}
+            >
+              {busy
+                ? t("optimize.whatChangedPanel.rollingBackEllipsis")
+                : t("optimize.whatChangedPanel.rollBackNamed", {
+                    title: rollbackTarget.rec_title,
+                  })}
+            </button>
+          )}
+        </div>
       )}
 
       <button
@@ -461,7 +500,20 @@ function WhatChangedReportView({
   );
 }
 
-export function WhatChangedPanel({ startedAt, arcV2 = false }: { startedAt: string; arcV2?: boolean }) {
+export function WhatChangedPanel({
+  startedAt,
+  arcV2 = false,
+  activeChangeFor,
+  onRollback,
+  busy = false,
+}: {
+  startedAt: string;
+  arcV2?: boolean;
+  /** BACKLOG:236 — optional together; absent = the next-test sentence renders alone (unchanged). */
+  activeChangeFor?: (recId: string) => AppliedChange | undefined;
+  onRollback?: (c: AppliedChange) => Promise<void>;
+  busy?: boolean;
+}) {
   const on = useIntelligenceFlag();
   const expert = useExpertView();
   const [outcome, setOutcome] = useState<WhatChangedOutcome | null>(null);
@@ -481,7 +533,16 @@ export function WhatChangedPanel({ startedAt, arcV2 = false }: { startedAt: stri
 
   if (!on || !outcome) return null;
 
-  return <WhatChangedReportView outcome={outcome} expert={expert} arcV2={arcV2} />;
+  return (
+    <WhatChangedReportView
+      outcome={outcome}
+      expert={expert}
+      arcV2={arcV2}
+      activeChangeFor={activeChangeFor}
+      onRollback={onRollback}
+      busy={busy}
+    />
+  );
 }
 
 // ─── Intelligence Phase 2 — good-vs-bad session investigator (Monitor) ─────────
@@ -495,9 +556,18 @@ type GameGroup = { game: string; sessions: SessionSummary[] };
 export function SessionInvestigator({
   sessions,
   arcV2 = false,
+  activeChangeFor,
+  onRollback,
+  rollbackBusy = false,
 }: {
   sessions: SessionSummary[];
   arcV2?: boolean;
+  /** BACKLOG:236 — optional together; absent = the next-test sentence renders alone (unchanged).
+   *  Named `rollbackBusy` because this surface already owns a local `busy` for its OWN compare
+   *  fetch; the two are unrelated and must never gate each other. */
+  activeChangeFor?: (recId: string) => AppliedChange | undefined;
+  onRollback?: (c: AppliedChange) => Promise<void>;
+  rollbackBusy?: boolean;
 }) {
   const { t } = useTranslation();
   const on = useIntelligenceFlag();
@@ -633,6 +703,9 @@ export function SessionInvestigator({
             expert={expert}
             arcV2={arcV2}
             headline={t("optimize.whatChangedPanel.headlineBetween")}
+            activeChangeFor={activeChangeFor}
+            onRollback={onRollback}
+            busy={rollbackBusy}
           />
         </div>
       )}

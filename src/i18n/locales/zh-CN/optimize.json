@@ -419,6 +419,8 @@
     "noiseFloor": "噪声下限 ±{{pct}}%",
     "mostLikelyCause": "最可能的原因",
     "nextTest": "下一步验证",
+    "rollBackNamed": "回滚“{{title}}”",
+    "rollingBackEllipsis": "正在回滚…",
     "hideTheWorking": "收起推理过程",
     "showTheWorking": "展开推理过程",
     "tagBaseline": "基线",

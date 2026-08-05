@@ -108,6 +108,7 @@ export default function Play({
   onExport,
   changes,
   rollback,
+  activeChangeFor,
   deepMonitoring,
   vendor = "any",
   view = "all",
@@ -124,6 +125,10 @@ export default function Play({
   onExport: () => void;
   changes: AppliedChange[];
   rollback: (c: AppliedChange) => Promise<void>;
+  // BACKLOG:236 Ledger half (additive — absent = prose only): resolves a rec id to its still-active
+  // ledger row so the session debrief's "next test" can carry a real rollback button. Same pair
+  // (`activeChangeFor` + `rollback`) the Fix/Optimize surfaces already take.
+  activeChangeFor?: (recId: string) => AppliedChange | undefined;
   deepMonitoring?: ReactNode;
   vendor?: GpuVendor;
   // Monitor restructure (spec 2026-06-21): the Monitor shell renders Play twice under a segmented
@@ -489,6 +494,7 @@ export default function Play({
                         onExport={onExport}
                         changes={changes}
                         rollback={rollback}
+                        activeChangeFor={activeChangeFor}
                         vendor={vendor}
                         sessions={sessions}
                       />

@@ -437,6 +437,8 @@
     "noiseFloor": "noise floor ±{{pct}}%",
     "mostLikelyCause": "Most likely cause",
     "nextTest": "Next test",
+    "rollBackNamed": "Roll back \"{{title}}\"",
+    "rollingBackEllipsis": "Rolling back…",
     "hideTheWorking": "Hide the working",
     "showTheWorking": "Show the working",
     "tagBaseline": "baseline",

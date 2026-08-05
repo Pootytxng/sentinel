@@ -248,9 +248,31 @@ never be conflatable in any doc, commit message, or report).
   prescribes a *rollback*, and feeding it a still-active rec hits `already_active` in `simulate`'s precedence
   chain and returns `already-configured` ("nothing left to change or test") — a dead end. Guard:
   `next_test_rec_id_is_read_from_the_ledger_never_matched_from_prose` (6 cases, mutation-verified to fail on a
-  relaxed rule). Backend + TS contract only; **no surface affordance built yet** — that is the remaining half,
-  and it must land in the Ledger surface. Decision doc `docs/decisions/2026-07-18-prove-a-change-overlap.md` §5.
+  relaxed rule). Decision doc `docs/decisions/2026-07-18-prove-a-change-overlap.md` §5.
   No mutation / network / gate change.
+  **Ledger half — ✅ LANDED, both halves now closed.** The "Next test" line in the What-changed report carries
+  an inline `Roll back "<change>"` button whenever the engine's rec id still resolves to a live applied row.
+  **Routing refinement of the line above** (the destination was right, the *location* wasn't): the affordance
+  brings the Ledger action TO the report rather than sending the user to the Ledger surface —
+  [[flags-name-it-and-fix-it-inline]] forbids a "go to another tab" dead-end and requires the flag to name the
+  specific thing it found (hence the change's title in the label, never a bare "Roll back"). Resolution is
+  against the **live** `changes` array (`App.tsx` `findActiveChangeForRec`), so the button self-hides the
+  instant the rollback lands — which is exactly why the engine's prose still names the Trust Ledger itself and
+  was left untouched: the sentence is the route, the button is only the shortcut. Props
+  (`activeChangeFor`/`onRollback`/`busy`) are optional together, so every pre-existing mount renders unchanged.
+  **Duplication caught by self-review and fixed in the same train:** in the primary flow (apply a fix from the
+  debrief → `arm_comparison` for that rec → the next same-game session resolves it) the `ComparisonCard`'s rec
+  and the engine's `next_action_rec_id` are the SAME still-active row, so an unguarded shortcut stacked TWO
+  differently-worded buttons for ONE action in one card. `SessionDebrief` now wraps the host resolver
+  (`rollbackShortcutFor`) and returns `undefined` for the card's own rec — for **every** verdict, not only the
+  ones showing "Revert it", because a `Roll back "X"` hanging under an *improved* card that just said "Keep it"
+  would contradict it outright. Wrapping the resolver rather than adding a prop leaves `WhatChangedPanel`'s
+  contract untouched and gives `SessionInvestigator` the same protection for free.
+  Guard: `src/surfaces/what-changed-rollback-guard.test.tsx` — 13 cases: 9 pinning the render condition, the
+  handed-over row, the busy face and all six stand-down paths, plus 4 that mount the *composition*
+  (`SessionDebrief`, not the isolated panel — which is exactly why the first 9 stayed green while the defect was
+  live) covering both suppression paths and both must-still-render paths. Mutation-verified: reverting the memo
+  to a bare `activeChangeFor(recId)` fails exactly the 2 suppression cases.
 - [x] **Measurement Platform 2.0 follow-up — comparability vocabulary chrome convergence (cosmetic).** ✅ LANDED
   `921f49e`. `src/surfaces/measurement-chrome.tsx` + `.css` are now the ONE vocabulary both rooms wear —
   `<VerdictBand>` / `<SectionLabel>` / `<ComparabilityNote>`, fed per-room by a `--mc-*` palette block declared

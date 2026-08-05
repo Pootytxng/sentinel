@@ -98,8 +98,13 @@ welfare check. They are logged in `docs/BACKLOG.md` as additive follow-ups:
    destination is the **Trust Ledger / Applied Changes** surface focused on that change, where the rollback
    affordance already exists. The backend contract says so in its own doc comment; a surface that routes
    this id anywhere it cannot be rolled back is wrong. Guard:
-   `next_test_rec_id_is_read_from_the_ledger_never_matched_from_prose`. The Ledger-side affordance is the
-   remaining half and is still unbuilt.
+   `next_test_rec_id_is_read_from_the_ledger_never_matched_from_prose`. **✅ The affordance half has since
+   landed, with one refinement:** the Ledger *action* comes to the report instead of the report sending the
+   user to the Ledger *surface* — [[flags-name-it-and-fix-it-inline]] forbids a "go to another tab" dead-end.
+   The "Next test" line grows an inline `Roll back "<change>"` button whenever the id still resolves to a live
+   applied row (resolved against the live ledger, so it self-hides once the rollback lands). The destination
+   ruling above is unchanged and is what the button obeys — it rolls back, it never routes to the bench.
+   Guard: `src/surfaces/what-changed-rollback-guard.test.tsx`.
 2. **Vocabulary *display* convergence.** The two surfaces now share the comparability words at the domain
    level; a later pass could unify their visual chrome (badges, section labels) into one shared component
    vocabulary. Cosmetic, deferred.

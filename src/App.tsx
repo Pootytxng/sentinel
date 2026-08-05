@@ -1326,6 +1326,7 @@ function App() {
             onExport,
             changes,
             rollback,
+            activeChangeFor: findActiveChangeForRec,
             deepMonitoring: <MonitoringTab active={activeTab === "Play"} embedded />,
             vendor: detectedVendor,
           };
