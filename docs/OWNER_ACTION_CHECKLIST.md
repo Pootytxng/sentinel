@@ -50,9 +50,29 @@
   Authenticode enrollment, publication, distribution, and external timing are owner territory;
   protected use of the existing updater key inside an authorized local release train is engineering.
 
+### A_ci. Branch protection on `main` — two checkboxes only you can tick  ·  ⏳ NEW 2026-08-05
+`main`'s CI sat **red for two days** and nobody noticed ([#68](https://github.com/Pootytxng/sentinel/issues/68)).
+The detection half is built and green — a daily watchdog that files an issue when the trunk goes red
+([#72](https://github.com/Pootytxng/sentinel/pull/72)). **The prevention half is a repository
+setting, which is yours, not mine.** Detection cannot substitute for it: the watchdog notices a red
+`main`, it cannot stop one being merged into.
+
+On `main`'s protection rule: **(1) Require status checks to pass** — naming *Frontend (test +
+build)* and *Rust (test + clippy)* — and **(2) Require branches to be up to date before merging.**
+
+The second is the one with a concrete hole behind it, found 2026-08-05. `ci.yml` triggers on
+`pull_request: branches: [main]`, and that filter matches the **base**, so a stacked PR runs no CI
+at all. When its parent merges, GitHub auto-retargets it — and a base change fires `edited`, which
+is **not** one of the default trigger events. **So a stacked PR can land on `main` having never run
+CI once.** That is the default path for the current stack; I forced a run by hand
+([31018664664](https://github.com/Pootytxng/sentinel/actions/runs/31018664664), green, covers
+#69+#72) rather than merge unproven. Checkbox 2 makes that automatic instead of dependent on me
+remembering. Widening the trigger to all branches would also fix it and was rejected — that is the
+unbounded spend that exhausted July's allowance and killed CI for 22 days in the first place.
+
 ### A-closed. Nine §A items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
-None of them is waiting on you — A0 above is the only §A item still open. Archived
+None of them is waiting on you — A0 and A_ci above are the only §A items still open. Archived
 2026-08-04 (TOKEN LAW §1 — history leaves the live doc, never gets deleted): **A0b** zh-CN merged +
 published in v0.9.11 · **A1** Gaming Mode QA signed off · **A2** beta smoke (sitting waived; the live
 beta thread is **§B2** below) · **A3** Lab Ops Console · **A4** Home console · **A5** Monitor v5
