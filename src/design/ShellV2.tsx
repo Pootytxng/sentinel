@@ -33,6 +33,7 @@ import { LenisSpine } from "./jarvis/LenisSpine";
 import { MagneticLayer } from "./jarvis/MagneticLayer";
 import { HudFrame } from "./console/HudFrame";
 import { ReticleCursor } from "./console/ReticleCursor";
+import { useLedgerHealth, knownIncomplete } from "./LedgerHealthNotice";
 import "./shell-v2.css";
 import "./jarvis/jarvis.css";
 
@@ -118,6 +119,14 @@ export function ShellV2({
       });
   }, []);
 
+  // Ledger health, for the footer count below. The rail is app-level chrome, so this one probe is
+  // what stops EVERY room — including the ones that never mounted a health check of their own —
+  // from printing a ledger total the record can't vouch for. Probed HERE rather than lifted into
+  // App.tsx on purpose: a prop can be forgotten at a call site, and this gate must not be
+  // forgettable. Cost is one cheap file-existence read per shell mount. Fails → UNKNOWN → the
+  // footer reads exactly as it does today.
+  const ledgerUnvouched = knownIncomplete(useLedgerHealth(ledgerCount));
+
   // Digit shortcuts 1..N (the rail's kbd hints must WORK — a hint that does nothing is a fake
   // affordance). Never while typing, never with a modifier held.
   useEffect(() => {
@@ -186,10 +195,28 @@ export function ShellV2({
               <span className="v2-zero-led" aria-hidden="true" />
               Outbound: signed update check only
             </div>
-            <div>
-              {t("common.shellV2.footerPre")}{" "}
-              <span className="v2-mono">{t("common.shellV2.footerEmph", { n: ledgerCount })}</span>
-            </div>
+            {/* The reversible/ledger line, gated on the same health check HomeHud and HomeV2 use.
+                BOTH halves are false under an incomplete record, not just the count: changes made
+                before a quarantine genuinely cannot be undone, so "Every change reversible" is the
+                bigger lie of the two. The incomplete branch therefore replaces the WHOLE line
+                rather than swapping the number out from under a prefix that stopped being true.
+                Known-incomplete ONLY — UNKNOWN health leaves this byte-identical to today. */}
+            {ledgerUnvouched ? (
+              <div className="v2-ledger-state">
+                <span className="v2-ledger-led" aria-hidden="true" />
+                {t("common.shellV2.footerIncompletePre")}{" "}
+                <span className="v2-mono">
+                  {ledgerCount > 0
+                    ? t("common.shellV2.footerEmphFloor", { n: ledgerCount })
+                    : t("common.shellV2.footerEmphUnknown")}
+                </span>
+              </div>
+            ) : (
+              <div>
+                {t("common.shellV2.footerPre")}{" "}
+                <span className="v2-mono">{t("common.shellV2.footerEmph", { n: ledgerCount })}</span>
+              </div>
+            )}
           </div>
         </nav>
 

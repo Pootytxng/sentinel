@@ -9,12 +9,24 @@ import { railFor, HOME_RAIL } from "./homeRail";
 // reversibility promises with the MEASURED ledger count. (Updater ARMED 2026-07-22: the footer
 // names the signed update check as the one outbound call — "zero outbound" would now be a lie.)
 
+// `null` health = UNKNOWN, so every pre-existing test below reads the footer exactly as it did
+// before the ledger-health gate existed. The block at the bottom of this file is the one that
+// moves it.
+const health: { value: unknown } = { value: null };
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string) =>
-    cmd === "get_build_stamp" ? Promise.resolve("ab12cd3 · dev") : Promise.resolve(null),
+    cmd === "get_build_stamp"
+      ? Promise.resolve("ab12cd3 · dev")
+      : cmd === "get_ledger_health"
+        ? Promise.resolve(health.value)
+        : Promise.resolve(null),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  health.value = null;
+});
 
 const ITEMS = railFor(true); // merged (the shipped default): Home · Optimize · Monitor · Blackbook · Lab
 
@@ -56,6 +68,70 @@ describe("ShellV2 rail", () => {
     render(shell());
     expect(screen.getByText("Outbound: signed update check only")).toBeTruthy();
     expect(screen.getByText("ledger 41")).toBeTruthy();
+  });
+});
+
+// bug → guard, the app-level half of the ledger-completeness class (rooms: `b60a314`/`a1d5f53`
+// Optimize, `61e092c` Blackbook, `4150eb3` Benchmark, ledger-health-home-guard.test.tsx Home).
+//
+// This footer is the widest instance of the class by far: it is rail chrome, so it prints on EVERY
+// room — including the ones that never mounted a health check of their own. And both halves of it
+// are false under an incomplete record, not just the count. "Every change reversible" is the bigger
+// lie of the two: changes applied before a quarantine genuinely cannot be undone, so the incomplete
+// branch has to replace the WHOLE line, not swap the number out from under a prefix that stopped
+// being true. Guarded here because a later refactor that "simplifies" this back to one line would
+// restore the fabrication silently, in every room at once.
+describe("ShellV2 footer may not promise reversibility off a ledger it can't read", () => {
+  const UNREADABLE = { complete: false, error: "failed to read history.json", quarantined: false };
+  const QUARANTINED = { complete: false, error: null, quarantined: true };
+  const HEALTHY = { complete: true, error: null, quarantined: false };
+
+  const foot = (c: HTMLElement) => c.querySelector(".v2-foot")!.textContent ?? "";
+
+  it.each([
+    ["quarantined — the durable shape, clean-and-empty forever after", QUARANTINED],
+    ["unreadable — the transient shape, apply and rollback both refusing", UNREADABLE],
+  ])("%s: the promise is withdrawn and the count degrades to a floor", async (_n, value) => {
+    health.value = value;
+    const { container } = render(shell());
+
+    await waitFor(() => expect(container.querySelector(".v2-ledger-state")).toBeTruthy());
+    // The count survives as a FLOOR — 41 changes really are on record; what is unknown is whether
+    // there are more. Withdrawing a real measurement would be its own dishonesty.
+    expect(foot(container)).toContain("at least 41");
+    expect(foot(container)).not.toContain("Every change reversible");
+    expect(foot(container)).not.toContain("ledger 41");
+    // The outbound-honesty line is a separate promise and stays put.
+    expect(screen.getByText("Outbound: signed update check only")).toBeTruthy();
+  });
+
+  it("at zero there is no floor to name, so the count goes too", async () => {
+    // Zero is where the record is indistinguishable from a genuine first run — the shape that
+    // lands this defect. "ledger 0" would read as a measurement; it is an absence.
+    health.value = QUARANTINED;
+    const { container } = render(shell({ ledgerCount: 0 }));
+
+    await waitFor(() => expect(container.querySelector(".v2-ledger-state")).toBeTruthy());
+    expect(foot(container)).toContain("count unknown");
+    expect(foot(container)).not.toContain("ledger 0");
+    expect(foot(container)).not.toContain("Every change reversible");
+  });
+
+  it.each([
+    ["UNKNOWN (probe returned nothing)", null],
+    ["COMPLETE (the backend vouching for the record)", HEALTHY],
+  ])("%s leaves the footer BYTE-IDENTICAL to today", async (_n, value) => {
+    health.value = null;
+    const before = render(shell()).container.querySelector(".v2-foot")!.outerHTML;
+    cleanup();
+
+    health.value = value;
+    const { container } = render(shell());
+    // Settle the probe before asserting nothing moved — asserting on an unsettled render would
+    // pass for the wrong reason.
+    await waitFor(() => expect(screen.getByText("ledger 41")).toBeTruthy());
+    expect(container.querySelector(".v2-foot")!.outerHTML).toBe(before);
+    expect(container.querySelector(".v2-ledger-state")).toBeNull();
   });
 });
 

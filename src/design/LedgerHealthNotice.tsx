@@ -37,13 +37,23 @@ export function useLedgerHealth(refreshKey?: unknown, enabled = true): LedgerHea
       return;
     }
     let live = true;
-    invoke<LedgerHealth>("get_ledger_health")
-      .then((h) => {
-        if (live) setHealth(h);
-      })
-      .catch(() => {
-        if (live) setHealth(null);
-      });
+    // This hook now runs in app-level chrome (the ShellV2 rail footer), so it mounts under every
+    // test that renders the shell — including ones whose IPC double returns a non-promise. A bare
+    // `.then()` on `undefined` throws SYNCHRONOUSLY, which would take the whole shell down rather
+    // than degrade one line. Promise.resolve + try/catch funnel BOTH failure shapes into UNKNOWN,
+    // the state this hook already documents for a failed probe and the one that leaves every
+    // caller's copy exactly as it was.
+    try {
+      Promise.resolve(invoke<LedgerHealth>("get_ledger_health"))
+        .then((h) => {
+          if (live) setHealth(h);
+        })
+        .catch(() => {
+          if (live) setHealth(null);
+        });
+    } catch {
+      setHealth(null);
+    }
     return () => {
       live = false;
     };

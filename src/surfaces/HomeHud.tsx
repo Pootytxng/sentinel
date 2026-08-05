@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
 import { RoomShell } from "../design/room-shell";
+import { LedgerHealthNotice, knownIncomplete, useLedgerHealth } from "../design/LedgerHealthNotice";
 import { Sparkline } from "../design/Sparkline";
 import { useReducedMotion } from "../design/use-motion";
 import { readHologramV2 } from "../design/theme";
@@ -289,6 +290,17 @@ export function HomeHud({
     : null;
   const activeCount = activeChangeCount(changes);
 
+  // An unreadable ledger loads as an EMPTY one, and this column paints an empty one as "0" +
+  // "nothing applied yet — your PC is untouched": a claim ABOUT THE MACHINE, read off a record
+  // Compy cannot read. At zero the two are indistinguishable, so here zero is an ABSENCE, not a
+  // measurement — and this file's honesty contract says every number is measured or honestly
+  // absent. The honest render is the one the last-session module already uses: drop the reading,
+  // keep the note. Only the EMPTY branch narrows; a PARTIAL list still names its real (floor)
+  // count, with the notice above disclosing that it is a floor. UNKNOWN health (probe failed or
+  // disabled) leaves everything byte-identical to healthy — see design/LedgerHealthNotice.tsx.
+  const health = useLedgerHealth(changes);
+  const ledgerBlank = changes.length === 0 && !!knownIncomplete(health);
+
   const drifts = readiness?.drifts ?? [];
   const driftNames =
     drifts
@@ -561,27 +573,43 @@ export function HomeHud({
             )}
           </Module>
 
+          {/* Above the two readings it qualifies — a caveat printed under its subject has
+              already failed at its job. Self-nulling when health is complete or UNKNOWN. */}
+          <LedgerHealthNotice health={health} />
+
           <Module label={t("home.homeHud.ledger.activeChangesLabel")}>
-            <span className="hud-reading hud-mono">
-              {reduced ? activeCount : <CountUp to={activeCount} duration={0.9} />}
-            </span>
-            <span className="hud-note">{t("home.homeHud.ledger.activeChangesNote")}</span>
+            {ledgerBlank ? (
+              <span className="hud-note">{t("common.ledgerHealth.activeUnknown")}</span>
+            ) : (
+              <>
+                <span className="hud-reading hud-mono">
+                  {reduced ? activeCount : <CountUp to={activeCount} duration={0.9} />}
+                </span>
+                <span className="hud-note">{t("home.homeHud.ledger.activeChangesNote")}</span>
+              </>
+            )}
           </Module>
 
           <Module label={t("home.homeHud.ledger.trustLedgerLabel")}>
-            <span className="hud-reading hud-mono">
-              {reduced ? changes.length : <CountUp to={changes.length} duration={0.9} />}
-              <span className="hud-unit">
-                {t("home.homeHud.ledger.changesTracked", { count: changes.length })}
-              </span>
-            </span>
-            {latest ? (
-              <span className="hud-note hud-note-clip" title={latest.rec_title}>
-                {t("home.homeHud.ledger.latest", { title: latest.rec_title })}{" "}
-                <span className="hud-mono">· {latestTime}</span>
-              </span>
+            {ledgerBlank ? (
+              <span className="hud-note">{t("common.ledgerHealth.trackedUnknown")}</span>
             ) : (
-              <span className="hud-note">{t("home.homeHud.ledger.nothingApplied")}</span>
+              <>
+                <span className="hud-reading hud-mono">
+                  {reduced ? changes.length : <CountUp to={changes.length} duration={0.9} />}
+                  <span className="hud-unit">
+                    {t("home.homeHud.ledger.changesTracked", { count: changes.length })}
+                  </span>
+                </span>
+                {latest ? (
+                  <span className="hud-note hud-note-clip" title={latest.rec_title}>
+                    {t("home.homeHud.ledger.latest", { title: latest.rec_title })}{" "}
+                    <span className="hud-mono">· {latestTime}</span>
+                  </span>
+                ) : (
+                  <span className="hud-note">{t("home.homeHud.ledger.nothingApplied")}</span>
+                )}
+              </>
             )}
           </Module>
 
