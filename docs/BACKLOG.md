@@ -445,8 +445,11 @@ Changes** surface in four places (Rust doc comment, TS mirror, this file, decisi
 `next_test_rec_id_is_read_from_the_ledger_never_matched_from_prose`, 6 cases, mutation-verified.
 917 pass (+1) · clippy clean · npm 3239 · module-map OK · doc-budget PASS.
 
-Remaining half, recorded not built: the Ledger-side affordance consuming `next_action_rec_id` — surface
-work, so it needs a `self-reviewer` PASS before any done-claim.
+**Remaining half — closed the next commit, `2d5d955`** (this line said "recorded not built" for a day
+after it was built; corrected in `343df36`). The affordance is an inline `Roll back "<change>"` button in
+the What-changed report itself, not a trip to the Ledger surface — plus the duplication self-review caught
+between it and the `ComparisonCard`'s own control, and a 13-case guard. Full record at the `[x]` item
+above; not restated here.
 
 ### Cycle 2026-08-04d — ✅ AN UNREADABLE LEDGER NO LONGER EXONERATES COMPY (CC): `8798616` on `claude/harness-context-cleanup-700535` — **unpushed, unmerged** (owner decides the merge)
 
