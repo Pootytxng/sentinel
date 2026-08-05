@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { audit, isNoop, listRemoteRefs, parseDispositions, resolveBase } from "./branch-disposition-audit.mjs";
+import { audit, isNoop, listRemoteRefs, parseDispositions, refSetCoverage, resolveBase } from "./branch-disposition-audit.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -49,6 +49,8 @@ const doc = (rows) =>
 
 let root;
 let fixture;
+/** A clone configured the way `actions/checkout@v4` leaves one: origin, but only one branch of it. */
+let narrow;
 
 beforeAll(() => {
   root = mkdtempSync(join(tmpdir(), "compy-branch-disposition-"));
@@ -58,6 +60,11 @@ beforeAll(() => {
   git(fixture, ["init", "-b", "main"]);
   git(fixture, ["config", "user.email", "t@t"]);
   git(fixture, ["config", "user.name", "t"]);
+  // An origin that tracks every branch — the wildcard refspec is what `refSetCoverage` reads, and
+  // without it this fixture would look like CI's single-branch clone and every assertion below
+  // about ref existence would pass VACUOUSLY. Nothing ever fetches from this path; only the
+  // refspec `git remote add` writes matters.
+  git(fixture, ["remote", "add", "origin", join(root, "origin.git")]);
   writeFileSync(join(fixture, "a.txt"), "a\n");
   git(fixture, ["add", "-A"]);
   git(fixture, ["commit", "-m", "seed"]);
@@ -73,6 +80,14 @@ beforeAll(() => {
   git(fixture, ["commit", "-m", "side work"]);
   git(fixture, ["update-ref", "refs/remotes/origin/ahead", git(fixture, ["rev-parse", "HEAD"])]);
   git(fixture, ["checkout", "-q", "main"]);
+
+  // The CI shape, built exactly as `actions/checkout@v4` builds it: an origin whose refspec names
+  // ONE branch. Its remote-tracking cache can never be a picture of the remote.
+  narrow = join(root, "narrow");
+  mkdirSync(narrow, { recursive: true });
+  git(narrow, ["init", "-b", "main"]);
+  git(narrow, ["remote", "add", "origin", join(root, "origin.git")]);
+  git(narrow, ["config", "--replace-all", "remote.origin.fetch", "+refs/heads/main:refs/remotes/origin/main"]);
 });
 
 afterAll(() => {
@@ -83,10 +98,10 @@ afterAll(() => {
   }
 });
 
-const run = (rows) => {
+const run = (rows, extra = {}) => {
   const docPath = join(root, `record-${Math.abs(rows.length * 7 + rows.join("").length)}.md`);
   writeFileSync(docPath, doc(rows));
-  return audit({ repoRoot: fixture, docPath });
+  return audit({ repoRoot: fixture, docPath, ...extra });
 };
 
 describe("parsing", () => {
@@ -187,8 +202,80 @@ describe("what the audit refuses to pass", () => {
   });
 });
 
+// The CI failure this block exists for: `actions/checkout@v4` clones single-branch, so
+// refs/remotes/origin/* held one ref, and the audit read that near-empty cache as a fact about the
+// remote. It printed 21 instructions to delete 21 true rows — one of them beta/private-beta-001,
+// the frozen ref that is LOCKED against movement. The audit was wrong in the direction of
+// destroying the record it exists to protect, which is the worst direction available to it.
+//
+// The rule it now follows: a degraded read produces SILENCE, never a claim. Same shape as the
+// Trust Ledger fix one layer up, where an unreadable ledger used to say "your PC is untouched."
+describe("what a checkout is entitled to say about origin", () => {
+  const blind = { tracksEveryBranch: false, shallow: false, reason: "test" };
+  const noHistory = { tracksEveryBranch: true, shallow: true, reason: "test" };
+
+  it("knows a clone that tracks every branch from one that tracks a single branch", () => {
+    expect(refSetCoverage(fixture)).toMatchObject({ tracksEveryBranch: true, shallow: false });
+    expect(refSetCoverage(fixture).reason).toBe(null);
+
+    const narrowCover = refSetCoverage(narrow);
+    expect(narrowCover.tracksEveryBranch).toBe(false);
+    expect(narrowCover.reason).toMatch(/does not track every origin branch/);
+    // The reason quotes the actual refspec, so a red CI log says WHICH clone shape silenced it.
+    expect(narrowCover.reason).toContain("refs/heads/main:refs/remotes/origin/main");
+  });
+
+  it("makes no absence claim in EITHER direction when the ref set is not authoritative", () => {
+    // Rows naming refs this clone never fetched, and live refs with no row: on a full checkout
+    // this is four failures. On a blind one it must be none — the 21-delete-instruction regression.
+    const problems = run(
+      [
+        ["origin/beta/private-beta-001", "PRESERVE"],
+        ["origin/some-lane-from-last-month", "MERGED"],
+      ],
+      { coverage: blind },
+    );
+    expect(problems).toEqual([]);
+  });
+
+  it("still reports what it can see without origin — the silence is scoped to origin claims", () => {
+    const problems = run(
+      [
+        ["origin/landed", "MERGED"],
+        ["origin/landed", "UNLANDED"],
+        ["origin/ahead", "PROBABLY FINE"],
+      ],
+      { coverage: blind },
+    );
+    expect(problems.some((p) => /appears twice/.test(p))).toBe(true);
+    expect(problems.some((p) => /PROBABLY FINE/.test(p))).toBe(true);
+  });
+
+  it("still fails an empty table without origin — a record with no rows is broken on any clone", () => {
+    expect(run([], { coverage: blind })[0]).toMatch(/no disposition rows/);
+  });
+
+  // The two axes are independent, so they silence different halves.
+  it("checks existence but not merge-tree when the refs are there and the history is not", () => {
+    const problems = run([["origin/ahead", "MERGED"]], { coverage: noHistory });
+    // origin/landed has no row: that is a ref-set fact, and the ref set is good here.
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("origin/landed");
+    // origin/ahead is NOT merged, but re-proving that needs ancestry a depth-1 clone lacks.
+    expect(problems.some((p) => /still changes the tree/.test(p))).toBe(false);
+  });
+});
+
 describe("this repository", () => {
   it("has a true branch-disposition record right now", () => {
     expect(audit({ repoRoot })).toEqual([]);
+  });
+
+  // The live shape of the CI failure. Whatever the record says today, a checkout that cannot see
+  // origin must not tell anyone to delete a row of it.
+  it("is never told to delete a row by a checkout that cannot see origin", () => {
+    const problems = audit({ repoRoot, coverage: { tracksEveryBranch: false, shallow: false, reason: "test" } });
+    expect(problems.filter((p) => /no longer exists/.test(p))).toEqual([]);
+    expect(problems).toEqual([]);
   });
 });

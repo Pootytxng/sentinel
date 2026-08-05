@@ -83,6 +83,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # `actions/checkout@v4` clones SINGLE-BRANCH by default, so refs/remotes/origin/* holds one
+      # ref. scripts/branch-disposition-audit.mjs reads that cache; on 2026-08-05 it read the near-
+      # empty cache as the truth about the remote and emitted 21 instructions to delete 21 correct
+      # rows, one of them the LOCKED frozen beta ref. The script now refuses to speak about origin
+      # from a clone that cannot see it — this step is what lets it speak.
+      #
+      # Refs only, no history: `--depth=1` keeps this at a couple of seconds and a few hundred KB
+      # (ZERO-BUDGET LAW), which is all the existence half of the audit needs. Ancestry stays absent,
+      # so merge-tree re-proof is honestly SKIPPED rather than faked — the audit prints PARTIAL and
+      # says which half it checked. `fetch-depth: 0` would buy the other half for a full clone of
+      # every branch on every run, which is not a trade this budget can make.
+      - name: fetch the branch NAMES the disposition audit checks against
+        run: |
+          git config --replace-all remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+          git fetch --no-tags --prune --depth=1 origin
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20

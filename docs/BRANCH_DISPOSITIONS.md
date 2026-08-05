@@ -3,6 +3,10 @@
 > **Current state only.** One row per live ref on `origin`. `scripts/branch-disposition-audit.mjs`
 > fails the build when a ref has no row, when a row names a ref that is gone, or when a `MERGED`
 > row is not actually a no-op against `main`. Run `node scripts/branch-disposition-audit.mjs`.
+>
+> It reports **PARTIAL**, not OK, on a checkout that cannot see all of `origin` — a shallow or
+> single-branch clone (which is what `actions/checkout@v4` makes by default) may not say a ref is
+> gone, because it never looked. See `refSetCoverage` in that script.
 
 This file exists because `docs/BACKLOG.md` claimed *"every branch has a verified disposition"* while
 nothing had ever checked one. Q6 retired that claim as false (issue
@@ -41,6 +45,8 @@ Swept 2026-08-04 against `main` @ `1a513cb`.
 | `origin/recovery/failed-v0.9.9-prepare-1fa06a8` | PRESERVE | A preserved failed release candidate. `docs/RELEASE_AUTONOMY.md`: "Preserve every failed candidate before reset, replacement, or abandonment." Never a merge target. |
 | `origin/recovery/failed-v0.9.9-runtime-proof-2bd649d` | PRESERVE | Same rule — the runtime-proof half of the same failed v0.9.9 attempt. |
 | `origin/feat/console-project-doctor` | CLAIMED | Codex lane, worktree `C:\Users\Kuya\code\sentinel-project-doctor`, issue [#55](https://github.com/Pootytxng/sentinel/issues/55). The claim carries a 12-hour alarm with **no automatic takeover**, so an expired clock is not a licence to touch it. `tools/console/doctor.html` is absent from `main`. |
+| `origin/claude/ci-entry-mainmodule-posix` | CLAIMED | This lane, worktree `C:\Users\Kuya\code\sentinel-worktrees\harness-context-cleanup-700535`, issue [#68](https://github.com/Pootytxng/sentinel/issues/68) — the red-`main` CI repair. Not yet a merge target. |
+| `origin/claude/harness-context-cleanup-700535` | MERGED | Landed as [#66](https://github.com/Pootytxng/sentinel/pull/66) (squash `6712c14`), so `origin` still carries the pre-squash tip `3808b00`; merge-tree against `main` is a no-op. |
 | `origin/fix/fps-pid-identity` | MERGED | Zero commits ahead of `main`; merge-tree no-op. |
 | `origin/recovery/codex-019fb092` | MERGED | Zero commits ahead of `main`; merge-tree no-op. |
 | `origin/integration/v0.9.8-hardened` | MERGED | Merge-tree no-op. Same commit `d000295` as the v0.9.9 candidate below. |

@@ -18,6 +18,7 @@
 
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync, closeSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 export const LOCK_DIR = join(process.env.LOCALAPPDATA ?? ".", "CompyEntry");
 export const LOCK_NAME = "launcher.lock";
@@ -124,7 +125,7 @@ export function release({ dir = LOCK_DIR, pid = process.pid } = {}) {
   return true;
 }
 
-if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, "/")}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = process.argv.slice(2);
   const argOf = (n) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : null);
   const pid = argOf("--pid") ? Number(argOf("--pid")) : process.pid;

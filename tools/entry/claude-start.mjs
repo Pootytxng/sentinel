@@ -35,6 +35,7 @@
 // instead of leaking a process nobody can see.
 
 import { existsSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 // win32 semantics EXPLICITLY. This resolves a WINDOWS executable out of a WINDOWS PATH on behalf of
 // a Windows .lnk — there is no other machine it runs on.
 //
@@ -152,7 +153,7 @@ export function planFromMachine({
   });
 }
 
-if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, "/")}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = process.argv.slice(2);
   const argOf = (n) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : null);
   let plan;

@@ -13,7 +13,7 @@
 // shortcut permanently dead is worse than the race it was preventing — so staleness is proven from
 // the pid and the clock, not hoped for.
 
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -133,11 +133,24 @@ describe("taking it for real", () => {
 // The shell reads an EXIT CODE, so the code is the contract — not the JSON beside it.
 describe("the exit code compy-entry.ps1 acts on", () => {
   const CLI = join(process.cwd(), "tools", "entry", "single-flight.mjs");
+  // Parse OUTSIDE the catch. The old shape swallowed a JSON.parse SyntaxError thrown on the success
+  // path into the child-failure branch, where `e.status` is undefined -- so a CLI that printed
+  // nothing reported "expected undefined to be 2" instead of "it printed nothing". See the same
+  // repair, and the Linux main-module bug that motivated it, in control-exit.test.mjs.
   const run = (args, env) => {
+    const r = spawnSync(process.execPath, [CLI, ...args], { encoding: "utf8", env: { ...process.env, ...env } });
+    if (r.error) throw r.error;
     try {
-      return { code: 0, json: JSON.parse(execFileSync(process.execPath, [CLI, ...args], { encoding: "utf8", env: { ...process.env, ...env } })) };
+      return { code: r.status, json: JSON.parse(r.stdout) };
     } catch (e) {
-      return { code: e.status, json: JSON.parse(String(e.stdout || "{}")) };
+      throw new Error(
+        `${CLI} printed no JSON verdict.\n` +
+          `  argv   : ${args.join(" ")}\n` +
+          `  exit   : ${r.status}${r.signal ? ` (signal ${r.signal})` : ""}\n` +
+          `  stdout : ${r.stdout === "" ? "(empty)" : r.stdout}\n` +
+          `  stderr : ${r.stderr === "" ? "(empty)" : r.stderr}\n` +
+          `  parse  : ${e.message}`,
+      );
     }
   };
 
