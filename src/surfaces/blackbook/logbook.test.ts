@@ -58,6 +58,8 @@ const intel = (over: Partial<IntelEvent> = {}): IntelEvent => ({
   detail: "Noticed between two Compy readings — the exact time isn't recorded, only the window.",
   observed_between: ["2026-07-06T09:00:00Z", "2026-07-07T10:00:00Z"],
   since_rolled_back: false,
+  // Observed source — no Compy rec behind it, so no id to carry.
+  rec_id: null,
   ...over,
 });
 

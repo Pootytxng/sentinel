@@ -523,6 +523,9 @@ export type IntelEvent = {
   observed_between: [string, string] | null;
   /** Apply events only: the ledger says this change was later rolled back. */
   since_rolled_back: boolean;
+  /** Trust-Ledger events only: the catalog rec id, copied verbatim off the ledger row.
+   *  `null` for every other source, which has no rec behind it. */
+  rec_id: string | null;
 };
 
 export type IntelligenceTimeline = {
@@ -565,6 +568,11 @@ export type IntelHypothesis = {
   contradicting_evidence: string[];
   missing_evidence: string[];
   next_test: string | null;
+  /** The catalog rec `next_test` refers to — present ONLY where the engine could point at a
+   *  real id it READ off the Trust Ledger. `null` everywhere else, permanently: matching the
+   *  prose against the catalog would be fabrication. A surface that gets `null` renders the
+   *  sentence and nothing more. */
+  next_test_rec_id: string | null;
 };
 
 // ─── Measurement Platform 2.0 (Task F): session comparability ────────────────
@@ -619,6 +627,14 @@ export type WhatChangedReport = {
   /** What Compy genuinely cannot know here — stated, never papered over. */
   unknowns: string[];
   next_action: string | null;
+  /** The leading hypothesis's `next_test_rec_id`, mirrored so a surface can offer a real
+   *  affordance instead of prose alone. `null` unless the leader carries one.
+   *
+   *  **Destination is the Trust Ledger, not the experiment bench.** The only next test that
+   *  can carry an id today prescribes a ROLLBACK, and the bench applies — feeding it a
+   *  still-active rec simulates to `already-configured`, a dead end. Route this id only
+   *  somewhere the change can actually be rolled back. */
+  next_action_rec_id: string | null;
   /** ≥2 change families moved between sessions — single-cause attribution refused. */
   confounded: boolean;
   gap_days: number;

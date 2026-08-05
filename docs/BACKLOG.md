@@ -233,13 +233,24 @@ never be conflatable in any doc, commit message, or report).
   `not-comparable` added to `no_verdict_note_ever_carries_a_numeric_confidence` + an `ExperimentBench.test.tsx`
   render guard (the `not-comparable` verdict is unreachable in the live UI by design, so its label is vitest-proven).
   Decision doc `docs/decisions/2026-07-18-experiment-comparability.md` §3/§4 updated to CLOSED.
-- [ ] **Measurement Platform 2.0 follow-up — `next_test` → experiment structured routing (additive).**
-  A leading hypothesis's suggested next test is **free prose** (`next_action` / `next_test` strings) with no
-  machine-readable rec-id, so "run the supported next test" cannot be wired into a pre-loaded `ExperimentBench`
-  pick without **fabricating** a prose→catalog-rec mapping (a no-fabrication violation). Deferred until the
-  hypothesis engine can emit a real, OPTIONAL rec-id where a safe mapping provably exists; until then the
-  connection stays a plain-language instruction, not a button. Decision doc
-  `docs/decisions/2026-07-18-prove-a-change-overlap.md` §5. No mutation / network / gate change.
+- [x] **Measurement Platform 2.0 follow-up — `next_test` structured rec-id (additive).** The deferral's own
+  unlock condition is now met: the engine emits a real, OPTIONAL rec-id where a safe mapping provably exists.
+  `EventRecord.rec_id` carries the catalog id **copied verbatim off the Trust-Ledger row**, so
+  `Hypothesis.next_test_rec_id` / `WhatChangedReport.next_action_rec_id` are **READ, never matched from prose** —
+  nothing parses a summary or maps free text onto the catalog. Emitted under three read conditions, all inside
+  `compy-config-change` (the only hypothesis with a ledger row behind it): exactly ONE distinct rec in the
+  window · it has an apply event · that apply is not `since_rolled_back`. Every other hypothesis, the
+  confounded path, and the count-delta-only path emit `None` permanently. Deliberately NOT gated on
+  `is_appliable` — LOCKED rule 3 resolves rollback from `history.json` alone, so a rec that has since left the
+  apply allowlist is still undoable. **Routing correction (the deferral got the destination wrong):** the
+  destination is the **Trust Ledger / Applied Changes**, NOT a pre-loaded `ExperimentBench` pick — the bench
+  *applies* (`experiment.rs` `start_experiment` → `history::apply_recommendation`) while this next test
+  prescribes a *rollback*, and feeding it a still-active rec hits `already_active` in `simulate`'s precedence
+  chain and returns `already-configured` ("nothing left to change or test") — a dead end. Guard:
+  `next_test_rec_id_is_read_from_the_ledger_never_matched_from_prose` (6 cases, mutation-verified to fail on a
+  relaxed rule). Backend + TS contract only; **no surface affordance built yet** — that is the remaining half,
+  and it must land in the Ledger surface. Decision doc `docs/decisions/2026-07-18-prove-a-change-overlap.md` §5.
+  No mutation / network / gate change.
 - [x] **Measurement Platform 2.0 follow-up — comparability vocabulary chrome convergence (cosmetic).** ✅ LANDED
   `921f49e`. `src/surfaces/measurement-chrome.tsx` + `.css` are now the ONE vocabulary both rooms wear —
   `<VerdictBand>` / `<SectionLabel>` / `<ComparabilityNote>`, fed per-room by a `--mc-*` palette block declared

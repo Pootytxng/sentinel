@@ -83,12 +83,23 @@ Task G routing conclusion too (no fifth room — unambiguous routing over shared
 None of the below was needed to ship the surfacing, so no reshape of a core element occurred → no
 welfare check. They are logged in `docs/BACKLOG.md` as additive follow-ups:
 
-1. **`next_test` → experiment structured routing.** A hypothesis's suggested next test is **free prose**
-   (`next_action` / `next_test` strings) with no machine-readable rec-id. Auto-routing "the supported
-   next test" into a pre-loaded `ExperimentBench` pick would require *fabricating* a mapping from prose
-   to a catalog rec — a no-fabrication violation. Deferred until the hypothesis engine can emit a real,
-   optional rec-id where (and only where) a safe mapping provably exists. Until then the connection stays
-   a plain-language instruction, not a wired button.
+1. ~~**`next_test` → experiment structured routing.**~~ **RESOLVED 2026-08-04 — with the destination
+   corrected.** The rec-id half is built: `EventRecord.rec_id` carries the catalog id **copied verbatim off
+   the Trust-Ledger row**, and `Hypothesis.next_test_rec_id` / `WhatChangedReport.next_action_rec_id` are
+   therefore READ, never matched from prose — the fabrication this item feared never happens, because
+   nothing parses a summary. An id is emitted only inside `compy-config-change` (the one hypothesis with a
+   ledger row behind it) and only when the window names exactly ONE distinct rec that has an apply event
+   still not `since_rolled_back`. Everything else emits `None` permanently.
+
+   **The routing destination named above was wrong.** `ExperimentBench` **applies** (`start_experiment` →
+   `history::apply_recommendation`); the only next test that can carry an id prescribes a **rollback**.
+   Pre-loading the bench with a still-active rec hits `already_active` in `simulate`'s precedence chain and
+   returns verdict `already-configured` — "there's nothing left to change or test." So the honest
+   destination is the **Trust Ledger / Applied Changes** surface focused on that change, where the rollback
+   affordance already exists. The backend contract says so in its own doc comment; a surface that routes
+   this id anywhere it cannot be rolled back is wrong. Guard:
+   `next_test_rec_id_is_read_from_the_ledger_never_matched_from_prose`. The Ledger-side affordance is the
+   remaining half and is still unbuilt.
 2. **Vocabulary *display* convergence.** The two surfaces now share the comparability words at the domain
    level; a later pass could unify their visual chrome (badges, section labels) into one shared component
    vocabulary. Cosmetic, deferred.

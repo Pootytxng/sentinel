@@ -42,7 +42,7 @@ Line counts drift — treat as rough and verify against current code before asse
 **Intelligence & Measurement Platform (read-only, additive — no mutation markers, verified 2026-08-02)**
 - `intelligence.rs` (~3614) — Phase 1: canonical intelligence types, local event timeline, deterministic "What changed?" engine. READ-ONLY by doctrine; never mutates Windows, never networks.
 - `intelligence_patterns.rs` (~903) — Phase 2: cross-session pattern detection over `sessions.json`.
-- `experiment.rs` (~1420) — Phase 3: single-variable experiment engine + optimization simulator (DARK groundwork).
+- `experiment.rs` (~1420) — Phase 3: single-variable experiment engine + optimization simulator. **ARMED** (`experiment_gate()` returns true, owner sign-off 2026-07-17) — the bench renders live. It APPLIES via `history::apply_recommendation`, so an already-active rec simulates to `already-configured`; do not route a rollback-shaped next test here.
 - `component_evidence.rs` (~332) — Phase 4: component-level evidence attribution. READ-ONLY.
 - `comparability.rs` (~730), `game_state.rs` (~276), `capture.rs` (~279) — Measurement Platform 2.0 tasks E/F: session-comparability gate, conditions fingerprint, capture-backend/capability model.
 - `fuzz_support.rs` (~184) — test-only input generator for the property/fuzz suites.

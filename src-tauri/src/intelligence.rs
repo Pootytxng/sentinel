@@ -90,6 +90,14 @@ pub(crate) struct EventRecord {
     /// dated `change-rolled-back` event; older rollbacks have no recorded time, so this
     /// flag is their only honest trace — never retro-dated into an event.
     pub since_rolled_back: bool,
+    /// Trust-Ledger events ONLY: the catalog recommendation id, copied verbatim off the
+    /// ledger row. `None` for every other source, which has no rec behind it.
+    ///
+    /// It exists so a downstream suggestion can name a REAL rec instead of matching prose.
+    /// The id is READ, never inferred — nothing here parses `summary`, guesses from a title,
+    /// or maps free text onto the catalog. That is the whole point: the alternative
+    /// (prose → rec) would be fabrication.
+    pub rec_id: Option<String>,
 }
 
 /// The assembled timeline plus honesty counters.
@@ -478,6 +486,7 @@ impl IdentityDeltaScan {
                     ),
                     observed_between: Some((from_at, at.to_string())),
                     since_rolled_back: false,
+                    rec_id: None,
                 },
             });
         }
@@ -505,6 +514,7 @@ impl IdentityDeltaScan {
                             ),
                             observed_between: Some((prev_at.clone(), at.to_string())),
                             since_rolled_back: false,
+                            rec_id: None,
                         },
                     });
                 }
@@ -540,6 +550,7 @@ impl IdentityDeltaScan {
                                 ),
                                 observed_between: Some((prev_at.clone(), at.to_string())),
                                 since_rolled_back: false,
+                                rec_id: None,
                             },
                         });
                     }
@@ -566,6 +577,7 @@ impl IdentityDeltaScan {
                             ),
                             observed_between: Some((prev_at.clone(), at.to_string())),
                             since_rolled_back: false,
+                            rec_id: None,
                         },
                     });
                 }
@@ -650,6 +662,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             detail: adopted.then(|| "Adopted leftover — restored to stock via Compy.".to_string()),
             observed_between: None,
             since_rolled_back: rolled_back,
+            rec_id: Some(c.rec_id.clone()),
         });
         if let Some(rb) = &c.rolled_back_at {
             if parse_utc(rb).is_none() {
@@ -666,6 +679,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
                     detail: None,
                     observed_between: None,
                     since_rolled_back: false,
+                    rec_id: Some(c.rec_id.clone()),
                 });
             }
         }
@@ -699,6 +713,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             ),
             observed_between: window,
             since_rolled_back: false,
+            rec_id: None,
         });
     }
 
@@ -725,6 +740,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             detail: None,
             observed_between: None,
             since_rolled_back: false,
+            rec_id: None,
         });
     }
 
@@ -743,6 +759,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
                 detail: None,
                 observed_between: None,
                 since_rolled_back: false,
+                rec_id: None,
             });
         } else {
             dropped += 1;
@@ -769,6 +786,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             detail: None,
             observed_between: None,
             since_rolled_back: false,
+            rec_id: None,
         });
     }
 
@@ -786,6 +804,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
                 detail: None,
                 observed_between: None,
                 since_rolled_back: false,
+                rec_id: None,
             });
         } else {
             dropped += 1;
@@ -806,6 +825,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
                 detail: None,
                 observed_between: None,
                 since_rolled_back: false,
+                rec_id: None,
             });
         } else {
             dropped += 1;
@@ -938,6 +958,12 @@ pub(crate) struct Hypothesis {
     pub contradicting_evidence: Vec<String>,
     pub missing_evidence: Vec<String>,
     pub next_test: Option<String>,
+    /// The catalog rec `next_test` refers to — present ONLY where the engine can point at a
+    /// real id it READ (today: a single still-applied Trust-Ledger change). `None` everywhere
+    /// else, permanently: matching the prose against the catalog would be fabrication, and a
+    /// surface that gets `None` renders the sentence and nothing more. See
+    /// `next_test_rec_id_is_read_from_the_ledger_never_matched_from_prose`.
+    pub next_test_rec_id: Option<String>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -958,6 +984,16 @@ pub(crate) struct WhatChangedReport {
     /// Honest gaps: what Compy wasn't recording, so can neither rule in nor out.
     pub unknowns: Vec<String>,
     pub next_action: Option<String>,
+    /// The leading hypothesis's `next_test_rec_id`, mirrored so a surface can offer a real
+    /// affordance instead of prose alone. `None` unless the leader carries one — and the
+    /// confounded path never does, because the honest advice there is "change one thing,"
+    /// not "change this thing."
+    ///
+    /// **Destination is the Trust Ledger, not the experiment bench.** The only next test that
+    /// can carry an id today prescribes a ROLLBACK, and the bench applies; feeding it a
+    /// still-active rec returns `already-configured` (`experiment.rs`'s `simulate`) — a
+    /// dead end. A surface that routes this id anywhere it cannot be rolled back is wrong.
+    pub next_action_rec_id: Option<String>,
     /// ≥2 discrete changes landed between the sessions — attribution refused.
     pub confounded: bool,
     pub gap_days: i64,
@@ -1055,6 +1091,8 @@ struct HypoEval {
     /// drift — real evidence with an honest ceiling below the change family.
     environment: bool,
     next_test: Option<String>,
+    /// Set ONLY alongside a `next_test` whose subject is a rec the engine read an id for.
+    next_test_rec_id: Option<String>,
 }
 
 impl HypoEval {
@@ -1067,6 +1105,7 @@ impl HypoEval {
             direct: false,
             environment: false,
             next_test: None,
+            next_test_rec_id: None,
         }
     }
 }
@@ -1475,6 +1514,7 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
         ruled_out: Vec::new(),
         unknowns: Vec::new(),
         next_action: None,
+        next_action_rec_id: None,
         confounded: false,
         gap_days: 0,
         notes: Vec::new(),
@@ -1753,6 +1793,30 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
             h.next_test = Some(
                 "Roll back the change in the Trust Ledger, play one more session, and compare — that isolates it.".into(),
             );
+            // The one place an id can be named honestly. Three conditions, all read — none
+            // inferred:
+            //   1. the window's ledger events name exactly ONE distinct rec. The sentence says
+            //      "the change", singular; with two candidates, picking one would be
+            //      fabrication-by-selection, and with none (support came only from the
+            //      active-count delta, which carries no ids) there is nothing to name;
+            //   2. that rec has an apply event here — a rollback alone is not a thing to undo;
+            //   3. the apply is not `since_rolled_back`. You can only roll back what is still
+            //      applied. Deliberately NOT gated on `is_appliable`: LOCKED rule 3 resolves
+            //      rollback from history.json alone, so a rec that has since left the apply
+            //      allowlist is still undoable and suppressing it would be the wrong answer.
+            let mut distinct: Vec<&str> = ledger_events.iter().filter_map(|e| e.rec_id.as_deref()).collect();
+            distinct.sort_unstable();
+            distinct.dedup();
+            if let [only] = distinct[..] {
+                let still_applied = ledger_events.iter().any(|e| {
+                    e.event_type == "change-applied"
+                        && e.rec_id.as_deref() == Some(only)
+                        && !e.since_rolled_back
+                });
+                if still_applied {
+                    h.next_test_rec_id = Some(only.to_string());
+                }
+            }
         }
         evals.push(h);
     }
@@ -1995,6 +2059,8 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
                     contradicting_evidence: h.contradicting,
                     missing_evidence: h.missing,
                     next_test: None,
+                    // Ruled out — there is no test to route, so there is no id to carry.
+                    next_test_rec_id: None,
                 });
             } else {
                 unknowns.extend(h.missing);
@@ -2026,6 +2092,7 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
             contradicting_evidence: h.contradicting,
             missing_evidence: h.missing,
             next_test: h.next_test,
+            next_test_rec_id: h.next_test_rec_id,
         });
     }
 
@@ -2043,6 +2110,7 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
         "1% lows {direction_word} {abs_delta:.1}% vs your previous {game} session."
     );
     let next_action: Option<String>;
+    let mut next_action_rec_id: Option<String> = None;
     if confounded {
         headline.push_str(" Several things changed in between — no single cause can be honestly isolated.");
         next_action = Some(format!(
@@ -2067,6 +2135,7 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
             ));
         }
         next_action = leader.next_test.clone();
+        next_action_rec_id = leader.next_test_rec_id.clone();
     } else {
         next_action = None;
     }
@@ -2077,6 +2146,7 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
     r.ruled_out = ruled_out;
     r.unknowns = unknowns;
     r.next_action = next_action;
+    r.next_action_rec_id = next_action_rec_id;
     r.confounded = confounded;
     r.gap_days = gap_days;
     r.notes = notes;
@@ -2427,6 +2497,7 @@ mod tests {
             detail: None,
             observed_between: None,
             since_rolled_back: false,
+            rec_id: None,
         }
     }
 
@@ -2886,6 +2957,130 @@ mod tests {
             detail: None,
             observed_between: None,
             since_rolled_back: false,
+            rec_id: None,
+        }
+    }
+
+    fn applied_event(ts: &str, title: &str, rec_id: &str, rolled_back: bool) -> EventRecord {
+        EventRecord {
+            id: format!("applied:{ts}"),
+            timestamp: ts.into(),
+            event_type: "change-applied".into(),
+            source: "trust-ledger".into(),
+            scope: EventScope::CompyApplied,
+            game: None,
+            summary: format!("{title} applied"),
+            detail: None,
+            observed_between: None,
+            since_rolled_back: rolled_back,
+            rec_id: Some(rec_id.into()),
+        }
+    }
+
+    /// The whole contract of `next_test_rec_id`: it is COPIED off a Trust-Ledger row or it is
+    /// `None`. Nothing anywhere parses `summary`, matches a title, or maps the prose sentence
+    /// onto the catalog — that would be fabrication, and it is the reason this feature sat
+    /// deferred. Every `None` case below is a case where naming an id would require a guess.
+    #[test]
+    fn next_test_rec_id_is_read_from_the_ledger_never_matched_from_prose() {
+        let base = || {
+            let (mut b, mut c) = two_sessions(100.0, 88.0);
+            b.hw_fingerprint = Some(mk_fp("25.5.1"));
+            c.hw_fingerprint = Some(mk_fp("25.5.1"));
+            b.gaming_mode_active = Some(false);
+            c.gaming_mode_active = Some(false);
+            (b, c)
+        };
+        let run = |b: &SessionSummary, c: &SessionSummary, ev: Vec<EventRecord>| {
+            report(&WhatChangedInputs {
+                baseline: b,
+                current: c,
+                events_window: ev,
+                events_ambiguous: vec![],
+                snapshots: &[],
+            })
+        };
+
+        // 1. ONE rec, still applied → the id is named, and it is verbatim the ledger's.
+        let (b, c) = base();
+        let r = run(
+            &b,
+            &c,
+            vec![applied_event("2026-07-11T10:00:00Z", "HAGS on", "gpu-hags", false)],
+        );
+        let leader = r.leading_hypotheses.first().expect("has a leader");
+        assert_eq!(leader.id, "compy-config-change");
+        assert_eq!(leader.next_test_rec_id.as_deref(), Some("gpu-hags"));
+        assert_eq!(r.next_action_rec_id.as_deref(), Some("gpu-hags"));
+        assert!(leader.next_test.is_some(), "the id rides WITH the sentence, never alone");
+
+        // 2. TWO distinct recs → `None`. The sentence says "the change", singular; choosing
+        //    one of two would be fabrication-by-selection.
+        let (b, c) = base();
+        let r = run(
+            &b,
+            &c,
+            vec![
+                applied_event("2026-07-11T10:00:00Z", "HAGS on", "gpu-hags", false),
+                applied_event("2026-07-11T11:00:00Z", "Power plan", "power-plan", false),
+            ],
+        );
+        assert_eq!(r.next_action_rec_id, None);
+
+        // 3. The one rec has since been rolled back → `None`. You cannot undo what is
+        //    already undone; offering the affordance would be a dead button.
+        let (b, c) = base();
+        let r = run(
+            &b,
+            &c,
+            vec![applied_event("2026-07-11T10:00:00Z", "HAGS on", "gpu-hags", true)],
+        );
+        assert_eq!(r.next_action_rec_id, None);
+
+        // 4. A rollback event alone → `None`. A rollback is not a thing to roll back.
+        let (b, c) = base();
+        let mut only_rollback = rollback_event("2026-07-11T10:00:00Z", "HAGS on");
+        only_rollback.rec_id = Some("gpu-hags".into());
+        let r = run(&b, &c, vec![only_rollback]);
+        assert!(r.next_action.is_some(), "the prose still stands");
+        assert_eq!(r.next_action_rec_id, None);
+
+        // 5. Support came only from the active-change COUNT delta, which carries no ids at
+        //    all (that is exactly why it exists — undated legacy rollbacks). Sentence yes,
+        //    id no.
+        let (mut b, mut c) = base();
+        b.compy_changes_active = 3;
+        c.compy_changes_active = 1;
+        let r = run(&b, &c, vec![]);
+        let leader = r.leading_hypotheses.first().expect("has a leader");
+        assert_eq!(leader.id, "compy-config-change");
+        assert!(leader.next_test.is_some());
+        assert_eq!(r.next_action_rec_id, None);
+
+        // 6. No OTHER hypothesis may ever emit an id — none of them has a rec behind it.
+        //    Sweep every hypothesis this engine can produce across the fixtures above.
+        let (drift_b, drift_c) = base();
+        let (mut drv_b, mut drv_c) = base();
+        drv_b.hw_fingerprint = Some(mk_fp("25.5.1"));
+        drv_c.hw_fingerprint = Some(mk_fp("25.6.2"));
+        let (gm_b, mut gm_c) = base();
+        gm_c.gaming_mode_active = Some(true);
+        let (plain_b, plain_c) = base();
+        for (b, c, ev) in [
+            (&drift_b, &drift_c, vec![drift_event("2026-07-11T10:00:00Z", "Game Mode")]),
+            (&drv_b, &drv_c, vec![]),
+            (&gm_b, &gm_c, vec![]),
+            (&plain_b, &plain_c, vec![]),
+        ] {
+            let r = run(b, c, ev);
+            for h in r.leading_hypotheses.iter().chain(r.ruled_out.iter()) {
+                assert!(
+                    h.id == "compy-config-change" || h.next_test_rec_id.is_none(),
+                    "{} must never name a rec — it has none to read",
+                    h.id
+                );
+            }
+            assert_eq!(r.next_action_rec_id, None, "no ledger apply in this window");
         }
     }
 
@@ -2901,6 +3096,7 @@ mod tests {
             detail: None,
             observed_between: None,
             since_rolled_back: false,
+            rec_id: None,
         }
     }
 
@@ -3284,6 +3480,7 @@ mod tests {
                 "2026-07-13T09:00:00Z".into(), // after the current session
             )),
             since_rolled_back: false,
+            rec_id: None,
         };
         let r = report(&WhatChangedInputs {
             baseline: &b,
@@ -3315,6 +3512,7 @@ mod tests {
             detail: None,
             observed_between: None,
             since_rolled_back: false,
+            rec_id: None,
         };
         let all = vec![
             mk_ev("before", "2026-07-09T09:59:00Z", "change-applied", EventScope::CompyApplied),

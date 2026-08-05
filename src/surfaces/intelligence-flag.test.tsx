@@ -100,6 +100,7 @@ const leader: IntelHypothesis = {
   contradicting_evidence: [],
   missing_evidence: [],
   next_test: null,
+  next_test_rec_id: null,
 };
 
 const report: WhatChangedOutcome = {
@@ -118,6 +119,8 @@ const report: WhatChangedOutcome = {
   unknowns: [],
   next_action:
     "Play one more Valorant session with nothing else changed — if the gain holds, the driver is the likely cause.",
+  // A GPU-driver leader has no Compy rec behind it — the sentence stands alone.
+  next_action_rec_id: null,
   confounded: false,
   gap_days: 2,
   notes: [],
@@ -248,6 +251,8 @@ const observedEvent = (over: Partial<IntelEvent> = {}): IntelEvent => ({
   detail: "Noticed between two Compy readings — the exact time isn't recorded, only the window.",
   observed_between: ["2026-07-06T09:00:00Z", "2026-07-07T10:00:00Z"],
   since_rolled_back: false,
+  // Observed source — no Compy rec behind it, so no id to carry.
+  rec_id: null,
   ...over,
 });
 
