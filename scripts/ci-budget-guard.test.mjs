@@ -30,6 +30,7 @@ import { join } from "node:path";
 const WF = join(process.cwd(), ".github", "workflows");
 const ci = readFileSync(join(WF, "ci.yml"), "utf8");
 const audit = readFileSync(join(WF, "audit.yml"), "utf8");
+const health = readFileSync(join(WF, "ci-health.yml"), "utf8");
 
 /** Runner minute multipliers. macOS is 10x and has no business in this repository. */
 const MULTIPLIER = { "ubuntu-latest": 1, "windows-latest": 2, "macos-latest": 10 };
@@ -89,9 +90,52 @@ describe("the informational audit stays off the hot path", () => {
   });
 });
 
+describe("the health reporter must cost less than the outage it watches for", () => {
+  // Added with .github/workflows/ci-health.yml. A watchdog that eats the allowance would take CI
+  // offline in exactly the way it exists to detect, so it is priced here rather than trusted.
+  it("is NEVER triggered by a push or a pull request", () => {
+    // A push-triggered health check bills on every commit AND tells you only about the run that
+    // triggered it — paying the hot-path price for the one question you could already answer.
+    const on = health.slice(health.indexOf("\non:"), health.indexOf("\nconcurrency:"));
+    expect(on).not.toMatch(/^\s*push:/m);
+    expect(on).not.toMatch(/^\s*pull_request:/m);
+    expect(on).toMatch(/^\s*schedule:/m);
+  });
+
+  it("can be run on demand, so a suspected outage does not wait for tomorrow", () => {
+    expect(health).toMatch(/workflow_dispatch:/);
+  });
+
+  it("runs at most once a day", () => {
+    // `0 15 * * *` — a day-of-month or hour list here would multiply the bill silently.
+    const cron = /cron:\s*["'](.+?)["']/.exec(health)?.[1];
+    expect(cron).toBeDefined();
+    const [minute, hour, dom, month, dow] = cron.split(/\s+/);
+    for (const [field, value] of [["minute", minute], ["hour", hour]]) {
+      expect(value, `${field} must be a single value, not a list or step`).toMatch(/^\d+$/);
+    }
+    expect([dom, month, dow]).toEqual(["*", "*", "*"]);
+  });
+
+  it("cannot run long enough to matter, even if the API hangs", () => {
+    expect(health).toMatch(/timeout-minutes:\s*[1-9]\b/); // single digit, i.e. under ten
+  });
+
+  it("checks out one file rather than the repository", () => {
+    expect(health).toMatch(/sparse-checkout:\s*scripts\/ci-health-report\.mjs/);
+  });
+
+  it("builds nothing — no cargo, no npm install, no npm run build", () => {
+    // The line where this job would stop being free. If it ever needs a build, that argument gets
+    // made here, in the projection below, not by quietly adding a step.
+    expect(health).not.toMatch(/cargo/);
+    expect(health).not.toMatch(/npm (ci|install|run)/);
+  });
+});
+
 describe("runner cost is bounded by construction", () => {
   it("no workflow uses a macOS runner (10x) — nothing here needs one", () => {
-    for (const [name, text] of [["ci.yml", ci], ["audit.yml", audit]]) {
+    for (const [name, text] of [["ci.yml", ci], ["audit.yml", audit], ["ci-health.yml", health]]) {
       const bad = runnersIn(text).filter((r) => r.includes("macos"));
       expect(bad, `${name} must not use macOS runners`).toEqual([]);
     }
@@ -103,10 +147,11 @@ describe("runner cost is bounded by construction", () => {
     const windows = runnersIn(ci).filter((r) => r.includes("windows"));
     expect(windows).toHaveLength(1);
     expect(runnersIn(audit).filter((r) => r.includes("windows"))).toEqual([]);
+    expect(runnersIn(health).filter((r) => r.includes("windows"))).toEqual([]);
   });
 
   it("every runner named is one whose price we know", () => {
-    for (const r of [...runnersIn(ci), ...runnersIn(audit)]) {
+    for (const r of [...runnersIn(ci), ...runnersIn(audit), ...runnersIn(health)]) {
       expect(Object.keys(MULTIPLIER), `unpriced runner "${r}"`).toContain(r);
     }
   });
@@ -131,7 +176,11 @@ describe("the projected monthly cost fits inside the free allowance", () => {
     // site-app `npm ci` + one staged build, added so the three site guards can run at all
     // (PR #9's fix). ~1.7 min per billable run on a 1x runner — counted, not hand-waved.
     const siteSetup = billable * 1.7 * MULTIPLIER["ubuntu-latest"];
-    const total = rust + frontend + auditWeekly + siteSetup;
+    // The health reporter: daily, sparse checkout + setup-node + two API reads. Priced at a
+    // deliberately pessimistic 1 minute against a job that should finish in well under one, because
+    // a watchdog that is cheaper than its own budget line is the only kind worth having.
+    const healthDaily = 31 * 1 * MULTIPLIER["ubuntu-latest"];
+    const total = rust + frontend + auditWeekly + siteSetup + healthDaily;
 
     // Recorded so a future reader sees the arithmetic rather than trusting the number.
     expect(Math.round(total)).toBeLessThan(INCLUDED);
