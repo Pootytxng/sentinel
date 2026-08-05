@@ -24,10 +24,12 @@ import {
   fmtLocalWinTopPct,
   fmtLocalWinPercentile,
 } from "./benchmark-view";
+import { hasMeasuredPair } from "./two-futures-view";
 import { useExpertView } from "../design/use-expert-view";
 import { useDocumentVisible } from "../data/use-document-visible";
 import { readTwoFutures } from "../design/theme";
 import { TwoFutures } from "./TwoFutures";
+import { LedgerHealthNotice, knownIncomplete, useLedgerHealth } from "../design/LedgerHealthNotice";
 import type { HardwareInfo } from "../App";
 import type {
   BenchmarkState,
@@ -104,6 +106,9 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
     try {
       const [s, ch, t, sb] = await Promise.all([
         invoke<BenchmarkState>("get_benchmark_state"),
+        // Collapses to empty so one unreadable ledger can't blank the whole tab. That emptiness is
+        // NOT evidence of a quiet machine, and the attribution line below must not read it as such —
+        // `useLedgerHealth` is what keeps the two apart. Never delete one without the other.
         invoke<AppliedChange[]>("get_applied_changes").catch(() => [] as AppliedChange[]),
         invoke<TrialState>("get_trial_state").catch(() => null),
         invoke<ScoreboardView>("get_scoreboard").catch(() => null),
@@ -282,6 +287,24 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
   // surface (this card, Two Futures, the Lab verdict) agrees on what a result covers.
   const changesSince = changesBetweenRuns(state, changes);
 
+  // `refresh` collapses an unreadable ledger to `[]` (`.catch(() => [])` above), and BOTH attributing
+  // cards read that emptiness out loud as "No Compy changes recorded since the baseline — this
+  // reflects manual or ambient changes." That sentence does not merely under-report an absence: it
+  // hands the measured delta to the user or their environment. On a ledger Compy cannot read, that
+  // is a fabricated causal claim — the same defect `b60a314` closed on Optimize and `61e092c` on the
+  // Blackbook Logbook, in its worst form yet. So the same disclosure is mounted here, and the
+  // attribution line stops speaking when `knownIncomplete` is truthy.
+  const health = useLedgerHealth(changes);
+  const ledgerIncomplete = !!knownIncomplete(health);
+
+  // Exactly one of the two cards below prints an attribution line — they are mutually exclusive by
+  // construction (the flag makes Two Futures SUBSUME the efficacy card). These are the render
+  // conditions themselves, not a restatement of them, so the notice gate cannot drift out of sync
+  // with what it qualifies: change either card's condition and the gate follows.
+  const showEfficacyCard = showEfficacy && !!state?.efficacy && !twoFutures && !provingGround;
+  const showSplit = twoFutures || provingGround;
+  const attributing = showEfficacyCard || (showSplit && hasMeasuredPair(state));
+
   return (
     <div className="bench-wrap">
       <header className="bench-head">
@@ -343,8 +366,17 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
           overall pill + the same 4 delta/verdict rows would render twice adjacently) — it
           carries the full readout plus before/after values, the split rigs, and the change
           attribution. Flag off renders today's card unchanged. */}
-      {showEfficacy && state?.efficacy && !twoFutures && !provingGround && (
-        <EfficacyCard efficacy={state.efficacy} changes={changesSince} />
+      {/* FIRST, above the card whose attribution line it qualifies — a caveat printed underneath its
+          subject has already failed at its job. Gated on `attributing` so it appears exactly when a
+          claim about the ledger is about to be made, and never over a tab with no claim on it. */}
+      {attributing && <LedgerHealthNotice health={health} />}
+
+      {showEfficacyCard && state?.efficacy && (
+        <EfficacyCard
+          efficacy={state.efficacy}
+          changes={changesSince}
+          ledgerIncomplete={ledgerIncomplete}
+        />
       )}
 
       {/* Two Futures measured split — where the efficacy readout lives (spec placement).
@@ -353,7 +385,14 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
           the split IS the loop's "prove it" payoff — the changed rig part emphasized by its real
           per-component efficacy (partGlow) — so it renders regardless of the standalone flag. The
           one law still holds: no measured pair → the honest empty state, no fabricated trophy. */}
-      {(twoFutures || provingGround) && <TwoFutures bench={state} hw={hw} changes={changesSince} />}
+      {showSplit && (
+        <TwoFutures
+          bench={state}
+          hw={hw}
+          changes={changesSince}
+          ledgerIncomplete={ledgerIncomplete}
+        />
+      )}
 
       {state?.latest && (
         <RunCard
@@ -667,7 +706,17 @@ function RunCard({ report, at, title }: { report: RunReport; at: string | null; 
   );
 }
 
-function EfficacyCard({ efficacy, changes }: { efficacy: Efficacy; changes: AppliedChange[] }) {
+function EfficacyCard({
+  efficacy,
+  changes,
+  ledgerIncomplete = false,
+}: {
+  efficacy: Efficacy;
+  changes: AppliedChange[];
+  /** The ledger is KNOWN incomplete, so an empty `changes` is not evidence of a quiet machine.
+      Defaults false, so every other caller renders exactly as it did. */
+  ledgerIncomplete?: boolean;
+}) {
   const { t } = useTranslation();
   const attr = changeAttribution(changes.length, t);
   return (
@@ -684,6 +733,10 @@ function EfficacyCard({ efficacy, changes }: { efficacy: Efficacy; changes: Appl
             {attr.lead} <strong>{changes.map((c) => c.rec_title).join(", ")}</strong>.
             {attr.caveat ? ` ${attr.caveat}` : ""}
           </>
+        ) : ledgerIncomplete ? (
+          // "No Compy changes recorded … this reflects manual or ambient changes" credits the delta
+          // to the user. Compy cannot know that from a record it cannot read.
+          <>{t("common.ledgerHealth.attributionUnknown")}</>
         ) : (
           <>{t("gaming.benchmark.noChangesRecorded")}</>
         )}

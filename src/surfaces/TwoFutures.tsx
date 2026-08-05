@@ -21,12 +21,16 @@ export function TwoFutures({
   bench,
   hw,
   changes = [],
+  ledgerIncomplete = false,
 }: {
   bench: BenchmarkState | null;
   hw: HardwareInfo | null;
   /** Trust-Ledger changes applied between the two runs — the attribution the efficacy card
       carried (this card subsumes it when the flag is on, so the line moves here). */
   changes?: AppliedChange[];
+  /** The ledger is KNOWN incomplete, so an empty `changes` is the output of a read that failed,
+      not evidence that Compy changed nothing. Defaults false — every other caller is unchanged. */
+  ledgerIncomplete?: boolean;
 }) {
   const { t } = useTranslation();
   if (!hasMeasuredPair(bench)) {
@@ -56,6 +60,10 @@ export function TwoFutures({
               {attr.lead} <strong>{changes.map((c) => c.rec_title).join(", ")}</strong>.
               {attr.caveat ? ` ${attr.caveat}` : ""}
             </>
+          ) : ledgerIncomplete ? (
+            // Same refusal as the efficacy card this one subsumes: "…this reflects manual or
+            // ambient changes" is a causal claim, and an unreadable record cannot support one.
+            <>{t("common.ledgerHealth.attributionUnknown")}</>
           ) : (
             <>{t("gaming.twoFutures.noChangesRecorded")}</>
           )}

@@ -174,6 +174,7 @@
     "unreadableBody": "So this list isn't the whole story. Compy won't apply or undo anything until it can read the record again — it refuses rather than guessing at what's on your PC.",
     "quarantinedTitle": "Compy can't tell you everything it did",
     "quarantinedBody": "The record was damaged on an earlier run, so Compy set the original aside unopened instead of deleting it. Nothing was thrown away — but changes made before that point are missing from this list, and can't be undone from here.",
+    "attributionUnknown": "Compy can't read its own record, so it can't say whether any of its changes are part of this result.",
     "revealFile": "Show me the file Compy set aside",
     "revealFolder": "Open the Compy folder"
   }
