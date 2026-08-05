@@ -34,6 +34,8 @@ the branch is compared file-by-file against `main` and dispositioned on that evi
 | `UNLANDED` | carries real work that is not on `main` | needs a decision |
 
 The audit reads **local remote-tracking refs** — it reflects the last `git fetch`, not the server.
+It measures against **`origin/main`**, not a local `main`: a disposition is a claim about the shared
+trunk, and a worktree's `main` pointer can sit weeks behind without anyone noticing.
 
 ## The refs
 

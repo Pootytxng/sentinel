@@ -95,9 +95,19 @@ export function refSetCoverage(repoRoot) {
   };
 }
 
-/** `main` if it exists locally, else `origin/main` — worktrees do not always carry the branch. */
+/**
+ * The trunk every disposition is measured against: `origin/main` first, local `main` only as a
+ * fallback.
+ *
+ * The order used to be the other way round, and it produced a confident false failure the first
+ * time this ran in a worktree: local `main` sat at `c74d80e` while origin had moved to `6712c14`,
+ * so a genuinely MERGED branch "still changes the tree" — the tree it changed was a week old. A
+ * disposition is a claim about what the SHARED trunk contains, and a local branch pointer is a
+ * private bookmark that no one is obliged to move. Reading it as the trunk is the same mistake as
+ * reading an unfetched ref cache as the remote, which is what the rest of this file exists to stop.
+ */
 export function resolveBase(repoRoot) {
-  for (const candidate of ["main", "origin/main"]) {
+  for (const candidate of ["origin/main", "main"]) {
     try {
       git(repoRoot, ["rev-parse", "--verify", "--quiet", `${candidate}^{commit}`]);
       return candidate;

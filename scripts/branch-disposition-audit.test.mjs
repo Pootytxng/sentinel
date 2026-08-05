@@ -133,8 +133,26 @@ describe("git facts the audit rests on", () => {
     git(fixture, ["update-ref", "-d", "refs/remotes/origin/main"]);
   });
 
-  it("resolves main as the base", () => {
+  it("falls back to local main when origin/main has not been fetched", () => {
     expect(resolveBase(fixture)).toBe("main");
+  });
+
+  // The regression. A disposition is a claim about the SHARED trunk, and a local `main` pointer is
+  // a private bookmark nobody is obliged to move. When this preferred local `main`, a worktree
+  // whose `main` sat a week behind origin reported a genuinely merged branch as "still changes the
+  // tree" — confident, specific, and wrong, because the tree it changed was the stale one.
+  it("prefers origin/main over a local main that has fallen behind", () => {
+    git(fixture, ["update-ref", "refs/remotes/origin/main", git(fixture, ["rev-parse", "origin/ahead"])]);
+    try {
+      expect(resolveBase(fixture)).toBe("origin/main");
+      // And it is a DIFFERENT answer, not the same commit wearing another name — otherwise this
+      // passes whether or not the preference works.
+      expect(git(fixture, ["rev-parse", "origin/main"])).not.toBe(git(fixture, ["rev-parse", "main"]));
+      expect(isNoop(fixture, "origin/main", "origin/ahead")).toBe(true);
+      expect(isNoop(fixture, "main", "origin/ahead")).toBe(false);
+    } finally {
+      git(fixture, ["update-ref", "-d", "refs/remotes/origin/main"]);
+    }
   });
 
   it("calls an already-merged ref a no-op and a diverged one not", () => {
