@@ -972,13 +972,18 @@ pub(crate) fn rec_is_active(rec_id: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Total Trust-Ledger entry count (append-only, so monotonic). Used as a confound watermark by the
-/// cross-session comparison engine: if the ledger advanced between arming and the next session,
-/// another change landed and the delta can't be honestly attributed.
-pub(crate) fn ledger_len() -> usize {
-    // On an unreadable ledger this reads 0 — which DIFFERS from any non-zero armed watermark,
-    // so the comparison engine refuses attribution (the fail-safe direction for honesty).
-    load_history().unwrap_or_default().len()
+/// Total Trust-Ledger entry count — the confound watermark for the cross-session comparison engine.
+/// The ledger is append-only in code, so the SAME ledger can only ever read the same count or more;
+/// any other reading means it is not the same ledger, and the delta can't be honestly attributed.
+///
+/// Returns `Err` rather than a number, deliberately, and there is no `unwrap_or_default` sibling:
+/// a collapsed read here is not a missing count, it is a FABRICATED one. `load_history_from`
+/// quarantines a corrupt ledger to `history.json.corrupt`, after which every load returns empty
+/// forever — so the collapsed value (0) sits BELOW any armed watermark while real changes are free
+/// to land into the fresh ledger. The comparison engine's callers must decide what to do with that
+/// (refuse to arm; refuse to attribute), and they can only decide it if they can see it.
+pub(crate) fn ledger_len_checked() -> Result<usize, String> {
+    load_history().map(|h| h.len())
 }
 
 /// Count of DISTINCT recs whose LATEST ledger entry is an active apply (status "applied"). Powers the

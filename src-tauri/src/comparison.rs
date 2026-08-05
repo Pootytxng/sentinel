@@ -43,8 +43,10 @@ pub(crate) struct ArmedComparison {
     pub baseline_avg_fps: f64,
     pub baseline_low1_fps: f64,
     pub armed_at: String,
-    /// Trust-Ledger entry count at arm time — the confound watermark. If the ledger has advanced by
-    /// finalize, another change landed between sessions and the delta can't be honestly attributed.
+    /// Trust-Ledger entry count at arm time — the confound watermark. If the ledger does not read
+    /// EXACTLY this at finalize, it is not the ledger this baseline was measured against, and the
+    /// delta can't be honestly attributed. Arming refuses outright when the count can't be read, so
+    /// this number is always a real reading and never a fallback.
     #[serde(default)]
     pub ledger_watermark: usize,
     /// Fix (default — back-compat with pre-tuning armed files) vs Tuning.
@@ -117,6 +119,16 @@ fn save_result(r: &ComparisonResult) -> Result<(), String> {
     std::fs::write(result_path(), json).map_err(|e| e.to_string())
 }
 
+/// The watermark an arm is allowed to bank. An unreadable ledger REFUSES to arm rather than banking
+/// a fabricated number — a count that was never really read cannot later prove the next session
+/// measured the same machine. Every arm path in the app goes through here (both of this module's,
+/// plus the experiment engine's) so none of them can quietly reintroduce a fallback.
+pub(crate) fn arm_watermark() -> Result<usize, String> {
+    crate::history::ledger_len_checked().map_err(|e| {
+        format!("can't arm a before/after comparison — the change history is unreadable, so a later result could never be proven fair: {e}")
+    })
+}
+
 /// Arm a comparison: record the just-debriefed session as the baseline + the fix being applied.
 pub(crate) fn arm(
     rec_id: String,
@@ -132,7 +144,7 @@ pub(crate) fn arm(
         baseline_avg_fps,
         baseline_low1_fps,
         armed_at: chrono::Utc::now().to_rfc3339(),
-        ledger_watermark: crate::history::ledger_len(),
+        ledger_watermark: arm_watermark()?,
         kind: ComparisonKind::Fix,
         baseline_peak_temp_c: None,
         crash_reported: false,
@@ -157,7 +169,7 @@ pub(crate) fn arm_tuning(
         baseline_avg_fps,
         baseline_low1_fps,
         armed_at: chrono::Utc::now().to_rfc3339(),
-        ledger_watermark: crate::history::ledger_len(),
+        ledger_watermark: arm_watermark()?,
         kind: ComparisonKind::Tuning,
         baseline_peak_temp_c,
         crash_reported: false,
@@ -213,12 +225,13 @@ pub(crate) fn classify(delta_low1_pct: f64, noise_floor_pct: f64) -> &'static st
 
 /// Pure verdict WITH the honesty guards layered over `classify`. Expiry + confound take precedence
 /// over the measured delta — no credit when the comparison isn't fair. `ledger_now` and `now` are
-/// injected (not read from disk/clock) so this is unit-testable.
+/// injected (not read from disk/clock) so this is unit-testable. `ledger_now` is `None` when the
+/// ledger could not be read at all.
 pub(crate) fn classify_with_guards(
     armed: &ArmedComparison,
     delta_low1_pct: f64,
     noise_floor_pct: f64,
-    ledger_now: usize,
+    ledger_now: Option<usize>,
     now: chrono::DateTime<chrono::Utc>,
 ) -> &'static str {
     if let Ok(t) = chrono::DateTime::parse_from_rfc3339(&armed.armed_at) {
@@ -226,8 +239,15 @@ pub(crate) fn classify_with_guards(
             return "expired"; // baseline too old to compare fairly
         }
     }
-    if ledger_now > armed.ledger_watermark {
-        return "confounded"; // another change landed between sessions
+    // The watermark's contract is "the SAME ledger", so the test is equality, not growth. A `>` test
+    // only caught the ledger GROWING, and the reading that actually happens in the field is the
+    // opposite: `load_history_from` quarantines a corrupt ledger to `history.json.corrupt`, after
+    // which every load returns empty forever. That reads BELOW the watermark, so `>` called it
+    // "nothing landed" and credited the delta — while real changes were landing into the fresh
+    // ledger, unseen. `None` (unreadable) is the same refusal for the same reason: no reading at all
+    // can prove the comparison was fair.
+    if ledger_now != Some(armed.ledger_watermark) {
+        return "confounded"; // not the ledger this baseline was measured against
     }
     classify(delta_low1_pct, noise_floor_pct)
 }
@@ -257,7 +277,7 @@ pub(crate) fn build_result(
     armed: &ArmedComparison,
     s: &SessionSummary,
     nf: f64,
-    ledger_now: usize,
+    ledger_now: Option<usize>,
     now: chrono::DateTime<chrono::Utc>,
 ) -> ComparisonResult {
     let pct = |after: f64, base: f64| if base > 0.0 { (after - base) / base * 100.0 } else { 0.0 };
@@ -298,7 +318,9 @@ pub(crate) fn on_session_finalized(s: &SessionSummary) {
         &armed,
         s,
         DEFAULT_NOISE_FLOOR_PCT,
-        crate::history::ledger_len(),
+        // `.ok()` here is the honest direction, not a collapse: an unreadable ledger becomes `None`,
+        // which the guard above refuses to attribute. It is never silently treated as a count.
+        crate::history::ledger_len_checked().ok(),
         chrono::Utc::now(),
     );
     let _ = save_result(&result);
@@ -351,9 +373,27 @@ mod comparison_tests {
         let now = chrono::Utc::now();
         let armed = armed_fixture(now.to_rfc3339(), 5);
         // Ledger unchanged since arming → the measured verdict stands.
-        assert_eq!(classify_with_guards(&armed, 8.0, 3.0, 5, now), "improved");
+        assert_eq!(classify_with_guards(&armed, 8.0, 3.0, Some(5), now), "improved");
         // Another change landed between sessions (ledger advanced) → confounded, no credit.
-        assert_eq!(classify_with_guards(&armed, 8.0, 3.0, 6, now), "confounded");
+        assert_eq!(classify_with_guards(&armed, 8.0, 3.0, Some(6), now), "confounded");
+    }
+
+    #[test]
+    fn a_ledger_that_is_not_the_armed_one_can_never_read_as_unchanged() {
+        // The watermark's contract is "the SAME ledger", not "a ledger that hasn't grown". The
+        // Trust Ledger is append-only in code, so any difference at all means a different ledger —
+        // and the difference that actually happens in the field is DOWNWARD: `load_history_from`
+        // quarantines a corrupt ledger to `history.json.corrupt`, after which every load returns an
+        // empty vec forever, indistinguishable from first run. A `>` test read that as "nothing
+        // landed" and credited the delta to the armed change, which is the precise false
+        // attribution the watermark exists to prevent (Q9 acceptance: "before/after attribution
+        // never credits one change when several changed").
+        let now = chrono::Utc::now();
+        let armed = armed_fixture(now.to_rfc3339(), 3);
+        assert_eq!(classify_with_guards(&armed, 8.0, 3.0, Some(0), now), "confounded");
+        // And an outright unreadable ledger is the strictest case of the same thing: no reading at
+        // all can prove the comparison was fair, so no credit is given.
+        assert_eq!(classify_with_guards(&armed, 8.0, 3.0, None, now), "confounded");
     }
 
     #[test]
@@ -361,16 +401,19 @@ mod comparison_tests {
         let now = chrono::Utc::now();
         let stale = armed_fixture((now - chrono::Duration::days(ARM_MAX_AGE_DAYS + 1)).to_rfc3339(), 5);
         // A clear improvement with an unchanged ledger is STILL discarded when the baseline's too old.
-        assert_eq!(classify_with_guards(&stale, 8.0, 3.0, 5, now), "expired");
+        assert_eq!(classify_with_guards(&stale, 8.0, 3.0, Some(5), now), "expired");
         let fresh = armed_fixture((now - chrono::Duration::days(ARM_MAX_AGE_DAYS - 1)).to_rfc3339(), 5);
-        assert_eq!(classify_with_guards(&fresh, 8.0, 3.0, 5, now), "improved");
+        assert_eq!(classify_with_guards(&fresh, 8.0, 3.0, Some(5), now), "improved");
     }
 
     #[test]
     fn expiry_takes_precedence_over_confound() {
         let now = chrono::Utc::now();
         let stale = armed_fixture((now - chrono::Duration::days(ARM_MAX_AGE_DAYS + 5)).to_rfc3339(), 5);
-        assert_eq!(classify_with_guards(&stale, 8.0, 3.0, 99, now), "expired");
+        assert_eq!(classify_with_guards(&stale, 8.0, 3.0, Some(99), now), "expired");
+        // …and over an unreadable ledger too — the oldest defect wins, so the message names the
+        // reason the user can act on (re-measure a fresh baseline).
+        assert_eq!(classify_with_guards(&stale, 8.0, 3.0, None, now), "expired");
     }
 
     // ── Tuning baseline (spec 2026-06-08) ──────────────────────────────────────────────
@@ -436,7 +479,7 @@ mod comparison_tests {
         let now = chrono::Utc::now();
         let armed = tuning_fixture(Some(84));
         // 1% low held inside the noise floor; peak temp dropped 84 → 71.
-        let r = build_result(&armed, &session_fixture(81.0, Some(71)), 3.0, 0, now);
+        let r = build_result(&armed, &session_fixture(81.0, Some(71)), 3.0, Some(0), now);
         assert_eq!(r.kind, ComparisonKind::Tuning);
         assert_eq!(r.baseline_peak_temp_c, Some(84));
         assert_eq!(r.after_peak_temp_c, Some(71));
@@ -450,7 +493,7 @@ mod comparison_tests {
         let now = chrono::Utc::now();
         let armed = tuning_fixture(Some(84));
         // 1% low 80 → 70 = −12.5%, well past the 3% floor → "too aggressive" signal upstream.
-        let r = build_result(&armed, &session_fixture(70.0, Some(72)), 3.0, 0, now);
+        let r = build_result(&armed, &session_fixture(70.0, Some(72)), 3.0, Some(0), now);
         assert_eq!(r.verdict, "regressed");
         assert_eq!(r.delta_temp_c, Some(-12));
     }
@@ -460,7 +503,7 @@ mod comparison_tests {
         let now = chrono::Utc::now();
         let mut armed = tuning_fixture(Some(84));
         armed.crash_reported = true;
-        let r = build_result(&armed, &session_fixture(81.0, Some(71)), 3.0, 0, now);
+        let r = build_result(&armed, &session_fixture(81.0, Some(71)), 3.0, Some(0), now);
         assert!(r.crash_reported, "a reported crash rides into the result");
     }
 
