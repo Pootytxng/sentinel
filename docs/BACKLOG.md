@@ -333,6 +333,31 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
+### Cycle 2026-08-04e — ✅ THE NEXT TEST MAY NAME A REC — BECAUSE IT READS THE ID (CC): `83ebfd8` on `claude/harness-context-cleanup-700535` — **unpushed, unmerged** (owner decides the merge)
+
+The deferral premise was wrong. Routing `next_test` structurally looked like it needed a prose→catalog
+mapping (fabrication), but `compy-config-change` is the one hypothesis backed by real Trust-Ledger
+rows, and an `AppliedChange` already carries a real `rec_id`. So the id is **copied off the row**;
+nothing parses a summary anywhere. `EventRecord.rec_id` is the only possible carrier (`WhatChangedInputs`
+never sees raw ledger rows). Emitted only when three conditions **read** true: exactly ONE distinct rec
+in the window (the sentence says "the change" — choosing between two is fabrication-by-selection), it
+has an apply event, and that apply is not `since_rolled_back`. Read from the window's own events, not
+the live ledger, so the engine stays pure.
+
+Deliberately **not** gated on `is_appliable`: an advisory rec can't produce an apply row anyway, and a
+rec that has since left the allowlist is still undoable (LOCKED rule 3 — rollback resolves from
+`history.json` alone). Gating there would suppress a valid rollback.
+
+**The item named the wrong destination.** `ExperimentBench` is ARMED but it *applies*, while the only
+next test that can carry an id prescribes a **rollback** — a still-active rec hits `already_active` and
+simulates to `already-configured`, a dead end. Destination corrected to the **Trust Ledger / Applied
+Changes** surface in four places (Rust doc comment, TS mirror, this file, decision doc §5). Guard
+`next_test_rec_id_is_read_from_the_ledger_never_matched_from_prose`, 6 cases, mutation-verified.
+917 pass (+1) · clippy clean · npm 3239 · module-map OK · doc-budget PASS.
+
+Remaining half, recorded not built: the Ledger-side affordance consuming `next_action_rec_id` — surface
+work, so it needs a `self-reviewer` PASS before any done-claim.
+
 ### Cycle 2026-08-04d — ✅ AN UNREADABLE LEDGER NO LONGER EXONERATES COMPY (CC): `8798616` on `claude/harness-context-cleanup-700535` — **unpushed, unmerged** (owner decides the merge)
 
 Swept every `load_history().unwrap_or_default()` against one test: *does the collapse make the app
