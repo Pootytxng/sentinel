@@ -29,6 +29,11 @@ import { execFileSync } from "child_process";
 //      `MAX_CONTINUES = 2` while `stop-continue.mjs` had said 8 since 2026-08-03. A doc restating a
 //      code literal is a drift bomb with a fuse of exactly one edit.
 //
+// A seventh defect was this guard's own, found in CI on 2026-08-06: teaching it the whole search
+// path (defect 1) made half that path MACHINE-LOCAL, so it passed here and failed on a runner that
+// has no `~/.claude/skills/`. Fixed by declaring the out-of-repo skills in git — MACHINE_GLOBAL_SKILLS
+// below — rather than by discovering them from whatever filesystem happens to be underneath.
+//
 // Per the owner's bug->guard law (~/.claude/CLAUDE.md §6: "when a rule gets broken, the fix is a
 // guard, not another paragraph"), all three rot classes are mechanized here. They are all
 // mechanically checkable, which is precisely why prose was the wrong tier for them.
@@ -82,10 +87,32 @@ describe("agent machinery — the scanned surface itself", () => {
 // Missing (b) is what made this guard's own opening premise wrong: it declared the reviewer agents'
 // pointers to `check`/`security` dead and they were removed as rot, when both skills were live the
 // whole time. A guard that cannot see half the search path does not find rot, it manufactures it.
-const SKILL_ROOTS = [".claude/skills", join(homedir(), ".claude", "skills")];
+const GLOBAL_SKILL_ROOT = join(homedir(), ".claude", "skills");
+const SKILL_ROOTS = [".claude/skills", GLOBAL_SKILL_ROOT];
 const skillsIn = (root: string) =>
   existsSync(root) ? readdirSync(root).filter((d) => statSync(join(root, d)).isDirectory()) : [];
-const REAL_SKILLS = new Set(SKILL_ROOTS.flatMap(skillsIn));
+
+// ...and knowing the whole search path is still not enough, because HALF OF IT IS NOT PORTABLE.
+// `~/.claude/skills/` is machine-global and untracked: it is populated on the owner's machine and
+// absent on a GitHub runner. Root (b) alone therefore makes the verdict depend on whose filesystem
+// ran the test — which is exactly how this guard came to pass locally and fail in CI on 2026-08-06,
+// reporting the live `security` skill as dead the moment it ran somewhere without a home directory
+// full of skills. A guard whose answer changes with the machine is not a guard, it is a coin flip.
+//
+// So a skill hosted OUTSIDE the repo is declared here, in git, with the reason it lives there. The
+// four tests below keep the declaration honest: it may not shadow a project skill, it may not name
+// something nothing cites, it must carry a reason, and — wherever the global root IS visible — it
+// must still match that machine.
+const MACHINE_GLOBAL_SKILLS = new Map<string, string>([
+  [
+    "security",
+    "Deep security audit at ~/.claude/skills/security, cited by the rust-tauri-reviewer agent in " +
+      "both lanes. Machine-global on purpose: it is reused by every project on this machine, so it " +
+      "is not vendored into Compy and CI has no copy of it to look at.",
+  ],
+]);
+
+const REAL_SKILLS = new Set([...SKILL_ROOTS.flatMap(skillsIn), ...MACHINE_GLOBAL_SKILLS.keys()]);
 
 // Two ways a skill gets named in prose. Both are how the real defects were written:
 //   (a) an explicit path — `.claude/skills/self-review/SKILL.md`
@@ -130,6 +157,39 @@ describe("rot class 1 — every referenced skill exists", () => {
     const dead = skillRefs(text).filter((s) => !NOT_A_SKILL.has(s) && !REAL_SKILLS.has(s));
     // A dead skill reference routes work to nowhere and no runtime error is ever produced.
     expect(dead).toEqual([]);
+  });
+
+  // The declaration above is an escape hatch, and an escape hatch that is never audited becomes the
+  // answer to every failure. These three keep it small and true, and they are deterministic — they
+  // read only tracked files, so they hold the same verdict on a runner as on the owner's machine.
+  it("declares no machine-global skill that is really a project skill", () => {
+    const project = skillsIn(".claude/skills");
+    const shadowed = [...MACHINE_GLOBAL_SKILLS.keys()].filter((s) => project.includes(s));
+    // Exempting a skill the repo actually ships would hide its deletion behind the exemption.
+    expect(shadowed).toEqual([]);
+  });
+
+  it("declares no machine-global skill that nothing cites", () => {
+    const cited = new Set(SOURCES.flatMap((s) => skillRefs(s.text)));
+    const unused = [...MACHINE_GLOBAL_SKILLS.keys()].filter((s) => !cited.has(s));
+    // Stops the list drifting into a dumping ground of names no agent routes to any more.
+    expect(unused).toEqual([]);
+  });
+
+  it("gives every machine-global declaration a written reason", () => {
+    for (const [name, why] of MACHINE_GLOBAL_SKILLS) {
+      expect(why.length, `${name} needs a reason it lives outside the repo`).toBeGreaterThan(40);
+    }
+  });
+
+  // ...and on the one machine that CAN see the global root, still hold the declaration to reality,
+  // so a renamed or deleted global skill is caught somewhere rather than nowhere. Skipped on CI by
+  // design: there is nothing to compare against there, and guessing would re-create the flaw.
+  it("matches the global skills actually on disk, where that directory is visible", () => {
+    if (!existsSync(GLOBAL_SKILL_ROOT)) return;
+    const onDisk = skillsIn(GLOBAL_SKILL_ROOT);
+    const missing = [...MACHINE_GLOBAL_SKILLS.keys()].filter((s) => !onDisk.includes(s));
+    expect(missing).toEqual([]);
   });
 });
 
