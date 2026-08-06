@@ -209,7 +209,13 @@ export function audit({ repoRoot, docPath = join(repoRoot, DOC), coverage } = {}
     if (!rule || rule.noop === null) continue; // unknown word already reported; PRESERVE/CLAIMED claim nothing
     const noop = isNoop(repoRoot, base, ref);
     if (rule.noop && !noop) {
-      problems.push(`${ref} is recorded MERGED but merging it into ${base} still changes the tree.`);
+      // The remedy travels with the failure, because the failure is nearly always the same story:
+      // the row was true when it was written, then the trunk moved. Whoever hits this needs to know
+      // that re-proving it is usually impossible, not that they should go hunting for a merge.
+      problems.push(
+        `${ref} is recorded MERGED but merging it into ${base} still changes the tree. ` +
+          `A MERGED row is perishable — prune the ref and drop the row, or re-disposition it on today's evidence.`,
+      );
     }
     if (!rule.noop && noop) {
       problems.push(`${ref} is recorded ${disposition} but merging it into ${base} is a no-op — it is MERGED.`);

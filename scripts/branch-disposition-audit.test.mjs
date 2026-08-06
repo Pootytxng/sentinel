@@ -188,6 +188,13 @@ describe("what the audit refuses to pass", () => {
     const problems = run([["origin/landed", "MERGED"], ["origin/ahead", "MERGED"]]);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toMatch(/origin\/ahead is recorded MERGED but merging it into main still changes/);
+    // ...and it must say what to DO. On 2026-08-06 this exact failure fired against a row written
+    // twenty minutes earlier: the lane rebase-merged (a no-op at that instant), then the very next
+    // commit edited the row from CLAIMED to MERGED — a line the branch itself had added, so the
+    // three-way merge became a conflict and the proof could never be produced again. Re-proving is
+    // not the fix there; pruning is. A diagnosis without a remedy sends the next reader looking for
+    // a merge that cannot exist.
+    expect(problems[0]).toMatch(/prune the ref and drop the row/);
   });
 
   it("fails when an UNLANDED row has quietly landed", () => {
