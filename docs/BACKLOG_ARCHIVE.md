@@ -6,6 +6,53 @@
 > Current truth lives in docs/RELEASE_STATE.md — these are point-in-time records.
 
 ---
+## ARCHIVED 2026-08-06 — two oldest steering-log cycles (moved verbatim)
+
+> Moved out of `docs/BACKLOG.md` under its own retention rule (the board keeps the newest ~12
+> cycles; adding the 2026-08-06 idle-cost teardown made 14). Verbatim, unedited — history is not
+> retro-edited. Cycles in this batch, newest first: Cycle 2026-07-16e · Cycle 2026-07-16d.
+> The live board's 2026-07-16 owner decree points here for 16e.
+> Current truth: `docs/RELEASE_STATE.md` (gates) · `docs/BACKLOG.md` (live board).
+
+### Cycle 2026-07-16e — ✅ SITE DEPLOYED + AUTO-DEPLOY WIRED (CC, owner-directed "deploy the site … make it as automated as possible"): live on `compy-bd6.pages.dev` · ~~GitHub Actions deploy lane awaiting ONE owner token paste~~ **← CANCELLED, see decree above**
+
+- **Manual deploy (the last one):** dist-site restaged fresh (`npm run stage:site`) → `wrangler pages
+  deploy` under the standing deploy GO (checklist B3, 2026-07-15) → apex promotion PROVEN by hash
+  (apex == deployment URL `37fa0e02…`, SHA-256 `FFC5D5ADD8812501…`, 34073 bytes both).
+- **Auto-deploy lane:** `.github/workflows/deploy-site.yml` — push-to-main path-scoped (site/,
+  site-app/, functions/, src/data/, the stage script) → `npm ci` ×2 → `stage:site` → wrangler-action
+  production deploy. Preflight job SKIPS green until the credential exists (no red-X spam);
+  zero-budget (ubuntu 1×, scoped triggers, concurrency-cancel).
+- **Secrets:** `CLOUDFLARE_ACCOUNT_ID` set by CC via `gh secret set` (low-sensitivity). The deploy
+  token is owner-mint-only → **checklist B7** (Pages:Edit-scoped custom token → GitHub secret
+  `CLOUDFLARE_API_TOKEN`; never passes through chat/repo). First auto-run gets fired + verified on
+  his "token's in".
+
+### Cycle 2026-07-16d — ✅ OPTIMIZATION CLEANUP PHASE 0 SHIPPED (CC, owner-directed "ship Phase 0"): `55f68b6` locked name + first-class front door · `f831b5f` landed 16c's stranded deliverables — NO gate moved, zero mutation boundary
+
+- **`f831b5f` — git-lock recovery + 16c's docs landed:** Cycle 2026-07-16c's Cowork session died on
+  its final commit, leaving stale zero-byte `.git/HEAD.lock`/`index.lock` (evidence-verified: 19 min
+  old, no git.exe running, HEAD intact) and its deliverables uncommitted. Removed the locks and landed
+  the 7 pending files exactly as staged (the 4.1 spec · METHODOLOGY.md · consumer-story draft · both
+  panel-review docs · BACKLOG/COMPY_OVERVIEW edits, completing `801ea62`'s truncated file). Parallel-lane
+  COWORK_*.md working artifacts stay untracked, never swept.
+- **`55f68b6` — 4.1 Phase 0 (owner-authorized, superseding the entry's "nothing authorized to build"):**
+  the live `leftovers.rs` read-only audit now fronts as **"Optimization Cleanup"** (owner-locked name,
+  2026-07-15) and is **UNBURIED** — out of the "Nothing else needs attention" drawer to a first-class
+  Check section (title + explainer blurb + "Check this PC for old tweaks" run button; a check the user
+  is meant to RUN can't hide in a leave-it-alone pile). terms.json/tweaks.json renamed (+ alias);
+  title-case "Past Tweaks" pinned as a retired label in stale-reference-guard (lowercase descriptive
+  phrase + the "Past tweak ·" row prefix stay legal); Optimize.test now asserts the section renders ON
+  the open surface, never in the drawer. **Read-only unchanged:** no restore action exists,
+  `restore_gate()` stays double-dark, identifiers keep `leftovers`. Phases 1–3 remain un-scope-gated;
+  the Trust-Ledger-reuse vs separate-mechanism fork is still the first scope-gate call.
+- **Verify:** tsc 0 · vitest 1682/1682 (181 files; new guard rides the existing per-file scans) ·
+  self-reviewer PASS 9/9 (contrast 11.3:1 header, no dup mount, pre-run/busy/result/fixture states) ·
+  installer re-cut + silent reinstall — SHA + stamp in the RELEASE_STATE 2026-07-16b banner.
+
+
+---
+
 
 ## ARCHIVED 2026-08-04 — five oldest steering-log cycles (moved verbatim)
 
