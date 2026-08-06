@@ -82,6 +82,12 @@ bottom expandable rows read like footer legalese.
    invisible safe tweak) are this one seam: **the check's output and the fix's door live in
    different rooms with no hallway.** The fix class is a routed hand-off (check verdict → deep
    link into Lab→Optimize with the found items highlighted), not more UI.
+   ✅ **SHIPPED 2026-08-06** (`f84ae7b5`, PR #79): every "see the fixes" route now goes through one
+   writer, `openFixesInLab` in `App.tsx`, which persists the station intent BEFORE navigating, so a
+   click lands on the Optimize station OPEN rather than the bare Lab dock. `RerunCheckBand` grew a
+   quiet text link ("Fix them in Lab") that appears only when the check actually found something.
+   Guarded by `src/surfaces/post-check-lab-route-guard.test.ts` (ordering + single-writer) and
+   behaviourally in `home-console.test.tsx`. Self-review PASS.
 2. **Parallel UI generations coexist behind flags** — Home has 4+ faces (HomeRoom/V2/Console/HUD),
    Monitor 4 (classic/V2/Basic/Console), Lab 5 (classic/V2/Bento/Console/Ground), plus legacy
    Check/Fix/Play/Learn surfaces still in-tree. One blessed face per room exists at runtime, but
@@ -93,6 +99,9 @@ bottom expandable rows read like footer legalese.
    comment claims a default the flag's reader contradicts — nine had drifted, incl. MonitorV2 and
    BlackbookV2 still calling their LIVE console faces "DEFAULT OFF". Faces still multiply; they can
    no longer lie about which one ships.
+   ✅ **PRUNE SHIPPED 2026-08-06** (`1ab831fb`, PR #78): one blessed face per room, 29 unreachable
+   files / ~2,578 lines deleted. Remaining tail: the `compy_editorial="0"` intra-file classic
+   branches in MonitorV2/BlackbookV2 (not separate faces — dead branches inside a live one).
 3. **Orientation lives in copy, not chrome.** The room's purpose is a one-line crumb in the
    topbar; the strongest wayfinding line ships at the END of onboarding. **Candidates:**
    ~~surface the rail-reads-top-to-bottom framing at guided-setup START~~ ✅ **SHIPPED 2026-07-23**
