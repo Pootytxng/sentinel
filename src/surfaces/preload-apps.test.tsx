@@ -64,7 +64,9 @@ describe("PreloadApps (Phase-B, BUILT DARK)", () => {
     preloadView(true, ["solitaire-collection", "feedback-hub"]);
     render(<Fix {...baseProps} />);
     fireEvent.click(await screen.findByText("Preinstalled apps"));
-    expect(screen.getByText("Solitaire Collection")).toBeTruthy();
+    // findBy, not getBy: the row list is painted by a state update the click only schedules,
+    // so a synchronous read here fails under full-suite load and passes in isolation.
+    expect(await screen.findByText("Solitaire Collection")).toBeTruthy();
     expect(screen.getByText("Feedback Hub")).toBeTruthy();
     // Not installed → never offered (no "remove something that isn't there").
     expect(screen.queryByText("Microsoft News")).toBeNull();
