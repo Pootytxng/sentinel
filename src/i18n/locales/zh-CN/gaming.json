@@ -291,6 +291,10 @@
     "orbitButton": "环绕",
     "dragHint": "拖动可环绕旋转 · 悬停或点击部件可查看实时规格",
     "initializingHologram": "全息影像初始化中…",
+    "a11y": {
+      "hologram": "你电脑的 3D 全息影像,其中包含:{{parts}}。",
+      "hologramGhosts": "以下部件 Compy 无法通过软件读取,因此以淡淡的虚影呈现:{{ghosts}}。"
+    },
     "honestyNote": "完全根据你的配置定制——部件和规格都实时读取自你的电脑。当 HWiNFO 或 LibreHardwareMonitor 运行时,风扇会以真实转速旋转;如果都没有运行,它们就只是淡淡的占位效果。电源和散热器型号在软件层面没有身份信息,所以它们会以虚影形式呈现,而不是被随意猜测。",
     "nudgeTitle": "点亮你的风扇与温度显示",
     "nudgeBodyPre": "你的风扇目前显示为虚影,是因为 Compy 坚持",

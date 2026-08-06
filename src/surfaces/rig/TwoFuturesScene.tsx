@@ -54,6 +54,11 @@ export default function TwoFuturesScene({
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: true }}
       camera={{ position: [0, 1.6, 13.8], fov: 45 }}
+      // Q7 a11y: genuinely decorative, so it is hidden rather than named. This canvas states no
+      // fact of its own — the baseline/now dates sit above it (TwoFutures.tsx `tf-heads`) and every
+      // per-component before → after number sits below it (`tf-rail`). Naming it would make a
+      // screen reader announce the same comparison twice. Unlike the bay, hiding here loses nothing.
+      aria-hidden="true"
     >
       <ambientLight intensity={0.7} />
       {/* Neutral keys (same rule as the bay): theme-tinted keys wash the per-part identity

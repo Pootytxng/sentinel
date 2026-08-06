@@ -183,6 +183,11 @@ export function HardwareTourScene({
       dpr={[1, 2]}
       gl={{ alpha: true, antialias: true }}
       camera={{ position: [OVERVIEW_CAM.x, OVERVIEW_CAM.y, OVERVIEW_CAM.z], fov: 36 }}
+      // Q7 a11y: decorative — the tour's text panel (SetupTour.tsx `st-panel`) carries the lesson,
+      // this stage only illustrates it. The host wrapper `st-stage` is already aria-hidden; this
+      // repeats it at the call site so the rule is true of the component itself and not only of
+      // wherever it happens to be mounted.
+      aria-hidden="true"
     >
       <fogExp2 attach="fog" args={["#070b12", 0.06]} />
       <ambientLight intensity={0.65} />
