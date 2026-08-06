@@ -170,15 +170,13 @@ passed on the same updater path, and the debris is cleared, so **normal product 
 resume.** Every row still marked OPEN above gates a *future* PUBLIC (store/marketing) release or the
 arming of a dark feature; none of them blocks the shipped v0.9.12 build or the work that follows it.
 
-**⚠️ VERSION DEBT — the next release cut MUST bump to 0.9.13 before anything can reach a tester.**
-`main` has moved past the published v0.9.12 (ledger-honesty fixes, `dc4d55e` and later) while still
-*declaring* version 0.9.12. The updater offers a download only on a **higher** number, so under the
-current version every one of those fixes is unreachable by the fleet — including the two-plus testers
-now confirmed on 0.9.12. This is not a blocker on development; it is a debt that comes due at the
-next cut. Bump `src-tauri/tauri.conf.json` + `package.json`, build **with** `TAURI_SIGNING_PRIVATE_KEY`
-(owner-held; an unsigned build cannot be published, by design), then the normal publish GO/NO-GO.
-Recorded 2026-08-05 at the owner's direction to defer the cut until the next session's work lands, so
-one bump covers both.
+**⚠️ VERSION DEBT — half paid 2026-08-06. The manifests now declare 0.9.13; the SIGNED cut does not
+exist yet.** The bump landed in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`,
+so the ledger-honesty fixes (`dc4d55e` and later) and the idle-cost teardown are no longer trapped
+behind a version the updater will not offer. What is still owed is the *publish*: a build made **with**
+`TAURI_SIGNING_PRIVATE_KEY` (owner-held; the local dev build above is deliberately unsigned, and tauri
+fails the updater-artifact step without it — expected, not a defect), then the normal publish GO/NO-GO.
+Until that runs, the fleet stays on published v0.9.12 and no 0.9.13 reaches a tester.
 
 ## Required owner decisions (live)
 
