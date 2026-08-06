@@ -82,10 +82,11 @@
   `docs/perf/raw/`, `docs/perf/q7-baseline.json` transcribes 14 metrics, and
   `scripts/perf-budget-guard.test.mjs` re-derives every published number from those traces on each
   `npm test` — so a hand-edited baseline fails even though CI can never re-run the probe. One bad
-  finding is on the record as an `open finding`, not a spec: **idle Compy costs ~50% of one core**
-  with nothing moving and nobody present, reproduced on two bare runs; `src/shell-idle-guard.test.ts`
-  adds the third idle axis (*is anyone interacting?*) and carries `LenisSpine.tsx` as its declared
-  exception. *Still owner-blocked:* the lower-spec rig leg — every budget is proven on one fast
+  finding was on the record as an `open finding`, not a spec: **idle Compy cost ~50% of one core**
+  with nothing moving and nobody present, reproduced on two bare runs. **CLOSED 2026-08-06** by the
+  idle-cost teardown below — 50.165% → 23.348% of a core, re-measured on the shipped 0.9.13 build;
+  `src/shell-idle-guard.test.ts` carries the third idle axis (*is anyone interacting?*) and its
+  always-on record is now empty. *Still owner-blocked:* the lower-spec rig leg — every budget is proven on one fast
   machine and none is a claim about a slow one. **Q6 DELIVERED 2026-08-04**
   (issue [#65](https://github.com/Pootytxng/sentinel/issues/65), `9bf3bde`) — three stale live claims
   retired: `GAMING_MODE_PLAN.md` reconciled against the QA record (8 rows mapped, 3 left unchecked as
