@@ -14,6 +14,10 @@ import "./RerunCheckBand.css";
 // Honest by construction (RECEIPTS DOCTRINE): an AGE only appears when a real check completed and we
 // stored its record (last-check.ts). With no stored snapshot we fall back to the LIVE readiness
 // counts and show NO age — never a time we didn't measure.
+//
+// The check→fix hallway (2026-08-06): when the band reports a non-zero fix count it also carries the
+// route to those fixes — a text link, not a rival button, so the "one primary action" rule above
+// still holds. A named flag with no way to act on it is the dead-end this app exists to avoid.
 
 const REFRESH_ICON = (
   <svg
@@ -36,10 +40,15 @@ export function RerunCheckBand({
   readiness,
   checking,
   onRunCheck,
+  onSeeInFix,
+  fixRoomLabel,
 }: {
   readiness: GameReadiness | null;
   checking: boolean;
   onRunCheck: () => void;
+  /** Route to the fixes themselves. A count with no way to act on it is a dead-end flag. */
+  onSeeInFix?: () => void;
+  fixRoomLabel?: string;
 }) {
   const { t } = useTranslation();
   const snap = checking ? null : readLastCheck();
@@ -104,7 +113,17 @@ export function RerunCheckBand({
         />
         <div>
           <div className="rcb-tag">{tag}</div>
-          <div className="rcb-status">{status}</div>
+          <div className="rcb-status">
+            {status}
+            {/* A count is only honest if it goes somewhere: the flag names its own fix inline.
+                A text LINK, never a second button — Home keeps ONE primary action. */}
+            {warn && onSeeInFix ? (
+              <button type="button" className="rcb-fix" onClick={onSeeInFix}>
+                {t("optimize.rerunCheckBand.fixLink", { room: fixRoomLabel })}
+                <span aria-hidden="true"> →</span>
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
       <button type="button" className="rcb-btn" onClick={onRunCheck} disabled={checking}>
