@@ -1,0 +1,123 @@
+{
+  "task": "latency",
+  "recordedAt": "2026-08-05T23:54:48.369Z",
+  "note": "Click -> the rAF tick where the rail reports the room selected AND its body carries >200 characters of text. Pass 0 is a genuine first mount (fresh reload). The >200-char rule is a weak proxy for a room that is mostly canvas: Lab reports ~238 characters, so its figure means 'chrome painted', not 'scene rendered'.",
+  "rooms": [
+    "Home",
+    "Monitor",
+    "Blackbook",
+    "Lab"
+  ],
+  "runs": [
+    {
+      "pass": 0,
+      "room": "Home",
+      "ms": 1,
+      "bodyChars": 549
+    },
+    {
+      "pass": 0,
+      "room": "Monitor",
+      "ms": 19,
+      "bodyChars": 1036
+    },
+    {
+      "pass": 0,
+      "room": "Blackbook",
+      "ms": 19,
+      "bodyChars": 3916
+    },
+    {
+      "pass": 0,
+      "room": "Lab",
+      "ms": 7,
+      "bodyChars": 261
+    },
+    {
+      "pass": 1,
+      "room": "Home",
+      "ms": 8,
+      "bodyChars": 408
+    },
+    {
+      "pass": 1,
+      "room": "Monitor",
+      "ms": 11,
+      "bodyChars": 1036
+    },
+    {
+      "pass": 1,
+      "room": "Blackbook",
+      "ms": 15,
+      "bodyChars": 3916
+    },
+    {
+      "pass": 1,
+      "room": "Lab",
+      "ms": 5,
+      "bodyChars": 238
+    },
+    {
+      "pass": 2,
+      "room": "Home",
+      "ms": 7,
+      "bodyChars": 408
+    },
+    {
+      "pass": 2,
+      "room": "Monitor",
+      "ms": 11,
+      "bodyChars": 1036
+    },
+    {
+      "pass": 2,
+      "room": "Blackbook",
+      "ms": 16,
+      "bodyChars": 3916
+    },
+    {
+      "pass": 2,
+      "room": "Lab",
+      "ms": 7,
+      "bodyChars": 238
+    }
+  ],
+  "summary": {
+    "Home": {
+      "first": 1,
+      "repeat": [
+        8,
+        7
+      ],
+      "worst": 8,
+      "median": 7
+    },
+    "Monitor": {
+      "first": 19,
+      "repeat": [
+        11,
+        11
+      ],
+      "worst": 19,
+      "median": 11
+    },
+    "Blackbook": {
+      "first": 19,
+      "repeat": [
+        15,
+        16
+      ],
+      "worst": 19,
+      "median": 16
+    },
+    "Lab": {
+      "first": 7,
+      "repeat": [
+        5,
+        7
+      ],
+      "worst": 7,
+      "median": 7
+    }
+  }
+}
