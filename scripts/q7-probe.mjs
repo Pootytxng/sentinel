@@ -24,6 +24,8 @@
 //   node scripts/q7-probe.mjs latency   [--port 9455] [--out FILE]
 //   node scripts/q7-probe.mjs idle      [--port 9455] [--minutes 10] [--hidden] [--out FILE]
 //   node scripts/q7-probe.mjs idle-bare [--minutes 10] [--settle 45]   <- no CDP; the honest CPU number
+//   node scripts/q7-probe.mjs attribute [--port 9455] [--settle 45] [--phase 120]
+//                              <- WHY idle costs what it costs: freeze rAF, then animations, then timers
 //   node scripts/q7-probe.mjs a11y      [--port 9455] [--w 1280] [--h 720] [--out FILE]
 //   node scripts/q7-probe.mjs eval      [--port 9455] --expr "<js>"
 //   node scripts/q7-probe.mjs restore   -- kill every port-bearing instance, relaunch clean
@@ -106,8 +108,23 @@ function runningCompyPids() {
   return out ? out.split(",").map(Number).filter(Boolean) : [];
 }
 
-function killAllCompy() {
-  ps(`Get-Process compy -ErrorAction SilentlyContinue | Stop-Process -Force`);
+/**
+ * Kill every compy.exe and WAIT for the kernel to agree.
+ *
+ * One Stop-Process pass is not enough: process exit is asynchronous, and Compy runs more than one
+ * compy.exe (the shell plus the ETW capture helper), so a single-shot kill returns while a pid is
+ * still dying and launch() then refuses with "already running". Retries inside PowerShell so the
+ * whole wait costs one spawn. Returns the number of survivors -- 0 on success.
+ */
+function killAllCompy(timeoutSeconds = 12) {
+  const out = ps(
+    `$deadline=(Get-Date).AddSeconds(${timeoutSeconds});` +
+      `while((Get-Date) -lt $deadline){` +
+      `$p=Get-Process compy -ErrorAction SilentlyContinue; if(-not $p){break};` +
+      `$p | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 300 };` +
+      `(Get-Process compy -ErrorAction SilentlyContinue | Measure-Object).Count`,
+  );
+  return Number(out) || 0;
 }
 
 function moveWindow(pid, x, y, w, h) {
@@ -1019,6 +1036,747 @@ async function taskIdle() {
   console.log("written:", writeOut(hidden ? "idle-hidden" : "idle-visible", result));
 }
 
+// ---------------------------------------------------------------------------- idle attribution
+//
+// A SEPARATE payload from INSTRUMENT, on purpose. INSTRUMENT installs its own unconditional rAF tick
+// (the frame-rate denominator, see line ~295) driven by an unpatched rAF. Harmless for every other
+// task; fatal for this one -- it would keep running straight through the frozen phase and turn the
+// A/B below into noise, reporting the probe's own cost as the app's residual. taskAttribute()
+// therefore never calls session(), and installs ONLY this.
+//
+// Every internal name is prefixed q7 so the capture frame can be filtered out of its own stack, and
+// there is no regex anywhere in here: `\s` and `\/` inside a JS template literal are silently
+// unescaped, so a regex written here does not arrive as the regex that was typed.
+
+const RAF_TRAP = `(() => {
+  if (window.__q7raf) return { already: true, installedAt: window.__q7raf.installedAt };
+  const trap = (window.__q7raf = {
+    scheduled: 0,
+    fired: 0,
+    live: new Map(),
+    sites: Object.create(null),
+    seq: 0,
+    frozenRaf: false,
+    frozenAnimations: false,
+    frozenTimers: false,
+    sampleEvery: 60,
+    installedAt: Date.now(),
+    // A freeze that merely cancels the armed handles is a one-shot: anything that re-arms from
+    // OUTSIDE its own callback (a timer, an event, a self-healing ticker) walks straight back in and
+    // the phase measures a half-frozen app. So the freeze is STICKY -- registration is refused while
+    // frozen -- and every refusal is tallied WITH ITS STACK. The re-armer is then named rather than
+    // merely detected, and the band stays valid instead of voiding.
+    refused: { raf: 0, intervals: 0, timeouts: 0 },
+    refusedSites: Object.create(null),
+    frozenAnimationNames: Object.create(null),
+    fakeSeq: 1,
+  });
+  const origRaf = window.requestAnimationFrame.bind(window);
+  const origCaf = window.cancelAnimationFrame.bind(window);
+
+  // WHERE the loop was armed. A CPU sampling profile attributes idle frame work to the browser's
+  // frame dispatcher -- true, and useless: the dispatcher is not the code a fix has to touch. The
+  // REGISTRATION stack names the module that armed the loop. Sampled 1-in-60, because capturing a
+  // stack 60 times a second is itself a measurable cost, which is precisely the subject here. A
+  // loop that re-arms every frame is sampled about once a second, so nothing persistent hides.
+  function q7sig() {
+    let raw = "";
+    try { raw = new Error().stack || ""; } catch (e) { return "(no stack)"; }
+    const lines = raw.split("\\n");
+    const out = [];
+    for (let i = 0; i < lines.length && out.length < 3; i++) {
+      const ln = lines[i].trim();
+      if (!ln) continue;
+      if (ln.indexOf("q7") !== -1) continue;
+      if (ln.indexOf("Error") === 0) continue;
+      out.push(ln);
+    }
+    return out.join(" <- ") || "(empty stack)";
+  }
+
+  // Refuse a registration during a frozen phase and record who tried. Always takes a stack: a
+  // re-armer is by definition rare enough to sample every time, and naming it is the whole payoff.
+  // The returned handle is a number no real scheduler will hand out, so a later clear/cancel on it
+  // is a harmless no-op rather than a cross-wired cancellation of somebody else's live handle.
+  function q7refuse(kind) {
+    trap.refused[kind]++;
+    const key = kind + ": " + q7sig();
+    trap.refusedSites[key] = (trap.refusedSites[key] || 0) + 1;
+    return 900000000 + trap.fakeSeq++;
+  }
+
+  window.requestAnimationFrame = function q7rafSchedule(cb) {
+    if (trap.frozenRaf) return q7refuse("raf");
+    trap.scheduled++;
+    let sig = null;
+    if (trap.seq++ % trap.sampleEvery === 0) {
+      sig = q7sig();
+      trap.sites[sig] = (trap.sites[sig] || 0) + 1;
+    }
+    const handle = origRaf(function q7rafFire(t) {
+      trap.live.delete(handle);
+      trap.fired++;
+      return cb(t);
+    });
+    trap.live.set(handle, sig || "(unsampled)");
+    return handle;
+  };
+  window.cancelAnimationFrame = function q7rafCancel(handle) {
+    trap.live.delete(handle);
+    return origCaf(handle);
+  };
+
+  // Timers are the other way to burn a core while nobody is looking, and a self-re-arming setTimeout
+  // chain is invisible to a rAF trap. Intervals get a stack every time (they are rare). Timeouts are
+  // sampled 1-in-50 -- promise plumbing schedules them constantly and a stack per timeout would be a
+  // bigger cost than anything being measured.
+  const origSetInterval = window.setInterval.bind(window);
+  const origClearInterval = window.clearInterval.bind(window);
+  const origSetTimeout = window.setTimeout.bind(window);
+  const origClearTimeout = window.clearTimeout.bind(window);
+  trap.intervals = new Map();
+  trap.timeouts = new Map();
+  trap.intervalSites = Object.create(null);
+  trap.timeoutSites = Object.create(null);
+  trap.timeoutSeq = 0;
+
+  window.setInterval = function q7setInterval(fn, ms) {
+    if (trap.frozenTimers) return q7refuse("intervals");
+    const rest = Array.prototype.slice.call(arguments, 2);
+    const sig = q7sig();
+    const id = origSetInterval.apply(null, [fn, ms].concat(rest));
+    const key = sig + "  every " + ms + "ms";
+    trap.intervals.set(id, key);
+    trap.intervalSites[key] = (trap.intervalSites[key] || 0) + 1;
+    return id;
+  };
+  window.clearInterval = function q7clearInterval(id) {
+    trap.intervals.delete(id);
+    return origClearInterval(id);
+  };
+  window.setTimeout = function q7setTimeout(fn, ms) {
+    if (trap.frozenTimers) return q7refuse("timeouts");
+    const rest = Array.prototype.slice.call(arguments, 2);
+    let sig = null;
+    if (trap.timeoutSeq++ % 50 === 0) {
+      sig = q7sig() + "  after " + ms + "ms";
+      trap.timeoutSites[sig] = (trap.timeoutSites[sig] || 0) + 1;
+    }
+    let id = 0;
+    const wrapped = function () {
+      trap.timeouts.delete(id);
+      return typeof fn === "function" ? fn.apply(null, arguments) : fn;
+    };
+    id = origSetTimeout.apply(null, [wrapped, ms].concat(rest));
+    trap.timeouts.set(id, sig || "(unsampled)");
+    return id;
+  };
+  window.clearTimeout = function q7clearTimeout(id) {
+    trap.timeouts.delete(id);
+    return origClearTimeout(id);
+  };
+
+  function q7tally(bag, cap) {
+    const out = [];
+    for (const key in bag) out.push({ site: key, count: bag[key] });
+    out.sort(function (a, b) { return b.count - a.count; });
+    return out.slice(0, cap);
+  }
+
+  // CSS/WAAPI animations do NOT go through rAF and survive a frame-loop freeze. Naming their target
+  // elements is the difference between "something is animating" and a selector to go fix.
+  trap.animationInfo = function () {
+    if (typeof document.getAnimations !== "function") return [];
+    return document.getAnimations().map(function (a) {
+      const eff = a.effect;
+      const tgt = eff && eff.target ? eff.target : null;
+      let sel = "(no target)";
+      if (tgt && tgt.tagName) {
+        sel = tgt.tagName.toLowerCase();
+        if (tgt.id) sel += "#" + tgt.id;
+        const cls = typeof tgt.className === "string" ? tgt.className.trim() : "";
+        if (cls) sel += "." + cls.split(" ").join(".");
+      }
+      let name = "";
+      try {
+        name = a.animationName || a.transitionProperty || "";
+      } catch (e) {
+        name = "";
+      }
+      let timing = {};
+      try {
+        timing = eff && eff.getTiming ? eff.getTiming() : {};
+      } catch (e) {
+        timing = {};
+      }
+      return {
+        target: sel.slice(0, 220),
+        name: String(name),
+        playState: a.playState,
+        duration: timing.duration,
+        iterations: timing.iterations,
+      };
+    });
+  };
+
+  trap.read = function () {
+    return {
+      t: Date.now(),
+      scheduled: trap.scheduled,
+      fired: trap.fired,
+      // Exact, not sampled: a loop that re-arms every frame holds exactly one armed handle at rest,
+      // so at idle this IS the count of concurrent frame loops.
+      pending: trap.live.size,
+      frozen: { raf: trap.frozenRaf, animations: trap.frozenAnimations, timers: trap.frozenTimers },
+      sampleEvery: trap.sampleEvery,
+      sites: q7tally(trap.sites, 25),
+      liveIntervals: trap.intervals.size,
+      intervalSites: q7tally(trap.intervalSites, 25),
+      pendingTimeouts: trap.timeouts.size,
+      timeoutSites: q7tally(trap.timeoutSites, 15),
+      animations: trap.animationInfo(),
+      visibility: document.visibilityState,
+      refused: { raf: trap.refused.raf, intervals: trap.refused.intervals, timeouts: trap.refused.timeouts },
+      refusedSites: q7tally(trap.refusedSites, 20),
+    };
+  };
+
+  // Cancel every armed frame AND latch the refusal, so nothing can re-arm for the rest of the run.
+  // The first cut of this only cancelled, and 250 frames still fired in the frozen window at 16fps:
+  // something external kept re-arming. Sticky turns that from an unusable reading into a named site.
+  trap.freeze = function () {
+    trap.frozenRaf = true;
+    let n = 0;
+    trap.live.forEach(function (_sig, handle) { origCaf(handle); n++; });
+    trap.live.clear();
+    trap.frozenRaf = true;
+    return { cancelled: n, t: Date.now() };
+  };
+
+  // Cancel ONE named animation. "Animations cost 45 points" names no fix; "aurora costs 40 and the
+  // foil sweep costs 5" names two, and says which one is worth the risk of touching.
+  trap.freezeAnimationsNamed = function (name) {
+    const want = String(name);
+    let n = 0;
+    if (typeof document.getAnimations === "function") {
+      document.getAnimations().forEach(function (a) {
+        let nm = "";
+        try { nm = a.animationName || a.transitionProperty || ""; } catch (e) { nm = ""; }
+        if (String(nm) !== want) return;
+        try { a.cancel(); n++; } catch (e) { /* already idle */ }
+      });
+    }
+    trap.frozenAnimationNames[want] = true;
+    return { name: want, cancelled: n, t: Date.now() };
+  };
+
+  // Cancel every running CSS/WAAPI animation. cancel() drops the effect and leaves the element at its
+  // unanimated style; nothing re-creates it unless a style rule is re-applied, and a count that grows
+  // back is reported rather than smoothed over.
+  trap.freezeAnimations = function () {
+    const before = trap.animationInfo();
+    let n = 0;
+    if (typeof document.getAnimations === "function") {
+      document.getAnimations().forEach(function (a) {
+        try { a.cancel(); n++; } catch (e) { /* already idle */ }
+      });
+    }
+    trap.frozenAnimations = true;
+    return { cancelled: n, wasRunning: before, t: Date.now() };
+  };
+
+  // Last resort: clear every live interval and pending timeout. This breaks the app -- it is the
+  // final phase for a reason. What is still burning CPU after this is not the app's JavaScript.
+  trap.freezeTimers = function () {
+    trap.frozenTimers = true;
+    let i = 0;
+    let t = 0;
+    trap.intervals.forEach(function (_sig, id) { origClearInterval(id); i++; });
+    trap.intervals.clear();
+    trap.timeouts.forEach(function (_sig, id) { origClearTimeout(id); t++; });
+    trap.timeouts.clear();
+    trap.frozenTimers = true;
+    return { intervals: i, timeouts: t, t: Date.now() };
+  };
+
+  return { already: false, installedAt: trap.installedAt };
+})()`;
+
+const TRAP_READ = `(window.__q7raf ? window.__q7raf.read() : null)`;
+
+/** Block until the app is painted. waitUsable() cannot serve: it gates on window.__q7, which the
+ *  trap-only session deliberately never installs. */
+async function waitPainted(s, timeoutMs = 60000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const ready = await evaluate(
+        s,
+        `({ trap: !!window.__q7raf, rail: document.querySelectorAll(".v2-nav-item").length,
+            body: document.body ? document.body.innerText.length : 0 })`,
+      );
+      if (ready.trap && ready.rail > 0 && ready.body > 400) return s;
+    } catch {
+      /* execution context swapped mid-reload */
+    }
+    await sleep(100);
+  }
+  throw new Error("page never became usable (raf-trap session)");
+}
+
+/**
+ * One CPU window over the process group. t0 is taken BEFORE the opening sample and elapsed AFTER the
+ * closing one, so both PowerShell round-trips fall inside the window they are dividing by -- the same
+ * ordering idle-bare uses, and the reason its number is trustworthy.
+ */
+async function cpuPhase(pids, seconds, label) {
+  const t0 = Date.now();
+  const start = sampleProcesses(pids);
+  await sleep(seconds * 1000);
+  const end = sampleProcesses(pids);
+  const elapsed = (Date.now() - t0) / 1000;
+  const before = new Map(start.map((p) => [p.id, p.cpu ?? 0]));
+  const perProcess = end
+    .map((p) => {
+      const d = (p.cpu ?? 0) - (before.get(p.id) ?? 0);
+      return {
+        id: p.id,
+        name: p.name,
+        processorSeconds: Number(d.toFixed(3)),
+        percentOfOneCore: Number(((d / elapsed) * 100).toFixed(3)),
+      };
+    })
+    .sort((a, b) => b.processorSeconds - a.processorSeconds);
+  const processorSeconds = perProcess.reduce((x, p) => x + p.processorSeconds, 0);
+  return {
+    label,
+    seconds: Number(elapsed.toFixed(1)),
+    processorSeconds: Number(processorSeconds.toFixed(3)),
+    percentOfOneCore: Number(((processorSeconds / elapsed) * 100).toFixed(3)),
+    perProcess,
+  };
+}
+
+/**
+ * Renderer-side counters, read straight off CDP. The OS tells us a process burned N processor-seconds
+ * but not on what; these split the RENDERER's share into script / layout / style. The gap between
+ * TaskDuration (main-thread work) and the process's own CPU is the part that is NOT on the main
+ * thread -- compositor, raster, GPU -- which no amount of JavaScript freezing can ever remove.
+ */
+const METRIC_DURATIONS = [
+  "TaskDuration",
+  "ScriptDuration",
+  "LayoutDuration",
+  "RecalcStyleDuration",
+  "ThreadTime",
+  "ProcessTime",
+];
+const METRIC_COUNTERS = ["LayoutCount", "RecalcStyleCount"];
+const METRIC_GAUGES = ["Nodes", "JSEventListeners", "Frames"];
+
+async function readMetrics(s) {
+  try {
+    const r = await s.call("Performance.getMetrics");
+    const out = Object.create(null);
+    for (const m of r.metrics || []) out[m.name] = m.value;
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+function metricsDelta(open, close, elapsed) {
+  if (!open || !close || !(elapsed > 0)) return null;
+  const out = {};
+  for (const k of METRIC_DURATIONS) {
+    if (typeof open[k] !== "number" || typeof close[k] !== "number") continue;
+    const d = close[k] - open[k];
+    out[k] = {
+      seconds: Number(d.toFixed(3)),
+      percentOfOneCore: Number(((d / elapsed) * 100).toFixed(3)),
+    };
+  }
+  for (const k of METRIC_COUNTERS) {
+    if (typeof open[k] !== "number" || typeof close[k] !== "number") continue;
+    out[k] = { total: close[k] - open[k], perSecond: Number(((close[k] - open[k]) / elapsed).toFixed(2)) };
+  }
+  for (const k of METRIC_GAUGES) {
+    if (typeof close[k] === "number") out[k] = close[k];
+  }
+  return out;
+}
+
+/** "at http://tauri.localhost/assets/index-abc.js:1:392847" -> { url, line, col }. */
+function parseFrame(frame) {
+  let s = String(frame).trim();
+  // Timer signatures carry a double-space-delimited tail ("  every 500ms") that would otherwise be
+  // parsed as part of the column number.
+  const tail = s.indexOf("  ");
+  if (tail !== -1) s = s.slice(0, tail).trim();
+  if (s.endsWith(")")) s = s.slice(0, -1);
+  const parts = s.split(":");
+  const col = Number(parts.pop());
+  const line = Number(parts.pop());
+  let url = parts.join(":");
+  const sp = url.lastIndexOf(" ");
+  if (sp !== -1) url = url.slice(sp + 1);
+  if (url.startsWith("(")) url = url.slice(1);
+  if (!Number.isFinite(col) || !Number.isFinite(line) || !url.startsWith("http")) return null;
+  return { url, line, col };
+}
+
+/**
+ * The shipped bundle is minified, so a stack frame is a file:line:col and nothing else. Slicing the
+ * bundle text around that offset turns it back into something a human can name -- minified, but
+ * `.raf(` on a Lenis instance still reads as Lenis. The slice happens IN THE PAGE so a few hundred KB
+ * of bundle never crosses the debug socket.
+ */
+async function enrichSites(s, sites, limit = 6, radius = 160) {
+  const out = [];
+  for (const entry of sites.slice(0, limit)) {
+    const loc = parseFrame(String(entry.site).split(" <- ")[0]);
+    if (!loc) {
+      out.push({ ...entry, source: null });
+      continue;
+    }
+    let snippet = null;
+    try {
+      snippet = await evaluate(
+        s,
+        `fetch(${JSON.stringify(loc.url)}).then((r) => r.text()).then((t) => {
+           const ln = t.split("\\n")[${loc.line - 1}] || "";
+           return ln.slice(Math.max(0, ${loc.col - radius}), ${loc.col + radius});
+         })`,
+      );
+    } catch {
+      snippet = null;
+    }
+    out.push({ ...entry, source: snippet });
+  }
+  return out;
+}
+
+/**
+ * IDLE ATTRIBUTION. docs/perf/raw/idle-bare.json records that Compy burns ~50% of one core sitting
+ * idle with nothing on screen and nobody at the keyboard. It does not say WHY, and a budget that
+ * names a cost without naming its owner cannot be defended or cut.
+ *
+ * Method -- a subtraction waterfall. Each phase kills one more class of work and re-measures the SAME
+ * window, so every band is a difference between two directly comparable numbers:
+ *
+ *   running        everything alive                        -> the total idle cost
+ *   anim-frozen    every CSS/WAAPI animation cancelled      -> minus declarative animation
+ *   raf-frozen     every armed animation frame cancelled    -> minus the frame loops
+ *   timers-frozen  every interval + pending timeout cleared -> minus all remaining app JavaScript
+ *
+ * Animations are frozen FIRST because the bands are not additive when the work contends: with the
+ * frame loops frozen first, the animations' style recalcs went from 60/s to 250/s -- freeing the main
+ * thread made them cost MORE, and "running" read lower than the frozen phase beneath it. The dominant
+ * band has to be the one measured against an unperturbed baseline.
+ *
+ * What survives the last phase is not the app's JavaScript at all: it is the runtime -- WebView2
+ * compositing, the Tauri IPC pump, the Rust core. Naming that band is as important as naming the
+ * others, because it is the part no frontend change can ever fix.
+ *
+ * The FIRST band was the whole of the earlier two-phase probe, and it came back at 6.7% of the idle
+ * cost -- which is why this exists: freezing every frame loop in the app barely moved the number, so
+ * the answer was somewhere the two-phase design could not see.
+ *
+ * Each phase also snapshots CDP renderer counters, which split the renderer's own share into script /
+ * layout / style, and expose the gap between main-thread work and the process's total CPU. A large
+ * gap means the cost is off the main thread (compositor / raster) and no JavaScript change removes it.
+ *
+ * The run is VOID for the rAF band, and says so rather than publishing it, if frames keep firing
+ * after the freeze: that means something re-arms externally and the phase was never actually quiet.
+ */
+async function taskAttribute() {
+  const settle = Number(flags.settle ?? 45);
+  const phaseSeconds = Number(flags.phase ?? 120);
+  // Anything smaller than this is scheduler noise between two separate CPU windows, not a finding.
+  const NOISE_FLOOR = 0.5;
+
+  const survivors = killAllCompy();
+  if (survivors) throw new Error(`${survivors} compy.exe would not die; cannot measure a clean idle`);
+  await sleep(1500);
+  const lock = await launch(PORT);
+  await waitForPort(PORT, 30000);
+  const s = await attachMain(PORT);
+  await s.call("Page.enable");
+  // Document-start, for the same reason session({fresh:true}) does it: a loop armed during boot is
+  // invisible to a trap installed after boot, and the honest live count would be unknowable.
+  await s.call("Page.addScriptToEvaluateOnNewDocument", { source: RAF_TRAP });
+  await s.call("Page.reload", { ignoreCache: false });
+  await waitPainted(s);
+  await s.call("Performance.enable").catch(() => {});
+
+  const pids = processTree(lock.pid);
+  const cores = Number(ps(`[Environment]::ProcessorCount`)) || 1;
+  process.stderr.write(`  settling ${settle}s (boot animations must finish before phase 1 starts)\n`);
+  await sleep(settle * 1000);
+
+  const room = await evaluate(s, ACTIVE_ROOM);
+
+  /** One measured band: trap + renderer counters on both edges of a single CPU window. */
+  async function runPhase(label, note) {
+    const open = await evaluate(s, TRAP_READ);
+    const openMetrics = await readMetrics(s);
+    process.stderr.write(`  phase ${label}: ${phaseSeconds}s -- ${note}\n`);
+    const cpu = await cpuPhase(pids, phaseSeconds, label);
+    const close = await evaluate(s, TRAP_READ);
+    const closeMetrics = await readMetrics(s);
+    return {
+      label,
+      note,
+      cpu,
+      renderer: metricsDelta(openMetrics, closeMetrics, cpu.seconds),
+      framesFired: close.fired - open.fired,
+      framesPerSecond: Number(((close.fired - open.fired) / cpu.seconds).toFixed(1)),
+      open,
+      close,
+    };
+  }
+
+  // A baseline taken while the app is still ramping subtracts wrong for every band beneath it. Take
+  // short windows until two consecutive ones agree, then start. Costs seconds; buys a phase-1 number
+  // that is not a coin flip.
+  async function stabilize() {
+    const attempts = [];
+    let prev = null;
+    for (let i = 0; i < 6; i++) {
+      const w = await cpuPhase(pids, 8, `stabilize-${i + 1}`);
+      attempts.push(Number(w.percentOfOneCore.toFixed(3)));
+      if (prev !== null) {
+        const spread = Math.abs(w.percentOfOneCore - prev);
+        if (spread <= Math.max(1, prev * 0.12)) {
+          return { settled: true, windowSeconds: 8, attempts, spread: Number(spread.toFixed(3)) };
+        }
+      }
+      prev = w.percentOfOneCore;
+    }
+    return { settled: false, windowSeconds: 8, attempts, spread: null };
+  }
+  process.stderr.write(`  stabilising the baseline before phase 1\n`);
+  const stability = await stabilize();
+  process.stderr.write(
+    `  baseline ${stability.settled ? "settled" : "NEVER SETTLED"}: ${stability.attempts.join(" -> ")}\n`,
+  );
+
+  // ORDER MATTERS, and it is not the obvious one. The bands are only comparable if the DOMINANT cost
+  // is measured against an unperturbed baseline: when the frame loops were frozen first, the CSS
+  // animations' style recalcs jumped from 60/s to 250/s because the main thread they had been
+  // contending with went quiet -- so freezing rAF made the app cost MORE, and the "running" phase read
+  // lower than the frozen phase beneath it. Animations first; the frame loops are the cheap band.
+  const running = await runPhase("running", "everything alive");
+
+  const band = (hi, lo) => Number((hi.cpu.percentOfOneCore - lo.cpu.percentOfOneCore).toFixed(3));
+
+  // Split the animation band one animation at a time, in the order they were found. Each name gets
+  // its own window, so the output is a per-animation cost rather than a lump nobody can act on.
+  const animNames = [];
+  for (const a of running.open.animations ?? []) {
+    const nm = String(a?.name ?? "").trim();
+    if (nm && !animNames.includes(nm)) animNames.push(nm);
+  }
+  const animationSplit = [];
+  let prevAnimPhase = running;
+  for (const nm of animNames) {
+    const one = await evaluate(s, `window.__q7raf.freezeAnimationsNamed(${JSON.stringify(nm)})`);
+    await sleep(2000);
+    const ph = await runPhase(`anim-frozen:${nm}`, `${one.cancelled} "${nm}" animation(s) cancelled`);
+    animationSplit.push({
+      name: nm,
+      instancesCancelled: one.cancelled,
+      percentOfOneCore: band(prevAnimPhase, ph),
+      recalcStyleBefore: prevAnimPhase.renderer?.RecalcStyleCount?.perSecond ?? null,
+      recalcStyleAfter: ph.renderer?.RecalcStyleCount?.perSecond ?? null,
+      phase: ph,
+    });
+    prevAnimPhase = ph;
+  }
+
+  // Sweep whatever the named pass did not catch (unnamed transitions, anything that started late).
+  const animFreeze = await evaluate(s, `window.__q7raf.freezeAnimations()`);
+  await sleep(2000);
+  const animFrozen = await runPhase(
+    "anim-frozen",
+    `${animFreeze.cancelled} remaining CSS/WAAPI animation(s) cancelled`,
+  );
+
+  const rafFreeze = await evaluate(s, `window.__q7raf.freeze()`);
+  await sleep(3000);
+  const rafFrozen = await runPhase("raf-frozen", `${rafFreeze.cancelled} armed frame(s) cancelled`);
+
+  const timerFreeze = await evaluate(s, `window.__q7raf.freezeTimers()`);
+  await sleep(2000);
+  const timersFrozen = await runPhase(
+    "timers-frozen",
+    `${timerFreeze.intervals} interval(s) + ${timerFreeze.timeouts} timeout(s) cleared`,
+  );
+
+  const escapedFrames = rafFrozen.framesFired;
+  const rafValid = escapedFrames <= 2;
+  const firedRunning = running.framesFired;
+  const loopsAtRest = running.open.pending;
+  const rearms = timersFrozen.close.refused ?? { raf: 0, intervals: 0, timeouts: 0 };
+
+  const animBand = band(running, animFrozen);
+  const rafBand = band(animFrozen, rafFrozen);
+  const timerBand = band(rafFrozen, timersFrozen);
+  const residual = timersFrozen.cpu.percentOfOneCore;
+  const total = running.cpu.percentOfOneCore;
+  const share = (v) => (total > 0 ? Number(((v / total) * 100).toFixed(1)) : null);
+  const verdict = (v) =>
+    Math.abs(v) < NOISE_FLOOR ? `below the ${NOISE_FLOOR}-point noise floor -- not a finding` : "measured";
+
+  let bareIdle = null;
+  try {
+    bareIdle = JSON.parse(readFileSync(join(ROOT, "docs", "perf", "raw", "idle-bare.json"), "utf8"));
+  } catch {
+    /* not recorded yet */
+  }
+
+  // The renderer's main thread vs the whole process group. If main-thread time is a small fraction of
+  // the CPU still burning after every timer is dead, the cost lives off the main thread and the fix is
+  // not in the app's JavaScript.
+  const finalTask = timersFrozen.renderer?.TaskDuration?.percentOfOneCore ?? null;
+
+  const result = {
+    task: "attribute",
+    recordedAt: new Date().toISOString(),
+    room,
+    settleSeconds: settle,
+    phaseSeconds,
+    cores,
+    method:
+      "subtraction waterfall: running -> anim-frozen -> raf-frozen -> timers-frozen, each phase a " +
+      "separate CPU window over the same process group. Freezes are sticky (re-registration refused " +
+      "and its stack recorded), so a band cannot be diluted by work that quietly re-arms itself.",
+    baselineStability: stability,
+    rafBandValid: rafValid,
+    validity: [
+      rafValid
+        ? `${escapedFrames} frame(s) fired during raf-frozen -- the frame loops were genuinely dead.`
+        : `VOID for the rAF band: ${escapedFrames} frames fired AFTER the freeze despite the sticky ` +
+          `refusal, so the anim-frozen minus raf-frozen delta is NOT the cost of the frame loops.`,
+      stability.settled
+        ? `baseline settled to within ${stability.spread} points before phase 1.`
+        : `BASELINE NEVER SETTLED (${stability.attempts.join(" -> ")}) -- the running phase may have ` +
+          `been taken mid-ramp, so every band below it inherits that error.`,
+    ].join(" "),
+    // Who tried to come back after being frozen. Empty is the healthy answer; a named site here is a
+    // self-healing ticker, and it is a finding in its own right rather than a defect in the reading.
+    externalRearms: {
+      attempts: rearms,
+      sites: await enrichSites(s, timersFrozen.close.refusedSites ?? [], 10),
+    },
+    attribution: {
+      totalPercentOfOneCore: total,
+      bands: [
+        {
+          name: "CSS/WAAPI animations",
+          percentOfOneCore: animBand,
+          shareOfIdle: share(animBand),
+          verdict: verdict(animBand),
+          splitByAnimation: animationSplit.map((a) => ({
+            name: a.name,
+            instancesCancelled: a.instancesCancelled,
+            percentOfOneCore: a.percentOfOneCore,
+            shareOfIdle: share(a.percentOfOneCore),
+            verdict: verdict(a.percentOfOneCore),
+            recalcStylePerSecond: { before: a.recalcStyleBefore, after: a.recalcStyleAfter },
+          })),
+        },
+        {
+          name: "rAF frame loops",
+          percentOfOneCore: rafValid ? rafBand : null,
+          shareOfIdle: rafValid ? share(rafBand) : null,
+          verdict: rafValid ? verdict(rafBand) : "void -- frames escaped the freeze",
+        },
+        {
+          name: "timers (intervals + timeouts)",
+          percentOfOneCore: timerBand,
+          shareOfIdle: share(timerBand),
+          verdict: verdict(timerBand),
+        },
+        {
+          name: "runtime floor (WebView2 compositing, Tauri IPC, Rust core)",
+          percentOfOneCore: residual,
+          shareOfIdle: share(residual),
+          verdict: "survives every JavaScript freeze -- no frontend change removes this",
+        },
+      ],
+      mainThread: {
+        rendererTaskPercentOfOneCoreAtFloor: finalTask,
+        processGroupPercentOfOneCoreAtFloor: residual,
+        note:
+          finalTask === null
+            ? "renderer counters unavailable"
+            : finalTask < residual / 4
+              ? "the floor is overwhelmingly OFF the renderer main thread (compositor / raster / other process)"
+              : "a meaningful part of the floor is still renderer main-thread work",
+      },
+    },
+    phases: {
+      running,
+      ...Object.fromEntries(animationSplit.map((a) => [`animFrozen:${a.name}`, a.phase])),
+      animFrozen,
+      rafFrozen,
+      timersFrozen,
+    },
+    raf: {
+      concurrentLoopsAtRest: loopsAtRest,
+      framesFiredRunning: firedRunning,
+      callbacksPerSecond: running.framesPerSecond,
+      // N concurrent loops each get a callback per frame, so callbacks/s is N x refresh rate. The
+      // pending count is the N that makes it readable.
+      impliedRefreshHz:
+        loopsAtRest > 0 ? Number((firedRunning / running.cpu.seconds / loopsAtRest).toFixed(1)) : null,
+      armedAtFreeze: rafFreeze.cancelled,
+      firedAfterFreeze: escapedFrames,
+    },
+    animations: {
+      runningAtStart: running.open.animations,
+      cancelled: animFreeze.cancelled,
+      returnedAfterCancel: animFrozen.close.animations,
+    },
+    timers: {
+      liveIntervalsAtStart: running.open.liveIntervals,
+      pendingTimeoutsAtStart: running.open.pendingTimeouts,
+      cleared: { intervals: timerFreeze.intervals, timeouts: timerFreeze.timeouts },
+      stillLiveAtEnd: {
+        intervals: timersFrozen.close.liveIntervals,
+        timeouts: timersFrozen.close.pendingTimeouts,
+      },
+    },
+    sites: {
+      raf: await enrichSites(s, running.close.sites),
+      intervals: await enrichSites(s, running.close.intervalSites, 8),
+      timeouts: await enrichSites(s, running.close.timeoutSites, 6),
+    },
+    // The debug port and the trap are not free. Stating the gap keeps this run honest about being an
+    // observed number, not the shipped one -- idle-bare.json is the shipped one.
+    observerCost:
+      bareIdle && typeof bareIdle?.cpu?.percentOfOneCore === "number"
+        ? {
+            bareIdlePercentOfOneCore: bareIdle.cpu.percentOfOneCore,
+            observedPercentOfOneCore: total,
+            overheadPoints: Number((total - bareIdle.cpu.percentOfOneCore).toFixed(3)),
+            note: "bare = docs/perf/raw/idle-bare.json, measured with no CDP port and no trap.",
+          }
+        : null,
+  };
+
+  s.close();
+  killAllCompy();
+  console.log(JSON.stringify(result, null, 2));
+  console.log("written:", writeOut("idle-attribution", result));
+  console.log("the frozen instance was killed; run `node scripts/q7-probe.mjs restore` for a clean desk build.");
+  if (!rafValid) {
+    console.error("REFUSING TO CLAIM THE rAF BAND: frames kept firing after the freeze.");
+    process.exit(1);
+  }
+}
+
 /**
  * ACCESSIBILITY MATRIX. Resizes the REAL OS window (not an emulated viewport) and records, per room:
  * the accessible name/role/state of every focusable control, the visible focus ring, the tab order,
@@ -1394,6 +2152,7 @@ const TASKS = {
   latency: taskLatency,
   idle: taskIdle,
   "idle-bare": taskIdleBare,
+  attribute: taskAttribute,
   a11y: taskA11y,
   selftest: taskSelftest,
   eval: taskEval,
