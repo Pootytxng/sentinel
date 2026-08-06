@@ -71,8 +71,10 @@ const STANDS_DOWN: Record<string, { why: string; requires: RegExp[] }> = {
       "wrapper.scrollTop actually changing rather than on any library flag, so no internal Lenis " +
       "state can leave it spinning for a scroll that already ended. Also still stands down on " +
       "document.hidden, and deliberately does NOT re-arm on the way back to visible — an " +
-      "unattended foreground window was the original defect.",
-    requires: [/IDLE_AFTER_MS/, /const wake = /, /raf = 0; \/\/ Parked/, /document\.hidden/],
+      "unattended foreground window was the original defect. Both stand-down paths (idle and " +
+      "hidden) go through the same park() helper, which is also where the parked interval is " +
+      "recorded so it can be subtracted from Lenis's clock — see lenis-wake-guard.test.tsx.",
+    requires: [/IDLE_AFTER_MS/, /const wake = /, /const park = /, /document\.hidden/],
   },
 };
 
@@ -214,8 +216,30 @@ describe("shell-idle guard — the shell's rAF loops are a declared set", () => 
       `only outcome is another frame runs forever in every room, for the whole session,\n` +
       `including behind the game Compy is supposed to be optimizing.\n`;
     expect(body.includes("IDLE_AFTER_MS"), message).toBe(true);
-    expect(/raf = 0;/.test(body), message).toBe(true);
     expect(/\breturn\b/.test(body), message).toBe(true);
+
+    // The stand-down may be written inline (`raf = 0;`) or delegated to a helper (`park(time)`).
+    // Both are correct; pinning one of them is the same mistake the header warns about — the first
+    // draft of THIS assertion required the literal `raf = 0;` and then failed the 2026-08-06 wake
+    // fix, whose only crime was moving that statement into a shared park(). So accept either, and
+    // when the loop delegates, FOLLOW the indirection rather than take the call on faith: an empty
+    // park() would satisfy a naive `/park\(/` and leave the loop spinning forever.
+    const zeroesInline = /\braf = 0\b/.test(body);
+    const delegates = /\bpark\s*\(/.test(body);
+    expect(zeroesInline || delegates, message).toBe(true);
+    if (!zeroesInline) {
+      const helper = spine.indexOf("const park = ");
+      expect(
+        helper,
+        `LenisSpine's loop calls park(), but the file declares no 'const park = ' for it — ${message}`,
+      ).toBeGreaterThan(-1);
+      const helperBody = spine.slice(helper, spine.indexOf("};", helper));
+      expect(
+        /\braf = 0\b/.test(helperBody) && /cancelAnimationFrame/.test(helperBody),
+        `LenisSpine's park() does not actually stop the loop (it must cancelAnimationFrame AND\n` +
+          `zero the handle, or wake() will see a stale non-zero handle and refuse to re-arm).\n${message}`,
+      ).toBe(true);
+    }
   });
 
   it("the sibling axes it defers to are real", () => {

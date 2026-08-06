@@ -70,8 +70,30 @@ export function LenisSpine({
     let lastMotion = 0;
     let lastTop = wrapper.scrollTop;
 
+    // THE PARKED TIME IS HIDDEN FROM LENIS (self-review FAIL, 2026-08-06). Lenis eases on a clock:
+    // `raf(time)` derives deltaTime from the previous call, and the damping factor is 1-e^(-λ·Δt).
+    // Parking leaves a multi-second hole in that series, so the first frame after a wake saturates
+    // the factor to ~1 and the lane TELEPORTS to the target instead of easing to it — smooth on the
+    // first scroll of a session, an instant snap on every scroll after a park. Reproduced: a 4 s park
+    // turned a 13-frame curve into one jump of 137 px, then flat.
+    //
+    // The interval is therefore subtracted from the timestamps Lenis sees: it is time during which
+    // the spine did not exist, and the library has no business learning about it. Done through the
+    // public raf(time) argument, never by writing the instance's internal clock, so a Lenis upgrade
+    // cannot silently un-fix it. Guarded by src/design/jarvis/lenis-wake-guard.test.tsx.
+    let parkedAt = 0;
+    let parkedTotal = 0;
+
+    /** Stop ticking, and record WHEN. Every path that parks goes through here — one that does not
+     *  leaves its gap in Lenis's next deltaTime, which is exactly the defect above. */
+    const park = (at: number) => {
+      cancelAnimationFrame(raf);
+      raf = 0;
+      parkedAt = at;
+    };
+
     const loop = (time: number) => {
-      lenis?.raf(time);
+      lenis?.raf(time - parkedTotal);
 
       const top = wrapper.scrollTop;
       if (top !== lastTop) {
@@ -79,7 +101,7 @@ export function LenisSpine({
         lastMotion = time;
       }
       if (time - lastMotion > IDLE_AFTER_MS) {
-        raf = 0; // Parked. Nothing has moved for a second — the next input re-arms it.
+        park(time); // Parked. Nothing has moved for a second — the next input re-arms it.
         return;
       }
       raf = requestAnimationFrame(loop);
@@ -88,14 +110,19 @@ export function LenisSpine({
     /** Arm the loop (or extend its life) — safe to call on every event of a burst. */
     const wake = () => {
       if (disposed || !lenis || document.hidden) return;
-      lastMotion = performance.now();
-      if (!raf) raf = requestAnimationFrame(loop);
+      const now = performance.now();
+      lastMotion = now;
+      if (raf) return; // already running: nothing was parked, nothing to discount
+      if (parkedAt) parkedTotal += now - parkedAt;
+      parkedAt = 0;
+      raf = requestAnimationFrame(loop);
     };
 
     const onVisibility = () => {
       if (document.hidden) {
-        cancelAnimationFrame(raf);
-        raf = 0;
+        // A hidden window is a park like any other — and the longest one there is. Left unrecorded,
+        // the first scroll after the user comes back is the snap all over again.
+        park(performance.now());
         lenis?.stop();
       } else {
         // Do NOT arm here: a window coming back to the foreground with nobody touching it is
