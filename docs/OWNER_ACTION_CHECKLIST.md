@@ -302,6 +302,16 @@ These gate **public** release only (not the local app you use daily). Full list:
 ## §D — Taste / visual sign-offs (as they come up)
 Claude proceeds on tasteful polish autonomously and only flags genuine forks here — default theme,
 exact hexes, anything where your eye is the authority.
+- 🔨 **The title foil sweep now stops instead of looping forever — SUBSTITUTION, needs your eye**  ·  ⏳ NEW 2026-08-06  ·  PR [#76](https://github.com/Pootytxng/sentinel/pull/76)
+  The shine that travels across the big room titles used to repaint that text on every single frame,
+  forever, in every room — on its own it was **29.8% of one CPU core** while you did nothing. It now
+  sweeps a few times when a room opens and then settles. **What you should see:** the same sweep, same
+  look, then a still title. If a permanently-moving shine was the point, the revert is one word
+  (`both` → `infinite` in `src/surfaces/ambient-hud.css`) and the cost comes back with it.
+  Two things ride along, no action needed unless you disagree: the 3D "two futures" scene could not be
+  visually checked (it only mounts once you have a measured before/after pair, which this desk lacks —
+  its diff is a screen-reader label only), and `src/surfaces/Optimize.css:175` still has a pre-existing
+  bounce ease this lane deliberately did not touch.
 - ✅ **Version numbering call — DECIDED 2026-07-16: "0.9.0 now, 1.0.0 at Claude's bar."** Applied same
   day (manifests + Cargo.lock at `0.9.0`, ship-reinstall derives the filename, drift-guard test added);
   spec flipped to DECIDED:
