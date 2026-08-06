@@ -21,6 +21,7 @@
 | `doc-sync` | any state change; any two docs disagreeing | any | Precedence (RELEASE_STATE=state, CLAUDE.md=law, code>both) + same-commit ordering. |
 | `usage-audit` | owner asks about usage/tokens/budget; a 🔴 in `docs/usage-audit/LATEST.md` | layer 1: `node scripts/usage-audit.mjs` (no LLM) · layer 2: any (terse) | Session/token discipline meter. Weekly report auto-written by the `CompyUsageAudit` scheduled task (Mondays, zero tokens). |
 | `status` | "where are we" / "what's left" / "show me" / end of any train | dispatcher: any · doc reads: **sonnet** | Added 2026-08-05: >50% of the owner's short messages are status questions and there was no surface for them. Reconstructs from git + the state docs; never answers from session memory. |
+| `motion-design` | choosing timing/easing/choreography for a specific animation | main agent (docs only, no scripts) | **VENDORED, third-party** — `LottieFiles/motion-design-skill` (MIT), pinned in `skills-lock.json`; restore with `npx skills install`. Do NOT hand-edit — re-vendor instead. **Routing vs `impeccable`:** `impeccable` owns the interface (does this UI work?); `motion-design` owns how a motion *feels* once you've decided to build it. If both could fire, start with `impeccable`. Relevant because `gsap`/`motion` are already deps and `docs/UI_VISION_BACKLOG.md` still has 🔴 OPEN motion items. |
 
 **Subagent routing (condensed):** haiku = mechanical search/read/format · sonnet = research/verify/
 audit/review (the default worker — CC pins it via `settings.json` `CLAUDE_CODE_SUBAGENT_MODEL`) ·
