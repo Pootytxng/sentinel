@@ -35,6 +35,14 @@ worker's context; only the verdict returns.
 3. **On FAIL:** apply the fix list, then re-dispatch for a full fresh review (from the top — a fix
    can break a neighboring item). Repeat until PASS.
 4. **On PASS:** quote the block in your done-report. That is the claim's license.
+5. **If the change is a TASTE CALL or TASTE SUBSTITUTION, the report also ships a before/after
+   the owner can look at** (owner directive 2026-08-05: *"post me a snapshot ... for me to see the
+   before and after of what it is youre referring too exactly"*). Prose describing a look is not a
+   taste call he can rule on — he does not carry the old version in his head. Build a self-contained
+   file that shows **both states side by side**, copying the real CSS **verbatim** with resolved
+   token values (an approximation of a taste call is a fabricated claim), and hand it over with
+   **`SendUserFile`** — never `Read` it back into the orchestrator (that is the Token Law above).
+   Motion changes need something that moves: inline-rendered HTML (`display: "render"`), not a PNG.
 
 ## Red flags — you're about to violate the law
 
