@@ -18,6 +18,7 @@
 // code points, so a code-page decoding regression in the capture helper fails test 2 loudly.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { windows } from "./lib/windows-only.mjs";
+import { DEFAULT_PICK_TIMEOUT_MS } from "./lib/tauri-window-pick.mjs";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -31,6 +32,14 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const EXPECTED_STAMP = "abc1234 · release";
 const EXPECTED_VERSION = "9.9.9";
 const EXPECTED_RAIL = "9.9.9";
+
+// Scenario 1 asserts the PROBE fails cleanly (nonzero exit, a message on stderr, TIMEDOUT=False).
+// The probe now retries for DEFAULT_PICK_TIMEOUT_MS waiting for the main window, and
+// Invoke-CapturedProcess defaults to its own 20 s watchdog -- the SAME number, so which deadline
+// fired first was a coin flip, and when the watchdog won it killed the probe mid-message and this
+// test failed on an empty stderr or TIMEDOUT=True. Derived, not hand-tuned: raising the picker's
+// deadline moves this one with it instead of silently restoring the tie.
+const CAPTURE_TIMEOUT_MS = DEFAULT_PICK_TIMEOUT_MS * 2;
 
 // One fake probe, selected by mode. Mirrors e2e-updater-probe.mjs: one JSON line on stdout and
 // exit 0, or a message on stderr and a nonzero exit.
@@ -60,7 +69,8 @@ const HARNESS = `param(
   [Parameter(Mandatory = $true)][string]$NodeExe,
   [Parameter(Mandatory = $true)][string]$FakeProbe,
   [Parameter(Mandatory = $true)][string]$RealProbe,
-  [Parameter(Mandatory = $true)][string]$CounterFile
+  [Parameter(Mandatory = $true)][string]$CounterFile,
+  [Parameter(Mandatory = $true)][int]$CaptureTimeoutMs
 )
 # The exact condition that turned an expected probe failure into a fatal release error.
 $ErrorActionPreference = "Stop"
@@ -92,8 +102,9 @@ try {
     Wait-LoopbackPortClosed -Port $closedPort -TimeoutMs 3000
     Write-Output "CLOSED_PORT_ACCEPTED"
   } elseif ($Scenario -eq "closed-port") {
-    # Port 1 never listens: the REAL probe writes to stderr and exits nonzero.
-    $r = Invoke-CapturedProcess -FilePath $NodeExe -ArgumentList @($RealProbe, "1", "stamp")
+    # Port 1 never listens: the REAL probe writes to stderr and exits nonzero. The capture watchdog
+    # must outlast the probe's OWN retry deadline, or this scenario measures the watchdog instead.
+    $r = Invoke-CapturedProcess -FilePath $NodeExe -ArgumentList @($RealProbe, "1", "stamp") -TimeoutMs $CaptureTimeoutMs
     Write-Output ("EXIT=" + $r.ExitCode)
     Write-Output ("STDERR_LEN=" + $r.StdErr.Length)
     Write-Output ("TIMEDOUT=" + $r.TimedOut)
@@ -176,6 +187,7 @@ const run = (scenario) => {
       "-FakeProbe", fakeProbe,
       "-RealProbe", join(root, "scripts", "e2e-updater-probe.mjs"),
       "-CounterFile", join(dir, `counter-${scenario}-${counterSeq}.txt`),
+      "-CaptureTimeoutMs", String(CAPTURE_TIMEOUT_MS),
     ],
     { encoding: "utf8", windowsHide: true },
   );
@@ -192,8 +204,10 @@ describe.runIf(windows)("runtime proof behaviour (bug->guard, failed v0.9.9 publ
     const { field } = run("closed-port");
     expect(Number(field("EXIT"))).not.toBe(0);
     expect(Number(field("STDERR_LEN"))).toBeGreaterThan(0);
+    // Not incidental: TIMEDOUT=True would mean the watchdog killed the probe, so the nonzero exit
+    // above would be the KILL rather than the clean failure this scenario claims to prove.
     expect(field("TIMEDOUT")).toBe("False");
-  }, 60000);
+  }, 90000);
 
   it("fails closed while a debugging port listens and accepts it only after closure", () => {
     const { out, field } = run("port-closure");

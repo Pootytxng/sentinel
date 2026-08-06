@@ -77,11 +77,28 @@ site/assets/og-card*
 beta-kit/
 business/
 
-# Compy Pro signing keys — the private license-signing key NEVER enters the repo (license-tool.mjs keygen
-# writes it here / there). Defense-in-depth so it can't be committed by accident.
+# Signing keys and secrets — LOCKED rule 4 says the private key NEVER enters the repo / `.env*` / CI.
+# This block is the mechanical half of that rule; `scripts/secret-containment-guard.test.mjs` fails the
+# build if any of it is deleted or if key material ever becomes tracked.
+#
+# WIDENED 2026-08-06: `*.key` alone was covering the two keys that exist TODAY (compy-license.key,
+# compy-updater.key) while leaving the formats the project is about to need wide open — `.pfx`/`.p12`
+# is what an Authenticode code-signing certificate arrives as (an open owner decision), and `.env`
+# was named in the rule itself yet had no entry of any kind. A rule that only ignores yesterday's
+# filename extensions is not defense-in-depth.
 secrets/
 *.key
 compy-license.key
+*.pem
+*.pfx
+*.p12
+*.jks
+*.keystore
+.env
+.env.*
+# Sample env files carry no values and SHOULD be reviewable in git.
+!.env.example
+!.env.sample
 
 # Weekly usage-audit reports (machine-local, auto-written by the CompyUsageAudit scheduled task)
 docs/usage-audit/

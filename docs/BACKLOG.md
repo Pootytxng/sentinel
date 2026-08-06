@@ -82,10 +82,11 @@
   `docs/perf/raw/`, `docs/perf/q7-baseline.json` transcribes 14 metrics, and
   `scripts/perf-budget-guard.test.mjs` re-derives every published number from those traces on each
   `npm test` — so a hand-edited baseline fails even though CI can never re-run the probe. One bad
-  finding is on the record as an `open finding`, not a spec: **idle Compy costs ~50% of one core**
-  with nothing moving and nobody present, reproduced on two bare runs; `src/shell-idle-guard.test.ts`
-  adds the third idle axis (*is anyone interacting?*) and carries `LenisSpine.tsx` as its declared
-  exception. *Still owner-blocked:* the lower-spec rig leg — every budget is proven on one fast
+  finding was on the record as an `open finding`, not a spec: **idle Compy cost ~50% of one core**
+  with nothing moving and nobody present, reproduced on two bare runs. **CLOSED 2026-08-06** by the
+  idle-cost teardown below — 50.165% → 23.348% of a core, re-measured on the shipped 0.9.13 build;
+  `src/shell-idle-guard.test.ts` carries the third idle axis (*is anyone interacting?*) and its
+  always-on record is now empty. *Still owner-blocked:* the lower-spec rig leg — every budget is proven on one fast
   machine and none is a claim about a slow one. **Q6 DELIVERED 2026-08-04**
   (issue [#65](https://github.com/Pootytxng/sentinel/issues/65), `9bf3bde`) — three stale live claims
   retired: `GAMING_MODE_PLAN.md` reconciled against the QA record (8 rows mapped, 3 left unchecked as
@@ -370,7 +371,8 @@ queued).
 > ### 🛑 OWNER DECREE 2026-07-16 (via Cowork, owner at the console): AUTO-DEPLOY LANE DROPPED — do not resurface
 >
 > The GitHub-Actions auto-deploy errand (Cloudflare token + GitHub billing unblock, Cycle
-> 2026-07-16e below) is **dead, permanently, by owner decision.** Facts established live in the
+> 2026-07-16e, archived 2026-08-06 to `docs/BACKLOG_ARCHIVE.md`) is **dead, permanently, by owner
+> decision.** Facts established live in the
 > owner's GitHub dashboard before the call: no failed payment, billed $0; Actions blocked since
 > Jul 9 by the account's $0 Actions budget (stop-usage on); **$12 of ~$16 included free minutes
 > already burned this month** — so "costs nothing" was not guaranteed, making this a zero-budget-law
@@ -380,6 +382,32 @@ queued).
 > it on next touch; ② manual `wrangler pages deploy` under the standing B3 deploy GO remains THE
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
+
+### Cycle 2026-08-06a — ✅ IDLE COST TEARDOWN: HALF A CORE WAS DECORATION NOBODY WAS LOOKING AT (CC): `e12467f5` … `e34db6f7` (14 commits) on `claude/idle-cost-teardown-1f6a80` — PR [#76](https://github.com/Pootytxng/sentinel/pull/76), issue [#75](https://github.com/Pootytxng/sentinel/issues/75), **unmerged** (owner decides the merge)
+
+Q7 left a measured but unattributed number: the app burned **50.165% of one core sitting still**. This
+cycle attributed it. `scripts/q7-probe.mjs` gained a subtraction waterfall — disable one animation,
+re-measure, name its cost — and the answer was one line of CSS: the title foil sweep in
+`src/surfaces/ambient-hud.css` ran `background-clip: text` on an `infinite` loop, repainting the big
+room titles every frame in every room, forever, for **29.793% of a core on its own**. The rest was the
+Lenis rAF spine ticking with nobody scrolling, two aurora backdrops repainting instead of compositing,
+and three 3D scenes rendering at full cadence while parked. Re-measured on the shipped 0.9.13 build:
+**50.165% → 23.348% of one core**, a 54% cut, reproduced across two 10-minute bare runs.
+
+Two defects the self-review caught, both in the new scroll-park path, both now guarded rather than
+just fixed: the parked spine handed Lenis the entire idle gap on wake (`50e5edda` — scroll snapped),
+and a second park overwrote the first one's interval so the accumulated offset was wrong
+(`3ad6eb48` — the lane teleported). `src/design/jarvis/lenis-wake-guard.test.tsx` pins all five
+wake paths, the monotonic clock across three parks, and overlapping parks counted once each.
+
+- **Taste substitution, owner-flagged** (`OWNER_ACTION_CHECKLIST.md` §D): the foil now sweeps a bounded
+  number of times and settles, instead of forever. One-word revert is `both` → `infinite`.
+- **DISCLOSED GAP:** `TwoFuturesScene` could not be visually verified — it only mounts with a measured
+  before/after pair this desk lacks; its diff is an `aria-hidden` label only.
+- 0.9.13 declared and silently reinstalled; desk verified live at `3ad6eb48 · release`.
+
+cargo 922/922 · vitest 308 files / 3994 tests · tsc clean · doc-truth 30/30 0 drift · doc-budget PASS ·
+branch-disposition-audit 22/22 · self-reviewer **VERDICT: PASS** (round 3)
 
 ### Cycle 2026-08-04g — ✅ THE SIBLING ROOM STOPS SPEAKING FOR THE SAME UNREADABLE LEDGER (CC): `61e092c` · `50ff816` · `801b27c` on `claude/harness-context-cleanup-700535` — **unpushed, unmerged** (owner decides the merge)
 
@@ -823,43 +851,6 @@ owner's machine and a stable candidate, not more code. Evidence rows updated in
   ARMED, shipped 2026-07-16) left exactly where it was; nothing folded in.
 - **Board retention:** 4 oldest cycles (13f/13e/13d/13c) moved verbatim to `BACKLOG_ARCHIVE.md`
   (104 lines); board at 12 cycles.
-
-### Cycle 2026-07-16e — ✅ SITE DEPLOYED + AUTO-DEPLOY WIRED (CC, owner-directed "deploy the site … make it as automated as possible"): live on `compy-bd6.pages.dev` · ~~GitHub Actions deploy lane awaiting ONE owner token paste~~ **← CANCELLED, see decree above**
-
-- **Manual deploy (the last one):** dist-site restaged fresh (`npm run stage:site`) → `wrangler pages
-  deploy` under the standing deploy GO (checklist B3, 2026-07-15) → apex promotion PROVEN by hash
-  (apex == deployment URL `37fa0e02…`, SHA-256 `FFC5D5ADD8812501…`, 34073 bytes both).
-- **Auto-deploy lane:** `.github/workflows/deploy-site.yml` — push-to-main path-scoped (site/,
-  site-app/, functions/, src/data/, the stage script) → `npm ci` ×2 → `stage:site` → wrangler-action
-  production deploy. Preflight job SKIPS green until the credential exists (no red-X spam);
-  zero-budget (ubuntu 1×, scoped triggers, concurrency-cancel).
-- **Secrets:** `CLOUDFLARE_ACCOUNT_ID` set by CC via `gh secret set` (low-sensitivity). The deploy
-  token is owner-mint-only → **checklist B7** (Pages:Edit-scoped custom token → GitHub secret
-  `CLOUDFLARE_API_TOKEN`; never passes through chat/repo). First auto-run gets fired + verified on
-  his "token's in".
-
-### Cycle 2026-07-16d — ✅ OPTIMIZATION CLEANUP PHASE 0 SHIPPED (CC, owner-directed "ship Phase 0"): `55f68b6` locked name + first-class front door · `f831b5f` landed 16c's stranded deliverables — NO gate moved, zero mutation boundary
-
-- **`f831b5f` — git-lock recovery + 16c's docs landed:** Cycle 2026-07-16c's Cowork session died on
-  its final commit, leaving stale zero-byte `.git/HEAD.lock`/`index.lock` (evidence-verified: 19 min
-  old, no git.exe running, HEAD intact) and its deliverables uncommitted. Removed the locks and landed
-  the 7 pending files exactly as staged (the 4.1 spec · METHODOLOGY.md · consumer-story draft · both
-  panel-review docs · BACKLOG/COMPY_OVERVIEW edits, completing `801ea62`'s truncated file). Parallel-lane
-  COWORK_*.md working artifacts stay untracked, never swept.
-- **`55f68b6` — 4.1 Phase 0 (owner-authorized, superseding the entry's "nothing authorized to build"):**
-  the live `leftovers.rs` read-only audit now fronts as **"Optimization Cleanup"** (owner-locked name,
-  2026-07-15) and is **UNBURIED** — out of the "Nothing else needs attention" drawer to a first-class
-  Check section (title + explainer blurb + "Check this PC for old tweaks" run button; a check the user
-  is meant to RUN can't hide in a leave-it-alone pile). terms.json/tweaks.json renamed (+ alias);
-  title-case "Past Tweaks" pinned as a retired label in stale-reference-guard (lowercase descriptive
-  phrase + the "Past tweak ·" row prefix stay legal); Optimize.test now asserts the section renders ON
-  the open surface, never in the drawer. **Read-only unchanged:** no restore action exists,
-  `restore_gate()` stays double-dark, identifiers keep `leftovers`. Phases 1–3 remain un-scope-gated;
-  the Trust-Ledger-reuse vs separate-mechanism fork is still the first scope-gate call.
-- **Verify:** tsc 0 · vitest 1682/1682 (181 files; new guard rides the existing per-file scans) ·
-  self-reviewer PASS 9/9 (contrast 11.3:1 header, no dup mount, pre-run/busy/result/fixture states) ·
-  installer re-cut + silent reinstall — SHA + stamp in the RELEASE_STATE 2026-07-16b banner.
-
 
 ## ⛔ Persistent-workflow protocol (read before declaring "done")
 

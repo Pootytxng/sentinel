@@ -20,11 +20,25 @@
 
 ### A0. NEW 2026-07-23 — Live updater: key backup + the LAST manual send
 
-- ⏳ **Back up the updater signing key (2 minutes, genuinely important).** Copy
-  `C:\Users\Kuya\.tauri\compy-updater.key` (and `.key.pub`) somewhere private OFF this machine —
-  password-manager attachment or your personal cloud. **Lose it** → the fleet can never receive
-  another update (one-time re-send of new-key builds required). **Leak it** → whoever holds it can
-  push code to every install. Same custody class as the remote-rules key law.
+- ⏳ **Back up the updater signing key (2 minutes, genuinely important) — STILL OPEN, and here is the
+  correction, 2026-08-06.** You produced `C:\Users\Kuya\Desktop\COMPY KEY\` and called it *"the old
+  compy key."* Two things about that, both verified read-only (the private half was never opened):
+  - **It is not old — it is the LIVE key.** Its public half is byte-identical to
+    `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`, and its ID `43711DD10AAB67D7` is the
+    same fleet anchor pinned in `scripts/updater-trust-root-guard.test.mjs:23`. This is the key every
+    shipped Compy trusts. There is no second, newer key to go looking for.
+  - **A Desktop folder is not a backup.** It hashes identical to `C:\Users\Kuya\.tauri\compy-updater.key`
+    — same key, two copies, **same machine, same disk**. One failed drive still loses the fleet. This
+    item asks for a copy **off this machine** (password-manager attachment or your personal cloud), and
+    that has not happened yet. Moving it also *shrinks* the exposure: a Desktop folder is the first
+    place anything that ever runs on this PC looks.
+  **Lose it** → the fleet can never receive another update (one-time re-send of new-key builds
+  required). **Leak it** → whoever holds it can sign an update that Compy installs **silently on every
+  install**, because the updater has been live since 2026-07-22. That makes this the highest-consequence
+  secret in the project. Same custody class as the remote-rules key law.
+  Repo side is clean and now mechanically enforced: no key material has ever been committed on any
+  branch, and `scripts/secret-containment-guard.test.mjs` fails the build if key/`.env` patterns leave
+  `.gitignore` or if key material ever lands in the index. Nothing for you in that half.
 - ✅ **One-tester canary — PASS (recorded 2026-07-28).** A tester completed it through Compy's
   **normal public updater** and is **currently running v0.9.11**; **no updater failure was
   reported.** That is the entire record — their prior version, the exact timing, and any per-step
@@ -302,6 +316,19 @@ These gate **public** release only (not the local app you use daily). Full list:
 ## §D — Taste / visual sign-offs (as they come up)
 Claude proceeds on tasteful polish autonomously and only flags genuine forks here — default theme,
 exact hexes, anything where your eye is the authority.
+- ✅ **The title foil sweep now stops instead of looping forever — APPROVED 2026-08-06**, on a
+  side-by-side before/after he watched run.  ·  PR [#76](https://github.com/Pootytxng/sentinel/pull/76)
+  The shine that travels across the big room titles used to repaint that text on every single frame,
+  forever, in every room — on its own it was **29.8% of one CPU core** while he did nothing. It now
+  sweeps once when a room opens and settles. His verdict, verbatim: *"keep the more efficient shine
+  change youre right compy isnt suppose to be a resource hog whatsoever matter of fact it should be
+  the most optomized thing oin someons pc altoether."* That second sentence is a **standing product
+  bar**, not a note about this one animation — recorded in [`perf/README.md`](perf/README.md).
+  Nothing further on him here; the `infinite` revert is not being held open.
+  Two things rode along and remain open: the 3D "two futures" scene could not be visually checked
+  (it only mounts once he has a measured before/after pair, which this desk lacks — its diff is a
+  screen-reader label only), and `src/surfaces/Optimize.css:175` still has a pre-existing bounce ease
+  this lane deliberately did not touch.
 - ✅ **Version numbering call — DECIDED 2026-07-16: "0.9.0 now, 1.0.0 at Claude's bar."** Applied same
   day (manifests + Cargo.lock at `0.9.0`, ship-reinstall derives the filename, drift-guard test added);
   spec flipped to DECIDED:

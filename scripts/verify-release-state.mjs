@@ -69,12 +69,27 @@ export function validateOwnerDecisionVersions(section, latestVersion, candidateV
   return failures;
 }
 
-// Delimited 7-char lowercase-hex runs in a binary read as latin1 — the exact shape `build.rs` bakes in
+// Delimited lowercase-hex runs in a binary read as latin1 — the shape `build.rs` bakes in
 // (`git rev-parse --short HEAD` → `cargo:rustc-env=COMPY_GIT_HASH`), which lands in the executable's
 // rodata as a standalone ASCII token. "Delimited" is the whole trick: a longer hex run is a different
-// string that merely begins with hex, and must NOT yield a 7-char candidate out of its middle.
+// string that merely begins with hex, and must NOT yield a candidate out of its middle.
+//
+// The LENGTH IS A RANGE, not 7, because `--short` is not a fixed width: git widens the abbreviation as
+// the object count grows, and this repo crossed into 8 on 2026-08-06 (`ff0ce65f`). Pinned at exactly 7,
+// this scan found 24 tokens, resolved none of them, and printed STATE-SKIP — so the one check whose
+// entire purpose is catching a stale desk anchor stopped checking, permanently, while still printing a
+// line. That is precisely the failure this check's own header calls "worse than an absent anchor",
+// happening again one level down in the scanner instead of in the anchor. The upper bound keeps the
+// delimited-run property meaningful: a 40-char OID or a 64-char SHA-256 is a different string, not a
+// stamp, and must still yield nothing.
+const STAMP_MIN_HEX = 7;
+const STAMP_MAX_HEX = 12;
 export function embeddedStampTokens(text) {
-  return [...new Set(text.match(/(?<![0-9a-f])[0-9a-f]{7}(?![0-9a-f])/g) ?? [])];
+  const run = new RegExp(
+    `(?<![0-9a-f])[0-9a-f]{${STAMP_MIN_HEX},${STAMP_MAX_HEX}}(?![0-9a-f])`,
+    "g",
+  );
+  return [...new Set(text.match(run) ?? [])];
 }
 
 // --- file resolution -----------------------------------------------------------------------------

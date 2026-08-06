@@ -23,21 +23,22 @@ import { readFileSync, existsSync } from "fs";
 //
 //   Attribution, stated exactly as far as the evidence goes: the shell owns exactly two rAF loops
 //   (asserted below). ReticleCursor's starts on pointer-enter and cancels on pointer-leave, so an
-//   unattended window costs it nothing. LenisSpine's is unconditional. That makes LenisSpine the
-//   only always-mounted loop with no stand-down — not a profiler attribution of the whole 50%, and
-//   this comment does not claim one.
+//   unattended window costs it nothing. LenisSpine's was unconditional — the only always-mounted
+//   loop with no stand-down.
 //
-// WHY A GUARD AND NOT JUST A FIX: the fix is a scroll-feel change to a component the owner has
-// explicit UI-vision investment in (Lenis), so it is queued rather than smuggled into an
-// accessibility lane. What must NOT wait is the class growing. This file freezes the population.
+// CLOSED 2026-08-06 (idle-cost teardown). The subtraction waterfall in docs/perf/raw/
+// idle-attribution.json sized the whole rAF band at 6.83% of a core out of 49.3% — real, but the
+// minority term; two decorative CSS animations owned 80%. LenisSpine now parks a second after the
+// lane stops moving and re-arms on input, so it is a STANDS_DOWN entry and the always-on class is
+// EMPTY. The finding this file was written to hold open is closed; what it now enforces is that
+// nothing re-opens it.
 //
 // THE RULE — the shell's rAF owners are an EXACT, declared set. Two ways to fail:
 //
 //   • A new shell module starts a rAF loop → it is in neither list → fail. Add it to STANDS_DOWN
-//     with the mechanism named, or admit it is always-on (and then the second assertion bites).
-//   • LenisSpine gets fixed → it stops matching ALWAYS_ON's shape → fail, deliberately. The
-//     finding is written down in three places; whoever fixes it moves it to STANDS_DOWN and the
-//     ledger stays honest instead of quietly describing a bug that no longer exists.
+//     with the mechanism named, or admit it is always-on (and then the empty-class assertion bites).
+//   • A stand-down gets deleted → its signature stops matching → fail. The mechanism is the whole
+//     value of the entry; an entry describing a stand-down that is gone is worse than no entry.
 //
 // SCOPE, honestly: the corpus is ShellV2's import closure — the chrome mounted in EVERY room for
 // the whole session, which is the only place a loop can be "always-on" in the sense that matters.
@@ -63,29 +64,25 @@ const STANDS_DOWN: Record<string, { why: string; requires: RegExp[] }> = {
       "nothing to animate. This is the pattern the shell should use everywhere.",
     requires: [/pointerleave/, /cancelAnimationFrame/],
   },
+  "src/design/jarvis/LenisSpine.tsx": {
+    why:
+      "Motion-driven: the loop parks IDLE_AFTER_MS after the lane's last observed pixel of " +
+      "movement and re-arms from wake() on wheel/touch/key/pointer/scroll. Parking is keyed on " +
+      "wrapper.scrollTop actually changing rather than on any library flag, so no internal Lenis " +
+      "state can leave it spinning for a scroll that already ended. Also still stands down on " +
+      "document.hidden, and deliberately does NOT re-arm on the way back to visible — an " +
+      "unattended foreground window was the original defect. Both stand-down paths (idle and " +
+      "hidden) go through the same park() helper, which is also where the parked interval is " +
+      "recorded so it can be subtracted from Lenis's clock — see lenis-wake-guard.test.tsx.",
+    requires: [/IDLE_AFTER_MS/, /const wake = /, /const park = /, /document\.hidden/],
+  },
 };
 
 /**
- * Loops that keep running with nobody there. Not exemptions — OPEN FINDINGS, carried here so the
- * class cannot grow and so the fix has somewhere to land.
+ * Loops that keep running with nobody there. EMPTY, and that is the assertion — see the header.
+ * An entry here is an open finding against the shell, never an exemption.
  */
-const ALWAYS_ON: Record<string, { finding: string; requires: RegExp[] }> = {
-  "src/design/jarvis/LenisSpine.tsx": {
-    finding:
-      "Q7 open finding (2026-08-05): the rAF loop re-arms unconditionally and is cancelled only by " +
-      "the visibilitychange handler. Mounted app-wide at ShellV2.tsx, so it runs in every room for " +
-      "the whole session — see rooms.json Blackbook (0 IPC, 0 draws, 3751 callbacks / 15 s). " +
-      "Smooth scroll only has work to do while a scroll is in flight; the loop should idle out " +
-      "after the last one settles and restart on wheel/touch/key input, the way ReticleCursor does " +
-      "with the pointer. Deliberately not fixed in the a11y lane: it changes scroll feel on a " +
-      "surface the owner has design investment in, and that needs its own self-review pass.",
-    // The shape of the bug. When it is fixed these stop matching and this guard fails ON PURPOSE.
-    // The re-arm is anchored to a WHOLE line on purpose: the likeliest fix is a condition in front
-    // of it (`if (scrolling) raf = ...`), and an unanchored substring would still match that and
-    // report the finding as open after it was closed.
-    requires: [/^\s*raf = requestAnimationFrame\(loop\);\s*$/m, /document\.hidden/],
-  },
-};
+const ALWAYS_ON: Record<string, { finding: string; requires: RegExp[] }> = {};
 
 // ── Corpus: the transitive import closure of the shell ───────────────────────────────────────────
 
@@ -170,31 +167,78 @@ describe("shell-idle guard — the shell's rAF loops are a declared set", () => 
     }
   });
 
-  it("the always-on class has not grown", () => {
-    // One is a finding with a fix queued. Two is a habit.
+  it("the always-on class is empty, and stays empty", () => {
+    // The one entry that used to live here was closed on 2026-08-06. Re-opening it is allowed —
+    // but only loudly, by editing this assertion, never by quietly appending to the record.
     expect(
-      Object.keys(ALWAYS_ON).length,
-      `A second always-on shell loop was declared. The first one costs ~50% of a core at idle\n` +
-        `(docs/perf/raw/idle-bare.json); do not add another — fix the loop instead.\n`,
-    ).toBeLessThanOrEqual(1);
+      Object.keys(ALWAYS_ON),
+      `A shell rAF loop was declared always-on. Nothing in the shell is allowed to run frames at\n` +
+        `rest: the shell is mounted in EVERY room for the whole session, including behind the game\n` +
+        `Compy is supposed to be optimizing. The measured cost of the last one to try is in\n` +
+        `docs/perf/raw/idle-attribution.json (rAF band: 6.83% of a core, idle, nobody present).\n` +
+        `Give it a stand-down and move it to STANDS_DOWN — do not log it here.\n`,
+    ).toEqual([]);
   });
 
-  it("the open finding is still open, and still shaped the way it is written down", () => {
-    // This fails when the bug is FIXED, which is the point: the finding is described in this file,
-    // in keepalive-idle-guard.test.ts's exemption, and in the Q7 spec. Whoever fixes it moves the
-    // entry to STANDS_DOWN and corrects the other two, instead of leaving three files describing a
-    // bug that no longer exists.
-    for (const [file, { finding, requires }] of Object.entries(ALWAYS_ON)) {
-      const text = readFileSync(file, "utf8");
-      for (const re of requires) {
-        expect(
-          re.test(text),
-          `${file} no longer matches the open finding — if you FIXED it, thank you: move it from\n` +
-            `ALWAYS_ON to STANDS_DOWN here, drop the "not a clean bill of health" paragraph from\n` +
-            `src/keepalive-idle-guard.test.ts, and re-run the idle recording so the baseline in\n` +
-            `docs/perf/q7-baseline.json stops citing a cost that is gone.\n\nThe finding as written:\n${finding}\n`,
-        ).toBe(true);
+  it("the finding this file was opened for is still closed", () => {
+    // Belt and braces on the STANDS_DOWN signature above, and deliberately NOT a check on the
+    // shape of the re-arm statement. The first draft of this assertion banned a bare
+    // `raf = requestAnimationFrame(loop);` line, guessing the fix would be `if (awake) raf = ...`.
+    // The fix that actually landed returns EARLY above an unchanged re-arm line, so that
+    // assertion failed against correct code — a guard that pins an imagined implementation
+    // instead of the behaviour is worse than none.
+    //
+    // What matters is that the loop carries its OWN exit. A re-arm anywhere in the file proves
+    // nothing; a `loop` whose body can only ever call requestAnimationFrame again is the bug.
+    // So: isolate the loop body and require the idle park to live inside it.
+    const spine = readFileSync("src/design/jarvis/LenisSpine.tsx", "utf8");
+    const open = spine.indexOf("const loop = ");
+    expect(open, `LenisSpine no longer declares 'const loop = ' — rewrite this guard`).toBeGreaterThan(-1);
+
+    // Brace-match from the arrow body: text-level, but exact, and it cannot drift into wake().
+    const bodyStart = spine.indexOf("{", open);
+    let depth = 0;
+    let bodyEnd = -1;
+    for (let i = bodyStart; i < spine.length; i++) {
+      if (spine[i] === "{") depth++;
+      else if (spine[i] === "}" && --depth === 0) {
+        bodyEnd = i;
+        break;
       }
+    }
+    expect(bodyEnd, `Could not brace-match LenisSpine's loop body — rewrite this guard`).toBeGreaterThan(-1);
+    const body = spine.slice(bodyStart, bodyEnd + 1);
+
+    const message =
+      `LenisSpine's rAF loop no longer contains its own exit — that is the 2026-08-05 idle\n` +
+      `finding returning. Whatever arms the loop, the loop itself must be able to STOP:\n` +
+      `park on ${"IDLE_AFTER_MS"} of no observed motion and let wake() re-arm it. A loop whose\n` +
+      `only outcome is another frame runs forever in every room, for the whole session,\n` +
+      `including behind the game Compy is supposed to be optimizing.\n`;
+    expect(body.includes("IDLE_AFTER_MS"), message).toBe(true);
+    expect(/\breturn\b/.test(body), message).toBe(true);
+
+    // The stand-down may be written inline (`raf = 0;`) or delegated to a helper (`park(time)`).
+    // Both are correct; pinning one of them is the same mistake the header warns about — the first
+    // draft of THIS assertion required the literal `raf = 0;` and then failed the 2026-08-06 wake
+    // fix, whose only crime was moving that statement into a shared park(). So accept either, and
+    // when the loop delegates, FOLLOW the indirection rather than take the call on faith: an empty
+    // park() would satisfy a naive `/park\(/` and leave the loop spinning forever.
+    const zeroesInline = /\braf = 0\b/.test(body);
+    const delegates = /\bpark\s*\(/.test(body);
+    expect(zeroesInline || delegates, message).toBe(true);
+    if (!zeroesInline) {
+      const helper = spine.indexOf("const park = ");
+      expect(
+        helper,
+        `LenisSpine's loop calls park(), but the file declares no 'const park = ' for it — ${message}`,
+      ).toBeGreaterThan(-1);
+      const helperBody = spine.slice(helper, spine.indexOf("};", helper));
+      expect(
+        /\braf = 0\b/.test(helperBody) && /cancelAnimationFrame/.test(helperBody),
+        `LenisSpine's park() does not actually stop the loop (it must cancelAnimationFrame AND\n` +
+          `zero the handle, or wake() will see a stale non-zero handle and refuse to re-arm).\n${message}`,
+      ).toBe(true);
     }
   });
 

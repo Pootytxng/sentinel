@@ -59,11 +59,9 @@ const EXEMPT: Record<string, string> = {
   "src/design/jarvis/LenisSpine.tsx":
     "App-wide scroll spine. Rendered ONLY at ShellV2.tsx:231, above the room switch. Its rAF loop " +
     "is the shell's, not a room's — so the ROOM axis this guard enforces genuinely does not apply. " +
-    "It is exempt HERE and open ELSEWHERE: the Q7 idle sweep (2026-08-05) measured ~50% of one core " +
-    "at rest, and this is the only always-mounted loop with no stand-down at all — it pauses for " +
-    "document.hidden and for nothing else. That third axis ('is anyone interacting?') is enforced " +
-    "by src/shell-idle-guard.test.ts, which carries this file as the known open finding. Do not " +
-    "read this exemption as a clean bill of health.",
+    "The third axis ('is anyone interacting?') is enforced by src/shell-idle-guard.test.ts, which " +
+    "pins the interaction stand-down this file gained on 2026-08-06: the loop parks a second after " +
+    "the lane stops moving and re-arms on input.",
   "src/design/use-update.ts":
     "App-wide update hook, single instance: called ONLY by UpdatePill.tsx:14, rendered at " +
     "ShellV2.tsx:205. update-prefs.ts:18 documents that a second instance is forbidden. Its recheck " +

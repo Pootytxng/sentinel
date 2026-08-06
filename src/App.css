@@ -2115,7 +2115,18 @@ body {
 
 /* Living atmosphere — a slow drifting aurora behind everything. Theme-aware (streak tokens) and
    spread to cover the canvas (top-right, mid-left, bottom-right, bottom-mid) so no corner reads as
-   dead black; it drifts as one cohesive mesh. */
+   dead black; it drifts as one cohesive mesh.
+
+   COMPOSITOR-ONLY BY CONSTRUCTION (idle-cost teardown, 2026-08-06). This layer used to carry
+   filter: blur(26px) while its keyframes scaled it 1 → 1.09. A blurred layer is rasterized at its
+   current size, so scaling threw that raster away and re-blurred the whole window every frame.
+   Cancelling it mid-measurement freed 8.026% of a CPU core — 16.3% of everything the app burned
+   sitting idle on Home with nobody at the keyboard — and moved RecalcStyleCount not at all
+   (248.7/s → 249.8/s), which is the signature of a pure raster cost rather than script or style
+   (docs/perf/raw/idle-attribution.json). The blur is gone — the four radials already fade out over
+   transparent 60–64% stops and inset: -25% puts every edge off-screen, so it was buying almost no
+   softness — and will-change promotes the layer once so the drift is a GPU transform, not a repaint.
+   Guarded by src/ambient-animation-cost-guard.test.ts. */
 body::before {
   content: "";
   position: fixed;
@@ -2127,7 +2138,7 @@ body::before {
     radial-gradient(38% 34% at 14% 34%, color-mix(in srgb, var(--ix-streak-2) 13%, transparent), transparent 64%),
     radial-gradient(44% 40% at 90% 86%, color-mix(in srgb, var(--ix-streak-1) 12%, transparent), transparent 62%),
     radial-gradient(46% 42% at 34% 105%, color-mix(in srgb, var(--ix-streak-3, var(--ix-streak-2)) 10%, transparent), transparent 60%);
-  filter: blur(26px);
+  will-change: transform;
   animation: aurora 20s ease-in-out infinite alternate;
 }
 @keyframes aurora {

@@ -77,6 +77,23 @@ describe("Q7 performance baseline: every published number traces to a recording"
       .toBeGreaterThan(3);
   });
 
+  it.each(metricEntries)("%s names the build it was recorded against, header or its own", (key, m) => {
+    // A baseline is re-cut a few rows at a time -- three idle rows moved to ff0ce65f while eleven
+    // others still describe dc4d55e. One header stamp covering both would make the file quietly
+    // claim a build for numbers that were never taken on it, which is worse than no stamp: it is a
+    // wrong one, and every reader downstream would trust it. A row that moved says so on the row.
+    if (m.recordedAgainst === undefined) return;
+    expect(m.recordedAgainst.buildStamp ?? "", `${key}.recordedAgainst.buildStamp must be a build stamp`)
+      .toMatch(/^[0-9a-f]{7,40} · (release|debug)$/);
+    expect(
+      m.recordedAgainst.buildStamp,
+      `${key} overrides the header stamp with the same value -- an override that overrides nothing ` +
+        `reads as provenance while carrying none. Delete it, or re-record and change it.`,
+    ).not.toBe(baseline.recordedAgainst?.buildStamp);
+    expect(String(m.recordedAgainst.why ?? "").length, `${key}.recordedAgainst must say WHY it differs`)
+      .toBeGreaterThan(20);
+  });
+
   it.each(metricEntries)("%s re-derives from the raw trace it cites", (key, m) => {
     const [file, path] = String(m.source).split("#");
     const traceFile = join(RAW_DIR, file);
