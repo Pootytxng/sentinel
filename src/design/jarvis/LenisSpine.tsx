@@ -11,6 +11,18 @@ import { useEffect, type RefObject } from "react";
 // `prevent` callback walks from the wheel target up to the wrapper and yields to any ancestor
 // that genuinely scrolls (overflow-y auto/scroll AND overflowing content) — no per-surface
 // data-lenis-prevent bookkeeping to drift out of date.
+//
+// IDLE STAND-DOWN (2026-08-06, Q7 idle-cost teardown). The loop used to re-arm unconditionally and
+// was stopped only by `document.hidden` — so a VISIBLE window with nobody at the keyboard ticked
+// every frame forever, in every room, for the whole session. Measured
+// (docs/perf/raw/idle-attribution.json): the frame loops were 6.561 of the 51.733 CPU points the
+// idle app burned, and this was the top registration site in the sample. Smooth scroll only has
+// work to do while the lane is actually moving, so the loop now parks IDLE_AFTER_MS after the last
+// pixel of motion and wakes on input — the ReticleCursor pattern, applied to scroll.
+//
+// Parking is keyed on OBSERVED MOTION (wrapper.scrollTop actually changed), not on any Lenis event
+// or flag: whatever the library does internally, "the lane has not moved for a second" is a fact,
+// and it cannot leave the loop running for a scroll that already ended.
 
 type LenisLike = {
   raf(time: number): void;
@@ -18,6 +30,15 @@ type LenisLike = {
   start(): void;
   destroy(): void;
 };
+
+/** How long the loop keeps ticking after the lane stops moving. One second of frames costs ~0.1% of
+ *  a core; anything shorter risks parking inside the tail of a lerp the user can still see. */
+const IDLE_AFTER_MS = 1000;
+
+/** Every way a user can start a scroll. `scroll` on the wrapper covers scrollbar drags, focus jumps
+ *  and programmatic scrollTo — and it also fires while Lenis is moving the lane, which harmlessly
+ *  re-confirms the loop should stay awake. */
+const WAKE_EVENTS = ["wheel", "touchstart", "touchmove", "keydown", "pointerdown"] as const;
 
 function hasNestedScroller(node: HTMLElement | null, stopAt: HTMLElement): boolean {
   let el: HTMLElement | null = node;
@@ -46,19 +67,41 @@ export function LenisSpine({
     let disposed = false;
     let lenis: LenisLike | null = null;
     let raf = 0;
+    let lastMotion = 0;
+    let lastTop = wrapper.scrollTop;
 
     const loop = (time: number) => {
       lenis?.raf(time);
+
+      const top = wrapper.scrollTop;
+      if (top !== lastTop) {
+        lastTop = top;
+        lastMotion = time;
+      }
+      if (time - lastMotion > IDLE_AFTER_MS) {
+        raf = 0; // Parked. Nothing has moved for a second — the next input re-arms it.
+        return;
+      }
       raf = requestAnimationFrame(loop);
     };
+
+    /** Arm the loop (or extend its life) — safe to call on every event of a burst. */
+    const wake = () => {
+      if (disposed || !lenis || document.hidden) return;
+      lastMotion = performance.now();
+      if (!raf) raf = requestAnimationFrame(loop);
+    };
+
     const onVisibility = () => {
       if (document.hidden) {
         cancelAnimationFrame(raf);
         raf = 0;
         lenis?.stop();
-      } else if (lenis && !raf) {
-        lenis.start();
-        raf = requestAnimationFrame(loop);
+      } else {
+        // Do NOT arm here: a window coming back to the foreground with nobody touching it is
+        // exactly the case that used to cost a core. It wakes on the first real input.
+        lenis?.start();
+        lastTop = wrapper.scrollTop;
       }
     };
 
@@ -76,13 +119,21 @@ export function LenisSpine({
         // lane keeps native scroll. Progressive enhancement, never a broken scroll.
         return;
       }
-      raf = requestAnimationFrame(loop);
+      for (const type of WAKE_EVENTS) {
+        wrapper.addEventListener(type, wake, { passive: true });
+      }
+      wrapper.addEventListener("scroll", wake, { passive: true });
       document.addEventListener("visibilitychange", onVisibility);
+      // One arming pass so a scroll restored on mount settles, then it parks on its own.
+      wake();
     })();
 
     return () => {
       disposed = true;
       cancelAnimationFrame(raf);
+      raf = 0;
+      for (const type of WAKE_EVENTS) wrapper.removeEventListener(type, wake);
+      wrapper.removeEventListener("scroll", wake);
       document.removeEventListener("visibilitychange", onVisibility);
       lenis?.destroy();
       lenis = null;

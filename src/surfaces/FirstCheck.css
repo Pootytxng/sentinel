@@ -43,25 +43,39 @@
 .fc-sweepzone {
   position: relative;
 }
+/* The beam TRAVELS ON THE COMPOSITOR (idle-cost teardown, 2026-08-06). It used to be a 34px band
+   animating `top` from -10% to 100%. `top` is a layout property, so every one of those frames ran
+   layout + paint, and because the band carries filter: blur(2px) the blurred texture was thrown
+   away and recomputed each time — the same defect the aurora backdrop was measured costing 8% of a
+   CPU core (docs/perf/raw/idle-attribution.json). Same look, no repaints: the element now spans the
+   whole sweep zone (plus one band-height of headroom above it) and paints the band as a
+   non-repeating background at its top edge, so a plain translate3d from 0 to 100% walks the band
+   from just above the zone to just below it. Fixed size, fixed geometry, one raster reused for the
+   life of the animation. Guarded by src/ambient-animation-cost-guard.test.ts. */
 .fc-sweep-beam {
   position: absolute;
   left: -4px;
   right: -4px;
-  height: 34px;
+  top: -34px;
+  height: calc(100% + 34px);
   pointer-events: none;
   z-index: 0;
-  background: linear-gradient(
+  background-image: linear-gradient(
     180deg,
     transparent,
     color-mix(in srgb, var(--ix-accent, #2ee6c0) 22%, transparent),
     transparent
   );
+  background-size: 100% 34px;
+  background-repeat: no-repeat;
+  background-position: 0 0;
   filter: blur(2px);
+  will-change: transform;
   animation: fc-beam 1.5s ease-in-out infinite;
 }
 @keyframes fc-beam {
   0% {
-    top: -10%;
+    transform: translate3d(0, 0, 0);
     opacity: 0;
   }
   15% {
@@ -71,7 +85,7 @@
     opacity: 1;
   }
   100% {
-    top: 100%;
+    transform: translate3d(0, 100%, 0);
     opacity: 0;
   }
 }

@@ -110,11 +110,19 @@
   will-change: transform;
 }
 
+/* The deep layer BREATHES ON OPACITY, not on scale (idle-cost teardown, 2026-08-06). These stops
+   used to ride scale(0.975 -> 1.035) on a layer carrying filter: blur(3px). A blurred layer is
+   rasterized at its current size, so a ±3.5% scale threw that texture away and re-blurred three
+   radial gradients every frame for as long as Optimize was on screen — the aurora defect, measured
+   at 8% of a CPU core there (docs/perf/raw/idle-attribution.json). A ±6% opacity wobble reads as
+   the same slow volumetric swell on blobs already sitting at 10-18% alpha, and opacity is a
+   compositor property: the raster is built once and reused.
+   Guarded by src/ambient-animation-cost-guard.test.ts. */
 @keyframes opt-drift-deep {
-  0%   { transform: translate3d(0, 0, 0) scale(1); }
-  33%  { transform: translate3d(14px, -8px, 0) scale(1.035); }
-  66%  { transform: translate3d(-11px, 6px, 0) scale(0.975); }
-  100% { transform: translate3d(8px, -12px, 0) scale(1.02); }
+  0%   { transform: translate3d(0, 0, 0); opacity: 0.92; }
+  33%  { transform: translate3d(14px, -8px, 0); opacity: 1; }
+  66%  { transform: translate3d(-11px, 6px, 0); opacity: 0.88; }
+  100% { transform: translate3d(8px, -12px, 0); opacity: 0.96; }
 }
 @keyframes opt-drift-near {
   0%   { transform: translate3d(0, 0, 0); }

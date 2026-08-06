@@ -35,8 +35,21 @@
 /* Holo-foil verdict headlines — accent-driven OKLCH tint sweep across the room verdicts
    (all five rooms; the eyebrow/masthead register is untouched). The gradient's stops are
    ALL token-derived mixes that stay within a whisper of --v2-text, so the headline reads
-   as ink with a live sheen, never a rainbow. The slow pan stills under reduced motion,
-   leaving a static foil — reduced-motion static by construction. */
+   as ink with a live sheen, never a rainbow. The sweep stills under reduced motion,
+   leaving a static foil — reduced-motion static by construction.
+
+   ARRIVAL SWEEP, NOT A LOOP (idle-cost teardown, 2026-08-06). This used to pan forever
+   (`v2-foil-pan 14s linear infinite`), and it was the single most expensive thing in the app:
+   cancelling it mid-measurement freed 29.793% of a CPU core — 60.4% of everything Compy burned
+   sitting idle with nobody at the keyboard — and dropped RecalcStyleCount from 249.8/s to 19.87/s
+   (docs/perf/raw/idle-attribution.json). background-position is not a compositable property, so
+   every frame cost a style recalc plus a repaint, and under background-clip: text that repaint
+   re-rasterizes every glyph. There is no cheap way to loop it: the clip binds the paint to the
+   text, so the sheen cannot be moved on the GPU the way a transform can.
+   So it sweeps ONCE on arrival and settles into exactly the static foil reduced-motion already
+   showed. Each room renders its own headline element, so a room change is a fresh mount and the
+   sweep replays — the moment you actually look at a headline is the moment it shines. Steady-state
+   cost: zero. Guarded by src/ambient-animation-cost-guard.test.ts. */
 :root[data-v2="on"][data-hud="on"] .v2-verdict h1,
 :root[data-v2="on"][data-hud="on"] .hud-headline {
   background-image: linear-gradient(
@@ -51,14 +64,15 @@
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: v2-foil-pan 14s linear infinite;
+  animation: v2-foil-pan 1.6s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 @keyframes v2-foil-pan {
   from {
-    background-position: 0% 0;
-  }
-  to {
     background-position: 220% 0;
+  }
+  /* Rests on the gradient's own framing — byte-identical to the reduced-motion static foil. */
+  to {
+    background-position: 0% 0;
   }
 }
 :root[data-v2="on"][data-hud="on"][data-motion="reduced"] .v2-verdict h1,
