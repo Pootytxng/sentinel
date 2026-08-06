@@ -474,6 +474,36 @@ describe("HomeConsole — the #1-limiter readout (measured fact + its fix route)
   });
 });
 
+// The check→fix hallway (2026-08-06). The masthead band NAMES a fix count; before this it named it
+// and stopped, leaving the user to hunt for the fixes in another room. A named flag carries its own
+// route inline ([[flags-name-it-and-fix-it-inline]]) — and it must be a LINK, because the band's
+// Re-run button is Home's ONE primary action and a rival button would break that rule.
+describe("HomeConsole — the masthead band's route to the fixes", () => {
+  it("offers the route, and only a link, when the band reports something to fix", () => {
+    const jump = vi.fn();
+    const attn: GameReadiness = {
+      ...readiness,
+      checks: [{ id: "ref", label: "Refresh rate below max", status: "attention", detail: "", value: null }],
+      attention_count: 1,
+    };
+    const c = mount({ ...props, readiness: attn, onSeeInFix: jump, fixRoomLabel: "Lab" }).container;
+    const band = c.querySelector(".rcb")!;
+    const fix = band.querySelector<HTMLButtonElement>(".rcb-fix")!;
+    expect(fix, "the band names a fix count with no way to reach the fixes").not.toBeNull();
+    expect(fix.textContent).toContain("Fix them in Lab");
+    // One primary action, never two: .rcb-btn stays the band's only button-looking control.
+    expect(band.querySelectorAll(".rcb-btn").length).toBe(1);
+    fireEvent.click(fix);
+    expect(jump).toHaveBeenCalled();
+  });
+
+  it("shows NO route when there is nothing to fix — a clean rig is not sent anywhere", () => {
+    const c = mount({ ...props, fixRoomLabel: "Lab" }).container;
+    expect(c.querySelector(".rcb")).not.toBeNull();
+    expect(c.querySelector(".rcb-fix")).toBeNull();
+  });
+});
+
 // bug→guard (self-review 2026-07-17): the fix that made the attention verdict NAME the top
 // flagged check introduced a DUPLICATION — when that same item is ALSO the #1 limiter, its title
 // rendered twice on Home (the gold verdict headline + the "top limiter" row ~500px below). The

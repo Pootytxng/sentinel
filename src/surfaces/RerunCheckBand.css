@@ -61,6 +61,24 @@
 :root[data-v2="on"] .rcb-num {
   font-family: var(--v2-font-mono);
 }
+/* The route to the fixes. Deliberately a LINK, not a button — .rcb-btn stays the band's only
+   button, so the count gains a destination without Home growing a second primary action. */
+:root[data-v2="on"] .rcb-fix {
+  margin-left: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--v2-font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--v2-accent);
+  cursor: pointer;
+  text-underline-offset: 3px;
+}
+:root[data-v2="on"] .rcb-fix:hover,
+:root[data-v2="on"] .rcb-fix:focus-visible {
+  text-decoration: underline;
+}
 :root[data-v2="on"] .rcb-btn {
   display: inline-flex;
   align-items: center;

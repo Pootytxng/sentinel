@@ -375,6 +375,7 @@
     "measuredFlaggedSuffix": " measured · {{attention}} flagged",
     "checkingButton": "Checking…",
     "rerunButton": "Re-run check",
+    "fixLink": "Fix them in {{room}}",
     "age": {
       "justNow": "just now",
       "minutesAgo": "{{n}}m ago",

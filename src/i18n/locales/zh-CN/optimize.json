@@ -357,6 +357,7 @@
     "measuredFlaggedSuffix": " 项已测量 · {{attention}} 项需关注",
     "checkingButton": "检测中…",
     "rerunButton": "重新检测",
+    "fixLink": "在「{{room}}」中修复",
     "age": {
       "justNow": "刚刚",
       "minutesAgo": "{{n}} 分钟前",

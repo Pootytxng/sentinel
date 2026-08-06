@@ -354,12 +354,14 @@ describe("HomeV2 — last-session numbers carry hardware-graded tone", () => {
 });
 
 describe("HomeV2 — priorities rows", () => {
-  it("ranks the first limiter 'biggest limiter'; rows route to Optimize", () => {
+  // "See in Lab", not "See in Optimize" — the 2026-08-06 generation prune deleted the standalone
+  // Optimize room, so the fixRoomLabel default this isolation mount falls back to now names the Lab.
+  it("ranks the first limiter 'biggest limiter'; rows route to the fixes", () => {
     useReduced();
     const { props } = mount();
     expect(screen.getByText("biggest limiter")).toBeTruthy();
     expect(screen.getByText("medium confidence")).toBeTruthy();
-    fireEvent.click(screen.getAllByRole("button", { name: "See in Optimize" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "See in Lab" })[0]);
     expect(props.onSeeInFix).toHaveBeenCalled();
   });
 

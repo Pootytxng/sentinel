@@ -258,7 +258,9 @@ export function HomeConsole({
   changes,
   onRunCheck,
   onSeeInFix,
-  fixRoomLabel = "Optimize",
+  // "Lab", not "Optimize" — that room was deleted in the 2026-08-06 generation prune. App.tsx
+  // always passes t("common.rail.lab"); this default only ever shows up in isolation tests.
+  fixRoomLabel = "Lab",
   onNavigate,
   rooms,
   recs,
@@ -583,7 +585,15 @@ export function HomeConsole({
           <span className="hc-headline">{t("common.rail.home", { defaultValue: "Home" })}</span>
         </>
       }
-      measured={<RerunCheckBand readiness={readiness} checking={checking} onRunCheck={onRunCheck} />}
+      measured={
+        <RerunCheckBand
+          readiness={readiness}
+          checking={checking}
+          onRunCheck={onRunCheck}
+          onSeeInFix={onSeeInFix}
+          fixRoomLabel={fixRoomLabel}
+        />
+      }
     >
       <div className="home-console" data-motion={reduced ? "reduced" : "full"}>
         {/* THE COLD-OPEN VERDICT — relocated out of the h1 (title-header law): postureLine's

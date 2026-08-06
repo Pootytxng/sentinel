@@ -121,7 +121,8 @@ export function HomeV2({
   changes,
   onRunCheck,
   onSeeInFix,
-  fixRoomLabel = "Optimize",
+  // "Lab" — the Optimize room was deleted in the 2026-08-06 generation prune.
+  fixRoomLabel = "Lab",
 }: Props) {
   const { t } = useTranslation();
   const reduced = useReducedMotion();

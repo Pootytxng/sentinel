@@ -1011,6 +1011,19 @@ function App() {
   const navHome = (id: HomeRailId) => {
     setActiveTab(id === "home" ? "Overview" : id === "play" ? "Play" : id === "learn" ? "Learn" : "Lab");
   };
+  // The check->fix hallway. Every "take me to the fixes" affordance in the app routes through HERE,
+  // so there is exactly ONE writer of the station intent and exactly one ordering to get right:
+  // persist BEFORE navHome mounts LabConsole (race-free), because LabConsole reads + clears the key
+  // on mount. Landing on the Lab dock instead of the station is the bug this closes — naming a fix
+  // count and then making the user hunt for the fixes is the dead-end the app exists to avoid.
+  const openFixesInLab = () => {
+    try {
+      localStorage.setItem("compy_lab_open_station", "optimize");
+    } catch {
+      /* non-fatal — the user still lands in the Lab, just on the dock */
+    }
+    navHome("lab");
+  };
   const HOME_FOR_TAB: Partial<Record<Tab, HomeRailId>> = {
     Overview: "home",
     Play: "play",
@@ -1188,16 +1201,10 @@ function App() {
           }}
           onGoToLab={() => {
             // Post-check route (tester J 2026-07-22): close the verdict and land the user in the Lab
-            // with the Optimize station auto-opened. The intent is persisted BEFORE navHome mounts
-            // LabConsole (race-free); LabConsole reads + clears it on mount.
-            try {
-              localStorage.setItem("compy_lab_open_station", "optimize");
-            } catch {
-              /* non-fatal — the user still lands in the Lab, just on the dock */
-            }
+            // with the Optimize station auto-opened — openFixesInLab owns the race-free handoff.
             setShowFirstCheck(false);
             void refresh();
-            navHome("lab");
+            openFixesInLab();
           }}
           arcV2
         />
@@ -1294,8 +1301,9 @@ function App() {
                   // standalone Optimize tab to review on). The recovery is NOT cleared here —
                   // the toast keeps greeting until the pane's own card takes over on mount,
                   // so Review can never dead-end the restore (the old clear did exactly that
-                  // when the pane stayed behind a closed disclosure).
-                  setActiveTab("Lab");
+                  // when the pane stayed behind a closed disclosure). Routed through the
+                  // hallway so Review opens the station the pane is IN, not the dock above it.
+                  openFixesInLab();
                 }}
               >
                 {t("app.gamingToast.review")}
@@ -1393,7 +1401,7 @@ function App() {
               sessions={sessions}
               changes={changes}
               onRunCheck={() => setShowFirstCheck(true)}
-              onSeeInFix={() => setActiveTab("Lab")}
+              onSeeInFix={openFixesInLab}
               fixRoomLabel={t("common.rail.lab")}
               // Console-only (compy_home_console): the Home dock's doors are the rail the app
               // actually shows (the shared `rail` above) minus Home itself, navigating through
