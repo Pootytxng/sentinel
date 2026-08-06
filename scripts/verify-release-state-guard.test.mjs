@@ -56,12 +56,22 @@ describe("embedded build-stamp token extraction", () => {
     expect(embeddedStampTokens("COMPY_GIT_HASH\0c7c60d3\0release")).toEqual(["c7c60d3"]);
   });
 
+  it("REGRESSION: an 8-hex stamp is a stamp — `--short` widens as the repo grows", () => {
+    // This file used to assert `embeddedStampTokens("abcdefab") === []`, pinning the width at exactly
+    // 7. Git widened this repo's abbreviation to 8 on 2026-08-06 and the scan went blind: 24 tokens
+    // found, none resolved, permanent STATE-SKIP — a check that keeps printing a line while checking
+    // nothing. Width is a property of the repo's object count, never of the stamp's meaning.
+    expect(embeddedStampTokens("COMPY_GIT_HASH\0ff0ce65f\0release")).toEqual(["ff0ce65f"]);
+    expect(embeddedStampTokens("|4ca909f8|")).toEqual(["4ca909f8"]);
+  });
+
   it("never carves a candidate out of the middle of a longer hex run", () => {
     // A 40-char full OID, a SHA-256 digest, or any hex blob merely BEGINS with hex — it is a
-    // different string, and slicing 7 chars out of it would invent a stamp that was never embedded.
+    // different string, and slicing a stamp out of its middle would invent one that was never
+    // embedded. The upper bound (12) is what keeps that true now that the width is a range.
     expect(embeddedStampTokens("a1be896fb5853f729d77525374a4242c6672d5a8")).toEqual([]);
     expect(embeddedStampTokens("0123456789abcdef")).toEqual([]);
-    expect(embeddedStampTokens("abcdefab")).toEqual([]);
+    expect(embeddedStampTokens("7861729562bc302112ef84e4a16345aa22d51c7b")).toEqual([]);
     expect(embeddedStampTokens("abcdef")).toEqual([]);
   });
 
