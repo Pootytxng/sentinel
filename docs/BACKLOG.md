@@ -73,8 +73,20 @@
   disclosure + deletion consequences. **Q5 COMPLETE 2026-08-04** — the in-app preview/export UI
   (`08ad3b1`, `src/surfaces/SupportEvidence.tsx`, 9 tests, en/zh-CN parity) took its visual
   self-review on the installed `5ff6963` release build and PASSed 9/9; the first pass FAILed on a
-  real user-facing defect and its fix is now guarded both sides (see the cycle entry below). Also open: Q7 native accessibility and measured
-  performance budgets (blocked on a stable candidate + owner's machine). **Q6 DELIVERED 2026-08-04**
+  real user-facing defect and its fix is now guarded both sides (see the cycle entry below). **Q7 DELIVERED 2026-08-05** (issue
+  [#73](https://github.com/Pootytxng/sentinel/issues/73)) — the accessibility sweep and the measured
+  baselines, both recorded against the installed `dc4d55e · release` build on the owner's desk.
+  A11y: the three `<Canvas>` mounts were checked in the live DOM, two were silent to a screen
+  reader, and `src/canvas-a11y-guard.test.ts` now forces every canvas to answer *named picture* or
+  *explicitly decorative* at its own call site. Perf: `scripts/q7-probe.mjs` wrote raw traces to
+  `docs/perf/raw/`, `docs/perf/q7-baseline.json` transcribes 14 metrics, and
+  `scripts/perf-budget-guard.test.mjs` re-derives every published number from those traces on each
+  `npm test` — so a hand-edited baseline fails even though CI can never re-run the probe. One bad
+  finding is on the record as an `open finding`, not a spec: **idle Compy costs ~50% of one core**
+  with nothing moving and nobody present, reproduced on two bare runs; `src/shell-idle-guard.test.ts`
+  adds the third idle axis (*is anyone interacting?*) and carries `LenisSpine.tsx` as its declared
+  exception. *Still owner-blocked:* the lower-spec rig leg — every budget is proven on one fast
+  machine and none is a claim about a slow one. **Q6 DELIVERED 2026-08-04**
   (issue [#65](https://github.com/Pootytxng/sentinel/issues/65), `9bf3bde`) — three stale live claims
   retired: `GAMING_MODE_PLAN.md` reconciled against the QA record (8 rows mapped, 3 left unchecked as
   *unproven, not failing*), the 2026-07-06 launch runway archived verbatim with its "no real UI gaps"
@@ -971,7 +983,14 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] Autopsy "what did we learn?" rollup — `autopsy-ledger.ts`, `Learn.tsx:453`
 - [x] local autopsy stats — `autopsy-ledger.ts`, `local-stats.ts`
 
-### A4 · ADVISORY surfaces — **THE MAJOR REMAINING LANE (~24 of 33 not built)**
+### A4 · ADVISORY surfaces — **42 of 48 shipped; nothing here is ungated work** (recount 2026-08-05)
+
+> The old "~24 of 33 not built" heading survived the whole lane being built out and read as the
+> project's biggest hole. Actual state: **42 `[x]` · 1 `[~]` honesty-capped (NVIDIA/Intel vendor
+> badges, withheld under LOCKED Rule 5 — not a to-do) · 5 `[ ]`, and every one of the five is gated**
+> — three on owner-curated data that must not be LLM-generated (safe-to-suspend reference, keyboard
+> debounce/Snap-Tap detection, sensor-ID known-issue DB) and two behind the outbound wall (ISP speed
+> snapshot, DNS resolution-time probe). **Do not pick these up as "next" — none is unblocked.**
 
 **Monitor/Display**
 - [x] OSD detection — shipped the feasible+honest reading: `overlay_tools.rs` read-only probe detects third-party in-game overlay/OSD TOOLS running (RTSS · MSI Afterburner · Fraps · Bandicam — only tools whose running process reliably means an OSD is drawn), surfaced as an "On-screen overlays" Diagnostics section so a double-overlay with Compy's own overlay isn't a mystery. Informational only (no perf/FPS claim, no "close it"); curated labels only (live process names never surfaced/sent); honest coverage. Monitor-HARDWARE-OSD reading deliberately NOT attempted (DDC/CI is an unreliable per-monitor honesty-hazard). No new IPC; 8 tests + law guards — `bf0272f`

@@ -80,9 +80,26 @@ for #71 ([31022512767](https://github.com/Pootytxng/sentinel/actions/runs/310225
 Widening the CI trigger to all branches would also fix it and was rejected — that is the unbounded
 spend that exhausted July's allowance and killed CI for 22 days in the first place.
 
+### A_rig. The performance budgets are proven on ONE machine — yours  ·  ⏳ NEW 2026-08-05
+Q7 recorded Compy's real numbers against the installed build and turned them into budgets a test
+re-checks on every run ([`docs/perf/q7-baseline.json`](perf/q7-baseline.json), issue
+[#73](https://github.com/Pootytxng/sentinel/issues/73)). Every one of those 14 numbers came off your
+desk: Ryzen X3D, 16 cores, 29.4 GB, RX 9070 XT, 240 Hz. **In plain English: we now know Compy starts
+in 3.7 seconds and uses 575 MB on a fast gaming PC. We do not know what it does on a slow laptop,
+and nothing in the repo should be read as claiming we do.**
+
+Nothing for you to do today — this is logged so it does not silently become a claim. The moment a
+second, slower Windows machine is available (a spare laptop, a tester's PC, anything), the whole
+sweep is one command per leg and takes about twenty minutes:
+`node scripts/q7-probe.mjs coldstart|boot|rooms|latency|idle-bare|a11y`. Until then the budgets stay
+labelled *upper bound proven on fast hardware*, and the one bad finding below stays open regardless
+of rig: **idle Compy burns ~half a CPU core doing nothing**, which will be worse, not better, on a
+weaker machine.
+
 ### A-closed. Nine §A items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
-None of them is waiting on you — A0 and A_ci above are the only §A items still open. Archived
+None of them is waiting on you — A0, A_ci and A_rig above are the only §A items still open, and
+only A0 actually needs your hands. Archived
 2026-08-04 (TOKEN LAW §1 — history leaves the live doc, never gets deleted): **A0b** zh-CN merged +
 published in v0.9.11 · **A1** Gaming Mode QA signed off · **A2** beta smoke (sitting waived; the live
 beta thread is **§B2** below) · **A3** Lab Ops Console · **A4** Home console · **A5** Monitor v5
