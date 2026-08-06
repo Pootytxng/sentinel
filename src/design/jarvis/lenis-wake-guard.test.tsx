@@ -186,4 +186,39 @@ describe("LenisSpine hides the parked interval from Lenis's clock", () => {
       "returning from a hidden window hands Lenis the whole hidden interval",
     ).toBeLessThanOrEqual(50);
   });
+
+  it("parks that overlap are counted once each, not just the last one", async () => {
+    // Self-review round 2, 2026-08-06 — the fix above had this defect one layer down, and the test
+    // right before this one could not see it: it goes straight from runUntilParked() into the hidden
+    // event with no real time in between, so the two parks coincide and nothing is lost.
+    //
+    // Real sequence: the user stops scrolling (idle park), leaves the window sitting there for a
+    // while, THEN alt-tabs (hidden park), then comes back. park() runs twice, and the second call
+    // used to overwrite parkedAt — so the whole interval between the two parks never entered
+    // parkedTotal and leaked straight back into Lenis's deltaTime. Live-reproduced on the b3fc59ec
+    // build as a zero-frame snap: scrollTop 1000, 1000, 1000, … for all 25 sampled frames.
+    const wrapper = await mountSpine();
+    runUntilParked();
+    const beforePark = last();
+
+    elapse(6000); // parked, visible, nobody home — this is the interval that used to vanish
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    document.dispatchEvent(new Event("visibilitychange")); // parks a SECOND time
+    elapse(4200);
+    hidden.mockReturnValue(false);
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    fireEvent.wheel(wrapper);
+    frame(16);
+
+    const delta = last() - beforePark;
+    expect(
+      delta,
+      `Lenis was told ${delta.toFixed(0)}ms elapsed across a 10200ms double park. Only the LAST\n` +
+        `park is being discounted: park() must record its timestamp on the TRANSITION into parked\n` +
+        `and leave it alone while already parked, or every interval before the final park is\n` +
+        `handed back to the easing clock and the lane teleports.`,
+    ).toBeLessThanOrEqual(50);
+    expect(delta, "time went backwards or stood still across the wake").toBeGreaterThan(0);
+  });
 });

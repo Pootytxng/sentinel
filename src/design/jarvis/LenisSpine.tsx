@@ -85,11 +85,18 @@ export function LenisSpine({
     let parkedTotal = 0;
 
     /** Stop ticking, and record WHEN. Every path that parks goes through here — one that does not
-     *  leaves its gap in Lenis's next deltaTime, which is exactly the defect above. */
+     *  leaves its gap in Lenis's next deltaTime, which is exactly the defect above.
+     *
+     *  The stamp is taken on the TRANSITION into parked only (`raf` still holds a live handle).
+     *  Parking twice is normal — the idle timer parks, the window is hidden some time later and
+     *  parks again — and overwriting the stamp on that second call drops everything between the two
+     *  parks from parkedTotal, handing it straight back to the easing clock. That is the same
+     *  teleport as above, one layer down; it survived the first fix and was caught live on b3fc59ec
+     *  (scrollTop 1000, 1000, 1000… — a zero-frame snap). Guarded by lenis-wake-guard.test.tsx. */
     const park = (at: number) => {
+      if (raf) parkedAt = at;
       cancelAnimationFrame(raf);
       raf = 0;
-      parkedAt = at;
     };
 
     const loop = (time: number) => {
