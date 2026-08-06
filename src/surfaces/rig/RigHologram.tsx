@@ -276,6 +276,18 @@ export const RigHologram = memo(function RigHologram({
       ? "demand"
       : "always";
 
+  // Alt text for the bay: the names of the parts actually drawn, plus an honest note about the ones
+  // Compy can't read in software (the visible ghosts) — derived from the same `parts` the scene
+  // renders, so it can never describe hardware that isn't there.
+  const altText = useMemo(() => {
+    const drawn = [...parts.map((p) => p.name), ...manualParts.map((p) => p.name)];
+    const ghosts = parts.filter((p) => !p.detected).map((p) => p.name);
+    const base = t("gaming.rigViewer.a11y.hologram", { parts: drawn.join(", ") });
+    return ghosts.length > 0
+      ? `${base} ${t("gaming.rigViewer.a11y.hologramGhosts", { ghosts: ghosts.join(", ") })}`
+      : base;
+  }, [parts, manualParts, t]);
+
   return (
     <Canvas
       frameloop={frameloop}
@@ -283,6 +295,19 @@ export const RigHologram = memo(function RigHologram({
       gl={{ antialias: true, alpha: true }}
       camera={{ position: [0.6, 1.5, cameraDist], fov: 45 }}
       onPointerMissed={() => onSelect("")}
+      // Q7 a11y: the bay was invisible to a screen reader in BOTH rooms that mount it (Home and
+      // Lab) — canvas with no name, no role, no fallback, no adjacent text. It is a picture of the
+      // user's own machine, so it gets a picture's alt text, built from the SAME parts list the
+      // scene draws (never a fabricated description of hardware).
+      //
+      // r3f trap, load-bearing: CanvasProps extends HTMLAttributes<HTMLDivElement> and `...props`
+      // is spread onto the OUTER wrapper div — role/aria-label land THERE, not on <canvas>. The
+      // only prop that reaches the canvas element is `fallback` (r3f's own words: "similar to
+      // img's alt prop"). So both are set: role+label name the wrapper for the AX tree, `fallback`
+      // names the canvas itself for anything that walks to it directly.
+      role="img"
+      aria-label={altText}
+      fallback={altText}
     >
       <fogExp2 attach="fog" args={["#0a1320", 0.045]} />
       <ambientLight intensity={0.7} />

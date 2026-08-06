@@ -295,6 +295,10 @@
     "orbitButton": "Orbit",
     "dragHint": "Drag to orbit · hover or click a part for its live specs",
     "initializingHologram": "Initializing hologram…",
+    "a11y": {
+      "hologram": "3D hologram of your PC, showing: {{parts}}.",
+      "hologramGhosts": "Compy can't read these in software, so they appear as faint ghosts: {{ghosts}}."
+    },
     "honestyNote": "Tailored to your rig — parts and specs read live from your PC. Fans spin at their real RPM when HWiNFO or LibreHardwareMonitor is running; without one they stay faint placeholders. A PSU and the cooler model have no software identity, so they remain ghosts rather than guesses.",
     "nudgeTitle": "Light up your fans & temperatures",
     "nudgeBodyPre": "Your fans show as ghosts because Compy stays",
