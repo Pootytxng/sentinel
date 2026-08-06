@@ -1,0 +1,79 @@
+{
+  "task": "boot",
+  "recordedAt": "2026-08-05T23:46:41.251Z",
+  "note": "Warm reload of the running release build, instrumented from document start. Process-launch timing lives in the coldstart record; this is the complete IPC/timer census.",
+  "room": "Home",
+  "bootPlusSettle": {
+    "seconds": "20 after first read",
+    "ipcTotalAtFirstRead": 29,
+    "ipcByCommandAtFirstRead": {
+      "plugin:window|is_maximized": 1,
+      "plugin:event|listen": 1,
+      "gaming_mode_enabled": 1,
+      "set_close_to_tray": 1,
+      "get_recommendations": 2,
+      "get_startup_entries": 2,
+      "get_game_readiness": 2,
+      "get_session_summaries": 2,
+      "get_hardware_info": 1,
+      "get_applied_changes": 2,
+      "get_rules_source": 1,
+      "get_diagnostics": 1,
+      "get_gaming_session_state": 1,
+      "priorities_from": 2,
+      "plugin:updater|check": 1,
+      "get_gpu_sensors": 1,
+      "get_memory_pressure": 1,
+      "get_intelligence_headline": 1,
+      "get_ledger_health": 4,
+      "get_build_stamp": 1
+    },
+    "ipcDuringSettle": {
+      "get_gpu_sensors": 4,
+      "get_memory_pressure": 4,
+      "get_fps_status": 14,
+      "get_fan_sensors": 9
+    }
+  },
+  "liveIntervals": {
+    "count": 5,
+    "byDelayMs": {
+      "1000": 1,
+      "1500": 1,
+      "2500": 1,
+      "5000": 1,
+      "14400000": 1
+    }
+  },
+  "canvases": 1,
+  "documentAnimations": 2,
+  "settleWindow": {
+    "seconds": 20.01,
+    "invokes": {
+      "get_gpu_sensors": 4,
+      "get_memory_pressure": 4,
+      "get_fps_status": 14,
+      "get_fan_sensors": 9
+    },
+    "invokeTotal": 31,
+    "invokesPerSecond": 1.55,
+    "rafScheduled": 5241,
+    "rafFired": 5239,
+    "frames": 4988,
+    "displayFps": 249.3,
+    "concurrentRafLoops": 1.05,
+    "draws": 240,
+    "drawsPerSecond": 12,
+    "drawsPerFrame": 0.05,
+    "liveIntervals": 5,
+    "intervalDelays": {
+      "1000": 1,
+      "1500": 1,
+      "2500": 1,
+      "5000": 1,
+      "14400000": 1
+    },
+    "visibility": "visible",
+    "ipcCounterLive": true
+  }
+}

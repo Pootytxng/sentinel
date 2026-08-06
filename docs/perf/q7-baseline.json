@@ -1,0 +1,150 @@
+{
+  "$comment": [
+    "Q7 performance baseline. Every number here is a TRANSCRIPTION of a recording in docs/perf/raw/,",
+    "not a judgement about one. `source` names the trace and the exact path inside it;",
+    "scripts/perf-budget-guard.test.mjs re-opens each trace and fails the build if this file and the",
+    "recording ever disagree. Budgets are derived here and nowhere else -- a budget that appears in a",
+    "spec table with no entry in this file also fails the guard.",
+    "`budgetKind` separates three things a number in a budget column can mean, because reading them",
+    "as one is how a defect gets filed as a spec: `upper bound` = worst recorded + headroom, the app",
+    "has earned it; `exact` = budget equals the recording, any drift at all fails; `open finding` =",
+    "a ceiling on a KNOWN DEFECT so it cannot grow while the fix is queued, to be re-derived and cut",
+    "when the finding closes. An `open finding` row must name the guard or file carrying it.",
+    "Re-record with: node scripts/q7-probe.mjs <coldstart|boot|rooms|latency|idle|idle-bare|a11y>."
+  ],
+  "recordedAgainst": {
+    "buildStamp": "dc4d55e · release",
+    "buildStampSource": "get_build_stamp over CDP against the installed %LOCALAPPDATA%\\Compy\\compy.exe",
+    "machine": "Owner desk: AMD Ryzen X3D-class, 16 logical cores ~5.1 GHz, 29.4 GB RAM, Radeon RX 9070 XT (RDNA4), Windows 11 Home 26200, 240 Hz display",
+    "recordedOn": "2026-08-05",
+    "caveat": "ONE rig. Every budget below is an upper bound proven on fast hardware; none of them is a claim about a low-spec target, and the 240 Hz display sets the frame-cadence numbers. A second rig would move these, and Q7's lower-spec leg is still owner-blocked."
+  },
+  "metrics": {
+    "coldStartToUsableHomeMs": {
+      "value": 3721,
+      "unit": "ms",
+      "statistic": "worst of 3 cold process starts",
+      "source": "coldstart.json#summary.usableHomeMs.max",
+      "budget": 4500,
+      "budgetBasis": "Worst recorded start (3721 ms) plus ~20% headroom for a colder disk cache and a busier machine. Set off the WORST sample, never the median: a median budget is one the app fails a third of the time by construction.",
+      "budgetKind": "upper bound"
+    },
+    "coldStartDocumentReadyMs": {
+      "value": 210,
+      "unit": "ms",
+      "statistic": "worst of 3 cold process starts",
+      "source": "coldstart.json#summary.documentReadyMs.max",
+      "budget": 400,
+      "budgetBasis": "Worst recorded 210 ms. Held well under the usable-Home budget on purpose: this is the shell, and the ~3.5 s that follows it is React plus first IPC, so a regression here is a webview/bundle regression and should be caught separately from a data regression.",
+      "budgetKind": "upper bound"
+    },
+    "coldStartWorkingSetMB": {
+      "value": 580.06,
+      "unit": "MB",
+      "statistic": "worst of 3, summed across the whole process tree",
+      "source": "coldstart.json#summary.workingSetMB.max",
+      "budget": 660,
+      "budgetBasis": "Worst recorded 580 MB across all 8 processes plus ~14%. Deliberately replaces the old 26.50 MB figure in the spec, which counted the compy.exe parent alone and omitted the seven WebView2 processes that hold ~90% of the memory.",
+      "budgetKind": "upper bound"
+    },
+    "coldStartProcessCount": {
+      "value": 8,
+      "unit": "processes",
+      "statistic": "identical across all 3 cold starts",
+      "source": "coldstart.json#summary.processCount.max",
+      "budget": 8,
+      "budgetBasis": "Exact, not padded. 8 was invariant across three starts (1 compy.exe + 7 WebView2 hosts); a 9th process means a new host or a leaked child, and either is worth failing on rather than absorbing.",
+      "budgetKind": "exact"
+    },
+    "bootIpcCallsToFirstPaint": {
+      "value": 29,
+      "unit": "calls",
+      "statistic": "complete document-start census, first read after mount",
+      "source": "boot.json#bootPlusSettle.ipcTotalAtFirstRead",
+      "budget": 34,
+      "budgetBasis": "29 recorded with a from-document-start instrument, so nothing is missed. Headroom of 5 covers one new panel; it is tight on purpose because 7 of the 29 are duplicate pairs and get_ledger_health alone fires 4x -- the number should be going DOWN, and a budget with room to grow into is a budget that licenses the duplication.",
+      "budgetKind": "upper bound"
+    },
+    "idleIpcCallsPerSecond": {
+      "value": 1.55,
+      "unit": "calls/s",
+      "statistic": "20 s settle window on Home after boot",
+      "source": "boot.json#settleWindow.invokesPerSecond",
+      "budget": 2,
+      "budgetBasis": "Worst of the two Home idle measurements (1.55 here, 1.47 in the room sweep). This is what the app costs while the user reads the screen and does nothing, so it is the figure that compounds over an all-day session.",
+      "budgetKind": "upper bound"
+    },
+    "busiestRoomIpcCallsPerSecond": {
+      "value": 3,
+      "unit": "calls/s",
+      "statistic": "15 s dwell, Monitor -- the busiest of four rooms",
+      "source": "rooms.json#visits.2.invokesPerSecond",
+      "budget": 4,
+      "budgetBasis": "Monitor at 3.0/s is 2x idle Home and is the ceiling across all four rooms: three 1 Hz sensor polls (GPU, CPU, FPS). Budget 4 admits one more 1 Hz sensor and no more; a live monitoring room is allowed to poll, but each poll has to be a deliberate decision.",
+      "budgetKind": "upper bound"
+    },
+    "busiestRoomRafLoops": {
+      "value": 1.94,
+      "unit": "concurrent loops",
+      "statistic": "rafFired/frames over a 15 s dwell, Monitor",
+      "source": "rooms.json#visits.2.concurrentRafLoops",
+      "budget": 2.5,
+      "budgetBasis": "Derived, not counted by hand: rAF callbacks divided by real frames, with the probe's own tick excluded. Monitor runs ~2 concurrent loops; every other room runs exactly 1. Budget 2.5 fails a third simultaneous loop, which is the shape animation regressions actually take.",
+      "budgetKind": "upper bound"
+    },
+    "keepaliveRoomsIdleIpcPerSecond": {
+      "value": 1.47,
+      "unit": "calls/s",
+      "statistic": "15 s dwell on Home AFTER all four rooms were mounted and left mounted",
+      "source": "rooms.json#visits.5.invokesPerSecond",
+      "budget": 1.6,
+      "budgetBasis": "Equal to Home BEFORE any other room existed (1.47, rooms.json#visits.1) -- the keepalive rooms genuinely stand down instead of polling behind display:none. Budget sits just above the recorded value so that any drift toward background polling fails immediately; this is the metric that would catch it.",
+      "budgetKind": "upper bound"
+    },
+    "idleHologramDrawsPerSecond": {
+      "value": 0,
+      "unit": "GL draw calls/s",
+      "statistic": "15 s dwell on settled Home, WebGL draw* prototypes counted",
+      "source": "rooms.json#visits.1.drawsPerSecond",
+      "budget": 0,
+      "budgetBasis": "Zero, budgeted at zero. The hologram bay's frameloop=\"demand\" contract says a settled scene must issue no draw calls at all; it spends 240 draws settling and then stops dead. Any nonzero value means the demand loop broke, which is precisely the d557e70 holo-flicker regression.",
+      "budgetKind": "exact"
+    },
+    "idleCpuPercentOfOneCore": {
+      "value": 50.165,
+      "unit": "% of one core",
+      "statistic": "consumed processor-seconds over a 10-minute hands-off window, whole process tree, second of two bare runs",
+      "source": "idle-bare.json#cpu.percentOfOneCore",
+      "budget": 52,
+      "budgetBasis": "NOT AN ACCEPTED COST -- a ceiling on a recorded DEFECT, written to stop it growing while the fix is queued. Half a core, with nothing on screen moving and no user present, is the single worst number this sweep produced, and it is reproducible: 50.95% instrumented, then 50.71% and 50.165% on two independent bare runs that owe nothing to the observer. Budget = worst sample (50.95) + ~1 point for the 0.78-point run-to-run spread, so a real regression fails and normal variance does not. The open finding is the shell's unconditional rAF loop (src/design/jarvis/LenisSpine.tsx), pinned by src/shell-idle-guard.test.ts; when it stands down this number must be RE-RECORDED and this budget cut hard, not left at 52 as a licence.",
+      "budgetKind": "open finding"
+    },
+    "idleWorkingSetMB": {
+      "value": 575.16,
+      "unit": "MB",
+      "statistic": "max of 20 samples over 10 minutes, whole process tree, fresh boot parked on Home",
+      "source": "idle-bare.json#memory.workingSetMB.max",
+      "budget": 640,
+      "budgetBasis": "Worst sample of the bare run (575.16 MB) plus ~11%. State is part of the number and the two are not comparable without it: this is a FRESH boot that never left Home, whereas the instrumented idle trace ran after the room sweep with every keepalive room still mounted behind display:none -- roughly 80 MB more of the same app alive. Compare idle memory only at equal state. Observed and deliberately not called a leak: working set drifted 555.75 -> 575.16 MB across the window (median 564.49), which one 10-minute run cannot distinguish from allocator behaviour; proving it either way needs max-at-10/30/60-minutes from one continuous run.",
+      "budgetKind": "upper bound"
+    },
+    "idlePrivateMB": {
+      "value": 441.09,
+      "unit": "MB",
+      "statistic": "max of 20 samples over 10 minutes, whole process tree, fresh boot parked on Home",
+      "source": "idle-bare.json#memory.privateMB.max",
+      "budget": 500,
+      "budgetBasis": "Worst sample (441.09 MB) plus ~13%. Recorded alongside working set because the two answer different questions: working set includes shared and mapped pages the OS can reclaim, private bytes is what Compy alone is holding and cannot give back. If a future leak hypothesis needs settling, this is the row that settles it -- a working set that grows while private bytes hold flat is the OS, not the app.",
+      "budgetKind": "upper bound"
+    },
+    "roomSwitchLatencyWorstMs": {
+      "value": 19,
+      "unit": "ms",
+      "statistic": "worst first-mount click-to-content across all rooms (Blackbook and Monitor tie)",
+      "source": "latency.json#summary.Blackbook.worst",
+      "budget": 60,
+      "budgetBasis": "Worst recorded 19 ms for the heaviest room's genuine first mount (measured from a fresh reload, so the 'first' column is not a warm cache). 60 ms is the perceptual floor where a room switch stops feeling instant -- a 3x margin, because this is the number a slower rig will move most.",
+      "budgetKind": "upper bound"
+    }
+  }
+}

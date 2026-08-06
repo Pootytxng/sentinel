@@ -111,6 +111,10 @@ const RESIDENCY = {
     kind: "npm-test",
     runner: "scripts/public-version-gate.test.mjs",
   },
+  "q7-probe.mjs": {
+    kind: "manual",
+    why: "Drives the INSTALLED build over a CDP port on the owner's desk and records raw traces to docs/perf/raw/ — one of its legs parks the machine hands-off for ten minutes. A resident runner would need a live app, a real GPU and a user who is not touching the mouse; CI has none of the three. What IS resident is the artifact it produces: scripts/perf-budget-guard.test.mjs re-derives every published number from those traces on every `npm test`, so a hand-edited baseline fails even though the probe never re-runs.",
+  },
   "release-powershell-static-guard.mjs": {
     kind: "npm-test",
     runner: "scripts/release-powershell-static-guard.test.mjs",

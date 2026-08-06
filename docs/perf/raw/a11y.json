@@ -1,0 +1,477 @@
+{
+  "task": "a11y",
+  "recordedAt": "2026-08-06T00:30:46.194Z",
+  "note": "Window sizes are REAL OS window resizes of the shipped build. nativeMedia is what this machine's WebView2 reports with nothing emulated. The 200% row is the CSS viewport budget 200% scaling produces, not an emulated DPR. forced-colors IS emulated (CDP setEmulatedMedia) -- it proves the app's own handling, not the WebView2 host chrome under the real Windows theme.",
+  "window": {
+    "requested": {
+      "w": 1280,
+      "h": 720
+    },
+    "viewport": {
+      "w": 1264,
+      "h": 711,
+      "dpr": 1
+    }
+  },
+  "nativeMedia": {
+    "prefersReducedMotion": true,
+    "forcedColors": false,
+    "prefersContrastMore": false,
+    "prefersColorScheme": "dark",
+    "devicePixelRatio": 1,
+    "innerWidth": 1264,
+    "innerHeight": 711
+  },
+  "rooms": [
+    {
+      "room": "Home",
+      "controls": 23,
+      "unnamed": [],
+      "horizontalOverflowPx": 0,
+      "ax": {
+        "available": true,
+        "nodesTotal": 289,
+        "nodesIgnored": 74,
+        "interactiveTotal": 23,
+        "unnamedInteractive": [],
+        "tabs": [
+          {
+            "name": "Home 1",
+            "selected": true
+          },
+          {
+            "name": "Monitor 2",
+            "selected": false
+          },
+          {
+            "name": "Blackbook 3",
+            "selected": false
+          },
+          {
+            "name": "Lab 4",
+            "selected": false
+          },
+          {
+            "name": "3D",
+            "selected": true
+          },
+          {
+            "name": "Cards",
+            "selected": false
+          }
+        ]
+      },
+      "hologram": {
+        "canvas": true,
+        "ariaLabel": null,
+        "role": null,
+        "ariaHidden": null,
+        "labelledbyText": null,
+        "fallbackText": null,
+        "siblingText": null
+      }
+    },
+    {
+      "room": "Monitor",
+      "controls": 26,
+      "unnamed": [],
+      "horizontalOverflowPx": 0,
+      "ax": {
+        "available": true,
+        "nodesTotal": 381,
+        "nodesIgnored": 95,
+        "interactiveTotal": 26,
+        "unnamedInteractive": [],
+        "tabs": [
+          {
+            "name": "Home 1",
+            "selected": false
+          },
+          {
+            "name": "Monitor 2",
+            "selected": true
+          },
+          {
+            "name": "Blackbook 3",
+            "selected": false
+          },
+          {
+            "name": "Lab 4",
+            "selected": false
+          },
+          {
+            "name": "Live",
+            "selected": true
+          },
+          {
+            "name": "Sessions",
+            "selected": false
+          },
+          {
+            "name": "Basic",
+            "selected": false
+          },
+          {
+            "name": "Advanced",
+            "selected": true
+          }
+        ]
+      },
+      "hologram": {
+        "canvas": true,
+        "ariaLabel": null,
+        "role": null,
+        "ariaHidden": "true",
+        "labelledbyText": null,
+        "fallbackText": null,
+        "siblingText": "▼ 6:29 PM"
+      }
+    },
+    {
+      "room": "Blackbook",
+      "controls": 27,
+      "unnamed": [],
+      "horizontalOverflowPx": 0,
+      "ax": {
+        "available": true,
+        "nodesTotal": 989,
+        "nodesIgnored": 291,
+        "interactiveTotal": 27,
+        "unnamedInteractive": [],
+        "tabs": [
+          {
+            "name": "Home 1",
+            "selected": false
+          },
+          {
+            "name": "Monitor 2",
+            "selected": false
+          },
+          {
+            "name": "Blackbook 3",
+            "selected": true
+          },
+          {
+            "name": "Lab 4",
+            "selected": false
+          },
+          {
+            "name": "Logbook",
+            "selected": true
+          },
+          {
+            "name": "Field guide",
+            "selected": false
+          }
+        ]
+      },
+      "hologram": {
+        "canvas": false
+      }
+    },
+    {
+      "room": "Lab",
+      "controls": 17,
+      "unnamed": [],
+      "horizontalOverflowPx": 0,
+      "ax": {
+        "available": true,
+        "nodesTotal": 261,
+        "nodesIgnored": 68,
+        "interactiveTotal": 17,
+        "unnamedInteractive": [],
+        "tabs": [
+          {
+            "name": "Home 1",
+            "selected": false
+          },
+          {
+            "name": "Monitor 2",
+            "selected": false
+          },
+          {
+            "name": "Blackbook 3",
+            "selected": false
+          },
+          {
+            "name": "Lab 4",
+            "selected": true
+          }
+        ]
+      },
+      "hologram": {
+        "canvas": true,
+        "ariaLabel": null,
+        "role": null,
+        "ariaHidden": null,
+        "labelledbyText": null,
+        "fallbackText": null,
+        "siblingText": null
+      }
+    }
+  ],
+  "focusRings": [
+    {
+      "name": "Home1",
+      "outlineWidth": "2px",
+      "outlineStyle": "solid",
+      "outlineColor": "rgb(46, 230, 192)",
+      "boxShadow": null,
+      "focusVisible": true,
+      "isActiveElement": true
+    },
+    {
+      "name": "Monitor2",
+      "outlineWidth": "2px",
+      "outlineStyle": "solid",
+      "outlineColor": "rgb(46, 230, 192)",
+      "boxShadow": null,
+      "focusVisible": true,
+      "isActiveElement": true
+    },
+    {
+      "name": "Blackbook3",
+      "outlineWidth": "2px",
+      "outlineStyle": "solid",
+      "outlineColor": "rgb(46, 230, 192)",
+      "boxShadow": null,
+      "focusVisible": true,
+      "isActiveElement": true
+    },
+    {
+      "name": "Lab4",
+      "outlineWidth": "2px",
+      "outlineStyle": "solid",
+      "outlineColor": "rgb(46, 230, 192)",
+      "boxShadow": null,
+      "focusVisible": true,
+      "isActiveElement": true
+    }
+  ],
+  "tabJourney": [
+    {
+      "step": 1,
+      "focus": {
+        "tag": "button",
+        "role": null,
+        "name": "Home accent color",
+        "outline": "2px solid",
+        "boxShadow": null
+      }
+    },
+    {
+      "step": 2,
+      "focus": {
+        "tag": "button",
+        "role": null,
+        "name": "Re-run check",
+        "outline": "2px solid",
+        "boxShadow": null
+      }
+    },
+    {
+      "step": 3,
+      "focus": {
+        "tag": "button",
+        "role": null,
+        "name": "1% low",
+        "outline": "2px solid",
+        "boxShadow": null
+      }
+    },
+    {
+      "step": 4,
+      "focus": {
+        "tag": "button",
+        "role": null,
+        "name": "More in the Blackbook →",
+        "outline": "2px solid",
+        "boxShadow": null
+      }
+    },
+    {
+      "step": 5,
+      "focus": {
+        "tag": "button",
+        "role": null,
+        "name": "RAM details",
+        "outline": "1px solid",
+        "boxShadow": null
+      }
+    },
+    {
+      "step": 6,
+      "focus": {
+        "tag": "button",
+        "role": null,
+        "name": "Storage details",
+        "outline": "1px solid",
+        "boxShadow": null
+      }
+    },
+    {
+      "step": 7,
+      "focus": {
+        "tag": "button",
+        "role": null,
+        "name": "GPU details",
+        "outline": "1px solid",
+        "boxShadow": null
+      }
+    },
+    {
+      "step": 8,
+      "focus": {
+        "tag": "button",
+        "role": null,
+        "name": "CPU details",
+        "outline": "1px solid",
+        "boxShadow": null
+      }
+    },
+    {
+      "step": 9,
+      "focus": {
+        "tag": "button",
+        "role": "tab",
+        "name": "3D",
+        "outline": "2px solid",
+        "boxShadow": null
+      }
+    },
+    {
+      "step": 10,
+      "focus": {
+        "tag": "button",
+        "role": "tab",
+        "name": "Cards",
+        "outline": "2px solid",
+        "boxShadow": null
+      }
+    },
+    {
+      "step": 11,
+      "focus": {
+        "tag": "button",
+        "role": null,
+        "name": "Exploded",
+        "outline": "2px solid",
+        "boxShadow": null
+      }
+    },
+    {
+      "step": 12,
+      "focus": {
+        "tag": "button",
+        "role": null,
+        "name": "Orbit",
+        "outline": "2px solid",
+        "boxShadow": null
+      }
+    }
+  ],
+  "scaled200": [
+    {
+      "condition": "cssBudgetOf200PercentScaling",
+      "room": "Home",
+      "horizontalOverflowPx": 0,
+      "scrollW": 640,
+      "clientW": 640,
+      "vw": 640,
+      "vh": 360,
+      "dpr": 1,
+      "railVisible": true,
+      "bodyChars": 724
+    },
+    {
+      "condition": "cssBudgetOf200PercentScaling",
+      "room": "Monitor",
+      "horizontalOverflowPx": 0,
+      "scrollW": 640,
+      "clientW": 640,
+      "vw": 640,
+      "vh": 360,
+      "dpr": 1,
+      "railVisible": true,
+      "bodyChars": 1408
+    },
+    {
+      "condition": "cssBudgetOf200PercentScaling",
+      "room": "Blackbook",
+      "horizontalOverflowPx": 0,
+      "scrollW": 640,
+      "clientW": 640,
+      "vw": 640,
+      "vh": 360,
+      "dpr": 1,
+      "railVisible": true,
+      "bodyChars": 4376
+    },
+    {
+      "condition": "cssBudgetOf200PercentScaling",
+      "room": "Lab",
+      "horizontalOverflowPx": 0,
+      "scrollW": 640,
+      "clientW": 640,
+      "vw": 640,
+      "vh": 360,
+      "dpr": 1,
+      "railVisible": true,
+      "bodyChars": 1194
+    }
+  ],
+  "forcedColors": {
+    "emulated": true,
+    "queryActive": true,
+    "rooms": [
+      {
+        "condition": "forcedColorsEmulated",
+        "room": "Home",
+        "horizontalOverflowPx": 0,
+        "scrollW": 1264,
+        "clientW": 1264,
+        "vw": 1264,
+        "vh": 711,
+        "dpr": 1,
+        "railVisible": true,
+        "bodyChars": 724
+      },
+      {
+        "condition": "forcedColorsEmulated",
+        "room": "Monitor",
+        "horizontalOverflowPx": 0,
+        "scrollW": 1264,
+        "clientW": 1264,
+        "vw": 1264,
+        "vh": 711,
+        "dpr": 1,
+        "railVisible": true,
+        "bodyChars": 1409
+      },
+      {
+        "condition": "forcedColorsEmulated",
+        "room": "Blackbook",
+        "horizontalOverflowPx": 0,
+        "scrollW": 1264,
+        "clientW": 1264,
+        "vw": 1264,
+        "vh": 711,
+        "dpr": 1,
+        "railVisible": true,
+        "bodyChars": 4376
+      },
+      {
+        "condition": "forcedColorsEmulated",
+        "room": "Lab",
+        "horizontalOverflowPx": 0,
+        "scrollW": 1264,
+        "clientW": 1264,
+        "vw": 1264,
+        "vh": 711,
+        "dpr": 1,
+        "railVisible": true,
+        "bodyChars": 1194
+      }
+    ]
+  }
+}

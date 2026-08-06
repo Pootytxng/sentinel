@@ -1,0 +1,186 @@
+{
+  "task": "rooms",
+  "recordedAt": "2026-08-05T23:53:04.993Z",
+  "dwellMs": 15000,
+  "rooms": [
+    "Home",
+    "Monitor",
+    "Blackbook",
+    "Lab"
+  ],
+  "visits": [
+    {
+      "room": "Home",
+      "phase": "before-any-other-room-mounted",
+      "seconds": 15.01,
+      "invokes": {
+        "plugin:window|is_maximized": 1,
+        "get_gpu_sensors": 3,
+        "get_memory_pressure": 3,
+        "get_fps_status": 10,
+        "get_fan_sensors": 6,
+        "plugin:window|minimize": 1
+      },
+      "invokeTotal": 24,
+      "invokesPerSecond": 1.6,
+      "rafScheduled": 4302,
+      "rafFired": 4297,
+      "frames": 3743,
+      "displayFps": 249.4,
+      "concurrentRafLoops": 1.15,
+      "draws": 240,
+      "drawsPerSecond": 16,
+      "drawsPerFrame": 0.06,
+      "liveIntervals": 5,
+      "intervalDelays": {
+        "1000": 1,
+        "1500": 1,
+        "2500": 1,
+        "5000": 1,
+        "14400000": 1
+      },
+      "visibility": "visible",
+      "ipcCounterLive": true
+    },
+    {
+      "room": "Home",
+      "phase": "active",
+      "seconds": 15.01,
+      "invokes": {
+        "get_gpu_sensors": 3,
+        "get_memory_pressure": 3,
+        "get_fps_status": 10,
+        "get_fan_sensors": 6
+      },
+      "invokeTotal": 22,
+      "invokesPerSecond": 1.47,
+      "rafScheduled": 3752,
+      "rafFired": 3752,
+      "frames": 3752,
+      "displayFps": 250,
+      "concurrentRafLoops": 1,
+      "draws": 0,
+      "drawsPerSecond": 0,
+      "drawsPerFrame": 0,
+      "liveIntervals": 5,
+      "intervalDelays": {
+        "1000": 1,
+        "1500": 1,
+        "2500": 1,
+        "5000": 1,
+        "14400000": 1
+      },
+      "visibility": "visible",
+      "ipcCounterLive": true
+    },
+    {
+      "room": "Monitor",
+      "phase": "active",
+      "seconds": 15.01,
+      "invokes": {
+        "get_gpu_sensors": 15,
+        "get_fps_status": 15,
+        "get_cpu_sensors": 15
+      },
+      "invokeTotal": 45,
+      "invokesPerSecond": 3,
+      "rafScheduled": 7263,
+      "rafFired": 7262,
+      "frames": 3752,
+      "displayFps": 250,
+      "concurrentRafLoops": 1.94,
+      "draws": 0,
+      "drawsPerSecond": 0,
+      "drawsPerFrame": 0,
+      "liveIntervals": 3,
+      "intervalDelays": {
+        "1000": 2,
+        "14400000": 1
+      },
+      "visibility": "visible",
+      "ipcCounterLive": true
+    },
+    {
+      "room": "Blackbook",
+      "phase": "active",
+      "seconds": 15,
+      "invokes": {},
+      "invokeTotal": 0,
+      "invokesPerSecond": 0,
+      "rafScheduled": 3751,
+      "rafFired": 3751,
+      "frames": 3751,
+      "displayFps": 250,
+      "concurrentRafLoops": 1,
+      "draws": 0,
+      "drawsPerSecond": 0,
+      "drawsPerFrame": 0,
+      "liveIntervals": 2,
+      "intervalDelays": {
+        "1000": 1,
+        "14400000": 1
+      },
+      "visibility": "visible",
+      "ipcCounterLive": true
+    },
+    {
+      "room": "Lab",
+      "phase": "active",
+      "seconds": 15,
+      "invokes": {
+        "get_fps_status": 10,
+        "get_fan_sensors": 6
+      },
+      "invokeTotal": 16,
+      "invokesPerSecond": 1.07,
+      "rafScheduled": 3751,
+      "rafFired": 3751,
+      "frames": 3751,
+      "displayFps": 250,
+      "concurrentRafLoops": 1,
+      "draws": 0,
+      "drawsPerSecond": 0,
+      "drawsPerFrame": 0,
+      "liveIntervals": 4,
+      "intervalDelays": {
+        "1000": 1,
+        "1500": 1,
+        "2500": 1,
+        "14400000": 1
+      },
+      "visibility": "visible",
+      "ipcCounterLive": true
+    },
+    {
+      "room": "Home",
+      "phase": "after-every-room-mounted",
+      "seconds": 15.02,
+      "invokes": {
+        "get_gpu_sensors": 3,
+        "get_memory_pressure": 3,
+        "get_fps_status": 10,
+        "get_fan_sensors": 6
+      },
+      "invokeTotal": 22,
+      "invokesPerSecond": 1.47,
+      "rafScheduled": 3754,
+      "rafFired": 3754,
+      "frames": 3754,
+      "displayFps": 250,
+      "concurrentRafLoops": 1,
+      "draws": 0,
+      "drawsPerSecond": 0,
+      "drawsPerFrame": 0,
+      "liveIntervals": 5,
+      "intervalDelays": {
+        "1000": 1,
+        "1500": 1,
+        "2500": 1,
+        "5000": 1,
+        "14400000": 1
+      },
+      "visibility": "visible",
+      "ipcCounterLive": true
+    }
+  ]
+}
