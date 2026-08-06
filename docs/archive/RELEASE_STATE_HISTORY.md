@@ -4,6 +4,35 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-08-06 - local ship at 3ad6eb48: the idle-cost teardown, and the two scroll snaps it caused
+
+Installed by Claude + LIVE. Built from `3ad6eb48` on `claude/idle-cost-teardown-1f6a80` (0.9.13).
+Installer `Compy_0.9.13_x64-setup.exe` SHA-256
+`8A4BA7AF3E5B473AA76585B714CE6538E088930139C846F721B8CCDB53FA4E97` (5,105,379 bytes), exactly one
+installer on the Desktop, runtime-proved over CDP as `3ad6eb48 · release · shell 0.9.13` (1 proof
+attempt). Local ship only - nothing published, no tag, no fleet-visible action. Supersedes the
+same-day ships at `ff0ce65f` and `dc4d55e` (2026-08-05), neither of which is safe to run: see below.
+
+**What it carries.** The Q7 idle-cost teardown: idle CPU on an unattended visible window fell from
+**50.165% to 23.348% of one core**, reproduced across two 10-minute bare runs, with the budget cut
+from the *worst* post-fix reading. The single largest item was an infinite `background-clip: text`
+foil pan repainting the title every frame at 29.793% of a core; the rest came from standing the
+`LenisSpine` rAF loop down when the lane is not moving, and from making the FirstCheck / Optimize
+aurora backdrops compositor-cheap. Evidence: `docs/perf/raw/idle-attribution.json` and siblings.
+
+**Why two intermediate ships are dead.** Standing the scroll loop down handed Lenis a multi-second
+`deltaTime` on the first frame after a park, saturating its `1-e^(-λ·Δt)` damping to ~1 - so the lane
+*teleported* to the scroll target instead of easing to it, on every scroll after the app sat still.
+Fixed at `50e5edda` by subtracting the parked interval from the timestamps Lenis sees. The fix then
+had the same defect one layer down: `park()` re-stamped `parkedAt` on a *second* park, so an idle
+park followed later by a hidden park dropped everything between them. Live-reproduced on `ff0ce65f`
+as a zero-frame snap (scrollTop `1000, 1000, 1000…` for all 25 sampled frames). Fixed at `3ad6eb48`
+by stamping only on the transition into parked. Both defects were found by the forced self-review,
+not by tests, and both are now pinned by `src/design/jarvis/lenis-wake-guard.test.tsx` (5 cases).
+
+Verify: `node scripts/verify-release-state.mjs` (check 7) ·
+`Select-String -Path "$env:LOCALAPPDATA\Compy\compy.exe" -Pattern 3ad6eb48`.
+
 ### 2026-08-04 - local ship at 8b7c232: the desk catches up on 25 commits, Q5's UI included
 
 Installed by Claude + LIVE. Built from `8b7c232` on `main`. Installer
