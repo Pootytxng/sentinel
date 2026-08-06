@@ -4,7 +4,7 @@
 // corrupted WebView2 profile) — and an uncaught throw during the first render blanks the whole
 // app before any recovery UI can mount. Every read/write of localStorage in a component must go
 // through these so a disabled store degrades to "no persisted preference", never a blank app.
-// Mirrors the try/catch pattern already used in main.tsx, nav-flags.ts, and design/theme.ts.
+// Mirrors the try/catch pattern already used in main.tsx and design/theme.ts.
 
 export function lsGet(key: string): string | null {
   try {

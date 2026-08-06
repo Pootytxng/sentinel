@@ -5,6 +5,15 @@
 > **This doc decides nothing destructively. It is the evidence a deletion would need.** Written
 > 2026-08-04 on `claude/harness-context-cleanup-700535`. File:line claims are point-in-time —
 > re-verify before acting.
+>
+> **⚠️ EXECUTED 2026-08-06 — everything below is the PRE-PRUNE tree.** The generation prune acted on
+> this evidence and deleted 29 files: `Lab.tsx` · `LabV2.tsx` · `LabBento.tsx` · `Optimize.tsx` ·
+> `OptimizeV2.tsx` (+ their CSS, tests and `lab-v2-data.ts`), `CompyHero.tsx`+`.css`,
+> `src/data/nav-flags.ts`, the `design/qpw/` component layer, `design/Gallery.tsx`,
+> `design/console/Sparkline.tsx` and the vendored `MagicBento`. Files named here as live are gone;
+> read this only as the *reasoning*. Still true and still open: **`GpuProfile.tsx` is the owner fork**
+> (§d, owner decision B_gpu). The recurrence is now mechanically prevented —
+> `src/reachability-guard.test.ts` fails the build on any module unreachable from `src/main.tsx`.
 
 ## The premise Finding 2 got wrong
 

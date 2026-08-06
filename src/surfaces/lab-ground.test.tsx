@@ -1,17 +1,11 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/react";
-import { readLabGround, applyLabGround } from "../design/theme";
 
-// Guard for the Lab overhaul (spec 2026-07-08-lab-proving-ground): the merged proving-ground
-// room behind `compy_lab_ground` — DEFAULT ON since the 2026-07-10 flip (owner round-4 verdict);
-// "0" is the classic failsafe. The flag lives at the App level — App swaps LabV2 → LabGround for
-// the Lab tab — so the failsafe contract has TWO parts:
-//   1. the flag reader honors the "0" failsafe (readLabGround), and
-//   2. Lab.tsx's new `ground` mode is purely additive — Lab WITHOUT the prop renders identically
-//      regardless of the compy_lab_ground value (Lab.tsx never reads the flag; only App does), so
-//      the whole flag-"0" app stays byte-identical to the classic tree.
-// Plus: `ground` mode renders the ONE linear spine (router + numbered stations) and NONE of the
-// three retired nav idioms (bento / guided-welcome / classic accordion / readings strip).
+// Guard for the Lab overhaul (spec 2026-07-08-lab-proving-ground). LabGround IS the Lab now: the
+// 2026-08-06 generation prune deleted Lab.tsx and LabV2.tsx and retired the `compy_lab_ground`
+// flag, so there is no longer a second face to be byte-identical to and no flag reader to pin —
+// those three describes went with the files. What survives is the contract that actually ships:
+// the Ops Console face (below).
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(null)) }));
 // LabGround's ground mode now always renders the Ops Console (LabConsole), whose center hologram
@@ -31,83 +25,12 @@ class IOStub {
 vi.stubGlobal("IntersectionObserver", IOStub);
 
 // Imported after the mock so their on-mount probe reads hit the stub.
-const { default: Lab } = await import("./Lab");
 const { LabGround } = await import("./LabGround");
 const { ConfirmProvider } = await import("../design/ConfirmDialog");
 
 afterEach(cleanup);
 beforeEach(() => {
   localStorage.clear();
-  // Pin the other Lab flags to fixed values so only the variable under test moves.
-  localStorage.setItem("compy_lab_bento", "0");
-  localStorage.setItem("compy_lab_guided", "0");
-});
-
-const renderClassic = () =>
-  render(<Lab v2 vendor="amd" diagnostics={<div data-testid="diag" />} diagnosticsCaptured />)
-    .container;
-
-const renderGround = () =>
-  render(
-    <Lab v2 ground vendor="amd" diagnostics={<div data-testid="diag" />} diagnosticsCaptured />,
-  ).container;
-
-describe("compy_lab_ground flag reader", () => {
-  it("defaults ON (absent → true — the 2026-07-10 flip, ship-approved-work-as-the-build)", () => {
-    localStorage.removeItem("compy_lab_ground");
-    expect(readLabGround()).toBe(true);
-  });
-
-  it("'1' → true, '0' → false (the classic failsafe); applyLabGround round-trips", () => {
-    applyLabGround(true);
-    expect(readLabGround()).toBe(true);
-    expect(localStorage.getItem("compy_lab_ground")).toBe("1");
-    applyLabGround(false);
-    expect(readLabGround()).toBe(false);
-    expect(localStorage.getItem("compy_lab_ground")).toBe("0");
-  });
-});
-
-describe("Lab `ground` mode is additive — flag-off byte-identity", () => {
-  it("classic Lab (no ground prop) is byte-identical regardless of compy_lab_ground value", () => {
-    // Lab.tsx must never read the flag itself — App owns the swap. Prove it: the classic render is
-    // identical whether the flag is absent, '0', or '1'.
-    localStorage.removeItem("compy_lab_ground");
-    const absent = renderClassic().innerHTML;
-    cleanup();
-    localStorage.setItem("compy_lab_ground", "0");
-    const off = renderClassic().innerHTML;
-    cleanup();
-    localStorage.setItem("compy_lab_ground", "1");
-    const on = renderClassic().innerHTML;
-    expect(off).toBe(absent);
-    expect(on).toBe(absent);
-  });
-});
-
-describe("Lab `ground` mode renders the ONE linear spine", () => {
-  it("front door (router) + numbered stations present; the three old idioms absent", () => {
-    const c = renderGround();
-    // The intake router leads the room.
-    expect(c.querySelector(".lab-router")).not.toBeNull();
-    // Numbered stations (the linear spine) — at least one station number rendered.
-    expect(c.querySelector(".lab-station-num")).not.toBeNull();
-    expect(c.querySelector(".lab-station-lines")).not.toBeNull();
-    // The ground marker on the root, and NOT the bento/guided markers.
-    expect(c.querySelector("[data-ground]")).not.toBeNull();
-    expect(c.querySelector("[data-bento]")).toBeNull();
-    // None of the retired faces: bento grid, welcome band, classic-only readings strip.
-    expect(c.querySelector(".lab-bento")).toBeNull();
-    expect(c.querySelector(".lab-welcome")).toBeNull();
-    expect(c.querySelector(".lab-readings")).toBeNull();
-  });
-
-  it("ground overrides even a default-ON bento flag (proving-ground is the single idiom)", () => {
-    localStorage.setItem("compy_lab_bento", "1"); // bento would normally paint
-    const c = renderGround();
-    expect(c.querySelector(".lab-bento")).toBeNull();
-    expect(c.querySelector(".lab-router")).not.toBeNull();
-  });
 });
 
 describe("LabGround OPS CONSOLE — LabConsole replaces the Instrument Bench bento (spec 2026-07-09, Task 4)", () => {

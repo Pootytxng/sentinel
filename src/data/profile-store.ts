@@ -5,7 +5,7 @@
 // a tweak, suspend a service, or arm anything. It's a label, like the rig-tier line — read-only,
 // reversible (just pick another), and entirely on this PC. Nothing leaves the machine; no new IPC.
 //
-// Guarded like every other flag reader (nav-flags.ts, theme.ts): a bare localStorage access throws
+// Guarded like every other flag reader (design/theme.ts, safe-storage.ts): a bare localStorage throws
 // on WebView2 configs where storage is disabled/partitioned, and with no React error boundary that
 // throw would blank the whole window. Every read/write swallows the throw and falls back safely.
 

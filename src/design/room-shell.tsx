@@ -18,7 +18,6 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { HomeRailId } from "./homeRail";
 import { useV2Nav } from "./ShellV2";
-import { useLabGroundFlag } from "./use-hud";
 
 // The journey door map — copy + destinations are the P6 spec table, pinned literally by
 // room-shell.test.tsx so a copy/destination drift fails CI. Keyed by rail id (home/fix/play/
@@ -73,13 +72,14 @@ export function RoomShell({
   doorOpen?: boolean;
   children: ReactNode;
 }) {
-  const ground = useLabGroundFlag();
-  const door = doorOpen ? doorFor(room, ground) : null;
+  // `compy_lab_ground` was retired in the 2026-08-06 generation prune — the proving-ground rail is
+  // the only rail, so the ground argument is now the literal `true` rather than a flag read.
+  const door = doorOpen ? doorFor(room, true) : null;
   // door.label (DOOR_MAP/doorFor, above) is the literal English source of truth — pinned verbatim
   // by room-shell.test.tsx, so it stays untranslated there. The door's copy depends only on the
-  // ORIGIN room (ground mode still shows "Find what's worth fixing" for home, just a different
-  // destination), so a room-keyed lookup here — with the pinned English as its fallback — localizes
-  // the rendered text without touching that pinned constant.
+  // ORIGIN room (home still shows "Find what's worth fixing", it just leads to the Lab), so a
+  // room-keyed lookup here — with the pinned English as its fallback — localizes the rendered text
+  // without touching that pinned constant.
   const { t } = useTranslation();
   const doorLabel = door ? t(`common.roomShell.door.${room}`, door.label) : null;
   return (

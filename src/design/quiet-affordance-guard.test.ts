@@ -121,7 +121,9 @@ describe("every .v2-quiet head is a semantic disclosure button", () => {
       }
     }
     expect(violations, violations.join("\n")).toEqual([]);
-    // The slot is real and in use — this guard must never pass vacuously.
-    expect(heads.length, "no .v2-quiet heads found — guard would be vacuous").toBeGreaterThanOrEqual(2);
+    // The slot is real and in use — this guard must never pass vacuously. Floor was 2 until the
+    // 2026-08-06 generation prune deleted OptimizeV2.tsx, which held the second head; MonitorV2's
+    // remains, so the guard still bites. Raise this again if a room grows another quiet head.
+    expect(heads.length, "no .v2-quiet heads found — guard would be vacuous").toBeGreaterThanOrEqual(1);
   });
 });

@@ -66,13 +66,11 @@ function readFlagDefaults(): Map<string, Truth> {
     if (flag) truth.set(flag, defaultFor(m[2], m[3]));
   }
 
-  // nav-flags.ts — the key is inlined, one hop.
-  const nav = readFileSync(join("src", "data", "nav-flags.ts"), "utf8");
-  for (const m of nav.matchAll(
-    /localStorage\.getItem\("(compy_[a-z0-9_]+)"\)\s*(!==|===)\s*"([01])"/g,
-  )) {
-    truth.set(m[1], defaultFor(m[2], m[3]));
-  }
+  // The one-hop hop (inlined key, `src/data/nav-flags.ts`) was REMOVED in the 2026-08-06 generation
+  // prune: `compy_optimize` and `compy_monitor` were retired with the faces they switched, the file
+  // that read them is deleted, and reading a deleted path here would throw at collection time rather
+  // than fail a claim. theme.ts is the only reader shape left. If a future flag inlines its key
+  // instead of using an X_KEY const, restore a hop for it — an ungraded flag is an ungraded comment.
 
   return truth;
 }
@@ -184,10 +182,12 @@ describe("state-drift law: no comment may contradict a flag's real shipped defau
   const claims = collectClaims(new Set(truth.keys()), sourceFiles());
 
   it("parses a real default for every boolean flag reader", () => {
-    // Both readers must be found, or the guard is grading against an empty truth table.
+    // The reader must be found, or the guard is grading against an empty truth table.
     expect(flags.get("compy_editorial")).toBe("ON"); // theme.ts, two-hop
-    expect(flags.get("compy_monitor")).toBe("ON"); // nav-flags.ts, one-hop
-    expect(flags.size).toBeGreaterThanOrEqual(20);
+    // Floor was 20 with nav-flags.ts contributing two; the 2026-08-06 generation prune retired
+    // compy_optimize + compy_monitor with their file, three Lab face flags out of theme.ts, and
+    // compy_committed with the unreachable CompyHero it gated.
+    expect(flags.size).toBeGreaterThanOrEqual(18);
   });
 
   it("derives each shipped face's attribute from main.tsx, not from a hand-kept table", () => {

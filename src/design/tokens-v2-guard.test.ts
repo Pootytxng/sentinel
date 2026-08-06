@@ -47,7 +47,8 @@ const roomAccentPickerCss = loadV2Css("design", "room-accent-picker.css");
 const homeCss = loadV2Css("surfaces", "home-v2.css");
 const homeHudCss = loadV2Css("surfaces", "home-hud.css");
 const homeConsoleCss = loadV2Css("surfaces", "home-console.css");
-const optimizeCss = loadV2Css("surfaces", "optimize-v2.css");
+// optimize-v2.css went with OptimizeV2 in the 2026-08-06 generation prune (Optimize's live home is
+// lab/OptimizeStation inside LabGround, styled by lab-console.css).
 const monitorCss = loadV2Css("surfaces", "monitor-v2.css");
 const blackbookCss = loadV2Css("surfaces", "blackbook-v2.css");
 const labCss = loadV2Css("surfaces", "lab-v2.css");
@@ -74,7 +75,6 @@ const V2_CSS: [string, string][] = [
   ["home-v2.css", homeCss],
   ["home-hud.css", homeHudCss],
   ["home-console.css", homeConsoleCss],
-  ["optimize-v2.css", optimizeCss],
   ["monitor-v2.css", monitorCss],
   ["blackbook-v2.css", blackbookCss],
   ["lab-v2.css", labCss],
@@ -155,7 +155,6 @@ describe("v2 surface CSS consumes the token layer only (no-slop law)", () => {
     ["shell-v2.css", shellCss],
     ["home-v2.css", homeCss],
     ["home-hud.css", homeHudCss],
-    ["optimize-v2.css", optimizeCss],
     ["monitor-v2.css", monitorCss],
     ["blackbook-v2.css", blackbookCss],
     ["lab-v2.css", labCss],
@@ -309,7 +308,8 @@ describe("vendor hygiene (MIT + Commons Clause notice)", () => {
     // Floor tracks the ADOPTED components only. Dead-code sweep 2026-07-13 removed 7 never-wired
     // React Bits vendored dirs (DotField, GlareHover, GooeyNav, Grainient, Noise, PillNav, Radar —
     // 0 importers, verified) from the original bulk-vendor add; the 7 that remain are all in use.
-    expect(components.length).toBeGreaterThanOrEqual(7);
+    // 2026-08-06 generation prune: MagicBento went with LabBento.tsx (its last importer) — 6 remain.
+    expect(components.length).toBeGreaterThanOrEqual(6);
   });
 
   const thirdParty = readFileSync(join(vendorDir, "THIRD_PARTY.md"), "utf8");

@@ -96,6 +96,10 @@
   `scripts/branch-disposition-audit.mjs`.
 - [ ] **P2 product completion:** owner-accepted canonical Lab + reversible generation pruning →
   first-win action/rollback/proof journey → Consumer/Technical/Support evidence exports.
+  **Generation pruning DONE 2026-08-06** — 29 unreachable files / ~2,578 lines deleted (two Lab faces,
+  three Optimize faces, `CompyHero`, `nav-flags.ts`, the `design/qpw` components, `Gallery`, a second
+  `Sparkline`, vendored `MagicBento`); recurrence mechanised by `src/reachability-guard.test.ts`.
+  Remaining under P2: the first-win journey and the evidence exports.
 - [x] **Ledger-completeness honesty class — last known open instance CLOSED (found 2026-08-05 during
   the Home train's completeness-critic sweep, fixed the same day, issue #70).** The Lab Optimize
   station's "Applied & history — **every change, undoable**" summary vouched for a set Compy may

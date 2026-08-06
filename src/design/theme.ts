@@ -167,128 +167,17 @@ export function applyLivingInstrument(on: boolean): void {
   }
 }
 
-// Committed brand hero (owner "take a full swing" 2026-06-15) — the bold "Welcome to Compy" moment:
-// a beating pulse-C over a teal signal field. DEFAULT OFF (experimental swing, not shipped) behind
-// `compy_committed`; toggled live for review. Reversible: drop the flag + CompyHero and nothing changes.
-const COMMITTED_KEY = "compy_committed";
+// The committed brand hero (owner "take a full swing" 2026-06-15) and its `compy_committed` flag
+// were RETIRED in the 2026-08-06 generation prune. Its own comment named the exit: "drop the flag +
+// CompyHero and nothing changes." Nothing imported CompyHero.tsx and nothing called readCommitted /
+// applyCommitted, so no code path could set `data-committed` and the hero was unreachable — an
+// experimental swing that never shipped. Any value left in a tester's localStorage is inert.
 
-export function readCommitted(): boolean {
-  try {
-    return localStorage.getItem(COMMITTED_KEY) === "1";
-  } catch {
-    /* ignore — default OFF */
-  }
-  return false;
-}
-
-export function applyCommitted(on: boolean): void {
-  if (on) document.documentElement.dataset.committed = "on";
-  else delete document.documentElement.dataset.committed;
-  try {
-    localStorage.setItem(COMMITTED_KEY, on ? "1" : "0");
-  } catch {
-    /* ignore */
-  }
-  try {
-    window.dispatchEvent(new Event("compy:committed-changed"));
-  } catch {
-    /* ignore */
-  }
-}
-
-// Guided Lab bench (spec 2026-07-05-lab-linear-guided-bench) — the Lab room as a linear instrument
-// bench: the "What are you here to do?" router + ordered numbered stations (the walk-the-bench
-// step-through was removed per the 2026-07-05 deslop directive #1 — the router IS the guide).
-// DEFAULT OFF behind `compy_lab_guided` (Settings → Appearance preview toggle, the P-series
-// contract): flag off, today's Lab renders byte-identical (test-pinned). Frontend only — the flag
-// changes signposting and order around the existing instruments, never what they read or run.
-const LAB_GUIDED_KEY = "compy_lab_guided";
-
-export function readLabGuided(): boolean {
-  try {
-    return localStorage.getItem(LAB_GUIDED_KEY) === "1";
-  } catch {
-    /* ignore — default OFF */
-  }
-  return false;
-}
-
-export function applyLabGuided(on: boolean): void {
-  try {
-    localStorage.setItem(LAB_GUIDED_KEY, on ? "1" : "0");
-  } catch {
-    /* ignore */
-  }
-  try {
-    window.dispatchEvent(new Event("compy:lab-guided-changed"));
-  } catch {
-    /* ignore */
-  }
-}
-
-// Lab bento checkup (spec 2026-07-05-lab-bento-checkup) — the Lab's face as a MagicBento grid
-// of station cards in bench order + a synthesized checkup report. DEFAULT OFF behind
-// `compy_lab_bento` (Settings → Appearance preview toggle, P-series contract): flag off,
-// today's Lab renders byte-identical in both guided states (test-pinned). Presentation +
-// synthesis only — the instruments, their reads, and the guided-bench data are untouched.
-const LAB_BENTO_KEY = "compy_lab_bento";
-
-export function readLabBento(): boolean {
-  // Default ON (owner approval 2026-07-06 — ship-approved-work-as-the-build); the classic
-  // Lab face stays reachable as the failsafe (Settings toggle / localStorage "0").
-  try {
-    return localStorage.getItem(LAB_BENTO_KEY) !== "0";
-  } catch {
-    /* ignore — default ON */
-  }
-  return true;
-}
-
-export function applyLabBento(on: boolean): void {
-  try {
-    localStorage.setItem(LAB_BENTO_KEY, on ? "1" : "0");
-  } catch {
-    /* ignore */
-  }
-  try {
-    window.dispatchEvent(new Event("compy:lab-bento-changed"));
-  } catch {
-    /* ignore */
-  }
-}
-
-// Lab proving ground (spec 2026-07-08-lab-proving-ground, ★ PRIMARY BLUEPRINT, phase 1) — the
-// Lab overhaul: the Optimize room MERGES into the Lab as one slim room (the Ops Console). The
-// "enable all the good tweaks" fast path (no benchmark required) leads; the measure→test→prove
-// instruments are the adjacent utility, collapsed from three nav idioms (bento/guided/classic).
-// DEFAULT ON (owner verdict 2026-07-10 round 4 "ALL GOOD" — ship-approved-work-as-the-build);
-// with the flip the standalone Optimize tab DROPS (owner decision 2026-07-10): the Lab's Optimize
-// station is the one door to the safe-tweak toggles. The classic separate Lab + Optimize rooms
-// stay the failsafe: Settings → Appearance toggle / localStorage "0". Frontend only — the
-// existing apply/batch path is unchanged, zero new IPC, zero new mutation primitive.
-const LAB_GROUND_KEY = "compy_lab_ground";
-
-export function readLabGround(): boolean {
-  try {
-    return localStorage.getItem(LAB_GROUND_KEY) !== "0";
-  } catch {
-    /* ignore — default ON */
-  }
-  return true;
-}
-
-export function applyLabGround(on: boolean): void {
-  try {
-    localStorage.setItem(LAB_GROUND_KEY, on ? "1" : "0");
-  } catch {
-    /* ignore */
-  }
-  try {
-    window.dispatchEvent(new Event("compy:lab-ground-changed"));
-  } catch {
-    /* ignore */
-  }
-}
+// The Lab's three generational face flags — `compy_lab_guided`, `compy_lab_bento` and
+// `compy_lab_ground` — were RETIRED in the 2026-08-06 generation prune along with the faces they
+// selected (Lab.tsx, LabV2.tsx, LabBento.tsx, Optimize.tsx, OptimizeV2.tsx). LabGround IS the Lab
+// now and Optimize lives inside it as a station, so there is no second face left to switch to and
+// nothing for a reader to return. Any value left in a tester's localStorage is inert.
 
 // Setup & Tour stepper progress (React Bits Stepper, round-2 sourcing pass) — the tour's
 // footer progress row as numbered step indicators with animated connectors + check marks,

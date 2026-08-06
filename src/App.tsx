@@ -18,7 +18,6 @@ import { Term } from "./design/Term";
 import { Wordmark } from "./design/Wordmark";
 import { readCloseToTray, persistDisplayRefreshHz } from "./design/theme";
 import { ShellV2 } from "./design/ShellV2";
-import { KeepaliveRoom } from "./design/KeepaliveRoom";
 import { fmtGB } from "./surfaces/hardware-format";
 // Deep Monitoring panels + their sensor types — moved verbatim to surfaces/monitor-panels (T3)
 // so the summary-first MonitorDomainCards can reuse them as its expanded detail.
@@ -35,36 +34,25 @@ import {
 } from "./surfaces/monitor-panels";
 import { MonitorDomainCards } from "./surfaces/MonitorDomainCards";
 import { readMonitorCards } from "./design/theme";
-import { useLabGroundFlag } from "./design/use-hud";
 import { useReducedMotion } from "./design/use-motion";
 import { railFor, type HomeRailId } from "./design/homeRail";
-import { GamingMode } from "./surfaces/GamingMode";
 import { HomeRoom } from "./surfaces/HomeRoom";
 import { TrustMoment } from "./surfaces/TrustMoment";
-import { OptimizeV2 } from "./surfaces/OptimizeV2";
 import { MonitorV2 } from "./surfaces/MonitorV2";
 import { BlackbookV2 } from "./surfaces/BlackbookV2";
-import { LabV2 } from "./surfaces/LabV2";
 import { LabGround } from "./surfaces/LabGround";
-import Fix from "./surfaces/Fix";
+// Learn is NOT a room any more (Blackbook renders BlackbookV2) — this import survives the generation
+// prune solely for the knowledge-library MODAL, which any surface can raise via LibraryContext.
 import Learn from "./surfaces/Learn";
-import Check from "./surfaces/Check";
-// Aliased so the new merged shell never shadows the "Optimize" Tab string literal (which is the
-// INTERNAL name of today's Tune slot; the merged tab reuses that same slot — see the wiring below).
-import { Optimize as OptimizeShell } from "./surfaces/Optimize";
 import { prewarmScan } from "./surfaces/use-scan";
 import { activeChangeCount } from "./surfaces/dashboard-data";
 import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport, ExportResult } from "./types";
 import { LEDGER_CHANGED_EVENT } from "./types";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
-import { readOptimizeMerged, readMonitorMerged } from "./data/nav-flags";
 import { lsGet, lsSet } from "./data/safe-storage";
 import { invalidateProbe } from "./data/probe-cache";
 import { useDocumentVisible } from "./data/use-document-visible";
-import Play from "./surfaces/Play";
-import Monitor from "./surfaces/Monitor";
-import Lab from "./surfaces/Lab";
 import Settings from "./surfaces/Settings";
 import {
   type GamingSessionFile,
@@ -93,7 +81,9 @@ import "./design/fonts-v2.css"; // Geist Sans/Mono @font-face (OFL, bundled) —
 import "./design/tokens-v2.css"; // V2 shell tokens — scoped under [data-v2="on"], default ON (main.tsx sets that attribute unconditionally; the compy_v2 flag was removed)
 import "./surfaces/room-identity.css"; // per-room identity accents — scoped [data-room-identity="on"], default ON
 import "./design/tokens-qpw.css"; // Quiet Pit Wall redesign tokens - scoped [data-qpw="on"], DEFAULT OFF (issue #49)
-import "./design/qpw/qpw-components.css"; // Quiet Pit Wall component contracts - same scope, same default
+// The qpw COMPONENT layer (design/qpw/*) was deleted in the 2026-08-06 generation prune: nothing
+// imported it and nothing ever sets data-qpw, so it was inert code shipping in the bundle. The
+// TOKEN layer above stays — tokens-qpw-guard.test.ts is cited as the one source of truth for motion.
 import "./design/tokens-hud.css"; // Instrument-HUD tokens — scoped under [data-hud="on"], DEFAULT ON
 import "./surfaces/ambient-hud.css"; // T4c ambient skin (grain · glass · holo-foil) — scoped [data-v2][data-hud]
 
@@ -291,10 +281,10 @@ const APPLIABLE_REC_IDS = new Set<string>([
   "eee-disable",
 ]);
 
-// Top-level sections shown in the left command rail. The six rec categories +
-// Startup are consolidated into one "Optimize" section (filtered inside) so the
-// rail stays short and never needs a horizontal scroll.
-type Tab = "Overview" | "Check" | "Optimize" | "Play" | "Learn" | "Lab";
+// Top-level sections shown in the left command rail. Four rooms, one face each: the
+// Check + Optimize (Tune) tabs are gone — their content lives inside the Lab's Optimize
+// station, which is where railFor() has pointed since the proving-ground merge shipped.
+type Tab = "Overview" | "Play" | "Learn" | "Lab";
 
 type DiagnosticEntry = {
   label: string;
@@ -552,25 +542,10 @@ function App() {
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
   // V2 is the shipped shell (2026-07-03) — the ShellV2 rail carries every room; there's no classic
   // rail layout to switch between anymore, so nothing here mirrors the retired compy_v2/living flags.
-  // Optimize merge (phase 1a, spec 2026-06-21-optimize-merge-design): when on, Check + Tune collapse
-  // into one "Optimize" room (Fixes / Applied / History segments). Read once at startup (mirrors the
-  // other compy_* dev-flag readers). Reversible: the flag governs only which navigation/render path
-  // the shell takes — the classic separate Check + Tune are one localStorage flag away.
-  // Merged Optimize tab is the DEFAULT (owner sign-off 2026-06-21). Escape hatch: set
-  // compy_optimize="0" to fall back to the classic separate Check + Tune tabs (fully reversible).
-  const optimizeMerged = readOptimizeMerged();
-  // Lab proving ground (spec 2026-07-08-lab-proving-ground; DEFAULT ON since 2026-07-10, owner
-  // round-4 verdict): when on, the Lab tab renders the merged LabGround room — Optimize's fixes +
-  // the "enable all the good tweaks" one-action fast path folded INTO the Lab, beside the
-  // measure→prove instruments — and the standalone Check/Optimize tabs drop from the rail (the
-  // Lab's Optimize station is the one door). Flag "0" → the classic LabV2 + OptimizeV2 rooms and
-  // rail render (the failsafe). Live-reactive to the Settings toggle (compy:lab-ground-changed)
-  // so flipping it re-swaps an already-mounted app without a reload.
-  const labGround = useLabGroundFlag();
-  // Monitor restructure (tab #2): segments the Monitor surface into Sessions(default)/Live. DEFAULT ON
-  // (owner sign-off 2026-06-21). Escape hatch: compy_monitor="0" restores the classic single Play surface.
-  // Guarded readers — a bare getItem in the render body throws (→ blank app) on storage-disabled WebView2.
-  const monitorMerged = readMonitorMerged();
+  // Generation prune (2026-08-06): the compy_optimize / compy_lab_ground / compy_monitor flags are
+  // RETIRED. Each had been default-ON and owner-signed-off for weeks, so their "0" branches rendered
+  // rooms nobody could reach — five surfaces' worth of tree that every layout edit had to be
+  // disambiguated against. One blessed face per room now: Overview · Play · Learn · Lab.
   const [readiness, setReadiness] = useState<GameReadiness | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   // Sessions "new debrief" indicator: the started_at of the latest session the user has seen.
@@ -590,7 +565,13 @@ function App() {
   );
   const [report, setReport] = useState<ExportResult | null>(null);
   const [priorities, setPriorities] = useState<Priorities | null>(null);
-  const [exporting, setExporting] = useState(false);
+  // Export re-entrancy latch. This was STATE until the generation prune (2026-08-06) — its only
+  // reader was OptimizeV2's export button, which rendered a busy label. That room is gone, and
+  // today's one export entry (Monitor → SessionDebrief) has no busy affordance, so nothing renders
+  // it. Kept as a ref rather than deleted: it still stops a double-click firing two concurrent
+  // export_report calls, and a ref reads correctly inside the async handler, where state would be
+  // a stale closure and let both clicks through anyway.
+  const exportingRef = useRef(false);
   const [showSettings, setShowSettings] = useState(false);
   // Settings opens from the custom titlebar (window chrome lives outside <App/>, so it signals across
   // the tree — same bridge as the compy:*-changed flags). The titlebar gear is the app-wide entry.
@@ -766,19 +747,15 @@ function App() {
     } catch (e) {
       // Start leg failed AFTER a confirmed restore — settings are safely back; say exactly
       // that, and point at the one door to try again (never a vague "resume failed").
-      fail(
-        labGround
-          ? t("app.errors.gamingResumeFailedGround", { room: t("common.rail.lab") })
-          : t("app.errors.gamingResumeFailedMerged", { room: t("common.rail.optimize") }),
-        e,
-      );
+      fail(t("app.errors.gamingResumeFailedGround", { room: t("common.rail.lab") }), e);
     } finally {
       setGamingResuming(false);
     }
   };
 
   const onExport = async () => {
-    setExporting(true);
+    if (exportingRef.current) return;
+    exportingRef.current = true;
     setError(null);
     try {
       setReport(await invoke<ExportResult>("export_report", { feedback: null }));
@@ -786,7 +763,7 @@ function App() {
     } catch (e) {
       fail(t("app.errors.exportFailed"), e);
     } finally {
-      setExporting(false);
+      exportingRef.current = false;
     }
   };
 
@@ -994,38 +971,20 @@ function App() {
     refresh();
   }, []);
 
-  // Ordered list of sections that have content. The six rec categories +
-  // Startup are consolidated into one "Optimize" section (filtered inside),
-  // so the rail stays short and never needs a horizontal scroll.
+  // Ordered list of rooms that have content. There is no standalone Check or Optimize (Tune) room —
+  // the Lab's Optimize station is the one door to the toggles (its panel carries Fix + the ledger
+  // History; Check lives under "More cleanup"), which is what the rail has shown since the
+  // proving-ground merge shipped. Overview and Learn are always available (Learn's knowledge library
+  // is static/offline); Learn MUST be listed or the reset effect below bounces it to Overview.
   const visibleTabs: Tab[] = useMemo(() => {
-    const list: Tab[] = ["Overview"];
-    // Optimize merge (phase 1a): when merged, Check folds INTO the "Optimize" slot — there is no
-    // standalone Check tab, and the Optimize tab is present whenever EITHER half has content. When
-    // off, the two stay separate exactly as before.
-    // Proving ground (owner decision 2026-07-10, ships with the default-ON flip): NO standalone
-    // Check/Optimize tab at all — the Lab's Optimize station is the one door to the toggles (its
-    // panel carries Fix + the ledger History; Check lives under "More cleanup"). Ground wins over
-    // the merge flag; compy_lab_ground="0" restores the classic tabs.
-    const hasCheck = !!(readiness || priorities);
-    const hasTune = (recs?.length ?? 0) > 0 || startup.length > 0 || gamingEnabled;
-    if (!labGround) {
-      if (optimizeMerged) {
-        if (hasCheck || hasTune) list.push("Optimize");
-      } else {
-        if (hasCheck) list.push("Check"); // Check consolidates Readiness + Priorities into one section.
-        if (hasTune) list.push("Optimize");
-      }
-    }
-    // Learn is a rail room now (one-rail §1b) and is ALWAYS available — the knowledge library is
-    // static/offline. Must be in visibleTabs or the reset effect would bounce it back to Overview.
-    list.push("Learn");
+    const list: Tab[] = ["Overview", "Learn"];
     // Play consolidates Monitoring + Sessions IN PLACE; Lab consolidates Benchmark + Latency IN PLACE.
     if (hw || sessions.length > 0) list.push("Play");
     if (hw) list.push("Lab");
     // Diagnostics + History are no longer standalone rooms — Diagnostics embeds inside the Lab and
-    // the Trust Ledger (History) lives inside the Optimize/Fix room, so neither is a visible tab.
+    // the Trust Ledger (History) lives inside the Lab's Optimize station, so neither is a visible tab.
     return list;
-  }, [recs, startup.length, hw, readiness, sessions.length, priorities, gamingEnabled, optimizeMerged, labGround]);
+  }, [hw, sessions.length]);
 
   // If the active section disappears, fall back to Dashboard (Overview).
   useEffect(() => {
@@ -1047,38 +1006,14 @@ function App() {
 
   // Six-home rail (one-rail §1b) — the ShellV2 rail renders from HOME_RAIL. navHome maps a home id
   // to its tab; HOME_FOR_TAB maps the active tab back to its home so the right rail item highlights.
+  // railFor() already filters the check + fix ids off the rail, so those two arms only fire for a
+  // stale persisted location; both land on the Lab, which is where the toggles live.
   const navHome = (id: HomeRailId) => {
-    setActiveTab(
-      id === "home"
-        ? "Overview"
-        : id === "check"
-          ? // Merged: the rail has no standalone Check room, but map check→Optimize defensively
-            // (e.g. a stale persisted location) so it always lands on the merged tab. Ground: the
-            // toggles live in the Lab's Optimize station — check/fix both land on the Lab.
-            labGround
-            ? "Lab"
-            : optimizeMerged
-              ? "Optimize"
-              : "Check"
-          : id === "play"
-            ? "Play"
-            : id === "fix"
-              ? labGround
-                ? "Lab"
-                : "Optimize"
-              : id === "learn"
-                ? "Learn"
-                : "Lab",
-    );
+    setActiveTab(id === "home" ? "Overview" : id === "play" ? "Play" : id === "learn" ? "Learn" : "Lab");
   };
   const HOME_FOR_TAB: Partial<Record<Tab, HomeRailId>> = {
     Overview: "home",
-    // Merged: Check has no rail room of its own — it folds into the "fix"-id Optimize room, so it
-    // highlights that one. Off: Check highlights its own room. Ground: the fix room itself is gone
-    // from the rail — anything fix-flavored highlights the Lab (the one door to the toggles).
-    Check: labGround ? "lab" : optimizeMerged ? "fix" : "check",
     Play: "play",
-    Optimize: labGround ? "lab" : "fix",
     Learn: "learn",
     Lab: "lab",
   };
@@ -1098,18 +1033,10 @@ function App() {
   const [fwdHistory, setFwdHistory] = useState<string[]>([]);
   const prevLocationRef = useRef(currentLocation);
   const navKindRef = useRef<"normal" | "back" | "forward">("normal");
-  // Once Optimize has been opened, keep its (heavy) tree MOUNTED and just hide it with display:none on
-  // other tabs — so returning to Optimize is an instant CSS show, not a full re-mount/re-render of
-  // Check + ~16 rec rows. (Set during render; idempotent. It mounts on first visit, not at app start,
-  // so the scan still only runs when the user actually opens Optimize.)
-  const optimizeMountedRef = useRef(false);
-  // Same keepalive for the V2 room path (V2-4): OptimizeV2 stays mounted once visited so
-  // returning to it is a CSS show, not a re-mount of Check + the rec rows.
-  const optimizeV2MountedRef = useRef(false);
   // Warm the readiness scan cache during the first idle window after paint, so the user's FIRST
-  // open of Optimize/Check seeds the verdict instantly instead of cold-starting the scan (+ replaying
-  // the row stagger) on the click. Deferred to idle (requestIdleCallback) so it never competes with
-  // Home's first paint; no-op if a real scan already cached. Read-only, reversible, zero new IPC.
+  // open of the Lab's Optimize station seeds the verdict instantly instead of cold-starting the scan
+  // (+ replaying the row stagger) on the click. Deferred to idle (requestIdleCallback) so it never
+  // competes with Home's first paint; no-op if a real scan already cached. Read-only, zero new IPC.
   useEffect(() => {
     const ric = (window as typeof window & {
       requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
@@ -1221,133 +1148,19 @@ function App() {
       ]
     : [];
 
-  // V2-4: under the v2 shell the merged Optimize room renders OptimizeV2 instead — the classic
-  // keepalive must not ALSO mount the classic tree hidden (double Check/Fix machinery). Each
-  // path keeps its own keepalive; toggling the flag swaps which one is warm.
-  const v2Optimize = v2Shell && optimizeMerged;
-  if (activeTab === "Optimize" && !v2Optimize) optimizeMountedRef.current = true;
-  if (activeTab === "Optimize" && v2Optimize) optimizeV2MountedRef.current = true;
-  // V2-5: same swap for the Monitor room (no keepalive on either path — classic Play also
-  // mounts per-visit; its pollers are demand-gated on the tab). compy_monitor="0" (non-merged
-  // escape hatch) falls through to the classic Play panels, same contract as Optimize.
-  const v2Monitor = v2Shell && monitorMerged;
-
-  // ── Room renders ───────────────────────────────────────────────────────────
-  // The room panels render inside the V2 shell; each room re-skins independently, so these shared
-  // panels stay the one source of truth for what a room shows (the shell only wraps them).
-  const roomPanels = hw && (
-    <>
-      {/* Check renders standalone ONLY when the Optimize merge is off; when merged it folds
-          into the Optimize shell below (the Check tab is unreachable then anyway). */}
-      {activeTab === "Check" && !optimizeMerged && (
-        <Check
-          isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
-          onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
-          onChanged={refresh}
-          vendor={detectedVendor}
-          sessions={sessions}
-          gpus={hw?.gpus ?? []}
-          onExport={onExport}
-          exporting={exporting}
-        />
-      )}
-      {optimizeMountedRef.current && (
-        <KeepaliveRoom active={activeTab === "Optimize"}>
-          {optimizeMerged ? (
-          // Merged shell: Check + Gaming + Fix under Fixes / Applied / History segments + the
-          // persistent active-undo chip. Same props the standalone surfaces receive — pure
-          // composition, no new IPC, same audited apply/rollback handlers.
-          <OptimizeShell
-            isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
-            onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
-            onChanged={refresh}
-            vendor={detectedVendor}
-            sessions={sessions}
-            gpus={hw?.gpus ?? []}
-            recs={recs ?? []}
-            startup={startup}
-            changes={changes}
-            busyId={busyId}
-            activeChangeFor={findActiveChangeForRec}
-            onToggleRec={(recId) => {
-              const r = (recs ?? []).find((x) => x.id === recId);
-              if (r) toggleRec(r);
-            }}
-            onToggleStartup={toggleStartup}
-            onRollback={rollback}
-            onApplyBatch={applyBatch}
-            activeCount={activeChangeCount(changes)}
-            gamingSlot={gamingEnabled ? <GamingMode /> : null}
-            onExport={onExport}
-            exporting={exporting}
-          />
-        ) : (
-          <>
-            {/* Gaming Mode lives here as a featured section at the top of Tune (its own tab
-                retired — owner 2026-06-19). Only when the gate is on. */}
-            {gamingEnabled && (
-              <div className="tune-gaming-feature">
-                <GamingMode />
-              </div>
-            )}
-            <Fix
-              recs={recs ?? []}
-              startup={startup}
-              changes={changes}
-              busyId={busyId}
-              isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
-              activeChangeFor={findActiveChangeForRec}
-              onToggleRec={(recId) => {
-                const r = (recs ?? []).find((x) => x.id === recId);
-                if (r) toggleRec(r);
-              }}
-              onToggleStartup={toggleStartup}
-              onRollback={rollback}
-              onApplyBatch={applyBatch}
-              onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
-              vendor={detectedVendor}
-            />
-          </>
-          )}
-        </KeepaliveRoom>
-      )}
-      {activeTab === "Play" &&
-        (() => {
-          // Same props for both surfaces; the Monitor shell adds the Sessions/Live segmented
-          // control and drives Play's `view`. Behind compy_monitor (DEFAULT ON; "0" is the failsafe).
-          const monitorProps = {
-            active: activeTab === "Play",
-            sessions,
-            sessionsSeenAt,
-            priorities,
-            recs: recs ?? [],
-            apply,
-            busyId,
-            onExport,
-            changes,
-            rollback,
-            activeChangeFor: findActiveChangeForRec,
-            deepMonitoring: <MonitoringTab active={activeTab === "Play"} embedded />,
-            vendor: detectedVendor,
-          };
-          return monitorMerged ? <Monitor {...monitorProps} /> : <Play {...monitorProps} />;
-        })()}
-      {activeTab === "Learn" && (
-        <Learn
-          asPanel
-          focusId={libraryFocusId}
-          vendor={detectedVendor}
-          onClose={() => setActiveTab("Overview")}
-        />
-      )}
-      {activeTab === "Lab" && (
-        <Lab
-          diagnostics={<DiagnosticsTab sections={diagnostics} />}
-          vendor={detectedVendor}
-        />
-      )}
-    </>
-  );
+  // ── Room renders (generation prune 2026-08-06) ─────────────────────────────
+  // There used to be a `roomPanels` fragment here holding the classic Check / Optimize / Play /
+  // Learn / Lab trees, kept warm behind a KeepaliveRoom and swapped in by the compy_optimize /
+  // compy_monitor / compy_lab_ground flags. Every one of those flags had been default-ON and
+  // owner-signed-off for weeks, so the classic side was unreachable tree — and its Learn and Lab
+  // branches were doubly dead, excluded unconditionally by the consumer guard below. Each room now
+  // renders exactly one face, inline, in the shell below.
+  //
+  // The rail that survived the prune: railFor's `ground` arm, which filters the check + fix ids out
+  // of HOME_RAIL and leaves Home · Monitor · Blackbook · Lab. Both args are now constants (the flags
+  // they used to read are gone), so this is computed once and shared by the shell rail and the Home
+  // dock — they were always required to agree, and now they cannot drift.
+  const rail = railFor(true, true);
 
   return (
     <LibraryContext.Provider value={libraryApi}>
@@ -1482,7 +1295,7 @@ function App() {
                   // the toast keeps greeting until the pane's own card takes over on mount,
                   // so Review can never dead-end the restore (the old clear did exactly that
                   // when the pane stayed behind a closed disclosure).
-                  setActiveTab(labGround ? "Lab" : "Optimize");
+                  setActiveTab("Lab");
                 }}
               >
                 {t("app.gamingToast.review")}
@@ -1499,9 +1312,7 @@ function App() {
           <div className="gaming-toast gaming-toast-ready" role="status">
             <p className="gaming-toast-msg">
               <strong>{t("app.gamingToast.resumedHeadline")}</strong>{" "}
-              {labGround
-                ? t("app.gamingToast.resumedBodyGround", { summary: gamingResumed, room: t("common.rail.lab") })
-                : t("app.gamingToast.resumedBodyMerged", { summary: gamingResumed, room: t("common.rail.optimize") })}
+              {t("app.gamingToast.resumedBodyGround", { summary: gamingResumed, room: t("common.rail.lab") })}
             </p>
             <div className="gaming-toast-actions">
               <button className="btn-small" onClick={() => setGamingResumed(null)}>
@@ -1552,49 +1363,18 @@ function App() {
         // Home is the first V2 room (V2-3 — hologram hero + stats + priorities on RoomShell);
         // the remaining rooms still render their classic elements until V2-4..V2-7.
         <ShellV2
-          items={railFor(optimizeMerged, labGround)}
+          items={rail}
           activeId={activeHomeId}
           onNavigate={navHome}
           ledgerCount={changes.length}
           version={APP_VERSION}
           rig={hw ? [hw.cpu_brand, hw.gpus[0]?.name].filter(Boolean).join(" · ") : null}
         >
-          {/* OptimizeV2 keepalive — hoisted OUT of the Home ternary (below) so it persists across
-              EVERY tab, Home included (display:none when it isn't the active room). It used to live
-              inside the ternary's else-branch, which unmounts whenever you're on Home — so every
-              Home→Optimize RE-MOUNTED the heavy Check+Fix and re-fired Check's on-mount scan (the
-              profiled Optimize-enter hitch). Mounted once, it now stays warm; returning is a cheap
-              display toggle. Perf-only: same component, same props, same audited handlers. */}
-          {optimizeV2MountedRef.current && optimizeMerged && hw && (
-            <KeepaliveRoom active={activeTab === "Optimize"}>
-              <OptimizeV2
-                isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
-                onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
-                onChanged={refresh}
-                vendor={detectedVendor}
-                sessions={sessions}
-                gpus={hw?.gpus ?? []}
-                recs={recs}
-                readiness={readiness}
-                priorities={priorities}
-                startup={startup}
-                changes={changes}
-                busyId={busyId}
-                activeChangeFor={findActiveChangeForRec}
-                onToggleRec={(recId) => {
-                  const r = (recs ?? []).find((x) => x.id === recId);
-                  if (r) toggleRec(r);
-                }}
-                onToggleStartup={toggleStartup}
-                onRollback={rollback}
-                onApplyBatch={applyBatch}
-                activeCount={activeChangeCount(changes)}
-                gamingSlot={gamingEnabled ? <GamingMode /> : null}
-                onExport={onExport}
-                exporting={exporting}
-              />
-            </KeepaliveRoom>
-          )}
+          {/* The OptimizeV2 keepalive stood here until the generation prune (2026-08-06). There is no
+              Optimize ROOM any more — the rail has no `fix` door and the Optimize station lives inside
+              the Lab (LabGround → lab/OptimizeStation), so there was nothing left for it to keep warm.
+              The keepalive idiom itself survives in src/design/KeepaliveRoom.tsx for the next room that
+              proves it needs one; src/keepalive-idle-guard.test.ts still pins its contract. */}
           {activeTab === "Overview" && hw ? (
             <>
               {/* One-time "watch it work" trust loop (consumer-panel Phase 2): offered only while
@@ -1613,22 +1393,20 @@ function App() {
               sessions={sessions}
               changes={changes}
               onRunCheck={() => setShowFirstCheck(true)}
-              onSeeInFix={() => setActiveTab(labGround ? "Lab" : "Optimize")}
-              fixRoomLabel={labGround ? t("common.rail.lab") : t("common.rail.optimize")}
+              onSeeInFix={() => setActiveTab("Lab")}
+              fixRoomLabel={t("common.rail.lab")}
               // Console-only (compy_home_console): the Home dock's doors are the rail the app
-              // actually shows (railFor — the 4-room ground rail at default-ON) minus Home
-              // itself, navigating through the SAME navHome mapping the rail uses.
+              // actually shows (the shared `rail` above) minus Home itself, navigating through
+              // the SAME navHome mapping the rail uses.
               onNavigate={(k) => navHome(k as HomeRailId)}
-              rooms={railFor(optimizeMerged, labGround)
+              rooms={rail
                 .filter((r) => r.id !== "home")
                 .map((r) => ({
                   key: r.id,
                   // r.label is HOME_RAIL's English literal (homeRail.ts is guard-pinned, out of
                   // scope) — re-derive the DISPLAY name from common.rail instead of using it
-                  // directly, so this list localizes too. "fix" is special: when the Optimize
-                  // merge relabels it to "Optimize" (railFor's own re-point), route through
-                  // common.rail.optimize rather than common.rail.fix ("Tune") to match.
-                  name: r.id === "fix" && optimizeMerged ? t("common.rail.optimize") : t(`common.rail.${r.id}`),
+                  // directly, so this list localizes too.
+                  name: t(`common.rail.${r.id}`),
                 }))}
               // Console intake band only (compy_home_intake, BACKLOG:916): the one-tap fast path
               // derives its safe stack from the SAME recs + allowlist Optimize uses, and applies
@@ -1640,10 +1418,10 @@ function App() {
             </>
           ) : (
             <>
-              {/* V2-5: the Monitor room on RoomShell (merged shape only — compy_monitor="0"
-                  falls through to the classic Play panels below). Same props the classic
-                  Monitor shell receives; mounts per-visit like the classic path. */}
-              {activeTab === "Play" && v2Monitor && hw && (
+              {/* V2-5: the Monitor room on RoomShell — the room's ONE face since the generation
+                  prune (the compy_monitor="0" fallthrough to the classic Play panels is gone).
+                  Mounts per-visit; its pollers are demand-gated on the active tab. */}
+              {activeTab === "Play" && hw && (
                 <MonitorV2
                   active
                   sessions={sessions}
@@ -1673,58 +1451,40 @@ function App() {
                   onOpenLab={() => setActiveTab("Lab")}
                 />
               )}
-              {/* V2-7: the Lab room on RoomShell — Lab composes verbatim (its v2 prop trims the
-                  standalone head; RoomShell's verdict is the ONE summary). Mounts per-visit like
-                  the classic path; no door — Lab is the journey's last chapter. */}
-              {activeTab === "Lab" &&
-                (labGround ? (
-                  // Proving-ground merge (phase 1, compy_lab_ground DEFAULT ON since 2026-07-10):
-                  // Optimize's fixes + the enable-all fast path fold INTO the Lab. Same audited
-                  // apply/batch handlers OptimizeV2 gets (zero new IPC) + Lab's own instruments.
-                  // The "0" failsafe falls back to the LabV2 branch below.
-                  // hw-gated: the Ops Console's center hologram (RigViewer) needs the real hardware
-                  // read; hw is null only for the brief detection window before first refresh.
-                  hw && (
-                  <LabGround
-                    hw={hw}
-                    isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
-                    onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
-                    onChanged={refresh}
-                    vendor={detectedVendor}
-                    sessions={sessions}
-                    gpus={hw?.gpus ?? []}
-                    recs={recs}
-                    readiness={readiness}
-                    startup={startup}
-                    changes={changes}
-                    busyId={busyId}
-                    activeChangeFor={findActiveChangeForRec}
-                    onToggleRec={(recId) => {
-                      const r = (recs ?? []).find((x) => x.id === recId);
-                      if (r) toggleRec(r);
-                    }}
-                    onToggleStartup={toggleStartup}
-                    onRollback={rollback}
-                    onApplyBatch={applyBatch}
-                    gamingEnabled={gamingEnabled}
-                    activeCount={activeChangeCount(changes)}
-                    diagnostics={<DiagnosticsTab sections={diagnostics} />}
-                    diagnosticsCaptured={diagnostics.length > 0}
-                  />
-                  )
-                ) : (
-                  <LabV2
-                    diagnostics={<DiagnosticsTab sections={diagnostics} />}
-                    vendor={detectedVendor}
-                    diagnosticsCaptured={diagnostics.length > 0}
-                    changes={changes}
-                  />
-                ))}
-              {!(activeTab === "Optimize" && optimizeMerged) &&
-                !(activeTab === "Play" && v2Monitor) &&
-                activeTab !== "Learn" &&
-                activeTab !== "Lab" &&
-                roomPanels}
+              {/* The Lab room on RoomShell — the proving-ground merge, and the room's ONE face since
+                  the generation prune (LabV2 and its bento/guided ancestors are deleted). Optimize's
+                  fixes + the enable-all fast path live INSIDE the Lab here, on the same audited
+                  apply/batch handlers (zero new IPC) alongside the Lab's own instruments.
+                  hw-gated: the Ops Console's center hologram (RigViewer) needs the real hardware
+                  read; hw is null only for the brief detection window before first refresh. */}
+              {activeTab === "Lab" && hw && (
+                <LabGround
+                  hw={hw}
+                  isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
+                  onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
+                  onChanged={refresh}
+                  vendor={detectedVendor}
+                  sessions={sessions}
+                  gpus={hw?.gpus ?? []}
+                  recs={recs}
+                  readiness={readiness}
+                  startup={startup}
+                  changes={changes}
+                  busyId={busyId}
+                  activeChangeFor={findActiveChangeForRec}
+                  onToggleRec={(recId) => {
+                    const r = (recs ?? []).find((x) => x.id === recId);
+                    if (r) toggleRec(r);
+                  }}
+                  onToggleStartup={toggleStartup}
+                  onRollback={rollback}
+                  onApplyBatch={applyBatch}
+                  gamingEnabled={gamingEnabled}
+                  activeCount={activeChangeCount(changes)}
+                  diagnostics={<DiagnosticsTab sections={diagnostics} />}
+                  diagnosticsCaptured={diagnostics.length > 0}
+                />
+              )}
             </>
           )}
         </ShellV2>

@@ -19,6 +19,10 @@ declare module "fs" {
 }
 declare module "path" {
   export function join(...parts: string[]): string;
+  // reachability-guard.test.ts walks the import graph: dirname+resolve turn a relative specifier
+  // into the absolute path the graph is keyed on.
+  export function dirname(p: string): string;
+  export function resolve(...parts: string[]): string;
 }
 declare module "os" {
   export function homedir(): string;
