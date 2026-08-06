@@ -1,5 +1,16 @@
 # `docs/perf/` — recorded performance evidence
 
+**Why the budgets exist at all — owner decree 2026-08-06, on approving the foil-sweep cut:**
+
+> compy isnt suppose to be a resource hog whatsoever matter of fact it should be the most optomized
+> thing oin someons pc altoether
+
+That is a **standing product bar, not a target**: an optimizer that costs its user measurable
+performance is refuting its own pitch, and this one ships to gamers who will watch it in Task
+Manager. It ranks *above* visual ambition — the 14s foil loop was cut on this basis with the look
+substituted, not defended. A budget here is the mechanical form of that bar; adding cost without
+adding a budget is how the bar gets lost.
+
 Three kinds of file, and the distinction is the whole point:
 
 | | |

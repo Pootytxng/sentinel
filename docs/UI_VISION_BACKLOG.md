@@ -40,6 +40,29 @@ ships visuals but worsens wayfinding is a regression under this directive.
 through the live updater) — the 800×600 default crammed the whole HUD into a postage stamp and was
 called out by testers.
 
+**RESTATED 2026-08-06 — and it names the failure mode for the first time. Owner verbatim:**
+
+> im still not satisfied with the layout of compy it just looks to intimidating rather than this
+> intuitive easy to use and understand portal for everyone with a techy enthusiast catering flip side.
+
+Two things here are new and must not be flattened back into the 2026-07-23 wording:
+1. **The symptom is INTIMIDATION, not clutter.** "Neatly compact everything" could be read as
+   density work; this cannot. The default face is reading as a control panel for someone who already
+   knows what the controls do. Consolidation that leaves the first screen looking expert-operated
+   does not satisfy this.
+2. **He wants a two-audience shape, explicitly** — a calm mainstream default with a *flip side* for
+   the enthusiast. That flip side already exists and is functional: expert view
+   (`compy_expert_view`, 8 surfaces, presentation-only, gates zero mutation paths, spec
+   `superpowers/specs/2026-07-11-expert-layer-middle-ground.md`, default OFF). So the work is
+   **calming the DEFAULT face, not building a second mode** — and anything that is only legible to
+   an enthusiast is a candidate to move behind the flip side rather than to delete.
+
+**Read together with NAV-1 finding 2 below:** parallel UI generations coexist per room (Home 4+,
+Monitor 4, Lab 5) and the pruning pass has never run. That is the leading mechanical suspect for
+"intimidating" — surfaces authored under different design generations, all reachable, none blessed.
+It is also the same work as **P2 "reversible generation pruning"** in `BACKLOG.md`, which is why the
+backend runway and this ask meet at the same next train.
+
 ### NAV-1. Navigation & consolidation audit (2026-07-23) — findings + candidates awaiting owner direction 🔴 OPEN
 
 **What real testers hit (2026-07-22 reviews, 0.9.0 build — the receipts for this audit):**
