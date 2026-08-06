@@ -864,11 +864,21 @@ function median(nums) {
  * forces the compositor to keep producing frames, so the probe should pay for a share of the cost it
  * reports.
  *
- * It does not. Bare -- no debug port, no CDP, no injected script, just the shipped exe under Windows'
- * own per-process processor-time counters -- the same idle app measured 50.71%, and a second
- * independent bare run measured 50.17%. The instrument costs about a quarter of a percentage point.
- * The ~half-a-core is Compy's own, reproducibly, and that is a performance FINDING, not a baseline to
- * budget around (docs/perf/README.md, and the spec's idle section).
+ * It did not, on that build. Bare -- no debug port, no CDP, no injected script, just the shipped exe
+ * under Windows' own per-process processor-time counters -- the same idle app measured 50.71%, and a
+ * second independent bare run measured 50.17%, agreeing with the instrumented 50.95% to within a
+ * point. The ~half-a-core was Compy's own, reproducibly, and that was a performance FINDING rather
+ * than a baseline to budget around (docs/perf/README.md, and the spec's idle section).
+ *
+ * SINCE THE FIX (ff0ce65f), THAT AGREEMENT IS GONE AND THE ORIGINAL HYPOTHESIS IS LIVE AGAIN IN
+ * REVERSE. Bare reads 23.10 / 23.35 over ten minutes; the instrumented attribution over an
+ * equivalent 90-second window reads 11.69 -- the observer now appears to HALVE what it measures, and
+ * its per-animation subtraction produced a negative band, which is a validity tell rather than a
+ * saving. Shorter bare runs of the same build then read 16.69 / 12.23 / 10.51, and an occlusion
+ * probe caught a foreign application owning the foreground for its whole window. The likeliest
+ * reading is that window visibility, not the instrument, moves the number: a covered WebView2 stops
+ * compositing. That is unproven -- the desk was not exclusive -- and until it is, treat any single
+ * idle-CPU reading as conditional on window state and record which state it was taken in.
  *
  * The run stays in the suite regardless: it is the only measurement that owes nothing to the
  * observer, so it is what any future idle-CPU claim gets checked against.

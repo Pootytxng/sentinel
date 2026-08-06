@@ -1,6 +1,6 @@
 {
   "task": "attribute",
-  "recordedAt": "2026-08-06T07:09:57.556Z",
+  "recordedAt": "2026-08-06T08:29:26.992Z",
   "room": "Home",
   "settleSeconds": 30,
   "phaseSeconds": 90,
@@ -10,13 +10,13 @@
     "settled": true,
     "windowSeconds": 8,
     "attempts": [
-      43.388,
-      42.321
+      11.947,
+      13.088
     ],
-    "spread": 1.067
+    "spread": 1.141
   },
   "rafBandValid": true,
-  "validity": "0 frame(s) fired during raf-frozen -- the frame loops were genuinely dead. baseline settled to within 1.067 points before phase 1.",
+  "validity": "0 frame(s) fired during raf-frozen -- the frame loops were genuinely dead. baseline settled to within 1.141 points before phase 1.",
   "externalRearms": {
     "attempts": {
       "raf": 1,
@@ -25,67 +25,67 @@
     },
     "sites": [
       {
-        "site": "raf: at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756) <- at Object.wake (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421224) <- at e.t (http://tauri.localhost/assets/index-ChKtRjUA.js:16:424686)",
+        "site": "raf: at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134) <- at Object.wake (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421602) <- at e.t (http://tauri.localhost/assets/index-ChwU3Fby.js:16:425064)",
         "count": 1,
-        "source": "n k(N){var M=t()-o,_=N===!0,C,A,T,E;if((M>e||M<0)&&(i+=M-a),o+=M,T=o-i,C=T-d,(C>0||_)&&(E=++y.frame,v=T-y.time*1e3,y.time=T=T/1e3,d+=C+(C>=c?4:c-C),A=1),_||(m=p(k)),A)for(x=0;x<u.length;x++)u[x](T,v,E,N)};return y={time:0,frame:0,tick:function(){S(!0)},deltaRatio:function(N){return v/(1e3/(N||60))},wake:function(){i1&&"
+        "source": "n k(N){var M=t()-o,_=N===!0,C,A,T,E;if((M>e||M<0)&&(i+=M-a),o+=M,T=o-i,C=T-d,(C>0||_)&&(E=++y.frame,v=T-y.time*1e3,y.time=T=T/1e3,d+=C+(C>=c?4:c-C),A=1),_||(m=p(k)),A)for(x=0;x<u.length;x++)u[x](T,v,E,N)};return y={time:0,frame:0,tick:function(){S(!0)},deltaRatio:function(N){return v/(1e3/(N||60))},wake:function(){r1&&"
       }
     ]
   },
   "attribution": {
-    "totalPercentOfOneCore": 49.3,
+    "totalPercentOfOneCore": 11.694,
     "bands": [
       {
         "name": "CSS/WAAPI animations",
-        "percentOfOneCore": 39.435,
-        "shareOfIdle": 80,
+        "percentOfOneCore": 7.052,
+        "shareOfIdle": 60.3,
         "verdict": "measured",
         "splitByAnimation": [
           {
             "name": "aurora",
             "instancesCancelled": 1,
-            "percentOfOneCore": 8.026,
-            "shareOfIdle": 16.3,
+            "percentOfOneCore": 9.021,
+            "shareOfIdle": 77.1,
             "verdict": "measured",
             "recalcStylePerSecond": {
-              "before": 248.7,
-              "after": 249.8
+              "before": 9.03,
+              "after": 0
             }
           },
           {
             "name": "v2-foil-pan",
             "instancesCancelled": 1,
-            "percentOfOneCore": 29.793,
-            "shareOfIdle": 60.4,
+            "percentOfOneCore": -2.294,
+            "shareOfIdle": -19.6,
             "verdict": "measured",
             "recalcStylePerSecond": {
-              "before": 249.8,
-              "after": 19.87
+              "before": 0,
+              "after": 12.84
             }
           }
         ]
       },
       {
         "name": "rAF frame loops",
-        "percentOfOneCore": 6.83,
-        "shareOfIdle": 13.9,
+        "percentOfOneCore": 1.813,
+        "shareOfIdle": 15.5,
         "verdict": "measured"
       },
       {
         "name": "timers (intervals + timeouts)",
-        "percentOfOneCore": 1.483,
-        "shareOfIdle": 3,
+        "percentOfOneCore": 0.605,
+        "shareOfIdle": 5.2,
         "verdict": "measured"
       },
       {
         "name": "runtime floor (WebView2 compositing, Tauri IPC, Rust core)",
-        "percentOfOneCore": 1.552,
-        "shareOfIdle": 3.1,
+        "percentOfOneCore": 2.224,
+        "shareOfIdle": 19,
         "verdict": "survives every JavaScript freeze -- no frontend change removes this"
       }
     ],
     "mainThread": {
       "rendererTaskPercentOfOneCoreAtFloor": 0.002,
-      "processGroupPercentOfOneCoreAtFloor": 1.552,
+      "processGroupPercentOfOneCoreAtFloor": 2.224,
       "note": "the floor is overwhelmingly OFF the renderer main thread (compositor / raster / other process)"
     }
   },
@@ -95,54 +95,54 @@
       "note": "everything alive",
       "cpu": {
         "label": "running",
-        "seconds": 90.5,
-        "processorSeconds": 44.641,
-        "percentOfOneCore": 49.3,
+        "seconds": 90.6,
+        "processorSeconds": 10.594,
+        "percentOfOneCore": 11.694,
         "perProcess": [
           {
-            "id": 20016,
+            "id": 17428,
             "name": "msedgewebview2",
-            "processorSeconds": 26.266,
-            "percentOfOneCore": 29.007
+            "processorSeconds": 5.953,
+            "percentOfOneCore": 6.571
           },
           {
-            "id": 4792,
+            "id": 20280,
             "name": "msedgewebview2",
-            "processorSeconds": 15.422,
-            "percentOfOneCore": 17.031
+            "processorSeconds": 2.828,
+            "percentOfOneCore": 3.122
           },
           {
-            "id": 9160,
+            "id": 15156,
+            "name": "msedgewebview2",
+            "processorSeconds": 0.719,
+            "percentOfOneCore": 0.793
+          },
+          {
+            "id": 18864,
+            "name": "msedgewebview2",
+            "processorSeconds": 0.672,
+            "percentOfOneCore": 0.742
+          },
+          {
+            "id": 6880,
             "name": "compy",
-            "processorSeconds": 1.266,
-            "percentOfOneCore": 1.398
-          },
-          {
-            "id": 4784,
-            "name": "msedgewebview2",
-            "processorSeconds": 0.984,
-            "percentOfOneCore": 1.087
-          },
-          {
-            "id": 1580,
-            "name": "msedgewebview2",
-            "processorSeconds": 0.406,
-            "percentOfOneCore": 0.449
-          },
-          {
-            "id": 14560,
-            "name": "msedgewebview2",
             "processorSeconds": 0.297,
             "percentOfOneCore": 0.328
           },
           {
-            "id": 15564,
+            "id": 18268,
+            "name": "msedgewebview2",
+            "processorSeconds": 0.125,
+            "percentOfOneCore": 0.138
+          },
+          {
+            "id": 16124,
             "name": "msedgewebview2",
             "processorSeconds": 0,
             "percentOfOneCore": 0
           },
           {
-            "id": 19020,
+            "id": 19016,
             "name": "msedgewebview2",
             "processorSeconds": 0,
             "percentOfOneCore": 0
@@ -151,48 +151,48 @@
       },
       "renderer": {
         "TaskDuration": {
-          "seconds": 6.794,
-          "percentOfOneCore": 7.507
+          "seconds": 0.852,
+          "percentOfOneCore": 0.94
         },
         "ScriptDuration": {
-          "seconds": 0.496,
-          "percentOfOneCore": 0.548
+          "seconds": 0.246,
+          "percentOfOneCore": 0.271
         },
         "LayoutDuration": {
-          "seconds": 0.09,
-          "percentOfOneCore": 0.1
+          "seconds": 0.049,
+          "percentOfOneCore": 0.054
         },
         "RecalcStyleDuration": {
-          "seconds": 0.762,
-          "percentOfOneCore": 0.841
+          "seconds": 0.101,
+          "percentOfOneCore": 0.112
         },
         "ThreadTime": {
-          "seconds": 6.536,
-          "percentOfOneCore": 7.222
+          "seconds": 0.818,
+          "percentOfOneCore": 0.902
         },
         "ProcessTime": {
-          "seconds": 15.184,
-          "percentOfOneCore": 16.778
+          "seconds": 2.725,
+          "percentOfOneCore": 3.007
         },
         "LayoutCount": {
-          "total": 1015,
-          "perSecond": 11.22
+          "total": 289,
+          "perSecond": 3.19
         },
         "RecalcStyleCount": {
-          "total": 22507,
-          "perSecond": 248.7
+          "total": 818,
+          "perSecond": 9.03
         },
-        "Nodes": 426,
-        "JSEventListeners": 299,
+        "Nodes": 427,
+        "JSEventListeners": 305,
         "Frames": 1
       },
-      "framesFired": 24419,
-      "framesPerSecond": 269.8,
+      "framesFired": 720,
+      "framesPerSecond": 7.9,
       "open": {
-        "t": 1785999642827,
-        "scheduled": 12441,
-        "fired": 12435,
-        "pending": 1,
+        "t": 1786004412366,
+        "scheduled": 1403,
+        "fired": 1395,
+        "pending": 0,
         "frozen": {
           "raf": false,
           "animations": false,
@@ -201,45 +201,41 @@
         "sampleEvery": 60,
         "sites": [
           {
-            "site": "at u (http://tauri.localhost/assets/index-ChKtRjUA.js:16:405006)",
-            "count": 198
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134)",
+            "count": 23
           },
           {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756)",
-            "count": 9
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756) <- at Object.wake (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421224) <- at Bo (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421642)",
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134) <- at Object.wake (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421602) <- at Bo (http://tauri.localhost/assets/index-ChwU3Fby.js:16:422020)",
             "count": 1
           }
         ],
         "liveIntervals": 5,
         "intervalSites": [
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 14400000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 14400000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:588000 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 5000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:588378 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 5000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:477490 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 1000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:477868 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 1000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 1500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 1500ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:7910 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 2500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:7908 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 2500ms",
             "count": 1
           }
         ],
         "pendingTimeouts": 0,
         "timeoutSites": [
           {
-            "site": "at ResizeObserver.<anonymous> (http://tauri.localhost/assets/lenis-C7bIl90M.js:1:988)  after 250ms",
+            "site": "at Mx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:113651) <- at Xx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:125032) <- at MessagePort.X (http://tauri.localhost/assets/index-ChwU3Fby.js:2:10707)  after 206.89999999850988ms",
             "count": 1
           }
         ],
@@ -254,9 +250,9 @@
           {
             "target": "h1",
             "name": "v2-foil-pan",
-            "playState": "running",
-            "duration": 14000,
-            "iterations": null
+            "playState": "finished",
+            "duration": 1600,
+            "iterations": 1
           }
         ],
         "visibility": "visible",
@@ -268,10 +264,10 @@
         "refusedSites": []
       },
       "close": {
-        "t": 1785999733380,
-        "scheduled": 36870,
-        "fired": 36854,
-        "pending": 1,
+        "t": 1786004502966,
+        "scheduled": 2129,
+        "fired": 2115,
+        "pending": 0,
         "frozen": {
           "raf": false,
           "animations": false,
@@ -280,49 +276,41 @@
         "sampleEvery": 60,
         "sites": [
           {
-            "site": "at u (http://tauri.localhost/assets/index-ChKtRjUA.js:16:405006)",
-            "count": 562
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134)",
+            "count": 35
           },
           {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756)",
-            "count": 51
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756) <- at Object.wake (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421224) <- at Bo (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421642)",
-            "count": 1
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:478358)",
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134) <- at Object.wake (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421602) <- at Bo (http://tauri.localhost/assets/index-ChwU3Fby.js:16:422020)",
             "count": 1
           }
         ],
         "liveIntervals": 5,
         "intervalSites": [
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 14400000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 14400000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:588000 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 5000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:588378 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 5000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:477490 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 1000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:477868 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 1000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 1500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 1500ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:7910 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 2500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:7908 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 2500ms",
             "count": 1
           }
         ],
         "pendingTimeouts": 0,
         "timeoutSites": [
           {
-            "site": "at ResizeObserver.<anonymous> (http://tauri.localhost/assets/lenis-C7bIl90M.js:1:988)  after 250ms",
+            "site": "at Mx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:113651) <- at Xx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:125032) <- at MessagePort.X (http://tauri.localhost/assets/index-ChwU3Fby.js:2:10707)  after 206.89999999850988ms",
             "count": 1
           }
         ],
@@ -337,9 +325,9 @@
           {
             "target": "h1",
             "name": "v2-foil-pan",
-            "playState": "running",
-            "duration": 14000,
-            "iterations": null
+            "playState": "finished",
+            "duration": 1600,
+            "iterations": 1
           }
         ],
         "visibility": "visible",
@@ -356,54 +344,54 @@
       "note": "1 \"aurora\" animation(s) cancelled",
       "cpu": {
         "label": "anim-frozen:aurora",
-        "seconds": 90.7,
-        "processorSeconds": 37.422,
-        "percentOfOneCore": 41.274,
+        "seconds": 90.6,
+        "processorSeconds": 2.422,
+        "percentOfOneCore": 2.673,
         "perProcess": [
           {
-            "id": 20016,
+            "id": 18864,
             "name": "msedgewebview2",
-            "processorSeconds": 20.734,
-            "percentOfOneCore": 22.869
+            "processorSeconds": 0.672,
+            "percentOfOneCore": 0.742
           },
           {
-            "id": 4792,
+            "id": 15156,
             "name": "msedgewebview2",
-            "processorSeconds": 14.188,
-            "percentOfOneCore": 15.648
+            "processorSeconds": 0.5,
+            "percentOfOneCore": 0.552
           },
           {
-            "id": 4784,
-            "name": "msedgewebview2",
-            "processorSeconds": 0.969,
-            "percentOfOneCore": 1.068
-          },
-          {
-            "id": 9160,
+            "id": 6880,
             "name": "compy",
-            "processorSeconds": 0.656,
-            "percentOfOneCore": 0.724
+            "processorSeconds": 0.469,
+            "percentOfOneCore": 0.517
           },
           {
-            "id": 1580,
+            "id": 20280,
             "name": "msedgewebview2",
-            "processorSeconds": 0.641,
-            "percentOfOneCore": 0.707
+            "processorSeconds": 0.406,
+            "percentOfOneCore": 0.448
           },
           {
-            "id": 14560,
+            "id": 17428,
             "name": "msedgewebview2",
-            "processorSeconds": 0.234,
-            "percentOfOneCore": 0.259
+            "processorSeconds": 0.266,
+            "percentOfOneCore": 0.293
           },
           {
-            "id": 15564,
+            "id": 18268,
+            "name": "msedgewebview2",
+            "processorSeconds": 0.109,
+            "percentOfOneCore": 0.121
+          },
+          {
+            "id": 16124,
             "name": "msedgewebview2",
             "processorSeconds": 0,
             "percentOfOneCore": 0
           },
           {
-            "id": 19020,
+            "id": 19016,
             "name": "msedgewebview2",
             "processorSeconds": 0,
             "percentOfOneCore": 0
@@ -412,48 +400,48 @@
       },
       "renderer": {
         "TaskDuration": {
-          "seconds": 6.567,
-          "percentOfOneCore": 7.241
+          "seconds": 0.269,
+          "percentOfOneCore": 0.297
         },
         "ScriptDuration": {
-          "seconds": 0.452,
-          "percentOfOneCore": 0.498
+          "seconds": 0.128,
+          "percentOfOneCore": 0.141
         },
         "LayoutDuration": {
-          "seconds": 0.06,
-          "percentOfOneCore": 0.066
+          "seconds": 0.013,
+          "percentOfOneCore": 0.014
         },
         "RecalcStyleDuration": {
-          "seconds": 0.528,
-          "percentOfOneCore": 0.582
+          "seconds": 0,
+          "percentOfOneCore": 0
         },
         "ThreadTime": {
-          "seconds": 5.907,
-          "percentOfOneCore": 6.513
+          "seconds": 0.251,
+          "percentOfOneCore": 0.277
         },
         "ProcessTime": {
-          "seconds": 13.809,
-          "percentOfOneCore": 15.225
+          "seconds": 0.352,
+          "percentOfOneCore": 0.389
         },
         "LayoutCount": {
-          "total": 614,
-          "perSecond": 6.77
+          "total": 99,
+          "perSecond": 1.09
         },
         "RecalcStyleCount": {
-          "total": 22657,
-          "perSecond": 249.8
+          "total": 0,
+          "perSecond": 0
         },
-        "Nodes": 426,
-        "JSEventListeners": 299,
+        "Nodes": 427,
+        "JSEventListeners": 552,
         "Frames": 1
       },
-      "framesFired": 23697,
-      "framesPerSecond": 261.3,
+      "framesFired": 0,
+      "framesPerSecond": 0,
       "open": {
-        "t": 1785999735384,
-        "scheduled": 37371,
-        "fired": 37355,
-        "pending": 1,
+        "t": 1786004504974,
+        "scheduled": 2129,
+        "fired": 2115,
+        "pending": 0,
         "frozen": {
           "raf": false,
           "animations": false,
@@ -462,49 +450,41 @@
         "sampleEvery": 60,
         "sites": [
           {
-            "site": "at u (http://tauri.localhost/assets/index-ChKtRjUA.js:16:405006)",
-            "count": 570
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134)",
+            "count": 35
           },
           {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756)",
-            "count": 51
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756) <- at Object.wake (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421224) <- at Bo (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421642)",
-            "count": 1
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:478358)",
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134) <- at Object.wake (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421602) <- at Bo (http://tauri.localhost/assets/index-ChwU3Fby.js:16:422020)",
             "count": 1
           }
         ],
         "liveIntervals": 5,
         "intervalSites": [
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 14400000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 14400000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:588000 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 5000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:588378 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 5000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:477490 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 1000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:477868 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 1000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 1500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 1500ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:7910 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 2500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:7908 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 2500ms",
             "count": 1
           }
         ],
         "pendingTimeouts": 0,
         "timeoutSites": [
           {
-            "site": "at ResizeObserver.<anonymous> (http://tauri.localhost/assets/lenis-C7bIl90M.js:1:988)  after 250ms",
+            "site": "at Mx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:113651) <- at Xx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:125032) <- at MessagePort.X (http://tauri.localhost/assets/index-ChwU3Fby.js:2:10707)  after 206.89999999850988ms",
             "count": 1
           }
         ],
@@ -512,9 +492,9 @@
           {
             "target": "h1",
             "name": "v2-foil-pan",
-            "playState": "running",
-            "duration": 14000,
-            "iterations": null
+            "playState": "finished",
+            "duration": 1600,
+            "iterations": 1
           }
         ],
         "visibility": "visible",
@@ -526,10 +506,10 @@
         "refusedSites": []
       },
       "close": {
-        "t": 1785999826053,
-        "scheduled": 61073,
-        "fired": 61052,
-        "pending": 1,
+        "t": 1786004595583,
+        "scheduled": 2129,
+        "fired": 2115,
+        "pending": 0,
         "frozen": {
           "raf": false,
           "animations": false,
@@ -538,49 +518,41 @@
         "sampleEvery": 60,
         "sites": [
           {
-            "site": "at u (http://tauri.localhost/assets/index-ChKtRjUA.js:16:405006)",
-            "count": 955
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134)",
+            "count": 35
           },
           {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756)",
-            "count": 60
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:478358)",
-            "count": 2
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756) <- at Object.wake (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421224) <- at Bo (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421642)",
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134) <- at Object.wake (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421602) <- at Bo (http://tauri.localhost/assets/index-ChwU3Fby.js:16:422020)",
             "count": 1
           }
         ],
         "liveIntervals": 5,
         "intervalSites": [
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 14400000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 14400000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:588000 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 5000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:588378 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 5000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:477490 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 1000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:477868 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 1000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 1500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 1500ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:7910 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 2500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:7908 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 2500ms",
             "count": 1
           }
         ],
         "pendingTimeouts": 0,
         "timeoutSites": [
           {
-            "site": "at ResizeObserver.<anonymous> (http://tauri.localhost/assets/lenis-C7bIl90M.js:1:988)  after 250ms",
+            "site": "at Mx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:113651) <- at Xx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:125032) <- at MessagePort.X (http://tauri.localhost/assets/index-ChwU3Fby.js:2:10707)  after 206.89999999850988ms",
             "count": 1
           }
         ],
@@ -588,9 +560,9 @@
           {
             "target": "h1",
             "name": "v2-foil-pan",
-            "playState": "running",
-            "duration": 14000,
-            "iterations": null
+            "playState": "finished",
+            "duration": 1600,
+            "iterations": 1
           }
         ],
         "visibility": "visible",
@@ -608,53 +580,53 @@
       "cpu": {
         "label": "anim-frozen:v2-foil-pan",
         "seconds": 90.6,
-        "processorSeconds": 10.407,
-        "percentOfOneCore": 11.481,
+        "processorSeconds": 4.5,
+        "percentOfOneCore": 4.967,
         "perProcess": [
           {
-            "id": 4792,
+            "id": 20280,
             "name": "msedgewebview2",
-            "processorSeconds": 4.734,
-            "percentOfOneCore": 5.223
+            "processorSeconds": 1.5,
+            "percentOfOneCore": 1.656
           },
           {
-            "id": 20016,
+            "id": 17428,
             "name": "msedgewebview2",
-            "processorSeconds": 3.703,
-            "percentOfOneCore": 4.085
+            "processorSeconds": 1.391,
+            "percentOfOneCore": 1.535
           },
           {
-            "id": 9160,
+            "id": 18864,
+            "name": "msedgewebview2",
+            "processorSeconds": 0.5,
+            "percentOfOneCore": 0.552
+          },
+          {
+            "id": 6880,
             "name": "compy",
-            "processorSeconds": 0.641,
-            "percentOfOneCore": 0.707
+            "processorSeconds": 0.484,
+            "percentOfOneCore": 0.535
           },
           {
-            "id": 4784,
+            "id": 15156,
             "name": "msedgewebview2",
-            "processorSeconds": 0.594,
-            "percentOfOneCore": 0.655
+            "processorSeconds": 0.422,
+            "percentOfOneCore": 0.466
           },
           {
-            "id": 1580,
+            "id": 18268,
             "name": "msedgewebview2",
-            "processorSeconds": 0.563,
-            "percentOfOneCore": 0.621
+            "processorSeconds": 0.203,
+            "percentOfOneCore": 0.224
           },
           {
-            "id": 14560,
-            "name": "msedgewebview2",
-            "processorSeconds": 0.172,
-            "percentOfOneCore": 0.19
-          },
-          {
-            "id": 15564,
+            "id": 16124,
             "name": "msedgewebview2",
             "processorSeconds": 0,
             "percentOfOneCore": 0
           },
           {
-            "id": 19020,
+            "id": 19016,
             "name": "msedgewebview2",
             "processorSeconds": 0,
             "percentOfOneCore": 0
@@ -663,48 +635,48 @@
       },
       "renderer": {
         "TaskDuration": {
-          "seconds": 2.482,
-          "percentOfOneCore": 2.74
+          "seconds": 0.901,
+          "percentOfOneCore": 0.995
         },
         "ScriptDuration": {
-          "seconds": 0.543,
-          "percentOfOneCore": 0.599
+          "seconds": 0.283,
+          "percentOfOneCore": 0.312
         },
         "LayoutDuration": {
-          "seconds": 0.072,
-          "percentOfOneCore": 0.08
+          "seconds": 0.059,
+          "percentOfOneCore": 0.065
         },
         "RecalcStyleDuration": {
-          "seconds": 0.095,
-          "percentOfOneCore": 0.105
+          "seconds": 0.07,
+          "percentOfOneCore": 0.077
         },
         "ThreadTime": {
-          "seconds": 2.408,
-          "percentOfOneCore": 2.658
+          "seconds": 0.835,
+          "percentOfOneCore": 0.921
         },
         "ProcessTime": {
-          "seconds": 4.489,
-          "percentOfOneCore": 4.955
+          "seconds": 1.346,
+          "percentOfOneCore": 1.485
         },
         "LayoutCount": {
-          "total": 885,
-          "perSecond": 9.77
+          "total": 590,
+          "perSecond": 6.51
         },
         "RecalcStyleCount": {
-          "total": 1800,
-          "perSecond": 19.87
+          "total": 1163,
+          "perSecond": 12.84
         },
-        "Nodes": 426,
-        "JSEventListeners": 299,
+        "Nodes": 427,
+        "JSEventListeners": 318,
         "Frames": 1
       },
-      "framesFired": 24159,
-      "framesPerSecond": 266.7,
+      "framesFired": 1024,
+      "framesPerSecond": 11.3,
       "open": {
-        "t": 1785999828061,
-        "scheduled": 61575,
-        "fired": 61554,
-        "pending": 1,
+        "t": 1786004597591,
+        "scheduled": 2129,
+        "fired": 2115,
+        "pending": 0,
         "frozen": {
           "raf": false,
           "animations": false,
@@ -713,49 +685,41 @@
         "sampleEvery": 60,
         "sites": [
           {
-            "site": "at u (http://tauri.localhost/assets/index-ChKtRjUA.js:16:405006)",
-            "count": 964
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134)",
+            "count": 35
           },
           {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756)",
-            "count": 60
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:478358)",
-            "count": 2
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756) <- at Object.wake (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421224) <- at Bo (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421642)",
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134) <- at Object.wake (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421602) <- at Bo (http://tauri.localhost/assets/index-ChwU3Fby.js:16:422020)",
             "count": 1
           }
         ],
         "liveIntervals": 5,
         "intervalSites": [
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 14400000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 14400000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:588000 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 5000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:588378 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 5000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:477490 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 1000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:477868 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 1000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 1500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 1500ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:7910 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 2500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:7908 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 2500ms",
             "count": 1
           }
         ],
         "pendingTimeouts": 0,
         "timeoutSites": [
           {
-            "site": "at ResizeObserver.<anonymous> (http://tauri.localhost/assets/lenis-C7bIl90M.js:1:988)  after 250ms",
+            "site": "at Mx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:113651) <- at Xx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:125032) <- at MessagePort.X (http://tauri.localhost/assets/index-ChwU3Fby.js:2:10707)  after 206.89999999850988ms",
             "count": 1
           }
         ],
@@ -769,10 +733,10 @@
         "refusedSites": []
       },
       "close": {
-        "t": 1785999918711,
-        "scheduled": 85740,
-        "fired": 85713,
-        "pending": 1,
+        "t": 1786004688193,
+        "scheduled": 3157,
+        "fired": 3139,
+        "pending": 0,
         "frozen": {
           "raf": false,
           "animations": false,
@@ -781,49 +745,41 @@
         "sampleEvery": 60,
         "sites": [
           {
-            "site": "at u (http://tauri.localhost/assets/index-ChKtRjUA.js:16:405006)",
-            "count": 1342
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134)",
+            "count": 52
           },
           {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756)",
-            "count": 84
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:478358)",
-            "count": 2
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756) <- at Object.wake (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421224) <- at Bo (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421642)",
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134) <- at Object.wake (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421602) <- at Bo (http://tauri.localhost/assets/index-ChwU3Fby.js:16:422020)",
             "count": 1
           }
         ],
         "liveIntervals": 5,
         "intervalSites": [
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 14400000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 14400000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:588000 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 5000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:588378 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 5000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:477490 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 1000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:477868 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 1000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 1500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 1500ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:7910 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 2500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:7908 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 2500ms",
             "count": 1
           }
         ],
         "pendingTimeouts": 0,
         "timeoutSites": [
           {
-            "site": "at ResizeObserver.<anonymous> (http://tauri.localhost/assets/lenis-C7bIl90M.js:1:988)  after 250ms",
+            "site": "at Mx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:113651) <- at Xx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:125032) <- at MessagePort.X (http://tauri.localhost/assets/index-ChwU3Fby.js:2:10707)  after 206.89999999850988ms",
             "count": 1
           }
         ],
@@ -842,54 +798,54 @@
       "note": "0 remaining CSS/WAAPI animation(s) cancelled",
       "cpu": {
         "label": "anim-frozen",
-        "seconds": 90.6,
-        "processorSeconds": 8.937,
-        "percentOfOneCore": 9.865,
+        "seconds": 90.5,
+        "processorSeconds": 4.203,
+        "percentOfOneCore": 4.642,
         "perProcess": [
           {
-            "id": 4792,
+            "id": 20280,
             "name": "msedgewebview2",
-            "processorSeconds": 4.5,
-            "percentOfOneCore": 4.967
+            "processorSeconds": 1.469,
+            "percentOfOneCore": 1.622
           },
           {
-            "id": 20016,
+            "id": 17428,
             "name": "msedgewebview2",
-            "processorSeconds": 2.734,
-            "percentOfOneCore": 3.018
+            "processorSeconds": 1.25,
+            "percentOfOneCore": 1.381
           },
           {
-            "id": 9160,
+            "id": 15156,
+            "name": "msedgewebview2",
+            "processorSeconds": 0.5,
+            "percentOfOneCore": 0.552
+          },
+          {
+            "id": 6880,
             "name": "compy",
-            "processorSeconds": 0.547,
-            "percentOfOneCore": 0.604
+            "processorSeconds": 0.453,
+            "percentOfOneCore": 0.5
           },
           {
-            "id": 4784,
+            "id": 18864,
             "name": "msedgewebview2",
-            "processorSeconds": 0.531,
-            "percentOfOneCore": 0.586
+            "processorSeconds": 0.453,
+            "percentOfOneCore": 0.5
           },
           {
-            "id": 1580,
+            "id": 18268,
             "name": "msedgewebview2",
-            "processorSeconds": 0.359,
-            "percentOfOneCore": 0.397
+            "processorSeconds": 0.078,
+            "percentOfOneCore": 0.086
           },
           {
-            "id": 14560,
-            "name": "msedgewebview2",
-            "processorSeconds": 0.266,
-            "percentOfOneCore": 0.293
-          },
-          {
-            "id": 15564,
+            "id": 16124,
             "name": "msedgewebview2",
             "processorSeconds": 0,
             "percentOfOneCore": 0
           },
           {
-            "id": 19020,
+            "id": 19016,
             "name": "msedgewebview2",
             "processorSeconds": 0,
             "percentOfOneCore": 0
@@ -898,48 +854,48 @@
       },
       "renderer": {
         "TaskDuration": {
-          "seconds": 2.322,
-          "percentOfOneCore": 2.563
+          "seconds": 0.856,
+          "percentOfOneCore": 0.946
         },
         "ScriptDuration": {
-          "seconds": 0.489,
-          "percentOfOneCore": 0.54
+          "seconds": 0.254,
+          "percentOfOneCore": 0.28
         },
         "LayoutDuration": {
-          "seconds": 0.049,
-          "percentOfOneCore": 0.054
-        },
-        "RecalcStyleDuration": {
           "seconds": 0.056,
           "percentOfOneCore": 0.061
         },
+        "RecalcStyleDuration": {
+          "seconds": 0.067,
+          "percentOfOneCore": 0.074
+        },
         "ThreadTime": {
-          "seconds": 2.204,
-          "percentOfOneCore": 2.433
+          "seconds": 0.867,
+          "percentOfOneCore": 0.958
         },
         "ProcessTime": {
-          "seconds": 4.115,
-          "percentOfOneCore": 4.542
+          "seconds": 1.421,
+          "percentOfOneCore": 1.57
         },
         "LayoutCount": {
-          "total": 485,
-          "perSecond": 5.35
+          "total": 754,
+          "perSecond": 8.33
         },
         "RecalcStyleCount": {
-          "total": 900,
-          "perSecond": 9.93
+          "total": 1487,
+          "perSecond": 16.43
         },
-        "Nodes": 426,
-        "JSEventListeners": 299,
+        "Nodes": 427,
+        "JSEventListeners": 331,
         "Frames": 1
       },
-      "framesFired": 23398,
-      "framesPerSecond": 258.3,
+      "framesFired": 1252,
+      "framesPerSecond": 13.8,
       "open": {
-        "t": 1785999920726,
-        "scheduled": 86244,
-        "fired": 86217,
-        "pending": 1,
+        "t": 1786004690209,
+        "scheduled": 3157,
+        "fired": 3139,
+        "pending": 0,
         "frozen": {
           "raf": false,
           "animations": true,
@@ -948,49 +904,41 @@
         "sampleEvery": 60,
         "sites": [
           {
-            "site": "at u (http://tauri.localhost/assets/index-ChKtRjUA.js:16:405006)",
-            "count": 1351
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134)",
+            "count": 52
           },
           {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756)",
-            "count": 84
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:478358)",
-            "count": 2
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756) <- at Object.wake (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421224) <- at Bo (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421642)",
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134) <- at Object.wake (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421602) <- at Bo (http://tauri.localhost/assets/index-ChwU3Fby.js:16:422020)",
             "count": 1
           }
         ],
         "liveIntervals": 5,
         "intervalSites": [
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 14400000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 14400000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:588000 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 5000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:588378 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 5000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:477490 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 1000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:477868 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 1000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 1500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 1500ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:7910 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 2500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:7908 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 2500ms",
             "count": 1
           }
         ],
         "pendingTimeouts": 0,
         "timeoutSites": [
           {
-            "site": "at ResizeObserver.<anonymous> (http://tauri.localhost/assets/lenis-C7bIl90M.js:1:988)  after 250ms",
+            "site": "at Mx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:113651) <- at Xx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:125032) <- at MessagePort.X (http://tauri.localhost/assets/index-ChwU3Fby.js:2:10707)  after 206.89999999850988ms",
             "count": 1
           }
         ],
@@ -1004,10 +952,10 @@
         "refusedSites": []
       },
       "close": {
-        "t": 1786000011317,
-        "scheduled": 109645,
-        "fired": 109615,
-        "pending": 1,
+        "t": 1786004780755,
+        "scheduled": 4414,
+        "fired": 4391,
+        "pending": 0,
         "frozen": {
           "raf": false,
           "animations": true,
@@ -1016,49 +964,41 @@
         "sampleEvery": 60,
         "sites": [
           {
-            "site": "at u (http://tauri.localhost/assets/index-ChKtRjUA.js:16:405006)",
-            "count": 1732
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134)",
+            "count": 73
           },
           {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756)",
-            "count": 93
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:478358)",
-            "count": 2
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756) <- at Object.wake (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421224) <- at Bo (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421642)",
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134) <- at Object.wake (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421602) <- at Bo (http://tauri.localhost/assets/index-ChwU3Fby.js:16:422020)",
             "count": 1
           }
         ],
         "liveIntervals": 5,
         "intervalSites": [
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 14400000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 14400000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:588000 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 5000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:588378 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 5000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:477490 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 1000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:477868 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 1000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 1500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 1500ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:7910 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 2500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:7908 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 2500ms",
             "count": 1
           }
         ],
         "pendingTimeouts": 0,
         "timeoutSites": [
           {
-            "site": "at ResizeObserver.<anonymous> (http://tauri.localhost/assets/lenis-C7bIl90M.js:1:988)  after 250ms",
+            "site": "at Mx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:113651) <- at Xx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:125032) <- at MessagePort.X (http://tauri.localhost/assets/index-ChwU3Fby.js:2:10707)  after 206.89999999850988ms",
             "count": 1
           }
         ],
@@ -1074,57 +1014,57 @@
     },
     "rafFrozen": {
       "label": "raf-frozen",
-      "note": "1 armed frame(s) cancelled",
+      "note": "0 armed frame(s) cancelled",
       "cpu": {
         "label": "raf-frozen",
         "seconds": 90.6,
-        "processorSeconds": 2.75,
-        "percentOfOneCore": 3.035,
+        "processorSeconds": 2.563,
+        "percentOfOneCore": 2.829,
         "perProcess": [
           {
-            "id": 4784,
+            "id": 18864,
             "name": "msedgewebview2",
-            "processorSeconds": 0.922,
-            "percentOfOneCore": 1.017
+            "processorSeconds": 0.719,
+            "percentOfOneCore": 0.793
           },
           {
-            "id": 1580,
+            "id": 15156,
             "name": "msedgewebview2",
-            "processorSeconds": 0.484,
-            "percentOfOneCore": 0.535
+            "processorSeconds": 0.531,
+            "percentOfOneCore": 0.586
           },
           {
-            "id": 9160,
+            "id": 20280,
+            "name": "msedgewebview2",
+            "processorSeconds": 0.516,
+            "percentOfOneCore": 0.569
+          },
+          {
+            "id": 6880,
             "name": "compy",
-            "processorSeconds": 0.453,
-            "percentOfOneCore": 0.5
-          },
-          {
-            "id": 20016,
-            "name": "msedgewebview2",
-            "processorSeconds": 0.375,
-            "percentOfOneCore": 0.414
-          },
-          {
-            "id": 4792,
-            "name": "msedgewebview2",
             "processorSeconds": 0.297,
             "percentOfOneCore": 0.328
           },
           {
-            "id": 14560,
+            "id": 17428,
             "name": "msedgewebview2",
-            "processorSeconds": 0.219,
-            "percentOfOneCore": 0.241
+            "processorSeconds": 0.281,
+            "percentOfOneCore": 0.31
           },
           {
-            "id": 15564,
+            "id": 18268,
             "name": "msedgewebview2",
-            "processorSeconds": 0,
-            "percentOfOneCore": 0
+            "processorSeconds": 0.203,
+            "percentOfOneCore": 0.224
           },
           {
-            "id": 19020,
+            "id": 19016,
+            "name": "msedgewebview2",
+            "processorSeconds": 0.016,
+            "percentOfOneCore": 0.017
+          },
+          {
+            "id": 16124,
             "name": "msedgewebview2",
             "processorSeconds": 0,
             "percentOfOneCore": 0
@@ -1133,47 +1073,47 @@
       },
       "renderer": {
         "TaskDuration": {
-          "seconds": 0.242,
-          "percentOfOneCore": 0.267
+          "seconds": 0.282,
+          "percentOfOneCore": 0.311
         },
         "ScriptDuration": {
-          "seconds": 0.121,
-          "percentOfOneCore": 0.134
+          "seconds": 0.131,
+          "percentOfOneCore": 0.145
         },
         "LayoutDuration": {
-          "seconds": 0.012,
-          "percentOfOneCore": 0.013
+          "seconds": 0.013,
+          "percentOfOneCore": 0.015
         },
         "RecalcStyleDuration": {
-          "seconds": 0,
-          "percentOfOneCore": 0
+          "seconds": 0.001,
+          "percentOfOneCore": 0.001
         },
         "ThreadTime": {
-          "seconds": 0.232,
-          "percentOfOneCore": 0.256
+          "seconds": 0.263,
+          "percentOfOneCore": 0.29
         },
         "ProcessTime": {
-          "seconds": 0.325,
-          "percentOfOneCore": 0.358
+          "seconds": 0.385,
+          "percentOfOneCore": 0.425
         },
         "LayoutCount": {
-          "total": 97,
-          "perSecond": 1.07
+          "total": 108,
+          "perSecond": 1.19
         },
         "RecalcStyleCount": {
-          "total": 4,
-          "perSecond": 0.04
+          "total": 8,
+          "perSecond": 0.09
         },
-        "Nodes": 426,
-        "JSEventListeners": 572,
+        "Nodes": 427,
+        "JSEventListeners": 370,
         "Frames": 1
       },
       "framesFired": 0,
       "framesPerSecond": 0,
       "open": {
-        "t": 1786000014330,
-        "scheduled": 109645,
-        "fired": 109615,
+        "t": 1786004783759,
+        "scheduled": 4414,
+        "fired": 4391,
         "pending": 0,
         "frozen": {
           "raf": true,
@@ -1183,49 +1123,41 @@
         "sampleEvery": 60,
         "sites": [
           {
-            "site": "at u (http://tauri.localhost/assets/index-ChKtRjUA.js:16:405006)",
-            "count": 1732
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134)",
+            "count": 73
           },
           {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756)",
-            "count": 93
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:478358)",
-            "count": 2
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756) <- at Object.wake (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421224) <- at Bo (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421642)",
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134) <- at Object.wake (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421602) <- at Bo (http://tauri.localhost/assets/index-ChwU3Fby.js:16:422020)",
             "count": 1
           }
         ],
         "liveIntervals": 5,
         "intervalSites": [
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 14400000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 14400000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:588000 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 5000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:588378 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 5000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:477490 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 1000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:477868 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 1000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 1500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 1500ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:7910 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 2500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:7908 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 2500ms",
             "count": 1
           }
         ],
         "pendingTimeouts": 0,
         "timeoutSites": [
           {
-            "site": "at ResizeObserver.<anonymous> (http://tauri.localhost/assets/lenis-C7bIl90M.js:1:988)  after 250ms",
+            "site": "at Mx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:113651) <- at Xx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:125032) <- at MessagePort.X (http://tauri.localhost/assets/index-ChwU3Fby.js:2:10707)  after 206.89999999850988ms",
             "count": 1
           }
         ],
@@ -1239,9 +1171,9 @@
         "refusedSites": []
       },
       "close": {
-        "t": 1786000104939,
-        "scheduled": 109645,
-        "fired": 109615,
+        "t": 1786004874367,
+        "scheduled": 4414,
+        "fired": 4391,
         "pending": 0,
         "frozen": {
           "raf": true,
@@ -1251,49 +1183,41 @@
         "sampleEvery": 60,
         "sites": [
           {
-            "site": "at u (http://tauri.localhost/assets/index-ChKtRjUA.js:16:405006)",
-            "count": 1732
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134)",
+            "count": 73
           },
           {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756)",
-            "count": 93
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:478358)",
-            "count": 2
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756) <- at Object.wake (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421224) <- at Bo (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421642)",
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134) <- at Object.wake (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421602) <- at Bo (http://tauri.localhost/assets/index-ChwU3Fby.js:16:422020)",
             "count": 1
           }
         ],
         "liveIntervals": 5,
         "intervalSites": [
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 14400000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 14400000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:588000 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 5000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:588378 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 5000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:477490 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 1000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:477868 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 1000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 1500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 1500ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:7910 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 2500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:7908 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 2500ms",
             "count": 1
           }
         ],
         "pendingTimeouts": 0,
         "timeoutSites": [
           {
-            "site": "at ResizeObserver.<anonymous> (http://tauri.localhost/assets/lenis-C7bIl90M.js:1:988)  after 250ms",
+            "site": "at Mx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:113651) <- at Xx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:125032) <- at MessagePort.X (http://tauri.localhost/assets/index-ChwU3Fby.js:2:10707)  after 206.89999999850988ms",
             "count": 1
           }
         ],
@@ -1306,7 +1230,7 @@
         },
         "refusedSites": [
           {
-            "site": "raf: at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756) <- at Object.wake (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421224) <- at e.t (http://tauri.localhost/assets/index-ChKtRjUA.js:16:424686)",
+            "site": "raf: at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134) <- at Object.wake (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421602) <- at e.t (http://tauri.localhost/assets/index-ChwU3Fby.js:16:425064)",
             "count": 1
           }
         ]
@@ -1318,53 +1242,53 @@
       "cpu": {
         "label": "timers-frozen",
         "seconds": 90.6,
-        "processorSeconds": 1.406,
-        "percentOfOneCore": 1.552,
+        "processorSeconds": 2.015,
+        "percentOfOneCore": 2.224,
         "perProcess": [
           {
-            "id": 9160,
+            "id": 18864,
+            "name": "msedgewebview2",
+            "processorSeconds": 0.625,
+            "percentOfOneCore": 0.69
+          },
+          {
+            "id": 15156,
+            "name": "msedgewebview2",
+            "processorSeconds": 0.609,
+            "percentOfOneCore": 0.672
+          },
+          {
+            "id": 6880,
             "name": "compy",
-            "processorSeconds": 0.422,
-            "percentOfOneCore": 0.466
+            "processorSeconds": 0.328,
+            "percentOfOneCore": 0.362
           },
           {
-            "id": 4784,
+            "id": 17428,
             "name": "msedgewebview2",
-            "processorSeconds": 0.391,
-            "percentOfOneCore": 0.431
+            "processorSeconds": 0.234,
+            "percentOfOneCore": 0.259
           },
           {
-            "id": 1580,
+            "id": 18268,
             "name": "msedgewebview2",
-            "processorSeconds": 0.359,
-            "percentOfOneCore": 0.397
+            "processorSeconds": 0.219,
+            "percentOfOneCore": 0.241
           },
           {
-            "id": 14560,
-            "name": "msedgewebview2",
-            "processorSeconds": 0.125,
-            "percentOfOneCore": 0.138
-          },
-          {
-            "id": 20016,
-            "name": "msedgewebview2",
-            "processorSeconds": 0.109,
-            "percentOfOneCore": 0.121
-          },
-          {
-            "id": 4792,
+            "id": 16124,
             "name": "msedgewebview2",
             "processorSeconds": 0,
             "percentOfOneCore": 0
           },
           {
-            "id": 15564,
+            "id": 19016,
             "name": "msedgewebview2",
             "processorSeconds": 0,
             "percentOfOneCore": 0
           },
           {
-            "id": 19020,
+            "id": 20280,
             "name": "msedgewebview2",
             "processorSeconds": 0,
             "percentOfOneCore": 0
@@ -1390,7 +1314,7 @@
         },
         "ThreadTime": {
           "seconds": 0.001,
-          "percentOfOneCore": 0.001
+          "percentOfOneCore": 0.002
         },
         "ProcessTime": {
           "seconds": 0.003,
@@ -1404,16 +1328,16 @@
           "total": 0,
           "perSecond": 0
         },
-        "Nodes": 426,
-        "JSEventListeners": 572,
+        "Nodes": 427,
+        "JSEventListeners": 370,
         "Frames": 1
       },
       "framesFired": 0,
       "framesPerSecond": 0,
       "open": {
-        "t": 1786000106953,
-        "scheduled": 109645,
-        "fired": 109615,
+        "t": 1786004876372,
+        "scheduled": 4414,
+        "fired": 4391,
         "pending": 0,
         "frozen": {
           "raf": true,
@@ -1423,49 +1347,41 @@
         "sampleEvery": 60,
         "sites": [
           {
-            "site": "at u (http://tauri.localhost/assets/index-ChKtRjUA.js:16:405006)",
-            "count": 1732
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134)",
+            "count": 73
           },
           {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756)",
-            "count": 93
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:478358)",
-            "count": 2
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756) <- at Object.wake (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421224) <- at Bo (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421642)",
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134) <- at Object.wake (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421602) <- at Bo (http://tauri.localhost/assets/index-ChwU3Fby.js:16:422020)",
             "count": 1
           }
         ],
         "liveIntervals": 0,
         "intervalSites": [
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 14400000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 14400000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:588000 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 5000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:588378 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 5000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:477490 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 1000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:477868 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 1000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 1500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 1500ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:7910 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 2500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:7908 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 2500ms",
             "count": 1
           }
         ],
         "pendingTimeouts": 0,
         "timeoutSites": [
           {
-            "site": "at ResizeObserver.<anonymous> (http://tauri.localhost/assets/lenis-C7bIl90M.js:1:988)  after 250ms",
+            "site": "at Mx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:113651) <- at Xx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:125032) <- at MessagePort.X (http://tauri.localhost/assets/index-ChwU3Fby.js:2:10707)  after 206.89999999850988ms",
             "count": 1
           }
         ],
@@ -1478,15 +1394,15 @@
         },
         "refusedSites": [
           {
-            "site": "raf: at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756) <- at Object.wake (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421224) <- at e.t (http://tauri.localhost/assets/index-ChKtRjUA.js:16:424686)",
+            "site": "raf: at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134) <- at Object.wake (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421602) <- at e.t (http://tauri.localhost/assets/index-ChwU3Fby.js:16:425064)",
             "count": 1
           }
         ]
       },
       "close": {
-        "t": 1786000197555,
-        "scheduled": 109645,
-        "fired": 109615,
+        "t": 1786004966991,
+        "scheduled": 4414,
+        "fired": 4391,
         "pending": 0,
         "frozen": {
           "raf": true,
@@ -1496,49 +1412,41 @@
         "sampleEvery": 60,
         "sites": [
           {
-            "site": "at u (http://tauri.localhost/assets/index-ChKtRjUA.js:16:405006)",
-            "count": 1732
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134)",
+            "count": 73
           },
           {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756)",
-            "count": 93
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:478358)",
-            "count": 2
-          },
-          {
-            "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756) <- at Object.wake (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421224) <- at Bo (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421642)",
+            "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134) <- at Object.wake (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421602) <- at Bo (http://tauri.localhost/assets/index-ChwU3Fby.js:16:422020)",
             "count": 1
           }
         ],
         "liveIntervals": 0,
         "intervalSites": [
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 14400000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 14400000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:588000 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 5000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:588378 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 5000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:477490 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 1000ms",
+            "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:477868 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 1000ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 1500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 1500ms",
             "count": 1
           },
           {
-            "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:7910 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 2500ms",
+            "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:7908 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 2500ms",
             "count": 1
           }
         ],
         "pendingTimeouts": 0,
         "timeoutSites": [
           {
-            "site": "at ResizeObserver.<anonymous> (http://tauri.localhost/assets/lenis-C7bIl90M.js:1:988)  after 250ms",
+            "site": "at Mx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:113651) <- at Xx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:125032) <- at MessagePort.X (http://tauri.localhost/assets/index-ChwU3Fby.js:2:10707)  after 206.89999999850988ms",
             "count": 1
           }
         ],
@@ -1551,7 +1459,7 @@
         },
         "refusedSites": [
           {
-            "site": "raf: at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756) <- at Object.wake (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421224) <- at e.t (http://tauri.localhost/assets/index-ChKtRjUA.js:16:424686)",
+            "site": "raf: at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134) <- at Object.wake (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421602) <- at e.t (http://tauri.localhost/assets/index-ChwU3Fby.js:16:425064)",
             "count": 1
           }
         ]
@@ -1559,11 +1467,11 @@
     }
   },
   "raf": {
-    "concurrentLoopsAtRest": 1,
-    "framesFiredRunning": 24419,
-    "callbacksPerSecond": 269.8,
-    "impliedRefreshHz": 269.8,
-    "armedAtFreeze": 1,
+    "concurrentLoopsAtRest": 0,
+    "framesFiredRunning": 720,
+    "callbacksPerSecond": 7.9,
+    "impliedRefreshHz": null,
+    "armedAtFreeze": 0,
     "firedAfterFreeze": 0
   },
   "animations": {
@@ -1578,9 +1486,9 @@
       {
         "target": "h1",
         "name": "v2-foil-pan",
-        "playState": "running",
-        "duration": 14000,
-        "iterations": null
+        "playState": "finished",
+        "duration": 1600,
+        "iterations": 1
       }
     ],
     "cancelled": 0,
@@ -1601,65 +1509,55 @@
   "sites": {
     "raf": [
       {
-        "site": "at u (http://tauri.localhost/assets/index-ChKtRjUA.js:16:405006)",
-        "count": 562,
-        "source": "!1}function mG({wrapperRef:t,contentRef:e}){return w.useEffect(()=>{const a=t.current,i=e.current;if(!a||!i)return;let o=!1,c=null,d=0;const u=p=>{c?.raf(p),d=requestAnimationFrame(u)},m=()=>{document.hidden?(cancelAnimationFrame(d),d=0,c?.stop()):c&&!d&&(c.start(),d=requestAnimationFrame(u))};return(async()=>{try{cons"
+        "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134)",
+        "count": 35,
+        "source": "n k(N){var M=t()-o,_=N===!0,C,A,T,E;if((M>e||M<0)&&(i+=M-a),o+=M,T=o-i,C=T-d,(C>0||_)&&(E=++y.frame,v=T-y.time*1e3,y.time=T=T/1e3,d+=C+(C>=c?4:c-C),A=1),_||(m=p(k)),A)for(x=0;x<u.length;x++)u[x](T,v,E,N)};return y={time:0,frame:0,tick:function(){S(!0)},deltaRatio:function(N){return v/(1e3/(N||60))},wake:function(){r1&&"
       },
       {
-        "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756)",
-        "count": 51,
-        "source": "n k(N){var M=t()-o,_=N===!0,C,A,T,E;if((M>e||M<0)&&(i+=M-a),o+=M,T=o-i,C=T-d,(C>0||_)&&(E=++y.frame,v=T-y.time*1e3,y.time=T=T/1e3,d+=C+(C>=c?4:c-C),A=1),_||(m=p(k)),A)for(x=0;x<u.length;x++)u[x](T,v,E,N)};return y={time:0,frame:0,tick:function(){S(!0)},deltaRatio:function(N){return v/(1e3/(N||60))},wake:function(){i1&&"
-      },
-      {
-        "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:420756) <- at Object.wake (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421224) <- at Bo (http://tauri.localhost/assets/index-ChKtRjUA.js:16:421642)",
+        "site": "at k (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421134) <- at Object.wake (http://tauri.localhost/assets/index-ChwU3Fby.js:16:421602) <- at Bo (http://tauri.localhost/assets/index-ChwU3Fby.js:16:422020)",
         "count": 1,
-        "source": "n k(N){var M=t()-o,_=N===!0,C,A,T,E;if((M>e||M<0)&&(i+=M-a),o+=M,T=o-i,C=T-d,(C>0||_)&&(E=++y.frame,v=T-y.time*1e3,y.time=T=T/1e3,d+=C+(C>=c?4:c-C),A=1),_||(m=p(k)),A)for(x=0;x<u.length;x++)u[x](T,v,E,N)};return y={time:0,frame:0,tick:function(){S(!0)},deltaRatio:function(N){return v/(1e3/(N||60))},wake:function(){i1&&"
-      },
-      {
-        "site": "at k (http://tauri.localhost/assets/index-ChKtRjUA.js:16:478358)",
-        "count": 1,
-        "source": "rn;let p=0,f=0,y=0,v=0,x=0,S=!1;const k=()=>{p+=(y-p)*.35,f+=(v-f)*.35,m.style.transform=`translate(${p}px, ${f}px) translate(-50%, -50%) scale(${S?1.7:1})`,x=requestAnimationFrame(k)};let N=!1;const M=P=>{const L=u.getBoundingClientRect();y=P.clientX-L.left,v=P.clientY-L.top;const D=P.target instanceof Element&&!!P.ta"
+        "source": "n k(N){var M=t()-o,_=N===!0,C,A,T,E;if((M>e||M<0)&&(i+=M-a),o+=M,T=o-i,C=T-d,(C>0||_)&&(E=++y.frame,v=T-y.time*1e3,y.time=T=T/1e3,d+=C+(C>=c?4:c-C),A=1),_||(m=p(k)),A)for(x=0;x<u.length;x++)u[x](T,v,E,N)};return y={time:0,frame:0,tick:function(){S(!0)},deltaRatio:function(N){return v/(1e3/(N||60))},wake:function(){r1&&"
       }
     ],
     "intervals": [
       {
-        "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 14400000ms",
+        "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:396238 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 14400000ms",
         "count": 1,
-        "source": "current=!0,()=>{f.current=!1;const A=u.current;u.current=null,S(A)}),[S]),w.useEffect(()=>JI(()=>c(Fg())),[]),w.useEffect(()=>{if(!o)return;N();const A=window.setInterval(()=>{N()},eG);return()=>window.clearInterval(A)},[o,N]);const M=w.useCallback(()=>{N()},[N]);w.useEffect(()=>{const A=()=>{N()};return window.addEven"
+        "source": "current=!0,()=>{f.current=!1;const A=u.current;u.current=null,S(A)}),[S]),w.useEffect(()=>eG(()=>c(Fg())),[]),w.useEffect(()=>{if(!o)return;N();const A=window.setInterval(()=>{N()},tG);return()=>window.clearInterval(A)},[o,N]);const M=w.useCallback(()=>{N()},[N]);w.useEffect(()=>{const A=()=>{N()};return window.addEven"
       },
       {
-        "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:588000 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 5000ms",
+        "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:588378 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 5000ms",
         "count": 1,
         "source": "ll)),U(\"get_memory_pressure\").then(Zt=>!ke&&X(Zt?{used:Zt.used_bytes,total:Zt.total_bytes,level:Zt.level}:null)).catch(()=>!ke&&X(null))};it();const Qt=window.setInterval(it,5e3);return()=>{ke=!0,window.clearInterval(Qt)}},[H]);const K=Wo(),[J,oe]=w.useState(null);w.useEffect(()=>{if(!K){oe(null);return}let ke=!0;retur"
       },
       {
-        "site": "at http://tauri.localhost/assets/index-ChKtRjUA.js:16:477490 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChKtRjUA.js:9:108536)  every 1000ms",
+        "site": "at http://tauri.localhost/assets/index-ChwU3Fby.js:16:477868 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Sx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:108536)  every 1000ms",
         "count": 1,
-        "source": "eturn new Date().toLocaleTimeString([],{hour12:!1})}function EH({rig:t}){const[e,a]=w.useState(Rf),i=ia();w.useEffect(()=>{if(!i)return;a(Rf());const c=window.setInterval(()=>a(Rf()),1e3);return()=>window.clearInterval(c)},[i]);const o=[t,e].filter(Boolean);return n.jsxs(\"div\",{className:\"hud-frame\",\"aria-hidden\":\"true"
+        "source": "eturn new Date().toLocaleTimeString([],{hour12:!1})}function OH({rig:t}){const[e,a]=w.useState(Rf),i=ia();w.useEffect(()=>{if(!i)return;a(Rf());const c=window.setInterval(()=>a(Rf()),1e3);return()=>window.clearInterval(c)},[i]);const o=[t,e].filter(Boolean);return n.jsxs(\"div\",{className:\"hud-frame\",\"aria-hidden\":\"true"
       },
       {
-        "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 1500ms",
+        "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:6803 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 1500ms",
         "count": 1,
-        "source": "t[T,b]=h.useState(null);h.useEffect(()=>{if(!R)return;let g=!1;const F=()=>{wt(\"get_fps_status\").then(Y=>!g&&C(!!Y?.active)).catch(()=>{})};F();const k=window.setInterval(F,1500);return()=>{g=!0,window.clearInterval(k)}},[R]);const G=h.useMemo(()=>new Set(c.map(g=>g.kind)),[c]),O=h.useMemo(()=>S.filter(g=>g.detected||!"
+        "source": "t[E,b]=h.useState(null);h.useEffect(()=>{if(!R)return;let P=!1;const _=()=>{wt(\"get_fps_status\").then(G=>!P&&B(!!G?.active)).catch(()=>{})};_();const V=window.setInterval(_,1500);return()=>{P=!0,window.clearInterval(V)}},[R]);const j=h.useMemo(()=>new Set(c.map(P=>P.kind)),[c]),I=h.useMemo(()=>g.filter(P=>P.detected||!"
       },
       {
-        "site": "at http://tauri.localhost/assets/RigHologram-Bv2i2Wtk.js:404:7910 <- at xl (http://tauri.localhost/assets/index-ChKtRjUA.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChKtRjUA.js:9:109483)  every 2500ms",
+        "site": "at http://tauri.localhost/assets/RigHologram-D9vGhWS0.js:404:7908 <- at xl (http://tauri.localhost/assets/index-ChwU3Fby.js:9:93232) <- at Xr (http://tauri.localhost/assets/index-ChwU3Fby.js:9:109483)  every 2500ms",
         "count": 1,
-        "source": "e}]:[]]}})},[c,u]);h.useEffect(()=>{if(w||!R)return;let g=!1;const F=()=>{wt(\"get_fan_sensors\").then(Y=>!g&&b(ee=>Yn(ee,Y))).catch(()=>{})};F();const k=window.setInterval(F,2500);return()=>{g=!0,window.clearInterval(k)}},[w,R]);const I=h.useMemo(()=>T&&T.length>0?T.map((g,F)=>({id:`fan-${F}`,label:g.label,rpm:g.rpm,det"
+        "source": "ote}]:[]]}})},[c,u]);h.useEffect(()=>{if(M||!R)return;let P=!1;const _=()=>{wt(\"get_fan_sensors\").then(G=>!P&&b(q=>Yn(q,G))).catch(()=>{})};_();const V=window.setInterval(_,2500);return()=>{P=!0,window.clearInterval(V)}},[M,R]);const N=h.useMemo(()=>E&&E.length>0?E.map((P,_)=>({id:`fan-${_}`,label:P.label,rpm:P.rpm,det"
       }
     ],
     "timeouts": [
       {
-        "site": "at ResizeObserver.<anonymous> (http://tauri.localhost/assets/lenis-C7bIl90M.js:1:988)  after 250ms",
+        "site": "at Mx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:113651) <- at Xx (http://tauri.localhost/assets/index-ChwU3Fby.js:9:125032) <- at MessagePort.X (http://tauri.localhost/assets/index-ChwU3Fby.js:2:10707)  after 206.89999999850988ms",
         "count": 1,
-        "source": "erp=i,this.duration=s,this.easing=o,this.currentTime=0,this.isRunning=!0,l?.(),this.onUpdate=h}};function C(t,e){let i;return function(...s){clearTimeout(i),i=setTimeout(()=>{i=void 0,t.apply(this,s)},e)}}var X=class{width=0;height=0;scrollHeight=0;scrollWidth=0;debouncedResize;wrapperResizeObserver;contentResizeObserv"
+        "source": "break;case 3:case 5:break;default:throw Error(i(329))}if((r&62914560)===r&&(g=Ld+300-Ie(),10<g)){if(ei(h,r,Yn,!Xs),Tt(h,0,!0)!==0)break e;ks=r,h.timeoutHandle=lk(Lx.bind(null,h,l,Mn,Ed,pp,r,Yn,qi,Jr,Xs,b,\"Throttled\",-0,0),g);break e}Lx(h,l,Mn,Ed,pp,r,Yn,qi,Jr,Xs,b,null,-0,0)}}break}while(!0);Ia(s)}function Lx(s,r,l,h,g"
       }
     ]
   },
   "observerCost": {
-    "bareIdlePercentOfOneCore": 50.165,
-    "observedPercentOfOneCore": 49.3,
-    "overheadPoints": -0.865,
+    "bareIdlePercentOfOneCore": 23.348,
+    "observedPercentOfOneCore": 11.694,
+    "overheadPoints": -11.654,
     "note": "bare = docs/perf/raw/idle-bare.json, measured with no CDP port and no trap."
   }
 }

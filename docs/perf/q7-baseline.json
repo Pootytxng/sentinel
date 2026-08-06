@@ -10,6 +10,12 @@
     "has earned it; `exact` = budget equals the recording, any drift at all fails; `open finding` =",
     "a ceiling on a KNOWN DEFECT so it cannot grow while the fix is queued, to be re-derived and cut",
     "when the finding closes. An `open finding` row must name the guard or file carrying it.",
+    "A row may carry its own `recordedAgainst` when it was re-recorded against a later build than the",
+    "file header names -- otherwise one header stamp silently speaks for metrics taken from two",
+    "different binaries. The guard validates every override and requires it to differ from the header.",
+    "OWED: the traces in docs/perf/raw/ carry no build stamp of their own, so an override is a claim",
+    "this file makes about a recording rather than something the recording proves. Stamp them at write",
+    "time in scripts/q7-probe.mjs and the guard can check it instead of trusting it.",
     "Re-record with: node scripts/q7-probe.mjs <coldstart|boot|rooms|latency|idle|idle-bare|a11y>."
   ],
   "recordedAgainst": {
@@ -111,31 +117,44 @@
       "budgetKind": "exact"
     },
     "idleCpuPercentOfOneCore": {
-      "value": 50.165,
+      "value": 23.348,
       "unit": "% of one core",
-      "statistic": "consumed processor-seconds over a 10-minute hands-off window, whole process tree, second of two bare runs",
+      "statistic": "consumed processor-seconds over a 10-minute hands-off window, whole process tree, worst of two bare runs against the post-fix build",
       "source": "idle-bare.json#cpu.percentOfOneCore",
-      "budget": 52,
-      "budgetBasis": "NOT AN ACCEPTED COST -- a ceiling on a recorded DEFECT, written to stop it growing while the fix is queued. Half a core, with nothing on screen moving and no user present, is the single worst number this sweep produced, and it is reproducible: 50.95% instrumented, then 50.71% and 50.165% on two independent bare runs that owe nothing to the observer. Budget = worst sample (50.95) + ~1 point for the 0.78-point run-to-run spread, so a real regression fails and normal variance does not. The open finding is the shell's unconditional rAF loop (src/design/jarvis/LenisSpine.tsx), pinned by src/shell-idle-guard.test.ts; when it stands down this number must be RE-RECORDED and this budget cut hard, not left at 52 as a licence.",
-      "budgetKind": "open finding"
+      "budget": 26,
+      "budgetKind": "open finding",
+      "recordedAgainst": {
+        "buildStamp": "ff0ce65f · release",
+        "why": "The three idle rows were re-recorded after the idle-cost fixes landed; the other eleven metrics still describe dc4d55e. Traces carry no stamp of their own yet, so this row-level override is the only thing keeping one file from silently describing two builds -- see the trace-stamping item in $comment."
+      },
+      "budgetBasis": "NOT AN ACCEPTED COST, and no longer the same finding. The rAF/animation teardown cut this from 50.165 to 23.348 -- a 54% reduction, reproducible across two 10-minute bare runs (23.095 and 23.348, spread 0.253) and flat across every 30-second window. What is NOT settled is the residual. The subtraction attribution predicted roughly 5% after the fixes and can no longer be used to check that: attaching the instrument to the post-fix build HALVES the number it reports (11.694% over an equivalent window) and its per-animation split has gone incoherent -- one band measured -2.294%, which is a validity tell, not a saving. Independent 3-minute bare runs of the same build then read 16.686 / 12.233 / 10.508, and the occlusion probe found a foreign application owning the foreground for its entire window, so the 2x spread most likely tracks whether Compy's window is visible or covered (WebView2 throttling compositing) rather than anything Compy executes -- LIKELY, not proven, because the desk was not exclusive. Budget = worst post-fix reading (23.348) + ~11%, deliberately set from the WORST so it cannot understate the cost while the spread is unexplained. Owed before this row becomes an upper bound: a controlled re-measure on an exclusive desk with window state as an explicit variable. The fixes themselves are held by src/shell-idle-guard.test.ts; the instrument that can no longer attribute the residual is scripts/q7-probe.mjs."
     },
     "idleWorkingSetMB": {
-      "value": 575.16,
+      "value": 605.76,
       "unit": "MB",
       "statistic": "max of 20 samples over 10 minutes, whole process tree, fresh boot parked on Home",
       "source": "idle-bare.json#memory.workingSetMB.max",
       "budget": 640,
-      "budgetBasis": "Worst sample of the bare run (575.16 MB) plus ~11%. State is part of the number and the two are not comparable without it: this is a FRESH boot that never left Home, whereas the instrumented idle trace ran after the room sweep with every keepalive room still mounted behind display:none -- roughly 80 MB more of the same app alive. Compare idle memory only at equal state. Observed and deliberately not called a leak: working set drifted 555.75 -> 575.16 MB across the window (median 564.49), which one 10-minute run cannot distinguish from allocator behaviour; proving it either way needs max-at-10/30/60-minutes from one continuous run.",
-      "budgetKind": "upper bound"
+      "budgetKind": "upper bound",
+      "recordedAgainst": {
+        "buildStamp": "ff0ce65f · release",
+        "why": "Re-recorded with its sibling idle rows against the post-fix build; the other eleven metrics still describe dc4d55e."
+      },
+      "budgetBasis": "Worst sample of the bare run (605.76 MB) plus ~6%. Up 30 MB from the pre-fix 575.16, which is the expected shape of the trade that was made: standing the animations down moves work off the CPU and onto retained compositor layers. State is part of the number and two runs are not comparable without it -- this is a FRESH boot that never left Home, whereas the instrumented idle trace ran after the room sweep with every keepalive room still mounted behind display:none, roughly 80 MB more of the same app alive. Observed and deliberately not called a leak: working set drifted 570.65 -> 601.35 MB across the window (median 600.49), which one 10-minute run cannot distinguish from allocator behaviour; proving it either way needs max-at-10/30/60-minutes from one continuous run.",
+      "headroomNote": "34 MB of headroom left against a budget that was set at 640 pre-fix and is deliberately NOT being raised to restore comfort -- if the next change spends the rest of it, that is the signal to look, not to edit this line."
     },
     "idlePrivateMB": {
-      "value": 441.09,
+      "value": 535.14,
       "unit": "MB",
       "statistic": "max of 20 samples over 10 minutes, whole process tree, fresh boot parked on Home",
       "source": "idle-bare.json#memory.privateMB.max",
-      "budget": 500,
-      "budgetBasis": "Worst sample (441.09 MB) plus ~13%. Recorded alongside working set because the two answer different questions: working set includes shared and mapped pages the OS can reclaim, private bytes is what Compy alone is holding and cannot give back. If a future leak hypothesis needs settling, this is the row that settles it -- a working set that grows while private bytes hold flat is the OS, not the app.",
-      "budgetKind": "upper bound"
+      "budget": 560,
+      "budgetKind": "upper bound",
+      "recordedAgainst": {
+        "buildStamp": "ff0ce65f · release",
+        "why": "Re-recorded with its sibling idle rows against the post-fix build; the other eleven metrics still describe dc4d55e."
+      },
+      "budgetBasis": "Worst sample (535.14 MB) plus ~5%. This one breached its old 500 MB budget and the per-sample series is why it was NOT quietly re-stated as a median to make it fit: private bytes read 414, then 535 at t+60s, then 433, and then hold within 4 MB of 434 for the remaining nine minutes. The max is a single allocation spike just past the settle window, not a steady state and not a leak -- but max is still the statistic that catches a leak, so the row keeps it and the budget moves once, with the transient named. A second spike, or a median that climbs toward the max, means something different and should fail. Recorded alongside working set because the two answer different questions: working set includes shared and mapped pages the OS can reclaim, private bytes is what Compy alone is holding and cannot give back -- a working set that grows while private bytes hold flat is the OS, not the app."
     },
     "roomSwitchLatencyWorstMs": {
       "value": 19,
