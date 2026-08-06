@@ -11,7 +11,7 @@
 | Skill | Fires when | Cheapest executor | Notes |
 |---|---|---|---|
 | `self-review` | any UI change about to be claimed done/fixed/ready | dispatcher: any · worker: **sonnet** (pinned) | Verdict block = the license. Never review inline (token law: evidence stays in worker context). |
-| `impeccable` | building / critiquing / polishing frontend UI | main agent; its `scripts/` do the heavy lift | 26 subcommands, anti-pattern detector wired as PostToolUse hook via settings.local.json. |
+| `impeccable` | building / critiquing / polishing frontend UI | main agent; its `scripts/` do the heavy lift | 28 subcommands (`reference/*.md`), anti-pattern detector wired as PostToolUse hook via settings.local.json. **Owns motion too** — `reference/animate.md`. Vendored third-party (v3.9.1, Apache 2.0, `npx impeccable`): do NOT hand-edit, re-vendor. |
 | `hygiene` | "maintenance" / "cleanup" / stale-state or bloat suspicion | main agent (script does the lift) | `scripts/repo-hygiene.ps1` + doc-budget gate; PROCESS-KILL SAFETY rule inside - read it before killing anything named claude. |
 | `compy-coverage-sweep` | expanding test coverage (test-only, never prod code) | orchestrator: any · crews: **sonnet** | Disjoint file domains, 3-ring verification gate. |
 | `mutation-gate` | ANY diff touching `actions.rs` / `history.rs`, gate flips, elevation | any (it's a checklist) · reviewer dispatch: **sonnet** | 10-item rollback-first contract + required dispatches. Highest-stakes surface in the repo. |
@@ -21,7 +21,23 @@
 | `doc-sync` | any state change; any two docs disagreeing | any | Precedence (RELEASE_STATE=state, CLAUDE.md=law, code>both) + same-commit ordering. |
 | `usage-audit` | owner asks about usage/tokens/budget; a 🔴 in `docs/usage-audit/LATEST.md` | layer 1: `node scripts/usage-audit.mjs` (no LLM) · layer 2: any (terse) | Session/token discipline meter. Weekly report auto-written by the `CompyUsageAudit` scheduled task (Mondays, zero tokens). |
 | `status` | "where are we" / "what's left" / "show me" / end of any train | dispatcher: any · doc reads: **sonnet** | Added 2026-08-05: >50% of the owner's short messages are status questions and there was no surface for them. Reconstructs from git + the state docs; never answers from session memory. |
-| `motion-design` | choosing timing/easing/choreography for a specific animation | main agent (docs only, no scripts) | **VENDORED, third-party** — `LottieFiles/motion-design-skill` (MIT), pinned in `skills-lock.json`; restore with `npx skills install`. Do NOT hand-edit — re-vendor instead. **Routing vs `impeccable`:** `impeccable` owns the interface (does this UI work?); `motion-design` owns how a motion *feels* once you've decided to build it. If both could fire, start with `impeccable`. Relevant because `gsap`/`motion` are already deps and `docs/UI_VISION_BACKLOG.md` still has 🔴 OPEN motion items. |
+
+### Evaluated and rejected — do not re-add without reading this
+
+- **`LottieFiles/motion-design-skill`** (MIT, docs-only) — added 2026-08-05 (`23c30e8d`), **voided the
+  same day**. Not rejected for quality; rejected because it **contradicts `impeccable` on hard rules**
+  and two loaded skills issuing conflicting CRITICAL directives is worse than either alone. The
+  conflicts: (a) `impeccable/reference/animate.md` bans bounce/elastic easing as dated, motion-design
+  prescribes `ease-out-back` + 10–20% overshoot for its Playful/Joy archetypes; (b) `impeccable` warns
+  on animation fatigue and cutting decorative motion, motion-design mandates "always three motion
+  layers" including an ambient one — wrong for a dense telemetry dashboard. `impeccable` also wins on
+  two things motion-design's SKILL.md never covers at all: `prefers-reduced-motion` and GPU/layout
+  performance discipline. And it is **wired to a live PostToolUse hook**, so it is mechanical, not
+  prose (`~/.claude/CLAUDE.md` §6). What was genuinely better in motion-design — distance-scaled
+  duration, stagger budgets, the 1/3 choreography rules, material-based easing — was **not preserved**;
+  it is theory no open Compy item is blocked on, and a doc to hold it is exactly the bloat TOKEN LAW
+  targets. If a 🔴 UI_VISION_BACKLOG motion item ever needs it, it is one command away:
+  `npx skills add LottieFiles/motion-design-skill`.
 
 **Subagent routing (condensed):** haiku = mechanical search/read/format · sonnet = research/verify/
 audit/review (the default worker — CC pins it via `settings.json` `CLAUDE_CODE_SUBAGENT_MODEL`) ·
