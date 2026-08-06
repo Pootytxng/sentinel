@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   readHud,
-  readLabGround,
   readHomeConsole,
   readHomeIntake,
   readMonitorConsole,
@@ -26,19 +25,8 @@ export function useHudFlag(): boolean {
   return on;
 }
 
-// The Lab proving-ground flag as live React state (same contract as useHudFlag: the Settings
-// toggle fires compy:lab-ground-changed so consumers re-render without a reload). App owns the
-// tab/rail swap; RoomShell uses this for the ground-aware forward door (home's door points at
-// the Lab when the standalone Optimize room is gone from the rail).
-export function useLabGroundFlag(): boolean {
-  const [on, setOn] = useState(readLabGround);
-  useEffect(() => {
-    const sync = () => setOn(readLabGround());
-    window.addEventListener("compy:lab-ground-changed", sync);
-    return () => window.removeEventListener("compy:lab-ground-changed", sync);
-  }, []);
-  return on;
-}
+// `useLabGroundFlag` was RETIRED in the 2026-08-06 generation prune with `compy_lab_ground` itself:
+// the proving-ground rail is the only rail, so RoomShell's forward door passes ground literally.
 
 // The Home console cold-open flag as live React state (plan 2026-07-10-console-hud-phase2-home,
 // same contract as useHudFlag: the Settings toggle fires compy:home-console-changed so HomeRoom

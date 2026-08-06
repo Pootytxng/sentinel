@@ -7,9 +7,8 @@ import type { PriorityItem } from "../../types";
 import type { RigLine } from "../../Onboarding";
 import { Wordmark } from "../../design/Wordmark";
 import { NavGlyph } from "../../design/NavGlyph";
-import { HOME_RAIL, railFor, type HomeRailId } from "../../design/homeRail";
-import { readOptimizeMerged } from "../../data/nav-flags";
-import { readSetupStepper, readLabGround } from "../../design/theme";
+import { HOME_RAIL, type HomeRailId } from "../../design/homeRail";
+import { readSetupStepper } from "../../design/theme";
 import { StepIndicator, StepConnector } from "../../design/vendor/Stepper/Stepper";
 import { TrustSwitch } from "../../design/TrustSwitch";
 import { useConfirm } from "../../design/ConfirmDialog";
@@ -42,19 +41,13 @@ const HardwareTourScene = lazy(() =>
 
 export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[]; onDone: () => void }) {
   const { t } = useTranslation();
-  // The tour follows the rail the user actually has (P6 §4 alignment): ground (the default) = the
-  // four-room proving-ground rail; merged = the five-room journey recap; the compy_optimize="0"
-  // escape hatch keeps the classic six-room tour.
-  const merged = useMemo(() => readOptimizeMerged(), []);
-  const ground = useMemo(() => readLabGround(), []);
-  const steps = useMemo(() => buildSetupSteps(buildRigParts(hw), merged, ground), [hw, merged, ground]);
-  // The room that holds the ledger, named by its CURRENT rail label ("Lab" on the proving-ground
-  // rail — its Optimize station owns the toggles + ledger; "Optimize" merged / "Tune" classic) —
-  // so the seatbelt step never names a tab the rail doesn't show.
-  const fixLabel = useMemo(
-    () => (ground ? "Lab" : railFor(merged).find((r) => r.id === "fix")!.label),
-    [merged, ground],
-  );
+  // The tour follows the rail the user actually has (P6 §4 alignment). The `compy_optimize` and
+  // `compy_lab_ground` flags were retired in the 2026-08-06 generation prune — the four-room
+  // proving-ground rail is the only rail, so both arguments are literal `true` now.
+  const steps = useMemo(() => buildSetupSteps(buildRigParts(hw), true, true), [hw]);
+  // The room that holds the ledger, named by its rail label: the Lab, whose Optimize station owns
+  // the toggles + ledger — so the seatbelt step never names a tab the rail doesn't show.
+  const fixLabel = "Lab";
   const [i, setI] = useState(0);
   const step = steps[i];
   const reduced = useReducedMotion();

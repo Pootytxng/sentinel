@@ -96,6 +96,10 @@
   `scripts/branch-disposition-audit.mjs`.
 - [ ] **P2 product completion:** owner-accepted canonical Lab + reversible generation pruning →
   first-win action/rollback/proof journey → Consumer/Technical/Support evidence exports.
+  **Generation pruning DONE 2026-08-06** — 29 unreachable files / ~2,578 lines deleted (two Lab faces,
+  three Optimize faces, `CompyHero`, `nav-flags.ts`, the `design/qpw` components, `Gallery`, a second
+  `Sparkline`, vendored `MagicBento`); recurrence mechanised by `src/reachability-guard.test.ts`.
+  Remaining under P2: the first-win journey and the evidence exports.
 - [x] **Ledger-completeness honesty class — last known open instance CLOSED (found 2026-08-05 during
   the Home train's completeness-critic sweep, fixed the same day, issue #70).** The Lab Optimize
   station's "Applied & history — **every change, undoable**" summary vouched for a set Compy may
@@ -1076,8 +1080,9 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] per-tweak audit trail — `Fix.tsx:423`
 - [x] ledger filter "this rig only" — History checkbox, rendered only when some entry is KNOWN to be from other hardware; hides exactly those (legacy unstamped rows never hidden); hidden count named — `2f5b675`
 - [x] measured-payoff linkage — per-tweak honest payoff meter: `payoff_label_from_action` (history.rs) names the KIND of gain (input latency / background CPU&RAM / network / power&thermal / …), never a fabricated number; rendered as a quiet advisory chip on active + history ledger rows (Fix.tsx)
-- [x] pre-room intent router — the Lab's symptom router ("What are you here to do?", shipped 2026-07-05
-  via `compy_lab_guided`) covers IN-Lab wayfinding; the remaining gap is the **pre-room-selection entry
+- [x] pre-room intent router — the Lab's symptom router ("What are you here to do?", shipped 2026-07-05;
+  its `compy_lab_guided` flag was retired in the 2026-08-06 generation prune — the router is now
+  unconditional, `LabConsole.tsx:17` ← `lab-guided-data.ts`) covers IN-Lab wayfinding; the remaining gap is the **pre-room-selection entry
   point**: a first-class "what brought you here today?" entry on Home routing to Monitor / Blackbook / Lab by
   intent, so a non-technical user never has to know which room owns their problem. Scope ONLY that entry
   gap — don't rebuild the in-Lab router. Provenance: panel-review brief 2026-07-15 §4.2.

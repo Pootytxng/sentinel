@@ -154,6 +154,16 @@ the Lab overhaul, not a cleanup sweep. Net actionable: one archivable pair (`Com
 deletable file (`Optimize.tsx`, better folded into retiring the whole `Optimize` tab), two dead JSX
 mount sites, and **one owner fork: `GpuProfile.tsx`** (346 lines, fully tested, zero non-test
 importers — wire it in as advisory, or archive it).
+**✅ (c) EXECUTED 2026-08-06 — 29 files deleted, ~2,578 lines.** Beyond the inventory's shortlist, a
+reachability walk from `src/main.tsx` (static *and* `React.lazy` edges) found the whole retired stack
+unreachable: `Lab.tsx` · `LabV2.tsx` · `LabBento.tsx` · `Optimize.tsx` · `OptimizeV2.tsx` + their CSS
+and tests, `CompyHero`, `src/data/nav-flags.ts`, the `design/qpw` component layer (its *token* layer
+stays — `ExperimentBench.css` cites it), `design/Gallery.tsx`, `design/console/Sparkline.tsx` and the
+vendored `MagicBento`. `LabGround` untouched as directed. **The recurrence is now mechanised:**
+`src/reachability-guard.test.ts` fails the build on any unreachable module, so a losing face dies with
+its flag instead of lingering two redesigns. `GpuProfile.tsx` remains the owner fork (B_gpu), exempted
+with a written reason rather than deleted. This is invisible in the UI by design — it is the
+prerequisite that makes "change the Lab" an unambiguous instruction before the calm-default pass.
 
 **Execution lane:** direction + audit = this file; the redesign build itself = CC/Fable lane per
 the owner's standing preference (Cowork steers + audits, doesn't blueprint final creative).

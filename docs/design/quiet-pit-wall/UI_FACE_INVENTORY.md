@@ -5,6 +5,11 @@ Nothing here is deleted or disabled. This document names, for each room, the **o
 surface** the Quiet Pit Wall rebuild targets and the faces that retire *after* parity and installed
 approval — never before.
 
+> **⚠️ POINT-IN-TIME — the retirements below HAPPENED (2026-08-06 generation prune).** `LabV2`,
+> `LabBento`, `OptimizeV2`, `Lab.tsx`, `Optimize.tsx`, `CompyHero`, `src/data/nav-flags.ts` and the
+> `design/qpw` component layer are deleted; the flag census and the branch tables below describe the
+> pre-prune tree. Current face truth = the code, guarded by `src/reachability-guard.test.ts`.
+
 ## How faces are chosen at runtime
 
 There is no central route table. Each room has an **entry component that reads flags and branches**:

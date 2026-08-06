@@ -6,7 +6,7 @@
 // never weakens minisign verification, which stays mandatory on every install path.
 //
 // Default ON: only an explicit "0" disables, matching the guarded-localStorage convention in
-// src/data/nav-flags.ts. A bare localStorage read in a render body is banned (devtools-blocked or
+// src/design/theme.ts. A bare localStorage read in a render body is banned (devtools-blocked or
 // privacy-mode storage throws), so every access here is wrapped.
 
 export const AUTO_UPDATE_CHECK_KEY = "compy_update_autocheck";

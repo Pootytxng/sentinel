@@ -6,8 +6,8 @@ import { readFileSync, existsSync } from "fs";
 // WHY THIS EXISTS — a signal that reads TRUE while the user sees nothing:
 //
 //   `hidden-poll-guard.test.ts` covers the WINDOW being hidden. This covers the other axis, and the
-//   two are not interchangeable. App.tsx keeps Optimize MOUNTED behind `display: none` for the rest
-//   of the session — a deliberate perf win, but it means "unmounted" stopped being the signal a
+//   two are not interchangeable. App.tsx kept Optimize MOUNTED behind `display: none` for the rest
+//   of the session — a deliberate perf win, but it meant "unmounted" stopped being the signal a
 //   room-scoped timer could rely on. A component in a hidden room still has running effects, and
 //   `useDocumentVisible` reads TRUE the whole time, because the window is perfectly visible.
 //
@@ -26,12 +26,23 @@ import { readFileSync, existsSync } from "fs";
 // never the weak part, the corpus is. A new timer inside the keepalive is in scope the moment it is
 // imported, with no list to remember to update.
 //
-// SCOPE, stated honestly: the import closure OVER-approximates the render closure. Optimize imports
+// SCOPE, stated honestly: the import closure OVER-approximates the render closure. Optimize imported
 // app-wide chrome (HudFrame, LenisSpine, use-update) for types and hooks, but ShellV2 renders those
-// ONCE, above the room switch — never inside the hidden div. Those are exempt on the merits below,
-// each with its render site named. And this is a FILE-level check, not an AST one: it proves the
+// ONCE, above the room switch — never inside the hidden div. Those were exempt on the merits (the
+// retired reasons are kept below). And this is a FILE-level check, not an AST one: it proves the
 // signals are wired into a timer-owning file, not that the gate landed on the right effect. Cheap
 // and robust beats clever and brittle, and it catches the failure that actually happened.
+//
+// DORMANT BUT ARMED (2026-08-06 generation prune). App.tsx renders NO keepalive room today: both
+// roots were Optimize faces, and both were deleted with the dead generations — Optimize's live home
+// is `lab/OptimizeStation` inside LabGround, an ordinary mounted child. So the closure walk has
+// nothing to walk, and the population this guard governs is legitimately empty.
+//
+// It is kept, not deleted, because the FAILURE it describes is a property of the idiom, not of
+// Optimize: the day someone hides a room behind display:none again, every timer inside it goes on
+// running invisibly. The two tests that still bite unconditionally — "nobody hand-rolls a keepalive"
+// and "the signals it points at are the real ones" — are what keep the idiom honest in the meantime;
+// the closure tests re-arm the moment a root is added back to KEEPALIVE_ROOTS.
 //
 // Paths are repo-root-relative; vitest runs from the repo root (scripts/run-vitest.mjs).
 
@@ -39,8 +50,9 @@ const WINDOW_SIGNAL = "useDocumentVisible";
 const ROOM_SIGNAL = "useRoomActive";
 
 // The rooms App.tsx keeps warm instead of unmounting. Kept in step with the real call sites by the
-// count assertion below: a third `<KeepaliveRoom>` fails this guard until its root is declared here.
-const KEEPALIVE_ROOTS = ["src/surfaces/Optimize.tsx", "src/surfaces/OptimizeV2.tsx"];
+// count assertion below: a `<KeepaliveRoom>` fails this guard until its root is declared here.
+// EMPTY since 2026-08-06 — see the dormant-but-armed note above.
+const KEEPALIVE_ROOTS: string[] = [];
 
 // A timer, of either kind. `setInterval` survives `display: none` outright; `requestAnimationFrame`
 // keeps firing too while the WINDOW is visible, because rAF is document-scoped, not element-scoped.
@@ -50,31 +62,36 @@ const TIMER = /\bsetInterval\s*\(|\brequestAnimationFrame\s*\(/;
 
 // Exemptions carry a REASON, never a bare path — an unexplained exemption is how a guard rots into
 // a formality. Every one of these is a refusal on the merits, with its render site named.
-const EXEMPT: Record<string, string> = {
-  "src/design/console/HudFrame.tsx":
-    "App-wide chrome. Rendered ONLY at ShellV2.tsx:233, above the room switch — never inside the " +
-    "hidden div. Reachable here because Optimize imports it for types/hooks. Its 1Hz clock already " +
-    "gates on useDocumentVisible (75ce9b3); a room signal would be meaningless for a frame that " +
-    "belongs to no room.",
-  "src/design/jarvis/LenisSpine.tsx":
-    "App-wide scroll spine. Rendered ONLY at ShellV2.tsx:231, above the room switch. Its rAF loop " +
-    "is the shell's, not a room's — so the ROOM axis this guard enforces genuinely does not apply. " +
-    "The third axis ('is anyone interacting?') is enforced by src/shell-idle-guard.test.ts, which " +
-    "pins the interaction stand-down this file gained on 2026-08-06: the loop parks a second after " +
-    "the lane stops moving and re-arms on input.",
-  "src/design/use-update.ts":
-    "App-wide update hook, single instance: called ONLY by UpdatePill.tsx:14, rendered at " +
-    "ShellV2.tsx:205. update-prefs.ts:18 documents that a second instance is forbidden. Its recheck " +
-    "timer is session-scoped, deliberately independent of which room is on screen.",
-  "src/design/console/ReticleCursor.tsx":
-    "rAF loop, pointer-driven: it starts on pointer-enter and stops on pointer-leave, so a room " +
-    "nobody is pointing at costs nothing. Rendered at ShellV2.tsx:234 (app-wide) and in the Home, " +
-    "Lab and Monitor consoles — none of which sit inside a keepalive room.",
-  "src/design/vendor/DecryptedText/DecryptedText.tsx":
-    "Genuinely inside the keepalive (OptimizeV2 renders it), but self-terminating: the interval is " +
-    "gated on isAnimating, clears itself when the decode completes, and a decode-once registry " +
-    "stops it re-running. It is a one-shot reveal, not a loop — there is nothing to stand down.",
-};
+//
+// EMPTY since the 2026-08-06 prune, because an exemption from an empty closure is meaningless — and
+// the stale-exemption test below would (correctly) fail on every one of them. The five retired
+// reasons are kept VERBATIM here so the next keepalive inherits the reasoning instead of re-deriving
+// it; move the ones that still apply back into EXEMPT when a root returns.
+//
+//   src/design/console/HudFrame.tsx
+//     App-wide chrome. Rendered ONLY at ShellV2.tsx:233, above the room switch — never inside the
+//     hidden div. Reachable here because Optimize imports it for types/hooks. Its 1Hz clock already
+//     gates on useDocumentVisible (75ce9b3); a room signal would be meaningless for a frame that
+//     belongs to no room.
+//   src/design/jarvis/LenisSpine.tsx
+//     App-wide scroll spine. Rendered ONLY at ShellV2.tsx:231, above the room switch. Its rAF loop
+//     is the shell's, not a room's — so the ROOM axis this guard enforces genuinely does not apply.
+//     The third axis ('is anyone interacting?') is enforced by src/shell-idle-guard.test.ts, which
+//     pins the interaction stand-down this file gained on 2026-08-06: the loop parks a second after
+//     the lane stops moving and re-arms on input.
+//   src/design/use-update.ts
+//     App-wide update hook, single instance: called ONLY by UpdatePill.tsx:14, rendered at
+//     ShellV2.tsx:205. update-prefs.ts:18 documents that a second instance is forbidden. Its recheck
+//     timer is session-scoped, deliberately independent of which room is on screen.
+//   src/design/console/ReticleCursor.tsx
+//     rAF loop, pointer-driven: it starts on pointer-enter and stops on pointer-leave, so a room
+//     nobody is pointing at costs nothing. Rendered at ShellV2.tsx:234 (app-wide) and in the Home,
+//     Lab and Monitor consoles — none of which sit inside a keepalive room.
+//   src/design/vendor/DecryptedText/DecryptedText.tsx
+//     Was genuinely inside the keepalive (OptimizeV2 rendered it), but self-terminating: the
+//     interval is gated on isAnimating, clears itself when the decode completes, and a decode-once
+//     registry stops it re-running. It is a one-shot reveal, not a loop — nothing to stand down.
+const EXEMPT: Record<string, string> = {};
 
 // ── Corpus: the transitive import closure of the keepalive rooms ─────────────────────────────────
 
@@ -126,11 +143,18 @@ describe("keepalive-idle guard", () => {
   it("still reaches the keepalive rooms at all (the corpus is the weak part)", () => {
     // A moved root or a broken resolver would silently empty the closure and turn every assertion
     // below into a no-op. Pin the floor: the walk found 60 modules on 2026-08-04.
+    //
+    // Conditional since the 2026-08-06 prune ONLY because there are no roots to walk — an empty
+    // KEEPALIVE_ROOTS is a fact about App.tsx, not a broken resolver, and the count test below is
+    // what proves that (it fails the moment App.tsx renders a keepalive this list doesn't know).
+    // The floors are unchanged and re-arm with the first root.
     for (const root of KEEPALIVE_ROOTS) {
       expect(existsSync(root), `${root} is gone — update KEEPALIVE_ROOTS`).toBe(true);
     }
-    expect(closure().length).toBeGreaterThanOrEqual(50);
-    expect(timerModules().length).toBeGreaterThanOrEqual(6);
+    if (KEEPALIVE_ROOTS.length) {
+      expect(closure().length).toBeGreaterThanOrEqual(50);
+      expect(timerModules().length).toBeGreaterThanOrEqual(6);
+    }
   });
 
   it("every timer reachable from a keepalive room stands down when it can't be seen", () => {

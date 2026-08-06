@@ -138,6 +138,21 @@
   padding: 16px 20px 18px;
 }
 
+/* ── Rehomed from the deleted Lab.css (dead-generation prune) ──────────────────────────────────
+   `.lab-card` / `.lab-card-body` were styled by Lab.css, which only reached the browser as a SIDE
+   EFFECT of App.tsx statically importing the (unreachable) Lab.tsx. LabConsole renders both class
+   names, so deleting that file would have silently unclipped the detail panel's rounded corners and
+   dropped its header hairline. These are the ONLY two declarations Lab.css actually won at default
+   flags — its background/border/border-radius lost to dashboard-skin.css `[data-dash-v2="on"]`, and
+   its body padding lost to the rule directly above — so moving anything else would be cargo-cult.
+   Scoped under [data-v2="on"] like every other selector in this file (tokens-v2-guard.test.ts). */
+:root[data-v2="on"] .lab-card {
+  overflow: hidden;
+}
+:root[data-v2="on"] .lab-card-body {
+  border-top: 1px solid var(--ix-glass-border);
+}
+
 /* ── Task 5: the console comes ALIVE — cursor-follow accent spotlight + staggered mount reveal ──
    ALL gated under .lab-console[data-motion="full"]; the reduced branch (data-motion="reduced") simply
    never matches, so it stays a flat static console (no explicit disable needed). The reticle Target

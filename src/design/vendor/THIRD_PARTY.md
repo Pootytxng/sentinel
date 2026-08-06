@@ -23,18 +23,23 @@ the `main` branch.
 | CountUp | TextAnimations/CountUp | Stat values land with weight — measured values only | LF-normalized, header added |
 | ElectricBorder | Animations/ElectricBorder | ONE sanctioned use: hologram hero stage frame | LF-normalized, header added |
 | SpotlightCard | Components/SpotlightCard | Hover treatment, priority/finding cards | LF-normalized, header added |
-| MagicBento | Components/MagicBento | Home stats bento rhythm; **Lab checkup bento** (`LabBento.tsx`, spec 2026-07-05-lab-bento-checkup) | LF-normalized, header added; **`ParticleCard` exported** so LabBento composes real station cards from the interaction primitive (theme-accent glow, tilt/magnetism off, reduced-motion gated) instead of duplicating it |
 | Stepper | Components/Stepper | Setup & Tour footer progress — numbered indicators + animated connectors + check marks (`compy_setup_stepper`, DEFAULT OFF; vendored 2026-07-05, round-2 pass) | LF-normalized, header added; **StepIndicator/StepConnector exported** (SetupTour composes the indicator row without the demo container); **status colors moved from the motion variants into token-driven CSS** (`data-status`; vendor purple can never paint, test-pinned); `reduced` prop zeroes every animation duration (reduced-motion gate) |
 
 > **Dead-code sweep 2026-07-13:** 7 never-adopted React Bits dirs removed (0 importers, grep-verified) —
 > **Radar, DotField, Grainient, Noise, GlareHover, GooeyNav, PillNav**. Their table rows + the vendor-time
 > rationale below are dropped with them. **Follow-up (not done here):** `ogl` was pulled ONLY by Radar +
 > Grainient (both now gone) → it is likely an orphaned npm dependency; verify no other importer, then drop
-> it from `package.json` in a dedicated dep-prune pass. `gsap` (still used by MagicBento) and `motion`
-> (DecryptedText/CountUp) remain in use.
+> it from `package.json` in a dedicated dep-prune pass. `motion` (DecryptedText/CountUp) remains in use.
 
-Runtime deps these components pull (all free, MIT-family, added in V2-1): `gsap`
-(MagicBento), `motion` (DecryptedText, CountUp). (`ogl` — see the sweep note above.)
+> **Generation prune 2026-08-06:** **MagicBento** removed — `LabBento.tsx` was its last importer and went
+> with the dead Lab/Optimize generations (Optimize's live home is `lab/OptimizeStation` inside `LabGround`).
+> Its table row is dropped with it. **`gsap` STAYS in `package.json`** — it is no longer a vendor dep at all
+> but a first-party one: `design/console/ArcGauge.tsx` (the Lab console's corner arc gauges),
+> `design/jarvis/MagneticLayer.tsx`, and `surfaces/lab/use-count-to.ts` all import it directly. A dep-prune
+> that drops `gsap` on the strength of the older note above breaks the Lab console.
+
+Runtime deps these components pull (all free, MIT-family, added in V2-1): `motion`
+(DecryptedText, CountUp). (`gsap` and `ogl` — see the sweep notes above.)
 
 ## threejs-holographic-material — github.com/ektogamat/threejs-holographic-material
 
