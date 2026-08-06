@@ -38,6 +38,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { WINDOW_PROBE_EXPRESSION, pickMainTarget } from "./lib/tauri-window-pick.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const EXE = join(process.env.LOCALAPPDATA ?? "", "Compy", "compy.exe");
@@ -198,35 +199,27 @@ async function targets(port) {
 }
 
 /**
- * Pick the MAIN window. Same scoring as e2e-updater-probe.mjs, and for the same reason: Settings
- * REPLACES ShellV2, so a `.v2-shell`-only test falls through to the overlay HUD.
+ * Attach to the MAIN window — identified by its Tauri label, never by what it happens to be
+ * rendering. See scripts/lib/tauri-window-pick.mjs for why the old content heuristic picked the
+ * overlay at cold start and what that cost.
  */
 async function attachMain(port) {
-  const pages = (await targets(port)).filter((t) => t.type === "page");
-  if (!pages.length) throw new Error(`no page targets on port ${port}`);
-  let best = null;
-  let bestScore = -1;
-  for (const p of pages) {
-    let s;
-    try {
-      s = await open(p);
-      const probe = await s.call("Runtime.evaluate", {
-        expression: `({ shell: !!document.querySelector(".v2-shell"), buttons: document.querySelectorAll("button").length })`,
-        returnByValue: true,
-      });
-      const v = probe.result?.value ?? {};
-      const score = (v.shell ? 100000 : 0) + (v.buttons ?? 0);
-      if (score > bestScore) {
-        bestScore = score;
-        if (best) best.close();
-        best = s;
-      } else s.close();
-    } catch {
-      s?.close();
-    }
-  }
-  if (!best) throw new Error("no reachable main window");
-  return best;
+  const { target } = await pickMainTarget({
+    listTargets: async () => (await targets(port)).filter((t) => t.type === "page"),
+    probeTarget: async (t) => {
+      const s = await open(t);
+      try {
+        const probe = await s.call("Runtime.evaluate", {
+          expression: WINDOW_PROBE_EXPRESSION,
+          returnByValue: true,
+        });
+        return probe.result?.value ?? null;
+      } finally {
+        s.close();
+      }
+    },
+  });
+  return open(target);
 }
 
 async function evaluate(session, expression, awaitPromise = true) {
