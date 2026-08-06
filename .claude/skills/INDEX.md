@@ -39,6 +39,20 @@
   targets. If a 🔴 UI_VISION_BACKLOG motion item ever needs it, it is one command away:
   `npx skills add LottieFiles/motion-design-skill`.
 
+- **`CloudAI-X/threejs-skills`** (10 skills, docs-only, 2.9k stars) — evaluated 2026-08-05, **never
+  added**. Three independent blockers: (1) **Wrong paradigm.** All 11 three.js files in `src/` are
+  React Three Fiber declarative (`<Canvas>`, `useFrame`, `@react-three/drei`,
+  `@react-three/postprocessing`); all 10 skills are vanilla imperative with **zero** R3F mentions —
+  `document.body.appendChild(renderer.domElement)`, manual `requestAnimationFrame` loops,
+  `three/addons/postprocessing/EffectComposer.js`. (2) **Teaches a pattern the build bans.**
+  `src/idle-motion-guard.test.ts` fails on a `<Canvas>` mounted without `frameloop` (r3f defaults to
+  `"always"` = repaints forever); the skill's Quick Start is exactly that unconditional rAF loop. A
+  skill that generates code our own tests reject is worse than no skill. (3) **No license**
+  (`licenseInfo: null` = all rights reserved, no grant to vendor it), and its README's install command
+  points at `pinkforest/threejs-playground` — dead, different owner, `isFork: false`, attribution
+  stripped. Plus 10 more description lines on every session boot forever. **For R3F work use the
+  `context7` MCP** — current three.js/R3F docs on demand, correct version, zero boot cost.
+
 **Subagent routing (condensed):** haiku = mechanical search/read/format · sonnet = research/verify/
 audit/review (the default worker — CC pins it via `settings.json` `CLAUDE_CODE_SUBAGENT_MODEL`) ·
 opus = rare, judgment-heavy workers only · fable = never a subagent. Full table:
