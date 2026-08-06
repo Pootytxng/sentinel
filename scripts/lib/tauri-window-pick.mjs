@@ -70,6 +70,16 @@ export function scoreWindow(v) {
 const defaultSleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * How long the picker waits for the main window before giving up.
+ *
+ * EXPORTED because a caller that runs this probe under its own watchdog has to set that watchdog
+ * LONGER than this, or the two deadlines race and the probe's own error message is lost to a kill
+ * (scripts/runtime-proof-guard.test.mjs derives its capture timeout from this constant rather than
+ * hard-coding a number that would silently drift back into a tie).
+ */
+export const DEFAULT_PICK_TIMEOUT_MS = 20000;
+
+/**
  * Poll the target list until the main window identifies itself.
  *
  * Every dependency is injected so the guard can replay a cold start with no browser: pass a
@@ -85,7 +95,7 @@ const defaultSleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function pickMainTarget({
   listTargets,
   probeTarget,
-  timeoutMs = 20000,
+  timeoutMs = DEFAULT_PICK_TIMEOUT_MS,
   intervalMs = 250,
   now = () => Date.now(),
   sleep = defaultSleep,
