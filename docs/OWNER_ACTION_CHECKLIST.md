@@ -20,11 +20,25 @@
 
 ### A0. NEW 2026-07-23 — Live updater: key backup + the LAST manual send
 
-- ⏳ **Back up the updater signing key (2 minutes, genuinely important).** Copy
-  `C:\Users\Kuya\.tauri\compy-updater.key` (and `.key.pub`) somewhere private OFF this machine —
-  password-manager attachment or your personal cloud. **Lose it** → the fleet can never receive
-  another update (one-time re-send of new-key builds required). **Leak it** → whoever holds it can
-  push code to every install. Same custody class as the remote-rules key law.
+- ⏳ **Back up the updater signing key (2 minutes, genuinely important) — STILL OPEN, and here is the
+  correction, 2026-08-06.** You produced `C:\Users\Kuya\Desktop\COMPY KEY\` and called it *"the old
+  compy key."* Two things about that, both verified read-only (the private half was never opened):
+  - **It is not old — it is the LIVE key.** Its public half is byte-identical to
+    `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`, and its ID `43711DD10AAB67D7` is the
+    same fleet anchor pinned in `scripts/updater-trust-root-guard.test.mjs:23`. This is the key every
+    shipped Compy trusts. There is no second, newer key to go looking for.
+  - **A Desktop folder is not a backup.** It hashes identical to `C:\Users\Kuya\.tauri\compy-updater.key`
+    — same key, two copies, **same machine, same disk**. One failed drive still loses the fleet. This
+    item asks for a copy **off this machine** (password-manager attachment or your personal cloud), and
+    that has not happened yet. Moving it also *shrinks* the exposure: a Desktop folder is the first
+    place anything that ever runs on this PC looks.
+  **Lose it** → the fleet can never receive another update (one-time re-send of new-key builds
+  required). **Leak it** → whoever holds it can sign an update that Compy installs **silently on every
+  install**, because the updater has been live since 2026-07-22. That makes this the highest-consequence
+  secret in the project. Same custody class as the remote-rules key law.
+  Repo side is clean and now mechanically enforced: no key material has ever been committed on any
+  branch, and `scripts/secret-containment-guard.test.mjs` fails the build if key/`.env` patterns leave
+  `.gitignore` or if key material ever lands in the index. Nothing for you in that half.
 - ✅ **One-tester canary — PASS (recorded 2026-07-28).** A tester completed it through Compy's
   **normal public updater** and is **currently running v0.9.11**; **no updater failure was
   reported.** That is the entire record — their prior version, the exact timing, and any per-step
