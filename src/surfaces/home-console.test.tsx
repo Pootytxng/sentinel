@@ -240,6 +240,12 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
 });
 
 describe("HomeConsole — the console stage (hologram center + honest corner gauges)", () => {
+  // The lower two gauges (1% low, GPU temp) ride the flip side as of the calm-default pass — see
+  // home-console-calm-default-guard.test.tsx for WHICH readouts moved and why. Their honesty
+  // contract is unchanged and still has to hold, so these tests assert it where they now live:
+  // under expert view. The global beforeEach clears storage, so this must run after it.
+  beforeEach(() => localStorage.setItem("compy_expert_view", "1"));
+
   it("renders the recognizable rig hologram at center-stage", async () => {
     mount();
     const rig = await screen.findByTestId("rig-hologram");
@@ -401,6 +407,13 @@ const denseHw = {
 } as unknown as HardwareInfo;
 
 describe("HomeConsole — callout dense readouts (B6a: the hologram indexes the dense data)", () => {
+  // The dense record IS the enthusiast half — module timings, disk serials, driver builds — so the
+  // whole expansion affordance moved behind the flip side in the calm-default pass. The label stays
+  // on the default face; only the record moved. These tests therefore run under expert view, where
+  // the feature lives; that the default face has NO expandable callout is pinned in
+  // home-console-calm-default-guard.test.tsx.
+  beforeEach(() => localStorage.setItem("compy_expert_view", "1"));
+
   const gpuButton = (c: HTMLElement) =>
     Array.from(c.querySelectorAll<HTMLButtonElement>(".hc-callout-btn")).find((b) =>
       b.textContent?.includes("GPU"),
@@ -635,6 +648,10 @@ const block = (css: string, selector: string) => {
 describe("HomeConsole — 2D card viewport clears the always-present corner gauges (bug→guard)", () => {
   it("2D mode: the card path and all four corner gauges coexist in one stage (collision precondition)", () => {
     localStorage.setItem("compy_home_rig_3d", "0");
+    // The lower two gauges ride the flip side now, so the FOUR-gauge collision is an expert-view
+    // state. It is still a reachable state, so the CSS bound below still has to hold — the guard is
+    // kept at full strength rather than reduced to the two gauges the default face shows.
+    localStorage.setItem("compy_expert_view", "1");
     const stage = mount().container.querySelector(".hc-stage")!;
     // The 2D fallback renders the real HardwareGrid, not the 3D hologram…
     expect(stage.querySelector(".hc-stage-cards .grid")).not.toBeNull();
