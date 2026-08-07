@@ -4,50 +4,57 @@ name: CI
 # plus an informational dependency audit. Added 2026-06-26 in response to an external audit
 # that flagged the absence of CI as a drift risk.
 #
-# Cost note (ZERO-BUDGET LAW): the Rust job runs on windows-latest (2x minute multiplier) because
-# the crate pulls Windows-only deps (windows / winreg / wmi / ferrisetw / runas / adlx) and will not
-# compile elsewhere. The frontend job runs on ubuntu-latest (1x) to keep minutes down.
-# Triggers are scoped to main + PRs only (not every branch push). Caches keep re-runs cheap.
+# Cost note (ZERO-BUDGET LAW): the Rust job lives in ci-rust.yml because it runs on windows-latest
+# (2x multiplier) and the crate pulls Windows-only deps (windows / winreg / wmi / ferrisetw / runas /
+# adlx) that will not compile elsewhere. This workflow is ubuntu-latest (1x) only.
 #
 # ---------------------------------------------------------------------------------------------
-# 2026-08-01, measured: THIS WORKFLOW EXHAUSTED THE FREE ALLOWANCE AND STOPPED CI FOR 22 DAYS.
+# THIS WORKFLOW HAS EXHAUSTED THE FREE ALLOWANCE TWICE. 9 July, then again 7 August.
 #
-# July's actual usage, from GitHub's own metrics (1,650 raw minutes / 366 job runs):
+# July: 2,195 billed vs 2,000 included, and CI stayed dead for 22 days without anyone noticing,
+# because the failure did not look like one -- jobs were rejected before a runner was assigned
+# (zero steps, zero billable ms) and surfaced as red X's that no test had produced. The 2026-08-01
+# fixes moved the informational audit to audit.yml (645 min, the largest consumer) and stopped
+# docs-only commits from starting runners.
 #
-#   job                              runner    raw    x    BILLED
-#   Dependency audit (informational) ubuntu    645    1      645   <- moved to audit.yml, weekly
-#   Rust (test + clippy)             windows   545    2    1,090
-#   Frontend (test + build)          ubuntu    460    1      460
-#                                                          -----
-#                                                          2,195   vs 2,000 included
+# It walled again six days later, and the second measurement is why the shape below changed:
 #
-# It ran out on 9 July. Every run afterwards was rejected before a runner was assigned -- 7 seconds,
-# zero steps, zero billable ms -- which surfaces as three red X's on every PR that no test produced.
-# A dead gate that LOOKS like a failing gate is worse than an absent one, so the cost of this file
-# is now part of its contract and `scripts/ci-budget-guard.test.mjs` fails the build if it drifts.
+#   job                             runner    raw     x    BILLED   share
+#   Rust (test + clippy)            windows    506    2     1,012     62%
+#   Frontend (test + build)         ubuntu     583    1       583     36%
+#   health + audit + deploy         ubuntu      24    1        24      2%
+#                                                          -------
+#                                              1,619 in SEVEN DAYS   (>6,900/month projected)
 #
-# Fix 1 (here): 226 of July's 535 commits to main -- 42% -- touched ONLY docs and markdown. Those
-# cannot change what a test proves, so they no longer start runners.
-# Fix 2 (audit.yml): the informational audit was the largest single consumer and is
-# `continue-on-error`, so it can never fail a build. Weekly is enough for a dependency advisory.
+# The 2026-08-01 fixes were sound and were not the problem. Development velocity was: 593 commits
+# to main in 30 days, 91 CI runs in 7. No paths filter survives a 3.5x overrun, so the two structural
+# wastes had to go instead.
+#
+# Fix 3 (here): `push: main` is gone. 54 of those 91 runs -- 59% -- were pushes to main re-testing a
+# commit its own PR had tested minutes earlier, at full price, to produce an answer already known.
+# The PR is the gate; the merge is not a second event worth paying for.
+# Fix 4 (ci-rust.yml): only 58 of those 593 commits -- 9.8% -- touched src-tauri/ at all. The most
+# expensive job in the repository was running in full on every frontend and tooling commit. It is
+# now its own workflow, scoped to the paths that can actually change its answer.
+#
+# Projected after both: ~1,250 billed/month against 2,000. `scripts/ci-budget-guard.test.mjs` holds
+# the arithmetic and re-derives velocity from git history rather than trusting a constant -- the
+# previous projection stayed green through this entire overrun because it pinned the CONFIG and
+# assumed July's run count forever.
+#
+# The real gate is now `npm run verify`, which runs every one of these checks locally in ~3.5 min
+# (scripts/verify-like-ci.mjs). Hosted CI is the second opinion, not the safety net.
 # ---------------------------------------------------------------------------------------------
 
-# The two paths-ignore lists are written out twice on purpose. A YAML anchor/alias would be the
-# obvious de-duplication, but GitHub Actions' workflow parser does not support anchors, and a
-# workflow that silently fails to parse is precisely the invisible-outage failure this whole change
-# exists to prevent. ci-budget-guard.test.mjs asserts both blocks carry the list, so they cannot
-# drift apart unnoticed.
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "docs/**"
-      - "**.md"
   pull_request:
     branches: [main]
     paths-ignore:
       - "docs/**"
       - "**.md"
+  # Kept so a suspected outage, or a main that drifted from the PR that tested it, can be checked
+  # on demand instead of waiting for the next pull request.
+  workflow_dispatch:
 
 # Cancel superseded runs on the same ref to save minutes.
 concurrency:
@@ -58,26 +65,6 @@ permissions:
   contents: read
 
 jobs:
-  rust:
-    name: Rust (test + clippy)
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      # No explicit toolchain here on purpose: rustup on the runner reads rust-toolchain.toml, so CI
-      # and the owner's desk resolve the SAME channel and components from one file. Naming @stable
-      # here as well would be a second source of truth for the same fact, and the first time they
-      # disagreed the local release gate would silently be the weaker one — which is exactly what
-      # happened on 2026-08-01 (local 1.95 vs CI 1.97, two clippy lints apart).
-      - name: show the toolchain rust-toolchain.toml selected
-        run: rustc --version && cargo clippy --version
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-      - name: cargo test
-        run: cargo test --manifest-path src-tauri/Cargo.toml
-      - name: cargo clippy (deny warnings)
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-
   frontend:
     name: Frontend (test + build)
     runs-on: ubuntu-latest

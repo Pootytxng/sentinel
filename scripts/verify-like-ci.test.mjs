@@ -18,7 +18,11 @@ const key = (cmd, dir) => (dir ? `${cmd} @${dir}` : cmd);
     where the next one does. `working-directory:` only ever describes the step it sits in, so the
     boundary is what stops one step's directory from being read onto its neighbour. */
 function workflowSteps() {
-  const yml = readFileSync(join(repoRoot, ".github", "workflows", "ci.yml"), "utf8").split(/\r?\n/);
+  // Both halves of CI. The Rust job lives in its own workflow so it can be paths-scoped to
+  // src-tauri/ (it bills at 2x on Windows); `npm run verify` runs the union, because a developer
+  // running the gate before a push does not know yet which paths the diff will touch.
+  const yml = ["ci.yml", "ci-rust.yml"]
+    .flatMap((f) => readFileSync(join(repoRoot, ".github", "workflows", f), "utf8").split(/\r?\n/));
   const steps = [];
   for (const line of yml) {
     if (/^\s*- \S/.test(line)) steps.push([]);

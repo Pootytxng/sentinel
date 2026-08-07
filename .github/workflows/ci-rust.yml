@@ -1,0 +1,61 @@
+name: CI (Rust)
+
+# The Rust half of CI, separated from ci.yml on 2026-08-07 for one reason: cost.
+#
+# It runs on windows-latest at a 2x minute multiplier, because the crate pulls Windows-only deps
+# (windows / winreg / wmi / ferrisetw / runas / adlx) and will not compile anywhere else. That made
+# it 1,012 of the 1,619 minutes this repository billed in the first seven days of August — 62% of
+# the spend, and the largest single reason the free allowance ran out for the second time in a month.
+#
+# Only 58 of the 593 commits to main in the preceding 30 days touched src-tauri/ at all. The most
+# expensive job in the repository was running in full on frontend commits, tooling commits and
+# script commits that could not possibly change its answer. A job cannot be paths-scoped while it
+# shares a workflow with one that must run on everything, so it moved here.
+#
+# `scripts/ci-budget-guard.test.mjs` pins the trigger shape and the arithmetic. What it CANNOT pin
+# is that this file's paths list stays complete — see the note on it below, which is the one thing
+# a future reader has to get right by hand.
+
+on:
+  pull_request:
+    branches: [main]
+    # Everything that can change what cargo test / clippy prove, and nothing that cannot.
+    #
+    # ADDING A PATH IS CHEAP; OMITTING ONE IS A GREEN CHECK THAT PROVED NOTHING. If Rust code grows
+    # a new input — a workspace member outside src-tauri/, a build script reading a file elsewhere,
+    # a generated binding — it belongs in this list the same day. The budget guard asserts the four
+    # known inputs are present; it cannot know about a fifth that does not exist yet.
+    paths:
+      - "src-tauri/**"
+      - "rust-toolchain.toml"
+      - ".github/workflows/ci-rust.yml"
+      - "scripts/ci-budget-guard.test.mjs"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-rust-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust (test + clippy)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No explicit toolchain here on purpose: rustup on the runner reads rust-toolchain.toml, so CI
+      # and the owner's desk resolve the SAME channel and components from one file. Naming @stable
+      # here as well would be a second source of truth for the same fact, and the first time they
+      # disagreed the local release gate would silently be the weaker one — which is exactly what
+      # happened on 2026-08-01 (local 1.95 vs CI 1.97, two clippy lints apart).
+      - name: show the toolchain rust-toolchain.toml selected
+        run: rustc --version && cargo clippy --version
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: cargo test
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: cargo clippy (deny warnings)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
