@@ -11,6 +11,7 @@ $budgets = @{
   "docs/BRANCH_DISPOSITIONS.md" = 120
   "docs/RELEASE_AUTONOMY.md" = 120
   "docs/RELEASE_TRANSACTION.md" = 120
+  "docs/SESSION_HANDOFF.md" = 120
   # Tightened 400 -> 380 on 2026-08-04, when the module map's read-only half moved to
   # src-tauri/CLAUDE.md. Without the tightening the root just refills to 400 and the split bought
   # nothing; the banked headroom is what keeps the always-loaded doc smaller.
