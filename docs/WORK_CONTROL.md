@@ -55,16 +55,16 @@ Do not maintain a second status board in Markdown, chat, a VS Code note, or anot
 - **Codex** defaults to read-only audit, research, planning, and independent verification.
 - **Cowork** owns research, documents, copy, design judgment, and review unless a task explicitly
   gives it a bounded write scope.
-- **Kuya** owns gates, money, distribution, people, taste, security/system settings, secrets, and
-  irreversible choices.
+- **Kuya** owns gates, money, distribution, people, brand, security/system settings, secrets, and
+  irreversible choices. Aesthetic taste is not on that list — agents decide it and show him.
 
 A tool name is not an ownership claim. Ownership belongs to one issue and one bounded scope.
 
 ### What "gate" means (clarified 2026-08-03)
 
 A **gate** is a decision that reaches the outside world or cannot be walked back: publishing a
-release, spending money, granting access, handling secrets, changing system settings, and product
-or taste calls.
+release, spending money, granting access, handling secrets, changing system settings, and
+product-scope calls. **An aesthetic call is not a gate** — decide it, ship it, show a before/after.
 
 Routine Git operations are **not** gates. Committing, pushing a branch, opening a pull request, and
 merging a green PR into `main` are ordinary execution — reversible, and invisible to users until a

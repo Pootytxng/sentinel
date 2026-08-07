@@ -24,7 +24,8 @@
    **content exposure** (what the site shows off vs what stays app-exclusive — *samples, not free
    meals*; precedent: the full ~190-entry Blackbook was published as web pages, defeating its
    exclusivity). Convenes on every site/web train; advises with ONE named recommendation per fork.
-   Final taste sign-off remains owner territory.
+   Its aesthetic calls are **ours to make and ship** with a before/after (CLAUDE.md, "TASTE IS MINE
+   TO EXERCISE, HIS TO OVERRULE"); only the product name, logo and price presentation ask first.
 
 ## When the Council convenes
 
@@ -41,7 +42,7 @@
 ## Rules of order
 
 - Advises, never rules: doctrine laws, LOCKED gates, zero-budget law, and owner territory
-  (money/taste/people/irreversible) outrank any seat.
+  (money/brand/people/irreversible) outrank any seat. Aesthetic taste is NOT owner territory.
 - **Scope of "reversible PROCESS gate" the council may advise overriding (reconciles the COWORK_HANDOFF
   mandate-expansion):** internal/reversible process conventions only. **"Reversible" NEVER licenses
   crossing an outbound-network or security boundary.** The council may NOT self-authorize: arming

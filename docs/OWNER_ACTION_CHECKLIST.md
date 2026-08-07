@@ -314,8 +314,10 @@ These gate **public** release only (not the local app you use daily). Full list:
 ---
 
 ## §D — Taste / visual sign-offs (as they come up)
-Claude proceeds on tasteful polish autonomously and only flags genuine forks here — default theme,
-exact hexes, anything where your eye is the authority.
+**Nothing aesthetic is parked on you by default** (CLAUDE.md, "TASTE IS MINE TO EXERCISE, HIS TO
+OVERRULE"). Claude decides the look, ships it, and hands you a before/after to veto on sight. Only
+brand — the product name, logo, price presentation — and reversals of a call you already made land
+here as decisions.
 - ✅ **The title foil sweep now stops instead of looping forever — APPROVED 2026-08-06**, on a
   side-by-side before/after he watched run.  ·  PR [#76](https://github.com/Pootytxng/sentinel/pull/76)
   The shine that travels across the big room titles used to repaint that text on every single frame,
