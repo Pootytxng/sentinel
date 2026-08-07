@@ -50,7 +50,6 @@
       }
     },
     "callout": {
-      "detailsAria": "{{name}} details",
       "ram": "RAM",
       "ramBelowRated": "{{speed}} of {{rated}} MT/s — EXPO/XMP off in BIOS",
       "storage": "Storage",
@@ -66,6 +65,13 @@
       "cores": "cores",
       "clock": "clock",
       "slot": "slot {{n}}"
+    },
+    "specs": {
+      "eyebrow": "Detected",
+      "gpu": "Graphics",
+      "cpu": "Processor",
+      "ram": "Memory",
+      "storage": "Storage"
     },
     "stage": {
       "readinessLabel": "Readiness",
