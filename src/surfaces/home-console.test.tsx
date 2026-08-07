@@ -240,11 +240,9 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
 });
 
 describe("HomeConsole — the console stage (hologram center + honest corner gauges)", () => {
-  // The lower two gauges (1% low, GPU temp) ride the flip side as of the calm-default pass — see
-  // home-console-calm-default-guard.test.tsx for WHICH readouts moved and why. Their honesty
-  // contract is unchanged and still has to hold, so these tests assert it where they now live:
-  // under expert view. The global beforeEach clears storage, so this must run after it.
-  beforeEach(() => localStorage.setItem("compy_expert_view", "1"));
+  // All four gauges are STANDARD — no expert flag, no scaffold (owner 2026-08-06: "the information
+  // it displayed should be standard"). The congestion answer is layout, not a switch; the readout
+  // stays whole for everyone. Pinned in home-console-standard-readout-guard.test.tsx.
 
   it("renders the recognizable rig hologram at center-stage", async () => {
     mount();
@@ -373,9 +371,10 @@ describe("HomeConsole — motion contract (Task 4)", () => {
   });
 });
 
-// B6a (owner direction 2026-07-14): the hologram is the INDEX into the dense data — callouts
-// with a dense record expand on demand into the full detected readout. Same HardwareInfo the
-// Cards view renders; a missing field omits its row (never a placeholder).
+// B6a (owner direction 2026-07-14, restructured 2026-08-06): the detected record is STANDARD and
+// always open — four boxed templates under the stage, no expand affordance and no expert flag
+// ("the information it displayed should be standard … better grouping and boxed templates").
+// Same HardwareInfo the Cards view renders; a missing field omits its row (never a placeholder).
 const denseHw = {
   ...hw,
   gpus: [
@@ -406,60 +405,47 @@ const denseHw = {
   ],
 } as unknown as HardwareInfo;
 
-describe("HomeConsole — callout dense readouts (B6a: the hologram indexes the dense data)", () => {
-  // The dense record IS the enthusiast half — module timings, disk serials, driver builds — so the
-  // whole expansion affordance moved behind the flip side in the calm-default pass. The label stays
-  // on the default face; only the record moved. These tests therefore run under expert view, where
-  // the feature lives; that the default face has NO expandable callout is pinned in
-  // home-console-calm-default-guard.test.tsx.
-  beforeEach(() => localStorage.setItem("compy_expert_view", "1"));
+describe("HomeConsole — the detected record (boxed templates, always open)", () => {
+  // Grab a box by its title so the assertions read as the user sees them — "the Graphics box",
+  // not "the third grid child". A box the machine did not report is ABSENT, so `?? null` is the
+  // honest lookup and the empty-record test below leans on exactly that.
+  const box = (c: HTMLElement, title: string) =>
+    Array.from(c.querySelectorAll<HTMLElement>(".hc-spec")).find(
+      (b) => b.querySelector(".hc-spec-title")?.textContent === title,
+    ) ?? null;
 
-  const gpuButton = (c: HTMLElement) =>
-    Array.from(c.querySelectorAll<HTMLButtonElement>(".hc-callout-btn")).find((b) =>
-      b.textContent?.includes("GPU"),
-    )!;
-
-  it("default face is unchanged: no dense readout in the DOM, expandable callouts closed", () => {
+  it("the record is open by default — boxed, and behind NO affordance", () => {
     const c = mount({ ...props, hw: denseHw }).container;
-    expect(c.querySelector(".hc-callout-dense")).toBeNull();
-    expect(gpuButton(c).getAttribute("aria-expanded")).toBe("false");
+    expect(c.querySelector(".hc-specs")).not.toBeNull();
+    expect(box(c, "Graphics")).not.toBeNull();
+    // The whole point of the restructure: nothing to click, nothing to discover, nothing gated.
+    expect(c.querySelectorAll(".hc-specs button")).toHaveLength(0);
+    expect(c.querySelector(".hc-specs [aria-expanded]")).toBeNull();
   });
 
-  it("click expands into the DETECTED record (driver, VRAM) and click again collapses", () => {
+  it("the Graphics box carries the DETECTED record (model, VRAM, driver)", () => {
     const c = mount({ ...props, hw: denseHw }).container;
-    fireEvent.click(gpuButton(c));
-    expect(gpuButton(c).getAttribute("aria-expanded")).toBe("true");
-    const dense = gpuButton(c).closest(".hc-callout")!.querySelector(".hc-callout-dense")!;
-    expect(dense.textContent).toContain("AMD Radeon RX 9070 XT");
-    expect(dense.textContent).toContain("16 GB");
-    expect(dense.textContent).toContain("25.5.1");
-    fireEvent.click(gpuButton(c));
-    expect(c.querySelector(".hc-callout-dense")).toBeNull();
+    const gpu = box(c, "Graphics")!;
+    expect(gpu.textContent).toContain("AMD Radeon RX 9070 XT");
+    expect(gpu.textContent).toContain("16 GB");
+    expect(gpu.textContent).toContain("25.5.1");
   });
 
-  it("RAM expands to per-module detected rows (capacity · type · speed · manufacturer)", () => {
+  it("Memory boxes one row per module (capacity · type · speed · manufacturer)", () => {
     const c = mount({ ...props, hw: denseHw }).container;
-    const ramBtn = Array.from(c.querySelectorAll<HTMLButtonElement>(".hc-callout-btn")).find(
-      (b) => b.textContent?.includes("RAM"),
-    )!;
-    fireEvent.click(ramBtn);
-    const dense = ramBtn.closest(".hc-callout")!.querySelector(".hc-callout-dense")!;
-    expect(dense.textContent).toContain("slot 1");
-    expect(dense.textContent).toContain("16 GB · DDR5 · 6000 MT/s · Corsair");
-    expect(dense.querySelectorAll(".hc-dense-row")).toHaveLength(2);
+    const ram = box(c, "Memory")!;
+    expect(ram.textContent).toContain("slot 1");
+    expect(ram.textContent).toContain("16 GB · DDR5 · 6000 MT/s · Corsair");
+    expect(ram.querySelectorAll(".hc-spec-row")).toHaveLength(2);
   });
 
-  it("honesty: a missing field omits its ROW; an empty record renders NO button at all", () => {
+  it("honesty: a missing field omits its ROW; an empty record renders NO box at all", () => {
     // Default fixture: gpus[0] has no driver fields → no driver row, no fabricated value.
     const c = mount().container;
-    fireEvent.click(gpuButton(c));
-    const dense = gpuButton(c).closest(".hc-callout")!.querySelector(".hc-callout-dense")!;
-    expect(dense.textContent).not.toContain("driver");
-    // memory_modules is empty in the default fixture → the RAM callout is not expandable.
-    const ramBtn = Array.from(c.querySelectorAll<HTMLButtonElement>(".hc-callout-btn")).find(
-      (b) => b.textContent?.includes("RAM"),
-    );
-    expect(ramBtn).toBeUndefined();
+    expect(box(c, "Graphics")!.textContent).not.toContain("driver");
+    // memory_modules / physical_disks are empty in the default fixture → no hollow frames.
+    expect(box(c, "Memory")).toBeNull();
+    expect(box(c, "Storage")).toBeNull();
   });
 });
 
@@ -648,10 +634,6 @@ const block = (css: string, selector: string) => {
 describe("HomeConsole — 2D card viewport clears the always-present corner gauges (bug→guard)", () => {
   it("2D mode: the card path and all four corner gauges coexist in one stage (collision precondition)", () => {
     localStorage.setItem("compy_home_rig_3d", "0");
-    // The lower two gauges ride the flip side now, so the FOUR-gauge collision is an expert-view
-    // state. It is still a reachable state, so the CSS bound below still has to hold — the guard is
-    // kept at full strength rather than reduced to the two gauges the default face shows.
-    localStorage.setItem("compy_expert_view", "1");
     const stage = mount().container.querySelector(".hc-stage")!;
     // The 2D fallback renders the real HardwareGrid, not the 3D hologram…
     expect(stage.querySelector(".hc-stage-cards .grid")).not.toBeNull();

@@ -14,7 +14,6 @@ import type { HardwareInfo } from "../App";
 import { RoomShell } from "../design/room-shell";
 import { useReducedMotion } from "../design/use-motion";
 import { useIntelligenceFlag, useHomeIntakeFlag } from "../design/use-hud";
-import { useExpertView } from "../design/use-expert-view";
 import { readHologramV2 } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
 import { LedgerHealthNotice, useLedgerHealth } from "../design/LedgerHealthNotice";
@@ -175,8 +174,9 @@ export const denseStorage = (disks: HardwareInfo["physical_disks"]): [string, st
 
 // One instrument annotation: LED (only when a measured value earned a tone) · part · detected
 // model · measured value on a hairline leader. HomeHud's Callout in the console's namespace.
-// With `dense` rows it becomes the index into the full detected record: hover peeks, click
-// pins (aria-expanded button). The default face is unchanged — density is per-interaction.
+// A LABEL, nothing more (2026-08-06): it names a rig part and carries what is changing right
+// now. The detected record it used to hide behind a hover/click expander lives in the boxed
+// `.hc-specs` templates below the stage — one owner per fact, and no mystery meat over the 3D.
 function Callout({
   tone,
   name,
@@ -184,7 +184,6 @@ function Callout({
   value,
   valueTone,
   mono = true,
-  dense,
 }: {
   tone: "ok" | "warn" | null;
   name: string;
@@ -192,44 +191,14 @@ function Callout({
   value?: string;
   valueTone?: "ok" | "warn" | null;
   mono?: boolean;
-  dense?: [string, string][];
 }) {
-  const { t } = useTranslation();
-  const [pinned, setPinned] = useState(false);
-  const [hovered, setHovered] = useState(false);
-  const expandable = !!dense && dense.length > 0;
-  const open = expandable && (pinned || hovered);
-  const head = (
-    <span className="hc-callout-head">
-      {tone && <span className={`hc-led hc-led-${tone}`} aria-hidden="true" />}
-      <b>{name}</b>
-      {detail && <span className="hc-callout-detail">{detail}</span>}
-      {expandable && (
-        <span className="hc-callout-more" aria-hidden="true">
-          {open ? "−" : "+"}
-        </span>
-      )}
-    </span>
-  );
   return (
-    <div
-      className={`hc-callout${expandable ? " hc-callout-x" : ""}${open ? " hc-callout-open" : ""}`}
-      onPointerEnter={expandable ? () => setHovered(true) : undefined}
-      onPointerLeave={expandable ? () => setHovered(false) : undefined}
-    >
-      {expandable ? (
-        <button
-          type="button"
-          className="hc-callout-btn"
-          aria-expanded={open}
-          aria-label={t("home.homeConsole.callout.detailsAria", { name })}
-          onClick={() => setPinned((v) => !v)}
-        >
-          {head}
-        </button>
-      ) : (
-        head
-      )}
+    <div className="hc-callout">
+      <span className="hc-callout-head">
+        {tone && <span className={`hc-led hc-led-${tone}`} aria-hidden="true" />}
+        <b>{name}</b>
+        {detail && <span className="hc-callout-detail">{detail}</span>}
+      </span>
       {value && (
         <span
           className={`hc-callout-v ${mono ? "hc-mono" : ""}${valueTone ? ` hc-callout-v-${valueTone}` : ""}`}
@@ -237,16 +206,27 @@ function Callout({
           {value}
         </span>
       )}
-      {open && (
-        <span className="hc-callout-dense">
-          {dense!.map(([k, v], i) => (
-            <span key={`${k}-${i}`} className="hc-dense-row">
-              <span className="hc-dense-k">{k}</span>
-              <span className="hc-dense-v hc-mono">{v}</span>
-            </span>
-          ))}
-        </span>
-      )}
+    </div>
+  );
+}
+
+// One boxed template in the detected-hardware block. Title + label/value rows, always open —
+// the owner's "better grouping and boxed templates" in place of hover-to-reveal. Rows come
+// verbatim from the dense builders above (same HardwareInfo the Cards view renders, zero new
+// probes); an empty record renders NO box rather than an empty one or a fabricated placeholder.
+function SpecBox({ title, rows }: { title: string; rows: [string, string][] }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="hc-spec">
+      <span className="hc-spec-title">{title}</span>
+      <dl className="hc-spec-rows">
+        {rows.map(([k, v], i) => (
+          <div key={`${k}-${i}`} className="hc-spec-row">
+            <dt className="hc-spec-k">{k}</dt>
+            <dd className="hc-spec-v hc-mono">{v}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }
@@ -274,28 +254,28 @@ export function HomeConsole({
   // hard-require the provider on every mount (see useConfirmOptional). null → runFastPath no-ops.
   const confirm = useConfirmOptional();
   const intakeOn = useHomeIntakeFlag();
-  // THE CALM DEFAULT FACE (owner 2026-08-06: "it just looks too intimidating rather than this
-  // intuitive easy to use and understand portal for everyone with a techy enthusiast catering
-  // flip side"; UI_VISION_BACKLOG "the symptom is INTIMIDATION, not clutter" / "calming the
-  // DEFAULT face, not building a second mode"). Home was the ONE room never wired to the expert
-  // preference every other room already honours. Four gauges, two floating spec planes and three
-  // segmented control groups all landed at once on the app's opening screen.
+  // HOME IS UNGATED — STRUCTURE, NOT A SWITCH (owner 2026-08-06, reversing the calm-default pass
+  // that shipped the day before): "the expert view doesnt seemingly even need to be an option the
+  // information it displayed should be standard my only worry with that was only if it was
+  // overbearing or caused to much congestion aesthetically the better option is to integrate and
+  // structure the layout in a neat style that avoided too much text or paragraph style
+  // descriptions with better grouping and boxed templates".
   //
-  // What stays on the default face is the plain answer: the verdict, the readiness score, the
-  // avg-FPS the user actually asked about, the rig picture AND its labels, the #1 limiter, the
-  // doors. What moves behind the flip side is what only an enthusiast can read: the 1% low
-  // (jargon — it needs a glossary Term to parse at all), the GPU temp (a number with no action
-  // attached here), the dense detected-hardware record behind each callout (module timings, disk
-  // serials, driver builds), and the explode/orbit knobs.
+  // The complaint was never that the information EXISTS — it was congestion. The previous pass
+  // answered congestion by hiding half of Home behind useExpertView(); that is a switch, not a
+  // layout, and it made the answer conditional on a preference a non-technical user will never
+  // find. Home consumes NO expert preference now (the other nine surfaces keep theirs — spec
+  // 2026-07-11-expert-layer-middle-ground, owner GO 2026-07-12; this reversal is Home-only).
   //
-  // Two things are deliberately NOT gated. The 2D/3D choice is a comfort control, not
-  // instrumentation — hiding it strands a non-expert inside the 3D view. And the annotation
-  // PLANES themselves stay: "Memory · 14.2 / 29.4 GB" is the reassuring "here is your PC" line,
-  // not a spec sheet. Gate the labels and the calm face becomes a nameless 3D object.
-  //
-  // Presentation-only and reactive (custom event + storage listener), exactly as Check/Fix/Lab
-  // consume it — no new affordance here, the preference lives in Settings like every other room's.
-  const expert = useExpertView();
+  // What replaced the switch, and where each number now lives — ONE owner per fact:
+  //   · the stage carries LIVE state only — four gauges, and floating labels naming the rig parts
+  //     with what is changing right now (RAM used/total, disk % full). Plain text: no hover, no
+  //     "+", no button. Nothing on the stage hides behind an interaction.
+  //   · the DETECTED record — module timings, driver builds, disk models, core counts — moved off
+  //     the stage into `.hc-specs`: four always-visible boxed templates under it (Graphics ·
+  //     Processor · Memory · Storage), label/value rows, zero prose.
+  // Hover-to-reveal was the congestion: it put a spec sheet on top of the 3D scene and made the
+  // rest mystery meat. Boxes below the stage read at a glance and never overlap the rig.
   // Fast-path (option C) transient state: a busy guard against double-submit, and a real receipt
   // built from the batch result (never a fabricated "done" — it names applied AND skipped).
   const [fastPathBusy, setFastPathBusy] = useState(false);
@@ -428,14 +408,6 @@ export function HomeConsole({
   // Orbit is an explicit opt-in under hologram v2 (bay rests on frameloop "demand", idle GPU ~0);
   // classic (flag off) keeps its always-orbiting default — same contract as HomeHud's bay.
   const [autoRotate, setAutoRotate] = useState(() => !readHologramV2());
-  // The explode/orbit knobs ride the flip side (below), so leaving expert view must not STRAND their
-  // state: a rig left exploded — or spinning — with its controls gone is a calm face the user has no
-  // way to undo. Leaving expert view restores the defaults the default face is entitled to.
-  useEffect(() => {
-    if (expert) return;
-    setExploded(false);
-    setAutoRotate(!readHologramV2());
-  }, [expert]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   // Stable handler: an inline arrow here breaks RigHologram's memo, letting every 5s live-poll
@@ -510,6 +482,18 @@ export function HomeConsole({
     day: "numeric",
     year: "numeric",
   });
+
+  // THE DETECTED RECORD, grouped (owner 2026-08-06: "better grouping and boxed templates").
+  // Same HardwareInfo the Cards view renders — zero new probes, zero new claims. A record the
+  // machine did not report drops its whole box rather than showing an empty frame or a
+  // fabricated placeholder; all four empty drops the block, so a rig that reports no SMBIOS
+  // module/disk detail is not handed four hollow boxes.
+  const specs: { title: string; rows: [string, string][] }[] = [
+    { title: t("home.homeConsole.specs.gpu"), rows: denseGpu(hw.gpus?.[0], t) },
+    { title: t("home.homeConsole.specs.cpu"), rows: denseCpu(hw, t) },
+    { title: t("home.homeConsole.specs.ram"), rows: denseRam(hw.memory_modules ?? [], t) },
+    { title: t("home.homeConsole.specs.storage"), rows: denseStorage(hw.physical_disks ?? []) },
+  ].filter((s) => s.rows.length > 0);
 
   const sysDisk = hw.disks?.find((d) => d.mount_point?.toUpperCase().startsWith("C"));
   const diskPct =
@@ -773,34 +757,32 @@ export function HomeConsole({
               measured={avgFps != null}
             />
           </div>
-          {expert && (
-            <div className="hc-corner hc-bl">
-              {/* First exposure of "1% low" in the app (the cold-open) — glossed inline, plan
-                  2026-07-11 Phase 1 (the no-jargon promise). Expert-only: a term that needs a
-                  glossary to parse is the definition of enthusiast-legible. */}
-              <ArcGauge
-                label={<Term id="one-percent-lows">{t("home.homeConsole.stage.onePercentLow")}</Term>}
-                value={lowFps}
-                max={240}
-                unit="fps"
-                tone={arcTone(low1Grade)}
-                measured={lowFps != null}
-              />
-            </div>
-          )}
-          {expert && (
-            <div className="hc-corner hc-br">
-              {/* NVIDIA renders neutral tone (LOCKED rule 5 — sensor not hardware-verified). */}
-              <ArcGauge
-                label={t("home.homeConsole.stage.gpuTemp")}
-                value={gpuTemp}
-                max={100}
-                unit="°C"
-                tone={arcTone(gpuGrade)}
-                measured={gpuTemp != null}
-              />
-            </div>
-          )}
+          <div className="hc-corner hc-bl">
+            {/* First exposure of "1% low" in the app (the cold-open) — glossed inline via <Term>,
+                plan 2026-07-11 Phase 1 (the no-jargon promise). The gloss is exactly why this
+                gauge does NOT need to be gated: a term that carries its own definition is
+                legible to everyone, and the fourth corner is what makes the frame read as an
+                instrument rather than a lopsided one. */}
+            <ArcGauge
+              label={<Term id="one-percent-lows">{t("home.homeConsole.stage.onePercentLow")}</Term>}
+              value={lowFps}
+              max={240}
+              unit="fps"
+              tone={arcTone(low1Grade)}
+              measured={lowFps != null}
+            />
+          </div>
+          <div className="hc-corner hc-br">
+            {/* NVIDIA renders neutral tone (LOCKED rule 5 — sensor not hardware-verified). */}
+            <ArcGauge
+              label={t("home.homeConsole.stage.gpuTemp")}
+              value={gpuTemp}
+              max={100}
+              unit="°C"
+              tone={arcTone(gpuGrade)}
+              measured={gpuTemp != null}
+            />
+          </div>
           <div className="hc-rig">
             {rig3d ? (
               <Suspense
@@ -826,18 +808,16 @@ export function HomeConsole({
           </div>
           {rig3d && (
             <>
-              {/* Instrument annotations — the parallax plane (Task 4); the plane stays
-                  pointer-events none so drag-orbit under it never fights — only a callout
-                  with a dense readout takes the pointer back (hc-callout-x). GPU temp lives
-                  in the BR gauge (one owner per number), so the GPU callout carries the
-                  detected model only; expanding it is the index into the full record (B6a).
-
-                  The PLANES stay on the default face: they are the hologram's labels, and
+              {/* Instrument annotations — the parallax plane (Task 4). The whole plane is
+                  pointer-events:none so drag-orbit under it never fights: nothing here is
+                  interactive any more, which is the point. These are the hologram's LABELS —
                   "Memory · 14.2 / 29.4 GB" is the plain-English "here is your PC" moment a
-                  non-technical user opened Home for. Hiding them leaves a nameless 3D object
-                  — less legible, not calmer. What rides the flip side is the RECORD behind
-                  each label (`dense`): module timings, disk serials, driver builds. Without
-                  it a Callout is a plain line of text — no +, no button, no expansion. */}
+                  non-technical user opened Home for — and they carry LIVE state only.
+
+                  The detected RECORD each label used to hide behind a hover/click expander
+                  (module timings, disk models, driver builds) now lives in the boxed .hc-specs
+                  templates below the stage. One owner per fact: GPU temp is the BR gauge, the
+                  GPU's model is its label, and its driver build is its box. */}
               <div className="hc-ann hc-ann-left">
                 <Callout
                   tone={mem ? gradeTone(mem.level === "ok" ? "good" : "bad") : null}
@@ -849,7 +829,6 @@ export function HomeConsole({
                       : `${fmtGB1(hw.ram_total_bytes)} GB`
                   }
                   valueTone={mem && mem.level !== "ok" ? "warn" : mem ? "ok" : null}
-                  dense={expert ? denseRam(hw.memory_modules, t) : undefined}
                 />
                 {diskPct != null && (
                   <Callout
@@ -857,7 +836,6 @@ export function HomeConsole({
                     name={t("home.homeConsole.callout.storage")}
                     value={t("home.homeConsole.stage.diskFull", { pct: diskPct })}
                     valueTone={diskPct >= 90 ? "warn" : "ok"}
-                    dense={expert ? denseStorage(hw.physical_disks) : undefined}
                   />
                 )}
               </div>
@@ -866,7 +844,6 @@ export function HomeConsole({
                   tone={null}
                   name={t("home.homeConsole.callout.gpu")}
                   detail={shortModel(hw.gpus[0]?.name)}
-                  dense={expert ? denseGpu(hw.gpus[0], t) : undefined}
                 />
                 <Callout
                   tone={null}
@@ -874,14 +851,14 @@ export function HomeConsole({
                   detail={hw.cpu_arch?.family_label || undefined}
                   value={t("home.homeConsole.callout.cpuNoTemp")}
                   mono={false}
-                  dense={expert ? denseCpu(hw, t) : undefined}
                 />
               </div>
             </>
           )}
           {/* Quiet view controls — the same persisted choices HomeHud offers, console chrome.
-              The 2D/3D pair stays on the default face (comfort, not instrumentation); the
-              explode/orbit knobs are enthusiast fiddling and ride the flip side. */}
+              Both groups are standard: 2D/3D, then explode/orbit whenever the 3D rig is up.
+              Orbit still DEFAULTS off (T4d contract — the resting bay costs ~0 GPU); showing
+              the knob is not the same as spinning the rig. */}
           <div className="hc-controls">
             <div className="hc-seg-group" role="tablist" aria-label={t("home.homeConsole.stage.rigViewAria")}>
               <button
@@ -903,7 +880,7 @@ export function HomeConsole({
                 {t("home.homeConsole.stage.viewCards")}
               </button>
             </div>
-            {rig3d && expert && (
+            {rig3d && (
               <div className="hc-seg-group">
                 <button
                   type="button"
@@ -929,6 +906,20 @@ export function HomeConsole({
               + the rAF pointerleave stop — Phase-1's review fix). */}
           <ReticleCursor scopeRef={stageRef} />
         </div>
+
+        {/* THE DETECTED RECORD — boxed templates, always open (owner 2026-08-06: "better grouping
+            and boxed templates"). Static facts only; everything that MOVES is on the stage above,
+            so no number is owned twice. Label/value rows, zero prose. */}
+        {specs.length > 0 && (
+          <section className="hc-specs" aria-label={t("home.homeConsole.specs.eyebrow")}>
+            <span className="hc-specs-eyebrow">{t("home.homeConsole.specs.eyebrow")}</span>
+            <div className="hc-specs-grid">
+              {specs.map((s) => (
+                <SpecBox key={s.title} title={s.title} rows={s.rows} />
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* THE #1 LIMITER — micro-label · the measured title · quiet confidence tag · jump. */}
         {topLimiter && (

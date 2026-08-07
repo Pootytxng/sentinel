@@ -46,7 +46,6 @@
       }
     },
     "callout": {
-      "detailsAria": "{{name}}详情",
       "ram": "内存",
       "ramBelowRated": "{{speed}} / {{rated}} MT/s——BIOS 中未开启 EXPO/XMP",
       "storage": "存储",
@@ -62,6 +61,13 @@
       "cores": "核心数",
       "clock": "主频",
       "slot": "插槽 {{n}}"
+    },
+    "specs": {
+      "eyebrow": "已检测",
+      "gpu": "显卡",
+      "cpu": "处理器",
+      "ram": "内存",
+      "storage": "存储"
     },
     "stage": {
       "readinessLabel": "就绪度",

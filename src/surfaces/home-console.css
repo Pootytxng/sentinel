@@ -358,76 +358,71 @@
   color: var(--v2-warn);
 }
 
-/* ── Dense readouts (B6a, owner 2026-07-14: the hologram is the index into the dense data).
-   Only an expandable callout takes the pointer back — the rest of the plane stays inert so
-   drag-orbit keeps the stage. Hover peeks, click pins; the +/− is the quiet affordance. ── */
-:root[data-v2="on"] .hc-callout-x {
-  pointer-events: auto;
-}
-:root[data-v2="on"] .hc-callout-open {
-  max-width: 250px;
-}
-:root[data-v2="on"] .hc-callout-btn {
-  background: none;
-  border: 0;
-  padding: 0;
-  margin: 0;
-  font: inherit;
-  color: inherit;
-  text-align: inherit;
-  cursor: pointer;
-  display: block;
-}
-:root[data-v2="on"] .hc-callout-btn:focus-visible {
-  outline: 1px solid var(--v2-accent);
-  outline-offset: 2px;
-  border-radius: 2px;
-}
-:root[data-v2="on"] .hc-ann-right .hc-callout-btn .hc-callout-head {
-  justify-content: flex-end;
-}
-:root[data-v2="on"] .hc-callout-more {
-  color: var(--v2-muted);
-  font-size: 11px;
-  line-height: 1;
-}
-:root[data-v2="on"] .hc-callout-x:hover .hc-callout-more,
-:root[data-v2="on"] .hc-callout-open .hc-callout-more {
-  color: var(--v2-accent);
-}
-:root[data-v2="on"] .hc-callout-dense {
+/* ── THE DETECTED RECORD (owner 2026-08-06: "better grouping and boxed templates").
+   Replaces the hover/click-expand dense callouts: the static record no longer hides behind an
+   affordance on a draggable plane — it sits below the stage in four boxes that auto-fit, so a
+   record the machine did not report simply drops its box instead of leaving a hollow frame.
+   Label/value rows only; no prose lives here. ── */
+:root[data-v2="on"] .hc-specs {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  margin-top: 4px;
-  padding-top: 4px;
-  border-top: 1px solid var(--v2-line);
+  gap: 8px;
 }
-:root[data-v2="on"] .hc-dense-row {
+:root[data-v2="on"] .hc-specs-eyebrow {
+  font: 600 10px var(--v2-font-sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  /* --v2-muted, not --v2-faint: at 10px/600 this is not "large text", so it owes the full 4.5:1.
+     Faint lands at 3.63:1 on the page background — an eyebrow nobody can read is not a label.
+     Guarded: src/design/tokens-v2-guard.test.ts "caption-token usage". */
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .hc-specs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+}
+:root[data-v2="on"] .hc-spec {
   display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px 14px;
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  min-width: 0;
+}
+:root[data-v2="on"] .hc-spec-title {
+  font: 600 10px var(--v2-font-sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .hc-spec-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+:root[data-v2="on"] .hc-spec-row {
+  display: flex;
+  align-items: baseline;
   justify-content: space-between;
   gap: 12px;
   font-size: 11px;
 }
-:root[data-v2="on"] .hc-dense-k {
+:root[data-v2="on"] .hc-spec-k {
   color: var(--v2-muted);
   flex: none;
+  margin: 0;
 }
-:root[data-v2="on"] .hc-dense-v {
+:root[data-v2="on"] .hc-spec-v {
   color: var(--v2-text);
   text-align: right;
   overflow-wrap: anywhere;
-}
-/* Reveal fade rides the motion contract: full motion only; reduced = instant. */
-:root[data-v2="on"] .home-console[data-motion="full"] .hc-callout-dense {
-  animation: v2-hc-dense-in 0.16s ease;
-}
-@keyframes v2-hc-dense-in {
-  from {
-    opacity: 0;
-    transform: translateY(-2px);
-  }
+  min-width: 0;
+  margin: 0;
 }
 
 /* ── The #1-limiter readout — a context row beside the dock: micro-label · the measured
@@ -570,6 +565,7 @@
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-stage,
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-corner,
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-limiter,
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-specs,
 :root[data-v2="on"] .home-console[data-motion="full"] .dock {
   animation: v2-hc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
@@ -578,6 +574,7 @@
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-tr { animation-delay: 0.19s; }
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-bl { animation-delay: 0.26s; }
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-br { animation-delay: 0.33s; }
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-specs { animation-delay: 0.24s; }
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-limiter { animation-delay: 0.26s; }
 :root[data-v2="on"] .home-console[data-motion="full"] .dock { animation-delay: 0.3s; }
 

@@ -50,27 +50,62 @@ Two things here are new and must not be flattened back into the 2026-07-23 wordi
    density work; this cannot. The default face is reading as a control panel for someone who already
    knows what the controls do. Consolidation that leaves the first screen looking expert-operated
    does not satisfy this.
-2. **He wants a two-audience shape, explicitly** — a calm mainstream default with a *flip side* for
-   the enthusiast. That flip side already exists and is functional: expert view
-   (`compy_expert_view`, 8 surfaces, presentation-only, gates zero mutation paths, spec
-   `superpowers/specs/2026-07-11-expert-layer-middle-ground.md`, default OFF). So the work is
-   **calming the DEFAULT face, not building a second mode** — and anything that is only legible to
-   an enthusiast is a candidate to move behind the flip side rather than to delete.
-   ✅ **HOME WIRED TO THE FLIP SIDE 2026-08-06** — Home was the ONE room never wired to
-   `useExpertView()`; four gauges, two spec planes and three control groups all landed on the opening
-   screen at once. Moved behind the flip side: the 1% low gauge, the GPU temp gauge, the four dense
-   detected-hardware records behind the hologram callouts, and the explode/orbit knobs. Deliberately
-   NOT moved: the readiness and avg-FPS gauges, the annotation planes and their labels ("here is your
-   PC", not a spec sheet), and the 2D/3D toggle (comfort, not instrumentation). Leaving expert view
-   also RESETS explode/orbit, so no rig is stranded exploded or spinning with its controls gone.
-   `home-console-calm-default-guard.test.tsx`; self-review PASS. **Home only — the other rooms'
-   default faces have not had this pass.**
+2. **He wants a two-audience shape** — a calm mainstream default with a *flip side* for the
+   enthusiast. That flip side exists: expert view (`compy_expert_view`, 9 surfaces,
+   presentation-only, gates zero mutation paths, spec
+   `superpowers/specs/2026-07-11-expert-layer-middle-ground.md`, default OFF).
+   ⛔ **BUT HIDING IS NOT THE TOOL — owner reversal, 2026-08-06.** Home was wired to the flip side
+   that morning (1% low gauge, GPU temp gauge, the dense detected-hardware records, explode/orbit
+   knobs) and the owner rejected it the same day, verbatim:
+   > the expert view doesnt seemingly even need to be an option the information it displayed should
+   > be standard my only worry with that was only if it was overbearing or caused to much congestion
+   > aesthetically the better option is to integrate and structure the layout in a neat style that
+   > avoided too m,uch text or paragrapgh style descriptions with better grouping and boxed templates
+
+   **The standing rule this sets:** intimidation is a STRUCTURE defect, and the fix is grouping,
+   boxed templates and fewer words — **never a switch.** Gating information is not calming a face,
+   it is deleting the enthusiast half of the product from the default view. Expert view stays where
+   it already earned its place (the nine surfaces above), but it is not a tool for answering "this
+   looks congested."
+   ✅ **HOME RESTRUCTURED 2026-08-06** — un-gated in full, then rebuilt as layout: live state on the
+   rig's annotation planes (plain labels, no hover-to-expand callouts), the static detected record in
+   four boxed templates below the stage (Graphics · Processor · Memory · Storage, label+value rows,
+   zero prose). No number is owned twice; a record the machine did not report drops its whole box.
+   Guarded by `home-console-standard-readout-guard.test.tsx` — which pins that flipping
+   `compy_expert_view` changes NOTHING on Home, in both directions. **Home only — the other rooms'
+   default faces have not had this pass, and they get the layout treatment, not the switch.**
 
 **Read together with NAV-1 finding 2 below:** parallel UI generations coexist per room (Home 4+,
 Monitor 4, Lab 5) and the pruning pass has never run. That is the leading mechanical suspect for
 "intimidating" — surfaces authored under different design generations, all reachable, none blessed.
 It is also the same work as **P2 "reversible generation pruning"** in `BACKLOG.md`, which is why the
 backend runway and this ask meet at the same next train.
+
+### PAL-1. The caption colour is too dim to read — palette lift is an owner taste call 🔴 OPEN
+
+**Measured 2026-08-06.** `--v2-faint` renders **3.63:1** against the page background. WCAG AA lets a
+colour that dim carry only *large* text (≥24px, or ≥18.66px bold); small text owes **4.5:1**. Every
+rule in `src/` that pairs `color: var(--v2-faint)` with a declared font size — **29 of 29**, across
+`shell-v2.css` · `home-console.css` · `home-hud.css` · `home-v2.css` · `hud-rooms.css` ·
+`monitor-v2.css` · `RerunCheckBand.css` — is small text. So the token's "caption tier → AA-large"
+contract is fiction in practice: version stamps, eyebrows, units, hints and tags all ship under AA.
+
+**Plain English:** the faintest grey label text is dimmer than the accessibility floor — readable on
+a good monitor in a dark room, not readable for everyone. For a product sold as "a portal for
+everyone," that is a real defect, not a nitpick.
+
+**Why it is parked here and not just fixed:** raising `--v2-faint` is a **palette change**, which is
+owner territory (aesthetic taste call), and it compresses the muted/faint hierarchy — three text
+tiers become closer to two. That is a look decision, his to make. Options when he wants it:
+(a) lift `--v2-faint` to ≥4.5:1 and re-space `--v2-muted` above it; (b) retire the faint tier and
+fold those 29 sites onto `--v2-muted`; (c) keep the colour, raise the type — only honest where the
+text can actually be large, which is almost nowhere in these 29.
+
+**Holding the line meanwhile:** `src/design/tokens-v2-guard.test.ts` → "caption-token usage" freezes
+the 29 as a **ratchet** — a 30th site fails the build, and a baselined site that gets fixed without
+its line deleted also fails, so the list can only shrink. The day the palette lands, the guard's
+contrast precondition stops holding and it retires itself. (It was written because a new Home label
+became the 30th and the self-review caught it: `bug → guard`.)
 
 ### NAV-1. Navigation & consolidation audit (2026-07-23) — findings + candidates awaiting owner direction 🔴 OPEN
 
