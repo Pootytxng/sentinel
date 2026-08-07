@@ -61,16 +61,26 @@ describe("the concept was renamed, not just the strings", () => {
     expect(policy.tiers.find((t) => t.window === 300000)?.issues.length).toBeGreaterThan(0);
   });
 
-  it("acceptance did NOT widen the default — routine work is still 150k", () => {
-    // The named failure mode: widening `default` to make a refusal go away turns a routing mistake
-    // into an invisible one. Criterion 3 of #21.
-    expect(loadPolicy().default).toBe(150000);
+  it("acceptance did NOT widen the default INTO the marathon tier", () => {
+    // The named failure mode (criterion 3 of #21): raising `default` to the marathon window to make
+    // a refusal go away turns a routing mistake into an invisible one.
+    //
+    // Stated as the invariant, not as a literal. This asserted `default === 150000` until
+    // 2026-08-07, which conflated two different things: "standard is not marathon" (the guard) and
+    // "standard is 150k" (a value that turned out to be broken — at 150k the measured compaction
+    // ceiling is ~116k against a ~77k fixed floor, which is the owner's thrash dialog). Repairing
+    // the standard tier must not have to fight this test; widening it to 300000 still must.
+    const policy = loadPolicy();
+    const marathon = policy.tiers.map((t) => t.window);
+    expect(marathon).toContain(300000);
+    expect(marathon).not.toContain(policy.default);
+    expect(policy.default).toBeLessThan(Math.min(...marathon));
   });
 
   it("the tier stays granted per issue, so a standard train still intends the default", () => {
     const policy = loadPolicy();
     expect(intendedWindow(policy, { issue: 19 })).toMatchObject({ window: 300000, marathon: true });
-    expect(intendedWindow(policy, { issue: 21 })).toMatchObject({ window: 150000, marathon: false });
+    expect(intendedWindow(policy, { issue: 21 })).toMatchObject({ window: policy.default, marathon: false });
   });
 
   it("renders the accepted name on the label the owner reads on every launch", () => {

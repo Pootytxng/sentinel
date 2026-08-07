@@ -28,6 +28,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CREATE_BASE_REF, HERE, HOST_DIR, refreshCreateBase, resolveCreateBase, settingsSourceFor } from "./gather.mjs";
 import { createWorktree, refreshAndCreate } from "./launch.mjs";
 import { reconcile } from "./preflight.mjs";
+import { DOCUMENTED_FALLBACK_WINDOW } from "../../scripts/lib/compaction-window.mjs";
 import {
   PROJECT_SETTINGS_PATH,
   compareWindow,
@@ -82,15 +83,20 @@ afterAll(() => {
 });
 
 describe("the deadlock itself", () => {
-  it("REPRODUCTION: the launcher's own directory answers 150000 unconfigured, and is refused", () => {
+  it("REPRODUCTION: the launcher's own directory answers the fallback unconfigured, and is refused", () => {
     // This is the state the old code shipped to preflight. It is still a refusal — correctly so,
     // because an unconfigured coincidence is not a decision. Nothing about the comparison was
     // wrong; asking the wrong folder was.
     const fromLauncher = resolveWindow({ dir: HERE, home: emptyHome, env: {} });
     expect(fromLauncher.configured).toBe(false);
-    expect(fromLauncher.window).toBe(150000);
+    // The documented fallback, not a literal — what is being reproduced is "unconfigured", and the
+    // 150000 literal that used to sit here made this a version pin instead of a guard.
+    expect(fromLauncher.window).toBe(DOCUMENTED_FALLBACK_WINDOW);
 
-    const check = windowCheck(STANDARD, fromLauncher);
+    // Reconstruct the coincidence the reproduction is about — a policy default that happens to equal
+    // the unconfigured fallback — instead of relying on the two literals staying equal by luck.
+    const coincident = intendedWindow({ ...POLICY, default: DOCUMENTED_FALLBACK_WINDOW }, { issue: 21 });
+    const check = windowCheck(coincident, fromLauncher);
     expect(check.ok).toBe(false);
     expect(check.expected).toBe(check.actual); // the confusing part of the report Kuya saw
     expect(check.remediation).toMatch(/not configured/i);

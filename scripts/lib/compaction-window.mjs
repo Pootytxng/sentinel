@@ -18,13 +18,27 @@ import { join } from "node:path";
 
 /**
  * The window the context-size advisor falls back to when the env var is missing
- * (`.claude/hooks/context-size-advisor.mjs`: `Number(process.env...) || 150_000`).
+ * (`.claude/hooks/context-size-advisor.mjs`: `Number(process.env...) || 250_000`).
  * Kept identical on purpose — two fallbacks that disagree would be a second source of truth.
+ *
+ * Raised 150_000 → 250_000 on 2026-08-07, see MEASURED_COMPACT_FRACTION below for the evidence.
  */
-export const DOCUMENTED_FALLBACK_WINDOW = 150_000;
+export const DOCUMENTED_FALLBACK_WINDOW = 250_000;
 
-/** Native auto-compaction fires at ~92-95% of the window (Anthropic default). */
-export const NATIVE_COMPACT_FRACTION = [0.92, 0.95];
+/**
+ * Where auto-compaction ACTUALLY fires, as a fraction of the window — measured, not documented.
+ *
+ * The old literal here was [0.92, 0.95] ("Anthropic default"), which nothing in this repo had ever
+ * checked against a transcript. Measuring every sentinel session's peak turn (input + cache_read +
+ * cache_creation) says otherwise: under the 150k pin, 20+ independent sessions across three weeks
+ * all topped out in a tight 116.0k-119.9k band — 0.77-0.80 of the window, never 0.92. The most
+ * likely mechanism is that the harness reserves the max output budget (150k - 32k ≈ 118k), but the
+ * ratio is what we can prove, so the ratio is what is stored.
+ *
+ * This matters because it is 20% of the window, and the advisor's warn line was set from the wrong
+ * number: 0.85 × 150k = 127.5k sat ABOVE a ceiling of ~119k, so the advisory could never fire once.
+ */
+export const NATIVE_COMPACT_FRACTION = [0.77, 0.8];
 
 const ENV_KEY = "CLAUDE_CODE_AUTO_COMPACT_WINDOW";
 
@@ -66,6 +80,53 @@ export function resolveCompactionWindow({ env = {}, settings = null } = {}) {
   }
 
   return { window: DOCUMENTED_FALLBACK_WINDOW, source: "fallback", configured: false, ignored };
+}
+
+/**
+ * The smallest working headroom a session may be configured down to.
+ *
+ * Derived, not chosen: sessions from 2026-07-15 to 2026-07-31 opened at a ~52-66k floor against a
+ * ~119k ceiling — ~60k of headroom — and ran to 4,731 turns with no thrash complaint. Sessions from
+ * 2026-08-04 on opened at a 75-128k floor against the SAME ceiling, leaving ~30k or in one case a
+ * NEGATIVE margin (a 128,085-token first turn), and thrashed immediately. 60k is the last width
+ * that is known to have worked.
+ */
+export const MIN_WORKING_HEADROOM = 60_000;
+
+/**
+ * Working headroom = where compaction actually fires − the fixed per-turn floor.
+ *
+ * This is the number that decides whether a session is usable, and until 2026-08-07 nothing
+ * computed it. Both prior fixes missed for the same reason: #84 (big-read guard) only limits new
+ * bulk, and #85 (refill-velocity detector) only reports the thrash after it happens. Neither raises
+ * the ceiling nor lowers the floor, so neither could change this subtraction.
+ *
+ * `floorTokens` is the fixed payload re-sent every turn — system prompt, tool + MCP listings,
+ * auto-loaded CLAUDE.md/MEMORY.md, skill and agent listings, the carried handoff. Measure it as a
+ * session's FIRST recorded turn, before any work: that turn is the floor by definition.
+ *
+ * @param {ReturnType<typeof resolveCompactionWindow>} resolved
+ * @param {number} floorTokens
+ * @returns {{ceiling: number, floor: number, headroom: number, ok: boolean, reason: string}}
+ */
+export function usableHeadroom(resolved, floorTokens) {
+  const k = (n) => `${Math.round(n / 1000)}k`;
+  const floor = Math.max(0, Number(floorTokens) || 0);
+  const ceiling = Math.round(resolved.window * NATIVE_COMPACT_FRACTION[0]);
+  const headroom = ceiling - floor;
+  const ok = headroom >= MIN_WORKING_HEADROOM;
+  return {
+    ceiling,
+    floor,
+    headroom,
+    ok,
+    reason: ok
+      ? `${k(headroom)} of working headroom (compaction fires ≈${k(ceiling)}, fixed floor ${k(floor)})`
+      : `🔴 only ${k(headroom)} of working headroom — compaction fires ≈${k(ceiling)} and the fixed ` +
+        `per-turn floor is already ${k(floor)}. Below ${k(MIN_WORKING_HEADROOM)} a session refills ` +
+        `within a turn or two of every compact, which IS the "Autocompact is thrashing" condition. ` +
+        `Raise ${ENV_KEY} or cut the floor (auto-loaded docs, MCP connectors, skill listings).`,
+  };
 }
 
 /** Read a project `.claude/settings.json`. Returns null when absent/unreadable/invalid — never throws. */
