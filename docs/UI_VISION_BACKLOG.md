@@ -81,7 +81,7 @@ Monitor 4, Lab 5) and the pruning pass has never run. That is the leading mechan
 It is also the same work as **P2 "reversible generation pruning"** in `BACKLOG.md`, which is why the
 backend runway and this ask meet at the same next train.
 
-### PAL-1. The caption colour is too dim to read — palette lift is an owner taste call 🔴 OPEN
+### PAL-1. The caption colour is too dim to read — palette lift queued, mine to ship 🔴 OPEN
 
 **Measured 2026-08-06.** `--v2-faint` renders **3.63:1** against the page background. WCAG AA lets a
 colour that dim carry only *large* text (≥24px, or ≥18.66px bold); small text owes **4.5:1**. Every
@@ -94,12 +94,15 @@ contract is fiction in practice: version stamps, eyebrows, units, hints and tags
 a good monitor in a dark room, not readable for everyone. For a product sold as "a portal for
 everyone," that is a real defect, not a nitpick.
 
-**Why it is parked here and not just fixed:** raising `--v2-faint` is a **palette change**, which is
-owner territory (aesthetic taste call), and it compresses the muted/faint hierarchy — three text
-tiers become closer to two. That is a look decision, his to make. Options when he wants it:
-(a) lift `--v2-faint` to ≥4.5:1 and re-space `--v2-muted` above it; (b) retire the faint tier and
-fold those 29 sites onto `--v2-muted`; (c) keep the colour, raise the type — only honest where the
-text can actually be large, which is almost nowhere in these 29.
+**Why it is still open, and who decides it (revised 2026-08-07):** raising `--v2-faint` is a palette
+change that compresses the muted/faint hierarchy — three text tiers become closer to two. Under the
+decree in `CLAUDE.md` ("TASTE IS MINE TO EXERCISE, HIS TO OVERRULE") that is **mine to decide and
+ship**, with a before/after posted so the owner can veto on sight. It is open because the change is
+unbuilt, not because it is waiting on him. **Recommendation: (a)** — lift `--v2-faint` to ≥4.5:1 and
+re-space `--v2-muted` above it, keeping three tiers. Rejected alternatives: (b) retiring the faint
+tier and folding all 29 sites onto `--v2-muted` flattens the hierarchy the HUD reads by;
+(c) keeping the colour and raising the type is only honest where the text can actually be large,
+which is almost nowhere in these 29.
 
 **Holding the line meanwhile:** `src/design/tokens-v2-guard.test.ts` → "caption-token usage" freezes
 the 29 as a **ratchet** — a 30th site fails the build, and a baselined site that gets fixed without
