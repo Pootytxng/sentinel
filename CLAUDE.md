@@ -170,6 +170,10 @@ A `ship-reminder` PostToolUse hook nudges this after any `tauri build`. Memory:
 - Remote `Pootytxng/sentinel`, branch `main` (resolves directly, not a redirect).
 - Dev loop: `npm run tauri dev` from repo root. Tests: `cargo test --manifest-path src-tauri/Cargo.toml`.
   Fresh shells may need `export PATH="$HOME/.cargo/bin:$PATH"`. Git CRLF warnings are benign.
+- **`npm run verify` is the pre-push gate** — it runs everything `.github/workflows/ci.yml` runs, in
+  order, on this machine (~3.5 min; `--fast` skips the Rust half). Hosted Actions is a metered
+  private-repo budget that dies with `steps: 0` and no log when it lapses, so the green tick that
+  matters is this one. `scripts/verify-like-ci.test.mjs` fails the build if the two drift apart.
 - Runtime data: Trust Ledger `%APPDATA%\Compy\history.json`; FPS IPC (`fps.json`/`fps.alive`) at
   `%APPDATA%\Compy\runtime\`. `%LOCALAPPDATA%\Compy\` is the NSIS per-user INSTALL dir (exe +
   `launch-debug.log`, debug only) — **never IPC**.

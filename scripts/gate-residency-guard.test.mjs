@@ -170,6 +170,10 @@ const RESIDENCY = {
     kind: "scheduled",
     why: "The CompyUsageAudit Windows task runs it Mondays and writes docs/usage-audit/LATEST.md. It reads session transcripts outside the repo, so a commit cannot change its answer.",
   },
+  "verify-like-ci.mjs": {
+    kind: "npm-script",
+    why: "`npm run verify` runs the whole CI workflow on this machine, `npm test` included. Making it resident would mean the suite starts itself, so what IS resident is the honesty of its step list — scripts/verify-like-ci.test.mjs fails the build when it and .github/workflows/ci.yml disagree about which checks exist.",
+  },
   "verify-module-map.mjs": { kind: "npm-test", runner: "scripts/verify-module-map-guard.test.mjs" },
   "verify-release-state.mjs": {
     kind: "npm-test",
