@@ -76,6 +76,17 @@
             "statusMessage": "subagent spawn-count check"
           }
         ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/big-read-guard.mjs\"",
+            "timeout": 10,
+            "statusMessage": "big-read budget guard"
+          }
+        ]
       }
     ],
     "PostToolUse": [
