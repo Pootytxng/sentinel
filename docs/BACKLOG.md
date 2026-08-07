@@ -22,9 +22,14 @@
 > in [RELEASE_STATE.md](RELEASE_STATE.md). Historical priority sections below remain evidence, not the
 > current pull order.
 
-- [~] **Q0 — LabDeck glance-first presentation pilot:** Active in issue
-  [#14](https://github.com/Pootytxng/sentinel/issues/14), default OFF; preserve the real RigViewer,
-  essential measured gauges, comparison evidence, and the accepted decision-journey organization.
+- [x] **Q0 — LabDeck glance-first presentation pilot: CLOSED, redirected 2026-08-02.** Issue
+  [#14](https://github.com/Pootytxng/sentinel/issues/14) is not canonical and was never merged
+  wholesale — closing verdict redirects into issue [#49](https://github.com/Pootytxng/sentinel/issues/49)'s
+  Quiet Pit Wall Lab step (production order step 6). `feat/user-feedback-lab-recovery` @ `0599013`
+  is preserved as selectively-portable source only: the real rig evidence map, measured gauges,
+  comparison evidence, honest unavailable states, rollback, denial semantics, decision-journey
+  behavior, and a11y/layout guards + tests port into #49's Lab surface only "when they earn parity,"
+  never wholesale.
 - [x] **P0 before the next release or wider beta — ALL THREE LANDED 2026-08-03.**
   - **Q1 privacy/storage/trust-copy truth** — shipped as v0.9.12 (issue
     [#59](https://github.com/Pootytxng/sentinel/issues/59)): absolute offline claims gone from both
@@ -99,7 +104,8 @@
   **Generation pruning DONE 2026-08-06** — 29 unreachable files / ~2,578 lines deleted (two Lab faces,
   three Optimize faces, `CompyHero`, `nav-flags.ts`, the `design/qpw` components, `Gallery`, a second
   `Sparkline`, vendored `MagicBento`); recurrence mechanised by `src/reachability-guard.test.ts`.
-  Remaining under P2: the first-win journey and the evidence exports.
+  Remaining under P2: the first-win journey and the evidence exports — the first-win journey is
+  issue #49's Lab production-order step (see Q0 above for the #14-verdict porting checklist).
 - [x] **Ledger-completeness honesty class — last known open instance CLOSED (found 2026-08-05 during
   the Home train's completeness-critic sweep, fixed the same day, issue #70).** The Lab Optimize
   station's "Applied & history — **every change, undoable**" summary vouched for a set Compy may
