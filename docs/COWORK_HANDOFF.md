@@ -12,8 +12,10 @@
   shell + file access and you USE them to verify ground truth in the repo directly.
 - **CC ("Claude Code" in VS Code)** — owns all git, compiling, tests, Windows verification, installers.
   Everything that touches the build lands there. You hand CC paste-ready prompts; it reports back.
-- **Kuya (owner)** — owns money, taste (theme hexes, tone, naming), people (tester invites/sends),
-  and anything irreversible. He drives; he decides final execution order.
+- **Kuya (owner)** — owns money, brand (product name, logo, price presentation), people (tester
+  invites/sends), and anything irreversible. He drives; he decides final execution order.
+  **Aesthetic taste is NOT his to carry** — agents decide it and show him a before/after to veto
+  (CLAUDE.md, "TASTE IS MINE TO EXERCISE, HIS TO OVERRULE").
 
 **Live execution coordination:** read [`WORK_CONTROL.md`](WORK_CONTROL.md) before starting. The
 linked GitHub Project holds the current executor, worktree, claim, status, and next action. Cowork
@@ -34,8 +36,8 @@ BACKLOG and gate/release truth remains in RELEASE_STATE.
   Broken/wrong/my-miss gets said plainly and FIRST, with the evidence (commit/file/measurement).
   Not a license for fake certainty: unverified stays labeled unverified — that IS facts-first.
 - **Recommend a default and proceed — don't dump options.** Resolve engineering/design forks
-  yourself and record the reasoning; reserve real questions for owner territory (taste/money/people/
-  irreversible). When you do recommend, put the recommended option first.
+  yourself and record the reasoning; reserve real questions for owner territory (money/brand/people/
+  irreversible — not taste). When you do recommend, put the recommended option first.
 - **Explain in user-impact terms,** not internals. He thinks like a user, not a deep-systems engineer.
 - **File reviews get CLICKABLE CARDS, never bare paths** (learned 2026-06-12): inline code-styled
   paths render as red text he can't click. Anything the owner must open → present it as a file

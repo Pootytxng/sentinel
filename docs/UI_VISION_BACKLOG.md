@@ -133,7 +133,7 @@ bottom expandable rows read like footer legalese.
    `ms-settings:windowsdefender`, VRR, HAGS → `ms-settings:display-advancedgraphics`) behind an
    explicit `startsWith("ms-settings:")` allowlist — Settings pages only, never an arbitrary URL.
 
-**Owner taste calls — status 2026-07-23b:**
+**Taste forks the owner picked himself, pre-decree — status 2026-07-23b:**
 (a) ✅ **RESOLVED + SHIPPED (v0.9.5, `67541e4`/`ac518f1`)** — owner picked "apply to all": per-room
 accents stay (his 2026-07-12b feature), plus a one-shot "Apply to all rooms" action in the picker
 popover (accent-tinted primary action above the muted reset; no mode, no hidden state; per-room
@@ -288,7 +288,7 @@ full response ive written here seeing how things seem to get lost in translation
    self-reviewer PASS 8/8). Monitor now opens on the Flight Deck for everyone. **Follow-up logged
    (pre-existing, exposed by the flip): the Monitor room chrome is locked to static violet
    (`monitor-v2.css` play-room re-point) while the SessionStack sparkline follows the live theme —
-   an internal accent mismatch under non-Violet themes; owner-taste call, BACKLOG Cycle 2026-07-12g.**
+   an internal accent mismatch under non-Violet themes; BACKLOG Cycle 2026-07-12g.**
    → ✅ **RESOLVED direction: owner picked "per-room identity" (2026-07-12)** — each room gets its OWN
    accent (Monitor = teal), so the SessionStack sparkline now matches the room chrome instead of clashing.
    Built behind `compy_room_identity` **DEFAULT OFF** (`72fa005`, installer `D23DE073…9EBA9`, stamp-verified)
@@ -593,7 +593,7 @@ self-reviewer round-2 PASS. ~~**Open:** owner one-flip eyeball → default-ON or
 Home/Monitor/JARVIS).~~ → ✅ **FLIPPED DEFAULT-ON 2026-07-13 (`18272be`)** in the graduation batch (owner:
 "everything was supposed to be default on to avoid the QA toggle section") — the "(preview)" Settings row
 is gone, `src/design/theme.ts:578` reads `!== "0"`, devtools `"0"` remains the classic failsafe.
-One known follow-up folded into the shared accent-lock owner-taste call (room `.bc-*` chrome locks to `#a78bfa`
+One known follow-up folded into the shared accent-lock decision (room `.bc-*` chrome locks to `#a78bfa`
 under Crimson via the systemic `--ix-accent → --v2-accent` re-point; identical on Monitor/Lab, 0 vendor-purple).
 → ✅ **RESOLVED direction (owner 2026-07-12): "per-room identity"** — Blackbook = amber, built behind
 `compy_room_identity` **DEFAULT OFF** (`72fa005`) → **DEFAULT-ON 2026-07-13 (`18272be`)**; the owner
@@ -680,8 +680,9 @@ with zero dead runway (guard pins added to `scripts/site-landing.test.mjs`). Res
 deck scrub is the ONLY new scrolled motion — no page-wide scatter. Self-review ran 4 rounds to
 PASS (rounds 2–3 caught a live→results swap-height jump at desktop then mobile; `.rhud-swap`
 min-height now 276px base / 364px ≤720px, verified flat through the swap at 1500×980 AND 390×844).
-Site remains PRE-PUBLISH; owner
-taste sign-off on the live scroll feel is the remaining gate.
+(PRE-PUBLISH at the time of writing — superseded by
+G.2 below, which records the deploy GO. The scroll feel was called in-lane and shipped; under the
+2026-08-07 taste decree it was never an owner gate.)
 
 **G.2 🟢 SHIPPED + DEPLOYED (2026-07-15) — site completion: SEO/launch plumbing + `/compare`.**
 The owner granted the **deploy GO** ("deploy go looks good for now… go about doing the full completion
@@ -710,8 +711,9 @@ speech bubble alert or just something out of the way that you can easily restore
 verbatim: the global crash-recovery prompt + both success confirmations moved from full-width top bars
 into a fixed bottom-right `.gaming-toast-stack` (App.tsx/App.css) with a × dismiss (this-run-only —
 never clears the recovery; never-hide law intact), Resume primary, slide-in gated on
-`data-motion="reduced"`. Self-reviewer PASS (sr-gaming-toast-*.png). One taste note for the owner: the
-literal speech-bubble *tail* was read as an analogy, not built — say the word if you want the pointy tail.
+`data-motion="reduced"`. Self-reviewer PASS (sr-gaming-toast-*.png). Design call made in-lane: the
+literal speech-bubble *tail* was read as an analogy and deliberately not built — a tail pins the toast
+to a source element it does not have. One-word revert if the owner wants the point.
 
 ---
 
@@ -770,6 +772,7 @@ detail: `docs/RELEASE_STATE.md` + `docs/CHANGELOG.md`.
 - **Before claiming any redesign lane "complete":** check that its OPEN items here are closed, not just
   the reskin. A "COMPLETE" checkbox that leaves 🔴 items is how this dropped the first time.
 - **When the owner gives a new UI ask:** add it here with a citation the same session, and (if it needs
-  his hands/eyes/taste) cross-link it in `docs/OWNER_ACTION_CHECKLIST.md`.
+  his hands or his eyes) cross-link it in `docs/OWNER_ACTION_CHECKLIST.md`. **An aesthetic call alone is
+  not a reason to cross-link** — decide it, ship it, show a before/after.
 - **Substitutions:** if you ship a simpler thing than the owner asked, it is NOT done — log it here as a
   substitution needing his sign-off, never silently close it.

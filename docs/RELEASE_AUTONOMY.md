@@ -73,7 +73,7 @@ Stop for the owner only at:
 3. security or Windows system-setting changes;
 4. force-push, destructive history rewrite, or deletion without preservation;
 5. spending money;
-6. material product-scope or aesthetic decisions outside the authorized train; or
+6. material product-scope decisions outside the authorized train — aesthetic taste is NOT one; or
 7. genuinely unresolved options with meaningfully different irreversible consequences.
 
 These gates do not prevent read-only verification of public state or use of a protected signing key

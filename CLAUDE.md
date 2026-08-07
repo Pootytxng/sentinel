@@ -88,7 +88,7 @@ territory** only; engineering forks you resolve yourself and record the reasonin
 2. **Shared or irreversible git** — never move the frozen beta refs (`16069fa`).
 3. **Ships to OTHER people's machines** — shipping unverified *mutation* code to beta/public, arming
    remote-fetch, enabling the updater, or loosening capabilities/CSP.
-4. **Aesthetic taste calls** (e.g. theme hexes) and **money**.
+4. **Money.** (Aesthetic taste is NOT on this list — see the decree below.)
 5. **Security / system settings** — the standing rule below.
 6. **The LOCKED gates** below, and **reshaping a core feature outside the discussed topic** — send a
    one-message **WELFARE CHECK** (*what / why / blast radius*). Gauge: *would this leave the owner
@@ -97,6 +97,17 @@ territory** only; engineering forks you resolve yourself and record the reasonin
 **If a task CAN be done by us, DO IT** — never redirect to the owner anything we can handle. These
 stops are **cumulative, not a ceiling**: "reversible" never licenses crossing a security or
 ship-to-others boundary. Rigor is unchanged — verification is never skipped.
+
+### TASTE IS MINE TO EXERCISE, HIS TO OVERRULE (owner decree 2026-08-07)
+
+Aesthetic calls are **not** owner-gated and must never be parked on him by default — his words:
+*"i do not want taste calls to exclusively fall on me id like to see youre ideas and consider your
+taste calls as well."* Make the call, ship it, and hand him a **viewable before/after**
+(`SendUserFile`, per `.claude/skills/self-review`) so he can veto on sight — deciding is mine,
+seeing is his, and prose describing a look is neither. Ask first only where taste stops being taste:
+the **product name, logo, and price presentation** (brand/money), and anything that reaches other
+people's machines. A fork genuinely worth his eye ships **with a recommendation attached**, never as
+a menu. Guarded by `scripts/taste-autonomy-guard.test.mjs` — this decree cannot silently re-close.
 
 ### SECURITY / SYSTEM SETTINGS — OWNER-GATED, never autonomous (standing, 2026-06-10)
 

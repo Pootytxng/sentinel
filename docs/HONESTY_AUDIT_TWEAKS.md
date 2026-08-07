@@ -6,7 +6,8 @@
 > This file is the **resumable ledger** for the multi-batch pass — each tick appends a batch, so an
 > API-halt never loses progress. Method: [[knowledge-corpus-factcheck-audit]]. Discipline: auto-fix
 > CLEAR factual errors (esp. fabricated/unmeasured numbers — Compy's cardinal sin); hand
-> verdict-calls + voice/nits to `content`/owner (taste = owner territory). Never edit from memory —
+> verdict-calls to `content`/owner (a *verdict* is a factual claim, not taste — voice and tone are
+> ours to call). Never edit from memory —
 > web-verify.
 
 Corpus: **84 entries** — 28 `real` · 17 `risky` · 39 `placebo`.

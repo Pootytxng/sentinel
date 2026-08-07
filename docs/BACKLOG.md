@@ -148,8 +148,9 @@ experiments + logbook. Matthew praised: guided-setup rail line, simple home, Opt
   `cursor: pointer` beats an inherited `cursor: none`). It had **no guard**; added
   `src/design/console/reticle-cursor-contract.test.ts` (`e2f1322`) pinning the selector, the
   `!important`, both escapes (text entry, `:disabled`) and the z-index band. Matthew's separate
-  "square crosshair is a little weird" is a TASTE call on the reticle's shape and stays OPEN as
-  owner territory — it was never the same defect as the two-cursor bug.
+  "square crosshair is a little weird" is about the reticle's SHAPE and stays OPEN — a taste call,
+  which since 2026-08-07 is ours to make and show, not the owner's to adjudicate (CLAUDE.md, "TASTE
+  IS MINE TO EXERCISE, HIS TO OVERRULE"). It was never the same defect as the two-cursor bug.
 - [x] **J: "1 safe tweak not applied" is a dead end** — ✅ SHIPPED 2026-08-03 (`17d5f84`). The
   detail was never missing: `apply_recommendations_batch` already returns `{ title, reason }` per
   skip and HomeConsole discarded it one line after arrival, keeping only `.length`. The receipt now
@@ -163,8 +164,9 @@ experiments + logbook. Matthew praised: guided-setup rail line, simple home, Opt
   skip-bearing batch receipt — no machine mutation. 7/7 rubric PASS. One flag, not new to this diff:
   the skip-reason line inherits the muted caption token at 3.44:1 on 12.5px — sub-AA for body text,
   but it is the same token already shipping one line above and it clears the deliberate AA-large
-  floor `src/theme-contrast.test.ts:100` pins for `--ix-text-3`. Raising that floor is a theme-hex
-  call (owner territory), so it is logged here, not changed under a T4 review.
+  floor `src/theme-contrast.test.ts:100` pins for `--ix-text-3`. Raising that floor is ours to call
+  (2026-08-07 taste decree) but it repaints every muted caption in the app — too wide for a T4
+  review to absorb, so it stays logged here as its own scoped change, not deferred to the owner.
 - [x] **J: post-check routing** — ✅ ALREADY SHIPPED (found 2026-08-03, stale entry). FirstCheck
   renders "Take me to the Lab" beside "Open the dashboard" and deep-links the Optimize station via
   the one-shot `compy_lab_open_station` handoff (App writes before `navHome("lab")`; LabConsole
@@ -177,7 +179,7 @@ experiments + logbook. Matthew praised: guided-setup rail line, simple home, Opt
   + bordered Not-for-me in a visible actions row. Live-verified via CDP (6 doors, no-guide case).
   **Test-debt:** a DOM guard for the door behavior is NOT yet written (live-verified only) — add to
   `optimize-v2-ia.test.tsx` next pass. Apply-from-card stays absent BY DESIGN (no safe switch).
-- [x] **J: per-room accents read as INCONSISTENCY** — ✅ RESOLVED per owner taste call 2026-07-23
+- [x] **J: per-room accents read as INCONSISTENCY** — ✅ RESOLVED per the owner's own 2026-07-23 pick
   ("apply to all"): SHIPPED v0.9.5 (`67541e4` feat · `ac518f1` release) through the updater — one-tap
   "Apply to all rooms" in the accent picker; per-room freedom intact. Live-proven + owner state
   restored. UI_VISION_BACKLOG NAV-1 (a) has the record.
@@ -404,7 +406,7 @@ and a second park overwrote the first one's interval so the accumulated offset w
 (`3ad6eb48` — the lane teleported). `src/design/jarvis/lenis-wake-guard.test.tsx` pins all five
 wake paths, the monotonic clock across three parks, and overlapping parks counted once each.
 
-- **Taste substitution, owner-flagged** (`OWNER_ACTION_CHECKLIST.md` §D): the foil now sweeps a bounded
+- **Look substitution, surfaced not gated** (`OWNER_ACTION_CHECKLIST.md` §D): the foil now sweeps a bounded
   number of times and settles, instead of forever. One-word revert is `both` → `infinite`.
 - **DISCLOSED GAP:** `TwoFuturesScene` could not be visually verified — it only mounts with a measured
   before/after pair this desk lacks; its diff is an `aria-hidden` label only.
@@ -868,15 +870,16 @@ When running a `/loop` or scheduled session against "the checklist":
    - *"Phase A `[ ]` count is now 0; remaining work is Phase B/C/D which is gated — confirm before I cross a gate."*
    - A bare "I'm finished, standing by" with un-ticked `[ ]` items above is a **false finish** — keep going.
 3. **A green test suite is NOT the stop signal.** The stop signal is "no un-ticked, non-gated item remains."
-4. Owner-gated items (🔒 money/distribution, 🪪 mutation catalog-expansion, 📡 telemetry/outbound,
-   🎨 taste) are *blockers to surface*, never silently skipped or marked done.
+4. Owner-gated items (🔒 money/distribution, 🪪 mutation catalog-expansion, 📡 telemetry/outbound)
+   are *blockers to surface*, never silently skipped or marked done. **Aesthetics are not on that
+   list** (2026-08-07 decree) — decide it, ship it, hand him a before/after to veto on sight.
 5. **Branch redundancy: judge by the TREE, not ahead/behind.** Lanes merge via PR (new hashes), so a branch can
    read "N ahead / `git cherry` all `+`" while its content is **already in main**. Before flagging a branch as
    "stranded/unmerged work," run `git merge-tree --write-tree main <branch>` — if it equals `git rev-parse main^{tree}`,
    the merge is a no-op → already shipped → prune, don't surface. Only a tree-changing merge is real unmerged work.
    And re-RUN cargo/vitest for counts each cycle — never carry an assumed number forward. ([[branch-redundancy-detect-by-mergetree]])
 
-> **🌿 Branch-integration health** — the 2026-06-24e sweep (every branch dispositioned, `main` the single product truth) is a **point-in-time record**, moved verbatim to `BACKLOG_ARCHIVE.md` (2026-07-22). **Its standing claim was false when written and is now enforced instead of asserted (2026-08-04, Q6):** every one of the **20** origin branches carries a row in **`docs/BRANCH_DISPOSITIONS.md`**, and `scripts/branch-disposition-audit.mjs` fails the build when a ref has no row, a row names a dead ref, or a `MERGED` row stops being a no-op. Result: 6 MERGED · 6 SUPERSEDED (content reached `main` by another path) · 3 PRESERVE (the frozen beta ref + two failed v0.9.9 candidates `RELEASE_AUTONOMY.md` requires kept) · 1 CLAIMED by the Codex lane (`feat/console-project-doctor`, no automatic takeover) · **4 UNLANDED** carrying real work — `codex/tool-shed-hygiene` (partial), `feat/bklit-anime-design-system` (owner taste), `feat/user-feedback-lab-recovery` (owner review), `design/quiet-pit-wall` (deferred, needs a visual self-review). `main` remains the **release** truth — every shipped build is built from it — but that is not a claim that no work lives elsewhere; live lane ownership is governed by `docs/WORK_CONTROL.md`. The durable merge-tree law stays in protocol rule 5 above; re-run it before asserting a branch is stranded.
+> **🌿 Branch-integration health** — the 2026-06-24e sweep (every branch dispositioned, `main` the single product truth) is a **point-in-time record**, moved verbatim to `BACKLOG_ARCHIVE.md` (2026-07-22). **Its standing claim was false when written and is now enforced instead of asserted (2026-08-04, Q6):** every one of the **20** origin branches carries a row in **`docs/BRANCH_DISPOSITIONS.md`**, and `scripts/branch-disposition-audit.mjs` fails the build when a ref has no row, a row names a dead ref, or a `MERGED` row stops being a no-op. Result: 6 MERGED · 6 SUPERSEDED (content reached `main` by another path) · 3 PRESERVE (the frozen beta ref + two failed v0.9.9 candidates `RELEASE_AUTONOMY.md` requires kept) · 1 CLAIMED by the Codex lane (`feat/console-project-doctor`, no automatic takeover) · **4 UNLANDED** carrying real work — `codex/tool-shed-hygiene` (partial), `feat/bklit-anime-design-system` (owner product-scope), `feat/user-feedback-lab-recovery` (owner review), `design/quiet-pit-wall` (deferred, needs a visual self-review). `main` remains the **release** truth — every shipped build is built from it — but that is not a claim that no work lives elsewhere; live lane ownership is governed by `docs/WORK_CONTROL.md`. The durable merge-tree law stays in protocol rule 5 above; re-run it before asserting a branch is stranded.
 
 ---
 
@@ -1099,8 +1102,9 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   row yields to the LAST SESSION verdict block when it renders (self-reviewer rubric-3 catch → bug→guard
   `home-intake.test.tsx`, 15/15). Self-reviewer **PASS** (both catches — session-question duplication +
   disabled-button hover leak — verified fixed with live-DOM/computed-style proof; full pass, no regressions).
-  tsc clean. **Awaiting owner eyeball + default-ON/ship call** (owner taste call, per the slim-down flag
-  precedent). Symptom→ROOM map surfaced in the ship report.
+  tsc clean. **The default-ON/ship call is MINE** (2026-08-07 taste decree) — was parked on the owner
+  under the slim-down-flag precedent; now: ship it and hand him a before/after to veto on sight, don't
+  wait. Symptom→ROOM map surfaced in the ship report.
 - [x] basic-mode simplification — SCOPE-CHECK FIRST, build only what's missing: FirstCheck's one-verdict
   flow + verdict cards + the answer-first Home already cover most of "one screen, one verdict, one
   action"; audit that flow against the panel's basic-mode ask and close only genuine gaps (no parallel

@@ -63,15 +63,14 @@ trunk, and a worktree's `main` pointer can sit weeks behind without anyone notic
 
 Swept 2026-08-04 against `main` @ `1a513cb`; the `origin/claude/*` rows added 2026-08-05 against
 `origin/main` @ `6712c14`, and re-proven the same day against `origin/main` @ `2e5365d` once the
-three-PR stack (#69 → #71 → #72) had landed. Six of those lane refs are gone rather than listed
-MERGED — `ci-entry-mainmodule-posix` (`fcb2a22`), `ledger-honesty-optimize-station` (`069536e`),
-`ci-health-reporter` (`81c6877`), `claude/compy-next-phase-1f6a80` (the Q7 train, PR
-[#74](https://github.com/Pootytxng/sentinel/pull/74), rebase-merged as `6583fda5`) and
-`claude/prune-dead-generations-1f6a80` (the generation prune, PR
-[#78](https://github.com/Pootytxng/sentinel/pull/78), squash-landed as `1ab831fb`) and
-`claude/check-fix-hallway-1f6a80` (the check→fix hallway, PR
-[#79](https://github.com/Pootytxng/sentinel/pull/79), squash-landed as `0a52215e`) were pruned on
-landing, per the rule above.
+three-PR stack (#69 → #71 → #72) had landed. Nine lane refs are **gone rather than listed MERGED**,
+pruned on landing per the rule above — `ci-entry-mainmodule-posix`, `ledger-honesty-optimize-station`,
+`ci-health-reporter`, and the `claude/*` lanes behind PRs
+[#74](https://github.com/Pootytxng/sentinel/pull/74) · [#78](https://github.com/Pootytxng/sentinel/pull/78) ·
+[#79](https://github.com/Pootytxng/sentinel/pull/79) · [#80](https://github.com/Pootytxng/sentinel/pull/80) ·
+[#81](https://github.com/Pootytxng/sentinel/pull/81) · [#82](https://github.com/Pootytxng/sentinel/pull/82).
+A landed ref's row is its own tombstone: prune the ref and the row in the same commit that records
+the merge, so this table only ever lists refs that still exist.
 
 | ref | disposition | evidence |
 | --- | --- | --- |
@@ -93,7 +92,7 @@ landing, per the rule above.
 | `origin/latency-capture` | SUPERSEDED | `main`'s `src-tauri/src/latency.rs` is +631/−154 *ahead* of the branch and contains every symbol the branch defines. |
 | `origin/docs/claude-md-split` | SUPERSEDED | Re-authored on 2026-08-04, not merged. `353967f` predates `scripts/verify-module-map.mjs` (created 2026-08-02) and would have made all 19 moved modules report `MISSING`; the re-author extends the verifier to read both halves as one map (`SUBMAP-MISSING`, `DUPLICATE`) and moves the Intelligence block the branch never saw. |
 | `origin/codex/tool-shed-hygiene` | UNLANDED | **Partially landed.** `scripts/markdown-link-guard.mjs` is byte-identical on `main`, but the `.agents/skills/*` mirror layer (10 files), `scripts/agents-layout-guard.mjs` + its test, two archive splits and the plan doc are all absent. Codex-lane tooling — the unlanded half is the `.agents/` mirror, not a product change. |
-| `origin/feat/bklit-anime-design-system` | UNLANDED | One commit `6fac5c1`, 76 files / 10739 insertions — vendors the Bklit UI chart engine + anime.js v4, no Tailwind adopted. Merges clean. **Owner taste call**, not an engineering one. |
+| `origin/feat/bklit-anime-design-system` | UNLANDED | One commit `6fac5c1`, 76 files / 10739 insertions — vendors the Bklit UI chart engine + anime.js v4, no Tailwind adopted. Merges clean. **Owner product-scope call** (adopting a vendored design system), not a taste one. |
 | `origin/feat/user-feedback-lab-recovery` | UNLANDED | 49 commits, 120 files, 14703 insertions; 42 files absent from `main` (LabDeck, RecDetailCard, the decision-journey IA and its guards). The compaction-window work from this branch *did* land. The Lab candidate sits behind a temporary owner flag and is a large product/design train — **owner review**, and a visual self-review, before any of it moves. |
 | `origin/claude/review-consolidation-structure-9d13f2` | UNLANDED | A sibling Claude Code worktree branch, 7 commits ahead / 27 behind `main`. Carries four things `main` does not have: `docs/decisions/2026-08-04-startup-term-analysis-review.md` (absent from `main`), the `CLAUDE_CODE_AUTO_COMPACT_WINDOW` 150k→300k bump, Rust test-only coverage in `stutter.rs` / `capture.rs` / `benchmark_trial.rs`, and **a one-line `site/llms.txt` fix — `main` still says "free desktop app", which contradicts the owner's 2026-07-21 monetization decree and is currently live on `compy.gg`.** Predates `support_evidence.rs`, so merging it whole would delete 1,074 lines; the landing path is per-file, not a merge. Not this lane's branch — dispositioned, untouched. |
 | `origin/design/quiet-pit-wall` | UNLANDED | **Partially landed.** 22 files / 5147 insertions vs merge-base `36bdf6b`, issue [#49](https://github.com/Pootytxng/sentinel/issues/49). **Half A landed** — the inert `[data-qpw="on"]` token + component-contract layer, its two guard suites, the four prototypes + inventory docs, the `vitest.config.ts` `NODE_ENV` pin, and the `ExperimentBench.css` motion-gate fix. Applied in this commit by `git checkout <branch> -- <paths>`. Not a merge — the branch is ~100 files behind `main`, and merging would drag stale copies. **Half B held — owner territory:** the branch flips `use-motion.ts`'s default from `"full"` to `"system"`, reversing the owner's explicit 2026-06-19 decision; on his own WebView2 (`prefers-reduced-motion: reduce`) that makes the whole app static. Welfare check filed in `OWNER_ACTION_CHECKLIST.md` §D. Held with it: `use-motion.test.ts`, the two `settings.json` locales, `Settings.test.tsx`, the `Walkthrough.tsx` comment. The branch's own guard asserted the flipped default; that assertion was re-pinned to the owner's decision rather than landed. |
