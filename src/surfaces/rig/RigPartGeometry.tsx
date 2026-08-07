@@ -1,4 +1,5 @@
 import { Edges } from "@react-three/drei";
+import { Mesh } from "three";
 import type { RigPartKind, Vec3 } from "./rig-parts";
 
 // Holographic wireframe geometry per part kind (adapted from the HoloForge prototype). Colour is the
@@ -6,6 +7,15 @@ import type { RigPartKind, Vec3 } from "./rig-parts";
 // unreadable — so the honesty reads visually, not just in the label.
 
 const HALF_PI = Math.PI / 2;
+
+// A mesh wearing this contributes no raycast hits, so the pointer passes straight through it to
+// whatever is behind. Module-level so the prop identity never changes: r3f re-commits (and
+// invalidates the demand-mode canvas) on referentially-new mesh props, and this file is inside the
+// resting hologram's zero-idle-cost budget.
+export const NO_HIT = () => null;
+/** three's own mesh raycast, named so the prop is always set explicitly — handing r3f `undefined`
+    leaves whatever was there before, which would strand a mesh as unhittable after a flip. */
+const DEFAULT_HIT = Mesh.prototype.raycast;
 
 function fill(active: boolean, detected: boolean) {
   if (!detected) return active ? 0.13 : 0.05; // honest ghost: barely there
@@ -22,11 +32,13 @@ interface BoxProps {
   /** Measured-emphasis multiplier on the emissive glow (Two Futures: per-component
       efficacy delta). 1 = neutral — existing callers render unchanged. */
   glow?: number;
+  /** Drawn, but invisible to the pointer — see NO_HIT. */
+  noHit?: boolean;
 }
 
-function HoloBox({ args, position, rotation, color, active, detected, glow = 1 }: BoxProps) {
+function HoloBox({ args, position, rotation, color, active, detected, glow = 1, noHit }: BoxProps) {
   return (
-    <mesh position={position} rotation={rotation}>
+    <mesh position={position} rotation={rotation} raycast={noHit ? NO_HIT : DEFAULT_HIT}>
       <boxGeometry args={args} />
       <meshStandardMaterial
         color={color}
@@ -53,6 +65,7 @@ function HoloCyl({
   detected,
   glow = 1,
   segments = 28,
+  noHit,
 }: {
   radius: number;
   height: number;
@@ -63,9 +76,10 @@ function HoloCyl({
   detected: boolean;
   glow?: number;
   segments?: number;
+  noHit?: boolean;
 }) {
   return (
-    <mesh position={position} rotation={rotation}>
+    <mesh position={position} rotation={rotation} raycast={noHit ? NO_HIT : DEFAULT_HIT}>
       <cylinderGeometry args={[radius, radius, height, segments]} />
       <meshStandardMaterial
         color={color}
@@ -88,6 +102,7 @@ export function RigPartGeometry({
   active,
   detected,
   glow = 1,
+  pointerThrough = false,
 }: {
   kind: RigPartKind;
   color: string;
@@ -96,8 +111,16 @@ export function RigPartGeometry({
   /** Measured-emphasis glow multiplier (1 = neutral; only Two Futures passes ≠1, and only
       from a per-component efficacy row — never implied without data). */
   glow?: number;
+  /** This part stands between the camera and a real, detected one, so the geometry that covers it
+      must let the pointer through — drawn exactly as before, just not raycast. Only the mounting
+      face passes through where a kind HAS one: a cooler's fin stack towers well clear of the socket
+      and stays clickable in its own right, which is how the cooler keeps its own honest
+      "nothing to read here" card. Set from `shadowingGhostIds` in RigHologram, evidence-map only. */
+  pointerThrough?: boolean;
 }) {
-  const p = { color, active, detected, glow };
+  const p = { color, active, detected, glow, noHit: pointerThrough };
+  // The tower above the socket blocks nothing, so it keeps its hitbox even when the base gives up.
+  const clear = { ...p, noHit: false };
   switch (kind) {
     case "board":
       return (
@@ -124,9 +147,16 @@ export function RigPartGeometry({
         <group>
           <HoloBox args={[0.62, 0.62, 0.3]} {...p} />
           <HoloCyl radius={0.22} height={0.34} rotation={[HALF_PI, 0, 0]} {...p} />
-          <HoloBox args={[1.9, 0.55, 0.16]} position={[0, 1.0, 0]} {...p} />
+          <HoloBox args={[1.9, 0.55, 0.16]} position={[0, 1.0, 0]} {...clear} />
           {[-0.6, 0, 0.6].map((x) => (
-            <HoloCyl key={x} radius={0.22} height={0.18} position={[x, 1.0, 0]} rotation={[0, 0, HALF_PI]} {...p} />
+            <HoloCyl
+              key={x}
+              radius={0.22}
+              height={0.18}
+              position={[x, 1.0, 0]}
+              rotation={[0, 0, HALF_PI]}
+              {...clear}
+            />
           ))}
         </group>
       );

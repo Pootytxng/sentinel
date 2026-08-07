@@ -120,7 +120,30 @@
     "unitFrames": "frames",
     "closeStationAriaLabel": "Close station",
     "close": "Close",
-    "optimizeReassurance": "This station applies your safe stack in one click — and like every change made in this room, it's fully reversible."
+    "optimizeReassurance": "This station applies your safe stack in one click — and like every change made in this room, it's fully reversible.",
+    "evidence": {
+      "subsystem": {
+        "cpu": "Processor",
+        "gpu": "Graphics",
+        "memory": "Memory",
+        "storage": "Storage",
+        "display": "Display",
+        "network": "Network",
+        "audio": "Audio",
+        "thermals": "Cooling",
+        "system": "System"
+      },
+      "reading": {
+        "cores": "Cores · threads",
+        "clock": "Reported clock",
+        "vram": "Video memory",
+        "driver": "Driver version",
+        "memory": "In use",
+        "storage": "Free space",
+        "refresh": "Refresh rate"
+      },
+      "empty": "Nothing to read here — Compy has no measurement of its own for this part, and it won't invent one."
+    }
   },
   "optimizeStation": {
     "gaugeAriaLabel": "{{applied}} of {{total}} safe tweaks on",

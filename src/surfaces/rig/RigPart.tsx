@@ -24,6 +24,15 @@ interface Props {
   /** Measured-emphasis glow multiplier (Two Futures per-component efficacy; default 1 =
       neutral, existing hosts unchanged). */
   glow?: number;
+  /** true → the part stands in front of a real, detected one, so the covering geometry stops
+      taking raycast hits and clicks reach the part behind (see `shadowingGhostIds`). Every mesh
+      here stops propagation, so without this the nearest one always wins. Default false —
+      existing hosts are untouched. */
+  pointerThrough?: boolean;
+  /** false → the on-canvas spec card is suppressed while THIS part is the selected one, because
+      the host is already showing its readings somewhere else (the Lab evidence panel). Hover cards
+      for other parts are unaffected. Default true. */
+  cardOnSelect?: boolean;
 }
 
 export function RigPart({
@@ -37,12 +46,17 @@ export function RigPart({
   onSelect,
   onHover,
   glow = 1,
+  pointerThrough = false,
+  cardOnSelect = true,
 }: Props) {
   const { t } = useTranslation();
   const groupRef = useRef<Group>(null);
   const [hovered, setHovered] = useState(false);
   const active = hovered || hoveredId === part.id || selectedId === part.id;
   const below = useTooltipFlip(groupRef, active);
+  // The spec card and the Lab's evidence panel carry the same numbers, so only one of them speaks
+  // for the selected part. Hovering a DIFFERENT part still gets its card.
+  const showCard = active && (cardOnSelect || selectedId !== part.id);
 
   useFrame((state, delta) => {
     const g = groupRef.current;
@@ -69,6 +83,10 @@ export function RigPart({
     <group
       ref={groupRef}
       position={part.assembled}
+      // Handlers are ALWAYS attached, even for a pass-through part: pointer transparency is done
+      // per-mesh in RigPartGeometry (`raycast`), never by adding/removing handlers. Toggling them
+      // re-registers the object with r3f's event system and re-commits its props, which invalidates
+      // the demand-mode canvas — the resting bay must cost zero draws.
       onPointerOver={(e) => {
         e.stopPropagation();
         setHovered(true);
@@ -86,9 +104,16 @@ export function RigPart({
         onSelect(part.id);
       }}
     >
-      <RigPartGeometry kind={part.kind} color={color} active={active} detected={part.detected} glow={glow} />
+      <RigPartGeometry
+        kind={part.kind}
+        color={color}
+        active={active}
+        detected={part.detected}
+        glow={glow}
+        pointerThrough={pointerThrough}
+      />
 
-      {active && (
+      {showCard && (
         <Html position={[0, 0, 0]} center distanceFactor={8} zIndexRange={[100, 0]} style={{ pointerEvents: "none" }}>
           <div
             style={{

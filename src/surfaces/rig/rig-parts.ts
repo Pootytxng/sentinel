@@ -35,6 +35,16 @@ function row(start: Vec3, step: Vec3, i: number): Vec3 {
   return [start[0] + step[0] * i, start[1] + step[1] * i, start[2] + step[2] * i];
 }
 
+// Drive bay. Drives used to sit at [-0.55, -0.4, -0.6] — directly BEHIND and BELOW the graphics
+// card, whose slab spans x -1.1..1.3 / y -0.53..0.48 / z -0.66..0.29 once the group offset is
+// applied. From the fixed camera the card covered the drives completely, so a real, detected part
+// was never hoverable or clickable in the assembled pose (caught in self-review of the Lab evidence
+// map, 2026-08-07). They now live in the clear gap between the card and the PSU shroud, which is
+// also where drive cages actually are. `unreachableDetectedIds` below is the guard that keeps them
+// reachable.
+const STORAGE_BAY: Vec3 = [-0.55, -0.82, 0.1];
+const STORAGE_STEP: Vec3 = [0, -0.2, 0];
+
 // Static-copy translator for this module's `gaming.rigViewer.parts.*` keys. `t` omitted (or the
 // `!t` branch, used by every existing caller/test) returns byte-identical English — including
 // simple `{{var}}` interpolation, so templated fallbacks (e.g. "Memory · Slot {{n}}") still render
@@ -196,7 +206,7 @@ export function buildRigParts(hw: HardwareInfo, t?: TFunction): RigPart[] {
         category: tp(t, "storageCategory", "Storage"),
         kind: "storage",
         detected: true,
-        assembled: row([-0.55, -0.4, -0.6], [0, -0.22, 0], i),
+        assembled: row(STORAGE_BAY, STORAGE_STEP, i),
         exploded: row([-3.1, -0.5, 0.9], [-0.25, -0.25, 0], i),
         rotation: [0, 0.6, 0.5],
         tagline: `${d.media_type || ""} ${fmtGB(d.size_bytes)}`.trim(),
@@ -215,7 +225,7 @@ export function buildRigParts(hw: HardwareInfo, t?: TFunction): RigPart[] {
         category: tp(t, "storageCategory", "Storage"),
         kind: "storage",
         detected: true,
-        assembled: row([-0.55, -0.4, -0.6], [0, -0.22, 0], i),
+        assembled: row(STORAGE_BAY, STORAGE_STEP, i),
         exploded: row([-3.1, -0.5, 0.9], [-0.25, -0.25, 0], i),
         rotation: [0, 0.6, 0.5],
         tagline: `${fmtGB(d.total_bytes)} · ${d.file_system}`,
@@ -267,3 +277,201 @@ export function buildRigParts(hw: HardwareInfo, t?: TFunction): RigPart[] {
 
   return parts;
 }
+
+/** How close two parts' assembled x/y must be to count as "the same spot on screen". Generous on
+ *  purpose: these meshes have real width, so sharing an axis within a part-width is enough to
+ *  swallow a click aimed at the one behind. */
+const SHADOW_RADIUS = 0.35;
+
+/**
+ * Parts that sit directly in FRONT of another part and can never carry a reading of their own.
+ *
+ * Found by the Rig Evidence Map self-review (2026-08-07): the CPU is unselectable in the assembled
+ * pose. `cooler` sits at [0.05, 1.15, -0.16] and the CPU at [0.05, 1.15, -0.58] — identical x/y,
+ * cooler 0.42 nearer the camera — and every mesh calls `stopPropagation()` in its pointer handlers,
+ * so the nearest one wins and the CPU never receives the click. The user can only reach it by
+ * manually drag-rotating, and the Ops Console renders `chromeless`, which hides the very orbit and
+ * explode controls that would hint at that.
+ *
+ * The rule is narrow on purpose. A part is shadowing only if it is BOTH:
+ *   - `detected: false` — a ghost placeholder for something Compy cannot read, so selecting it can
+ *     never produce a reading; its evidence panel is the empty sentence no matter what. Nothing is
+ *     lost by letting a click pass through it.
+ *   - nearer the camera than a DETECTED part on the same x/y axis — i.e. actually in the way.
+ *
+ * A ghost standing on its own (the PSU, off on its own axis) stays fully selectable, and no detected
+ * part is ever made unclickable. This is deliberately NOT "ghosts are not clickable".
+ *
+ * Consumed by RigHologram in evidence-map mode only, so the Gaming rig viewer's behaviour is
+ * unchanged. Pure and data-only so `rig-parts.test.ts` can prove it without a WebGL context.
+ */
+export function shadowingGhostIds(parts: readonly Placed[]): string[] {
+  const detected = parts.filter((p) => p.detected);
+  return parts
+    .filter(
+      (ghost) =>
+        !ghost.detected &&
+        detected.some(
+          (real) =>
+            Math.abs(real.assembled[0] - ghost.assembled[0]) <= SHADOW_RADIUS &&
+            Math.abs(real.assembled[1] - ghost.assembled[1]) <= SHADOW_RADIUS &&
+            // +z is toward the camera in this scene, so a larger z is in front.
+            ghost.assembled[2] > real.assembled[2],
+        ),
+    )
+    .map((p) => p.id);
+}
+
+/** The minimum a part needs — anything at all, so `id` and a place in the scene. Lets the fan
+    ghosts (which are not RigParts) ride the same tested rules as the parts. */
+export interface Placed {
+  id: string;
+  detected: boolean;
+  assembled: Vec3;
+}
+
+/** Local-space bounds of each geometry kind, as the union of the boxes/cylinders
+    `RigPartGeometry.tsx` actually draws for it. Keep in step with that file — `rig-parts.test.ts`
+    fails if a kind is missing here, so a NEW kind cannot silently skip the reachability guard. */
+const KIND_BOUNDS: Record<RigPartKind, { min: Vec3; max: Vec3 }> = {
+  board: { min: [-1.3, -1.6, -0.03], max: [1.3, 1.6, 0.23] },
+  cpu: { min: [-0.28, -0.34, -0.03], max: [0.28, 0.28, 0.08] },
+  ram: { min: [-0.07, -0.5, -0.23], max: [0.07, 0.62, 0.23] },
+  gpu: { min: [-1.2, -0.45, -0.48], max: [1.2, 0.28, 0.48] },
+  storage: { min: [-0.55, -0.03, -0.21], max: [0.55, 0.11, 0.21] },
+  cooler: { min: [-0.95, -0.31, -0.17], max: [0.95, 1.28, 0.17] },
+  psu: { min: [-1.2, -0.44, -0.66], max: [1.2, 0.48, 0.68] },
+};
+
+/** What is still solid to the pointer once a part passes clicks through. `RigPartGeometry` only
+    releases the geometry that actually covers the part behind, so a cooler keeps its fin stack —
+    which is how it stays selectable in its own right. A kind absent here releases everything. */
+const PASS_THROUGH_REMAINDER: Partial<Record<RigPartKind, { min: Vec3; max: Vec3 }>> = {
+  cooler: { min: [-0.95, 0.725, -0.17], max: [0.95, 1.275, 0.17] },
+};
+
+/** What a pass-through part of this kind keeps, or null if it releases its whole mesh. Releasing
+    everything is only right where the part has no clickable area worth keeping — a fan ghost is one
+    flat square sitting on the CPU. A cooler is not, which is why it has an entry. */
+export function passThroughRemainder(kind: RigPartKind): { min: Vec3; max: Vec3 } | null {
+  return PASS_THROUGH_REMAINDER[kind] ?? null;
+}
+
+/** Square fan frame from `RigFan.tsx` (0.92 × 0.92 × 0.16), for fans fed in as `Placed`. */
+const FAN_BOUNDS = { min: [-0.46, -0.46, -0.08] as Vec3, max: [0.46, 0.46, 0.08] as Vec3 };
+
+/** Where the CPU fan sits. Lives here, not in `RigHologram`, so the reachability guard measures the
+    same coordinates the scene draws instead of a copy that can drift away from them. */
+export const CPU_FAN_PLACEMENT = { assembled: [0.05, 1.15, 0.08] as Vec3, exploded: [0.3, 3.3, 0.7] as Vec3 };
+
+// The bay's camera never moves on its own: `RigHologram` mounts it at [0.6, 1.5, cameraDist]
+// looking at the origin. Everything below projects along that fixed view direction — a parallel
+// approximation, which at ~9.5 units from a ~5-unit model is close enough to catch a part being
+// swallowed whole (the failure this guards), and is pure arithmetic, so it runs without WebGL.
+const VIEW: Vec3 = (() => {
+  const [x, y, z] = [0.6, 1.5, 9.5];
+  const len = Math.hypot(x, y, z);
+  return [x / len, y / len, z / len];
+})();
+const RIGHT: Vec3 = (() => {
+  // up × view, normalised — the screen-x axis.
+  const [vx, , vz] = VIEW;
+  const len = Math.hypot(vz, vx) || 1;
+  return [vz / len, 0, -vx / len];
+})();
+const UP: Vec3 = [
+  VIEW[1] * RIGHT[2] - VIEW[2] * RIGHT[1],
+  VIEW[2] * RIGHT[0] - VIEW[0] * RIGHT[2],
+  VIEW[0] * RIGHT[1] - VIEW[1] * RIGHT[0],
+];
+const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+interface Rect {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  depth: number;
+}
+
+function screenRect(at: Vec3, bounds: { min: Vec3; max: Vec3 }): Rect {
+  let x0 = Infinity;
+  let x1 = -Infinity;
+  let y0 = Infinity;
+  let y1 = -Infinity;
+  for (const cx of [bounds.min[0], bounds.max[0]]) {
+    for (const cy of [bounds.min[1], bounds.max[1]]) {
+      for (const cz of [bounds.min[2], bounds.max[2]]) {
+        const p: Vec3 = [at[0] + cx, at[1] + cy, at[2] + cz];
+        const sx = dot(p, RIGHT);
+        const sy = dot(p, UP);
+        x0 = Math.min(x0, sx);
+        x1 = Math.max(x1, sx);
+        y0 = Math.min(y0, sy);
+        y1 = Math.max(y1, sy);
+      }
+    }
+  }
+  return { x0, x1, y0, y1, depth: dot(at, VIEW) };
+}
+
+/**
+ * Detected parts that the user cannot actually reach with the pointer in the assembled pose,
+ * because nearer INTERACTIVE geometry covers almost all of their silhouette.
+ *
+ * This is the reachability guard behind the 2026-08-07 self-review FAIL: correct code that the user
+ * can never trigger is not a shipped feature. It is about the pointer, not the pixels — a part that
+ * is merely half-hidden but still clickable passes, and ids listed in `clickThrough` (see
+ * `shadowingGhostIds`) are excluded as occluders because clicks pass straight through them.
+ *
+ * A part is "reachable" if at least `MIN_EXPOSED` of its projected area is free of nearer rects.
+ * Coverage is sampled on a grid rather than computed analytically — the counts here are tiny and a
+ * sampler cannot get union-of-rectangles arithmetic subtly wrong.
+ */
+const MIN_EXPOSED = 0.2;
+const SAMPLES = 24;
+
+export function unreachableDetectedIds(
+  parts: readonly Placed[],
+  opts: { clickThrough?: readonly string[] } = {},
+): string[] {
+  const pass = new Set(opts.clickThrough ?? []);
+  const rects = parts.flatMap((p) => {
+    // Anything carrying a `kind` is a RigPart and measures by its geometry; everything else in the
+    // scene is a fan, whose frame is one fixed square.
+    const kind = "kind" in p ? (p as RigPart).kind : null;
+    const through = pass.has(p.id);
+    const bounds = through
+      ? kind
+        ? PASS_THROUGH_REMAINDER[kind] ?? null
+        : null
+      : kind
+        ? KIND_BOUNDS[kind]
+        : FAN_BOUNDS;
+    // A part that passes clicks through entirely simply is not in the way of anything.
+    return bounds ? [{ part: p, through, rect: screenRect(p.assembled, bounds) }] : [];
+  });
+
+  return rects
+    // A fully pass-through part has no rect at all and already dropped out above; one that kept a
+    // remainder is still judged on it, so "released the whole mesh" cannot slip by unnoticed.
+    .filter(({ part }) => part.detected)
+    .filter(({ part, rect }) => {
+      const occluders = rects
+        .filter((o) => o.part.id !== part.id && o.rect.depth > rect.depth)
+        .map((o) => o.rect);
+      let exposed = 0;
+      for (let i = 0; i < SAMPLES; i++) {
+        const sx = rect.x0 + ((i + 0.5) / SAMPLES) * (rect.x1 - rect.x0);
+        for (let j = 0; j < SAMPLES; j++) {
+          const sy = rect.y0 + ((j + 0.5) / SAMPLES) * (rect.y1 - rect.y0);
+          if (!occluders.some((o) => sx >= o.x0 && sx <= o.x1 && sy >= o.y0 && sy <= o.y1)) exposed++;
+        }
+      }
+      return exposed / (SAMPLES * SAMPLES) < MIN_EXPOSED;
+    })
+    .map(({ part }) => part.id);
+}
+
+/** Every kind the guard knows how to measure — asserted complete by `rig-parts.test.ts`. */
+export const MEASURED_KINDS = Object.keys(KIND_BOUNDS) as RigPartKind[];

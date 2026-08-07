@@ -29,6 +29,7 @@ const RigHologram = lazy(() =>
 export const RigViewer = memo(function RigViewer({
   hw,
   chromeless = false,
+  onSelectedIdChange,
 }: {
   hw: HardwareInfo;
   // chromeless: render ONLY the 3D hologram canvas (no control bar, honesty caption, monitor nudge,
@@ -36,6 +37,10 @@ export const RigViewer = memo(function RigViewer({
   // Console, whose corner gauges would otherwise collide with the viewer's bottom form). Manual
   // parts still render in the model; only the management CHROME is hidden.
   chromeless?: boolean;
+  // Selection stays internal state (autoRotate/exploded live here too) — this is an OPT-IN mirror
+  // for a host that wants to react to it (e.g. the Ops Console showing evidence for the selected
+  // part), not a hand-off of ownership.
+  onSelectedIdChange?: (id: string | null) => void;
 }) {
   const { t } = useTranslation();
   const [exploded, setExploded] = useState(false);
@@ -114,9 +119,16 @@ export const RigViewer = memo(function RigViewer({
             autoRotate={autoRotate}
             selectedId={selectedId}
             hoveredId={hoveredId}
-            onSelect={(id) => setSelectedId(id || null)}
+            onSelect={(id) => {
+              const next = id || null;
+              setSelectedId(next);
+              onSelectedIdChange?.(next);
+            }}
             onHover={setHoveredId}
             manualParts={manualParts}
+            // Chromeless = the Lab evidence map: no explode/orbit buttons, so clicking the model is
+            // the only way in and nothing may block a real part's hitbox.
+            evidenceMap={chromeless}
           />
         </Suspense>
       </div>
