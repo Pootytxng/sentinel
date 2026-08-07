@@ -156,6 +156,11 @@ describe("hologram orbit default follows !readHologramV2() on every host (T4d co
   // 2026-07-10) — its stage must obey the same T4d contract: fresh default = no unattended
   // rotation, Orbit is an opt-in.
   it("Home console stage, fresh default (v2 ON): Orbit renders un-pressed — no unattended rotation", async () => {
+    // The console's Orbit knob rides the flip side as of the calm-default pass, so the control is
+    // only on screen under expert view. The contract it guards is unchanged — and the calm face is
+    // strictly safer, since leaving expert view resets autoRotate back to !readHologramV2() rather
+    // than stranding a spinning rig with no control (pinned in home-console-calm-default-guard).
+    localStorage.setItem("compy_expert_view", "1");
     const c = render(shell(<HomeRoom {...props} />));
     const orbit = await c.findByRole("button", { name: "Orbit" });
     expect(orbit.getAttribute("aria-pressed")).toBe("false");

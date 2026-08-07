@@ -56,6 +56,15 @@ Two things here are new and must not be flattened back into the 2026-07-23 wordi
    `superpowers/specs/2026-07-11-expert-layer-middle-ground.md`, default OFF). So the work is
    **calming the DEFAULT face, not building a second mode** — and anything that is only legible to
    an enthusiast is a candidate to move behind the flip side rather than to delete.
+   ✅ **HOME WIRED TO THE FLIP SIDE 2026-08-06** — Home was the ONE room never wired to
+   `useExpertView()`; four gauges, two spec planes and three control groups all landed on the opening
+   screen at once. Moved behind the flip side: the 1% low gauge, the GPU temp gauge, the four dense
+   detected-hardware records behind the hologram callouts, and the explode/orbit knobs. Deliberately
+   NOT moved: the readiness and avg-FPS gauges, the annotation planes and their labels ("here is your
+   PC", not a spec sheet), and the 2D/3D toggle (comfort, not instrumentation). Leaving expert view
+   also RESETS explode/orbit, so no rig is stranded exploded or spinning with its controls gone.
+   `home-console-calm-default-guard.test.tsx`; self-review PASS. **Home only — the other rooms'
+   default faces have not had this pass.**
 
 **Read together with NAV-1 finding 2 below:** parallel UI generations coexist per room (Home 4+,
 Monitor 4, Lab 5) and the pruning pass has never run. That is the leading mechanical suspect for
