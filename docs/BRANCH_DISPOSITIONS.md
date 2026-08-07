@@ -63,13 +63,14 @@ trunk, and a worktree's `main` pointer can sit weeks behind without anyone notic
 
 Swept 2026-08-04 against `main` @ `1a513cb`; the `origin/claude/*` rows added 2026-08-05 against
 `origin/main` @ `6712c14`, and re-proven the same day against `origin/main` @ `2e5365d` once the
-three-PR stack (#69 → #71 → #72) had landed. Eleven lane refs are **gone rather than listed MERGED**,
+three-PR stack (#69 → #71 → #72) had landed. Twelve lane refs are **gone rather than listed MERGED**,
 pruned on landing per the rule above — `ci-entry-mainmodule-posix`, `ledger-honesty-optimize-station`,
 `ci-health-reporter`, and the `claude/*` lanes behind PRs
 [#74](https://github.com/Pootytxng/sentinel/pull/74) · [#78](https://github.com/Pootytxng/sentinel/pull/78) ·
 [#79](https://github.com/Pootytxng/sentinel/pull/79) · [#80](https://github.com/Pootytxng/sentinel/pull/80) ·
 [#81](https://github.com/Pootytxng/sentinel/pull/81) · [#82](https://github.com/Pootytxng/sentinel/pull/82) ·
-[#83](https://github.com/Pootytxng/sentinel/pull/83) · [#84](https://github.com/Pootytxng/sentinel/pull/84).
+[#83](https://github.com/Pootytxng/sentinel/pull/83) · [#84](https://github.com/Pootytxng/sentinel/pull/84) ·
+[#85](https://github.com/Pootytxng/sentinel/pull/85).
 A landed ref's row is its own tombstone: prune the ref and the row in the same commit that records
 the merge, so this table only ever lists refs that still exist.
 
