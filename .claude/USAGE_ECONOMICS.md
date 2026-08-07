@@ -37,10 +37,21 @@ genuinely reduces mistakes.
 
 ## 3. Session length — the #1 lever
 
-Compact around 80–120k context; avoid working above 150k. **This is why the auto-compact window
-in `.claude/settings.json` is set to 150000, not higher** — it's not a technical ceiling (Opus's
-real window is far larger), it's this deliberate quality/cost target: smaller working sets mean
-less "lost in the middle" degradation on long threads, on top of the direct token savings.
+Compact around 80–120k of *conversation*; don't keep a giant thread alive because it "knows
+everything." The auto-compact window in `.claude/settings.json` is **250000** — raised from 150000
+on 2026-08-07 after measurement (§"open questions" below, and `scripts/lib/compaction-window.mjs`).
+
+**Why the target did not change but the number did.** The 150k pin was set as a quality/cost target,
+not a technical ceiling, and that reasoning still holds. What it missed is that the window is not
+the working set — the working set is `where compaction actually fires − the fixed per-turn floor`,
+and both of those moved. Compaction fires at 0.77–0.80 of the window (measured; the code said
+0.92–0.95), so 150000 meant a real ceiling of ~116k. Meanwhile the fixed floor — system prompt, MCP
+tool listings, auto-loaded CLAUDE.md/MEMORY.md, skill and agent listings — grew from ~55k in July to
+a p75 of **77k** in August, with one session opening at 128k. That leaves ~38k to work in, which two
+file reads exhaust, which is the owner's recurring "Autocompact is thrashing" dialog. 250000 restores
+~115k. **Cutting the floor is still the better lever and is not done** — a bigger window buys room,
+it does not make the floor cheaper, and cache-read cost per turn scales with what is carried.
+`scripts/context-headroom-guard.test.mjs` fails the build if headroom narrows below 60k again.
 Refresh is now automatic (§5) — don't manually `/clear`/`/compact` unless the driver prompt says
 "NO REFRESH." Don't keep one giant thread alive because it "knows everything"; persist state to
 disk (BACKLOG/spec/handoff) instead, per the context-size-advisor hook's own instruction.
@@ -63,9 +74,11 @@ match these exactly or point back to this section rather than restate its own co
 | Name | Value | Meaning | Lives in |
 |---|---|---|---|
 | Handoff target | 80–120k | Ideal working range (§3, unchanged) | this doc only |
-| Ceiling | 150k | "Avoid working above" (§3, unchanged) | this doc only |
-| `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | 150000 | The one literal env-var value; native auto-compact fires at ~92–95% of it (~140k) | `.claude/settings.json` — the ONLY place this literal should be set |
-| Advisor warn threshold | 85% of the window above, computed at runtime | When the Stop hook injects a persist-to-disk instruction | `.claude/hooks/context-size-advisor.mjs` — reads the env var, does not hardcode a copy |
+| `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | **250000** (was 150000 until 2026-08-07) | The one literal env-var value | `.claude/settings.json` — the ONLY place this literal should be set. `tools/entry/context-policy.json` `default` must agree or the launcher refuses. |
+| Where compaction really fires | **0.77–0.80 of the window** (~193k at 250000) | MEASURED from 34 transcripts, replacing a documented-but-never-checked 0.92–0.95 | `scripts/lib/compaction-window.mjs` (`NATIVE_COMPACT_FRACTION`) |
+| Fixed per-turn floor | ~77k p75 (min 51k, max 128k) | Payload re-sent every turn before any work — system prompt, MCP tool listings, auto-loaded docs, skill/agent listings. The other half of the arithmetic. | measured from first-turn tokens by `scripts/context-headroom-guard.test.mjs` |
+| Working headroom | ceiling − floor, **min 60k** | The number that decides thrash. 60k is the last width known to have worked (July sessions, 4,731 turns, no complaint). | `MIN_WORKING_HEADROOM` in `scripts/lib/compaction-window.mjs`; build fails below it |
+| Advisor warn threshold | 70% of the window, computed at runtime | When the Stop hook injects a persist-to-disk instruction. Was 85%, which sat ABOVE the real ceiling — so it never fired once in its life. | `.claude/hooks/context-size-advisor.mjs` — reads the env var, does not hardcode a copy |
 | Audit red-flag | 200k peak context | Sanity check only — should never be reached if auto-compact is working; hitting it means compaction failed to fire, not a target to approach | `.claude/skills/usage-audit/SKILL.md`, `scripts/usage-audit.mjs` |
 | Autopilot continuation cap | 8 (was 2) | Hard code clamp (was: unenforced doc convention) on how many tasks autopilot chains in one session, so it can't manufacture a >150k context on its own. Raised 2→8 on 2026-08-03 under the owner's standing autonomy grant; lower it again if the context advisor starts firing | `.claude/hooks/stop-continue.mjs` (`MAX_CONTINUES`) — the code is the source, this row mirrors it |
 
@@ -110,9 +123,14 @@ than papered over:
   pointers left — ~21 KB off the board, back under the flag (107 KB). Remaining size is inherent
   cycle-log verbosity; next lever if it regrows past the flag: Phase-A detail (~37 KB, needs
   cross-reference re-pointing first — its Phase-D row and closure note cite lines inside it).
-- **The 150k window number itself is inherited, not re-derived.** It was set 2026-07-02 from that
-  period's burn pattern; nobody has re-tested whether 150k is still the right cutoff specifically
-  for Opus 4.8. Internally consistent now (§5), not empirically re-proven optimal.
+- **~~The 150k window number is inherited, not re-derived.~~ RE-DERIVED 2026-08-07 — and it was
+  wrong.** Measured across 34 recent sessions' transcripts: under the pin, every session's peak turn
+  landed in a 116.0k–119.9k band (0.77–0.80 of the window, not the documented 0.92–0.95), while the
+  first-turn floor rose to a p75 of 77k. Headroom ~38k → thrash. Window raised to 250000; the
+  measurement lives in `scripts/lib/compaction-window.mjs` and is enforced by
+  `scripts/context-headroom-guard.test.mjs`. What is still NOT re-derived: whether 250000 is optimal
+  rather than merely sufficient, and what the floor's ~64k of harness-injected payload (MCP tool
+  listings and instruction blocks for connectors unrelated to Compy) is actually costing.
 - **`docs/LANE_WORKFLOW.md`'s "Workflow tool" — CONFIRMED + GUARDED (2026-07-22).** The live
   PreToolUse `tool_name` is `Workflow`, captured empirically via a temporary catch-all logging
   hook + a no-op workflow run (0 agents), not assumed. Now guarded:

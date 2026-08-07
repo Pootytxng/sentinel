@@ -16,7 +16,17 @@
 // A context that varies by 18k around 105k is almost entirely FIXED per-turn payload — system
 // prompt, auto-loaded docs, tool listings, re-injected skills, the carried handoff. Compaction can
 // only reclaim CONVERSATION, and there is barely any. That is the whole mechanism behind the 1-turn
-// refill, and it is why a bigger window would not have helped: the session never reached the old one.
+// refill.
+//
+// CORRECTION (v6, 2026-08-07). v5 closed that paragraph with "and it is why a bigger window would
+// not have helped: the session never reached the old one." That was wrong, and it is why the owner
+// hit the same dialog again after #84 and #85 shipped. The session never reached 150k because
+// compaction fires at ~0.78 of the window, i.e. ~119k — measured, see compaction-window.mjs. The
+// window IS the ceiling; 123k was not "well short of 150k", it was hard against the real boundary.
+// Sessions before the 150k pin (2026-07-11 to 07-13, no env var set) routinely peaked at 270-393k
+// on this same machine, with no thrash. The pin cut the ceiling by two thirds while the fixed floor
+// grew 55k → 86k, and headroom = ceiling − floor collapsed from ~60k to ~30k. Both halves are real;
+// only the floor half was ever acted on.
 //
 // So v5 keeps the size checkpoint and adds the signal that actually fires: refill velocity, computed
 // by scripts/lib/context-thrash.mjs from a bounded per-session series this hook samples each turn.
@@ -49,10 +59,15 @@ try {
 
 // Single source of truth for the window is settings.json's CLAUDE_CODE_AUTO_COMPACT_WINDOW —
 // read it at runtime (fallback only if the env var is somehow missing) rather than restating
-// the literal value here. Warn at 85% of the real window, giving headroom before native
-// auto-compact fires (which itself triggers at ~92-95% of the window, per Anthropic's default).
-const COMPACT_WINDOW = Number(process.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW) || 150_000;
-const WARN_TOKENS = Math.round(COMPACT_WINDOW * 0.85);
+// the literal value here.
+//
+// v6 (2026-08-07): the warn fraction was 0.85 of the window, on the belief that compaction fires at
+// 0.92-0.95. Measured across every sentinel transcript, it fires at 0.77-0.80 — so 0.85 sat ABOVE
+// the ceiling and this checkpoint has never fired in its entire life, exactly like the v4 bug it was
+// written to fix. Warn at 0.70, which is genuinely below the measured ceiling.
+// scripts/lib/compaction-window.mjs carries the measurement and the fallback; both are kept in step.
+const COMPACT_WINDOW = Number(process.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW) || 250_000;
+const WARN_TOKENS = Math.round(COMPACT_WINDOW * 0.7);
 const STEP_TOKENS = 30_000;
 const TAIL_BYTES = 512 * 1024; // enough to contain several recent assistant lines
 const SERIES_TURNS = 60; // bounded on purpose — a monitor that grows is the disease, not the cure
@@ -154,7 +169,9 @@ if (thrashResult?.thrashing) {
         `Compaction cannot fix it. Compaction reclaims CONVERSATION, and at this refill speed almost ` +
         `all of the context is fixed per-turn payload (system prompt, auto-loaded docs, tool ` +
         `listings, re-injected skills, the carried handoff) — there is nothing left for it to ` +
-        `reclaim. A bigger window would not help either. Do exactly this, then end your turn:\n` +
+        `reclaim. /clear is the cheapest correct move RIGHT NOW; separately, headroom itself is ` +
+        `misconfigured if this keeps happening — run scripts/context-headroom-guard.test.mjs, which ` +
+        `checks the window against the measured floor. Do exactly this, then end your turn:\n` +
         `1. Write or refresh docs/SESSION_HANDOFF.md — the ONE bounded resume file. Decisions made, ` +
         `exact file:line refs, what is committed, the precise next action. Complete enough that a ` +
         `session starting from zero could carry on from it alone; short enough to stay under its ` +

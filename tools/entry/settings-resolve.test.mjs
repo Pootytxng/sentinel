@@ -14,6 +14,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+// The fallback cases below assert the DOCUMENTED fallback, not a literal. They used to hard-code
+// 150000, which turned a guard ("unconfigured is never verified") into a version pin that broke the
+// moment the window was repaired on 2026-08-07.
+import { DOCUMENTED_FALLBACK_WINDOW } from "../../scripts/lib/compaction-window.mjs";
 import {
   compareWindow,
   intendedWindow,
@@ -110,7 +114,7 @@ describe("layered resolution reports provenance, not just a number", () => {
 
   it("reports the documented fallback as a fallback, never as configuration", () => {
     const r = resolveWindow({ dir: dirs.bare, home: join(root, "no-such-home"), env: {} });
-    expect(r.window).toBe(150000);
+    expect(r.window).toBe(DOCUMENTED_FALLBACK_WINDOW);
     expect(r.source).toBe("fallback");
     expect(r.configured).toBe(false);
   });
@@ -181,10 +185,16 @@ describe("guard 2 — the comparison, in both directions", () => {
   });
 
   it("refuses an unconfigured window even when the fallback happens to match", () => {
-    // 150000 by accident is not 150000 by decision. "Resolved intentionally per policy" means the
-    // value has to be configured, not coincidental.
-    const c = compareWindow(intendedWindow(POLICY, { issue: 18 }), resolveWindow({ dir: dirs.bare, home: join(root, "nope"), env: {} }));
-    expect(c.actual).toBe(150000);
+    // The right number by accident is not the right number by decision. "Resolved intentionally per
+    // policy" means the value has to be configured, not coincidental. The coincidence is built here
+    // rather than assumed, so this keeps testing the coincidence after the fallback moves.
+    const coincident = { ...POLICY, default: DOCUMENTED_FALLBACK_WINDOW };
+    const c = compareWindow(
+      intendedWindow(coincident, { issue: 18 }),
+      resolveWindow({ dir: dirs.bare, home: join(root, "nope"), env: {} }),
+    );
+    expect(c.expected).toBe(c.actual); // they agree on the number...
+    expect(c.actual).toBe(DOCUMENTED_FALLBACK_WINDOW);
     expect(c.ok).toBe(false);
     expect(c.remediation).toMatch(/not configured/i);
   });

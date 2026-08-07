@@ -22,6 +22,13 @@ import { createInterface } from "node:readline";
 import { join, basename, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
+import {
+  describeWindow,
+  flagPeakContext,
+  loadProjectSettings,
+  resolveCompactionWindow,
+  usableHeadroom,
+} from "./lib/compaction-window.mjs";
 
 const ROOT = join(homedir(), ".claude", "projects");
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -45,7 +52,10 @@ const K = (x) => (x / 1e3).toFixed(0) + "k";
 
 async function scanSession(t) {
   const seen = new Set();
-  const s = { date: "", file: t.file.slice(0, 8), sizeMB: +(t.size / 1048576).toFixed(1), out: 0, cacheRead: 0, cacheWrite: 0, peakCtx: 0, msgs: 0, wallMin: 0, models: {}, firstPrompt: "" };
+  // firstCtx: the FIRST recorded turn's total — all fixed payload, no conversation. It is the floor
+  // half of `headroom = ceiling − floor`, and until 2026-08-07 nothing measured it, which is how the
+  // floor grew 55k → 77k across three weeks with the audit reporting nothing.
+  const s = { date: "", file: t.file.slice(0, 8), sizeMB: +(t.size / 1048576).toFixed(1), out: 0, cacheRead: 0, cacheWrite: 0, peakCtx: 0, firstCtx: 0, msgs: 0, wallMin: 0, models: {}, firstPrompt: "" };
   const agg = { tools: {}, bash: {}, skills: {}, readPaths: {}, errBuckets: {}, notReadErrs: 0 };
   let firstTs = null, lastTs = null;
   const rl = createInterface({ input: createReadStream(t.path, "utf8"), crlfDelay: Infinity });
@@ -64,6 +74,7 @@ async function scanSession(t) {
         s.cacheWrite += m.usage.cache_creation_input_tokens || 0;
         const ctx = (m.usage.cache_read_input_tokens || 0) + (m.usage.cache_creation_input_tokens || 0) + (m.usage.input_tokens || 0);
         if (ctx > s.peakCtx) s.peakCtx = ctx;
+        if (!s.firstCtx && ctx > 0) s.firstCtx = ctx;
         s.models[m.model || "?"] = (s.models[m.model || "?"] || 0) + 1;
       }
       for (const c of Array.isArray(m.content) ? m.content : []) {
@@ -157,8 +168,26 @@ for (const t of sessions) {
 const agents = await scanAgents();
 
 const flags = [];
-const hot = rows.filter((r) => r.peakCtx > 200_000);
-if (hot.length) flags.push(`🔴 ${hot.length}/${rows.length} sessions ran past 200k context (owner rule: hand off at 80-120k). Worst: ${hot.slice(0, 3).map((r) => `${r.date} ${K(r.peakCtx)}`).join(", ")}. Cache-read cost per turn scales with carried context.`);
+
+// The window-relative peak flag. `flagPeakContext` was written as the bug→guard for issue #16 —
+// the hard-coded `peakCtx > 200_000` that fired on healthy sessions — but it was never actually
+// wired in here, so the literal it replaced stayed live and the guard test guarded a function
+// nothing called. Wired 2026-08-07.
+const windowInfo = resolveCompactionWindow({ env: process.env, settings: loadProjectSettings(REPO) });
+const peakFlag = flagPeakContext(rows, windowInfo).flag;
+if (peakFlag) flags.push(peakFlag);
+
+// The floor flag, and the one that would have caught the August thrash three weeks early: a session
+// opens with its fixed payload, so a rising first turn silently eats the room to work in.
+const floors = rows.map((r) => r.firstCtx).filter((n) => n > 0).sort((a, b) => a - b);
+const floorP75 = floors.length >= 3 ? floors[Math.floor(floors.length * 0.75)] : 0;
+const room = floorP75 ? usableHeadroom(windowInfo, floorP75) : null;
+if (room && !room.ok) {
+  flags.push(
+    `🔴 ${room.reason} Sessions are configured to thrash: ${floors.length} measured floors, p75 ${K(floorP75)}, ` +
+      `worst ${K(floors[floors.length - 1])}. Raise CLAUDE_CODE_AUTO_COMPACT_WINDOW or cut the per-turn payload.`,
+  );
+}
 if (agents.offRouted) flags.push(`🟡 ${agents.offRouted}/${agents.total} subagent runs on opus/fable (routing law: cheapest capable model). Check spawn sites pass no model override.`);
 try {
   const bl = statSync(join(REPO, "docs", "BACKLOG.md")).size;
@@ -172,14 +201,18 @@ lines.push(`# Usage audit — ${new Date().toISOString().slice(0, 10)} (${rows.l
 lines.push("");
 lines.push(`Main-lane totals: **${M(g.out)} output** · **${(g.cacheRead / 1e9).toFixed(2)}B cache-read** · ${M(g.cacheWrite)} cache-write · ${g.msgs} assistant msgs`);
 lines.push(`Avg carried context: **${K(g.cacheRead / Math.max(1, g.msgs))}/turn** (cache-read per assistant msg)`);
+lines.push(
+  `Compaction window: ${describeWindow(windowInfo)}` +
+    (room ? ` · fixed floor p75 **${K(room.floor)}** → working headroom **${K(room.headroom)}**${room.ok ? "" : " 🔴"}` : ""),
+);
 lines.push("");
 lines.push("## Health flags");
 for (const f of flags) lines.push(`- ${f}`);
 lines.push("");
 lines.push("## Sessions (newest first)");
-lines.push("| date | MB | peakCtx | out | wall | model | first prompt |");
-lines.push("|---|---|---|---|---|---|---|");
-for (const r of rows.slice(0, 30)) lines.push(`| ${r.date} | ${r.sizeMB} | ${K(r.peakCtx)} | ${K(r.out)} | ${r.wallMin}m | ${(top(r.models, 1)[0]?.[0] || "-").replace("claude-", "")} | ${r.firstPrompt.replace(/\|/g, "/")} |`);
+lines.push("| date | MB | floor | peakCtx | out | wall | model | first prompt |");
+lines.push("|---|---|---|---|---|---|---|---|");
+for (const r of rows.slice(0, 30)) lines.push(`| ${r.date} | ${r.sizeMB} | ${K(r.firstCtx)} | ${K(r.peakCtx)} | ${K(r.out)} | ${r.wallMin}m | ${(top(r.models, 1)[0]?.[0] || "-").replace("claude-", "")} | ${r.firstPrompt.replace(/\|/g, "/")} |`);
 lines.push("");
 lines.push("## Tool mix");
 lines.push(top(g.tools, 15).map(([k, v]) => `${k}:${v}`).join(" · "));

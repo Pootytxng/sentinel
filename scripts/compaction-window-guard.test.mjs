@@ -77,13 +77,13 @@ describe("peak-context red flag derives from the configured window", () => {
     expect(resolved.window).toBe(DOCUMENTED_FALLBACK_WINDOW);
     const { threshold, over, flag } = flagPeakContext(
       [
-        { date: "2026-07-28", peakCtx: 149_000 },
-        { date: "2026-07-29", peakCtx: 180_000 },
+        { date: "2026-07-28", peakCtx: 249_000 },
+        { date: "2026-07-29", peakCtx: 280_000 },
       ],
       resolved,
     );
-    expect(threshold).toBe(150_000);
-    expect(over.map((r) => r.peakCtx)).toEqual([180_000]);
+    expect(threshold).toBe(250_000);
+    expect(over.map((r) => r.peakCtx)).toEqual([280_000]);
     expect(flag).toContain("fallback");
     expect(flag).toContain(ENV_KEY);
     expect(flag).not.toContain("configured window");
@@ -107,8 +107,8 @@ describe("report basis line", () => {
   it("names the source so a reader never has to guess the threshold", () => {
     expect(describeWindow(at300k())).toContain("300k");
     expect(describeWindow(at300k())).toContain("in the environment");
-    // 92-95% of 300k
-    expect(describeWindow(at300k())).toMatch(/276k-285k/);
+    // the MEASURED compaction band, 77-80% of 300k (see NATIVE_COMPACT_FRACTION for why not 92-95%)
+    expect(describeWindow(at300k())).toMatch(/231k-240k/);
     expect(describeWindow(resolveCompactionWindow({}))).toContain("documented fallback");
     expect(describeWindow(resolveCompactionWindow({ env: { [ENV_KEY]: "oops" } }))).toContain('ignored invalid env="oops"');
   });
