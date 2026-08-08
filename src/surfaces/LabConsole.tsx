@@ -8,6 +8,8 @@ import { Term } from "../design/Term";
 import { Dock, type DockNode } from "../design/console/Dock";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { RigViewer } from "./rig/RigViewer";
+import { buildRigParts } from "./rig/rig-parts";
+import { rigPartReadings, subsystemForRigPart, type LabReadingKey, type LabSubsystem } from "./lab-evidence-map";
 import { OptimizeStation, type LabFastPathProps } from "./lab/OptimizeStation";
 import {
   LAB_STATION_ORDER,
@@ -183,6 +185,21 @@ export function LabConsole({
     stackedCount: changesBetweenRuns(bench, fast.changes ?? []).length,
   };
 
+  // RIG EVIDENCE MAP (owner verdict 2026-07-29) — selecting a part in the hologram states what that
+  // subsystem reads right now. The hologram stays the owner of its own selection; this is a mirror
+  // of it, not a takeover (see RigViewer's `onSelectedIdChange` doc comment).
+  //
+  // Rig ids are NOT 1:1 with kinds (`ram-2`, `gpu-1`, `disk-1`, `vol-1` all exist), so the exact part
+  // is resolved from the same builder the viewer renders from and stays intact through the reading
+  // call. Reducing it to `kind` here would relabel GPU 0 / C: readings as whichever GPU or drive the
+  // user actually selected. `t` keeps this list byte-identical to the one on screen.
+  const [selectedRigId, setSelectedRigId] = useState<string | null>(null);
+  const selectedPart = selectedRigId ? buildRigParts(hw, t).find((p) => p.id === selectedRigId) : undefined;
+  const evidenceSubsystem: LabSubsystem | null = selectedPart ? subsystemForRigPart(selectedPart.kind) : null;
+  // Honesty rail 2 of lab-evidence-map: an empty list is a legitimate answer and is SAID in words,
+  // never padded with a dash. Several subsystems return nothing on purpose.
+  const evidenceReadings = selectedPart ? rigPartReadings(selectedPart, hw) : [];
+
   // Detail view — exactly ONE station open at a time (the dock IS the menu). Clicking a node opens
   // it, clicking again closes, clicking another swaps. Optimize is included — it is NOT always-on.
   const [openStation, setOpenStation] = useState<LabStationKey | null>(null);
@@ -328,10 +345,48 @@ export function LabConsole({
           {/* chromeless — just the recognizable 3D hologram; the console frames it (brackets +
               corner gauges), so the viewer's own control bar / caption / "add a part" form are
               hidden (they collided with the corner gauges). */}
-          <RigViewer hw={hw} chromeless />
+          <RigViewer hw={hw} chromeless onSelectedIdChange={setSelectedRigId} />
         </div>
         <ReticleCursor scopeRef={stageRef} />
       </div>
+
+      {/* RIG EVIDENCE MAP — appears only once a part is selected; nothing selected means no panel,
+          not an empty one. Outside .lc-stage so it never collides with the corner gauges, and above
+          the dock so the reading sits next to the hologram that produced it. */}
+      {evidenceSubsystem && (
+        <div className="lc-evidence" aria-live="polite">
+          <div className="lc-evidence-head">
+            <span className="lc-evidence-name">
+              {t(`lab.labConsole.evidence.subsystem.${evidenceSubsystem}`)}
+            </span>
+            <span className="lc-evidence-part">{selectedPart?.name}</span>
+          </div>
+          {evidenceReadings.length > 0 ? (
+            <dl className="lc-evidence-list">
+              {evidenceReadings.map((r) => (
+                <div className="lc-evidence-row" key={r.key}>
+                  <dt>{t(`lab.labConsole.evidence.reading.${r.key satisfies LabReadingKey}`)}</dt>
+                  <dd>
+                    <span className="lc-evidence-value">{r.value}</span>
+                    {r.kind === "gauge" && (
+                      <>
+                        <span className="lc-evidence-den">{r.den}</span>
+                        {/* Proportion only — no colour-by-threshold. None of the app's audited
+                            thresholds apply to these fields, so a reading is stated, not graded. */}
+                        <span className="lc-evidence-bar" aria-hidden="true">
+                          <span style={{ width: `${Math.round(r.pct * 100)}%` }} />
+                        </span>
+                      </>
+                    )}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="lc-evidence-empty">{t("lab.labConsole.evidence.empty")}</p>
+          )}
+        </div>
+      )}
 
       {/* DOCK — Optimize primary + the measure stations. */}
       <Dock nodes={dockNodes} activeKey={openStation} onOpen={onDockOpen} />

@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { buildRigParts } from "./rig-parts";
+import {
+  buildRigParts,
+  shadowingGhostIds,
+  unreachableDetectedIds,
+  passThroughRemainder,
+  CPU_FAN_PLACEMENT,
+  MEASURED_KINDS,
+} from "./rig-parts";
 import type { HardwareInfo } from "../../App";
 
 // Minimal fixture exercising the fields buildRigParts reads (cast — the real type is much larger).
@@ -78,5 +85,59 @@ describe("buildRigParts — real hardware, honest ghosts", () => {
   it("falls back to a single aggregate RAM part when no modules are reported", () => {
     const noMods = buildRigParts({ ...hw, memory_modules: [] } as unknown as HardwareInfo);
     expect(noMods.filter((p) => p.kind === "ram").length).toBe(1);
+  });
+});
+
+// ── Pointer reachability in the assembled pose ────────────────────────────────────────────────
+// Guard for the 2026-08-07 self-review FAIL: the Lab evidence map reads whichever part the user
+// clicks, and two detected parts could not be clicked at all — the CPU sat behind the cooler and
+// CPU-fan ghosts, the drives sat behind the graphics card. Correct code the user cannot trigger is
+// not a shipped feature, so the arrangement is now pinned by a test instead of by eyeballing it.
+describe("assembled-pose reachability", () => {
+  const parts = buildRigParts(hw);
+  // The scene as RigHologram draws it: the parts, plus the three honest fan ghosts it adds when
+  // nothing is publishing RPM (the worst case for occlusion — real fan sensors are `detected`).
+  const scene = [
+    ...parts,
+    { id: "fan-ghost-cpu", detected: false, assembled: CPU_FAN_PLACEMENT.assembled },
+    { id: "fan-ghost-front", detected: false, assembled: [-1.36, 0.85, 0.85] as const },
+    { id: "fan-ghost-rear", detected: false, assembled: [1.36, 0.55, 0.85] as const },
+  ].map((p) => ({ ...p, assembled: [...p.assembled] as [number, number, number] }));
+
+  it("measures every geometry kind buildRigParts can emit", () => {
+    for (const p of parts) expect(MEASURED_KINDS).toContain(p.kind);
+  });
+
+  it("lets clicks through the ghosts that stand in front of a detected part", () => {
+    const shadowing = shadowingGhostIds(scene);
+    // The cooler and the CPU fan share the CPU's x/y and sit nearer the camera.
+    expect(shadowing).toContain("cooler");
+    expect(shadowing).toContain("fan-ghost-cpu");
+    // The PSU is a ghost too, but it stands alone — it must stay selectable.
+    expect(shadowing).not.toContain("psu");
+    // No detected part is ever made click-through.
+    for (const id of shadowing) expect(parts.find((p) => p.id === id)?.detected ?? false).toBe(false);
+  });
+
+  it("leaves every detected part clickable once those ghosts pass clicks through", () => {
+    expect(unreachableDetectedIds(scene, { clickThrough: shadowingGhostIds(scene) })).toEqual([]);
+  });
+
+  it("keeps the cooler itself selectable — only its socket face passes clicks through", () => {
+    const through = shadowingGhostIds(scene);
+    // It must keep a region of its own — releasing the whole mesh was the round-2 regression, where
+    // no click anywhere on the cooler, fin stack included, selected anything.
+    expect(passThroughRemainder("cooler")).not.toBeNull();
+    // Probe: judge the cooler as if it HAD to be reachable. It is measured on what it keeps (the
+    // fin stack towering over the socket), so a remainder buried behind something else fails too.
+    const probe = scene.map((p) => (p.id === "cooler" ? { ...p, detected: true } : p));
+    expect(unreachableDetectedIds(probe, { clickThrough: through })).not.toContain("cooler");
+  });
+
+  it("still finds a part that a nearer solid part swallows (the guard actually bites)", () => {
+    const buried = scene.map((p) =>
+      p.id === "disk-0" ? { ...p, assembled: [-0.55, -0.4, -0.6] as [number, number, number] } : p,
+    );
+    expect(unreachableDetectedIds(buried, { clickThrough: shadowingGhostIds(buried) })).toContain("disk-0");
   });
 });
