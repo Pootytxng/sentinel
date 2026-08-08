@@ -19,7 +19,7 @@
 
 import type { HardwareInfo } from "../App";
 import { fmtGB, fmtGHz } from "./hardware-format";
-import type { RigPartKind } from "./rig/rig-parts";
+import type { RigPart, RigPartKind } from "./rig/rig-parts";
 
 /** Functional subsystems readings are grouped by — a narrower, purpose-built taxonomy for this
  *  bounded slice (the full goal-taxonomy `LabSubsystem` from the Lab-recovery branch is not ported
@@ -36,7 +36,15 @@ export type LabSubsystem =
   | "system";
 
 /** Stable ids — the surface turns these into words via i18n, so no copy lives in this module. */
-export type LabReadingKey = "cores" | "clock" | "vram" | "driver" | "memory" | "storage" | "refresh";
+export type LabReadingKey =
+  | "cores"
+  | "clock"
+  | "vram"
+  | "driver"
+  | "memory"
+  | "storage"
+  | "capacity"
+  | "refresh";
 
 /** A reading is either a plain stated fact, or a proportion with a denominator worth seeing.
  *  `pct` is 0..1 and is only ever a real ratio of two real numbers. */
@@ -72,6 +80,51 @@ function systemVolume(hw: HardwareInfo): HardwareInfo["disks"][number] | null {
 }
 
 const ratio = (part: number, whole: number) => Math.min(1, Math.max(0, whole > 0 ? part / whole : 0));
+
+function indexedReadingSource<T>(id: string, prefix: string, sources: readonly T[]): T | null {
+  const match = new RegExp(`^${prefix}-(\\d+)$`).exec(id);
+  if (!match) return null;
+  return sources[Number(match[1])] ?? null;
+}
+
+/** Readings for one exact selected rig part. GPU and storage fail closed when the id does not
+ *  resolve to the same source `buildRigParts()` used for that part; falling back to adapter 0 or C:
+ *  would put another component's measurement under the selected part's name. */
+export function rigPartReadings(part: Pick<RigPart, "id" | "kind">, hw: HardwareInfo): LabReading[] {
+  if (part.kind === "gpu") {
+    const gpu = indexedReadingSource(part.id, "gpu", hw.gpus);
+    if (!gpu) return [];
+    const out: LabReading[] = [];
+    if (gpu.vram_bytes > 0) out.push({ kind: "fact", key: "vram", value: fmtGB(gpu.vram_bytes) });
+    if (gpu.driver_version.trim()) {
+      out.push({ kind: "fact", key: "driver", value: gpu.driver_version.trim() });
+    }
+    return out;
+  }
+
+  if (part.kind === "storage") {
+    const physical = indexedReadingSource(part.id, "disk", hw.physical_disks ?? []);
+    if (physical) {
+      return physical.size_bytes > 0
+        ? [{ kind: "fact", key: "capacity", value: fmtGB(physical.size_bytes) }]
+        : [];
+    }
+
+    const volume = indexedReadingSource(part.id, "vol", hw.disks ?? []);
+    if (!volume || volume.total_bytes <= 0) return [];
+    return [
+      {
+        kind: "gauge",
+        key: "storage",
+        value: fmtGB(volume.available_bytes),
+        den: fmtGB(volume.total_bytes),
+        pct: ratio(volume.available_bytes, volume.total_bytes),
+      },
+    ];
+  }
+
+  return subsystemReadings(subsystemForRigPart(part.kind), hw);
+}
 
 export function subsystemReadings(sub: LabSubsystem, hw: HardwareInfo): LabReading[] {
   const out: LabReading[] = [];

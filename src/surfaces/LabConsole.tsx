@@ -9,7 +9,7 @@ import { Dock, type DockNode } from "../design/console/Dock";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { RigViewer } from "./rig/RigViewer";
 import { buildRigParts } from "./rig/rig-parts";
-import { subsystemForRigPart, subsystemReadings, type LabReadingKey, type LabSubsystem } from "./lab-evidence-map";
+import { rigPartReadings, subsystemForRigPart, type LabReadingKey, type LabSubsystem } from "./lab-evidence-map";
 import { OptimizeStation, type LabFastPathProps } from "./lab/OptimizeStation";
 import {
   LAB_STATION_ORDER,
@@ -189,16 +189,16 @@ export function LabConsole({
   // subsystem reads right now. The hologram stays the owner of its own selection; this is a mirror
   // of it, not a takeover (see RigViewer's `onSelectedIdChange` doc comment).
   //
-  // The id→kind hop is deliberate: rig ids are NOT 1:1 with kinds (`ram-2`, `gpu-0`, `vol-1` all
-  // exist), so the part is resolved from the same builder the viewer renders from, and its `kind` —
-  // never the id string — is what maps to a subsystem. `t` is passed so this list is byte-identical
-  // to the one on screen; only `id`/`kind` are read from it, so no copy crosses this boundary.
+  // Rig ids are NOT 1:1 with kinds (`ram-2`, `gpu-1`, `disk-1`, `vol-1` all exist), so the exact part
+  // is resolved from the same builder the viewer renders from and stays intact through the reading
+  // call. Reducing it to `kind` here would relabel GPU 0 / C: readings as whichever GPU or drive the
+  // user actually selected. `t` keeps this list byte-identical to the one on screen.
   const [selectedRigId, setSelectedRigId] = useState<string | null>(null);
   const selectedPart = selectedRigId ? buildRigParts(hw, t).find((p) => p.id === selectedRigId) : undefined;
   const evidenceSubsystem: LabSubsystem | null = selectedPart ? subsystemForRigPart(selectedPart.kind) : null;
   // Honesty rail 2 of lab-evidence-map: an empty list is a legitimate answer and is SAID in words,
   // never padded with a dash. Several subsystems return nothing on purpose.
-  const evidenceReadings = evidenceSubsystem ? subsystemReadings(evidenceSubsystem, hw) : [];
+  const evidenceReadings = selectedPart ? rigPartReadings(selectedPart, hw) : [];
 
   // Detail view — exactly ONE station open at a time (the dock IS the menu). Clicking a node opens
   // it, clicking again closes, clicking another swaps. Optimize is included — it is NOT always-on.

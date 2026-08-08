@@ -14,8 +14,17 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(null)) }));
 // Reduced motion simplifies gauge assertions (useCountTo snaps instead of tweening).
 vi.mock("../design/use-motion", () => ({ useReducedMotion: () => true }));
-// RigViewer pulls in the ~600KB three.js bundle lazily — stub it so this stays a DOM test.
-vi.mock("./rig/RigViewer", () => ({ RigViewer: () => <div data-testid="rig-hologram" /> }));
+// RigViewer pulls in the ~600KB three.js bundle lazily — stub only the WebGL surface while keeping
+// its selected-id boundary real. The buttons let the evidence tests drive the same callback an
+// actual mesh click emits without asserting anything about the stub itself.
+vi.mock("./rig/RigViewer", () => ({
+  RigViewer: ({ onSelectedIdChange }: { onSelectedIdChange?: (id: string | null) => void }) => (
+    <div data-testid="rig-hologram">
+      <button onClick={() => onSelectedIdChange?.("gpu-1")}>Select GPU 2</button>
+      <button onClick={() => onSelectedIdChange?.("disk-1")}>Select drive 2</button>
+    </div>
+  ),
+}));
 
 const { LabConsole } = await import("./LabConsole");
 const { ConfirmProvider } = await import("../design/ConfirmDialog");
@@ -85,6 +94,48 @@ const hwFixture = {
   os_version: "11",
 } as unknown as HardwareInfo;
 
+const multiDeviceHw = {
+  ...hwFixture,
+  gpus: [
+    {
+      name: "AMD Radeon RX 9070 XT",
+      vram_bytes: 16 * 1024 ** 3,
+      driver_version: "25.5.1",
+      driver_date: "",
+      driver_age_days: null,
+      video_processor: "",
+      current_refresh_rate_hz: 165,
+    },
+    {
+      name: "NVIDIA GeForce RTX 4070",
+      vram_bytes: 12 * 1024 ** 3,
+      driver_version: "555.99",
+      driver_date: "",
+      driver_age_days: null,
+      video_processor: "",
+      current_refresh_rate_hz: 144,
+    },
+  ],
+  disks: [
+    {
+      mount_point: "C:\\",
+      total_bytes: 1000 * 1024 ** 3,
+      available_bytes: 130 * 1024 ** 3,
+      file_system: "NTFS",
+    },
+    {
+      mount_point: "D:\\",
+      total_bytes: 4000 * 1024 ** 3,
+      available_bytes: 3000 * 1024 ** 3,
+      file_system: "NTFS",
+    },
+  ],
+  physical_disks: [
+    { friendly_name: "System SSD", media_type: "SSD", bus_type: "NVMe", size_bytes: 1000 * 1024 ** 3 },
+    { friendly_name: "Archive SSD", media_type: "SSD", bus_type: "SATA", size_bytes: 4096 * 1024 ** 3 },
+  ],
+} as unknown as HardwareInfo;
+
 const fast: LabFastPathProps = {
   recs: recsFixture,
   startup: [],
@@ -122,6 +173,29 @@ describe("LabConsole", () => {
   it("renders the recognizable rig hologram at center", () => {
     renderConsole();
     expect(screen.getByTestId("rig-hologram")).toBeInTheDocument();
+  });
+
+  it("keeps GPU 2's identity through the evidence panel instead of showing GPU 1's readings", () => {
+    renderConsole({ ...base, hw: multiDeviceHw });
+    fireEvent.click(screen.getByRole("button", { name: "Select GPU 2" }));
+
+    const evidence = document.querySelector(".lc-evidence")!;
+    expect(evidence.querySelector(".lc-evidence-part")!.textContent).toBe("NVIDIA GeForce RTX 4070");
+    expect(evidence.textContent).toContain("12.0 GB");
+    expect(evidence.textContent).toContain("555.99");
+    expect(evidence.textContent).not.toContain("16.0 GB");
+    expect(evidence.textContent).not.toContain("25.5.1");
+  });
+
+  it("keeps drive 2's identity through the evidence panel instead of showing C: free space", () => {
+    renderConsole({ ...base, hw: multiDeviceHw });
+    fireEvent.click(screen.getByRole("button", { name: "Select drive 2" }));
+
+    const evidence = document.querySelector(".lc-evidence")!;
+    expect(evidence.querySelector(".lc-evidence-part")!.textContent).toBe("Archive SSD");
+    expect(evidence.textContent).toContain("4096.0 GB");
+    expect(evidence.textContent).not.toContain("130.0 GB");
+    expect(evidence.textContent).not.toContain("1000.0 GB");
   });
 
   it("renders a dock node for every Lab station (no gallery) with Optimize as the primary", () => {

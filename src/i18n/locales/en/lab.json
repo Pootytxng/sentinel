@@ -140,6 +140,7 @@
         "driver": "Driver version",
         "memory": "In use",
         "storage": "Free space",
+        "capacity": "Capacity",
         "refresh": "Refresh rate"
       },
       "empty": "Nothing to read here — Compy has no measurement of its own for this part, and it won't invent one."
