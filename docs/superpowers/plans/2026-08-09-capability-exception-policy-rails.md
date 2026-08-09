@@ -1,8 +1,9 @@
 # Capability Exception Policy Rails — Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: use superpowers:executing-plans to implement this plan task by
-> task. Use test-driven-development for every guard. Do not begin until PR #90 has completed its exact
-> unfiltered verification and has a recorded merge/disposition.
+> task. Use test-driven-development for every guard. PR #90 @ `c2868bc` now records exact
+> current-head gates; do not begin until its missing independent review and merge/disposition are
+> recorded, and rerun those gates if its head moves.
 >
 > **Handoff state:** the #91 preparation branch already contains the proposed canonical policy and a
 > seeded `src/capability-exception-policy-guard.test.ts` with mutation-style positive controls. Do
@@ -24,7 +25,10 @@ copy. Historical archives remain byte-preserved.
 ## Preconditions and stop rules
 
 - Work Control issue: #91.
-- Required predecessor: PR #90 exact unfiltered test rerun + merge/disposition.
+- Required predecessor: confirm PR #90's `c2868bc` exact-gate receipt is still current, complete
+  its independent review, then merge/dispose it; rerun exact gates if its head changed.
+- PR #90 overlaps this train in `AGENTS.md`, `CLAUDE.md` and `docs/RELEASE_STATE.md`; rebase after
+  disposition before editing.
 - Use a dedicated branch/worktree. Do not write in PR #90/#49/#50/#55 worktrees.
 - No runtime Rust, Tauri capability, CSP, endpoint, key, updater or Windows mutation in this plan.
 - Preserve historical `docs/archive/**`, dated changelog entries and old audit evidence.
@@ -43,7 +47,8 @@ Read `CLAUDE.md`, `docs/RELEASE_STATE.md`, `docs/BACKLOG.md`,
 
 Record:
 
-- PR #90 merged or explicitly disposed;
+- PR #90's exact receipt is current, independent review is complete, and it is merged or explicitly
+  disposed;
 - #49 owner/claim and file scope;
 - PR #50 remains draft/untouched;
 - #55 claim remains separate;

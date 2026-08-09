@@ -4,7 +4,8 @@
 > **Date:** 2026-08-09
 > **Owner:** Kuya
 > **Work Control:** [issue #91](https://github.com/Pootytxng/sentinel/issues/91)
-> **Predecessor:** PR #90 must finish exact unfiltered verification and be merged/dispositioned first
+> **Predecessor:** PR #90 @ `c2868bc` records exact current-head gates; its independent review and
+> merge/disposition must finish first, with a rerun if that head moves
 > **Plans:** [policy rails](../plans/2026-08-09-capability-exception-policy-rails.md) ·
 > [Tier 1 build](../plans/2026-08-09-outbound-case-intelligence-tier1.md)
 
@@ -611,7 +612,10 @@ These are product/engineering acceptance criteria, not marketing claims.
 
 ## 17. Queue and ownership
 
-- PR #90 remains the predecessor and must be merged/dispositioned first.
+- PR #90 remains the predecessor. Its `c2868bc` exact-gate receipt is current as of 2026-08-09;
+  complete the missing independent review and merge/disposition first, and rerun if its head moves.
+  PR #90 overlaps #91 in `AGENTS.md`, `CLAUDE.md` and `docs/RELEASE_STATE.md`, so rebase after
+  disposition is mandatory.
 - #91 owns policy, spec, guards and the isolated Tier 1 domain/backend train.
 - #49 owns the Lab production shell; #91 offers a narrow route/label contract, not a competing shell.
 - #64 stays deferred while Rust-side transport keeps CSP/local webviews unchanged.

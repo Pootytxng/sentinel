@@ -64,8 +64,10 @@ shape of a known issue." It cannot claim causation.
 
 ## Queue placement
 
-1. Finish PR #90's exact unfiltered verification and merge/disposition.
-2. Land issue #91 policy/spec/guard preparation.
+1. PR #90 @ `c2868bc` records exact current-head gates; finish its missing independent review and
+   merge/disposition first, rerunning the gates if that head moves.
+2. Rebase #91 because PR #90 overlaps `AGENTS.md`, `CLAUDE.md` and
+   `docs/RELEASE_STATE.md`, then land policy/spec/guard preparation.
 3. Implement Tier 1 domain + verification + cache behind a hard-false gate.
 4. Add an always-visible Home Care entry and Crash & Freeze Rescue deep-link in coordination with
    issue #49; keep the broad `compy_home_intake` band default-OFF.

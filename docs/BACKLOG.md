@@ -23,9 +23,10 @@
 > current pull order.
 
 - [ ] **Q8 / issue #91 — COMPY CARE: primary PC-doctor directive + Capability Exception Gate
-  (OWNER-APPROVED 2026-08-09).** Queue position is exact: **finish PR #90's unfiltered verification
-  and merge/disposition first**, then land #91 policy/guards, then start Tier 1 domain/backend dark
-  implementation. Do not compete with issue #49's Lab shell, revive draft PR #50, or adopt #55's
+  (OWNER-APPROVED 2026-08-09).** Queue position is exact: PR #90 @ `c2868bc` now records its
+  current-head exact gates, but its independent reviewer was authentication-blocked; **finish that
+  independent review and merge/disposition first** (rerun gates if its HEAD moves), then rebase #91,
+  land policy/guards, and start Tier 1 domain/backend dark implementation. Do not compete with issue #49's Lab shell, revive draft PR #50, or adopt #55's
   stale Project Doctor claim. Rust-side Tier 1 keeps production CSP unchanged, so it does not trigger
   #64 Q2b; any proposal for webview fetch/remote content/CSP widening does.
   - **Primary product:** "Compy Care" umbrella; user-facing rescue entry is **Crash & Freeze Rescue**
