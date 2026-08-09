@@ -3,6 +3,11 @@
 > **For Claude:** REQUIRED SUB-SKILL: use superpowers:executing-plans to implement this plan task by
 > task. Use test-driven-development for every guard. Do not begin until PR #90 has completed its exact
 > unfiltered verification and has a recorded merge/disposition.
+>
+> **Handoff state:** the #91 preparation branch already contains the proposed canonical policy and a
+> seeded `src/capability-exception-policy-guard.test.ts` with mutation-style positive controls. Do
+> not recreate or defer that guard; rebase, run it first, and evolve it in the same policy commit if
+> current main has changed.
 
 **Goal:** Land the approved Capability Exception Gate as mechanically protected policy while keeping
 runtime behavior unchanged.
@@ -62,16 +67,19 @@ node scripts/verify-module-map.mjs
 Expected: clean worktree; synchronized intended base; module map green. Reconcile any current-state
 drift before continuing. Do not bury a release-state failure inside the policy commit.
 
-### Task 2: Pin the policy decision in the law guard
+### Task 2: Pin and verify the policy decision in the law guard
 
 **Files:**
 
-- Modify: `src/claude-md-laws-guard.test.ts`
-- Test: `src/claude-md-laws-guard.test.ts`
+- Verify/modify: `src/claude-md-laws-guard.test.ts`
+- Verify/modify only for rebase drift: the canonical files named below
 
-**Step 1: Write failing markers**
+The handoff branch already contains these proposed markers. Treat them as a reviewable baseline, not
+as work to recreate.
 
-Require all of these concepts from `CLAUDE.md`:
+**Step 1: Run the focused guard immediately after rebase**
+
+The guard must require all of these concepts from `CLAUDE.md`:
 
 - named Capability Exception Gate and 2026-08-09 owner decision;
 - current build ships no driver;
@@ -85,17 +93,16 @@ Require all of these concepts from `CLAUDE.md`:
 - Tier 3 explicit per-case evidence upload;
 - signed remote rules remain triple-gated OFF.
 
-Run the focused guard before editing the law and prove it fails for the new markers:
-
 ```powershell
 npm test -- src/claude-md-laws-guard.test.ts
 ```
 
-Expected: FAIL because old law does not contain the new markers.
+Expected on the handoff branch: PASS. If a rebase removes a marker, first preserve the failing test,
+then reconcile the law; do not delete the marker to accept drift.
 
-**Step 2: Update canonical law and mirrors**
+**Step 2: Reconcile canonical law and mirrors only if current main changed**
 
-Update only live policy/current-state sources:
+The prepared live set is:
 
 - `CLAUDE.md`
 - `AGENTS.md`
@@ -103,80 +110,89 @@ Update only live policy/current-state sources:
 - `docs/RECEIPTS_DOCTRINE.md`
 - `docs/PRODUCT_DIRECTION.md`
 - `COMPY_OVERVIEW.md`
-- `docs/PRIVACY.md` doctrine pointer
+- `docs/PRIVACY.md`
 - `docs/RELEASE_STATE.md`
 - `docs/BACKLOG.md`
 - `docs/decisions/2026-08-09-capability-exception-gate.md`
 
 Preserve game/process injection as absolute. State current runtime separately from future policy.
+Preserve historical evidence; add a supersession banner rather than rewriting old state.
 
-**Step 3: Run focused guard**
+**Step 3: Re-run the focused guard and budgets**
 
 ```powershell
 npm test -- src/claude-md-laws-guard.test.ts
+powershell -NoProfile -File scripts/doc-budget.ps1
 ```
 
-Expected: PASS, including byte/pointer budget.
-
-**Step 4: Commit**
+**Step 4: Commit only rebase corrections**
 
 ```powershell
 git add CLAUDE.md AGENTS.md COMPY_OVERVIEW.md docs/ARCHITECTURE_LOCKS.md docs/RECEIPTS_DOCTRINE.md docs/PRODUCT_DIRECTION.md docs/PRIVACY.md docs/RELEASE_STATE.md docs/BACKLOG.md docs/decisions/2026-08-09-capability-exception-gate.md src/claude-md-laws-guard.test.ts
-git commit -m "docs(care): establish capability exception gate (#91)"
+git commit -m "docs(care): reconcile capability exception gate (#91)"
 ```
 
-### Task 3: Add a policy-coherence guard
+### Task 3: Verify and maintain the seeded policy-coherence guard
 
 **Files:**
 
-- Create: `src/capability-exception-policy-guard.test.ts`
+- Verify/modify: `src/capability-exception-policy-guard.test.ts`
 - Modify only if required: `scripts/run-vitest.mjs`
 
-**Step 1: Write the failing guard**
+The guard is part of the policy preparation itself, not a Monday follow-up.
 
-The guard must scan live, non-historical policy sources and assert:
+**Step 1: Inspect the explicit live corpus**
 
-1. `CLAUDE.md`, `AGENTS.md`, Architecture Locks, Receipts Doctrine and Product Direction all name
-   the Capability Exception Gate.
-2. They all preserve no third-party game/process injection.
-3. They all distinguish "current runtime ships no driver" from "driver policy-possible under gate."
-4. Every tier is present and Tier 1 explicitly says no machine-derived upload.
-5. `docs/RELEASE_STATE.md` says Tier 1 is not built/no runtime traffic.
+The guard must read only named operative policy/current-state sources. It must exclude
+`docs/archive/**`, dated changelog entries and historical audit evidence by construction.
+`docs/GATE_DECISIONS.md` is the one explicit historical exception: inspect only its supersession
+banner so its stale table cannot be mistaken for current state.
+
+It must assert:
+
+1. `CLAUDE.md`, `AGENTS.md`, Architecture Locks, Receipts Doctrine, Product Direction,
+   Compy Overview, Privacy, Release State, BACKLOG and the decision record carry their applicable
+   Capability Exception Gate markers.
+2. Standing-law mirrors preserve no third-party game/process injection.
+3. Driver-facing mirrors separate "current runtime ships no driver" from "future Compy driver is
+   policy-possible only under its own gate."
+4. Tier 1 says no machine-derived upload; Tier 2/3 are separate and cannot inherit authorization.
+5. `docs/RELEASE_STATE.md` says Tier 1 is not built and has no runtime traffic.
 6. `docs/PRIVACY.md` says it describes current behavior and must change before arming.
-7. Historical paths are excluded rather than rewritten.
+7. Tier 1's initial kill switch is local/deny-only; remote disable is a separate signed/gated trust
+   surface that cannot enable/configure or ride in the catalog.
+8. `CASE_SOURCE_ORIGINS` is compiled in `case_intelligence.rs`, app-release-reviewed, and catalog
+   content cannot add transport origins.
 
-Add positive controls proving the scanner catches:
+Export a pure `auditCapabilityExceptionPolicy(snapshot)` function so positive controls mutate
+in-memory snapshots rather than editing working files.
 
-- a reintroduced blanket "any driver/network is allowed";
-- removal of Tier 1's no-upload constraint;
-- removal of the game-injection ban;
-- a claim that Tier 1 authorizes Tier 2/3.
-
-**Step 2: Run and see RED**
-
-```powershell
-npm test -- src/capability-exception-policy-guard.test.ts
-```
-
-Expected: FAIL until every canonical mirror is aligned.
-
-**Step 3: Make the smallest policy corrections**
-
-Correct only the failing live mirrors. Do not alter archives or dated evidence.
-
-**Step 4: Run GREEN**
+**Step 2: Run the seeded guard**
 
 ```powershell
 npm test -- src/capability-exception-policy-guard.test.ts
 ```
 
-Expected: PASS including positive controls.
+Expected on the handoff branch: PASS. If rebased main changed a live mirror, correct the policy and
+guard together; do not weaken an invariant to make stale copy pass.
 
-**Step 5: Commit**
+**Step 3: Confirm positive controls**
+
+The test must prove it rejects:
+
+- blanket "any driver/network is allowed" language;
+- removal of the game/process injection ban;
+- Tier 1 machine/incident upload;
+- a statement that Tier 1 authorizes Tier 2/3;
+- a false claim that Tier 1 is live/has runtime traffic;
+- a remote kill switch that can enable/configure behavior or rides in the catalog;
+- a catalog-supplied source origin.
+
+**Step 4: Commit only if rebase corrections were required**
 
 ```powershell
 git add src/capability-exception-policy-guard.test.ts
-git commit -m "test(care): pin exception policy coherence (#91)"
+git commit -m "test(care): preserve exception policy coherence (#91)"
 ```
 
 ### Task 4: Evolve the outbound claim guard without weakening it
@@ -271,12 +287,26 @@ git commit -m "test(support): preserve local evidence boundary (#91)"
 
 ### Task 6: Reconcile public/legal copy inventory without premature claims
 
-**Files:**
+**Exact live-copy inventory:**
 
-- Audit only in this plan:
-  `docs/EULA.md`, `site/generate.mjs`, `site-app/src/pages/**`,
-  `src/i18n/locales/en/**`, `src/i18n/locales/zh-CN/**`,
-  `src-tauri/tauri.conf.json`, `src/data/terms*.json`
+- Legal/current state: `docs/EULA.md`, `docs/PRIVACY.md`,
+  `docs/BETA_TESTER_README.md`, `_tester-message.md`
+- Site sources: `site/generate.mjs`, `site-app/src/pages/index.astro`,
+  `site-app/src/pages/compare.astro`
+- Generated site outputs: `site/eula.html`, `site/privacy.html`, and every generated
+  `site/*.html` footer/article touched by `site/generate.mjs` (regenerate; do not hand-edit)
+- App metadata/data: `src-tauri/tauri.conf.json`, `src/data/terms.json`,
+  `src/data/terms.zh-CN.json`
+- English copy: `src/i18n/locales/en/home.json`, `src/i18n/locales/en/monitor.json`,
+  `src/i18n/locales/en/settings.json`, `src/surfaces/setup/setup-steps.ts`,
+  `src/Onboarding.tsx`
+- Chinese mirrors: `src/i18n/locales/zh-CN/home.json`,
+  `src/i18n/locales/zh-CN/monitor.json`, `src/i18n/locales/zh-CN/settings.json`
+- Active indexes/snapshots: `.claude/skills/INDEX.md`, `docs/GATE_DECISIONS.md`
+- Tests/snapshots: `scripts/site-landing.test.mjs`, `src/surfaces/Monitor.test.tsx`,
+  `src/surfaces/home-hud-flag.test.tsx`, `src/surfaces/home-v2.test.tsx`,
+  `src/surfaces/monitor-domain-cards.test.tsx`, onboarding snapshots discovered by the focused
+  test, `src/outbound-claim-guard.test.ts`, `src/i18n/locale-parity-guard.test.ts`
 
 **Step 1: Classify each categorical statement**
 
@@ -286,28 +316,34 @@ Classify as:
 - standing policy ("no game/process injection");
 - stale current-state claim ("updater off", "zero outbound");
 - future promise that must become tier-aware;
-- dated historical evidence to preserve.
+- dated historical evidence to preserve;
+- active indexes that incorrectly call a future surface the "first" outbound boundary;
+- historical gate briefs that need an explicit supersession banner, not rewritten tables.
 
 **Step 2: Fix only present-tense drift**
 
 Do not market a driver or upload capability that does not exist. Time-scope current factual claims.
 Correct stale updater/zero-outbound claims. Preserve the injection ban.
 
-If generator source changes, regenerate outputs; never hand-edit generated HTML.
+If generator source changes, regenerate outputs; never hand-edit generated HTML. Treat
+`docs/BETA_TESTER_README.md` and `_tester-message.md` as distribution-facing unless explicitly
+marked as a frozen-version snapshot, and do not silently rewrite `docs/archive/**` or old changelog
+evidence. `docs/GATE_DECISIONS.md` keeps its dated table and receives only the strong supersession
+banner.
 
 **Step 3: Update tests/snapshots with the source change**
 
 Run:
 
 ```powershell
-npm test -- scripts/site-landing.test.mjs src/outbound-claim-guard.test.ts src/i18n/locale-parity-guard.test.ts
+npm test -- scripts/site-landing.test.mjs src/outbound-claim-guard.test.ts src/i18n/locale-parity-guard.test.ts src/surfaces/Monitor.test.tsx src/surfaces/home-hud-flag.test.tsx src/surfaces/home-v2.test.tsx src/surfaces/monitor-domain-cards.test.tsx
 npm run build
 ```
 
 **Step 4: Commit**
 
 ```powershell
-git add docs/EULA.md site/generate.mjs site site-app/src/pages src/i18n src-tauri/tauri.conf.json src/data
+git add docs/EULA.md docs/PRIVACY.md docs/BETA_TESTER_README.md _tester-message.md site/generate.mjs site site-app/src/pages/index.astro site-app/src/pages/compare.astro src/i18n src/surfaces/setup/setup-steps.ts src/Onboarding.tsx src-tauri/tauri.conf.json src/data/terms.json src/data/terms.zh-CN.json .claude/skills/INDEX.md docs/GATE_DECISIONS.md scripts/site-landing.test.mjs src/surfaces/Monitor.test.tsx src/surfaces/home-hud-flag.test.tsx src/surfaces/home-v2.test.tsx src/surfaces/monitor-domain-cards.test.tsx src/outbound-claim-guard.test.ts
 git commit -m "docs(trust): time-scope driver and outbound claims (#91)"
 ```
 

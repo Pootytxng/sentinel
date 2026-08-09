@@ -3,13 +3,12 @@
 *A shareable snapshot of where the project is and where it's going. Written for outside eyes:
 what's good, what's missing, what's a bad idea. Be blunt — "this part is dumb" is useful data.*
 
-> **Last reconciled: 2026-07-15**, against `docs/RELEASE_STATE.md`, `docs/RECEIPTS_DOCTRINE.md`,
-> and `docs/MONETIZATION_PLAN.md` (the authoritative current-state docs — if this file and any of
-> those three ever disagree again, those three win). This file had gone six weeks stale (last
-> touched 2026-06-05) before a 2026-07-15 consumer panel review caught it describing a product
-> that no longer existed: it said Gaming Mode was dark, the catalog was frozen, and monetization
-> was undecided — all wrong by the time of the fix. Re-check this line before trusting anything
-> below it as current.
+> **Last reconciled: 2026-08-09**, against `docs/RELEASE_STATE.md`,
+> `docs/PRODUCT_DIRECTION.md`, `docs/RECEIPTS_DOCTRINE.md`, and the 2026-08-09 Compy Care
+> decision/spec (the authoritative current-state and direction sources — if this snapshot disagrees,
+> those win). The 2026-07-15 reconciliation had already corrected six weeks of drift; this pass adds
+> the owner-approved PC-doctor hierarchy, Capability Exception Gate, outbound tiers, live-updater
+> truth, and current module/state counts. Re-check this line before treating anything below as current.
 
 ---
 

@@ -11,7 +11,10 @@
 ## Decision
 
 Compy's primary identity is **Compy Care: the PC doctor users open after any crash, freeze, slowdown,
-or unexplained hiccup.** Measured optimization remains its second specialty.
+or unexplained hiccup.** Measured optimization remains its second specialty. Care owns the continuing
+loop—intake, triage, local case chart, bounded differential, one next plan, follow-up and prevention.
+Coverage expands in evidence-earned trains: crash/hang/restart first, then performance regression,
+thermals/noise, storage/startup/update, and network/peripheral/device trouble.
 
 New capabilities remain local, user-mode, least-privilege and non-invasive by default. A stronger
 boundary is allowed only through a named, capability-specific exception record that proves the user
@@ -50,7 +53,10 @@ At this decision point:
 Tier 1 must be a new Rust-side advisory module with a separate signing key, manifest schema, endpoint
 allowlist, cache namespace and monotonic catalog version from privileged remote rules. The catalog
 may provide plain-text evidence requirements, public source links and safe/research-only next steps.
-It cannot name mutation variants, scripts, registry paths or remote HTML.
+It cannot name mutation variants, scripts, registry paths or remote HTML. The initial kill switch is
+local and deny-only. Public source links must match compiled `CASE_SOURCE_ORIGINS` in
+`case_intelligence.rs`; the catalog cannot add an origin. Any remote disable signal is separately
+exception-gated and signed, may disable only, and cannot ride inside the catalog.
 
 The existing local crash incident remains the source of machine truth. Downloaded knowledge is
 matched on-device and can only add an advisory result such as "This incident matches the recorded
@@ -61,9 +67,12 @@ shape of a known issue." It cannot claim causation.
 1. Finish PR #90's exact unfiltered verification and merge/disposition.
 2. Land issue #91 policy/spec/guard preparation.
 3. Implement Tier 1 domain + verification + cache behind a hard-false gate.
-4. Add the narrow Crash & Freeze Rescue entry/deep-link in coordination with issue #49.
-5. Review exact endpoint/signing/privacy/canary evidence before runtime arming.
-6. Specify Tier 2 and Tier 3 separately, if later justified.
+4. Add an always-visible Home Care entry and Crash & Freeze Rescue deep-link in coordination with
+   issue #49; keep the broad `compy_home_intake` band default-OFF.
+5. Add the bounded local incident observer/persisted Home card; notification is a secondary nudge and
+   no direct click payload is assumed.
+6. Review exact endpoint/signing/privacy/canary evidence before runtime arming.
+7. Specify later Care trains, Tier 2 and Tier 3 separately, if justified.
 
 Draft PR #50 is not revived. Issue #55's stale Project Doctor claim is not adopted. A Rust-side fetch
 keeps production CSP unchanged and therefore does not trigger issue #64 Q2b; webview fetch or CSP

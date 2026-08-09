@@ -152,17 +152,32 @@ tile. Current runtime remains driver-free, and CPU temperature remains external-
 
 | Tier | Purpose | Consent | Data leaving Compy | Independent gate |
 |---|---|---|---|---|
-| **1 — signed case knowledge** | Keep public known-issue guidance current | disclosed request + global off switch | catalog request metadata only; **no machine-derived incident payload** | separate advisory signing trust, domain, cache, caps, timeouts, kill switch |
+| **1 — signed case knowledge** | Keep public known-issue guidance current | disclosed request + global off switch | catalog request metadata only; **no machine-derived incident payload** | separate advisory signing trust, domain, cache, caps, timeouts; local deny-only kill switch |
 | **2 — scrubbed incident fingerprint** | Learn which issue shapes recur | explicit opt-in, default OFF, previewable | allowlisted coarse fields only; no raw log/dump/path/serial/user identity | payload schema, redaction proof, retention/deletion, revocation, abuse review |
 | **3 — per-case evidence upload** | Let a user send one support case | explicit consent for that incident after preview/redaction | exactly the displayed bundle to a named recipient | one-case receipt, endpoint policy, retention/deletion response, no background queue |
 
 Tiers never inherit consent from one another. Tier 1 does not authorize Tier 2 or 3.
 
+#### Kill-switch and source-origin authority
+
+Tier 1's initial kill switch is **local and deny-only**. It may keep the production gate false or
+stop refresh/use of case intelligence; it cannot enable the feature, change endpoints, add payload
+fields, alter matching, or weaken the hard-false gate. Any remotely delivered disable signal is a
+new inbound trust surface and needs its own Capability Exception record, distinct signing key/schema
+and owner arming decision. It may disable only, never enable or configure, and it cannot travel inside
+the advisory catalog.
+
+Public case-source links use a compile-time `CASE_SOURCE_ORIGINS` allowlist owned in
+`src-tauri/src/case_intelligence.rs`. That list changes only through an app release with Rust/security
+review. A signed catalog may select a URL under an existing HTTPS origin; it cannot add an origin,
+redirect Compy's transport, or cause an in-app fetch. Opening a source is an explicit user click into
+the system browser.
+
 #### Tier 1 implementation lock
 
 The first outbound case-intelligence build is a new Rust-side advisory module, not `remote_rules.rs`,
 `receipts.rs`, or `support_evidence.rs`, and not a webview fetch. It uses a separate public key,
-manifest schema, endpoint allowlist, cache namespace and monotonic version. It verifies signature,
+manifest schema, catalog-endpoint allowlist, compiled source-link allowlist, cache namespace and monotonic version. It verifies signature,
 hash, expiry, app-version range and size before caching; preserves an embedded/last-known-good
 fallback; matches the downloaded public catalog against the existing local crash incident on-device;
 and returns advisory wording only. It does not widen CSP, upload incident data, add a mutation

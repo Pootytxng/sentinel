@@ -103,6 +103,12 @@ Tests must reject:
 - non-HTTPS source URL;
 - source URL outside the public-source allowlist.
 
+The allowlist is not an implementation-time choice: define
+`const CASE_SOURCE_ORIGINS: &[&str]` in `src-tauri/src/case_intelligence.rs`. It is reviewed and
+changed only through an app release; signed catalog content may select a URL under an existing HTTPS
+origin but cannot add an origin or trigger an in-app fetch. Keep the catalog-download endpoint
+allowlist separate from the source-click allowlist.
+
 **Step 2: Run RED**
 
 ```powershell
@@ -307,9 +313,12 @@ The new guard must assert:
 - no upload/send-report/evidence/dump/support-bundle methods;
 - no incident serialization into URL/query/header/body;
 - no account/cookie/install ID;
-- explicit compiled HTTPS allowlist;
+- explicit compiled `CASE_SOURCE_ORIGINS` and separate catalog-endpoint HTTPS allowlist;
+- catalog content cannot add origins, redirect transport or cause an in-app fetch;
 - separate endpoint/key/cache names from updater/remote rules;
 - `case_intelligence_gate()` hard-returns false;
+- initial kill switch is local and deny-only; no remote signal can enable/configure the feature or
+  ride inside the advisory catalog;
 - no frontend network primitive connected to case intelligence;
 - production CSP unchanged;
 - support evidence/Receipts remain transport-free.
@@ -335,7 +344,8 @@ Implement an injected HTTP interface and local fixture tests:
 - unavailable network keeps local analysis usable;
 - no production endpoint configured.
 
-Do not broaden Tauri capability files or CSP.
+Do not broaden Tauri capability files or CSP. Do not add a remote kill switch in Tier 1; any future
+remote disable-only signal needs a separate exception record, signing trust and owner arming review.
 
 **Step 4: Run GREEN**
 
@@ -400,53 +410,92 @@ git commit -m "feat(care): attach optional known-issue guidance (#91)"
 
 Include the exact TypeScript type file in `git add` after discovery.
 
-### Task 8: Make crash rescue discoverable without redesigning the Lab
+### Task 8: Make crash rescue discoverable without enabling the broad intake band
 
-**Files:**
+**Production files:**
 
+- Modify: `src/surfaces/HomeConsole.tsx`
+- Modify: `src/surfaces/home-console.css`
+- Modify: `src/surfaces/home-intake-data.ts`
+- Modify: `src/App.tsx`
 - Modify: `src/surfaces/LabConsole.tsx`
-- Modify: current Home/intake router files after exact discovery
-- Modify: navigation/i18n files that expose "Black Box"
-- Modify: focused UI tests
+- Modify: `src/surfaces/lab-guided-data.ts`
+- Inspect/preserve: `src/design/use-hud.ts`
+- Inspect/preserve: `src/design/theme.ts`
+- Modify: `src/i18n/locales/en/home.json`
+- Modify: `src/i18n/locales/en/lab.json`
+- Modify: `src/i18n/locales/zh-CN/home.json`
+- Modify: `src/i18n/locales/zh-CN/lab.json`
 - Do not touch: draft PR #50 files or unrelated #49 shell work.
+
+**Focused tests:**
+
+- Modify: `src/surfaces/home-console.test.tsx`
+- Modify: `src/surfaces/home-intake.test.tsx`
+- Modify: `src/surfaces/lab-console.test.tsx`
+- Modify: `src/surfaces/post-check-lab-route-guard.test.ts`
+- Create: `src/care-home-route-guard.test.ts`
+- Preserve/run: `src/design/theme.test.ts`
+- Preserve/run: `src/i18n/locale-parity-guard.test.ts`
+
+**Locked product decision:** do not default the broad `compy_home_intake` optimization/intake band
+on. Extract one compact Care entry and render it always on Home, independent of that flag. The
+internal station ID remains `blackbox`; the user label becomes **Crash & Freeze Rescue**.
 
 **Step 1: Coordinate with #49 owner**
 
-Post the narrow contract: station ID stays stable; visible label becomes **Crash & Freeze Rescue**;
-deep-link payload selects the rescue station. If #49 currently owns the same files, hand off the
-contract rather than writing them concurrently.
+Post the narrow contract before touching shared files. If #49 owns one of the exact files above,
+hand off that file's small contract rather than writing concurrently. Do not redesign the Lab shell.
 
-**Step 2: Write RED routing tests**
+**Step 2: Write RED discovery/routing tests**
 
-Prove:
+Prove all of the following:
 
-- "A game closed or froze" routes to rescue;
-- "blue screen/restarted" routes to rescue;
-- Home recent-crash card routes to the exact incident;
-- deep-link does not open Optimize;
-- visible navigation no longer relies on "Black Box";
-- internal station/module ID remains backward-compatible;
-- keyboard/focus semantics hold;
-- en/zh-CN parity holds.
+- with `compy_home_intake` absent, the compact Care entry is visible;
+- with `compy_home_intake = "0"`, the compact Care entry is still visible while the broad band stays
+  hidden;
+- `homeCareEntry` is exported from `home-intake-data.ts` and the optional band contains no duplicate
+  crash row;
+- "A game closed or froze" and "blue screen/restarted" route to `blackbox`;
+- `App.tsx` owns one generic
+  `openLabStation(station: "optimize" | "blackbox", incidentId?: string)` writer;
+- that helper performs the only
+  `localStorage.setItem("compy_lab_open_station", station)` before `navHome("lab")`;
+- `openFixesInLab` calls the helper with `"optimize"`; Care calls it with `"blackbox"`;
+- an optional exact incident ID uses the separate one-shot `compy_lab_open_incident` key;
+- `LabConsole.tsx` accepts only `"optimize"` or `"blackbox"`, consumes both one-shot keys and
+  clears them after use;
+- the crash route never opens Optimize;
+- visible copy does not require the words "Black Box";
+- keyboard/focus semantics and en/zh-CN parity hold.
 
-**Step 3: Implement smallest route/label change**
+**Step 3: Implement the smallest route**
 
-No Lab shell redesign. Keep glance-first hierarchy and existing rig/instrument styling.
+- Extract `homeCareEntry` from the existing intake data and remove the duplicate crash choice from
+  the flag-gated collection.
+- Render a compact Care control in `HomeConsole.tsx` outside the
+  `useHomeIntakeEnabled()` branch.
+- Pass an `onOpenCare(incidentId?)` prop from `App.tsx`.
+- Generalize the current `openFixesInLab` writer into `openLabStation`; keep
+  `openFixesInLab` as a thin `"optimize"` caller.
+- Extend `LabConsole.tsx`'s existing one-shot station read to `blackbox` and optional incident ID.
+- Keep `compy_home_intake` default-OFF in `use-hud.ts` / `theme.ts`.
+- Change only visible labels/routes; retain internal `blackbox` module/station compatibility.
 
-**Step 4: Run focused UI tests**
+**Step 4: Run focused UI checks**
 
 ```powershell
-npm test -- src/surfaces/BlackBox.test.tsx src/surfaces/lab-console.test.tsx src/i18n/locale-parity-guard.test.ts
+npm test -- src/surfaces/home-console.test.tsx src/surfaces/home-intake.test.tsx src/surfaces/lab-console.test.tsx src/surfaces/post-check-lab-route-guard.test.ts src/care-home-route-guard.test.ts src/design/theme.test.ts src/i18n/locale-parity-guard.test.ts
 npm run build
 ```
 
-Use the actual discovered test filenames if the repo names differ; record them in the issue comment.
+**Step 5: Visual self-review of the real default state**
 
-**Step 5: Visual self-review**
+Use the repo `self-review` skill at the owner's real resolution. The verdict cannot pass from a
+flag-forced preview. Capture `compy_home_intake` absent and `"0"`, and prove:
 
-Use the repo `self-review` skill at the owner's real resolution. Prove:
-
-- rescue is visible within five seconds from Home;
+- the Care route is visible within five seconds from Home in both default states;
+- the broad intake band remains hidden;
 - result hierarchy is What happened → evidence points to → next step → proof;
 - raw receipts are subordinate;
 - no layout collision at target resolutions;
@@ -456,56 +505,140 @@ Use the repo `self-review` skill at the owner's real resolution. Prove:
 **Step 6: Commit**
 
 ```powershell
-git add src/surfaces/LabConsole.tsx src/surfaces/BlackBox.tsx src/i18n
-git commit -m "feat(care): route crash intent to rescue (#91)"
+git add src/App.tsx src/surfaces/HomeConsole.tsx src/surfaces/home-console.css src/surfaces/home-intake-data.ts src/surfaces/LabConsole.tsx src/surfaces/lab-guided-data.ts src/surfaces/home-console.test.tsx src/surfaces/home-intake.test.tsx src/surfaces/lab-console.test.tsx src/surfaces/post-check-lab-route-guard.test.ts src/care-home-route-guard.test.ts src/i18n/locales/en/home.json src/i18n/locales/en/lab.json src/i18n/locales/zh-CN/home.json src/i18n/locales/zh-CN/lab.json
+git commit -m "feat(care): make crash rescue always discoverable (#91)"
 ```
 
-Add the exact Home/router/test files discovered; do not stage unrelated #49 work.
+### Task 9: Add a persisted local incident observer and secondary nudge
 
-### Task 9: Add proactive local incident nudge
+**Production files:**
 
-**Files:**
+- Create: `src-tauri/src/incident_observer.rs`
+- Modify: `src-tauri/src/blackbox.rs` (stable path-free `incident_id` only)
+- Modify: `src-tauri/src/lib.rs` (module, lifecycle and three commands)
+- Modify: `src-tauri/build.rs`
+- Modify: `src-tauri/capabilities/default.json` only for main-window command authority
+- Modify: `src-tauri/CLAUDE.md` module map
+- Modify: `src/types.ts` (`incident_id` and `PendingCareIncident`)
+- Modify: `src/App.tsx`
+- Modify: `src/surfaces/HomeConsole.tsx`
+- Modify: `src/surfaces/BlackBox.tsx`
+- Modify: `src/surfaces/LabConsole.tsx`
+- Modify: the same four en/zh-CN Home/Lab locale files from Task 8
+- Do not add: a Windows service, scheduled task, periodic poll, network, webview capability or CSP
+  change.
 
-- Modify: existing tray/monitor/event polling seam after exact discovery
-- Modify: `src-tauri/src/lib.rs` only for notification/deep-link wiring
-- Modify: Home recent-incident surface
-- Add focused Rust/UI tests
+**Tests:**
 
-**Step 1: Write RED notification policy tests**
+- Inline Rust tests in `incident_observer.rs`
+- Modify: `src/surfaces/home-console.test.tsx`
+- Modify: `src/surfaces/lab-console.test.tsx`
+- Modify: `src/surfaces/BlackBox.test.tsx`
+- Create: `src/care-incident-observer-contract.test.ts`
+- Run: `src/command-authority-guard.test.ts`
+
+**Step 1: Write RED state/lifecycle tests**
+
+Pin this schema in `%APPDATA%\Compy\care\incident-observer.json`:
+
+```rust
+struct IncidentObserverState {
+    schema_version: u32,
+    last_scan_at: Option<String>,
+    seen: Vec<ObservedIncident>,
+    pending_home_incident_id: Option<String>,
+}
+
+struct ObservedIncident {
+    incident_id: String,
+    first_seen_at: String,
+    notified_at: Option<String>,
+    opened_at: Option<String>,
+    dismissed_at: Option<String>,
+}
+```
 
 Prove:
 
-- notification only for a newly observed high-signal incident;
-- no low-confidence heuristic notification;
-- one notification per incident ID;
-- bounded dedupe for repeated same-app incidents;
-- click opens selected rescue incident;
-- Compy-not-running case becomes persistent Home card next launch;
-- notification off does not hide the Home card;
-- no network needed;
-- wording says "appears to have closed unexpectedly," not a cause.
+- the first-ever run seeds current IDs/watermark and emits no historical card/toast;
+- later launch and main-window foreground scans inspect only incidents since the watermark;
+- monitored-session finalization triggers one targeted scan;
+- no periodic timer, service or scheduled task exists;
+- an incident while Compy is closed is detected on next launch from the persisted watermark;
+- only real app crash/hang, GPU timeout, BSOD/WHEA or unexpected-restart records qualify;
+- low-confidence assessment text alone never qualifies;
+- exact `incident_id` notifies at most once;
+- same app/family toast cooldown is 30 minutes while the newest exact incident can become pending;
+- state keeps at most 128 observations/30 days; pending card expires after 7 days;
+- temp write + flush + atomic replace preserves prior state on interruption;
+- corrupt state is quarantined and fails safe with no spam.
 
-**Step 2: Implement using existing notification capability**
+**Step 2: Implement the observer as a consumer of Black Box**
 
-Do not add a background Windows service/scheduled task. First implementation works while Compy/tray is
-running; next-launch Home card covers downtime.
+Do not duplicate Event Log/WER/Reliability collection. Add a stable, path-free `incident_id` to the
+normalized `Incident` contract and feed those incidents into `incident_observer.rs`. Wire:
 
-**Step 3: Run focused tests**
+- one scan after application setup/state initialization;
+- one scan when the main window returns to the foreground;
+- one targeted scan after monitored-session finalization.
 
-Run the exact Rust module tests plus Home/notification UI tests discovered in Step 1.
+No always-on cadence in this train. If later measurement earns one, change the plan and add explicit
+CPU/IO budgets first.
 
-**Step 4: Visual self-review**
+**Step 3: Add main-window-only IPC and the persistent Home card**
 
-Prove notification click routing and persistent fallback. Keep toast secondary to in-app discovery.
+Register:
 
-**Step 5: Commit**
+- `get_pending_care_incident() -> Option<PendingCareIncident>`;
+- `mark_care_incident_opened(incident_id: String)`;
+- `dismiss_care_incident(incident_id: String)`.
+
+Update the command manifest/capability using the repository's existing main-window authority pattern;
+the overlay receives none of these commands. The DTO carries only stable ID, occurred-at, kind,
+app/display label and calm summary. The Home card remains visible when notification permission is
+off. **Find out why** calls `openLabStation("blackbox", incident_id)`; mark opened only after
+`LabConsole`/Crash & Freeze Rescue consumes the exact selection. Dismiss/expiry clears the pending
+pointer without deleting the underlying Windows evidence.
+
+**Step 4: Add a toast without promising click activation**
+
+The currently registered official desktop notification path provides simple `show()` only; it has
+no supported action/click callback carrying an incident payload. Therefore:
+
+- toast only for a newly observed high-signal incident while Compy/tray is running;
+- copy: "A game appears to have closed unexpectedly. Open Compy to review the evidence.";
+- notification off suppresses only the toast, never the Home card;
+- the persisted pending state is authoritative;
+- if an installed-build probe proves the default Windows click merely foregrounds Compy, Home reads
+  the pending state—do not describe this as selected-incident click-through;
+- direct action payload routing is out of scope until supported and separately tested.
+
+**Step 5: Run focused verification**
 
 ```powershell
-git add src-tauri/src/lib.rs src-tauri/src/tray.rs src
-git commit -m "feat(care): surface new crash incidents locally (#91)"
+cargo test --manifest-path src-tauri/Cargo.toml incident_observer
+cargo test --manifest-path src-tauri/Cargo.toml blackbox
+npm test -- src/surfaces/home-console.test.tsx src/surfaces/lab-console.test.tsx src/surfaces/BlackBox.test.tsx src/care-incident-observer-contract.test.ts src/command-authority-guard.test.ts src/i18n/locale-parity-guard.test.ts
+node scripts/verify-module-map.mjs
+npm run build
 ```
 
-Stage only exact changed files, not the broad paths shown if unrelated work exists.
+Then spawn the frontend IPC contract auditor and Rust/Tauri reviewer. Resolve every command,
+serde/TypeScript, capability, persistence and panic/unwrap finding.
+
+**Step 6: Installed-build/visual proof**
+
+Use the repo `self-review` skill at the owner's real resolution. Prove the default-on Home card
+route with notification permission both on and off. Use persisted-state fixtures for the
+app-closed/next-launch path. Record notification display and foreground behavior as observed facts;
+do not claim direct click routing unless the installed build proves it.
+
+**Step 7: Commit**
+
+```powershell
+git add src-tauri/src/incident_observer.rs src-tauri/src/blackbox.rs src-tauri/src/lib.rs src-tauri/build.rs src-tauri/capabilities/default.json src-tauri/CLAUDE.md src/types.ts src/App.tsx src/surfaces/HomeConsole.tsx src/surfaces/BlackBox.tsx src/surfaces/LabConsole.tsx src/surfaces/home-console.test.tsx src/surfaces/lab-console.test.tsx src/surfaces/BlackBox.test.tsx src/care-incident-observer-contract.test.ts src/i18n/locales/en/home.json src/i18n/locales/en/lab.json src/i18n/locales/zh-CN/home.json src/i18n/locales/zh-CN/lab.json
+git commit -m "feat(care): persist and surface new crash incidents (#91)"
+```
 
 ### Task 10: Security/privacy review and dark acceptance
 
@@ -589,15 +722,17 @@ arming change is a short, separately owner-reviewed mutation after the evidence 
 
 ## Completion definition
 
-Tier 1 dark is complete only when:
+Tier 1 fixture-proven dark mechanics are complete only when:
 
 - local crash scan still works with network disabled;
-- signed advisory catalog is separately verified/cached/matched locally;
+- catalog schema/signature/cache/match mechanics are proven with local fixtures; no production
+  catalog, endpoint or key is implied by this state;
 - production gate is false and no endpoint/key is armed;
 - no machine incident data can leave through the Tier 1 module;
 - support evidence and Receipts still have no transport;
 - CSP/webviews are unchanged;
 - no driver/mutation/injection exists;
 - Crash & Freeze Rescue is discoverable and deep-links correctly;
-- notification is secondary to persistent in-app discovery;
+- the persisted Home card is authoritative; notification is secondary and no unsupported direct
+  click-routing claim ships;
 - every required test/review is green and current state docs tell the truth.

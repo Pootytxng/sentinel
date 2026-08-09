@@ -31,6 +31,16 @@
   - **Primary product:** "Compy Care" umbrella; user-facing rescue entry is **Crash & Freeze Rescue**
     (retire "Black Box" from primary navigation). Diagnosis/recovery first; measured optimization is
     the second specialty.
+  - **Care loop:** intake → triage → local case chart → bounded differential → one next plan →
+    follow-up → prevention. The app must remember whether the symptom returned and whether the plan
+    helped; it must not end at a one-time log explanation.
+  - **Coverage ladder:** Train 1 crashes/hangs/restarts/BSOD; then measured performance regressions
+    and slowdowns; thermals/noise; storage/startup/update trouble; network/peripheral/device trouble.
+    Each later train needs its own evidence contract and must preserve honest unknown states.
+  - **Discovery contract:** a compact Care entry is always visible on Home even while the broad
+    `compy_home_intake` band stays default-OFF. A new local incident observer may persist one pending
+    Home card, but the first version uses launch/foreground and monitored-session-end scans only—no
+    background service and no assumed notification-click callback.
   - **Tier 1 — approved to build DARK:** separately signed public known-issue catalog, Rust-side
     pull only, local matching against existing crash incidents, zero machine-derived upload, separate
     key/schema/domain/cache from privileged remote rules. Runtime stays hard-false until exact

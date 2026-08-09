@@ -10,7 +10,7 @@ qualified professional before public distribution. Owner/contact identity: Pooty
 
 > **Doctrine pointer (updated 2026-08-09):** This policy describes current runtime behavior.
 > Receipts remains disabled and no send path exists. Tier 1 signed case intelligence is approved as
-> a dark design but has no module, endpoint or traffic today. Before any tier is armed, this policy
+> a dark design but has no module, endpoint or traffic today. Before any Capability Exception Gate outbound tier is armed, this policy
 > and generated site copy must be updated in the SAME release with its exact endpoint, payload,
 > consent, retention/deletion and off-switch behavior; Tier 1 cannot authorize Tier 2 or 3.
 > `src/outbound-claim-guard.test.ts` enforces the current outbound claims.

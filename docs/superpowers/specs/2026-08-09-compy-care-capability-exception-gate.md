@@ -65,6 +65,34 @@ Optimization becomes Compy's treatment/conditioning wing:
 
 It is still premium value, but no longer the only recurring reason to open the app.
 
+### 3.4 Care loop and coverage ladder
+
+Compy Care is a continuing case relationship, not a one-shot scanner:
+
+1. **Intake** — the user names a symptom in ordinary language or Compy surfaces a recent incident.
+2. **Triage** — distinguish urgent recovery, degraded-but-usable, and informational states without
+   scare language.
+3. **Local case chart** — retain the incident, relevant measured context, steps tried and outcomes on
+   this PC; no account is required.
+4. **Bounded differential** — show Windows facts, plausible contributors and known-issue matches as
+   separate evidence classes.
+5. **One plan** — give the safest useful next test/recovery first; alternatives stay behind detail.
+6. **Follow-up** — ask whether the symptom returned and whether the step helped; compare only what was
+   actually measured.
+7. **Prevention** — turn proven recurrence patterns into calm maintenance or rollback advice.
+
+Coverage expands in evidence-earned trains:
+
+- **Train 1:** application/game crashes, hangs, GPU timeouts, unexpected restarts and BSOD/WHEA.
+- **Train 2:** measured performance regressions, stutter and unexplained slowdowns.
+- **Train 3:** thermal/noise/clock-limit symptoms using available honest sensors.
+- **Train 4:** storage pressure, startup failure and Windows/driver update trouble.
+- **Train 5:** network, peripheral and device problems.
+
+Optimization lives inside this loop as treatment/conditioning. No later train inherits authority from
+Tier 1 case intelligence or from the medical metaphor; each needs its own evidence, safety and privacy
+contract.
+
 ## 4. Five-second information architecture
 
 A user who just experienced a crash must not need to understand Compy's room names.
@@ -75,6 +103,8 @@ A user who just experienced a crash must not need to understand Compy's room nam
   **Find out why**.
 - **Home, always:** one compact **PC help** entry with symptom choices:
   "A game closed or froze" · "The PC restarted/blue-screened" · "It feels slow" · "Something else."
+  This entry is rendered independently of `compy_home_intake`; the broader intake/optimization band
+  remains default-OFF.
 - **Lab/diagnostics:** visible station label **Crash & Freeze Rescue**.
 - **Search/command routing:** "crash", "freeze", "game closed", "blue screen", "restart", "error",
   "Event Viewer" and "Discord tab-out" route to the same station.
@@ -119,10 +149,14 @@ The current code already owns most of the local spine:
 - `src-tauri/src/support_evidence.rs`: bounded, redacted local record with preview/export.
 - `src-tauri/src/remote_rules.rs`: a proven signed-manifest verification pattern, but a privileged
   trust domain that Tier 1 must not reuse.
-- `src-tauri/src/lib.rs`: native notification capability already registered.
+- `src-tauri/src/lib.rs`: native notification capability already registered for a simple
+  `show()` nudge; there is no proven notification action/click callback contract.
+- `blackbox::get_crash_blackbox()`: current collection is on-demand; there is no durable incident
+  cursor/dedupe observer yet.
 - `src/q2b-deferral-tripwire.test.ts`: production webviews and CSP are local-only.
 
-The new work is a signed advisory-knowledge seam plus discoverability—not a second incident system.
+The new work is a signed advisory-knowledge seam, an always-visible route and a small persisted local
+observer around the existing incident collector—not a second evidence or diagnosis system.
 
 ## 6. Capability Exception Gate
 
@@ -159,7 +193,7 @@ A proposal cannot leave the default posture until its record contains all of the
 | Recovery | Rollback/uninstall, last-known-good, failed-update recovery |
 | Trust | Signing keys, rotation, update channel, custody |
 | Rollout | hard-false → dark → canary → staged → general |
-| Kill switch | Local/remote mechanism that cannot become a new unsafe control plane |
+| Kill switch | Initial mechanism is local and deny-only; any remote disable signal is a separately gated inbound trust surface |
 | Abort | Quantified safety/reliability/value conditions that stop rollout |
 | Review | Independent reviewers, owner decision, expiry/re-review date |
 
@@ -271,8 +305,20 @@ Tier 1 has its own:
 - endpoint/domain allowlist;
 - cache directory and files;
 - monotonic catalog version;
-- runtime gate and kill switch;
+- runtime gate and local deny-only kill switch;
 - source/provenance label.
+
+The compiled source-link authority is `CASE_SOURCE_ORIGINS` in
+`src-tauri/src/case_intelligence.rs`. It is owned by the Rust/security review lane and changes only
+through an app release. A catalog entry may select a signed HTTPS URL whose exact origin is already in
+that list; the catalog cannot extend the list, introduce a transport origin, redirect the catalog
+download, or trigger an in-app fetch. Sources open in the system browser only after a user click.
+Catalog endpoint origins are a separate compiled allowlist in the same module.
+
+The first Tier 1 kill switch is local and deny-only: it can keep the hard-false gate closed or disable
+refresh/use. It cannot enable or configure case intelligence. Any remote disable signal requires a
+new Capability Exception record, a signing trust distinct from both case intelligence and remote
+rules, and a separate owner arming decision; it may disable only and cannot be carried in the catalog.
 
 Cryptographic primitives may be extracted and reused only if the type system keeps trust roots,
 manifest types and cache namespaces distinct.
@@ -381,20 +427,78 @@ No numeric confidence. A matched known issue still says "matches the recorded sh
 - global off switch;
 - no webview `fetch`, CSP change or remote content.
 
-## 10. Notifications and proactive rescue
+## 10. Local incident observation and notifications
 
-Push notifications are a secondary nudge, not the discovery system. Users can disable them.
+Notifications are a secondary nudge, not the discovery system. The persisted Home card is the
+authoritative route and remains available when notifications are disabled.
 
-### Reliable path
+### 10.1 Dedicated observer and durable state
 
-- When Compy/tray is running and a new high-signal incident is locally observed, create one native
-  notification: "A game appears to have closed unexpectedly — Compy can check the evidence."
-- When Compy was not running, show the persistent Home card on next launch.
-- Clicking either opens Crash & Freeze Rescue with the relevant incident selected.
-- Deduplicate by incident identity and suppress repeated alerts for the same app/family in a bounded
-  window.
-- Never notify on a low-confidence heuristic alone.
-- Do not use scare language, red alarm styling or causal claims.
+Create `src-tauri/src/incident_observer.rs`. It consumes normalized incidents from `blackbox.rs`;
+it does not reread Windows sources independently and does not create a service or scheduled task.
+`blackbox.rs` derives a stable, path-free `incident_id` from canonical incident facts.
+
+State lives at `%APPDATA%\Compy\care\incident-observer.json`:
+
+```rust
+struct IncidentObserverState {
+    schema_version: u32,
+    last_scan_at: Option<String>,
+    seen: Vec<ObservedIncident>,
+    pending_home_incident_id: Option<String>,
+}
+
+struct ObservedIncident {
+    incident_id: String,
+    first_seen_at: String,
+    notified_at: Option<String>,
+    opened_at: Option<String>,
+    dismissed_at: Option<String>,
+}
+```
+
+Writes are temp-file + flush + atomic replace. Corrupt state is quarantined and fails safe to manual
+rescue with no notification spam. Keep at most 128 observations and 30 days; a pending card expires
+after 7 days. A same-app/incident-family notification has a 30-minute cooldown while the newest exact
+incident may still become the pending Home card. These are lifecycle caps, not confidence claims.
+
+### 10.2 Observation lifecycle
+
+- **First ever observer run:** seed the watermark and current incident IDs; do not alert on historical
+  backlog.
+- **Every later app launch and main-window foreground:** scan only since the saved watermark.
+- **After a monitored game/session ends:** run one targeted scan after existing session finalization.
+- **While running:** no periodic polling in the first release. A bounded cadence may be proposed only
+  after collector cost and notification value are measured.
+- **While Compy is closed:** nothing runs. On next launch, the saved watermark lets Compy find
+  qualifying incidents that occurred during downtime and persist the newest Home card.
+- **High-signal predicate:** a real Event Log/WER/Reliability incident of application crash/hang, GPU
+  timeout, BSOD/WHEA or unexpected restart. Assessment heuristics alone never trigger a nudge.
+- **Dedupe:** exact `incident_id` is notified at most once; cooldown reduces same-family bursts.
+
+### 10.3 IPC, routing and notification contract
+
+Add main-window-only commands:
+
+- `get_pending_care_incident() -> Option<PendingCareIncident>`;
+- `mark_care_incident_opened(incident_id: String)`;
+- `dismiss_care_incident(incident_id: String)`.
+
+The pending DTO contains the stable ID, occurred-at time, incident kind, app/display label and calm
+summary—no raw receipt, path or dump. Home's **Find out why** writes the one-shot Lab station
+`blackbox` plus the selected incident ID, then marks it opened only after Crash & Freeze Rescue
+actually consumes that selection. Dismissal is explicit; expiry is automatic.
+
+The current official desktop notification plugin exposes a simple show operation, not a supported
+action/click callback carrying an incident payload:
+https://docs.rs/tauri-plugin-notification/latest/src/tauri_plugin_notification/desktop.rs.html
+
+Therefore the initial toast says: **"A game appears to have closed unexpectedly. Open Compy to review
+the evidence."** It carries no promise that clicking the toast opens a selected case. If Windows'
+default click merely foregrounds Compy, the frontend reads the persisted pending state and shows the
+card; that behavior must be empirically proved before it is described as click-through. Direct
+notification-action routing is a later capability only if the notification API and installed-build
+test support it.
 
 Microsoft's notification guidance says notifications should be timely, actionable, concise and
 valuable enough to justify interruption:
@@ -441,7 +545,7 @@ The product principle is: **glance first, one next action, proof on demand.**
 | Threat/failure | Required control |
 |---|---|
 | Catalog server compromise | Ed25519 signature + pinned separate public key |
-| Signing-key compromise | offline custody, documented rotation via app update, kill switch |
+| Signing-key compromise | offline custody, documented rotation via app update, local deny-only kill switch |
 | Rollback/freeze attack | monotonic version + expiry + app compatibility |
 | Cache tampering | full re-verification before use |
 | Oversized/malicious catalog | byte/entry/string/depth caps, strict schema |
@@ -452,7 +556,7 @@ The product principle is: **glance first, one next action, proof on demand.**
 | UI overclaim | fixed match vocabulary and copy guards |
 | Network unavailable | embedded/local analysis remains fully useful |
 | Bad advisory | source + updated date, contraindications, feedback, catalog kill switch |
-| Notification fatigue | high-signal only, dedupe, persistent in-app fallback, off control |
+| Notification fatigue | high-signal only, bounded dedupe, persisted Home fallback, off control; no unproven click promise |
 
 ## 14. Rollout
 
@@ -460,12 +564,15 @@ The product principle is: **glance first, one next action, proof on demand.**
 2. **Pure domain dark:** types, parser, verifier, matcher, cache tests; gate false; no endpoint.
 3. **Transport dark:** fixed test endpoint in test harness only; production gate false.
 4. **UI contract dark:** optional match field; absent path byte/behavior compatible.
-5. **Discoverability:** Crash & Freeze Rescue label, Home/symptom deep-link; coordinate with #49.
-6. **Security/privacy review:** exact endpoint, key custody, request trace, copy, guard mutation tests.
-7. **Canary:** owner-approved endpoint/key; limited machines; abort on crash/perf/privacy/signature
+5. **Discoverability:** always-visible Home Care entry plus Crash & Freeze Rescue deep-link;
+   preserve the broad intake flag as default-OFF and coordinate with #49.
+6. **Local observation:** persisted incident cursor/Home card, launch/foreground/session-end scans and
+   a plain notification nudge; no service, polling cadence or assumed click callback.
+7. **Security/privacy review:** exact endpoint, key custody, request trace, copy, guard mutation tests.
+8. **Canary:** owner-approved endpoint/key; limited machines; abort on crash/perf/privacy/signature
    failure.
-8. **Arming decision:** only after evidence pack. No automatic inheritance from this spec.
-9. **Tier 2/3:** new specs and decisions, not continuation tasks.
+9. **Arming decision:** only after evidence pack. No automatic inheritance from this spec.
+10. **Later Care trains and Tier 2/3:** new evidence contracts/specs/decisions, not continuation tasks.
 
 ## 15. Success measures
 
@@ -479,8 +586,9 @@ Before broader arming, prove:
 - Tier 1 packet/request inspection shows no incident or machine-derived payload;
 - no webview network surface, CSP widening, mutation variant or support-evidence transport appears;
 - invalid/tampered/expired/rolled-back catalogs never render an advisory;
-- notification click and Home card open the same incident;
-- repeated incidents do not produce notification spam;
+- the persisted Home card opens the exact incident; the toast remains a secondary nudge and direct
+  click activation is not claimed unless an installed-build test proves a supported contract;
+- repeated incidents do not produce notification spam and first-run history does not alert;
 - owner can turn case-knowledge refresh off without affecting local diagnosis.
 
 These are product/engineering acceptance criteria, not marketing claims.
@@ -496,6 +604,8 @@ These are product/engineering acceptance criteria, not marketing claims.
 - remote mutation rules;
 - webview/network/CSP changes;
 - Lab shell redesign;
+- a Windows service, scheduled task or unmeasured always-on polling loop;
+- guaranteed notification-click payload routing with the current plugin;
 - reviving Quiet Pit Wall draft PR #50;
 - claiming every crash is diagnosable.
 
