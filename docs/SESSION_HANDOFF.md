@@ -6,7 +6,7 @@
 
 PR #90 governance/proof repair under issue #49.
 
-- Writer: none; Codex implementation claim released after the verified push
+- Writer: none; Codex's bounded repair claim is released after the verified final push
 - Checkout: `C:\Users\Kuya\code\sentinel-pr90-governance`
 - Local branch: `codex/pr90-governance`
 - Remote/PR branch: `origin/agent/rig-evidence-map-clean`, PR #90 ready for review
@@ -22,22 +22,25 @@ write only after an explicit, exclusive handoff. Exact required gates, current-h
 independent review now control proof-dependent GitHub transitions.
 
 The 14 Rig Evidence Map product/i18n/test files inherited from PR #90 are unchanged. PR #89's CI
-policy, runner-budget, local-verifier, package-script, and lockfile changes remain excluded.
+policy, runner-budget, local-verifier, package-script, and lockfile changes remain excluded. Two
+repository-owned failures exposed by the exact final gate were repaired in this lane: the shared
+Fix disclosure no longer lets its mount effect overwrite a first click, and the native release
+sandbox now asserts the real 15-second backoff lower bound without failing on scheduler overhead.
 
 ## Current evidence
 
 - Re-read the source conversation, current main, both PRs, issue #49 comments/Project fields, every
-  linked worktree, dirty state, remote refs, hosted check summaries, and relevant live processes.
-- PR #89 is closed unmerged at `93c931a3`; PR #90 is draft at `a4cbbc43`. The old PR #90 checkout is
-  preserved but owned by the prior sandbox SID, so this clean linked worktree was created from the
-  exact remote head instead of trusting or modifying it.
-- Issue #49 records the verified takeover. Project state is Active / Codex / Gate None with this
-  worktree, branch, expiry, and next action.
+  linked worktree, dirty state, remote refs, hosted check summaries, and relevant live process.
+- PR #89 is closed unmerged at `93c931a3`; PR #90 is open and ready for independent review. The old
+  PR #90 checkout is preserved but owned by the prior sandbox SID, so this clean linked worktree was
+  created from the exact remote head instead of trusting or modifying it.
+- Issue #49 records both verified Codex claims, including the bounded re-claim after final-head gates
+  exposed the two defects. The Project is now Review / Claude Code / Gate None; no write claim remains.
 - The work-control guard failed five core behavior cases before the evaluator existed, three
   law-loading cases before the docs changed, and three typo/identity hardening cases before those
   checks were added. It now passes all 16 evaluator, CLI, and law-loading cases.
-- Exact committed-head gates ran without filters at `c2868bc0`: site staging passed; Vitest passed
-  308 files / 3,963 tests with 2 skipped; the production build transformed 7,500 modules; Cargo passed 922 with
+- Exact final committed-head gates ran without filters: site staging passed; Vitest passed 308 files /
+  3,963 tests with 2 skipped; the production build transformed 7,500 modules; Cargo passed 922 with
   0 failed and 24 ignored; clippy passed with warnings denied.
 - The first full Vitest attempt correctly blocked on this lane's non-canonical main-module check and
   three release-harness timeouts while Cargo compiled in parallel. The existing idiom guard caught
@@ -46,12 +49,15 @@ policy, runner-budget, local-verifier, package-script, and lockfile changes rema
 - Final inspection also found `STATE:source_main_commit` 12 commits stale. It was re-stamped from
   `ce3f4bd` to current `origin/main` `a53d7795`; the release-state verifier now reports 30/30
   citations and 0 state drift.
-- Current focused governance/main-module/residency/state set: 4 files, 485 tests passed.
+- Focused disclosure/preload behavior passed 14/14; the native alias-backoff regression passed 1/1.
+- The final encoding scan found 1,241 tracked text files clean; documentation budgets, branch
+  disposition, release-state, work-control residency, and clean-diff guards all passed.
 - The work-control receipt returned `PASS` with one explicit warning: Claude Code 2.1.220 could not
   perform the non-writing review because its OAuth session is expired and no API key is present.
   Authentication was not changed. The review remains labeled unverified rather than self-approved.
 - PR #90 is ready for independent review, not merge-authorized. PR #89 remains closed unmerged. The
-  Project is Review / Claude Code / Gate None; the claim expiry is cleared.
+  issue title and Project execution fields now describe integration plus PR #90 review; the claim
+  expiry is cleared.
 
 ## Remaining external review
 

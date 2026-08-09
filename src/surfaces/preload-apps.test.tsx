@@ -64,8 +64,8 @@ describe("PreloadApps (Phase-B, BUILT DARK)", () => {
     preloadView(true, ["solitaire-collection", "feedback-hub"]);
     render(<Fix {...baseProps} />);
     fireEvent.click(await screen.findByText("Preinstalled apps"));
-    // findBy, not getBy: the row list is painted by a state update the click only schedules,
-    // so a synchronous read here fails under full-suite load and passes in isolation.
+    // Regression: the disclosure's initial preference sync must not overwrite this first click
+    // when the async preload probe mounts the section under full-suite load.
     expect(await screen.findByText("Solitaire Collection")).toBeTruthy();
     expect(screen.getByText("Feedback Hub")).toBeTruthy();
     // Not installed → never offered (no "remove something that isn't there").

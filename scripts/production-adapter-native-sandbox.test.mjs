@@ -131,8 +131,10 @@ describe.runIf(windows)(`production release adapter over sandboxed native transp
     expect(payload.first_stages).toEqual(stages);
     expect(payload.first_alias.latest_alias_verified).toBe(true);
     expect(payload.first_alias.latest_alias_attempts).toBe(3);
-    // Backoff really is charged against the deadline, not skipped: 5s then 10s before the third read.
-    expect(payload.first_alias.latest_alias_seconds).toBeCloseTo(15, 0);
+    // Backoff really is charged against the deadline, not skipped: 5s then 10s before the third
+    // read. This is a wall-clock measurement, so loaded-runner scheduling overhead may take it
+    // above 15.5s; the lower bound is the contract, while the test timeout remains the upper bound.
+    expect(payload.first_alias.latest_alias_seconds).toBeGreaterThanOrEqual(15);
     expect(payload.first_alias_probes.manifest).toBe(3);
     // A retry must not reuse the previous attempt's download: the hashes finally recorded are the
     // receipt-bound ones, never the stale 9.9.8 body an earlier attempt left in the same file.
