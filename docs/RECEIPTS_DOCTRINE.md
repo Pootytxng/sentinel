@@ -17,7 +17,9 @@ This is the grand re-opening. We were never open; now we are, and the door says 
 
 - FROM: "an optimizer that promises nothing" (honesty as a vow of silence).
 - TO: **"the measurement brand that proves everything — and gets paid when the proof says 'buy a GPU.'"**
-- The free app is the **trust engine + funnel**. Money lives in the layers around it.
+- **PRIMARY PRODUCT (owner decision 2026-08-09): Compy Care is the PC doctor users open after any
+  crash, freeze, slowdown or unexplained hiccup.** Optimization and measured performance treatment
+  are the second specialty. The app is the trust engine + funnel; money lives in the layers around it.
 - **SHARPENED (owner decree 2026-07-21): Compy is NOT a free product.** The end-state is a
   **free tier vs. paid monthly** split — the free tier exists as the funnel option, but the goal
   is **complete monetization**. Never brand/describe Compy as "a free app" in outward copy
@@ -36,7 +38,8 @@ This is the grand re-opening. We were never open; now we are, and the door says 
   Constraints (non-negotiable): consent-first UI, default OFF, anonymous (no PII, no rig serials),
   kill-switch, no third-party trackers, payload inspectable by the user before send. It is a NEW
   outbound-network boundary → rides its own spec + security review + **owner sign-off before ship**
-  (CLAUDE.md stop-rule 3). Until it ships, the verified zero-outbound property still holds.
+  (CLAUDE.md stop-rule 3). The signed updater is already live, so zero-outbound is not a current
+  property. Case intelligence follows the separate Tier 1/2/3 boundaries in Architecture Locks §1.8.
 - **"Your PC is probably fine" defensive copy.** Retired app-wide and site-wide. Replacement voice:
   "Measured on rigs like yours." Celebrate measured wins loudly.
 - **The refusal to market.** Retired. Attack marketing is sanctioned: the debunk IS the ad; pick the
@@ -60,9 +63,11 @@ This is the grand re-opening. We were never open; now we are, and the door says 
 ### UNTOUCHABLE (now business-critical, not just safety)
 - Rollback-first integrity (the moat; B2B's entire purchase reason).
 - No fabricated claims (owner's integrity line + legal survival).
-- No kernel driver · no game injection (anti-cheat safety = market access).
-- Signed-remote-rules triple gate, updater off, secrets/signing-key rules, frozen beta refs,
-  security/system-settings owner gate — ALL CLAUDE.md LOCKED rules stand. A monetized Compy makes
+- No third-party game/process injection (anti-cheat safety = market access). A Compy driver is
+  exception-gated, never assumed; none ships today.
+- Capability Exception Gate · outbound Tier 1/2/3 separation · signed-remote-rules triple gate,
+  secrets/signing-key rules, frozen beta refs, security/system-settings owner gate — ALL CLAUDE.md
+  LOCKED rules stand. The updater is live and separately signed. A monetized Compy makes
   these MORE important: we will be charging strangers; the blast radius of sloppiness is the brand.
 
 ## 3. The money stack (ranked by passivity)

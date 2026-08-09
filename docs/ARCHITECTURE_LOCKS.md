@@ -1,6 +1,6 @@
 # Architecture Locks
 
-> Compy is not an optimizer that happens to have rollback. Compy is a rollback-first Windows configuration safety layer that happens to optimize.
+> Compy is the PC doctor users turn to after a crash, freeze, slowdown, or unexplained hiccup. Its treatment layer is still rollback-first; optimization is a secondary specialty.
 
 This document captures decisions that are hard to change once users are in the wild, plus the operating policies that govern how new features get added. Future contributors (including future Claude sessions) must respect these. Breaking them silently is a "users-can't-update-or-rollback" class incident — or worse, a "remote control plane shipped without signed verification" class incident.
 
@@ -58,7 +58,7 @@ Compy must be useful on first launch with no network access, indefinitely.
 
 ### 1.4 Remote fetch is gated behind signed manifest validation
 
-No remote fetch ships, **including in private or closed beta**, until all of the following are in place:
+No remote **rules** fetch ships, including in private or closed beta, until all of the following are in place:
 
 - Ed25519 public key embedded in the binary
 - Signed manifest format with `schema_version`, `ruleset_version`, `created_at`, `expires_at`, `min_app_version`, `max_app_version`, `rules_sha256`, `rules_url`
@@ -103,6 +103,76 @@ Compy does not promise FPS gains, latency reductions, or other measured improvem
 Synthetic microbenchmarks may be exposed as health signals. They may not be presented as "this tweak improved your FPS by X%." Real before/after gaming proof requires PresentMon/ETW frame-pacing capture.
 
 **Scope update (2026-06-03, owner-approved).** PresentMon/ETW frame-time capture is **promoted from "out of v1" to the core efficacy "Measure"** — real per-tweak before/after frame-pacing deltas (frame times, 1%/0.1% lows) are the ultimate proof the measured-efficacy direction is built on. This reuses the **already-shipping, read-only, anti-cheat-safe** elevated `fps.rs --fps-capture` ETW helper (no new capability, no mutation, no injection — the same mechanism the Monitoring tab already uses). **The honesty invariant above is unchanged and reinforced:** a measured delta must still clear the run-to-run **noise floor** (default 3%) or be reported as an explicit **"no measurable change"**; synthetic runners stay labeled health signals ("is-my-hardware-to-spec"), kept distinct from PresentMon's "did-this-help-my-game" proof. Building the PresentMon→`compute_efficacy` seam stays gated behind the dark `benchmark_enabled()` until it ships and is QA'd.
+
+### 1.8 Capability Exception Gate + outbound case intelligence
+
+**Owner decision (2026-08-09, issue #91):** the blanket "no Compy driver / no new outbound surface"
+prohibitions are replaced by a challengeable gate. This is not a general unlock.
+
+#### Default posture
+
+Every new capability starts **local, user-mode, least-privilege, non-invasive, offline-usable and
+fail-closed**. The proposer must use documented Windows APIs, ETW, vendor SDKs, local files, WMI/CIM,
+or a user-mode service before requesting a stronger boundary.
+
+An exception record is valid only when it names all of the following:
+
+1. the user-visible failure and measurable success criterion;
+2. evidence that lower-risk routes cannot deliver that outcome;
+3. exact target, privilege level, caller, data read/written, persistence and performance budget;
+4. anti-cheat, security, privacy and stability threat model;
+5. consent, disclosure, retention/deletion and revocation behavior;
+6. rollback/uninstall, update/signing, kill switch and recovery from a bad release;
+7. dark/canary/staged rollout, independent review, abort metrics and review expiry;
+8. the owner decision that permits implementation and the later decision that permits arming.
+
+Approval applies only to the named capability. It cannot be cited to justify an adjacent transport,
+driver IOCTL, endpoint, payload, telemetry field, capability permission, CSP widening or mutation.
+
+#### Boundaries that remain absolute
+
+- **No third-party game/process injection:** no DLL injection, code hooks inside a game, game-memory
+  reading/writing, or execution inside an anti-cheat process.
+- No vulnerable or borrowed third-party kernel driver (BYOVD).
+- No generic physical-memory, arbitrary MSR, PCI configuration, I/O-port, device-register or
+  kernel read/write primitive.
+- No silent evidence upload, no raw dump auto-upload, no hidden background queue.
+- Remote/advisory content never creates a mutation primitive or bypasses `actions.rs`.
+
+#### Compy-shipped driver exception
+
+A Compy driver is policy-possible but is **not approved by this decision and is not needed for the
+first Compy Care train**. Its own record must additionally prove a kernel driver is required; use a
+minimal WDF design; constrain every IOCTL and caller; pass HVCI/Memory Integrity, Driver Verifier,
+HLK/compatibility, signing and uninstall/rollback tests; document anti-cheat compatibility; and
+survive an independent driver-security review. A driver cannot be justified only to fill a sensor
+tile. Current runtime remains driver-free, and CPU temperature remains external-monitor-only.
+
+#### Outbound tiers
+
+| Tier | Purpose | Consent | Data leaving Compy | Independent gate |
+|---|---|---|---|---|
+| **1 — signed case knowledge** | Keep public known-issue guidance current | disclosed request + global off switch | catalog request metadata only; **no machine-derived incident payload** | separate advisory signing trust, domain, cache, caps, timeouts, kill switch |
+| **2 — scrubbed incident fingerprint** | Learn which issue shapes recur | explicit opt-in, default OFF, previewable | allowlisted coarse fields only; no raw log/dump/path/serial/user identity | payload schema, redaction proof, retention/deletion, revocation, abuse review |
+| **3 — per-case evidence upload** | Let a user send one support case | explicit consent for that incident after preview/redaction | exactly the displayed bundle to a named recipient | one-case receipt, endpoint policy, retention/deletion response, no background queue |
+
+Tiers never inherit consent from one another. Tier 1 does not authorize Tier 2 or 3.
+
+#### Tier 1 implementation lock
+
+The first outbound case-intelligence build is a new Rust-side advisory module, not `remote_rules.rs`,
+`receipts.rs`, or `support_evidence.rs`, and not a webview fetch. It uses a separate public key,
+manifest schema, endpoint allowlist, cache namespace and monotonic version. It verifies signature,
+hash, expiry, app-version range and size before caching; preserves an embedded/last-known-good
+fallback; matches the downloaded public catalog against the existing local crash incident on-device;
+and returns advisory wording only. It does not widen CSP, upload incident data, add a mutation
+variant, or alter support evidence transport. The runtime gate stays hard-false until endpoint,
+signing custody, privacy copy, security review and arming evidence are exact.
+
+Detailed directive: `docs/superpowers/specs/2026-08-09-compy-care-capability-exception-gate.md`.
+Execution plans:
+`docs/superpowers/plans/2026-08-09-capability-exception-policy-rails.md` and
+`docs/superpowers/plans/2026-08-09-outbound-case-intelligence-tier1.md`.
 
 ---
 

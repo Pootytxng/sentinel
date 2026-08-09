@@ -34,12 +34,23 @@ const flat = text.replace(/\s+/g, " ");
 
 const REQUIRED: { law: string; markers: string[] }[] = [
   {
-    law: "LOCKED 1 — no kernel driver / no fabricated CPU temp",
-    markers: ["No kernel driver.", "never reads CPU die temperature", "never fabricated"],
+    law: "LOCKED 1 — Capability Exception Gate / no fabricated CPU temp",
+    markers: [
+      "Capability Exception Gate (owner decision 2026-08-09).",
+      "current build ships no driver",
+      "No vulnerable third-party driver",
+      "external-monitor-only",
+      "never fabricated",
+    ],
   },
   {
-    law: "LOCKED 2 — no game injection",
-    markers: ["No game injection.", "anti-cheat", "borderless/windowed"],
+    law: "LOCKED 2 — no third-party game/process injection",
+    markers: [
+      "No third-party game/process injection.",
+      "no DLL injection",
+      "game-memory access",
+      "borderless/windowed",
+    ],
   },
   {
     law: "LOCKED 3 — rollback-first integrity",
@@ -75,7 +86,7 @@ const REQUIRED: { law: string; markers: string[] }[] = [
       "Defender disable",
       "MPO disable",
       "fixed pagefile",
-      "kernel-level anything",
+      "ungated kernel-level capability",
       "EAC/BattlEye",
       "GPU-profile apply",
     ],
@@ -107,7 +118,9 @@ const REQUIRED: { law: string; markers: string[] }[] = [
     markers: [
       "never fabricate, never claim unmeasured",
       "default-OFF",
-      "Never write an absolute offline claim",
+      "Tier 1 signed advisory download / no machine-data upload",
+      "Tier 2 opt-in scrubbed incident fingerprint",
+      "Tier 3 explicit per-case evidence upload",
     ],
   },
   {

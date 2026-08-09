@@ -15,20 +15,18 @@ what's good, what's missing, what's a bad idea. Be blunt — "this part is dumb"
 
 ## TL;DR (30 seconds)
 
-**Compy finds what's actually slowing your gaming PC down — fixes the fixable, proves whether it
-worked, and undoes anything, anytime.** It reads your real hardware and speaks plain English:
-what's worth changing on *your* rig, what's already fine, and — the soul of the product — **when a
-tweak did nothing, it says so.**
+**Compy is the PC doctor for everyday Windows gamers:** the first place to go after a game crash,
+freeze, slowdown, or unexplained hiccup. It gathers the evidence already on the PC, explains what is
+known versus only suspected, gives one safe next test or recovery step, and remembers the outcome.
+Optimization is the second specialty: hardware-aware treatment that proves whether it worked and
+can undo every change.
 
-It's a real, working Windows app (Tauri: Rust core, web UI), at private-beta quality. **Core
-promise: optimize + rollback stay free forever, no account required.** Your hardware, sessions and
-history stay on your PC: no telemetry, no account, no upload. The app's one automatic outbound call
-is a signed update check against a pinned GitHub endpoint (live 2026-07-22) — it carries none of
-your data, downloads nothing until you approve, and can be switched off in Settings → About. A
-future opt-in **Receipts telemetry** feature
-(anonymous, default-off, kill-switched) is planned but **not yet built** — there is no toggle to
-turn on yet, and it won't ship without its own security review and owner sign-off. The wedge isn't
-"boost" — it's being the only tool in a snake-oil category that **measures instead of promises.**
+It is a real Tauri/Rust Windows app at private-beta quality. The current build needs no account;
+hardware, sessions, crash evidence and history stay local. Its one automatic outbound use is the
+signed updater, switchable off in Settings. A signed known-issue catalog is approved for a dark
+Tier 1 build, but no case-intelligence endpoint or upload exists today. Future sharing is split into
+separate opt-in tiers; none inherits consent from another. The wedge is not "boost" — it is diagnosis
+and measured treatment without pretending certainty.
 
 ---
 
@@ -66,9 +64,10 @@ Detect → diagnose → debrief → prove. That loop is built and running today 
   were audited and most were refused*: HPET/timer hacks, Defender disable, core parking, TCP
   mega-packs, fixed pagefile — permanently blocklisted. The category competes on tweak count;
   Compy competes on what it leaves out, on purpose, with receipts.
-- **No risky internals.** No kernel driver (which is why there's no CPU temperature — reading it
-  needs one, and we won't ship one). No game injection — FPS is captured externally via Windows'
-  own event tracing, so it's anti-cheat safe by design. GPU sensors via official vendor SDKs.
+- **Boundaries are explicit.** Current build ships no kernel driver. A future Compy driver would
+  need its own Capability Exception Gate record; vulnerable borrowed drivers and generic kernel
+  read/write surfaces remain barred. Game/process injection remains prohibited — FPS is captured
+  externally through ETW and sensors use documented vendor interfaces.
 - **Local-first, one outbound call.** No account, no remote config, no telemetry. **The in-app
   updater (LIVE 2026-07-22, owner-directed) is the one thing that talks out:** a signed-update
   check against the public releases repo on launch + every 4h; nothing downloads until the user
@@ -84,7 +83,7 @@ Detect → diagnose → debrief → prove. That loop is built and running today 
 
 ## Honesty about the project itself
 
-The codebase is **weeks old, built at AI-assisted velocity** (~20k+ lines across 35 Rust modules,
+The codebase is **weeks old, built at AI-assisted velocity** (~20k+ lines across 45 Rust modules,
 1000+ frontend tests). We treat that fact the way Compy treats your PC: small blast radius,
 everything reversible, verification never skipped. **Gaming Mode is live** — the one feature with
 a real mutation surface passed its own crash-safety QA (10/10 field cases) and the owner signed
@@ -123,12 +122,12 @@ you to turn off its own telemetry.
 - **Money: deliberately zero spend** until a phase proves it can pay for itself — domain purchase,
   code signing, legal, and a Pro entity/payments are all owner-gated. Signing and legal gate the
   *public app* release; the domain gates the site's canonical URLs; none of this blocks the beta.
-- **Still dark on purpose:** remote rules (triple-gated off), the updater (off), Receipts
-  telemetry (no send path, needs its own security review + owner sign-off), Compy Pro licensing
+- **Still dark on purpose:** remote rules (triple-gated off), Tier 1 case intelligence (approved
+  design, no runtime module/endpoint yet), Receipts sharing (no send path), Compy Pro licensing
   (needs an entity + payments). Gaming Mode is **no longer on this list — it's live.**
 - **The tweak catalog is open, not frozen** (owner decision 2026-07-09): a tweak earns inclusion
-  by measurable benefit under the same permanent safety rails (reversible, no kernel driver/
-  injection, non-security-weakening, stability-safe) — see CLAUDE.md LOCKED rule 6.
+  by measurable benefit under the same permanent safety rails (reversible, no ungated kernel capability /
+  no injection, non-security-weakening, stability-safe) — see CLAUDE.md LOCKED rule 6.
 - **Monetization has a real build order**, not an open question: `docs/RECEIPTS_DOCTRINE.md` (the
   law) + `docs/MONETIZATION_PLAN.md` (the sequencing, 2026-07-15). Four layers ranked by
   passivity — affiliate upgrade links (hold, needs accounts + data) → content/SEO (live today,
