@@ -83,6 +83,13 @@ batching questions to the end. A failed gate triggers repair, not owner escalati
 failed candidate before reset or abandonment. `AskUserQuestion` is for genuine forks in **owner
 territory** only; engineering forks you resolve yourself and record the reasoning.
 
+**Role specialization + proof order:** Claude Code is the default implementation owner; Codex is the
+default independent reviewer. Either may become the one active writer only by explicit handoff under
+`docs/WORK_CONTROL.md`, after inspecting inherited repo, remote, worktree, dirty-state, and process
+truth. Exact required gates cannot be substituted: extra checks are supplemental, and environment inability
+is a blocker, not a pass. Run `scripts/work-control-gate.mjs` before any proof-dependent GitHub state
+transition; when practical, the non-writing model gives the final independent review.
+
 **Owner-bound in this repo** (on top of the universal floor in `~/.claude/CLAUDE.md` §3):
 1. **Secrets / signing** — the Ed25519 private key or any secret never enters the repo / `.env*` / CI.
 2. **Shared or irreversible git** — never move the frozen beta refs (`16069fa`).
