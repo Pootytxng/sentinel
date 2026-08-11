@@ -13,14 +13,27 @@ const state = vi.hoisted(() => ({
   sessions: [] as unknown[],
   sim: null as unknown,
   simHang: false, // when true, simulate_optimization stays pending → lets a test observe the in-flight lock
-  loadDelayMs: 0, // when >0, the initial ledger reads land LATE → reproduces a loaded CI runner
+  loadGate: null as Promise<void> | null, // when set, the initial ledger reads block on it
 }));
 
-/** Resolve after the configured initial-load delay, so `busy` is still true when a test first looks. */
+/** Hold the initial ledger reads until the returned function is called.
+ *
+ *  This used to be a wall-clock `loadDelayMs = 80`, which made the test that uses it a race it lost
+ *  under load: the delay is measured against the runner's clock, but the assertion it guards runs
+ *  after an `await findByRole`, and on a busy machine that await can outlast 80ms — at which point
+ *  the options HAVE arrived, the "precondition" that the option is absent fails, and a green test
+ *  turns red for reasons that have nothing to do with the code. Latency simulated with a timer is
+ *  not a slow backend, it is a second racer. A gate the test opens itself is the same scenario with
+ *  the race removed. */
+const holdInitialLoad = () => {
+  let open!: () => void;
+  state.loadGate = new Promise<void>((resolve) => (open = resolve));
+  return open;
+};
+
+/** Resolves only once any gate the test installed is open, so `busy` is still true when it looks. */
 const afterLoad = <T,>(value: T): Promise<T> =>
-  state.loadDelayMs > 0
-    ? new Promise((resolve) => setTimeout(() => resolve(value), state.loadDelayMs))
-    : Promise.resolve(value);
+  state.loadGate ? state.loadGate.then(() => value) : Promise.resolve(value);
 
 const KEPT_EXPERIMENT = {
   id: "exp:1-0",
@@ -135,7 +148,7 @@ afterEach(() => {
   state.sessions = [];
   state.sim = null;
   state.simHang = false;
-  state.loadDelayMs = 0;
+  state.loadGate = null;
 });
 
 // bug->guard (CI run 30696118350, 2026-08-01). Setting a <select> to a value that has NO matching
@@ -237,16 +250,18 @@ describe("ExperimentBench (armed)", () => {
     state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
     state.sessions = [VALORANT_SESSION];
     state.sim = WORTH_TESTING_SIM;
-    state.loadDelayMs = 80; // the reads arrive well after the select first exists
+    const landTheReads = holdInitialLoad(); // nothing loads until this test says so
     render(<ExperimentBench />);
     await screen.findByTestId("experiment-bench");
 
     // The precondition that makes this test meaningful: the option really is absent at first, so a
     // bare fireEvent here would set nothing. If this ever stops being true the repro has rotted and
-    // the test below is passing for the wrong reason.
+    // the test below is passing for the wrong reason. Held open by the gate rather than by a timer,
+    // so a slow machine cannot let the reads land early and turn the precondition into a race.
     const select = await screen.findByRole("combobox");
     expect(select.querySelector('option[value="test-rec"]')).toBeNull();
 
+    landTheReads();
     await pickChange("test-rec");
 
     expect(await screen.findByText("Worth testing")).toBeInTheDocument();
