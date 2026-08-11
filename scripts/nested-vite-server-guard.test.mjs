@@ -72,6 +72,33 @@ describe("the refusal that catches what grep cannot", () => {
     // loadLibrary()`, which is how this bug came back after the direct sites were fixed.
     await expect(loadLibrary()).rejects.toThrow(/vite server inside a vitest worker/);
   });
+
+  // bug->guard, 2026-08-11. The refusal originally keyed on `process.env.VITEST`, and environment
+  // variables are INHERITED by child processes: `node site/generate.mjs`, spawned by
+  // scripts/site-seo.test.mjs, is a separate process where a vite server is the correct thing and
+  // nothing can deadlock — but it inherited the marker and was refused. It only fired when the site
+  // artifacts were stale, so the breakage arrived on an unrelated branch, days later, blocking a
+  // push whose diff never touched the site.
+  it("refuses by PROCESS, not by an environment variable a child would inherit", () => {
+    const source = read("scripts/lib/library-render.mjs");
+    expect(source).toMatch(/if \(globalThis\.__vitest_worker__\)/);
+    expect(source, "process.env.VITEST is inherited by children and cannot answer 'am I in the pool?'")
+      .not.toMatch(/if \(process\.env\.VITEST\)/);
+  });
+
+  it("a child process does not inherit the marker, even with VITEST set in its environment", async () => {
+    const { execFileSync } = await import("node:child_process");
+    const probe =
+      "process.stdout.write(JSON.stringify({" +
+      "env: Boolean(process.env.VITEST)," +
+      "worker: Boolean(globalThis.__vitest_worker__)}))";
+    const out = execFileSync(process.execPath, ["-e", probe], {
+      encoding: "utf8",
+      env: { ...process.env, VITEST: "true" },
+    });
+    // The two disagree in a child, which is exactly the case the old check got wrong.
+    expect(JSON.parse(out)).toEqual({ env: true, worker: false });
+  });
 });
 
 describe("the injected loader still resolves the real modules", () => {
