@@ -8,22 +8,34 @@
 # the run it was triggered by, which you can already see; the whole point is to notice on a day when
 # nobody pushes anything.
 #
-# Cost (see the July 2026 table in ci.yml and the projection in scripts/ci-budget-guard.test.mjs):
-# ubuntu-latest at 1x, one sparse checkout + one API read, ~30 runs a month. Budgeted at 30 min/month
-# against a 2,000-minute allowance. If this ever grows a build step, it stops being free and the
-# budget guard is where that argument has to be won.
-#
 # The workflow's own red/green means exactly ONE thing: whether the reporter could do its job. A red
 # `main` is reported through the issue it files, never by failing this workflow — otherwise "main is
 # broken" and "the reporter is broken" would look identical in the Actions tab, and the second one
 # would go unfixed.
+#
+# ---------------------------------------------------------------------------------------------
+# DORMANT since 2026-08-10 — the schedule is removed, dispatch is kept.
+#
+# Two independent reasons, either of which is sufficient:
+#
+# 1. There is nothing left to read. ci.yml is manual-only now (its header carries the arithmetic),
+#    so `main` no longer has a CI conclusion that tracks `main`. A daily reader of the last run
+#    would report on whatever someone last dispatched, days ago, and file issues about it. A
+#    watchdog reporting stale state is worse than no watchdog, by this file's own argument.
+#
+# 2. It cannot see the outage that matters. Between 7 and 10 August every job in this repository was
+#    rejected before a runner was assigned — including this one. Five consecutive daily runs died in
+#    ~4 seconds with zero steps and filed nothing, because a hosted watchdog cannot report an outage
+#    whose definition is "hosted jobs do not start". That is structural, not a bug to fix here.
+#
+# So the job of noticing moved off GitHub entirely: `npm run verify:local` runs on the owner's desk
+# and fails a push directly, which needs no runner, no schedule and no allowance to be true.
+# Restoring the schedule only makes sense once ci.yml has an automatic trigger again.
+# ---------------------------------------------------------------------------------------------
 
 name: CI health
 
 on:
-  schedule:
-    # 15:00 UTC — morning in the owner's timezone, so a red trunk is the first thing waiting.
-    - cron: "0 15 * * *"
   workflow_dispatch:
 
 concurrency: ci-health
