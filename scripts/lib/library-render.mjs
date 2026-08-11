@@ -57,7 +57,14 @@ export async function loadLibrary({ load } = {}) {
   // `lib ??= await loadLibrary()`, so one test calling it without `lib` reintroduced the whole bug
   // after the direct call sites were fixed. Failing here turns a 60-second deadlock that lands on
   // somebody else's test file into an instant error naming the actual caller.
-  if (process.env.VITEST) {
+  // `globalThis.__vitest_worker__`, NOT `process.env.VITEST`. Environment variables are INHERITED by
+  // child processes, and `process.env.VITEST` is therefore still set inside a `node site/generate.mjs`
+  // that a test spawned — a separate process, where a vite server is exactly the right thing and
+  // nothing can deadlock. scripts/site-seo.test.mjs does precisely that, but only when the site
+  // artifacts are stale, so the refusal misfired on a condition unrelated to the change that tripped
+  // it. The worker handle is set by vitest inside the worker and cannot cross a process boundary, so
+  // it answers the question actually being asked: am *I* running in the pool?
+  if (globalThis.__vitest_worker__) {
     throw new Error(
       "loadLibrary() tried to start a vite server inside a vitest worker. That deadlocks the pool " +
         "and the failure surfaces in unrelated test files. Pass a loader instead: " +
