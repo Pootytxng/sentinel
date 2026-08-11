@@ -12,58 +12,57 @@
 
 ## Lane
 
-**Consolidation only — no write claim taken.** Worktree
-`.claude/worktrees/compy-discoverability-ux-context-68c484`, branch
-`claude/compy-discoverability-ux-context-68c484`, read-only against `main` @ `a53d7795`.
-Reconstructs the work three sessions were mid-flight on when the weekly cap hit 2026-08-09, plus
-the Codex PR-90 handoff the owner pasted 2026-08-10. Nothing below is claimed done.
+Worktree `.claude/worktrees/compy-discoverability-ux-context-68c484`, branch
+**`fix/confirm-stacking-focus-ring`** @ `0f0502f2`, stacked on
+`claude/compy-discoverability-ux-context-68c484` @ `af501bf0`, both off `main` @ `a53d7795`.
+**Local only — nothing pushed, no PR, no merge.** Reconstructs and executes the work three sessions
+were mid-flight on when the weekly cap hit 2026-08-09, plus the Codex PR-90 handoff pasted 2026-08-10.
 
 ## What this lane is doing
 
-Nothing but reading. It fixed no gate and committed no source, deliberately: two of the four blocks
-below are pinned to heads another lane must not have moved under it.
+Blocks 1 and 2 below are done and committed. Blocks 3 and 4 are untouched and are the next work.
 
 ## Done so far
 
-Verified 2026-08-10 against `main` @ `a53d7795` after `git fetch`:
-
-- `node scripts/verify-release-state.mjs` → **FAIL** (30/30 citations OK, 1 STATE-DRIFT).
-- `node scripts/branch-disposition-audit.mjs` → **FAIL** (3 refs).
-- `git status` in `C:\Users\Kuya\code\sentinel-quietpitwall` → 4 dirty paths, still there.
-- Crash-rescue reachability traced in source (block 4). No gate re-run at PR #90's head.
+- **§1 — both red gates are green** (`af501bf0`). Re-stamped `STATE:source_main_commit` `ce3f4bd`
+  → `a53d7795` (it trailed by 12, tolerance 10 — 30/30 citations were already anchored), and wrote
+  disposition rows for the three unjudged origin refs: PR #90's and PR #92's branches CLAIMED,
+  `feat/lab-49-parity-port` UNLANDED. That last row is the one to read — its PR is closed and its
+  rig work was re-cut into #90, but `scripts/verify-like-ci.mjs`, `scripts/lib/ci-steps.mjs` and
+  `scripts/verify-like-ci.test.mjs` exist on neither `main` nor #90. Pruning the ref drops the local
+  CI runner with it. **Owner decision, named in the row.**
+- **§2 — both defects fixed, guards mutation-proven** (`0f0502f2`). Confirm backdrop 200 → 2000.
+  Home's intent rows got their own `:focus-visible` rule. Carried onto a clean branch off `main`;
+  the closed PR #89 is not their vehicle.
+  - Both ported guards were themselves broken. The stacking guard checked a hand-written list of
+    four backdrops; it now derives every `position: fixed` full-viewport layer from the CSS and
+    found five more, `.modal-backdrop` at 1000 among them. The focus guard's lookahead sat after
+    `\s*` instead of after the colon, backtracked to zero width, inspected the space, and read
+    `outline: none` as an acceptable focus mark — **exempting every rule it exists to catch.**
+    Rewritten it flags them, and the sweep then found no other offender in `src`.
+  - **D2 is not currently reachable by users** — `.hc-intake-row` renders only behind
+    `compy_home_intake`, DEFAULT OFF. §4 is what turns it on. D1 is live on `main` unconditionally.
+  - Gates: `npm test` 3909 passed / 3 skipped / 308 files · tsc clean · `npm run build` ok ·
+    verify-release-state 30/30 · disposition audit OK · encoding-guard 1237 · doc-budget ALL PASS ·
+    `git diff --check` clean. **Rust untouched, so cargo was not run.**
+  - This worktree had **no local `node_modules`** — tests were resolving from the parent repo, so
+    two guards that read `node_modules/...` by relative path reported false FAILs. `npm ci` run at
+    root and in `site-app/`. A nested worktree will do this again.
 
 ## Left to do
 
-### 1 · Two build-failing gates, red on `main` right now
+### 2b · The one thing §2 still owes
 
-- **G1** `STATE:source_main_commit=ce3f4bd` (`docs/RELEASE_STATE.md:28`) trails `origin/main` by 12
-  commits, max 10 → re-stamp to `a53d7795`. This is the one the Codex handoff flagged.
-- **G2** disposition audit: `agent/rig-evidence-map-clean` (PR #90),
-  `codex/compy-care-capability-gate` (PR #92) and `feat/lab-49-parity-port` (PR #89, closed) exist
-  on `origin` with no row in `docs/BRANCH_DISPOSITIONS.md`. **Not in the Codex handoff — new.**
-- Sequencing: both edit files PR #90's final-head proof covers. Fixing them moves the tree and
-  voids the `98146456` receipt. Land them in ONE lane, then re-run the exact gates at the new head.
+**No visual verdict has been quoted for either fix.** The commit says so in its own message. The
+`self-reviewer` subagent has not been run — this session was started under a no-subagent
+instruction. **Do not report §2 as done until a PASS block is quoted.** Also still true: the older
+copies of both fixes sit dirty in `C:\Users\Kuya\code\sentinel-quietpitwall`, now redundant and
+superseded by `0f0502f2` — clear them once the verdict lands, not before.
 
-### 2 · Two live user-facing defects whose fixes were written and never committed
-
-Worktree `C:\Users\Kuya\code\sentinel-quietpitwall`, branch `feat/lab-49-parity-port` @ `7e6cd4d7`
-(PR #89 closed 2026-08-08 — the fixes did **not** go with it; neither guard exists on `main`):
-
-- **D1** `src/design/ConfirmDialog.css:5` is `z-index: 200` on `main`, below FirstCheck (999),
-  Onboarding/SetupTour/Gaming (1000) and Term/WhatsThis (1200) — the "are you sure?" before Compy
-  changes the PC paints **underneath** every full-screen surface. Mouse dead, keyboard alive.
-  Fix in the worktree: `2000`. Guard `src/modal-stacking-guard.test.ts` (untracked).
-- **D2** `src/surfaces/home-console.css` shares one rule between `:hover` and `:focus-visible` with
-  `outline: none` — keyboard focus invisible on Home rows. Fix + `src/focus-ring-guard.test.ts`
-  (untracked).
-- **BLOCKING both:** the `self-reviewer` verdict never returned (the agent died on the cap). jsdom
-  applies no stylesheets, which is exactly how both survived green tests. **Re-dispatch and quote a
-  PASS block — do not commit these on tsc/vitest alone.** Then full `npm run verify` incl. cargo.
-- Declined ports and their reasons: `git show feat/lab-49-parity-port:docs/SESSION_HANDOFF.md`.
-  One real gap recorded there: no friendly-name layer exists (`RecName.tsx` / `rec-detail.ts`
-  absent), so the one-name-per-rec invariant is unenforced here.
-- Remaining #14→#49 slices after this: comparison evidence · rollback · denial semantics ·
-  decision-journey behavior.
+Declined ports and their reasons: `git show feat/lab-49-parity-port:docs/SESSION_HANDOFF.md`. One
+real gap there: no friendly-name layer exists (`RecName.tsx` / `rec-detail.ts` absent), so the
+one-name-per-rec invariant is unenforced. Remaining #14→#49 slices: comparison evidence · rollback ·
+denial semantics · decision-journey behavior.
 
 ### 3 · PR #90 recovery (Codex handoff, 2026-08-10 — treat its gate list as claims)
 
@@ -103,12 +102,14 @@ value is literally `"1"`, so cleared storage *is* off. Don't write tests around 
 
 ## Do NOT
 
-- Do not push this branch — `origin` already has 3 undispositioned refs failing G2; a 4th makes it worse.
+- Do not push either branch without adding its own disposition row in the same commit — the audit
+  is green now and a new origin ref turns it red again.
 - Do not merge, release, publish, or touch signing keys. Do not rebase PR #92 before #90 resolves.
 - Do not claim PR #90's gates from the `98146456` receipt if the tree moves.
-- Do not commit D1/D2 without a quoted self-review PASS.
+- Do not report §2 done without a quoted self-review PASS. It is committed, not verified.
 
 ## Resume with
 
-Pick ONE: **§2** (safety defect, self-contained, no head conflict) · **§1** (unblocks every gate,
-but must own the tree) · **§4** (the owner's stated product priority; needs a taste before/after).
+**§2b first if subagents are permitted** — one `self-reviewer` dispatch closes the block. Otherwise
+**§4**, the owner's stated product priority, in a fresh session: it needs a whole context window and
+a taste before/after. **§3** is the Codex lane's; take it only on an explicit handoff.
