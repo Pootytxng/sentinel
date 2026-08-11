@@ -22,8 +22,7 @@
 > **RENAMED Sentinel → Compy (2026-06-04).** `gg.compy.app` · `compy.exe` · crate `compy`/`compy_lib`
 > · `%APPDATA%\Compy` · `compy.gg`. First launch COPY-migrates `%APPDATA%\Sentinel` → `%APPDATA%\Compy`
 > (`migrate_legacy_data_once` in `lib.rs`; **the legacy literal MUST stay "Sentinel"** — it is the
-> source). Pre-rename git history, the WSL path and the old data dir still say "sentinel": expected,
-> not a leftover. GitHub repo rename deferred to first-public-exposure.
+> source). Pre-rename history, the WSL path and the old data dir still say "sentinel" — expected.
 
 ## What Compy is
 
@@ -47,7 +46,7 @@ must be in context at all times:
 - **Honest-measurement law (REFRAMED):** **never fabricate, never claim unmeasured — and amplify
   measured wins loudly.** "Never promise" was a vow of silence and is retired, as is the "your PC is
   probably fine" defensive copy.
-- **Outbound + Capability Exception Gate (owner decision 2026-08-09):** zero-outbound absolutism
+- **Outbound + Capability Exception Gate (owner decision 2026-08-09):** zero-outbound absolutism <!-- outbound-claim-allow -->
   is retired; the signed updater is live. New capabilities stay local/user-mode by default and cross
   a boundary only through a named, reviewed exception. Outbound has three distinct tiers: **Tier 1
   signed advisory download / no machine-data upload; Tier 2 opt-in scrubbed incident fingerprint;
@@ -56,10 +55,7 @@ must be in context at all times:
 - **ONE MUTATION BOUNDARY (mechanical, 2026-08-03):** Compy changes Windows from
   `src-tauri/src/actions.rs` and **nowhere else** — snapshot → apply → verify → receipt → rollback.
   `src/mutation-boundary-guard.test.ts` fails the build on a registry write, service/task change,
-  power-plan switch or package removal anywhere else in `src-tauri/src`. Written because
-  `set_startup_entry_enabled` sat in `lib.rs` writing `StartupApproved\Run` directly with a
-  SYNTHESISED value, destroying the timestamp bytes — the prior state was unrestorable *in
-  principle*, and rollback-first lived only in prose, which does not fail a build. Line-level escape
+  power-plan switch or package removal anywhere else in `src-tauri/src`. Line-level escape
   hatch for copy that merely NAMES a command: `mutation-boundary-allow` (greppable).
 - **ZERO-BUDGET LAW:** every phase ships $0-first on free tiers; any spend is owner-gated with named
   payback + KPI trigger. **Paid ads: never before 1.0.** Every money phase defines ONE metric before
@@ -119,11 +115,9 @@ restore is. **Diagnose elevation behavior with read-only probes only** (read the
 token integrity level, time a hands-off elevation, read the ledger); if a setting genuinely must
 change to proceed, that is a welfare-check, full stop. Mirrored in `docs/COWORK_HANDOFF.md`.
 
-**Precedent:** during the 2026-06-10 elevation-QA diagnosis a session autonomously flipped
-`ConsentPromptBehaviorAdmin` 5→2, then restored it — caught and verified-restored, no harm, but over
-the line. The model's own safety layer auto-switched that session because the work tripped a security
-classifier: **treat a model auto-switch on security-sensitive work as a STOP signal** — halt and
-involve the owner.
+**Precedent (2026-06-10):** a session flipped `ConsentPromptBehaviorAdmin` 5→2 to diagnose, restored
+it, and its own safety layer auto-switched mid-work: **treat a model auto-switch on
+security-sensitive work as a STOP signal** — halt and involve the owner.
 
 ### Reports, subagents, self-review
 
