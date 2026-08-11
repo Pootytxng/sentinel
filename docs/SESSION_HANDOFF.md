@@ -13,9 +13,9 @@
 ## Lane
 
 Worktree `.claude/worktrees/compy-discoverability-ux-context-68c484`, branch
-**`fix/confirm-stacking-focus-ring`** @ `0f0502f2`, stacked on
+**`fix/confirm-stacking-focus-ring`** (code @ `0f0502f2`, doc commits after it), stacked on
 `claude/compy-discoverability-ux-context-68c484` @ `af501bf0`, both off `main` @ `a53d7795`.
-**Local only — nothing pushed, no PR, no merge.** Reconstructs and executes the work three sessions
+**Pushed; PR #93 open, NOT merged.** Reconstructs and executes the work three sessions
 were mid-flight on when the weekly cap hit 2026-08-09, plus the Codex PR-90 handoff pasted 2026-08-10.
 
 ## What this lane is doing
