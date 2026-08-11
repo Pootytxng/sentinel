@@ -249,28 +249,6 @@
     "close": "Close",
     "routerTitle": "What are you here to do?",
     "routerSub": "Pick the line that sounds like you — it opens the right tool below.",
-    "welcome": {
-      "benchmark": {
-        "term": "Benchmark",
-        "gloss": "did a change actually move anything?"
-      },
-      "latency": {
-        "term": "Latency",
-        "gloss": "what's slowing the trip from mouse to screen?"
-      },
-      "tuning": {
-        "term": "Tuning",
-        "gloss": "did your AMD undervolt hold up?"
-      },
-      "diagnostics": {
-        "term": "Diagnostics",
-        "gloss": "the raw facts Compy read about this rig."
-      },
-      "blackBox": {
-        "term": "Crash & Freeze",
-        "gloss": "what crashed or froze — read Windows' own record, in plain English."
-      }
-    },
     "sections": {
       "benchmark": {
         "name": "Benchmark",
@@ -296,19 +274,6 @@
       }
     },
     "latestReadingsLabel": "Latest readings",
-    "readings": {
-      "baselineLabel": "Baseline",
-      "latencyLabel": "Latency",
-      "tuningLabel": "Tuning",
-      "blackBoxLabel": "Crash & Freeze",
-      "systemReportLabel": "System report",
-      "baselineSet": "set",
-      "latencyTimer": "timer {{ms}} ms",
-      "latencyMsiOn": "MSI {{on}} on",
-      "blackBoxNoneFound": "none found",
-      "blackBoxRecorded": "{{n}} recorded",
-      "systemReportCaptured": "captured"
-    },
     "stationAriaLabel": "Station {{n}}",
     "contract": {
       "forLabel": "What it's for",
