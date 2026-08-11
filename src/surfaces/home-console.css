@@ -676,10 +676,18 @@
   cursor: pointer;
   transition: background 0.12s ease;
 }
-:root[data-v2="on"] .hc-intake-row:hover,
+:root[data-v2="on"] .hc-intake-row:hover {
+  background: var(--v2-accent-dim);
+}
+/* Keyboard focus gets a mark of its own. These two states shared one rule that killed the default
+   outline and replaced it with background alone — but background is what hover already spends, so a
+   tabbing user got the faint wash a mouse hover gives and nothing more, while every other focusable
+   control in the app drew a real ring. jsdom applies no stylesheets, so tsc and vitest saw nothing.
+   Guarded by src/focus-ring-guard.test.ts. */
 :root[data-v2="on"] .hc-intake-row:focus-visible {
   background: var(--v2-accent-dim);
-  outline: none;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 :root[data-v2="on"] .hc-intake-row-symptom {
   flex: 0 1 340px;
