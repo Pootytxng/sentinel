@@ -102,7 +102,7 @@ describe("LabGround OPS CONSOLE — LabConsole replaces the Instrument Bench ben
     const c = renderMerged([SAFE_REC]);
     expect(c.querySelector('[data-testid="rig-hologram"]')).not.toBeNull();
     const nodeNames = Array.from(c.querySelectorAll(".dock-node .dock-nm")).map((n) => n.textContent);
-    expect(nodeNames).toEqual(["Optimize", "Diagnostics", "Benchmark", "Latency", "Tuning", "Black Box"]);
+    expect(nodeNames).toEqual(["Optimize", "Diagnostics", "Benchmark", "Latency", "Tuning", "Crash & Freeze"]);
     expect(c.querySelector(".dock-node-primary")!.textContent).toContain("Optimize");
     // One idiom: the retired linear-spine + bento + gallery faces stay absent.
     expect(c.querySelector(".lab-router")).toBeNull();
@@ -116,7 +116,7 @@ describe("LabGround OPS CONSOLE — LabConsole replaces the Instrument Bench ben
   it("empty state (no recs): every dock node still renders, no throw, verdict present", () => {
     const c = renderMerged();
     const nodeNames = Array.from(c.querySelectorAll(".dock-node .dock-nm")).map((n) => n.textContent);
-    expect(nodeNames).toEqual(["Optimize", "Diagnostics", "Benchmark", "Latency", "Tuning", "Black Box"]);
+    expect(nodeNames).toEqual(["Optimize", "Diagnostics", "Benchmark", "Latency", "Tuning", "Crash & Freeze"]);
     expect(c.querySelector(".v2-room[data-room='lab']")).not.toBeNull();
   });
 
