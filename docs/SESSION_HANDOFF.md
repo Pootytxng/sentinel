@@ -48,16 +48,20 @@ Blocks 1 and 2 below are done and committed. Blocks 3 and 4 are untouched and ar
   - This worktree had **no local `node_modules`** — tests were resolving from the parent repo, so
     two guards that read `node_modules/...` by relative path reported false FAILs. `npm ci` run at
     root and in `site-app/`. A nested worktree will do this again.
+  - **Self-review VERDICT: PASS (9/9)** on a dev build from this worktree at 1500x980 over CDP.
+    Live `elementFromPoint` at the confirm's centre returned the confirm — not the overlay — with
+    FirstCheck (999) open and with Gaming Mode (1000) open, and `.wc-bar` (9000) still hit-tests
+    above it. Focus proven with real `Input.dispatchKeyEvent` Tab, not a class match: focus draws
+    `rgb(179,102,255) solid 2px`, hover draws none, both share the same wash.
+    **Named limitation:** this rig had no applicable rec (FirstCheck read 16/16 clean) and Gaming
+    Mode's consent gate never calls `useConfirm`, so the confirm markup was injected at
+    ConfirmProvider's real mount point (verified last child of `#root` in `main.tsx`) rather than
+    raised by a real mutation. That proves the stacking law exactly; it does not re-prove the apply
+    path. **A real mutation-raised confirm over a full-screen surface stays unexercised** — fold it
+    into the next install's QA.
+  - Superseded duplicates cleared from the quietpitwall worktree (now clean).
 
 ## Left to do
-
-### 2b · The one thing §2 still owes
-
-**No visual verdict has been quoted for either fix.** The commit says so in its own message. The
-`self-reviewer` subagent has not been run — this session was started under a no-subagent
-instruction. **Do not report §2 as done until a PASS block is quoted.** Also still true: the older
-copies of both fixes sit dirty in `C:\Users\Kuya\code\sentinel-quietpitwall`, now redundant and
-superseded by `0f0502f2` — clear them once the verdict lands, not before.
 
 Declined ports and their reasons: `git show feat/lab-49-parity-port:docs/SESSION_HANDOFF.md`. One
 real gap there: no friendly-name layer exists (`RecName.tsx` / `rec-detail.ts` absent), so the
@@ -106,10 +110,9 @@ value is literally `"1"`, so cleared storage *is* off. Don't write tests around 
   is green now and a new origin ref turns it red again.
 - Do not merge, release, publish, or touch signing keys. Do not rebase PR #92 before #90 resolves.
 - Do not claim PR #90's gates from the `98146456` receipt if the tree moves.
-- Do not report §2 done without a quoted self-review PASS. It is committed, not verified.
+- Do not read §2's PASS as covering the apply path — see the named limitation above.
 
 ## Resume with
 
-**§2b first if subagents are permitted** — one `self-reviewer` dispatch closes the block. Otherwise
-**§4**, the owner's stated product priority, in a fresh session: it needs a whole context window and
-a taste before/after. **§3** is the Codex lane's; take it only on an explicit handoff.
+**§4 next**, in a fresh session — the owner's stated product priority, and it needs a whole context
+window plus a taste before/after. **§3** is the Codex lane's; take it only on an explicit handoff.
