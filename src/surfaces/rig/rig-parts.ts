@@ -313,13 +313,23 @@ const SHADOW_RADIUS = 0.35;
  * A fan is identified the same way `unreachableDetectedIds` identifies one: no `kind` field. Fans
  * are not RigParts, they ride this shape so both rules judge one scene.
  *
+ * USER-ADDED PARTS ARE INCLUDED TOO, and that is the third fix (self-review round 2, 2026-08-11).
+ * A part the user typed in is drawn as a RigPart with `detected: true` — it has to be, or the model
+ * would present the user's own PSU as something Compy failed to find — so neither of the two clauses
+ * above could ever release it. Add a cooler by hand and it lands on the socket slot at z -0.16, the
+ * same place the ghost cooler stands, 0.42 nearer the camera than the CPU: the CPU stopped being
+ * clickable the moment the user helped. `userAdded` is what separates "the user told us this is
+ * here" from "we read this off the machine"; the host that builds the manual list sets it, because
+ * only that host knows. Like the ghost cooler, it keeps its fin stack (`PASS_THROUGH_REMAINDER`), so
+ * releasing the socket face costs the user nothing — their part stays selectable in its own right.
+ *
  * Consumed by RigHologram in evidence-map mode only, so the Gaming rig viewer's behaviour is
  * unchanged — there the explode control reaches anything a click cannot. Pure and data-only so
  * `rig-parts.test.ts` can prove it without a WebGL context.
  */
 export function clickThroughIds(parts: readonly Placed[]): string[] {
   const detected = parts.filter((p) => p.detected);
-  const releasable = (p: Placed) => !p.detected || !("kind" in p);
+  const releasable = (p: Placed) => !p.detected || !("kind" in p) || p.userAdded === true;
   return parts
     .filter(
       (front) =>
@@ -404,6 +414,9 @@ export interface Placed {
   id: string;
   detected: boolean;
   assembled: Vec3;
+  /** Set by the host for a part the USER typed in. Such a part is `detected: true` (it is really
+      there — the user said so), which is exactly why the shadowing rule cannot infer it. */
+  userAdded?: boolean;
 }
 
 /** Local-space bounds of each geometry kind, as the union of the boxes/cylinders

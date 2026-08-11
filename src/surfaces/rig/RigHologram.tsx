@@ -297,7 +297,10 @@ export const RigHologram = memo(function RigHologram({
     return new Set(
       clickThroughIds([
         ...shownParts,
-        ...manualRigParts,
+        // `userAdded` is set HERE because this is the only place that knows: a manual part is drawn
+        // as `detected: true` (the user said it is there), so nothing downstream can tell it from
+        // hardware Compy read for itself — and a hand-added cooler sits on the CPU's socket slot.
+        ...manualRigParts.map((p) => ({ ...p, userAdded: true })),
         ...fanPlacements.map((fp) => ({ id: fp.fan.id, detected: fp.fan.detected, assembled: fp.assembled })),
       ]),
     );

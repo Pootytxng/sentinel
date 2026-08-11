@@ -10,6 +10,7 @@ import {
   CPU_FAN_PLACEMENT,
   MEASURED_KINDS,
 } from "./rig-parts";
+import { manualPlacement } from "./manual-parts";
 import type { HardwareInfo } from "../../App";
 
 // Minimal fixture exercising the fields buildRigParts reads (cast — the real type is much larger).
@@ -178,6 +179,56 @@ describe("assembled-pose reachability", () => {
       // greater, so this is belt-and-braces) and any future loosening of the depth test would make
       // every fan click-through with nothing behind it to receive the click.
       expect(clickThroughIds([{ id: "fan-solo", detected: true, assembled: [3, 3, 3] }])).toEqual([]);
+    });
+  });
+
+  // ── The helped rig: the user typed in the parts Compy cannot read ────────────────────────────
+  // Self-review round 2, 2026-08-11: the fan half of this rule was fixed and the user-added half was
+  // not. A cooler added by hand is drawn `detected: true` (the user said it is there) and lands on
+  // the socket slot 0.42 nearer the camera than the CPU, so it swallowed every click aimed at the
+  // processor. The evidence map broke for exactly the user who helped it along.
+  describe("with a cooler the user added by hand", () => {
+    const helped = [
+      ...parts,
+      {
+        id: "manual-1",
+        // `kind` is what makes this fixture honest: RigHologram gives every manual part a geometry
+        // (`manualGeom`), so a fixture without one would be judged as a FAN by the shape rules and
+        // would pass whether the user-added clause exists or not.
+        kind: "cooler" as const,
+        detected: true,
+        userAdded: true,
+        assembled: [...manualPlacement("cooler", 0).assembled] as [number, number, number],
+      },
+    ];
+
+    it("hands a hand-added cooler's clicks to the processor behind it", () => {
+      expect(clickThroughIds(helped)).toContain("manual-1");
+    });
+
+    it("leaves every detected part reachable on a helped rig too", () => {
+      expect(unreachableDetectedIds(helped, { clickThrough: clickThroughIds(helped) })).toEqual([]);
+    });
+
+    it("keeps the user's own part selectable — it releases the socket face, not its fin stack", () => {
+      // Their part must not vanish as a click target because they were helpful. Judged the way the
+      // ghost cooler is: on the remainder it keeps.
+      const through = clickThroughIds(helped);
+      expect(unreachableDetectedIds(helped, { clickThrough: through })).not.toContain("manual-1");
+    });
+
+    it("does not release a hand-added part that stands in nobody's way", () => {
+      const offAxis = [
+        ...parts,
+        {
+          id: "manual-2",
+          kind: "psu" as const,
+          detected: true,
+          userAdded: true,
+          assembled: [...manualPlacement("psu", 0).assembled] as [number, number, number],
+        },
+      ];
+      expect(clickThroughIds(offAxis)).not.toContain("manual-2");
     });
   });
 
