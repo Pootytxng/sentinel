@@ -19,8 +19,59 @@ export const escapeHtml = (s) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
-/** Load the canonical Library data through vite's SSR module loader (same modules the app bundles). */
-export async function loadLibrary() {
+/** Assemble the library from a module loader — the shape mapping, independent of HOW modules load. */
+async function assembleLibrary(load) {
+  const knowledge = await load("/src/data/knowledge.ts");
+  const glossary = await load("/src/data/verdict-glossary.ts");
+  const site = await load("/src/data/site.ts");
+  return {
+    entries: knowledge.KNOWLEDGE,
+    glossary: glossary.VERDICT_GLOSSARY,
+    verdictChip: glossary.verdictChip,
+    verdictDefinition: glossary.verdictDefinition,
+    site: {
+      SITE_URL: site.SITE_URL,
+      SITE_TAGLINE: site.SITE_TAGLINE,
+      WAITLIST_SLOT: site.WAITLIST_SLOT,
+      KOFI_URL: site.KOFI_URL,
+    },
+  };
+}
+
+/**
+ * Load the canonical Library data through vite's SSR module loader (same modules the app bundles).
+ *
+ * `load` overrides HOW those paths resolve, and exists for ONE reason: booting this nested vite
+ * server from inside a vitest worker deadlocks. Two test files wanted this data, so two more vite
+ * servers came up inside the pool alongside vitest's own module runner, each with its own esbuild
+ * service — and one of them would stop answering. The symptom was
+ * `transport invoke timed out after 60000ms` on a 6 KB JSON somewhere in the knowledge.ts import
+ * chain, naming a different file every run, which reads like six unrelated flaky tests and cost
+ * days to pin down. Under test, pass `importFromRepo` below instead. The default path here — a
+ * real createServer — is what `npm run export:library` and `site/generate.mjs` use for real
+ * output, so it is still exercised by every actual library/site build, just not from in the pool.
+ */
+export async function loadLibrary({ load } = {}) {
+  if (load) return assembleLibrary(load);
+  // Refuse rather than hang. A grep-based guard cannot see INDIRECT boots — exportLibrary() does
+  // `lib ??= await loadLibrary()`, so one test calling it without `lib` reintroduced the whole bug
+  // after the direct call sites were fixed. Failing here turns a 60-second deadlock that lands on
+  // somebody else's test file into an instant error naming the actual caller.
+  // `globalThis.__vitest_worker__`, NOT `process.env.VITEST`. Environment variables are INHERITED by
+  // child processes, and `process.env.VITEST` is therefore still set inside a `node site/generate.mjs`
+  // that a test spawned — a separate process, where a vite server is exactly the right thing and
+  // nothing can deadlock. scripts/site-seo.test.mjs does precisely that, but only when the site
+  // artifacts are stale, so the refusal misfired on a condition unrelated to the change that tripped
+  // it. The worker handle is set by vitest inside the worker and cannot cross a process boundary, so
+  // it answers the question actually being asked: am *I* running in the pool?
+  if (globalThis.__vitest_worker__) {
+    throw new Error(
+      "loadLibrary() tried to start a vite server inside a vitest worker. That deadlocks the pool " +
+        "and the failure surfaces in unrelated test files. Pass a loader instead: " +
+        "loadLibrary({ load: importFromRepo }), and hand the result to exportLibrary({ lib }) so it " +
+        "does not load its own. See scripts/nested-vite-server-guard.test.mjs.",
+    );
+  }
   const server = await createServer({
     root: repoRoot,
     configFile: false, // data modules only — no plugins/JSX needed; esbuild handles TS + JSON
@@ -30,25 +81,21 @@ export async function loadLibrary() {
     optimizeDeps: { noDiscovery: true },
   });
   try {
-    const knowledge = await server.ssrLoadModule("/src/data/knowledge.ts");
-    const glossary = await server.ssrLoadModule("/src/data/verdict-glossary.ts");
-    const site = await server.ssrLoadModule("/src/data/site.ts");
-    return {
-      entries: knowledge.KNOWLEDGE,
-      glossary: glossary.VERDICT_GLOSSARY,
-      verdictChip: glossary.verdictChip,
-      verdictDefinition: glossary.verdictDefinition,
-      site: {
-        SITE_URL: site.SITE_URL,
-        SITE_TAGLINE: site.SITE_TAGLINE,
-        WAITLIST_SLOT: site.WAITLIST_SLOT,
-        KOFI_URL: site.KOFI_URL,
-      },
-    };
+    return await assembleLibrary((path) => server.ssrLoadModule(path));
   } finally {
     await server.close();
   }
 }
+
+/**
+ * The loader test files pass to `loadLibrary`. Resolves the same repo-absolute module paths through
+ * the CALLER's own module graph — under vitest that is the runner already transforming the other
+ * 300+ files, so no second vite server is created. Defined here so both call sites share one
+ * idiom and scripts/nested-vite-server-guard.test.mjs has one thing to enforce.
+ */
+// "../.." because this file lives in scripts/lib/ — that walks back up to the repo root, where the
+// "/src/data/..." paths above are rooted.
+export const importFromRepo = (path) => import(/* @vite-ignore */ "../.." + path);
 
 // Honest stance line per tweak verdict — states what the APP does, promises nothing it doesn't do.
 export const stance = (verdict) => {

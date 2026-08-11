@@ -11,6 +11,7 @@
 // elsewhere in this codebase); HomeConsole passes its own `t` from useTranslation() at each call.
 
 import type { TFunction } from "i18next";
+import type { LabStationKey } from "./lab-guided-data";
 
 // The room routing key = the persisted nav id the app-shell/Dock route through (homeRail.ts).
 // Under the live flags (labGround default ON) the rendered rooms are play=Monitor, learn=Blackbook,
@@ -21,6 +22,11 @@ export type HomeIntakeRow = {
   symptom: string; // the user's own felt words — what they'd say out loud
   room: HomeIntakeRoom; // where that intent lives
   because: string; // plain-English why THAT room — names the action, never the room label
+  // Optional in-room destination. A room that answers the symptom with ONE instrument should hand
+  // the user that instrument, not the room's dock — landing on the dock after naming the symptom is
+  // the same dead end the check->fix hallway closed (post-check-lab-route-guard). When present,
+  // HomeConsole routes through App's single station-intent writer instead of a bare room nav.
+  station?: LabStationKey;
 };
 
 // The intent rows (option A). Symptom-first, one room each, honest because-line. Order: the two
@@ -53,6 +59,11 @@ export function homeIntakeRows(t: TFunction): HomeIntakeRow[] {
       symptom: t("home.homeConsole.intake.rows.crashedFroze.symptom"),
       room: "lab",
       because: t("home.homeConsole.intake.rows.crashedFroze.because"),
+      // The crash-rescue discoverability fix (SESSION_HANDOFF §4, tester walked to Event Viewer):
+      // the crash evidence reader is ONE station inside the Lab, so routing this row to the room
+      // dropped the user on the dock to hunt for a station that was named "Black Box" — an insider
+      // metaphor with no "crash" in it. The row now lands ON the evidence.
+      station: "blackbox",
     },
   ];
 }

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "verify:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-local.ps1",
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "node scripts/run-vitest.mjs run",

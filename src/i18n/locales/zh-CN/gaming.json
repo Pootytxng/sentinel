@@ -234,7 +234,7 @@
     "connectedLabel": "已连接"
   },
   "blackBox": {
-    "introPre": "黑匣子会读取 Windows 已经记录的崩溃与卡死证据,并叠加显示 Compy 自己的",
+    "introPre": "「崩溃与卡死」会读取 Windows 已经记录的崩溃与卡死证据,并叠加显示 Compy 自己的",
     "introEmph": "最后生命体征",
     "introPost": "来自当时正在运行的任意会话。它只如实报告已记录的内容——绝不猜测原因。",
     "scanningEllipsis": "扫描中…",

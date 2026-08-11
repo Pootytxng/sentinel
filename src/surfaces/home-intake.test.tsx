@@ -38,7 +38,7 @@ const fastPathAppliedNote = (applied: number, skipped: number) =>
   fastPathAppliedNoteRaw(applied, skipped, i18n.t);
 
 // Guards for the Home intake band (BACKLOG:916 — the pre-room intent router + one-tap fast path,
-// behind compy_home_intake, DEFAULT OFF). The owner's greenlit direction (2026-07-14):
+// behind compy_home_intake, DEFAULT ON). The owner's greenlit direction (2026-07-14):
 //   "lift the proven 'what are you here to do?' idiom up one level to Home, where the rows route to
 //    the right ROOM instead of the right Lab station / i like option a / … c might be good to have
 //    as an always available option … some combination of both might be best ill let you decide"
@@ -222,28 +222,45 @@ function renderHome(extra: Partial<React.ComponentProps<typeof HomeRoom>> = {}) 
   );
 }
 
-describe("Home intake band — flag gating (compy_home_intake DEFAULT OFF)", () => {
-  it("key ABSENT: the band never renders even with rooms + fast-path fully wired", () => {
+describe("Home intake band — flag gating (compy_home_intake GRADUATED to DEFAULT ON 2026-08-11)", () => {
+  it("key ABSENT: the band renders — this is what a first-run user actually gets", () => {
+    // The polarity flip is the whole point, so it is asserted from the state a fresh install is
+    // really in: nothing written to localStorage at all. A test that only ever sets the key
+    // explicitly would pass identically before and after the graduation and prove nothing.
     const c = renderHome({
       rooms: liveRooms,
       recs: [rec({ id: "safe-ok" })],
       isAppliable: () => true,
       onApplyBatch: async () => ({ applied: 0, skipped: [] }),
     }).container;
-    expect(c.querySelector(".home-console")).not.toBeNull(); // the console still mounts
-    expect(c.querySelector(".hc-intake")).toBeNull(); // …but the band stays dark
+    expect(localStorage.getItem("compy_home_intake")).toBeNull(); // nothing opted anything in
+    expect(c.querySelector(".home-console")).not.toBeNull();
+    expect(c.querySelector(".hc-intake")).not.toBeNull();
   });
 
-  it("key '0' (explicit off): still no band", () => {
+  it("key '0' (explicit off): no band — the Settings failsafe still works", () => {
+    // ship-approved-work-as-the-build graduates the DEFAULT; it never removes the escape hatch.
     localStorage.setItem("compy_home_intake", "0");
     const c = renderHome({ rooms: liveRooms }).container;
     expect(c.querySelector(".hc-intake")).toBeNull();
   });
 
-  it("key '1': the band renders", () => {
+  it("key '1' (explicit on): the band renders", () => {
     localStorage.setItem("compy_home_intake", "1");
     const c = renderHome({ rooms: liveRooms }).container;
     expect(c.querySelector(".hc-intake")).not.toBeNull();
+  });
+
+  it("only the literal string '0' turns it off, so a junk value fails ON", () => {
+    // Matches readMonitorConsole / readLivingInstrument / readSetupStepper: `!== "0"`. The failure
+    // mode worth pinning is a discoverability surface silently vanishing because something wrote
+    // "false" or "" into the key.
+    for (const junk of ["false", "", "no", "OFF"]) {
+      localStorage.setItem("compy_home_intake", junk);
+      const c = renderHome({ rooms: liveRooms }).container;
+      expect(c.querySelector(".hc-intake"), `value ${JSON.stringify(junk)}`).not.toBeNull();
+      cleanup();
+    }
   });
 });
 
@@ -295,6 +312,60 @@ describe("Home intake band — intent rows (option A): route to the live room, n
     expect(onNavigate).toHaveBeenCalledWith("play");
     fireEvent.click(findRow(labRow.symptom));
     expect(onNavigate).toHaveBeenCalledWith("lab");
+  });
+});
+
+// bug->guard (SESSION_HANDOFF §4, tester 2026-08-09): "it crashed or froze" was answered by
+// dropping the user in the Lab, where the one instrument that reads Windows' crash record was a
+// dock node called "Black Box". The tester never found it and went to Event Viewer instead. Two
+// causes, both guarded here: the row routed to the ROOM, and the destination was named after an
+// insider metaphor rather than the problem. Either one regressing re-opens the same dead end.
+describe("Crash & Freeze rescue — the crash row lands ON the evidence (§4)", () => {
+  const crashRow = () => {
+    const row = HOME_INTAKE_ROWS.find((r) => r.station === "blackbox");
+    expect(row, 'no intake row deep-links to "blackbox" — the crash symptom routes to the room again')
+      .toBeTruthy();
+    return row!;
+  };
+
+  const findRowEl = (c: HTMLElement, symptom: string) =>
+    Array.from(c.querySelectorAll(".hc-intake-row")).find(
+      (el) => el.querySelector(".hc-intake-row-symptom")?.textContent === symptom,
+    )!;
+
+  it("deep-links to the crash station instead of dropping the user on the Lab dock", () => {
+    localStorage.setItem("compy_home_intake", "1");
+    const onNavigate = vi.fn();
+    const onOpenLabStation = vi.fn();
+    const row = crashRow();
+    const c = renderHome({ rooms: liveRooms, onNavigate, onOpenLabStation }).container;
+    fireEvent.click(findRowEl(c, row.symptom));
+    expect(onOpenLabStation).toHaveBeenCalledWith("blackbox");
+    // The bare room nav is the bug: it lands on the dock with the station still to be hunted for.
+    expect(onNavigate, "the crash row still fired a bare room nav — that IS the dead end").not.toHaveBeenCalled();
+  });
+
+  it("still navigates to the room when no station writer is wired (never a dead click)", () => {
+    localStorage.setItem("compy_home_intake", "1");
+    const onNavigate = vi.fn();
+    const row = crashRow();
+    const c = renderHome({ rooms: liveRooms, onNavigate }).container;
+    fireEvent.click(findRowEl(c, row.symptom));
+    expect(onNavigate, "an isolated mount lost the row's only exit").toHaveBeenCalledWith(row.room);
+  });
+
+  it("leaves every station-less row on the plain room nav", () => {
+    localStorage.setItem("compy_home_intake", "1");
+    const onNavigate = vi.fn();
+    const onOpenLabStation = vi.fn();
+    const plain = HOME_INTAKE_ROWS.filter((r) => !r.station);
+    expect(plain.length, "every row deep-links now — this test no longer proves anything").toBeGreaterThan(0);
+    const c = renderHome({ rooms: liveRooms, onNavigate, onOpenLabStation }).container;
+    for (const row of plain) {
+      fireEvent.click(findRowEl(c, row.symptom));
+      expect(onNavigate).toHaveBeenCalledWith(row.room);
+    }
+    expect(onOpenLabStation, "a station-less row hijacked the station writer").not.toHaveBeenCalled();
   });
 });
 

@@ -26,6 +26,7 @@ const invoke = (scenario, sourcePath) => {
     encoding: "utf8",
     shell: false,
     timeout: 180_000,
+    windowsHide: true,
   });
   const combined = `${output.stderr}\n${output.stdout}`;
   const line = String(output.stdout).trim().split(/\r?\n/).at(-1);

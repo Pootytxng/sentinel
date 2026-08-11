@@ -129,7 +129,8 @@ describe("LabConsole", () => {
     expect(screen.getByRole("button", { name: /optimize/i })).toHaveClass("dock-node-primary");
     expect(screen.getByRole("button", { name: /benchmark/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /latency/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /black box/i })).toBeInTheDocument();
+    // Renamed 2026-08-11 (§4): the dock node says the problem ("crash"), not the metaphor.
+    expect(screen.getByRole("button", { name: /crash & freeze/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /gallery/i })).toBeNull();
   });
 
