@@ -20,6 +20,12 @@ releases repository is external state and is created only within an explicitly a
 action. Engineering forks inside the reversible scope are resolved by the agent and documented in
 code, tests, commits, or release evidence.
 
+**Merging a green PR into private `main` is inside that reversible scope** — owner decree 2026-08-11,
+*"you should be able to just merge lanes yourself … thats no token efficient."* The older
+per-PR-instruction rule is retired: gates green + disposition row current + no conflict means merge
+and report after, never with `--delete-branch` (it has set `core.bare=true` repo-wide; prune the ref
+with `gh api -X DELETE`). Owner territory is unchanged.
+
 ## Preservation and provenance are mandatory
 
 Before resetting, replacing, superseding, or abandoning a failed candidate, preserve its useful

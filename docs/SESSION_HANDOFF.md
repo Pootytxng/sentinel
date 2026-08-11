@@ -12,9 +12,8 @@
 
 ## Lane
 
-Worktree `.claude/worktrees/local-ci-verification-c41dbc`, branch **`claude/command-palette`** @
-`41579adb`, off `main` @ `7e02ecb1`. **PR [#99](https://github.com/Pootytxng/sentinel/pull/99) open,
-MERGEABLE/CLEAN, NOT merged** — a merge to `main` needs the owner's per-PR word.
+Worktree `.claude/worktrees/local-ci-verification-c41dbc`, currently **detached on `main`**. The
+lane's own branch `claude/command-palette` landed as `22fb15b2` and its ref is pruned.
 
 The prior occupant of this file (the discoverability lane, PRs #93/#94/#95/#97) has fully landed and
 its branches are pruned; that state is retired here, not lost — it is in git history.
@@ -54,21 +53,18 @@ was a global "jump anywhere" palette, not another room.
 
 ## Left to do
 
-### 1 · Merge decision on PR #99 — owner's word
+### 1 · Nothing here is waiting on the owner
 
-Not blocked on anything technical. Do not merge without an explicit per-PR instruction.
+PR #99 merged (`22fb15b2`), ref pruned, row dropped. The old `verify-like-ci.mjs` runner question is
+answered — it dies with PR #89, reasoning in that branch's disposition row.
 
-### 2 · The local CI runner on a closed PR's branch
+**Standing, owner decree 2026-08-11:** *"you should be able to just merge lanes yourself i dont get
+why you need me to confirm it if im just gonna say to do it thats no token efficient."* Merging a
+green PR to `main` is no longer his call, and neither are engineering decisions like the one above —
+*"that is also on you to discern."* The old per-PR-instruction rule is retired. Unchanged: ships to
+other people's machines, secrets, money, security settings, destructive git.
 
-`origin/feat/lab-49-parity-port` (PR #89, closed unmerged) carries three files that exist on neither
-`main` nor #90: `scripts/verify-like-ci.mjs`, `scripts/lib/ci-steps.mjs`,
-`scripts/verify-like-ci.test.mjs`. `main` now has its own gate — `scripts/verify-local.ps1` +
-`.githooks/pre-push` + `scripts/deps-satisfied.ps1` (PR #98). **Converge or kill:** either port what
-the older runner does better into `verify-local.ps1`, or write the reason it dies with its PR into
-that branch's `docs/BRANCH_DISPOSITIONS.md` row. Right now the row says "needs a decision" and
-nobody has made one.
-
-### 3 · PR #90 recovery (Codex handoff, 2026-08-10 — treat its gate list as claims)
+### 2 · PR #90 recovery (Codex handoff, 2026-08-10 — treat its gate list as claims)
 
 PR #90 `agent/rig-evidence-map-clean`, head `98146456`, OPEN / MERGEABLE / no review decision.
 Independent review was never completed (expired OAuth), so no gate below is re-proven.
@@ -90,15 +86,16 @@ Independent review was never completed (expired OAuth), so no gate below is re-p
   this lane hit the table's conflict twice in one hour because neighbouring lanes merged and pruned
   refs mid-flight. On a conflict there, re-check `git ls-remote --heads origin <ref>` before
   choosing a side — the row that names a dead ref is the wrong one, whichever side it is on.
-- Do not merge, release, publish, or touch signing keys. Do not rebase PR #92 before #90 resolves.
+- Do not release, publish, or touch signing keys. (Merging a green PR is fine — see §1.) Do not
+  rebase PR #92 before #90 resolves.
 - Do not claim PR #90's gates from the `98146456` receipt if the tree moves.
 - Do not run `loadLibrary()` without injecting a loader from inside a test — it boots a real Vite
-  server inside the worker pool and the deadlock surfaces in unrelated files. It now refuses under
-  `VITEST`; see `scripts/nested-vite-server-guard.test.mjs`.
+  server inside the worker pool and the deadlock surfaces in unrelated files. It refuses when it can
+  see a vitest worker (`globalThis.__vitest_worker__`, **not** `process.env.VITEST` — that leaks into
+  child processes and once broke `site-seo.test.mjs`); see `scripts/nested-vite-server-guard.test.mjs`.
 
 ## Resume with
 
-**Item 2 (converge or kill the old CI runner)** unless the owner says otherwise — it is the last
-open piece of the Codex local-CI handoff, and its branch row has been "needs a decision" since
-2026-08-08. A dev build of this branch may still be running on port 1420; stop all `compy` and free
-1420 *before* launching another.
+**Item 2 (PR #90 recovery)** — it is the only open work left in this file. Everything else here has
+landed. A dev build may still be running on port 1420; stop all `compy` and free 1420 *before*
+launching another.
