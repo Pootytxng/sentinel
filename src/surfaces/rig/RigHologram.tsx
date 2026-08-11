@@ -9,7 +9,13 @@ import { useTranslation } from "react-i18next";
 import HolographicMaterial from "../../design/vendor/HolographicMaterial/HolographicMaterial";
 import { readHologramV2 } from "../../design/theme";
 import type { HardwareInfo } from "../../App";
-import { buildRigParts, type Vec3, type RigPart as RigPartData } from "./rig-parts";
+import {
+  buildRigParts,
+  shadowingGhostIds,
+  CPU_FAN_PLACEMENT,
+  type Vec3,
+  type RigPart as RigPartData,
+} from "./rig-parts";
 import { nextFanSensors, type FanSensor } from "./fan-sensors";
 import { type ManualPart, type ManualKind, manualGeom, manualPlacement } from "./manual-parts";
 import { useRigColors, partColor, FAN_COLOR } from "./use-rig-colors";
@@ -81,6 +87,11 @@ interface Props {
   /** Initial camera distance. Default = the classic framing; the V2 hero stage pulls in closer
       so the model fills its bigger stage (additive — existing callers are untouched). */
   cameraDist?: number;
+  /** Evidence-map mode (the Lab console). Clicking a part is the ONLY way to open its readings
+      there — the orbit/explode chrome is hidden — so any ghost standing in front of a real part
+      becomes transparent to the pointer. Off everywhere else: the Gaming rig viewer keeps its
+      controls, so the ghosts stay selectable there and nothing about it changes. */
+  evidenceMap?: boolean;
 }
 
 // Memoized: parents re-render on live polls (HomeHud's 5s mem/GPU tick), and ANY re-render
@@ -98,6 +109,7 @@ export const RigHologram = memo(function RigHologram({
   onHover,
   manualParts,
   cameraDist = 9.5,
+  evidenceMap = false,
 }: Props) {
   const { t } = useTranslation();
   const colors = useRigColors();
@@ -253,12 +265,26 @@ export const RigHologram = memo(function RigHologram({
     let ci = 0;
     return fans.map((f) => {
       if (/cpu/i.test(f.label)) {
-        return { fan: f, assembled: [0.05, 1.15, 0.08] as Vec3, exploded: [0.3, 3.3, 0.7] as Vec3 };
+        return { fan: f, ...CPU_FAN_PLACEMENT };
       }
       const idx = ci++;
       return { fan: f, assembled: casePos[idx % casePos.length], exploded: caseExp[idx % caseExp.length] };
     });
   }, [fans]);
+
+  // Evidence-map mode only: ghosts standing between the camera and a real part hand their clicks
+  // through, so the part behind them stays selectable. Fans ride the same rule via the shared
+  // `Placed` shape — that is what stops the CPU-fan ghost swallowing every click on the CPU.
+  const clickThrough = useMemo(() => {
+    if (!evidenceMap) return new Set<string>();
+    return new Set(
+      shadowingGhostIds([
+        ...shownParts,
+        ...manualRigParts,
+        ...fanPlacements.map((fp) => ({ id: fp.fan.id, detected: fp.fan.detected, assembled: fp.assembled })),
+      ]),
+    );
+  }, [evidenceMap, shownParts, manualRigParts, fanPlacements]);
 
   // Drop the WebGL render loop to on-demand whenever the user can't see it — during a game (step-aside),
   // under reduced-motion, OR while this window is hidden/minimized — so the orbiting hologram never
@@ -363,6 +389,8 @@ export const RigHologram = memo(function RigHologram({
             reduced={reduced}
             onSelect={onSelect}
             onHover={onHover}
+            pointerThrough={clickThrough.has(p.id)}
+            cardOnSelect={!evidenceMap}
           />
         ))}
         {manualRigParts.map((p, i) => (
@@ -377,6 +405,8 @@ export const RigHologram = memo(function RigHologram({
             reduced={reduced}
             onSelect={onSelect}
             onHover={onHover}
+            pointerThrough={clickThrough.has(p.id)}
+            cardOnSelect={!evidenceMap}
           />
         ))}
         {fanPlacements.map((fp) => (
@@ -392,6 +422,7 @@ export const RigHologram = memo(function RigHologram({
             selectedId={selectedId}
             onHover={onHover}
             onSelect={onSelect}
+            pointerThrough={clickThrough.has(fp.fan.id)}
           />
         ))}
       </group>

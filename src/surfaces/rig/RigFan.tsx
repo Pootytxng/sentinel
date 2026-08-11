@@ -2,8 +2,9 @@ import { useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Edges, Html } from "@react-three/drei";
 import { useTranslation } from "react-i18next";
-import type { Group } from "three";
+import { Mesh, type Group } from "three";
 import type { Vec3 } from "./rig-parts";
+import { NO_HIT } from "./RigPartGeometry";
 import { useTooltipFlip } from "./use-tooltip-flip";
 
 // A case/CPU fan in the hologram. Detected fans (real RPM from a monitor) SPIN — visibly conveying
@@ -19,6 +20,7 @@ export interface FanInfo {
 }
 
 const BLADES = 7;
+const DEFAULT_HIT = Mesh.prototype.raycast;
 
 function visualSpin(rpm: number): number {
   // rad/s, scaled down from true angular velocity and capped so even 2000 RPM reads as a clear spin.
@@ -37,6 +39,7 @@ export function RigFan({
   selectedId,
   onHover,
   onSelect,
+  pointerThrough = false,
 }: {
   fan: FanInfo;
   color: string;
@@ -48,6 +51,10 @@ export function RigFan({
   selectedId: string | null;
   onHover: (id: string | null) => void;
   onSelect: (id: string) => void;
+  /** true → drawn but transparent to the pointer, so a real part behind it stays clickable
+      (see `shadowingGhostIds`). A fan frame is one flat square with nothing to spare, so the whole
+      thing passes through rather than a sub-region. Default false. */
+  pointerThrough?: boolean;
 }) {
   const { t } = useTranslation();
   const groupRef = useRef<Group>(null);
@@ -71,6 +78,7 @@ export function RigFan({
     }
   });
 
+  const hit = pointerThrough ? NO_HIT : DEFAULT_HIT;
   const emissive = fan.detected ? (active ? 1.4 : 0.7) : 0.3;
   const op = fan.detected ? (active ? 0.32 : 0.17) : active ? 0.12 : 0.05;
   const mat = (
@@ -90,6 +98,9 @@ export function RigFan({
     <group
       ref={groupRef}
       position={assembled}
+      // Handlers stay attached even when the fan passes clicks through — transparency is done with
+      // `raycast` on the meshes below. Adding/removing handlers re-registers the object with r3f's
+      // event system and invalidates the demand-mode canvas, and the resting bay costs zero draws.
       onPointerOver={(e) => {
         e.stopPropagation();
         setHovered(true);
@@ -108,7 +119,7 @@ export function RigFan({
       }}
     >
       {/* Square fan frame */}
-      <mesh>
+      <mesh raycast={hit}>
         <boxGeometry args={[0.92, 0.92, 0.16]} />
         <meshStandardMaterial
           color={color}
@@ -125,13 +136,14 @@ export function RigFan({
 
       {/* Hub + blades (the rotating group) */}
       <group ref={bladesRef}>
-        <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <mesh rotation={[Math.PI / 2, 0, 0]} raycast={hit}>
           <cylinderGeometry args={[0.14, 0.14, 0.2, 16]} />
           {mat}
         </mesh>
         {Array.from({ length: BLADES }).map((_, i) => (
           <mesh
             key={i}
+            raycast={hit}
             rotation={[0, 0, (i / BLADES) * Math.PI * 2]}
             position={[Math.cos((i / BLADES) * Math.PI * 2) * 0.26, Math.sin((i / BLADES) * Math.PI * 2) * 0.26, 0]}
           >
