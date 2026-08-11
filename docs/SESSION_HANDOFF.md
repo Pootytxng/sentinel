@@ -64,10 +64,12 @@ green PR to `main` is no longer his call, and neither are engineering decisions 
 *"that is also on you to discern."* The old per-PR-instruction rule is retired. Unchanged: ships to
 other people's machines, secrets, money, security settings, destructive git.
 
-### 2 · PR #90 recovery (Codex handoff, 2026-08-10 — treat its gate list as claims)
+### 2 · PR #90 recovery — **ours to finish, not a thread to wait on**
 
 PR #90 `agent/rig-evidence-map-clean`, head `98146456`, OPEN / MERGEABLE / no review decision.
-Independent review was never completed (expired OAuth), so no gate below is re-proven.
+The four items below came from a Codex audit, which is **advisory only — no jurisdiction over
+building or decisions** (owner, 2026-08-11). Its review never completed (expired OAuth), so every
+gate below is an unverified claim to re-prove here, and none of it blocks starting.
 
 - **P1** `LabConsole.tsx` resolves selected IDs only through detected `buildRigParts()` entries —
   manual parts and fans can select into no panel. Keep exact IDs; never collapse to `gpu`/`storage`.
@@ -77,7 +79,8 @@ Independent review was never completed (expired OAuth), so no gate below is re-p
   tab, Enter/Space, visible focus, name/role/value, 200% reflow, honest unavailable states.
 - **P4** Re-verify `scripts/work-control-gate.mjs` itself resolves the real head, binds gates and
   review to that head, and rejects self-authored SHAs — don't re-apply the old governance diff blind.
-- Owner-run verifier: `powershell -NoProfile -File scripts/verify-release.ps1 -EvidencePath src-tauri\target\codex-verification\pr90-final-review-verify-release-evidence.json`
+- Verifier (**we run it, it is not the owner's job**):
+  `powershell -NoProfile -File scripts/verify-release.ps1 -EvidencePath src-tauri\target\codex-verification\pr90-final-review-verify-release-evidence.json`
 
 ## Do NOT
 
