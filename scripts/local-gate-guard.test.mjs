@@ -111,8 +111,14 @@ describe("the differences from hosted CI are declared, not accidental", () => {
     // The worktree trap: Node walks UP to find node_modules, so a worktree runs against the main
     // checkout's tree and every guard that checks a RELATIVE path invents a failure. That is how
     // canvas-a11y-guard reported a moved r3f declaration file that had never moved.
-    expect(gateCode).toMatch(/node_modules/);
+    //
+    // The bootstrap asks scripts/deps-satisfied.ps1 whether the tree satisfies the manifest, rather
+    // than whether a directory exists -- that weaker question let the same phantom through again on
+    // 2026-08-11. What the bootstrap must DO lives here; what "installed" means, and the proof that
+    // a partial tree triggers a reinstall, live in scripts/deps-bootstrap-guard.test.mjs.
+    expect(gateCode).toMatch(/Test-DependenciesSatisfied/);
     expect(gateCode).toMatch(/\bci\b/);
+    expect(exists("scripts/deps-satisfied.ps1")).toBe(true);
   });
 });
 
