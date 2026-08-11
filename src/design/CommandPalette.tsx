@@ -246,7 +246,9 @@ export function CommandPalette({
             <kbd>↵</kbd> {t("common.palette.footOpen")}
           </span>
           <span className="cp-foot-count">
-            {t("common.palette.footCount", { n: results.length })}
+            {/* `count`, not a plain var: i18next selects footCount_one / footCount_other from it,
+                so a single hit reads "1 result" rather than "1 results". */}
+            {t("common.palette.footCount", { count: results.length })}
           </span>
         </div>
       </div>

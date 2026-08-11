@@ -125,12 +125,25 @@
 }
 .cp-panel kbd {
   font: 10.5px var(--v2-font-mono);
-  color: var(--v2-muted);
   border: 1px solid var(--v2-line);
   border-bottom-width: 2px;
   border-radius: 4px;
   padding: 1px 5px;
   background: var(--v2-bg);
+}
+/* Written to WIN the cascade, not merely to declare the token. `:root[data-v2="on"] .v2-shell kbd`
+   (shell-v2.css:97) paints every kbd in the shell --v2-faint, and both of these mount inside
+   .v2-shell — so an unprefixed `color:` here loses and ships 10.5px text at 3.45:1. It read
+   correct in the file and wrong on screen.
+   `.v2-shell` is in the selector for ONE reason: it makes these strictly MORE specific than that
+   rule. Matching its specificity is not enough — a tie is broken by stylesheet insertion order,
+   and this file is inserted first (ShellV2 imports CommandPalette above its own CSS), so an
+   equal-specificity rule loses too. That was the round-2 self-review FAIL. The guard in
+   command-palette.test.tsx compares computed specificity, so a "tidy-up" that drops `.v2-shell`
+   fails the build instead of quietly greying the hints again. */
+:root[data-v2="on"] .v2-shell .cp-panel kbd,
+:root[data-v2="on"] .v2-shell .v2-search kbd {
+  color: var(--v2-muted);
 }
 
 .cp-results {

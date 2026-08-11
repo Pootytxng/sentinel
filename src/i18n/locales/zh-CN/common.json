@@ -35,7 +35,7 @@
     "emptyHint": "试试用大白话描述问题——“卡顿”“崩溃”“很吵”。",
     "footMove": "移动",
     "footOpen": "打开",
-    "footCount": "{{n}} 条结果"
+    "footCount_other": "{{count}} 条结果"
   },
   "confirmDialog": {
     "cancel": "取消",

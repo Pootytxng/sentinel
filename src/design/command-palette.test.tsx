@@ -2,6 +2,8 @@
 // The visual side is the self-review law's job; these pin the contracts that break silently:
 // it routes through the host's writers, keyboard and mouse agree, and it never offers a dead door.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { readFileSync } from "fs";
+import { join } from "path";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { CommandPalette } from "./CommandPalette";
 import { railFor, type HomeRailItem } from "./homeRail";
@@ -175,6 +177,63 @@ describe("the empty state names what was searched", () => {
     expect(screen.queryAllByRole("option").length).toBe(0);
     // A dead end with no next move is the thing this feature exists to remove.
     expect(screen.getByText(/stutter/i)).toBeTruthy();
+  });
+});
+
+describe("the kbd hints out-specify the shell rule that would grey them out", () => {
+  // bug → guard, twice over. The palette's CSS said `color: var(--v2-muted)` and the live app
+  // painted --v2-faint anyway: shell-v2.css's `:root[data-v2="on"] .v2-shell kbd` is more
+  // specific, and both the topbar box and the overlay mount inside .v2-shell. Five 10.5px labels
+  // (Ctrl K, Esc, ↑, ↓, ↵) shipped at ~3.45:1 while every file-level check was green.
+  //
+  // Round 2 of the same defect: matching that specificity STILL lost, because a tie goes to
+  // whichever stylesheet was inserted last, and ShellV2 imports CommandPalette (and therefore this
+  // CSS) above its own. So the guard cannot ask "is the token right" or even "is the prefix
+  // there" — it has to compare the two rules the way a browser does. It computes specificity and
+  // demands the palette's rule be STRICTLY greater, which is the only outcome that does not
+  // depend on import order.
+  const read = (f: string) => readFileSync(join("src", "design", f), "utf8");
+
+  /** (ids, classes+attrs+pseudo-classes, elements) — enough of the real algorithm for these two
+   *  rules, which use only classes, one attribute, `:root`, and element names. */
+  const specificity = (selector: string): [number, number, number] => {
+    const s = selector.trim();
+    const ids = (s.match(/#[\w-]+/g) ?? []).length;
+    const classish =
+      (s.match(/\.[\w-]+/g) ?? []).length +
+      (s.match(/\[[^\]]+\]/g) ?? []).length +
+      (s.match(/:(?!:)[\w-]+/g) ?? []).length;
+    const elements = (s.replace(/\[[^\]]+\]/g, "").match(/(^|[\s>+~])[a-z][\w-]*/g) ?? []).length;
+    return [ids, classish, elements];
+  };
+  const beats = (a: [number, number, number], b: [number, number, number]) =>
+    a[0] !== b[0] ? a[0] > b[0] : a[1] !== b[1] ? a[1] > b[1] : a[2] > b[2];
+
+  /** Every selector, across all rules in `css`, whose declaration block matches `body`. */
+  const selectorsOf = (css: string, body: RegExp): string[] =>
+    [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+      .filter(([, , decls]) => body.test(decls))
+      .flatMap(([, sel]) => sel.split(",").map((s) => s.trim()))
+      .filter(Boolean);
+
+  it("beats shell-v2's blanket kbd rule on specificity, not on import order", () => {
+    const shell = selectorsOf(read("shell-v2.css"), /color:\s*var\(--v2-faint\)/).filter((s) =>
+      /\.v2-shell\s+kbd$/.test(s),
+    );
+    // If the shell stops painting kbds faint, this whole selector prefix is dead weight rather
+    // than a fix — whoever removes it should be told why it was ever there.
+    expect(shell, "shell-v2.css no longer paints .v2-shell kbd faint — re-read this guard").toHaveLength(1);
+
+    const ours = selectorsOf(read("command-palette.css"), /color:\s*var\(--v2-muted\)/).filter((s) =>
+      /\bkbd\b/.test(s),
+    );
+    expect(ours.some((s) => s.includes(".cp-panel kbd"))).toBe(true);
+    expect(ours.some((s) => s.includes(".v2-search kbd"))).toBe(true);
+    for (const sel of ours) {
+      expect(beats(specificity(sel), specificity(shell[0])), `${sel} does not beat ${shell[0]}`).toBe(
+        true,
+      );
+    }
   });
 });
 

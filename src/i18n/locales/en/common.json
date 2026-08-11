@@ -35,7 +35,8 @@
     "emptyHint": "Try what's wrong in plain words — \"stutter\", \"crashed\", \"loud\".",
     "footMove": "move",
     "footOpen": "open",
-    "footCount": "{{n}} results"
+    "footCount_one": "{{count}} result",
+    "footCount_other": "{{count}} results"
   },
   "confirmDialog": {
     "cancel": "Cancel",
