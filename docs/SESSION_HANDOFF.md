@@ -68,9 +68,9 @@ load, twice). **Verification:** full pre-push gate, `LOCAL CHECK RESULT: PASS`, 
 ### 1 · Land PR [#101](https://github.com/Pootytxng/sentinel/pull/101)
 
 Branch is on origin and green through the pre-push gate. Merging a green PR is ours, not the
-owner's (decree 2026-08-11). After merge: prune the ref via `gh api` — **never**
-`gh pr merge --delete-branch`, which once set `core.bare=true` across every worktree — then drop the
-row from `docs/BRANCH_DISPOSITIONS.md` in a follow-up.
+owner's (decree 2026-08-11). Prune the ref afterwards with `gh api`, never with the
+`--delete-branch` flag — it once wrote `core.bare=true` into the shared git config and broke every
+lane at once. Then drop the row from `docs/BRANCH_DISPOSITIONS.md` in a follow-up.
 
 ### 2 · One owner decision, already put to him
 
