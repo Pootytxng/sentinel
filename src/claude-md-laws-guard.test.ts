@@ -178,8 +178,15 @@ describe("CLAUDE.md carries every operative law", () => {
 
 // Measured 23,538 bytes after the 2026-08-05 trim (down from 34,574 — a 32% cut, not the ~60% first
 // estimated by eye; the LOCKED rules and the module map are irreducible and they dominate the file).
-// The ceiling is that measurement + ~2.5 KB of room for one more law. It is NOT a target to grow into.
-const MAX_BYTES = 26_000;
+// The ceiling was set at that measurement + ~2.5 KB of room for one more law, and it was NOT a target
+// to grow into — but on 2026-08-11 the file measured 25,120: it had eaten 1.6 KB of that headroom in
+// six days, leaving 880 bytes. Slack is not a budget; a ceiling nobody approaches is a ceiling that
+// does nothing. So it ratchets. Trimmed to 24,742 that day and the ceiling followed it down.
+//
+// RATCHET RULE: when a trim lands, move this DOWN to the new measurement + ~250 bytes, in the same
+// commit. Raising it is a deliberate decision that costs a law's worth of boot tax on every session
+// forever — say so out loud when you do it. Never raise it to make a commit pass.
+const MAX_BYTES = 25_000;
 const MIN_BYTES = 12_000;
 
 describe("CLAUDE.md stays within its boot-tax budget", () => {
