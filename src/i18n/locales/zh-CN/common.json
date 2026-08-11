@@ -23,7 +23,19 @@
     "footerIncompletePre": "台账不完整 ·",
     "footerEmphFloor": "至少 {{n}} 项",
     "footerEmphUnknown": "数量未知",
-    "fallbackTitle": "Compy"
+    "fallbackTitle": "Compy",
+    "searchPlaceholder": "搜索或跳转到任意位置"
+  },
+  "palette": {
+    "title": "搜索或跳转到任意位置",
+    "placeholder": "输入房间、仪器,或者哪里不对劲……",
+    "settingsLabel": "设置",
+    "settingsHint": "语言、更新,以及 Compy 被允许做什么",
+    "emptyTitle": "没有匹配“{{query}}”的结果",
+    "emptyHint": "试试用大白话描述问题——“卡顿”“崩溃”“很吵”。",
+    "footMove": "移动",
+    "footOpen": "打开",
+    "footCount": "{{n}} 条结果"
   },
   "confirmDialog": {
     "cancel": "取消",

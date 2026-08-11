@@ -429,6 +429,37 @@ export function applyHomeIntake(on: boolean): void {
   }
 }
 
+// Command palette (owner-greenlit 2026-08-11) — the topbar "Search or jump anywhere" box and the
+// Ctrl+K overlay that searches every destination at once: rooms, Lab instruments, Settings, and the
+// whole Blackbook corpus. Built because a tester could not navigate the app and the owner named that
+// his biggest gripe with it, so it ships DEFAULT ON per ship-approved-work-as-the-build: a
+// discoverability surface that is off by default fixes nothing for the only people it exists for.
+// "0" is the devtools failsafe — the topbar loses the box and Ctrl+K stops binding, leaving the
+// shell byte-identical to the pre-palette tree (pinned by command-palette-flag.test.tsx).
+const COMMAND_PALETTE_KEY = "compy_command_palette";
+
+export function readCommandPalette(): boolean {
+  try {
+    return localStorage.getItem(COMMAND_PALETTE_KEY) !== "0";
+  } catch {
+    /* ignore — default ON */
+  }
+  return true;
+}
+
+export function applyCommandPalette(on: boolean): void {
+  try {
+    localStorage.setItem(COMMAND_PALETTE_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:command-palette-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Monitor console (plan 2026-07-10-console-hud-phase3-monitor, Phase 3 of the Console HUD) —
 // the Monitor room's LIVE face as the console instrument cluster: rolling fps/frametime
 // oscilloscope traces + honest arc gauges over the SAME polls the existing tiles run (zero new

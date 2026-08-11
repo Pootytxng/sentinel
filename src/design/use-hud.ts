@@ -9,6 +9,7 @@ import {
   readRoomIdentity,
   readHudFrame,
   readIntelligence,
+  readCommandPalette,
 } from "./theme";
 
 // The Instrument-HUD preview flag as live React state (spec 2026-07-05-ui-deslop-organic-
@@ -44,7 +45,8 @@ export function useHomeConsoleFlag(): boolean {
 
 // The Home intake band flag as live React state (BACKLOG:916 — the pre-room intent router; same
 // contract: the Settings toggle fires compy:home-intake-changed so HomeConsole shows/hides the
-// intake band without a reload). DEFAULT OFF (opt-in) — the band is absent until the key is "1".
+// intake band without a reload). DEFAULT ON since 2026-08-11 (the graduation that shipped in #97) —
+// only an explicit "0" hides the band, per the graduated-flag convention.
 export function useHomeIntakeFlag(): boolean {
   const [on, setOn] = useState(readHomeIntake);
   useEffect(() => {
@@ -122,6 +124,20 @@ export function useRoomIdentityFlag(): boolean {
     const sync = () => setOn(readRoomIdentity());
     window.addEventListener("compy:room-identity-changed", sync);
     return () => window.removeEventListener("compy:room-identity-changed", sync);
+  }, []);
+  return on;
+}
+
+// The command palette flag as live React state (owner-greenlit 2026-08-11; same contract: a flag
+// change fires compy:command-palette-changed so the topbar shows/hides its search box without a
+// reload). DEFAULT ON — an explicit "0" (devtools failsafe) removes the box AND unbinds Ctrl+K,
+// leaving the shell byte-identical to the pre-palette tree (pinned by command-palette-flag.test.tsx).
+export function useCommandPaletteFlag(): boolean {
+  const [on, setOn] = useState(readCommandPalette);
+  useEffect(() => {
+    const sync = () => setOn(readCommandPalette());
+    window.addEventListener("compy:command-palette-changed", sync);
+    return () => window.removeEventListener("compy:command-palette-changed", sync);
   }, []);
   return on;
 }

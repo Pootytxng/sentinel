@@ -23,7 +23,19 @@
     "footerIncompletePre": "Ledger incomplete ·",
     "footerEmphFloor": "at least {{n}}",
     "footerEmphUnknown": "count unknown",
-    "fallbackTitle": "Compy"
+    "fallbackTitle": "Compy",
+    "searchPlaceholder": "Search or jump anywhere"
+  },
+  "palette": {
+    "title": "Search or jump anywhere",
+    "placeholder": "Type a room, an instrument, or what's wrong…",
+    "settingsLabel": "Settings",
+    "settingsHint": "language, updates, and what Compy is allowed to do",
+    "emptyTitle": "Nothing matches \"{{query}}\"",
+    "emptyHint": "Try what's wrong in plain words — \"stutter\", \"crashed\", \"loud\".",
+    "footMove": "move",
+    "footOpen": "open",
+    "footCount": "{{n}} results"
   },
   "confirmDialog": {
     "cancel": "Cancel",
