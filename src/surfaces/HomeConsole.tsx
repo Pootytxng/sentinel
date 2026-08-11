@@ -77,7 +77,7 @@ type Props = {
    *  BEFORE navigating, so the destination console cannot mount first and lose it. Intake rows that
    *  carry a `station` route through here; without it they fall back to a plain room nav. */
   onOpenLabStation?: (station: string) => void;
-  // ── Home intake band (BACKLOG:916, behind compy_home_intake, DEFAULT OFF). The three below
+  // ── Home intake band (BACKLOG:916, behind compy_home_intake, DEFAULT ON). The three below
   //    are the ONLY wiring the pre-room intent router + its one-tap fast path need. All optional:
   //    an isolated mount (no wiring) simply shows no fast-path row — never a misleading "Checking…".
   /** The live recommendation catalog. undefined = not wired (no fast path); null = still loading
