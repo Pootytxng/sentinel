@@ -51,9 +51,10 @@ Do not maintain a second status board in Markdown, chat, a VS Code note, or anot
 
 ## Roles
 
-- **Claude Code** owns implementation, builds, tests, Git, and Compy's silent reinstall.
-- **Codex** is a **second opinion and an auditor — advisory only, with no jurisdiction over building
-  or decisions** (owner, 2026-08-11: *"codex has no jurisdiction when it comes to building or
+- **Claude Code is the default implementation owner** — implementation, builds, tests, Git, and
+  Compy's silent reinstall.
+- **Codex is the default independent reviewer**, and it is a **second opinion and an auditor —
+  advisory only, with no jurisdiction over building or decisions** (owner, 2026-08-11: *"codex has no jurisdiction when it comes to building or
   decisions i simply use it for a 2nd opinion and some audits"*). Read-only audit, research, planning
   and independent verification. **Never wait on it.** A Codex verdict, handoff or unfinished review
   is input to weigh, never a blocker and never a reason to leave work unstarted; its findings are
