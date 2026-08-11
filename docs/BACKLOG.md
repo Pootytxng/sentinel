@@ -22,6 +22,41 @@
 > in [RELEASE_STATE.md](RELEASE_STATE.md). Historical priority sections below remain evidence, not the
 > current pull order.
 
+- [ ] **Q8 / issue #91 — COMPY CARE: primary PC-doctor directive + Capability Exception Gate
+  (OWNER-APPROVED 2026-08-09).** Queue position is exact: PR #90 @ `c2868bc` now records its
+  current-head exact gates, but its independent reviewer was authentication-blocked; **finish that
+  independent review and merge/disposition first** (rerun gates if its HEAD moves), then rebase #91,
+  land policy/guards, and start Tier 1 domain/backend dark implementation. Do not compete with issue #49's Lab shell, revive draft PR #50, or adopt #55's
+  stale Project Doctor claim. Rust-side Tier 1 keeps production CSP unchanged, so it does not trigger
+  #64 Q2b; any proposal for webview fetch/remote content/CSP widening does.
+  - **Primary product:** "Compy Care" umbrella; user-facing rescue entry is **Crash & Freeze Rescue**
+    (retire "Black Box" from primary navigation). Diagnosis/recovery first; measured optimization is
+    the second specialty.
+  - **Care loop:** intake → triage → local case chart → bounded differential → one next plan →
+    follow-up → prevention. The app must remember whether the symptom returned and whether the plan
+    helped; it must not end at a one-time log explanation.
+  - **Coverage ladder:** Train 1 crashes/hangs/restarts/BSOD; then measured performance regressions
+    and slowdowns; thermals/noise; storage/startup/update trouble; network/peripheral/device trouble.
+    Each later train needs its own evidence contract and must preserve honest unknown states.
+  - **Discovery contract:** a compact Care entry is always visible on Home even while the broad
+    `compy_home_intake` band stays default-OFF. A new local incident observer may persist one pending
+    Home card, but the first version uses launch/foreground and monitored-session-end scans only—no
+    background service and no assumed notification-click callback.
+  - **Tier 1 — approved to build DARK:** separately signed public known-issue catalog, Rust-side
+    pull only, local matching against existing crash incidents, zero machine-derived upload, separate
+    key/schema/domain/cache from privileged remote rules. Runtime stays hard-false until exact
+    endpoint, signing custody, disclosures, security review and canary evidence are approved.
+  - **Tier 2 — NOT authorized by Tier 1:** opt-in scrubbed incident fingerprint, default OFF,
+    payload preview, no raw log/dump/path/serial.
+  - **Tier 3 — NOT authorized by Tier 1:** explicit one-case evidence upload after preview/redaction,
+    named recipient + retention/deletion receipt, no background queue or inherited consent.
+  - **Driver posture:** no driver is needed for Tier 1. A Compy driver is policy-possible only through
+    its own proven-need/security/anti-cheat/signing/rollback record. Borrowed vulnerable drivers,
+    generic physical-memory/MSR/PCI/device-register access, and game/process injection remain barred.
+  - Canonical spec: `docs/superpowers/specs/2026-08-09-compy-care-capability-exception-gate.md`.
+    Plans: `docs/superpowers/plans/2026-08-09-capability-exception-policy-rails.md` then
+    `docs/superpowers/plans/2026-08-09-outbound-case-intelligence-tier1.md`.
+
 - [x] **Q0 — LabDeck glance-first presentation pilot: CLOSED, redirected 2026-08-02.** Issue
   [#14](https://github.com/Pootytxng/sentinel/issues/14) is not canonical and was never merged
   wholesale — closing verdict redirects into issue [#49](https://github.com/Pootytxng/sentinel/issues/49)'s
@@ -207,8 +242,9 @@ experiments + logbook. Matthew praised: guided-setup rail line, simple home, Opt
 ## 🧠 INTELLIGENCE PLATFORM LANE (owner directive 2026-07-16 — supersedes priority ordering per its §0.12)
 
 Owner-approved direction: evolve Compy into **evidence-based PC performance intelligence** — the
-measurement layer that can say *what changed, what likely caused it, and what to test next*, from
-local records only. In-git anchor: `docs/superpowers/specs/2026-07-16-intelligence-foundation-train1.md`
+measurement layer that can say *what changed, what is consistent with the evidence, and what to
+test next*. Machine evidence remains local by default; approved Tier 1 may download signed public
+case knowledge and match it locally, with no incident upload. In-git anchor: `docs/superpowers/specs/2026-07-16-intelligence-foundation-train1.md`
 (the Intelligence Phase 1 spec; the directive itself is a Cowork-lane review artifact, not committed).
 **Namespace rule: phases in this lane are always written "Intelligence Phase N"** — never bare
 "Phase N" (Optimization Cleanup owns a separate Phase 0–3 sequence; the two numbering schemes must
@@ -1239,9 +1275,17 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   the same grading language the intelligence layer must use. (These are Cleanup Phase numbers, not
   Intelligence Phase numbers — see the 🧠 lane's namespace rule.)
 
-## PHASE C — Telemetry / outbound 📡 (stop-rule 3: own spec + security review + owner sign-off; ships DARK)
-- [BUILT-DARK] Receipts opt-in consent UI + payload preview — `receipts.rs`, `ReceiptsConsent.tsx` (gate off)
-- [ ] bufferbloat/speed-test send · jitter/packet-loss · session network telemetry · A/B preset efficacy · ISP/ZIP lookup
+## PHASE C — Outbound capabilities 📡 (separate gates; each ships DARK before arming)
+- [ ] **Tier 1 signed case knowledge** — owner-approved direction under #91; new Rust-side advisory
+  module, separate trust domain, signed download only, local match, no machine-data upload.
+- [BUILT-DARK] **Tier 2 precursor: Receipts** opt-in consent UI + payload preview —
+  `receipts.rs`, `ReceiptsConsent.tsx` (gate off; no transport).
+- [ ] **Tier 2 scrubbed incident fingerprint** — separate spec/consent/schema/retention gate; not
+  authorized by Tier 1.
+- [ ] **Tier 3 explicit case evidence upload** — separate per-case preview/redaction/recipient/
+  retention/deletion gate; never background or inherited consent.
+- [ ] bufferbloat/speed-test send · jitter/packet-loss · session network telemetry · A/B preset
+  efficacy · ISP/ZIP lookup — each still needs its own exception record; no blanket Phase C unlock.
 
 ## PHASE D — Money / distribution 🔒 (owner territory — DEFERRED per current 1.0 focus)
 - [BUILT-DARK] License / Pro gate scaffolding — `license.rs`, `ProGate.tsx`, `pro.ts`

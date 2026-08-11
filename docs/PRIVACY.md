@@ -8,7 +8,12 @@ signed, consent-first app updater that went live on 2026-07-22, and the Settings
 its automatic checks off.) It is **not legal advice** — the owner should still have it reviewed by a
 qualified professional before public distribution. Owner/contact identity: Pootytxng (GitHub issues).
 
-> **Doctrine pointer (2026-08-03):** Receipts telemetry remains disabled and no send path exists. Per `docs/RECEIPTS_DOCTRINE.md`, an opt-in default-OFF Receipts phase is planned — if it is ever armed, this policy must be revised in the SAME release. The same rule applied to the updater and is now enforced by a build guard (`src/outbound-claim-guard.test.ts`).
+> **Doctrine pointer (updated 2026-08-09):** This policy describes current runtime behavior.
+> Receipts remains disabled and no send path exists. Tier 1 signed case intelligence is approved as
+> a dark design but has no module, endpoint or traffic today. Before any Capability Exception Gate outbound tier is armed, this policy
+> and generated site copy must be updated in the SAME release with its exact endpoint, payload,
+> consent, retention/deletion and off-switch behavior; Tier 1 cannot authorize Tier 2 or 3.
+> `src/outbound-claim-guard.test.ts` enforces the current outbound claims.
 
 ---
 
