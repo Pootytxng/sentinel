@@ -190,11 +190,18 @@ export function LabConsole({
     const k = key as LabStationKey;
     setOpenStation((cur) => (cur === k ? null : k));
   };
-  // Post-check deep-link (tester J 2026-07-22, Phase 5): "Take me to the Lab" from the first-check
+  // Station deep-link (tester J 2026-07-22, Phase 5): "Take me to the Lab" from the first-check
   // verdict lands here and auto-opens the Optimize station (the door to the safe-tweak toggles)
   // instead of dropping the user on the dock to hunt for it. Race-free: the intent is written to
   // localStorage BEFORE this face mounts. One-shot — cleared on read, so a normal Lab visit is
   // unaffected.
+  //
+  // Generalised 2026-08-11 (crash-rescue discoverability, SESSION_HANDOFF §4): Home's "it crashed
+  // or froze" row deep-links to `blackbox` through the same key, so the reader takes any station
+  // — but only one this rig ACTUALLY renders. `stationBody` returns null for a station whose data
+  // is absent (Tuning without a guide, Diagnostics without slots), and measureKeys filters those
+  // off the dock; honouring the raw key regardless would open an empty panel the dock has no node
+  // for. A stale or unknown value is dropped, and the user simply lands on the dock.
   useEffect(() => {
     let pending: string | null = null;
     try {
@@ -203,7 +210,11 @@ export function LabConsole({
     } catch {
       /* ignore — no deep-link this visit */
     }
-    if (pending === "optimize") setOpenStation("optimize");
+    if (!pending) return;
+    const openable: LabStationKey[] = ["optimize", ...measureKeys];
+    const target = openable.find((k) => k === pending);
+    if (target) setOpenStation(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on mount by design
   }, []);
 
   // The identical instrument bodies the classic Lab renders — one source for every layout. Optimize

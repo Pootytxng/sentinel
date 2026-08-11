@@ -298,6 +298,60 @@ describe("Home intake band — intent rows (option A): route to the live room, n
   });
 });
 
+// bug->guard (SESSION_HANDOFF §4, tester 2026-08-09): "it crashed or froze" was answered by
+// dropping the user in the Lab, where the one instrument that reads Windows' crash record was a
+// dock node called "Black Box". The tester never found it and went to Event Viewer instead. Two
+// causes, both guarded here: the row routed to the ROOM, and the destination was named after an
+// insider metaphor rather than the problem. Either one regressing re-opens the same dead end.
+describe("Crash & Freeze rescue — the crash row lands ON the evidence (§4)", () => {
+  const crashRow = () => {
+    const row = HOME_INTAKE_ROWS.find((r) => r.station === "blackbox");
+    expect(row, 'no intake row deep-links to "blackbox" — the crash symptom routes to the room again')
+      .toBeTruthy();
+    return row!;
+  };
+
+  const findRowEl = (c: HTMLElement, symptom: string) =>
+    Array.from(c.querySelectorAll(".hc-intake-row")).find(
+      (el) => el.querySelector(".hc-intake-row-symptom")?.textContent === symptom,
+    )!;
+
+  it("deep-links to the crash station instead of dropping the user on the Lab dock", () => {
+    localStorage.setItem("compy_home_intake", "1");
+    const onNavigate = vi.fn();
+    const onOpenLabStation = vi.fn();
+    const row = crashRow();
+    const c = renderHome({ rooms: liveRooms, onNavigate, onOpenLabStation }).container;
+    fireEvent.click(findRowEl(c, row.symptom));
+    expect(onOpenLabStation).toHaveBeenCalledWith("blackbox");
+    // The bare room nav is the bug: it lands on the dock with the station still to be hunted for.
+    expect(onNavigate, "the crash row still fired a bare room nav — that IS the dead end").not.toHaveBeenCalled();
+  });
+
+  it("still navigates to the room when no station writer is wired (never a dead click)", () => {
+    localStorage.setItem("compy_home_intake", "1");
+    const onNavigate = vi.fn();
+    const row = crashRow();
+    const c = renderHome({ rooms: liveRooms, onNavigate }).container;
+    fireEvent.click(findRowEl(c, row.symptom));
+    expect(onNavigate, "an isolated mount lost the row's only exit").toHaveBeenCalledWith(row.room);
+  });
+
+  it("leaves every station-less row on the plain room nav", () => {
+    localStorage.setItem("compy_home_intake", "1");
+    const onNavigate = vi.fn();
+    const onOpenLabStation = vi.fn();
+    const plain = HOME_INTAKE_ROWS.filter((r) => !r.station);
+    expect(plain.length, "every row deep-links now — this test no longer proves anything").toBeGreaterThan(0);
+    const c = renderHome({ rooms: liveRooms, onNavigate, onOpenLabStation }).container;
+    for (const row of plain) {
+      fireEvent.click(findRowEl(c, row.symptom));
+      expect(onNavigate).toHaveBeenCalledWith(row.room);
+    }
+    expect(onOpenLabStation, "a station-less row hijacked the station writer").not.toHaveBeenCalled();
+  });
+});
+
 describe("Home intake band — one-owner stand-down (rubric 3: no duplicate 'last session' route)", () => {
   // The LAST SESSION verdict block on the same Home screen already answers "how did my last session
   // go?" with the engine's own verdict line + a See-in-Monitor door. When it's live, the intake row

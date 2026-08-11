@@ -34,6 +34,10 @@ type Props = {
   onNavigate?: (key: string) => void;
   /** Console-only: the rooms the rail actually shows (railFor minus home) — honest doors. */
   rooms?: { key: string; name: string }[];
+  /** Console intake band only: App's single station-intent writer (openLabStation). An intake row
+   *  whose symptom has ONE answering instrument routes through here so it lands on that instrument
+   *  instead of the Lab dock. Absent → the row falls back to a plain room nav, never a dead end. */
+  onOpenLabStation?: (station: string) => void;
   /** Console intake band only (compy_home_intake, BACKLOG:916): the live recs catalog the
    *  one-tap fast path derives its safe stack from (null = loading, undefined = not wired). */
   recs?: Recommendation[] | null;

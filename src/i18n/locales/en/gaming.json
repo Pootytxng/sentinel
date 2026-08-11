@@ -237,7 +237,7 @@
     "connectedLabel": "Connected"
   },
   "blackBox": {
-    "introPre": "Black Box reads the crash and freeze evidence Windows already recorded, and overlays Compy's own",
+    "introPre": "Crash & Freeze reads the crash and freeze evidence Windows already recorded, and overlays Compy's own",
     "introEmph": "last vitals",
     "introPost": "from any session that was running at the time. It only reports what was logged — it makes no guesses about the cause.",
     "scanningEllipsis": "Scanning…",
