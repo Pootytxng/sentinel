@@ -168,7 +168,7 @@
       "connectsLine": "Benchmark grades whether your frames held after the undervolt."
     },
     "blackbox": {
-      "name": "Black Box",
+      "name": "Crash & Freeze",
       "forLine": "Understand a crash or freeze after it happens.",
       "whenLine": "It crashed or froze and you don't know why.",
       "connectsLine": "Check Diagnostics for the rig state behind what it finds."
@@ -267,7 +267,7 @@
         "gloss": "the raw facts Compy read about this rig."
       },
       "blackBox": {
-        "term": "Black Box",
+        "term": "Crash & Freeze",
         "gloss": "what crashed or froze — read Windows' own record, in plain English."
       }
     },
@@ -277,7 +277,7 @@
         "oneLiner": "Run it, change one thing, re-run — Compy tells you if it actually moved, honestly."
       },
       "blackBox": {
-        "name": "Black Box",
+        "name": "Crash & Freeze",
         "oneLiner": "Read the crash and freeze evidence Windows recorded — plain English, with your last vitals.",
         "summary": "Crash & freeze record"
       },
@@ -300,7 +300,7 @@
       "baselineLabel": "Baseline",
       "latencyLabel": "Latency",
       "tuningLabel": "Tuning",
-      "blackBoxLabel": "Black Box",
+      "blackBoxLabel": "Crash & Freeze",
       "systemReportLabel": "System report",
       "baselineSet": "set",
       "latencyTimer": "timer {{ms}} ms",

@@ -19,6 +19,14 @@
 // route into ONE writer, `openFixesInLab`, so ordering is proven in a single place — and this guard
 // now pins that singleness. A second bare writer is the regression it exists to catch.
 //
+// EXTENDED 2026-08-11 (crash-rescue discoverability, SESSION_HANDOFF §4). The hallway was
+// hard-wired to the "optimize" string on BOTH sides, so a second destination could not use it
+// without a second writer — the exact regression the singleness test above exists to catch. The
+// station is now a parameter of the one writer (`openLabStation`), `openFixesInLab` delegates to
+// it, and the reader takes any station the dock actually renders. These tests now pin the
+// GENERALISED contract: still one writer, still write-before-navigate, still one-shot — and the
+// reader must not have gone back to matching a single hardcoded station.
+//
 // This is a source-contract guard (see the sibling fastpath-skipped-detail-guard for the same
 // honesty note): a behavioural test would need LabConsole mounted with its full prop surface. The
 // band's own link IS covered behaviourally, in home-console.test.tsx.
@@ -31,13 +39,17 @@ const app = readFileSync(join("src", "App.tsx"), "utf8");
 const labConsole = readFileSync(join("src", "surfaces", "LabConsole.tsx"), "utf8");
 const firstCheck = readFileSync(join("src", "surfaces", "FirstCheck.tsx"), "utf8");
 
-const HELPER = "openFixesInLab";
-const helperBody = app.match(/const openFixesInLab = \(\) => \{([\s\S]*?)\n {2}\};/)?.[1] ?? "";
+const HELPER = "openLabStation"; // the one writer of the intent
+const FIX_HELPER = "openFixesInLab"; // its Optimize-named delegate, used by the check->fix hallway
+const helperBody = app.match(/const openLabStation = \(station: LabStationKey\) => \{([\s\S]*?)\n {2}\};/)?.[1] ?? "";
 
 describe("post-check lab route (J, 2026-07-22)", () => {
-  it("persists the Optimize intent from the post-check route", () => {
-    expect(app, `App no longer writes ${KEY} — the post-check CTA lands on the dock, not Optimize`)
-      .toContain(`localStorage.setItem("${KEY}", "optimize")`);
+  it("persists the station intent from the post-check route", () => {
+    // The writer takes the station as a parameter now; the post-check CTA still names "optimize".
+    expect(app, `App no longer writes ${KEY} — the post-check CTA lands on the dock, not a station`)
+      .toContain(`localStorage.setItem("${KEY}", station)`);
+    expect(app, "the post-check CTA no longer names the Optimize station")
+      .toMatch(/openFixesInLab = \(\) => openLabStation\("optimize"\)/);
   });
 
   it("writes the intent BEFORE navigating, so LabConsole cannot mount first", () => {
@@ -61,7 +73,27 @@ describe("post-check lab route (J, 2026-07-22)", () => {
       labConsole,
       `LabConsole no longer CLEARS ${KEY} — every later Lab visit would force-open Optimize`,
     ).toContain(`localStorage.removeItem("${KEY}")`);
-    expect(labConsole).toMatch(/pending === "optimize"/);
+  });
+
+  it("reads the intent as a station, not one hardcoded string", () => {
+    // Re-hardcoding the reader is how the second destination silently stops working: the writer
+    // would still persist "blackbox" and the reader would still clear it — and drop it on the floor.
+    expect(
+      labConsole,
+      "LabConsole matches a single hardcoded station again — every other deep-link is silently dropped",
+    ).not.toMatch(/pending === "(optimize|blackbox|benchmark|latency|tuning|diagnostics)"/);
+    expect(labConsole, "LabConsole no longer resolves the pending key against the openable stations")
+      .toMatch(/openable\.find\(/);
+  });
+
+  it("only opens a station this rig actually renders", () => {
+    // stationBody() returns null for a station whose data is absent (Tuning without a guide), and
+    // measureKeys filters those off the dock. Honouring the raw key would open an empty panel with
+    // no dock node behind it — a dead end one level deeper than the one this hallway closed.
+    expect(
+      labConsole,
+      "the openable set no longer derives from measureKeys — a stale key can open a station the dock does not have",
+    ).toMatch(/const openable: LabStationKey\[\] = \["optimize", \.\.\.measureKeys\]/);
   });
 
   it("still offers the second CTA beside the dashboard button", () => {
@@ -75,12 +107,19 @@ describe("post-check lab route (J, 2026-07-22)", () => {
 
 describe("the check->fix hallway (2026-08-06)", () => {
   it("routes Home's see-the-fixes affordance through the hallway, not the bare Lab tab", () => {
-    expect(app, `Home's onSeeInFix no longer uses ${HELPER} — it drops the user on the Lab dock`)
-      .toContain(`onSeeInFix={${HELPER}}`);
+    expect(app, `Home's onSeeInFix no longer uses ${FIX_HELPER} — it drops the user on the Lab dock`)
+      .toContain(`onSeeInFix={${FIX_HELPER}}`);
   });
 
   it("routes the post-check CTA through the same hallway", () => {
-    expect(app, `the post-check CTA no longer calls ${HELPER}`).toContain(`${HELPER}();`);
+    expect(app, `the post-check CTA no longer calls ${FIX_HELPER}`).toContain(`${FIX_HELPER}();`);
+  });
+
+  it("routes Home's crash row through the same single writer (§4)", () => {
+    // The crash deep-link must not grow its own localStorage write — that is the second writer the
+    // singleness test above exists to forbid, and the ordering bug it would reintroduce.
+    expect(app, `Home's intake band no longer routes its station deep-link through ${HELPER}`)
+      .toMatch(/onOpenLabStation=\{\(s\) => openLabStation\(s as LabStationKey\)\}/);
   });
 
   it("no Home face still defaults its fix room to the deleted Optimize room", () => {

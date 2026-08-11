@@ -128,6 +128,13 @@ involve the owner.
 
 ### Reports, subagents, self-review
 
+- **PLAIN + SHORT TO THE OWNER (owner decree 2026-08-11, standing).** Every reply to him is as short,
+  simple and plain-English as the content allows — no jargon, no walls, no tables he didn't ask for.
+  Lead with what happened and what he must do; detail goes in the commit/PR, not the chat. He asked
+  for this globally: mirror it into `~/.claude/CLAUDE.md` on any machine where that file is reachable
+  (a cloud container's copy is ephemeral and does NOT count). This line is the in-git backstop.
+- **End every session with a HANDOFF BLOCK** — a paste-ready prompt for the next session, plus one
+  line saying whether this session is done (archive / delete / leave open).
 - **Terse reports** (chat is pasted into Cowork, so verbosity bills twice): commit hash(es) · 1–2 line
   what-changed · **one** verification line (cargo/npm/clippy/tsc/security) · flags / owner-decisions.
   Mechanism and design detail go in the commit message + spec. Cite `path#section`, don't restate docs.
