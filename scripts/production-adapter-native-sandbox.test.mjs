@@ -28,7 +28,7 @@ const invoke = (scenario = "happy") => {
       "-Scenario",
       scenario,
     ],
-    { cwd: root, encoding: "utf8", shell: false, timeout: 120_000 },
+    { cwd: root, encoding: "utf8", shell: false, timeout: 120_000, windowsHide: true },
   );
   // The sandbox path travels with the result: a run that fails emits no payload, and its journal is
   // the only place the "what did the transaction record before it stopped" question can be answered.

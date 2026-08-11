@@ -117,7 +117,7 @@ const probe = (dir) => {
   const result = spawnSync(
     "powershell.exe",
     ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", HELPER, "-Path", dir],
-    { cwd: ROOT, encoding: "utf8", shell: false },
+    { cwd: ROOT, encoding: "utf8", shell: false, windowsHide: true },
   );
   return { needsInstall: result.status !== 0, reason: (result.stdout || "").trim(), stderr: result.stderr };
 };
