@@ -3,8 +3,15 @@ import { describe, expect, it } from "vitest";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { defaultOwnerFor, evaluateWorkControl } from "./work-control-gate.mjs";
+
+// The REAL head of this worktree. Fixtures used to say HEAD, and the gate accepted it — which
+// is precisely the hole this file now guards: a receipt is written by the actor asking for
+// authorization, so a head it invented proved nothing. Every fixture below is bound to the head
+// the repository is actually on, and the CLI cases re-resolve it in a child process.
+const HEAD = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+const OTHER_HEAD = `${"0".repeat(39)}1`;
 
 // Bug -> guard (2026-08-09): PR #89 was closed after replacement evidence looked strong, but
 // before PR #90's exact required gates could run. Substitute evidence and an unavailable execution
@@ -19,8 +26,8 @@ const INSPECTED = {
 };
 
 const EXACT_PASS = [
-  { command: "npm test", status: "passed", head: "abc123" },
-  { command: "cargo test --manifest-path src-tauri/Cargo.toml", status: "passed", head: "abc123" },
+  { command: "npm test", status: "passed", head: HEAD },
+  { command: "cargo test --manifest-path src-tauri/Cargo.toml", status: "passed", head: HEAD },
 ];
 
 function record(overrides = {}) {
@@ -31,7 +38,7 @@ function record(overrides = {}) {
     inheritedWork: true,
     inspection: INSPECTED,
     transition: "close-superseded-pr",
-    currentHead: "abc123",
+    currentHead: HEAD,
     requiredGates: ["npm test", "cargo test --manifest-path src-tauri/Cargo.toml"],
     gateResults: EXACT_PASS,
     independentReview: {
@@ -39,6 +46,7 @@ function record(overrides = {}) {
       reviewer: "claude-code",
       writer: "codex",
       status: "passed",
+      head: HEAD,
     },
     ...overrides,
   };
@@ -88,8 +96,8 @@ describe("proof-gated GitHub transitions", () => {
     const result = evaluateWorkControl(
       record({
         gateResults: [
-          { command: "npm test", status: "unavailable", head: "abc123", reason: "sandbox policy" },
-          { command: "npm test -- --exclude host-dependent", status: "passed", head: "abc123" },
+          { command: "npm test", status: "unavailable", head: HEAD, reason: "sandbox policy" },
+          { command: "npm test -- --exclude host-dependent", status: "passed", head: HEAD },
           EXACT_PASS[1],
         ],
       }),
@@ -100,7 +108,7 @@ describe("proof-gated GitHub transitions", () => {
 
   it("rejects exact gate receipts from any head other than the transition head", () => {
     const result = evaluateWorkControl(
-      record({ gateResults: EXACT_PASS.map((gate) => ({ ...gate, head: "stale456" })) }),
+      record({ gateResults: EXACT_PASS.map((gate) => ({ ...gate, head: OTHER_HEAD })) }),
     );
     expect(result.decision).toBe("BLOCKED");
     expect(result.blockers.join("\n")).toMatch(/current head/i);
@@ -120,7 +128,9 @@ describe("proof-gated GitHub transitions", () => {
 
   it("requires a different model's final review when that review is practical", () => {
     const result = evaluateWorkControl(
-      record({ independentReview: { practical: true, reviewer: "codex", writer: "codex", status: "passed" } }),
+      record({
+        independentReview: { practical: true, reviewer: "codex", writer: "codex", status: "passed", head: HEAD },
+      }),
     );
     expect(result.decision).toBe("BLOCKED");
     expect(result.blockers.join("\n")).toMatch(/non-writing model/i);
@@ -134,11 +144,61 @@ describe("proof-gated GitHub transitions", () => {
           reviewer: "claude-code",
           writer: "claude-code",
           status: "passed",
+          head: HEAD,
         },
       }),
     );
     expect(result.decision).toBe("BLOCKED");
     expect(result.blockers.join("\n")).toMatch(/receipt actor/i);
+  });
+
+  // Bug -> guard (2026-08-11, PR #90 recovery P4): the gate bound gate results to `currentHead` but
+  // never asked git what the head WAS, so a receipt carrying one invented SHA everywhere satisfied
+  // every binding in it. Internal consistency is not proof.
+  it("rejects a head that is not a real commit id", () => {
+    const result = evaluateWorkControl(record({ currentHead: "abc123", gateResults: [] }));
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/full 40-character commit SHA/i);
+  });
+
+  it("rejects a well-formed head the repository is not actually on", () => {
+    const result = evaluateWorkControl(
+      record({
+        currentHead: OTHER_HEAD,
+        gateResults: EXACT_PASS.map((gate) => ({ ...gate, head: OTHER_HEAD })),
+        independentReview: {
+          practical: true,
+          reviewer: "claude-code",
+          writer: "codex",
+          status: "passed",
+          head: OTHER_HEAD,
+        },
+      }),
+    );
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/the repository is at/i);
+  });
+
+  it("blocks rather than waves through when the head cannot be resolved at all", () => {
+    const result = evaluateWorkControl(record(), { resolveHead: () => null });
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/could not be resolved/i);
+  });
+
+  it("rejects an independent review recorded at an earlier head than the transition", () => {
+    const result = evaluateWorkControl(
+      record({
+        independentReview: {
+          practical: true,
+          reviewer: "claude-code",
+          writer: "codex",
+          status: "passed",
+          head: OTHER_HEAD,
+        },
+      }),
+    );
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/independent review is recorded at/i);
   });
 
   it("allows a proof-dependent transition only after exact current-head gates and independent review pass", () => {
@@ -170,7 +230,7 @@ describe("work-control receipt CLI", () => {
     const result = runReceipt(
       record({
         gateResults: [
-          { command: "npm test", status: "unavailable", head: "abc123", reason: "no host access" },
+          { command: "npm test", status: "unavailable", head: HEAD, reason: "no host access" },
           EXACT_PASS[1],
         ],
       }),

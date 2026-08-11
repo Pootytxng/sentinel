@@ -1,5 +1,21 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+
+// A commit id, not a label. `abc123` is neither — an abbreviated or invented head cannot be matched
+// against the repository, and every binding below is only as good as the head it binds to.
+const FULL_SHA = /^[0-9a-f]{40}$/;
+
+/** The head the repository is ACTUALLY on, or null when git can't answer. Never trust the receipt's
+    own `currentHead`: it is written by the same actor that is asking for authorization, so on its
+    own it authorizes a transition against a head that may not exist. */
+export function resolveRepoHead() {
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  } catch {
+    return null;
+  }
+}
 
 const PROOF_DEPENDENT_TRANSITIONS = new Set([
   "mark-pr-ready",
@@ -36,7 +52,7 @@ export function defaultOwnerFor(kind) {
   throw new Error(`unknown work kind: ${kind}`);
 }
 
-export function evaluateWorkControl(record) {
+export function evaluateWorkControl(record, { resolveHead = resolveRepoHead } = {}) {
   const blockers = [];
   const warnings = [];
 
@@ -71,7 +87,31 @@ export function evaluateWorkControl(record) {
     const requiredGates = Array.isArray(record?.requiredGates) ? record.requiredGates : [];
     const gateResults = Array.isArray(record?.gateResults) ? record.gateResults : [];
 
-    if (!currentHead) blockers.push("A proof-dependent GitHub transition requires the current head SHA.");
+    // The head is checked against the repository BEFORE anything is bound to it. Without this the
+    // gate only proves internal consistency: a receipt that writes the same made-up SHA into
+    // `currentHead` and into every gate result passes every binding below and authorizes a
+    // transition whose proof was never run anywhere.
+    if (!currentHead) {
+      blockers.push("A proof-dependent GitHub transition requires the current head SHA.");
+    } else if (!FULL_SHA.test(currentHead)) {
+      blockers.push(
+        `currentHead "${currentHead}" is not a full 40-character commit SHA, so it cannot be ` +
+          "matched against the repository.",
+      );
+    } else {
+      const actualHead = resolveHead();
+      if (!actualHead) {
+        blockers.push(
+          "The repository head could not be resolved (git rev-parse HEAD failed), so no receipt " +
+            "can be bound to it; environment inability is a blocker, not a pass.",
+        );
+      } else if (actualHead !== currentHead) {
+        blockers.push(
+          `The receipt claims head ${currentHead}, but the repository is at ${actualHead}.`,
+        );
+      }
+    }
+
     if (requiredGates.length === 0) {
       blockers.push("A proof-dependent GitHub transition requires at least one exact named gate.");
     }
@@ -120,6 +160,14 @@ export function evaluateWorkControl(record) {
         review?.reviewer === review?.writer
       ) {
         blockers.push("Final review must pass with a non-writing model whenever that review is practical.");
+      }
+      // Gates were bound to the head; the review has to be too. A review of an earlier head is a
+      // review of different code — the commits that came after it are exactly the unreviewed ones.
+      if (currentHead && review?.head !== currentHead) {
+        blockers.push(
+          `The independent review is recorded at ${review?.head ?? "no head"}, not the current head ` +
+            `${currentHead}; a review of earlier code does not cover the commits after it.`,
+        );
       }
     }
   }

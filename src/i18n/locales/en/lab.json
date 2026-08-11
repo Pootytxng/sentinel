@@ -141,9 +141,14 @@
         "memory": "In use",
         "storage": "Free space",
         "capacity": "Capacity",
-        "refresh": "Refresh rate"
+        "refresh": "Refresh rate",
+        "fanSpeed": "Fan speed"
       },
-      "empty": "Nothing to read here — Compy has no measurement of its own for this part, and it won't invent one."
+      "empty": "Nothing to read here — Compy has no measurement of its own for this part, and it won't invent one.",
+      "fanSpeed": "{{rpm}} rpm",
+      "fanUnread": "No monitor is publishing this fan's speed right now, so there's nothing to read — Compy won't guess a number.",
+      "userAddedSubsystem": "You added this",
+      "userAddedNote": "You added this part yourself, so Compy has no reading for it — it's here to keep your rig's picture complete."
     }
   },
   "optimizeStation": {

@@ -25,7 +25,7 @@ interface Props {
       neutral, existing hosts unchanged). */
   glow?: number;
   /** true → the part stands in front of a real, detected one, so the covering geometry stops
-      taking raycast hits and clicks reach the part behind (see `shadowingGhostIds`). Every mesh
+      taking raycast hits and clicks reach the part behind (see `clickThroughIds`). Every mesh
       here stops propagation, so without this the nearest one always wins. Default false —
       existing hosts are untouched. */
   pointerThrough?: boolean;

@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useEffect, useState, type FormEvent } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useState, type FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import "../../i18n";
 import type { HardwareInfo } from "../../App";
 import { useManualParts, MANUAL_KINDS, manualKindLabel, type ManualKind } from "./manual-parts";
+import { rigSelectionStatus, type RigSelection } from "./rig-parts";
 import { readHologramV2 } from "../../design/theme";
 import { useDocumentVisible } from "../../data/use-document-visible";
 import "./RigViewer.css";
@@ -40,7 +41,7 @@ export const RigViewer = memo(function RigViewer({
   // Selection stays internal state (autoRotate/exploded live here too) — this is an OPT-IN mirror
   // for a host that wants to react to it (e.g. the Ops Console showing evidence for the selected
   // part), not a hand-off of ownership.
-  onSelectedIdChange?: (id: string | null) => void;
+  onSelectedIdChange?: (id: string | null, what: RigSelection | null) => void;
 }) {
   const { t } = useTranslation();
   const [exploded, setExploded] = useState(false);
@@ -50,6 +51,19 @@ export const RigViewer = memo(function RigViewer({
   const [autoRotate, setAutoRotate] = useState(() => !readHologramV2());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // What the hologram drew, for the keyboard picker below. Empty until the lazy 3D chunk mounts.
+  const [inventory, setInventory] = useState<RigSelection[]>([]);
+
+  // One selection path for pointer and keyboard alike: both land here, so the host mirror can never
+  // see a selection the other route wouldn't have produced.
+  const select = useCallback(
+    (id: string, what: RigSelection | null) => {
+      const next = id || null;
+      setSelectedId(next);
+      onSelectedIdChange?.(next, what);
+    },
+    [onSelectedIdChange],
+  );
 
   const { parts: manualParts, add, remove } = useManualParts();
   const [kind, setKind] = useState<ManualKind>("psu");
@@ -119,18 +133,51 @@ export const RigViewer = memo(function RigViewer({
             autoRotate={autoRotate}
             selectedId={selectedId}
             hoveredId={hoveredId}
-            onSelect={(id) => {
-              const next = id || null;
-              setSelectedId(next);
-              onSelectedIdChange?.(next);
-            }}
+            // `what` rides along so a host can answer for a fan or a user-added part, neither of
+            // which is in `buildRigParts`. Selection ownership is unchanged — this is still a
+            // mirror of our state, now one the host can actually read.
+            onSelect={select}
             onHover={setHoveredId}
+            onInventory={setInventory}
             manualParts={manualParts}
             // Chromeless = the Lab evidence map: no explode/orbit buttons, so clicking the model is
             // the only way in and nothing may block a real part's hitbox.
             evidenceMap={chromeless}
           />
         </Suspense>
+
+        {/* The keyboard's way in. The hologram is a WebGL canvas — its parts are meshes, not DOM, so
+            a pointer was the ONLY way to select one and everything the evidence panel shows was
+            unreachable without a mouse (#49 a11y acceptance). These are real buttons: Tab reaches
+            them, Enter/Space activates, aria-pressed reports which is selected. They sit off-screen
+            until one takes focus, then the group appears over the stage — so the pointer experience
+            and the owner-approved framing are unchanged, and a keyboard user sees where they are. */}
+        {inventory.length > 0 && (
+          <ul className="rig-picker" aria-label={t("gaming.rigViewer.picker.label")}>
+            {inventory.map((item) => {
+              const status = rigSelectionStatus(item);
+              const value =
+                item.source === "fan" && item.rpm !== null
+                  ? t("gaming.rigViewer.picker.rpm", { rpm: item.rpm })
+                  : t(`gaming.rigViewer.picker.status.${status}`);
+              return (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    className="rig-picker-item"
+                    aria-pressed={selectedId === item.id}
+                    onClick={() => select(item.id, item)}
+                    onFocus={() => setHoveredId(item.id)}
+                    onBlur={() => setHoveredId((h) => (h === item.id ? null : h))}
+                  >
+                    <span className="rig-picker-name">{item.name}</span>
+                    <span className="rig-picker-value">{value}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
 
       {!chromeless && (

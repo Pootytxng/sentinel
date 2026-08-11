@@ -141,9 +141,14 @@
         "memory": "已使用",
         "storage": "可用空间",
         "capacity": "容量",
-        "refresh": "刷新率"
+        "refresh": "刷新率",
+        "fanSpeed": "风扇转速"
       },
-      "empty": "这里没有可读数据——Compy 对这个部件没有自己的实测值,也不会凭空编造。"
+      "empty": "这里没有可读数据——Compy 对这个部件没有自己的实测值,也不会凭空编造。",
+      "fanSpeed": "{{rpm}} rpm",
+      "fanUnread": "当前没有监控软件在发布这个风扇的转速，因此没有可读数据——Compy 不会猜测数值。",
+      "userAddedSubsystem": "你添加的部件",
+      "userAddedNote": "这个部件是你自己添加的，Compy 没有它的实测数据——它只是让你的整机图更完整。"
     }
   },
   "optimizeStation": {

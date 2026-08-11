@@ -52,7 +52,7 @@ export function RigFan({
   onHover: (id: string | null) => void;
   onSelect: (id: string) => void;
   /** true → drawn but transparent to the pointer, so a real part behind it stays clickable
-      (see `shadowingGhostIds`). A fan frame is one flat square with nothing to spare, so the whole
+      (see `clickThroughIds`). A fan frame is one flat square with nothing to spare, so the whole
       thing passes through rather than a sub-region. Default false. */
   pointerThrough?: boolean;
 }) {
