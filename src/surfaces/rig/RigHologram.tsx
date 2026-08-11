@@ -94,6 +94,11 @@ interface Props {
       this is how a keyboard user selects a part at all. Must be referentially stable. */
   onInventory?: (items: RigSelection[]) => void;
   manualParts: ManualPart[];
+  /** true → the host's DOM part picker has focus, so every on-canvas spec card stands down. The
+      cards are anchored to their part's position in 3D and the picker panel is anchored to the
+      stage, so the two collide over exactly the rows a keyboard user is reading. Highlighting is
+      unaffected — the focused row still lights its part up in the model. */
+  cardsSuppressed?: boolean;
   /** Initial camera distance. Default = the classic framing; the V2 hero stage pulls in closer
       so the model fills its bigger stage (additive — existing callers are untouched). */
   cameraDist?: number;
@@ -119,6 +124,7 @@ export const RigHologram = memo(function RigHologram({
   onHover,
   onInventory,
   manualParts,
+  cardsSuppressed = false,
   cameraDist = 9.5,
   evidenceMap = false,
 }: Props) {
@@ -422,6 +428,7 @@ export const RigHologram = memo(function RigHologram({
             onHover={onHover}
             pointerThrough={clickThrough.has(p.id)}
             cardOnSelect={!evidenceMap}
+            suppressCard={cardsSuppressed}
           />
         ))}
         {manualRigParts.map((p, i) => (
@@ -438,6 +445,7 @@ export const RigHologram = memo(function RigHologram({
             onHover={onHover}
             pointerThrough={clickThrough.has(p.id)}
             cardOnSelect={!evidenceMap}
+            suppressCard={cardsSuppressed}
           />
         ))}
         {fanPlacements.map((fp) => (
@@ -453,6 +461,7 @@ export const RigHologram = memo(function RigHologram({
             selectedId={selectedId}
             onHover={onHover}
             onSelect={emitSelect}
+            suppressCard={cardsSuppressed}
             pointerThrough={clickThrough.has(fp.fan.id)}
           />
         ))}

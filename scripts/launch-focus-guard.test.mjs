@@ -234,6 +234,36 @@ function measurableBinary() {
 
 const BINARY = windows ? measurableBinary() : null;
 
+/**
+ * The probe REFUSES to measure while a compy is already running: the single-instance lock would
+ * absorb the launch and every reading would describe the window the owner already had open. That
+ * refusal is correct. Turning it into a red suite is not -- the owner running his own app is the
+ * normal state of this machine, and a gate that refuses a green repo teaches you to pass
+ * --no-verify. So it SKIPS, loudly and by name. Where proof is actually being demanded (the release
+ * gate sets COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF), an unmeasurable run is a failure again.
+ */
+function unmeasurableBecauseRunning() {
+  const run = spawnSync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-Command",
+      "(Get-Process -Name compy -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id) -join ','",
+    ],
+    { encoding: "utf8", windowsHide: true, timeout: 30_000 },
+  );
+  const pids = (run.stdout || "").trim();
+  if (!pids) return false;
+  const reason =
+    `compy is already running (PID ${pids}); the single-instance lock would absorb the launch, ` +
+    "so the measurement would describe the OLD window. Close it to measure.";
+  if (process.env.COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF) {
+    throw new Error(`runtime foreground proof was REQUIRED but could not run: ${reason}`);
+  }
+  console.log(`[launch-focus-guard] runtime measurement SKIPPED: ${reason}`);
+  return true;
+}
+
 /** Run the probe and return its parsed result. Throws with the probe's own words on failure. */
 function measureLaunch({ args = [], env = {}, seconds = 6, savedState = null }) {
   // A throwaway APPDATA so a measurement never writes to the owner's Trust Ledger, and so the
@@ -301,6 +331,7 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
         );
         return;
       }
+      if (unmeasurableBecauseRunning()) return;
       const result = measureLaunch({ env: { COMPY_ACTIVATE: "1" } });
       expect(result.exited, `the app exited during the measurement (code ${result.exitCode})`).toBe(false);
       // Whether ANY launch can reach the foreground is decided before Compy runs. Windows only lets a
@@ -324,6 +355,7 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
   it(
     "a quiet launch opens a real visible window and never takes the foreground",
     () => {
+      if (unmeasurableBecauseRunning()) return;
       const result = measureLaunch({ args: ["--no-activate"], savedState: MAXIMIZED_STATE });
       if (!result.rightsGranted) {
         // Honest caveat, not a failure: this run's shell had no foreground rights to hand over, so

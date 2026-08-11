@@ -53,6 +53,10 @@ export const RigViewer = memo(function RigViewer({
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   // What the hologram drew, for the keyboard picker below. Empty until the lazy 3D chunk mounts.
   const [inventory, setInventory] = useState<RigSelection[]>([]);
+  // The picker panel and the on-canvas spec cards both want the top-left of the stage. While the
+  // picker holds focus the cards stand down (self-review 2026-08-11 caught one landing across the
+  // list rows, illegible at narrow widths) — the model still highlights the focused part.
+  const [pickerFocused, setPickerFocused] = useState(false);
 
   // One selection path for pointer and keyboard alike: both land here, so the host mirror can never
   // see a selection the other route wouldn't have produced.
@@ -139,6 +143,7 @@ export const RigViewer = memo(function RigViewer({
             onSelect={select}
             onHover={setHoveredId}
             onInventory={setInventory}
+            cardsSuppressed={pickerFocused}
             manualParts={manualParts}
             // Chromeless = the Lab evidence map: no explode/orbit buttons, so clicking the model is
             // the only way in and nothing may block a real part's hitbox.
@@ -153,7 +158,16 @@ export const RigViewer = memo(function RigViewer({
             until one takes focus, then the group appears over the stage — so the pointer experience
             and the owner-approved framing are unchanged, and a keyboard user sees where they are. */}
         {inventory.length > 0 && (
-          <ul className="rig-picker" aria-label={t("gaming.rigViewer.picker.label")}>
+          <ul
+            className="rig-picker"
+            aria-label={t("gaming.rigViewer.picker.label")}
+            onFocus={() => setPickerFocused(true)}
+            // Only when focus leaves the list entirely — moving between its own buttons must not
+            // flicker the cards back on for a frame.
+            onBlur={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setPickerFocused(false);
+            }}
+          >
             {inventory.map((item) => {
               const status = rigSelectionStatus(item);
               const value =

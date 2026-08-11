@@ -30,10 +30,17 @@ const INVENTORY: RigSelection[] = [
 
 vi.mock("./RigHologram", () => ({
   // Emitted from an effect, as the real one does — announcing the scene during render would update
-  // the parent mid-render, which React refuses.
-  RigHologram: ({ onInventory }: { onInventory?: (items: RigSelection[]) => void }) => {
+  // the parent mid-render, which React refuses. `cardsSuppressed` is reflected into an attribute so
+  // the test can read what the canvas was actually told.
+  RigHologram: ({
+    onInventory,
+    cardsSuppressed,
+  }: {
+    onInventory?: (items: RigSelection[]) => void;
+    cardsSuppressed?: boolean;
+  }) => {
     useEffect(() => onInventory?.(INVENTORY), [onInventory]);
-    return <div data-testid="hologram-stub" />;
+    return <div data-testid="hologram-stub" data-cards-suppressed={String(!!cardsSuppressed)} />;
   },
 }));
 
@@ -46,10 +53,9 @@ afterEach(() => {
   localStorage.clear();
 });
 
-const picker = async () => {
-  await screen.findByTestId("hologram-stub");
-  return screen.getByRole("list", { name: /rig parts/i });
-};
+// findBy, not getBy: the list appears one render AFTER the stub mounts (the scene is announced
+// from an effect), and under a loaded machine those two renders do not land in the same tick.
+const picker = () => screen.findByRole("list", { name: /rig parts/i });
 
 describe("the hologram's keyboard route", () => {
   it("offers a real button for every part the canvas can select", async () => {
@@ -88,6 +94,29 @@ describe("the hologram's keyboard route", () => {
     // which is what left the Lab's evidence panel blank on those clicks.
     expect(onSelectedIdChange).toHaveBeenCalledWith("fan-0", INVENTORY[3]);
     expect(button.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  // Bug -> guard (self-review FAIL, 2026-08-11): focusing a picker row also highlights that part in
+  // the model, and the highlight brought the on-canvas spec card with it. The card is anchored to
+  // the part's position in 3D, the picker panel to the stage's top-left, so the card landed across
+  // the list rows — illegible at narrow widths, and on the very first thing a keyboard user does.
+  it("stands the on-canvas spec cards down while the picker holds focus", async () => {
+    render(<RigViewer hw={hw} chromeless />);
+    const list = await picker();
+    const stub = screen.getByTestId("hologram-stub");
+    expect(stub.dataset.cardsSuppressed).toBe("false");
+
+    const [first, second] = list.querySelectorAll("button");
+    fireEvent.focus(first);
+    expect(stub.dataset.cardsSuppressed).toBe("true");
+
+    // Moving between the list's own buttons must not flicker the cards back on for a frame.
+    fireEvent.blur(first, { relatedTarget: second });
+    expect(stub.dataset.cardsSuppressed).toBe("true");
+
+    // Leaving the list entirely gives the pointer experience its cards back, untouched.
+    fireEvent.blur(second, { relatedTarget: document.body });
+    expect(stub.dataset.cardsSuppressed).toBe("false");
   });
 
   it("renders no empty picker before the lazy 3D chunk has reported a scene", () => {
