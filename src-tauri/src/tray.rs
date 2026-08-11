@@ -64,15 +64,27 @@ pub(crate) fn set_close_to_tray(enabled: bool) {
     set_tray_visible(enabled);
 }
 
-/// Restore the main window — show + focus it if it exists, recreate it if a prior unclean exit left
-/// no window (the same logic the single-instance plugin uses; shared so tray-Show and a second
-/// launch behave identically).
-pub(crate) fn show_or_recreate_main(app: &AppHandle) {
+/// Restore the main window — show it if it exists, recreate it if a prior unclean exit left no
+/// window (the same logic the single-instance plugin uses; shared so tray-Show and a second launch
+/// behave identically).
+///
+/// `activate` decides whether the restored window is also RAISED to the foreground. A tray click or
+/// an owner-initiated relaunch is a request to look at Compy, so it raises. A tooling-initiated
+/// relaunch (`--no-activate`, see `lib::QUIET_LAUNCH_ARG`) restores the window where it stands and
+/// leaves the foreground alone — on Windows, activating any window minimises an exclusive-fullscreen
+/// game, and a build finishing is not a reason to end the owner's session. Without this parameter
+/// the whole foreground-courtesy path is defeated by a single relaunch, because the second process
+/// hands its intent here and this function used to focus regardless.
+pub(crate) fn show_or_recreate_main(app: &AppHandle, activate: bool) {
     match app.get_webview_window("main") {
         Some(win) => {
+            // Unminimize even when staying quiet: a window left minimised is one the owner cannot
+            // click on the taskbar to reach. It restores in place; it does not come forward.
             let _ = win.unminimize();
             let _ = win.show();
-            let _ = win.set_focus();
+            if activate {
+                let _ = win.set_focus();
+            }
         }
         None => {
             use tauri::{WebviewUrl, WebviewWindowBuilder};
@@ -80,6 +92,9 @@ pub(crate) fn show_or_recreate_main(app: &AppHandle) {
                 .title("Compy")
                 .inner_size(800.0, 600.0)
                 .min_inner_size(380.0, 560.0)
+                // Same contract as the config-driven creation in `lib::run()`: `focused(false)` makes
+                // the runtime raise this window with SW_SHOWNOACTIVATE instead of SW_SHOW.
+                .focused(activate)
                 .build();
         }
     }
@@ -98,7 +113,8 @@ pub(crate) fn init(app: &AppHandle) -> tauri::Result<()> {
         // Left-click restores the window; the menu (with the real Quit) is the right-click action.
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
-            "show" => show_or_recreate_main(app),
+            // A menu click is the owner asking to SEE Compy — always raise it.
+            "show" => show_or_recreate_main(app, true),
             "quit" => {
                 // The real exit — same teardown as the §1 close path (helper self-exits ~0.5s).
                 crate::monitoring::shutdown_for_exit();
@@ -113,7 +129,8 @@ pub(crate) fn init(app: &AppHandle) -> tauri::Result<()> {
                 ..
             } = event
             {
-                show_or_recreate_main(tray.app_handle());
+                // Likewise a left-click on the tray icon: he pointed at it, so bring it forward.
+                show_or_recreate_main(tray.app_handle(), true);
             }
         });
 

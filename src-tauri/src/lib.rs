@@ -1012,19 +1012,97 @@ mod win_maximize_fix {
     }
 }
 
+/// An env var counts as SET only when it carries a meaningful value. `""` and `"0"` are how a caller
+/// turns a flag back OFF, and reading either as "on" would leave the escape hatch impossible to
+/// release once anything upstream had exported the name.
+fn is_env_flag_set(value: Option<&str>) -> bool {
+    matches!(value, Some(v) if !v.trim().is_empty() && v.trim() != "0")
+}
+
+/// The one argv token that carries "do not take the foreground" ACROSS a process boundary. An
+/// environment variable cannot reach a Compy that is ALREADY running: the single-instance plugin
+/// hands the second launch's argv to the live instance and nothing else, so the intent has to ride
+/// there or a relaunch-while-alive steals focus no matter what the new process was told.
+pub(crate) const QUIET_LAUNCH_ARG: &str = "--no-activate";
+
+/// True when this launch's command line asked to stay out of the foreground. Matches the exact
+/// token only — a substring match would fire on a path that merely contains it.
+pub(crate) fn argv_asks_for_quiet_launch<I: IntoIterator<Item = S>, S: AsRef<str>>(argv: I) -> bool {
+    argv.into_iter().any(|a| a.as_ref() == QUIET_LAUNCH_ARG)
+}
+
+/// FOREGROUND COURTESY (owner ask, 2026-08-11). A launch that Compy's own tooling performs must not
+/// take the foreground away from whatever the owner is actually doing: an exclusive-fullscreen game
+/// is MINIMISED when another window activates, so a dev relaunch or a post-build reinstall costs him
+/// his session. Suppressing activation does not hide the app — the window is created, visible and on
+/// the taskbar. It simply does not steal focus.
+///
+/// Precedence, highest first:
+///   `COMPY_ACTIVATE`    — explicit "yes, take the foreground": the escape hatch, so a launch that is
+///                         MEANT to be seen stays one variable away.
+///   `--no-activate`     — the argv form, which also reaches an already-running instance.
+///   `COMPY_NO_ACTIVATE` — explicit "do not". Set by `scripts/ship-reinstall.ps1` around its relaunch.
+///   debug build         — every `npm run tauri dev` launch is tooling-initiated by definition, so
+///                         dev is quiet by DEFAULT rather than by a launcher remembering to opt in.
+///
+/// A shipped release the owner starts himself sets neither variable and activates normally.
+fn should_suppress_activation(
+    is_debug_build: bool,
+    no_activate: Option<&str>,
+    activate: Option<&str>,
+    argv_quiet: bool,
+) -> bool {
+    if is_env_flag_set(activate) {
+        return false;
+    }
+    if argv_quiet || is_env_flag_set(no_activate) {
+        return true;
+    }
+    is_debug_build
+}
+
 pub fn run() {
+    // FOREGROUND COURTESY, part 1 of 2 — the CREATION-TIME half. `focus` is honoured by the runtime
+    // (tao raises the first ShowWindow with SW_SHOWNOACTIVATE when it is false), but it has to be
+    // decided HERE: by the time `setup` runs the window already exists and has already activated, so
+    // un-focusing there is a snatch-and-return that has ALREADY minimised the game it meant to
+    // spare. `focusable` is deliberately untouched — a window the owner cannot click into afterwards
+    // is a broken app, not a polite one.
+    //
+    // Part 2 is the window-state plugin below. Setting `focus = false` alone does NOT work, which is
+    // what made the first attempt at this (PR #100) measure as inert three times over.
+    let mut context = tauri::generate_context!();
+    let no_activate = std::env::var("COMPY_NO_ACTIVATE").ok();
+    let activate = std::env::var("COMPY_ACTIVATE").ok();
+    let suppress_activation = should_suppress_activation(
+        cfg!(debug_assertions),
+        no_activate.as_deref(),
+        activate.as_deref(),
+        argv_asks_for_quiet_launch(std::env::args().skip(1)),
+    );
+    if suppress_activation {
+        for window in &mut context.config_mut().app.windows {
+            window.focus = false;
+        }
+    }
     tauri::Builder::default()
         // Single-instance MUST be the first plugin. A second launch focuses the
         // existing main window instead of opening another process — so only one
         // main process ever mutates history.json (no cross-process race). The
         // elevated --fps-capture helper returns from main.rs before this builder,
         // so it never registers here and is unaffected.
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             // Single-instance hardening (Train #3 §1, part 2): a second launch focuses the existing
             // window, OR recreates it when the lock holder has none — a ghost from a prior unclean
             // exit (the old silent no-op was the "Compy won't open" report) OR a window hidden to the
             // tray (relaunch-while-trayed restores it). Shared restore logic so both paths match.
-            crate::tray::show_or_recreate_main(app);
+            //
+            // FOREGROUND COURTESY: the second process dies here, so ITS environment is worthless —
+            // only its argv survives the hop. A tooling relaunch passes `--no-activate` and the live
+            // window is restored WITHOUT being raised; a launch the owner performs himself carries
+            // no such token and is brought to the front, which is the entire point of clicking it.
+            let quiet = argv_asks_for_quiet_launch(argv.iter().skip(1).map(String::as_str));
+            crate::tray::show_or_recreate_main(app, !quiet);
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
@@ -1039,8 +1117,22 @@ pub fn run() {
         // tauri.conf.json 1280x720 centered default — tester gripe 2026-07-23). The telemetry
         // overlay is DENYLISTED: it places itself programmatically (corner picker) and a restore
         // would fight that logic.
+        // FOREGROUND COURTESY, part 2 of 2 — and the part that actually broke PR #100. This plugin's
+        // `on_window_ready` hook runs BEFORE our `setup`, and `restore_state` ends with an
+        // unconditional `show()` + `set_focus()` whenever StateFlags::VISIBLE is set (measured in
+        // tauri-plugin-window-state 2.4.1, src/lib.rs:262-264). `set_focus` calls Win32
+        // SetForegroundWindow, which overrides the polite SW_SHOWNOACTIVATE the config above just
+        // bought — so the window came up, THEN was yanked to the front, and the owner's game
+        // minimised. Dropping VISIBLE removes the plugin's show/focus entirely and changes nothing
+        // else: the window is still created visible by the config, and size/position/maximized are
+        // still restored. It also fixes a latent bug — a window closed to tray saved `visible:false`
+        // and the plugin then refused to show it at all on the NEXT launch ("Compy won't open").
         .plugin(
             tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        - tauri_plugin_window_state::StateFlags::VISIBLE,
+                )
                 .with_denylist(&["overlay"])
                 .build(),
         )
@@ -1215,8 +1307,72 @@ pub fn run() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod activation_tests {
+    use super::{argv_asks_for_quiet_launch, is_env_flag_set, should_suppress_activation};
+
+    #[test]
+    fn a_release_launch_the_owner_starts_himself_still_takes_the_foreground() {
+        assert!(!should_suppress_activation(false, None, None, false));
+    }
+
+    #[test]
+    fn a_dev_launch_is_quiet_by_default_because_tooling_started_it() {
+        assert!(should_suppress_activation(true, None, None, false));
+    }
+
+    #[test]
+    fn no_activate_suppresses_a_release_launch() {
+        assert!(should_suppress_activation(false, Some("1"), None, false));
+    }
+
+    #[test]
+    fn activate_outranks_no_activate_so_the_escape_hatch_always_wins() {
+        assert!(!should_suppress_activation(true, Some("1"), Some("1"), true));
+        assert!(!should_suppress_activation(
+            false,
+            Some("1"),
+            Some("1"),
+            true
+        ));
+    }
+
+    #[test]
+    fn an_empty_or_zero_value_turns_a_flag_off_rather_than_on() {
+        // Otherwise a variable exported as "" anywhere upstream would pin the behaviour permanently
+        // on, and the escape hatch could never be released once it had been set.
+        assert!(!is_env_flag_set(Some("")));
+        assert!(!is_env_flag_set(Some("   ")));
+        assert!(!is_env_flag_set(Some("0")));
+        assert!(is_env_flag_set(Some("1")));
+        assert!(!is_env_flag_set(None));
+        assert!(should_suppress_activation(false, Some("1"), Some("0"), false));
+        assert!(!should_suppress_activation(false, Some("0"), None, false));
+    }
+
+    #[test]
+    fn the_argv_token_suppresses_a_release_launch_that_sets_no_variable() {
+        // The relaunch path depends on this: a second process hands the live instance its argv and
+        // nothing else, so an env-only lever would be silently dropped at the process boundary.
+        assert!(should_suppress_activation(false, None, None, true));
+    }
+
+    #[test]
+    fn only_the_exact_argv_token_counts() {
+        assert!(argv_asks_for_quiet_launch(["--no-activate"]));
+        assert!(argv_asks_for_quiet_launch(["--fps-capture", "--no-activate"]));
+        assert!(!argv_asks_for_quiet_launch(Vec::<&str>::new()));
+        // A substring match would fire on any path that happens to contain the token, and a
+        // release the owner double-clicks from such a folder would silently stop coming to front.
+        assert!(!argv_asks_for_quiet_launch([
+            r"C:\tools\--no-activate\compy.exe"
+        ]));
+        assert!(!argv_asks_for_quiet_launch(["--no-activate=0"]));
+    }
 }
 
 
