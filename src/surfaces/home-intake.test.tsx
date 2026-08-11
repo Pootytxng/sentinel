@@ -38,7 +38,7 @@ const fastPathAppliedNote = (applied: number, skipped: number) =>
   fastPathAppliedNoteRaw(applied, skipped, i18n.t);
 
 // Guards for the Home intake band (BACKLOG:916 — the pre-room intent router + one-tap fast path,
-// behind compy_home_intake, DEFAULT OFF). The owner's greenlit direction (2026-07-14):
+// behind compy_home_intake, DEFAULT ON). The owner's greenlit direction (2026-07-14):
 //   "lift the proven 'what are you here to do?' idiom up one level to Home, where the rows route to
 //    the right ROOM instead of the right Lab station / i like option a / … c might be good to have
 //    as an always available option … some combination of both might be best ill let you decide"
@@ -222,28 +222,45 @@ function renderHome(extra: Partial<React.ComponentProps<typeof HomeRoom>> = {}) 
   );
 }
 
-describe("Home intake band — flag gating (compy_home_intake DEFAULT OFF)", () => {
-  it("key ABSENT: the band never renders even with rooms + fast-path fully wired", () => {
+describe("Home intake band — flag gating (compy_home_intake GRADUATED to DEFAULT ON 2026-08-11)", () => {
+  it("key ABSENT: the band renders — this is what a first-run user actually gets", () => {
+    // The polarity flip is the whole point, so it is asserted from the state a fresh install is
+    // really in: nothing written to localStorage at all. A test that only ever sets the key
+    // explicitly would pass identically before and after the graduation and prove nothing.
     const c = renderHome({
       rooms: liveRooms,
       recs: [rec({ id: "safe-ok" })],
       isAppliable: () => true,
       onApplyBatch: async () => ({ applied: 0, skipped: [] }),
     }).container;
-    expect(c.querySelector(".home-console")).not.toBeNull(); // the console still mounts
-    expect(c.querySelector(".hc-intake")).toBeNull(); // …but the band stays dark
+    expect(localStorage.getItem("compy_home_intake")).toBeNull(); // nothing opted anything in
+    expect(c.querySelector(".home-console")).not.toBeNull();
+    expect(c.querySelector(".hc-intake")).not.toBeNull();
   });
 
-  it("key '0' (explicit off): still no band", () => {
+  it("key '0' (explicit off): no band — the Settings failsafe still works", () => {
+    // ship-approved-work-as-the-build graduates the DEFAULT; it never removes the escape hatch.
     localStorage.setItem("compy_home_intake", "0");
     const c = renderHome({ rooms: liveRooms }).container;
     expect(c.querySelector(".hc-intake")).toBeNull();
   });
 
-  it("key '1': the band renders", () => {
+  it("key '1' (explicit on): the band renders", () => {
     localStorage.setItem("compy_home_intake", "1");
     const c = renderHome({ rooms: liveRooms }).container;
     expect(c.querySelector(".hc-intake")).not.toBeNull();
+  });
+
+  it("only the literal string '0' turns it off, so a junk value fails ON", () => {
+    // Matches readMonitorConsole / readLivingInstrument / readSetupStepper: `!== "0"`. The failure
+    // mode worth pinning is a discoverability surface silently vanishing because something wrote
+    // "false" or "" into the key.
+    for (const junk of ["false", "", "no", "OFF"]) {
+      localStorage.setItem("compy_home_intake", junk);
+      const c = renderHome({ rooms: liveRooms }).container;
+      expect(c.querySelector(".hc-intake"), `value ${JSON.stringify(junk)}`).not.toBeNull();
+      cleanup();
+    }
   });
 });
 

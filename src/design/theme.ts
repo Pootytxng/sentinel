@@ -394,18 +394,26 @@ export function applyHomeConsole(on: boolean): void {
 // Home intake band (BACKLOG:916 — the pre-room intent router). Lifts the proven Lab
 // "What are you here to do?" symptom-router idiom UP one level to Home: an always-available
 // one-click safe fast-path (option C) + intent rows that route to the right ROOM (option A),
-// sitting above the Dock room-doors. NEW surface → DEFAULT OFF (opt-in, inverted polarity: ON
-// only when the key is literally "1"); flips on only once eyeballed + approved. Event mirrors the
-// home-console idiom so Settings toggles + the useHomeIntakeFlag hook stay in sync.
+// sitting above the Dock room-doors. Shipped DEFAULT OFF, GRADUATED to DEFAULT ON 2026-08-11 — ON
+// unless the key is literally "0", the same graduation the Setup & Tour stepper took above, with
+// Settings' explicit "0" surviving as the failsafe (test-pinned).
+//
+// It shipped OFF pending an eyeball, and both blockers on that eyeball are now gone: PR #93 fixed
+// the focus-ring/stacking defect in this exact band, and PR #94 renamed the Lab's "Black Box"
+// station to "Crash & Freeze" so the band's crash row lands somewhere a non-technical user reads as
+// the right place. The owner's reason for the work was a tester who could not find things ("not
+// inherently familiar or intuitive enough ... my biggest gripe"), and a discoverability surface that
+// is off by default fixes nothing for the only people it exists for. Event mirrors the home-console
+// idiom so Settings toggles + the useHomeIntakeFlag hook stay in sync.
 const HOME_INTAKE_KEY = "compy_home_intake";
 
 export function readHomeIntake(): boolean {
   try {
-    return localStorage.getItem(HOME_INTAKE_KEY) === "1";
+    return localStorage.getItem(HOME_INTAKE_KEY) !== "0";
   } catch {
-    /* ignore — default OFF */
+    /* ignore — default ON */
   }
-  return false;
+  return true;
 }
 
 export function applyHomeIntake(on: boolean): void {
