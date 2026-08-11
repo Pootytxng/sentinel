@@ -582,7 +582,7 @@
    lifted one level up to Home, routing to ROOMS instead of in-Lab stations. Wears the same
    cmp-glass grammar as the #1-limiter readout and the Lab router: token text only, no accent
    fills. The one-tap fast path (option C) sits on top, the intent rows (option A) below. Renders
-   only behind compy_home_intake (DEFAULT OFF) — absent entirely until the flag is on. ── */
+   behind compy_home_intake (DEFAULT ON since 2026-08-11) — absent entirely on an explicit "0". ── */
 :root[data-v2="on"] .hc-intake {
   display: flex;
   flex-direction: column;
