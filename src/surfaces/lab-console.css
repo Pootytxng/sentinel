@@ -98,6 +98,91 @@
   right: 22px;
 }
 
+/* ── Rig Evidence Map — what the selected subsystem reads right now. Same glass idiom as .lc-detail
+   below (one panel language in this room), but deliberately quieter: it is evidence the hologram
+   produced, not a station the user opened. Like .lc-detail it is EXCLUDED from the v2-lc-rise
+   entrance stagger at the bottom of this file — that stagger is the room arriving, and this panel
+   appears later, on a click. Re-running an entrance animation on a click reads as a glitch. ── */
+:root[data-v2="on"] .lc-evidence {
+  margin-top: 14px;
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  padding: 14px 20px 16px;
+}
+:root[data-v2="on"] .lc-evidence-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+:root[data-v2="on"] .lc-evidence-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ix-text-1);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+/* The part's own name, secondary — it answers "which thing did I just click", and the subsystem
+   above it answers "what am I reading". */
+:root[data-v2="on"] .lc-evidence-part {
+  font-size: 12px;
+  color: var(--ix-text-2);
+}
+:root[data-v2="on"] .lc-evidence-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px 24px;
+  margin: 12px 0 0;
+}
+:root[data-v2="on"] .lc-evidence-row dt {
+  font-size: 11px;
+  color: var(--ix-text-2);
+  letter-spacing: 0.04em;
+}
+:root[data-v2="on"] .lc-evidence-row dd {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 3px 0 0;
+}
+:root[data-v2="on"] .lc-evidence-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ix-text-1);
+  font-variant-numeric: tabular-nums;
+}
+:root[data-v2="on"] .lc-evidence-den {
+  font-size: 12px;
+  color: var(--ix-text-2);
+  font-variant-numeric: tabular-nums;
+}
+/* Proportion, not a grade. One neutral accent at every fill level — no colour-by-threshold, because
+   none of the app's audited thresholds (src/data/tuning-measure.ts) apply to these fields. */
+:root[data-v2="on"] .lc-evidence-bar {
+  flex: 1;
+  min-width: 40px;
+  height: 3px;
+  align-self: center;
+  border-radius: 999px;
+  background: var(--ix-glass-border);
+  overflow: hidden;
+}
+:root[data-v2="on"] .lc-evidence-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ix-accent);
+}
+/* An empty reading list is a real answer and is said in words. Same size as a reading label so it
+   never reads as an error state. */
+:root[data-v2="on"] .lc-evidence-empty {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ix-text-2);
+}
+
 /* ── Detail — the ONE open station (header + instrument body), same idiom as the deleted bento's
    detail panel. ── */
 :root[data-v2="on"] .lc-detail {

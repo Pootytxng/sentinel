@@ -120,7 +120,31 @@
     "unitFrames": "帧",
     "closeStationAriaLabel": "关闭站点",
     "close": "关闭",
-    "optimizeReassurance": "这一站可以一键应用你的安全优化组合——和这个房间里的每一项更改一样,均可完全撤销。"
+    "optimizeReassurance": "这一站可以一键应用你的安全优化组合——和这个房间里的每一项更改一样,均可完全撤销。",
+    "evidence": {
+      "subsystem": {
+        "cpu": "处理器",
+        "gpu": "显卡",
+        "memory": "内存",
+        "storage": "存储",
+        "display": "显示",
+        "network": "网络",
+        "audio": "音频",
+        "thermals": "散热",
+        "system": "系统"
+      },
+      "reading": {
+        "cores": "核心 · 线程",
+        "clock": "报告主频",
+        "vram": "显存",
+        "driver": "驱动版本",
+        "memory": "已使用",
+        "storage": "可用空间",
+        "capacity": "容量",
+        "refresh": "刷新率"
+      },
+      "empty": "这里没有可读数据——Compy 对这个部件没有自己的实测值,也不会凭空编造。"
+    }
   },
   "optimizeStation": {
     "gaugeAriaLabel": "{{total}} 项安全优化项中已开启 {{applied}} 项",
@@ -247,28 +271,6 @@
     "close": "关闭",
     "routerTitle": "你是来做什么的?",
     "routerSub": "选择最符合你情况的一条——它会为你打开下方对应的工具。",
-    "welcome": {
-      "benchmark": {
-        "term": "基准测试",
-        "gloss": "这项更改到底有没有起作用?"
-      },
-      "latency": {
-        "term": "延迟",
-        "gloss": "是什么拖慢了从鼠标到屏幕的这段路程?"
-      },
-      "tuning": {
-        "term": "调校",
-        "gloss": "你的 AMD 降压设置扛住了吗?"
-      },
-      "diagnostics": {
-        "term": "诊断",
-        "gloss": "Compy 读取到的这台主机的原始信息。"
-      },
-      "blackBox": {
-        "term": "崩溃与卡死",
-        "gloss": "什么崩溃了、什么卡死了——用大白话读懂 Windows 自己的记录。"
-      }
-    },
     "sections": {
       "benchmark": {
         "name": "基准测试",
@@ -294,19 +296,6 @@
       }
     },
     "latestReadingsLabel": "最新读数",
-    "readings": {
-      "baselineLabel": "基准",
-      "latencyLabel": "延迟",
-      "tuningLabel": "调校",
-      "blackBoxLabel": "崩溃与卡死",
-      "systemReportLabel": "系统报告",
-      "baselineSet": "已保存",
-      "latencyTimer": "计时器 {{ms}} 毫秒",
-      "latencyMsiOn": "MSI 开启 {{on}}",
-      "blackBoxNoneFound": "未发现",
-      "blackBoxRecorded": "{{n}} 条记录",
-      "systemReportCaptured": "已采集"
-    },
     "stationAriaLabel": "第 {{n}} 站",
     "contract": {
       "forLabel": "用途",

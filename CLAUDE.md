@@ -55,8 +55,8 @@ must be in context at all times:
 - **ONE MUTATION BOUNDARY (mechanical, 2026-08-03):** Compy changes Windows from
   `src-tauri/src/actions.rs` and **nowhere else** — snapshot → apply → verify → receipt → rollback.
   `src/mutation-boundary-guard.test.ts` fails the build on a registry write, service/task change,
-  power-plan switch or package removal anywhere else in `src-tauri/src`. Line-level escape
-  hatch for copy that merely NAMES a command: `mutation-boundary-allow` (greppable).
+  power-plan switch or package removal anywhere else in `src-tauri/src`. Line-level escape hatch for
+  copy that merely NAMES a command: `mutation-boundary-allow` (greppable).
 - **ZERO-BUDGET LAW:** every phase ships $0-first on free tiers; any spend is owner-gated with named
   payback + KPI trigger. **Paid ads: never before 1.0.** Every money phase defines ONE metric before
   build.
@@ -77,6 +77,13 @@ plan → TDD ceremony** for greenlit or clearly-scoped work: build → verify �
 batching questions to the end. A failed gate triggers repair, not owner escalation. Preserve every
 failed candidate before reset or abandonment. `AskUserQuestion` is for genuine forks in **owner
 territory** only; engineering forks you resolve yourself and record the reasoning.
+
+**Role specialization + proof order:** Claude Code is the default implementation owner; Codex is the
+default independent reviewer. Either may become the one active writer only by explicit handoff under
+`docs/WORK_CONTROL.md`, after inspecting inherited repo, remote, worktree, dirty-state, and process
+truth. Exact required gates cannot be substituted: extra checks are supplemental, and environment inability
+is a blocker, not a pass. Run `scripts/work-control-gate.mjs` before any proof-dependent GitHub state
+transition; when practical, the non-writing model gives the final independent review.
 
 **Owner-bound in this repo** (on top of the universal floor in `~/.claude/CLAUDE.md` §3):
 1. **Secrets / signing** — the Ed25519 private key or any secret never enters the repo / `.env*` / CI.

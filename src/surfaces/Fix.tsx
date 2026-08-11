@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
@@ -434,8 +434,16 @@ function CollapsibleSection({
   // re-baselines each section (open when expert, closed otherwise); the user can still toggle any
   // section freely afterward. Presentation-only: contents and controls are identical either way.
   const expert = useExpertView();
-  const [open, setOpen] = useState(!!defaultOpen || expert);
-  useEffect(() => setOpen(expert || !!defaultOpen), [expert, defaultOpen]);
+  const preferenceBaseline = expert || !!defaultOpen;
+  const [open, setOpen] = useState(preferenceBaseline);
+  const previousBaseline = useRef(preferenceBaseline);
+  useEffect(() => {
+    // Initial state already reflects the preference. Writing it again from the mount effect can
+    // race and overwrite the first click on a section that appears after an async probe.
+    if (previousBaseline.current === preferenceBaseline) return;
+    previousBaseline.current = preferenceBaseline;
+    setOpen(preferenceBaseline);
+  }, [preferenceBaseline]);
   return (
     <section className={`fix-group ${tint ? `fix-group-${tint}` : ""}`}>
       <button className="fix-group-head cmp-door" onClick={() => setOpen((o) => !o)} aria-expanded={open}>

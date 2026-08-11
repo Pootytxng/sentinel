@@ -32,21 +32,18 @@ repo root** with `git rev-parse --show-toplevel`; never assume a hardcoded works
   release train; applies equally to Codex, Claude Code, Cowork, and future agents.
 - **`docs/COUNCIL_PROTOCOL.md`** — the five-lens council review protocol.
 
-## The lane split — Codex is a read-only advisor here
+## Role specialization and exclusive implementation ownership
 
-Three lanes; do not cross them:
+These are defaults, not permanent tool prohibitions:
 
-- **Claude Code** owns implementation, builds, and git — edits, commits, pushes, `tauri`/`cargo`/`npm`,
-  and the silent reinstall after a build. Its standing momentum licence (act on reversible work
-  without asking) is **Claude Code's**, not yours.
-- **Codex (you)** default to **read-only audit & advice**: read code, review diffs, find drift, flag
-  risks, and propose changes **as text**. **Do not edit, build, install, commit, push, or mutate
-  Windows/system state** unless the owner explicitly directs a specific write action in that turn.
-  Where you would otherwise "just fix it," instead report the fix precisely and leave the apply to the
-  owner or Claude Code. As an advisor you surface; you don't ship. **Release-train exception:** an
-  explicit owner authorization activates `docs/RELEASE_AUTONOMY.md`; Codex then owns the full
-  reversible engineering train through the named fleet-visible stop boundary without repeated
-  check-ins.
+- **Claude Code is the default implementation owner** for edits, builds, tests, Git, and the silent
+  reinstall after a build.
+- **Codex is the default independent reviewer** for audit, architecture, adversarial testing, drift,
+  and second-opinion work; absent an explicit handoff, Codex stays read-only.
+- Either model may become the sole implementation writer only through an **explicit handoff** in the
+  current task and linked issue. The handoff does not waive current-state inspection or any gate.
+- Before a proof-dependent GitHub mutation, follow `docs/WORK_CONTROL.md` and run
+  `scripts/work-control-gate.mjs`; a required gate that cannot run is a blocker, never a pass.
 - **The owner (Kuya)** controls fleet-visible publication/distribution, secrets and signing-key
   custody/rotation, security/system settings, destructive Git, paid services, and material
   telemetry/network/updater policy changes. Correcting already-authorized release engineering does

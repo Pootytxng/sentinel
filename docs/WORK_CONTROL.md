@@ -51,9 +51,10 @@ Do not maintain a second status board in Markdown, chat, a VS Code note, or anot
 
 ## Roles
 
-- **Claude Code** owns implementation, builds, tests, Git, and Compy's silent reinstall.
-- **Codex** is a **second opinion and an auditor — advisory only, with no jurisdiction over building
-  or decisions** (owner, 2026-08-11: *"codex has no jurisdiction when it comes to building or
+- **Claude Code is the default implementation owner** — implementation, builds, tests, Git, and
+  Compy's silent reinstall.
+- **Codex is the default independent reviewer**, and it is a **second opinion and an auditor —
+  advisory only, with no jurisdiction over building or decisions** (owner, 2026-08-11: *"codex has no jurisdiction when it comes to building or
   decisions i simply use it for a 2nd opinion and some audits"*). Read-only audit, research, planning
   and independent verification. **Never wait on it.** A Codex verdict, handoff or unfinished review
   is input to weigh, never a blocker and never a reason to leave work unstarted; its findings are
@@ -65,6 +66,36 @@ Do not maintain a second status board in Markdown, chat, a VS Code note, or anot
   irreversible choices. Aesthetic taste is not on that list — agents decide it and show him.
 
 A tool name is not an ownership claim. Ownership belongs to one issue and one bounded scope.
+
+### Role handoff and proof order
+
+Role specialization is a default, not a permanent prohibition. Either Claude Code or Codex may take
+implementation ownership only through an **explicit handoff** in the current task and linked issue,
+and then there is **one active implementation writer per scope**. The other model stays non-writing.
+
+The incoming writer must inspect the current repository, remote PR/issue state, exact worktree and
+branch, dirty state, and relevant live processes before touching inherited work. Old handoffs and
+matching-looking trees are context, never proof of current state.
+
+Exact required gates cannot be substituted. A narrower, filtered, or alternative check is supplemental
+evidence only. If the exact required gate cannot run, **environment inability is a blocker, not a
+pass**: preserve the work, record the blocker, and do not perform a transition whose authority depends
+on that proof.
+
+A **proof-dependent GitHub transition** — including marking a PR ready, closing a superseded PR,
+merging, closing the issue, or marking the Project item Done — happens only after every named gate has
+passed at the exact current head. Before that mutation, save the claim, head, exact commands/results,
+and review disposition as a JSON receipt, then run:
+
+```text
+node scripts/work-control-gate.mjs <receipt.json>
+```
+
+Only `PASS` authorizes the transition. `BLOCKED` is the state, not permission to reinterpret a failed
+or unavailable gate. Opening an explicitly blocked draft is allowed because it does not claim
+readiness. The **non-writing model performs the final independent review whenever practical**; if
+that is genuinely impossible, the receipt names why and the handoff labels the review
+unverified rather than silently self-approving.
 
 ### What "gate" means (clarified 2026-08-03)
 
