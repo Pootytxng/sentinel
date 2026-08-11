@@ -283,9 +283,17 @@ describe("Check — V2-4b stacked-summary suppression", () => {
     expect(document.querySelector(".check-sub")).toBeNull();
   });
 
+  // findByRole recomputes the whole accessibility tree on every retry, and blew past testing
+  // -library's 1s default under a loaded parallel run — this single test failed an otherwise green
+  // pre-push gate on 2026-08-11 while passing in isolation. A flaky gate is worse than a slow one:
+  // it teaches you to reach for --no-verify. The label is reached by findByText here, exactly as
+  // the sibling tests above already do, and closest("button") keeps the claim this test is named
+  // for — the toggle is still a real button, not a bare span.
   it("expanding 'All N checks' still works with the sub gone (chrome intact)", async () => {
     mountCheck({ v2Ia: true });
-    fireEvent.click(await screen.findByRole("button", { name: /All 1 checks/ }));
+    const toggle = (await screen.findByText(/All 1 checks/)).closest("button");
+    if (!toggle) throw new Error("'All N checks' is no longer inside a button — the chrome is gone");
+    fireEvent.click(toggle);
     expect(screen.getByText("SSD check")).toBeTruthy();
   });
 });
