@@ -1,0 +1,6 @@
+#!/bin/sh
+# Run the free local verification gate before anything is pushed.
+set -eu
+
+repo="$(git -c safe.directory="$PWD" rev-parse --show-toplevel)"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$repo/scripts/verify-local.ps1"

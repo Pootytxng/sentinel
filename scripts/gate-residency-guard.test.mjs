@@ -43,6 +43,7 @@ const code = (text) =>
 //   npm-script        an npm script entry point; `npm test` does not exercise it
 //   release           invoked by `runner` during a release; `staticGuard` pins it into that runner
 //   release-entry     a human types this one; `staticGuard` pins its contents so checks cannot vanish
+//   push-gate         .githooks/pre-push runs it before every push; `staticGuard` pins its contents
 //   scheduled         a Windows scheduled task runs it
 //   manual            a tool, not a gate — nothing to keep resident
 // `why` is required for everything that is NOT resident in `npm test`, because "nobody runs this"
@@ -151,6 +152,10 @@ const RESIDENCY = {
     kind: "npm-script",
     why: "The runner of `npm test` itself. It cannot be resident inside the suite it starts.",
   },
+  "setup-local-ci.ps1": {
+    kind: "manual",
+    why: "One-time wiring: points git's core.hooksPath at .githooks so the pre-push gate goes live in a checkout. A test must not run it, because reconfiguring the developer's repository as a side effect of `npm test` is exactly the kind of surprise nobody consents to.",
+  },
   "ship-reinstall.ps1": {
     kind: "release-entry",
     staticGuard: "scripts/release-pipeline-guard.test.mjs",
@@ -169,6 +174,11 @@ const RESIDENCY = {
   "usage-audit.mjs": {
     kind: "scheduled",
     why: "The CompyUsageAudit Windows task runs it Mondays and writes docs/usage-audit/LATEST.md. It reads session transcripts outside the repo, so a commit cannot change its answer.",
+  },
+  "verify-local.ps1": {
+    kind: "push-gate",
+    staticGuard: "scripts/local-gate-guard.test.mjs",
+    why: "The everyday pre-push gate that replaced hosted CI on 2026-08-10, after the free Actions allowance was exhausted a second time. It RUNS `npm test`, so it can never be resident inside the suite it starts; its contents are pinned against ci.yml's own steps instead.",
   },
   "verify-module-map.mjs": { kind: "npm-test", runner: "scripts/verify-module-map-guard.test.mjs" },
   "verify-release-state.mjs": {
@@ -241,14 +251,14 @@ describe("each declared runner is real, and names what it claims to run", () => 
     expect(broken).toEqual([]);
   });
 
-  it("resolves every release runner and static guard, with the call site in code rather than a comment", () => {
+  it("resolves every release/push-gate runner and static guard, with the call site in code rather than a comment", () => {
     const broken = [];
     for (const [name, entry] of Object.entries(RESIDENCY)) {
       if (entry.kind === "release") {
         if (!exists(entry.runner)) broken.push(`${name}: runner ${entry.runner} missing`);
         else if (!code(read(entry.runner)).includes(name)) broken.push(`${name}: ${entry.runner} does not invoke it`);
       }
-      if (entry.kind === "release" || entry.kind === "release-entry") {
+      if (entry.kind === "release" || entry.kind === "release-entry" || entry.kind === "push-gate") {
         if (!exists(entry.staticGuard)) broken.push(`${name}: staticGuard ${entry.staticGuard} missing`);
         else if (!read(entry.staticGuard).includes(name)) broken.push(`${name}: ${entry.staticGuard} does not pin it`);
       }
@@ -277,7 +287,7 @@ describe("not being resident is a decision, not an oversight", () => {
   });
 
   it("uses only the kinds this file knows how to check", () => {
-    const kinds = new Set(["npm-test", "npm-script", "release", "release-entry", "scheduled", "manual"]);
+    const kinds = new Set(["npm-test", "npm-script", "release", "release-entry", "push-gate", "scheduled", "manual"]);
     const unknown = Object.entries(RESIDENCY)
       .filter(([, e]) => !kinds.has(e.kind))
       .map(([name, e]) => `${name}: ${e.kind}`);
