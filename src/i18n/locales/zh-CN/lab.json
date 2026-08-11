@@ -247,28 +247,6 @@
     "close": "关闭",
     "routerTitle": "你是来做什么的?",
     "routerSub": "选择最符合你情况的一条——它会为你打开下方对应的工具。",
-    "welcome": {
-      "benchmark": {
-        "term": "基准测试",
-        "gloss": "这项更改到底有没有起作用?"
-      },
-      "latency": {
-        "term": "延迟",
-        "gloss": "是什么拖慢了从鼠标到屏幕的这段路程?"
-      },
-      "tuning": {
-        "term": "调校",
-        "gloss": "你的 AMD 降压设置扛住了吗?"
-      },
-      "diagnostics": {
-        "term": "诊断",
-        "gloss": "Compy 读取到的这台主机的原始信息。"
-      },
-      "blackBox": {
-        "term": "崩溃与卡死",
-        "gloss": "什么崩溃了、什么卡死了——用大白话读懂 Windows 自己的记录。"
-      }
-    },
     "sections": {
       "benchmark": {
         "name": "基准测试",
@@ -294,19 +272,6 @@
       }
     },
     "latestReadingsLabel": "最新读数",
-    "readings": {
-      "baselineLabel": "基准",
-      "latencyLabel": "延迟",
-      "tuningLabel": "调校",
-      "blackBoxLabel": "崩溃与卡死",
-      "systemReportLabel": "系统报告",
-      "baselineSet": "已保存",
-      "latencyTimer": "计时器 {{ms}} 毫秒",
-      "latencyMsiOn": "MSI 开启 {{on}}",
-      "blackBoxNoneFound": "未发现",
-      "blackBoxRecorded": "{{n}} 条记录",
-      "systemReportCaptured": "已采集"
-    },
     "stationAriaLabel": "第 {{n}} 站",
     "contract": {
       "forLabel": "用途",
