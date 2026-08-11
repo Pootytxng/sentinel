@@ -15,6 +15,7 @@
 // build must not be one `npm install` away from being unable to run.
 
 import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -133,9 +134,90 @@ describe("the gate is wired to something that runs it", () => {
     expect(psCode(setup)).toMatch(/\.githooks/);
   });
 
+  it("pre-flights core.bare before spending four minutes on the gate", () => {
+    expect(hook).toMatch(/core\.bare/);
+  });
+
+  it("scrubs git's hook environment before running anything", () => {
+    // bug->guard, 2026-08-11, and the bug was this hook's own. Git exports GIT_DIR to every hook and
+    // every descendant inherits it. The gate's first step is `npm test`, and this suite builds REAL
+    // git fixtures -- `git init --bare`, `git worktree add`, `git checkout main` against temp dirs.
+    // Those all take GIT_DIR over their own cwd and arguments, so under the hook they retargeted the
+    // developer's actual repository: core.bare=true written into the real .git/config, and the real
+    // worktree checked out onto main with its work staged. Three times in one session.
+    //
+    // The variables asserted here are the ones that redirect WHICH repo a command acts on or WHERE
+    // it writes. Anything less than all of them leaves a hole of exactly the same shape.
+    const scrub = hook.split(/\r?\n/).filter((line) => !line.trimStart().startsWith("#")).join("\n");
+    for (const varName of [
+      "GIT_DIR",
+      "GIT_WORK_TREE",
+      "GIT_COMMON_DIR",
+      "GIT_INDEX_FILE",
+      "GIT_OBJECT_DIRECTORY",
+      "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+      "GIT_QUARANTINE_PATH",
+    ]) {
+      expect(scrub, `pre-push must unset ${varName} before invoking the gate`).toContain(varName);
+    }
+    expect(scrub).toMatch(/^unset /m);
+
+    // Order is load-bearing: the repo root has to be resolved while the hook environment is still
+    // intact, and the gate has to be invoked after it is gone.
+    expect(scrub.indexOf("--show-toplevel")).toBeLessThan(scrub.indexOf("unset "));
+    expect(scrub.indexOf("unset ")).toBeLessThan(scrub.indexOf("verify-local.ps1"));
+  });
+
   it("keeps the hook bypassable only on purpose", () => {
     // `git push --no-verify` exists and always will. What must not exist is a hook that passes by
     // accident: the shell script has to stop on the first error rather than run on.
     expect(hook).toMatch(/set -e/);
+  });
+});
+
+describe("the checkout the gate runs in is one git will actually operate on", () => {
+  // bug->guard, 2026-08-11. `core.bare = true` appeared three times in one session in the SHARED
+  // .git/config. Git then refuses every work-tree operation repo-wide -- main checkout and all ~12
+  // worktrees at once -- and each time the acting worktree also came back on `main`.
+  //
+  // The emitter WAS this repo's own pre-push hook leaking GIT_DIR into the test suite; that is fixed
+  // at the source in .githooks/pre-push and pinned by the scrub test above. This detector stays
+  // anyway, for two reasons. A corrupted .git/config is worth catching however it got that way --
+  // the very first occurrence followed `gh pr merge --squash --delete-branch` failing its local
+  // branch deletion, a path that has nothing to do with hooks (which is why that flag is now
+  // banned). And the diagnosis only became possible once something asserted the condition by name:
+  // the run that finally isolated it was the one where this test went red instead of the seven
+  // unrelated files that had been going red for two cycles.
+  //
+  // What makes it worth a guard rather than a note: it is silent and it lies. `git worktree list`
+  // and the .git pointer files all look correct, so it reads as worktree damage. Downstream it
+  // surfaces as a scatter of unrelated red: tools/entry/tracked-hooks.test.mjs claimed
+  // `.claude/settings.local.json` was no longer gitignored, when .gitignore contained it all along
+  // and `git check-ignore` was simply exiting 128. Every one of those failures names the wrong
+  // thing. This one names the right thing, and carries its repair (flags-name-it-and-fix-it-inline).
+  //
+  // DO NOT re-prove this by toggling core.bare on. It was proven RED once, deliberately, on
+  // 2026-08-11 and the assertion message below is that run's actual output. Every time core.bare
+  // went true here, the acting worktree also came back on `main` with its work staged -- which is
+  // how a `git reset --hard` once landed on local main instead of a feature branch. The repair is
+  // `git checkout <branch>`, but the cheap way to keep it is to not run the experiment.
+  const git = (...args) => {
+    try {
+      return execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
+    } catch {
+      return "";
+    }
+  };
+
+  it("is not marked bare", () => {
+    expect(
+      git("config", "--get", "core.bare"),
+      "core.bare is true in the shared .git/config, so git refuses every work-tree operation here " +
+        "and in every other worktree. Repair with:  git config core.bare false",
+    ).not.toBe("true");
+  });
+
+  it("can answer work-tree questions, which half the repo's guards shell out to ask", () => {
+    expect(git("rev-parse", "--is-inside-work-tree")).toBe("true");
   });
 });

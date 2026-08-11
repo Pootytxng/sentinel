@@ -2,5 +2,45 @@
 # Run the free local verification gate before anything is pushed.
 set -eu
 
+# Pre-flight, 1 second, before the 4-minute gate. A stray `core.bare = true` in the SHARED
+# .git/config makes git refuse every work-tree operation in the main checkout AND all ~12 worktrees
+# at once. It surfaces as a scatter of unrelated test failures (anything shelling out to
+# `git check-ignore`, `git ls-files`, ...), four minutes in, naming everything except the cause.
+# The scrub below removes the one known cause; this stays as the detector, because a corrupted
+# .git/config is worth catching however it got that way.
+if [ "$(git config --get core.bare || echo false)" = "true" ]; then
+  echo "pre-push: .git/config has core.bare=true. Git will refuse every work-tree operation," >&2
+  echo "pre-push: in this checkout and in every other worktree sharing this .git." >&2
+  echo "pre-push: repair with:  git config core.bare false" >&2
+  exit 1
+fi
+
 repo="$(git -c safe.directory="$PWD" rev-parse --show-toplevel)"
+
+# ---------------------------------------------------------------------------------------------
+# Scrub git's hook environment before handing off. This is not hygiene, it is the fix to a bug
+# this hook CAUSED -- three times on 2026-08-11, each time corrupting the repo it exists to protect.
+#
+# Git exports GIT_DIR (and friends) to every hook, and they are inherited by every descendant. The
+# gate's first step is `npm test`, and this repo's test suite builds REAL git fixtures -- tools/entry
+# alone runs `git init --bare`, `git worktree add`, and `git checkout main` against temp directories.
+# Those commands take GIT_DIR over their own cwd and argument. So under the hook, and ONLY under the
+# hook, every one of them retargets the developer's actual repository: `git init --bare <tmp>` writes
+# core.bare=true into the REAL .git/config, and a fixture's `git checkout main` moves the REAL
+# worktree onto main with its work left staged.
+#
+# The tell was that `npm test` was green standing alone and failed 8-10 files from inside the hook,
+# with an unmistakable "77 skipped" instead of 3. Confirmed by pointing GIT_DIR at a throwaway repo
+# and re-running the suite: the identical failure set reproduced, and the damage landed in the
+# throwaway. scripts/local-gate-guard.test.mjs pins this scrub so it cannot be dropped.
+#
+# GIT_DIR/GIT_WORK_TREE/GIT_COMMON_DIR/GIT_NAMESPACE redirect which repo a command acts on;
+# GIT_INDEX_FILE/GIT_OBJECT_DIRECTORY/GIT_ALTERNATE_OBJECT_DIRECTORIES/GIT_QUARANTINE_PATH redirect
+# where it writes; GIT_PREFIX/GIT_REFLOG_ACTION merely mislead. `repo` is captured above, first,
+# while the hook environment is still intact.
+# ---------------------------------------------------------------------------------------------
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_NAMESPACE \
+      GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_QUARANTINE_PATH \
+      GIT_PREFIX GIT_REFLOG_ACTION 2>/dev/null || true
+
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$repo/scripts/verify-local.ps1"
