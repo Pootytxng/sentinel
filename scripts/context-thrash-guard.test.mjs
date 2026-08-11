@@ -12,6 +12,7 @@ import { appendFileSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { THRASH_LIMITS, appendSeries, describeThrash, detectThrash } from "./lib/context-thrash.mjs";
@@ -24,8 +25,14 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const HOOK = join(ROOT, ".claude", "hooks", "context-size-advisor.mjs");
 
 let seq = 0;
-/** Unique per call: the hook keeps per-session markers in tmpdir, which outlive a single test run. */
-const freshSession = () => `test-${process.pid}-${++seq}`;
+/**
+ * Unique per call AND per run: the hook keeps per-session markers in tmpdir keyed by session id, and
+ * those files outlive the run. `pid-seq` alone is NOT unique — Windows recycles pids, so a later run
+ * can inherit an earlier run's thrash series and fire early (or stay silent because the earlier run
+ * already tripped the once-per-session marker). Measured 2026-08-11: a full-suite gate run failed two
+ * assertions here against 1,389 leftover marker files, while the same file passed in isolation.
+ */
+const freshSession = () => `test-${process.pid}-${randomUUID()}-${++seq}`;
 
 /**
  * Drive the hook turn by turn against a synthetic transcript, exactly as the Stop event does.

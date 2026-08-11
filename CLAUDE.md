@@ -1,9 +1,9 @@
 # CLAUDE.md — Compy project brief & resume point
 
-<!-- SIZE + LAW BUDGET. Auto-loads on EVERY session boot in this repo, so every byte is paid forever.
+<!-- SIZE + LAW BUDGET. Auto-loads on EVERY session boot, so every byte is paid forever.
      `src/claude-md-laws-guard.test.ts` fails the build on a dropped law marker, a byte-budget breach
-     or a dead pointer, and its header carries the full trim history. Add project LAWS here; put
-     anything narrative, historical or explanatory in docs/ and link it. -->
+     or a dead pointer, and its header carries the trim history. Add project LAWS here; put anything
+     narrative, historical or explanatory in docs/ and link it. -->
 
 > **Auto-loads into every Claude Code session rooted in this repo** — durable, in-git, portable.
 > Fresh session: read this, then `docs/RELEASE_STATE.md` (live gate state) + `docs/BACKLOG.md` (next).
@@ -16,8 +16,7 @@
 > **📍 LIVE GATE STATE → `docs/RELEASE_STATE.md` is authoritative.** Single current-truth matrix for
 > every gate, artifact, and release blocker (each row carries a `file:line`). **Where any older text
 > in this file or any other doc disagrees about *current* gate state, RELEASE_STATE.md wins.** Deep
-> legacy strata live in `docs/CHANGELOG.md` and are point-in-time records. Gaming Mode is LIVE (field
-> QA 10/10, owner signed off 2026-07-14 — GAMING_MODE_QA.md); service-suspend + debloat are ARMED.
+> legacy strata live in `docs/CHANGELOG.md` and are point-in-time records.
 
 > **RENAMED Sentinel → Compy (2026-06-04).** `gg.compy.app` · `compy.exe` · crate `compy`/`compy_lib`
 > · `%APPDATA%\Compy` · `compy.gg`. First launch COPY-migrates `%APPDATA%\Sentinel` → `%APPDATA%\Compy`
@@ -26,12 +25,13 @@
 
 ## What Compy is
 
-An all-in-one PC optimization & **safety** dashboard for the everyday, **non-technical gamer** (not
-sysadmins). Positioned as *"a rollback-first Windows configuration safety layer that happens to
-optimize."* Core differentiator: **hardware-aware, per-rig** recommendations — it reads the actual PC
-and tailors safe settings to it, instead of generic YouTube/Reddit "best tweaks" that break things.
-UX promise: plain-English "for YOUR hardware" framing, safe + reversible by default, rollback over
-raw control. No jargon, no regkey dumps. **Never invent or assume hardware specs.**
+Compy is the **PC doctor for everyday, non-technical Windows gamers**: the first place a user goes
+after a crash, freeze, slowdown, or unexplained hiccup. It gathers local evidence, explains what is
+known versus only suspected, and guides the safest next test or recovery. Optimization remains a
+major specialty, but it is secondary to diagnosis and recovery. The durable engineering identity is
+still *"a rollback-first Windows configuration safety layer that happens to optimize."* UX stays
+plain-English, hardware-aware, safe + reversible by default. **Never invent or assume hardware
+specs.**
 
 ## 💰 Receipts Doctrine — canonical: `docs/RECEIPTS_DOCTRINE.md`
 
@@ -39,17 +39,18 @@ Compy's mission includes generating real income for the owner. **Read the doctri
 gates and KPIs; where older product-direction text conflicts, the doctrine wins.** The parts that
 must be in context at all times:
 
-- **Identity:** "the measurement brand that proves everything — and gets paid when the proof says
-  'buy a GPU.'" Free app = trust engine + funnel. Money stack build order and KPIs: doctrine doc.
+- **Identity:** Compy Care is the primary product: *"the PC doctor that explains what happened,
+  what likely contributed, and what to do next."* Optimization/proving is the second specialty.
+  Measurement remains the trust engine; money stack build order and KPIs: doctrine doc.
 - **Honest-measurement law (REFRAMED):** **never fabricate, never claim unmeasured — and amplify
   measured wins loudly.** "Never promise" was a vow of silence and is retired, as is the "your PC is
   probably fine" defensive copy.
-- **Outbound:** no-telemetry absolutism is RETIRED — Receipts telemetry is opt-in, default-OFF, and a
-  NEW outbound boundary (own spec + security review + owner sign-off before ship).
-  The zero-outbound claim is retired too <!-- outbound-claim-allow -->: the signed update check has
-  been live since 2026-07-22 (`tauri.conf.json` `plugins.updater.endpoints`), switchable off in
-  Settings → About. **Never write an absolute offline claim:**
-  `src/outbound-claim-guard.test.ts` fails the build on one.
+- **Outbound + Capability Exception Gate (owner decision 2026-08-09):** zero-outbound absolutism <!-- outbound-claim-allow -->
+  is retired; the signed updater is live. New capabilities stay local/user-mode by default and cross
+  a boundary only through a named, reviewed exception. Outbound has three distinct tiers: **Tier 1
+  signed advisory download / no machine-data upload; Tier 2 opt-in scrubbed incident fingerprint;
+  Tier 3 explicit per-case evidence upload.** Never merge their consent or transport. Receipts stays
+  default-OFF; `src/outbound-claim-guard.test.ts` rejects absolute offline claims.
 - **ONE MUTATION BOUNDARY (mechanical, 2026-08-03):** Compy changes Windows from
   `src-tauri/src/actions.rs` and **nowhere else** — snapshot → apply → verify → receipt → rollback.
   `src/mutation-boundary-guard.test.ts` fails the build on a registry write, service/task change,
@@ -58,9 +59,10 @@ must be in context at all times:
 - **ZERO-BUDGET LAW:** every phase ships $0-first on free tiers; any spend is owner-gated with named
   payback + KPI trigger. **Paid ads: never before 1.0.** Every money phase defines ONE metric before
   build.
-- **UNTOUCHABLE (business-critical):** rollback-first · no fabricated claims · no kernel
-  driver/injection · the tweak rails · signed-remote-rules triple gate · every LOCKED rule below.
-  One Reddit thread of brand damage kills the funnel — **the gates ARE the moat.**
+- **UNTOUCHABLE (business-critical):** rollback-first · no fabricated claims · no third-party
+  game/process injection · the Capability Exception Gate · the tweak rails · signed-remote-rules
+  triple gate · every LOCKED rule below. One Reddit thread of brand damage kills the funnel —
+  **the gates ARE the moat.**
 - **Council oversight:** `docs/COUNCIL_PROTOCOL.md` — five-lens council (Contrarian · First-Principles
   · Expansionist · Outsider · Executor). 6-line COUNCIL STRIP closes every marathon log + Cowork
   audit; full council at money gates and on the owner's "council it." Advises, never overrides.
@@ -119,22 +121,22 @@ restore is. **Diagnose elevation behavior with read-only probes only** (read the
 token integrity level, time a hands-off elevation, read the ledger); if a setting genuinely must
 change to proceed, that is a welfare-check, full stop. Mirrored in `docs/COWORK_HANDOFF.md`.
 
-**Precedent (2026-06-10):** a session flipped `ConsentPromptBehaviorAdmin` 5→2 to diagnose, restored
-it, and its own safety layer auto-switched mid-work: **treat a model auto-switch on
-security-sensitive work as a STOP signal** — halt and involve the owner.
+**Precedent (2026-06-10):** a session flipped `ConsentPromptBehaviorAdmin` to diagnose and its own
+safety layer auto-switched mid-work: **treat a model auto-switch on security-sensitive work as a
+STOP signal** — halt and involve the owner.
 
 ### Reports, subagents, self-review
 
 - **PLAIN + SHORT TO THE OWNER (owner decree 2026-08-11, standing).** Every reply to him is as short,
   simple and plain-English as the content allows — no jargon, no walls, no tables he didn't ask for.
   Lead with what happened and what he must do; detail goes in the commit/PR, not the chat. He asked
-  for this globally: mirror it into `~/.claude/CLAUDE.md` on any machine where that file is reachable
-  (a cloud container's copy is ephemeral and does NOT count). This line is the in-git backstop.
+  for this globally: mirror it into `~/.claude/CLAUDE.md` wherever reachable (a cloud container's
+  copy is ephemeral and does NOT count). This line is the in-git backstop.
 - **End every session with a HANDOFF BLOCK** — a paste-ready prompt for the next session, plus one
   line saying whether this session is done (archive / delete / leave open).
 - **Terse reports** (chat is pasted into Cowork, so verbosity bills twice): commit hash(es) · 1–2 line
-  what-changed · **one** verification line (cargo/npm/clippy/tsc/security) · flags / owner-decisions.
-  Mechanism and design detail go in the commit message + spec. Cite `path#section`, don't restate docs.
+  what-changed · **one** verification line (cargo/npm/clippy/tsc) · flags / owner-decisions. Mechanism
+  and design detail go in the commit message + spec. Cite `path#section`, don't restate docs.
 - **Subagent routing:** `.claude/settings.json` sets `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` — **the
   setting is the guard, do not add per-session routing instructions.** Pin a stronger `model:` in
   agent frontmatter only where adversarial judgment is provably the point. Cowork lane: always set
@@ -143,8 +145,8 @@ security-sensitive work as a STOP signal** — halt and involve the owner.
 - **SELF-REVIEW before claiming ANY UI change done (standing LAW, 2026-06-20).** Run the `self-review`
   project skill — a forced, evidence-required rubric. Green tsc/vitest are NOT a visual review.
   Execution belongs in the `.claude/agents/self-reviewer.md` subagent; **never capture or cdp-eval
-  inline in the orchestrator** (inline review was once 64% of weekly tokens). No done-claim without a
-  quoted PASS verdict. Memory: [[always-self-review-visual-work]].
+  inline in the orchestrator**. No done-claim without a quoted PASS verdict.
+  Memory: [[always-self-review-visual-work]].
 - **`bug → guard` (LAW):** every defect the owner catches becomes a permanent guard *before the fix
   counts* — a vitest/cargo test if mechanizable, else a `self-review` rubric item. Tiers: automated
   guard > forced rubric item > memory > prose. Memory: [[bug-becomes-guard]].
@@ -161,10 +163,9 @@ on his Desktop. After **any** `npm run tauri build`, immediately run **`scripts/
 (stop running compy → delete all Desktop installers → stage ONLY the new NSIS → silent `/S` install →
 launch). Then **verify live == build via the build STAMP** (`get_build_stamp` over a CDP port →
 `"<commit> · release"`), **not an exe hash** — the installed exe is not byte-identical to
-`target/release/compy.exe` (NSIS packaging). Report as *"your live app is now `<commit>`, one
+`target/release/compy.exe` (NSIS packaging). Report it as *"your live app is now `<commit>`, one
 installer on the Desktop, nothing for you to do."* His ONLY job is verification (does it feel right).
-A `ship-reminder` PostToolUse hook nudges this after any `tauri build`. Memory:
-[[silent-reinstall-is-my-job]].
+A `ship-reminder` PostToolUse hook nudges this after any `tauri build`.
 
 ## Stack & where things live
 
@@ -181,13 +182,12 @@ A `ship-reminder` PostToolUse hook nudges this after any `tauri build`. Memory:
 ### Rust module map (`lib.rs` carved into safety-boundary modules)
 
 Complete as of 2026-08-04 (45 `.rs` files; line counts drift, treat as rough). **Mutation/rollback +
-gate-relevant modules are starred ★ — scope any mutation-gate change against these first**, which is
-why they live in the always-loaded half. The **read-only remainder** (hardware/sensors,
-monitoring/FPS, benchmark/Lab, advisory/ranking/export, intelligence/measurement) is in
-**`src-tauri/CLAUDE.md`**, which auto-loads only when work touches `src-tauri/`. **Mechanically
-verified — run `node scripts/verify-module-map.mjs` before trusting either half;** it reads both
-together and fails on a missing module, a ghost, a wrong file count, a module declared in both
-halves, an unstarred module that writes Windows state, or a delegated half that has gone missing.
+gate-relevant modules are starred ★ — scope any mutation-gate change against these first.** The
+read-only remainder (hardware/sensors, monitoring/FPS, benchmark/Lab, advisory/ranking/export,
+intelligence/measurement) lives in **`src-tauri/CLAUDE.md`**, which auto-loads only when work touches
+`src-tauri/`. **Mechanically verified — run `node scripts/verify-module-map.mjs` before trusting
+either half;** it fails on a missing or ghost module, a wrong file count, a module declared in both
+halves, an unstarred mutator, or a delegated half that has gone missing.
 
 **Core wiring & entry**
 - `main.rs` — argv router: `--fps-capture` → headless ETW helper (`run_fps_capture`); `--run-elevated <hex>` → elevated-PowerShell child (elevation boundary, owner territory); else `run()`. Runs BEFORE any window.
@@ -208,17 +208,17 @@ halves, an unstarred module that writes Windows state, or a delegated half that 
 
 ## LOCKED safety rules — do not cross without an explicit product-owner decision
 
-1. **No kernel driver.** Compy ships no driver of its own — the anti-cheat-safe / no-driver fundamental (do not re-investigate a Compy-shipped driver). Consequence: **Compy never reads CPU die temperature *itself*** — real die temp needs ring-0 MSR access, i.e. a driver (every tool that shows it ships one; the common WinRing0 is on Microsoft's vulnerable-driver blocklist and trips anti-cheat), so we will not. It DOES **display** a CPU temp when a monitor the user already runs is publishing one — HWiNFO's shared-memory block or the LibreHardwareMonitor / OpenHardwareMonitor WMI namespaces, read-only interop (`cpu_temp.rs`); when nothing is publishing, temp stays **unavailable/unknown, never fabricated**. The *lock* is "no Compy driver," not "temp is unshowable." GPU temp is fine (vendor SDK).
-2. **No game injection.** Anti-cheat-safe. FPS/frametime via ETW (DXGI present events) in an elevated helper; GPU sensors via vendor libs (AMD ADLX / NVIDIA NVML). Overlay only draws over borderless/windowed, never exclusive fullscreen.
+1. **Capability Exception Gate (owner decision 2026-08-09).** Default remains local, user-mode, least-privilege and non-invasive. An exception must be named and capability-specific, prove the outcome cannot be reached by a lower-risk path, and define exact privilege/data surface, consent, rollback/uninstall, signing/update, kill switch, staged proof, independent security + anti-cheat review, abort metrics and owner sign-off; full record in `docs/ARCHITECTURE_LOCKS.md` §1.8. A Compy driver is no longer categorically forbidden, but **the current build ships no driver** and no driver may be built before its own approved record. No vulnerable third-party driver and no generic physical-memory/MSR/PCI/device-register access. CPU temp remains external-monitor-only unless a separately approved driver capability ships; unavailable stays unknown, never fabricated.
+2. **No third-party game/process injection.** This remains absolute: no DLL injection, game-memory access, runtime hooks, or code inside a game/anti-cheat process. FPS/frametime stays external ETW; sensors use documented Windows/vendor interfaces. Overlay draws over borderless/windowed, never exclusive fullscreen.
 3. **Rollback-first integrity.** Apply captures the full typed rollback contract + snapshot **at apply time**; rollback resolves from `history.json` ALONE (never the live catalog), so a removed/deprecated rec stays undoable. **Never apply a change you can't roll back.**
-4. **Signed remote rules — triple-gated OFF.** Real Ed25519 verify is wired (`ed25519-compact`), but remote fetch stays disabled (placeholder all-zeros pubkey, `remote_fetch_enabled()==false`, no CDN URL) until production signing + CDN + staged rollout exist. **The Ed25519 private key NEVER lives in the repo** (not commits, `.env*`, CI, or unencrypted home). **Unsigned remote rules must never ship, even in beta.**
+4. **Signed remote rules — triple-gated OFF.** Privileged remote mutation policy remains disabled (placeholder key, `remote_fetch_enabled()==false`, no CDN URL). **Unsigned remote rules must never ship, even in beta.** The Ed25519 private key NEVER lives in the repo. **Case intelligence is not remote rules:** Tier 1 uses a separate key, schema, domain, cache and hard-false runtime gate; it downloads public advisory knowledge and uploads no machine data.
 5. **GPU vendor honesty.** AMD = **verified**. NVIDIA (refined 2026-06-06 from the first NVIDIA tester export, RTX 3060 Ti / Win11 25H2): GPU **detection + NVIDIA-specific recs + their applies (HAGS, Container telemetry) = hardware-verified**, but **NVML sensor + session/FPS monitoring is STILL "implemented, not yet hardware-verified"** (tester had 0 sessions). The Monitoring "GPU sensor coverage" line and the NVML tooltip stay "not yet hardware-verified" — **do NOT flip those.** Intel = planned. Never silently upgrade NVIDIA *sensor* confidence past what a monitored session proves.
-6. **Tweak catalog — OPEN under measurable-benefit-under-rails** (owner decision 2026-07-09; the pre-2026-07-09 freeze is LIFTED). A tweak earns inclusion by **measurable benefit**, even individually-negligible — the **cumulative measured stack** is the point, and the honest vehicle is aggregate before/after A/B, not per-tweak claims below the noise floor. "Measurable benefit" is an **ADD criterion ON TOP OF** the permanent rails, never instead of them: every catalog tweak MUST still be **reversible** (typed rollback contract + snapshot captured at apply time, rule 3 — no rollback, no catalog) · **no kernel driver / no injection / anti-cheat-safe** (rules 1–2) · **non-security-weakening** (the owner gate above stands) · **stability-safe**. Opening the catalog is a POLICY change, not a license to skip proof: every new tweak rides the full **mutation-gate** (its own apply/rollback QA + welfare-check) before it ships.
-   - **(a) Stays barred regardless of measured fps** — timer/HPET hacks · bcdedit boot params · MMCSS abuse · **core-parking writes** · Defender disable · MPO disable · fixed pagefile forcing · kernel-level anything · anything that trips EAC/BattlEye. Excluded for SAFETY / STABILITY / SECURITY / ANTI-CHEAT; **measurement does NOT make these safe.**
+6. **Tweak catalog — OPEN under measurable-benefit-under-rails** (owner decision 2026-07-09; the pre-2026-07-09 freeze is LIFTED). A tweak earns inclusion by **measurable benefit**, even individually-negligible — the **cumulative measured stack** is the point, and the honest vehicle is aggregate before/after A/B, not per-tweak claims below the noise floor. "Measurable benefit" is an **ADD criterion ON TOP OF** the permanent rails, never instead of them: every catalog tweak MUST still be **reversible** (typed rollback contract + snapshot captured at apply time, rule 3 — no rollback, no catalog) · **no ungated kernel capability / no injection / anti-cheat-safe** (rules 1–2) · **non-security-weakening** (the owner gate above stands) · **stability-safe**. Opening the catalog is a POLICY change, not a license to skip proof: every new tweak rides the full **mutation-gate** (its own apply/rollback QA + welfare-check) before it ships.
+   - **(a) Stays barred regardless of measured fps** — timer/HPET hacks · bcdedit boot params · MMCSS abuse · **core-parking writes** · Defender disable · MPO disable · fixed pagefile forcing · ungated kernel-level capability · anything that trips EAC/BattlEye. Excluded for SAFETY / STABILITY / SECURITY / ANTI-CHEAT; **measurement does NOT make these safe.**
    - **(b) Becomes a candidate** once it proves measurable benefit AND clears the rails — anything previously excluded merely as unmeasured "optimizer-rot / snake-oil."
    - **Structurally impossible (don't attempt):** GPU-profile apply — AMD profile state isn't user-mode readable, so rollback-first cannot be satisfied.
    - The Lab's proving loop is the qualifying pipeline (candidate → proves benefit on the bench → clears the rails → mutation-gate QA → joins the catalog). Catalog policy blueprint: `docs/superpowers/specs/2026-07-08-lab-proving-ground.md` (**its §2/§3/§8 UI direction is SUPERSEDED** — owner-rejected 2026-07-09; live Lab UI = `docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md` "The Instrument Bench", plan `docs/superpowers/plans/2026-07-09-lab-instrument-bench-p1.md`).
-   - Product value also grows *upward* (gaming readiness, monitoring, session summaries, priority ranking, export) — see `docs/PRODUCT_DIRECTION.md`. **Any new feature that is not a catalog tweak must be read-only / advisory / reversible / session-scoped until proven safe.**
+   - Product value also grows *upward* (gaming readiness, monitoring, session summaries, priority ranking, export) — see `docs/PRODUCT_DIRECTION.md`. **Any new feature that is not a catalog tweak stays read-only / advisory / reversible / session-scoped by default; an exception requires rule 1.**
 
 ## Dev machine (for hardware-specific work)
 

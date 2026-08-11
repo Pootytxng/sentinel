@@ -54,18 +54,22 @@ These are defaults, not permanent tool prohibitions:
 Read the full **LOCKED safety rules** and the **security/system-settings** + **secrets** rules in
 `CLAUDE.md`. These are the non-negotiables — never propose or perform anything that crosses them:
 
-- **No kernel driver, no game injection** — anti-cheat-safe. Compy ships no driver of its own, so it
-  **never reads CPU die temperature itself**; it only *displays* a CPU temp when an external monitor the
-  user already runs (HWiNFO shared memory, or LibreHardwareMonitor / OpenHardwareMonitor WMI) is
-  publishing one via read-only interop (`cpu_temp.rs`); otherwise temp stays unavailable/unknown, never
-  fabricated. Full doctrine: `CLAUDE.md` LOCKED rule 1. GPU temp via vendor SDK is fine.
+- **Capability Exception Gate; no third-party game/process injection.** Default remains local,
+  user-mode, least-privilege and non-invasive. A Compy-shipped driver is policy-possible only through
+  the named gate in `CLAUDE.md` LOCKED rule 1 / `docs/ARCHITECTURE_LOCKS.md` §1.8; none ships
+  today, no vulnerable third-party driver is allowed, and no generic physical-memory/MSR/PCI/device-
+  register surface is allowed. DLL injection, game-memory access and runtime hooks remain prohibited.
+  CPU temperature stays external-monitor-only unless a separately approved capability actually ships;
+  unavailable remains unknown, never fabricated.
 - **Rollback-first integrity** — never apply a change that can't be rolled back from `history.json`.
 - **Signed remote rules stay triple-gated OFF;** the Ed25519 private key never enters the repo, `.env*`,
   or CI.
 - **No fabricated or unmeasured claims** — honest measurement only.
 - **Security/system settings** (UAC keys, Defender, firewall, anything under `HKLM\...\Policies\System`)
   are owner-gated — diagnose with read-only probes, never flip, not even reversibly.
-- **No new network / telemetry / CSP / capability / updater behavior** without owner sign-off.
+- **No new network / telemetry / CSP / capability / updater behavior** outside an owner-approved
+  Capability Exception record. Issue #91 authorizes Tier 1 design + dark implementation; exact
+  endpoint, signing custody, disclosures and runtime arming remain reviewable stop points.
 
 ## Owner collaboration style
 

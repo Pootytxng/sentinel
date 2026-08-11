@@ -9,15 +9,18 @@
 > BLUEPRINT `docs/superpowers/specs/2026-07-08-lab-proving-ground.md` Directive 1). The catalog now
 > grows **both** upward (below) AND by **measured additions**: a tweak earns inclusion by measurable
 > benefit — even individually-negligible; the cumulative measured stack is the point — **on top of**
-> the permanent safety rails (reversible · no-kernel/no-injection/anti-cheat-safe · non-security-
-> weakening · stability-safe), each riding the full mutation-gate. "Sideways into more switches" is
+> the permanent safety rails (reversible · no ungated kernel capability · no injection /
+> anti-cheat-safe · non-security-weakening · stability-safe), each riding the full mutation-gate.
+> "Sideways into more switches" is
 > **re-permitted when measured + safe**. Where any text below says the catalog is frozen, this
 > pointer wins.
 
-**Thesis:** Compy grows **upward** into a *gaming readiness, monitoring, rollback, and
-safe-configuration control center* — and now **also** by *measured* catalog additions (see the
-pointer above). The recommendation catalog is one part of the value, not the product. The module
-refactor and the locked safety model make higher-level features *safer* to add, not impossible.
+**Thesis (owner decision 2026-08-09):** Compy grows first into the **PC doctor users open after a
+crash, freeze, slowdown or unexplained hiccup**: detect → explain → test → recover → remember. Its
+second specialty is measured performance treatment: readiness, monitoring, rollback and safe
+optimization. The recommendation catalog is supporting treatment, not the product. Boundary
+expansion is possible only through the Capability Exception Gate; game/process injection remains
+prohibited.
 
 > **Catalog quality bar ≠ feature freeze.** The catalog is OPEN (measurable-benefit-under-rails),
 > but the bar is **proof**: no low-quality tweak-stuffing, no unmeasured snake-oil. What is locked is
@@ -29,7 +32,8 @@ The old "optimizer rot" blocklist splits in two under the opened-catalog policy:
 
 - **Stays barred regardless of measured fps** (excluded for SAFETY/STABILITY/SECURITY/ANTI-CHEAT):
   timer hacks, HPET toggles, `bcdedit` edits, MMCSS registry abuse, **core-parking writes**, Defender
-  disable, MPO disable, fixed pagefile forcing, kernel-level anything, anything that trips
+  disable, MPO disable, fixed pagefile forcing, any kernel-level tweak outside its own Capability
+  Exception record, anything that trips
   EAC/BattlEye, and any unsigned/AI-generated/arbitrary registry-service-PowerShell action.
   **Measurement does not make these safe** — Compy is not a registry clown car.
 - **Becomes a candidate** once it proves measurable benefit AND clears the safety rails: anything
@@ -198,19 +202,22 @@ Graphite/Frost/Aurora/Ember, drop neon Synthwave/Viper); intent **modes deferred
 brand accent kept. **Implementation is HELD** until owner green-light, ideally informed by first
 private-beta feel-feedback. (This refines, not relaxes, the locks below.)
 
-**Core product rule (the correction):** Do **not** solve perceived "lightness" by adding more tweak
-buttons. Solve it by making Compy *feel* like a **performance cockpit · readiness advisor · monitoring
-dashboard · session analyst · rollback-safe control center · premium trust layer over Windows gaming
-configuration.** The product should not become "30 switches" — it should become **"the place a gamer goes
-to know their PC is truly ready."**
+**Core product rule (2026-08-09 correction):** Do not solve perceived lightness by adding more
+tweak buttons. Make Compy the **first place a gamer goes when the PC hiccups**: it notices or accepts
+the symptom, opens the right rescue path, shows the evidence in plain English, separates known facts
+from hypotheses, recommends one safe next step, and verifies the outcome. Optimization remains the
+prescription/conditioning wing, not the front door.
 
 ## Locks reaffirmed
 
-- **Tweak catalog stays frozen** (~29 recs; no new risky tweaks; the blocklist above is hard).
-- **Safety model is locked**: no kernel driver, no game injection, rollback-first, local-only
-  **by default** (outbound only via opt-in, default-OFF, owner-sign-off-gated Receipts telemetry —
-  RECEIPTS_DOCTRINE §2 RETIRED the no-telemetry absolutism), signed-rules-off, GPU vendor honesty.
-- **Any new feature must be READ-ONLY, REVERSIBLE, SESSION-SCOPED, or ADVISORY until proven
-  safe.** Mutating features (only F1 so far) ride the manual-mutation QA gate and the full
-  rollback contract.
-- The manual-mutation QA blocker (`docs/RELEASE_QA.md`) remains open and gates beta/release.
+- **Tweak catalog is open under measurable-benefit-under-rails;** no tweak-count stuffing.
+- **Default posture is locked:** local, user-mode, least-privilege, non-invasive and rollback-first.
+  Exceptions require the named Capability Exception Gate in `docs/ARCHITECTURE_LOCKS.md` §1.8.
+- **No third-party game/process injection.** Current build ships no Compy driver. Any driver proposal
+  needs its own proven-need/security/anti-cheat/signing/rollback record and later arming decision.
+- **Outbound is tiered, never globally unlocked:** updater live; Tier 1 signed advisory download/no
+  machine upload; Tier 2 opt-in scrubbed fingerprint; Tier 3 explicit per-case evidence upload.
+  Remote mutation rules remain signed and OFF.
+- **New features stay read-only, reversible, session-scoped or advisory by default.** Mutations still
+  ride the one `actions.rs` boundary, mutation-gate QA and full rollback contract.
+- Canonical directive: `docs/superpowers/specs/2026-08-09-compy-care-capability-exception-gate.md`.

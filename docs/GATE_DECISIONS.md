@@ -1,5 +1,11 @@
 # 🔒 Gate Decision Brief — the safe path to "opening a gate"
 
+> **HISTORICAL PROCESS SNAPSHOT (2026-06-27) — NOT CURRENT GATE STATE.** The table below is preserved
+> as dated evidence and intentionally still contains then-true updater/zero-outbound language. Use
+> `docs/RELEASE_STATE.md` for current runtime truth and `CLAUDE.md` plus
+> `docs/ARCHITECTURE_LOCKS.md` §1.8 for the current Capability Exception Gate. This file is process
+> precedent only; do not copy its state claims into a new plan.
+
 > **Owner said "open any gates."** HQ will **not blanket-arm** — each LOCKED gate is, by your own law
 > (CLAUDE.md), a *deliberate, specific, informed* decision + welfare-check + per-feature QA + sign-off. Arming
 > ships **Windows-mutation code or outbound network to real machines** = the "irreversible / outward-facing /

@@ -76,7 +76,8 @@ opus = rare, judgment-heavy workers only · fable = never a subagent. Full table
 4. **`receipts-arming-review`** — stop-rule-3 runbook for arming the telemetry boundary: payload
    sanitize/bucket verification, consent UI + preview + kill-switch checks, endpoint/queue review,
    sign-off checklist. Executor: opus worker + owner decision. **Build when:** owner schedules
-   Receipts arming (it is the FIRST outbound boundary — do not arm without this).
+   Receipts arming. The signed updater is already live; Receipts is a Tier 2 precursor and must not
+   inherit updater or Tier 1 approval.
 
 ## House rules for adding skills
 
