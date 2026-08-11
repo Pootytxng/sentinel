@@ -12,7 +12,7 @@ import { describe, it, expect } from "vitest";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, dirname, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadLibrary } from "./lib/library-render.mjs";
+import { loadLibrary, importFromRepo } from "./lib/library-render.mjs";
 import { STAGING_EXCLUDE, buildSiteApp } from "./stage-dist-site.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -20,7 +20,9 @@ const siteDir = join(root, "site");
 const distDir = join(root, "dist-site");
 const functionsDir = join(root, "functions");
 
-const { entries } = await loadLibrary();
+// importFromRepo, not the default nested vite server — see loadLibrary's docblock for why booting
+// one inside a vitest worker deadlocks the pool.
+const { entries } = await loadLibrary({ load: importFromRepo });
 const count = entries.length;
 
 /** Recursively list files under dir as relative POSIX-ish paths. */

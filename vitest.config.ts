@@ -23,5 +23,16 @@ export default defineConfig({
     // Heavier render tests (e.g. TweakEncyclopedia) can take 5–7s under full-suite CPU contention,
     // tripping the 5s default and flaking. Give them headroom — they pass in ~5s isolated.
     testTimeout: 15000,
+    // Same failure mode one level up: a file whose SETUP or import is starved dies before any test
+    // runs and reports as a bare file-level failure with no assertion to read. Seen on
+    // scripts/export-library.test.mjs. The default is 10s.
+    hookTimeout: 15000,
+    // No `retry` here, deliberately. A different small set of files failed on nearly every run for
+    // days — encoding-guard, export-library, release-transaction-e2e, ExperimentBench — each one
+    // passing when re-run alone, which reads exactly like contention and is not: two test files
+    // were booting their own nested vite dev servers inside the worker pool (see
+    // scripts/lib/library-render.mjs `loadLibrary`, and the guard in
+    // scripts/nested-vite-server-guard.test.mjs). Retries would have made that quieter, not fixed,
+    // and quieter is how it survives another six months. Anything flaky here is a defect to find.
   },
 });
