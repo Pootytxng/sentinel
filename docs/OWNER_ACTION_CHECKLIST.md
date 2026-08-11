@@ -110,6 +110,21 @@ labelled *upper bound proven on fast hardware*, and the one bad finding below st
 of rig: **idle Compy burns ~half a CPU core doing nothing**, which will be worse, not better, on a
 weaker machine.
 
+### A_crash. Crash & Freeze rescue is fixed but still switched off — one eyeball flips it on  ·  ⏳ NEW 2026-08-11
+A tester whose PC had crashed searched Compy, found nothing that said "crash", and went to Windows
+Event Viewer instead — while Compy's own crash-evidence reader sat one room away, named "Black Box".
+Both causes are fixed: Home's "it crashed or froze" row now lands **on** the evidence instead of
+dropping you at the Lab door, and the station is called **Crash & Freeze** everywhere it is named.
+
+**What's left is yours, and it is a look-at-it, not a decision.** That Home row lives in the intake
+band behind `compy_home_intake`, which is DEFAULT OFF by the standing new-surface rule — *flips on
+only once eyeballed + approved*. Until it flips, the routing fix reaches nobody; the rename reaches
+everyone who already opens the Lab. Flip it in Settings, look at the band, and say yes or no.
+
+**One ordering matters:** PR [#93](https://github.com/Pootytxng/sentinel/pull/93) carries the fix for
+that band's keyboard focus ring (it drew focus identically to hover). Merge #93 **before** the flag
+goes on, or the flip ships that defect to real users on day one.
+
 ### A-closed. Nine §A items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
 None of them is waiting on you — A0, A_ci and A_rig above are the only §A items still open, and

@@ -52,6 +52,7 @@ import { LEDGER_CHANGED_EVENT } from "./types";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet, lsSet } from "./data/safe-storage";
 import { invalidateProbe } from "./data/probe-cache";
+import type { LabStationKey } from "./surfaces/lab-guided-data";
 import { useDocumentVisible } from "./data/use-document-visible";
 import Settings from "./surfaces/Settings";
 import {
@@ -1016,14 +1017,20 @@ function App() {
   // persist BEFORE navHome mounts LabConsole (race-free), because LabConsole reads + clears the key
   // on mount. Landing on the Lab dock instead of the station is the bug this closes — naming a fix
   // count and then making the user hunt for the fixes is the dead-end the app exists to avoid.
-  const openFixesInLab = () => {
+  // Generalised 2026-08-11 (crash-rescue discoverability, SESSION_HANDOFF §4): the hallway was
+  // hard-wired to "optimize" because Optimize was the only station anything deep-linked to. The
+  // Home intake band's "it crashed or froze" row needs the SAME race-free handoff to the crash
+  // evidence, so the station is now the parameter and this stays the ONE writer of the intent —
+  // one ordering to get right, pinned by post-check-lab-route-guard.
+  const openLabStation = (station: LabStationKey) => {
     try {
-      localStorage.setItem("compy_lab_open_station", "optimize");
+      localStorage.setItem("compy_lab_open_station", station);
     } catch {
       /* non-fatal — the user still lands in the Lab, just on the dock */
     }
     navHome("lab");
   };
+  const openFixesInLab = () => openLabStation("optimize");
   const HOME_FOR_TAB: Partial<Record<Tab, HomeRailId>> = {
     Overview: "home",
     Play: "play",
@@ -1377,6 +1384,13 @@ function App() {
           ledgerCount={changes.length}
           version={APP_VERSION}
           rig={hw ? [hw.cpu_brand, hw.gpus[0]?.name].filter(Boolean).join(" · ") : null}
+          // Command-palette destinations. Each is the SAME single writer the rest of the app routes
+          // through — openLabStation persists the station intent before the room mounts,
+          // openLibrary is what every inline glossary term already uses — so the palette adds a
+          // door without adding a second hallway (navigation never teleports).
+          onOpenStation={(s) => openLabStation(s)}
+          onOpenEntry={(id) => libraryApi.openLibrary(id)}
+          onOpenSettings={() => setShowSettings(true)}
         >
           {/* The OptimizeV2 keepalive stood here until the generation prune (2026-08-06). There is no
               Optimize ROOM any more — the rail has no `fix` door and the Optimize station lives inside
@@ -1407,6 +1421,9 @@ function App() {
               // actually shows (the shared `rail` above) minus Home itself, navigating through
               // the SAME navHome mapping the rail uses.
               onNavigate={(k) => navHome(k as HomeRailId)}
+              // Console intake band only: the crash row lands ON the crash evidence, through the
+              // same single writer every other station deep-link uses.
+              onOpenLabStation={(s) => openLabStation(s as LabStationKey)}
               rooms={rail
                 .filter((r) => r.id !== "home")
                 .map((r) => ({

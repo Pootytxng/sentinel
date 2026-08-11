@@ -1,78 +1,120 @@
 # Session Handoff
 
-> Current lane only. Replace rather than append. Keep under 120 lines.
+> **REPLACE this file's content every time you write it — never append.** It holds only the
+> *current* lane's state, not a log. One lane at a time. When the lane lands (merged + branch
+> deleted), clear this file back to the template in git history.
+>
+> Written by `.claude/hooks/context-size-advisor.mjs` when it detects context-thrash (fast
+> drop→refill cycles with no real headroom gained — see `scripts/lib/context-thrash.mjs`), and by
+> any session that sees its own context filling fast. Read this FIRST on a fresh session that
+> mentions "continue" or "resume" with no other lead. Budget: 120 lines
+> (`scripts/doc-budget.ps1`) — if you're about to blow it, cut detail, don't skip the write.
 
 ## Lane
 
-PR #90 governance/proof repair under issue #49.
+Worktree `.claude/worktrees/foreground-courtesy-handoff-82687b`, branch
+`claude/foreground-courtesy-handoff-82687b`, rebased onto `origin/main` `880a3b5f`.
 
-- Writer: none; Codex's bounded repair claim is released after the verified final push
-- Checkout: `C:\Users\Kuya\code\sentinel-pr90-governance`
-- Local branch: `codex/pr90-governance`
-- Remote/PR branch: `origin/agent/rig-evidence-map-clean`, PR #90 ready for review
-- Inherited head: `a4cbbc4390f15c9b5aa43f36314066ce5578991c`
-- Base: `origin/main` at `a53d77953b1ab28361d248fbd7a82d31a47ea57f`
-- Work Control: issue #49, Status Review, Lane Claude Code, Gate None
+The prior occupant (command-palette lane) landed as `22fb15b2`; its one still-open item (PR #90
+recovery) is carried forward below.
 
-## What this lane is doing
+## What this lane did
 
-Make the role and proof-order failure behind PR #89/#90 mechanically harder to repeat. Claude Code
-remains the default implementation owner and Codex the default independent reviewer; either may
-write only after an explicit, exclusive handoff. Exact required gates, current-head receipts, and
-independent review now control proof-dependent GitHub transitions.
+Two threads, both closed except for one owner decision.
 
-The 14 Rig Evidence Map product/i18n/test files inherited from PR #90 are unchanged. PR #89's CI
-policy, runner-budget, local-verifier, package-script, and lockfile changes remain excluded. Two
-repository-owned failures exposed by the exact final gate were repaired in this lane: the shared
-Fix disclosure no longer lets its mount effect overwrite a first click, and the native release
-sandbox now asserts the real 15-second backoff lower bound without failing on scheduler overhead.
+### 1 · PR #100's foreground fix is INERT — proven, do not merge
 
-## Current evidence
+The handoff asked for the on-screen proof. Ran it three times in isolation (own identifier + own
+`APPDATA` + port 1421, so the neighbouring lane's live compy on 1420 was never touched). **All three
+took the foreground; one minimised the owner's running game (Soulframe.x64).**
 
-- Re-read the source conversation, current main, both PRs, issue #49 comments/Project fields, every
-  linked worktree, dirty state, remote refs, hosted check summaries, and relevant live process.
-- PR #89 is closed unmerged at `93c931a3`; PR #90 is open and ready for independent review. The old
-  PR #90 checkout is preserved but owned by the prior sandbox SID, so this clean linked worktree was
-  created from the exact remote head instead of trusting or modifying it.
-- Issue #49 records both verified Codex claims, including the bounded re-claim after final-head gates
-  exposed the two defects. The Project is now Review / Claude Code / Gate None; no write claim remains.
-- The work-control guard failed five core behavior cases before the evaluator existed, three
-  law-loading cases before the docs changed, and three typo/identity hardening cases before those
-  checks were added. It now passes all 16 evaluator, CLI, and law-loading cases.
-- Exact final committed-head gates ran without filters: site staging passed; Vitest passed 308 files /
-  3,963 tests with 2 skipped; the production build transformed 7,500 modules; Cargo passed 922 with
-  0 failed and 24 ignored; clippy passed with warnings denied.
-- The first full Vitest attempt correctly blocked on this lane's non-canonical main-module check and
-  three release-harness timeouts while Cargo compiled in parallel. The existing idiom guard caught
-  and fixed the owned defect; the release harness passed 27/27 alone, proving CPU contention, and the
-  same exact unfiltered `npm test` then passed alone. No timeout was waived or filtered.
-- Final inspection also found `STATE:source_main_commit` 12 commits stale. It was re-stamped from
-  `ce3f4bd` to current `origin/main` `a53d7795`; the release-state verifier now reports 30/30
-  citations and 0 state drift.
-- Focused disclosure/preload behavior passed 14/14; the native alias-backoff regression passed 1/1.
-- The final encoding scan found 1,241 tracked text files clean; documentation budgets, branch
-  disposition, release-state, work-control residency, and clean-diff guards all passed.
-- The work-control receipt returned `PASS` with one explicit warning: Claude Code 2.1.220 could not
-  perform the non-writing review because its OAuth session is expired and no API key is present.
-  Authentication was not changed. The review remains labeled unverified rather than self-approved.
-- PR #90 is ready for independent review, not merge-authorized. PR #89 remains closed unmerged. The
-  issue title and Project execution fields now describe integration plus PR #90 review; the claim
-  expiry is cleared.
+Root cause, instrumented at `setup`: `config-as-seen-at-setup: focus=false visible=false` — the
+mutation in `run()` (`for window in &mut context.config_mut().app.windows { window.focus = false }`)
+sticks — but `visible_before=true … foreground_is_us=true`. **Tauri 2 ignores `WindowConfig.focus`
+and `.visible` at creation time**, so the window is already up and focused before any `setup` code
+runs. Nothing done in `setup` can fix it. Findings are posted on PR #100; my exploratory edits in
+`.claude/worktrees/nodejs-background-execution-fd4def` were reverted (`git checkout --`, tree clean).
 
-## Remaining external review
+A real fix means building the window through `WebviewWindowBuilder` (`.visible(false)` /
+`.focused(false)`) + `SW_SHOWNOACTIVATE`, carrying `decorations: false`, min sizes and the maximize
+subclass across. Separate hole: `tray::show_or_recreate_main` (`src-tauri/src/tray.rs:70-86`) calls
+`show()` + `set_focus()` unconditionally, so a *relaunch* steals focus regardless — the relauncher's
+intent would have to travel via the single-instance plugin's argv. #100 also conflicts with main.
 
-- Claude Code performs the read-only independent review when its authentication is available.
-- Do not merge, release, deploy, or publish under this task. Any later merge decision starts by
-  verifying the live PR head and rerunning required gates if that head changed.
+### 2 · The owner's actual complaint — FIXED, guarded, committed
+
+His words: *"the thing that keeps popping up stealing my forground primarily is the windows terminal
+… it appears blank then closes on its own shortly after."* Traced with a process-spawn poller to
+`npm test`: seven suites spawn `powershell.exe`, and Node's `spawnSync` defaults to
+`windowsHide: false`; Win11's default terminal is Windows Terminal, so each spawn opened a real blank
+console window (blank because stdout is piped), dozens per run.
+
+- `windowsHide: true` on all seven `scripts/*.test.mjs`: `alias-propagation-harness`,
+  `production-adapter-{lookup,native-sandbox}`, `release-{transaction-e2e,pipeline-guard}`,
+  `deps-bootstrap-guard`, `public-version-gate`.
+- **Guard** `scripts/console-window-guard.test.mjs` — parses each spawn call with a balanced-paren
+  scan so one correct call can't cover a wrong one beside it; includes a negative self-test.
+  Its interpreter names are **assembled from fragments on purpose** — a quoted `"powershell.exe"`
+  literal makes `windows-only-coverage.test.mjs` misclassify it and demand a `runIf(windows)` gate
+  that would be wrong (it starts no process). Do not "simplify" those regexes.
+- `CompyUsageAudit` scheduled task set `Settings.Hidden` False → True (it flashed the same way).
+
+Also landed here: the `~/.claude/hooks/unloaded-project-config.mjs` mirror re-sync (its drift was
+turning EVERY lane's gate red) and an 8 s budget on `preload-apps`' armed case (1 s lost to machine
+load, twice). **Verification:** full pre-push gate, `LOCAL CHECK RESULT: PASS`, 4042 tests.
+
+## Left to do
+
+### 1 · Land PR [#101](https://github.com/Pootytxng/sentinel/pull/101)
+
+Branch is on origin and green through the pre-push gate. Merging a green PR is ours, not the
+owner's (decree 2026-08-11). Prune the ref afterwards with `gh api`, never with the
+`--delete-branch` flag — it once wrote `core.bare=true` into the shared git config and broke every
+lane at once. Then drop the row from `docs/BRANCH_DISPOSITIONS.md` in a follow-up.
+
+### 2 · One owner decision, already put to him
+
+Close PR #100, or rework it via `WebviewWindowBuilder`. He has been told not to merge it and why.
+Nothing else waits on him.
+
+### 2 · PR #90 recovery — **ours to finish, not a thread to wait on**
+
+PR #90 `agent/rig-evidence-map-clean`, head `98146456`, OPEN / MERGEABLE / no review decision.
+The four items below came from a Codex audit, which is **advisory only — no jurisdiction over
+building or decisions** (owner, 2026-08-11). Its review never completed (expired OAuth), so every
+gate below is an unverified claim to re-prove here, and none of it blocks starting.
+
+- **P1** `LabConsole.tsx` resolves selected IDs only through detected `buildRigParts()` entries —
+  manual parts and fans can select into no panel. Keep exact IDs; never collapse to `gpu`/`storage`.
+- **P2** `shadowingGhostIds()` releases only *undetected* ghosts — a detected CPU fan or manual
+  cooler can still occlude the CPU. Needs regression coverage.
+- **P3** Selection is pointer-only through Three.js. #49's a11y acceptance needs a DOM selector:
+  tab, Enter/Space, visible focus, name/role/value, 200% reflow, honest unavailable states.
+- **P4** Re-verify `scripts/work-control-gate.mjs` itself resolves the real head, binds gates and
+  review to that head, and rejects self-authored SHAs — don't re-apply the old governance diff blind.
+- Verifier (**we run it, it is not the owner's job**):
+  `powershell -NoProfile -File scripts/verify-release.ps1 -EvidencePath src-tauri\target\codex-verification\pr90-final-review-verify-release-evidence.json`
 
 ## Do NOT
 
-- Do not merge, release, deploy, publish, build an installer, or mutate system/security state.
-- Do not revive or transplant PR #89's CI-policy changes.
-- Do not touch `feat/user-feedback-lab-recovery`, `design/quiet-pit-wall`, Task #12 files, or any
-  other worktree.
+- **Do not launch a build with nothing visual to show** (owner, 2026-08-11): *"if no major visual
+  changes or features have been added or made then if it saves tokens then you dont have to pull up
+  the build everytime."* Memory: `dont-launch-build-without-visual-change`.
+- **Do not `Start-Process pwsh -WindowStyle Hidden`** — Windows Terminal ignores `-WindowStyle`, so
+  that flashes the very window this lane just fixed. Launch helper shells via the Bash tool.
+- **Disposition rows go AFTER the first push, never with it** (learned the hard way, 2026-08-11).
+  The audit rejects a row whose ref it cannot resolve, so a row written before the branch exists
+  fails the very gate that would create the ref. Order: push, then a follow-up commit with the row.
+  Rows are perishable both ways — on a conflict there, re-check `git ls-remote --heads origin <ref>`
+  before choosing a side.
+- Do not kill another lane's processes or its port. `docs/WORK_CONTROL.md`: expiry is an alarm, not a
+  takeover. Isolate instead — override `identifier` (the single-instance lock key) and `APPDATA`,
+  and use a free port.
+- Do not release, publish, or touch signing keys. Do not rebase PR #92 before #90 resolves.
+- Do not run `loadLibrary()` without injecting a loader from inside a test — it boots a real Vite
+  server inside the worker pool. It refuses when it sees `globalThis.__vitest_worker__` (**not**
+  `process.env.VITEST` — that leaks into child processes); `scripts/nested-vite-server-guard.test.mjs`.
 
 ## Resume with
 
-Recheck remote PR #90 head, this worktree's HEAD/status, issue #49 Project fields, and relevant
-processes. The next lane is read-only Claude review; a new writer needs a new explicit claim.
+**Item 1** (land #101 and clean up its row), then **item 3** (PR #90 recovery) — the real open work.

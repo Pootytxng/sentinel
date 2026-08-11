@@ -73,7 +73,11 @@ type Props = {
   onNavigate?: (key: string) => void;
   /** The rooms the rail actually shows (railFor minus home itself) — honest doors only. */
   rooms?: { key: string; name: string }[];
-  // ── Home intake band (BACKLOG:916, behind compy_home_intake, DEFAULT OFF). The three below
+  /** App's single station-intent writer (openLabStation): persists the intended in-room instrument
+   *  BEFORE navigating, so the destination console cannot mount first and lose it. Intake rows that
+   *  carry a `station` route through here; without it they fall back to a plain room nav. */
+  onOpenLabStation?: (station: string) => void;
+  // ── Home intake band (BACKLOG:916, behind compy_home_intake, DEFAULT ON). The three below
   //    are the ONLY wiring the pre-room intent router + its one-tap fast path need. All optional:
   //    an isolated mount (no wiring) simply shows no fast-path row — never a misleading "Checking…".
   /** The live recommendation catalog. undefined = not wired (no fast path); null = still loading
@@ -243,6 +247,7 @@ export function HomeConsole({
   // always passes t("common.rail.lab"); this default only ever shows up in isolation tests.
   fixRoomLabel = "Lab",
   onNavigate,
+  onOpenLabStation,
   rooms,
   recs,
   isAppliable,
@@ -688,8 +693,11 @@ export function HomeConsole({
                 )}
               </div>
             )}
-            {/* Option A — the intent rows. Each routes to a ROOM (not an in-Lab station); the
-                because-line names the ROOM's action, the label resolves live from the rail. */}
+            {/* Option A — the intent rows. Each routes to a ROOM; a row whose symptom has ONE
+                answering instrument (today: "it crashed or froze" → the Lab's crash-evidence
+                station) routes THROUGH the room to that instrument, so naming the symptom and
+                then making the user hunt the dock is not a thing this band does. The because-line
+                names the ROOM's action, the label resolves live from the rail. */}
             {intakeRows.length > 0 && (
               <ul className="hc-intake-rows">
                 {intakeRows.map((row) => {
@@ -699,7 +707,11 @@ export function HomeConsole({
                       <button
                         type="button"
                         className="hc-intake-row"
-                        onClick={() => onNavigate?.(row.room)}
+                        onClick={() =>
+                          row.station && onOpenLabStation
+                            ? onOpenLabStation(row.station)
+                            : onNavigate?.(row.room)
+                        }
                       >
                         <span className="hc-intake-row-symptom">{row.symptom}</span>
                         <span className="hc-intake-row-because">{row.because}</span>

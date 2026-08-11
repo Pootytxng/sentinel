@@ -1,53 +1,55 @@
 name: CI
 
-# Minimal anti-drift CI: build + test + lint the Rust backend and the React/TS frontend,
-# plus an informational dependency audit. Added 2026-06-26 in response to an external audit
-# that flagged the absence of CI as a drift risk.
+# Build + test + lint the Rust backend and the React/TS frontend. Added 2026-06-26 in response to an
+# external audit that flagged the absence of CI as a drift risk.
 #
-# Cost note (ZERO-BUDGET LAW): the Rust job runs on windows-latest (2x minute multiplier) because
-# the crate pulls Windows-only deps (windows / winreg / wmi / ferrisetw / runas / adlx) and will not
-# compile elsewhere. The frontend job runs on ubuntu-latest (1x) to keep minutes down.
-# Triggers are scoped to main + PRs only (not every branch push). Caches keep re-runs cheap.
+# MANUAL-ONLY since 2026-08-10. This workflow no longer starts itself. Read on before restoring a
+# trigger — the reason is arithmetic, and it has now defeated two rounds of per-run cost-cutting.
 #
 # ---------------------------------------------------------------------------------------------
-# 2026-08-01, measured: THIS WORKFLOW EXHAUSTED THE FREE ALLOWANCE AND STOPPED CI FOR 22 DAYS.
+# THE ALLOWANCE HAS NOW BEEN EXHAUSTED TWICE, AND THE SECOND TIME THE COST-CUTTING WAS ALREADY IN.
 #
-# July's actual usage, from GitHub's own metrics (1,650 raw minutes / 366 job runs):
+# Round 1 (July): 2,195 billed minutes vs 2,000 included. Diagnosed as per-run cost. The audit job
+# moved to audit.yml/weekly, docs-only commits stopped starting runners, and a budget guard was
+# written that projected 1,180 billed minutes a month -- comfortably under.
 #
-#   job                              runner    raw    x    BILLED
-#   Dependency audit (informational) ubuntu    645    1      645   <- moved to audit.yml, weekly
-#   Rust (test + clippy)             windows   545    2    1,090
-#   Frontend (test + build)          ubuntu    460    1      460
-#                                                          -----
-#                                                          2,195   vs 2,000 included
+# Round 2 (August), measured from GitHub's run history for 1-7 Aug:
 #
-# It ran out on 9 July. Every run afterwards was rejected before a runner was assigned -- 7 seconds,
-# zero steps, zero billable ms -- which surfaces as three red X's on every PR that no test produced.
-# A dead gate that LOOKS like a failing gate is worse than an absent one, so the cost of this file
-# is now part of its contract and `scripts/ci-budget-guard.test.mjs` fails the build if it drifts.
+#   111 real CI runs in SIX DAYS   ->   ~570 runs/month
+#   the guard's projection assumed      122 runs/month
 #
-# Fix 1 (here): 226 of July's 535 commits to main -- 42% -- touched ONLY docs and markdown. Those
-# cannot change what a test proves, so they no longer start runners.
-# Fix 2 (audit.yml): the informational audit was the largest single consumer and is
-# `continue-on-error`, so it can never fail a build. Weekly is enough for a dependency advisory.
+# That is 4.7x, and it is why the guard stayed green while the budget burned: RUNS_PER_MONTH was a
+# hard-coded constant, so the one number that actually moved was the one nothing was watching. The
+# included minutes ran out around 06:00 UTC on 7 August. Every job since is rejected before a runner
+# is assigned -- 0 steps, ~1 second, and GitHub's generic annotation about payments or a spending
+# limit.
+#
+# THAT ANNOTATION IS MISLEADING AND HAS COST A SESSION BEFORE: there is no payment problem. The
+# owner checked his dashboard live on 2026-07-16 -- no failed payment, billed $0 -- and the account
+# runs a DELIBERATE $0 Actions budget with stop-usage on, under the zero-budget law. Hosted CI being
+# blocked is the intended steady state, and the owner directed that the spend never be re-asked
+# (docs/RELEASE_STATE.md "Hosted CI"; the OWNER DECREE 2026-07-16 in docs/BACKLOG.md). Do not chase
+# a billing bug, and do not ask him to raise the limit.
+#
+# Nothing about per-run cost caused this. Run VOLUME did. Several agent lanes now push to `main` and
+# to PR branches all day: 63 pushes to main alone in those six days, plus 48 pull_request events.
+# At ~4 min of Rust (windows, 2x) + ~4 min of frontend (ubuntu, 1x) per run, 570 runs a month is
+# ~6,800 billed minutes against a 2,000-minute allowance. No amount of caching closes a 3.4x gap.
+#
+# So the trigger is the thing that had to go, not the steps. Verification moved to the machine that
+# was always going to be cheaper than a runner: `npm run verify:local` (scripts/verify-local.ps1),
+# wired to a pre-push hook, running these same checks on the owner's desk for zero minutes.
+#
+# What this file is FOR now: a second opinion on a clean Linux/Windows runner when one is genuinely
+# wanted -- a release cut, a suspected works-on-my-machine, a dependency bump. Run it from the
+# Actions tab. It costs ~12 billed minutes when you ask for it, and nothing when you do not.
+#
+# `scripts/ci-budget-guard.test.mjs` now asserts this mechanically: no workflow here may carry an
+# automatic push/pull_request trigger except the path-scoped site deploy. A projection could be
+# wrong; that assertion cannot be, which is the whole lesson of round 2.
 # ---------------------------------------------------------------------------------------------
-
-# The two paths-ignore lists are written out twice on purpose. A YAML anchor/alias would be the
-# obvious de-duplication, but GitHub Actions' workflow parser does not support anchors, and a
-# workflow that silently fails to parse is precisely the invisible-outage failure this whole change
-# exists to prevent. ci-budget-guard.test.mjs asserts both blocks carry the list, so they cannot
-# drift apart unnoticed.
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "docs/**"
-      - "**.md"
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - "docs/**"
-      - "**.md"
+  workflow_dispatch:
 
 # Cancel superseded runs on the same ref to save minutes.
 concurrency:

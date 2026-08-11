@@ -64,9 +64,15 @@ describe("PreloadApps (Phase-B, BUILT DARK)", () => {
     preloadView(true, ["solitaire-collection", "feedback-hub"]);
     render(<Fix {...baseProps} />);
     fireEvent.click(await screen.findByText("Preinstalled apps"));
-    // Regression: the disclosure's initial preference sync must not overwrite this first click
-    // when the async preload probe mounts the section under full-suite load.
-    expect(await screen.findByText("Solitaire Collection")).toBeTruthy();
+    // findBy, not getBy: the row list is painted by a state update the click only schedules,
+    // so a synchronous read here fails under full-suite load and passes in isolation.
+    //
+    // The default 1000 ms budget was still too tight, and failed the pre-push gate twice in a row
+    // on 2026-08-11 while passing standing alone — several lanes run their own gates on this one
+    // machine, so "how long a scheduled paint takes" is a function of the whole box, not of this
+    // component. The budget below is not a guess at how slow the render is; it is a margin wide
+    // enough that a loaded machine cannot masquerade as a broken component.
+    expect(await screen.findByText("Solitaire Collection", {}, { timeout: 8000 })).toBeTruthy();
     expect(screen.getByText("Feedback Hub")).toBeTruthy();
     // Not installed → never offered (no "remove something that isn't there").
     expect(screen.queryByText("Microsoft News")).toBeNull();
