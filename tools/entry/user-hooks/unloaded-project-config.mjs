@@ -19,7 +19,7 @@
 // per (session, project) so it cannot become noise on a long editing run.
 import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve, sep } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
 import { tmpdir, homedir } from "node:os";
 
 const done = () => process.exit(0);
@@ -34,12 +34,43 @@ try {
 const filePath = payload?.tool_input?.file_path;
 if (!filePath || typeof filePath !== "string") done();
 
-// The session's own root. CLAUDE_PROJECT_DIR is populated for hooks; cwd is the fallback.
-const sessionRoot = resolve(process.env.CLAUDE_PROJECT_DIR || payload?.cwd || process.cwd());
 const home = resolve(homedir());
 
 // Windows paths are case-insensitive; compare case-folded and separator-normalised.
 const norm = (p) => resolve(p).replace(/[\\/]+$/, "").toLowerCase();
+
+// THE SESSION'S ROOT IS NOT ITS CWD (fix 2026-08-11).
+// What decides whether a project's config loaded is the directory the session was STARTED in. `cwd`
+// is not that — it is the shell's current directory, and it MOVES: one `Set-Location`/`cd` into the
+// project and cwd reads as the project root while the config is still just as absent.
+//
+// That is not hypothetical. This hook stayed silent through an entire sitting of edits to
+// code/sentinel from a session rooted at code/ — every sentinel hook inert, its CLAUDE.md never
+// auto-loaded — because a Set-Location into sentinel made `isInside(sessionRoot, projectRoot)` read
+// as "config IS loaded". A supervision guard that goes quiet in exactly the case it exists to catch
+// is worse than absent, because its silence gets read as an all-clear.
+//
+// Claude Code stores the transcript at ~/.claude/projects/<slug>/, where <slug> is the TRUE session
+// root with `:` and path separators replaced by `-` (C:\Users\Kuya\code → C--Users-Kuya-code).
+// Decoding a slug is lossy — a directory whose real name contains `-` is indistinguishable from a
+// separator — so this never decodes. It walks cwd's ancestors and picks the one whose slug MATCHES,
+// which is exact, and falls back to cwd when there is no transcript path or nothing matches.
+const slugOf = (p) => resolve(p).replace(/[:\\/]/g, "-").toLowerCase();
+const sessionRoot = (() => {
+  const cwd = resolve(process.env.CLAUDE_PROJECT_DIR || payload?.cwd || process.cwd());
+  const t = payload?.transcript_path;
+  if (typeof t !== "string" || !t) return cwd;
+  const want = basename(dirname(resolve(t))).toLowerCase();
+  let dir = cwd;
+  for (let i = 0; i < 40; i++) {
+    if (slugOf(dir) === want) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return cwd;
+})();
+
 const isInside = (child, parent) => {
   const c = norm(child);
   const p = norm(parent);

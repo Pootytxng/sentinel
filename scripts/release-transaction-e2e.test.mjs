@@ -32,7 +32,7 @@ const run = (scenario, directory, extra = [], allowPublication = true) => {
       ...(allowPublication ? ["-AllowPublication"] : []),
       ...extra,
     ],
-    { cwd: root, encoding: "utf8", shell: false },
+    { cwd: root, encoding: "utf8", shell: false, windowsHide: true },
   );
   const lines = result.stdout.trim().split(/\r?\n/);
   const payload = JSON.parse(lines.at(-1));

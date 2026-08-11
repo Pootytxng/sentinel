@@ -198,7 +198,7 @@ describe("release pipeline safety", () => {
             '$result=Invoke-NativeProcess -Command $npm.Command -ArgumentList (@($npm.ArgumentPrefix)+@("--version")); ' +
             "if($result.ExitCode -ne 0){throw $result.StdErr}; $result.StdOut",
         ],
-        { cwd: root, encoding: "utf8", shell: false },
+        { cwd: root, encoding: "utf8", shell: false, windowsHide: true },
       );
       expect(result.status, result.stderr || result.error?.message).toBe(0);
       expect(result.stdout).toMatch(/\d+\.\d+\.\d+/);

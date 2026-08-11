@@ -5,9 +5,10 @@
 // + a scrolling content lane. Renders ONLY when App's compy_v2 state is on; flag off, this tree
 // never mounts and the app is byte-identical (tokens-v2-guard.test.ts pins the CSS side).
 //
-// Deliberately ABSENT: the mockup's "Search or jump anywhere · Ctrl K" box. CommandPalette is
-// PARKED (design-direction spec: a new feature, owner call post-P6) and a search box that does
-// nothing would be a fake affordance — banned. It lands with the palette, if the owner calls it.
+// The mockup's "Search or jump anywhere · Ctrl K" box was ABSENT here from V2-2 until 2026-08-11:
+// CommandPalette was parked pending an owner call, and a search box that does nothing would have
+// been a fake affordance. The owner called it — a tester could not navigate the app, "honestly my
+// biggest gripe" — so the box lands WITH the palette behind it, exactly as that note required.
 import {
   createContext,
   useContext,
@@ -26,7 +27,9 @@ import { NavGlyph } from "./NavGlyph";
 import { UpdatePill } from "./UpdatePill";
 import { HOME_RAIL, type HomeRailId, type HomeRailItem } from "./homeRail";
 import { useJarvisActive } from "./jarvis/use-jarvis";
-import { useRoomIdentityFlag, useHudFrameFlag } from "./use-hud";
+import { useRoomIdentityFlag, useHudFrameFlag, useCommandPaletteFlag } from "./use-hud";
+import { CommandPalette } from "./CommandPalette";
+import type { LabStationKey } from "../surfaces/lab-guided-data";
 import { RoomAccentPicker } from "./RoomAccentPicker";
 import { PICKABLE_ROOMS, type PickableRoom } from "./room-identity";
 import { LenisSpine } from "./jarvis/LenisSpine";
@@ -65,6 +68,9 @@ export function ShellV2({
   ledgerCount,
   version,
   rig,
+  onOpenStation,
+  onOpenEntry,
+  onOpenSettings,
   children,
 }: {
   items: HomeRailItem[];
@@ -72,6 +78,12 @@ export function ShellV2({
   onNavigate: (id: HomeRailId) => void;
   ledgerCount: number;
   version: string;
+  // Command-palette destinations beyond the rail. Each is the app's EXISTING single writer for that
+  // kind of navigation, passed in rather than reached for — the shell owns chrome, not routing.
+  // Any one omitted → the palette does not index that group, so it can never offer a dead door.
+  onOpenStation?: (station: LabStationKey) => void;
+  onOpenEntry?: (entryId: string) => void;
+  onOpenSettings?: () => void;
   // Real hardware line for the HUD-frame readout ("CPU · GPU" from the probe); null until the
   // probe resolves — the readout omits the segment, never fabricates one.
   rig?: string | null;
@@ -94,6 +106,10 @@ export function ShellV2({
   // frame 2026-07-15, DEFAULT ON). "0" failsafe: neither mounts, and the stage-scoped reticle
   // instances (which self-defer while this is on) take back over — byte-identical shell.
   const hudFrame = useHudFrameFlag();
+  // Command palette (compy_command_palette, DEFAULT ON). "0" failsafe: no topbar box, no Ctrl+K
+  // binding, no overlay — the shell is byte-identical to the pre-palette tree.
+  const paletteEnabled = useCommandPaletteFlag();
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -131,6 +147,10 @@ export function ShellV2({
   // affordance). Never while typing, never with a modifier held.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // The palette owns the keyboard while it is open — otherwise typing "1" into the search box
+      // would ALSO jump a room out from under the overlay. (The typing-target check below already
+      // covers the input itself; this covers the moment before focus lands.)
+      if (paletteOpen) return;
       if (e.ctrlKey || e.altKey || e.metaKey || e.defaultPrevented) return;
       const t = e.target as HTMLElement | null;
       if (
@@ -147,7 +167,22 @@ export function ShellV2({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [items, onNavigate]);
+  }, [items, onNavigate, paletteOpen]);
+
+  // Ctrl+K / Cmd+K opens the palette. A shortcut alone would be invisible to the exact user this
+  // was built for, which is why the visible topbar box below is the primary affordance and this is
+  // the accelerator — not the other way round. Works from anywhere, including inside a text field,
+  // because that is the one thing every user who knows the shortcut expects it to do.
+  useEffect(() => {
+    if (!paletteEnabled) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== "k" || !(e.ctrlKey || e.metaKey) || e.defaultPrevented) return;
+      e.preventDefault();
+      setPaletteOpen((o) => !o);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [paletteEnabled]);
 
   const active = items.find((i) => i.id === activeId);
   const nav: V2Nav = {
@@ -228,6 +263,28 @@ export function ShellV2({
             {active && (
               <span className="v2-crumb">· {t(`common.shellV2.crumb.${active.id}`)}</span>
             )}
+            {/* Search box. `v2-stamp` carries the margin-left:auto that pushes the right-hand
+                cluster over, so this sits before it and the cluster order is unchanged. */}
+            {paletteEnabled && (
+              <button
+                type="button"
+                className="v2-search"
+                onClick={() => setPaletteOpen(true)}
+                {...(jarvis ? { "data-magnetic": "" } : {})}
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                  <path
+                    d="M10.5 10.5 L14 14"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <span className="v2-search-label">{t("common.shellV2.searchPlaceholder")}</span>
+                <kbd>Ctrl K</kbd>
+              </button>
+            )}
             {stamp && <span className="v2-stamp">{stamp}</span>}
             <UpdatePill />
             {roomIdentity && active && PICKABLE_ROOMS.includes(active.id as PickableRoom) && (
@@ -259,6 +316,18 @@ export function ShellV2({
         {jarvis && <MagneticLayer scopeRef={shellRef} />}
         {hudFrame && <HudFrame rig={rig ?? null} />}
         {hudFrame && <ReticleCursor scopeRef={shellRef} appWide />}
+        {paletteEnabled && (
+          <CommandPalette
+            open={paletteOpen}
+            onClose={() => setPaletteOpen(false)}
+            rail={items}
+            railLabel={railLabel}
+            onNavigate={onNavigate}
+            onOpenStation={onOpenStation}
+            onOpenEntry={onOpenEntry}
+            onOpenSettings={onOpenSettings}
+          />
+        )}
       </div>
     </V2NavContext.Provider>
   );

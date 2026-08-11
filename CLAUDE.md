@@ -1,12 +1,9 @@
 # CLAUDE.md — Compy project brief & resume point
 
-<!-- SIZE + LAW BUDGET. This file auto-loads on EVERY session boot in this repo, so every byte is
-     paid forever. Trimmed 34.5 KB → 23.5 KB on 2026-08-05: the cut material was (a) duplication of
-     ~/.claude/CLAUDE.md, which now loads in every session on this machine regardless of root, and
-     (b) the expired Fable-5-window sections (that window closed ~2026-07-07).
-     `src/claude-md-laws-guard.test.ts` fails the build if a required law marker disappears from this
-     file or if it grows past its byte budget. Add project LAWS here; put anything narrative,
-     historical, or explanatory in docs/ and link it. -->
+<!-- SIZE + LAW BUDGET. Auto-loads on EVERY session boot in this repo, so every byte is paid forever.
+     `src/claude-md-laws-guard.test.ts` fails the build on a dropped law marker, a byte-budget breach
+     or a dead pointer, and its header carries the full trim history. Add project LAWS here; put
+     anything narrative, historical or explanatory in docs/ and link it. -->
 
 > **Auto-loads into every Claude Code session rooted in this repo** — durable, in-git, portable.
 > Fresh session: read this, then `docs/RELEASE_STATE.md` (live gate state) + `docs/BACKLOG.md` (next).
@@ -22,12 +19,11 @@
 > legacy strata live in `docs/CHANGELOG.md` and are point-in-time records. Gaming Mode is LIVE (field
 > QA 10/10, owner signed off 2026-07-14 — GAMING_MODE_QA.md); service-suspend + debloat are ARMED.
 
-> **RENAMED Sentinel → Compy (2026-06-04)** for brand/SEO collision (SentinelOne / MS Sentinel /
-> Valorant). Identifier `gg.compy.app`, exe `compy.exe`, crate `compy`/`compy_lib`, data dir
-> `%APPDATA%\Compy`, domain `compy.gg`. First launch COPY-migrates `%APPDATA%\Sentinel` → `%APPDATA%\Compy`
+> **RENAMED Sentinel → Compy (2026-06-04).** `gg.compy.app` · `compy.exe` · crate `compy`/`compy_lib`
+> · `%APPDATA%\Compy` · `compy.gg`. First launch COPY-migrates `%APPDATA%\Sentinel` → `%APPDATA%\Compy`
 > (`migrate_legacy_data_once` in `lib.rs`; **the legacy literal MUST stay "Sentinel"** — it is the
-> source). Pre-rename git history, the WSL scaffold path, and the old data dir still say "sentinel":
-> expected, not a leftover. The GitHub repo rename is deferred to first-public-exposure.
+> source). Pre-rename git history, the WSL path and the old data dir still say "sentinel": expected,
+> not a leftover. GitHub repo rename deferred to first-public-exposure.
 
 ## What Compy is
 

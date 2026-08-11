@@ -130,6 +130,13 @@ describe("tracked text files", () => {
     expect(files).toContain("src-tauri/Cargo.toml");
   });
 
+  // This one scans every tracked text file in the repo, so it is O(repo) and genuinely slow —
+  // ~26s observed under a loaded parallel run, against vitest's 15s default. That default is a
+  // unit-test budget and this is not a unit test. Left implicit, a clean repo gets reported as
+  // corrupt whenever the machine is busy, and the pre-push gate refuses a legitimate push for a
+  // defect that does not exist (2026-08-11: it did exactly that). Budget it explicitly rather than
+  // letting machine load decide the verdict. The number is deliberately far above the real cost:
+  // this timeout must only ever catch a hang, never a slow day.
   it("carries no double-encoded text", () => {
     const dirty = [];
     for (const file of files) {
@@ -143,5 +150,5 @@ describe("tracked text files", () => {
       if (hits.length) dirty.push(`${file}: ${hits.length} span(s), first at line ${hits[0].line} (${JSON.stringify(hits[0].consumed)} -> ${JSON.stringify(hits[0].recovered)})`);
     }
     expect(dirty, `repair with: node scripts/encoding-guard.mjs --fix\n${dirty.join("\n")}`).toEqual([]);
-  });
+  }, 120_000);
 });

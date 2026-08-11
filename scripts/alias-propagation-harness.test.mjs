@@ -32,7 +32,7 @@ const run = (kase) => {
       "-Case",
       kase,
     ],
-    { cwd: root, encoding: "utf8", shell: false, timeout: 120_000 },
+    { cwd: root, encoding: "utf8", shell: false, timeout: 120_000, windowsHide: true },
   );
   expect(output.status, `${output.stderr}\n${output.stdout}`).toBe(0);
   return JSON.parse(output.stdout.trim().split(/\r?\n/).at(-1));

@@ -12,66 +12,77 @@
 
 ## Lane
 
-Worktree `.claude/worktrees/compy-discoverability-ux-context-68c484`, branch
-**`fix/confirm-stacking-focus-ring`** (code @ `0f0502f2`, doc commits after it), stacked on
-`claude/compy-discoverability-ux-context-68c484` @ `af501bf0`, both off `main` @ `a53d7795`.
-**Pushed; PR #93 open, NOT merged.** Reconstructs and executes the work three sessions
-were mid-flight on when the weekly cap hit 2026-08-09, plus the Codex PR-90 handoff pasted 2026-08-10.
+Worktree `.claude/worktrees/foreground-courtesy-handoff-82687b`, branch
+`claude/foreground-courtesy-handoff-82687b`, rebased onto `origin/main` `880a3b5f`.
 
-## What this lane is doing
+The prior occupant (command-palette lane) landed as `22fb15b2`; its one still-open item (PR #90
+recovery) is carried forward below.
 
-Blocks 1 and 2 below are done and committed. Blocks 3 and 4 are untouched and are the next work.
+## What this lane did
 
-## Done so far
+Two threads, both closed except for one owner decision.
 
-- **§1 — both red gates are green** (`af501bf0`). Re-stamped `STATE:source_main_commit` `ce3f4bd`
-  → `a53d7795` (it trailed by 12, tolerance 10 — 30/30 citations were already anchored), and wrote
-  disposition rows for the three unjudged origin refs: PR #90's and PR #92's branches CLAIMED,
-  `feat/lab-49-parity-port` UNLANDED. That last row is the one to read — its PR is closed and its
-  rig work was re-cut into #90, but `scripts/verify-like-ci.mjs`, `scripts/lib/ci-steps.mjs` and
-  `scripts/verify-like-ci.test.mjs` exist on neither `main` nor #90. Pruning the ref drops the local
-  CI runner with it. **Owner decision, named in the row.**
-- **§2 — both defects fixed, guards mutation-proven** (`0f0502f2`). Confirm backdrop 200 → 2000.
-  Home's intent rows got their own `:focus-visible` rule. Carried onto a clean branch off `main`;
-  the closed PR #89 is not their vehicle.
-  - Both ported guards were themselves broken. The stacking guard checked a hand-written list of
-    four backdrops; it now derives every `position: fixed` full-viewport layer from the CSS and
-    found five more, `.modal-backdrop` at 1000 among them. The focus guard's lookahead sat after
-    `\s*` instead of after the colon, backtracked to zero width, inspected the space, and read
-    `outline: none` as an acceptable focus mark — **exempting every rule it exists to catch.**
-    Rewritten it flags them, and the sweep then found no other offender in `src`.
-  - **D2 is not currently reachable by users** — `.hc-intake-row` renders only behind
-    `compy_home_intake`, DEFAULT OFF. §4 is what turns it on. D1 is live on `main` unconditionally.
-  - Gates: `npm test` 3909 passed / 3 skipped / 308 files · tsc clean · `npm run build` ok ·
-    verify-release-state 30/30 · disposition audit OK · encoding-guard 1237 · doc-budget ALL PASS ·
-    `git diff --check` clean. **Rust untouched, so cargo was not run.**
-  - This worktree had **no local `node_modules`** — tests were resolving from the parent repo, so
-    two guards that read `node_modules/...` by relative path reported false FAILs. `npm ci` run at
-    root and in `site-app/`. A nested worktree will do this again.
-  - **Self-review VERDICT: PASS (9/9)** on a dev build from this worktree at 1500x980 over CDP.
-    Live `elementFromPoint` at the confirm's centre returned the confirm — not the overlay — with
-    FirstCheck (999) open and with Gaming Mode (1000) open, and `.wc-bar` (9000) still hit-tests
-    above it. Focus proven with real `Input.dispatchKeyEvent` Tab, not a class match: focus draws
-    `rgb(179,102,255) solid 2px`, hover draws none, both share the same wash.
-    **Named limitation:** this rig had no applicable rec (FirstCheck read 16/16 clean) and Gaming
-    Mode's consent gate never calls `useConfirm`, so the confirm markup was injected at
-    ConfirmProvider's real mount point (verified last child of `#root` in `main.tsx`) rather than
-    raised by a real mutation. That proves the stacking law exactly; it does not re-prove the apply
-    path. **A real mutation-raised confirm over a full-screen surface stays unexercised** — fold it
-    into the next install's QA.
-  - Superseded duplicates cleared from the quietpitwall worktree (now clean).
+### 1 · PR #100's foreground fix is INERT — proven, do not merge
+
+The handoff asked for the on-screen proof. Ran it three times in isolation (own identifier + own
+`APPDATA` + port 1421, so the neighbouring lane's live compy on 1420 was never touched). **All three
+took the foreground; one minimised the owner's running game (Soulframe.x64).**
+
+Root cause, instrumented at `setup`: `config-as-seen-at-setup: focus=false visible=false` — the
+mutation in `run()` (`for window in &mut context.config_mut().app.windows { window.focus = false }`)
+sticks — but `visible_before=true … foreground_is_us=true`. **Tauri 2 ignores `WindowConfig.focus`
+and `.visible` at creation time**, so the window is already up and focused before any `setup` code
+runs. Nothing done in `setup` can fix it. Findings are posted on PR #100; my exploratory edits in
+`.claude/worktrees/nodejs-background-execution-fd4def` were reverted (`git checkout --`, tree clean).
+
+A real fix means building the window through `WebviewWindowBuilder` (`.visible(false)` /
+`.focused(false)`) + `SW_SHOWNOACTIVATE`, carrying `decorations: false`, min sizes and the maximize
+subclass across. Separate hole: `tray::show_or_recreate_main` (`src-tauri/src/tray.rs:70-86`) calls
+`show()` + `set_focus()` unconditionally, so a *relaunch* steals focus regardless — the relauncher's
+intent would have to travel via the single-instance plugin's argv. #100 also conflicts with main.
+
+### 2 · The owner's actual complaint — FIXED, guarded, committed
+
+His words: *"the thing that keeps popping up stealing my forground primarily is the windows terminal
+… it appears blank then closes on its own shortly after."* Traced with a process-spawn poller to
+`npm test`: seven suites spawn `powershell.exe`, and Node's `spawnSync` defaults to
+`windowsHide: false`; Win11's default terminal is Windows Terminal, so each spawn opened a real blank
+console window (blank because stdout is piped), dozens per run.
+
+- `windowsHide: true` on all seven `scripts/*.test.mjs`: `alias-propagation-harness`,
+  `production-adapter-{lookup,native-sandbox}`, `release-{transaction-e2e,pipeline-guard}`,
+  `deps-bootstrap-guard`, `public-version-gate`.
+- **Guard** `scripts/console-window-guard.test.mjs` — parses each spawn call with a balanced-paren
+  scan so one correct call can't cover a wrong one beside it; includes a negative self-test.
+  Its interpreter names are **assembled from fragments on purpose** — a quoted `"powershell.exe"`
+  literal makes `windows-only-coverage.test.mjs` misclassify it and demand a `runIf(windows)` gate
+  that would be wrong (it starts no process). Do not "simplify" those regexes.
+- `CompyUsageAudit` scheduled task set `Settings.Hidden` False → True (it flashed the same way).
+
+Also landed here: the `~/.claude/hooks/unloaded-project-config.mjs` mirror re-sync (its drift was
+turning EVERY lane's gate red) and an 8 s budget on `preload-apps`' armed case (1 s lost to machine
+load, twice). **Verification:** full pre-push gate, `LOCAL CHECK RESULT: PASS`, 4042 tests.
 
 ## Left to do
 
-Declined ports and their reasons: `git show feat/lab-49-parity-port:docs/SESSION_HANDOFF.md`. One
-real gap there: no friendly-name layer exists (`RecName.tsx` / `rec-detail.ts` absent), so the
-one-name-per-rec invariant is unenforced. Remaining #14→#49 slices: comparison evidence · rollback ·
-denial semantics · decision-journey behavior.
+### 1 · Land PR [#101](https://github.com/Pootytxng/sentinel/pull/101)
 
-### 3 · PR #90 recovery (Codex handoff, 2026-08-10 — treat its gate list as claims)
+Branch is on origin and green through the pre-push gate. Merging a green PR is ours, not the
+owner's (decree 2026-08-11). Prune the ref afterwards with `gh api`, never with the
+`--delete-branch` flag — it once wrote `core.bare=true` into the shared git config and broke every
+lane at once. Then drop the row from `docs/BRANCH_DISPOSITIONS.md` in a follow-up.
+
+### 2 · One owner decision, already put to him
+
+Close PR #100, or rework it via `WebviewWindowBuilder`. He has been told not to merge it and why.
+Nothing else waits on him.
+
+### 2 · PR #90 recovery — **ours to finish, not a thread to wait on**
 
 PR #90 `agent/rig-evidence-map-clean`, head `98146456`, OPEN / MERGEABLE / no review decision.
-Independent review was never completed (expired OAuth), so no gate below is re-proven here.
+The four items below came from a Codex audit, which is **advisory only — no jurisdiction over
+building or decisions** (owner, 2026-08-11). Its review never completed (expired OAuth), so every
+gate below is an unverified claim to re-prove here, and none of it blocks starting.
 
 - **P1** `LabConsole.tsx` resolves selected IDs only through detected `buildRigParts()` entries —
   manual parts and fans can select into no panel. Keep exact IDs; never collapse to `gpu`/`storage`.
@@ -81,38 +92,29 @@ Independent review was never completed (expired OAuth), so no gate below is re-p
   tab, Enter/Space, visible focus, name/role/value, 200% reflow, honest unavailable states.
 - **P4** Re-verify `scripts/work-control-gate.mjs` itself resolves the real head, binds gates and
   review to that head, and rejects self-authored SHAs — don't re-apply the old governance diff blind.
-- Owner-run verifier: `powershell -NoProfile -File scripts/verify-release.ps1 -EvidencePath src-tauri\target\codex-verification\pr90-final-review-verify-release-evidence.json`
-
-### 4 · Crash & Freeze Rescue discoverability — the tester walked to Event Viewer
-
-The 2026-08-09 session was cut off before any work; the whole task is untouched. Root cause is
-confirmed in source, not inferred:
-
-- `BlackBox` mounts **only** as a Lab station (`src/surfaces/LabConsole.tsx:234`, `case "blackbox"`).
-  There is no top-level route to it. The tester could not find it because it is not findable.
-- Its user-facing name is **"Black Box"** (`src/i18n/locales/en/lab.json:303`) — an insider
-  metaphor. Nothing in the nav says *crash*.
-- Home intake's `crashedFroze` row routes to room `"lab"`, **not** to the Black Box station
-  (`src/surfaces/home-intake-data.ts:52`) — even with the band on, it drops you in the room.
-- The band is behind `compy_home_intake`, DEFAULT OFF (`src/design/theme.ts:400`).
-- Backend is already built and read-only: `src-tauri/src/blackbox.rs`, `src/surfaces/BlackBox.tsx`,
-  `src/data/blackbox-resolution.ts` (Event Log + WER + Reliability History).
-- Direction: problem-first Home entry → deep-link straight into the crash evidence, not the room.
-  No new subsystem, no telemetry, no notification-as-primary-discovery.
-
-**Correction to the pasted handoff:** it says clearing storage "activates a default-on preview and
-is not a valid flag-off test." Not true of this flag — `readHomeIntake()` returns false unless the
-value is literally `"1"`, so cleared storage *is* off. Don't write tests around that claim.
+- Verifier (**we run it, it is not the owner's job**):
+  `powershell -NoProfile -File scripts/verify-release.ps1 -EvidencePath src-tauri\target\codex-verification\pr90-final-review-verify-release-evidence.json`
 
 ## Do NOT
 
-- Do not push either branch without adding its own disposition row in the same commit — the audit
-  is green now and a new origin ref turns it red again.
-- Do not merge, release, publish, or touch signing keys. Do not rebase PR #92 before #90 resolves.
-- Do not claim PR #90's gates from the `98146456` receipt if the tree moves.
-- Do not read §2's PASS as covering the apply path — see the named limitation above.
+- **Do not launch a build with nothing visual to show** (owner, 2026-08-11): *"if no major visual
+  changes or features have been added or made then if it saves tokens then you dont have to pull up
+  the build everytime."* Memory: `dont-launch-build-without-visual-change`.
+- **Do not `Start-Process pwsh -WindowStyle Hidden`** — Windows Terminal ignores `-WindowStyle`, so
+  that flashes the very window this lane just fixed. Launch helper shells via the Bash tool.
+- **Disposition rows go AFTER the first push, never with it** (learned the hard way, 2026-08-11).
+  The audit rejects a row whose ref it cannot resolve, so a row written before the branch exists
+  fails the very gate that would create the ref. Order: push, then a follow-up commit with the row.
+  Rows are perishable both ways — on a conflict there, re-check `git ls-remote --heads origin <ref>`
+  before choosing a side.
+- Do not kill another lane's processes or its port. `docs/WORK_CONTROL.md`: expiry is an alarm, not a
+  takeover. Isolate instead — override `identifier` (the single-instance lock key) and `APPDATA`,
+  and use a free port.
+- Do not release, publish, or touch signing keys. Do not rebase PR #92 before #90 resolves.
+- Do not run `loadLibrary()` without injecting a loader from inside a test — it boots a real Vite
+  server inside the worker pool. It refuses when it sees `globalThis.__vitest_worker__` (**not**
+  `process.env.VITEST` — that leaks into child processes); `scripts/nested-vite-server-guard.test.mjs`.
 
 ## Resume with
 
-**§4 next**, in a fresh session — the owner's stated product priority, and it needs a whole context
-window plus a taste before/after. **§3** is the Codex lane's; take it only on an explicit handoff.
+**Item 1** (land #101 and clean up its row), then **item 3** (PR #90 recovery) — the real open work.

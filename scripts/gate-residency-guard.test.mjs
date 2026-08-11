@@ -71,6 +71,13 @@ const RESIDENCY = {
     kind: "manual",
     why: "A Workflow script the orchestrator invokes on request, plus lane-runner.ps1. It spends tokens by design, so a resident runner would be a standing bill.",
   },
+  // Dot-sourced by verify-local.ps1, which is a push-gate and therefore not resident itself. This
+  // one IS: deps-bootstrap-guard.test.mjs runs it standalone (-Path) against fixture trees on every
+  // `npm test`, which is the only way to prove a partial node_modules triggers a reinstall.
+  "deps-satisfied.ps1": {
+    kind: "npm-test",
+    runner: "scripts/deps-bootstrap-guard.test.mjs",
+  },
   "dev-relaunch.ps1": {
     kind: "manual",
     why: "Restarts the dev app on the owner's desk. Resident execution would seize his screen mid-session.",

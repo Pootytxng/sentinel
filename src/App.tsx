@@ -1384,6 +1384,13 @@ function App() {
           ledgerCount={changes.length}
           version={APP_VERSION}
           rig={hw ? [hw.cpu_brand, hw.gpus[0]?.name].filter(Boolean).join(" · ") : null}
+          // Command-palette destinations. Each is the SAME single writer the rest of the app routes
+          // through — openLabStation persists the station intent before the room mounts,
+          // openLibrary is what every inline glossary term already uses — so the palette adds a
+          // door without adding a second hallway (navigation never teleports).
+          onOpenStation={(s) => openLabStation(s)}
+          onOpenEntry={(id) => libraryApi.openLibrary(id)}
+          onOpenSettings={() => setShowSettings(true)}
         >
           {/* The OptimizeV2 keepalive stood here until the generation prune (2026-08-06). There is no
               Optimize ROOM any more — the rail has no `fix` door and the Optimize station lives inside
