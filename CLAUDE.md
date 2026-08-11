@@ -22,8 +22,7 @@
 > **RENAMED Sentinel → Compy (2026-06-04).** `gg.compy.app` · `compy.exe` · crate `compy`/`compy_lib`
 > · `%APPDATA%\Compy` · `compy.gg`. First launch COPY-migrates `%APPDATA%\Sentinel` → `%APPDATA%\Compy`
 > (`migrate_legacy_data_once` in `lib.rs`; **the legacy literal MUST stay "Sentinel"** — it is the
-> source). Pre-rename git history, the WSL path and the old data dir still say "sentinel": expected,
-> not a leftover. GitHub repo rename deferred to first-public-exposure.
+> source). Pre-rename history, the WSL path and the old data dir still say "sentinel" — expected.
 
 ## What Compy is
 
@@ -54,11 +53,8 @@ must be in context at all times:
 - **ONE MUTATION BOUNDARY (mechanical, 2026-08-03):** Compy changes Windows from
   `src-tauri/src/actions.rs` and **nowhere else** — snapshot → apply → verify → receipt → rollback.
   `src/mutation-boundary-guard.test.ts` fails the build on a registry write, service/task change,
-  power-plan switch or package removal anywhere else in `src-tauri/src`. Written because
-  `set_startup_entry_enabled` sat in `lib.rs` writing `StartupApproved\Run` directly with a
-  SYNTHESISED value, destroying the timestamp bytes — the prior state was unrestorable *in
-  principle*, and rollback-first lived only in prose, which does not fail a build. Line-level escape
-  hatch for copy that merely NAMES a command: `mutation-boundary-allow` (greppable).
+  power-plan switch or package removal anywhere else in `src-tauri/src`. Line-level escape hatch for
+  copy that merely NAMES a command: `mutation-boundary-allow` (greppable).
 - **ZERO-BUDGET LAW:** every phase ships $0-first on free tiers; any spend is owner-gated with named
   payback + KPI trigger. **Paid ads: never before 1.0.** Every money phase defines ONE metric before
   build.
@@ -78,6 +74,13 @@ plan → TDD ceremony** for greenlit or clearly-scoped work: build → verify �
 batching questions to the end. A failed gate triggers repair, not owner escalation. Preserve every
 failed candidate before reset or abandonment. `AskUserQuestion` is for genuine forks in **owner
 territory** only; engineering forks you resolve yourself and record the reasoning.
+
+**Role specialization + proof order:** Claude Code is the default implementation owner; Codex is the
+default independent reviewer. Either may become the one active writer only by explicit handoff under
+`docs/WORK_CONTROL.md`, after inspecting inherited repo, remote, worktree, dirty-state, and process
+truth. Exact required gates cannot be substituted: extra checks are supplemental, and environment inability
+is a blocker, not a pass. Run `scripts/work-control-gate.mjs` before any proof-dependent GitHub state
+transition; when practical, the non-writing model gives the final independent review.
 
 **Owner-bound in this repo** (on top of the universal floor in `~/.claude/CLAUDE.md` §3):
 1. **Secrets / signing** — the Ed25519 private key or any secret never enters the repo / `.env*` / CI.
@@ -116,11 +119,9 @@ restore is. **Diagnose elevation behavior with read-only probes only** (read the
 token integrity level, time a hands-off elevation, read the ledger); if a setting genuinely must
 change to proceed, that is a welfare-check, full stop. Mirrored in `docs/COWORK_HANDOFF.md`.
 
-**Precedent:** during the 2026-06-10 elevation-QA diagnosis a session autonomously flipped
-`ConsentPromptBehaviorAdmin` 5→2, then restored it — caught and verified-restored, no harm, but over
-the line. The model's own safety layer auto-switched that session because the work tripped a security
-classifier: **treat a model auto-switch on security-sensitive work as a STOP signal** — halt and
-involve the owner.
+**Precedent (2026-06-10):** a session flipped `ConsentPromptBehaviorAdmin` 5→2 to diagnose, restored
+it, and its own safety layer auto-switched mid-work: **treat a model auto-switch on
+security-sensitive work as a STOP signal** — halt and involve the owner.
 
 ### Reports, subagents, self-review
 

@@ -201,6 +201,10 @@ const RESIDENCY = {
     kind: "npm-test",
     runner: "scripts/verify-updater-signature.test.mjs",
   },
+  "work-control-gate.mjs": {
+    kind: "npm-test",
+    runner: "scripts/work-control-gate.test.mjs",
+  },
 };
 
 // Detectors whose ANSWER changes with the repo: every commit can break them, so release-time-only
