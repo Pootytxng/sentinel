@@ -64,6 +64,27 @@ $git = Resolve-RequiredCommand "git"
 $npm = Resolve-RequiredCommand "npm"
 $cargo = Resolve-RequiredCommand "cargo"
 
+# Defines Test-DependenciesSatisfied. It carries the reasoning for what "installed" means and is
+# driven against fixture trees by scripts/deps-bootstrap-guard.test.mjs.
+. (Join-Path $PSScriptRoot "deps-satisfied.ps1")
+
+function Confirm-Dependencies {
+  param(
+    [Parameter(Mandatory = $true)][string]$Label,
+    [Parameter(Mandatory = $true)][string]$Directory,
+    [Parameter(Mandatory = $true)][string[]]$InstallArguments
+  )
+
+  $state = Test-DependenciesSatisfied -Directory $Directory -NpmPath $npm
+  if ($state.Satisfied) {
+    Write-Host "LOCAL CHECK: $Label dependencies are installed ($($state.Reason))."
+    return
+  }
+
+  Write-Host "LOCAL CHECK: installing $Label dependencies -- $($state.Reason)."
+  Invoke-Check -Name "install $Label dependencies" -Command $npm -Arguments $InstallArguments
+}
+
 # Run from the repository root no matter where this was invoked from. `npm test` resolves its config
 # from the working directory, so a run started in a subdirectory would silently test something else.
 Push-Location $repo
@@ -83,14 +104,19 @@ try {
   # (dist-site-staleness, site-landing, site-seo) all fail with "site-app dependencies missing",
   # which is a missing setup step wearing the costume of a broken test. ci.yml installs both; so
   # does this.
+  #
+  # WHAT "ALREADY INSTALLED" MEANS, and why it is not `Test-Path node_modules`. That is what this
+  # asked until 2026-08-11, and a directory existing is not the same fact as dependencies being
+  # installed. In .claude/worktrees/admiring-lumiere-648403 node_modules existed WITHOUT
+  # @react-three/fiber (a later `npm install` added 489 packages), so the bootstrap above skipped
+  # itself and canvas-a11y-guard reported the very same phantom this block was written to prevent,
+  # naming the same package, on a push whose diff had nothing to do with r3f. The question is
+  # therefore asked of the tree -- see scripts/deps-satisfied.ps1 for the three probes and their
+  # costs -- and pinned by scripts/deps-bootstrap-guard.test.mjs against real partial trees.
   # ---------------------------------------------------------------------------------------------
   if (-not $NoInstall) {
-    if (-not (Test-Path (Join-Path $repo "node_modules"))) {
-      Invoke-Check -Name "install root dependencies" -Command $npm -Arguments @("ci")
-    }
-    if (-not (Test-Path (Join-Path $repo "site-app\node_modules"))) {
-      Invoke-Check -Name "install site-app dependencies" -Command $npm -Arguments @("ci", "--prefix", "site-app")
-    }
+    Confirm-Dependencies -Label "root" -Directory $repo -InstallArguments @("ci")
+    Confirm-Dependencies -Label "site-app" -Directory (Join-Path $repo "site-app") -InstallArguments @("ci", "--prefix", "site-app")
   }
 
   Invoke-Check -Name "git diff check" -Command $git -Arguments @("-c", "safe.directory=$repo", "-C", $repo, "diff", "--check")
