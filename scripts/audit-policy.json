@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "reviewed_on": "2026-07-31",
-  "reviewed_in": "issue #35, Q4 of docs/superpowers/specs/2026-07-29-product-quality-stabilization-program.md",
+  "reviewed_on": "2026-08-11",
+  "reviewed_in": "issue #35, Q4 of docs/superpowers/specs/2026-07-29-product-quality-stabilization-program.md; five npm advisories re-reviewed 2026-08-11 in claude/compy-foreground-courtesy-rebuild-60b17e",
   "shipped_target": "x86_64-pc-windows-msvc",
   "how_this_file_is_used": "scripts/supply-chain-gate.mjs re-runs both audits against the current lockfiles on every verification run. A cargo finding whose package is absent from `cargo tree --target x86_64-pc-windows-msvc --edges normal,build` is classified mechanically and needs no entry here. Everything else must be listed below with a reachability argument and a review date. An unlisted finding fails the gate; a listed finding whose review_by has passed fails the gate. Acknowledgements expire on purpose - the alternative is a permanent excuse.",
   "npm": {
@@ -11,42 +11,103 @@
         "severity": "high",
         "classification": "build-time-only",
         "why": "Path traversal in PostCSS source-map auto-loading. Reached through vite (the frontend build) and the shadcn CLI. It processes only this repository's own CSS during a local build; no attacker-controlled source map is ever fed to it, and postcss ships nothing into the installer.",
-        "paths": ["vite@7.3.5 -> postcss", "shadcn@4.13.0 -> postcss"],
+        "paths": [
+          "vite@7.3.5 -> postcss",
+          "shadcn@4.13.0 -> postcss"
+        ],
         "review_by": "2026-10-31"
       },
       "esbuild": {
         "severity": "low",
         "classification": "build-time-only",
         "why": "The advisory is against the esbuild development server, which allows any website to read responses from it. Compy's build runs `vite build`, not a served dev bundle exposed to a browsing session, and esbuild is not in the installer.",
-        "paths": ["vite@7.3.5 -> esbuild"],
+        "paths": [
+          "vite@7.3.5 -> esbuild"
+        ],
         "review_by": "2026-10-31"
       },
       "fast-uri": {
         "severity": "high",
         "classification": "developer-tool-only",
         "why": "Host confusion via literal backslashes, reached only through ajv inside the @modelcontextprotocol/sdk that the shadcn developer CLI depends on. It is never executed by the frontend build or by Compy at runtime.",
-        "paths": ["shadcn@4.13.0 -> @modelcontextprotocol/sdk -> ajv -> fast-uri"],
+        "paths": [
+          "shadcn@4.13.0 -> @modelcontextprotocol/sdk -> ajv -> fast-uri"
+        ],
         "review_by": "2026-10-31"
       },
       "brace-expansion": {
         "severity": "high",
         "classification": "developer-tool-only",
         "why": "Denial of service via unbounded expansion, reached only through minimatch inside ts-morph inside the shadcn developer CLI. Not executed by the build, not in the installer.",
-        "paths": ["shadcn@4.13.0 -> ts-morph -> @ts-morph/common -> minimatch -> brace-expansion"],
+        "paths": [
+          "shadcn@4.13.0 -> ts-morph -> @ts-morph/common -> minimatch -> brace-expansion"
+        ],
         "review_by": "2026-10-31"
       },
       "@hono/node-server": {
         "severity": "moderate",
         "classification": "developer-tool-only",
         "why": "Path traversal in serve-static. Reached only through the MCP SDK that the shadcn developer CLI depends on; Compy runs no Hono server and ships none.",
-        "paths": ["shadcn@4.13.0 -> @modelcontextprotocol/sdk -> @hono/node-server"],
+        "paths": [
+          "shadcn@4.13.0 -> @modelcontextprotocol/sdk -> @hono/node-server"
+        ],
         "review_by": "2026-10-31"
       },
       "@modelcontextprotocol/sdk": {
         "severity": "moderate",
         "classification": "developer-tool-only",
         "why": "Listed because it depends on the vulnerable @hono/node-server range above. Same path, same reasoning: developer CLI only.",
-        "paths": ["shadcn@4.13.0 -> @modelcontextprotocol/sdk"],
+        "paths": [
+          "shadcn@4.13.0 -> @modelcontextprotocol/sdk"
+        ],
+        "review_by": "2026-10-31"
+      },
+      "hono": {
+        "severity": "moderate",
+        "classification": "developer-tool-only",
+        "why": "Four HTTP-server advisories (CORS ReDoS, memo() SSR cross-user disclosure, Connection-header proxy leak, Language-middleware DoS). Every one needs a running Hono server serving requests. Compy runs none: hono arrives only under the shadcn CLI, through the MCP SDK it embeds, and is never imported by src/ or by anything the Vite build emits into dist/.",
+        "paths": [
+          "shadcn@4.13.0 -> @modelcontextprotocol/sdk -> hono",
+          "shadcn@4.13.0 -> @modelcontextprotocol/sdk -> @hono/node-server -> hono"
+        ],
+        "review_by": "2026-10-31"
+      },
+      "ip-address": {
+        "severity": "high",
+        "classification": "developer-tool-only",
+        "why": "Three SSRF / trust-boundary bypasses that matter to a service classifying caller IPs. Reached only through express-rate-limit inside the shadcn CLI MCP SDK; Compy parses no addresses and ships no server, and node_modules is not packaged into the installer.",
+        "paths": [
+          "shadcn@4.13.0 -> @modelcontextprotocol/sdk -> express-rate-limit -> ip-address"
+        ],
+        "review_by": "2026-10-31"
+      },
+      "js-yaml": {
+        "severity": "high",
+        "classification": "developer-tool-only",
+        "why": "Quadratic CPU on !!omap resolution -- a denial of service against whoever parses the YAML. The only parser here is cosmiconfig reading the shadcn CLI own config on this machine, from this repository files. No Compy code path parses YAML, at build time or at runtime.",
+        "paths": [
+          "shadcn@4.13.0 -> cosmiconfig -> js-yaml"
+        ],
+        "review_by": "2026-10-31"
+      },
+      "nanoid": {
+        "severity": "high",
+        "classification": "build-time-only",
+        "why": "Infinite loop when a generator is called with a negative or zero size. Reached through postcss during the frontend build (the same path already acknowledged for postcss itself), which calls it with postcss own fixed sizes -- no repository input reaches the size argument. Nothing imports nanoid in src/, so it is not in the emitted bundle.",
+        "paths": [
+          "vite@7.3.5 -> postcss -> nanoid",
+          "shadcn@4.13.0 -> postcss -> nanoid"
+        ],
+        "review_by": "2026-10-31"
+      },
+      "undici": {
+        "severity": "high",
+        "classification": "developer-tool-only",
+        "why": "HTTP-client advisories (retry desync, cache-directive disclosure, CRLF injection, cookie-attribute injection) against a client making real requests. Compy frontend does no HTTP: undici is here as the fetch implementation inside jsdom (the vitest DOM environment) and inside dotenvx under the shadcn CLI. Neither runs in the shipped app, and the tests make no outbound requests.",
+        "paths": [
+          "jsdom@29.1.1 -> undici",
+          "shadcn@4.13.0 -> @dotenvx/dotenvx -> undici"
+        ],
         "review_by": "2026-10-31"
       }
     }
@@ -81,7 +142,9 @@
         "severity": "unscored",
         "classification": "shipped-not-reachable",
         "why": "Invalid pointer dereference in the fmt::Pointer impl for Atomic and Shared. Triggering it requires formatting one of those types with {:p} while the underlying pointer is invalid. crossbeam-epoch reaches the build only through crossbeam-deque <- rayon-core; Compy declares no dependency on rayon or crossbeam and never names either type, so no Compy code can reach the formatting path.",
-        "paths": ["crossbeam-epoch@0.9.18 <- crossbeam-deque <- rayon-core"],
+        "paths": [
+          "crossbeam-epoch@0.9.18 <- crossbeam-deque <- rayon-core"
+        ],
         "review_by": "2026-10-31"
       },
       "RUSTSEC-2026-0190": {
@@ -89,7 +152,9 @@
         "severity": "unsound",
         "classification": "shipped-not-reachable",
         "why": "Unsoundness in Error::downcast_mut(). Compy calls downcast_mut nowhere, and anyhow arrives through tauri-build, tauri-plugin and tauri-utils - predominantly build dependencies. No known exploit path, no vulnerability rating.",
-        "paths": ["anyhow@1.0.102 <- tauri-build / tauri-plugin / tauri-utils"],
+        "paths": [
+          "anyhow@1.0.102 <- tauri-build / tauri-plugin / tauri-utils"
+        ],
         "review_by": "2026-10-31"
       },
       "RUSTSEC-2025-0081": {
@@ -97,7 +162,9 @@
         "severity": "unmaintained",
         "classification": "shipped-unmaintained-no-known-vulnerability",
         "why": "Unmaintained, with no advisory of a defect. Reaches the build through urlpattern <- tauri-utils. Retiring it is a Tauri-side change; it is tracked here so the warning cannot quietly become a vulnerability without a re-review.",
-        "paths": ["unic-char-property@0.9.0 <- urlpattern <- tauri-utils"],
+        "paths": [
+          "unic-char-property@0.9.0 <- urlpattern <- tauri-utils"
+        ],
         "review_by": "2026-10-31"
       },
       "RUSTSEC-2025-0075": {
@@ -105,7 +172,9 @@
         "severity": "unmaintained",
         "classification": "shipped-unmaintained-no-known-vulnerability",
         "why": "Unmaintained, no known defect. Same urlpattern <- tauri-utils path as the rest of the unic family.",
-        "paths": ["unic-char-range@0.9.0 <- urlpattern <- tauri-utils"],
+        "paths": [
+          "unic-char-range@0.9.0 <- urlpattern <- tauri-utils"
+        ],
         "review_by": "2026-10-31"
       },
       "RUSTSEC-2025-0080": {
@@ -113,7 +182,9 @@
         "severity": "unmaintained",
         "classification": "shipped-unmaintained-no-known-vulnerability",
         "why": "Unmaintained, no known defect. Same urlpattern <- tauri-utils path as the rest of the unic family.",
-        "paths": ["unic-common@0.9.0 <- urlpattern <- tauri-utils"],
+        "paths": [
+          "unic-common@0.9.0 <- urlpattern <- tauri-utils"
+        ],
         "review_by": "2026-10-31"
       },
       "RUSTSEC-2025-0100": {
@@ -121,7 +192,9 @@
         "severity": "unmaintained",
         "classification": "shipped-unmaintained-no-known-vulnerability",
         "why": "Unmaintained, no known defect. Same urlpattern <- tauri-utils path as the rest of the unic family.",
-        "paths": ["unic-ucd-ident@0.9.0 <- urlpattern <- tauri-utils"],
+        "paths": [
+          "unic-ucd-ident@0.9.0 <- urlpattern <- tauri-utils"
+        ],
         "review_by": "2026-10-31"
       },
       "RUSTSEC-2025-0098": {
@@ -129,7 +202,9 @@
         "severity": "unmaintained",
         "classification": "shipped-unmaintained-no-known-vulnerability",
         "why": "Unmaintained, no known defect. Same urlpattern <- tauri-utils path as the rest of the unic family.",
-        "paths": ["unic-ucd-version@0.9.0 <- urlpattern <- tauri-utils"],
+        "paths": [
+          "unic-ucd-version@0.9.0 <- urlpattern <- tauri-utils"
+        ],
         "review_by": "2026-10-31"
       }
     }
