@@ -12,66 +12,66 @@
 
 ## Lane
 
-Worktree `.claude/worktrees/compy-discoverability-ux-context-68c484`, branch
-**`fix/confirm-stacking-focus-ring`** (code @ `0f0502f2`, doc commits after it), stacked on
-`claude/compy-discoverability-ux-context-68c484` @ `af501bf0`, both off `main` @ `a53d7795`.
-**Pushed; PR #93 open, NOT merged.** Reconstructs and executes the work three sessions
-were mid-flight on when the weekly cap hit 2026-08-09, plus the Codex PR-90 handoff pasted 2026-08-10.
+Worktree `.claude/worktrees/local-ci-verification-c41dbc`, branch **`claude/command-palette`** @
+`41579adb`, off `main` @ `7e02ecb1`. **PR [#99](https://github.com/Pootytxng/sentinel/pull/99) open,
+MERGEABLE/CLEAN, NOT merged** — a merge to `main` needs the owner's per-PR word.
+
+The prior occupant of this file (the discoverability lane, PRs #93/#94/#95/#97) has fully landed and
+its branches are pruned; that state is retired here, not lost — it is in git history.
 
 ## What this lane is doing
 
-Blocks 1 and 2 below are done and committed. Blocks 3 and 4 are untouched and are the next work.
+The owner's named priority, in his words: the app is *"just not inherently familiar or intuitive
+enough … honestly my biggest gripe."* He watched a tester fail to navigate it. The answer he chose
+was a global "jump anywhere" palette, not another room.
 
-## Done so far
+## Done and pushed
 
-- **§1 — both red gates are green** (`af501bf0`). Re-stamped `STATE:source_main_commit` `ce3f4bd`
-  → `a53d7795` (it trailed by 12, tolerance 10 — 30/30 citations were already anchored), and wrote
-  disposition rows for the three unjudged origin refs: PR #90's and PR #92's branches CLAIMED,
-  `feat/lab-49-parity-port` UNLANDED. That last row is the one to read — its PR is closed and its
-  rig work was re-cut into #90, but `scripts/verify-like-ci.mjs`, `scripts/lib/ci-steps.mjs` and
-  `scripts/verify-like-ci.test.mjs` exist on neither `main` nor #90. Pruning the ref drops the local
-  CI runner with it. **Owner decision, named in the row.**
-- **§2 — both defects fixed, guards mutation-proven** (`0f0502f2`). Confirm backdrop 200 → 2000.
-  Home's intent rows got their own `:focus-visible` rule. Carried onto a clean branch off `main`;
-  the closed PR #89 is not their vehicle.
-  - Both ported guards were themselves broken. The stacking guard checked a hand-written list of
-    four backdrops; it now derives every `position: fixed` full-viewport layer from the CSS and
-    found five more, `.modal-backdrop` at 1000 among them. The focus guard's lookahead sat after
-    `\s*` instead of after the colon, backtracked to zero width, inspected the space, and read
-    `outline: none` as an acceptable focus mark — **exempting every rule it exists to catch.**
-    Rewritten it flags them, and the sweep then found no other offender in `src`.
-  - **D2 is not currently reachable by users** — `.hc-intake-row` renders only behind
-    `compy_home_intake`, DEFAULT OFF. §4 is what turns it on. D1 is live on `main` unconditionally.
-  - Gates: `npm test` 3909 passed / 3 skipped / 308 files · tsc clean · `npm run build` ok ·
-    verify-release-state 30/30 · disposition audit OK · encoding-guard 1237 · doc-budget ALL PASS ·
-    `git diff --check` clean. **Rust untouched, so cargo was not run.**
-  - This worktree had **no local `node_modules`** — tests were resolving from the parent repo, so
-    two guards that read `node_modules/...` by relative path reported false FAILs. `npm ci` run at
-    root and in `site-app/`. A nested worktree will do this again.
-  - **Self-review VERDICT: PASS (9/9)** on a dev build from this worktree at 1500x980 over CDP.
-    Live `elementFromPoint` at the confirm's centre returned the confirm — not the overlay — with
-    FirstCheck (999) open and with Gaming Mode (1000) open, and `.wc-bar` (9000) still hit-tests
-    above it. Focus proven with real `Input.dispatchKeyEvent` Tab, not a class match: focus draws
-    `rgb(179,102,255) solid 2px`, hover draws none, both share the same wash.
-    **Named limitation:** this rig had no applicable rec (FirstCheck read 16/16 clean) and Gaming
-    Mode's consent gate never calls `useConfirm`, so the confirm markup was injected at
-    ConfirmProvider's real mount point (verified last child of `#root` in `main.tsx`) rather than
-    raised by a real mutation. That proves the stacking law exactly; it does not re-prove the apply
-    path. **A real mutation-raised confirm over a full-screen surface stays unexercised** — fold it
-    into the next install's QA.
-  - Superseded duplicates cleared from the quietpitwall worktree (now clean).
+- **The command palette** — `src/design/CommandPalette.tsx`, `command-palette-data.ts` (pure
+  index/ranking), `command-palette.css`; mounted by `ShellV2.tsx`, wired in `App.tsx`. Flag
+  `compy_command_palette` in `theme.ts` + `useCommandPaletteFlag()` in `use-hud.ts`, **default ON**
+  with a `"0"` failsafe. 45 tests across index, component and flag contract.
+  - Indexes the rail it is GIVEN (never `HOME_RAIL` — that still carries retired doors), Lab
+    stations, Settings, and `KNOWLEDGE`. Two ranking rules: **navigation outranks reading**, and
+    **symptoms are search terms** (`crashed` → blackbox, `laggy` → latency).
+  - Every row calls the host's existing writer — `onNavigate` / `openLabStation` / `openLibrary`.
+    A group whose callback is absent is not indexed at all, so there are no dead doors.
+- **Contrast fix + its guard** (`4a0c6544`). The `kbd` chips rendered `--v2-faint` (~3.45:1 at
+  10.5px) because `shell-v2.css`'s `:root[data-v2="on"] .v2-shell kbd` outranks an unprefixed rule —
+  and *matching* its specificity still lost, because a tie goes to insertion order and ShellV2
+  imports CommandPalette above its own CSS. The rule now carries `.v2-shell` and wins outright.
+  The first guard regex-matched selector text and went green while the bug was live; it now
+  computes CSS specificity for both stylesheets and demands ours be strictly greater.
+- **`footCount` pluralized** — `footCount_one` / `footCount_other` with `{{count}}`; zh-CN carries
+  only `_other` (no `one` category). It read "1 results".
+- **`fix(tests)` ExperimentBench** (`f35dd535`) — its loaded-runner test simulated backend latency
+  with an 80 ms timer, then asserted a state that only holds while that timer is pending. Under a
+  loaded suite the awaited query outlasts it and the precondition fails (it did here; passed twice
+  in isolation seconds later). Now gated on a promise the test opens itself.
+
+**Verification:** full suite 314/314 through the local pre-push gate (zero Actions minutes).
+**Self-review VERDICT: PASS** at round 3 — rounds 1 and 2 both FAILED on the contrast defect above.
 
 ## Left to do
 
-Declined ports and their reasons: `git show feat/lab-49-parity-port:docs/SESSION_HANDOFF.md`. One
-real gap there: no friendly-name layer exists (`RecName.tsx` / `rec-detail.ts` absent), so the
-one-name-per-rec invariant is unenforced. Remaining #14→#49 slices: comparison evidence · rollback ·
-denial semantics · decision-journey behavior.
+### 1 · Merge decision on PR #99 — owner's word
+
+Not blocked on anything technical. Do not merge without an explicit per-PR instruction.
+
+### 2 · The local CI runner on a closed PR's branch
+
+`origin/feat/lab-49-parity-port` (PR #89, closed unmerged) carries three files that exist on neither
+`main` nor #90: `scripts/verify-like-ci.mjs`, `scripts/lib/ci-steps.mjs`,
+`scripts/verify-like-ci.test.mjs`. `main` now has its own gate — `scripts/verify-local.ps1` +
+`.githooks/pre-push` + `scripts/deps-satisfied.ps1` (PR #98). **Converge or kill:** either port what
+the older runner does better into `verify-local.ps1`, or write the reason it dies with its PR into
+that branch's `docs/BRANCH_DISPOSITIONS.md` row. Right now the row says "needs a decision" and
+nobody has made one.
 
 ### 3 · PR #90 recovery (Codex handoff, 2026-08-10 — treat its gate list as claims)
 
 PR #90 `agent/rig-evidence-map-clean`, head `98146456`, OPEN / MERGEABLE / no review decision.
-Independent review was never completed (expired OAuth), so no gate below is re-proven here.
+Independent review was never completed (expired OAuth), so no gate below is re-proven.
 
 - **P1** `LabConsole.tsx` resolves selected IDs only through detected `buildRigParts()` entries —
   manual parts and fans can select into no panel. Keep exact IDs; never collapse to `gpu`/`storage`.
@@ -83,36 +83,22 @@ Independent review was never completed (expired OAuth), so no gate below is re-p
   review to that head, and rejects self-authored SHAs — don't re-apply the old governance diff blind.
 - Owner-run verifier: `powershell -NoProfile -File scripts/verify-release.ps1 -EvidencePath src-tauri\target\codex-verification\pr90-final-review-verify-release-evidence.json`
 
-### 4 · Crash & Freeze Rescue discoverability — the tester walked to Event Viewer
-
-The 2026-08-09 session was cut off before any work; the whole task is untouched. Root cause is
-confirmed in source, not inferred:
-
-- `BlackBox` mounts **only** as a Lab station (`src/surfaces/LabConsole.tsx:234`, `case "blackbox"`).
-  There is no top-level route to it. The tester could not find it because it is not findable.
-- Its user-facing name is **"Black Box"** (`src/i18n/locales/en/lab.json:303`) — an insider
-  metaphor. Nothing in the nav says *crash*.
-- Home intake's `crashedFroze` row routes to room `"lab"`, **not** to the Black Box station
-  (`src/surfaces/home-intake-data.ts:52`) — even with the band on, it drops you in the room.
-- The band is behind `compy_home_intake`, DEFAULT OFF (`src/design/theme.ts:400`).
-- Backend is already built and read-only: `src-tauri/src/blackbox.rs`, `src/surfaces/BlackBox.tsx`,
-  `src/data/blackbox-resolution.ts` (Event Log + WER + Reliability History).
-- Direction: problem-first Home entry → deep-link straight into the crash evidence, not the room.
-  No new subsystem, no telemetry, no notification-as-primary-discovery.
-
-**Correction to the pasted handoff:** it says clearing storage "activates a default-on preview and
-is not a valid flag-off test." Not true of this flag — `readHomeIntake()` returns false unless the
-value is literally `"1"`, so cleared storage *is* off. Don't write tests around that claim.
-
 ## Do NOT
 
-- Do not push either branch without adding its own disposition row in the same commit — the audit
-  is green now and a new origin ref turns it red again.
+- Do not push any branch without adding its own disposition row in the same commit — a new origin
+  ref turns `scripts/branch-disposition-audit.test.mjs` red. **And a row is perishable both ways:**
+  this lane hit the table's conflict twice in one hour because neighbouring lanes merged and pruned
+  refs mid-flight. On a conflict there, re-check `git ls-remote --heads origin <ref>` before
+  choosing a side — the row that names a dead ref is the wrong one, whichever side it is on.
 - Do not merge, release, publish, or touch signing keys. Do not rebase PR #92 before #90 resolves.
 - Do not claim PR #90's gates from the `98146456` receipt if the tree moves.
-- Do not read §2's PASS as covering the apply path — see the named limitation above.
+- Do not run `loadLibrary()` without injecting a loader from inside a test — it boots a real Vite
+  server inside the worker pool and the deadlock surfaces in unrelated files. It now refuses under
+  `VITEST`; see `scripts/nested-vite-server-guard.test.mjs`.
 
 ## Resume with
 
-**§4 next**, in a fresh session — the owner's stated product priority, and it needs a whole context
-window plus a taste before/after. **§3** is the Codex lane's; take it only on an explicit handoff.
+**Item 2 (converge or kill the old CI runner)** unless the owner says otherwise — it is the last
+open piece of the Codex local-CI handoff, and its branch row has been "needs a decision" since
+2026-08-08. A dev build of this branch may still be running on port 1420; stop all `compy` and free
+1420 *before* launching another.
