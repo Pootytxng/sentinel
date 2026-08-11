@@ -1012,7 +1012,59 @@ mod win_maximize_fix {
     }
 }
 
+/// An env var counts as SET only when it carries a meaningful value. `""` and `"0"` are how a caller
+/// turns a flag back OFF, and reading either as "on" would leave the escape hatch impossible to
+/// release once anything upstream had exported the name.
+fn is_env_flag_set(value: Option<&str>) -> bool {
+    matches!(value, Some(v) if !v.trim().is_empty() && v.trim() != "0")
+}
+
+/// FOREGROUND COURTESY (owner ask, 2026-08-11). A launch that Compy's own tooling performs must not
+/// take the foreground away from whatever the owner is actually doing: an exclusive-fullscreen game
+/// is MINIMISED when another window activates, so a dev relaunch or a post-build reinstall costs him
+/// his session. Suppressing activation does not hide the app — the window is created, visible and on
+/// the taskbar. It simply does not steal focus.
+///
+/// Precedence, highest first:
+///   `COMPY_ACTIVATE`    — explicit "yes, take the foreground": the escape hatch, so a launch that is
+///                         MEANT to be seen stays one variable away.
+///   `COMPY_NO_ACTIVATE` — explicit "do not". Set by `scripts/ship-reinstall.ps1` around its relaunch.
+///   debug build         — every `npm run tauri dev` launch is tooling-initiated by definition, so
+///                         dev is quiet by DEFAULT rather than by a launcher remembering to opt in.
+///
+/// A shipped release the owner starts himself sets neither variable and activates normally.
+fn should_suppress_activation(
+    is_debug_build: bool,
+    no_activate: Option<&str>,
+    activate: Option<&str>,
+) -> bool {
+    if is_env_flag_set(activate) {
+        return false;
+    }
+    if is_env_flag_set(no_activate) {
+        return true;
+    }
+    is_debug_build
+}
+
 pub fn run() {
+    let mut context = tauri::generate_context!();
+    let no_activate = std::env::var("COMPY_NO_ACTIVATE").ok();
+    let activate = std::env::var("COMPY_ACTIVATE").ok();
+    if should_suppress_activation(
+        cfg!(debug_assertions),
+        no_activate.as_deref(),
+        activate.as_deref(),
+    ) {
+        // Applied to the CONFIG, not to the built window. By the time `setup` runs the window already
+        // exists and the activation has already happened, so un-focusing there would be a visible
+        // snatch-and-return that has ALREADY minimised the game it was meant to spare. `focus` is the
+        // creation-time flag; `focusable` is deliberately untouched, because a window the owner
+        // cannot click into afterwards is a broken app, not a polite one.
+        for window in &mut context.config_mut().app.windows {
+            window.focus = false;
+        }
+    }
     tauri::Builder::default()
         // Single-instance MUST be the first plugin. A second launch focuses the
         // existing main window instead of opening another process — so only one
@@ -1215,8 +1267,47 @@ pub fn run() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod activation_tests {
+    use super::{is_env_flag_set, should_suppress_activation};
+
+    #[test]
+    fn a_release_launch_the_owner_starts_himself_still_takes_the_foreground() {
+        assert!(!should_suppress_activation(false, None, None));
+    }
+
+    #[test]
+    fn a_dev_launch_is_quiet_by_default_because_tooling_started_it() {
+        assert!(should_suppress_activation(true, None, None));
+    }
+
+    #[test]
+    fn no_activate_suppresses_a_release_launch() {
+        assert!(should_suppress_activation(false, Some("1"), None));
+    }
+
+    #[test]
+    fn activate_outranks_no_activate_so_the_escape_hatch_always_wins() {
+        assert!(!should_suppress_activation(true, Some("1"), Some("1")));
+        assert!(!should_suppress_activation(false, Some("1"), Some("1")));
+    }
+
+    #[test]
+    fn an_empty_or_zero_value_turns_a_flag_off_rather_than_on() {
+        // Otherwise a variable exported as "" anywhere upstream would pin the behaviour permanently
+        // on, and the escape hatch could never be released once it had been set.
+        assert!(!is_env_flag_set(Some("")));
+        assert!(!is_env_flag_set(Some("   ")));
+        assert!(!is_env_flag_set(Some("0")));
+        assert!(is_env_flag_set(Some("1")));
+        assert!(!is_env_flag_set(None));
+        assert!(should_suppress_activation(false, Some("1"), Some("0")));
+        assert!(!should_suppress_activation(false, Some("0"), None));
+    }
 }
 
 

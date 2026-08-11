@@ -235,6 +235,14 @@ if (-not $NoLaunch) {
   if ($env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS) {
     throw "REFUSING TO RELAUNCH: WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS is set in this process, so a detached relaunch would inherit it and could leave the shipped build serving a debugging port."
   }
+  # FOREGROUND COURTESY (owner ask, 2026-08-11). This relaunch happens whenever a build finishes,
+  # which is routinely while the owner is doing something else on the same machine - and activating a
+  # window MINIMISES an exclusive-fullscreen game. The app still launches and still appears on the
+  # taskbar; it just does not snatch the foreground. Set on THIS process rather than per-child
+  # precisely because the relaunches below are -Detached, and ShellExecute has no child-only
+  # environment (see Start-NativeProcess's contract in scripts/lib/native-process.ps1). Honoured by
+  # `should_suppress_activation` in src-tauri/src/lib.rs.
+  $env:COMPY_NO_ACTIVATE = "1"
   if ($VerifyRuntime) {
     # Derive what the running app MUST report before anything is launched: a bad -ExpectedCommit
     # must never leave a release build running with a debugging port open.
