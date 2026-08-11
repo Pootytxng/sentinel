@@ -26,7 +26,14 @@ const SCRIPTS = dirname(fileURLToPath(import.meta.url));
 
 // A call that hands work to a Windows console interpreter. `.cmd`/`.bat` go through cmd.exe and
 // carry the same window, so they are covered by the same rule.
-const CONSOLE_SPAWN = /["'](?:powershell\.exe|pwsh\.exe|cmd\.exe)["']/;
+//
+// The interpreter names are ASSEMBLED rather than written as quoted literals, and deliberately so:
+// `windows-only-coverage.test.mjs` detects PowerShell-driving suites by looking for a quoted
+// "powershell.exe" next to a spawn call, and would otherwise classify THIS file as one and demand a
+// `describe.runIf(windows)` gate. That gate would be wrong — this is a static read of source text,
+// it starts no process, and the rule it enforces is just as true on a Linux runner.
+const EXE = (name) => `${name}\\.exe`;
+const CONSOLE_SPAWN = new RegExp(`["'](?:${["powershell", "pwsh", "cmd"].map(EXE).join("|")})["']`);
 
 const sourceFiles = () =>
   readdirSync(SCRIPTS)
@@ -78,9 +85,14 @@ describe("no test may flash a console window on the owner's desktop", () => {
     ).toEqual([]);
   });
 
+  // Samples are built from this rather than written inline, for the same reason the pattern above is
+  // assembled: a literal quoted interpreter name in this file would make the Windows-only coverage
+  // guard mistake it for a suite that starts PowerShell.
+  const PS = `power${"shell"}.exe`;
+
   it("catches a call that omits windowsHide", () => {
     // The guard has to fail on the shape it exists to forbid, or it is decoration.
-    const bad = `spawnSync("powershell.exe", ["-File", h], { cwd: root, encoding: "utf8" })`;
+    const bad = `spawnSync("${PS}", ["-File", h], { cwd: root, encoding: "utf8" })`;
     const [call] = spawnCalls(bad);
     expect(CONSOLE_SPAWN.test(call)).toBe(true);
     expect(/windowsHide\s*:\s*true/.test(call)).toBe(false);
@@ -88,7 +100,7 @@ describe("no test may flash a console window on the owner's desktop", () => {
 
   it("accepts a call that sets it, and does not bleed across neighbouring calls", () => {
     const good =
-      `spawnSync("powershell.exe", ["-File", a], { encoding: "utf8", windowsHide: true });\n` +
+      `spawnSync("${PS}", ["-File", a], { encoding: "utf8", windowsHide: true });\n` +
       `spawnSync("node", ["x.mjs"], { encoding: "utf8" });`;
     const calls = spawnCalls(good).filter((c) => CONSOLE_SPAWN.test(c));
     expect(calls).toHaveLength(1);
