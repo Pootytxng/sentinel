@@ -9,13 +9,17 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, existsSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { exportLibrary, loadLibrary } from "./export-library.mjs";
+import { importFromRepo } from "./lib/library-render.mjs";
 
 let outDir;
+let lib; // hoisted: every exportLibrary() call must be handed this, or it loads its own (see below)
 let entries;
 let pages; // Map<filename, html>
 
 beforeAll(async () => {
-  const lib = await loadLibrary();
+  // importFromRepo, not the default nested vite server — see loadLibrary's docblock for why booting
+  // one inside a vitest worker deadlocks the pool.
+  lib = await loadLibrary({ load: importFromRepo });
   entries = lib.entries;
   outDir = mkdtempSync(join(tmpdir(), "compy-library-export-"));
   await exportLibrary({ lib, outDir });
@@ -95,7 +99,9 @@ describe("export-library", () => {
 
   it("export is destination-clean (re-export does not accumulate stale pages)", async () => {
     expect(existsSync(join(outDir, "index.html"))).toBe(true);
-    const again = await exportLibrary({ outDir });
+    // `lib` is not optional here: exportLibrary does `lib ??= await loadLibrary()`, and that
+    // default boots a nested vite server inside this worker — which is the whole bug below.
+    const again = await exportLibrary({ lib, outDir });
     expect(again.entryCount).toBe(entries.length);
     const files = readdirSync(outDir).filter((f) => f.endsWith(".html"));
     expect(files.length).toBe(entries.length + 1);
