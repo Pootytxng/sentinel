@@ -22,7 +22,7 @@ describe("WhatsThis", () => {
     const onOpen = vi.fn();
     render(<WhatsThis id="game-mode" onOpen={onOpen} />);
     fireEvent.click(screen.getByRole("button", { name: /What's this/i }));
-    fireEvent.click(screen.getByRole("button", { name: /More in the Blackbook/i }));
+    fireEvent.click(screen.getByRole("button", { name: /More in History/i }));
     expect(onOpen).toHaveBeenCalledWith("game-mode");
   });
 

@@ -2,10 +2,10 @@
   "rail": {
     "home": "Home",
     "check": "Check",
-    "play": "Monitor",
+    "play": "Live",
     "fix": "Tune",
-    "learn": "Blackbook",
-    "lab": "Lab",
+    "learn": "History",
+    "lab": "Test",
     "optimize": "Optimize"
   },
   "shellV2": {
@@ -94,7 +94,7 @@
     }
   },
   "term": {
-    "moreInBlackbook": "More in the Blackbook →"
+    "moreInBlackbook": "More in History →"
   },
   "trustSwitch": {
     "working": "Working…",
@@ -125,7 +125,7 @@
   },
   "whatsThis": {
     "trigger": "What's this?",
-    "more": "More in the Blackbook →"
+    "more": "More in History →"
   },
   "windowChrome": {
     "title": "Compy",

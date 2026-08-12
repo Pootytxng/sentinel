@@ -28,7 +28,7 @@
         "goal": "A more responsive PC — free up drive headroom, prioritize the game, and cut background drag."
       }
     },
-    "monitorSectionsAria": "Monitor sections",
+    "monitorSectionsAria": "Live sections",
     "detailLevelAria": "Detail level"
   },
   "monitorV2": {
@@ -43,7 +43,7 @@
     "liveTelemetryLabel": "Live telemetry",
     "tuningPresetsLabel": "Tuning presets",
     "tuningPresetsHint": "by-hand checklists · advisory — Compy never changes these for you",
-    "monitorSectionsAria": "Monitor sections",
+    "monitorSectionsAria": "Live sections",
     "detailLevelAria": "Detail level",
     "verdict": {
       "noSessionsHeadline": "No game sessions measured yet.",
@@ -107,7 +107,7 @@
     "changesOn_one": "{{count}} COMPY CHANGE ON",
     "changesOn_other": "{{count}} COMPY CHANGES ON",
     "combinedEffectTag": " · COMBINED EFFECT",
-    "combinedEffectTooltip": "These deltas reflect all active changes (and anything else that differed) together — for a one-change-at-a-time measurement, run the Lab's before/after benchmark.",
+    "combinedEffectTooltip": "These deltas reflect all active changes (and anything else that differed) together — for a one-change-at-a-time measurement, run Test's before/after benchmark.",
     "fpsScopeLabel": "fps",
     "gpuTempLabel": "GPU temp",
     "gpuLoadLabel": "GPU load",

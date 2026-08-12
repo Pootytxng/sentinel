@@ -285,7 +285,7 @@
     },
     "errors": {
       "applyFailed": "Couldn't apply it: {{error}}. Nothing on your PC was changed.",
-      "rollbackFailed": "The apply worked but the rollback didn't finish: {{error}}. The change is still active and undoable in the Lab under \"Applied & history\"."
+      "rollbackFailed": "The apply worked but the rollback didn't finish: {{error}}. The change is still active and undoable in Test under \"Applied & history\"."
     }
   },
   "compyHero": {

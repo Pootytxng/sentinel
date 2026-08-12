@@ -128,7 +128,7 @@
     "changeRolledBack": "Change rolled back — settings unchanged.",
     "scoreSectionTitle": "Score",
     "pointsSuffix": "{{points}} pts",
-    "labViewButton": "Lab view",
+    "labViewButton": "Test view",
     "arcadeViewButton": "Arcade view",
     "noWinsBlurb": "No verified wins yet. Measure a tweak above — any change that beats your noise floor lands here. Points are only ever earned by a measured, certified improvement; a tweak that doesn't help earns nothing.",
     "awardArcadeBoost": "boosted {{metric}} by {{delta}}",

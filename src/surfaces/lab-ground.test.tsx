@@ -123,14 +123,14 @@ describe("LabGround OPS CONSOLE — LabConsole replaces the Instrument Bench ben
   it("title-header law (owner 2026-07-10 round 2): the HUD h1 is exactly 'Lab' — never a status sentence; classic '0' keeps the verdict sentence", () => {
     // hud flag absent = default ON → the header is the room title, no sub.
     const c = renderMerged([SAFE_REC]);
-    expect(c.querySelector(".v2-verdict .hud-headline")!.textContent).toBe("Lab");
+    expect(c.querySelector(".v2-verdict .hud-headline")!.textContent).toBe("Test");
     expect(c.querySelector(".v2-verdict-sub")).toBeNull();
     cleanup();
     // The classic "0" failsafe keeps the pre-rollout contract: the verdict sentence as the h1.
     localStorage.setItem("compy_editorial", "0");
     const off = renderMerged([SAFE_REC]);
     expect(off.querySelector(".hud-headline")).toBeNull();
-    expect(off.querySelector(".v2-verdict h1")!.textContent!.trim()).not.toBe("Lab");
+    expect(off.querySelector(".v2-verdict h1")!.textContent!.trim()).not.toBe("Test");
   });
 
   it("Optimize is NOT always-on — its detail panel opens only when its dock node is clicked", () => {

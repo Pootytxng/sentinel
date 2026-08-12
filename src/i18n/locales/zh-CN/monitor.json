@@ -28,7 +28,7 @@
         "goal": "让 PC 反应更灵敏——腾出硬盘空间、优先保障游戏进程、减少后台拖累。"
       }
     },
-    "monitorSectionsAria": "监测分区",
+    "monitorSectionsAria": "实时分区",
     "detailLevelAria": "详细程度"
   },
   "monitorV2": {
@@ -43,7 +43,7 @@
     "liveTelemetryLabel": "实时遥测",
     "tuningPresetsLabel": "调优预设",
     "tuningPresetsHint": "手动操作清单 · 仅供参考——Compy 不会替你更改任何设置",
-    "monitorSectionsAria": "监测分区",
+    "monitorSectionsAria": "实时分区",
     "detailLevelAria": "详细程度",
     "verdict": {
       "noSessionsHeadline": "还没有记录到任何游戏会话。",
@@ -107,7 +107,7 @@
     "changesOn_one": "{{count}} 项 COMPY 更改已启用",
     "changesOn_other": "{{count}} 项 COMPY 更改已启用",
     "combinedEffectTag": " · 综合效果",
-    "combinedEffectTooltip": "这些差值反映的是所有当前启用更改（以及其他可能存在的差异）叠加后的综合效果——若需逐项测量单个更改的影响，请使用实验室的前后对比基准测试。",
+    "combinedEffectTooltip": "这些差值反映的是所有当前启用更改（以及其他可能存在的差异）叠加后的综合效果——若需逐项测量单个更改的影响，请使用「测试」的前后对比基准测试。",
     "fpsScopeLabel": "fps",
     "gpuTempLabel": "GPU 温度",
     "gpuLoadLabel": "GPU 负载",

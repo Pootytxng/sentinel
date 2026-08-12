@@ -14,8 +14,8 @@
     },
     "livePreview": "Live preview",
     "monitorConsole": {
-      "title": "Monitor console",
-      "sub": "Monitor's live face as an instrument cluster: rolling fps and frametime traces with honest gauges. Same sensors, same measurements — turn off for the classic live tiles."
+      "title": "Live console",
+      "sub": "The Live room's face as an instrument cluster: rolling fps and frametime traces with honest gauges. Same sensors, same measurements — turn off for the classic live tiles."
     },
     "jarvisMotion": {
       "title": "JARVIS motion",

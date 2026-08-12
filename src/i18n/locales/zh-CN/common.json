@@ -2,10 +2,10 @@
   "rail": {
     "home": "主页",
     "check": "检测",
-    "play": "监测",
+    "play": "实时",
     "fix": "调校",
-    "learn": "小黑本",
-    "lab": "实验室",
+    "learn": "历史",
+    "lab": "测试",
     "optimize": "优化"
   },
   "shellV2": {
@@ -93,7 +93,7 @@
     }
   },
   "term": {
-    "moreInBlackbook": "在小黑本(Blackbook)中查看更多 →"
+    "moreInBlackbook": "在历史(History)中查看更多 →"
   },
   "trustSwitch": {
     "working": "处理中…",
@@ -124,7 +124,7 @@
   },
   "whatsThis": {
     "trigger": "这是什么?",
-    "more": "在小黑本中查看更多 →"
+    "more": "在历史中查看更多 →"
   },
   "windowChrome": {
     "title": "Compy",

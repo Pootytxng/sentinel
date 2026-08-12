@@ -28,7 +28,10 @@ afterEach(() => {
   health.value = null;
 });
 
-const ITEMS = railFor(true); // merged (the shipped default): Home · Optimize · Monitor · Blackbook · Lab
+const ITEMS = railFor(true); // merged (the shipped default): Home · Optimize · Live · History · Test
+// Rendered rail text comes from i18n (common.rail.*), not HOME_RAIL's guard-pinned literals —
+// room renames (owner-approved 2026-08-12: Blackbook→History, Lab→Test, Monitor→Live) land here.
+const RAIL_TEXT: Record<string, string> = { home: "Home", check: "Check", fix: "Optimize", play: "Live", learn: "History", lab: "Test", optimize: "Optimize" };
 
 const shell = (over: Partial<Parameters<typeof ShellV2>[0]> = {}) => (
   <ShellV2
@@ -48,7 +51,7 @@ describe("ShellV2 rail", () => {
     render(shell());
     const tabs = screen.getAllByRole("tab");
     expect(tabs.map((t) => t.textContent)).toEqual(
-      ITEMS.map((it, i) => `${it.label}${i + 1}`),
+      ITEMS.map((it, i) => `${RAIL_TEXT[it.id]}${i + 1}`),
     );
   });
 
@@ -60,7 +63,7 @@ describe("ShellV2 rail", () => {
   it("a rail tab's accessible name is the room name ALONE — the digit is a keyboard hint", () => {
     render(shell());
     for (const [i, item] of ITEMS.entries()) {
-      const tab = screen.getByRole("tab", { name: item.label });
+      const tab = screen.getByRole("tab", { name: RAIL_TEXT[item.id] });
       expect(tab.getAttribute("aria-keyshortcuts"), item.label).toBe(String(i + 1));
       expect(tab.querySelector("kbd")?.getAttribute("aria-hidden")).toBe("true");
       // and the name is exactly the label — no trailing digit, no glyph text
@@ -72,7 +75,7 @@ describe("ShellV2 rail", () => {
     const onNavigate = vi.fn();
     render(shell({ onNavigate }));
     expect(screen.getByRole("tab", { name: /Home/ }).getAttribute("aria-selected")).toBe("true");
-    fireEvent.click(screen.getByRole("tab", { name: /Monitor/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /Live/ }));
     expect(onNavigate).toHaveBeenCalledWith("play");
   });
 
@@ -176,7 +179,7 @@ describe("ShellV2 digit shortcuts (the kbd hints must WORK)", () => {
 describe("ShellV2 topbar", () => {
   it("shows the active room title, its crumb, and the REAL build stamp once fetched", async () => {
     const { container } = render(shell({ activeId: "play" }));
-    expect(container.querySelector(".v2-room-title")?.textContent).toBe("Monitor");
+    expect(container.querySelector(".v2-room-title")?.textContent).toBe("Live");
     expect(screen.getByText(`· ${ROOM_CRUMB.play}`)).toBeTruthy();
     await waitFor(() => expect(screen.getByText("ab12cd3 · dev")).toBeTruthy());
   });

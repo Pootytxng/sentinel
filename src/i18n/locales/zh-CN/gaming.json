@@ -126,7 +126,7 @@
     "changeRolledBack": "更改已回滚——设置未发生变化。",
     "scoreSectionTitle": "得分",
     "pointsSuffix": "{{points}} 分",
-    "labViewButton": "实验室视图",
+    "labViewButton": "测试视图",
     "arcadeViewButton": "街机视图",
     "noWinsBlurb": "目前还没有经过验证的提升。测量上方的某项优化——任何超过噪声下限的改动都会显示在这里。只有经过测量、认证的真实提升才能获得分数;没有效果的优化项不会得分。",
     "awardArcadeBoost": "将 {{metric}} 提升了 {{delta}}",
