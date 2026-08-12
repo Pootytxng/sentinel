@@ -121,24 +121,44 @@ band behind `compy_home_intake`, which is DEFAULT OFF by the standing new-surfac
 only once eyeballed + approved*. Until it flips, the routing fix reaches nobody; the rename reaches
 everyone who already opens the Lab. Flip it in Settings, look at the band, and say yes or no.
 
-**One ordering matters:** PR [#93](https://github.com/Pootytxng/sentinel/pull/93) carries the fix for
-that band's keyboard focus ring (it drew focus identically to hover). Merge #93 **before** the flag
-goes on, or the flip ships that defect to real users on day one.
+**The ordering that used to block this is CLEARED.** PR [#93](https://github.com/Pootytxng/sentinel/pull/93)
+carried the fix for that band's keyboard focus ring (it drew focus identically to hover) and had to
+land first; it merged 2026-08-11 as `b3362f74`. Nothing stands between you and the flip now.
 
-### A_ref. One dead branch left on GitHub — deleting it needs your click  ·  ⏳ NEW 2026-08-11
-Two of the three finished branches were deleted cleanly. The third, `docs/close-recovery-lane`, was
-refused three times — the permission prompt for deleting a branch was declined to this session, so it
-is still sitting on GitHub even though its work is already in the main line (PR
-[#103](https://github.com/Pootytxng/sentinel/pull/103)).
+### A_ref. Four dead branches left on GitHub — deleting them needs your click  ·  ⏳ NEW 2026-08-11, grew same day
+Branch deletion has now been refused to two separate sessions, so finished branches are piling up.
+All four are done — their work is already in the main line — and each is a leftover label, not code:
 
-**Nothing is broken and nothing is at risk** — it is a leftover label, not code. The only cost is that
-`docs/BRANCH_DISPOSITIONS.md` has to keep a row explaining why it is still there. Next time a session
-asks to delete a branch, approving it clears both. No rush.
+| branch | landed as |
+| --- | --- |
+| `docs/close-recovery-lane` | PR [#103](https://github.com/Pootytxng/sentinel/pull/103) |
+| `codex/compy-care-capability-gate` | PR [#92](https://github.com/Pootytxng/sentinel/pull/92) |
+| `claude/admiring-lumiere-648403` | PR [#96](https://github.com/Pootytxng/sentinel/pull/96) |
+| `claude/compy-recovery-closeout-391516` | PR [#105](https://github.com/Pootytxng/sentinel/pull/105) |
+
+**Nothing is broken and nothing is at risk.** The cost is that `docs/BRANCH_DISPOSITIONS.md` has to
+carry a row for each one explaining why it still exists, and those rows go stale as `main` moves —
+which is exactly what happened to `docs/close-recovery-lane`, whose row had to be corrected on
+2026-08-11 because it claimed a merge state that had already expired. Next time a session asks to
+delete a branch, approving it clears the backlog. No rush.
+
+### A_hook. The handoff-block guard is built but switched off — one settings line turns it on  ·  ⏳ NEW 2026-08-11
+You pointed out (again) that sessions were ending without telling you whether to archive or delete
+them, which is how your sidebar fills with work you can't tell apart. That rule was written in
+`CLAUDE.md` the whole time and kept getting missed, so it is now a guard instead of a paragraph:
+`.claude/hooks/handoff-block-guard.mjs` refuses to let a session end without both a disposition and
+a real next step. It is merged and tested (PR [#106](https://github.com/Pootytxng/sentinel/pull/106)).
+
+**It does nothing until it is registered**, and editing `.claude/settings.json` is permission-gated
+for the assistant — the prompt was declined. One entry appended to the `Stop` hooks array turns it
+on; any session can add it once you approve the settings edit. Until then the rule is back to being
+prose, which is the state that already failed.
 
 ### A-closed. Nine §A items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
-None of them is waiting on you — A0, A_ci and A_rig above are the only §A items still open, and
-only A0 actually needs your hands. Archived
+None of them is waiting on you. The §A items still open above are A0, A_ci, A_rig, A_crash, A_ref
+and A_hook; the ones that actually need your hands are **A0**, **A_crash** (one flag + a look),
+**A_ref** (approve a branch delete) and **A_hook** (approve one settings edit). Archived
 2026-08-04 (TOKEN LAW §1 — history leaves the live doc, never gets deleted): **A0b** zh-CN merged +
 published in v0.9.11 · **A1** Gaming Mode QA signed off · **A2** beta smoke (sitting waived; the live
 beta thread is **§B2** below) · **A3** Lab Ops Console · **A4** Home console · **A5** Monitor v5
