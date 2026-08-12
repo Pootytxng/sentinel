@@ -1,0 +1,643 @@
+<title>Compy — a foundation it can stand on</title>
+
+<style>
+  /* ---- tokens: light is the base, dark redefines only tokens ------------- */
+  :root{
+    --paper:#f4f6f9; --card:#ffffff; --sunk:#eceff4;
+    --ink:#14161c; --ink2:#565d70; --ink3:#7d8496;
+    --rule:#e0e4ea; --rule2:#cfd5df;
+    --accent:#5330d9; --accent-soft:#efeaff;
+    --ok:#0f8a52; --warn:#9a6600; --bad:#c0392f; --info:#1668c9;
+    --shadow:0 1px 2px rgba(20,22,28,.05), 0 8px 24px rgba(20,22,28,.06);
+    --display:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;
+    --body:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+    --data:"Cascadia Mono",ui-monospace,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#0e1015; --card:#171a22; --sunk:#12141b;
+      --ink:#e9ebf1; --ink2:#a0a7b8; --ink3:#828a9c;
+      --rule:#262b36; --rule2:#333a48;
+      --accent:#a78bfa; --accent-soft:#221b3a;
+      --ok:#3ddc97; --warn:#f5c542; --bad:#ff6b5e; --info:#6cb8ff;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0e1015; --card:#171a22; --sunk:#12141b;
+    --ink:#e9ebf1; --ink2:#a0a7b8; --ink3:#828a9c;
+    --rule:#262b36; --rule2:#333a48;
+    --accent:#a78bfa; --accent-soft:#221b3a;
+    --ok:#3ddc97; --warn:#f5c542; --bad:#ff6b5e; --info:#6cb8ff;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:var(--body); font-size:16px; line-height:1.6;
+    margin:0; padding:0;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1120px; margin:0 auto; padding:56px 28px 96px;}
+  .col{max-width:68ch;}
+
+  h1,h2,h3{font-family:var(--display); text-wrap:balance; margin:0;}
+  h1{font-size:clamp(30px,4.6vw,46px); line-height:1.08; font-weight:700; letter-spacing:-.02em;}
+  h2{font-size:clamp(22px,2.6vw,28px); line-height:1.2; font-weight:650; letter-spacing:-.01em;}
+  h3{font-size:18px; font-weight:650; line-height:1.3;}
+  p{margin:0;}
+  a{color:var(--accent);}
+
+  .eyebrow{
+    font-family:var(--data); font-size:12px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink3);
+  }
+  .lede{font-size:19px; line-height:1.5; color:var(--ink2);}
+  .stack{display:flex; flex-direction:column; gap:14px;}
+  .stack-lg{display:flex; flex-direction:column; gap:26px;}
+
+  section{margin-top:64px; display:flex; flex-direction:column; gap:22px;}
+  .head{display:flex; flex-direction:column; gap:8px; border-top:2px solid var(--ink);
+        padding-top:14px;}
+
+  /* ---- facts row -------------------------------------------------------- */
+  .facts{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:2px;
+         background:var(--rule); border:1px solid var(--rule); border-radius:8px; overflow:hidden;}
+  .fact{background:var(--card); padding:18px 18px 20px; display:flex; flex-direction:column; gap:6px;}
+  .fact b{font-family:var(--display); font-size:30px; font-weight:700; line-height:1;
+          font-variant-numeric:tabular-nums;}
+  .fact span{font-size:14px; color:var(--ink2); line-height:1.45;}
+
+  /* ---- reference pattern list ------------------------------------------- */
+  .refs{display:flex; flex-direction:column; gap:0; border:1px solid var(--rule);
+        border-radius:8px; background:var(--card); overflow:hidden;}
+  .ref{display:grid; grid-template-columns:minmax(150px,190px) 1fr; gap:22px;
+       padding:18px 20px; border-bottom:1px solid var(--rule);}
+  .ref:last-child{border-bottom:0;}
+  .ref .who{display:flex; flex-direction:column; gap:3px;}
+  .ref .who b{font-size:15px; font-weight:650;}
+  .ref .who i{font-style:normal; font-size:12.5px; color:var(--ink3);}
+  .ref .what{font-size:14.5px; color:var(--ink2); line-height:1.55;}
+  .ref .what strong{color:var(--ink); font-weight:600;}
+  @media(max-width:640px){.ref{grid-template-columns:1fr; gap:8px;}}
+
+  /* ---- artboards (the Compy mockups) ------------------------------------ */
+  .board{background:var(--sunk); border:1px solid var(--rule); border-radius:12px;
+         padding:22px; display:flex; flex-direction:column; gap:14px;}
+  .board > figcaption{font-size:13.5px; color:var(--ink2); line-height:1.5;}
+  .boardtag{display:flex; align-items:center; gap:10px;}
+  .boardtag .pill{font-family:var(--data); font-size:11px; letter-spacing:.1em;
+    text-transform:uppercase; padding:3px 8px; border-radius:4px;
+    background:var(--accent-soft); color:var(--accent); font-weight:600;}
+  .boardtag .pill.now{background:var(--rule); color:var(--ink2);}
+
+  /* the app surface — one fixed dark world, deliberately, because it IS the app */
+  .app{
+    --a-bg:#0a0c10; --a-panel:#141824; --a-line:rgba(255,255,255,.09);
+    --a-text:#e8ebf2; --a-mut:#8b93a7; --a-fnt:#7a8397;
+    --a-acc:#a78bfa; --a-ok:#3ddc97; --a-warn:#f5c542; --a-bad:#ff6b5e; --a-info:#6cb8ff;
+    background:var(--a-bg); color:var(--a-text); border-radius:8px; overflow:hidden;
+    font-family:var(--body); border:1px solid rgba(255,255,255,.08);
+  }
+  .app-body{padding:30px 34px 34px; display:flex; flex-direction:column;}
+  .app-rail{display:flex; gap:0; border-bottom:1px solid var(--a-line); padding:0 12px;}
+  .app-rail span{padding:12px 16px; font-size:14px; color:var(--a-mut);}
+  .app-rail span.on{color:var(--a-text); box-shadow:inset 0 -2px 0 var(--a-acc);}
+
+  /* ---- today, recreated ------------------------------------------------- */
+  .now-title{font-size:32px; font-weight:600; letter-spacing:-.01em;}
+  .now-tag{font-size:11px; color:var(--a-fnt); margin-top:2px;}
+  .now-verdict{font-size:24px; font-weight:500; margin-top:20px; color:var(--a-text);}
+  .now-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:18px;}
+  .now-cell{background:var(--a-panel); border:1px solid var(--a-line); border-radius:7px;
+            padding:11px 12px; display:flex; flex-direction:column; gap:3px;}
+  .now-cell .k{font-family:var(--data); font-size:9px; letter-spacing:.14em;
+               text-transform:uppercase; color:var(--a-fnt);}
+  .now-cell .v{font-size:19px;}
+  .now-cell .d{font-size:11px; color:var(--a-fnt);}
+  .now-band{margin-top:20px; border-top:1px solid var(--a-line); padding-top:14px;}
+  .now-band .k{font-family:var(--data); font-size:9px; letter-spacing:.14em;
+               text-transform:uppercase; color:var(--a-fnt);}
+  .now-band .row{display:flex; gap:8px; margin-top:9px; flex-wrap:wrap;}
+  .now-band .row em{font-style:normal; font-size:11px; color:var(--a-mut);
+    border:1px solid var(--a-line); border-radius:5px; padding:6px 10px; background:var(--a-panel);}
+  .callouts{display:flex; flex-direction:column; gap:7px; margin-top:6px;}
+  .callout{font-size:13.5px; color:var(--ink2); display:flex; gap:9px; line-height:1.45;}
+  .callout b{color:var(--bad); font-family:var(--data); font-size:11px; letter-spacing:.06em;
+             padding-top:3px; white-space:nowrap;}
+
+  /* ---- proposed front door --------------------------------------------- */
+  .fd{display:flex; flex-direction:column; align-items:flex-start; gap:0; padding:56px 44px 44px;}
+  .fd .state{display:flex; align-items:center; gap:11px; margin-bottom:18px;}
+  .fd .dot{width:11px; height:11px; border-radius:50%; background:var(--a-ok);
+           box-shadow:0 0 0 5px rgba(61,220,151,.14);}
+  .fd .state span{font-size:15px; color:var(--a-ok); font-weight:600; letter-spacing:.01em;}
+  .fd h4{font-family:var(--display); font-size:40px; line-height:1.12; font-weight:650;
+         margin:0; max-width:17ch; letter-spacing:-.02em;}
+  .fd .sub{font-size:16px; color:var(--a-mut); margin-top:14px; max-width:52ch; line-height:1.55;}
+  .fd .cta{margin-top:30px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;}
+  .btn{border:0; border-radius:8px; padding:14px 24px; font-size:16px; font-weight:600;
+       font-family:var(--body); background:var(--a-acc); color:#1a0a2e; cursor:default;}
+  .btn.ghost{background:transparent; color:var(--a-mut); border:1px solid var(--a-line);}
+  .fd .foot{margin-top:34px; padding-top:16px; border-top:1px solid var(--a-line);
+            font-size:14px; color:var(--a-mut); width:100%; display:flex; gap:20px; flex-wrap:wrap;}
+  .fd .foot b{color:var(--a-text); font-weight:600;}
+
+  /* ---- interview -------------------------------------------------------- */
+  .iv{padding:44px; display:flex; flex-direction:column; gap:0;}
+  .iv .step{font-size:14px; color:var(--a-mut);}
+  .iv h4{font-family:var(--display); font-size:30px; font-weight:650; margin:10px 0 0;
+         letter-spacing:-.015em;}
+  .iv .opts{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:26px;}
+  @media(max-width:620px){.iv .opts{grid-template-columns:1fr;}}
+  .opt{background:var(--a-panel); border:1px solid var(--a-line); border-radius:9px;
+       padding:18px 20px; display:flex; flex-direction:column; gap:5px;}
+  .opt.sel{border-color:var(--a-acc); background:rgba(167,139,250,.09);}
+  .opt b{font-size:16px; font-weight:600;}
+  .opt span{font-size:13.5px; color:var(--a-mut); line-height:1.45;}
+  .iv .back{margin-top:24px; font-size:14px; color:var(--a-mut);}
+
+  /* ---- finding card ----------------------------------------------------- */
+  .fx{padding:38px 40px; display:flex; flex-direction:column; gap:0;}
+  .fx .lvl{display:inline-flex; align-items:center; gap:7px; align-self:flex-start;
+    border:1px solid rgba(245,197,66,.4); background:rgba(245,197,66,.1); color:var(--a-warn);
+    border-radius:999px; padding:5px 12px 5px 10px; font-size:13px; font-weight:600;}
+  .fx h4{font-family:var(--display); font-size:26px; font-weight:650; margin:16px 0 0;
+         letter-spacing:-.015em; max-width:24ch;}
+  .fx .why{font-size:15.5px; color:var(--a-mut); margin-top:12px; max-width:60ch; line-height:1.6;}
+  .fx .evi{margin-top:20px; background:var(--a-panel); border:1px solid var(--a-line);
+    border-radius:8px; padding:14px 16px; display:flex; flex-direction:column; gap:7px;}
+  .fx .evi .t{font-size:13px; color:var(--a-mut);}
+  .fx .evi .n{font-family:var(--data); font-size:14px; color:var(--a-text);
+              font-variant-numeric:tabular-nums;}
+  .fx .act{margin-top:24px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;}
+  .fx .undo{margin-top:18px; font-size:13.5px; color:var(--a-mut); display:flex; gap:8px;}
+
+  /* ---- specimens -------------------------------------------------------- */
+  .spec{background:var(--card); border:1px solid var(--rule); border-radius:10px; overflow:hidden;}
+  .spec-row{display:grid; grid-template-columns:120px 92px 1fr; gap:20px; align-items:baseline;
+    padding:14px 20px; border-bottom:1px solid var(--rule);}
+  .spec-row:last-child{border-bottom:0;}
+  .spec-row .nm{font-family:var(--data); font-size:12px; color:var(--ink3);
+                letter-spacing:.08em; text-transform:uppercase;}
+  .spec-row .px{font-family:var(--data); font-size:12.5px; color:var(--ink2);
+                font-variant-numeric:tabular-nums;}
+  .spec-row .sm{color:var(--ink);}
+  @media(max-width:640px){.spec-row{grid-template-columns:1fr; gap:4px;}}
+
+  .killed{display:flex; flex-wrap:wrap; gap:7px;}
+  .killed span{font-family:var(--data); font-size:12.5px; padding:4px 9px; border-radius:5px;
+    background:var(--sunk); color:var(--ink3); text-decoration:line-through;
+    border:1px solid var(--rule);}
+
+  .swatches{display:grid; grid-template-columns:repeat(auto-fit,minmax(184px,1fr)); gap:12px;}
+  .sw{border:1px solid var(--rule); border-radius:9px; background:var(--card);
+      padding:15px 16px; display:flex; flex-direction:column; gap:7px;}
+  .sw .chip{display:inline-flex; align-items:center; gap:7px; align-self:flex-start;
+    font-size:13.5px; font-weight:600; padding:4px 11px 4px 9px; border-radius:999px;}
+  .sw .mean{font-size:13.5px; color:var(--ink2); line-height:1.45;}
+  .sw .hex{font-family:var(--data); font-size:11.5px; color:var(--ink3);}
+  .glyph{width:15px; height:15px; flex:none;}
+
+  /* ---- glossary --------------------------------------------------------- */
+  .tablewrap{overflow-x:auto; border:1px solid var(--rule); border-radius:9px; background:var(--card);}
+  table{border-collapse:collapse; width:100%; min-width:600px;}
+  th,td{text-align:left; padding:11px 18px; border-bottom:1px solid var(--rule); font-size:14.5px;
+        vertical-align:top;}
+  th{font-family:var(--data); font-size:11.5px; letter-spacing:.1em; text-transform:uppercase;
+     color:var(--ink3); font-weight:600; background:var(--sunk);}
+  tr:last-child td{border-bottom:0;}
+  td.from{color:var(--ink3); text-decoration:line-through; white-space:nowrap;}
+  td.to{color:var(--ink); font-weight:600;}
+  td.why{color:var(--ink2);}
+
+  /* ---- tooling ---------------------------------------------------------- */
+  .tools{display:flex; flex-direction:column; gap:10px;}
+  .tool{display:grid; grid-template-columns:26px 1fr; gap:14px; background:var(--card);
+    border:1px solid var(--rule); border-radius:9px; padding:16px 18px;}
+  .tool .mark{font-family:var(--data); font-size:13px; font-weight:700; color:var(--accent);
+              padding-top:2px;}
+  .tool .who{font-size:11.5px; font-family:var(--data); letter-spacing:.1em;
+             text-transform:uppercase; color:var(--ink3);}
+  .tool b{font-size:15.5px; font-weight:650; display:block; margin-top:3px;}
+  .tool p{font-size:14px; color:var(--ink2); margin-top:5px; line-height:1.5;}
+  .tool code{font-family:var(--data); font-size:12.5px; background:var(--sunk);
+    border:1px solid var(--rule); border-radius:4px; padding:1px 5px;}
+
+  .order{display:flex; flex-direction:column; gap:0; border-left:2px solid var(--rule2);
+         padding-left:0;}
+  .ord{display:grid; grid-template-columns:44px 1fr; gap:16px; padding:0 0 22px 20px;
+       position:relative;}
+  .ord:last-child{padding-bottom:0;}
+  .ord .n{font-family:var(--data); font-size:13px; color:var(--accent); font-weight:700;
+          padding-top:2px;}
+  .ord b{font-size:16px; font-weight:650;}
+  .ord p{font-size:14.5px; color:var(--ink2); margin-top:4px; line-height:1.5;}
+
+  .note{background:var(--accent-soft); border:1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    border-radius:9px; padding:16px 18px; font-size:14.5px; line-height:1.55; color:var(--ink);}
+  .note b{font-weight:650;}
+</style>
+
+<div class="wrap">
+
+<header class="stack col">
+  <p class="eyebrow">Compy · design foundation · 11 Aug 2026</p>
+  <h1>Your testers aren't bouncing off the looks. They're bouncing off the shape.</h1>
+  <p class="lede">Four rooms of instruments, opened onto a hardware tour, written in 9-pixel
+  jargon. Nothing here says <em>what's wrong with my PC</em> — which is the only sentence any of
+  your friends came in with. Below: what the apps non-technical people actually like do instead,
+  and a front door for Compy built on it.</p>
+</header>
+
+<!-- ==================== 1. the measured diagnosis ==================== -->
+<section>
+  <div class="head col">
+    <p class="eyebrow">01 · What we already measured</p>
+    <h2>The overwhelm is quantifiable</h2>
+  </div>
+  <p class="col" style="font-size:15.5px;color:var(--ink2)">Taken off your installed build
+  (<code style="font-family:var(--data);font-size:13px">3155c7a0</code>) with a debug port, not
+  guessed from screenshots.</p>
+
+  <div class="facts">
+    <div class="fact"><b>57%</b><span>of all text on one screen renders at 11&nbsp;pixels or
+      smaller. Your users are gamers on 1080p screens, often sitting back from them.</span></div>
+    <div class="fact"><b>12</b><span>distinct font sizes on a single screen. A scale with twelve
+      steps isn't a hierarchy — it's noise, and the eye can't find the important thing.</span></div>
+    <div class="fact"><b>1</b><span>element on the whole page is larger than 19px — and it's the
+      word <em>“Home”</em>, which tells the user nothing.</span></div>
+    <div class="fact"><b>10</b><span>steps of hardware tour before a first-time user is allowed to
+      reach the thing they opened the app to find out.</span></div>
+  </div>
+
+  <p class="col" style="font-size:15.5px;color:var(--ink2)">Contrast is already fixed — 32 pieces of
+  unreadable text went to zero last train. The four above are structural, and no repaint touches
+  them.</p>
+</section>
+
+<!-- ==================== 2. reference research ==================== -->
+<section>
+  <div class="head col">
+    <p class="eyebrow">02 · Research</p>
+    <h2>What every app your friends already use has in common</h2>
+  </div>
+  <p class="col" style="font-size:15.5px;color:var(--ink2)">These aren't picked for beauty. They're
+  picked because non-technical people operate them without help, and they all solve the same
+  problem Compy has: an expert subject, an amateur audience.</p>
+
+  <div class="refs">
+    <div class="ref">
+      <div class="who"><b>Windows Security</b><i>Microsoft · the closest analogue</i></div>
+      <div class="what">One green shield and the sentence <em>“No action needed.”</em> Every detail
+        is one click down. <strong>Steal: the front door is a verdict, not a dashboard.</strong>
+        Your users already know this app — matching it buys instant familiarity.</div>
+    </div>
+    <div class="ref">
+      <div class="who"><b>TurboTax</b><i>Intuit · the interview model</i></div>
+      <div class="what">Takes the single most intimidating task in American adult life and asks one
+        plain question per screen, hiding every question that doesn't apply to you.
+        <strong>Steal: guide with questions, not with controls.</strong></div>
+    </div>
+    <div class="ref">
+      <div class="who"><b>Battery Health</b><i>Apple · honest limits</i></div>
+      <div class="what">A percentage, one sentence of what it means, one recommendation. It says
+        “we can't know X” rather than inventing X. <strong>Steal: your honesty rules are a design
+        asset — say the unknown in plain words instead of hiding it in a tooltip.</strong></div>
+    </div>
+    <div class="ref">
+      <div class="who"><b>Google Security Checkup</b><i>the guided sweep</i></div>
+      <div class="what">Runs itself, then presents findings as a short ranked list where each row is
+        a plain sentence plus one button. <strong>Steal: findings are sentences with a button, never
+        rows in a table.</strong></div>
+    </div>
+    <div class="ref">
+      <div class="who"><b>Duolingo</b><i>one thing per screen</i></div>
+      <div class="what">Never shows two decisions at once, and every screen has exactly one obvious
+        next tap. <strong>Steal: if a screen has more than one primary button, it has none.</strong></div>
+    </div>
+  </div>
+
+  <p class="col" style="font-size:15.5px;color:var(--ink2)">The principle underneath all five is
+  <strong>progressive disclosure</strong>: show the answer first, the reasoning on request, the
+  instruments on demand. Compy currently ships in reverse order.</p>
+</section>
+
+<!-- ==================== 3. the front door ==================== -->
+<section>
+  <div class="head col">
+    <p class="eyebrow">03 · The proposal, rendered</p>
+    <h2>The front door</h2>
+  </div>
+
+  <figure class="board" style="margin:0">
+    <div class="boardtag"><span class="pill now">Today</span>
+      <span style="font-size:13px;color:var(--ink3)">recreated at true measured sizes from the audit</span></div>
+    <div class="app">
+      <div class="app-rail"><span class="on">Home</span><span>Monitor</span><span>Blackbook</span><span>Lab</span></div>
+      <div class="app-body">
+        <div class="now-title">Home</div>
+        <div class="now-tag">your PC at a glance, and what to do next</div>
+        <div class="now-verdict">Nothing is obviously wrong right now</div>
+        <div class="now-grid">
+          <div class="now-cell"><span class="k">Changes to this PC</span><span class="v">3</span><span class="d">1 still on · every one undoable</span></div>
+          <div class="now-cell"><span class="k">Changed outside Compy</span><span class="v">1</span><span class="d">drivers · Windows · power</span></div>
+          <div class="now-cell"><span class="k">Sessions recorded</span><span class="v">0</span><span class="d">no frametime capture yet</span></div>
+          <div class="now-cell"><span class="k">Drift detected</span><span class="v">0</span><span class="d">applied state matches live</span></div>
+        </div>
+        <div class="now-band">
+          <span class="k">What are you here to do?</span>
+          <div class="row"><em>My game stutters</em><em>It crashed</em><em>It feels slow</em><em>Just check it over</em></div>
+        </div>
+      </div>
+    </div>
+    <div class="callouts">
+      <div class="callout"><b>SIZE</b><span>The biggest word on screen is “Home”. The verdict — the
+        only sentence that matters — is a third smaller.</span></div>
+      <div class="callout"><b>JARGON</b><span>“Drift”, “frametime capture”, “applied state matches
+        live”. Four of the five biggest numbers need a glossary.</span></div>
+      <div class="callout"><b>BURIED</b><span>The best idea in the product — “What are you here to
+        do?” — is a 9px label at the bottom, below four counters nobody asked for.</span></div>
+    </div>
+  </figure>
+
+  <figure class="board" style="margin:0">
+    <div class="boardtag"><span class="pill">Proposed</span>
+      <span style="font-size:13px;color:var(--ink3)">same app, same data, one job per screen</span></div>
+    <div class="app">
+      <div class="app-body fd">
+        <div class="state"><span class="dot"></span><span>Checked just now</span></div>
+        <h4>Your PC looks healthy.</h4>
+        <p class="sub">I found nothing broken. If something still feels off — a stutter, a crash, a
+        slowdown — tell me what happened and I'll go looking.</p>
+        <div class="cta">
+          <button class="btn" type="button">Something's wrong &rarr;</button>
+          <button class="btn ghost" type="button">Check again</button>
+        </div>
+        <div class="foot">
+          <span><b>3</b> changes Compy made · all undoable</span>
+          <span><b>1</b> change something else made</span>
+          <span>See everything &rsaquo;</span>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>What changed:</b> the verdict is the headline. The four counters become one quiet
+    line of footer text — still there, no longer competing. The “what are you here to do” idea is
+    promoted to the single primary button. Nothing was deleted; it was ranked.</figcaption>
+  </figure>
+</section>
+
+<!-- ==================== 4. the interview ==================== -->
+<section>
+  <div class="head col">
+    <p class="eyebrow">04 · The proposal, rendered</p>
+    <h2>Behind that button: the interview, not a control panel</h2>
+  </div>
+
+  <figure class="board" style="margin:0">
+    <div class="boardtag"><span class="pill">Proposed</span>
+      <span style="font-size:13px;color:var(--ink3)">one question, four answers, no vocabulary</span></div>
+    <div class="app">
+      <div class="app-body iv">
+        <p class="step">Question 1 of 3</p>
+        <h4>What happened?</h4>
+        <div class="opts">
+          <div class="opt sel"><b>The game stuttered</b><span>Smooth, then a hitch or a freeze,
+            then smooth again</span></div>
+          <div class="opt"><b>Something crashed</b><span>The game closed, or the whole PC restarted</span></div>
+          <div class="opt"><b>It just feels slow</b><span>Everything is sluggish, not only games</span></div>
+          <div class="opt"><b>I'm not sure</b><span>Look at everything and tell me what you find</span></div>
+        </div>
+        <p class="back">&lsaquo; Back &nbsp;·&nbsp; This takes about a minute</p>
+      </div>
+    </div>
+    <figcaption>Every option is written the way a person would say it out loud. “I'm not sure” is a
+    first-class answer — it is the one your friends will press, and it must not be a dead end.</figcaption>
+  </figure>
+
+  <figure class="board" style="margin:0">
+    <div class="boardtag"><span class="pill">Proposed</span>
+      <span style="font-size:13px;color:var(--ink3)">the finding — a sentence, a number, one button, a visible undo</span></div>
+    <div class="app">
+      <div class="app-body fx">
+        <span class="lvl">
+          <svg class="glyph" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.6 15 14H1L8 1.6Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 6v3.4M8 11.6v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          Worth fixing
+        </span>
+        <h4>Your PC is set to save power, not to run games.</h4>
+        <p class="why">Windows is holding your processor back to keep things quiet and cool. That's
+        the right setting for a laptop on battery — it's the wrong one for a gaming PC, and it's a
+        common cause of the exact hitching you described.</p>
+        <div class="evi">
+          <span class="t">What I measured on your PC just now</span>
+          <span class="n">Power plan: Balanced &nbsp;·&nbsp; CPU capped at 62% &nbsp;·&nbsp; 4 stutters in the last session</span>
+        </div>
+        <div class="act">
+          <button class="btn" type="button">Fix this for me</button>
+          <button class="btn ghost" type="button">Not now</button>
+        </div>
+        <p class="undo">
+          <svg class="glyph" viewBox="0 0 16 16" aria-hidden="true" style="color:var(--a-mut)"><path d="M3 8a5 5 0 1 1 1.6 3.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M3 4.5V8h3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          I save exactly how it is now first. One click puts it back, any time.
+        </p>
+      </div>
+    </div>
+    <figcaption>This is where Compy's real advantage shows. Every rival tool says “optimize”. Compy
+    can say <em>what it measured, what it will change, and how to undo it</em> — and that is the
+    trust story, told in words a non-technical person believes.</figcaption>
+  </figure>
+</section>
+
+<!-- ==================== 5. the foundation ==================== -->
+<section>
+  <div class="head col">
+    <p class="eyebrow">05 · The foundation</p>
+    <h2>Type: twelve sizes down to six</h2>
+  </div>
+  <div class="spec">
+    <div class="spec-row"><span class="nm">Verdict</span><span class="px">40 / 650</span>
+      <span class="sm" style="font-family:var(--display);font-size:32px;font-weight:650;line-height:1.1">Your PC looks healthy.</span></div>
+    <div class="spec-row"><span class="nm">Section</span><span class="px">26 / 650</span>
+      <span class="sm" style="font-family:var(--display);font-size:24px;font-weight:650">What happened?</span></div>
+    <div class="spec-row"><span class="nm">Card title</span><span class="px">17 / 600</span>
+      <span class="sm" style="font-size:17px;font-weight:600">The game stuttered</span></div>
+    <div class="spec-row"><span class="nm">Body</span><span class="px">15 / 400</span>
+      <span class="sm" style="font-size:15px">Windows is holding your processor back to keep things quiet.</span></div>
+    <div class="spec-row"><span class="nm">Label</span><span class="px">13 / 500</span>
+      <span class="sm" style="font-size:13px;font-weight:500">Changes Compy made</span></div>
+    <div class="spec-row"><span class="nm">Data</span><span class="px">13 mono</span>
+      <span class="sm" style="font-family:var(--data);font-size:13px">62% · 4 stutters · 3155c7a0</span></div>
+  </div>
+  <div class="stack col">
+    <p style="font-size:15px;color:var(--ink2)"><b style="color:var(--ink)">Deleted outright:</b></p>
+    <div class="killed"><span>8px</span><span>9px</span><span>10px</span><span>10.5px</span>
+      <span>11px</span><span>12px</span><span>12.5px</span><span>13.5px</span><span>16px</span>
+      <span>19px</span><span>32px</span></div>
+    <p style="font-size:15px;color:var(--ink2)">The audit said raise the floor to 11px. I'm revising
+    my own call upward to <b style="color:var(--ink)">13px</b> — 11 was a conservative step away from
+    a twelve-size mess, and it is still too small for someone sitting back from a 1080p monitor.
+    Separately: five font families are resolving on one screen, one of them <b style="color:var(--ink)">Arial</b>,
+    which means a stack is falling through. That's the cause of the tour's tick mark rendering like
+    a square-root sign.</p>
+  </div>
+</section>
+
+<section>
+  <div class="head col">
+    <p class="eyebrow">05 · The foundation</p>
+    <h2>Colour: four meanings, one accent, never colour alone</h2>
+  </div>
+  <p class="col" style="font-size:15.5px;color:var(--ink2)">Your own token file states the law —
+  <em>“colour is information, never decoration”</em> — and the app breaks it: the Lab's green is a
+  hair off the “this is good” green, and the Blackbook's amber is a hair off the “needs attention”
+  amber. So the same colour means two different things depending on which room you're in. That is
+  the definition of confusing.</p>
+
+  <div class="swatches">
+    <div class="sw">
+      <span class="chip" style="background:rgba(15,138,82,.12);color:var(--ok)">
+        <svg class="glyph" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8.4 6.4 11.6 12.8 4.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Healthy</span>
+      <span class="mean">Nothing to do. Only ever this.</span><span class="hex">#3ddc97</span>
+    </div>
+    <div class="sw">
+      <span class="chip" style="background:rgba(154,102,0,.12);color:var(--warn)">
+        <svg class="glyph" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.6 15 14H1L8 1.6Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 6v3.4M8 11.6v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        Worth fixing</span>
+      <span class="mean">Safe to ignore, better not to.</span><span class="hex">#f5c542</span>
+    </div>
+    <div class="sw">
+      <span class="chip" style="background:rgba(192,57,47,.12);color:var(--bad)">
+        <svg class="glyph" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 4.6v4.2M8 11.2v.1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        Needs you</span>
+      <span class="mean">This is why your PC is misbehaving.</span><span class="hex">#ff6b5e</span>
+    </div>
+    <div class="sw">
+      <span class="chip" style="background:rgba(22,104,201,.12);color:var(--info)">
+        <svg class="glyph" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 7.2v4M8 4.8v.1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        Can't tell</span>
+      <span class="mean">Honestly unknown. Never guessed.</span><span class="hex">#6cb8ff</span>
+    </div>
+    <div class="sw">
+      <span class="chip" style="background:var(--accent-soft);color:var(--accent)">Compy</span>
+      <span class="mean">The one accent. Buttons and selection only — never a status.</span>
+      <span class="hex">#a78bfa</span>
+    </div>
+  </div>
+
+  <div class="note col"><b>Rooms stop owning a colour.</b> Every green in the app means healthy;
+  every amber means worth fixing. This is a deletion, not a repaint — and it's the single change
+  that does most for comprehension. Roughly one man in twelve can't separate your Lab green from
+  your status green anyway, which is why every chip above carries a shape and a word, not just a hue.</div>
+</section>
+
+<section>
+  <div class="head col">
+    <p class="eyebrow">05 · The foundation</p>
+    <h2>Words: say it the way they'd say it</h2>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Today</th><th>Proposed</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td class="from">Blackbook</td><td class="to">History</td><td class="why">An invented word. Nobody guesses what's behind it.</td></tr>
+        <tr><td class="from">Lab</td><td class="to">Test</td><td class="why">“Lab” sounds like it's for experts. It is for anyone.</td></tr>
+        <tr><td class="from">Monitor</td><td class="to">Live</td><td class="why">Reads as a noun — people look for a display setting.</td></tr>
+        <tr><td class="from">Home</td><td class="to">— <span style="color:var(--ink3);font-weight:400">(delete the word)</span></td><td class="why">A tab you're already on doesn't need a 32px title.</td></tr>
+        <tr><td class="from">Guided setup</td><td class="to">Skip it entirely</td><td class="why">It's a hardware tour. First run should land on the answer.</td></tr>
+        <tr><td class="from">Rollback</td><td class="to">Undo</td><td class="why">Every human already knows Undo.</td></tr>
+        <tr><td class="from">Trust Ledger</td><td class="to">What Compy changed</td><td class="why">Describes itself. No branding required.</td></tr>
+        <tr><td class="from">Drift detected</td><td class="to">Something changed since</td><td class="why">“Drift” is our word, not theirs.</td></tr>
+        <tr><td class="from">Frametime</td><td class="to">How smooth it felt</td><td class="why">Keep the number; lead with the meaning.</td></tr>
+        <tr><td class="from">Apply recommendation</td><td class="to">Fix this for me</td><td class="why">A button says what happens when you press it.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="col" style="font-size:15px;color:var(--ink2)">Room names touch the brand, so those four
+  are the one part of this I'd want your nod on. Everything else is wording and I'll just do it.</p>
+</section>
+
+<!-- ==================== 6. tooling ==================== -->
+<section>
+  <div class="head col">
+    <p class="eyebrow">06 · Your question</p>
+    <h2>What I actually need to do this</h2>
+  </div>
+  <p class="col" style="font-size:15.5px;color:var(--ink2)">Honest answer first: <b style="color:var(--ink)">no
+  tool was the blocker</b> for anything above. I measured the app, found the problems and drew the
+  fix with what's already wired. Tools make the next part — building and proving it across a whole
+  app — faster and safer. Ranked by what they'd actually change.</p>
+
+  <div class="tools">
+    <div class="tool"><span class="mark">1</span><div>
+      <span class="who">You · one setting</span>
+      <b>Turn subagents back on for this work</b>
+      <p>They're switched off in this session. A redesign wants three or four layout directions
+      explored side by side and judged, plus the consumer-panel personas reacting to each. Serial,
+      that's days; parallel, it's an afternoon. This is the single biggest limiter.</p></div></div>
+
+    <div class="tool"><span class="mark">2</span><div>
+      <span class="who">You · one account decision</span>
+      <b>Figma, plus its MCP server</b>
+      <p>Lets me read real design files — components, spacing, colour variables — and build directly
+      from them, and lets you point at a layout you like and have me pull it apart. Free tier is
+      enough. Setup is <code>claude mcp add</code> once you've enabled Dev&nbsp;Mode. Without it I'm
+      designing in HTML mockups like this one, which works but can't be handed to anyone else.</p></div></div>
+
+    <div class="tool"><span class="mark">3</span><div>
+      <span class="who">Me · free, no permission needed</span>
+      <b>An accessibility engine in the test suite</b>
+      <p><code>axe-core</code> plus the contrast/type measurement I already wrote, run on every
+      build. Turns “is this readable” from an argument into a failing test. Your bug&rarr;guard law
+      says this is how a fix counts as done.</p></div></div>
+
+    <div class="tool"><span class="mark">4</span><div>
+      <span class="who">Me · free</span>
+      <b>The shadcn component MCP</b>
+      <p>A library of keyboard-accessible, screen-reader-correct dialogs, menus and form controls.
+      Not for the look — for the plumbing underneath, so I spend the effort on Compy's voice instead
+      of rebuilding a dropdown.</p></div></div>
+
+    <div class="tool"><span class="mark">5</span><div>
+      <span class="who">Already wired · costs credits</span>
+      <b>v0</b>
+      <p>Generates React layouts fast. Good for throwing five versions of a screen at the wall.
+      Every call spends your credits, so I'd use it for exploration only and hand-build what ships.</p></div></div>
+
+    <div class="tool"><span class="mark">6</span><div>
+      <span class="who">You · costs nothing but time</span>
+      <b>Thirty minutes with two of those friends</b>
+      <p>The one thing no tool replaces. Sit them in front of it, say nothing, and ask them to find
+      out why their game stutters. Where they stop is the real backlog. Record it if you can — I'll
+      turn it into fixes. Everything above is my judgement; this is evidence.</p></div></div>
+  </div>
+</section>
+
+<!-- ==================== 7. order ==================== -->
+<section>
+  <div class="head col">
+    <p class="eyebrow">07 · If you say go</p>
+    <h2>The order I'd build it</h2>
+  </div>
+  <div class="order">
+    <div class="ord"><span class="n">01</span><div><b>Type and colour, app-wide</b>
+      <p>Six sizes, 13px floor, kill the Arial fallthrough, rooms give up their hue. Mechanical,
+      low-risk, and it makes every screen in the app better at once. About a day.</p></div></div>
+    <div class="ord"><span class="n">02</span><div><b>The front door</b>
+      <p>Verdict becomes the headline, counters become footer, first run lands here instead of on
+      the hardware tour. This is the change your friends will feel within two seconds.</p></div></div>
+    <div class="ord"><span class="n">03</span><div><b>The interview</b>
+      <p>Promote “what are you here to do?” into a real guided flow with the plain-English finding
+      card. The biggest build, and the one that makes Compy feel like a doctor instead of a
+      dashboard.</p></div></div>
+    <div class="ord"><span class="n">04</span><div><b>Rewrite the words</b>
+      <p>The glossary above, applied everywhere, with a test that fails the build if a banned term
+      comes back.</p></div></div>
+    <div class="ord"><span class="n">05</span><div><b>The instruments stay — behind a door</b>
+      <p>Monitor, Lab and the record aren't deleted. They stop being the first thing anyone sees.
+      Your power users lose nothing; your friends stop drowning.</p></div></div>
+  </div>
+</section>
+
+</div>
