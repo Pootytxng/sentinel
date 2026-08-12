@@ -133,6 +133,15 @@ You said "you have full permission", so the pile is cleared: `docs/close-recover
 their now-dead rows dropped from `docs/BRANCH_DISPOSITIONS.md` in the same commit. Nothing is left
 for you here.
 
+### A_ref2. One more dead branch — a single delete click  ·  ⏳ NEW 2026-08-11
+A sixth-and-final leftover appeared right after A_ref closed: `docs/untangle-dispositions`. A session
+fixed the branch-record duplicate there, but its push was blocked long enough that another lane fixed
+the exact same thing first (PRs #109 and #110). The branch now carries nothing `main` lacks, so it was
+abandoned rather than merged — **but the delete was permission-denied to the assistant**, same as the
+last pile. Its row in `docs/BRANCH_DISPOSITIONS.md` is marked SUPERSEDED and goes when the ref does.
+Delete it on GitHub (Branches → trash icon), or approve ref deletion once and any session can clear
+this class for good. Nothing is lost: nothing on it is unique.
+
 ### A_hook. The handoff-block guard is built but switched off — one settings line turns it on  ·  ⏳ NEW 2026-08-11
 You pointed out (again) that sessions were ending without telling you whether to archive or delete
 them, which is how your sidebar fills with work you can't tell apart. That rule was written in
@@ -167,9 +176,10 @@ If you would rather a session do it, add a `permissions.allow` entry for `Remove
 
 ### A-closed. Nine §A items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
-None of them is waiting on you. The §A items still open above are A0, A_ci, A_rig, A_crash, A_hook
-and A_disk (**A_ref closed 2026-08-11**); the ones that actually need your hands are **A0**,
-**A_crash** (one flag + a look), **A_hook** (one settings line) and **A_disk** (free 9 GB). Both
+None of them is waiting on you. The §A items still open above are A0, A_ci, A_rig, A_crash, A_ref2,
+A_hook and A_disk (**A_ref closed 2026-08-11**); the ones that actually need your hands are **A0**,
+**A_crash** (one flag + a look), **A_ref2** (one delete click), **A_hook** (one settings line) and
+**A_disk** (free 9 GB). Both
 A_hook and A_disk are blocked by the same thing: the assistant cannot edit `.claude/settings.json`
 or run a recursive delete, whatever it is told in chat. Archived
 2026-08-04 (TOKEN LAW §1 — history leaves the live doc, never gets deleted): **A0b** zh-CN merged +
