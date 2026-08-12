@@ -4,6 +4,7 @@ import type { TFunction } from "i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { ExportResult } from "../types";
+import { BentoTile } from "../design/bento/BentoGrid";
 
 // Feedback & Export — the in-app path for beta testers (and later, everyone) to send Kuya a note
 // plus a diagnostic snapshot without hand-writing a checklist into an email. ALWAYS visible (not a
@@ -113,9 +114,13 @@ export function FeedbackExport({
     }
   };
 
+  // Bento conversion (2026-08-12). Full width: the notes textarea is the one control in Settings
+  // that genuinely needs the room, and squeezing it into a half tile would make writing a bug
+  // report feel like writing into a slot. The testid rides an inner <div> — BentoTile takes a
+  // fixed prop set and does not spread, so a testid on the tile itself would be dropped.
   return (
-    <section className="set-section" data-testid="feedback-export">
-      <h2 className="set-section-title">{t("settings.feedback.sectionTitle")}</h2>
+    <BentoTile title={t("settings.feedback.sectionTitle")} span="full">
+      <div data-testid="feedback-export">
       <p className="receipts-hint">
         {t("settings.feedback.hintPre")}
         <strong>{t("settings.feedback.hintStrong")}</strong>
@@ -164,7 +169,8 @@ export function FeedbackExport({
           {result.discord && <pre className="receipts-preview fb-summary">{result.discord}</pre>}
         </div>
       )}
-    </section>
+      </div>
+    </BentoTile>
   );
 }
 

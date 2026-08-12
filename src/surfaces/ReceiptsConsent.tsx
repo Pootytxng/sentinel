@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
+import { BentoTile } from "../design/bento/BentoGrid";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../i18n";
@@ -55,17 +56,23 @@ export default function ReceiptsConsent() {
     }
   };
 
+  // Bento conversion (2026-08-12). span="full" is FORCED, not chosen: this component can return
+  // null (the dark gate above), and a narrower tile that vanishes would punch a hole in the strict
+  // row-major flow. Mechanised in one-hero-guard.test.ts. The testid rides an inner <div> because
+  // BentoTile takes a fixed prop set and does not spread — putting it on the tile would silently
+  // drop it and break ReceiptsConsent.test.tsx.
   return (
-    <section className="set-section" data-testid="receipts-consent">
-      <h2 className="set-section-title">{t("optimize.receiptsConsent.title")}</h2>
-      <p className="receipts-hint">{t("optimize.receiptsConsent.hint")}</p>
-      <div className="set-row">
-        <button className="set-action" onClick={inspect}>
-          {t("optimize.receiptsConsent.inspectButton")}
-        </button>
+    <BentoTile title={t("optimize.receiptsConsent.title")} span="full">
+      <div data-testid="receipts-consent">
+        <p className="receipts-hint">{t("optimize.receiptsConsent.hint")}</p>
+        <div className="set-row">
+          <button className="set-action" onClick={inspect}>
+            {t("optimize.receiptsConsent.inspectButton")}
+          </button>
+        </div>
+        {previewErr && <p className="receipts-hint">{previewErr}</p>}
+        {preview && <pre className="receipts-preview">{JSON.stringify(preview, null, 2)}</pre>}
       </div>
-      {previewErr && <p className="receipts-hint">{previewErr}</p>}
-      {preview && <pre className="receipts-preview">{JSON.stringify(preview, null, 2)}</pre>}
-    </section>
+    </BentoTile>
   );
 }

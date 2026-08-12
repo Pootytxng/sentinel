@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import type { LicenseStatus } from "../types";
+import { BentoTile } from "../design/bento/BentoGrid";
 // Side-effect import: guarantees the i18next instance is initialized before this file's t() calls run.
 import "../i18n";
 
@@ -49,9 +50,10 @@ export function LicensePanel() {
       .finally(() => setSaving(false));
   };
 
+  // Bento conversion (2026-08-12). A third-width tile: the free/Pro line is one sentence, and the
+  // key-entry form only ever appears once licensing is armed.
   return (
-    <section className="set-section">
-      <h2 className="set-section-title">{t("common.licensePanel.title")}</h2>
+    <BentoTile title={t("common.licensePanel.title")} span="third">
       <div className="set-license">
         {isPro ? (
           <p className="set-license-status set-license-pro">
@@ -97,6 +99,6 @@ export function LicensePanel() {
           </div>
         )}
       </div>
-    </section>
+    </BentoTile>
   );
 }
