@@ -3,6 +3,9 @@
     "masthead": {
       "eyebrow": "Rig diagnostic"
     },
+    "care": {
+      "label": "Crash & Freeze Rescue"
+    },
     "intake": {
       "prompt": "What are you here to do?",
       "applying": "Applying…",

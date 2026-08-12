@@ -6,6 +6,7 @@ import { ConfirmProvider } from "../design/ConfirmDialog";
 import { railFor } from "../design/homeRail";
 import {
   homeIntakeRows,
+  homeCareEntry,
   homeIntakeFastpath,
   fastPathReadyHeadline as fastPathReadyHeadlineRaw,
   fastPathApplyLabel as fastPathApplyLabelRaw,
@@ -31,6 +32,7 @@ import type { HardwareInfo } from "../App";
 // English-resolved re-exports under the ORIGINAL names (see the i18n-update note above) — every
 // call site below (HOME_INTAKE_ROWS.find(...), fastPathReadyHeadline(2), etc.) is untouched.
 const HOME_INTAKE_ROWS = homeIntakeRows(i18n.t);
+const HOME_CARE_ENTRY = homeCareEntry(i18n.t);
 const HOME_INTAKE_FASTPATH = homeIntakeFastpath(i18n.t);
 const fastPathReadyHeadline = (n: number) => fastPathReadyHeadlineRaw(n, i18n.t);
 const fastPathApplyLabel = (n: number) => fastPathApplyLabelRaw(n, i18n.t);
@@ -264,6 +266,60 @@ describe("Home intake band — flag gating (compy_home_intake GRADUATED to DEFAU
   });
 });
 
+// bug->guard (issue #91 Compy Care Tier 1, discovery contract — extracted 2026-08-12): crash
+// rescue used to be an intake ROW, so it inherited the band's flag. `compy_home_intake="0"` — the
+// Settings failsafe — took crash rescue down with the optimization band, and the population most
+// likely to switch a busy band off overlaps hard with the population whose PC keeps crashing.
+// Re-darkening the band (it graduated to DEFAULT ON only on 2026-08-11) would have done the same
+// thing silently. The contract (docs/BACKLOG.md §Discovery contract) turns on one word: the Care
+// entry is always visible on Home INDEPENDENT of that band — whatever the band's default is. The
+// band's own gating is pinned above; this block pins the divorce. Data laws: care-home-route-guard.
+describe("Care entry — visible in EVERY state of compy_home_intake (#91)", () => {
+  const careEl = (c: HTMLElement) => c.querySelector(".hc-care-entry");
+  const states: Array<[string, () => void]> = [
+    ["absent (what a fresh install really gets)", () => localStorage.removeItem("compy_home_intake")],
+    ['"0" (the Settings failsafe — the case the extraction exists for)', () => localStorage.setItem("compy_home_intake", "0")],
+    ['"1" (explicitly on)', () => localStorage.setItem("compy_home_intake", "1")],
+    ["junk (fails ON, like the band)", () => localStorage.setItem("compy_home_intake", "false")],
+  ];
+
+  for (const [name, set] of states) {
+    it(`renders with the flag ${name}`, () => {
+      set();
+      const c = renderHome({ rooms: liveRooms }).container;
+      expect(
+        careEl(c),
+        `crash rescue vanished with compy_home_intake ${name} — it is gated on the band again`,
+      ).not.toBeNull();
+    });
+  }
+
+  it('the band itself still obeys "0" — the fix was extraction, not re-arming the band', () => {
+    // If this fails, the entry was made visible by rendering the WHOLE band always, which hands the
+    // user's Settings switch back a lie.
+    localStorage.setItem("compy_home_intake", "0");
+    const c = renderHome({ rooms: liveRooms }).container;
+    expect(c.querySelector(".hc-intake"), "the extraction re-armed the whole intake band").toBeNull();
+    expect(careEl(c)).not.toBeNull();
+  });
+
+  it("routes to the crash station FROM the failsafe state, not just the default one", () => {
+    // Visible-but-dead is the same dead end with extra steps.
+    localStorage.setItem("compy_home_intake", "0");
+    const onOpenLabStation = vi.fn();
+    const c = renderHome({ rooms: liveRooms, onOpenLabStation }).container;
+    fireEvent.click(careEl(c) as HTMLElement);
+    expect(onOpenLabStation).toHaveBeenCalledWith(HOME_CARE_ENTRY.station);
+  });
+
+  it("stands down when the rail has no room to send the click to (no dead ends)", () => {
+    // The one condition it DOES obey — the same law every other affordance on Home obeys.
+    const roomsNoLab = liveRooms.filter((r) => r.key !== HOME_CARE_ENTRY.room);
+    const c = renderHome({ rooms: roomsNoLab }).container;
+    expect(careEl(c)).toBeNull();
+  });
+});
+
 describe("Home intake band — intent rows (option A): route to the live room, no dead ends", () => {
   it("renders exactly the rows whose room the live rail shows, with the LIVE-resolved label", () => {
     localStorage.setItem("compy_home_intake", "1");
@@ -273,11 +329,12 @@ describe("Home intake band — intent rows (option A): route to the live room, n
     const expected = HOME_INTAKE_ROWS.filter((r) => liveRooms.some((rm) => rm.key === r.room));
     expect(rows.length).toBe(expected.length);
     expect(rows.length).toBe(HOME_INTAKE_ROWS.length);
-    // The room chip shows the rail's LABEL (Monitor/Blackbook/Lab), never the raw nav id.
+    // The room chip shows the rail's LABEL (Live/History/Test — owner rename 2026-08-12), never
+    // the raw nav id.
     const chips = Array.from(c.querySelectorAll(".hc-intake-row-room")).map((n) => n.textContent);
-    expect(chips).toContain("Monitor →");
-    expect(chips).toContain("Blackbook →");
-    expect(chips).toContain("Lab →");
+    expect(chips).toContain("Live →");
+    expect(chips).toContain("History →");
+    expect(chips).toContain("Test →");
     // …and never leaks a raw id.
     expect(chips.some((t) => /\b(play|learn)\b/.test(t ?? ""))).toBe(false);
   });
@@ -320,44 +377,38 @@ describe("Home intake band — intent rows (option A): route to the live room, n
 // dock node called "Black Box". The tester never found it and went to Event Viewer instead. Two
 // causes, both guarded here: the row routed to the ROOM, and the destination was named after an
 // insider metaphor rather than the problem. Either one regressing re-opens the same dead end.
-describe("Crash & Freeze rescue — the crash row lands ON the evidence (§4)", () => {
-  const crashRow = () => {
-    const row = HOME_INTAKE_ROWS.find((r) => r.station === "blackbox");
-    expect(row, 'no intake row deep-links to "blackbox" — the crash symptom routes to the room again')
-      .toBeTruthy();
-    return row!;
-  };
-
-  const findRowEl = (c: HTMLElement, symptom: string) =>
-    Array.from(c.querySelectorAll(".hc-intake-row")).find(
-      (el) => el.querySelector(".hc-intake-row-symptom")?.textContent === symptom,
-    )!;
+describe("Crash & Freeze Rescue — the Care entry lands ON the evidence (§4)", () => {
+  const careEl = (c: HTMLElement) => c.querySelector(".hc-care-entry") as HTMLElement | null;
 
   it("deep-links to the crash station instead of dropping the user on the Lab dock", () => {
     localStorage.setItem("compy_home_intake", "1");
     const onNavigate = vi.fn();
     const onOpenLabStation = vi.fn();
-    const row = crashRow();
     const c = renderHome({ rooms: liveRooms, onNavigate, onOpenLabStation }).container;
-    fireEvent.click(findRowEl(c, row.symptom));
+    fireEvent.click(careEl(c)!);
     expect(onOpenLabStation).toHaveBeenCalledWith("blackbox");
     // The bare room nav is the bug: it lands on the dock with the station still to be hunted for.
-    expect(onNavigate, "the crash row still fired a bare room nav — that IS the dead end").not.toHaveBeenCalled();
+    expect(onNavigate, "the Care entry still fired a bare room nav — that IS the dead end").not.toHaveBeenCalled();
   });
 
   it("still navigates to the room when no station writer is wired (never a dead click)", () => {
     localStorage.setItem("compy_home_intake", "1");
     const onNavigate = vi.fn();
-    const row = crashRow();
     const c = renderHome({ rooms: liveRooms, onNavigate }).container;
-    fireEvent.click(findRowEl(c, row.symptom));
-    expect(onNavigate, "an isolated mount lost the row's only exit").toHaveBeenCalledWith(row.room);
+    fireEvent.click(careEl(c)!);
+    expect(onNavigate, "an isolated mount lost the entry's only exit").toHaveBeenCalledWith(
+      HOME_CARE_ENTRY.room,
+    );
   });
 
   it("leaves every station-less row on the plain room nav", () => {
     localStorage.setItem("compy_home_intake", "1");
     const onNavigate = vi.fn();
     const onOpenLabStation = vi.fn();
+    const findRowEl = (c: HTMLElement, symptom: string) =>
+      Array.from(c.querySelectorAll(".hc-intake-row")).find(
+        (el) => el.querySelector(".hc-intake-row-symptom")?.textContent === symptom,
+      )!;
     const plain = HOME_INTAKE_ROWS.filter((r) => !r.station);
     expect(plain.length, "every row deep-links now — this test no longer proves anything").toBeGreaterThan(0);
     const c = renderHome({ rooms: liveRooms, onNavigate, onOpenLabStation }).container;

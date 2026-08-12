@@ -203,7 +203,7 @@
       "connectsLine": "Benchmark grades whether your frames held after the undervolt."
     },
     "blackbox": {
-      "name": "Crash & Freeze",
+      "name": "Crash & Freeze Rescue",
       "forLine": "Understand a crash or freeze after it happens.",
       "whenLine": "It crashed or froze and you don't know why.",
       "connectsLine": "Check Diagnostics for the rig state behind what it finds."

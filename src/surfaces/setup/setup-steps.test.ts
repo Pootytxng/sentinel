@@ -62,7 +62,8 @@ describe("buildSetupSteps", () => {
     expect(last.tabs?.map((t) => t.id)).toEqual(["home", "fix", "play", "learn", "lab"]);
     expect(last.body).toBe(JOURNEY_RECAP_BODY);
     // The journey copy names every room in rail order (order is felt — the recap says it once).
-    for (const label of ["Home", "Optimize", "Monitor", "Blackbook", "Lab"]) {
+    // Room labels renamed by owner decision 2026-08-12 (Monitor→Live, Blackbook→History, Lab→Test).
+    for (const label of ["Home", "Optimize", "Live", "History", "Test"]) {
       expect(last.body).toContain(label);
     }
   });
@@ -183,7 +184,7 @@ describe("proving-ground tour alignment (ground=true)", () => {
     expect(last.kind).toBe("tabmap");
     expect(last.tabs?.map((t) => t.id)).toEqual(["home", "play", "learn", "lab"]);
     expect(last.body).toBe(GROUND_RECAP_BODY);
-    for (const label of ["Home", "Monitor", "Blackbook", "Lab"]) {
+    for (const label of ["Home", "Live", "History", "Test"]) {
       expect(last.body).toContain(label);
     }
     // The dead room never appears in the recap copy.
@@ -209,11 +210,11 @@ describe("proving-ground tour alignment (ground=true)", () => {
     const ground = buildHardwareSteps(PARTS, true, true);
     const cpu = ground.find((s) => s.lesson?.kind === "cpu");
     expect(cpu?.lesson?.tab.id).toBe("lab");
-    expect(cpu?.lesson?.tab.tie).toBe("The Lab scans for CPU limiters and applies the top fix.");
+    expect(cpu?.lesson?.tab.tie).toBe("Test scans for CPU limiters and applies the top fix.");
     const storage = ground.find((s) => s.lesson?.kind === "storage");
     expect(storage?.lesson?.tab.id).toBe("lab");
     expect(storage?.lesson?.tab.tie).toBe(
-      "Apply or undo these at the Lab's Optimize station — all in the ledger.",
+      "Apply or undo these at Test's Optimize station — all in the ledger.",
     );
   });
 

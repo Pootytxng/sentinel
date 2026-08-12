@@ -3,6 +3,9 @@
     "masthead": {
       "eyebrow": "主机诊断"
     },
+    "care": {
+      "label": "崩溃与卡死救援"
+    },
     "intake": {
       "prompt": "你想做什么?",
       "applying": "正在应用…",

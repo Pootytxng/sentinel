@@ -11,9 +11,9 @@ import { HOME_RAIL, railFor } from "./homeRail";
 describe("home rail parity", () => {
   it("is the blessed six-home set, in order", () => {
     expect(HOME_RAIL.map((r) => r.id)).toEqual(["home", "check", "play", "fix", "learn", "lab"]);
-    // "Monitor" (2026-06-15) + "Tune" + "Blackbook" labels = owner-approved renames; persisted ids
-    // unchanged (the id "play" stays the nav key behind the "Monitor" label).
-    expect(HOME_RAIL.map((r) => r.label)).toEqual(["Home", "Check", "Monitor", "Tune", "Blackbook", "Lab"]);
+    // "Live" + "History" + "Test" labels = owner-approved renames (2026-08-12; earlier rounds
+    // 2026-06-12/15); persisted ids unchanged (the id "play" stays the nav key behind "Live").
+    expect(HOME_RAIL.map((r) => r.label)).toEqual(["Home", "Check", "Live", "Tune", "History", "Test"]);
   });
 
   it("the app-shell rail renders from the shared rail (no second map)", () => {
@@ -54,10 +54,10 @@ describe("railFor — Optimize merge collapse", () => {
 // is the ONE door to the safe-tweak toggles. Four rooms, relative order preserved (the Lab stays
 // the last chapter). compy_lab_ground="0" restores the classic rails above.
 describe("railFor — proving ground drops the standalone Optimize room", () => {
-  it("ground: Home · Monitor · Blackbook · Lab — no check, no fix, order preserved", () => {
+  it("ground: Home · Live · History · Test — no check, no fix, order preserved", () => {
     const rail = railFor(true, true);
     expect(rail.map((r) => r.id)).toEqual(["home", "play", "learn", "lab"]);
-    expect(rail.map((r) => r.label)).toEqual(["Home", "Monitor", "Blackbook", "Lab"]);
+    expect(rail.map((r) => r.label)).toEqual(["Home", "Live", "History", "Test"]);
   });
 
   it("ground wins over the merge flag (same rail either way)", () => {

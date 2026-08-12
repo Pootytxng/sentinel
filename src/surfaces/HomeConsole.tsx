@@ -35,6 +35,7 @@ import { deriveReverted } from "./use-scan";
 import { BentoGrid, BentoTile, Sheet, useSheet } from "../design/bento";
 import {
   homeIntakeRows,
+  homeCareEntry,
   homeIntakeFastpath,
   fastPathReadyHeadline,
   fastPathApplyLabel,
@@ -565,6 +566,13 @@ export function HomeConsole({
       rooms?.some((rm) => rm.key === row.room) && !(lastSessionRendered && row.room === "play"),
   );
   const intakeRenders = intakeOn && (fastPathAvailable || intakeRows.length > 0);
+  // The Care entry (issue #91, discovery contract): ALWAYS visible, independent of `intakeOn` —
+  // crash rescue is the one thing a user comes to Home in distress to find, and it must not be
+  // behind the same switch as the optimization band. The single condition it does obey is the
+  // no-dead-end law every other affordance here obeys: if the rail does not render the room the
+  // station lives in, there is nowhere to send the click.
+  const care = homeCareEntry(t);
+  const careRenders = !!rooms?.some((rm) => rm.key === care.room);
   // Static fast-path copy (option C) — resolved once per render through the live `t`.
   const fastpath = homeIntakeFastpath(t);
 
@@ -632,6 +640,26 @@ export function HomeConsole({
           </span>
           {!dekRedundant && <span className="hc-verdict-dek">{dek}</span>}
         </div>
+        {/* THE CARE ENTRY (issue #91 Tier 1, visible half) — one compact door to crash rescue,
+            rendered OUTSIDE the intake band's gate on purpose. A user whose PC just crashed is the
+            least likely person to go turn a Settings band back on to find help, and the tester who
+            walked to Event Viewer (SESSION_HANDOFF §4) is the evidence for what happens when this
+            sign is not in front of them. It lands ON the evidence station, never the Lab dock. */}
+        {careRenders && (
+          <section className="hc-care" aria-label={care.label}>
+            <button
+              type="button"
+              className="hc-care-entry"
+              onClick={() =>
+                onOpenLabStation ? onOpenLabStation(care.station) : onNavigate?.(care.room)
+              }
+            >
+              <span className="hc-care-label hc-mono">{care.label}</span>
+              <span className="hc-care-symptom">{care.symptom}</span>
+              <span className="hc-care-because">{care.because}</span>
+            </button>
+          </section>
+        )}
         {/* THE INTAKE BAND (BACKLOG:916) — the proven Lab "What are you here to do?" idiom lifted
             one level up to Home: an always-available one-tap fast path (option C) over intent rows
             that route to the right ROOM (option A). The Dock below stays clean room-name doors

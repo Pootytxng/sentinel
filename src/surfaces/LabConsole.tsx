@@ -239,7 +239,7 @@ export function LabConsole({
     const k = key as LabStationKey;
     setOpenStation((cur) => (cur === k ? null : k));
   };
-  // Station deep-link (tester J 2026-07-22, Phase 5): "Take me to the Lab" from the first-check
+  // Station deep-link (tester J 2026-07-22, Phase 5): "Take me to Test" from the first-check
   // verdict lands here and auto-opens the Optimize station (the door to the safe-tweak toggles)
   // instead of dropping the user on the dock to hunt for it. Race-free: the intent is written to
   // localStorage BEFORE this face mounts. One-shot — cleared on read, so a normal Lab visit is

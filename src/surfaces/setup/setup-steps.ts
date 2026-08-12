@@ -124,7 +124,7 @@ export const HARDWARE_LESSONS: readonly HardwareLesson[] = [
       "Fast Startup off — a true clean boot, not a half-hibernated state",
       "USB selective-suspend & PCIe power-saving off — no power naps mid-game",
     ],
-    tab: { id: "lab", tie: "Prove the clocks hold with benchmarks in the Lab tab." },
+    tab: { id: "lab", tie: "Prove the clocks hold with benchmarks in the Test tab." },
     note: "Compy can't read your PSU model in software, so it stays a faint placeholder — but the power settings above decide how hard everything is allowed to draw.",
   },
   {
@@ -149,7 +149,7 @@ export const HARDWARE_LESSONS: readonly HardwareLesson[] = [
       "Vendor background/telemetry services off (NVIDIA Container · AMD UXP)",
       "Force games onto your discrete GPU, and keep the driver current",
     ],
-    tab: { id: "play", tie: "Watch the frames these earn you, live, in the Monitor tab." },
+    tab: { id: "play", tie: "Watch the frames these earn you, live, in the Live tab." },
   },
   {
     kind: "cpu",
@@ -206,12 +206,12 @@ export function buildHardwareSteps(parts: RigPart[], merged = true, ground = fal
       ? rawLesson.tab.id === "check"
         ? {
             ...rawLesson,
-            tab: { id: "lab", tie: "The Lab scans for CPU limiters and applies the top fix." },
+            tab: { id: "lab", tie: "Test scans for CPU limiters and applies the top fix." },
           }
         : rawLesson.tab.id === "fix"
           ? {
               ...rawLesson,
-              tab: { id: "lab", tie: "Apply or undo these at the Lab's Optimize station — all in the ledger." },
+              tab: { id: "lab", tie: "Apply or undo these at Test's Optimize station — all in the ledger." },
             }
           : rawLesson
       : merged && rawLesson.tab.id === "check"
@@ -250,12 +250,12 @@ export function buildHardwareSteps(parts: RigPart[], merged = true, ground = fal
 // it): the rail reads top to bottom in story order. Only the merged five-room rail IS that
 // journey; the classic six-room escape hatch keeps its original copy.
 export const JOURNEY_RECAP_BODY =
-  "The rail reads top to bottom: Home for the glance, Optimize to check and fix, Monitor to watch it live, Blackbook for what actually works, the Lab to go deeper.";
+  "The rail reads top to bottom: Home for the glance, Optimize to check and fix, Live to watch the frames as they happen, History for what actually works, Test to go deeper.";
 
 // The proving-ground recap (2026-07-10 flip) — the four-room rail in ITS order, the Lab as the
 // workshop at the end of the row.
 export const GROUND_RECAP_BODY =
-  "The rail reads top to bottom: Home for the glance, Monitor to watch it live, Blackbook for what actually works, the Lab to check, fix and prove it.";
+  "The rail reads top to bottom: Home for the glance, Live to watch the frames as they happen, History for what actually works, Test to check, fix and prove it.";
 
 // The ordered flow: setup steps → a hardware lesson per present component → the rail recap.
 // 2026-07-23 (tester Matthew: "the last tab is the best for clarity" — orientation must not wait

@@ -110,20 +110,26 @@ labelled *upper bound proven on fast hardware*, and the one bad finding below st
 of rig: **idle Compy burns ~half a CPU core doing nothing**, which will be worse, not better, on a
 weaker machine.
 
-### A_crash. Crash & Freeze rescue is fixed but still switched off — one eyeball flips it on  ·  ⏳ NEW 2026-08-11
+### A_crash. ✅ CLOSED 2026-08-12 — the flag it was waiting on no longer gates it
 A tester whose PC had crashed searched Compy, found nothing that said "crash", and went to Windows
 Event Viewer instead — while Compy's own crash-evidence reader sat one room away, named "Black Box".
-Both causes are fixed: Home's "it crashed or froze" row now lands **on** the evidence instead of
-dropping you at the Lab door, and the station is called **Crash & Freeze** everywhere it is named.
+Both causes are fixed: the Home door lands **on** the evidence instead of dropping you at the Lab
+door, and the station is called **Crash & Freeze Rescue** everywhere it is named.
 
-**What's left is yours, and it is a look-at-it, not a decision.** That Home row lives in the intake
-band behind `compy_home_intake`, which is DEFAULT OFF by the standing new-surface rule — *flips on
-only once eyeballed + approved*. Until it flips, the routing fix reaches nobody; the rename reaches
-everyone who already opens the Lab. Flip it in Settings, look at the band, and say yes or no.
+**✅ The flag question this item asked you to answer is GONE — nothing here is waiting on you.**
+When this was written, that Home door was a row inside the intake band, so it inherited
+`compy_home_intake` and the ask was "flip it and eyeball it". Two things happened since:
+the band **graduated to default-ON 2026-08-11** (so the flip you were asked for already
+happened), and on **2026-08-12** the crash door was **extracted out of the band entirely** into
+the always-visible Care entry the #91 discovery contract requires — independent of that flag in
+every state, including the `"0"` Settings failsafe. A user who switches the optimization band off
+keeps crash rescue, which is the point: the people most likely to silence a busy band overlap hard
+with the people whose PC keeps crashing. Pinned by `src/surfaces/care-home-route-guard.test.ts` and
+the Care-entry block in `src/surfaces/home-intake.test.tsx`.
 
-**The ordering that used to block this is CLEARED.** PR [#93](https://github.com/Pootytxng/sentinel/pull/93)
-carried the fix for that band's keyboard focus ring (it drew focus identically to hover) and had to
-land first; it merged 2026-08-11 as `b3362f74`. Nothing stands between you and the flip now.
+**What is genuinely still yours here: nothing structural, one look.** The entry has not been seen
+on your real screen at your real resolution — the visual self-review the plan asks for (Task 8
+step 5) has not run. That is a look, not a decision, and the feature reaches users either way.
 
 ### A_ref. ✅ CLOSED 2026-08-11 — the six dead branches are gone
 You said "you have full permission", so the pile is cleared: `docs/close-recovery-lane`,
@@ -176,10 +182,11 @@ Nothing in the folder was ever unique — the branch and every commit live on Gi
 
 ### A-closed. Nine §A items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
-None of them is waiting on you. The §A items still open above are A0, A_ci, A_rig, A_crash and
-A_ref2 (**A_ref closed 2026-08-11; A_hook and A_disk closed 2026-08-12**); the ones that actually
-need your hands are **A0** (get the updater signing key off this machine) and **A_crash** (one flag
-+ a look) — A_ref2 is a ref deletion a session is clearing, not a click you owe. Archived
+None of them is waiting on you. The §A items still open above are A0, A_ci, A_rig and
+A_ref2 (**A_ref closed 2026-08-11; A_hook and A_disk closed 2026-08-12; A_crash closed 2026-08-12
+when the Care entry was extracted out of the flag that gated it**); the one that actually needs
+your hands is **A0** (get the updater signing key off this machine) — A_ref2 is a ref deletion a
+session is clearing, not a click you owe. Archived
 2026-08-04 (TOKEN LAW §1 — history leaves the live doc, never gets deleted): **A0b** zh-CN merged +
 published in v0.9.11 · **A1** Gaming Mode QA signed off · **A2** beta smoke (sitting waived; the live
 beta thread is **§B2** below) · **A3** Lab Ops Console · **A4** Home console · **A5** Monitor v5
