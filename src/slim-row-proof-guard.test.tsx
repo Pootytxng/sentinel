@@ -120,7 +120,7 @@ describe("slim row detail panel (in-place reveal)", () => {
     const whatsThis = screen.getByRole("button", { name: "What's this?" }); // game-mode resolves an entry
     fireEvent.click(whatsThis);
     expect(screen.getByRole("tooltip")).toBeTruthy();
-    expect(screen.getByText(/More in the Blackbook/)).toBeTruthy();
+    expect(screen.getByText(/More in History/)).toBeTruthy();
     expect(screen.getByText("Show me the way")).toBeTruthy(); // game-mode has a walkthrough
     // The one control keeps the EXISTING TrustSwitch semantics — same audited path.
     fireEvent.click(screen.getByRole("switch", { name: /Apply Title game-mode/ }));

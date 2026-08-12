@@ -74,7 +74,7 @@ const ROOMS: { name: string; label: string; title: string; mount: () => HTMLElem
   {
     name: "MonitorV2",
     label: "Live telemetry",
-    title: "Monitor",
+    title: "Live",
     mount: () =>
       render(
         <MonitorV2
@@ -95,7 +95,7 @@ const ROOMS: { name: string; label: string; title: string; mount: () => HTMLElem
   {
     name: "BlackbookV2",
     label: "Field records",
-    title: "Blackbook",
+    title: "History",
     mount: () => render(<BlackbookV2 focusId={null} vendor="amd" onClose={() => {}} />).container,
   },
 ];

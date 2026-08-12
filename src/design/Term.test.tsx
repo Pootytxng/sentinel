@@ -26,7 +26,7 @@ describe("Term glossary tooltip", () => {
     const open = renderTerm("vrr");
     fireEvent.click(screen.getByRole("button", { name: "VRR" }));
     expect(screen.getByRole("tooltip")).toHaveTextContent(/monitor/i); // vrr 'what' mentions the monitor
-    fireEvent.click(screen.getByRole("button", { name: /More in the Blackbook/i }));
+    fireEvent.click(screen.getByRole("button", { name: /More in History/i }));
     expect(open).toHaveBeenCalledWith("vrr");
   });
 
@@ -59,7 +59,7 @@ describe("Term glossary tooltip", () => {
         fireEvent.mouseEnter(wrap); // pointer arrives on the tooltip (a wrapper child)
         act(() => vi.advanceTimersByTime(1000));
         expect(screen.getByRole("tooltip")).toBeInTheDocument(); // pending close was cancelled
-        fireEvent.click(screen.getByRole("button", { name: /More in the Blackbook/i }));
+        fireEvent.click(screen.getByRole("button", { name: /More in History/i }));
         expect(open).toHaveBeenCalledWith("vrr"); // the link is genuinely reachable + navigates
       } finally {
         vi.useRealTimers();

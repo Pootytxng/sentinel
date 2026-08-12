@@ -83,7 +83,7 @@
     },
     "verdict": {
       "nothingGraded": {
-        "headline": "Nothing graded in the Lab yet.",
+        "headline": "Nothing graded in Test yet.",
         "sub": "Start with Benchmark — set a baseline, change one thing, re-run. Compy tells you if it actually moved."
       },
       "baselineRecorded": {

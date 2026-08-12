@@ -79,7 +79,7 @@ describe("blackbookVerdict — pure, measured, branch-proper copy", () => {
     const v = blackbookVerdict([]);
     expect(v.headline).toBe("Heard a tweak online? Look it up here before you try it.");
     expect(v.sub).toBe(
-      "We only answer what's been verified — search the Blackbook, or paste a whole guide and get every claim graded.",
+      "We only answer what's been verified — search History, or paste a whole guide and get every claim graded.",
     );
   });
 
@@ -199,7 +199,7 @@ describe("BlackbookV2 — RoomShell composition", () => {
 describe("classic Learn — pinned unchanged (flag-off byte-identity at the render level)", () => {
   it("keeps its standalone head (title + tagline + autopsy hint) and renders no RoomShell chrome", () => {
     const { container } = render(<Learn asPanel onClose={() => {}} />);
-    expect(screen.getByRole("heading", { name: "Blackbook" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "History" })).toBeTruthy();
     expect(container.querySelector(".lx-tagline")).toBeTruthy();
     expect(container.querySelector(".lx-autopsy-hint")).toBeTruthy();
     expect(container.querySelector(".v2-verdict")).toBeNull();

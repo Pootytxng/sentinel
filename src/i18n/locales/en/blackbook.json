@@ -18,12 +18,12 @@
       "logbook": "Logbook",
       "guide": "Field guide"
     },
-    "faceToggleAriaLabel": "Blackbook view",
+    "faceToggleAriaLabel": "History view",
     "guideLede": "The Field Guide is Compy's library: every tweak and myth, graded by the measured record — hardware-aware for this rig.",
     "fieldRecordsLabel": "Field records",
     "verdict": {
       "noRecordHeadline": "Heard a tweak online? Look it up here before you try it.",
-      "noRecordSub": "We only answer what's been verified — search the Blackbook, or paste a whole guide and get every claim graded.",
+      "noRecordSub": "We only answer what's been verified — search History, or paste a whole guide and get every claim graded.",
       "gradedNoTweaksHeadline_one": "You've fact-checked {{count}} guide here.",
       "gradedNoTweaksHeadline_other": "You've fact-checked {{count}} guides here.",
       "scamFlaggedSoFar_one": "{{count}} known scam pattern flagged so far.",
@@ -56,7 +56,7 @@
       "autopsy": "guide checks",
       "observed": "observed"
     },
-    "stripAriaLabel": "What Blackbook records",
+    "stripAriaLabel": "What History records",
     "tiles": {
       "changesTitle": "Changes to this PC",
       "changesNone": "nothing changed yet",
@@ -120,8 +120,8 @@
     },
     "tapeMore_one": "show {{count}} older record",
     "tapeMore_other": "show {{count}} older records",
-    "manageJump_one": "{{count}} change still active — roll back in the Lab",
-    "manageJump_other": "{{count}} changes still active — roll back in the Lab",
+    "manageJump_one": "{{count}} change still active — roll back in Test",
+    "manageJump_other": "{{count}} changes still active — roll back in Test",
     "library": {
       "eyebrow": "The field guide",
       "scent": "Heard a tweak online? Look it up before you try it — every claim graded.",
@@ -152,7 +152,7 @@
   "learn": {
     "tagline": "What actually works — measured. Look up any tweak, term, or scam you heard online; we only answer what we've verified.",
     "close": "Close",
-    "modeAriaLabel": "Blackbook mode",
+    "modeAriaLabel": "History mode",
     "modes": {
       "browse": "Look it up",
       "autopsy": "Autopsy a guide"
@@ -313,9 +313,9 @@
     "qualifiesMark": "Why this rig qualifies:",
     "qualifiesConnector": " measured here — ",
     "notForRigMark": "Not for this rig right now:",
-    "notForRigRest": ". Compy only suggests tuning when your own sessions show it would help — the full guide stays in the Blackbook (search “undervolt”) if you're curious.",
+    "notForRigRest": ". Compy only suggests tuning when your own sessions show it would help — the full guide stays in History (search “undervolt”) if you're curious.",
     "readoutHead": "Stability & thermal",
-    "readoutEmpty": "No tune measured yet. Undervolt in Adrenalin, then arm a baseline from a Monitor debrief — Compy measures whether temps dropped and frames held, judged over time.",
+    "readoutEmpty": "No tune measured yet. Undervolt in Adrenalin, then arm a baseline from a Live debrief — Compy measures whether temps dropped and frames held, judged over time.",
     "recentLabel": "Recent sessions — peak temp & consistency",
     "showMeTheWay": "Show me the way",
     "unknownGame": "Unknown",

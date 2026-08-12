@@ -178,7 +178,7 @@ describe("BlackbookConsole — undo is NOT triggered in-room; active changes rou
     mountConsole([change({ id: "c1", active: true }), change({ id: "c2", active: true })], {
       onOpenLab,
     });
-    const jump = screen.getByRole("button", { name: /roll back in the Lab/i });
+    const jump = screen.getByRole("button", { name: /roll back in Test/i });
     expect(jump.textContent).toContain("2 changes still active");
     fireEvent.click(jump);
     expect(onOpenLab).toHaveBeenCalledOnce();
@@ -188,14 +188,14 @@ describe("BlackbookConsole — undo is NOT triggered in-room; active changes rou
     useReduced();
     mountConsole([change({ active: true })]);
     expect(
-      screen.getByRole("button", { name: /roll back in the Lab/i }).textContent,
+      screen.getByRole("button", { name: /roll back in Test/i }).textContent,
     ).toContain("1 change still active");
   });
 
   it("no active changes ⇒ no jump (rolled-back / no-longer-active never summon it)", () => {
     useReduced();
     mountConsole([change({ active: false, rolledBack: true }), change({ active: false })]);
-    expect(screen.queryByRole("button", { name: /roll back in the Lab/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /roll back in Test/i })).toBeNull();
   });
 });
 
@@ -249,7 +249,7 @@ describe("BlackbookV2 console — title-header law + honest data flow", () => {
     const { container } = render(
       <BlackbookV2 focusId={null} vendor="amd" onClose={() => {}} sessions={[s]} />,
     );
-    expect((container.querySelector(".hud-headline") as HTMLElement).textContent).toBe("Blackbook");
+    expect((container.querySelector(".hud-headline") as HTMLElement).textContent).toBe("History");
     // the counts live in the body Receipts Strip, never a heading
     const strip = container.querySelector(".bc-strip") as HTMLElement;
     expect(strip).not.toBeNull();

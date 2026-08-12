@@ -33,8 +33,8 @@ artifact `claude.ai/code/artifact/4eeeac30-4b1a-4de8-bd8c-59260bd46155`). Thesis
 must be a **verdict + one action**, not a dashboard; the intake band ("what are you here to do?")
 is promoted to a TurboTax-style interview; instruments move behind a door. Build order: ① type +
 colour app-wide (= TYPE-1 + COLOR-1) ② front door (= UX-1) ③ interview ④ wording pass with a banned-
-term guard ⑤ instruments behind a door. **Awaiting owner nod on room renames only** (Blackbook →
-History, Lab → Test, Monitor → Live) — brand-adjacent; everything else is mine to ship.
+term guard ⑤ instruments behind a door. **Room renames APPROVED by owner 2026-08-12** (Blackbook →
+History, Lab → Test, Monitor → Live — all three; shipped as user-facing strings, Train 2 slice 1).
 
 ### ⭐ STANDING DIRECTIVE — organization · ease of access · inherently intuitive UI (owner, restated 2026-07-23; "made many times") 🔴 OPEN
 

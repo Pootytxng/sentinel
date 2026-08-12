@@ -17,7 +17,7 @@ const title = ".lx-name"; // card titles (the same name can recur as a related c
 describe("Learn surface (reskin)", () => {
   it("renders the Blackbook shell with type-filter chips", () => {
     open();
-    expect(screen.getByText("Blackbook")).toBeInTheDocument();
+    expect(screen.getByText("History")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Terms" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tricks" })).toBeInTheDocument();
   });

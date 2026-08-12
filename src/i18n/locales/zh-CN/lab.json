@@ -83,7 +83,7 @@
     },
     "verdict": {
       "nothingGraded": {
-        "headline": "实验室里还没有任何判定结果。",
+        "headline": "「测试」里还没有任何判定结果。",
         "sub": "从「基准测试」开始——设定一个基准,改一项设置,再测一次,Compy 会如实告诉你这项改动到底有没有用。"
       },
       "baselineRecorded": {

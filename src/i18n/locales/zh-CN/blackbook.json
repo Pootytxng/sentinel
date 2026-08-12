@@ -18,12 +18,12 @@
       "logbook": "日志",
       "guide": "指南库"
     },
-    "faceToggleAriaLabel": "小黑本(Blackbook)视图",
+    "faceToggleAriaLabel": "历史(History)视图",
     "guideLede": "指南库是 Compy 的资料库:收录每一个优化项和坊间传言,并按实测记录评级——针对这台设备量身参考。",
     "fieldRecordsLabel": "现场记录",
     "verdict": {
       "noRecordHeadline": "在网上听说了什么优化技巧?先在这里查一查再尝试。",
-      "noRecordSub": "我们只回答已经验证过的内容——搜索小黑本,或粘贴整份指南,获取每条说法的评级。",
+      "noRecordSub": "我们只回答已经验证过的内容——搜索历史,或粘贴整份指南,获取每条说法的评级。",
       "gradedNoTweaksHeadline_other": "你已在这里核查了 {{count}} 份指南。",
       "scamFlaggedSoFar_other": "目前已标记 {{count}} 个诈骗套路。",
       "unratedClaimsSingular": "其中的说法不属于我们已验证的优化项,因此没有评级——我们从不瞎猜。",
@@ -52,7 +52,7 @@
       "autopsy": "核查记录",
       "observed": "观测记录"
     },
-    "stripAriaLabel": "小黑本记录的内容",
+    "stripAriaLabel": "历史记录的内容",
     "tiles": {
       "changesTitle": "这台电脑上的变更",
       "changesNone": "还没有任何变更",
@@ -113,7 +113,7 @@
       "noDetail": "在两次 Compy 读数之间发现的变化。"
     },
     "tapeMore_other": "显示 {{count}} 条更早的记录",
-    "manageJump_other": "{{count}} 项优化仍在生效——前往实验室撤销",
+    "manageJump_other": "{{count}} 项优化仍在生效——前往「测试」撤销",
     "library": {
       "eyebrow": "指南库",
       "scent": "在网上看到什么优化技巧?先查一查再动手——每一条说法都经过评级。",
@@ -142,7 +142,7 @@
   "learn": {
     "tagline": "什么才是真正有用的——用实测说话。查一查你在网上听说的任何优化项、术语或骗局;我们只回答已经验证过的内容。",
     "close": "关闭",
-    "modeAriaLabel": "小黑本模式",
+    "modeAriaLabel": "历史模式",
     "modes": {
       "browse": "查一查",
       "autopsy": "解剖指南"
@@ -298,9 +298,9 @@
     "qualifiesMark": "这台设备符合条件的原因:",
     "qualifiesConnector": " 实测依据——",
     "notForRigMark": "这台设备目前不符合条件:",
-    "notForRigRest": "。Compy 只会在你自己的实测结果显示确实有帮助时才建议调校——如果你好奇,完整指南仍然保留在小黑本里(搜索“undervolt”即可找到)。",
+    "notForRigRest": "。Compy 只会在你自己的实测结果显示确实有帮助时才建议调校——如果你好奇,完整指南仍然保留在「历史」里(搜索“undervolt”即可找到)。",
     "readoutHead": "稳定性和散热",
-    "readoutEmpty": "还没有调校数据。先在 Adrenalin 里降压,然后在「监测」的对局总结里启用一条基线——Compy 会持续观察温度有没有下降、帧数有没有保住。",
+    "readoutEmpty": "还没有调校数据。先在 Adrenalin 里降压,然后在「实时」的对局总结里启用一条基线——Compy 会持续观察温度有没有下降、帧数有没有保住。",
     "recentLabel": "近期对局——峰值温度与稳定性",
     "showMeTheWay": "带我看看怎么做",
     "unknownGame": "未知",
