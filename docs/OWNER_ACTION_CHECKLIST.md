@@ -133,6 +133,13 @@ You said "you have full permission", so the pile is cleared: `docs/close-recover
 their now-dead rows dropped from `docs/BRANCH_DISPOSITIONS.md` in the same commit. Nothing is left
 for you here.
 
+### A_ref2. One more dead branch — a single delete click  ·  ⏳ NEW 2026-08-11
+A sixth-and-final leftover appeared right after A_ref closed: `docs/untangle-dispositions`. A session
+fixed the branch-record duplicate there, but its push was blocked long enough that another lane fixed
+the exact same thing first (PRs #109 and #110). The branch now carries nothing `main` lacks, so it was
+abandoned rather than merged. Its row in `docs/BRANCH_DISPOSITIONS.md` is marked SUPERSEDED and goes
+when the ref does. Nothing is lost: nothing on it is unique.
+
 ### A_hook. ✅ CLOSED 2026-08-12 — the handoff-block guard is registered and live
 You pointed out (again) that sessions were ending without telling you whether to archive or delete
 them, which is how your sidebar fills with work you can't tell apart. That rule was written in
@@ -169,10 +176,10 @@ Nothing in the folder was ever unique — the branch and every commit live on Gi
 
 ### A-closed. Nine §A items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
-None of them is waiting on you. The §A items still open above are A0, A_ci, A_rig and A_crash
-(**A_ref closed 2026-08-11; A_hook and A_disk closed 2026-08-12**); the only two that actually need
-your hands are **A0** (get the updater signing key off this machine) and **A_crash** (one flag + a
-look). Archived
+None of them is waiting on you. The §A items still open above are A0, A_ci, A_rig, A_crash and
+A_ref2 (**A_ref closed 2026-08-11; A_hook and A_disk closed 2026-08-12**); the ones that actually
+need your hands are **A0** (get the updater signing key off this machine) and **A_crash** (one flag
++ a look) — A_ref2 is a ref deletion a session is clearing, not a click you owe. Archived
 2026-08-04 (TOKEN LAW §1 — history leaves the live doc, never gets deleted): **A0b** zh-CN merged +
 published in v0.9.11 · **A1** Gaming Mode QA signed off · **A2** beta smoke (sitting waived; the live
 beta thread is **§B2** below) · **A3** Lab Ops Console · **A4** Home console · **A5** Monitor v5
