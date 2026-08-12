@@ -8,7 +8,7 @@ import { Term } from "../design/Term";
 import { Dock, type DockNode } from "../design/console/Dock";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { RigViewer } from "./rig/RigViewer";
-import { buildRigParts } from "./rig/rig-parts";
+import { buildRigParts, type RigSelection } from "./rig/rig-parts";
 import { rigPartReadings, subsystemForRigPart, type LabReadingKey, type LabSubsystem } from "./lab-evidence-map";
 import { OptimizeStation, type LabFastPathProps } from "./lab/OptimizeStation";
 import {
@@ -193,12 +193,42 @@ export function LabConsole({
   // is resolved from the same builder the viewer renders from and stays intact through the reading
   // call. Reducing it to `kind` here would relabel GPU 0 / C: readings as whichever GPU or drive the
   // user actually selected. `t` keeps this list byte-identical to the one on screen.
-  const [selectedRigId, setSelectedRigId] = useState<string | null>(null);
-  const selectedPart = selectedRigId ? buildRigParts(hw, t).find((p) => p.id === selectedRigId) : undefined;
+  //
+  // The hologram also draws two things `buildRigParts` knows nothing about — the user's manually
+  // added parts, and the fans — and BOTH are clickable. Resolving through the builder alone meant a
+  // click on either highlighted it in the model and then rendered no panel at all: a dead end with
+  // no sentence explaining itself, which reads as a broken app. `selectedRig` carries what the
+  // hologram actually drew, so every click now answers.
+  const [selectedRig, setSelectedRig] = useState<RigSelection | null>(null);
+  const selectedPart =
+    selectedRig?.source === "part" ? buildRigParts(hw, t).find((p) => p.id === selectedRig.id) : undefined;
   const evidenceSubsystem: LabSubsystem | null = selectedPart ? subsystemForRigPart(selectedPart.kind) : null;
   // Honesty rail 2 of lab-evidence-map: an empty list is a legitimate answer and is SAID in words,
   // never padded with a dash. Several subsystems return nothing on purpose.
   const evidenceReadings = selectedPart ? rigPartReadings(selectedPart, hw) : [];
+  // A fan is the one non-part with a measurement of its own: its rpm comes from the same sensor
+  // read the hologram is already showing, so stating it invents nothing. A fan with no monitor
+  // publishing has `rpm: null` and says so; a part the user typed in himself is never presented as
+  // something Compy measured.
+  const evidenceFallback = (() => {
+    if (!selectedRig || selectedRig.source === "part") return null;
+    const isFan = selectedRig.source === "fan";
+    const rpm = selectedRig.source === "fan" ? selectedRig.rpm : null;
+    return {
+      name: selectedRig.name,
+      subsystemLabel: isFan
+        ? t("lab.labConsole.evidence.subsystem.thermals")
+        : t("lab.labConsole.evidence.userAddedSubsystem"),
+      // Exactly one of the two: a real measurement, or the honest reason there isn't one.
+      reading: rpm !== null ? t("lab.labConsole.evidence.fanSpeed", { rpm }) : null,
+      note:
+        rpm !== null
+          ? null
+          : isFan
+            ? t("lab.labConsole.evidence.fanUnread")
+            : t("lab.labConsole.evidence.userAddedNote"),
+    };
+  })();
 
   // Detail view — exactly ONE station open at a time (the dock IS the menu). Clicking a node opens
   // it, clicking again closes, clicking another swaps. Optimize is included — it is NOT always-on.
@@ -356,7 +386,7 @@ export function LabConsole({
           {/* chromeless — just the recognizable 3D hologram; the console frames it (brackets +
               corner gauges), so the viewer's own control bar / caption / "add a part" form are
               hidden (they collided with the corner gauges). */}
-          <RigViewer hw={hw} chromeless onSelectedIdChange={setSelectedRigId} />
+          <RigViewer hw={hw} chromeless onSelectedIdChange={(_id, what) => setSelectedRig(what)} />
         </div>
         <ReticleCursor scopeRef={stageRef} />
       </div>
@@ -395,6 +425,31 @@ export function LabConsole({
             </dl>
           ) : (
             <p className="lc-evidence-empty">{t("lab.labConsole.evidence.empty")}</p>
+          )}
+        </div>
+      )}
+
+      {/* The same panel for the two things that are NOT in the parts list — a fan, or a part the
+          user added himself. Same shape and same rails: a real rpm reading when a monitor is
+          publishing one, and otherwise a sentence saying why there is nothing to read. What must
+          never happen here is the third option this replaced: no panel. */}
+      {evidenceFallback && (
+        <div className="lc-evidence" aria-live="polite">
+          <div className="lc-evidence-head">
+            <span className="lc-evidence-name">{evidenceFallback.subsystemLabel}</span>
+            <span className="lc-evidence-part">{evidenceFallback.name}</span>
+          </div>
+          {evidenceFallback.reading ? (
+            <dl className="lc-evidence-list">
+              <div className="lc-evidence-row">
+                <dt>{t("lab.labConsole.evidence.reading.fanSpeed")}</dt>
+                <dd>
+                  <span className="lc-evidence-value">{evidenceFallback.reading}</span>
+                </dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="lc-evidence-empty">{evidenceFallback.note}</p>
           )}
         </div>
       )}

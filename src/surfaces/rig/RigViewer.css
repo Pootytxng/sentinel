@@ -28,6 +28,74 @@
     var(--ix-base, #0a0c11);
 }
 
+/* Keyboard part picker — the DOM equivalent of clicking a mesh. Clipped out of the visual layout
+   (never display:none, never hidden: both would drop it out of the tab order, which is the whole
+   point of it) and unfolded the moment any of its buttons takes focus. Pointer users never see it;
+   keyboard users get the same parts, the same selection, and the same evidence panel. */
+.rig-picker {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  list-style: none;
+}
+.rig-picker:focus-within {
+  z-index: 3;
+  width: auto;
+  height: auto;
+  max-width: calc(100% - 16px);
+  max-height: calc(100% - 16px);
+  overflow: auto;
+  clip-path: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  border-radius: var(--ix-radius, 14px);
+  border: 1px solid var(--ix-glass-border, var(--border, #242b39));
+  background: color-mix(in srgb, var(--ix-base, #0a0c11) 92%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.rig-picker-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  /* 24px min target on the short side (WCAG 2.5.8), comfortably cleared by the padding + text. */
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--ix-glass-border, var(--border, #242b39));
+  background: transparent;
+  color: var(--ix-text-1, #e6ebf5);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.rig-picker-item:hover {
+  border-color: var(--ix-accent, var(--accent, #2ee6c0));
+}
+.rig-picker-item[aria-pressed="true"] {
+  border-color: var(--ix-accent, var(--accent, #2ee6c0));
+  background: color-mix(in srgb, var(--ix-accent, #2ee6c0) 14%, transparent);
+}
+/* Focus ring drawn INSIDE the button: the group scrolls, and an outside ring on the first/last
+   item would be clipped by the panel's own overflow — an invisible focus indicator. */
+.rig-picker-item:focus-visible {
+  outline: 2px solid var(--ix-accent, var(--accent, #2ee6c0));
+  outline-offset: -3px;
+}
+.rig-picker-value {
+  color: var(--ix-text-3, var(--muted, #8b95a8));
+  white-space: nowrap;
+}
+
 .rig-loading {
   position: absolute;
   inset: 0;

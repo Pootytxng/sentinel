@@ -1,0 +1,399 @@
+// @vitest-environment node
+//
+// Guard: a launch Compy's own TOOLING performs must never take the owner's foreground.
+//
+// Owner ask, 2026-08-11: "anytime the node.js module is being used ... make it to where it doesnt
+// interrupt my forground process ... so it doesnt minimize my primary monitor atleast."
+//
+// The node processes were never the problem -- npm, vitest and the guards run inside the agent's
+// hidden console and create no window at all (that half is `console-window-guard.test.mjs`). What
+// interrupted him was the APP: `npm run tauri dev` and scripts/ship-reinstall.ps1's post-build
+// relaunch both open a window that ACTIVATES, and on Windows an activating window minimises an
+// exclusive-fullscreen game. A build finishing is not a reason to end his session.
+//
+// The rule this pins is "does not steal activation", NOT "is hidden". The window is still created,
+// still visible, still on the taskbar -- he clicks it when he wants it. A hidden app would be a
+// worse bug than the one being fixed, so `focusable` is deliberately out of scope: a window he
+// cannot click into afterwards is broken, not polite.
+//
+// ── WHY THERE IS A RUNTIME TIER ──────────────────────────────────────────────────────────────────
+// The first version of this file was static only. It read lib.rs, asserted the right words were
+// present, and passed green across an entire lane while the feature did NOTHING -- the config was
+// being set correctly and then overridden a moment later by the window-state plugin's
+// `show()` + `set_focus()`. It took three hand-run measurements to find that, and one of them
+// minimised the owner's game: the exact harm the guard claimed to prevent.
+//
+// So the tiers divide like this, and neither replaces the other:
+//   STATIC  -- pins the WIRING: that the decision is made before the window exists, that the
+//              overriding plugin flag stays off, that the ship path sets both levers. These are all
+//              one-line deletions away from silently reverting.
+//   RUNTIME -- pins the BEHAVIOUR: launches the real binary and watches GetForegroundWindow. This is
+//              the only tier that can tell a working fix from a well-worded one.
+import { describe, expect, it } from "vitest";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { windows } from "./lib/windows-only.mjs";
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const read = (...parts) => readFileSync(join(ROOT, ...parts), "utf8");
+
+const LIB_RS = read("src-tauri", "src", "lib.rs");
+const TRAY_RS = read("src-tauri", "src", "tray.rs");
+const SHIP = read("scripts", "ship-reinstall.ps1");
+const CONSOLE_START = read("tools", "console", "start.ps1");
+
+/** The body of `pub fn run()` up to the builder call -- where the decision must be applied. */
+function runPrelude(source) {
+  const start = source.indexOf("pub fn run() {");
+  expect(start, "src-tauri/src/lib.rs must still define `pub fn run()`").toBeGreaterThan(-1);
+  const builder = source.indexOf("tauri::Builder::default()", start);
+  expect(builder, "`run()` must still build the Tauri app").toBeGreaterThan(start);
+  return source.slice(start, builder);
+}
+
+describe("the app decides activation BEFORE the window exists", () => {
+  it("run() suppresses activation by mutating the window CONFIG, not the built window", () => {
+    const prelude = runPrelude(LIB_RS);
+    // Applying this in `setup` would be too late: the window is already up and has already taken the
+    // foreground, so un-focusing there is a snatch-and-return that has already minimised the game.
+    expect(prelude).toMatch(/should_suppress_activation\s*\(/);
+    expect(prelude).toMatch(/config_mut\(\)\.app\.windows/);
+    expect(prelude).toMatch(/window\.focus\s*=\s*false/);
+  });
+
+  it("run() reads every lever and hands them to the decision", () => {
+    const prelude = runPrelude(LIB_RS);
+    expect(prelude).toContain("COMPY_NO_ACTIVATE");
+    expect(prelude).toContain("COMPY_ACTIVATE");
+    // A dev build is tooling-initiated by definition, so quiet is its DEFAULT rather than something
+    // every launcher has to remember to opt into.
+    expect(prelude).toMatch(/cfg!\(debug_assertions\)/);
+    // argv, because an environment variable cannot reach a process that is already running.
+    expect(prelude).toMatch(/argv_asks_for_quiet_launch\s*\(/);
+  });
+
+  it("passes the mutated context to run(), not a freshly generated one", () => {
+    // `.run(tauri::generate_context!())` would compile, pass every unit test, and silently discard
+    // every suppression this guard checks for.
+    expect(LIB_RS).toMatch(/\.run\(context\)/);
+    expect(LIB_RS).not.toMatch(/\.run\(tauri::generate_context!\(\)\)/);
+  });
+
+  it("leaves `focusable` alone, so the owner can still click into the window", () => {
+    expect(LIB_RS).not.toMatch(/focusable\s*=\s*false/);
+  });
+});
+
+describe("nothing downstream is allowed to re-focus the window", () => {
+  // THE REGRESSION THIS FILE EXISTS FOR. tauri-plugin-window-state's `on_window_ready` runs before
+  // our `setup`, and its `restore_state` ends with an unconditional `show()` + `set_focus()`
+  // whenever StateFlags::VISIBLE is set (2.4.1, src/lib.rs:262-264). `set_focus` calls Win32
+  // SetForegroundWindow, which overrides the polite SW_SHOWNOACTIVATE the config just bought. Put
+  // VISIBLE back -- or drop `with_state_flags` and take the default, which is `all()` -- and the
+  // whole feature silently reverts to inert while every other assertion here still passes.
+  it("the window-state plugin is configured WITHOUT StateFlags::VISIBLE", () => {
+    const plugin = LIB_RS.slice(
+      LIB_RS.indexOf("tauri_plugin_window_state::Builder::default()"),
+      LIB_RS.indexOf(".invoke_handler("),
+    );
+    expect(plugin, "window-state plugin registration must still exist").toContain("with_denylist");
+    expect(plugin).toMatch(/with_state_flags\s*\(/);
+    expect(plugin).toMatch(/StateFlags::all\(\)\s*-\s*tauri_plugin_window_state::StateFlags::VISIBLE/);
+  });
+
+  it("the relaunch path carries the caller's intent instead of focusing regardless", () => {
+    // `show_or_recreate_main` used to call `set_focus()` unconditionally, so a tooling relaunch that
+    // found a live instance stole the foreground no matter what the new process had been told.
+    //
+    // Pinned statically ON PURPOSE -- the runtime tier below deliberately does NOT assert on the
+    // relaunch case, and that is a measurement, not an omission. With this handler gutted to a
+    // literal no-op and rebuilt, the live window still came forward for 35 of 37 samples: when a
+    // second process of the same app starts and exits, Windows can raise the existing instance by
+    // itself. `set_focus()` is still worth gating (it reaches SetForegroundWindow through tao's
+    // AttachThreadInput dance, which bypasses the foreground lock and therefore raises even where
+    // the OS would not), but no in-process change can make a relaunch reliably silent, and a guard
+    // that demanded it would be asserting Windows' behaviour, not Compy's.
+    // Reproduce: scripts/lib/foreground-probe.ps1 -RelaunchWith quiet|loud.
+    expect(TRAY_RS).toMatch(/fn show_or_recreate_main\(app: &AppHandle, activate: bool\)/);
+    const body = TRAY_RS.slice(TRAY_RS.indexOf("fn show_or_recreate_main"));
+    const focusCall = body.indexOf("set_focus()");
+    expect(focusCall, "the restore path must still be able to focus").toBeGreaterThan(-1);
+    // The focus must sit inside the `if activate` branch, not beside it.
+    expect(body.slice(0, focusCall)).toMatch(/if activate \{\s*$/m);
+  });
+
+  it("the single-instance handler reads the second launch's argv", () => {
+    const handler = LIB_RS.slice(
+      LIB_RS.indexOf("tauri_plugin_single_instance::init("),
+      LIB_RS.indexOf(".plugin(tauri_plugin_opener::init())"),
+    );
+    expect(handler).toMatch(/argv_asks_for_quiet_launch\s*\(/);
+    expect(handler).toMatch(/show_or_recreate_main\(app,\s*!quiet\)/);
+  });
+});
+
+describe("the ship path relaunches without stealing the foreground", () => {
+  it("sets COMPY_NO_ACTIVATE before it launches the installed exe", () => {
+    const setter = SHIP.search(/\$env:COMPY_NO_ACTIVATE\s*=\s*"1"/);
+    expect(setter, "scripts/ship-reinstall.ps1 must set COMPY_NO_ACTIVATE").toBeGreaterThan(-1);
+    const firstLaunch = SHIP.search(/Start-NativeProcess\s+-Command\s+\$exe/);
+    expect(firstLaunch, "ship-reinstall must still launch the installed exe").toBeGreaterThan(-1);
+    // Ordering is the whole point: set after the launch and the child has already inherited nothing.
+    expect(setter).toBeLessThan(firstLaunch);
+  });
+
+  it("also passes the argv token, which is the half that survives the single-instance hop", () => {
+    // If an older Compy is still alive, the new process hands it only its command line and dies.
+    // An env-only lever would be dropped exactly when the owner has the app open.
+    expect(SHIP).toMatch(/\$quietLaunchArgs\s*=\s*@\("--no-activate"\)/);
+    for (const launch of SHIP.split(/\r?\n/).filter((l) => /Start-NativeProcess -Command \$exe/.test(l))) {
+      expect(launch, `${launch.trim()} must carry the quiet argv`).toMatch(/-ArgumentList \$quietLaunchArgs/);
+    }
+  });
+
+  it("sets it on THIS process, because a detached child cannot take a child-only environment", () => {
+    // ShellExecute has no per-child environment -- Start-NativeProcess refuses -Detached with
+    // -Environment for exactly this reason. Parent-process assignment is the sanctioned route.
+    expect(SHIP).not.toMatch(/-Detached[^\r\n]*-Environment/);
+  });
+});
+
+describe("the console browser opens quietly only when tooling started it", () => {
+  it("every browser launch carries an explicit window style", () => {
+    const launches = CONSOLE_START.split(/\r?\n/).filter((line) => /^\s*Start-Process\b/.test(line));
+    expect(launches.length).toBeGreaterThan(0);
+    for (const line of launches) {
+      expect(line, `${line.trim()} must name a -WindowStyle`).toMatch(/-WindowStyle\s+\$?\w+/);
+    }
+  });
+
+  it("opens normally for the owner and minimised for tooling", () => {
+    // When HE runs start.ps1 he is asking to look at the console; that window is not an interruption
+    // and must not be hidden from him. Only a tooling-initiated start goes quiet.
+    expect(CONSOLE_START).toMatch(/COMPY_NO_ACTIVATE/);
+    expect(CONSOLE_START).toMatch(/"Minimized"/);
+    expect(CONSOLE_START).toMatch(/"Normal"/);
+  });
+
+  it("treats an empty or zero value as OFF, matching the Rust reader", () => {
+    // Two readers of one variable that disagree about `""` is a lever that cannot be released once
+    // anything upstream exports the name. `is_env_flag_set` in lib.rs holds the same contract.
+    expect(CONSOLE_START).toMatch(/COMPY_NO_ACTIVATE\.Trim\(\)\s*-ne\s*"0"/);
+    expect(LIB_RS).toMatch(/fn is_env_flag_set/);
+  });
+});
+
+// ── RUNTIME TIER ────────────────────────────────────────────────────────────────────────────────
+
+const PROBE = join(ROOT, "scripts", "lib", "foreground-probe.ps1");
+const TAURI_IDENTIFIER = JSON.parse(read("src-tauri", "tauri.conf.json")).identifier;
+
+/**
+ * A saved window state that comes back MAXIMIZED. The riskiest restore path: the window-state plugin
+ * reaches maximize through `ShowWindow(SW_MAXIMIZE)`, which is an ACTIVATING show command, so a
+ * maximized window is where a "quiet" launch is most likely to come forward anyway. Seeding it costs
+ * the measurement nothing and covers the case the owner is one double-click away from creating.
+ */
+const MAXIMIZED_STATE = {
+  main: {
+    width: 1148,
+    height: 840,
+    x: 100,
+    y: 50,
+    prev_x: 100,
+    prev_y: 50,
+    maximized: true,
+    visible: true,
+    decorated: false,
+    fullscreen: false,
+  },
+};
+
+/**
+ * The newest built compy.exe that is actually NEWER than the sources this file pins. A stale binary
+ * would let the runtime tier "prove" a fix that predates the code -- the same false-pass, one level
+ * down. Returns null when there is nothing honest to measure (a clean checkout, CI, a Linux box).
+ */
+function measurableBinary() {
+  const sourceTouched = Math.max(
+    statSync(join(ROOT, "src-tauri", "src", "lib.rs")).mtimeMs,
+    statSync(join(ROOT, "src-tauri", "src", "tray.rs")).mtimeMs,
+  );
+  const candidates = ["release", "debug"]
+    .map((profile) => join(ROOT, "src-tauri", "target", profile, "compy.exe"))
+    .filter((p) => existsSync(p))
+    .map((p) => ({ path: p, mtime: statSync(p).mtimeMs }))
+    .sort((a, b) => b.mtime - a.mtime);
+  const newest = candidates[0];
+  if (!newest || newest.mtime < sourceTouched) return null;
+  return newest.path;
+}
+
+const BINARY = windows ? measurableBinary() : null;
+
+/**
+ * The probe REFUSES to measure while a compy is already running: the single-instance lock would
+ * absorb the launch and every reading would describe the window the owner already had open. That
+ * refusal is correct. Turning it into a red suite is not -- the owner running his own app is the
+ * normal state of this machine, and a gate that refuses a green repo teaches you to pass
+ * --no-verify. So it SKIPS, loudly and by name. Where proof is actually being demanded (the release
+ * gate sets COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF), an unmeasurable run is a failure again.
+ */
+function unmeasurableBecauseRunning() {
+  const run = spawnSync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-Command",
+      "(Get-Process -Name compy -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id) -join ','",
+    ],
+    { encoding: "utf8", windowsHide: true, timeout: 30_000 },
+  );
+  const pids = (run.stdout || "").trim();
+  if (!pids) return false;
+  const reason =
+    `compy is already running (PID ${pids}); the single-instance lock would absorb the launch, ` +
+    "so the measurement would describe the OLD window. Close it to measure.";
+  if (process.env.COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF) {
+    throw new Error(`runtime foreground proof was REQUIRED but could not run: ${reason}`);
+  }
+  console.log(`[launch-focus-guard] runtime measurement SKIPPED: ${reason}`);
+  return true;
+}
+
+/** Run the probe and return its parsed result. Throws with the probe's own words on failure. */
+function measureLaunch({ args = [], env = {}, seconds = 6, savedState = null }) {
+  // A throwaway APPDATA so a measurement never writes to the owner's Trust Ledger, and so the
+  // window-state file each launch reads is a known one rather than whatever he left behind.
+  const sandbox = mkdtempSync(join(tmpdir(), "compy-fg-"));
+  if (savedState) {
+    // The window-state plugin restores from the app config dir, which is %APPDATA%\<identifier>.
+    mkdirSync(join(sandbox, TAURI_IDENTIFIER), { recursive: true });
+    writeFileSync(join(sandbox, TAURI_IDENTIFIER, ".window-state.json"), JSON.stringify(savedState));
+  }
+  const run = spawnSync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      PROBE,
+      "-FilePath",
+      BINARY,
+      "-DurationSeconds",
+      String(seconds),
+      ...(args.length ? ["-ArgumentList", args.join(",")] : []),
+    ],
+    {
+      encoding: "utf8",
+      // Same rule console-window-guard.test.mjs enforces: a measurement of window behaviour must not
+      // itself flash a console window across the screen it is measuring.
+      windowsHide: true,
+      timeout: (seconds + 40) * 1000,
+      env: { ...process.env, APPDATA: sandbox, LOCALAPPDATA: sandbox, ...env },
+    },
+  );
+  const stdout = (run.stdout || "").trim();
+  const json = stdout.split(/\r?\n/).find((line) => line.startsWith("{"));
+  if (!json) {
+    throw new Error(`foreground probe produced no result.\nstdout: ${stdout}\nstderr: ${run.stderr}`);
+  }
+  // The probe can also measure a second, single-instance-absorbed launch (-RelaunchWith); this guard
+  // only ever asks for the first one, so flatten that block up and keep the launch-level fields.
+  const parsed = JSON.parse(json);
+  return { ...parsed.initial, launchedPid: parsed.launchedPid, rightsGranted: parsed.rightsGranted };
+}
+
+describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegroundWindow", () => {
+  // DECLARATION ORDER IS LOAD-BEARING. The self-test runs FIRST because Windows holds a foreground
+  // LOCK for a moment after the active window changes, and each measurement ends by killing the app
+  // it launched. Measured: with the quiet case first, the following ACTIVATING launch could not
+  // reach the foreground either -- a state in which the quiet case proves nothing and passes anyway.
+  // The probe's own settle wait covers the same hazard; the ordering is the belt to its braces.
+  it(
+    "the probe is not blind: an explicit COMPY_ACTIVATE launch DOES take the foreground",
+    () => {
+      // Without this, a probe that could never see Compy in the foreground -- a broken P/Invoke, a
+      // wrong PID, a window owned by a child process, a machine whose foreground is locked -- would
+      // report a perfect pass below forever. That is precisely how the inert fix survived a lane.
+      //
+      // It is opt-in because proving activation means actually TAKING the owner's foreground for a
+      // few seconds, which is the very interruption this lane exists to remove. Run it deliberately,
+      // when he is not mid-game:
+      //   COMPY_PROVE_ACTIVATION=1 npx vitest run scripts/launch-focus-guard.test.mjs
+      if (!process.env.COMPY_PROVE_ACTIVATION && !process.env.COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF) {
+        console.log(
+          "[launch-focus-guard] activation self-test SKIPPED (set COMPY_PROVE_ACTIVATION=1 to run it; it will steal the foreground once, by design)",
+        );
+        return;
+      }
+      if (unmeasurableBecauseRunning()) return;
+      const result = measureLaunch({ env: { COMPY_ACTIVATE: "1" } });
+      expect(result.exited, `the app exited during the measurement (code ${result.exitCode})`).toBe(false);
+      // Whether ANY launch can reach the foreground is decided before Compy runs. Windows only lets a
+      // process activate a window if it inherited foreground rights from its launcher, so the whole
+      // measurement is conditional on the shell running this test being the foreground app -- which a
+      // test harness spawned in the background is not. Measured here: the grant is refused whenever
+      // the owner is looking at any other window. That is not a failing fix and not a passing one; it
+      // is a measurement that could not be taken, and saying so is the entire point of a self-test.
+      expect(
+        result.rightsGranted,
+        "the harness could not obtain foreground rights, so NOTHING could have taken the foreground and the quiet result below proves nothing. Re-run from a shell that IS the foreground window (click the terminal first).",
+      ).toBe(true);
+      expect(
+        result.everTookForeground,
+        "an explicitly-activating launch did NOT reach the foreground, so the probe cannot detect the failure it is meant to catch",
+      ).toBe(true);
+    },
+    120_000,
+  );
+
+  it(
+    "a quiet launch opens a real visible window and never takes the foreground",
+    () => {
+      if (unmeasurableBecauseRunning()) return;
+      const result = measureLaunch({ args: ["--no-activate"], savedState: MAXIMIZED_STATE });
+      if (!result.rightsGranted) {
+        // Honest caveat, not a failure: this run's shell had no foreground rights to hand over, so
+        // "never took the foreground" is weaker evidence than it looks. The self-test above turns the
+        // same fact into a hard failure whenever proof is actually being demanded.
+        console.log(
+          "[launch-focus-guard] WEAK EVIDENCE: no foreground rights were available to grant, so an activating launch could not have taken the foreground either. Pair this with the COMPY_PROVE_ACTIVATION self-test.",
+        );
+      }
+      // Ordered most-diagnostic-first: "never took the foreground" is also true of an app that
+      // crashed on startup, and that would be a worse bug passing as a fix.
+      expect(result.exited, `the app exited during the measurement (code ${result.exitCode})`).toBe(false);
+      expect(result.sawWindow, "the app never opened a window at all").toBe(true);
+      expect(result.sawVisibleWindow, "the window existed but was hidden or minimised -- the fix must stay out of the foreground, not out of sight").toBe(true);
+      expect(
+        result.ownedForegroundSamples,
+        `Compy held the foreground for ${result.ownedForegroundSamples}/${result.samples} samples (first at ${result.firstForegroundMs}ms). This is the owner's game being minimised.`,
+      ).toBe(0);
+    },
+    120_000,
+  );
+});
+
+describe("the runtime tier states plainly when it did not run", () => {
+  it("names the reason rather than passing silently", () => {
+    if (windows && BINARY) {
+      console.log(`[launch-focus-guard] runtime tier measured against ${BINARY}`);
+      return;
+    }
+    const reason = !windows
+      ? "not Windows -- there is no foreground to steal"
+      : "no built compy.exe newer than src-tauri/src/{lib,tray}.rs (build first: cargo build --manifest-path src-tauri/Cargo.toml)";
+    console.log(`[launch-focus-guard] runtime tier NOT RUN: ${reason}`);
+    // A release must never ship on the static tier alone -- that is exactly how the inert fix in
+    // PR #100 survived a whole lane green. The release gate sets this.
+    expect(
+      process.env.COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF,
+      `runtime foreground proof was REQUIRED but could not run: ${reason}`,
+    ).toBeFalsy();
+  });
+});

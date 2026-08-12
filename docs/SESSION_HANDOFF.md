@@ -12,109 +12,81 @@
 
 ## Lane
 
-Worktree `.claude/worktrees/foreground-courtesy-handoff-82687b`, branch
-`claude/foreground-courtesy-handoff-82687b`, rebased onto `origin/main` `880a3b5f`.
-
-The prior occupant (command-palette lane) landed as `22fb15b2`; its one still-open item (PR #90
-recovery) is carried forward below.
+Worktree `.claude/worktrees/admiring-lumiere-648403`, branch
+`claude/compy-foreground-courtesy-rebuild-60b17e`, which carries `origin/main` `5a982647` in its
+own history.
+PR [#102](https://github.com/Pootytxng/sentinel/pull/102) — OPEN, pre-push gate `LOCAL CHECK
+RESULT: PASS`. It closes three handoffs at once (PR #90 recovery, the #100 redo, and the
+foreground-courtesy ask).
 
 ## What this lane did
 
-Two threads, both closed except for one owner decision.
+### 1 · The quiet launch, rebuilt where it can actually work
 
-### 1 · PR #100's foreground fix is INERT — proven, do not merge
+PR #100's mechanism was inert — `focus = false` through `context.config_mut()` does not survive to
+window creation. #100 is **CLOSED**; this is the replacement, not a patch.
 
-The handoff asked for the on-screen proof. Ran it three times in isolation (own identifier + own
-`APPDATA` + port 1421, so the neighbouring lane's live compy on 1420 was never touched). **All three
-took the foreground; one minimised the owner's running game (Soulframe.x64).**
+- The window is built with `WebviewWindowBuilder` and shown via `SW_SHOWNOACTIVATE`: visible, on the
+  taskbar, clickable — it just never takes activation. Hidden would be a worse bug than the one fixed.
+- Intent crosses the single-instance boundary as `--no-activate` argv, so a *relaunch* is quiet too;
+  `tray::show_or_recreate_main` no longer focuses unconditionally.
+- `should_suppress_activation` + its five unit tests kept verbatim — the predicate was never the bug.
+- `scripts/launch-focus-guard.test.mjs` has a **RUNTIME tier**: a `GetForegroundWindow` poller across
+  a real launch, plus a self-test proving the probe can still SEE an activating launch. It skips by
+  name when a compy is already running (single-instance would make it measure the OLD window) and
+  fails instead under `COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF`.
 
-Root cause, instrumented at `setup`: `config-as-seen-at-setup: focus=false visible=false` — the
-mutation in `run()` (`for window in &mut context.config_mut().app.windows { window.focus = false }`)
-sticks — but `visible_before=true … foreground_is_us=true`. **Tauri 2 ignores `WindowConfig.focus`
-and `.visible` at creation time**, so the window is already up and focused before any `setup` code
-runs. Nothing done in `setup` can fix it. Findings are posted on PR #100; my exploratory edits in
-`.claude/worktrees/nodejs-background-execution-fd4def` were reverted (`git checkout --`, tree clean).
+### 2 · PR #90 recovery, P1–P4 — all four re-proven and repaired
 
-A real fix means building the window through `WebviewWindowBuilder` (`.visible(false)` /
-`.focused(false)`) + `SW_SHOWNOACTIVATE`, carrying `decorations: false`, min sizes and the maximize
-subclass across. Separate hole: `tray::show_or_recreate_main` (`src-tauri/src/tray.rs:70-86`) calls
-`show()` + `set_focus()` unconditionally, so a *relaunch* steals focus regardless — the relauncher's
-intent would have to travel via the single-instance plugin's argv. #100 also conflicts with main.
+- **P1** Selection now carries a typed `RigSelection` for parts, user-added parts AND fans, so the
+  Lab evidence map answers for all three of its clickable lists (it answered for one).
+- **P2** Ghost-fan shadowing released only *undetected* ghosts; a detected CPU fan could occlude the
+  CPU. Fixed + regression coverage.
+- **P3** The hologram was pointer-only (meshes, not DOM). It now has a real keyboard route: one
+  native `<button>` per part, built from the same `rigInventory` the meshes come from, off-screen
+  until focused, then shown over the stage. `src/surfaces/rig/rig-picker.test.tsx`.
+- **P4** `scripts/work-control-gate.mjs` trusted a receipt's self-declared SHA. It resolves the head
+  itself, demands a full 40-char SHA, binds gates AND the independent review to that head, and treats
+  an unresolvable head as a blocker rather than a pass.
 
-### 2 · The owner's actual complaint — FIXED, guarded, committed
+### 3 · Three gates that were describing yesterday's repo
 
-His words: *"the thing that keeps popping up stealing my forground primarily is the windows terminal
-… it appears blank then closes on its own shortly after."* Traced with a process-spawn poller to
-`npm test`: seven suites spawn `powershell.exe`, and Node's `spawnSync` defaults to
-`windowsHide: false`; Win11's default terminal is Windows Terminal, so each spawn opened a real blank
-console window (blank because stdout is piped), dozens per run.
+npm audit (five advisories classified with real dependency paths + expiry), RELEASE_STATE
+(`source_main_commit`, `owner_installed_stamp` re-stamped to `1214fa9c`), BRANCH_DISPOSITIONS
+(this lane's row added after the push; #90 → MERGED, #100 → SUPERSEDED).
 
-- `windowsHide: true` on all seven `scripts/*.test.mjs`: `alias-propagation-harness`,
-  `production-adapter-{lookup,native-sandbox}`, `release-{transaction-e2e,pipeline-guard}`,
-  `deps-bootstrap-guard`, `public-version-gate`.
-- **Guard** `scripts/console-window-guard.test.mjs` — parses each spawn call with a balanced-paren
-  scan so one correct call can't cover a wrong one beside it; includes a negative self-test.
-  Its interpreter names are **assembled from fragments on purpose** — a quoted `"powershell.exe"`
-  literal makes `windows-only-coverage.test.mjs` misclassify it and demand a `runIf(windows)` gate
-  that would be wrong (it starts no process). Do not "simplify" those regexes.
-- `CompyUsageAudit` scheduled task set `Settings.Hidden` False → True (it flashed the same way).
-
-Also landed here: the `~/.claude/hooks/unloaded-project-config.mjs` mirror re-sync (its drift was
-turning EVERY lane's gate red) and an 8 s budget on `preload-apps`' armed case (1 s lost to machine
-load, twice). **Verification:** full pre-push gate, `LOCAL CHECK RESULT: PASS`, 4042 tests.
+**Verification:** `npx tsc --noEmit` clean · 4144 frontend tests · Rust tests + clippy · full
+`verify-release.ps1` (the three FAILs above are what it caught; all now green) · citations 30/30.
 
 ## Left to do
 
-### 1 · Land PR [#101](https://github.com/Pootytxng/sentinel/pull/101)
+Nothing in this lane except landing it. PR #102 is green, the build is installed and proved
+(`3155c7a0 · release`, installer SHA-256 `3AD4C690…BF8E`), and the self-review came back **PASS** on
+round 3. Round 2 is why there was a round 3: it caught that P2 was only half-fixed — the detected-fan
+half worked, a hand-added cooler still swallowed every click aimed at the CPU behind it. Fixed in
+`3155c7a0` with four regression cases, and the fixtures carry `kind` on purpose (without it the shape
+rules judge a manual part as a fan and the tests pass either way — measured).
 
-Branch is on origin and green through the pre-push gate. Merging a green PR is ours, not the
-owner's (decree 2026-08-11). Prune the ref afterwards with `gh api`, never with the
-`--delete-branch` flag — it once wrote `core.bare=true` into the shared git config and broke every
-lane at once. Then drop the row from `docs/BRANCH_DISPOSITIONS.md` in a follow-up.
+Next: merge #102, prune the ref with `gh api` (never `--delete-branch`), then clear this file.
 
-### 2 · One owner decision, already put to him
+### Found on the way, not fixed here
 
-Close PR #100, or rework it via `WebviewWindowBuilder`. He has been told not to merge it and why.
-Nothing else waits on him.
-
-### 2 · PR #90 recovery — **ours to finish, not a thread to wait on**
-
-PR #90 `agent/rig-evidence-map-clean`, head `98146456`, OPEN / MERGEABLE / no review decision.
-The four items below came from a Codex audit, which is **advisory only — no jurisdiction over
-building or decisions** (owner, 2026-08-11). Its review never completed (expired OAuth), so every
-gate below is an unverified claim to re-prove here, and none of it blocks starting.
-
-- **P1** `LabConsole.tsx` resolves selected IDs only through detected `buildRigParts()` entries —
-  manual parts and fans can select into no panel. Keep exact IDs; never collapse to `gpu`/`storage`.
-- **P2** `shadowingGhostIds()` releases only *undetected* ghosts — a detected CPU fan or manual
-  cooler can still occlude the CPU. Needs regression coverage.
-- **P3** Selection is pointer-only through Three.js. #49's a11y acceptance needs a DOM selector:
-  tab, Enter/Space, visible focus, name/role/value, 200% reflow, honest unavailable states.
-- **P4** Re-verify `scripts/work-control-gate.mjs` itself resolves the real head, binds gates and
-  review to that head, and rejects self-authored SHAs — don't re-apply the old governance diff blind.
-- Verifier (**we run it, it is not the owner's job**):
-  `powershell -NoProfile -File scripts/verify-release.ps1 -EvidencePath src-tauri\target\codex-verification\pr90-final-review-verify-release-evidence.json`
+`<RigViewer>` is mounted live only by `LabConsole.tsx`, always `chromeless` — and `chromeless` hides
+the "add a part" form. The manual-parts feature is therefore reachable in tests only. Logged in
+`docs/BACKLOG.md`.
 
 ## Do NOT
 
-- **Do not launch a build with nothing visual to show** (owner, 2026-08-11): *"if no major visual
-  changes or features have been added or made then if it saves tokens then you dont have to pull up
-  the build everytime."* Memory: `dont-launch-build-without-visual-change`.
-- **Do not `Start-Process pwsh -WindowStyle Hidden`** — Windows Terminal ignores `-WindowStyle`, so
-  that flashes the very window this lane just fixed. Launch helper shells via the Bash tool.
-- **Disposition rows go AFTER the first push, never with it** (learned the hard way, 2026-08-11).
-  The audit rejects a row whose ref it cannot resolve, so a row written before the branch exists
-  fails the very gate that would create the ref. Order: push, then a follow-up commit with the row.
-  Rows are perishable both ways — on a conflict there, re-check `git ls-remote --heads origin <ref>`
-  before choosing a side.
-- Do not kill another lane's processes or its port. `docs/WORK_CONTROL.md`: expiry is an alarm, not a
-  takeover. Isolate instead — override `identifier` (the single-instance lock key) and `APPDATA`,
-  and use a free port.
-- Do not release, publish, or touch signing keys. Do not rebase PR #92 before #90 resolves.
-- Do not run `loadLibrary()` without injecting a loader from inside a test — it boots a real Vite
-  server inside the worker pool. It refuses when it sees `globalThis.__vitest_worker__` (**not**
-  `process.env.VITEST` — that leaks into child processes); `scripts/nested-vite-server-guard.test.mjs`.
+- **Do not `Start-Process pwsh -WindowStyle Hidden`** — Windows Terminal ignores `-WindowStyle`.
+- **Disposition rows go AFTER the first push, never with it.** The audit rejects a row whose ref it
+  cannot resolve, and its vocabulary is exactly MERGED / SUPERSEDED / UNLANDED / PRESERVE / CLAIMED.
+- Do not kill another lane's processes or its port; isolate (own `identifier`, own `APPDATA`, free
+  port) instead.
+- Do not release, publish, or touch signing keys. `npm run tauri build` exits non-zero on the missing
+  private key — that is expected here and the NSIS + MSI bundles are still produced.
+- Do not pipe a long build through `tail`: it once masked a libuv assertion and looked like success.
+  Redirect to a log file instead.
 
 ## Resume with
 
-**Item 1** (land #101 and clean up its row), then **item 3** (PR #90 recovery) — the real open work.
+Merge PR #102 if it is still open; otherwise this lane is finished and the file can be cleared.

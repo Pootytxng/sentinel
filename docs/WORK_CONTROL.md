@@ -91,6 +91,11 @@ and review disposition as a JSON receipt, then run:
 node scripts/work-control-gate.mjs <receipt.json>
 ```
 
+The receipt's `currentHead` must be the **full 40-character SHA**, and the gate resolves the head
+itself (`git rev-parse HEAD`) and blocks when the receipt disagrees with it — a head the actor typed
+is not proof. Gate results **and** the independent review are both bound to that head; a review
+recorded at an earlier head does not cover the commits made after it.
+
 Only `PASS` authorizes the transition. `BLOCKED` is the state, not permission to reinterpret a failed
 or unavailable gate. Opening an explicitly blocked draft is allowed because it does not claim
 readiness. The **non-writing model performs the final independent review whenever practical**; if
