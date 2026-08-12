@@ -323,3 +323,44 @@ describe("LabConsole", () => {
     expect(container.innerHTML).not.toMatch(/132\s*,\s*0\s*,\s*255/);
   });
 });
+
+
+// TRAIN 1 GUARD (2026-08-12) — the add-a-part form must be reachable from the Lab, the app's ONLY
+// live RigViewer mount. The PR #102 self-review caught the defect this pins: the Lab renders the
+// viewer chromeless, chromeless hid the viewer's built-in form, so manual parts (manual-parts.ts,
+// compy_rig_manual_parts, the user-added evidence fallback) were reachable in tests only — a user
+// could not add the PSU or cooler Compy admits it cannot read. The form now lives in the Lab's own
+// chrome (.lc-manual > RigManualParts); this block fails the build if it ever unmounts again.
+describe("LabConsole — add a part (manual parts in the Lab's own chrome)", () => {
+  it("mounts the add-a-part form in the Lab chrome, outside the chromeless viewer", () => {
+    renderConsole();
+    expect(document.querySelector(".lc-manual .rig-manual")).not.toBeNull();
+    expect(screen.getByText("Add a part Compy can't detect:")).toBeInTheDocument();
+  });
+
+  it("adding a part from the Lab persists it and lists it as user-added", () => {
+    renderConsole();
+    const input = screen.getByPlaceholderText("e.g. Corsair RM850x");
+    fireEvent.change(input, { target: { value: "Corsair RM850x" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(screen.getByText("Corsair RM850x")).toBeInTheDocument();
+    expect(screen.getByText("user-added")).toBeInTheDocument();
+    const stored = JSON.parse(localStorage.getItem("compy_rig_manual_parts") ?? "[]");
+    expect(stored).toHaveLength(1);
+    expect(stored[0].name).toBe("Corsair RM850x");
+    expect(stored[0].kind).toBe("psu");
+  });
+
+  it("removing the part from the Lab clears it from storage", () => {
+    renderConsole();
+    fireEvent.change(screen.getByPlaceholderText("e.g. Corsair RM850x"), {
+      target: { value: "Noctua NH-D15" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.click(screen.getByRole("button", { name: /remove noctua nh-d15/i }));
+
+    expect(screen.queryByText("Noctua NH-D15")).toBeNull();
+    expect(JSON.parse(localStorage.getItem("compy_rig_manual_parts") ?? "[]")).toHaveLength(0);
+  });
+});
