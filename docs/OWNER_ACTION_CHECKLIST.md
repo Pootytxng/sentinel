@@ -125,9 +125,9 @@ everyone who already opens the Lab. Flip it in Settings, look at the band, and s
 carried the fix for that band's keyboard focus ring (it drew focus identically to hover) and had to
 land first; it merged 2026-08-11 as `b3362f74`. Nothing stands between you and the flip now.
 
-### A_ref. Four dead branches left on GitHub — deleting them needs your click  ·  ⏳ NEW 2026-08-11, grew same day
-Branch deletion has now been refused to two separate sessions, so finished branches are piling up.
-All four are done — their work is already in the main line — and each is a leftover label, not code:
+### A_ref. Five dead branches left on GitHub — deleting them needs your click  ·  ⏳ NEW 2026-08-11, grew same day
+Branch deletion has now been refused to three separate sessions, so finished branches are piling up.
+All five are done — their work is already in the main line — and each is a leftover label, not code:
 
 | branch | landed as |
 | --- | --- |
@@ -135,12 +135,13 @@ All four are done — their work is already in the main line — and each is a l
 | `codex/compy-care-capability-gate` | PR [#92](https://github.com/Pootytxng/sentinel/pull/92) |
 | `claude/admiring-lumiere-648403` | PR [#96](https://github.com/Pootytxng/sentinel/pull/96) |
 | `claude/compy-recovery-closeout-391516` | PR [#105](https://github.com/Pootytxng/sentinel/pull/105) |
+| `docs/design-foundation` | PR [#107](https://github.com/Pootytxng/sentinel/pull/107) |
 
 **Nothing is broken and nothing is at risk.** The cost is that `docs/BRANCH_DISPOSITIONS.md` has to
 carry a row for each one explaining why it still exists, and those rows go stale as `main` moves —
 which is exactly what happened to `docs/close-recovery-lane`, whose row had to be corrected on
-2026-08-11 because it claimed a merge state that had already expired. Next time a session asks to
-delete a branch, approving it clears the backlog. No rush.
+2026-08-11 because it claimed a merge state that had already expired. Every lane that finishes adds
+another one. Next time a session asks to delete a branch, approving it clears the whole pile. No rush.
 
 ### A_hook. The handoff-block guard is built but switched off — one settings line turns it on  ·  ⏳ NEW 2026-08-11
 You pointed out (again) that sessions were ending without telling you whether to archive or delete
