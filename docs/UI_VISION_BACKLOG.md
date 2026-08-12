@@ -22,6 +22,20 @@
 These are owner asks that are **never-built or parked**, not yet reflected as active work anywhere
 else. This is the list the owner meant.
 
+### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) 🔴 OPEN — parent of TYPE-1/COLOR-1/UX-1
+
+Owner escalated 2026-08-11: non-technical testers, incl. close friends, "do not enjoy using the app
+— overwhelming, hard to navigate, completely unfamiliar." Asked for tooling + deep research on
+intuitive layouts, shown to him, "so we can rebuild a foundation compy can atleast stand on."
+
+Deliverable: `docs/decisions/2026-08-11-design-foundation.md` (research + rendered proposal;
+artifact `claude.ai/code/artifact/4eeeac30-4b1a-4de8-bd8c-59260bd46155`). Thesis: the front door
+must be a **verdict + one action**, not a dashboard; the intake band ("what are you here to do?")
+is promoted to a TurboTax-style interview; instruments move behind a door. Build order: ① type +
+colour app-wide (= TYPE-1 + COLOR-1) ② front door (= UX-1) ③ interview ④ wording pass with a banned-
+term guard ⑤ instruments behind a door. **Awaiting owner nod on room renames only** (Blackbook →
+History, Lab → Test, Monitor → Live) — brand-adjacent; everything else is mine to ship.
+
 ### ⭐ STANDING DIRECTIVE — organization · ease of access · inherently intuitive UI (owner, restated 2026-07-23; "made many times") 🔴 OPEN
 
 **Owner verbatim (2026-07-23, updater-ship session):**
