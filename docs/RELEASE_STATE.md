@@ -25,12 +25,12 @@
 <!-- latest_release_version is enforced by check (1) to equal src-tauri/tauri.conf.json's version, so it
      means "the version THIS TREE is configured to build" — NOT "the newest published release".
      Published truth is carried separately by published_release_* below. Do not conflate them. -->
-<!-- STATE:source_main_commit=abda5ce9 -->
+<!-- STATE:source_main_commit=d244ff5a -->
 <!-- STATE:latest_release_version=0.9.14 -->
-<!-- STATE:candidate_version=0.9.14 -->
+<!-- STATE:candidate_version=0.9.15 -->
 <!-- STATE:candidate_branch=main -->
 <!-- STATE:candidate_published=no-unsigned-local-only -->
-<!-- STATE:candidate_installed=yes-owner-desk-only -->
+<!-- STATE:candidate_installed=no-pending-prove -->
 <!-- STATE:aborted_source_only_release=v0.9.9-664aa5e -->
 <!-- STATE:v0910_release_debris=deleted-2026-07-28 -->
 <!-- STATE:v0910_source_tag=92c7608-preserved -->
@@ -73,8 +73,9 @@
 
 **Bottom line:** the newest **published** release and the public updater manifest are both
 **v0.9.12 (`a1be896`)**, released 2026-08-03 — it replaced v0.9.11 (`7ba5fb6`) as the fleet-visible
-build. The owner box is one step ahead by design — it runs local 0.9.13 with embedded stamp
-`3155c7a0`; that build is not published and is not evidence about tester state.
+build. The owner box is a minor version ahead by design — its installed version and embedded stamp
+are carried by the `owner_installed_*` anchors and the row above, not restated here; that build is
+not published and is not evidence about tester state.
 v0.9.12 carries the
 updater/privacy truth fix (issue #59): the absolute "nothing leaves your PC" claims are gone from
 the app, both locales, the legal documents and the marketing site, automatic update checks are now
@@ -175,20 +176,23 @@ passed on the same updater path, and the debris is cleared, so **normal product 
 resume.** Every row still marked OPEN above gates a *future* PUBLIC (store/marketing) release or the
 arming of a dark feature; none of them blocks the shipped v0.9.12 build or the work that follows it.
 
-**⚠️ VERSION DEBT — half paid 2026-08-06. The manifests now declare 0.9.13; the SIGNED cut does not
-exist yet.** The bump landed in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`,
-so the ledger-honesty fixes (`dc4d55e` and later) and the idle-cost teardown are no longer trapped
-behind a version the updater will not offer. What is still owed is the *publish*: a build made **with**
-`TAURI_SIGNING_PRIVATE_KEY` (owner-held; the local dev build above is deliberately unsigned, and tauri
+**⚠️ VERSION DEBT — still half paid.** The manifests (`package.json`, `src-tauri/tauri.conf.json`,
+`src-tauri/Cargo.toml`) declare the configured build version carried by the
+`STATE:latest_release_version` anchor above, so the desk ships are not trapped behind a version the
+updater will not offer. What is still owed is the *publish*: a build made **with**
+`TAURI_SIGNING_PRIVATE_KEY` (owner-held; the local desk builds are deliberately unsigned, and tauri
 fails the updater-artifact step without it — expected, not a defect), then the normal publish GO/NO-GO.
-Until that runs, the fleet stays on published v0.9.12 and no 0.9.13 reaches a tester.
+Until that runs, the fleet stays on published v0.9.12 and no desk build reaches a tester.
 
 ## Required owner decisions (live)
 
-1. **Publish GO/NO-GO for v0.9.14** — the marathon Train 4 decision (fleet publish at week's end,
-   `claude/COMPY_MARATHON_PLAN.md`). Candidate v0.9.14 carries Train 1 (the add-a-part form mounted
-   in the Lab's own chrome — the first ship where a user can add the PSU or cooler Compy admits it
-   cannot read) on top of everything below that v0.9.13 already carried over published v0.9.12.
+1. **Publish GO/NO-GO for v0.9.15** — the marathon Train 4 decision (fleet publish at week's end,
+   `claude/COMPY_MARATHON_PLAN.md`). Candidate v0.9.15 carries **Train 2 — the room renames the
+   owner approved 2026-08-12** (Blackbook→History, Lab→Test, Monitor→Live, both locales and every
+   non-locale user-visible string; PRs #114 + #115) on top of Train 1 in v0.9.14 (the add-a-part
+   form mounted in the Test room's own chrome — the first ship where a user can add the PSU or
+   cooler Compy admits it cannot read), and everything below that v0.9.13 already carried over
+   published v0.9.12.
    Prior decision text, still operative for the publish itself:
    **(carried from v0.9.13)** — the tree declares 0.9.13 as of 2026-08-06 and the build runs
    locally, but a *publishable* one needs `TAURI_SIGNING_PRIVATE_KEY`, which is owner-held and never
