@@ -51,6 +51,13 @@ The dev build runs two same-origin webviews + a small default window, so capture
 4. **Interactive states** — hover / active / disabled don't break or mislead (no false danger-red
    on a primary action). Say which you checked.
 5. **Layout** — alignment, spacing, no clipping/overflow; empty + loading states hold.
+   **Bento tile hygiene (bug→guard, Blackbook 2026-08-12 — caught twice in one commit):** when a
+   block moves INSIDE a `<BentoTile>`, its old wrapper's frame and gap must be re-homed, not
+   assumed. MEASURE, don't eyeball: (a) no direct child of `.v2-tile-body` may keep its own
+   `border` — the tile draws that, and a box inside a box is what the conversion exists to remove;
+   (b) `.v2-tile-body` is `display:block` and supplies NO gap, so any spacing the deleted wrapper
+   owned reads 0px until something re-declares it. Report the computed `border-color` and the
+   measured inter-block px, never an impression.
 6. **Wording** — plain, accurate, no stale references (renamed features — "Optimize", "Startup
    tab" — no longer exist). **Title-header law (owner 2026-07-10, round 2 — supersedes the
    round-1 header-slop wording, both enforced):** a tab/room header is (a) a TITLE — the h1/
