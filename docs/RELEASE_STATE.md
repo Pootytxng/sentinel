@@ -27,10 +27,10 @@
      Published truth is carried separately by published_release_* below. Do not conflate them. -->
 <!-- STATE:source_main_commit=abda5ce9 -->
 <!-- STATE:latest_release_version=0.9.13 -->
-<!-- STATE:candidate_version=0.9.13 -->
+<!-- STATE:candidate_version=0.9.14 -->
 <!-- STATE:candidate_branch=main -->
 <!-- STATE:candidate_published=no-unsigned-local-only -->
-<!-- STATE:candidate_installed=yes-owner-desk-only -->
+<!-- STATE:candidate_installed=no-pending-prove -->
 <!-- STATE:aborted_source_only_release=v0.9.9-664aa5e -->
 <!-- STATE:v0910_release_debris=deleted-2026-07-28 -->
 <!-- STATE:v0910_source_tag=92c7608-preserved -->
@@ -185,7 +185,12 @@ Until that runs, the fleet stays on published v0.9.12 and no 0.9.13 reaches a te
 
 ## Required owner decisions (live)
 
-1. **Publish GO/NO-GO for v0.9.13** — the tree declares 0.9.13 as of 2026-08-06 and the build runs
+1. **Publish GO/NO-GO for v0.9.14** — the marathon Train 4 decision (fleet publish at week's end,
+   `claude/COMPY_MARATHON_PLAN.md`). Candidate v0.9.14 carries Train 1 (the add-a-part form mounted
+   in the Lab's own chrome — the first ship where a user can add the PSU or cooler Compy admits it
+   cannot read) on top of everything below that v0.9.13 already carried over published v0.9.12.
+   Prior decision text, still operative for the publish itself:
+   **(carried from v0.9.13)** — the tree declares 0.9.13 as of 2026-08-06 and the build runs
    locally, but a *publishable* one needs `TAURI_SIGNING_PRIVATE_KEY`, which is owner-held and never
    enters this repo. So the cut cannot be made without him: signed build → publish → the fleet's
    updater sees a higher number and offers it. What it would carry over published v0.9.12: the
