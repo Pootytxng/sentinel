@@ -97,8 +97,17 @@ describe("BlackbookConsole — honest empty (never a fabricated row)", () => {
     expect(container.querySelector(".bc-empty")).not.toBeNull();
     expect(container.querySelector(".bc-tape")).toBeNull();
     expect(screen.getByText("No record yet")).toBeTruthy();
-    // No Receipts Strip (and no tape head) when there is nothing to count.
-    expect(container.querySelector(".bc-strip")).toBeNull();
+    // The Receipts Strip is UNCONDITIONAL since the bento conversion: the room is a strict
+    // row-major grid with no dense flow, so a half tile that vanishes leaves the 2-row hero's
+    // remainder as a visible hole. Its zero-state is already honest (every count 0, every tile
+    // disabled, "nothing changed yet"), so showing it costs no truth. What must stay gone is the
+    // tape head — a "since <date>" line with no rows behind it IS a claim about the machine.
+    const strip = container.querySelector(".bc-strip")!;
+    expect(strip).not.toBeNull();
+    for (const tile of strip.querySelectorAll(".bc-tile")) {
+      expect(tile.querySelector(".bc-tile-n")!.textContent).toBe("0");
+      expect((tile as HTMLButtonElement).disabled).toBe(true);
+    }
     expect(container.querySelector(".bc-sect")).toBeNull();
   });
 });
@@ -137,8 +146,11 @@ describe("BlackbookConsole — the tape renders each real record kind", () => {
   it("the tape head speaks the field-guide grammar: 'The record' + the since date", () => {
     useReduced();
     const { container } = mountConsole([session()]);
+    // "The record" is the bento tile's own title now (the hero's <h3>), not part of the badge —
+    // the tile frame draws the head, so a hand-rolled section head would be a second title.
+    const hero = container.querySelector(".v2-tile-hero")!;
+    expect(hero.querySelector(".v2-tile-title")!.textContent).toContain("The record");
     const sect = container.querySelector(".bc-sect")!;
-    expect(sect.textContent).toContain("The record");
     expect(sect.textContent).toContain("everything Compy has done on this PC");
     expect(sect.textContent).toMatch(/since\s/);
   });

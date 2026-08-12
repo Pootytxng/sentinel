@@ -211,7 +211,11 @@ describe("the Logbook may not speak for a ledger it could not read", () => {
     useReduced();
     const { container } = mountConsole([], QUARANTINED);
 
-    expect(container.querySelector(".bc-strip")).toBeNull();
+    // The strip is unconditional since the bento conversion (a vanishing half tile would hole the
+    // grid — strict row-major, no dense flow). It stays honest at zero because the incomplete-ledger
+    // wording rides the tiles themselves: "none we can still show", never "nothing changed yet".
+    expect(container.querySelector(".bc-strip")).not.toBeNull();
+    expect(tileD(container, "change")).toBe("none we can still show");
     expect(container.querySelector(".bc-empty-title")?.textContent).toBe("Nothing else to show");
     expect(container.querySelector(".bc-empty-sub")?.textContent).toContain(
       "separately from the change record",

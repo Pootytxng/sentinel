@@ -175,14 +175,16 @@ export function BlackbookV2({
           )}
           {face === "logbook" ? (
             <>
-              {/* Intelligence Phase 2 — cross-session pattern synthesis sits above the record tape
-                  (§5E: Blackbook holds the historical record). Self-contained fetch so the console
-                  stays zero-IPC; renders nothing until there's something honest to say. */}
-              <PatternsTile />
               <BlackbookConsole
                 records={records}
                 health={health}
                 vendor={vendor}
+                /* Intelligence Phase 2 — cross-session pattern synthesis sits above the record tape
+                   (§5E: Blackbook holds the historical record). Self-contained fetch so the console
+                   stays zero-IPC; renders nothing until there's something honest to say. Handed IN
+                   rather than rendered beside the console so it lands inside the same bento grid as
+                   its own full-width tile. */
+                patterns={<PatternsTile />}
                 onOpenLab={() => onOpenLab?.()}
                 onOpenGuide={(fid) => {
                   setGuideFocus(fid ?? null);

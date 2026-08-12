@@ -53,6 +53,8 @@ function bentoBlocks(src: string): string[] {
 
 const files = tsxFiles(SRC).map((path) => ({ path, src: readFileSync(path, "utf8") }));
 const withBento = files.filter((f) => f.src.includes("<BentoGrid"));
+/** Tile COMPONENTS — a file that renders tiles into someone else's grid (PatternsTile and friends). */
+const tileOnly = files.filter((f) => f.src.includes("<BentoTile") && !f.src.includes("<BentoGrid"));
 
 describe("bento: one hero per grid", () => {
   it("at least one room actually uses the grid (the guard is not vacuously green)", () => {
@@ -95,6 +97,27 @@ describe("bento: one hero per grid", () => {
           `${path}: a conditionally-rendered <BentoTile> must be span="full" — a partial-width ` +
             `tile that sometimes doesn't render leaves a hole in its row. Give it an always-` +
             `rendering empty state instead.`,
+        ).toMatch(/span=["']full["']/);
+      }
+    }
+  });
+
+  // The same hole defect, one level up. The rule above only sees tiles written INSIDE a grid block,
+  // so a tile that lives in its own component file escapes it entirely — and that is the more
+  // dangerous shape, because `return null` at the top of a component is invisible from the room that
+  // mounts it. PatternsTile is exactly this: three separate null returns (flag off, fetch failed,
+  // brand-new user), handed into Blackbook's grid as a prop.
+  it("a tile component that can render null is span=\"full\"", () => {
+    for (const { path, src } of tileOnly) {
+      if (!/\breturn null\b/.test(src)) continue;
+      // Match the span props directly rather than the opening tag: a tag that carries a JSX badge
+      // has `>` characters inside it, so any tag-shaped regex would stop short of the span.
+      for (const [prop] of src.matchAll(/\bspan=["'][a-z]+["']/g)) {
+        expect(
+          prop,
+          `${path}: this component returns null in some state, so its <BentoTile> must be ` +
+            `span="full" — a partial-width tile that sometimes doesn't render leaves a hole in ` +
+            `whichever grid mounts it.`,
         ).toMatch(/span=["']full["']/);
       }
     }

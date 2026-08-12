@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useReducedMotion } from "../../design/use-motion";
+import { BentoGrid, BentoTile } from "../../design/bento/BentoGrid";
 import { Term } from "../../design/Term";
 import { LedgerHealthNotice, knownIncomplete } from "../../design/LedgerHealthNotice";
 import { prettyGameName } from "../game-name";
@@ -201,6 +202,7 @@ export function BlackbookConsole({
   vendor,
   onOpenLab,
   onOpenGuide,
+  patterns = null,
 }: {
   records: LogbookRecord[];
   /** Whether the Trust Ledger behind the Change records is the WHOLE story (BlackbookV2 probes it).
@@ -212,6 +214,10 @@ export function BlackbookConsole({
   onOpenLab: () => void;
   /** Door into the field guide; a focusId deep-links to that entry. */
   onOpenGuide: (focusId?: string) => void;
+  /** Optional full-width band ABOVE the record (BlackbookV2 passes PatternsTile). It is handed in
+   *  rather than imported so this file stays zero-IPC, and it must be a `<BentoTile span="full">`
+   *  so its absence closes the row instead of leaving a hole (bento row-major law, no dense flow). */
+  patterns?: ReactNode;
 }) {
   const { t, i18n } = useTranslation();
   const reduced = useReducedMotion();
@@ -277,218 +283,232 @@ export function BlackbookConsole({
           incomplete — the same one box the Optimize ledger shows, so the two surfaces cannot drift
           into two different warnings about the same file. */}
       <LedgerHealthNotice health={health} />
-      {/* The Receipts Strip (owner pick 2026-07-13, concept A) — replaces the bare "N records ·
-          since <date>" status line with the same facts made self-explanatory: three tappable tiles
-          NAME the three things this room records, carry live counts, and filter the tape. The page
-          teaches its own vocabulary through a summary you can touch — no explainer paragraph.
-          Title-header law: this is BODY content; the h1 stays the bare room title. Absent when
-          there is no record (the empty state below carries the message instead). */}
-      {records.length > 0 && (
-        <div className="bc-strip" role="group" aria-label={t("blackbook.blackbookConsole.stripAriaLabel")}>
-          <button
-            type="button"
-            className="bc-tile"
-            data-kind="change"
-            aria-pressed={filter === "change"}
-            disabled={counts.change === 0}
-            onClick={() => toggleFilter("change")}
-          >
-            <span className="bc-tile-k">{t("blackbook.blackbookConsole.tiles.changesTitle")}</span>
-            {/* A count read off a ledger that would not open is not a count. An em dash says
-                "no number", where a 0 would say "nothing ever happened here". */}
-            <span className="bc-tile-n bc-mono">{incomplete?.error ? "—" : counts.change}</span>
-            <span className="bc-tile-d">
-              {incomplete ? (
-                incomplete.error
-                  ? t("blackbook.blackbookConsole.tiles.changesUnknown")
-                  : counts.change === 0
-                    ? t("blackbook.blackbookConsole.tiles.changesNonePartial")
-                    : activeChanges > 0
-                      ? t("blackbook.blackbookConsole.tiles.changesActivePartial", {
-                          count: activeChanges,
-                        })
-                      : t("blackbook.blackbookConsole.tiles.changesInactivePartial")
-              ) : counts.change === 0 ? (
-                t("blackbook.blackbookConsole.tiles.changesNone")
-              ) : activeChanges > 0 ? (
-                t("blackbook.blackbookConsole.tiles.changesActive", { count: activeChanges })
-              ) : (
-                t("blackbook.blackbookConsole.tiles.changesInactive")
-              )}
-            </span>
-          </button>
-          <button
-            type="button"
-            className="bc-tile"
-            data-kind="session"
-            aria-pressed={filter === "session"}
-            disabled={counts.session === 0}
-            onClick={() => toggleFilter("session")}
-          >
-            <span className="bc-tile-k">{t("blackbook.blackbookConsole.tiles.sessionsTitle")}</span>
-            <span className="bc-tile-n bc-mono">{counts.session}</span>
-            <span className="bc-tile-d">
-              {counts.session === 0
-                ? t("blackbook.blackbookConsole.tiles.sessionsNone")
-                : t("blackbook.blackbookConsole.tiles.sessionsSome")}
-            </span>
-          </button>
-          <button
-            type="button"
-            className="bc-tile"
-            data-kind="autopsy"
-            aria-pressed={filter === "autopsy"}
-            disabled={counts.autopsy === 0}
-            onClick={() => toggleFilter("autopsy")}
-          >
-            <span className="bc-tile-k">{t("blackbook.blackbookConsole.tiles.autopsyTitle")}</span>
-            <span className="bc-tile-n bc-mono">{counts.autopsy}</span>
-            <span className="bc-tile-d">
-              {counts.autopsy === 0
-                ? t("blackbook.blackbookConsole.tiles.autopsyNone")
-                : counts.scamFlags > 0
-                  ? t("blackbook.blackbookConsole.scamFlagged", { count: counts.scamFlags })
-                  : t("blackbook.blackbookConsole.tiles.autopsySome")}
-            </span>
-          </button>
-          {/* Observed machine changes (Intelligence Phase 1) — the tile only mounts once such a
-              record exists: three tiles stay the room's stable face until the fourth kind is real. */}
-          {counts.observed > 0 && (
+      <BentoGrid>
+        {/* Intelligence Phase 2 — cross-session pattern synthesis stays ABOVE the record (§5E),
+            handed in by BlackbookV2 rather than imported so this file stays zero-IPC. */}
+        {patterns}
+        {/* The Receipts Strip (owner pick 2026-07-13, concept A) — replaces the bare "N records ·
+            since <date>" status line with the same facts made self-explanatory: three tappable tiles
+            NAME the three things this room records, carry live counts, and filter the tape. The page
+            teaches its own vocabulary through a summary you can touch — no explainer paragraph.
+            Title-header law: this is BODY content; the h1 stays the bare room title.
+            UNCONDITIONAL since the bento conversion (it used to hide at zero records): its
+            zero-state copy is already honest ("nothing changed yet"), every tile disables itself at
+            zero, and a half tile that can vanish would leave the 2-row hero's remainder as a
+            visible hole — the grid is strict row-major with no dense flow, on purpose. */}
+        <BentoTile span="half" title={t("blackbook.blackbookConsole.stripAriaLabel")}>
+          <div className="bc-strip">
             <button
               type="button"
               className="bc-tile"
-              data-kind="observed"
-              aria-pressed={filter === "observed"}
-              onClick={() => toggleFilter("observed")}
+              data-kind="change"
+              aria-pressed={filter === "change"}
+              disabled={counts.change === 0}
+              onClick={() => toggleFilter("change")}
             >
-              <span className="bc-tile-k">{t("blackbook.blackbookConsole.tiles.observedTitle")}</span>
-              <span className="bc-tile-n bc-mono">{counts.observed}</span>
-              <span className="bc-tile-d">{t("blackbook.blackbookConsole.tiles.observedSub")}</span>
-            </button>
-          )}
-        </div>
-      )}
-
-      {records.length === 0 ? (
-        <div className="bc-empty">
-          {/* "No record yet" is a claim about the MACHINE, and an unreadable ledger is the one
-              state where Compy cannot make it. The notice above already says what's missing, so
-              this narrows to the kinds Compy can still vouch for rather than repeating it. */}
-          <span className="bc-empty-title">
-            {t(
-              incomplete
-                ? "blackbook.blackbookConsole.emptyIncomplete.title"
-                : "blackbook.blackbookConsole.empty.title",
-            )}
-          </span>
-          <span className="bc-empty-sub">
-            {t(
-              incomplete
-                ? "blackbook.blackbookConsole.emptyIncomplete.sub"
-                : "blackbook.blackbookConsole.empty.sub",
-            )}
-          </span>
-        </div>
-      ) : (
-        <>
-          {/* The tape's section head (concept B) — the same eyebrow-plus-scent grammar the field-guide
-              strip below already speaks, so the room's two halves finally introduce themselves the
-              same way. One line, not a paragraph. */}
-          <div className="bc-sect">
-            <span className="bc-sect-t">
-              {t("blackbook.blackbookConsole.sectionHead.record")}
-              {filter
-                ? ` · ${t(`blackbook.blackbookConsole.filterNoun.${filter}`)} only`
-                : ""}
-            </span>
-            <span className="bc-sect-rule" aria-hidden="true" />
-            <span className="bc-sect-s">
-              {/* "everything Compy has done on this PC" is the room's widest claim — it is exactly
-                  the sentence a partial ledger makes false. The date stays: it still marks where
-                  the readable record begins. */}
-              {t(
-                incomplete
-                  ? "blackbook.blackbookConsole.sectionHead.sinceIncomplete"
-                  : "blackbook.blackbookConsole.sectionHead.since",
-              )}
-              <span className="bc-mono">{sinceDate}</span>
-            </span>
-          </div>
-          <ol className="bc-tape">
-            {tape.map((r, i) => (
-            <li
-              key={`${r.kind}-${r.at}-${i}`}
-              className={`bc-row bc-row-${r.kind}${r.kind === "change" && r.rolledBack ? " bc-row-muted" : ""}`}
-              style={reduced ? undefined : { animationDelay: `${Math.min(i, 12) * 26}ms` }}
-            >
-              <span className="bc-tag" data-kind={r.kind}>
-                {t(`blackbook.blackbookConsole.kindTag.${r.kind}`)}
-              </span>
-              <span className="bc-time bc-mono">{fmtWhen(r.at)}</span>
-              <div className="bc-row-body">
-                {r.kind === "change" ? (
-                  <ChangeBody r={r} />
-                ) : r.kind === "session" ? (
-                  <SessionBody r={r} />
-                ) : r.kind === "autopsy" ? (
-                  <AutopsyBody r={r} />
+              <span className="bc-tile-k">{t("blackbook.blackbookConsole.tiles.changesTitle")}</span>
+              {/* A count read off a ledger that would not open is not a count. An em dash says
+                  "no number", where a 0 would say "nothing ever happened here". */}
+              <span className="bc-tile-n bc-mono">{incomplete?.error ? "—" : counts.change}</span>
+              <span className="bc-tile-d">
+                {incomplete ? (
+                  incomplete.error
+                    ? t("blackbook.blackbookConsole.tiles.changesUnknown")
+                    : counts.change === 0
+                      ? t("blackbook.blackbookConsole.tiles.changesNonePartial")
+                      : activeChanges > 0
+                        ? t("blackbook.blackbookConsole.tiles.changesActivePartial", {
+                            count: activeChanges,
+                          })
+                        : t("blackbook.blackbookConsole.tiles.changesInactivePartial")
+                ) : counts.change === 0 ? (
+                  t("blackbook.blackbookConsole.tiles.changesNone")
+                ) : activeChanges > 0 ? (
+                  t("blackbook.blackbookConsole.tiles.changesActive", { count: activeChanges })
                 ) : (
-                  <ObservedBody r={r} />
+                  t("blackbook.blackbookConsole.tiles.changesInactive")
                 )}
-              </div>
-            </li>
-          ))}
-          </ol>
-          {older > 0 && (
-            <button type="button" className="bc-tape-more" onClick={() => setTapeAll(true)}>
-              {t("blackbook.blackbookConsole.tapeMore", { count: older })}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="bc-tile"
+              data-kind="session"
+              aria-pressed={filter === "session"}
+              disabled={counts.session === 0}
+              onClick={() => toggleFilter("session")}
+            >
+              <span className="bc-tile-k">{t("blackbook.blackbookConsole.tiles.sessionsTitle")}</span>
+              <span className="bc-tile-n bc-mono">{counts.session}</span>
+              <span className="bc-tile-d">
+                {counts.session === 0
+                  ? t("blackbook.blackbookConsole.tiles.sessionsNone")
+                  : t("blackbook.blackbookConsole.tiles.sessionsSome")}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="bc-tile"
+              data-kind="autopsy"
+              aria-pressed={filter === "autopsy"}
+              disabled={counts.autopsy === 0}
+              onClick={() => toggleFilter("autopsy")}
+            >
+              <span className="bc-tile-k">{t("blackbook.blackbookConsole.tiles.autopsyTitle")}</span>
+              <span className="bc-tile-n bc-mono">{counts.autopsy}</span>
+              <span className="bc-tile-d">
+                {counts.autopsy === 0
+                  ? t("blackbook.blackbookConsole.tiles.autopsyNone")
+                  : counts.scamFlags > 0
+                    ? t("blackbook.blackbookConsole.scamFlagged", { count: counts.scamFlags })
+                    : t("blackbook.blackbookConsole.tiles.autopsySome")}
+              </span>
+            </button>
+            {/* Observed machine changes (Intelligence Phase 1) — the tile only mounts once such a
+                record exists: three tiles stay the room's stable face until the fourth kind is real. */}
+            {counts.observed > 0 && (
+              <button
+                type="button"
+                className="bc-tile"
+                data-kind="observed"
+                aria-pressed={filter === "observed"}
+                onClick={() => toggleFilter("observed")}
+              >
+                <span className="bc-tile-k">{t("blackbook.blackbookConsole.tiles.observedTitle")}</span>
+                <span className="bc-tile-n bc-mono">{counts.observed}</span>
+                <span className="bc-tile-d">{t("blackbook.blackbookConsole.tiles.observedSub")}</span>
+              </button>
+            )}
+          </div>
+          {/* Undo lives in the Lab (the ONE audited undo home) — the Logbook is a read view, so an
+              active change routes there rather than rolling back in-room (no second undo surface).
+              It sits in the strip tile because it is a follow-on to the change COUNT above it. */}
+          {activeChanges > 0 && (
+            <button type="button" className="bc-manage" onClick={onOpenLab}>
+              <span>{t("blackbook.blackbookConsole.manageJump", { count: activeChanges })}</span>
+              <span className="bc-chevron" aria-hidden="true">
+                ▸
+              </span>
             </button>
           )}
-        </>
-      )}
-
-      {/* Undo lives in the Lab (the ONE audited undo home) — the Logbook is a read view, so an
-          active change routes there rather than rolling back in-room (no second undo surface). */}
-      {activeChanges > 0 && (
-        <button type="button" className="bc-manage" onClick={onOpenLab}>
-          <span>{t("blackbook.blackbookConsole.manageJump", { count: activeChanges })}</span>
-          <span className="bc-chevron" aria-hidden="true">
-            ▸
-          </span>
-        </button>
-      )}
-
-      {/* The compact library strip — doors into the full field guide. Rig-fit "start here" entries
-          (real corpus only, hardware-aware) deep-link into the guide; the door browses all. */}
-      <div className="bc-library">
-        <div className="bc-library-head">
-          <span className="bc-library-eyebrow">{t("blackbook.blackbookConsole.library.eyebrow")}</span>
-          <span className="bc-library-scent">{t("blackbook.blackbookConsole.library.scent")}</span>
-        </div>
-        {startHere.length > 0 && (
-          <div className="bc-picks">
-            {startHere.map((e) => (
-              <button
-                key={e.id}
-                type="button"
-                className="bc-pick"
-                onClick={() => onOpenGuide(e.id)}
-              >
-                <span className="bc-pick-type">
-                  {t(`blackbook.blackbookConsole.typeLabel.${e.type}`, { defaultValue: e.type })}
+        </BentoTile>
+        {/* THE RECORD — the room's centrepiece, so it takes the one hero. The old ".bc-sect" head
+            is now the tile's own title + badge: the title carries "The record", the badge carries
+            the active filter and the "since <date>" scent that narrows on a partial ledger. */}
+        <BentoTile
+          span="hero"
+          title={t("blackbook.blackbookConsole.sectionHead.record")}
+          badge={
+            records.length > 0 ? (
+              <span className="bc-sect">
+                {filter && (
+                  <span className="bc-sect-t">
+                    {t(`blackbook.blackbookConsole.filterNoun.${filter}`)} only
+                  </span>
+                )}
+                <span className="bc-sect-s">
+                  {/* "everything Compy has done on this PC" is the room's widest claim — it is
+                      exactly the sentence a partial ledger makes false. The date stays: it still
+                      marks where the readable record begins. */}
+                  {t(
+                    incomplete
+                      ? "blackbook.blackbookConsole.sectionHead.sinceIncomplete"
+                      : "blackbook.blackbookConsole.sectionHead.since",
+                  )}
+                  <span className="bc-mono">{sinceDate}</span>
                 </span>
-                <span className="bc-pick-name">{e.name}</span>
-              </button>
-            ))}
+              </span>
+            ) : undefined
+          }
+        >
+          {records.length === 0 ? (
+            <div className="bc-empty">
+              {/* "No record yet" is a claim about the MACHINE, and an unreadable ledger is the one
+                  state where Compy cannot make it. The notice above already says what's missing, so
+                  this narrows to the kinds Compy can still vouch for rather than repeating it. */}
+              <span className="bc-empty-title">
+                {t(
+                  incomplete
+                    ? "blackbook.blackbookConsole.emptyIncomplete.title"
+                    : "blackbook.blackbookConsole.empty.title",
+                )}
+              </span>
+              <span className="bc-empty-sub">
+                {t(
+                  incomplete
+                    ? "blackbook.blackbookConsole.emptyIncomplete.sub"
+                    : "blackbook.blackbookConsole.empty.sub",
+                )}
+              </span>
+            </div>
+          ) : (
+            <>
+              <ol className="bc-tape">
+                {tape.map((r, i) => (
+                  <li
+                    key={`${r.kind}-${r.at}-${i}`}
+                    className={`bc-row bc-row-${r.kind}${r.kind === "change" && r.rolledBack ? " bc-row-muted" : ""}`}
+                    style={reduced ? undefined : { animationDelay: `${Math.min(i, 12) * 26}ms` }}
+                  >
+                    <span className="bc-tag" data-kind={r.kind}>
+                      {t(`blackbook.blackbookConsole.kindTag.${r.kind}`)}
+                    </span>
+                    <span className="bc-time bc-mono">{fmtWhen(r.at)}</span>
+                    <div className="bc-row-body">
+                      {r.kind === "change" ? (
+                        <ChangeBody r={r} />
+                      ) : r.kind === "session" ? (
+                        <SessionBody r={r} />
+                      ) : r.kind === "autopsy" ? (
+                        <AutopsyBody r={r} />
+                      ) : (
+                        <ObservedBody r={r} />
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+              {older > 0 && (
+                <button type="button" className="bc-tape-more" onClick={() => setTapeAll(true)}>
+                  {t("blackbook.blackbookConsole.tapeMore", { count: older })}
+                </button>
+              )}
+            </>
+          )}
+        </BentoTile>
+        {/* The compact library strip — doors into the full field guide. Rig-fit "start here" entries
+            (real corpus only, hardware-aware) deep-link into the guide; the door browses all. The
+            old ".bc-library-eyebrow" is gone: it said the same words the tile title now says, and a
+            tile that names itself twice is duplication (self-review rubric 3). */}
+        <BentoTile span="half" title={t("blackbook.blackbookConsole.library.eyebrow")}>
+          <div className="bc-library">
+            <span className="bc-library-scent">{t("blackbook.blackbookConsole.library.scent")}</span>
+            {startHere.length > 0 && (
+              <div className="bc-picks">
+                {startHere.map((e) => (
+                  <button
+                    key={e.id}
+                    type="button"
+                    className="bc-pick"
+                    onClick={() => onOpenGuide(e.id)}
+                  >
+                    <span className="bc-pick-type">
+                      {t(`blackbook.blackbookConsole.typeLabel.${e.type}`, { defaultValue: e.type })}
+                    </span>
+                    <span className="bc-pick-name">{e.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <button type="button" className="bc-library-all" onClick={() => onOpenGuide()}>
+              <span>{t("blackbook.blackbookConsole.library.openAll")}</span>
+              <span className="bc-chevron" aria-hidden="true">
+                ▸
+              </span>
+            </button>
           </div>
-        )}
-        <button type="button" className="bc-library-all" onClick={() => onOpenGuide()}>
-          <span>{t("blackbook.blackbookConsole.library.openAll")}</span>
-          <span className="bc-chevron" aria-hidden="true">
-            ▸
-          </span>
-        </button>
-      </div>
+        </BentoTile>
+      </BentoGrid>
     </div>
   );
 }

@@ -2,16 +2,9 @@
    Logbook face (§5E: the historical-record room). Token-only ink (--ix-*), every selector scoped
    under [data-v2="on"] (the flag-off byte-identity law — registered in tokens-v2-guard's V2_CSS).
    Mirrors the blackbook-console idiom: hairline cards, mono eyebrows, theme accent only. */
-:root[data-v2="on"] .bpt { display: flex; flex-direction: column; gap: 12px; min-width: 0;
-  padding-bottom: 14px; border-bottom: 1px solid var(--ix-glass-border); }
-
-/* Section head — same eyebrow-plus-scent grammar as .bc-sect, so the tile introduces itself the
-   way the tape and the field-guide strip do. */
-:root[data-v2="on"] .bpt-sect { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
-:root[data-v2="on"] .bpt-sect-t { font-family: var(--ix-mono); font-size: 9px; letter-spacing: .14em;
-  text-transform: uppercase; color: var(--ix-text-3); white-space: nowrap; }
-:root[data-v2="on"] .bpt-sect-rule { flex: 1; height: 1px; align-self: center;
-  background: var(--ix-glass-border); }
+/* The tile is a real <BentoTile span="full"> now — the bento frame draws the border and the head,
+   so the old bottom rule and hand-rolled section head are gone. Only the scent survives, as the
+   tile's badge. */
 :root[data-v2="on"] .bpt-sect-s { font-size: 11px; color: var(--ix-text-3);
   font-variant-numeric: tabular-nums; white-space: nowrap; }
 
