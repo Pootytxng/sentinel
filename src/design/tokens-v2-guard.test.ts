@@ -9,8 +9,9 @@ import { join } from "path";
 //      opt-in, no reachable classic shell).
 //   2. Every rule in tokens-v2.css is STILL scoped under [data-v2="on"] — now purely as namespacing
 //      (the attribute is always present, so every v2 rule matches).
-//   3. The v2 palette clears the same WCAG floors as the instrument themes (4.5 body,
-//      3.0 muted-caption, 4.5 ink-on-accent) — extends theme-contrast.test.ts to v2.
+//   3. The v2 palette clears the same WCAG floors as the instrument themes — all three text tiers
+//      at 4.5 (raised from a 3.0 caption tier on 2026-08-11), 4.5 ink-on-accent. Extends
+//      theme-contrast.test.ts to v2.
 //   4. Type discipline: Geist families are referenced ONLY via the v2 token layer, and
 //      --v2-font-mono exists so machine values have their one sanctioned mono source.
 //   5. Vendor hygiene: every vendored React Bits file carries its license header and is
@@ -235,7 +236,10 @@ describe("v2 palette contrast (legibility floors)", () => {
     const checks: [string, number][] = [
       ["text", 4.5],
       ["muted", 4.5],
-      ["faint", 3.0], // caption tier → AA-large
+      // Raised from 3.0 (AA-large) to 4.5 on 2026-08-11. The "caption tier → AA-large" theory was
+      // false in practice: every sized rule using faint set 9–11px. All three text tiers now owe the
+      // full AA-normal floor, which is what makes the usage ratchet below unnecessary.
+      ["faint", 4.5],
     ];
     for (const [name, floor] of checks) {
       const fg = parseHex(v2Token(name));
@@ -278,115 +282,15 @@ const listCss = (dir: string): string[] => {
   return out;
 };
 
-// ── caption-token USAGE guard (bug→guard, self-review FAIL 2026-08-06) ──
+// ── caption-token usage ratchet: RETIRED 2026-08-11 ──
 //
-// --v2-faint is declared a caption token above and held to the 3.0 AA-LARGE floor. That floor is
-// only honest if faint text actually IS large text. It is not: when this guard was written, all 29
-// rules under src/ that declare BOTH a font size and `color: var(--v2-faint)` set that size below
-// the AA-large threshold — so they ship small text at ~3.6:1 on the page background, under AA's 4.5.
-//
-// The defect that produced this guard: .hc-specs-eyebrow (Home's new detected-record label) was
-// written 10px/600 on --v2-faint. The pairwise palette test above cannot catch that — it checks
-// TOKENS against SURFACES and never sees which class uses which token at which size.
-//
-// This is a RATCHET, not an allowlist. The pre-existing sites are frozen below; a 30th fails, and
-// so does a baselined entry that gets fixed without being deleted — the list can only shrink.
-// Raising --v2-faint itself past 4.5:1 is a palette change and therefore an owner taste call
-// (logged in docs/UI_VISION_BACKLOG.md). The day it lands this guard self-retires: the contrast
-// precondition below stops holding and the suite passes without asserting anything.
-const FAINT_SMALL_TEXT_BASELINE: string[] = [
-  'src/design/shell-v2.css :: :root[data-v2="on"] .v2-version',
-  'src/design/shell-v2.css :: :root[data-v2="on"] .v2-shell kbd',
-  'src/design/shell-v2.css :: :root[data-v2="on"] .v2-foot',
-  'src/design/shell-v2.css :: :root[data-v2="on"] .v2-stamp',
-  'src/design/shell-v2.css :: :root[data-v2="on"] .v2-measured',
-  'src/design/shell-v2.css :: :root[data-v2="on"] .v2-update-notes',
-  'src/design/shell-v2.css :: :root[data-v2="on"] .v2-update-fine',
-  'src/surfaces/home-console.css :: :root[data-v2="on"] .hc-masthead-eyebrow',
-  'src/surfaces/home-console.css :: :root[data-v2="on"] .hc-stage-loading',
-  'src/surfaces/home-console.css :: :root[data-v2="on"] .hc-limiter-label',
-  'src/surfaces/home-console.css :: :root[data-v2="on"] .hc-limiter-tag',
-  'src/surfaces/home-hud.css :: :root[data-v2="on"][data-hud="on"] .hud-masthead-eyebrow',
-  'src/surfaces/home-hud.css :: :root[data-v2="on"][data-hud="on"] .hud-eyebrow',
-  'src/surfaces/home-hud.css :: :root[data-v2="on"][data-hud="on"] .hud-stage-loading',
-  'src/surfaces/home-hud.css :: :root[data-v2="on"][data-hud="on"] .hud-stage-hint',
-  'src/surfaces/home-hud.css :: :root[data-v2="on"][data-hud="on"] .hud-unit',
-  'src/surfaces/home-hud.css :: :root[data-v2="on"][data-hud="on"] .hud-ring-cap',
-  'src/surfaces/home-hud.css :: :root[data-v2="on"][data-hud="on"] .hud-trace-cap',
-  'src/surfaces/home-hud.css :: :root[data-v2="on"][data-hud="on"] .hud-docket-note',
-  'src/surfaces/home-hud.css :: :root[data-v2="on"][data-hud="on"] .hud-rank',
-  'src/surfaces/home-hud.css :: :root[data-v2="on"][data-hud="on"] .hud-pill',
-  'src/surfaces/home-v2.css :: :root[data-v2="on"] .hv2-stage-loading',
-  'src/surfaces/home-v2.css :: :root[data-v2="on"] .hv2-stat-d',
-  'src/surfaces/home-v2.css :: :root[data-v2="on"] .hv2-card-hd-right',
-  'src/surfaces/hud-rooms.css :: :root[data-v2="on"][data-hud="on"] .v2-room:not([data-room="home"]):not([data-room="check"]) .hud-masthead-eyebrow',
-  'src/surfaces/hud-rooms.css :: :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .check-section-label:not(.check-collapse-head), :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .fix-section-label',
-  'src/surfaces/hud-rooms.css :: :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .check-collapse-head',
-  'src/surfaces/monitor-v2.css :: :root[data-v2="on"] .mv2-quiet-hint',
-  'src/surfaces/RerunCheckBand.css :: :root[data-v2="on"] .rcb-tag',
-];
-
-// WCAG "large text": >=24px, or >=18.66px when bold. Anything smaller owes the full 4.5:1.
-const isLargeText = (px: number, weight: number): boolean =>
-  px >= 24 || (px >= 18.66 && weight >= 700);
-
-/** Every rule that declares BOTH an explicit size and `color: var(--v2-faint)` on small text. */
-function faintOnSmallText(): string[] {
-  const found: string[] = [];
-  for (const p of listCss("src")) {
-    const css = readFileSync(p, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-    for (const [, sel, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      if (!/color:\s*var\(--v2-faint\)/.test(body)) continue;
-      let px: number | null = null;
-      let weight = 400;
-      // `font: 600 10px var(--v2-font-sans)` shorthand, then longhand overrides.
-      const shorthand = body.match(/(?:^|[;\s])font:\s*([^;]+)/);
-      if (shorthand) {
-        weight = parseInt(shorthand[1].match(/\b([1-9]00)\b/)?.[1] ?? "400", 10);
-        const s = shorthand[1].match(/\b([\d.]+)px\b/);
-        if (s) px = parseFloat(s[1]);
-      }
-      const size = body.match(/font-size:\s*([\d.]+)px/);
-      if (size) px = parseFloat(size[1]);
-      const fw = body.match(/font-weight:\s*([1-9]00|bold)/);
-      if (fw) weight = fw[1] === "bold" ? 700 : parseInt(fw[1], 10);
-      // A rule with no size of its own inherits one this parser cannot resolve — out of scope.
-      if (px === null || isLargeText(px, weight)) continue;
-      found.push(`${p.replace(/\\/g, "/")} :: ${sel.replace(/\s+/g, " ").trim()}`);
-    }
-  }
-  return found;
-}
-
-describe("caption-token usage (--v2-faint on small text)", () => {
-  const faintOnBg = contrast(parseHex(v2Token("faint")), parseHex(v2Token("bg")));
-  // Precondition: this guard only has teeth while faint is genuinely sub-AA on the page.
-  const stillSubAA = faintOnBg < 4.5;
-
-  it("no NEW rule pairs --v2-faint with text below the AA-large threshold", () => {
-    if (!stillSubAA) return; // palette lifted past 4.5 — the whole class is fixed, guard retires
-    const baseline = new Set(FAINT_SMALL_TEXT_BASELINE);
-    const added = faintOnSmallText().filter((k) => !baseline.has(k));
-    expect(
-      added,
-      `--v2-faint is ${faintOnBg.toFixed(2)}:1 on --v2-bg, under AA's 4.5 — so it may only carry ` +
-        `LARGE text (>=24px, or >=18.66px bold). These rules put it on smaller text:\n  ` +
-        `${added.join("\n  ")}\nUse --v2-muted (the tier that owes and clears 4.5), or make the ` +
-        `text large. Do not add to the baseline: it is a ratchet and only shrinks.`,
-    ).toEqual([]);
-  });
-
-  it("the baseline has no stale entries — fixing a site must delete its line", () => {
-    if (!stillSubAA) return;
-    const live = new Set(faintOnSmallText());
-    const stale = FAINT_SMALL_TEXT_BASELINE.filter((k) => !live.has(k));
-    expect(
-      stale,
-      `these baselined sites no longer violate (fixed, renamed, or deleted) — remove them from ` +
-        `FAINT_SMALL_TEXT_BASELINE so the ratchet tightens:\n  ${stale.join("\n  ")}`,
-    ).toEqual([]);
-  });
-});
+// A ratchet lived here that froze 29 rules pairing --v2-faint with 9-11px text, because faint was
+// then 3.44:1 on --v2-bg and only honest on LARGE text. Its own retirement condition was
+// "raise --v2-faint past 4.5:1 and the whole class is fixed". That landed: faint is now #7a8397
+// (>=4.5 on every v2 surface, asserted in the palette floors above), so all three text tiers owe
+// and clear the same AA-normal floor and no rule can pair a text token with sub-AA contrast by
+// choosing the wrong tier. The floor assertion above is now the whole guard; a 30th site needs no
+// baseline entry because there is no longer a failing class to enumerate.
 
 describe("type discipline (Geist law)", () => {
   it("v2 token layer defines both font tokens", () => {

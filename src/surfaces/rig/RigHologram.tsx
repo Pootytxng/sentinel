@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, OrbitControls } from "@react-three/drei";
 import { EffectComposer, Bloom, Glitch } from "@react-three/postprocessing";
@@ -11,10 +11,13 @@ import { readHologramV2 } from "../../design/theme";
 import type { HardwareInfo } from "../../App";
 import {
   buildRigParts,
-  shadowingGhostIds,
+  clickThroughIds,
+  describeRigSelection,
+  rigInventory,
   CPU_FAN_PLACEMENT,
   type Vec3,
   type RigPart as RigPartData,
+  type RigSelection,
 } from "./rig-parts";
 import { nextFanSensors, type FanSensor } from "./fan-sensors";
 import { type ManualPart, type ManualKind, manualGeom, manualPlacement } from "./manual-parts";
@@ -81,9 +84,21 @@ interface Props {
   autoRotate: boolean;
   selectedId: string | null;
   hoveredId: string | null;
-  onSelect: (id: string) => void;
+  /** `what` describes which of the three drawn lists the id came from — a host that only knows
+      `buildRigParts` cannot resolve a fan or a user-added part, and silently showed nothing. Null
+      when the click cleared the selection. */
+  onSelect: (id: string, what: RigSelection | null) => void;
   onHover: (id: string | null) => void;
+  /** Everything the scene drew that can be selected, re-emitted whenever those lists change. The
+      host renders the DOM part picker from it — the canvas itself is unreachable by keyboard, so
+      this is how a keyboard user selects a part at all. Must be referentially stable. */
+  onInventory?: (items: RigSelection[]) => void;
   manualParts: ManualPart[];
+  /** true → the host's DOM part picker has focus, so every on-canvas spec card stands down. The
+      cards are anchored to their part's position in 3D and the picker panel is anchored to the
+      stage, so the two collide over exactly the rows a keyboard user is reading. Highlighting is
+      unaffected — the focused row still lights its part up in the model. */
+  cardsSuppressed?: boolean;
   /** Initial camera distance. Default = the classic framing; the V2 hero stage pulls in closer
       so the model fills its bigger stage (additive — existing callers are untouched). */
   cameraDist?: number;
@@ -107,7 +122,9 @@ export const RigHologram = memo(function RigHologram({
   hoveredId,
   onSelect,
   onHover,
+  onInventory,
   manualParts,
+  cardsSuppressed = false,
   cameraDist = 9.5,
   evidenceMap = false,
 }: Props) {
@@ -278,13 +295,36 @@ export const RigHologram = memo(function RigHologram({
   const clickThrough = useMemo(() => {
     if (!evidenceMap) return new Set<string>();
     return new Set(
-      shadowingGhostIds([
+      clickThroughIds([
         ...shownParts,
-        ...manualRigParts,
+        // `userAdded` is set HERE because this is the only place that knows: a manual part is drawn
+        // as `detected: true` (the user said it is there), so nothing downstream can tell it from
+        // hardware Compy read for itself — and a hand-added cooler sits on the CPU's socket slot.
+        ...manualRigParts.map((p) => ({ ...p, userAdded: true })),
         ...fanPlacements.map((fp) => ({ id: fp.fan.id, detected: fp.fan.detected, assembled: fp.assembled })),
       ]),
     );
   }, [evidenceMap, shownParts, manualRigParts, fanPlacements]);
+
+  // Every mesh reports its click through here, so the id is resolved ONCE, next to the three lists
+  // that produced it, instead of in each host that mirrors the selection. useCallback keeps the
+  // handler referentially stable — a new function per render re-commits it onto every mesh and r3f
+  // invalidates, repainting the resting bay (the idle-GPU law the frameloop note below is about).
+  const scene = useMemo(
+    () => ({ parts: shownParts, manual: manualRigParts, fans }),
+    [shownParts, manualRigParts, fans],
+  );
+
+  const emitSelect = useCallback(
+    (id: string) => onSelect(id, describeRigSelection(id, scene)),
+    [onSelect, scene],
+  );
+
+  // Hand the host the same list the meshes are built from — the picker it renders is the keyboard's
+  // only route to a selection, and deriving it from anything else would let the two drift apart.
+  useEffect(() => {
+    onInventory?.(rigInventory(scene));
+  }, [onInventory, scene]);
 
   // Drop the WebGL render loop to on-demand whenever the user can't see it — during a game (step-aside),
   // under reduced-motion, OR while this window is hidden/minimized — so the orbiting hologram never
@@ -320,7 +360,7 @@ export const RigHologram = memo(function RigHologram({
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: true }}
       camera={{ position: [0.6, 1.5, cameraDist], fov: 45 }}
-      onPointerMissed={() => onSelect("")}
+      onPointerMissed={() => emitSelect("")}
       // Q7 a11y: the bay was invisible to a screen reader in BOTH rooms that mount it (Home and
       // Lab) — canvas with no name, no role, no fallback, no adjacent text. It is a picture of the
       // user's own machine, so it gets a picture's alt text, built from the SAME parts list the
@@ -387,10 +427,11 @@ export const RigHologram = memo(function RigHologram({
             selectedId={selectedId}
             hoveredId={hoveredId}
             reduced={reduced}
-            onSelect={onSelect}
+            onSelect={emitSelect}
             onHover={onHover}
             pointerThrough={clickThrough.has(p.id)}
             cardOnSelect={!evidenceMap}
+            suppressCard={cardsSuppressed}
           />
         ))}
         {manualRigParts.map((p, i) => (
@@ -403,10 +444,11 @@ export const RigHologram = memo(function RigHologram({
             selectedId={selectedId}
             hoveredId={hoveredId}
             reduced={reduced}
-            onSelect={onSelect}
+            onSelect={emitSelect}
             onHover={onHover}
             pointerThrough={clickThrough.has(p.id)}
             cardOnSelect={!evidenceMap}
+            suppressCard={cardsSuppressed}
           />
         ))}
         {fanPlacements.map((fp) => (
@@ -421,7 +463,8 @@ export const RigHologram = memo(function RigHologram({
             hoveredId={hoveredId}
             selectedId={selectedId}
             onHover={onHover}
-            onSelect={onSelect}
+            onSelect={emitSelect}
+            suppressCard={cardsSuppressed}
             pointerThrough={clickThrough.has(fp.fan.id)}
           />
         ))}

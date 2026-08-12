@@ -1,12 +1,16 @@
 import { describe, it, expect } from "vitest";
 import {
   buildRigParts,
-  shadowingGhostIds,
+  clickThroughIds,
+  describeRigSelection,
+  rigInventory,
+  rigSelectionStatus,
   unreachableDetectedIds,
   passThroughRemainder,
   CPU_FAN_PLACEMENT,
   MEASURED_KINDS,
 } from "./rig-parts";
+import { manualPlacement } from "./manual-parts";
 import type { HardwareInfo } from "../../App";
 
 // Minimal fixture exercising the fields buildRigParts reads (cast — the real type is much larger).
@@ -96,7 +100,8 @@ describe("buildRigParts — real hardware, honest ghosts", () => {
 describe("assembled-pose reachability", () => {
   const parts = buildRigParts(hw);
   // The scene as RigHologram draws it: the parts, plus the three honest fan ghosts it adds when
-  // nothing is publishing RPM (the worst case for occlusion — real fan sensors are `detected`).
+  // nothing is publishing RPM. NOT the worst case for occlusion — a `detected` fan sensor is, and
+  // the block below covers it.
   const scene = [
     ...parts,
     { id: "fan-ghost-cpu", detected: false, assembled: CPU_FAN_PLACEMENT.assembled },
@@ -109,7 +114,7 @@ describe("assembled-pose reachability", () => {
   });
 
   it("lets clicks through the ghosts that stand in front of a detected part", () => {
-    const shadowing = shadowingGhostIds(scene);
+    const shadowing = clickThroughIds(scene);
     // The cooler and the CPU fan share the CPU's x/y and sit nearer the camera.
     expect(shadowing).toContain("cooler");
     expect(shadowing).toContain("fan-ghost-cpu");
@@ -120,11 +125,11 @@ describe("assembled-pose reachability", () => {
   });
 
   it("leaves every detected part clickable once those ghosts pass clicks through", () => {
-    expect(unreachableDetectedIds(scene, { clickThrough: shadowingGhostIds(scene) })).toEqual([]);
+    expect(unreachableDetectedIds(scene, { clickThrough: clickThroughIds(scene) })).toEqual([]);
   });
 
   it("keeps the cooler itself selectable — only its socket face passes clicks through", () => {
-    const through = shadowingGhostIds(scene);
+    const through = clickThroughIds(scene);
     // It must keep a region of its own — releasing the whole mesh was the round-2 regression, where
     // no click anywhere on the cooler, fin stack included, selected anything.
     expect(passThroughRemainder("cooler")).not.toBeNull();
@@ -134,10 +139,221 @@ describe("assembled-pose reachability", () => {
     expect(unreachableDetectedIds(probe, { clickThrough: through })).not.toContain("cooler");
   });
 
+  // ── The monitored rig: HWiNFO/LHM publishing, so the fans are REAL ───────────────────────────
+  // Compy's own copy tells the user to run one of these monitors, and doing so used to break the
+  // evidence map: the released-ghost rule keyed on `detected`, so `fan-0` on the CPU socket became
+  // a detected, never-released plate 0.66 nearer the camera than the CPU behind it. Every click
+  // aimed at the processor hit the fan, and the CPU's readings were unreachable for exactly the
+  // users who had followed the app's advice.
+  describe("with real fan sensors publishing", () => {
+    const monitored = [
+      ...parts,
+      { id: "fan-0", detected: true, assembled: [...CPU_FAN_PLACEMENT.assembled] as [number, number, number] },
+      { id: "fan-1", detected: true, assembled: [-1.36, 0.85, 0.85] as [number, number, number] },
+      { id: "fan-2", detected: true, assembled: [1.36, 0.55, 0.85] as [number, number, number] },
+    ];
+
+    it("hands a detected CPU fan's clicks to the processor behind it", () => {
+      expect(clickThroughIds(monitored)).toContain("fan-0");
+    });
+
+    it("keeps case fans selectable — they shadow nothing, and they carry a real rpm reading", () => {
+      const through = clickThroughIds(monitored);
+      expect(through).not.toContain("fan-1");
+      expect(through).not.toContain("fan-2");
+    });
+
+    it("leaves every detected part reachable on a monitored rig too", () => {
+      expect(unreachableDetectedIds(monitored, { clickThrough: clickThroughIds(monitored) })).toEqual([]);
+    });
+
+    it("never releases a detected part that is not a fan", () => {
+      const through = new Set(clickThroughIds(monitored));
+      for (const p of parts) {
+        if (p.detected) expect(through.has(p.id)).toBe(false);
+      }
+    });
+
+    it("does not let a fan release itself by standing in its own way", () => {
+      // `real.id !== front.id` — without it a detected fan matches itself (same x/y, same z is not
+      // greater, so this is belt-and-braces) and any future loosening of the depth test would make
+      // every fan click-through with nothing behind it to receive the click.
+      expect(clickThroughIds([{ id: "fan-solo", detected: true, assembled: [3, 3, 3] }])).toEqual([]);
+    });
+  });
+
+  // ── The helped rig: the user typed in the parts Compy cannot read ────────────────────────────
+  // Self-review round 2, 2026-08-11: the fan half of this rule was fixed and the user-added half was
+  // not. A cooler added by hand is drawn `detected: true` (the user said it is there) and lands on
+  // the socket slot 0.42 nearer the camera than the CPU, so it swallowed every click aimed at the
+  // processor. The evidence map broke for exactly the user who helped it along.
+  describe("with a cooler the user added by hand", () => {
+    const helped = [
+      ...parts,
+      {
+        id: "manual-1",
+        // `kind` is what makes this fixture honest: RigHologram gives every manual part a geometry
+        // (`manualGeom`), so a fixture without one would be judged as a FAN by the shape rules and
+        // would pass whether the user-added clause exists or not.
+        kind: "cooler" as const,
+        detected: true,
+        userAdded: true,
+        assembled: [...manualPlacement("cooler", 0).assembled] as [number, number, number],
+      },
+    ];
+
+    it("hands a hand-added cooler's clicks to the processor behind it", () => {
+      expect(clickThroughIds(helped)).toContain("manual-1");
+    });
+
+    it("leaves every detected part reachable on a helped rig too", () => {
+      expect(unreachableDetectedIds(helped, { clickThrough: clickThroughIds(helped) })).toEqual([]);
+    });
+
+    it("keeps the user's own part selectable — it releases the socket face, not its fin stack", () => {
+      // Their part must not vanish as a click target because they were helpful. Judged the way the
+      // ghost cooler is: on the remainder it keeps.
+      const through = clickThroughIds(helped);
+      expect(unreachableDetectedIds(helped, { clickThrough: through })).not.toContain("manual-1");
+    });
+
+    it("does not release a hand-added part that stands in nobody's way", () => {
+      const offAxis = [
+        ...parts,
+        {
+          id: "manual-2",
+          kind: "psu" as const,
+          detected: true,
+          userAdded: true,
+          assembled: [...manualPlacement("psu", 0).assembled] as [number, number, number],
+        },
+      ];
+      expect(clickThroughIds(offAxis)).not.toContain("manual-2");
+    });
+  });
+
   it("still finds a part that a nearer solid part swallows (the guard actually bites)", () => {
     const buried = scene.map((p) =>
       p.id === "disk-0" ? { ...p, assembled: [-0.55, -0.4, -0.6] as [number, number, number] } : p,
     );
-    expect(unreachableDetectedIds(buried, { clickThrough: shadowingGhostIds(buried) })).toContain("disk-0");
+    expect(unreachableDetectedIds(buried, { clickThrough: clickThroughIds(buried) })).toContain("disk-0");
+  });
+});
+
+// ── What the user actually clicked ────────────────────────────────────────────────────────────
+// The Lab's evidence panel resolved the hologram's emitted id through `buildRigParts` alone, so a
+// click on a fan or on a part the user added himself highlighted it in the model and then showed
+// NOTHING — no reading, no reason, no panel. Two of the three clickable lists had no answer.
+describe("describeRigSelection", () => {
+  const scene = {
+    parts: [
+      { id: "cpu", name: "Ryzen 7 9850X3D", detected: true },
+      { id: "gpu-0", name: "AMD Radeon RX 9070 XT", detected: true },
+    ],
+    manual: [{ id: "manual-1", name: "Corsair RM850x" }],
+    fans: [
+      { id: "fan-0", label: "CPU fan", rpm: 1180, detected: true },
+      { id: "fan-ghost-front", label: "Front intake", rpm: null, detected: false },
+    ],
+  };
+
+  it("resolves a detected part to the builder's own list", () => {
+    expect(describeRigSelection("gpu-0", scene)).toEqual({
+      source: "part",
+      id: "gpu-0",
+      name: "AMD Radeon RX 9070 XT",
+      detected: true,
+    });
+  });
+
+  it("names a part the user added himself instead of dropping the click", () => {
+    expect(describeRigSelection("manual-1", scene)).toEqual({
+      source: "manual",
+      id: "manual-1",
+      name: "Corsair RM850x",
+    });
+  });
+
+  it("carries a fan's real rpm so the panel states a measurement, not a guess", () => {
+    expect(describeRigSelection("fan-0", scene)).toEqual({
+      source: "fan",
+      id: "fan-0",
+      name: "CPU fan",
+      rpm: 1180,
+      detected: true,
+    });
+  });
+
+  it("keeps a ghost fan's null rpm null — the surface says why, it does not invent a number", () => {
+    expect(describeRigSelection("fan-ghost-front", scene)).toMatchObject({ rpm: null, detected: false });
+  });
+
+  it("returns null for the click-away that clears the selection, and for an unknown id", () => {
+    expect(describeRigSelection("", scene)).toBeNull();
+    expect(describeRigSelection("nothing-here", scene)).toBeNull();
+  });
+
+  // ── The keyboard's list ──────────────────────────────────────────────────────────────────────
+  // The hologram is a WebGL canvas: its parts are meshes, so a pointer was the only way to select
+  // one and every reading behind a selection was unreachable by keyboard (#49's a11y acceptance).
+  // The DOM picker fixes that, and these pin the property that makes it honest — it is built from
+  // the SAME list the meshes are, so a part that can be clicked is always in it.
+  describe("rigInventory", () => {
+    it("offers every clickable thing the scene drew, in scene order", () => {
+      expect(rigInventory(scene).map((i) => i.id)).toEqual([
+        "cpu",
+        "gpu-0",
+        "manual-1",
+        "fan-0",
+        "fan-ghost-front",
+      ]);
+    });
+
+    it("resolves each entry to exactly what a click on it resolves to", () => {
+      for (const item of rigInventory(scene)) {
+        expect(describeRigSelection(item.id, scene)).toEqual(item);
+      }
+    });
+
+    it("carries a name for every entry — a nameless button is an unusable one", () => {
+      for (const item of rigInventory(scene)) expect(item.name.length).toBeGreaterThan(0);
+    });
+
+    it("is empty for an empty scene rather than inventing a placeholder row", () => {
+      expect(rigInventory({ parts: [], manual: [], fans: [] })).toEqual([]);
+    });
+  });
+
+  describe("rigSelectionStatus", () => {
+    const statusOf = (id: string) => rigSelectionStatus(describeRigSelection(id, scene)!);
+
+    it("separates a fan with no sensor from a sensor with no number", () => {
+      // Both look like "no rpm" to a naive check, and they send the user to different fixes:
+      // install a monitor, versus a monitor that is running but hasn't published this fan.
+      expect(statusOf("fan-ghost-front")).toBe("unavailable");
+      expect(
+        rigSelectionStatus({ source: "fan", id: "fan-2", name: "Rear", rpm: null, detected: true }),
+      ).toBe("unread");
+    });
+
+    it("reports a measuring fan and a detected part as detected, never as a guess", () => {
+      expect(statusOf("fan-0")).toBe("detected");
+      expect(statusOf("cpu")).toBe("detected");
+    });
+
+    it("never calls a user-added part detected — the user typed it, Compy did not read it", () => {
+      expect(statusOf("manual-1")).toBe("userAdded");
+    });
+
+    it("calls an undetected part unavailable, so the list states why it is empty", () => {
+      expect(
+        rigSelectionStatus({ source: "part", id: "psu", name: "Power supply", detected: false }),
+      ).toBe("unavailable");
+    });
+  });
+
+  it("keeps ids exact — an indexed part never collapses onto its kind", () => {
+    // Reducing `gpu-1` to `gpu` would relabel the second card's readings as the first card's.
+    expect(describeRigSelection("gpu-1", scene)).toBeNull();
   });
 });

@@ -291,6 +291,16 @@
     "orbitButton": "环绕",
     "dragHint": "拖动可环绕旋转 · 悬停或点击部件可查看实时规格",
     "initializingHologram": "全息影像初始化中…",
+    "picker": {
+      "label": "配置部件——选择一个即可查看其读数",
+      "rpm": "{{rpm}} 转/分",
+      "status": {
+        "detected": "已检测到",
+        "unavailable": "软件无法检测",
+        "userAdded": "用户添加",
+        "unread": "暂无读数"
+      }
+    },
     "a11y": {
       "hologram": "你电脑的 3D 全息影像,其中包含:{{parts}}。",
       "hologramGhosts": "以下部件 Compy 无法通过软件读取,因此以淡淡的虚影呈现:{{ghosts}}。"

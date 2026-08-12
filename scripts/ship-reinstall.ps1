@@ -235,6 +235,20 @@ if (-not $NoLaunch) {
   if ($env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS) {
     throw "REFUSING TO RELAUNCH: WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS is set in this process, so a detached relaunch would inherit it and could leave the shipped build serving a debugging port."
   }
+  # FOREGROUND COURTESY (owner ask, 2026-08-11). This relaunch happens whenever a build finishes,
+  # which is routinely while the owner is doing something else on the same machine - and activating a
+  # window MINIMISES an exclusive-fullscreen game. The app still launches and still appears on the
+  # taskbar; it just does not snatch the foreground. Honoured by `should_suppress_activation` in
+  # src-tauri/src/lib.rs.
+  #
+  # BOTH levers are set on purpose, because they cover different processes. The env var is set on
+  # THIS process rather than per-child because the relaunches below are -Detached and ShellExecute
+  # has no child-only environment (Start-NativeProcess's contract, scripts/lib/native-process.ps1).
+  # The argv token is what survives the single-instance hop: if an older Compy is still alive, the
+  # new process hands it only its command line and then dies, so an env-only lever would be dropped
+  # exactly when it matters.
+  $env:COMPY_NO_ACTIVATE = "1"
+  $quietLaunchArgs = @("--no-activate")
   if ($VerifyRuntime) {
     # Derive what the running app MUST report before anything is launched: a bad -ExpectedCommit
     # must never leave a release build running with a debugging port open.
@@ -251,7 +265,7 @@ if (-not $NoLaunch) {
     $debugEnvironment = @{
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$debugPort"
     }
-    $launched = Start-NativeProcess -Command $exe -Environment $debugEnvironment
+    $launched = Start-NativeProcess -Command $exe -ArgumentList $quietLaunchArgs -Environment $debugEnvironment
 
     try {
       # The app needs a moment before it serves CDP, so the first attempts are EXPECTED to fail.
@@ -278,7 +292,7 @@ if (-not $NoLaunch) {
     Wait-LoopbackPortClosed -Port $debugPort -TimeoutMs 10000
     # -Detached: this app outlives the script, so it must not inherit our stdout/stderr and strand
     # a caller's pipe (issue #60 defect 2). Port absence is proven by the assertion above.
-    $normalLaunch = Start-NativeProcess -Command $exe -Detached
+    $normalLaunch = Start-NativeProcess -Command $exe -Detached -ArgumentList $quietLaunchArgs
     Start-Sleep -Seconds 3
     if ($normalLaunch.HasExited) {
       throw "RUNTIME PROOF FAILED: normal relaunch exited during the health window (exit $($normalLaunch.ExitCode))."
@@ -286,7 +300,7 @@ if (-not $NoLaunch) {
     $normalLaunch.Dispose()
   } else {
     # Same reason as the VerifyRuntime relaunch (issue #60 defect 2).
-    $normalLaunch = Start-NativeProcess -Command $exe -Detached
+    $normalLaunch = Start-NativeProcess -Command $exe -Detached -ArgumentList $quietLaunchArgs
     $normalLaunch.Dispose()
   }
 }

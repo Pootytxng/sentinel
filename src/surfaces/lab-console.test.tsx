@@ -18,10 +18,40 @@ vi.mock("../design/use-motion", () => ({ useReducedMotion: () => true }));
 // its selected-id boundary real. The buttons let the evidence tests drive the same callback an
 // actual mesh click emits without asserting anything about the stub itself.
 vi.mock("./rig/RigViewer", () => ({
-  RigViewer: ({ onSelectedIdChange }: { onSelectedIdChange?: (id: string | null) => void }) => (
+  RigViewer: ({
+    onSelectedIdChange,
+  }: {
+    // Both arguments, exactly as the real viewer emits them: the id AND which of the three drawn
+    // lists it came from. A mock that emitted the id alone let the console's fan / user-added
+    // branches go untested — that gap is what shipped a click that highlighted a part and then
+    // showed nothing.
+    onSelectedIdChange?: (id: string | null, what: RigSelection | null) => void;
+  }) => (
     <div data-testid="rig-hologram">
-      <button onClick={() => onSelectedIdChange?.("gpu-1")}>Select GPU 2</button>
-      <button onClick={() => onSelectedIdChange?.("disk-1")}>Select drive 2</button>
+      <button
+        onClick={() =>
+          onSelectedIdChange?.("gpu-1", {
+            source: "part",
+            id: "gpu-1",
+            name: "NVIDIA GeForce RTX 4070",
+            detected: true,
+          })
+        }
+      >
+        Select GPU 2
+      </button>
+      <button
+        onClick={() =>
+          onSelectedIdChange?.("disk-1", {
+            source: "part",
+            id: "disk-1",
+            name: "Archive SSD",
+            detected: true,
+          })
+        }
+      >
+        Select drive 2
+      </button>
     </div>
   ),
 }));
@@ -30,6 +60,7 @@ const { LabConsole } = await import("./LabConsole");
 const { ConfirmProvider } = await import("../design/ConfirmDialog");
 import type { LabFastPathProps } from "./lab/OptimizeStation";
 import type { HardwareInfo } from "../App";
+import type { RigSelection } from "./rig/rig-parts";
 
 afterEach(cleanup);
 beforeEach(() => localStorage.clear());

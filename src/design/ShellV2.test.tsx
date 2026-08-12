@@ -52,6 +52,22 @@ describe("ShellV2 rail", () => {
     );
   });
 
+  // bug→guard (UX audit 2026-08-11): the digit hint sat inside the tab's accessible name, so a
+  // screen reader announced "Home 1" / "Blackbook 3" — the shortcut read as part of the room name,
+  // and sighted users read the same pill as an unread count. The digit is now aria-hidden and the
+  // shortcut is declared where it means something. Exact-name matching is the assertion: a `/Home/`
+  // regex would pass again the day the digit crept back in.
+  it("a rail tab's accessible name is the room name ALONE — the digit is a keyboard hint", () => {
+    render(shell());
+    for (const [i, item] of ITEMS.entries()) {
+      const tab = screen.getByRole("tab", { name: item.label });
+      expect(tab.getAttribute("aria-keyshortcuts"), item.label).toBe(String(i + 1));
+      expect(tab.querySelector("kbd")?.getAttribute("aria-hidden")).toBe("true");
+      // and the name is exactly the label — no trailing digit, no glyph text
+      expect(tab.getAttribute("aria-keyshortcuts")).not.toBe(null);
+    }
+  });
+
   it("marks the active room and navigates on click", () => {
     const onNavigate = vi.fn();
     render(shell({ onNavigate }));

@@ -89,9 +89,16 @@ if (-not $NoBrowser) {
     }
   })
 
+  # FOREGROUND COURTESY (owner ask, 2026-08-11). When the OWNER runs this script he is asking to look
+  # at the console, so it opens normally and in front. When TOOLING runs it, the same window arrives
+  # unannounced over whatever he is actually doing, and on Windows an activating window minimises an
+  # exclusive-fullscreen game. `COMPY_NO_ACTIVATE` is the one lever for that across the repo (same
+  # variable src-tauri/src/lib.rs reads), and Minimized maps to SW_SHOWMINNOACTIVE: it launches, it
+  # lands on the taskbar, it never takes the foreground.
+  $browserWindow = if ($env:COMPY_NO_ACTIVATE -and $env:COMPY_NO_ACTIVATE.Trim() -and $env:COMPY_NO_ACTIVATE.Trim() -ne "0") { "Minimized" } else { "Normal" }
   if ($appBrowsers.Count -gt 0) {
-    Start-Process -FilePath $appBrowsers[0] -ArgumentList "--app=$url" -WorkingDirectory $env:USERPROFILE
+    Start-Process -FilePath $appBrowsers[0] -ArgumentList "--app=$url" -WorkingDirectory $env:USERPROFILE -WindowStyle $browserWindow
   } else {
-    Start-Process $url -WorkingDirectory $env:USERPROFILE
+    Start-Process $url -WorkingDirectory $env:USERPROFILE -WindowStyle $browserWindow
   }
 }

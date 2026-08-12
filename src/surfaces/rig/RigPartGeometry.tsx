@@ -115,7 +115,7 @@ export function RigPartGeometry({
       must let the pointer through — drawn exactly as before, just not raycast. Only the mounting
       face passes through where a kind HAS one: a cooler's fin stack towers well clear of the socket
       and stays clickable in its own right, which is how the cooler keeps its own honest
-      "nothing to read here" card. Set from `shadowingGhostIds` in RigHologram, evidence-map only. */
+      "nothing to read here" card. Set from `clickThroughIds` in RigHologram, evidence-map only. */
   pointerThrough?: boolean;
 }) {
   const p = { color, active, detected, glow, noHit: pointerThrough };

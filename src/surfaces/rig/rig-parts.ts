@@ -284,7 +284,7 @@ export function buildRigParts(hw: HardwareInfo, t?: TFunction): RigPart[] {
 const SHADOW_RADIUS = 0.35;
 
 /**
- * Parts that sit directly in FRONT of another part and can never carry a reading of their own.
+ * Parts that sit directly in FRONT of another part and must hand their clicks to it.
  *
  * Found by the Rig Evidence Map self-review (2026-08-07): the CPU is unselectable in the assembled
  * pose. `cooler` sits at [0.05, 1.15, -0.16] and the CPU at [0.05, 1.15, -0.58] — identical x/y,
@@ -293,33 +293,119 @@ const SHADOW_RADIUS = 0.35;
  * manually drag-rotating, and the Ops Console renders `chromeless`, which hides the very orbit and
  * explode controls that would hint at that.
  *
- * The rule is narrow on purpose. A part is shadowing only if it is BOTH:
- *   - `detected: false` — a ghost placeholder for something Compy cannot read, so selecting it can
- *     never produce a reading; its evidence panel is the empty sentence no matter what. Nothing is
- *     lost by letting a click pass through it.
+ * The rule is narrow on purpose. A part hands its clicks on only if it is BOTH:
+ *   - unable to keep the click usefully — a GHOST (`detected: false`, a placeholder for something
+ *     Compy cannot read, whose evidence panel is the empty sentence no matter what), or a FAN,
+ *     whose frame is one flat square exactly the size of the thing behind it.
  *   - nearer the camera than a DETECTED part on the same x/y axis — i.e. actually in the way.
  *
  * A ghost standing on its own (the PSU, off on its own axis) stays fully selectable, and no detected
- * part is ever made unclickable. This is deliberately NOT "ghosts are not clickable".
+ * NON-FAN part is ever made unclickable. This is deliberately NOT "ghosts are not clickable".
+ *
+ * FANS ARE INCLUDED EVEN WHEN DETECTED, and that is the whole of the second fix here. The original
+ * rule keyed on `detected` alone, so the CPU became reachable only while NOTHING was publishing fan
+ * sensors: start HWiNFO and `fan-0` (label matching /cpu/i) is placed on the socket at z 0.08 —
+ * detected, therefore never released, and 0.66 nearer the camera than the CPU it covers. The evidence
+ * map worked exactly until the user ran the monitor Compy tells them to run. A case fan sits off the
+ * CPU axis, shadows nothing, and stays selectable with its own rpm reading; only a fan sitting ON
+ * another part gives its clicks up, and there the part behind is what the user was aiming at.
+ *
+ * A fan is identified the same way `unreachableDetectedIds` identifies one: no `kind` field. Fans
+ * are not RigParts, they ride this shape so both rules judge one scene.
+ *
+ * USER-ADDED PARTS ARE INCLUDED TOO, and that is the third fix (self-review round 2, 2026-08-11).
+ * A part the user typed in is drawn as a RigPart with `detected: true` — it has to be, or the model
+ * would present the user's own PSU as something Compy failed to find — so neither of the two clauses
+ * above could ever release it. Add a cooler by hand and it lands on the socket slot at z -0.16, the
+ * same place the ghost cooler stands, 0.42 nearer the camera than the CPU: the CPU stopped being
+ * clickable the moment the user helped. `userAdded` is what separates "the user told us this is
+ * here" from "we read this off the machine"; the host that builds the manual list sets it, because
+ * only that host knows. Like the ghost cooler, it keeps its fin stack (`PASS_THROUGH_REMAINDER`), so
+ * releasing the socket face costs the user nothing — their part stays selectable in its own right.
  *
  * Consumed by RigHologram in evidence-map mode only, so the Gaming rig viewer's behaviour is
- * unchanged. Pure and data-only so `rig-parts.test.ts` can prove it without a WebGL context.
+ * unchanged — there the explode control reaches anything a click cannot. Pure and data-only so
+ * `rig-parts.test.ts` can prove it without a WebGL context.
  */
-export function shadowingGhostIds(parts: readonly Placed[]): string[] {
+export function clickThroughIds(parts: readonly Placed[]): string[] {
   const detected = parts.filter((p) => p.detected);
+  const releasable = (p: Placed) => !p.detected || !("kind" in p) || p.userAdded === true;
   return parts
     .filter(
-      (ghost) =>
-        !ghost.detected &&
+      (front) =>
+        releasable(front) &&
         detected.some(
           (real) =>
-            Math.abs(real.assembled[0] - ghost.assembled[0]) <= SHADOW_RADIUS &&
-            Math.abs(real.assembled[1] - ghost.assembled[1]) <= SHADOW_RADIUS &&
+            real.id !== front.id &&
+            Math.abs(real.assembled[0] - front.assembled[0]) <= SHADOW_RADIUS &&
+            Math.abs(real.assembled[1] - front.assembled[1]) <= SHADOW_RADIUS &&
             // +z is toward the camera in this scene, so a larger z is in front.
-            ghost.assembled[2] > real.assembled[2],
+            front.assembled[2] > real.assembled[2],
         ),
     )
     .map((p) => p.id);
+}
+
+/**
+ * What the user actually clicked, for a host surface that mirrors the hologram's selection.
+ *
+ * The hologram draws THREE kinds of thing and every one of them is clickable: parts from
+ * `buildRigParts`, the user's own manually-added parts, and fans. A host that resolves the emitted
+ * id through `buildRigParts` alone therefore has a hole exactly where the other two live — which is
+ * what the Lab's evidence panel did: clicking a case fan or a part you added yourself highlighted it
+ * in the model and then showed NOTHING, with no sentence saying why. A dead-end click reads as a
+ * broken app, and it is the one outcome an evidence surface must never produce.
+ *
+ * Carried alongside the id rather than replacing it: ids stay exact (`ram-2`, `gpu-1`, `vol-1`), so
+ * nothing here can collapse a reading onto the wrong drive or the wrong card.
+ */
+export type RigSelection =
+  | { source: "part"; id: string; name: string; detected: boolean }
+  | { source: "manual"; id: string; name: string }
+  | { source: "fan"; id: string; name: string; rpm: number | null; detected: boolean };
+
+/** The three lists the hologram draws, in the shapes this module needs. Structural on purpose so
+    this file keeps knowing nothing about three.js or FanInfo. */
+export interface RigScene {
+  parts: readonly { id: string; name: string; detected: boolean }[];
+  manual: readonly { id: string; name: string }[];
+  fans: readonly { id: string; label: string; rpm: number | null; detected: boolean }[];
+}
+
+/** Everything the scene drew that a user may select, in the order a keyboard should walk it.
+    ONE list feeds BOTH paths — the pointer (`describeRigSelection`) and the DOM part picker — so a
+    part the mouse can reach can never go missing from the keyboard list as the scene grows. */
+export function rigInventory(scene: RigScene): RigSelection[] {
+  return [
+    ...scene.parts.map((p) => ({ source: "part" as const, id: p.id, name: p.name, detected: p.detected })),
+    ...scene.manual.map((m) => ({ source: "manual" as const, id: m.id, name: m.name })),
+    ...scene.fans.map((f) => ({
+      source: "fan" as const,
+      id: f.id,
+      name: f.label,
+      rpm: f.rpm,
+      detected: f.detected,
+    })),
+  ];
+}
+
+/** What the picker says about an item next to its name — the "value" half of name/role/value, and
+    the honest-unavailable states in list form. A fan that IS reporting carries its rpm instead. */
+export type RigSelectionStatus = "detected" | "unavailable" | "userAdded" | "unread";
+
+export function rigSelectionStatus(item: RigSelection): RigSelectionStatus {
+  if (item.source === "manual") return "userAdded";
+  // A fan whose sensor exists but published no number is NOT the same as no sensor at all, and the
+  // list must not flatten the two — "no reading" and "no sensor" send the user to different fixes.
+  if (item.source === "fan" && item.detected && item.rpm === null) return "unread";
+  return item.detected ? "detected" : "unavailable";
+}
+
+/** Resolve a clicked id against everything the scene actually drew. `null` for an empty id (the
+    click-away that clears the selection) or an id from none of the three lists. */
+export function describeRigSelection(id: string, scene: RigScene): RigSelection | null {
+  if (!id) return null;
+  return rigInventory(scene).find((item) => item.id === id) ?? null;
 }
 
 /** The minimum a part needs — anything at all, so `id` and a place in the scene. Lets the fan
@@ -328,6 +414,9 @@ export interface Placed {
   id: string;
   detected: boolean;
   assembled: Vec3;
+  /** Set by the host for a part the USER typed in. Such a part is `detected: true` (it is really
+      there — the user said so), which is exactly why the shadowing rule cannot infer it. */
+  userAdded?: boolean;
 }
 
 /** Local-space bounds of each geometry kind, as the union of the boxes/cylinders
@@ -422,7 +511,7 @@ function screenRect(at: Vec3, bounds: { min: Vec3; max: Vec3 }): Rect {
  * This is the reachability guard behind the 2026-08-07 self-review FAIL: correct code that the user
  * can never trigger is not a shipped feature. It is about the pointer, not the pixels — a part that
  * is merely half-hidden but still clickable passes, and ids listed in `clickThrough` (see
- * `shadowingGhostIds`) are excluded as occluders because clicks pass straight through them.
+ * `clickThroughIds`) are excluded as occluders because clicks pass straight through them.
  *
  * A part is "reachable" if at least `MIN_EXPOSED` of its projected area is free of nearer rects.
  * Coverage is sampled on a grid rather than computed analytically — the counts here are tiny and a

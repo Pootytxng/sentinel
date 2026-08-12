@@ -40,6 +40,7 @@ export function RigFan({
   onHover,
   onSelect,
   pointerThrough = false,
+  suppressCard = false,
 }: {
   fan: FanInfo;
   color: string;
@@ -52,9 +53,12 @@ export function RigFan({
   onHover: (id: string | null) => void;
   onSelect: (id: string) => void;
   /** true → drawn but transparent to the pointer, so a real part behind it stays clickable
-      (see `shadowingGhostIds`). A fan frame is one flat square with nothing to spare, so the whole
+      (see `clickThroughIds`). A fan frame is one flat square with nothing to spare, so the whole
       thing passes through rather than a sub-region. Default false. */
   pointerThrough?: boolean;
+  /** true → no on-canvas card, whatever is hovered or focused. Same reason as RigPart's: the DOM
+      part picker sits at the stage's top-left and this card would land on top of it. */
+  suppressCard?: boolean;
 }) {
   const { t } = useTranslation();
   const groupRef = useRef<Group>(null);
@@ -153,7 +157,7 @@ export function RigFan({
         ))}
       </group>
 
-      {active && (
+      {active && !suppressCard && (
         <Html position={[0, 0, 0]} center distanceFactor={8} zIndexRange={[100, 0]} style={{ pointerEvents: "none" }}>
           <div
             style={{

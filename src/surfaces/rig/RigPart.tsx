@@ -25,7 +25,7 @@ interface Props {
       neutral, existing hosts unchanged). */
   glow?: number;
   /** true → the part stands in front of a real, detected one, so the covering geometry stops
-      taking raycast hits and clicks reach the part behind (see `shadowingGhostIds`). Every mesh
+      taking raycast hits and clicks reach the part behind (see `clickThroughIds`). Every mesh
       here stops propagation, so without this the nearest one always wins. Default false —
       existing hosts are untouched. */
   pointerThrough?: boolean;
@@ -33,6 +33,11 @@ interface Props {
       the host is already showing its readings somewhere else (the Lab evidence panel). Hover cards
       for other parts are unaffected. Default true. */
   cardOnSelect?: boolean;
+  /** true → no on-canvas spec card at all, whatever is hovered or focused. Set while the DOM part
+      picker is open: that panel is anchored to the stage's top-left and the card is anchored to the
+      part's position in 3D, so the card lands ON the list a keyboard user is reading. The model's
+      highlight still follows the focused row — only the floating card stands down. */
+  suppressCard?: boolean;
 }
 
 export function RigPart({
@@ -48,6 +53,7 @@ export function RigPart({
   glow = 1,
   pointerThrough = false,
   cardOnSelect = true,
+  suppressCard = false,
 }: Props) {
   const { t } = useTranslation();
   const groupRef = useRef<Group>(null);
@@ -56,7 +62,7 @@ export function RigPart({
   const below = useTooltipFlip(groupRef, active);
   // The spec card and the Lab's evidence panel carry the same numbers, so only one of them speaks
   // for the selected part. Hovering a DIFFERENT part still gets its card.
-  const showCard = active && (cardOnSelect || selectedId !== part.id);
+  const showCard = active && !suppressCard && (cardOnSelect || selectedId !== part.id);
 
   useFrame((state, delta) => {
     const g = groupRef.current;

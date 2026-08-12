@@ -22,10 +22,24 @@
 > in [RELEASE_STATE.md](RELEASE_STATE.md). Historical priority sections below remain evidence, not the
 > current pull order.
 
+- [x] **PR #90 recovery + the quiet launch, rebuilt** — PR [#102](https://github.com/Pootytxng/sentinel/pull/102).
+  #90 is MERGED; its four unverified Codex claims were re-proven and repaired (P1 the Lab evidence
+  map now answers for all three of its clickable lists · P2 ghost-fan shadowing pinned by regression
+  coverage · P3 the hologram has a real keyboard route, #49 a11y · P4 `work-control-gate.mjs`
+  resolves the head itself instead of trusting a receipt's self-declared SHA). PR #100 closed as
+  measured-inert and rebuilt through `WebviewWindowBuilder` + `SW_SHOWNOACTIVATE`, with a RUNTIME
+  tier in `launch-focus-guard.test.mjs` that watches `GetForegroundWindow` across a real launch.
+  Shipped: installed build `3155c7a0`, self-review **PASS** on round 3 (round 2 caught that P2 was
+  only half-fixed — a hand-added cooler still occluded the CPU — and that is now fixed and guarded).
+- [ ] **The "add a part" form is mounted nowhere** — found during the PR #102 self-review
+  (2026-08-11). `<RigViewer>` renders live only from `LabConsole.tsx`, always `chromeless`, and
+  `chromeless` hides the add-a-part form, the explode/orbit controls and the monitor nudge. So the
+  manual-parts feature (`manual-parts.ts`, `compy_rig_manual_parts`, the user-added evidence copy)
+  is reachable in tests only — a user cannot add the PSU or cooler Compy admits it cannot read.
+  Either mount a non-chromeless viewer somewhere real or move the form into the Lab's own chrome.
 - [ ] **Q8 / issue #91 — COMPY CARE: primary PC-doctor directive + Capability Exception Gate
-  (OWNER-APPROVED 2026-08-09).** Queue position is exact: PR #90 @ `c2868bc` now records its
-  current-head exact gates, but its independent reviewer was authentication-blocked; **finish that
-  independent review and merge/disposition first** (rerun gates if its HEAD moves), then rebase #91,
+  (OWNER-APPROVED 2026-08-09).** Queue position is exact: PR #90 is now MERGED and its four
+  post-merge defects are repaired in PR #102; **land #102 first**, then rebase #91,
   land policy/guards, and start Tier 1 domain/backend dark implementation. Do not compete with issue #49's Lab shell, revive draft PR #50, or adopt #55's
   stale Project Doctor claim. Rust-side Tier 1 keeps production CSP unchanged, so it does not trigger
   #64 Q2b; any proposal for webview fetch/remote content/CSP widening does.

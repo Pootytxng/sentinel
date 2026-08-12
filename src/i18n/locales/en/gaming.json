@@ -295,6 +295,16 @@
     "orbitButton": "Orbit",
     "dragHint": "Drag to orbit · hover or click a part for its live specs",
     "initializingHologram": "Initializing hologram…",
+    "picker": {
+      "label": "Rig parts — select one to see its readings",
+      "rpm": "{{rpm}} rpm",
+      "status": {
+        "detected": "detected",
+        "unavailable": "not software-detectable",
+        "userAdded": "user-added",
+        "unread": "no reading yet"
+      }
+    },
     "a11y": {
       "hologram": "3D hologram of your PC, showing: {{parts}}.",
       "hologramGhosts": "Compy can't read these in software, so they appear as faint ghosts: {{ghosts}}."
