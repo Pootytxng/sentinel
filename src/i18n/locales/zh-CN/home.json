@@ -93,7 +93,11 @@
       "topLabel": "首要限制因素",
       "lastSessionLabel": "上次会话",
       "seeIn": "在「{{room}}」中查看",
-      "confidenceTag": "{{level}} 置信度"
+      "confidenceTag": "{{level}} 置信度",
+      "none": "没有更多发现——上方的结论已经说明。",
+      "pending": "正在读取这台电脑。",
+      "lastSessionNone": "还没有前后对比——先进行一次受监控的游戏会话。",
+      "lastSessionOff": "会话对比已在设置中关闭。"
     }
   },
   "homeHud": {

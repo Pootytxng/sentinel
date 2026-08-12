@@ -467,6 +467,28 @@
   font: 500 12px var(--v2-font-sans);
 }
 
+/* BENTO: the tile IS the box (2026-08-12 conversion). Inside a tile body the row drops its own
+   glass shell — a framed row inside a framed tile is a box in a box, the same double-framing the
+   bento pass stripped from Monitor's stage and gauges. Only the shell goes; the flex row, the gap
+   and the auto-margin door are untouched, so nothing moves. */
+:root[data-v2="on"] .v2-tile-body .hc-limiter {
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+
+/* ── The honest empty line for the two half tiles beside the hero. It is real copy, not a
+   placeholder: both tiles must ALWAYS render (a half-width tile that vanishes leaves a hole
+   under the two-row hero — `bento: no conditional partial tile`), and an empty box would read
+   as "nothing is wrong", which Home does not know. Quiet on purpose — when this line is showing,
+   it is the least important thing on the screen. ── */
+:root[data-v2="on"] .hc-none {
+  margin: 0;
+  font-size: 13px;
+  color: var(--v2-faint);
+}
+
 /* ── Quiet view controls — bottom-center, between the two lower gauges ── */
 :root[data-v2="on"] .hc-controls {
   position: absolute;

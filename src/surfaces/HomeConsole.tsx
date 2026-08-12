@@ -638,8 +638,13 @@ export function HomeConsole({
             (option B door-hints declined — the band already carries the symptom→room map, so
             duplicating symptoms onto the doors would be the annoyance the owner warned against). */}
         <BentoGrid>
+        {/* FULL WIDTH BECAUSE IT IS CONDITIONAL (`bento: no conditional partial tile`). The band
+            is hidden by the compy_home_intake setting, so a half-width version of this tile would
+            leave a hole beside the hero the moment the owner switched it off. A full-width tile
+            always starts its own row, so its absence just moves the rest of the grid up intact —
+            and the band was born full-width anyway (it reads as a strip, not a card). */}
         {intakeRenders && (
-          <BentoTile title={t("home.homeConsole.intake.prompt")} span="half">
+          <BentoTile title={t("home.homeConsole.intake.prompt")} span="full">
           <section className="hc-intake" aria-label={t("home.homeConsole.intake.prompt")}>
             {/* Option C — the always-available one-tap "just make it faster, safely" fast path.
                 Honest state machine: applied receipt › loading › all-clear › ready-with-apply. */}
@@ -952,15 +957,27 @@ export function HomeConsole({
         </div>
         </BentoTile>
 
-        {/* THE FINDINGS TILE — the #1 limiter and the last-session verdict, the two measured
-            sentences Home is allowed to state. Sits beside the hero (row 2, left) so the
-            question "what is holding this PC back" is answered next to the picture of the PC.
-            No `open` prop: each row already carries its own door button, and a stretched tile
-            button would put a second, competing target over them. */}
-        {(topLimiter || intelHeadline) && (
-          <BentoTile title={t("home.homeConsole.bento.findings")} span="half">
+        {/* THE TWO HALF TILES BESIDE THE HERO — the #1 limiter, then the last-session verdict: the
+            two measured sentences Home is allowed to state, each in its own box. No `open` prop on
+            either: each row already carries its own door button, and a stretched tile button would
+            put a second, competing target over it.
+
+            WHY THEY ARE TWO TILES, AND WHY BOTH ALWAYS RENDER (self-review 2026-08-12, item 5). The
+            hero spans 7 columns × 2 rows, so the grid needs exactly TWO always-present 5-column
+            tiles to close those rows — strict row-major with no dense flow is deliberate, so any
+            slot that can go empty shows as a hole. They used to be one conditional tile, and on a
+            clean PC Home opened with a ~180px dark rectangle at every width. Splitting them is also
+            the honest shape: a limiter and a session comparison are different claims with different
+            empty states, and a shared "nothing here" line could only be vague about which was which.
+
+            NEITHER EMPTY LINE SAYS "NOTHING IS WRONG" — neither may. `topLimiter` goes null when the
+            verdict above already names the limiter (see `verdictNamesLimiter`) and while priorities
+            are still loading, so an all-clear claim here would be fabricated. Each line states only
+            what is true in its own null case. */}
+        <BentoTile title={t("home.homeConsole.bento.findings")} span="half">
+          <>
             {/* THE #1 LIMITER — micro-label · the measured title · quiet confidence tag · jump. */}
-            {topLimiter && (
+            {topLimiter ? (
               <div className="hc-limiter">
                 <span className="hc-limiter-label">{t("home.homeConsole.limiter.topLabel")}</span>
                 <span className="hc-limiter-title">{topLimiter.title}</span>
@@ -971,17 +988,31 @@ export function HomeConsole({
                   {t("home.homeConsole.limiter.seeIn", { room: fixRoomLabel })}
                 </button>
               </div>
+            ) : (
+              <p className="hc-none">
+                {priorities
+                  ? t("home.homeConsole.limiter.none")
+                  : t("home.homeConsole.limiter.pending")}
+              </p>
             )}
+          </>
+        </BentoTile>
 
-            {/* LAST SESSION — Home's ONE intelligence line (Intelligence Phase 1, decision 7): the
-                engine's own verdict sentence verbatim; the full report lives in Monitor's debrief.
-                Only rendered for a real improved/regressed verdict (the command returns null
-                otherwise), and the door only shows when Monitor is actually on the rail. */}
-            {intelHeadline && (
+        {/* LAST SESSION — Home's ONE intelligence line (Intelligence Phase 1, decision 7): the
+            engine's own verdict sentence verbatim; the full report lives in Monitor's debrief. The
+            LINE is still rendered only for a real improved/regressed verdict (the command returns
+            null otherwise) and the door only shows when Monitor is actually on the rail — the TILE
+            around it is what always renders, and it says which of the two null cases it is in
+            rather than inventing a verdict.
+
+            The title reuses `limiter.lastSessionLabel` — the exact string that used to be the row's
+            micro-label. Promoting it instead of minting a `bento.lastSession` twin keeps the label
+            out of the tile twice AND keeps the affordance census honest: that key stays reached, so
+            the guard sees a control that moved rather than one that vanished. */}
+        <BentoTile title={t("home.homeConsole.limiter.lastSessionLabel")} span="half">
+          <div className="hc-lastsession">
+            {intelHeadline ? (
               <div className="hc-limiter">
-                <span className="hc-limiter-label">
-                  {t("home.homeConsole.limiter.lastSessionLabel")}
-                </span>
                 <span className="hc-limiter-title">{intelHeadline.text}</span>
                 {onNavigate && rooms?.some((r) => r.key === "play") && (
                   <button
@@ -995,9 +1026,15 @@ export function HomeConsole({
                   </button>
                 )}
               </div>
+            ) : (
+              <p className="hc-none">
+                {intelOn
+                  ? t("home.homeConsole.limiter.lastSessionNone")
+                  : t("home.homeConsole.limiter.lastSessionOff")}
+              </p>
             )}
-          </BentoTile>
-        )}
+          </div>
+        </BentoTile>
 
         {/* THE DETECTED RECORD — boxed templates, always open (owner 2026-08-06: "better grouping
             and boxed templates"). Static facts only; everything that MOVES is on the stage above,

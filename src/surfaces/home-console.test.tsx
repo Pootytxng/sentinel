@@ -461,15 +461,22 @@ describe("HomeConsole — the #1-limiter readout (measured fact + its fix route)
     expect(jump).toHaveBeenCalled();
   });
 
-  it("renders NOTHING when limiters are empty or priorities are still loading (no placeholder)", () => {
+  // BENTO (2026-08-12): the limiter's TILE must always render — a half-width tile that sometimes
+  // doesn't render leaves a hole under the two-row hero (`bento: no conditional partial tile`, and
+  // the self-review FAIL that guard came from). What must never appear is a fabricated verdict: the
+  // ROW is still absent, and the empty line states only which null case it is in. It cannot say
+  // "nothing is wrong" — topLimiter is also null when the verdict above already names the limiter.
+  it("no limiter ⇒ no limiter ROW, and the empty line names its own null case (never an all-clear)", () => {
     const clean = mount({
       ...props,
       priorities: { ...(priorities as Priorities), limiters: [] },
     }).container;
-    expect(clean.querySelector(".hc-limiter")).toBeNull();
+    expect(topLimiterRows(clean)).toHaveLength(0);
+    expect(clean.querySelector(".hc-none")!.textContent).toContain("the verdict above covers it");
     cleanup();
     const loading = mount({ ...props, priorities: null }).container;
-    expect(loading.querySelector(".hc-limiter")).toBeNull();
+    expect(topLimiterRows(loading)).toHaveLength(0);
+    expect(loading.querySelector(".hc-none")!.textContent).toContain("Still reading this PC");
   });
 });
 
@@ -561,11 +568,12 @@ const headlineFixture = {
   session_started_at: "2026-07-10T20:00:00Z",
 };
 
-// Two rows share .hc-limiter (deliberate class reuse) — the micro-label tells them apart.
+// Two rows share .hc-limiter (deliberate class reuse). They used to be told apart by their
+// micro-labels; since the bento conversion (2026-08-12) each lives in its own tile and the label IS
+// the tile title, so the last-session row is located by its wrapper instead. The wrapper exists for
+// exactly this reason — <BentoTile> takes no className.
 const intelRow = (c: HTMLElement): HTMLElement | null =>
-  Array.from(c.querySelectorAll<HTMLElement>(".hc-limiter")).find(
-    (r) => r.querySelector(".hc-limiter-label")?.textContent === "last session",
-  ) ?? null;
+  c.querySelector<HTMLElement>(".hc-lastsession .hc-limiter");
 
 describe("HomeConsole — the last-session intelligence line (Intelligence Phase 1)", () => {
   it("renders the engine's headline verbatim with the door into Monitor (rooms has play)", async () => {

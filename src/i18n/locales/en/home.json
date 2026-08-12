@@ -95,9 +95,13 @@
     },
     "limiter": {
       "topLabel": "top limiter",
-      "lastSessionLabel": "last session",
+      "lastSessionLabel": "Last session",
       "seeIn": "See in {{room}}",
-      "confidenceTag": "{{level}} confidence"
+      "confidenceTag": "{{level}} confidence",
+      "none": "Nothing further — the verdict above covers it.",
+      "pending": "Still reading this PC.",
+      "lastSessionNone": "No before-and-after yet — play a monitored session.",
+      "lastSessionOff": "Session comparison is off in Settings."
     }
   },
   "homeHud": {

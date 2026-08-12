@@ -70,6 +70,36 @@ describe("bento: one hero per grid", () => {
     }
   });
 
+  // NO CONDITIONAL PARTIAL TILE — the hole defect, mechanized (self-review 2026-08-12, Home).
+  //
+  // The grid is strict row-major with NO `grid-auto-flow: dense`, deliberately: a mis-sized tile
+  // must show as a visible hole rather than be silently shuffled somewhere it doesn't belong. The
+  // cost of that choice is that a tile which sometimes doesn't render leaves its slot EMPTY. Home
+  // shipped exactly that — a conditional half-width "Findings" tile under a two-row hero — and on
+  // a clean PC the room opened with a ~180px dark rectangle at every width.
+  //
+  // A FULL-width tile is exempt because it cannot leave a partial row behind: it always starts a
+  // row, so when it doesn't render, the tiles after it simply move up a row intact.
+  //
+  // The fix a failure here is asking for is a tile that ALWAYS renders and carries an honest empty
+  // state — not a tile that vanishes, and not `dense`.
+  it.each(withBento.map((f) => f.path))("%s — no conditional partial tile", (path) => {
+    const src = files.find((f) => f.path === path)!.src;
+    for (const block of bentoBlocks(src)) {
+      // The JSX conditional forms that render a tile: `cond && (<BentoTile`, `cond && <BentoTile`,
+      // and `cond ? (<BentoTile`. A JSX comment may sit between the guard and the tag.
+      const guarded = /(?:&&|\?)\s*\(?\s*(?:\{\/\*[\s\S]*?\*\/\}\s*)?<BentoTile[^>]*>/g;
+      for (const [tag] of block.matchAll(guarded)) {
+        expect(
+          tag,
+          `${path}: a conditionally-rendered <BentoTile> must be span="full" — a partial-width ` +
+            `tile that sometimes doesn't render leaves a hole in its row. Give it an always-` +
+            `rendering empty state instead.`,
+        ).toMatch(/span=["']full["']/);
+      }
+    }
+  });
+
   it.each(withBento.map((f) => f.path))("%s — no computed span", (path) => {
     const src = files.find((f) => f.path === path)!.src;
     for (const block of bentoBlocks(src)) {
