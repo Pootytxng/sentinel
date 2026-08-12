@@ -154,11 +154,29 @@ for the assistant — the prompt was declined. One entry appended to the `Stop` 
 on; any session can add it once you approve the settings edit. Until then the rule is back to being
 prose, which is the state that already failed.
 
+### A_disk. A dead 9 GB folder Windows won't let the assistant delete — one command frees it  ·  ⏳ NEW 2026-08-11
+`.claude/worktrees/nodejs-background-execution-fd4def` is a leftover checkout from a finished
+session. Git no longer tracks it (`git worktree remove` deregistered it successfully), but Windows
+refused to delete the files — something still had a handle open — so **9 GB of build output is
+sitting on your disk doing nothing.** Six other dead folders from the same era were empty and are
+already gone.
+
+Your rule is that folders under `.claude/worktrees/` are never deleted by hand, so the assistant
+stopped there rather than reaching for `Remove-Item`. Nothing in it is unique: the branch and every
+commit live on GitHub. When you want the space back, reboot first (that releases the handle) then:
+
+```
+Remove-Item -Recurse -Force "C:\Users\Kuya\code\sentinel\.claude\worktrees\nodejs-background-execution-fd4def"
+```
+
+Or just say the word and a session will run it for you.
+
 ### A-closed. Nine §A items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
-None of them is waiting on you. The §A items still open above are A0, A_ci, A_rig, A_crash, A_ref
-and A_hook; the ones that actually need your hands are **A0**, **A_crash** (one flag + a look),
-**A_ref** (approve a branch delete) and **A_hook** (approve one settings edit). Archived
+None of them is waiting on you. The §A items still open above are A0, A_ci, A_rig, A_crash, A_ref,
+A_hook and A_disk; the ones that actually need your hands are **A0**, **A_crash** (one flag + a
+look), **A_ref** (approve a branch delete), **A_hook** (approve one settings edit) and **A_disk**
+(free 9 GB, or say the word). Archived
 2026-08-04 (TOKEN LAW §1 — history leaves the live doc, never gets deleted): **A0b** zh-CN merged +
 published in v0.9.11 · **A1** Gaming Mode QA signed off · **A2** beta smoke (sitting waived; the live
 beta thread is **§B2** below) · **A3** Lab Ops Console · **A4** Home console · **A5** Monitor v5
