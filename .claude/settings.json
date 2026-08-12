@@ -44,6 +44,12 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/context-size-advisor.mjs\"",
             "timeout": 10,
             "statusMessage": "context-size advisor"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/handoff-block-guard.mjs\"",
+            "timeout": 10,
+            "statusMessage": "handoff-block guard"
           }
         ]
       }
