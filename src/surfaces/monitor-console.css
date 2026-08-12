@@ -108,8 +108,11 @@
   border: 1px solid var(--ix-glass-border); font-family: var(--ix-mono); font-size: 10px;
   letter-spacing: .12em; text-transform: uppercase; color: var(--ix-text-3); }
 
-:root[data-v2="on"] .mc-stage { position: relative; display: flex; flex-direction: column; gap: 16px;
-  padding: 16px; border: 1px solid var(--ix-glass-border); }
+/* BENTO (2026-08-12): the stage no longer draws its own frame — the tiles inside it do, and a
+   frame around a grid of framed tiles reads as a double border. `position: relative` stays (the
+   cursor-follow ::after ring is absolutely positioned against it) and so does the column flow,
+   which now stacks .mc-capture → the bento grid. */
+:root[data-v2="on"] .mc-stage { position: relative; display: flex; flex-direction: column; gap: 16px; }
 
 :root[data-v2="on"] .mc-readouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 12px 20px; }
@@ -121,8 +124,10 @@
 
 :root[data-v2="on"] .mc-scopes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
 
+/* BENTO (2026-08-12): frame + inset dropped for the same reason as .mc-stage — the gauges now sit
+   inside a BentoTile that supplies both. */
 :root[data-v2="on"] .mc-gauges { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 14px 18px; padding: 14px 16px; border: 1px solid var(--ix-glass-border); }
+  gap: 14px 18px; }
 
 :root[data-v2="on"] .mc-honest { margin: 0; font-family: var(--ix-mono); font-size: 10px;
   letter-spacing: .08em; color: var(--ix-text-3); }

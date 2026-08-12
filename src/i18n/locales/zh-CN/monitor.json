@@ -115,7 +115,13 @@
     "ramLabel": "内存",
     "etwEmph": "ETW",
     "etwHonestyPost": " · 外部监测 · 反作弊安全——不注入、不装内核驱动。",
-    "sessionHistory": "会话历史"
+    "sessionHistory": "会话历史",
+    "bento": {
+      "deck": "帧生成时间",
+      "readouts": "本次会话",
+      "gauges": "传感器",
+      "scope": "帧率"
+    }
   },
   "monitorDomainCards": {
     "cpuCardLabel": "CPU",
