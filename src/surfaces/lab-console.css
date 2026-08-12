@@ -22,16 +22,16 @@
 }
 
 /* The stage — a relative box with a bracketed corner frame, the rig hologram centered, and the four
-   arc gauges pinned to the corners. */
+   arc gauges pinned to the corners. Its own glass frame is GONE (bento conversion 2026-08-12): the
+   hero <BentoTile> draws the panel now, and keeping both drew a box inside a box. What stays is
+   everything structural: `position: relative` is the containing block for the corner gauges, the
+   brackets and the ReticleCursor scope, and `border-radius` is what the cursor-follow glow ring
+   (`::after`, `border-radius: inherit`) traces. Padding drops to 0 — the tile's --v2-pad owns it. */
 :root[data-v2="on"] .lc-stage {
   position: relative;
   min-height: 380px;
   display: grid;
   place-items: center;
-  padding: 28px;
-  background: var(--ix-glass-fill);
-  border: 1px solid var(--ix-glass-border);
-  border-top-color: var(--ix-glass-top);
   border-radius: var(--ix-radius);
 }
 
@@ -98,19 +98,11 @@
   right: 22px;
 }
 
-/* ── Rig Evidence Map — what the selected subsystem reads right now. Same glass idiom as .lc-detail
-   below (one panel language in this room), but deliberately quieter: it is evidence the hologram
-   produced, not a station the user opened. Like .lc-detail it is EXCLUDED from the v2-lc-rise
-   entrance stagger at the bottom of this file — that stagger is the room arriving, and this panel
-   appears later, on a click. Re-running an entrance animation on a click reads as a glitch. ── */
-:root[data-v2="on"] .lc-evidence {
-  margin-top: 14px;
-  background: var(--ix-glass-fill);
-  border: 1px solid var(--ix-glass-border);
-  border-top-color: var(--ix-glass-top);
-  border-radius: var(--ix-radius);
-  padding: 14px 20px 16px;
-}
+/* ── Rig Evidence Map — what the selected subsystem reads right now. Since the bento conversion
+   (2026-08-12) it is the CONTENT of the "Rig reading" half tile, so the tile owns the frame and the
+   padding and this element carries no box of its own. It stays EXCLUDED from the v2-lc-rise entrance
+   stagger at the bottom of this file — that stagger is the room arriving, and this panel's content
+   changes later, on a click. Re-running an entrance animation on a click reads as a glitch. ── */
 :root[data-v2="on"] .lc-evidence-head {
   display: flex;
   align-items: baseline;
@@ -182,30 +174,18 @@
   line-height: 1.5;
   color: var(--ix-text-2);
 }
+/* The idle case (nothing selected yet) makes this the FIRST thing in the tile — no head above it to
+   space away from, so the 10px would read as a stray indent under the tile title. */
+:root[data-v2="on"] .lc-evidence-empty:first-child {
+  margin-top: 0;
+}
 
-/* ── Detail — the ONE open station (header + instrument body), same idiom as the deleted bento's
-   detail panel. ── */
-:root[data-v2="on"] .lc-detail {
-  background: var(--ix-glass-fill);
-  border: 1px solid var(--ix-glass-border);
-  border-top-color: var(--ix-glass-top);
-  border-radius: var(--ix-radius);
-}
-:root[data-v2="on"] .lc-detail-head {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--ix-glass-border);
-}
-:root[data-v2="on"] .lc-detail-name {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--ix-text-1);
-  letter-spacing: -0.01em;
-}
+/* ── Detail — the ONE open station. Since the bento conversion (2026-08-12) the station's name is
+   the <BentoTile> title and the close control is its badge, so the hand-rolled head (.lc-detail-head
+   / .lc-detail-name) and the panel's own glass frame are gone — the tile draws both. What remains is
+   the close button's own chrome and the body wrapper, which now carries only the id the Dock's
+   aria-controls points at. ── */
 :root[data-v2="on"] .lc-detail-close {
-  margin-left: auto;
   padding: 4px 12px;
   border: 1px solid var(--ix-glass-border);
   border-radius: 999px;
@@ -219,24 +199,9 @@
   color: var(--ix-text-1);
   border-color: var(--ix-glass-top);
 }
-:root[data-v2="on"] .lc-detail .lab-card-body {
-  padding: 16px 20px 18px;
-}
-
-/* ── Rehomed from the deleted Lab.css (dead-generation prune) ──────────────────────────────────
-   `.lab-card` / `.lab-card-body` were styled by Lab.css, which only reached the browser as a SIDE
-   EFFECT of App.tsx statically importing the (unreachable) Lab.tsx. LabConsole renders both class
-   names, so deleting that file would have silently unclipped the detail panel's rounded corners and
-   dropped its header hairline. These are the ONLY two declarations Lab.css actually won at default
-   flags — its background/border/border-radius lost to dashboard-skin.css `[data-dash-v2="on"]`, and
-   its body padding lost to the rule directly above — so moving anything else would be cargo-cult.
-   Scoped under [data-v2="on"] like every other selector in this file (tokens-v2-guard.test.ts). */
-:root[data-v2="on"] .lab-card {
-  overflow: hidden;
-}
-:root[data-v2="on"] .lab-card-body {
-  border-top: 1px solid var(--ix-glass-border);
-}
+/* The `.lab-card` / `.lab-card-body` rules rehomed here from the deleted Lab.css are gone with the
+   bento conversion (2026-08-12): LabConsole was their last renderer, and inside a <BentoTile> the
+   dashboard-skin `.lab-card` card painted a second bordered box within the tile's. */
 
 /* ── Task 5: the console comes ALIVE — cursor-follow accent spotlight + staggered mount reveal ──
    ALL gated under .lab-console[data-motion="full"]; the reduced branch (data-motion="reduced") simply
@@ -296,15 +261,6 @@
 :root[data-v2="on"] .lab-console[data-motion="full"] .dock { animation-delay: 0.3s; }
 
 
-/* ADD A PART (Train 1, 2026-08-12) — the manual-parts form mounted in the Lab's own chrome, below
-   the stage and clear of the corner gauges that forced the viewer chromeless. The glass card
-   matches .lc-evidence so it reads as console furniture, not a stray form; RigViewer.css still owns
-   the form's internals (.rig-manual…). */
-:root[data-v2="on"] .lc-manual {
-  margin-top: 14px;
-  background: var(--ix-glass-fill);
-  border: 1px solid var(--ix-glass-border);
-  border-top-color: var(--ix-glass-top);
-  border-radius: var(--ix-radius);
-  padding: 12px 20px 14px;
-}
+/* ADD A PART (Train 1, 2026-08-12) — the manual-parts form, now the content of the "Parts you added"
+   half tile (bento conversion, same day): the tile is the card, so this element keeps no frame and no
+   padding of its own. RigViewer.css still owns the form's internals (.rig-manual…). */

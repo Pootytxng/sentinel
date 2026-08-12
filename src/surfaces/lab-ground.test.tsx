@@ -141,7 +141,10 @@ describe("LabGround OPS CONSOLE — LabConsole replaces the Instrument Bench ben
     )!;
     fireEvent.click(optimizeNode);
     expect(c.querySelector(".lc-detail")).not.toBeNull();
-    expect(c.querySelector(".lc-detail-name")!.textContent).toBe("Optimize");
+    // The station's name is the enclosing <BentoTile>'s title since the bento conversion.
+    expect(
+      c.querySelector(".lc-detail")!.closest(".v2-tile")!.querySelector(".v2-tile-title")!.textContent,
+    ).toBe("Optimize");
   });
 
   it("undo stays reachable via the Lab panel (owner decision 2026-07-10, guard for the self-review catch): the opened Optimize panel carries the Applied & history ledger disclosure", () => {

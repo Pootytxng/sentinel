@@ -121,6 +121,11 @@
     "closeStationAriaLabel": "关闭站点",
     "close": "关闭",
     "optimizeReassurance": "这一站可以一键应用你的安全优化组合——和这个房间里的每一项更改一样,均可完全撤销。",
+    "tiles": {
+      "stage": "你的整机",
+      "reading": "部件读数",
+      "manual": "你添加的部件"
+    },
     "evidence": {
       "subsystem": {
         "cpu": "处理器",
@@ -144,6 +149,7 @@
         "refresh": "刷新率",
         "fanSpeed": "风扇转速"
       },
+      "idle": "在上方的整机图中选一个部件，Compy 会显示它的实测数据。",
       "empty": "这里没有可读数据——Compy 对这个部件没有自己的实测值,也不会凭空编造。",
       "fanSpeed": "{{rpm}} rpm",
       "fanUnread": "当前没有监控软件在发布这个风扇的转速，因此没有可读数据——Compy 不会猜测数值。",
