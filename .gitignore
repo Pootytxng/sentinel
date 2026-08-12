@@ -1,6 +1,11 @@
 # Logs
 logs
 *.log
+# `npm run tauri dev` output is routinely tee'd to dev_log*.txt at the repo root. It is not a
+# `.log`, so it stayed untracked-but-visible and tripped ship-reinstall's DIRTY-STAMP gate
+# (2026-08-12) — the build stamped "+dirty" purely because of dev noise, which is exactly the
+# false positive that makes a real dirty stamp easy to wave off.
+dev_log*.txt
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
