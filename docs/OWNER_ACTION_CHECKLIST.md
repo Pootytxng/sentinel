@@ -133,45 +133,46 @@ You said "you have full permission", so the pile is cleared: `docs/close-recover
 their now-dead rows dropped from `docs/BRANCH_DISPOSITIONS.md` in the same commit. Nothing is left
 for you here.
 
-### A_hook. The handoff-block guard is built but switched off — one settings line turns it on  ·  ⏳ NEW 2026-08-11
+### A_hook. ✅ CLOSED 2026-08-12 — the handoff-block guard is registered and live
 You pointed out (again) that sessions were ending without telling you whether to archive or delete
 them, which is how your sidebar fills with work you can't tell apart. That rule was written in
 `CLAUDE.md` the whole time and kept getting missed, so it is now a guard instead of a paragraph:
 `.claude/hooks/handoff-block-guard.mjs` refuses to let a session end without both a disposition and
 a real next step. It is merged and tested (PR [#106](https://github.com/Pootytxng/sentinel/pull/106)).
 
-**It does nothing until it is registered**, and editing `.claude/settings.json` is permission-gated
-for the assistant — the prompt was declined. One entry appended to the `Stop` hooks array turns it
-on; any session can add it once you approve the settings edit. Until then the rule is back to being
-prose, which is the state that already failed.
+**It is now registered.** The entry sits third in the `Stop` hooks array of `.claude/settings.json`,
+after the autopilot queue check and the context-size advisor. Proven live rather than read back: fed
+a synthetic transcript, a reply carrying neither a disposition nor a next action is blocked with the
+correction text, a compliant reply passes untouched, and `stop_hook_active` short-circuits so the
+guard can never loop a session. Nothing is left for you here — a session that ends without telling
+you archive/delete plus a next step now gets stopped before you see it.
 
-### A_disk. A dead 9 GB folder only you can delete — one command frees it  ·  ⏳ NEW 2026-08-11
-`.claude/worktrees/nodejs-background-execution-fd4def` is a leftover checkout from a finished
-session. Git no longer tracks it (`git worktree remove` deregistered it successfully), but Windows
-refused to delete the files — something still had a handle open — so **9 GB of build output is
-sitting on your disk doing nothing.** Six other dead folders from the same era were empty and are
-already gone.
+### A_disk. ✅ 10.24 GB reclaimed 2026-08-12 — an empty husk is all that is left
+`.claude/worktrees/nodejs-background-execution-fd4def` was a leftover checkout from a finished
+session. Git had already stopped tracking it (`git worktree remove` deregistered it successfully);
+what remained was build output. Measured before deletion it was **10.24 GB, not 9** — and every file
+and subfolder in it is now gone, deleted 2026-08-12 from a Cowork session. Six other dead folders
+from the same era were empty and were already gone.
 
-You then said "you have full permission", so the delete was attempted twice — `Remove-Item -Recurse
--Force` and `rm -rf` — and **both were refused by the harness's own permission classifier**, not by
-any project rule. Chat permission does not reach that layer; only a Bash permission rule does. So
-this one genuinely needs your hands. Nothing in the folder is unique: the branch and every commit
-live on GitHub. Reboot first (that releases the handle) then:
+What survived the sweep is the **empty top-level folder — 0 bytes, 0 children.** Windows still will
+not unlink the directory itself, and nothing on this machine names it: no running process carries
+that path on its command line, which points at a finished session's working directory as the holder.
+That kind of hold only clears on restart. **There is nothing to do and nothing at stake** — an empty
+folder costs no disk. If you want it gone, restart the machine at whatever moment suits you and then
+run this (or say the word and a session will):
 
 ```
 Remove-Item -Recurse -Force "C:\Users\Kuya\code\sentinel\.claude\worktrees\nodejs-background-execution-fd4def"
 ```
 
-If you would rather a session do it, add a `permissions.allow` entry for `Remove-Item` in
-`.claude/settings.json` (the same file **A_hook** needs one line in) and any session can clear it.
+Nothing in the folder was ever unique — the branch and every commit live on GitHub.
 
 ### A-closed. Nine §A items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
-None of them is waiting on you. The §A items still open above are A0, A_ci, A_rig, A_crash, A_hook
-and A_disk (**A_ref closed 2026-08-11**); the ones that actually need your hands are **A0**,
-**A_crash** (one flag + a look), **A_hook** (one settings line) and **A_disk** (free 9 GB). Both
-A_hook and A_disk are blocked by the same thing: the assistant cannot edit `.claude/settings.json`
-or run a recursive delete, whatever it is told in chat. Archived
+None of them is waiting on you. The §A items still open above are A0, A_ci, A_rig and A_crash
+(**A_ref closed 2026-08-11; A_hook and A_disk closed 2026-08-12**); the only two that actually need
+your hands are **A0** (get the updater signing key off this machine) and **A_crash** (one flag + a
+look). Archived
 2026-08-04 (TOKEN LAW §1 — history leaves the live doc, never gets deleted): **A0b** zh-CN merged +
 published in v0.9.11 · **A1** Gaming Mode QA signed off · **A2** beta smoke (sitting waived; the live
 beta thread is **§B2** below) · **A3** Lab Ops Console · **A4** Home console · **A5** Monitor v5
