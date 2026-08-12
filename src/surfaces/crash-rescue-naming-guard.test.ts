@@ -19,10 +19,14 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 import i18n from "../i18n";
-import { homeIntakeRows } from "./home-intake-data";
+import { homeIntakeRows, homeCareEntry } from "./home-intake-data";
 import { labStations, labRouter, LAB_STATION_ORDER, type LabStationKey } from "./lab-guided-data";
 
 const ROWS = homeIntakeRows(i18n.t);
+// The crash deep-link moved OUT of the intake rows and into the always-visible Care entry
+// (issue #91 discovery contract, 2026-08-12). Both properties below still hold — they just read
+// the Care entry now. The station-set check keeps sweeping the rows in case one grows a station.
+const CARE = homeCareEntry(i18n.t);
 const STATIONS = labStations(i18n.t);
 // "optimize" is a ground-only prepend and deliberately absent from LAB_STATION_ORDER (see
 // lab-guided-data), so the set of real keys is the order plus it.
@@ -42,13 +46,30 @@ describe("intake deep-links point at real stations (§4)", () => {
     }
   });
 
+  it("the Care entry names a station the Lab actually has", () => {
+    expect(
+      REAL_KEYS,
+      `the Care entry deep-links to "${CARE.station}", which is not a Lab station — the click does nothing`,
+    ).toContain(CARE.station);
+  });
+
   it("routes the crash symptom to the same station the Lab's own router does", () => {
-    // Two routers answer "it crashed or froze" — the Lab's in-room one and Home's band. Pointing
-    // them at different stations would mean the same sentence has two destinations.
+    // Two routers answer "it crashed or froze" — the Lab's in-room one and Home's Care entry.
+    // Pointing them at different stations would mean the same sentence has two destinations.
     const labTarget = labRouter(i18n.t).find((r) => r.station === "blackbox");
-    const homeTarget = ROWS.find((r) => r.station === "blackbox");
     expect(labTarget, "the Lab router no longer answers the crash symptom").toBeTruthy();
-    expect(homeTarget, "Home's band no longer deep-links the crash symptom").toBeTruthy();
+    expect(CARE.station, "Home's Care entry no longer deep-links the crash symptom").toBe("blackbox");
+  });
+
+  it("keeps exactly ONE Home door to the crash station — the Care entry, not a duplicate row", () => {
+    // The entry was extracted from the intake band on 2026-08-12. Re-adding a crash row would put
+    // two doors to one station on one screen (rubric 3 duplication) AND put half of crash rescue
+    // back behind the band's flag, which is the whole defect the extraction fixed.
+    const rowDupes = ROWS.filter((r) => r.station === "blackbox");
+    expect(
+      rowDupes.map((r) => r.symptom),
+      "an intake row deep-links to the crash station again — the Care entry already owns that door",
+    ).toEqual([]);
   });
 });
 
