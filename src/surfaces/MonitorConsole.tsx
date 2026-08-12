@@ -27,6 +27,7 @@ import { ArcGauge, type ArcTone } from "../design/console/ArcGauge";
 import { Oscilloscope } from "../design/console/Oscilloscope";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { Term } from "../design/Term";
+import { BentoGrid, BentoTile } from "../design/bento/BentoGrid";
 import { readoutStats, type ReadoutStats } from "./monitor-console-data";
 import { DeckScope } from "./monitor/DeckScope";
 import { SessionStack } from "./monitor/SessionStack";
@@ -401,136 +402,154 @@ export function MonitorConsole({
       {/* THE INSTRUMENT STAGE — the signature instruments: the motion IS the data, real
           buffered samples only. Spotlight + reticle live here; NO hologram, NO parallax. */}
       <div className="mc-stage" ref={stageRef}>
-        {/* Consumer-term readouts (owner direction §A0 item 6) — measured values only, em-dash
-            when nothing is measured. Same windows the traces draw; spike count = the SAME
-            detector as the markers (one source, can't disagree). */}
-        <div className="mc-readouts">
-          <div className="mc-readout">
-            <span className="mc-readout-v" style={ink(gradeFps(stats.maxFps, rig))}>
-              {stats.maxFps == null ? "—" : Math.round(stats.maxFps)}
-            </span>
-            <span className="mc-readout-k">{t("monitor.monitorConsole.maxFpsLabel")}</span>
-          </div>
-          <div className="mc-readout">
-            <span className="mc-readout-v" style={ink(gradeFps(stats.avgFps, rig))}>
-              {stats.avgFps == null ? "—" : Math.round(stats.avgFps)}
-            </span>
-            <span className="mc-readout-k">{t("monitor.monitorConsole.avgFpsLabel")}</span>
-          </div>
-          <div className="mc-readout">
-            <span
-              className="mc-readout-v"
-              style={ink(gradeFrametimeMs(stats.lowestLatencyMs, rig))}
-            >
-              {stats.lowestLatencyMs == null ? "—" : `${stats.lowestLatencyMs.toFixed(1)} ms`}
-            </span>
-            <span className="mc-readout-k">{t("monitor.monitorConsole.lowestLatencyLabel")}</span>
-          </div>
-          <div className="mc-readout">
-            <span
-              className="mc-readout-v"
-              style={stats.spikeCount ? ink("bad") : undefined}
-            >
-              {stats.spikeCount == null ? "—" : stats.spikeCount}
-            </span>
-            <span className="mc-readout-k">{t("monitor.monitorConsole.spikesLabel")}</span>
-          </div>
-        </div>
-
-        {/* THE HERO — the full-width frametime scope (v5 Flight Deck): real ms axis, dashed
-            budget line, exact-moment spike pins, hover scrub + drag-zoom (ported from the
-            deleted waterfall's front trace). Always mounted — it carries its own honest empty. */}
-        <DeckScope
-          ftWin={ftWin.current}
-          live={live}
-          budget={ftBudget}
-          tone={live ? arcTone(gradeFrametimeMs(sample.avg_frametime_ms, rig)) : "accent"}
-          reduced={reduced}
-          cap={FT_CAP}
-        />
-
-        {/* The deck's plain-number delta row — recorded facts only; renders NOTHING without a
-            prior session, and a cross-game prior is labeled so a genre gap never reads as a
-            regression (the v4 law, carried). */}
-        {deck && (
-          <div className="mc-delta">
-            <span className="mc-delta-k">
-              {t("monitor.monitorConsole.vsLastSession", {
-                game: (prettyGameName(deck.prev.process_name) || t("monitor.monitorConsole.unknownGame")).toUpperCase(),
-              })}
-              {!deck.sameGame && t("monitor.monitorConsole.differentGameTag")}
-            </span>
-            <span className="mc-delta-v">{t("monitor.monitorConsole.avgFpsLabel")} {fmtDeltaGlyph(deck.avgFps)}</span>
-            <span className="mc-delta-v">{t("monitor.monitorConsole.oneLowCapsLabel")} {fmtDeltaGlyph(deck.low1)}</span>
-            <span className="mc-delta-v">{t("monitor.monitorConsole.spikesLabel")} {fmtDeltaGlyph(deck.spikes)}</span>
-            {deck.changesOn > 0 && (
-              // Honesty caveat (consumer panel 2026-07-14): with >1 change on, these deltas are
-              // the COMBINED effect — never imply per-change attribution. The one-change-at-a-time
-              // answer is the Lab's A/B benchmark, and the tooltip says so.
-              <span
-                className="mc-delta-tag"
-                title={
-                  deck.changesOn > 1
-                    ? t("monitor.monitorConsole.combinedEffectTooltip")
-                    : undefined
-                }
-              >
-                {t("monitor.monitorConsole.changesOn", { count: deck.changesOn })}
-                {deck.changesOn > 1 && t("monitor.monitorConsole.combinedEffectTag")}
-              </span>
-            )}
-          </div>
-        )}
-
-        <div className="mc-scopes">
-          <Oscilloscope
-            samples={live ? fpsH.current : []}
-            cap={FPS_CAP}
-            label={t("monitor.monitorConsole.fpsScopeLabel")}
-            unit="fps"
-            tone={live ? arcTone(gradeFps(sample.fps, rig)) : "accent"}
-            reduced={reduced}
-          />
-        </div>
-
-        {/* Honest gauges over the same sensor reads the tiles surface; null ⇒ NOT-YET, never 0.
-            CPU utilisation stays deliberately ungraded (high while gaming is fine). */}
-        <div className="mc-gauges">
-          <ArcGauge
-            label={t("monitor.monitorConsole.gpuTempLabel")}
-            value={gpu?.temperature_c ?? null}
-            max={100}
-            unit="°C"
-            tone={arcTone(gpuGrade)}
-            measured={gpu?.temperature_c != null}
-          />
-          {mode === "advanced" && (
-            <ArcGauge
-              label={t("monitor.monitorConsole.gpuLoadLabel")}
-              value={gpu?.utilization_gpu_pct ?? null}
-              max={100}
-              unit="%"
-              tone="neutral"
-              measured={gpu?.utilization_gpu_pct != null}
+        {/* BENTO (2026-08-12) — the stage's four instrument clusters become tiles of deliberately
+            unequal weight, so the eye is told where to start (the frametime deck). The grid lives
+            INSIDE .mc-stage on purpose: stageRef feeds <ReticleCursor scopeRef> and the pointer
+            tilt, so the tracking area must stay exactly the stage it always was. Strict row-major,
+            no dense flow: hero(7)+half(5) fills row 1, hero's second row +half(5) fills row 2,
+            full(12) closes it — no holes at any width.
+            The conditional delta row is folded INSIDE the hero rather than given its own tile:
+            without a prior session a conditional TILE would leave a visible gap. */}
+        <BentoGrid className="mc-bento">
+          <BentoTile title={t("monitor.monitorConsole.bento.deck")} span="hero">
+            {/* THE HERO — the full-width frametime scope (v5 Flight Deck): real ms axis, dashed
+                budget line, exact-moment spike pins, hover scrub + drag-zoom (ported from the
+                deleted waterfall's front trace). Always mounted — it carries its own honest empty. */}
+            <DeckScope
+              ftWin={ftWin.current}
+              live={live}
+              budget={ftBudget}
+              tone={live ? arcTone(gradeFrametimeMs(sample.avg_frametime_ms, rig)) : "accent"}
+              reduced={reduced}
+              cap={FT_CAP}
             />
-          )}
-          <ArcGauge
-            label={t("monitor.monitorConsole.cpuLabel")}
-            value={cpu ? Math.round(cpu.usage_overall_pct) : null}
-            max={100}
-            unit="%"
-            tone="neutral"
-            measured={cpu != null}
-          />
-          <ArcGauge
-            label={t("monitor.monitorConsole.ramLabel")}
-            value={ramPct}
-            max={100}
-            unit="%"
-            tone={arcTone(gradeRamPct(ramPct))}
-            measured={ramPct != null}
-          />
-        </div>
+
+            {/* The deck's plain-number delta row — recorded facts only; renders NOTHING without a
+                prior session, and a cross-game prior is labeled so a genre gap never reads as a
+                regression (the v4 law, carried). */}
+            {deck && (
+              <div className="mc-delta">
+                <span className="mc-delta-k">
+                  {t("monitor.monitorConsole.vsLastSession", {
+                    game: (prettyGameName(deck.prev.process_name) || t("monitor.monitorConsole.unknownGame")).toUpperCase(),
+                  })}
+                  {!deck.sameGame && t("monitor.monitorConsole.differentGameTag")}
+                </span>
+                <span className="mc-delta-v">{t("monitor.monitorConsole.avgFpsLabel")} {fmtDeltaGlyph(deck.avgFps)}</span>
+                <span className="mc-delta-v">{t("monitor.monitorConsole.oneLowCapsLabel")} {fmtDeltaGlyph(deck.low1)}</span>
+                <span className="mc-delta-v">{t("monitor.monitorConsole.spikesLabel")} {fmtDeltaGlyph(deck.spikes)}</span>
+                {deck.changesOn > 0 && (
+                  // Honesty caveat (consumer panel 2026-07-14): with >1 change on, these deltas are
+                  // the COMBINED effect — never imply per-change attribution. The one-change-at-a-time
+                  // answer is the Lab's A/B benchmark, and the tooltip says so.
+                  <span
+                    className="mc-delta-tag"
+                    title={
+                      deck.changesOn > 1
+                        ? t("monitor.monitorConsole.combinedEffectTooltip")
+                        : undefined
+                    }
+                  >
+                    {t("monitor.monitorConsole.changesOn", { count: deck.changesOn })}
+                    {deck.changesOn > 1 && t("monitor.monitorConsole.combinedEffectTag")}
+                  </span>
+                )}
+              </div>
+            )}
+          </BentoTile>
+
+          <BentoTile title={t("monitor.monitorConsole.bento.readouts")} span="half">
+            {/* Consumer-term readouts (owner direction §A0 item 6) — measured values only, em-dash
+                when nothing is measured. Same windows the traces draw; spike count = the SAME
+                detector as the markers (one source, can't disagree). */}
+            <div className="mc-readouts">
+              <div className="mc-readout">
+                <span className="mc-readout-v" style={ink(gradeFps(stats.maxFps, rig))}>
+                  {stats.maxFps == null ? "—" : Math.round(stats.maxFps)}
+                </span>
+                <span className="mc-readout-k">{t("monitor.monitorConsole.maxFpsLabel")}</span>
+              </div>
+              <div className="mc-readout">
+                <span className="mc-readout-v" style={ink(gradeFps(stats.avgFps, rig))}>
+                  {stats.avgFps == null ? "—" : Math.round(stats.avgFps)}
+                </span>
+                <span className="mc-readout-k">{t("monitor.monitorConsole.avgFpsLabel")}</span>
+              </div>
+              <div className="mc-readout">
+                <span
+                  className="mc-readout-v"
+                  style={ink(gradeFrametimeMs(stats.lowestLatencyMs, rig))}
+                >
+                  {stats.lowestLatencyMs == null ? "—" : `${stats.lowestLatencyMs.toFixed(1)} ms`}
+                </span>
+                <span className="mc-readout-k">{t("monitor.monitorConsole.lowestLatencyLabel")}</span>
+              </div>
+              <div className="mc-readout">
+                <span
+                  className="mc-readout-v"
+                  style={stats.spikeCount ? ink("bad") : undefined}
+                >
+                  {stats.spikeCount == null ? "—" : stats.spikeCount}
+                </span>
+                <span className="mc-readout-k">{t("monitor.monitorConsole.spikesLabel")}</span>
+              </div>
+            </div>
+          </BentoTile>
+
+          <BentoTile title={t("monitor.monitorConsole.bento.gauges")} span="half">
+            {/* Honest gauges over the same sensor reads the tiles surface; null ⇒ NOT-YET, never 0.
+                CPU utilisation stays deliberately ungraded (high while gaming is fine). */}
+            <div className="mc-gauges">
+              <ArcGauge
+                label={t("monitor.monitorConsole.gpuTempLabel")}
+                value={gpu?.temperature_c ?? null}
+                max={100}
+                unit="°C"
+                tone={arcTone(gpuGrade)}
+                measured={gpu?.temperature_c != null}
+              />
+              {mode === "advanced" && (
+                <ArcGauge
+                  label={t("monitor.monitorConsole.gpuLoadLabel")}
+                  value={gpu?.utilization_gpu_pct ?? null}
+                  max={100}
+                  unit="%"
+                  tone="neutral"
+                  measured={gpu?.utilization_gpu_pct != null}
+                />
+              )}
+              <ArcGauge
+                label={t("monitor.monitorConsole.cpuLabel")}
+                value={cpu ? Math.round(cpu.usage_overall_pct) : null}
+                max={100}
+                unit="%"
+                tone="neutral"
+                measured={cpu != null}
+              />
+              <ArcGauge
+                label={t("monitor.monitorConsole.ramLabel")}
+                value={ramPct}
+                max={100}
+                unit="%"
+                tone={arcTone(gradeRamPct(ramPct))}
+                measured={ramPct != null}
+              />
+            </div>
+          </BentoTile>
+
+          <BentoTile title={t("monitor.monitorConsole.bento.scope")} span="full">
+            <div className="mc-scopes">
+              <Oscilloscope
+                samples={live ? fpsH.current : []}
+                cap={FPS_CAP}
+                label={t("monitor.monitorConsole.fpsScopeLabel")}
+                unit="fps"
+                tone={live ? arcTone(gradeFps(sample.fps, rig)) : "accent"}
+                reduced={reduced}
+              />
+            </div>
+          </BentoTile>
+        </BentoGrid>
 
         {/* The game-HUD Target Cursor, stage-scoped (kit handles reduced/coarse-pointer null
             + the rAF pointerleave stop — Phase-1's review fix). */}

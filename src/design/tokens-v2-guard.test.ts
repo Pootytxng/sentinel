@@ -66,6 +66,7 @@ const consoleReticleCss = loadV2Css("design", "console", "reticle.css");
 const gamingConsoleCss = loadV2Css("surfaces", "gaming-console.css");
 const hudFrameCss = loadV2Css("design", "console", "hud-frame.css");
 const rerunBandCss = loadV2Css("surfaces", "RerunCheckBand.css");
+const bentoCss = loadV2Css("design", "bento", "bento.css");
 
 // EVERY v2 stylesheet must obey the scoping law. New v2 CSS files get added here (V2-2+).
 const V2_CSS: [string, string][] = [
@@ -92,6 +93,7 @@ const V2_CSS: [string, string][] = [
   ["gaming-console.css", gamingConsoleCss],
   ["console/hud-frame.css", hudFrameCss],
   ["RerunCheckBand.css", rerunBandCss],
+  ["bento/bento.css", bentoCss],
 ];
 
 describe("v2 CSS scoping (flag-off byte-identity mechanism)", () => {
@@ -162,6 +164,7 @@ describe("v2 surface CSS consumes the token layer only (no-slop law)", () => {
     ["hud-rooms.css", hudRoomsCss],
     ["ambient-hud.css", ambientHudCss],
     ["RerunCheckBand.css", rerunBandCss],
+    ["bento/bento.css", bentoCss],
   ];
   for (const [name, css] of SURFACE_CSS) {
     it(`${name}: no color literals — every color comes from a --v2-* token`, () => {

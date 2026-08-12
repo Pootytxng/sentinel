@@ -115,7 +115,13 @@
     "ramLabel": "RAM",
     "etwEmph": "ETW",
     "etwHonestyPost": " · external · anti-cheat safe — no injection, no kernel driver.",
-    "sessionHistory": "Session history"
+    "sessionHistory": "Session history",
+    "bento": {
+      "deck": "Frame time",
+      "readouts": "This session",
+      "gauges": "Sensors",
+      "scope": "Frame rate"
+    }
   },
   "monitorDomainCards": {
     "cpuCardLabel": "CPU",

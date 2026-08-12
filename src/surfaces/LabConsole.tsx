@@ -6,6 +6,7 @@ import { useReducedMotion } from "../design/use-motion";
 import { ArcGauge } from "../design/console/ArcGauge";
 import { Term } from "../design/Term";
 import { Dock, type DockNode } from "../design/console/Dock";
+import { BentoGrid, BentoTile } from "../design/bento/BentoGrid";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { RigViewer } from "./rig/RigViewer";
 import { RigManualParts } from "./rig/RigManualParts";
@@ -332,151 +333,174 @@ export function LabConsole({
           header space above carries header-format text only; the reversibility reassurance lives in
           the Optimize panel, next to the one control it qualifies. */}
 
-      {/* CONSOLE STAGE — bracketed frame, real 3D hologram center, four corner arc gauges. */}
-      <div className="lc-stage" ref={stageRef}>
-        <span className="lc-brk lc-brk-tl" />
-        <span className="lc-brk lc-brk-tr" />
-        <span className="lc-brk lc-brk-bl" />
-        <span className="lc-brk lc-brk-br" />
-        <div className="lc-corner lc-tl">
-          {/* Same "how we calculate this" line the Home console carries (consumer-panel Phase 2). */}
-          <ArcGauge
-            label={t("lab.labConsole.readinessLabel")}
-            value={readinessScore}
-            max={100}
-            unit={t("lab.labConsole.unitScore")}
-            tone="accent"
-            note={
-              readinessKnown
-                ? t("lab.labConsole.readinessNote", {
-                    passed: Math.max(0, readiness!.checks.length - readiness!.attention_count - readiness!.unknown_count),
-                    total: readiness!.checks.length,
-                  })
-                : undefined
-            }
-          />
-        </div>
-        <div className="lc-corner lc-tr">
-          <ArcGauge label={t("lab.labConsole.avgFpsLabel")} value={avgFps} max={240} unit={t("lab.labConsole.unitFps")} measured={avgFps != null} />
-        </div>
-        <div className="lc-corner lc-bl">
-          <ArcGauge
-            label={t("lab.labConsole.safeStackLabel")}
-            value={fast.recs != null ? safeReady : null}
-            max={Math.max(1, safeReady)}
-            unit={t("lab.labConsole.unitReady")}
-            tone="accent"
-            measured={fast.recs != null}
-          />
-        </div>
-        <div className="lc-corner lc-br">
-          <ArcGauge
-            label={
-              /* align="end": this gauge sits at the stage's right edge — a left-anchored tooltip
-                 rendered 126px past the window (self-review catch 2026-07-11). */
-              <Term id="one-percent-lows" align="end">{t("lab.labConsole.oneLowLabel")}</Term>
-            }
-            value={lowFps}
-            max={240}
-            unit={t("lab.labConsole.unitFrames")}
-            tone="warn"
-            measured={lowFps != null}
-          />
-        </div>
-        <div className="lc-rig">
-          {/* chromeless — just the recognizable 3D hologram; the console frames it (brackets +
-              corner gauges), so the viewer's own control bar / caption / "add a part" form are
-              hidden (they collided with the corner gauges). */}
-          <RigViewer hw={hw} chromeless onSelectedIdChange={(_id, what) => setSelectedRig(what)} />
-        </div>
-        <ReticleCursor scopeRef={stageRef} />
-      </div>
-
-      {/* RIG EVIDENCE MAP — appears only once a part is selected; nothing selected means no panel,
-          not an empty one. Outside .lc-stage so it never collides with the corner gauges, and above
-          the dock so the reading sits next to the hologram that produced it. */}
-      {evidenceSubsystem && (
-        <div className="lc-evidence" aria-live="polite">
-          <div className="lc-evidence-head">
-            <span className="lc-evidence-name">
-              {t(`lab.labConsole.evidence.subsystem.${evidenceSubsystem}`)}
-            </span>
-            <span className="lc-evidence-part">{selectedPart?.name}</span>
-          </div>
-          {evidenceReadings.length > 0 ? (
-            <dl className="lc-evidence-list">
-              {evidenceReadings.map((r) => (
-                <div className="lc-evidence-row" key={r.key}>
-                  <dt>{t(`lab.labConsole.evidence.reading.${r.key satisfies LabReadingKey}`)}</dt>
-                  <dd>
-                    <span className="lc-evidence-value">{r.value}</span>
-                    {r.kind === "gauge" && (
-                      <>
-                        <span className="lc-evidence-den">{r.den}</span>
-                        {/* Proportion only — no colour-by-threshold. None of the app's audited
-                            thresholds apply to these fields, so a reading is stated, not graded. */}
-                        <span className="lc-evidence-bar" aria-hidden="true">
-                          <span style={{ width: `${Math.round(r.pct * 100)}%` }} />
-                        </span>
-                      </>
-                    )}
-                  </dd>
+      {/* THE ROOM'S BENTO — reading (half) · stage (hero, 2 rows) · parts you added (half). Strict
+          row-major with no dense flow, so this DOM order is the layout: the reading fills row 1
+          cols 1–5 beside the hero, and the manual-parts tile takes row 2 cols 1–5 under it. */}
+      <BentoGrid>
+        {/* RIG READING — one tile for every selection case. It used to be two panels that each
+            rendered only when something was selected; in a strict row-major grid a half tile that
+            sometimes vanishes leaves a hole in its row (one-hero-guard), so the tile is now
+            unconditional and carries an honest idle line instead. The idle line is navigation
+            ("pick a part"), never a fabricated reading. */}
+        <BentoTile span="half" title={t("lab.labConsole.tiles.reading")}>
+          <div className="lc-evidence" aria-live="polite">
+            {evidenceSubsystem ? (
+              <>
+                <div className="lc-evidence-head">
+                  <span className="lc-evidence-name">
+                    {t(`lab.labConsole.evidence.subsystem.${evidenceSubsystem}`)}
+                  </span>
+                  <span className="lc-evidence-part">{selectedPart?.name}</span>
                 </div>
-              ))}
-            </dl>
-          ) : (
-            <p className="lc-evidence-empty">{t("lab.labConsole.evidence.empty")}</p>
-          )}
-        </div>
-      )}
-
-      {/* The same panel for the two things that are NOT in the parts list — a fan, or a part the
-          user added himself. Same shape and same rails: a real rpm reading when a monitor is
-          publishing one, and otherwise a sentence saying why there is nothing to read. What must
-          never happen here is the third option this replaced: no panel. */}
-      {evidenceFallback && (
-        <div className="lc-evidence" aria-live="polite">
-          <div className="lc-evidence-head">
-            <span className="lc-evidence-name">{evidenceFallback.subsystemLabel}</span>
-            <span className="lc-evidence-part">{evidenceFallback.name}</span>
+                {evidenceReadings.length > 0 ? (
+                  <dl className="lc-evidence-list">
+                    {evidenceReadings.map((r) => (
+                      <div className="lc-evidence-row" key={r.key}>
+                        <dt>{t(`lab.labConsole.evidence.reading.${r.key satisfies LabReadingKey}`)}</dt>
+                        <dd>
+                          <span className="lc-evidence-value">{r.value}</span>
+                          {r.kind === "gauge" && (
+                            <>
+                              <span className="lc-evidence-den">{r.den}</span>
+                              {/* Proportion only — no colour-by-threshold. None of the app's audited
+                                  thresholds apply to these fields, so a reading is stated, not graded. */}
+                              <span className="lc-evidence-bar" aria-hidden="true">
+                                <span style={{ width: `${Math.round(r.pct * 100)}%` }} />
+                              </span>
+                            </>
+                          )}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : (
+                  <p className="lc-evidence-empty">{t("lab.labConsole.evidence.empty")}</p>
+                )}
+              </>
+            ) : evidenceFallback ? (
+              /* The two things that are NOT in the parts list — a fan, or a part the user added
+                 himself. Same shape and same rails: a real rpm reading when a monitor is publishing
+                 one, and otherwise a sentence saying why there is nothing to read. */
+              <>
+                <div className="lc-evidence-head">
+                  <span className="lc-evidence-name">{evidenceFallback.subsystemLabel}</span>
+                  <span className="lc-evidence-part">{evidenceFallback.name}</span>
+                </div>
+                {evidenceFallback.reading ? (
+                  <dl className="lc-evidence-list">
+                    <div className="lc-evidence-row">
+                      <dt>{t("lab.labConsole.evidence.reading.fanSpeed")}</dt>
+                      <dd>
+                        <span className="lc-evidence-value">{evidenceFallback.reading}</span>
+                      </dd>
+                    </div>
+                  </dl>
+                ) : (
+                  <p className="lc-evidence-empty">{evidenceFallback.note}</p>
+                )}
+              </>
+            ) : (
+              <p className="lc-evidence-empty">{t("lab.labConsole.evidence.idle")}</p>
+            )}
           </div>
-          {evidenceFallback.reading ? (
-            <dl className="lc-evidence-list">
-              <div className="lc-evidence-row">
-                <dt>{t("lab.labConsole.evidence.reading.fanSpeed")}</dt>
-                <dd>
-                  <span className="lc-evidence-value">{evidenceFallback.reading}</span>
-                </dd>
-              </div>
-            </dl>
-          ) : (
-            <p className="lc-evidence-empty">{evidenceFallback.note}</p>
-          )}
-        </div>
-      )}
+        </BentoTile>
 
-      {/* ADD A PART — the manual fallback for hardware Compy can't read (PSU, cooler, a spare
-          drive). Mounted in the Lab's OWN chrome, below the stage and clear of the corner gauges
-          that forced the viewer chromeless — the PR #102 self-review (BACKLOG 2026-08-11) found
-          this form otherwise unreachable in the only live mount. Same synced hook state as the
-          hologram above: adding a part here draws it in the model immediately. */}
-      <div className="lc-manual">
-        <RigManualParts />
-      </div>
+        {/* CONSOLE STAGE — bracketed frame, real 3D hologram center, four corner arc gauges. The
+            hero: the rig itself is the answer this room opens on. .lc-stage keeps its own box (it
+            is the positioning context for the corner gauges, the reticle and the glow ring) but no
+            longer draws a frame — the tile draws that. */}
+        <BentoTile span="hero" title={t("lab.labConsole.tiles.stage")}>
+          <div className="lc-stage" ref={stageRef}>
+            <span className="lc-brk lc-brk-tl" />
+            <span className="lc-brk lc-brk-tr" />
+            <span className="lc-brk lc-brk-bl" />
+            <span className="lc-brk lc-brk-br" />
+            <div className="lc-corner lc-tl">
+              {/* Same "how we calculate this" line the Home console carries (consumer-panel Phase 2). */}
+              <ArcGauge
+                label={t("lab.labConsole.readinessLabel")}
+                value={readinessScore}
+                max={100}
+                unit={t("lab.labConsole.unitScore")}
+                tone="accent"
+                note={
+                  readinessKnown
+                    ? t("lab.labConsole.readinessNote", {
+                        passed: Math.max(0, readiness!.checks.length - readiness!.attention_count - readiness!.unknown_count),
+                        total: readiness!.checks.length,
+                      })
+                    : undefined
+                }
+              />
+            </div>
+            <div className="lc-corner lc-tr">
+              <ArcGauge label={t("lab.labConsole.avgFpsLabel")} value={avgFps} max={240} unit={t("lab.labConsole.unitFps")} measured={avgFps != null} />
+            </div>
+            <div className="lc-corner lc-bl">
+              <ArcGauge
+                label={t("lab.labConsole.safeStackLabel")}
+                value={fast.recs != null ? safeReady : null}
+                max={Math.max(1, safeReady)}
+                unit={t("lab.labConsole.unitReady")}
+                tone="accent"
+                measured={fast.recs != null}
+              />
+            </div>
+            <div className="lc-corner lc-br">
+              <ArcGauge
+                label={
+                  /* align="end": this gauge sits at the stage's right edge — a left-anchored tooltip
+                     rendered 126px past the window (self-review catch 2026-07-11). */
+                  <Term id="one-percent-lows" align="end">{t("lab.labConsole.oneLowLabel")}</Term>
+                }
+                value={lowFps}
+                max={240}
+                unit={t("lab.labConsole.unitFrames")}
+                tone="warn"
+                measured={lowFps != null}
+              />
+            </div>
+            <div className="lc-rig">
+              {/* chromeless — just the recognizable 3D hologram; the console frames it (brackets +
+                  corner gauges), so the viewer's own control bar / caption / "add a part" form are
+                  hidden (they collided with the corner gauges). */}
+              <RigViewer hw={hw} chromeless onSelectedIdChange={(_id, what) => setSelectedRig(what)} />
+            </div>
+            <ReticleCursor scopeRef={stageRef} />
+          </div>
+        </BentoTile>
 
-      {/* DOCK — Optimize primary + the measure stations. */}
+        {/* PARTS YOU ADDED — the manual fallback for hardware Compy can't read (PSU, cooler, a
+            spare drive). Titled for the collection, not the action: the form inside already says
+            "Add a part Compy can't detect", and a tile that repeats its own body is the
+            duplication the self-review rubric rejects. Same synced hook state as the hologram
+            beside it — adding a part here draws it in the model immediately. */}
+        <BentoTile span="half" title={t("lab.labConsole.tiles.manual")}>
+          <div className="lc-manual">
+            <RigManualParts />
+          </div>
+        </BentoTile>
+      </BentoGrid>
+
+      {/* DOCK — Optimize primary + the measure stations. Outside the grid, like Home's: the dock is
+          the room's exit row, not one of its answers. */}
       <Dock nodes={dockNodes} activeKey={openStation} onOpen={onDockOpen} />
 
-      {/* ONE open panel: Optimize (inline OptimizeStation) OR a measure body. */}
+      {/* ONE open panel: Optimize (inline OptimizeStation) OR a measure body. A full-width tile
+          BELOW the dock, deliberately outside the grid — inside it, opening a station would push
+          the dock down the screen on every click. The station's name is the tile title and the
+          close control is its badge, so the hand-rolled panel head is gone. */}
       {openStation && (
-        <div className="lc-detail lab-card" id="lab-console-detail">
-          <div className="lc-detail-head">
-            <span className="lc-detail-name">{stations[openStation].name}</span>
+        <BentoTile
+          span="full"
+          title={stations[openStation].name}
+          badge={
             <button className="lc-detail-close" onClick={() => setOpenStation(null)} aria-label={t("lab.labConsole.closeStationAriaLabel")}>
               {t("lab.labConsole.close")}
             </button>
-          </div>
-          <div className="lab-card-body">
+          }
+        >
+          <div className="lc-detail" id="lab-console-detail">
             {openStation === "optimize" && (
               /* The room's reassurance, relocated from the header (owner header-slop law 2026-07-10)
                  to its context. This note does NOT census which stations mutate — the Lab has several
@@ -494,7 +518,7 @@ export function LabConsole({
             )}
             {openStation === "optimize" ? <OptimizeStation {...fast} /> : stationBody(openStation)}
           </div>
-        </div>
+        </BentoTile>
       )}
     </div>
   );

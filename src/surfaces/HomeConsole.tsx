@@ -32,6 +32,7 @@ import { useConfirmOptional } from "../design/ConfirmDialog";
 import { safeFixesReadyList } from "./optimize-v2-data";
 import { RerunCheckBand } from "./RerunCheckBand";
 import { deriveReverted } from "./use-scan";
+import { BentoGrid, BentoTile, Sheet, useSheet } from "../design/bento";
 import {
   homeIntakeRows,
   homeCareEntry,
@@ -259,6 +260,9 @@ export function HomeConsole({
   // Optional confirm — the fast path (default-OFF) is the only consumer, so HomeConsole must not
   // hard-require the provider on every mount (see useConfirmOptional). null → runFastPath no-ops.
   const confirm = useConfirmOptional();
+  // The rig tile's popout. Depth goes BEHIND the sheet, never across the surface (bento law): the
+  // stage keeps the live picture, the full detected parts list opens over the dimmed room.
+  const partsSheet = useSheet<"parts">();
   const intakeOn = useHomeIntakeFlag();
   // HOME IS UNGATED — STRUCTURE, NOT A SWITCH (owner 2026-08-06, reversing the calm-default pass
   // that shipped the day before): "the expert view doesnt seemingly even need to be an option the
@@ -661,9 +665,15 @@ export function HomeConsole({
             that route to the right ROOM (option A). The Dock below stays clean room-name doors
             (option B door-hints declined — the band already carries the symptom→room map, so
             duplicating symptoms onto the doors would be the annoyance the owner warned against). */}
+        <BentoGrid>
+        {/* FULL WIDTH BECAUSE IT IS CONDITIONAL (`bento: no conditional partial tile`). The band
+            is hidden by the compy_home_intake setting, so a half-width version of this tile would
+            leave a hole beside the hero the moment the owner switched it off. A full-width tile
+            always starts its own row, so its absence just moves the rest of the grid up intact —
+            and the band was born full-width anyway (it reads as a strip, not a card). */}
         {intakeRenders && (
+          <BentoTile title={t("home.homeConsole.intake.prompt")} span="full">
           <section className="hc-intake" aria-label={t("home.homeConsole.intake.prompt")}>
-            <div className="hc-intake-head">{t("home.homeConsole.intake.prompt")}</div>
             {/* Option C — the always-available one-tap "just make it faster, safely" fast path.
                 Honest state machine: applied receipt › loading › all-clear › ready-with-apply. */}
             {fastPathAvailable && (
@@ -751,10 +761,37 @@ export function HomeConsole({
               </ul>
             )}
           </section>
+          </BentoTile>
         )}
         {/* CONSOLE STAGE — bracketed frame, the real 3D hologram center, four honest corner
             gauges. No lede (owner header-slop law 2026-07-10): the console opens straight on
-            the stage. */}
+            the stage.
+
+            THE HERO TILE, AND WHY IT HAS NO `open` PROP. BentoTile's open affordance stretches a
+            button across the whole tile; over the stage that layer would swallow RigHologram's
+            drag-orbit pointer events, so the rig would stop turning. The popout is opened from the
+            badge slot instead — a real button, no stretched layer, orbit untouched. */}
+        <BentoTile
+          title={t("home.homeConsole.bento.rig")}
+          span="hero"
+          badge={
+            // Cards mode already prints the same grid on the stage, so the popout would be a
+            // second copy of what is on screen. It earns its place only in 3D mode.
+            rig3d ? (
+              <button
+                type="button"
+                className="hc-btn hc-btn-ghost"
+                onClick={(e) =>
+                  partsSheet.opener("parts")(
+                    (e.currentTarget.closest(".v2-tile") ?? e.currentTarget).getBoundingClientRect(),
+                  )
+                }
+              >
+                {t("home.homeConsole.bento.parts")}
+              </button>
+            ) : null
+          }
+        >
         <div
           className="hc-stage"
           ref={stageRef}
@@ -946,62 +983,122 @@ export function HomeConsole({
               + the rAF pointerleave stop — Phase-1's review fix). */}
           <ReticleCursor scopeRef={stageRef} />
         </div>
+        </BentoTile>
+
+        {/* THE TWO HALF TILES BESIDE THE HERO — the #1 limiter, then the last-session verdict: the
+            two measured sentences Home is allowed to state, each in its own box. No `open` prop on
+            either: each row already carries its own door button, and a stretched tile button would
+            put a second, competing target over it.
+
+            WHY THEY ARE TWO TILES, AND WHY BOTH ALWAYS RENDER (self-review 2026-08-12, item 5). The
+            hero spans 7 columns × 2 rows, so the grid needs exactly TWO always-present 5-column
+            tiles to close those rows — strict row-major with no dense flow is deliberate, so any
+            slot that can go empty shows as a hole. They used to be one conditional tile, and on a
+            clean PC Home opened with a ~180px dark rectangle at every width. Splitting them is also
+            the honest shape: a limiter and a session comparison are different claims with different
+            empty states, and a shared "nothing here" line could only be vague about which was which.
+
+            NEITHER EMPTY LINE SAYS "NOTHING IS WRONG" — neither may. `topLimiter` goes null when the
+            verdict above already names the limiter (see `verdictNamesLimiter`) and while priorities
+            are still loading, so an all-clear claim here would be fabricated. Each line states only
+            what is true in its own null case. */}
+        <BentoTile title={t("home.homeConsole.bento.findings")} span="half">
+          <>
+            {/* THE #1 LIMITER — micro-label · the measured title · quiet confidence tag · jump. */}
+            {topLimiter ? (
+              <div className="hc-limiter">
+                <span className="hc-limiter-label">{t("home.homeConsole.limiter.topLabel")}</span>
+                <span className="hc-limiter-title">{topLimiter.title}</span>
+                <span className="hc-limiter-tag hc-mono">
+                  {t("home.homeConsole.limiter.confidenceTag", { level: topLimiter.confidence })}
+                </span>
+                <button type="button" className="hc-btn hc-btn-ghost" onClick={onSeeInFix}>
+                  {t("home.homeConsole.limiter.seeIn", { room: fixRoomLabel })}
+                </button>
+              </div>
+            ) : (
+              <p className="hc-none">
+                {priorities
+                  ? t("home.homeConsole.limiter.none")
+                  : t("home.homeConsole.limiter.pending")}
+              </p>
+            )}
+          </>
+        </BentoTile>
+
+        {/* LAST SESSION — Home's ONE intelligence line (Intelligence Phase 1, decision 7): the
+            engine's own verdict sentence verbatim; the full report lives in Monitor's debrief. The
+            LINE is still rendered only for a real improved/regressed verdict (the command returns
+            null otherwise) and the door only shows when Monitor is actually on the rail — the TILE
+            around it is what always renders, and it says which of the two null cases it is in
+            rather than inventing a verdict.
+
+            The title reuses `limiter.lastSessionLabel` — the exact string that used to be the row's
+            micro-label. Promoting it instead of minting a `bento.lastSession` twin keeps the label
+            out of the tile twice AND keeps the affordance census honest: that key stays reached, so
+            the guard sees a control that moved rather than one that vanished. */}
+        <BentoTile title={t("home.homeConsole.limiter.lastSessionLabel")} span="half">
+          <div className="hc-lastsession">
+            {intelHeadline ? (
+              <div className="hc-limiter">
+                <span className="hc-limiter-title">{intelHeadline.text}</span>
+                {onNavigate && rooms?.some((r) => r.key === "play") && (
+                  <button
+                    type="button"
+                    className="hc-btn hc-btn-ghost"
+                    onClick={() => onNavigate("play")}
+                  >
+                    {t("home.homeConsole.limiter.seeIn", {
+                      room: rooms.find((r) => r.key === "play")?.name,
+                    })}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <p className="hc-none">
+                {intelOn
+                  ? t("home.homeConsole.limiter.lastSessionNone")
+                  : t("home.homeConsole.limiter.lastSessionOff")}
+              </p>
+            )}
+          </div>
+        </BentoTile>
 
         {/* THE DETECTED RECORD — boxed templates, always open (owner 2026-08-06: "better grouping
             and boxed templates"). Static facts only; everything that MOVES is on the stage above,
-            so no number is owned twice. Label/value rows, zero prose. */}
+            so no number is owned twice. Label/value rows, zero prose. No `open` prop and no
+            expander: the owner made the detected record standard and always-open. */}
         {specs.length > 0 && (
+          <BentoTile title={t("home.homeConsole.specs.eyebrow")} span="full">
           <section className="hc-specs" aria-label={t("home.homeConsole.specs.eyebrow")}>
-            <span className="hc-specs-eyebrow">{t("home.homeConsole.specs.eyebrow")}</span>
             <div className="hc-specs-grid">
               {specs.map((s) => (
                 <SpecBox key={s.title} title={s.title} rows={s.rows} />
               ))}
             </div>
           </section>
+          </BentoTile>
         )}
+        </BentoGrid>
 
-        {/* THE #1 LIMITER — micro-label · the measured title · quiet confidence tag · jump. */}
-        {topLimiter && (
-          <div className="hc-limiter">
-            <span className="hc-limiter-label">{t("home.homeConsole.limiter.topLabel")}</span>
-            <span className="hc-limiter-title">{topLimiter.title}</span>
-            <span className="hc-limiter-tag hc-mono">
-              {t("home.homeConsole.limiter.confidenceTag", { level: topLimiter.confidence })}
-            </span>
-            <button type="button" className="hc-btn hc-btn-ghost" onClick={onSeeInFix}>
-              {t("home.homeConsole.limiter.seeIn", { room: fixRoomLabel })}
-            </button>
-          </div>
-        )}
-
-        {/* LAST SESSION — Home's ONE intelligence line (Intelligence Phase 1, decision 7): the
-            engine's own verdict sentence verbatim; the full report lives in Monitor's debrief.
-            Only rendered for a real improved/regressed verdict (the command returns null
-            otherwise), and the door only shows when Monitor is actually on the rail. */}
-        {intelHeadline && (
-          <div className="hc-limiter">
-            <span className="hc-limiter-label">{t("home.homeConsole.limiter.lastSessionLabel")}</span>
-            <span className="hc-limiter-title">{intelHeadline.text}</span>
-            {onNavigate && rooms?.some((r) => r.key === "play") && (
-              <button
-                type="button"
-                className="hc-btn hc-btn-ghost"
-                onClick={() => onNavigate("play")}
-              >
-                {t("home.homeConsole.limiter.seeIn", {
-                  room: rooms.find((r) => r.key === "play")?.name,
-                })}
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* THE DOCK — navigate into the rooms the rail actually shows. */}
+        {/* THE DOCK — navigate into the rooms the rail actually shows. Deliberately OUTSIDE the
+            grid: the dock is the room's exit row, not one of its answers, and a door tile sitting
+            among the measured tiles is exactly the "twelve equal cards" failure the bento avoids. */}
         {dockNodes.length > 0 && onNavigate && (
           <Dock nodes={dockNodes} activeKey={null} onOpen={onNavigate} />
         )}
       </div>
+
+      {/* The hero's popout — the full detected parts list, grown out of the rig tile. */}
+      {partsSheet.is("parts") && (
+        <Sheet
+          title={t("home.homeConsole.bento.parts")}
+          origin={partsSheet.origin}
+          onClose={partsSheet.close}
+        >
+          <HardwareGrid hw={hw} />
+        </Sheet>
+      )}
     </RoomShell>
   );
 }

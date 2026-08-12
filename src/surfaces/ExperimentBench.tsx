@@ -15,6 +15,7 @@ import type { SessionSummary } from "../types";
 import { LEDGER_CHANGED_EVENT } from "../types";
 import { prettyGameName } from "./game-name";
 import { SectionLabel, VerdictBand, simulationTone } from "./measurement-chrome";
+import { BentoTile } from "../design/bento/BentoGrid";
 import "./ExperimentBench.css";
 
 type ExperimentStatus = "running" | "kept" | "restored" | "aborted";
@@ -352,9 +353,19 @@ export default function ExperimentBench() {
   const simMeta = sim ? SIM_VERDICT[sim.verdict] ?? { label: sim.verdict, blocked: false } : null;
   const canStart = !!sim && !!simMeta && !simMeta.blocked && !!baseline && !busy;
 
+  // Bento conversion (2026-08-12). span="full" is FORCED, not a taste call: this component can
+  // return null (the dark experiment gate above) and this file declares no grid of its own, so
+  // rule 3 of one-hero-guard.test.ts ("a tile component that can render null is span=\"full\"")
+  // applies. That guard reads raw source TEXT, so prose here must never spell the grid element's
+  // opening tag out — a mention in a comment reads as a real grid block and fails rule 1.
+  // LabGround mounts this as a SIBLING of <LabConsole> under RoomShell — not inside a grid — which
+  // is the same out-of-grid tile idiom LabConsole already uses for its open station panel. The
+  // tile draws the room's heading, so the old <h2 className="exp-bench-title"> is gone (one title,
+  // not two). The testid rides an inner <div>: BentoTile takes a fixed prop set and does not
+  // spread, so a testid on the tile itself would be silently dropped.
   return (
-    <section className="exp-bench" data-testid="experiment-bench">
-      <h2 className="exp-bench-title">{t("lab.experimentBench.title")}</h2>
+    <BentoTile title={t("lab.experimentBench.title")} span="full">
+      <div className="exp-bench" data-testid="experiment-bench">
       <p className="exp-bench-hint">
         {t("lab.experimentBench.hint")}
       </p>
@@ -494,7 +505,8 @@ export default function ExperimentBench() {
           </ul>
         </div>
       )}
-    </section>
+      </div>
+    </BentoTile>
   );
 }
 

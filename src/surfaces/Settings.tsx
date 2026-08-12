@@ -28,6 +28,7 @@ import {
   setAutoUpdateChecks,
   requestUpdateCheck,
 } from "../data/update-prefs";
+import { BentoGrid, BentoTile } from "../design/bento";
 import ReceiptsConsent from "./ReceiptsConsent";
 import { LicensePanel } from "./LicensePanel";
 import { FeedbackExport } from "./FeedbackExport";
@@ -221,9 +222,15 @@ export default function Settings({
         </header>
         <p className="set-tagline">{t("settings.tagline")}</p>
 
-        {/* ── Appearance ── */}
-        <section className="set-section">
-          <h2 className="set-section-title">{t("settings.appearance.sectionTitle")}</h2>
+        {/* Bento conversion (2026-08-12). The header + tagline stay OUTSIDE the grid — they are room
+            chrome, exactly like the Lab's Dock. Everything else is a tile, and every row sums to 12
+            so the strict row-major flow leaves no holes: Appearance is the hero (7 wide, 2 rows) with
+            Language + Behavior beside it, then Feedback full-width (its notes textarea needs the
+            room), then the three small utility tiles, then About. ReceiptsConsent is LAST because it
+            renders nothing today — a null tile mid-row would punch a hole. */}
+        <BentoGrid>
+          {/* ── Appearance ── */}
+          <BentoTile title={t("settings.appearance.sectionTitle")} span="hero">
           <div className="set-appearance">
             <div className="set-appearance-controls">
               <div className="set-field-label" id="set-theme-label">
@@ -295,11 +302,10 @@ export default function Settings({
             </div>
             <LivePreview />
           </div>
-        </section>
+          </BentoTile>
 
-        {/* ── Language (2026-07-23) ── */}
-        <section className="set-section">
-          <h2 className="set-section-title">{t("settings.language.sectionTitle")}</h2>
+          {/* ── Language (2026-07-23) ── */}
+          <BentoTile title={t("settings.language.sectionTitle")} span="half">
           <div className="set-row">
             <div className="set-row-text">
               <div className="set-row-title" id="set-language-label">
@@ -320,11 +326,10 @@ export default function Settings({
               ))}
             </div>
           </div>
-        </section>
+          </BentoTile>
 
-        {/* ── Behavior ── */}
-        <section className="set-section">
-          <h2 className="set-section-title">{t("settings.behavior.sectionTitle")}</h2>
+          {/* ── Behavior ── */}
+          <BentoTile title={t("settings.behavior.sectionTitle")} span="half">
           <div className="set-row">
             <div className="set-row-text">
               <div className="set-row-title">{t("settings.behavior.closeToTray.title")}</div>
@@ -409,16 +414,24 @@ export default function Settings({
               ))}
             </div>
           </div>
-        </section>
+          </BentoTile>
 
         {/* The "New look (preview)" flag hub was removed — parity with the classic surfaces is closed
             (Fix 57f2e21, Play aaa4f79), so the toggles only confused users and footgunned them (the
             Settings self-lockout). The flags still respect localStorage if set manually via devtools
             (hidden dev A/B path), just no user-facing control. */}
 
-        {/* ── Setup (re-homed from the global footer, halfway-home §0) ── */}
-        <section className="set-section">
-          <h2 className="set-section-title">{t("settings.setup.sectionTitle")}</h2>
+          {/* ── Feedback & help (always visible — the beta/help path; local bundle + one-click email,
+              nothing auto-sent). Full width because its notes textarea needs the room. ── */}
+          <FeedbackExport appVersion={appVersion} buildStamp={buildStamp} />
+
+          {/* ── Support record (Q5) — sits under Feedback because it is the same errand: the thing
+              you attach when you ask for help. Read it here, save it, send it yourself. It leads the
+              row of three small tiles directly beneath Feedback, so the pairing survives the bento. ── */}
+          <SupportEvidence />
+
+          {/* ── Setup (re-homed from the global footer, halfway-home §0) ── */}
+          <BentoTile title={t("settings.setup.sectionTitle")} span="third">
           <div className="set-row">
             <div className="set-row-text">
               <div className="set-row-title">{t("settings.setup.title")}</div>
@@ -428,27 +441,12 @@ export default function Settings({
               {t("settings.setup.action")}
             </button>
           </div>
-        </section>
+          </BentoTile>
 
-        {/* ── Receipts (R3 Lane C — DARK: renders nothing while the backend gate is hard-false;
-            when a future owner-signed build flips it, the consent + inspect surface appears HERE,
-            in the privacy-adjacent room). ── */}
-        <ReceiptsConsent />
+          <LicensePanel />
 
-        <LicensePanel />
-
-        {/* ── Feedback & help (always visible — the beta/help path; local bundle + one-click email,
-            nothing auto-sent). ── */}
-        <FeedbackExport appVersion={appVersion} buildStamp={buildStamp} />
-
-        {/* ── Support record (Q5) — sits under Feedback because it is the same errand: the thing
-            you attach when you ask for help. Read it here, save it, send it yourself. ── */}
-        <SupportEvidence />
-
-        {/* ── About ── */}
-
-        <section className="set-section">
-          <h2 className="set-section-title">{t("settings.about.sectionTitle")}</h2>
+          {/* ── About ── */}
+          <BentoTile title={t("settings.about.sectionTitle")} span="full">
           <div className="set-about">
             <div className="set-about-name">
               Compy <span className="set-about-version">v{appVersion}</span>
@@ -478,7 +476,14 @@ export default function Settings({
               />
             </div>
           </div>
-        </section>
+          </BentoTile>
+
+          {/* ── Receipts (R3 Lane C — DARK: renders nothing while the backend gate is hard-false;
+              when a future owner-signed build flips it, the consent + inspect surface appears HERE,
+              in the privacy-adjacent room). It is LAST in the grid, and full-width, precisely because
+              it renders null today — a narrower null tile would leave a hole mid-row. ── */}
+          <ReceiptsConsent />
+        </BentoGrid>
       </div>
     </div>
   );

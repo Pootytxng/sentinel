@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import type { EvidencePreview, SupportExport, SupportProjection } from "../types";
+import { BentoTile } from "../design/bento/BentoGrid";
 
 // Q5 support evidence — the user-facing half of src-tauri/src/support_evidence.rs (spec
 // 2026-07-29-product-quality-stabilization-program §12: "the user can inspect the bundle before
@@ -91,9 +92,12 @@ export function SupportEvidence() {
   const metaKey = count === 0 ? "metaEmpty" : count === 1 ? "metaOne" : "meta";
   const unreadable = bundle?.unreadable_records ?? 0;
 
+  // Bento conversion (2026-08-12). A third-width tile that LEADS the row directly beneath the
+  // full-width Feedback tile, so the "same errand" pairing above survives the grid. The testid
+  // rides an inner <div> — BentoTile takes a fixed prop set and does not spread.
   return (
-    <section className="set-section" data-testid="support-evidence">
-      <h2 className="set-section-title">{t(k("sectionTitle"))}</h2>
+    <BentoTile title={t(k("sectionTitle"))} span="third">
+      <div data-testid="support-evidence">
       <p className="receipts-hint">
         {t(k("hintPre"))}
         <strong>{t(k("hintStrong"))}</strong>
@@ -207,7 +211,8 @@ export function SupportEvidence() {
           </button>
         )}
       </div>
-    </section>
+      </div>
+    </BentoTile>
   );
 }
 

@@ -200,6 +200,12 @@ const renderConsole = (props = base) =>
     </ConfirmProvider>,
   );
 
+// The open station's NAME. Since the bento conversion it is the enclosing <BentoTile>'s title rather
+// than a hand-rolled .lc-detail-name — the panel head is the tile's, so the assertion reads it there.
+const openStationName = () =>
+  document.querySelector(".lc-detail")?.closest(".v2-tile")?.querySelector(".v2-tile-title")
+    ?.textContent;
+
 describe("LabConsole", () => {
   it("renders the recognizable rig hologram at center", () => {
     renderConsole();
@@ -251,10 +257,10 @@ describe("LabConsole", () => {
     renderConsole();
     fireEvent.click(screen.getByRole("button", { name: /benchmark/i }));
     expect(document.querySelectorAll(".lc-detail")).toHaveLength(1);
-    expect(document.querySelector(".lc-detail-name")!.textContent).toBe("Benchmark");
+    expect(openStationName()).toBe("Benchmark");
     fireEvent.click(screen.getByRole("button", { name: /latency/i }));
     expect(document.querySelectorAll(".lc-detail")).toHaveLength(1);
-    expect(document.querySelector(".lc-detail-name")!.textContent).toBe("Latency");
+    expect(openStationName()).toBe("Latency");
     fireEvent.click(screen.getByRole("button", { name: /latency/i }));
     expect(document.querySelector(".lc-detail")).toBeNull();
   });

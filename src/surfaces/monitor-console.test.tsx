@@ -395,11 +395,27 @@ describe("MonitorConsole — motion contract (Task 4)", () => {
 });
 
 describe("MonitorConsole — laws (e) + the mode split", () => {
-  it("header-slop pin: no headings or lede strips inside the console subtree", async () => {
+  // SHARPENED for the bento conversion (2026-08-12). The old form counted h1/h2/h3 and required 0,
+  // which was a PROXY for the title-header law ("a header is a name, never a status sentence") back
+  // when the console had no headings of any kind. BentoTile labels its boxes with an <h3
+  // class="v2-tile-title">, so the count would now fail on markup the law actually allows. The pin
+  // is therefore made stricter, not weaker: still zero room-level headings inside a room body, and
+  // every h3 must be a tile title carrying a short noun phrase — no lede strip, no sentence.
+  it("header-slop pin: no lede strips; every heading is a short noun-phrase tile title", async () => {
     mockPolls(() => liveFps);
     const { container } = mount();
     await waitFor(() => expect(container.querySelector(".monitor-console")).not.toBeNull());
-    expect(container.querySelectorAll("h1, h2, h3").length).toBe(0);
+    expect(container.querySelectorAll("h1, h2").length).toBe(0);
+    const h3s = [...container.querySelectorAll("h3")];
+    for (const h of h3s) {
+      expect(h.className, `heading "${h.textContent}" is not a bento tile title`).toContain(
+        "v2-tile-title",
+      );
+      const text = (h.textContent ?? "").trim();
+      expect(text.length, `tile title "${text}" is long enough to be a status sentence`).
+        toBeLessThanOrEqual(24);
+      expect(text, `tile title "${text}" is punctuated like a sentence`).not.toMatch(/[.!?]$/);
+    }
   });
 
   it("Advanced shows the fuller cluster (GPU load gauge); Basic the core set", async () => {

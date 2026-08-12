@@ -2,11 +2,13 @@
    theme. Mirrors the Lab instrument idiom (arc-instrument / TuningInstrument): glass card, mono
    telemetry, accent CTA with legible ink, honest muted secondary text. */
 
+/* Bento conversion (2026-08-12): the bench now lives INSIDE a <BentoTile>, so the tile draws the
+   frame and the separator chrome this rule used to carry (margin-top / padding-top / border-top)
+   is gone — a direct child of .v2-tile-body must never draw its own border, or the room shows a
+   double edge. The class itself stays: it is the declaring element for the --mc-* palette below
+   (measurement-chrome-guard.test.ts pins that), and every child selector hangs off it. */
 .exp-bench {
   display: block;
-  margin-top: 18px;
-  padding-top: 18px;
-  border-top: 1px solid var(--ix-line);
 
   /* Palette inputs for the shared measurement chrome (src/surfaces/measurement-chrome.css) —
      the same vocabulary Monitor's "What changed?" panel wears, in the Lab's --ix-* token family.
@@ -24,12 +26,7 @@
      they land here. They should read quieter than a coloured verdict but still be a headline. */
   --mc-neutral: var(--ix-text-2);
 }
-.exp-bench-title {
-  margin: 0 0 6px;
-  font-size: 15px;
-  font-weight: 650;
-  color: var(--ix-text-1);
-}
+/* .exp-bench-title is gone with the <h2> it styled — the BentoTile head is the one title now. */
 .exp-bench-hint {
   margin: 0 0 14px;
   font-size: 12.5px;

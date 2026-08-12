@@ -36,6 +36,21 @@ colour app-wide (= TYPE-1 + COLOR-1) ② front door (= UX-1) ③ interview ④ w
 term guard ⑤ instruments behind a door. **Room renames APPROVED by owner 2026-08-12** (Blackbook →
 History, Lab → Test, Monitor → Live — all three; shipped as user-facing strings, Train 2 slice 1).
 
+### FOUNDATION-1a. Bento grid + in-app popout, app-wide — ✅ SHIPPED (PR #117, 2026-08-12)
+
+Owner ask 2026-08-11, verbatim: *"this is to be applied throughout every single possible location in
+the app ... be sure you havent lost any current functionality or important features or finished items
+behind in the process."* Answered by `src/design/bento/` (12-column grid + in-app `Sheet` popout) with
+**all five console rooms converted and self-reviewed PASS** — Home, Monitor, History/Blackbook, Lab
+(console + experiment bench), Settings. Conversion was **wrap-don't-rename**: every `.hc-*`/`.mc-*`/
+`.bc-*`/`.lc-*`/`.set-*`/`.exp-*` class survives inside a tile, so each room's test file — and the
+owner decisions and past bug→guard catches it encodes — stays intact.
+
+**Deliberately excluded by form factor, not left undone:** Onboarding, FirstCheck and the Overlay are
+single-column reading/reveal surfaces, not dashboards. Four flag-off failsafes (`HomeV2`, `HomeHud`,
+`MonitorBasic`, classic `Play`) stay on old chrome on purpose. Guarded by `one-hero-guard.test.ts`
+(four rules; the last two written from defects this conversion itself caused).
+
 ### ⭐ STANDING DIRECTIVE — organization · ease of access · inherently intuitive UI (owner, restated 2026-07-23; "made many times") 🔴 OPEN
 
 **Owner verbatim (2026-07-23, updater-ship session):**

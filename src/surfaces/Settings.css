@@ -13,7 +13,10 @@
     var(--ix-base, #07090e);
 }
 .set-shell {
-  max-width: 760px;
+  /* Widened from 760px for the bento conversion (2026-08-12). The room's sections are now tiles in
+     a 12-column grid, and 760px ÷ 12 gives ~63px columns — a "third" tile would be too narrow to
+     hold a label and its control. This is the same reading width the console rooms use. */
+  max-width: 1180px;
   margin: 0 auto;
   padding: 30px 28px 48px;
   display: flex;
@@ -64,42 +67,24 @@
   color: var(--ix-text-2);
 }
 
-/* ── Sections ── */
-.set-section {
-  background: var(--ix-glass-fill);
-  border: 1px solid var(--ix-glass-border);
-  border-top-color: var(--ix-glass-top);
-  border-radius: var(--ix-radius);
-  padding: 18px 20px;
-  backdrop-filter: blur(7px);
-}
-/* Section title — the console micro-label register (mono, tracked, faint) over a hairline rule.
-   The accent moved from the whole label to a quiet leading tick: honest hierarchy, not a shout. */
-.set-section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 14px;
-  padding-bottom: 9px;
-  border-bottom: 1px solid var(--ix-glass-border);
-  font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ix-text-3);
-}
-.set-section-title::before {
-  content: "";
-  width: 8px;
-  height: 1px;
-  background: var(--ix-accent-text);
-  flex-shrink: 0;
-}
-.set-section-help {
-  margin: -8px 0 14px;
-  font-size: 12.5px;
-  color: var(--ix-text-2);
+/* ── Sections ──
+   The `.set-section` glass frame and its `.set-section-title` hairline header are GONE (bento
+   conversion, 2026-08-12): every section is now a <BentoTile>, which draws the panel and renders the
+   section name as its `title` — keeping both drew a box inside a box and stacked two headers. The
+   dead `.set-section-help` rule went with them (nothing rendered it, and its -8px top margin was
+   tuned against the deleted title's 14px bottom margin). Same move already proven on the Lab's
+   `.lc-detail-head`. `.set-section` / `.set-section-title` survive only as *names* in a few older
+   comments below — no element carries them any more.
+
+   Rows inside a NARROW tile (third / quarter) stack instead of sitting side by side: `.set-row` is
+   a space-between flex row built for a 760px-wide section, and in a 4-column tile the label and its
+   control would collide. This rule lives here rather than in bento.css on purpose — a `.set-row`
+   selector inside the design system would teach it about Settings. */
+.v2-tile-third .set-row,
+.v2-tile-quarter .set-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
 }
 
 /* ── Appearance ── */
