@@ -66,6 +66,11 @@
       "clock": "clock",
       "slot": "slot {{n}}"
     },
+    "bento": {
+      "rig": "Your PC",
+      "findings": "Findings",
+      "parts": "All parts"
+    },
     "specs": {
       "eyebrow": "Detected",
       "gpu": "Graphics",

@@ -62,6 +62,11 @@
       "clock": "主频",
       "slot": "插槽 {{n}}"
     },
+    "bento": {
+      "rig": "你的电脑",
+      "findings": "发现",
+      "parts": "全部硬件"
+    },
     "specs": {
       "eyebrow": "已检测",
       "gpu": "显卡",

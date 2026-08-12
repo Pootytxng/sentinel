@@ -86,6 +86,9 @@
       "skyEmerald": "天蓝色 / 翡翠绿"
     }
   },
+  "sheet": {
+    "close": "关闭"
+  },
   "slimRecRow": {
     "badge": {
       "recommended": "推荐",

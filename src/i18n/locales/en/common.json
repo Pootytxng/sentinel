@@ -87,6 +87,9 @@
       "skyEmerald": "Sky / Emerald"
     }
   },
+  "sheet": {
+    "close": "Close"
+  },
   "slimRecRow": {
     "badge": {
       "recommended": "Recommended",

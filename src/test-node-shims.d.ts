@@ -16,6 +16,9 @@ declare module "fs" {
   export function readdirSync(path: string): string[];
   export function readFileSync(path: string, encoding: "utf8"): string;
   export function statSync(path: string): { isDirectory(): boolean; isFile(): boolean };
+  // affordance-census.test.ts re-records its baseline behind an env var. Typed at that one shape:
+  // text out, explicit encoding, no Buffer overload — a guard should never be writing binary.
+  export function writeFileSync(path: string, data: string, encoding: "utf8"): void;
 }
 declare module "path" {
   export function join(...parts: string[]): string;
@@ -41,4 +44,10 @@ declare module "child_process" {
 // boot-tax budget is actually spending. `.length` would count UTF-16 code units and undercount.
 declare const Buffer: {
   byteLength(input: string, encoding: "utf8"): number;
+};
+// Also global, not a module. Declared at `env` alone: the only thing a guard here legitimately wants
+// from the process is an opt-in switch (COMPY_RECORD_AFFORDANCES). Values are `| undefined` on
+// purpose so an unset variable can never silently compare equal to a string.
+declare const process: {
+  env: Record<string, string | undefined>;
 };

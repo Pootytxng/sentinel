@@ -1,0 +1,351 @@
+/* ── BENTO GRID + SHEET (the 2026-08-11 redesign primitives) ───────────────────────────
+   Owner approval, 2026-08-11: "this is to be applied throughout every single possible
+   location in the app". BentoGrid.tsx / Sheet.tsx own the markup; this file owns the look.
+
+   THE LAWS THIS FILE OBEYS (tokens-v2-guard.test.ts, mechanically):
+     · EVERY selector is scoped under :root[data-v2="on"].
+     · NO color literals — no #hex, no rgb()/rgba(), no hsl(). Every colour is a --v2-* token,
+       and every translucency is the `opacity` property or a token that already carries alpha.
+     · font / font-family reference only var(--v2-font-*).
+     · No @media at depth 0 — the scoping parser reads top-level headers and sanctions exactly
+       one unscoped form, `@keyframes v2-*`. So the grid does NOT collapse responsively; the
+       app is a fixed-min-width desktop window, so this costs nothing today. If a room ever
+       genuinely needs a breakpoint, the honest fix is to teach the guard to accept an @media
+       whose inner selectors are all scoped — not to hide the file from the guard.
+
+   WHY NO BLUR, ANYWHERE. The obvious sheet treatment is `backdrop-filter: blur()` on the
+   scrim (or `filter: blur()` on the room behind it), and both are rejected on purpose: the
+   room behind a sheet has live-ticking gauges, so a blur filter re-rasterises the full window
+   on every frame the background updates. That is a permanent GPU cost for decoration, and it
+   contradicts the standing bar that Compy must be the least resource-hungry app on the machine
+   (owner, 2026-08-06). Instead the scrim is a FLAT fill and the room settles back with
+   opacity + transform only — both compositor-only, free after the first frame. */
+
+/* ── the grid ─────────────────────────────────────────────────────────────────────── */
+
+:root[data-v2="on"] .v2-bento {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-rows: minmax(148px, auto);
+  gap: var(--v2-gap);
+  align-items: stretch;
+}
+
+/* Spans are deliberately unequal — that IS the bento. One hero per grid answers the question
+   the user walked in with; one-hero-guard.test.ts pins it so the rule can't quietly rot into
+   twelve equal cards, which is the overwhelm complaint in a nicer outfit. */
+:root[data-v2="on"] .v2-tile-hero {
+  grid-column: span 7;
+  grid-row: span 2;
+}
+:root[data-v2="on"] .v2-tile-half {
+  grid-column: span 5;
+}
+:root[data-v2="on"] .v2-tile-third {
+  grid-column: span 4;
+}
+:root[data-v2="on"] .v2-tile-quarter {
+  grid-column: span 3;
+}
+:root[data-v2="on"] .v2-tile-full {
+  grid-column: span 12;
+}
+
+/* ── the tile ─────────────────────────────────────────────────────────────────────── */
+
+:root[data-v2="on"] .v2-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--v2-pad-sm);
+  min-width: 0;
+  padding: var(--v2-pad);
+  background: var(--v2-panel);
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-r);
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+:root[data-v2="on"] .v2-tile:hover {
+  border-color: var(--v2-line-strong);
+  background: var(--v2-panel-2);
+}
+
+/* Severity stripe. Rendered ONLY for a non-neutral tone, so the stripe means something
+   instead of decorating every card — colour is information, never decoration. */
+:root[data-v2="on"] .v2-tone-ok::before,
+:root[data-v2="on"] .v2-tone-warn::before,
+:root[data-v2="on"] .v2-tone-info::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: var(--v2-pad);
+  bottom: var(--v2-pad);
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+}
+:root[data-v2="on"] .v2-tone-ok::before {
+  background: var(--v2-ok);
+}
+:root[data-v2="on"] .v2-tone-warn::before {
+  background: var(--v2-warn);
+}
+:root[data-v2="on"] .v2-tone-info::before {
+  background: var(--v2-info);
+}
+
+:root[data-v2="on"] .v2-tile-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--v2-pad-sm);
+  min-width: 0;
+}
+
+:root[data-v2="on"] .v2-tile-title {
+  margin: 0;
+  font-family: var(--v2-font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--v2-text);
+}
+
+:root[data-v2="on"] .v2-tile-badge {
+  flex: 0 0 auto;
+  font-family: var(--v2-font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--v2-muted);
+}
+
+:root[data-v2="on"] .v2-tile-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--v2-font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--v2-muted);
+}
+
+/* The hero carries the answer, so it gets the reading size the secondary tiles don't. */
+:root[data-v2="on"] .v2-tile-hero .v2-tile-body {
+  font-size: 14px;
+  color: var(--v2-text);
+}
+
+/* ── the open affordance (overlay-link pattern) ───────────────────────────────────── */
+
+/* A real <button>, deliberately NOT positioned, so its ::after resolves against .v2-tile and
+   the whole tile becomes the hit target. See BentoGrid.tsx for why the tile is a <section>. */
+:root[data-v2="on"] .v2-tile-open {
+  margin-top: auto;
+  padding: 0;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--v2-font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--v2-accent);
+}
+
+:root[data-v2="on"] .v2-tile-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--v2-r);
+}
+
+:root[data-v2="on"] .v2-tile-knob {
+  position: relative;
+  z-index: 1;
+}
+
+:root[data-v2="on"] .v2-tile-open:hover::after {
+  box-shadow: inset 0 0 0 1px var(--v2-accent-line);
+}
+
+:root[data-v2="on"] .v2-tile-open:focus-visible::after {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
+}
+
+/* Controls that genuinely live INSIDE a tile stay clickable by sitting above the stretched
+   layer. Only real controls are lifted — plain text stays click-through, so the tile as a
+   whole still opens. */
+:root[data-v2="on"] .v2-tile-body :is(button, a, input, select, textarea, label, [role="button"]) {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── the room settling back while a sheet is open ─────────────────────────────────── */
+
+/* Keyed off .v2-shell (ShellV2.tsx) so it survives the .v2-shell-hud variant, and off <html>
+   so the portalled sheet — which is NOT inside the shell — is untouched by it. Window chrome
+   (.wc-bar) sits outside .v2-shell and stays live, so the app is never un-closable.
+   The transform makes .v2-shell a containing block for fixed descendants; that is only true
+   while a sheet is open and the room is inert anyway, so nothing in it can be interacted with
+   in a mispositioned state. */
+:root[data-v2="on"] .v2-shell {
+  transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.3, 1), opacity 0.28s ease;
+}
+
+:root[data-v2="on"][data-sheet="open"] .v2-shell {
+  transform: scale(0.985);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ── the sheet ────────────────────────────────────────────────────────────────────── */
+
+/* z-index 1400: above every room layer, deliberately BELOW the confirm dialog's 2000, so a
+   confirmation raised from inside a sheet still paints on top of it (modal-stacking-guard
+   derives this set from the CSS rather than a list, so this rule is auto-enrolled). */
+:root[data-v2="on"] .v2-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+/* Scrim as a ::before rather than opacity on the backdrop itself — opacity on the parent would
+   drag the panel down with it. A flat token fill, per the no-blur rule at the top of this file. */
+:root[data-v2="on"] .v2-sheet-backdrop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--v2-bg);
+  opacity: 0.62;
+}
+
+:root[data-v2="on"] .v2-sheet {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(880px, 100%);
+  max-height: 100%;
+  background: var(--v2-panel);
+  border: 1px solid var(--v2-line-strong);
+  border-radius: var(--v2-r);
+  box-shadow: 0 24px 64px var(--v2-shadow-panel);
+  transform-origin: center;
+  transition: transform 0.26s cubic-bezier(0.2, 0.7, 0.3, 1), opacity 0.2s ease;
+}
+
+:root[data-v2="on"] .v2-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--v2-gap);
+  padding: var(--v2-pad);
+  border-bottom: 1px solid var(--v2-line);
+}
+
+:root[data-v2="on"] .v2-sheet-heading {
+  min-width: 0;
+}
+
+:root[data-v2="on"] .v2-sheet-title {
+  margin: 0;
+  font-family: var(--v2-font-sans);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--v2-text);
+}
+
+:root[data-v2="on"] .v2-sheet-sub {
+  margin: 4px 0 0;
+  font-family: var(--v2-font-sans);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--v2-muted);
+}
+
+:root[data-v2="on"] .v2-sheet-close {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  background: var(--v2-panel-2);
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-r-sm);
+  cursor: pointer;
+  font-family: var(--v2-font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--v2-muted);
+  transition: color 0.16s ease, border-color 0.16s ease;
+}
+
+:root[data-v2="on"] .v2-sheet-close:hover {
+  color: var(--v2-text);
+  border-color: var(--v2-line-strong);
+}
+
+:root[data-v2="on"] .v2-sheet-close:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
+}
+
+:root[data-v2="on"] .v2-sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--v2-pad);
+  display: flex;
+  flex-direction: column;
+  gap: var(--v2-gap);
+  font-family: var(--v2-font-sans);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--v2-text);
+}
+
+:root[data-v2="on"] .v2-sheet-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--v2-pad-sm);
+  padding: var(--v2-pad);
+  border-top: 1px solid var(--v2-line);
+}
+
+/* ── staged reveal ────────────────────────────────────────────────────────────────── */
+
+/* Scoped under :not([data-motion="reduced"]) on purpose. The global reduced-motion rule in
+   tokens.css zeroes animation-DURATION but not animation-DELAY, so an unscoped stagger would
+   leave a reduced-motion user staring at empty rows for up to ~400ms before they snapped in.
+   Gating the whole effect is the only honest version. */
+:root[data-v2="on"]:not([data-motion="reduced"]) .v2-sheet-reveal > * {
+  animation: v2-sheet-rise 0.26s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+:root[data-v2="on"]:not([data-motion="reduced"]) .v2-sheet-reveal > :nth-child(1) {
+  animation-delay: 60ms;
+}
+:root[data-v2="on"]:not([data-motion="reduced"]) .v2-sheet-reveal > :nth-child(2) {
+  animation-delay: 125ms;
+}
+:root[data-v2="on"]:not([data-motion="reduced"]) .v2-sheet-reveal > :nth-child(3) {
+  animation-delay: 190ms;
+}
+:root[data-v2="on"]:not([data-motion="reduced"]) .v2-sheet-reveal > :nth-child(4) {
+  animation-delay: 255ms;
+}
+:root[data-v2="on"]:not([data-motion="reduced"]) .v2-sheet-reveal > :nth-child(n + 5) {
+  animation-delay: 320ms;
+}
+
+@keyframes v2-sheet-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
