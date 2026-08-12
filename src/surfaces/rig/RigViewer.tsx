@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useCallback, useEffect, useState, type FormEvent } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
@@ -6,7 +6,8 @@ import { useTranslation } from "react-i18next";
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../../i18n";
 import type { HardwareInfo } from "../../App";
-import { useManualParts, MANUAL_KINDS, manualKindLabel, type ManualKind } from "./manual-parts";
+import { useManualParts } from "./manual-parts";
+import { RigManualParts } from "./RigManualParts";
 import { rigSelectionStatus, type RigSelection } from "./rig-parts";
 import { readHologramV2 } from "../../design/theme";
 import { useDocumentVisible } from "../../data/use-document-visible";
@@ -69,9 +70,8 @@ export const RigViewer = memo(function RigViewer({
     [onSelectedIdChange],
   );
 
-  const { parts: manualParts, add, remove } = useManualParts();
-  const [kind, setKind] = useState<ManualKind>("psu");
-  const [name, setName] = useState("");
+  // add/remove live in RigManualParts now; this instance only draws the list in the hologram.
+  const { parts: manualParts } = useManualParts();
 
   // No fan sensors publishing → no monitor running → offer the honest "light up sensors" nudge.
   const [noMonitor, setNoMonitor] = useState(false);
@@ -94,14 +94,6 @@ export const RigViewer = memo(function RigViewer({
       window.clearInterval(id);
     };
   }, [chromeless, visible]);
-
-  const onAdd = (e: FormEvent) => {
-    e.preventDefault();
-    const n = name.trim();
-    if (!n) return;
-    add({ kind, name: n });
-    setName("");
-  };
 
   return (
     <div className="rig-viewer">
@@ -237,52 +229,10 @@ export const RigViewer = memo(function RigViewer({
         </div>
       )}
 
-      <div className="rig-manual">
-        <form className="rig-manual-form" onSubmit={onAdd}>
-          <span className="rig-manual-label">{t("gaming.rigViewer.addPartLabel")}</span>
-          <select
-            className="rig-manual-select"
-            value={kind}
-            onChange={(e) => setKind(e.target.value as ManualKind)}
-            aria-label={t("gaming.rigViewer.componentTypeAriaLabel")}
-          >
-            {MANUAL_KINDS.map((k) => (
-              <option key={k.value} value={k.value}>
-                {manualKindLabel(k.value, t)}
-              </option>
-            ))}
-          </select>
-          <input
-            className="rig-manual-input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t("gaming.rigViewer.addPartPlaceholder")}
-            maxLength={48}
-            aria-label={t("gaming.rigViewer.componentNameAriaLabel")}
-          />
-          <button type="submit" className="btn-small btn-small-on" disabled={!name.trim()}>
-            {t("gaming.rigViewer.addButton")}
-          </button>
-        </form>
-        {manualParts.length > 0 && (
-          <ul className="rig-manual-list">
-            {manualParts.map((p) => (
-              <li key={p.id} className="rig-manual-item">
-                <span className="rig-manual-item-name">{p.name}</span>
-                <span className="rig-manual-item-tag">{t("gaming.rigViewer.userAddedTag")}</span>
-                <button
-                  type="button"
-                  className="rig-manual-remove"
-                  onClick={() => remove(p.id)}
-                  aria-label={t("gaming.rigViewer.removePartAriaLabel", { name: p.name })}
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      {/* Extracted to RigManualParts (Train 1, 2026-08-12) so the Lab can mount the same form in
+          its own chrome — chromeless hid this one, which left manual parts unreachable in the only
+          live mount. Hook instances sync, so both surfaces see one list. */}
+      <RigManualParts />
         </>
       )}
     </div>

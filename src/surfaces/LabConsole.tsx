@@ -8,6 +8,7 @@ import { Term } from "../design/Term";
 import { Dock, type DockNode } from "../design/console/Dock";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { RigViewer } from "./rig/RigViewer";
+import { RigManualParts } from "./rig/RigManualParts";
 import { buildRigParts, type RigSelection } from "./rig/rig-parts";
 import { rigPartReadings, subsystemForRigPart, type LabReadingKey, type LabSubsystem } from "./lab-evidence-map";
 import { OptimizeStation, type LabFastPathProps } from "./lab/OptimizeStation";
@@ -453,6 +454,15 @@ export function LabConsole({
           )}
         </div>
       )}
+
+      {/* ADD A PART — the manual fallback for hardware Compy can't read (PSU, cooler, a spare
+          drive). Mounted in the Lab's OWN chrome, below the stage and clear of the corner gauges
+          that forced the viewer chromeless — the PR #102 self-review (BACKLOG 2026-08-11) found
+          this form otherwise unreachable in the only live mount. Same synced hook state as the
+          hologram above: adding a part here draws it in the model immediately. */}
+      <div className="lc-manual">
+        <RigManualParts />
+      </div>
 
       {/* DOCK — Optimize primary + the measure stations. */}
       <Dock nodes={dockNodes} activeKey={openStation} onOpen={onDockOpen} />

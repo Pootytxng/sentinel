@@ -2,6 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import type { TFunction } from "i18next";
 import type { Vec3, RigPartKind } from "./rig-parts";
 
+// Same-document sync between hook instances (the Lab mounts the add-a-part form in its own chrome
+// while the chromeless RigViewer draws the hologram — two instances of this hook must see one list,
+// or a part added in the Lab would not appear in the model until remount). localStorage 'storage'
+// events do NOT fire in the same document, so instances broadcast over a window CustomEvent.
+// Receivers bail out on reference equality, which terminates the echo after one hop.
+const SYNC_EVENT = "compy:rig-manual-parts-changed";
+
 // User-added parts — the manual fallback for hardware Compy can't read in software (PSU, cooler
 // model, an extra drive…). Stored per-rig in localStorage. ALWAYS rendered + labelled "user-added"
 // (distinct from detected) so the honesty line never blurs: detected = measured, manual = you told us.
@@ -44,12 +51,25 @@ function load(): ManualPart[] {
 
 export function useManualParts() {
   const [parts, setParts] = useState<ManualPart[]>(load);
+  // Receive: another instance in this document changed the list. Reference-equality bailout stops
+  // the echo (our own broadcast comes back with the array we already hold).
+  useEffect(() => {
+    const onSync = (e: Event) => {
+      const next = (e as CustomEvent<ManualPart[]>).detail;
+      if (Array.isArray(next)) setParts((prev) => (prev === next ? prev : next));
+    };
+    window.addEventListener(SYNC_EVENT, onSync);
+    return () => window.removeEventListener(SYNC_EVENT, onSync);
+  }, []);
+  // Persist + broadcast: runs post-commit on every real change (including the initial mount, which
+  // harmlessly converges all instances onto the newest ref — content is identical).
   useEffect(() => {
     try {
       localStorage.setItem(KEY, JSON.stringify(parts));
     } catch {
       /* storage unavailable — session-only is fine */
     }
+    window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: parts }));
   }, [parts]);
   const add = useCallback(
     (p: Omit<ManualPart, "id">) =>

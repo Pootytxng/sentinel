@@ -294,3 +294,17 @@
 :root[data-v2="on"] .lab-console[data-motion="full"] .lc-bl { animation-delay: 0.26s; }
 :root[data-v2="on"] .lab-console[data-motion="full"] .lc-br { animation-delay: 0.33s; }
 :root[data-v2="on"] .lab-console[data-motion="full"] .dock { animation-delay: 0.3s; }
+
+
+/* ADD A PART (Train 1, 2026-08-12) — the manual-parts form mounted in the Lab's own chrome, below
+   the stage and clear of the corner gauges that forced the viewer chromeless. The glass card
+   matches .lc-evidence so it reads as console furniture, not a stray form; RigViewer.css still owns
+   the form's internals (.rig-manual…). */
+:root[data-v2="on"] .lc-manual {
+  margin-top: 14px;
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  padding: 12px 20px 14px;
+}
