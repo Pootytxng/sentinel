@@ -210,11 +210,16 @@ export function ShellV2({
                 className="v2-nav-item"
                 onClick={() => onNavigate(item.id)}
                 title={railLabel(item)}
+                // The digit is a keyboard hint, not part of the room's name. Left in the accessible
+                // name it concatenated into "Home1"/"Blackbook3" — a screen reader announced the
+                // shortcut as if it were the label, and every nav test that matched on name had to
+                // know about it. aria-keyshortcuts is the field that actually means "press this".
+                aria-keyshortcuts={String(i + 1)}
                 {...(jarvis ? { "data-magnetic": "" } : {})}
               >
                 <NavGlyph name={item.icon} />
                 <span>{railLabel(item)}</span>
-                <kbd>{i + 1}</kbd>
+                <kbd aria-hidden="true">{i + 1}</kbd>
               </button>
             ))}
           </div>
