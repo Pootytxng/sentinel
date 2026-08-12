@@ -289,7 +289,7 @@ export default function FirstCheck({
                     onGoToLab();
                   }}
                 >
-                  Take me to the Lab
+                  Take me to Test
                 </button>
               )}
               <button className="fc-btn fc-btn-go" onClick={finish}>

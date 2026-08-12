@@ -10,18 +10,19 @@ export type HomeRailItem = { id: HomeRailId; label: string; icon: string };
 export const HOME_RAIL: HomeRailItem[] = [
   { id: "home", label: "Home", icon: "gauge" },
   { id: "check", label: "Check", icon: "check" },
-  // Label "Monitor" + a pulse glyph (owner rename 2026-06-15): the room is live monitoring + session
-  // debriefs, so "Play" undersold it. The id stays "play" — it's the persisted nav key (location
+  // Label "Live" (owner rename 2026-08-12; previously "Monitor" 2026-06-15): the room is live
+  // monitoring + session debriefs. The id stays "play" — it's the persisted nav key (location
   // history / parity guard); renaming the id would orphan stored history for zero user value.
-  { id: "play", label: "Monitor", icon: "monitor" },
+  { id: "play", label: "Live", icon: "monitor" },
   // Label "Tune" (owner-approved 2026-06-12, naming-proposals B3): "Fix" framed the PC as broken —
   // a fear frame the doctrine retired. The id stays "fix": it's the persisted nav key (location
   // history / parity guard) — renaming the id would orphan stored history for zero user value.
   { id: "fix", label: "Tune", icon: "fix" },
-  // Label "Blackbook" (owner-approved 2026-06-12): the Library brand, doorknob descriptor lives in
-  // the room header ("what actually works — measured"). The id stays "learn" — persisted nav key.
-  { id: "learn", label: "Blackbook", icon: "learn" },
-  { id: "lab", label: "Lab", icon: "lab" },
+  // Label "History" (owner rename 2026-08-12; previously "Blackbook" 2026-06-12): the doorknob
+  // descriptor lives in the room header ("what actually works — measured"). Id stays "learn".
+  { id: "learn", label: "History", icon: "learn" },
+  // Label "Test" (owner rename 2026-08-12; previously "Lab"). Id stays "lab" — persisted nav key.
+  { id: "lab", label: "Test", icon: "lab" },
 ];
 
 // railFor — THE single source for the rendered rail (the app-shell rail and the Home console's
