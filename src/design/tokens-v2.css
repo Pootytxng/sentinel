@@ -17,11 +17,19 @@
   --v2-line: rgba(255, 255, 255, 0.07);
   --v2-line-strong: rgba(255, 255, 255, 0.12);
 
-  /* Text. faint is nudged from the mockup's #5c6478 (2.99:1 on panel-2 — a hair under the
-     AA-large 3.0 floor) to the minimal passing value; everything else is the mockup verbatim. */
+  /* Text. faint was originally tuned to the AA-LARGE 3.0 floor (#626a80), on the theory that it was
+     a caption tier. It never was: every one of the 29 rules that paired it with an explicit size set
+     that size at 9–11px, so the whole third tier shipped at 3.44–3.63:1 — under AA's 4.5 — and a
+     live measurement of one room found 27 failing text nodes, ~20 of them this token. Raised
+     2026-08-11 to the minimal value that clears 4.5:1 against the LIGHTEST v2 surface (--v2-panel-2
+     #141824 → 4.65:1; 4.94:1 on --v2-bg), which retires the usage ratchet in tokens-v2-guard.test.ts
+     by construction rather than site-by-site. It stays visibly below --v2-muted (5.76:1 on panel-2),
+     so the three-tier hierarchy survives — compressed, which is the honest cost of a near-black
+     ground: three text tiers cannot all clear AA at 9px, so the tier below muted is now carried by
+     SIZE and WEIGHT, not by dimming further. */
   --v2-text: #e8ebf2;
   --v2-muted: #8b93a7;
-  --v2-faint: #626a80;
+  --v2-faint: #7a8397;
 
   /* Accent (violet family — the approved mockup accent). These are the DEFAULT (flag-off) values.
      A var()-chain inside a custom property bakes in at ITS declaring element, so a per-room

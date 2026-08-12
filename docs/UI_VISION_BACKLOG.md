@@ -81,34 +81,69 @@ Monitor 4, Lab 5) and the pruning pass has never run. That is the leading mechan
 It is also the same work as **P2 "reversible generation pruning"** in `BACKLOG.md`, which is why the
 backend runway and this ask meet at the same next train.
 
-### PAL-1. The caption colour is too dim to read — palette lift queued, mine to ship 🔴 OPEN
+### PAL-1. The caption colour is too dim to read — ✅ SHIPPED 2026-08-11
 
-**Measured 2026-08-06.** `--v2-faint` renders **3.63:1** against the page background. WCAG AA lets a
-colour that dim carry only *large* text (≥24px, or ≥18.66px bold); small text owes **4.5:1**. Every
-rule in `src/` that pairs `color: var(--v2-faint)` with a declared font size — **29 of 29**, across
-`shell-v2.css` · `home-console.css` · `home-hud.css` · `home-v2.css` · `hud-rooms.css` ·
-`monitor-v2.css` · `RerunCheckBand.css` — is small text. So the token's "caption tier → AA-large"
-contract is fiction in practice: version stamps, eyebrows, units, hints and tags all ship under AA.
+Recommendation (a) landed as decided. `--v2-faint` `#626a80` → **`#7a8397`**: 4.65:1 on the lightest
+v2 surface (`--v2-panel-2`), 4.94:1 on `--v2-bg`. Measured on the live installed build before and
+after the token swap: **32 failing text nodes → 0**. The palette floor for `faint` was raised 3.0 →
+4.5 in `tokens-v2-guard.test.ts`, and the 29-site ratchet was deleted — it existed only to freeze a
+failing class that no longer exists, exactly the self-retirement its own comment described.
 
-**Plain English:** the faintest grey label text is dimmer than the accessibility floor — readable on
-a good monitor in a dark room, not readable for everyone. For a product sold as "a portal for
-everyone," that is a real defect, not a nitpick.
+**The compression is real and is now the documented cost:** on a near-black ground three text tiers
+cannot all clear AA at 9px, so `faint` sits close to `muted`. The tier below `muted` is carried by
+SIZE and WEIGHT from here on, not by dimming further — which is what makes TYPE-1 below the
+follow-on rather than a separate idea.
 
-**Why it is still open, and who decides it (revised 2026-08-07):** raising `--v2-faint` is a palette
-change that compresses the muted/faint hierarchy — three text tiers become closer to two. Under the
-decree in `CLAUDE.md` ("TASTE IS MINE TO EXERCISE, HIS TO OVERRULE") that is **mine to decide and
-ship**, with a before/after posted so the owner can veto on sight. It is open because the change is
-unbuilt, not because it is waiting on him. **Recommendation: (a)** — lift `--v2-faint` to ≥4.5:1 and
-re-space `--v2-muted` above it, keeping three tiers. Rejected alternatives: (b) retiring the faint
-tier and folding all 29 sites onto `--v2-muted` flattens the hierarchy the HUD reads by;
-(c) keeping the colour and raising the type is only honest where the text can actually be large,
-which is almost nowhere in these 29.
+### TYPE-1. A 12-size type scale is not a scale — and 57% of the app is ≤11px 🔴 OPEN
 
-**Holding the line meanwhile:** `src/design/tokens-v2-guard.test.ts` → "caption-token usage" freezes
-the 29 as a **ratchet** — a 30th site fails the build, and a baselined site that gets fixed without
-its line deleted also fails, so the list can only shrink. The day the palette lands, the guard's
-contrast precondition stops holding and it retires itself. (It was written because a new Home label
-became the 30th and the self-review caught it: `bug → guard`.)
+**Measured 2026-08-11** on one live room: distinct font sizes in use = **8, 9, 10, 10.5, 11, 12,
+12.5, 13, 13.5, 16, 19, 32px**. 47 of 83 text nodes are **11px or smaller**; exactly one element is
+above 19px. There is no scale — there are twelve ad-hoc values.
+
+**Plain English:** almost the whole app is set in fine print. The target user is a non-technical
+gamer who is often further from the screen than a designer is from a laptop.
+
+**Decision (mine, per the taste decree): collapse to a 6-step token scale and raise the floor to
+11px — delete 8px and 9px outright.** Ships with a before/after. Also in scope: **five font families
+render on one screen** (Geist Sans, Geist Mono, Segoe UI Variable Display, Cascadia Mono, **Arial**).
+The Arial fallthrough is why the tour’s `✓` draws like a square-root sign.
+
+**Related law with no guard:** `tokens-v2.css` states *"--v2-font-mono is for MACHINE VALUES ONLY —
+never labels or prose"*. Live measurement found it on section labels throughout ("Patterns across
+your sessions", "Changes to this PC", "The record", "Guides fact-checked" — all 9px mono uppercase).
+The law is a comment; nothing enforces it. Mechanize it in the same train.
+
+### COLOR-1. Room accents collide with the status palette 🔴 OPEN
+
+**Measured 2026-08-11.** `tokens-v2.css` states *"Status — color is information, never decoration"*,
+and `src/surfaces/room-identity.css` breaks it: Lab `#27e08a` vs `--v2-ok: #3ddc97` (near-identical
+green); Blackbook `#f0b878` vs `--v2-warn: #f5c542` (both amber).
+
+**Plain English:** the whole Lab glows the same colour as "this is good", so green stops meaning
+good in the one room built to prove things. The whole Blackbook glows the same colour as "warning" —
+a room that exists to reassure reads as an alert, active tab pill included.
+
+**Decision: rooms stop owning hue.** Identity moves to the glyph, the masthead eyebrow and one
+hairline; `ok / warn / info` become the only elements allowed green, amber and blue. If tint must
+stay, move room accents off the status hues entirely (violet · indigo · slate · rose).
+
+### UX-1. The verdict is smaller than the word "Home", and the front door is a 10-step lecture 🔴 OPEN
+
+**Measured 2026-08-11.** On the diagnostic screen `Home` renders at **32px** — the largest text in
+the app — while the actual verdict *"You're ready to play"* sits beneath it at **24px**.
+
+**Plain English:** the least informative word on the page is the biggest thing on it.
+
+**Decisions:** ① the verdict becomes the H1; the room name shrinks into the eyebrow it already has
+("RIG DIAGNOSTIC"), and the room is renamed to something that answers a question (Health /
+Diagnosis). ② Drop the topbar taglines (`Blackbook · what actually works — measured` etc.) — that is
+the project's own title-header law, and each room already repeats its name as an H1 90px below.
+③ **First run lands on the diagnosis, not on the 10-step hardware tour** — Compy is where you go
+after a crash, and the tour is also mislabelled (`GUIDED SETUP` on step 1, `HARDWARE TOUR` on
+step 5). The tour becomes a card the user can choose.
+
+Full evidence, screenshots and the remaining copy/layout findings:
+[`docs/decisions/2026-08-11-design-navigation-audit.md`](decisions/2026-08-11-design-navigation-audit.md).
 
 ### NAV-1. Navigation & consolidation audit (2026-07-23) — findings + candidates awaiting owner direction 🔴 OPEN
 

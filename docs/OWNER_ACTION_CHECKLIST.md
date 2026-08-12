@@ -125,6 +125,16 @@ everyone who already opens the Lab. Flip it in Settings, look at the band, and s
 that band's keyboard focus ring (it drew focus identically to hover). Merge #93 **before** the flag
 goes on, or the flip ships that defect to real users on day one.
 
+### A_ref. One dead branch left on GitHub — deleting it needs your click  ·  ⏳ NEW 2026-08-11
+Two of the three finished branches were deleted cleanly. The third, `docs/close-recovery-lane`, was
+refused three times — the permission prompt for deleting a branch was declined to this session, so it
+is still sitting on GitHub even though its work is already in the main line (PR
+[#103](https://github.com/Pootytxng/sentinel/pull/103)).
+
+**Nothing is broken and nothing is at risk** — it is a leftover label, not code. The only cost is that
+`docs/BRANCH_DISPOSITIONS.md` has to keep a row explaining why it is still there. Next time a session
+asks to delete a branch, approving it clears both. No rush.
+
 ### A-closed. Nine §A items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
 None of them is waiting on you — A0, A_ci and A_rig above are the only §A items still open, and
