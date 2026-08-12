@@ -273,11 +273,12 @@ describe("Home intake band — intent rows (option A): route to the live room, n
     const expected = HOME_INTAKE_ROWS.filter((r) => liveRooms.some((rm) => rm.key === r.room));
     expect(rows.length).toBe(expected.length);
     expect(rows.length).toBe(HOME_INTAKE_ROWS.length);
-    // The room chip shows the rail's LABEL (Monitor/Blackbook/Lab), never the raw nav id.
+    // The room chip shows the rail's LABEL (Live/History/Test — owner rename 2026-08-12), never
+    // the raw nav id.
     const chips = Array.from(c.querySelectorAll(".hc-intake-row-room")).map((n) => n.textContent);
-    expect(chips).toContain("Monitor →");
-    expect(chips).toContain("Blackbook →");
-    expect(chips).toContain("Lab →");
+    expect(chips).toContain("Live →");
+    expect(chips).toContain("History →");
+    expect(chips).toContain("Test →");
     // …and never leaks a raw id.
     expect(chips.some((t) => /\b(play|learn)\b/.test(t ?? ""))).toBe(false);
   });

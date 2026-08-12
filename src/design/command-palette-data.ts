@@ -61,9 +61,9 @@ const GROUP_WEIGHT: Record<PaletteGroup, number> = {
 
 export const GROUP_LABEL: Record<PaletteGroup, string> = {
   room: "Rooms",
-  station: "Lab instruments",
+  station: "Test instruments",
   app: "App",
-  entry: "Blackbook",
+  entry: "History",
 };
 
 /** Rooms are ordered by the rail; everything else follows the group order. */

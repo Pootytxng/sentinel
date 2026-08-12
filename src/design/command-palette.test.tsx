@@ -57,7 +57,7 @@ describe("mounting", () => {
 describe("it routes through the host's writers — never its own navigation", () => {
   it("a room row calls onNavigate with the rail id", () => {
     const p = setup();
-    type("monitor");
+    type("live");
     fireEvent.click(rows()[0]);
     expect(p.onNavigate).toHaveBeenCalledWith("play");
   });
@@ -92,7 +92,7 @@ describe("it routes through the host's writers — never its own navigation", ()
       onClose: vi.fn(() => order.push("close")),
       onNavigate: vi.fn(() => order.push("navigate")),
     });
-    type("monitor");
+    type("live");
     fireEvent.click(rows()[0]);
     expect(order).toEqual(["close", "navigate"]);
     expect(p.onClose).toHaveBeenCalled();

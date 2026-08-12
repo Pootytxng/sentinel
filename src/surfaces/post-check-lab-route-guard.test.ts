@@ -1,7 +1,7 @@
 // bug->guard (J, 2026-07-22): "post-check routing — landing on the dashboard after a check feels
 // directionless; add a second CTA that opens the Lab's Optimize tab directly."
 //
-// The fix SHIPPED (FirstCheck's "Take me to the Lab" button + the `compy_lab_open_station` handoff)
+// The fix SHIPPED (FirstCheck's "Take me to Test" button + the `compy_lab_open_station` handoff)
 // but shipped WITHOUT a guard: the key appears in exactly two source files and no test. It is a
 // three-part contract split across two components with nothing holding the halves together —
 // precisely the shape that rots silently:
@@ -100,7 +100,7 @@ describe("post-check lab route (J, 2026-07-22)", () => {
     // J's complaint was a single exit ("Open the dashboard"). Two exits is the fix.
     expect(firstCheck, "the onGoToLab CTA is gone — the post-check verdict has one exit again")
       .toContain("onGoToLab");
-    expect(firstCheck).toMatch(/Take me to the Lab/);
+    expect(firstCheck).toMatch(/Take me to Test/);
     expect(firstCheck).toMatch(/Open the dashboard/);
   });
 });
