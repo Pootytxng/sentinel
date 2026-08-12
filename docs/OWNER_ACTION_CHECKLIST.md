@@ -125,23 +125,6 @@ everyone who already opens the Lab. Flip it in Settings, look at the band, and s
 that band's keyboard focus ring (it drew focus identically to hover). Merge #93 **before** the flag
 goes on, or the flip ships that defect to real users on day one.
 
-### A_gaming. A Gaming Mode session from this morning never ended — one click closes it  ·  ⏳ NEW 2026-08-11
-`%APPDATA%\Compy\gaming-session.json` holds an **active** session started 2026-08-11 06:25 with seven
-staged changes still on the contract (Game Mode, Game Bar/DVR, two power settings, and SysMain,
-DiagTrack and WSearch suspended). Closing Compy does not run the restore — only ending the session
-does — so it survived the app being replaced and is now blocking every install: `ship-reinstall.ps1`
-refuses to touch a machine with an unrestored contract on it, deliberately.
-
-**What's yours:** open Compy, end Gaming Mode / accept the "recover the last session" prompt, and
-approve the Windows admin prompt it raises (three of the seven changes are services and power
-settings, which need it). Nothing is lost either way — the contract records exactly what each
-setting was before, and two of the three services were already off when the session started.
-
-**Then tell me and I install the new build.** I am not doing this one behind your back: it is your
-live machine mid-day, and if you actually wanted Gaming Mode on right now, ending it is the wrong
-move. If you would rather I drove it, say so and I will — the admin prompt will still be yours to
-click.
-
 ### A-closed. Nine §A items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
 None of them is waiting on you — A0, A_ci and A_rig above are the only §A items still open, and

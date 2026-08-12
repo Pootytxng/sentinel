@@ -29,9 +29,14 @@
   resolves the head itself instead of trusting a receipt's self-declared SHA). PR #100 closed as
   measured-inert and rebuilt through `WebviewWindowBuilder` + `SW_SHOWNOACTIVATE`, with a RUNTIME
   tier in `launch-focus-guard.test.mjs` that watches `GetForegroundWindow` across a real launch.
-  **Still open on it:** the new build is built but NOT installed — an unrestored Gaming Mode
-  contract from 06:25 blocks `ship-reinstall.ps1` until the owner ends that session
-  (`OWNER_ACTION_CHECKLIST.md` §A_gaming), and the picker's re-review + before/after wait on it.
+  Shipped: installed build `3155c7a0`, self-review **PASS** on round 3 (round 2 caught that P2 was
+  only half-fixed — a hand-added cooler still occluded the CPU — and that is now fixed and guarded).
+- [ ] **The "add a part" form is mounted nowhere** — found during the PR #102 self-review
+  (2026-08-11). `<RigViewer>` renders live only from `LabConsole.tsx`, always `chromeless`, and
+  `chromeless` hides the add-a-part form, the explode/orbit controls and the monitor nudge. So the
+  manual-parts feature (`manual-parts.ts`, `compy_rig_manual_parts`, the user-added evidence copy)
+  is reachable in tests only — a user cannot add the PSU or cooler Compy admits it cannot read.
+  Either mount a non-chromeless viewer somewhere real or move the form into the Lab's own chrome.
 - [ ] **Q8 / issue #91 — COMPY CARE: primary PC-doctor directive + Capability Exception Gate
   (OWNER-APPROVED 2026-08-09).** Queue position is exact: PR #90 is now MERGED and its four
   post-merge defects are repaired in PR #102; **land #102 first**, then rebase #91,

@@ -60,33 +60,20 @@ npm audit (five advisories classified with real dependency paths + expiry), RELE
 
 ## Left to do
 
-### 1 · BLOCKED on the owner — an unrestored Gaming Mode contract
+Nothing in this lane except landing it. PR #102 is green, the build is installed and proved
+(`3155c7a0 · release`, installer SHA-256 `3AD4C690…BF8E`), and the self-review came back **PASS** on
+round 3. Round 2 is why there was a round 3: it caught that P2 was only half-fixed — the detected-fan
+half worked, a hand-added cooler still swallowed every click aimed at the CPU behind it. Fixed in
+`3155c7a0` with four regression cases, and the fixtures carry `kind` on purpose (without it the shape
+rules judge a manual part as a fan and the tests pass either way — measured).
 
-`%APPDATA%\Compy\gaming-session.json` is **active**, started 2026-08-11 06:25, seven staged changes
-(Game Mode, Game Bar/DVR, two power settings, SysMain + DiagTrack + WSearch suspended). Closing the
-app does not restore — only ending the session does — so `ship-reinstall.ps1` refuses to install over
-it, deliberately. Written up as `OWNER_ACTION_CHECKLIST.md` §A_gaming. **Do not delete, move or parse
-that file to get past the gate.** Three of the seven need elevation, so a UAC prompt is his click
-either way.
+Next: merge #102, prune the ref with `gh api` (never `--delete-branch`), then clear this file.
 
-### 2 · Then, in this order
+### Found on the way, not fixed here
 
-1. `scripts/ship-reinstall.ps1 -VerifyRuntime -ExpectedCommit <full HEAD sha>` — the build is already
-   cut at `34443622`+ (NSIS under `src-tauri/target/release/bundle/nsis/`); only the install is blocked.
-2. **Re-dispatch `self-reviewer` for a FULL fresh review** of the Lab keyboard picker. Round 1 came
-   back FAIL on one real defect (the on-canvas spec card landed across the picker rows); the fix is
-   committed (`34443622`) with a behavioural guard, but the law wants a fresh PASS from the top, not
-   a spot-check of the fixed item.
-3. Hand the owner a before/after of the picker via `SendUserFile` (taste-call rule) — regenerate the
-   shots against the newly installed build; the ones in the scratchpad predate the fix.
-4. Re-stamp the RELEASE_STATE owner-installed row (stamp + installer SHA-256) in the same commit.
-5. Merge #102 — merging a green PR is ours (decree 2026-08-11). Prune the ref with `gh api`, never
-   `--delete-branch`.
-
-### 3 · Watch item, not yet a defect
-
-The reviewer flagged `.rig-picker-value` contrast at ~3.0–3.6:1. That is the app's documented
-caption tier, so it is a taste call rather than a regression — decide it with the before/after.
+`<RigViewer>` is mounted live only by `LabConsole.tsx`, always `chromeless` — and `chromeless` hides
+the "add a part" form. The manual-parts feature is therefore reachable in tests only. Logged in
+`docs/BACKLOG.md`.
 
 ## Do NOT
 
@@ -102,5 +89,4 @@ caption tier, so it is a taste call rather than a regression — decide it with 
 
 ## Resume with
 
-Ask the owner whether he has ended the Gaming Mode session (§A_gaming) — everything else in this
-lane is done and pushed. Once it is clear: install, re-review, show him the before/after, merge #102.
+Merge PR #102 if it is still open; otherwise this lane is finished and the file can be cleared.
