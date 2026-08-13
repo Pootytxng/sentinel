@@ -75,10 +75,18 @@ export function ArcGauge({
       </svg>
       <div className="ag-ctr">
         <div className="ag-v">{empty ? "— —" : Math.round(shown!)}</div>
-        <div className="ag-u">{empty ? t("common.arcGauge.noReading") : unit}</div>
+        {/* TYPE-1 look-caught defect (v0.9.19 review, 2026-08-13): at the 13px floor a long unit
+            word ("score", "frames", "ready") or the empty-state sentence overflows the 56px ring —
+            the old 8px fit was fine print, the exact disease TYPE-1 cures. The ring only ever
+            carries a SHORT unit (°C, %, fps, ms); anything longer moves BESIDE the label, never
+            below the floor. Guarded in arc-gauge.test.tsx. */}
+        {!empty && unit.length <= 3 && <div className="ag-u">{unit}</div>}
       </div>
       <div className="ag-label">
         <span>{label}</span>
+        {(empty || unit.length > 3) && (
+          <span className="ag-u ag-u-side">{empty ? t("common.arcGauge.noReading") : unit}</span>
+        )}
         {empty ? <span className="ag-tag ag-tag-ny">{t("common.arcGauge.notYet")}</span>
                : measured ? <span className="ag-tag">{t("common.arcGauge.measured")}</span> : null}
         {note && !empty && <span className="ag-note">{note}</span>}

@@ -21,6 +21,9 @@
 :root[data-v2="on"] .ag-empty .ag-v { color: var(--ix-text-3); }
 :root[data-v2="on"] .ag-u { font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .1em;
   text-transform: uppercase; color: var(--ix-text-3); margin-top: 2px; }
+/* TYPE-1 (2026-08-13): a unit too long for the 56px ring renders here, beside the label, at the
+   same 13px floor — the ring never carries text it cannot hold, and nothing shrinks below floor. */
+:root[data-v2="on"] .ag-u-side { margin-top: 0; }
 :root[data-v2="on"] .ag-label { grid-column: 2; display: flex; flex-direction: column; gap: 4px;
   font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .12em; text-transform: uppercase; color: var(--ix-text-2); }
 :root[data-v2="on"] .ag-tag { align-self: flex-start; font-size: var(--type-label); letter-spacing: .1em;
