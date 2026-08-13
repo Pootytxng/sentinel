@@ -405,7 +405,7 @@ function EntryDateNote({ entry }: { entry: KnowledgeEntry }) {
     <p
       className="lx-datenote"
       role="note"
-      style={{ margin: "10px 0 0", fontSize: "11px", color: "var(--ix-text-3)" }}
+      style={{ margin: "10px 0 0", fontSize: "var(--type-label)", color: "var(--ix-text-3)" }}
     >
       {t("blackbook.learn.dateNote.addedPre")}
       {added}

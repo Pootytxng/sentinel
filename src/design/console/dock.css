@@ -24,11 +24,11 @@
   transition: transform 0.16s ease, border-color 0.16s, color 0.16s;
 }
 :root[data-v2="on"] .dock-node .dock-ic {
-  font-size: 18px;
+  font-size: var(--type-card);
   line-height: 1;
 }
 :root[data-v2="on"] .dock-node .dock-nm {
-  font-size: 9px;
+  font-size: var(--type-label);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ix-text-3);

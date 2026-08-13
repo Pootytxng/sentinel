@@ -29,7 +29,7 @@
 /* .exp-bench-title is gone with the <h2> it styled — the BentoTile head is the one title now. */
 .exp-bench-hint {
   margin: 0 0 14px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.55;
   color: var(--ix-text-2);
   max-width: 68ch;
@@ -37,7 +37,7 @@
 .exp-bench-error {
   margin: 0 0 12px;
   padding: 9px 11px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-1);
   background: color-mix(in srgb, var(--ix-danger) 12%, var(--ix-glass-fill));
@@ -57,7 +57,7 @@
   gap: 6px;
 }
 .exp-field-label {
-  font-size: 11.5px;
+  font-size: var(--type-label);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ix-text-3);
@@ -65,7 +65,7 @@
 .exp-select,
 .exp-input {
   font: inherit;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-1);
   background: var(--ix-glass-fill);
   border: 1px solid var(--ix-glass-border);
@@ -85,7 +85,7 @@
 }
 .exp-note {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-2);
   max-width: 64ch;
@@ -105,7 +105,7 @@
 /* Names the exact change this verdict + Start button act on — the mutation target, never ambiguous. */
 .exp-sim-rec {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--type-label);
   font-weight: 600;
   line-height: 1.35;
   color: var(--ix-text-1);
@@ -122,20 +122,20 @@
    attribute stays on .exp-sim as the card's own state hook. */
 .exp-sim-conf {
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 11px;
+  font-size: var(--type-label);
   letter-spacing: 0.02em;
   color: var(--ix-text-3);
   white-space: nowrap;
 }
 .exp-sim-why {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-2);
 }
 .exp-sim-line {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-2);
 }
@@ -152,7 +152,7 @@
 }
 .exp-baseline {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-2);
 }
@@ -163,7 +163,7 @@
 .exp-cta {
   align-self: flex-start;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--type-label);
   font-weight: 600;
   cursor: pointer;
   background: var(--ix-accent);
@@ -182,7 +182,7 @@
 .exp-cta-ghost {
   align-self: flex-start;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--type-label);
   font-weight: 600;
   cursor: pointer;
   background: transparent;
@@ -201,7 +201,7 @@
 }
 .exp-fineprint {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--type-label);
   line-height: 1.45;
   color: var(--ix-text-3);
   max-width: 64ch;
@@ -236,13 +236,13 @@
   flex: none;
 }
 .exp-running-title {
-  font-size: 13.5px;
+  font-size: var(--type-label);
   font-weight: 650;
   color: var(--ix-text-1);
 }
 .exp-running-baseline {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 .exp-running-baseline b {
@@ -251,7 +251,7 @@
 }
 .exp-running-step {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.55;
   color: var(--ix-text-2);
   max-width: 64ch;
@@ -259,7 +259,7 @@
 .exp-bench-warn {
   margin: 0;
   padding: 8px 10px;
-  font-size: 12px;
+  font-size: var(--type-label);
   line-height: 1.45;
   color: var(--ix-text-1);
   background: color-mix(in srgb, var(--ix-amber) 12%, var(--ix-glass-fill));
@@ -295,7 +295,7 @@
   grid-template-columns: 1fr auto auto;
   gap: 12px;
   align-items: baseline;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   padding: 5px 0;
   border-bottom: 1px solid var(--ix-line);
@@ -321,14 +321,14 @@
 }
 .exp-bench-delta {
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 11.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .exp-bench-abort {
   grid-column: 1 / -1;
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--ix-amber);
 }
 

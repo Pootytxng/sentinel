@@ -60,18 +60,18 @@
 }
 .slimrow-title {
   font-weight: 620;
-  font-size: 14.5px;
+  font-size: var(--type-body);
   color: var(--fg);
 }
 /* The ONE always-visible measured proof line (honesty guardrail — never hidden, never empty). */
 .slimrow-proof {
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.45;
 }
 
 .slimrow-badge {
-  font-size: 11px;
+  font-size: var(--type-label);
   font-weight: 700;
   letter-spacing: 0.03em;
   padding: 3px 9px;
@@ -107,7 +107,7 @@
   gap: 10px;
   padding: 8px 0;
   border-bottom: 1px solid var(--hairline);
-  font-size: 13px;
+  font-size: var(--type-label);
   line-height: 1.5;
 }
 .slimrow-drow:last-of-type {

@@ -56,9 +56,18 @@ function exactRule(css: string, selector: string): string | null {
   return hit ? hit.body : null;
 }
 
-const px = (body: string, prop: string): number | null => {
-  const m = body.match(new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([\\d.]+)px`));
+// TYPE-1 (2026-08-13): sizes are now declared as var(--type-*) tokens, so a literal-px match
+// resolves the token through type-scale.css — the floors below are enforced on the RESOLVED value.
+const TYPE_SCALE = readFileSync(join(SRC, "design", "type-scale.css"), "utf8");
+const tokenPx = (name: string): number | null => {
+  const m = TYPE_SCALE.match(new RegExp(`${name}:\\s*([\\d.]+)px`));
   return m ? Number(m[1]) : null;
+};
+const px = (body: string, prop: string): number | null => {
+  const lit = body.match(new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([\\d.]+)px`));
+  if (lit) return Number(lit[1]);
+  const tok = body.match(new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*var\\((--type-[\\w-]+)\\)`));
+  return tok ? tokenPx(tok[1]) : null;
 };
 
 const MC_VARS = [
@@ -117,7 +126,9 @@ describe("measurement chrome — typography lives exactly once", () => {
 
   it("names no palette token of its own — colour comes only from --mc-*", () => {
     // The whole reason one vocabulary can live in two token families (--* and --ix-*).
-    const foreignTokens = chromeCss.match(/var\(\s*--(?!mc-)[a-z0-9-]+/g) ?? [];
+    // --type-* is exempt (TYPE-1, 2026-08-13): the six-step type scale is the ONE shared size
+    // vocabulary app-wide — a size token is not a palette token and cannot re-fork colour.
+    const foreignTokens = chromeCss.match(/var\(\s*--(?!mc-|type-)[a-z0-9-]+/g) ?? [];
     expect(foreignTokens).toEqual([]);
   });
 });

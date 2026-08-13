@@ -6,13 +6,13 @@
   background: var(--ix-surface-2, rgba(255, 255, 255, 0.02));
 }
 .tg-verdict-head {
-  font-size: 14px;
+  font-size: var(--type-label);
   font-weight: 600;
   color: var(--ix-text-1);
 }
 .tg-verdict-detail {
   margin: 4px 0 8px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-2);
 }
@@ -22,7 +22,7 @@
   gap: 6px 14px;
 }
 .tg-stat {
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 .tg-stat b {

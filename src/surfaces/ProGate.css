@@ -10,7 +10,7 @@
 }
 .progate-badge {
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 10.5px;
+  font-size: var(--type-label);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -23,6 +23,6 @@
 .progate-text {
   margin: 0;
   color: var(--ix-text-2);
-  font-size: 13px;
+  font-size: var(--type-label);
   line-height: 1.5;
 }

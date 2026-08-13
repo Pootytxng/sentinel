@@ -76,13 +76,13 @@
 }
 .mdc-k {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--type-label);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
 }
 .mdc-sub {
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--faint);
   white-space: nowrap;
   overflow: hidden;
@@ -98,14 +98,14 @@
 }
 .mdc-value {
   font-family: var(--font-mono);
-  font-size: 28px;
+  font-size: var(--type-section);
   font-weight: 600;
   color: var(--fg);
   display: inline-flex;
   align-items: baseline;
 }
 .mdc-unit {
-  font-size: 13px;
+  font-size: var(--type-label);
   font-weight: 400;
   color: var(--muted);
   margin-left: 3px;
@@ -175,7 +175,7 @@
 }
 
 .mdc-mem-advisory {
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--muted);
   margin: 8px 0 0;
 }

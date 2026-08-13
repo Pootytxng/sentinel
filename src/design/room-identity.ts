@@ -10,18 +10,24 @@
 // shares the global violet, byte-identical to today. Home keeps the global brand violet — it IS the
 // home/brand colour, its identity unchanged.
 //
-// These hexes are the SINGLE SOURCE OF TRUTH; room-identity.css must carry the identical values,
-// pinned by room-identity.test.ts. Presentation only — no logic, data, or backend touched.
+// COLOR-1 (2026-08-13) superseded the preset half of this doctrine: room-identity.css now carries
+// NO preset rules (pinned by room-identity.test.ts) and ROOM_IDENTITY below is the one violet
+// accent for every room. The flag + picker mechanism this header describes still powers USER picks.
+// Presentation only — no logic, data, or backend touched.
 
 export type RoomKey = "play" | "learn" | "lab" | "fix";
 
-// The four in-room accents. `fix` (the Optimize station) shares the Lab family emerald — it lives
-// inside the Lab now, so they read as one bench.
+// COLOR-1 (design foundation step ①, 2026-08-13): ROOMS GAVE UP THEIR HUE. The teal/amber/emerald
+// presets collided with the status palette (Lab #27e08a vs --v2-ok #3ddc97; Blackbook #f0b878 vs
+// --v2-warn #f5c542) — whole rooms glowed "good"/"warning", so colour stopped being information.
+// Every room now DEFAULTS to the one violet accent; green/amber/red/blue each mean exactly one
+// thing app-wide. The user's per-room accent PICKER below survives (owner freedom directive
+// 2026-07-12b) — a deliberate pick is not a shipped default. room-identity.css carries no rules.
 export const ROOM_IDENTITY: Record<RoomKey, string> = {
-  play: "#3fd9c2", // Monitor — teal (live signal; echoes the rig's GPU hue)
-  learn: "#f0b878", // Blackbook — amber (records / logbook warmth)
-  lab: "#27e08a", // Lab — emerald (bench / measured "go")
-  fix: "#27e08a", // Optimize station — shares the Lab family
+  play: "#a78bfa", // Monitor — the one accent (was teal #3fd9c2 pre-COLOR-1)
+  learn: "#a78bfa", // Blackbook — the one accent (was amber #f0b878)
+  lab: "#a78bfa", // Lab — the one accent (was emerald #27e08a)
+  fix: "#a78bfa", // Optimize station — the one accent (was emerald #27e08a)
 };
 
 // Home / global brand accent — the DEFAULT for Home; Home takes no preset override in

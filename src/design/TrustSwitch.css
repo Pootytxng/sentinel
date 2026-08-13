@@ -47,7 +47,7 @@
   outline-offset: 2px;
 }
 .ts-label {
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-1);
 }
 
@@ -56,7 +56,7 @@
   align-items: baseline;
   gap: 8px;
   margin: 12px 0 0;
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   line-height: 1.5;
   font-family: var(--font-mono, ui-monospace, monospace);

@@ -9,7 +9,7 @@
 .mc-eyebrow {
   display: block;
   font-family: var(--mc-mono, ui-monospace, monospace);
-  font-size: 12px;
+  font-size: var(--type-label);
   font-weight: 500;
   letter-spacing: 0.06em;
   line-height: 1.35;
@@ -22,7 +22,7 @@
    side stripes). A host card may still carry its own border/wash; that is the CARD's business. */
 .mc-verdict {
   display: block;
-  font-size: 13px;
+  font-size: var(--type-label);
   font-weight: 620;
   line-height: 1.4;
   color: var(--mc-ink);

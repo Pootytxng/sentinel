@@ -7,7 +7,7 @@
 }
 .tg-walkthrough > summary {
   cursor: pointer;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-accent-text);
   user-select: none;
 }
@@ -18,7 +18,7 @@
   border-top: 1px solid var(--ix-line);
 }
 .tg-readout-head {
-  font-size: 11.5px;
+  font-size: var(--type-label);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ix-text-3);
@@ -26,7 +26,7 @@
 }
 .tg-readout-empty {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--type-label);
   line-height: 1.55;
   color: var(--ix-text-2);
 }
@@ -36,7 +36,7 @@
   margin-top: 12px;
 }
 .tg-recent-label {
-  font-size: 11.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
   margin-bottom: 6px;
 }
@@ -53,7 +53,7 @@
   grid-template-columns: 1fr auto auto;
   gap: 12px;
   align-items: center;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   padding: 3px 0;
 }
@@ -69,11 +69,11 @@
 }
 .tg-recent-smooth {
   color: var(--ix-text-3);
-  font-size: 11.5px;
+  font-size: var(--type-label);
 }
 .tg-readout-foot {
   margin: 12px 0 0;
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
   line-height: 1.4;
 }
@@ -81,7 +81,7 @@
 /* §A tailoring (spec 2026-06-12): the why-this-rig receipt line + the honest no-evidence state. */
 .tg-evidence {
   margin: 0 0 10px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 .tg-evidence-mark {
@@ -90,7 +90,7 @@
 }
 .tg-not-for-rig {
   margin: 0 0 12px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   max-width: 60ch;
 }

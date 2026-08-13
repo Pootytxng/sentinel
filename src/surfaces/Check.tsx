@@ -920,7 +920,7 @@ export default function Check({
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
                   fontFamily: "inherit",
-                  fontSize: "12.5px",
+                  fontSize: "var(--type-label)",
                   lineHeight: 1.5,
                   color: "var(--ix-text-2)",
                   background: "var(--ix-surface-2, rgba(0, 0, 0, 0.18))",

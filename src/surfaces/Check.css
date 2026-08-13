@@ -30,7 +30,7 @@
 }
 .check-title {
   margin: 0;
-  font-size: 22px;
+  font-size: var(--type-section);
   font-weight: 500;
   color: var(--ix-text-1);
   letter-spacing: -0.01em;
@@ -38,7 +38,7 @@
 /* P5.5 type voice: the subtitle is a sentence — UI font (mono is reserved for numbers/stamps). */
 .check-sub {
   margin: 5px 0 0;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 
@@ -51,7 +51,7 @@
   margin: 8px 0 2px;
 }
 .cc-chip {
-  font-size: 12px;
+  font-size: var(--type-label);
   font-weight: 600;
   padding: 2px 10px;
   border-radius: 999px;
@@ -81,7 +81,7 @@
   border-top-color: var(--ix-glass-top);
   background: var(--accent-soft, rgba(46, 230, 192, 0.12));
   color: var(--ix-accent-text);
-  font-size: 13px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
   transition: border-color 160ms ease;
@@ -101,7 +101,7 @@
   gap: 12px;
 }
 .check-section-label {
-  font-size: 11px;
+  font-size: var(--type-label);
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--ix-accent-text);
@@ -112,7 +112,7 @@
 }
 .check-clear {
   margin: 2px;
-  font-size: 13.5px;
+  font-size: var(--type-label);
   color: var(--ix-accent-text);
 }
 
@@ -150,17 +150,17 @@
   flex-wrap: wrap;
 }
 .check-row-title {
-  font-size: 14.5px;
+  font-size: var(--type-body);
   font-weight: 500;
   color: var(--ix-text-1);
 }
 .check-conf {
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
 }
 .check-row-reason {
   margin: 5px 0 0;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   line-height: 1.5;
 }
@@ -173,7 +173,7 @@
 }
 .check-drift-note {
   margin: 9px 0 0;
-  font-size: 11.5px;
+  font-size: var(--type-label);
   font-style: italic;
   line-height: 1.5;
   color: var(--ix-text-3);
@@ -197,7 +197,7 @@
   background: color-mix(in srgb, var(--ix-text-1) 3%, transparent);
 }
 .check-startup-name {
-  font-size: 13px;
+  font-size: var(--type-label);
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -209,7 +209,7 @@
 }
 .check-advisory {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   border: 1px solid var(--ix-glass-border);
   border-radius: 999px;
@@ -253,7 +253,7 @@
 }
 .check-driver-kind {
   flex: 0 0 auto;
-  font-size: 10.5px;
+  font-size: var(--type-label);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -265,7 +265,7 @@
 .check-driver-fact {
   flex: 1;
   min-width: 0;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   line-height: 1.5;
 }
@@ -275,7 +275,7 @@
 }
 .check-driver-note {
   margin: 9px 0 0;
-  font-size: 11.5px;
+  font-size: var(--type-label);
   font-style: italic;
   line-height: 1.5;
   color: var(--ix-text-3);
@@ -286,7 +286,7 @@
   color: var(--ix-text-2);
   border-radius: 6px;
   padding: 4px 11px;
-  font-size: 11.5px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
 }
@@ -309,17 +309,17 @@
   gap: 12px;
 }
 .check-drift-label {
-  font-size: 14px;
+  font-size: var(--type-label);
   font-weight: 500;
   color: var(--ix-text-1);
 }
 .check-drift-when {
-  font-size: 11.5px;
+  font-size: var(--type-label);
   color: var(--ix-amber);
 }
 .check-drift-detail {
   margin: 5px 0 0;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   line-height: 1.5;
 }
@@ -340,7 +340,7 @@
   border: 0;
   background: transparent;
   color: var(--ix-accent-text);
-  font-size: 13px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
   text-align: left;
@@ -357,7 +357,7 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 .check-fine-mark {
@@ -378,7 +378,7 @@
   align-items: baseline;
   gap: 10px;
   padding: 6px 0;
-  font-size: 12.5px;
+  font-size: var(--type-label);
 }
 .check-all-row + .check-all-row {
   border-top: 1px solid color-mix(in srgb, var(--ix-glass-border) 55%, transparent);
@@ -461,13 +461,13 @@
   min-width: 0;
 }
 .check-nudge-title {
-  font-size: 13.5px;
+  font-size: var(--type-label);
   font-weight: 600;
   color: var(--ix-text-1);
 }
 .check-nudge-reason {
   margin: 2px 0 0;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.45;
   color: var(--ix-text-2);
 }
@@ -478,7 +478,7 @@
   color: var(--ix-accent-text);
   border-radius: 6px;
   padding: 7px 12px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
@@ -498,7 +498,7 @@
 }
 .check-leftovers-blurb {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 .check-leftovers-run {
@@ -508,7 +508,7 @@
   border-top-color: var(--ix-glass-top);
   background: transparent;
   color: var(--ix-text-1);
-  font-size: 12.5px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
   transition: border-color 160ms ease;
@@ -522,14 +522,14 @@
 }
 .check-leftovers-clean {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-accent-text);
 }
 .check-leftovers .check-list {
   width: 100%;
 }
 .check-leftover-note {
-  font-size: 11.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
   margin: 4px 0 0;
 }
@@ -541,7 +541,7 @@
   border: 1px solid var(--ix-glass-border, rgba(255, 255, 255, 0.08));
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.02);
-  font-size: 11.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
 }
 .check-unchecked-head {
@@ -568,7 +568,7 @@
 }
 .check-upgrade-title {
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: var(--type-label);
 }
 .check-upgrade-links {
   display: flex;
@@ -578,7 +578,7 @@
 }
 .check-upgrade-disclosure {
   margin: 12px 0 0;
-  font-size: 11.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
 }
 

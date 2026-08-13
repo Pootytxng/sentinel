@@ -96,7 +96,7 @@
    tab, one quiet line under the face toggle). */
 :root[data-v2="on"] .bbv2-guide-lede {
   margin: 0 0 12px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.5;
   /* Token only — blackbook-v2.css is under the no-color-literals guard (caught by the full-suite
      gate 2026-07-23; the raw-hex fallback shipped in 0.9.6 because only targeted suites ran). */

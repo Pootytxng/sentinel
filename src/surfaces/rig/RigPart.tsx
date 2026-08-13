@@ -135,12 +135,12 @@ export function RigPart({
               backdropFilter: "blur(8px)",
             }}
           >
-            <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.12em", color }}>
+            <div style={{ fontSize: "var(--type-label)", textTransform: "uppercase", letterSpacing: "0.12em", color }}>
               {part.category}
               {!part.detected && t("gaming.rigViewer.notDetectedSuffix", { defaultValue: " · not detected" })}
             </div>
-            <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.2 }}>{part.name}</div>
-            <div style={{ fontSize: 11, color: "var(--ix-text-3, #8b95a8)", marginBottom: 8 }}>
+            <div style={{ fontSize: "var(--type-label)", fontWeight: 600, lineHeight: 1.2 }}>{part.name}</div>
+            <div style={{ fontSize: "var(--type-label)", color: "var(--ix-text-3, #8b95a8)", marginBottom: 8 }}>
               {part.tagline}
             </div>
             <div
@@ -152,7 +152,7 @@ export function RigPart({
               }}
             >
               {part.specs.map((spec) => (
-                <div key={spec.label} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 11 }}>
+                <div key={spec.label} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "var(--type-label)" }}>
                   <span style={{ color: "var(--ix-text-3, #8b95a8)" }}>{spec.label}</span>
                   <span style={{ fontWeight: 500, textAlign: "right" }}>{spec.value}</span>
                 </div>

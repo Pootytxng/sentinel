@@ -4,12 +4,13 @@ import { join } from "path";
 import { ROOM_IDENTITY, HOME_ACCENT, type RoomKey } from "../design/room-identity";
 import { readRoomIdentity, applyRoomIdentity } from "../design/theme";
 
-// Per-room identity accents (owner 2026-07-12 "per-room identity"). This guard mechanizes the two
-// invariants that keep the feature honest:
-//   1. FLAG-OFF BYTE-IDENTITY — every rule in room-identity.css is scoped under
-//      [data-room-identity="on"], so the absent/"0" state cannot touch a single pixel.
-//   2. SOURCE-OF-TRUTH SYNC + DISTINCTNESS — the CSS hexes equal ROOM_IDENTITY exactly (one
-//      palette, no drift) and the visible rooms are pairwise distinguishable (the whole point).
+// COLOR-1 (design foundation step ①, docs/decisions/2026-08-11-design-foundation.md, 2026-08-13):
+// rooms gave up their hue. This guard's job FLIPPED on that date — it used to pin that the four
+// per-room preset accents existed, were distinct, and matched ROOM_IDENTITY; it now pins that the
+// presets STAY DELETED and every room defaults to the one violet accent, because the old presets
+// collided with the status palette (Lab emerald ≈ --v2-ok; Blackbook amber ≈ --v2-warn) and colour
+// stopped being information. The user's per-room accent PICKER (owner 2026-07-12b) survives, so
+// the flag wiring and theme.ts pick-injection mechanism keep their guards.
 
 const roomCss = readFileSync(join("src", "surfaces", "room-identity.css"), "utf8");
 const themeTs = readFileSync(join("src", "design", "theme.ts"), "utf8");
@@ -17,95 +18,59 @@ const mainTsx = readFileSync(join("src", "main.tsx"), "utf8");
 const tokensCss = readFileSync(join("src", "design", "tokens-v2.css"), "utf8");
 const rigColorsTs = readFileSync(join("src", "surfaces", "rig", "use-rig-colors.ts"), "utf8");
 
-// Strip comments so hex/selector scans see only live CSS.
+// Strip comments so scans see only live CSS.
 const liveCss = roomCss.replace(/\/\*[\s\S]*?\*\//g, "");
 
-describe("room-identity: flag-off byte-identity (scoping)", () => {
-  it("every rule header is scoped under :root[data-room-identity=\"on\"]", () => {
-    const offenders: string[] = [];
-    let depth = 0;
-    let buf = "";
-    for (const ch of liveCss) {
-      if (ch === "{") {
-        if (depth === 0) {
-          const sel = buf.trim();
-          if (sel && !/:root\[data-room-identity="on"\]/.test(sel)) offenders.push(sel);
-        }
-        depth++;
-        buf = "";
-      } else if (ch === "}") {
-        depth--;
-        buf = "";
-      } else {
-        buf += ch;
-      }
+describe("COLOR-1: room preset accents are deleted and stay deleted", () => {
+  it("room-identity.css carries NO live rules at all (the deletion is the feature)", () => {
+    expect(liveCss.replace(/\s/g, "")).toBe("");
+  });
+
+  it("no room preset hue survives anywhere in the file, even commented back in", () => {
+    // The old teal/amber/emerald must not return as live CSS. (They MAY appear in the header
+    // comment as history; liveCss has comments stripped, so this only catches live rules.)
+    for (const hex of ["#3fd9c2", "#f0b878", "#27e08a"]) {
+      expect(liveCss.toLowerCase()).not.toContain(hex);
     }
-    expect(offenders).toEqual([]);
   });
 
-  it("only ever sets accent-family custom props (never a raw color property that would paint unscoped)", () => {
-    // The mechanism is scoped accent-token overrides only — no `color`/`background`/`border` here.
-    const allowed = new Set(["--v2-accent", "--v2-accent-dim", "--v2-accent-line"]);
-    const bodies = [...liveCss.matchAll(/\{([^}]*)\}/g)].map((m) => m[1]);
-    const props = bodies.flatMap((b) =>
-      [...b.matchAll(/([a-zA-Z-][\w-]*)\s*:/g)].map((m) => m[1]),
-    );
-    expect(props.length).toBeGreaterThan(0);
-    for (const p of props) expect(allowed.has(p), `unexpected property ${p}`).toBe(true);
-  });
-});
-
-describe("room-identity: palette is the single source of truth", () => {
-  const rooms: RoomKey[] = ["play", "learn", "lab", "fix"];
-
-  it("each room's CSS hex equals ROOM_IDENTITY exactly", () => {
+  it("every room's DEFAULT accent is the one violet (rooms own no hue)", () => {
+    const rooms: RoomKey[] = ["play", "learn", "lab", "fix"];
     for (const room of rooms) {
-      const rule = new RegExp(
-        `\\.v2-room\\[data-room="${room}"\\]\\s*\\{[^}]*--v2-accent:\\s*(#[0-9a-fA-F]{6})`,
-      );
-      const m = liveCss.match(rule);
-      expect(m, `room ${room} must have a scoped --v2-accent rule`).not.toBeNull();
-      expect(m![1].toLowerCase()).toBe(ROOM_IDENTITY[room].toLowerCase());
+      expect(ROOM_IDENTITY[room].toLowerCase()).toBe(HOME_ACCENT.toLowerCase());
     }
   });
 
-  it("the CSS defines exactly the four room rules and no stray rooms", () => {
-    const roomsInCss = [...liveCss.matchAll(/\.v2-room\[data-room="([a-z]+)"\]/g)].map((m) => m[1]);
-    expect(new Set(roomsInCss)).toEqual(new Set(rooms));
+  it("the one accent is the approved violet #a78bfa, and tokens-v2 agrees", () => {
+    expect(HOME_ACCENT.toLowerCase()).toBe("#a78bfa");
+    expect(tokensCss).toMatch(/--v2-accent:\s*#a78bfa/);
+  });
+
+  it(":root default dim/line washes stay concrete violet (flag-off honesty, pre-existing pin)", () => {
+    expect(tokensCss).toMatch(/--v2-accent-dim:\s*rgba\(167,\s*139,\s*250/);
+    expect(tokensCss).toMatch(/--v2-accent-line:\s*rgba\(167,\s*139,\s*250/);
   });
 });
 
-describe("room-identity: rooms are distinguishable (the whole point)", () => {
-  it("the three visible rooms (Monitor/Blackbook/Lab) are pairwise-distinct and differ from Home", () => {
-    const visible = [ROOM_IDENTITY.play, ROOM_IDENTITY.learn, ROOM_IDENTITY.lab];
-    expect(new Set(visible).size).toBe(3); // pairwise distinct
-    for (const hue of visible) expect(hue.toLowerCase()).not.toBe(HOME_ACCENT.toLowerCase());
-  });
-
-  it("the Optimize station shares the Lab family emerald (intentional, one bench)", () => {
-    expect(ROOM_IDENTITY.fix).toBe(ROOM_IDENTITY.lab);
-  });
-});
-
-describe("room-identity: DEFAULT ON wiring (owner-approved flip 2026-07-13)", () => {
+describe("room-identity flag: DEFAULT ON wiring survives (it gates the USER'S picker, not presets)", () => {
   beforeEach(() => {
     localStorage.clear();
     delete document.documentElement.dataset.roomIdentity;
   });
 
-  it("readRoomIdentity is true unless the key is literally \"0\" (the devtools failsafe)", () => {
-    expect(readRoomIdentity()).toBe(true); // absent = ON (the default build)
+  it('readRoomIdentity is true unless the key is literally "0" (the devtools failsafe)', () => {
+    expect(readRoomIdentity()).toBe(true);
     localStorage.setItem("compy_room_identity", "1");
     expect(readRoomIdentity()).toBe(true);
     localStorage.setItem("compy_room_identity", "0");
-    expect(readRoomIdentity()).toBe(false); // only "0" restores the classic uniform violet
+    expect(readRoomIdentity()).toBe(false);
   });
 
-  it("theme.ts reader is !== \"0\" (default ON, opt-out), not === \"1\" (opt-in)", () => {
+  it('theme.ts reader is !== "0" (default ON, opt-out), not === "1" (opt-in)', () => {
     expect(themeTs).toMatch(/ROOM_IDENTITY_KEY\)\s*!==\s*"0"/);
   });
 
-  it("main.tsx sets the boot attribute unless the key is \"0\"", () => {
+  it('main.tsx sets the boot attribute unless the key is "0"', () => {
     expect(mainTsx).toMatch(/getItem\("compy_room_identity"\)\s*!==\s*"0"/);
   });
 
@@ -119,60 +84,24 @@ describe("room-identity: DEFAULT ON wiring (owner-approved flip 2026-07-13)", ()
   });
 });
 
-// bug→guard (self-review rounds 1+2 FAIL, 2026-07-12): the derived accent washes (--v2-accent-dim/
-// -line, feeding --accent-soft/-line/-glow, --ix-accent-wash, the .play-armed hairline) stayed violet
-// under a room's teal/amber/emerald chrome. ROOT CAUSE (proven live): a var()-chain in a custom
-// property substitutes at ITS DECLARING element, so the :root dim/line bake root's violet and a
-// per-room --v2-accent override can't retro-follow them. FIX: re-declare dim/line on the SAME room
-// element (same-element resolution). This guard pins that the room blocks carry all three tokens and
-// that :root keeps a concrete (non-var) default so flag-off is unchanged.
-describe("room-identity: derived washes are re-declared per room (same-element, so they follow)", () => {
-  const rooms: RoomKey[] = ["play", "learn", "lab", "fix"];
-
-  it("every room block re-declares --v2-accent-dim AND --v2-accent-line (not just --v2-accent)", () => {
-    for (const room of rooms) {
-      const block =
-        liveCss.match(new RegExp(`\\.v2-room\\[data-room="${room}"\\]\\s*\\{([^}]*)\\}`))?.[1] ?? "";
-      expect(block, `room ${room} block`).toMatch(/--v2-accent-dim:\s*color-mix\(/);
-      expect(block, `room ${room} block`).toMatch(/--v2-accent-line:\s*color-mix\(/);
-      // dim/line mix the room's OWN hex, not violet
-      expect(block).toContain(ROOM_IDENTITY[room]);
-      expect(block).not.toMatch(/167,\s*139,\s*250/);
-    }
-  });
-
-  it(":root default dim/line stay concrete (a var()-chain there would silently not follow)", () => {
-    // The default (flag-off) tokens must NOT be `var(--v2-accent)`-derived — that form bakes at :root
-    // and looks like it follows when it doesn't. Concrete rgba keeps flag-off honest + byte-identical.
-    expect(tokensCss).toMatch(/--v2-accent-dim:\s*rgba\(167,\s*139,\s*250/);
-    expect(tokensCss).toMatch(/--v2-accent-line:\s*rgba\(167,\s*139,\s*250/);
-  });
-});
-
 // bug→guard (self-review round 1 FAIL, 2026-07-12): the rig hologram bay read --ix-accent off
-// documentElement, so Lab's hologram cage stayed violet while the room went emerald. It must read
-// the room-scoped accent when the flag is on and re-resolve when the flag flips.
-describe("room-identity: rig hologram bay follows the room accent when flagged", () => {
+// documentElement, so a room's picked accent didn't reach the hologram. The reader mechanism now
+// serves USER picks (COLOR-1 removed presets), but the same resolution bugs would bite a pick.
+describe("rig hologram follows a picked room accent (mechanism guards survive COLOR-1)", () => {
   it("use-rig-colors resolves from the active .v2-room when readRoomIdentity() is on", () => {
     expect(rigColorsTs).toMatch(/readRoomIdentity\(\)/);
     expect(rigColorsTs).toMatch(/querySelector<HTMLElement>\(["']\.v2-room["']\)/);
   });
 
-  // bug→guard (self-review catch 2026-07-13, the default-ON ship review): Home's --ix-accent
-  // re-point lives on the NESTED .home-console (home-console.css), not the .v2-room wrapper —
-  // custom properties never propagate UP, so reading .v2-room on Home silently yielded the base
-  // theme accent: a Home accent pick recolored chrome/dock but NEVER the rig hologram. Pin that
-  // the reader prefers .home-console (Home) before falling back to .v2-room (the other rooms).
   it("use-rig-colors prefers .home-console (Home's re-point element) over the .v2-room fallback", () => {
-    // anchor on the querySelector CALLS (comments legitimately mention both selectors)
     const homeIdx = rigColorsTs.indexOf('querySelector<HTMLElement>(".home-console")');
     const roomIdx = rigColorsTs.indexOf('querySelector<HTMLElement>(".v2-room")');
     expect(homeIdx, "the .home-console querySelector call must exist").toBeGreaterThan(-1);
     expect(roomIdx, "the .v2-room querySelector call must exist").toBeGreaterThan(-1);
     expect(homeIdx, ".home-console must be tried BEFORE the .v2-room fallback").toBeLessThan(roomIdx);
-    // and the stale "Home takes no re-point" comment (the defect's cover story) must be gone
     expect(rigColorsTs).not.toMatch(/Home\s+takes no --ix-accent re-point/);
   });
+
   it("use-rig-colors re-resolves on the room-identity flag change (attr + event)", () => {
     expect(rigColorsTs).toMatch(/attributeFilter:\s*\[[^\]]*"data-room-identity"/);
     expect(rigColorsTs).toMatch(/compy:room-identity-changed/);

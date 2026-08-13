@@ -19,7 +19,7 @@
   background: var(--v2-bg);
   color: var(--v2-muted);
   font-family: var(--v2-font-sans);
-  font-size: 12px;
+  font-size: var(--type-label);
   text-align: left;
   cursor: text; /* it behaves like a field, so it should read as one */
   transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
@@ -113,7 +113,7 @@
   background: transparent;
   color: var(--v2-text);
   font-family: var(--v2-font-sans);
-  font-size: 14.5px;
+  font-size: var(--type-body);
 }
 /* The placeholder is the only instruction a first-time user gets here, so it reads at the tier
    that clears AA rather than the decorative one. */
@@ -124,7 +124,7 @@
   flex: none;
 }
 .cp-panel kbd {
-  font: 10.5px var(--v2-font-mono);
+  font: var(--type-label) var(--v2-font-mono);
   border: 1px solid var(--v2-line);
   border-bottom-width: 2px;
   border-radius: 4px;
@@ -156,7 +156,7 @@
    labels a first-time user reads to orient themselves, which is the last place to spend contrast. */
 .cp-group {
   padding: 8px 8px 4px;
-  font: 10px var(--v2-font-mono);
+  font: var(--type-label) var(--v2-font-mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--v2-muted);
@@ -172,7 +172,7 @@
   background: transparent;
   color: var(--v2-text);
   font-family: var(--v2-font-sans);
-  font-size: 13px;
+  font-size: var(--type-label);
   text-align: left;
   cursor: pointer;
 }
@@ -193,7 +193,7 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   color: var(--v2-muted);
-  font-size: 12px;
+  font-size: var(--type-label);
   text-align: right;
 }
 
@@ -205,12 +205,12 @@
   text-align: center;
 }
 .cp-empty strong {
-  font-size: 13px;
+  font-size: var(--type-label);
   font-weight: 500;
   color: var(--v2-text);
 }
 .cp-empty span {
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--v2-muted);
 }
 
@@ -222,7 +222,7 @@
   padding: 8px 14px;
   border-top: 1px solid var(--v2-line);
   background: var(--v2-panel-2);
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--v2-muted);
 }
 .cp-foot span {

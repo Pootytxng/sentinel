@@ -11,7 +11,7 @@
 .bb-intro {
   margin: 0;
   color: var(--ix-text-2);
-  font-size: 14px;
+  font-size: var(--type-label);
   line-height: 1.55;
   max-width: 62ch;
 }
@@ -23,7 +23,7 @@
 .bb-scan {
   align-self: flex-start;
   font-family: var(--ix-mono);
-  font-size: 13.5px;
+  font-size: var(--type-label);
   font-weight: 600;
   color: var(--ix-accent-ink);
   background: var(--ix-accent);
@@ -40,7 +40,7 @@
 .bb-error {
   margin: 0;
   color: var(--ix-danger);
-  font-size: 13.5px;
+  font-size: var(--type-label);
 }
 
 .bb-results {
@@ -52,7 +52,7 @@
 .bb-empty {
   margin: 0;
   color: var(--ix-text-2);
-  font-size: 14px;
+  font-size: var(--type-label);
   border: 1px dashed var(--ix-border);
   border-radius: var(--ix-radius);
   padding: 16px 18px;
@@ -87,7 +87,7 @@
 
 .bb-tag {
   font-family: var(--ix-mono);
-  font-size: 11px;
+  font-size: var(--type-label);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -101,7 +101,7 @@
 
 .bb-headline {
   color: var(--ix-text-1);
-  font-size: 14.5px;
+  font-size: var(--type-body);
   line-height: 1.45;
 }
 
@@ -118,7 +118,7 @@
 }
 .bb-vitals-label {
   font-family: var(--ix-mono);
-  font-size: 10.5px;
+  font-size: var(--type-label);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ix-accent-text);
@@ -126,7 +126,7 @@
 }
 .bb-vitals-text {
   color: var(--ix-text-2);
-  font-size: 13.5px;
+  font-size: var(--type-label);
   line-height: 1.5;
 }
 .bb-vitals-none .bb-vitals-text {
@@ -140,7 +140,7 @@
   padding: 0;
   cursor: pointer;
   font-family: var(--ix-mono);
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-accent-text);
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -153,7 +153,7 @@
   border-top: 1px solid var(--ix-line);
   padding-top: 10px;
   font-family: var(--ix-mono);
-  font-size: 12.5px;
+  font-size: var(--type-label);
 }
 .bb-receipt-row {
   display: grid;
@@ -165,7 +165,7 @@
   color: var(--ix-text-3);
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  font-size: 10.5px;
+  font-size: var(--type-label);
 }
 .bb-receipt-row dd {
   margin: 0;
@@ -180,7 +180,7 @@
 .bb-skipped {
   margin: 0;
   color: var(--ix-text-3);
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.5;
 }
 
@@ -208,14 +208,14 @@
 }
 .bb-assess-label {
   font-family: var(--ix-mono);
-  font-size: 10.5px;
+  font-size: var(--type-label);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ix-accent-text);
 }
 .bb-strength {
   font-family: var(--ix-mono);
-  font-size: 10.5px;
+  font-size: var(--type-label);
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -238,7 +238,7 @@
 .bb-assess-line {
   margin: 0;
   color: var(--ix-text-1);
-  font-size: 14px;
+  font-size: var(--type-label);
   line-height: 1.5;
 }
 .bb-assess-line strong {
@@ -251,7 +251,7 @@
   flex-direction: column;
   gap: 3px;
   color: var(--ix-text-2);
-  font-size: 13px;
+  font-size: var(--type-label);
   line-height: 1.5;
 }
 .bb-nextstep {
@@ -268,7 +268,7 @@
 }
 .bb-nextstep-tag {
   font-family: var(--ix-mono);
-  font-size: 10px;
+  font-size: var(--type-label);
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--ix-accent-text);
@@ -279,13 +279,13 @@
 .bb-nextstep-headline {
   margin: 0;
   color: var(--ix-text-1);
-  font-size: 13.5px;
+  font-size: var(--type-label);
   font-weight: 600;
 }
 .bb-nextstep-detail {
   margin: 0;
   color: var(--ix-text-2);
-  font-size: 13px;
+  font-size: var(--type-label);
   line-height: 1.55;
 }
 .bb-helpful {
@@ -296,11 +296,11 @@
 }
 .bb-helpful-q {
   color: var(--ix-text-3);
-  font-size: 12px;
+  font-size: var(--type-label);
 }
 .bb-helpful-btn {
   font-family: var(--ix-mono);
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-accent-text);
   background: none;
   border: 1px solid var(--ix-border);
@@ -311,7 +311,7 @@
 .bb-helpful-done {
   margin: 0;
   color: var(--ix-text-3);
-  font-size: 12px;
+  font-size: var(--type-label);
 }
 
 /* v2.1 measured payoff — on a step the user marked helpful: a quiet acknowledgement + a FACTUAL line
@@ -322,11 +322,11 @@
   gap: 3px;
 }
 .bb-resolved-mark {
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
 }
 .bb-resolved-since {
-  font-size: 13px;
+  font-size: var(--type-label);
   line-height: 1.5;
 }
 .bb-resolved-none-since {

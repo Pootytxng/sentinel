@@ -17,12 +17,12 @@
   flex: 1 1 auto;
 }
 .td-arm-title {
-  font-size: 13px;
+  font-size: var(--type-label);
   font-weight: 600;
   color: var(--ix-text-1);
 }
 .td-arm-sub {
-  font-size: 12px;
+  font-size: var(--type-label);
   line-height: 1.45;
   color: var(--ix-text-2);
 }
@@ -33,7 +33,7 @@
   color: var(--ix-accent-text);
   border-radius: 6px;
   padding: 7px 12px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   font-weight: 500;
   cursor: pointer;
 }
@@ -53,7 +53,7 @@
   margin-bottom: 6px;
 }
 .td-measure-title {
-  font-size: 11.5px;
+  font-size: var(--type-label);
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--ix-text-3);
@@ -62,7 +62,7 @@
   border: none;
   background: transparent;
   color: var(--ix-text-3);
-  font-size: 11.5px;
+  font-size: var(--type-label);
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -83,7 +83,7 @@
 }
 .td-crash-q {
   flex: 1 1 auto;
-  font-size: 12px;
+  font-size: var(--type-label);
   line-height: 1.45;
   color: var(--ix-text-2);
 }
@@ -94,7 +94,7 @@
   color: var(--ix-danger, #e5534b);
   border-radius: 6px;
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: var(--type-label);
   cursor: pointer;
 }
 .td-crash-btn:disabled {

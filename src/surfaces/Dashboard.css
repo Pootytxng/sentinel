@@ -6,5 +6,5 @@
 .dash-limiter{display:flex;gap:10px;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--hairline);}
 .dash-limiter:last-child{border-bottom:0;}
 .dash-limiter .t{font-weight:500;}
-.dash-limiter .r{color:var(--muted);font-size:12.5px;}
-.dash-honesty{color:var(--faint);font-size:12px;line-height:1.5;}
+.dash-limiter .r{color:var(--muted);font-size: var(--type-label);}
+.dash-honesty{color:var(--faint);font-size: var(--type-label);line-height:1.5;}

@@ -10,7 +10,7 @@
   margin-bottom: 8px;
 }
 .wt-title {
-  font-size: 13px;
+  font-size: var(--type-label);
   font-weight: 500;
   color: var(--ix-text-1);
 }
@@ -26,7 +26,7 @@
   background: transparent;
   color: var(--ix-text-2);
   font-family: inherit;
-  font-size: 11.5px;
+  font-size: var(--type-label);
   cursor: pointer;
 }
 .wt-variant-on {
@@ -117,11 +117,11 @@
   border-radius: 50%;
   background: var(--ix-accent, var(--accent));
   color: var(--ix-accent-ink, #06231c);
-  font-size: 11px;
+  font-size: var(--type-label);
   font-weight: 700;
 }
 .wt-hotspot-label {
-  font-size: 11px;
+  font-size: var(--type-label);
   white-space: nowrap;
   color: var(--ix-text-1);
 }
@@ -178,7 +178,7 @@
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   opacity: 0.7;
   transition: opacity 200ms ease;
@@ -196,7 +196,7 @@
   height: 18px;
   border-radius: 50%;
   border: 1px solid var(--ix-glass-border, var(--hairline));
-  font-size: 11px;
+  font-size: var(--type-label);
   font-family: var(--font-mono, ui-monospace, monospace);
 }
 .wt-step-on .wt-step-num {
@@ -213,7 +213,7 @@
   margin-top: 12px;
 }
 .wt-honest {
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--ix-text-3, var(--faint));
   font-style: italic;
 }
@@ -225,7 +225,7 @@
   background: transparent;
   color: var(--ix-accent-text, var(--accent));
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   cursor: pointer;
   transition: background 140ms ease, color 140ms ease;
 }
@@ -250,7 +250,7 @@
   border: 1px solid var(--ix-glass-border, var(--hairline));
   background: var(--ix-surface-2);
   color: var(--ix-text-1, inherit);
-  font-size: 16px;
+  font-size: var(--type-body);
   line-height: 1;
   cursor: pointer;
 }

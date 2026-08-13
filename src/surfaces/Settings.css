@@ -37,7 +37,7 @@
 }
 .set-title {
   margin: 0;
-  font-size: 24px;
+  font-size: var(--type-section);
   font-weight: 500;
   color: var(--ix-text-1);
   letter-spacing: -0.01em;
@@ -51,7 +51,7 @@
   background: transparent;
   color: var(--ix-accent-text);
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 11px;
+  font-size: var(--type-label);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   line-height: 1;
@@ -63,7 +63,7 @@
 }
 .set-tagline {
   margin: 0 0 6px;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 
@@ -99,7 +99,7 @@
 }
 .set-field-label {
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 10px;
+  font-size: var(--type-label);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ix-text-3);
@@ -142,7 +142,7 @@
   flex: 1;
 }
 .set-theme-label {
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-1);
   text-align: center;
 }
@@ -160,7 +160,7 @@
   background: transparent;
   color: var(--ix-text-2);
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 10px;
+  font-size: var(--type-label);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   line-height: 1;
@@ -230,7 +230,7 @@
 .set-preview-label {
   position: absolute;
   bottom: 8px;
-  font-size: 10px;
+  font-size: var(--type-label);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ix-text-3);
@@ -253,19 +253,19 @@
   margin-top: 16px;
 }
 .set-row-title {
-  font-size: 14px;
+  font-size: var(--type-label);
   color: var(--ix-text-1);
 }
 .set-row-sub {
   margin-top: 3px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   line-height: 1.5;
   max-width: 56ch;
 }
 .set-status {
   flex-shrink: 0;
-  font-size: 10.5px;
+  font-size: var(--type-label);
   font-family: var(--ix-mono, ui-monospace, monospace);
   letter-spacing: 0.06em;
   color: var(--ix-text-2);
@@ -290,7 +290,7 @@
   background: transparent;
   color: var(--ix-text-1);
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 10.5px;
+  font-size: var(--type-label);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   line-height: 1;
@@ -339,22 +339,22 @@
 
 /* ── About ── */
 .set-about-name {
-  font-size: 16px;
+  font-size: var(--type-body);
   color: var(--ix-text-1);
 }
 .set-about-version {
   font-family: var(--font-mono, ui-monospace, monospace);
   color: var(--ix-text-3);
-  font-size: 13px;
+  font-size: var(--type-label);
 }
 .set-about-privacy {
   margin: 8px 0 0;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 .set-about-rules {
   margin: 6px 0 0;
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
   font-family: var(--font-mono, ui-monospace, monospace);
 }
@@ -377,14 +377,14 @@
 /* ── Receipts consent (R3 Lane C — dark today; styles ready for the gated future) ── */
 .receipts-hint {
   margin: 4px 0 10px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   max-width: 56ch;
 }
 .receipts-preview {
   margin: 10px 0 0;
   padding: 12px;
-  font-size: 11.5px;
+  font-size: var(--type-label);
   line-height: 1.5;
   background: var(--ix-bg-1);
   border: 1px solid var(--ix-border);
@@ -394,7 +394,7 @@
 
 /* §C build stamp in About — quiet provenance, same scale as the version. */
 .set-about-stamp {
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
   font-family: var(--ix-mono, monospace);
 }
@@ -408,7 +408,7 @@
 .set-license-status {
   margin: 0;
   color: var(--ix-text-2);
-  font-size: 13.5px;
+  font-size: var(--type-label);
   line-height: 1.55;
   max-width: 60ch;
 }
@@ -422,7 +422,7 @@
   padding: 0;
   cursor: pointer;
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-accent-text);
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -437,7 +437,7 @@
   flex: 1 1 240px;
   min-width: 0;
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-1);
   background: var(--ix-surface-2, rgba(255, 255, 255, 0.03));
   border: 1px solid var(--ix-glass-border);
@@ -446,7 +446,7 @@
 }
 .set-license-btn {
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 12.5px;
+  font-size: var(--type-label);
   font-weight: 600;
   color: var(--ix-accent-ink);
   background: var(--ix-accent);
@@ -463,7 +463,7 @@
   flex-basis: 100%;
   margin: 2px 0 0;
   color: var(--ix-text-3);
-  font-size: 12px;
+  font-size: var(--type-label);
 }
 
 /* ── Feedback & help — always-visible beta/help surface. Reuses .set-section / .set-action /
@@ -475,7 +475,7 @@
   resize: vertical;
   min-height: 84px;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--type-label);
   line-height: 1.55;
   color: var(--ix-text-1);
   background: var(--ix-surface-2, rgba(255, 255, 255, 0.03));
@@ -495,7 +495,7 @@
   margin: 4px 2px 0;
   text-align: right;
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
 }
 .fb-actions {
@@ -562,7 +562,7 @@
 }
 .sev-meta {
   margin: 8px 0 0;
-  font-size: 11.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
 }
 .sev-notice {

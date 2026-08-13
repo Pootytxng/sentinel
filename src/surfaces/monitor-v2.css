@@ -90,7 +90,7 @@
 /* ── quiet slot internals (the head button itself is .v2-quiet from shell-v2.css) ── */
 :root[data-v2="on"] .mv2-quiet-hint {
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--v2-faint);
 }
 

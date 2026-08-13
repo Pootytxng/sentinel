@@ -31,7 +31,7 @@
   background: var(--v2-bg);
   color: var(--v2-text);
   font-family: var(--v2-font-sans);
-  font-size: 13px;
+  font-size: var(--type-label);
   line-height: 1.5;
 }
 
@@ -52,7 +52,7 @@
 }
 :root[data-v2="on"] .v2-version {
   margin-left: auto;
-  font: 10px var(--v2-font-mono);
+  font: var(--type-label) var(--v2-font-mono);
   color: var(--v2-faint);
 }
 :root[data-v2="on"] .v2-nav {
@@ -71,7 +71,7 @@
   background: transparent;
   color: var(--v2-muted);
   font-family: var(--v2-font-sans);
-  font-size: 13px;
+  font-size: var(--type-label);
   text-align: left;
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
@@ -95,7 +95,7 @@
   margin-left: auto;
 }
 :root[data-v2="on"] .v2-shell kbd {
-  font: 10.5px var(--v2-font-mono);
+  font: var(--type-label) var(--v2-font-mono);
   color: var(--v2-faint);
   border: 1px solid var(--v2-line);
   border-bottom-width: 2px;
@@ -108,7 +108,7 @@
   padding: 10px;
   border-top: 1px solid var(--v2-line);
   color: var(--v2-faint);
-  font-size: 11.5px;
+  font-size: var(--type-label);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -146,7 +146,7 @@
   box-shadow: 0 0 6px var(--v2-warn);
 }
 :root[data-v2="on"] .v2-foot .v2-mono {
-  font: 10px var(--v2-font-mono);
+  font: var(--type-label) var(--v2-font-mono);
   white-space: nowrap; /* "ledger 48" never breaks mid-value */
 }
 
@@ -169,7 +169,7 @@
 }
 :root[data-v2="on"] .v2-room-title {
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: var(--type-label);
 }
 /* Crumb is a real sentence → muted (4.5 floor), not the mockup's faint (caption tier). */
 :root[data-v2="on"] .v2-crumb {
@@ -177,7 +177,7 @@
 }
 :root[data-v2="on"] .v2-stamp {
   margin-left: auto;
-  font: 10.5px var(--v2-font-mono);
+  font: var(--type-label) var(--v2-font-mono);
   color: var(--v2-faint);
 }
 
@@ -203,20 +203,20 @@
 }
 :root[data-v2="on"] .v2-verdict h1 {
   margin: 0;
-  font-size: 19px;
+  font-size: var(--type-card);
   font-weight: 600;
   letter-spacing: -0.2px;
 }
 :root[data-v2="on"] .v2-verdict-sub {
   color: var(--v2-muted);
-  font-size: 12.5px;
+  font-size: var(--type-label);
 }
 :root[data-v2="on"] .v2-verdict-action {
   margin-left: auto;
 }
 /* Provenance line: timestamps/counts — machine values, the sanctioned mono use. */
 :root[data-v2="on"] .v2-measured {
-  font: 10.5px var(--v2-font-mono);
+  font: var(--type-label) var(--v2-font-mono);
   color: var(--v2-faint);
   margin-bottom: var(--v2-gap);
 }
@@ -235,7 +235,7 @@
   width: 100%;
   color: var(--v2-muted);
   font-family: var(--v2-font-sans);
-  font-size: 12px;
+  font-size: var(--type-label);
   padding: 10px var(--v2-pad);
   border: 1px solid var(--v2-line);
   border-radius: var(--v2-r);
@@ -265,7 +265,7 @@
 }
 :root[data-v2="on"] .v2-quiet .v2-quiet-n {
   margin-left: auto;
-  font: 10.5px var(--v2-font-mono);
+  font: var(--type-label) var(--v2-font-mono);
 }
 /* The forward door — quiet chrome, a doorknob not a CTA (P6 law). */
 :root[data-v2="on"] .v2-door {
@@ -276,7 +276,7 @@
   width: 100%;
   color: var(--v2-muted);
   font-family: var(--v2-font-sans);
-  font-size: 12.5px;
+  font-size: var(--type-label);
   padding: 12px var(--v2-pad);
   border: 1px dashed var(--v2-line-strong);
   border-radius: var(--v2-r);
@@ -301,7 +301,7 @@
 :root[data-v2="on"] .v2-update-wrap { position: relative; display: inline-flex; }
 :root[data-v2="on"] .v2-update {
   display: inline-flex; align-items: center; gap: 6px;
-  font: 11px var(--v2-font-mono);
+  font: var(--type-label) var(--v2-font-mono);
   color: inherit;
   border: 1px solid var(--v2-line);
   border-radius: 999px;
@@ -327,13 +327,13 @@
   display: flex; flex-direction: column; gap: 8px;
   text-align: left;
 }
-:root[data-v2="on"] .v2-update-title { font: 12px var(--v2-font-mono); }
+:root[data-v2="on"] .v2-update-title { font: var(--type-label) var(--v2-font-mono); }
 :root[data-v2="on"] .v2-update-whatsnew {
-  font: 12px var(--v2-font-mono);
+  font: var(--type-label) var(--v2-font-mono);
   color: var(--v2-muted);
 }
 :root[data-v2="on"] .v2-update-notes {
-  font-size: 11.5px; color: var(--v2-muted);
+  font-size: var(--type-label); color: var(--v2-muted);
   max-height: 128px; overflow-y: auto;
   margin: 0; padding-left: 16px;
   display: flex; flex-direction: column; gap: 4px;
@@ -341,10 +341,10 @@
 :root[data-v2="on"] .v2-update-row { display: flex; gap: 8px; }
 :root[data-v2="on"] .v2-update-go,
 :root[data-v2="on"] .v2-update-later {
-  font: 11.5px var(--v2-font-mono);
+  font: var(--type-label) var(--v2-font-mono);
   color: inherit;
   border: 1px solid var(--v2-line); border-radius: 6px;
   padding: 4px 10px; background: var(--v2-panel); cursor: pointer;
 }
 :root[data-v2="on"] .v2-update-go { border-color: var(--v2-ok); }
-:root[data-v2="on"] .v2-update-fine { font-size: 10.5px; color: var(--v2-faint); }
+:root[data-v2="on"] .v2-update-fine { font-size: var(--type-label); color: var(--v2-faint); }

@@ -47,7 +47,7 @@
   h1 {
   display: block;
   margin: 0 0 6px;
-  font: 650 clamp(24px, 2.8vw, 32px) / 1.15 var(--v2-font-sans);
+  font: 650 var(--type-section) / 1.15 var(--v2-font-sans);
   letter-spacing: -0.01em;
   color: var(--v2-text);
   max-width: 34ch;
@@ -57,7 +57,7 @@
   .v2-room:not([data-room="home"]):not([data-room="check"])
   .v2-verdict-sub {
   display: block;
-  font-size: 13.5px;
+  font-size: var(--type-label);
   max-width: 64ch;
   margin-top: 2px;
 }
@@ -82,7 +82,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  font: 600 10px var(--v2-font-sans);
+  font: 600 var(--type-label) var(--v2-font-sans);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--v2-faint);
@@ -92,7 +92,7 @@
   .v2-room:not([data-room="home"]):not([data-room="check"])
   .hud-masthead-eyebrow
   .hud-mono {
-  font: 10px var(--v2-font-mono);
+  font: var(--type-label) var(--v2-font-mono);
   letter-spacing: 0.08em;
 }
 :root[data-v2="on"][data-hud="on"]
@@ -144,7 +144,7 @@
   .v2-room:not([data-room="home"]):not([data-room="check"])
   .v2-measured {
   display: block;
-  font: 500 11.5px / 1.5 var(--v2-font-mono);
+  font: 500 var(--type-label) / 1.5 var(--v2-font-mono);
   letter-spacing: 0.02em;
   color: var(--v2-muted);
   border-block: 1px solid var(--hud-hairline);
@@ -195,7 +195,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font: 600 10px var(--v2-font-sans);
+  font: 600 var(--type-label) var(--v2-font-sans);
   letter-spacing: 0.14em;
   color: var(--v2-faint);
 }
@@ -209,7 +209,7 @@
   background: var(--hud-hairline);
 }
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .check-collapse-head {
-  font: 600 10px var(--v2-font-sans);
+  font: 600 var(--type-label) var(--v2-font-sans);
   letter-spacing: 0.14em;
   color: var(--v2-faint);
 }
@@ -277,14 +277,14 @@
 /* Pills → flat mono tags: machine annotations wear the machine face. Case comes from each
    tag's base rule (already-uppercase micro-tags stay so; phrases stay sentence case). */
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .cc-chip {
-  font: 500 11px/1.6 var(--v2-font-mono);
+  font: 500 var(--type-label)/1.6 var(--v2-font-mono);
   letter-spacing: 0.02em;
   border-radius: 2px;
 }
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .check-advisory,
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .fix-guided-tag,
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .fix-payoff {
-  font: 500 10.5px/1.6 var(--v2-font-mono);
+  font: 500 var(--type-label)/1.6 var(--v2-font-mono);
   letter-spacing: 0.04em;
   border-radius: 2px;
 }
@@ -293,12 +293,12 @@
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .fix-override-chip,
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .fix-hist-rig-tag,
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .slimrow-badge {
-  font: 600 10px/1.6 var(--v2-font-mono);
+  font: 600 var(--type-label)/1.6 var(--v2-font-mono);
   letter-spacing: 0.07em;
   border-radius: 2px;
 }
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .fix-group-count {
-  font: 500 11px var(--v2-font-mono);
+  font: 500 var(--type-label) var(--v2-font-mono);
   background: transparent;
   border: 1px solid var(--hud-hairline);
   border-radius: 2px;
@@ -307,11 +307,11 @@
 /* Machine qualifiers + stamps in the mono register (values/timestamps, not sentences). */
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .check-conf,
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .fix-hist-status {
-  font: 500 10.5px var(--v2-font-mono);
+  font: 500 var(--type-label) var(--v2-font-mono);
   letter-spacing: 0.04em;
 }
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .check-drift-when {
-  font: 500 11px var(--v2-font-mono);
+  font: 500 var(--type-label) var(--v2-font-mono);
   letter-spacing: 0.02em;
 }
 

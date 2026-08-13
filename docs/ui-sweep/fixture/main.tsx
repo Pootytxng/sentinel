@@ -21,6 +21,7 @@ import ReactDOM from "react-dom/client";
 // Order is load-bearing: instrument.css must follow App.css so the accent re-point wins, and the
 // v2/hud token layers must come after the classics. Any reordering here silently re-skins the
 // screenshots and the review would be reporting on a look the app does not have.
+import "../../../src/design/type-scale.css";
 import "../../../src/App.css";
 import "../../../src/design/doorknob.css";
 import "../../../src/design/instrument.css";

@@ -173,12 +173,12 @@ export function RigFan({
               backdropFilter: "blur(8px)",
             }}
           >
-            <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.12em", color }}>
+            <div style={{ fontSize: "var(--type-label)", textTransform: "uppercase", letterSpacing: "0.12em", color }}>
               {t("gaming.rigViewer.fan.categoryLabel", { defaultValue: "Fan" })}
               {!fan.detected && t("gaming.rigViewer.notDetectedSuffix", { defaultValue: " · not detected" })}
             </div>
-            <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.2 }}>{fan.label}</div>
-            <div style={{ fontSize: 11, color: "var(--ix-text-3, #8b95a8)", marginTop: 3 }}>
+            <div style={{ fontSize: "var(--type-label)", fontWeight: 600, lineHeight: 1.2 }}>{fan.label}</div>
+            <div style={{ fontSize: "var(--type-label)", color: "var(--ix-text-3, #8b95a8)", marginTop: 3 }}>
               {fan.detected
                 ? fan.rpm && fan.rpm > 0
                   ? t("gaming.rigViewer.fan.rpmSpinning", { defaultValue: "{{rpm}} RPM · spinning", rpm: fan.rpm })

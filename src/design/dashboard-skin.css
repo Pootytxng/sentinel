@@ -75,7 +75,7 @@
   background: transparent;
   color: var(--ix-accent-text, #7defcf);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--type-label);
   font-weight: 600;
   cursor: pointer;
   padding: 3px 7px;

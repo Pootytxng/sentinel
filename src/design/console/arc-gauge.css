@@ -16,17 +16,17 @@
 :root[data-v2="on"] .ag-neutral .ag-fill { stroke: var(--ix-text-2); }
 :root[data-v2="on"] .ag-ctr { position: relative; grid-column: 1; grid-row: 1 / span 2;
   place-self: center; text-align: center; pointer-events: none; width: 56px; }
-:root[data-v2="on"] .ag-v { font-family: var(--ix-mono); font-size: 18px; font-weight: 600;
+:root[data-v2="on"] .ag-v { font-family: var(--ix-mono); font-size: var(--type-card); font-weight: 600;
   color: var(--ix-text-1); font-variant-numeric: tabular-nums; line-height: 1; }
 :root[data-v2="on"] .ag-empty .ag-v { color: var(--ix-text-3); }
-:root[data-v2="on"] .ag-u { font-family: var(--ix-mono); font-size: 8px; letter-spacing: .1em;
+:root[data-v2="on"] .ag-u { font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .1em;
   text-transform: uppercase; color: var(--ix-text-3); margin-top: 2px; }
 :root[data-v2="on"] .ag-label { grid-column: 2; display: flex; flex-direction: column; gap: 4px;
-  font-family: var(--ix-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ix-text-2); }
-:root[data-v2="on"] .ag-tag { align-self: flex-start; font-size: 8px; letter-spacing: .1em;
+  font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .12em; text-transform: uppercase; color: var(--ix-text-2); }
+:root[data-v2="on"] .ag-tag { align-self: flex-start; font-size: var(--type-label); letter-spacing: .1em;
   padding: 1px 5px; border: 1px solid var(--ready); color: var(--ready); }
 :root[data-v2="on"] .ag-tag-ny { border-color: var(--v2-warn, #f5c542); color: var(--v2-warn, #f5c542); }
 /* The "how we calculate this" line (consumer-panel Phase 2): plain sentence case, no tracking —
    it's an explanation, not another instrument label. */
-:root[data-v2="on"] .ag-note { font-size: 9px; letter-spacing: 0; text-transform: none;
+:root[data-v2="on"] .ag-note { font-size: var(--type-label); letter-spacing: 0; text-transform: none;
   color: var(--ix-text-3); line-height: 1.35; }

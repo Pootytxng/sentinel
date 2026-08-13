@@ -1,5 +1,5 @@
 .ds-pill{display:inline-flex;align-items:center;gap:6px;border-radius:var(--r-pill);
-  padding:3px 10px;font-size:12px;font-weight:600;border:1px solid var(--lineVar,var(--border-strong));
+  padding:3px 10px;font-size: var(--type-label);font-weight:600;border:1px solid var(--lineVar,var(--border-strong));
   color:var(--colorVar,var(--fg-2));background:var(--softVar,var(--panel-2));}
 .ds-pill .ds-dot{width:7px;height:7px;border-radius:50%;background:var(--colorVar,var(--muted));}
 .ds-pill.is-scanning .ds-dot{animation:ds-pulse 1.1s var(--ease) infinite;}

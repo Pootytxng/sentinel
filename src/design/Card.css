@@ -5,4 +5,4 @@
 .ds-card.is-interactive:active{transform:var(--press);}
 .ds-panel{border:1px solid var(--hairline);border-radius:var(--r-sm);background:var(--panel-2);padding:12px 13px;}
 .ds-section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
-.ds-section-head h3{margin:0;font-size:14px;}
+.ds-section-head h3{margin:0;font-size: var(--type-label);}

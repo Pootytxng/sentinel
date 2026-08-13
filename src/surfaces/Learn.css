@@ -73,14 +73,14 @@
 }
 .lx-title {
   margin: 0;
-  font-size: 22px;
+  font-size: var(--type-section);
   font-weight: 500;
   color: var(--ix-text-1);
   letter-spacing: -0.01em;
 }
 .lx-tagline {
   margin: 5px 0 0;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   max-width: 52ch;
 }
@@ -93,7 +93,7 @@
   border-top-color: var(--ix-glass-top);
   background: var(--accent-soft, rgba(46, 230, 192, 0.14));
   color: var(--ix-accent-text);
-  font-size: 13px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
   transition: border-color 160ms ease, background 160ms ease, opacity 160ms ease;
@@ -130,7 +130,7 @@
   border-radius: 999px;
   background: transparent;
   color: var(--ix-text-2);
-  font-size: 13px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
   transition: background 160ms ease, color 160ms ease;
@@ -148,7 +148,7 @@
   border: 1px solid var(--ix-glass-border);
   background: rgba(0, 0, 0, 0.28);
   color: var(--ix-text-1);
-  font-size: 15px;
+  font-size: var(--type-body);
   font-family: inherit;
   outline: none;
   transition: border-color 160ms ease, box-shadow 160ms ease;
@@ -172,7 +172,7 @@
   border: 1px solid var(--ix-glass-border);
   background: transparent;
   color: var(--ix-text-2);
-  font-size: 12.5px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
   transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
@@ -195,7 +195,7 @@
   border: 0;
   background: transparent;
   color: var(--ix-text-2);
-  font-size: 12px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
   display: inline-flex;
@@ -210,7 +210,7 @@
   border-radius: 999px;
   background: var(--ix-accent);
   color: var(--ix-accent-ink);
-  font-size: 10.5px;
+  font-size: var(--type-label);
   font-weight: 600;
   line-height: 1.5;
 }
@@ -262,14 +262,14 @@
 }
 .lx-name {
   flex-shrink: 0;
-  font-size: 15px;
+  font-size: var(--type-body);
   font-weight: 500;
   color: var(--ix-text-1);
 }
 .lx-oneliner {
   flex: 1;
   min-width: 0;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
   white-space: nowrap;
   overflow: hidden;
@@ -277,19 +277,19 @@
 }
 .lx-what {
   margin: 0 0 6px;
-  font-size: 13.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-1);
   line-height: 1.5;
 }
 .lx-why {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   line-height: 1.55;
 }
 .lx-line {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   line-height: 1.55;
 }
@@ -301,7 +301,7 @@
   color: var(--ix-accent-text);
 }
 .lx-golden {
-  font-size: 11.5px;
+  font-size: var(--type-label);
   color: var(--ix-accent-text);
   letter-spacing: 0.01em;
   margin-bottom: 8px;
@@ -310,7 +310,7 @@
   margin: 8px 0;
   padding-left: 20px;
   color: var(--ix-text-2);
-  font-size: 13px;
+  font-size: var(--type-label);
   line-height: 1.6;
 }
 .lx-steps li {
@@ -326,7 +326,7 @@
 /* Pills — verdict + type. */
 .lx-verdict,
 .lx-typepill {
-  font-size: 10.5px;
+  font-size: var(--type-label);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   padding: 2px 9px;
@@ -363,7 +363,7 @@
   border-radius: var(--ix-radius);
 }
 .lx-gradekey-title {
-  font-size: 10.5px;
+  font-size: var(--type-label);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--ix-text-3);
@@ -377,7 +377,7 @@
   flex-shrink: 0;
 }
 .lx-gradekey-def {
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.45;
   color: var(--ix-text-2);
 }
@@ -404,7 +404,7 @@
   border: 0;
   background: transparent;
   color: var(--ix-text-3);
-  font-size: 11px;
+  font-size: var(--type-label);
   font-family: inherit;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -424,7 +424,7 @@
 /* "Grade:" axis label before the verdict-filter chips — names what this row narrows. */
 .lx-vfilter-label {
   align-self: center;
-  font-size: 11px;
+  font-size: var(--type-label);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--ix-text-3);
@@ -441,7 +441,7 @@
   border: 0;
   background: transparent;
   color: var(--ix-text-2);
-  font-size: 12.5px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
   transition: color 160ms ease;
@@ -478,7 +478,7 @@
   border-top: 1px solid var(--ix-glass-border);
 }
 .lx-related-label {
-  font-size: 11px;
+  font-size: var(--type-label);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--ix-text-3);
@@ -489,7 +489,7 @@
   border: 1px solid var(--ix-glass-border);
   background: rgba(255, 255, 255, 0.03);
   color: var(--ix-text-2);
-  font-size: 12px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
   transition: color 160ms ease, border-color 160ms ease;
@@ -504,7 +504,7 @@
   border-radius: var(--ix-radius);
   padding: 22px;
   text-align: center;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   line-height: 1.55;
 }
@@ -521,7 +521,7 @@
 /* ── Autopsy ──────────────────────────────────────────────────────────────── */
 .lx-sub {
   margin: 0 0 14px;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   line-height: 1.55;
 }
@@ -532,7 +532,7 @@
   border: 1px solid var(--ix-glass-border);
   background: rgba(0, 0, 0, 0.28);
   color: var(--ix-text-1);
-  font-size: 13.5px;
+  font-size: var(--type-label);
   font-family: var(--font-mono, ui-monospace, monospace);
   line-height: 1.5;
   resize: vertical;
@@ -569,7 +569,7 @@
 .lx-autopsy-sticky-label {
   flex: 1;
   min-width: 0;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   white-space: nowrap;
   overflow: hidden;
@@ -577,7 +577,7 @@
 }
 .lx-autopsy-sticky-count {
   flex-shrink: 0;
-  font-size: 11.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
   font-family: var(--font-mono, ui-monospace, monospace);
 }
@@ -592,7 +592,7 @@
   background: color-mix(in srgb, var(--ix-accent) 8%, transparent);
 }
 .lx-grade {
-  font-size: 14px;
+  font-size: var(--type-label);
   color: var(--ix-text-1);
   font-family: var(--font-mono, ui-monospace, monospace);
   padding: 13px 15px;
@@ -620,17 +620,17 @@
   border: 1px solid rgba(240, 114, 111, 0.35);
   background: rgba(240, 114, 111, 0.08);
   color: var(--ix-danger);
-  font-size: 13px;
+  font-size: var(--type-label);
 }
 .lx-result-note {
   margin: 12px 0 0;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
   line-height: 1.5;
 }
 .lx-result-empty {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   line-height: 1.55;
 }
@@ -652,7 +652,7 @@
   border: 1px solid var(--ix-glass-border);
   background: var(--ix-glass-fill);
   color: var(--ix-text-1);
-  font-size: 13.5px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
   text-align: left;
@@ -666,7 +666,7 @@
 }
 .lx-hitcount {
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
 }
 .lx-howtos {
@@ -676,7 +676,7 @@
   border: 0;
   background: transparent;
   color: var(--ix-accent-text);
-  font-size: 12.5px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
   padding: 4px 0;
@@ -708,7 +708,7 @@
 }
 .lx-starthere-label {
   display: block;
-  font-size: 11px;
+  font-size: var(--type-label);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ix-text-3);
@@ -726,7 +726,7 @@
   background: var(--accent-soft, rgba(46, 230, 192, 0.1));
   color: var(--ix-accent-text);
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   cursor: pointer;
   transition: border-color 160ms ease;
 }
@@ -749,7 +749,7 @@
   background: var(--ix-glass-fill);
   color: var(--ix-text-1);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--type-label);
   font-weight: 500;
   text-align: left;
   cursor: pointer;
@@ -769,12 +769,12 @@
 /* One-line scent under each category title (V2-9 punch i) — quiet, never competing with the
    title, but muted (not faint): it's meant to be READ, so it clears AA, unlike the faint count. */
 .lx-cat-desc {
-  font-size: 11.5px;
+  font-size: var(--type-label);
   font-weight: 400;
   color: var(--ix-text-2);
 }
 .lx-cat-count {
-  font-size: 11.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
   font-family: var(--font-mono, ui-monospace, monospace);
 }
@@ -798,13 +798,13 @@
 }
 .lx-urlcard-lead {
   margin: 0 0 8px;
-  font-size: 13.5px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-1);
 }
 .lx-urlcard-how {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-2);
 }
@@ -824,13 +824,13 @@
   border-radius: var(--ix-radius);
 }
 .lx-autopsy-record-title {
-  font-size: 10.5px;
+  font-size: var(--type-label);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--ix-text-3);
 }
 .lx-autopsy-record-line {
-  font-size: 13px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-2);
 }
@@ -848,7 +848,7 @@
 .lx-superseded {
   margin: 0 0 10px;
   padding: 8px 11px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-2);
   background: color-mix(in srgb, var(--ix-amber) 10%, transparent);
@@ -891,6 +891,6 @@
 .lx-superseded-chain {
   display: block;
   margin-top: 4px;
-  font-size: 11.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-3, var(--ix-text-2));
 }

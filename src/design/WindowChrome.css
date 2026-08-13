@@ -56,7 +56,7 @@
 }
 .wc-title {
   padding-left: 13px;
-  font-size: 12px;
+  font-size: var(--type-label);
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--ix-text-2, #b8bcc8);

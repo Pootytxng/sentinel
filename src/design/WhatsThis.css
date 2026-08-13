@@ -12,7 +12,7 @@
   background: transparent;
   padding: 0;
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-accent-text, var(--accent, #2ee6c0));
   cursor: help;
   opacity: 0.82;
@@ -47,7 +47,7 @@
 }
 .whats-this-what {
   display: block;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-1, var(--fg, #e7ebf2));
   font-weight: 400;
@@ -56,7 +56,7 @@
   display: inline-block;
   margin-top: 8px;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--type-label);
   font-weight: 600;
   background: none;
   border: none;

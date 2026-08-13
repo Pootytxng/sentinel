@@ -69,6 +69,8 @@ import {
   statusLabel,
   summarizeChanges,
 } from "./surfaces/gaming-mode";
+// TYPE-1: the six-step type scale tokens load before every stylesheet that consumes them.
+import "./design/type-scale.css";
 import "./App.css";
 import "./design/doorknob.css";
 import { KonamiWhisper } from "./design/KonamiWhisper";

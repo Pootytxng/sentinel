@@ -42,7 +42,7 @@
 }
 :root[data-v2="on"] .hv2-hero-title {
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--v2-muted);
 }
 :root[data-v2="on"] .hv2-stage-controls {
@@ -56,7 +56,7 @@
 }
 :root[data-v2="on"] .hv2-seg {
   font-family: var(--v2-font-sans);
-  font-size: 11.5px;
+  font-size: var(--type-label);
   font-weight: 600;
   color: var(--v2-muted);
   background: transparent;
@@ -116,7 +116,7 @@
   place-items: center;
   height: 100%;
   color: var(--v2-faint);
-  font-size: 12px;
+  font-size: var(--type-label);
 }
 
 /* Scan sweep — renders ONLY while checks are actually running (honest activity). */
@@ -175,7 +175,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 11.5px;
+  font-size: var(--type-label);
   color: var(--v2-muted);
   background: var(--v2-panel-2);
   border: 1px solid var(--v2-line);
@@ -214,7 +214,7 @@
   position: absolute;
   left: 14px;
   bottom: 18px;
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--v2-muted);
   background: var(--v2-bg);
   border: 1px solid var(--v2-line-strong);
@@ -256,10 +256,10 @@
 }
 :root[data-v2="on"] .hv2-stat-k {
   color: var(--v2-muted);
-  font-size: 11.5px;
+  font-size: var(--type-label);
 }
 :root[data-v2="on"] .hv2-stat-n {
-  font-size: 22px;
+  font-size: var(--type-section);
   font-weight: 600;
   letter-spacing: -0.5px;
   color: var(--v2-text);
@@ -269,13 +269,13 @@
 }
 :root[data-v2="on"] .hv2-stat-unit {
   font-family: var(--v2-font-sans);
-  font-size: 12px;
+  font-size: var(--type-label);
   font-weight: 400;
   letter-spacing: 0;
   color: var(--v2-muted);
 }
 :root[data-v2="on"] .hv2-stat-d {
-  font-size: 11.5px;
+  font-size: var(--type-label);
   color: var(--v2-faint);
 }
 /* Ledger "latest" line: one line, ellipsized title (V2-9 punch b) — the timestamp never clips. */
@@ -296,7 +296,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 14.5px;
+  font-size: var(--type-body);
   font-weight: 600;
   color: var(--v2-text);
 }
@@ -327,14 +327,14 @@
   padding: 12px var(--v2-pad);
   border-bottom: 1px solid var(--v2-line);
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--v2-muted);
 }
 :root[data-v2="on"] .hv2-card-hd-right {
   margin-left: auto;
   font-weight: 400;
   color: var(--v2-faint);
-  font-size: 11.5px;
+  font-size: var(--type-label);
 }
 :root[data-v2="on"] .hv2-rows {
   display: flex;
@@ -363,7 +363,7 @@
 :root[data-v2="on"] .hv2-row-clear {
   display: block;
   color: var(--v2-muted);
-  font-size: 12.5px;
+  font-size: var(--type-label);
 }
 :root[data-v2="on"] .hv2-row-text {
   min-width: 0;
@@ -371,13 +371,13 @@
 :root[data-v2="on"] .hv2-row-nm {
   display: block;
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--v2-text);
 }
 :root[data-v2="on"] .hv2-row-why {
   display: block;
   color: var(--v2-muted);
-  font-size: 11.5px;
+  font-size: var(--type-label);
 }
 :root[data-v2="on"] .hv2-mark {
   width: 8px;
@@ -398,7 +398,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--type-label);
   font-weight: 600;
   padding: 2px 9px;
   border-radius: 99px;
@@ -420,7 +420,7 @@
 /* ── Buttons ── */
 :root[data-v2="on"] .hv2-btn {
   font-family: var(--v2-font-sans);
-  font-size: 12px;
+  font-size: var(--type-label);
   font-weight: 600;
   border-radius: var(--v2-r-sm);
   padding: 6px 13px;

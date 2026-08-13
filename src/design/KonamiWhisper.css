@@ -13,7 +13,7 @@
   border: 1px solid var(--ix-glass-border);
   border-top-color: var(--ix-glass-top);
   color: var(--ix-text-2);
-  font-size: 13px;
+  font-size: var(--type-label);
   white-space: nowrap;
   pointer-events: none;
   backdrop-filter: blur(8px);

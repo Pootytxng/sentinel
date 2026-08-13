@@ -301,8 +301,11 @@ describe("type discipline (Geist law)", () => {
     expect(v2Token("font-mono")).toContain("Geist Mono");
   });
 
-  it('"Geist" appears in src CSS only in fonts-v2.css (@font-face) + tokens-v2.css (tokens)', () => {
-    const allowed = new Set(["fonts-v2.css", "tokens-v2.css", "tokens-qpw.css"]);
+  it('"Geist" appears in src CSS only in the token layers that DEFINE the faces', () => {
+    // App.css joined the allowlist 2026-08-13 (TYPE-1): its :root --font-ui/--font-mono now point
+    // the LEGACY surfaces at the same Geist faces the v2 shell speaks — that is the one-UI-face
+    // consolidation, not a leak. Consumer CSS still may not name Geist directly.
+    const allowed = new Set(["fonts-v2.css", "tokens-v2.css", "tokens-qpw.css", "App.css"]);
     const offenders: string[] = [];
     for (const p of listCss("src")) {
       const base = p.replace(/\\/g, "/").split("/").pop() as string;

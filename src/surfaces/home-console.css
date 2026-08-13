@@ -40,14 +40,14 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  font: 600 10px var(--v2-font-sans);
+  font: 600 var(--type-label) var(--v2-font-sans);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--v2-faint);
   margin-bottom: 10px;
 }
 :root[data-v2="on"] .hc-masthead-eyebrow .hc-mono {
-  font: 10px var(--v2-font-mono);
+  font: var(--type-label) var(--v2-font-mono);
   letter-spacing: 0.08em;
 }
 :root[data-v2="on"] .hc-eyebrow-sep {
@@ -59,7 +59,7 @@
 :root[data-v2="on"] .v2-verdict h1:has(.hc-headline) {
   display: block;
   margin: 0 0 6px;
-  font: 650 clamp(24px, 2.8vw, 32px) / 1.15 var(--v2-font-sans);
+  font: 650 var(--type-section) / 1.15 var(--v2-font-sans);
   letter-spacing: -0.01em;
   color: var(--v2-text);
   max-width: 34ch;
@@ -81,7 +81,7 @@
   gap: 3px;
 }
 :root[data-v2="on"] .hc-verdict-line {
-  font: 650 clamp(17px, 1.9vw, 21px) / 1.2 var(--v2-font-sans);
+  font: 650 var(--type-card) / 1.2 var(--v2-font-sans);
   letter-spacing: -0.005em;
   color: var(--v2-text);
   text-wrap: balance;
@@ -90,7 +90,7 @@
   color: var(--v2-warn);
 }
 :root[data-v2="on"] .hc-verdict-dek {
-  font: 400 13px / 1.5 var(--v2-font-sans);
+  font: 400 var(--type-label) / 1.5 var(--v2-font-sans);
   color: var(--v2-muted);
   max-width: 62ch;
 }
@@ -104,13 +104,13 @@
   margin-bottom: 22px;
 }
 :root[data-v2="on"] .hc-readout-seg {
-  font: 600 10px var(--v2-font-sans);
+  font: 600 var(--type-label) var(--v2-font-sans);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--v2-muted);
 }
 :root[data-v2="on"] .hc-readout-seg .hc-mono {
-  font: 11px var(--v2-font-mono);
+  font: var(--type-label) var(--v2-font-mono);
   color: var(--v2-text);
   letter-spacing: 0.02em;
 }
@@ -161,7 +161,7 @@
 
 /* Buttons — quiet instrument chrome (HomeHud's register). */
 :root[data-v2="on"] .hc-btn {
-  font: 600 12px var(--v2-font-sans);
+  font: 600 var(--type-label) var(--v2-font-sans);
   letter-spacing: 0.01em;
   color: var(--v2-text);
   background: transparent;
@@ -236,7 +236,7 @@
   place-items: center;
   height: 100%;
   color: var(--v2-faint);
-  font-size: 12px;
+  font-size: var(--type-label);
 }
 
 /* Corner brackets — the HUD framing device, two 1px edges per corner. */
@@ -334,21 +334,21 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--v2-text);
 }
 :root[data-v2="on"] .hc-callout-head b {
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  font-size: 10px;
+  font-size: var(--type-label);
 }
 :root[data-v2="on"] .hc-callout-detail {
   color: var(--v2-muted);
-  font-size: 11px;
+  font-size: var(--type-label);
 }
 :root[data-v2="on"] .hc-callout-v {
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--v2-muted);
 }
 :root[data-v2="on"] .hc-callout-v-ok {
@@ -369,7 +369,7 @@
   gap: 8px;
 }
 :root[data-v2="on"] .hc-specs-eyebrow {
-  font: 600 10px var(--v2-font-sans);
+  font: 600 var(--type-label) var(--v2-font-sans);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   /* --v2-muted, not --v2-faint: at 10px/600 this is not "large text", so it owes the full 4.5:1.
@@ -394,7 +394,7 @@
   min-width: 0;
 }
 :root[data-v2="on"] .hc-spec-title {
-  font: 600 10px var(--v2-font-sans);
+  font: 600 var(--type-label) var(--v2-font-sans);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--v2-text);
@@ -410,7 +410,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  font-size: 11px;
+  font-size: var(--type-label);
 }
 :root[data-v2="on"] .hc-spec-k {
   color: var(--v2-muted);
@@ -439,19 +439,19 @@
   border-radius: var(--ix-radius);
 }
 :root[data-v2="on"] .hc-limiter-label {
-  font: 600 10px var(--v2-font-sans);
+  font: 600 var(--type-label) var(--v2-font-sans);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--v2-faint);
   flex: none;
 }
 :root[data-v2="on"] .hc-limiter-title {
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--v2-text);
   min-width: 0;
 }
 :root[data-v2="on"] .hc-limiter-tag {
-  font-size: 10px;
+  font-size: var(--type-label);
   color: var(--v2-faint);
   border: 1px solid var(--v2-line);
   border-radius: 999px;
@@ -464,7 +464,7 @@
   border-radius: 3px;
   background: transparent;
   cursor: pointer;
-  font: 500 12px var(--v2-font-sans);
+  font: 500 var(--type-label) var(--v2-font-sans);
 }
 
 /* BENTO: the tile IS the box (2026-08-12 conversion). Inside a tile body the row drops its own
@@ -485,7 +485,7 @@
    it is the least important thing on the screen. ── */
 :root[data-v2="on"] .hc-none {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--v2-faint);
 }
 
@@ -504,7 +504,7 @@
   gap: 4px;
 }
 :root[data-v2="on"] .hc-seg {
-  font: 600 11px var(--v2-font-sans);
+  font: 600 var(--type-label) var(--v2-font-sans);
   letter-spacing: 0.01em;
   color: var(--v2-muted);
   background: transparent;
@@ -619,7 +619,7 @@
    question, uppercase micro-label, never carrying a verdict. */
 :root[data-v2="on"] .hc-intake-head {
   padding: 10px 20px 4px;
-  font: 600 11.5px var(--v2-font-sans);
+  font: 600 var(--type-label) var(--v2-font-sans);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--ix-text-3);
@@ -640,11 +640,11 @@
   flex: 1 0 100%;
   min-width: 0;
   font-style: italic;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 :root[data-v2="on"] .hc-intake-fast-line {
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
 }
 :root[data-v2="on"] .hc-intake-fast-btn {
@@ -653,7 +653,7 @@
 /* J (2026-07-22): the skipped-tweak disclosure under the fast-path receipt. Subordinate to the
    receipt line by design - it answers "which one?" on demand without competing with the verdict. */
 :root[data-v2="on"] .hc-intake-fast-skipped {
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
   width: 100%;
 }
@@ -670,7 +670,7 @@
 }
 :root[data-v2="on"] .hc-intake-fast-undo {
   flex: none;
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
   opacity: 0.9;
 }
@@ -709,7 +709,7 @@
   background: transparent;
   color: inherit;
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   text-align: left;
   cursor: pointer;
   transition: background 0.12s ease;
@@ -755,7 +755,7 @@
   background: transparent;
   color: inherit;
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   text-align: left;
   cursor: pointer;
   transition: background 0.12s ease;

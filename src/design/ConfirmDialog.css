@@ -35,13 +35,13 @@
 }
 .cmp-confirm-title {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: var(--type-body);
   font-weight: 500;
   color: var(--ix-text-1);
 }
 .cmp-confirm-body {
   margin: 0 0 18px;
-  font-size: 13.5px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-2);
 }
@@ -55,7 +55,7 @@
   padding: 9px 18px;
   border-radius: 9px;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--type-label);
   cursor: pointer;
   transition: border-color 160ms ease, background 160ms ease, opacity 160ms ease;
 }

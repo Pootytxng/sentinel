@@ -7,9 +7,9 @@
    below are true screen px. */
 :root[data-v2="on"] .oscilloscope { display: flex; flex-direction: column; gap: 6px; margin: 0; min-width: 0; }
 :root[data-v2="on"] .osc-label { display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
-  font-family: var(--ix-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+  font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .12em; text-transform: uppercase;
   color: var(--ix-text-2); }
-:root[data-v2="on"] .osc-read { font-size: 12px; letter-spacing: .04em; color: var(--ix-text-1);
+:root[data-v2="on"] .osc-read { font-size: var(--type-label); letter-spacing: .04em; color: var(--ix-text-1);
   font-variant-numeric: tabular-nums; }
 :root[data-v2="on"] .osc-stage { position: relative; border: 1px solid var(--ix-glass-border); min-height: 64px; }
 :root[data-v2="on"] .osc-grid { display: block; width: 100%; height: 64px; }
@@ -22,18 +22,18 @@
 :root[data-v2="on"] .osc-warn .osc-trace { stroke: var(--v2-warn); }
 :root[data-v2="on"] .osc-good .osc-trace { stroke: var(--ready); }
 :root[data-v2="on"] .osc-neutral .osc-trace { stroke: var(--ix-text-2); }
-:root[data-v2="on"] .osc-worst { font-size: 10px; letter-spacing: .06em; color: var(--v2-warn);
+:root[data-v2="on"] .osc-worst { font-size: var(--type-label); letter-spacing: .06em; color: var(--v2-warn);
   font-variant-numeric: tabular-nums; }
 /* Zero-scale ms tick labels (RTSS-style labeled axis): HTML spans so the stretched viewBox
    can't distort the type; anchored to the right edge, quiet ink. */
 :root[data-v2="on"] .osc-ylab { position: absolute; right: 4px; transform: translateY(-50%);
-  font-family: var(--ix-mono); font-size: 8px; letter-spacing: .06em; color: var(--ix-text-3);
+  font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .06em; color: var(--ix-text-3);
   font-variant-numeric: tabular-nums; pointer-events: none; }
 :root[data-v2="on"] .osc-budget { stroke: var(--ix-text-3); stroke-width: .75; stroke-dasharray: 4 3; opacity: .6; }
 :root[data-v2="on"] .osc-spike { stroke: var(--v2-warn); stroke-width: 1; opacity: .8; }
 :root[data-v2="on"] .osc-spike-worst { stroke-width: 1.75; opacity: 1; }
 :root[data-v2="on"] .osc-nosignal { position: absolute; inset: 0; display: grid; place-items: center;
-  font-family: var(--ix-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+  font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .14em; text-transform: uppercase;
   color: var(--ix-text-3); }
 /* Interactive chrome (the Monitor deck's scrub + drag-zoom) — drawn only when the caller
    passes scrub/sel; the component itself stays a pure render. */

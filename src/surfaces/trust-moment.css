@@ -6,7 +6,7 @@
   border-radius: 10px;
   padding: 14px 16px;
   margin-bottom: 12px;
-  font-size: 0.9rem;
+  font-size: var(--type-body);
   color: var(--fg);
 }
 .tm-head {
@@ -27,7 +27,7 @@
 }
 .tm-btn {
   font: inherit;
-  font-size: 0.85rem;
+  font-size: var(--type-label);
   padding: 6px 12px;
   border-radius: 8px;
   border: 1px solid var(--border-strong, var(--border));

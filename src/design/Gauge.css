@@ -6,6 +6,6 @@
   -webkit-mask:radial-gradient(circle 31px at 50% 50%,transparent 98%,#000 100%);
   mask:radial-gradient(circle 31px at 50% 50%,transparent 98%,#000 100%);
   transition:background var(--dur-slow) var(--ease);}
-.ds-gauge .ds-dialval{position:absolute;font-family:var(--font-mono);font-size:18px;font-weight:600;}
-.ds-gauge .ds-dialval .ds-u{font-size:10px;color:var(--muted);}
-.ds-gauge .ds-gl{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.07em;}
+.ds-gauge .ds-dialval{position:absolute;font-family:var(--font-mono);font-size: var(--type-card);font-weight:600;}
+.ds-gauge .ds-dialval .ds-u{font-size: var(--type-label);color:var(--muted);}
+.ds-gauge .ds-gl{color:var(--faint);font-size: var(--type-label);text-transform:uppercase;letter-spacing:.07em;}

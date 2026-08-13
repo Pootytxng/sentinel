@@ -105,7 +105,7 @@
 :root[data-v2="on"] .v2-tile-title {
   margin: 0;
   font-family: var(--v2-font-sans);
-  font-size: 13px;
+  font-size: var(--type-label);
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--v2-text);
@@ -114,7 +114,7 @@
 :root[data-v2="on"] .v2-tile-badge {
   flex: 0 0 auto;
   font-family: var(--v2-font-mono);
-  font-size: 11px;
+  font-size: var(--type-label);
   font-variant-numeric: tabular-nums;
   color: var(--v2-muted);
 }
@@ -123,14 +123,14 @@
   flex: 1 1 auto;
   min-width: 0;
   font-family: var(--v2-font-sans);
-  font-size: 13px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--v2-muted);
 }
 
 /* The hero carries the answer, so it gets the reading size the secondary tiles don't. */
 :root[data-v2="on"] .v2-tile-hero .v2-tile-body {
-  font-size: 14px;
+  font-size: var(--type-label);
   color: var(--v2-text);
 }
 
@@ -146,7 +146,7 @@
   text-align: left;
   cursor: pointer;
   font-family: var(--v2-font-sans);
-  font-size: 12px;
+  font-size: var(--type-label);
   font-weight: 600;
   color: var(--v2-accent);
 }
@@ -254,7 +254,7 @@
 :root[data-v2="on"] .v2-sheet-title {
   margin: 0;
   font-family: var(--v2-font-sans);
-  font-size: 17px;
+  font-size: var(--type-card);
   font-weight: 600;
   color: var(--v2-text);
 }
@@ -262,7 +262,7 @@
 :root[data-v2="on"] .v2-sheet-sub {
   margin: 4px 0 0;
   font-family: var(--v2-font-sans);
-  font-size: 12px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--v2-muted);
 }
@@ -275,7 +275,7 @@
   border-radius: var(--v2-r-sm);
   cursor: pointer;
   font-family: var(--v2-font-sans);
-  font-size: 12px;
+  font-size: var(--type-label);
   font-weight: 600;
   color: var(--v2-muted);
   transition: color 0.16s ease, border-color 0.16s ease;
@@ -308,7 +308,7 @@
   flex-direction: column;
   gap: var(--v2-gap);
   font-family: var(--v2-font-sans);
-  font-size: 13px;
+  font-size: var(--type-label);
   line-height: 1.55;
   color: var(--v2-text);
 }

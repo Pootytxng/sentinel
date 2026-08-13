@@ -1,0 +1,22 @@
+/* TYPE-1 — the six-step type scale (design foundation step ①, docs/decisions/2026-08-11-design-foundation.md).
+   Measured 2026-08-11: one live room used TWELVE ad-hoc font sizes (8–32px); 47 of 83 text nodes
+   were ≤11px. That is fine print, not a scale. This file is the ONLY place a font size may be
+   declared in px. Every font-size in src/ resolves to one of these six tokens — enforced by
+   type-scale-guard.test.ts (the mechanized floor). Floor is 13px, per the foundation decision
+   (supersedes the audit's 11px: still too small at couch distance on 1080p).
+
+   verdict 40/650 · section 26/650 · card 17/600 · body 15/400 · label 13/500 · data 13 mono */
+:root {
+  --type-verdict: 40px;
+  --type-section: 26px;
+  --type-card: 17px;
+  --type-body: 15px;
+  --type-label: 13px;
+  --type-data: 13px; /* machine values (mono) — same step as label, distinct role */
+
+  --type-verdict-weight: 650;
+  --type-section-weight: 650;
+  --type-card-weight: 600;
+  --type-body-weight: 400;
+  --type-label-weight: 500;
+}

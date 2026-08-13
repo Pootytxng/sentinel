@@ -43,10 +43,10 @@ class ErrorBoundaryBase extends React.Component<Props, State> {
             background: "#0d0d10",
           }}
         >
-          <h1 style={{ fontSize: "20px", fontWeight: 600, margin: 0 }}>
+          <h1 style={{ fontSize: "var(--type-card)", fontWeight: 600, margin: 0 }}>
             {t("common.errorBoundary.title")}
           </h1>
-          <p style={{ fontSize: "14px", opacity: 0.75, margin: 0, maxWidth: "34ch" }}>
+          <p style={{ fontSize: "var(--type-label)", opacity: 0.75, margin: 0, maxWidth: "34ch" }}>
             {t("common.errorBoundary.body")}
           </p>
           <button
@@ -55,7 +55,7 @@ class ErrorBoundaryBase extends React.Component<Props, State> {
             style={{
               marginTop: "6px",
               padding: "9px 18px",
-              fontSize: "14px",
+              fontSize: "var(--type-label)",
               borderRadius: "8px",
               border: "1px solid #3a3a42",
               background: "#1b1b21",

@@ -33,19 +33,19 @@
 }
 .fix-title {
   margin: 0;
-  font-size: 22px;
+  font-size: var(--type-section);
   font-weight: 500;
   color: var(--ix-text-1);
   letter-spacing: -0.01em;
 }
 .fix-subtitle {
   margin: 5px 0 0;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 .fix-consent {
   margin: 7px 0 0;
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
 }
 .fix-classic {
@@ -55,7 +55,7 @@
   border: 1px solid var(--ix-glass-border);
   background: transparent;
   color: var(--ix-text-2);
-  font-size: 12.5px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
   transition: color 160ms ease, border-color 160ms ease;
@@ -67,7 +67,7 @@
 
 /* ── Section label (accent) ───────────────────────────────────────────────── */
 .fix-section-label {
-  font-size: 11px;
+  font-size: var(--type-label);
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--ix-accent-text);
@@ -75,7 +75,7 @@
 }
 .fix-empty {
   margin: 4px 2px;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 
@@ -114,13 +114,13 @@
   flex-wrap: wrap;
 }
 .fix-row-title {
-  font-size: 14.5px;
+  font-size: var(--type-body);
   font-weight: 500;
   color: var(--ix-text-1);
 }
 .fix-row-reason {
   margin: 5px 0 0;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   line-height: 1.5;
 }
@@ -138,13 +138,13 @@
 .fix-expert-path {
   display: block;
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   overflow-wrap: anywhere;
 }
 .fix-expert-note {
   display: block;
-  font-size: 10.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
   font-style: italic;
 }
@@ -156,7 +156,7 @@
   gap: 6px;
   margin-top: 7px;
   padding: 3px 9px;
-  font-size: 11.5px;
+  font-size: var(--type-label);
   font-weight: 500;
   color: var(--ix-text-2);
   background: color-mix(in srgb, var(--ix-accent) 8%, transparent);
@@ -180,7 +180,7 @@
 /* A5 applicability override — the "overridden by you" marker in the Not-for-this-rig pile.
    Muted outline chip: a user decision on record, not an alert. */
 .fix-override-chip {
-  font-size: 10px;
+  font-size: var(--type-label);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   padding: 2px 8px;
@@ -194,7 +194,7 @@
 /* A5 rig tagging — the "other rig" tag on history rows + the active-card heads-up. Muted,
    informational chrome: an entry from old hardware is a fact, not an alarm. */
 .fix-hist-rig-tag {
-  font-size: 10px;
+  font-size: var(--type-label);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   padding: 2px 8px;
@@ -206,7 +206,7 @@
 }
 .fix-rig-note {
   margin: 7px 0 0;
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   line-height: 1.5;
 }
@@ -216,7 +216,7 @@
   align-items: center;
   gap: 7px;
   margin: 0 0 10px;
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   cursor: pointer;
   user-select: none;
@@ -227,12 +227,12 @@
 }
 .fix-rig-hidden {
   color: var(--ix-text-3);
-  font-size: 11.5px;
+  font-size: var(--type-label);
 }
 
 /* Evidence chip — never upgraded; expected is the most muted. */
 .fix-evidence {
-  font-size: 10px;
+  font-size: var(--type-label);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   padding: 2px 8px;
@@ -270,7 +270,7 @@
   border: 0;
   background: transparent;
   color: var(--ix-text-1);
-  font-size: 13.5px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
   text-align: left;
@@ -280,7 +280,7 @@
 }
 .fix-group-count {
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   background: rgba(255, 255, 255, 0.05);
   border-radius: 999px;
@@ -305,7 +305,7 @@
 /* ── Refuse-pile ──────────────────────────────────────────────────────────── */
 .fix-refuse-intro {
   margin: 4px 2px 12px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   line-height: 1.5;
 }
@@ -323,7 +323,7 @@
   border: 1px solid var(--ix-glass-border);
   background: transparent;
   color: var(--ix-accent-text);
-  font-size: 12px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
   transition: border-color 160ms ease, background 160ms ease;
@@ -339,7 +339,7 @@
 }
 .fix-guided-tag {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--type-label);
   letter-spacing: 0.03em;
   color: var(--ix-text-2);
   border: 1px solid var(--ix-glass-border);
@@ -361,7 +361,7 @@
   border: 1px solid var(--ix-glass-border);
   background: transparent;
   color: var(--ix-text-1);
-  font-size: 12px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
   transition: border-color 160ms ease;
@@ -382,7 +382,7 @@
   background: rgba(255, 255, 255, 0.02);
 }
 .fix-guided-where {
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   margin-bottom: 6px;
 }
@@ -392,13 +392,13 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   line-height: 1.5;
 }
 .fix-guided-note {
   margin: 9px 0 0;
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
 }
 
@@ -419,7 +419,7 @@
 }
 .fix-startup-cmd {
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 11.5px;
+  font-size: var(--type-label);
   word-break: break-all;
 }
 .fix-startup-toggle {
@@ -482,7 +482,7 @@
   border: 1px solid var(--ix-glass-border);
   background: transparent;
   color: var(--ix-text-2);
-  font-size: 12.5px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
   transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
@@ -503,7 +503,7 @@
 .fix-amd-note {
   margin: 7px 0 0;
   padding: 7px 10px;
-  font-size: 12px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-2, #b8bcc8);
   background: color-mix(in srgb, var(--ix-amber, #fbbf3c) 9%, transparent);
@@ -519,7 +519,7 @@
   background: transparent;
   color: var(--ix-text-3);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--type-label);
   cursor: pointer;
   transition: color 140ms ease;
 }
@@ -536,7 +536,7 @@
   background: transparent;
   color: var(--ix-text-2);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   cursor: pointer;
   transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
 }
@@ -571,21 +571,21 @@
 }
 .fix-hist-title {
   flex: 1;
-  font-size: 13px;
+  font-size: var(--type-label);
   min-width: 0;
 }
 .fix-hist-when {
-  font-size: 11.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
   font-family: var(--font-mono, ui-monospace, monospace);
 }
 .fix-hist-status {
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
 }
 .fix-hist-detail {
   padding: 6px 4px 12px 30px;
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   display: flex;
   flex-direction: column;
@@ -593,7 +593,7 @@
 }
 .fix-hist-id {
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
 }
 
@@ -634,7 +634,7 @@
   background: var(--accent-soft, rgba(46, 230, 192, 0.1));
   color: var(--ix-accent-text);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--type-label);
   font-weight: 500;
   cursor: pointer;
   transition: border-color 160ms ease, background 160ms ease;
@@ -643,12 +643,12 @@
   border-color: var(--ix-accent);
 }
 .fix-applyall-hint {
-  font-size: 11.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
 }
 .fix-applyall-summary {
   margin: 0 0 12px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 
@@ -660,7 +660,7 @@
    so nothing else that matches them had to move. */
 .fix-applyall-note {
   margin: 0 0 14px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-2);
 }
@@ -682,11 +682,11 @@
   border: 1px solid var(--ix-glass-border);
 }
 .fix-applyall-item-title {
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-1);
 }
 .fix-applyall-item-what {
-  font-size: 11.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
 }
 /* §8c (slim rows): the pre-selected Recommended tick — one-tap deselect inside the consent sheet. */
@@ -712,7 +712,7 @@
   padding: 9px 16px;
   border-radius: 9px;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--type-label);
   cursor: pointer;
   transition: border-color 160ms ease, background 160ms ease, opacity 160ms ease;
 }
@@ -792,7 +792,7 @@
 }
 .fix-guided-none {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-2, #b8bcc8);
 }
@@ -810,7 +810,7 @@
   gap: 7px;
 }
 .ad-eyebrow {
-  font-size: 10.5px;
+  font-size: var(--type-label);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -818,13 +818,13 @@
 }
 .ad-text {
   margin: 0;
-  font-size: 13.5px;
+  font-size: var(--type-label);
   line-height: 1.55;
   color: var(--ix-text-2, #b8bcc8);
 }
 .ad-mono-soft {
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-1, #f2f3f7);
 }
 .ad-muted {
@@ -843,7 +843,7 @@
   gap: 7px;
 }
 .ad-flag {
-  font-size: 11px;
+  font-size: var(--type-label);
   font-weight: 600;
   padding: 3px 9px;
   border-radius: 999px;
@@ -859,7 +859,7 @@
 .ad-chip {
   display: inline-block;
   margin-right: 8px;
-  font-size: 11px;
+  font-size: var(--type-label);
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 6px;

@@ -17,7 +17,7 @@
    header-slop law 2026-07-10) — a contextual note next to the one control it qualifies. */
 :root[data-v2="on"] .lc-detail-note {
   margin: 0 0 10px;
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 
@@ -109,7 +109,7 @@
   gap: 10px;
 }
 :root[data-v2="on"] .lc-evidence-name {
-  font-size: 13px;
+  font-size: var(--type-label);
   font-weight: 600;
   color: var(--ix-text-1);
   letter-spacing: 0.06em;
@@ -118,7 +118,7 @@
 /* The part's own name, secondary — it answers "which thing did I just click", and the subsystem
    above it answers "what am I reading". */
 :root[data-v2="on"] .lc-evidence-part {
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 :root[data-v2="on"] .lc-evidence-list {
@@ -128,7 +128,7 @@
   margin: 12px 0 0;
 }
 :root[data-v2="on"] .lc-evidence-row dt {
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   letter-spacing: 0.04em;
 }
@@ -139,13 +139,13 @@
   margin: 3px 0 0;
 }
 :root[data-v2="on"] .lc-evidence-value {
-  font-size: 15px;
+  font-size: var(--type-body);
   font-weight: 600;
   color: var(--ix-text-1);
   font-variant-numeric: tabular-nums;
 }
 :root[data-v2="on"] .lc-evidence-den {
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   font-variant-numeric: tabular-nums;
 }
@@ -170,7 +170,7 @@
    never reads as an error state. */
 :root[data-v2="on"] .lc-evidence-empty {
   margin: 10px 0 0;
-  font-size: 12px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-2);
 }
@@ -192,7 +192,7 @@
   background: transparent;
   color: var(--ix-text-2);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--type-label);
   cursor: pointer;
 }
 :root[data-v2="on"] .lc-detail-close:hover {

@@ -52,13 +52,13 @@
   gap: 1px;
 }
 .lab-gauge-num {
-  font-size: 22px;
+  font-size: var(--type-section);
   font-weight: 600;
   color: var(--ix-text-1, var(--v2-text, #fff));
   line-height: 1;
 }
 .lab-gauge-den {
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
 }
 .lab-gauge-caption {
@@ -66,13 +66,13 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.4;
   color: var(--ix-text-2, var(--v2-text, rgba(255, 255, 255, 0.8)));
 }
 .lab-gauge-caption-k {
   font-family: var(--v2-font-mono, var(--font-mono, ui-monospace, monospace));
-  font-size: 10.5px;
+  font-size: var(--type-label);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
@@ -99,7 +99,7 @@
   border: 1px solid var(--v2-line, var(--ix-glass-border, rgba(255, 255, 255, 0.08)));
   border-radius: 9px;
   background: rgba(255, 255, 255, 0.02);
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-2, var(--v2-text, rgba(255, 255, 255, 0.8)));
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
@@ -117,7 +117,7 @@
 }
 .lab-optimize-more-summary::before {
   content: "▸";
-  font-size: 10px;
+  font-size: var(--type-label);
   transition: transform 0.15s ease;
 }
 .lab-optimize-more[open] > .lab-optimize-more-summary::before {
@@ -135,7 +135,7 @@
 }
 .lab-optimize-power-intro {
   margin: 0 0 12px;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
 }

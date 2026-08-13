@@ -21,14 +21,14 @@
 
 .play-title {
   margin: 0;
-  font-size: 22px;
+  font-size: var(--type-section);
   font-weight: 500;
   color: var(--ix-text-1);
   letter-spacing: -0.01em;
 }
 .play-sub {
   margin: 5px 0 0;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 
@@ -55,7 +55,7 @@
   margin-bottom: 14px;
 }
 .play-card-title {
-  font-size: 14px;
+  font-size: var(--type-label);
   font-weight: 500;
   color: var(--ix-text-1);
 }
@@ -66,7 +66,7 @@
   border-top-color: var(--ix-glass-top);
   background: rgba(255, 255, 255, 0.03);
   color: var(--ix-text-1);
-  font-size: 12.5px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
   transition: border-color 160ms ease, background 160ms ease;
@@ -89,7 +89,7 @@
   gap: 26px;
 }
 .play-metric-value {
-  font-size: 25px;
+  font-size: var(--type-section);
   font-weight: 500;
   color: var(--ix-text-1);
   font-family: var(--font-mono, ui-monospace, monospace);
@@ -97,17 +97,17 @@
 }
 .play-metric-label {
   margin-top: 2px;
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 .play-honest {
   margin: 12px 0 0;
-  font-size: 11.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
 }
 
 .play-field-label {
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
   margin: 12px 0 7px;
 }
@@ -126,7 +126,7 @@
   border: 0;
   background: transparent;
   color: var(--ix-text-2);
-  font-size: 12px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
   transition: background 160ms ease, color 160ms ease;
@@ -146,7 +146,7 @@
   border: 1px solid var(--ix-glass-border);
   background: transparent;
   color: var(--ix-text-2);
-  font-size: 14px;
+  font-size: var(--type-label);
   cursor: pointer;
   transition: border-color 160ms ease, color 160ms ease;
 }
@@ -162,7 +162,7 @@
   border: 0;
   background: transparent;
   color: var(--ix-accent-text);
-  font-size: 12.5px;
+  font-size: var(--type-label);
   font-family: inherit;
   cursor: pointer;
 }
@@ -172,7 +172,7 @@
 
 /* ── Sessions list ── */
 .play-section-label {
-  font-size: 11px;
+  font-size: var(--type-label);
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--ix-accent-text);
@@ -200,13 +200,13 @@
   text-align: left;
 }
 .play-monitor-title {
-  font-size: 14px;
+  font-size: var(--type-label);
   font-weight: 500;
   color: var(--ix-text-1);
 }
 .play-monitor-sub {
   flex: 1;
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-3);
 }
 .play-monitor-caret {
@@ -222,7 +222,7 @@
 }
 .play-empty {
   margin: 2px;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 .play-list {
@@ -269,18 +269,18 @@
   align-self: center;
 }
 .play-session-game {
-  font-size: 14px;
+  font-size: var(--type-label);
   font-weight: 500;
 }
 .play-session-meta {
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   display: inline-flex;
   align-items: baseline;
   gap: 8px;
 }
 .play-armed {
-  font-size: 10.5px;
+  font-size: var(--type-label);
   color: var(--ix-accent-text);
   border: 1px solid var(--accent-line, rgba(46, 230, 192, 0.32));
   border-radius: 999px;
@@ -289,7 +289,7 @@
 .play-session-nums {
   flex-shrink: 0;
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 12px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 .play-session-right {
@@ -342,12 +342,12 @@
   margin-bottom: 16px;
 }
 .play-hero-game {
-  font-size: 17px;
+  font-size: var(--type-card);
   font-weight: 600;
   color: var(--ix-text-1);
 }
 .play-hero-verdict {
-  font-size: 12.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 .play-hero-metrics {
@@ -360,7 +360,7 @@
   flex-direction: column;
 }
 .play-hero-value {
-  font-size: 26px;
+  font-size: var(--type-section);
   font-weight: 500;
   color: var(--ix-text-1);
   font-family: var(--font-mono, ui-monospace, monospace);
@@ -368,7 +368,7 @@
 }
 .play-hero-label {
   margin-top: 2px;
-  font-size: 11px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
 }
 
@@ -380,7 +380,7 @@
   background: rgba(255, 255, 255, 0.03);
   color: var(--ix-text-2);
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   padding: 7px 12px;
   border-radius: 9px;
   cursor: pointer;

@@ -1,42 +1,16 @@
-/* Per-room identity accents — scoped under :root[data-room-identity="on"] (the compy_room_identity
-   flag, DEFAULT ON since 2026-07-13; "0" is the devtools failsafe). See src/design/room-identity.ts
-   for the doctrine + the palette source of truth.
+/* COLOR-1 (design foundation step ①, docs/decisions/2026-08-11-design-foundation.md, 2026-08-13):
+   ROOMS GAVE UP THEIR HUE. The per-room preset accent overrides that lived here (Monitor teal
+   #3fd9c2, Blackbook amber #f0b878, Lab/Optimize emerald #27e08a) are DELETED, not repainted —
+   measured 2026-08-11: Lab's emerald was near-identical to --v2-ok (#3ddc97) and Blackbook's amber
+   to --v2-warn (#f5c542), so whole rooms glowed the same colour as "good"/"warning" and the status
+   palette stopped being information. One accent (--v2-accent violet, tokens-v2.css) now stands
+   app-wide; green/amber/red/blue each mean exactly one thing, everywhere.
 
-   THE MECHANISM: each rule overrides the accent tokens ON the room's own element. Every in-room
-   consumer already resolves its colour from these — the room re-point blocks (monitor/blackbook/lab/
-   optimize -v2.css) do `--ix-accent: var(--v2-accent)` and `--accent-*: var(--v2-accent-dim/line)`,
-   the shared HUD masthead (hud-rooms.css) and any Sparkline read var(--v2-accent) directly, and
-   Monitor's SessionStack + the rig hologram read the room-scoped --ix-accent — so overriding these on
-   the room element re-skins ALL of it. Home takes no override (keeps the global violet — its identity).
+   WHAT SURVIVES: the user's per-room accent PICKER (owner freedom directive 2026-07-12b) — a
+   deliberate user choice is not a shipped default. theme.ts (applyRoomAccents) still injects picked
+   accents scoped under :root[data-room-identity="on"], same mechanism, curated swatches only.
+   This file intentionally carries NO rules; room-identity.test.ts pins that the presets stay dead.
 
-   WHY dim/line are re-declared here (not derived at :root): a var()-chain inside a custom property is
-   substituted at ITS DECLARING element, so the :root `--v2-accent-dim`/`--v2-accent-line` bake in
-   root's violet and a per-room `--v2-accent` override can't retro-follow them (proven live on this
-   engine: `:root{--a:red;--b:var(--a)} .child{--a:blue}` → var(--b) resolves red). Declaring the dim/
-   line washes on the SAME room element as --v2-accent makes them resolve to the room hue; everything
-   downstream (--accent-soft/-line/-glow, --ix-accent-wash, the .play-armed hairline) then follows.
-
-   FLAG OFF ⇒ no rule matches ⇒ the global violet accent + washes stand within every room ⇒
-   byte-identical to today. Values MUST match ROOM_IDENTITY in src/design/room-identity.ts
-   (pinned + proven pairwise-distinct, with dim/line present, by room-identity.test.ts). */
-
-:root[data-room-identity="on"] .v2-room[data-room="play"] {
-  --v2-accent: #3fd9c2; /* Monitor — teal */
-  --v2-accent-dim: color-mix(in srgb, #3fd9c2 14%, transparent);
-  --v2-accent-line: color-mix(in srgb, #3fd9c2 25%, transparent);
-}
-:root[data-room-identity="on"] .v2-room[data-room="learn"] {
-  --v2-accent: #f0b878; /* Blackbook — amber */
-  --v2-accent-dim: color-mix(in srgb, #f0b878 14%, transparent);
-  --v2-accent-line: color-mix(in srgb, #f0b878 25%, transparent);
-}
-:root[data-room-identity="on"] .v2-room[data-room="lab"] {
-  --v2-accent: #27e08a; /* Lab — emerald */
-  --v2-accent-dim: color-mix(in srgb, #27e08a 14%, transparent);
-  --v2-accent-line: color-mix(in srgb, #27e08a 25%, transparent);
-}
-:root[data-room-identity="on"] .v2-room[data-room="fix"] {
-  --v2-accent: #27e08a; /* Optimize station — Lab family emerald */
-  --v2-accent-dim: color-mix(in srgb, #27e08a 14%, transparent);
-  --v2-accent-line: color-mix(in srgb, #27e08a 25%, transparent);
-}
+   HISTORICAL MECHANISM NOTE (kept for the next reader): a var()-chain inside a custom property
+   substitutes at ITS declaring element, so per-room overrides had to re-declare --v2-accent-dim/
+   -line on the SAME room element — theme.ts's injected pick rules still do. */

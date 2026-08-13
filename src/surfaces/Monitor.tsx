@@ -62,7 +62,7 @@ export function TuningPresets({
       style={{ display: "flex", flexDirection: "column", gap: 8 }}
     >
       {!bare && (
-        <h2 className="section-title" style={{ fontSize: 14 }}>
+        <h2 className="section-title" style={{ fontSize: "var(--type-label)" }}>
           {t("monitor.monitor.tuningPresetsTitle")}
         </h2>
       )}
@@ -98,7 +98,7 @@ export function TuningPresets({
         return (
           <div key={preset.id} className="card">
             <span className="card-label">{t(`monitor.monitor.tuningPresets.${preset.id}.label`, preset.label)}</span>
-            <span className="card-value" style={{ fontSize: 14, fontWeight: 500 }}>
+            <span className="card-value" style={{ fontSize: "var(--type-label)", fontWeight: 500 }}>
               {t(`monitor.monitor.tuningPresets.${preset.id}.goal`, preset.goal)}
             </span>
             <ol

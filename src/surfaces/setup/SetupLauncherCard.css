@@ -70,18 +70,18 @@
   flex: 1;
 }
 .stl-title {
-  font-size: 15px;
+  font-size: var(--type-body);
   font-weight: 700;
 }
 .stl-sub {
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.45;
   color: var(--ix-text-3, #8b95a8);
 }
 .stl-go {
   flex: 0 0 auto;
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 12.5px;
+  font-size: var(--type-label);
   letter-spacing: 0.06em;
   color: var(--ix-accent-text, var(--accent, #2ee6c0));
 }

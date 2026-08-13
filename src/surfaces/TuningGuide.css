@@ -5,13 +5,13 @@
 }
 .tg-goal {
   margin: 0 0 10px;
-  font-size: 13.5px;
+  font-size: var(--type-label);
   color: var(--ix-text-1);
   line-height: 1.5;
 }
 .tg-tool {
   margin: 0 0 4px;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-accent-text);
   font-weight: 500;
   line-height: 1.5;
@@ -20,7 +20,7 @@
   margin: 0 0 10px;
   padding-left: 20px;
   color: var(--ix-text-2);
-  font-size: 13px;
+  font-size: var(--type-label);
   line-height: 1.6;
 }
 .tg-steps li {
@@ -28,7 +28,7 @@
 }
 .tg-line {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-2);
   line-height: 1.55;
 }

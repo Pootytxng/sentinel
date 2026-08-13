@@ -121,7 +121,7 @@
   margin-bottom: 14px;
 }
 :root[data-living="on"] .ds-section-head h3 {
-  font-size: 15px;
+  font-size: var(--type-body);
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -181,7 +181,7 @@
   font-weight: 700;
 }
 :root[data-living="on"] .fix-row-tech {
-  font-size: 11px;
+  font-size: var(--type-label);
   font-weight: 500;
   color: var(--faint);
   letter-spacing: 0.02em;

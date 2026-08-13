@@ -28,7 +28,7 @@
   padding-left: 18px;
   display: grid;
   gap: 5px;
-  font-size: 13px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-2, var(--fg-2, #c4ccda));
 }
@@ -61,7 +61,7 @@
 
 .gaming-honesty {
   margin-top: 12px;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--muted);
   display: flex;
   flex-wrap: wrap;
@@ -74,7 +74,7 @@
 }
 
 .gaming-diff-title {
-  font-size: 12px;
+  font-size: var(--type-label);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
@@ -84,7 +84,7 @@
 .gaming-diff {
   margin: 0;
   padding-left: 18px;
-  font-size: 13px;
+  font-size: var(--type-label);
   line-height: 1.7;
 }
 
@@ -107,7 +107,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: var(--type-label);
   padding: 4px 0;
   cursor: pointer;
 }
@@ -129,7 +129,7 @@
   border: 1px solid var(--status-danger-line, var(--border-strong));
   background: var(--status-danger-soft, transparent);
   color: var(--status-danger, inherit);
-  font-size: 13px;
+  font-size: var(--type-label);
 }
 
 /* Restore-success confirmation (owner-caught gap 2026-07-07: a successful restore showed
@@ -155,7 +155,7 @@
 }
 .gaming-restored p {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--ix-text-2, var(--fg-2, inherit));
 }
 .gaming-restored .gaming-diff {
@@ -190,7 +190,7 @@
 }
 
 .gaming-guarantee {
-  font-size: 13px;
+  font-size: var(--type-label);
   color: var(--muted);
   margin-top: 12px;
 }

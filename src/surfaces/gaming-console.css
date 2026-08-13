@@ -34,7 +34,7 @@
 }
 :root[data-v2="on"] .gc-state {
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 10.5px;
+  font-size: var(--type-label);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ix-text-1, var(--fg));
@@ -45,7 +45,7 @@
   align-items: center;
   gap: 7px;
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 10px;
+  font-size: var(--type-label);
   letter-spacing: 0.04em;
   color: var(--ix-text-3, var(--muted));
 }
@@ -69,7 +69,7 @@
   gap: 8px;
   margin: 0 0 10px;
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 10px;
+  font-size: var(--type-label);
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -84,7 +84,7 @@
 }
 :root[data-v2="on"] .gc-prose {
   margin: 0 0 6px;
-  font-size: 13px;
+  font-size: var(--type-label);
   line-height: 1.55;
   color: var(--ix-text-2, var(--fg-2));
 }
@@ -113,7 +113,7 @@
   display: flex;
   align-items: baseline;
   gap: 9px;
-  font-size: 13px;
+  font-size: var(--type-label);
   line-height: 1.5;
   color: var(--ix-text-1, var(--fg));
 }
@@ -137,7 +137,7 @@
 :root[data-v2="on"] .gc-honesty {
   margin: 12px 0 0;
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 10.5px;
+  font-size: var(--type-label);
   letter-spacing: 0.04em;
   color: var(--ix-text-2, var(--muted));
 }
@@ -150,7 +150,7 @@
 }
 :root[data-v2="on"] .gc-tier-title {
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 10px;
+  font-size: var(--type-label);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ix-text-3, var(--muted));
@@ -171,7 +171,7 @@
   background: transparent;
   color: var(--ix-accent-text, var(--ix-accent, var(--accent)));
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 12px;
+  font-size: var(--type-label);
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -200,7 +200,7 @@
   background: transparent;
   color: var(--ix-text-1, var(--fg));
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 10.5px;
+  font-size: var(--type-label);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   line-height: 1;
@@ -226,7 +226,7 @@
 :root[data-v2="on"] .gc-what summary {
   cursor: pointer;
   font-family: var(--ix-mono, ui-monospace, monospace);
-  font-size: 10px;
+  font-size: var(--type-label);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ix-text-3, var(--muted));
@@ -240,7 +240,7 @@
 }
 :root[data-v2="on"] .gc-what p {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--type-label);
   line-height: 1.55;
   color: var(--ix-text-2, var(--fg-2));
 }

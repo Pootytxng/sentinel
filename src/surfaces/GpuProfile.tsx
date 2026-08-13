@@ -35,7 +35,7 @@ const panelStyle: React.CSSProperties = {
   padding: "14px 16px",
 };
 
-const headingStyle: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: "var(--ix-text-1)" };
+const headingStyle: React.CSSProperties = { fontSize: "var(--type-label)", fontWeight: 600, color: "var(--ix-text-1)" };
 
 function GpuProfileScopePicker() {
   const { t } = useTranslation();
@@ -65,7 +65,7 @@ function GpuProfileScopePicker() {
                 cursor: "pointer",
                 borderRadius: 999,
                 padding: "6px 14px",
-                fontSize: 12.5,
+                fontSize: "var(--type-label)",
                 fontWeight: 600,
                 border: selected ? "1px solid var(--ix-accent)" : "1px solid var(--ix-border)",
                 background: selected ? "var(--ix-accent)" : "transparent",
@@ -78,11 +78,11 @@ function GpuProfileScopePicker() {
         })}
       </div>
 
-      <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: "var(--ix-text-2)" }}>
+      <p style={{ margin: 0, fontSize: "var(--type-label)", lineHeight: 1.5, color: "var(--ix-text-2)" }}>
         {t(`lab.gpuProfile.scope.${scope}.blurb`, active.blurb)}
       </p>
 
-      <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.4, color: "var(--ix-text-3, var(--ix-text-2))" }}>
+      <p style={{ margin: 0, fontSize: "var(--type-label)", lineHeight: 1.4, color: "var(--ix-text-3, var(--ix-text-2))" }}>
         {t("lab.gpuProfile.scopeReassurance")}
       </p>
     </section>
@@ -95,7 +95,7 @@ const btnStyle = (quiet = false): React.CSSProperties => ({
   cursor: "pointer",
   borderRadius: 999,
   padding: "6px 14px",
-  fontSize: 12.5,
+  fontSize: "var(--type-label)",
   fontWeight: 600,
   border: "1px solid var(--ix-border)",
   background: "transparent",
@@ -130,7 +130,7 @@ function DeltaRow({ d }: { d: FieldDelta }) {
         : changed
           ? "var(--ix-text-1)"
           : "var(--ix-text-2)";
-  const cell: React.CSSProperties = { padding: "5px 8px", fontSize: 12.5, color };
+  const cell: React.CSSProperties = { padding: "5px 8px", fontSize: "var(--type-label)", color };
   return (
     <tr>
       <th scope="row" style={{ ...cell, textAlign: "left", fontWeight: 500 }}>
@@ -172,14 +172,14 @@ function GpuProfileDelta({ currentSnapshot }: { currentSnapshot?: GpuProfileSnap
   const bothCaptured = pair.before != null && pair.after != null;
   const changed = hasAnyChange(deltas);
   const mismatch = versionMismatch(deltas);
-  const muted: React.CSSProperties = { margin: 0, fontSize: 13, lineHeight: 1.5, color: "var(--ix-text-2)" };
+  const muted: React.CSSProperties = { margin: 0, fontSize: "var(--type-label)", lineHeight: 1.5, color: "var(--ix-text-2)" };
 
   return (
     <section aria-labelledby="gpu-profile-delta-title" style={panelStyle}>
       <div id="gpu-profile-delta-title" style={headingStyle}>
         {t("lab.gpuProfile.beforeAfterTitle")}
       </div>
-      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: "var(--ix-text-3, var(--ix-text-2))" }}>
+      <p style={{ margin: 0, fontSize: "var(--type-label)", lineHeight: 1.45, color: "var(--ix-text-3, var(--ix-text-2))" }}>
         {t("lab.gpuProfile.beforeAfterIntro")}
       </p>
 
@@ -225,10 +225,10 @@ function GpuProfileDelta({ currentSnapshot }: { currentSnapshot?: GpuProfileSnap
                 padding: "9px 11px",
               }}
             >
-              <span aria-hidden="true" style={{ fontSize: 13, lineHeight: 1.5, color: "var(--ix-amber, #fbbf3c)" }}>
+              <span aria-hidden="true" style={{ fontSize: "var(--type-label)", lineHeight: 1.5, color: "var(--ix-amber, #fbbf3c)" }}>
                 ⚠
               </span>
-              <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.5, color: "var(--ix-text-1, #f2f3f7)" }}>
+              <p style={{ margin: 0, fontSize: "var(--type-label)", lineHeight: 1.5, color: "var(--ix-text-1, #f2f3f7)" }}>
                 {t("lab.gpuProfile.driverMismatchWarning", {
                   before: mismatch.before,
                   after: mismatch.after,
@@ -238,7 +238,7 @@ function GpuProfileDelta({ currentSnapshot }: { currentSnapshot?: GpuProfileSnap
           )}
           <table style={{ borderCollapse: "collapse", width: "100%" }}>
             <thead>
-              <tr style={{ color: "var(--ix-text-3, var(--ix-text-2))", fontSize: 11.5 }}>
+              <tr style={{ color: "var(--ix-text-3, var(--ix-text-2))", fontSize: "var(--type-label)" }}>
                 <th scope="col" style={{ textAlign: "left", padding: "4px 8px", fontWeight: 600 }}>
                   {t("lab.gpuProfile.colSetting")}
                 </th>
@@ -259,7 +259,7 @@ function GpuProfileDelta({ currentSnapshot }: { currentSnapshot?: GpuProfileSnap
               ))}
             </tbody>
           </table>
-          <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.4, color: "var(--ix-text-3, var(--ix-text-2))" }}>
+          <p style={{ margin: 0, fontSize: "var(--type-label)", lineHeight: 1.4, color: "var(--ix-text-3, var(--ix-text-2))" }}>
             {t("lab.gpuProfile.footnote")}
           </p>
         </>
@@ -290,7 +290,7 @@ function GpuVendorInsights({ currentSnapshot }: { currentSnapshot?: GpuProfileSn
   return (
     <section aria-label={t("lab.gpuProfile.vendorInsightsAriaLabel")} style={panelStyle}>
       <div style={headingStyle}>{t("lab.gpuProfile.vendorInsightsTitle")}</div>
-      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: "var(--ix-text-3, var(--ix-text-2))" }}>
+      <p style={{ margin: 0, fontSize: "var(--type-label)", lineHeight: 1.45, color: "var(--ix-text-3, var(--ix-text-2))" }}>
         {t("lab.gpuProfile.vendorInsightsIntro")}
       </p>
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -319,8 +319,8 @@ function GpuVendorInsights({ currentSnapshot }: { currentSnapshot?: GpuProfileSn
               }}
             />
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ix-text-1)" }}>{i.title}</span>
-              <span style={{ fontSize: 12.5, lineHeight: 1.5, color: "var(--ix-text-2)" }}>{i.detail}</span>
+              <span style={{ fontSize: "var(--type-label)", fontWeight: 600, color: "var(--ix-text-1)" }}>{i.title}</span>
+              <span style={{ fontSize: "var(--type-label)", lineHeight: 1.5, color: "var(--ix-text-2)" }}>{i.detail}</span>
             </div>
           </li>
         ))}
