@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { ExportResult } from "../types";
 import { BentoTile } from "../design/bento/BentoGrid";
+import { lsGet, lsSet } from "../data/safe-storage";
 
 // Feedback & Export — the in-app path for beta testers (and later, everyone) to send Kuya a note
 // plus a diagnostic snapshot without hand-writing a checklist into an email. ALWAYS visible (not a
@@ -24,6 +25,20 @@ const NOTES_MAX = 4000;
 // Keep the mailto: URL within what real mail clients accept — the FULL note always lives in the saved
 // report, so trimming the inline email copy loses nothing.
 const MAILTO_BODY_MAX = 1900;
+
+// bug→guard (tester Jaikaran, v0.9.12): he typed a bug report here, left Settings, and it was gone.
+// Settings is a ternary swap in App.tsx (`hw && settingsActive ? <Settings…>`), not a hidden toggle,
+// so navigating away UNMOUNTS this component — and the note lived only in useState. The one thing a
+// feedback surface must never do is eat feedback.
+//
+// The draft is therefore mirrored to storage on every keystroke and read back lazily on mount. It is
+// cleared ONLY by the user emptying the box: there is no confirmed-send signal to clear on (the user
+// presses send in their OWN mail client, outside this app), and clearing on export would delete the
+// note out from under someone who saved a file and then wanted to mail it too. A stale draft is a
+// visible, one-keystroke inconvenience; a lost one is silent and unrecoverable. Storage goes through
+// safe-storage's lsGet/lsSet — a bare localStorage call throws on WebView2 profiles with DOM storage
+// blocked and blanks the whole app (see src/data/safe-storage.ts).
+const DRAFT_KEY = "compy_feedback_draft";
 
 // `t` is threaded in (not read from a hook) because this is a module-level pure helper — the compose
 // window it builds is part of the localized UI, so its subject + body scaffolding follow the app language.
@@ -52,11 +67,19 @@ export function FeedbackExport({
   buildStamp?: string | null;
 }) {
   const { t } = useTranslation();
-  const [notes, setNotes] = useState("");
+  // Lazy initialiser, not an effect: the text must be on screen in the FIRST paint after remount,
+  // and re-slicing to NOTES_MAX defends against a draft stored before the cap ever changed.
+  const [notes, setNotes] = useState(() => (lsGet(DRAFT_KEY) ?? "").slice(0, NOTES_MAX));
   const [busy, setBusy] = useState<"email" | "save" | null>(null);
   const [result, setResult] = useState<ExportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Mirror every keystroke. Writing "" on an emptied box is the DISCARD path, not a no-op — skipping
+  // it would strand the last draft forever with no way for the user to clear it.
+  useEffect(() => {
+    lsSet(DRAFT_KEY, notes);
+  }, [notes]);
 
   const subjectTag = [appVersion ? `v${appVersion}` : "", buildStamp || ""].filter(Boolean).join(" · ");
 

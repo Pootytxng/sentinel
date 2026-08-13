@@ -19,13 +19,35 @@
   font-weight: 600;
   cursor: pointer;
 }
+/* The pulse rides a pseudo-element on TRANSFORM + OPACITY, never box-shadow (perf law, 2026-08-13).
+   It shipped in v0.9.24 animating box-shadow spread directly on the LED — not a compositable
+   property, so every frame was a main-thread style recalc + repaint, forever, in the shell topbar
+   i.e. on every screen. And it runs in the AVAILABLE branch, which is the permanent resting state
+   of every fleet tester sitting on an older build: the update offer taxed exactly the people it was
+   built to help. Same mechanism the aurora/foil pair cost 42.1 of 51.7 idle CPU points for
+   (docs/perf/raw/idle-attribution.json); ambient-animation-cost-guard now carries a row for this
+   sheet so a third one cannot land silently.
+
+   The ring is painted ONCE at its full spread on the ::after layer, then scaled and faded — the
+   compositor owns both, so the rasterized texture is reused every frame. Visually the same
+   expanding pulse: small and opaque behind the LED, growing outward as it fades. */
 :root[data-v2="on"] .v2-update-avail .v2-update-led {
+  position: relative;
+}
+:root[data-v2="on"] .v2-update-avail .v2-update-led::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--v2-ok) 55%, transparent);
   animation: v2-update-pulse 1.6s ease-in-out infinite;
+  pointer-events: none;
 }
 @keyframes v2-update-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--v2-ok) 55%, transparent); }
-  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--v2-ok) 0%, transparent); }
+  0%, 100% { transform: scale(0.55); opacity: 1; }
+  50% { transform: scale(1); opacity: 0; }
 }
-:root[data-motion="reduced"][data-v2="on"] .v2-update-avail .v2-update-led {
+:root[data-motion="reduced"][data-v2="on"] .v2-update-avail .v2-update-led::after {
   animation: none;
+  opacity: 0;
 }

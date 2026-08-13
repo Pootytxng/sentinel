@@ -165,6 +165,17 @@ const ALWAYS_ON_AMBIENT: { file: string; selector: string; why: string }[] = [
     selector: ".hud-headline",
     why: "the HUD masthead is present in every HUD room",
   },
+  {
+    // bug→guard, v0.9.24: this row is the defect. The update pill's LED shipped animating
+    // box-shadow spread forever, in the shell topbar, in the AVAILABLE branch — the permanent
+    // resting state of every tester on an older build. Guard 1 could not see it (the LED is not a
+    // document-level pseudo layer) and this inventory did not list its sheet, so a green suite
+    // shipped the exact defect class this file exists to prevent. The inventory's blind spot IS
+    // that it is hand-kept; the only repair is to keep it.
+    file: "design/update-pill.css",
+    selector: ".v2-update-led",
+    why: "the update pill lives in the shell topbar, so an available update pulses on every screen",
+  },
 ];
 
 describe("ambient animation cost guard: always-on animations stay on the compositor", () => {

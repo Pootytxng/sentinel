@@ -28,6 +28,9 @@ import "../i18n";
 import FeedbackExport from "./FeedbackExport";
 
 beforeEach(() => {
+  // The surface now persists its draft (see the draft-survival block below), so a note typed in one
+  // case would otherwise be restored into the next one and break the blank-note assertions.
+  localStorage.clear();
   invokeMock.mockImplementation((cmd: string) => {
     if (cmd === "export_report") return Promise.resolve(RESULT);
     return Promise.resolve(null);
@@ -80,6 +83,62 @@ describe("FeedbackExport — outbound boundary", () => {
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("export_report", { feedback: null }));
     // Saved path is surfaced; no mail client, no network.
     expect(await screen.findByText(RESULT.path)).toBeInTheDocument();
+    expect(openUrlMock).not.toHaveBeenCalled();
+  });
+});
+
+// bug→guard, tester Jaikaran on v0.9.12: he typed a bug report into this box, left Settings, and it
+// was gone. Settings is a ternary swap in App.tsx, so leaving it UNMOUNTS this component — the note
+// lived only in useState and died with it. Nothing in the suite covered draft survival, so the suite
+// was green while the feedback surface ate feedback.
+//
+// These pin the behaviour, not the mechanism: each one unmounts for real and re-renders, which is
+// exactly what navigating out of Settings and back does.
+describe("FeedbackExport — the draft survives leaving Settings", () => {
+  const DRAFT_KEY = "compy_feedback_draft";
+  const type = (value: string) =>
+    fireEvent.change(screen.getByLabelText("Your feedback"), { target: { value } });
+
+  it("a typed note is still there after the surface unmounts and comes back", () => {
+    const first = render(<FeedbackExport />);
+    type("gpu fan spins up on the home screen and never stops");
+    first.unmount();
+
+    render(<FeedbackExport />);
+    expect(screen.getByLabelText("Your feedback")).toHaveValue(
+      "gpu fan spins up on the home screen and never stops",
+    );
+  });
+
+  it("a restored draft is what actually gets exported — not an empty note", async () => {
+    const first = render(<FeedbackExport />);
+    type("coil whine under load");
+    first.unmount();
+
+    render(<FeedbackExport />);
+    fireEvent.click(screen.getByRole("button", { name: "Save a report file" }));
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("export_report", { feedback: "coil whine under load" }),
+    );
+  });
+
+  it("emptying the box is the discard path — the stored draft goes with it", () => {
+    const first = render(<FeedbackExport />);
+    type("never mind, my mistake");
+    expect(localStorage.getItem(DRAFT_KEY)).toBe("never mind, my mistake");
+    type("");
+    first.unmount();
+
+    render(<FeedbackExport />);
+    expect(screen.getByLabelText("Your feedback")).toHaveValue("");
+  });
+
+  it("still sends NOTHING on mount even when a draft is waiting", () => {
+    localStorage.setItem(DRAFT_KEY, "a note from a previous session");
+    render(<FeedbackExport />);
+    expect(screen.getByLabelText("Your feedback")).toHaveValue("a note from a previous session");
+    // The outbound boundary is unchanged by persistence: restoring a draft is a local read.
+    expect(invokeMock).not.toHaveBeenCalled();
     expect(openUrlMock).not.toHaveBeenCalled();
   });
 });
