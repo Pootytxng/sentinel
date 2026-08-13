@@ -119,6 +119,28 @@ describe("the hologram's keyboard route", () => {
     expect(stub.dataset.cardsSuppressed).toBe("false");
   });
 
+  // The rig is the one surface a live visual review cannot drive: its parts are three.js meshes, so
+  // there is no selector to click and no way to prove the evidence panel's real-reading branch on
+  // screen. `data-rig-part` carries the hologram's own id onto the button, which is the stable
+  // handle a reviewer (or any out-of-jsdom driver) selects a NAMED part by. Matching the label
+  // instead breaks on the first locale or copy change, and counting rows breaks the first time a
+  // fan appears. Pinned so the attribute cannot be tidied away as unused.
+  it("addresses every picker row by the id the hologram selects by", async () => {
+    const onSelectedIdChange = vi.fn();
+    render(<RigViewer hw={hw} chromeless onSelectedIdChange={onSelectedIdChange} />);
+    const list = await picker();
+
+    expect([...list.querySelectorAll("button")].map((b) => b.getAttribute("data-rig-part"))).toEqual(
+      INVENTORY.map((i) => i.id),
+    );
+
+    // The handle has to select the same thing a click on that row selects — an attribute that
+    // merely exists would let a review report on the wrong part with full confidence.
+    const gone = list.querySelector<HTMLButtonElement>('[data-rig-part="fan-ghost-front"]');
+    fireEvent.click(gone!);
+    expect(onSelectedIdChange).toHaveBeenCalledWith("fan-ghost-front", INVENTORY[4]);
+  });
+
   it("renders no empty picker before the lazy 3D chunk has reported a scene", () => {
     // Nothing to select yet is not the same as an empty list of parts, and a keyboard user landing
     // on a nameless empty group learns nothing from it.
