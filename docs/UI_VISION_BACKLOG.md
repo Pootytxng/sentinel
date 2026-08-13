@@ -22,7 +22,7 @@
 These are owner asks that are **never-built or parked**, not yet reflected as active work anywhere
 else. This is the list the owner meant.
 
-### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) 🔴 OPEN — parent of TYPE-1/COLOR-1/UX-1
+### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) 🟡 IN PROGRESS — **step ① of five is DONE** (TYPE-1 + COLOR-1 shipped to the desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed); ② front door (UX-1), ③ interview, ④ wording pass + banned-term guard, ⑤ instruments behind a door remain OPEN
 
 Owner escalated 2026-08-11: non-technical testers, incl. close friends, "do not enjoy using the app
 — overwhelming, hard to navigate, completely unfamiliar." Asked for tooling + deep research on
@@ -123,7 +123,24 @@ cannot all clear AA at 9px, so `faint` sits close to `muted`. The tier below `mu
 SIZE and WEIGHT from here on, not by dimming further — which is what makes TYPE-1 below the
 follow-on rather than a separate idea.
 
-### TYPE-1. A 12-size type scale is not a scale — and 57% of the app is ≤11px 🔴 OPEN
+### TYPE-1. ✅ SHIPPED to the desk 2026-08-13 (v0.9.22 `700cd565`, on main `51956ed0`)
+
+**What landed:** the six-step scale is `src/design/type-scale.css` — verdict 40/650 · section 26/650 ·
+card 17/600 · body 15/400 · label 13/500 · data 13 mono — and **888 font-size declarations across 77
+CSS files plus 29 inline `fontSize` props** now resolve to `var(--type-*)`. Floor is **13px**, above
+the 11px this row originally proposed (superseded by the design-foundation decision); 8/9/10/10.5/11/
+11.5/12/12.5px are gone. The five-families-on-one-screen drift collapsed to one UI face (Geist Sans
+via `--font-ui`), which kills the **Arial fallthrough** that mis-drew the tour's ✓.
+**Mechanized, not documented:** `src/design/type-scale-guard.test.ts` fails the build on any literal
+font size, any `font:` shorthand smuggling one, any numeric inline `fontSize`, any token below the
+floor, and on Arial's return. **The look caught what the tests could not:** at 13px a long unit word
+overflowed the 56px arc-gauge ring ("100 SCORE", "246 FRAMES") — fixed in `64fe3579` with its own
+guard in `arc-gauge.test.tsx`. Evidence: `compy-visual-review/v0922-{home,test}.png`.
+**Still open from this row:** the mono-for-machine-values-only law is still a comment with no guard.
+
+<details><summary>Original measurement (2026-08-11) — kept for the record</summary>
+
+### TYPE-1. A 12-size type scale is not a scale — and 57% of the app is ≤11px
 
 **Measured 2026-08-11** on one live room: distinct font sizes in use = **8, 9, 10, 10.5, 11, 12,
 12.5, 13, 13.5, 16, 19, 32px**. 47 of 83 text nodes are **11px or smaller**; exactly one element is
@@ -142,6 +159,21 @@ never labels or prose"*. Live measurement found it on section labels throughout 
 your sessions", "Changes to this PC", "The record", "Guides fact-checked" — all 9px mono uppercase).
 The law is a comment; nothing enforces it. Mechanize it in the same train.
 
+</details>
+
+### COLOR-1. ✅ SHIPPED to the desk 2026-08-13 (v0.9.22 `700cd565`, on main `51956ed0`)
+
+**What landed:** a **deletion**, as specified. `src/surfaces/room-identity.css` now carries zero live
+rules and `ROOM_IDENTITY` maps every room to the one accent `#a78bfa`; Monitor teal `#3fd9c2`,
+Blackbook amber `#f0b878` and Lab/Optimize emerald `#27e08a` are gone, so `ok`/`warn`/`info` are the
+only elements allowed green, amber and blue. **The user's per-room accent picker survives untouched**
+(owner freedom directive 2026-07-12b) — a deliberate pick is not a shipped default, and theme.ts's
+injected pick rules still use the same same-element mechanism. `room-identity.test.ts` was rewritten
+to pin the deletion (it used to pin the presets' existence). Confirmed by eye: Test renders violet,
+not the emerald that read as "this is good" — `compy-visual-review/v0922-test.png`.
+
+<details><summary>Original measurement (2026-08-11) — kept for the record</summary>
+
 ### COLOR-1. Room accents collide with the status palette 🔴 OPEN
 
 **Measured 2026-08-11.** `tokens-v2.css` states *"Status — color is information, never decoration"*,
@@ -155,6 +187,8 @@ a room that exists to reassure reads as an alert, active tab pill included.
 **Decision: rooms stop owning hue.** Identity moves to the glyph, the masthead eyebrow and one
 hairline; `ok / warn / info` become the only elements allowed green, amber and blue. If tint must
 stay, move room accents off the status hues entirely (violet · indigo · slate · rose).
+
+</details>
 
 ### UX-1. The verdict is smaller than the word "Home", and the front door is a 10-step lecture 🔴 OPEN
 
