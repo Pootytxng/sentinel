@@ -221,7 +221,6 @@
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .fix-refuse-row,
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .fix-active-card,
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .check-driver,
-:root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .fix-applyall-item,
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .fix-guided-detail,
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .check-startup-row {
   background: transparent;
@@ -333,14 +332,12 @@
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .fix-guided-toggle,
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .fix-guided-open,
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .fix-autopsy,
-:root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .fix-applyall-cancel,
-:root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .fix-applyall-go,
 :root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .btn {
   border-radius: 3px;
 }
 
-/* The consent sheet squares up; content and behavior untouched. */
-:root[data-v2="on"][data-hud="on"] :is(.v2-room[data-room="fix"], .v2-room[data-room="lab"] :where(.lg-fast)) .fix-applyall-modal {
-  border-radius: 4px;
-  border-color: var(--hud-hairline-strong);
-}
+/* The consent sheet's own HUD skin (.fix-applyall-modal / -item / -cancel / -go) was deleted with
+   the hand-rolled popout it dressed (convergence 2026-08-13). Those selectors were descendants of
+   `.v2-room[data-room="fix"]`, and the consent sheet is now the canonical .v2-sheet, which portals
+   to <body> — outside every room. It carries the one popout look for the whole app by design, so
+   re-homing the skin here would be re-forking the thing this convergence merged. */

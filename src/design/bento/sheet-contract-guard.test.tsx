@@ -177,6 +177,82 @@ describe("pointer: the backdrop closes, the panel does not", () => {
   });
 });
 
+// POPOUT CONVERGENCE (2026-08-13). Fix.tsx's hand-rolled apply-all consent popout was deleted onto
+// this component, and it had exactly one behaviour the Sheet did not: while the batch it asked
+// consent for is actually running, it cannot be dismissed. It enforced that by hand in two separate
+// places — a `!batching` check inside its own Escape listener and another inside its backdrop
+// onClick — which is precisely the shape of a rule that survives one edit and not the next.
+//
+// It is now `dismissible`, and it is guarded here rather than in the room, because the room can no
+// longer break it and this component can. THE FAILURE IT PREVENTS: a user approves "apply all",
+// the batch starts writing to their machine, and a stray Escape or a click on the scrim removes the
+// only panel that says what is being applied — while the applying continues underneath.
+describe("dismissible=false: a sheet mid-mutation refuses to be dismissed", () => {
+  it("Escape does NOT close", () => {
+    const { onClose } = open({ dismissible: false });
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onClose, "Escape dismissed a sheet that was mid-apply").not.toHaveBeenCalled();
+  });
+
+  it("a backdrop click does NOT close", () => {
+    const { onClose } = open({ dismissible: false });
+    fireEvent.click(backdrop()!);
+    expect(onClose, "the scrim dismissed a sheet that was mid-apply").not.toHaveBeenCalled();
+  });
+
+  it("the close button is DISABLED, not merely inert — no control that does nothing", () => {
+    const { onClose } = open({ dismissible: false });
+    expect(closeBtn()!.disabled).toBe(true);
+    fireEvent.click(closeBtn()!);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("still SWALLOWS Escape — an undismissible sheet keeps owning the keyboard", () => {
+    // If the key leaked instead, a background window handler would act on an Escape aimed at a
+    // modal that is deliberately refusing it — the worst of both behaviours. Dispatched from
+    // document.body, exactly as ConfirmDialog.test.tsx pins its own trap: an event targeted AT
+    // window fires that window's listeners in registration order regardless of capture, so it
+    // cannot show a capture-phase trap at all.
+    const bg = vi.fn();
+    window.addEventListener("keydown", bg);
+    try {
+      open({ dismissible: false });
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      expect(bg, "Escape leaked past an undismissible sheet to a background handler").not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("keydown", bg);
+    }
+  });
+
+  it("all three dismissals come back when it flips true again (it is a state, not a mode)", () => {
+    const onClose = vi.fn();
+    const { rerender } = render(
+      <Sheet title="Apply these 2 changes to your rig?" onClose={onClose} dismissible={false}>
+        <button type="button">only</button>
+      </Sheet>,
+    );
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+    rerender(
+      <Sheet title="Apply these 2 changes to your rig?" onClose={onClose} dismissible>
+        <button type="button">only</button>
+      </Sheet>,
+    );
+    expect(closeBtn()!.disabled).toBe(false);
+    fireEvent.keyDown(window, { key: "Escape" });
+    fireEvent.click(backdrop()!);
+    fireEvent.click(closeBtn()!);
+    expect(onClose).toHaveBeenCalledTimes(3);
+  });
+
+  it("defaults to dismissible — every existing sheet keeps closing without opting in", () => {
+    const { onClose } = open();
+    expect(closeBtn()!.disabled).toBe(false);
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("it survives the states a real room hands it", () => {
   it("renders with no origin rect (opened by keyboard, not by a measured tile click)", () => {
     expect(() => open({ origin: null })).not.toThrow();
