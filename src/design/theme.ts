@@ -394,26 +394,34 @@ export function applyHomeConsole(on: boolean): void {
 // Home intake band (BACKLOG:916 — the pre-room intent router). Lifts the proven Lab
 // "What are you here to do?" symptom-router idiom UP one level to Home: an always-available
 // one-click safe fast-path (option C) + intent rows that route to the right ROOM (option A),
-// sitting above the Dock room-doors. Shipped DEFAULT OFF, GRADUATED to DEFAULT ON 2026-08-11 — ON
-// unless the key is literally "0", the same graduation the Setup & Tour stepper took above, with
-// Settings' explicit "0" surviving as the failsafe (test-pinned).
+// sitting above the Dock room-doors. Shipped DEFAULT OFF → GRADUATED to DEFAULT ON 2026-08-11 →
+// **RETURNED to DEFAULT OFF 2026-08-12 by the owner, on sight.** ON only when the key is
+// literally "1".
 //
-// It shipped OFF pending an eyeball, and both blockers on that eyeball are now gone: PR #93 fixed
-// the focus-ring/stacking defect in this exact band, and PR #94 renamed the Lab's "Black Box"
-// station to "Crash & Freeze" so the band's crash row lands somewhere a non-technical user reads as
-// the right place. The owner's reason for the work was a tester who could not find things ("not
-// inherently familiar or intuitive enough ... my biggest gripe"), and a discoverability surface that
-// is off by default fixes nothing for the only people it exists for. Event mirrors the home-console
-// idiom so Settings toggles + the useHomeIntakeFlag hook stay in sync.
+// The graduation reasoning (kept, because it was not wrong): the band exists for a tester who could
+// not find things, and a discoverability surface that is off by default fixes nothing for the only
+// people it exists for. What settled it was the owner finally SEEING it on a real build — "the what
+// are you here to do text box was ugly looks cleaner without it" — comparing Home with the band
+// against Home without it. Taste on his own front door is his call, and a screenshot beat the
+// argument.
+//
+// What leaving it off costs, stated so nobody has to rediscover it: the one-tap "just make it
+// faster, safely" fast path (option C) leaves Home with the band. It is NOT gone from the app — it
+// lives on in the Test room's Optimize station, which is the one door to the safe-tweak toggles.
+// What does NOT leave: crash rescue. The Care entry was extracted out of this band earlier the same
+// day precisely so this flag could never take it down (issue #91; `care-home-route-guard.test.ts`).
+// Turning the band off is now a layout choice, not a loss of the safety net.
+//
+// Event mirrors the home-console idiom so Settings toggles + the useHomeIntakeFlag hook stay in sync.
 const HOME_INTAKE_KEY = "compy_home_intake";
 
 export function readHomeIntake(): boolean {
   try {
-    return localStorage.getItem(HOME_INTAKE_KEY) !== "0";
+    return localStorage.getItem(HOME_INTAKE_KEY) === "1";
   } catch {
-    /* ignore — default ON */
+    /* ignore — default OFF */
   }
-  return true;
+  return false;
 }
 
 export function applyHomeIntake(on: boolean): void {
