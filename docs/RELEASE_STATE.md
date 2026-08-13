@@ -165,7 +165,7 @@ fleet path has since carried real traffic — the owner reports at least two tes
 | Item | Status |
 |---|---|
 | Private-beta functional blockers | **NONE** — Gaming Mode signed off; installed-build QA + runtime closure done; the updater path is live and owner-proven. |
-| Publish of v0.9.17 | **CLOSED — published 2026-08-12** under owner GO ("i permit you to proceed with everything yourself"). Transaction complete 9/9; public installer + `latest.json` byte-match the signed receipt; updater signature verifies against the pinned key; the latest-alias converged on the first check. **First published build that was visually reviewed on the installed binary before shipping** — and the first review round FAILED, which is the only reason that step is worth having. Supersedes the v0.9.15 publish (also closed 2026-08-12), v0.9.12 (2026-08-03) and v0.9.11 (2026-07-28). Any *future* candidate still needs its own owner GO/NO-GO after local preparation. |
+| Publish of the current fleet build | **CLOSED for v0.9.18 - published 2026-08-13T06:57Z under explicit owner GO ("go"), transaction 9/9, alias converged after the documented edge-cache delay; `published_*` anchors carry the artifact truth.** Prior close, v0.9.17: **CLOSED — published 2026-08-12** under owner GO ("i permit you to proceed with everything yourself"). Transaction complete 9/9; public installer + `latest.json` byte-match the signed receipt; updater signature verifies against the pinned key; the latest-alias converged on the first check. **First published build that was visually reviewed on the installed binary before shipping** — and the first review round FAILED, which is the only reason that step is worth having. Supersedes the v0.9.15 publish (also closed 2026-08-12), v0.9.12 (2026-08-03) and v0.9.11 (2026-07-28). Any *future* candidate still needs its own owner GO/NO-GO after local preparation. |
 | Tester distribution of the published build | **CLOSED — A0 canary PASS.** A tester updated through the normal public updater and runs v0.9.11 with no reported failure, proving the fleet path end-to-end on a machine that is not the owner's. Widening to the remaining invitees is an owner distribution call, not a blocker. |
 | Hosted CI | **NOT A BLOCKER — settled OFF by owner decision (2026-07-16).** Listed here only so its absence is never re-read as an unresolved gate. Local gates are the verification path. |
 | Code signing | **OPEN** — gates PUBLIC release (Azure Trusted Signing route, owner/$-gated). |
@@ -189,23 +189,24 @@ moment the next bump lands without a publish — the honest name for that state 
 
 ## Required owner decisions (live)
 
-1. **Candidate v0.9.18 — GO/NO-GO to PUBLISH after the look.** v0.9.18 carries the three changes
-   landed on `main` after the v0.9.17 publish: intake band default OFF (`4d1afa92`), the popout
-   modal-contract guard (`b44ec358`), and the three-popouts-onto-one-Sheet convergence (#119,
-   `6e7d9669` — never visually reviewed), plus the bento lane's #120 and the quiet-launch
-   SW_MAXIMIZE fix (issue #121 context). The desk ship + visual review proceed under standing
-   execute permission; **publishing it to the fleet is the owner's call once the look has evidence.**
-2. **Widening the invitee fleet onto v0.9.17** — the publish itself is **CLOSED** (v0.9.17 published 2026-08-12, 9/9). What is left
+**Closed 2026-08-13 (UTC):** candidate v0.9.18's publish GO/NO-GO. The owner said "go" with the
+desk-ship evidence in front of him (screenshots of the look, the #121 record, the runtime proof) and
+v0.9.18 published at 06:57 UTC on 2026-08-13, transaction closed - `published_*` anchors above carry
+the truth. (Written date-first with no ISO zulu suffix on purpose: the checker's decisions-section
+regex ends the section at the first zulu letter it meets - issue #123 has the fix-forward.) The one
+deferred look (the mid-apply consent panel, unreachable at 9/9-applied) transfers to the first real
+apply, not to a decision.
+
+1. **Widening the invitee fleet onto the published build (now v0.9.18)** — the publishes themselves are **CLOSED** (v0.9.17 then v0.9.18, both 9/9). What is left
    was never a pipeline question: **whether/when the remaining invitees move onto the updater path.** Six people hold the hand-sent
-   0.9.0 link and would each have to install once by hand to join it; everyone already on it is offered v0.9.17 automatically. Every
+   0.9.0 link and would each have to install once by hand to join it; everyone already on it is offered v0.9.18 automatically. Every
    stated precondition is met — the v0.9.11 canary PASSED on the normal updater path and at least two testers auto-updated onto
    v0.9.12 unaided — so this is a distribution call, not a readiness one. **Owner territory: it means naming humans and messaging
-   them.** Two things worth saying when you do: v0.9.17 renames three rooms a returning tester already learned and nothing in the app
-   tells them the names changed; and it is the second published build in one day, so anyone who updated this morning gets prompted
-   again.
-3. Code-signing route + legal finalization (PUBLIC gates).
-4. When/whether to arm Receipts (its own security review + owner sign-off).
-5. Tier 1 case-intelligence direction is approved. Do not re-ask that product decision; bring back
+   them.** Worth saying when you do: v0.9.17 renamed three rooms a returning tester already learned and nothing in the app
+   tells them the names changed.
+2. Code-signing route + legal finalization (PUBLIC gates).
+3. When/whether to arm Receipts (its own security review + owner sign-off).
+4. Tier 1 case-intelligence direction is approved. Do not re-ask that product decision; bring back
    only the exact endpoint, signing custody, disclosure, security review and measured dark/canary
    evidence required to arm real traffic.
 
