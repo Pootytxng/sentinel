@@ -25,12 +25,12 @@
 <!-- latest_release_version is enforced by check (1) to equal src-tauri/tauri.conf.json's version, so it
      means "the version THIS TREE is configured to build" — NOT "the newest published release".
      Published truth is carried separately by published_release_* below. Do not conflate them. -->
-<!-- STATE:source_main_commit=0673415d -->
+<!-- STATE:source_main_commit=f9303c45 -->
 <!-- STATE:latest_release_version=0.9.24 -->
-<!-- STATE:candidate_version=0.9.24 -->
+<!-- STATE:candidate_version=0.9.25 -->
 <!-- STATE:candidate_branch=main -->
-<!-- STATE:candidate_published=yes-published -->
-<!-- STATE:candidate_installed=yes-owner-desk-only -->
+<!-- STATE:candidate_published=no-unsigned-local-only -->
+<!-- STATE:candidate_installed=no-pending-prove -->
 <!-- STATE:aborted_source_only_release=v0.9.9-664aa5e -->
 <!-- STATE:v0910_release_debris=deleted-2026-07-28 -->
 <!-- STATE:v0910_source_tag=92c7608-preserved -->
@@ -203,7 +203,18 @@ regex ends the section at the first zulu letter it meets - issue #123 has the fi
 deferred look (the mid-apply consent panel, unreachable at 9/9-applied) transfers to the first real
 apply, not to a decision.
 
-1. **Candidate v0.9.24 publish GO/NO-GO — CLOSED 2026-08-13, published 21:29Z, transaction 9 of 9.**
+1. **Candidate v0.9.25 publish GO/NO-GO - OPEN. Desk ship and LOOK first, then the owner's GO.**
+   (Date-first, no zulu suffix, per #123.) Two defects neither the suite nor a reviewer caught, both
+   found by people: the owner reported v0.9.24 "runs a lot slower than before", and tester Jaikaran
+   reported on v0.9.12 that written feedback vanishes when he leaves Settings - still reproducible in
+   v0.9.24 source. `36d3a0c7` fixes both. The update-pill LED animated `box-shadow` forever in the
+   shell topbar, in the update-AVAILABLE branch that is every out-of-date tester's resting state, so
+   the main thread repainted every frame on every screen; it now rides an `::after` layer on
+   transform+opacity. The feedback draft now persists through safe-storage and survives the Settings
+   unmount. Both guards were proven able to FAIL by reintroducing each defect before the fix landed.
+   The owner's standing GO for this lane is "get the update sent to the testers"; still show him the
+   look capture before the publish runs.
+2. **Candidate v0.9.24 publish GO/NO-GO - CLOSED 2026-08-13, published 21:29Z, transaction 9 of 9.**
    (Date-first, no zulu suffix, per #123.) The owner's GO was "send out the most current working
    version of the app to the tester"; both look captures, the runtime proof and the note that the
    FIRST look had failed went to him before the publish ran, and the alias verified on attempt 1.
@@ -224,16 +235,16 @@ apply, not to a decision.
    re-prepares** (each prepare mints configured+1 — a re-prepare after a failure must pre-declare
    the NEXT number, not reuse one; nothing of 0.9.20/21 was installed or published). Desk ship +
    visual review first; publish only on an explicit owner GO given to exactly ONE lane.
-2. **Widening the invitee fleet onto the published build (now v0.9.18)** — the publishes themselves are **CLOSED** (v0.9.17 then v0.9.18, both 9/9). What is left
+3. **Widening the invitee fleet onto the published build (now v0.9.18)** — the publishes themselves are **CLOSED** (v0.9.17 then v0.9.18, both 9/9). What is left
    was never a pipeline question: **whether/when the remaining invitees move onto the updater path.** Six people hold the hand-sent
    0.9.0 link and would each have to install once by hand to join it; everyone already on it is offered v0.9.18 automatically. Every
    stated precondition is met — the v0.9.11 canary PASSED on the normal updater path and at least two testers auto-updated onto
    v0.9.12 unaided — so this is a distribution call, not a readiness one. **Owner territory: it means naming humans and messaging
    them.** Worth saying when you do: v0.9.17 renamed three rooms a returning tester already learned and nothing in the app
    tells them the names changed.
-3. Code-signing route + legal finalization (PUBLIC gates).
-4. When/whether to arm Receipts (its own security review + owner sign-off).
-5. Tier 1 case-intelligence direction is approved. Do not re-ask that product decision; bring back
+4. Code-signing route + legal finalization (PUBLIC gates).
+5. When/whether to arm Receipts (its own security review + owner sign-off).
+6. Tier 1 case-intelligence direction is approved. Do not re-ask that product decision; bring back
    only the exact endpoint, signing custody, disclosure, security review and measured dark/canary
    evidence required to arm real traffic.
 
