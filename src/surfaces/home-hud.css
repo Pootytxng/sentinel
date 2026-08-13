@@ -30,8 +30,18 @@
   );
 }
 /* The verdict speaks in sentence case — calm confidence, not a shouted banner. The HUD
-   register lives in the micro-labels/readout around it, so the answer itself stays human. */
-:root[data-v2="on"][data-hud="on"] .v2-room[data-room="home"] .v2-verdict h1 {
+   register lives in the micro-labels/readout around it, so the answer itself stays human.
+   UX-1 look-caught defect (v0.9.23 desk review, 2026-08-13): this rule is scoped only by
+   [data-room="home"], so it was also styling the HOME CONSOLE's h1 — a different face, whose
+   masthead register home-console.css deliberately re-ports into hc- classes rather than
+   borrowing from here. `compy_editorial` defaults ON, so [data-hud="on"] is set even when the
+   console branch renders, and at (0,6,1) this selector outranked home-console.css's
+   `h1:has(.hc-headline)` at (0,3,1) — which silently held UX-1's 40px verdict down at
+   --type-section. The console owns its own h1; `.hc-headline` exists only there, so excluding
+   it hands the rule back to the HUD face it was written for. The full suite was GREEN while this
+   was broken — jsdom never loads these sheets, so no rendering test could see it; only the look
+   could. Guarded statically, on both sheets, in home-verdict-scale-guard.test.ts. */
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="home"] .v2-verdict h1:not(:has(.hc-headline)) {
   display: block;
   margin: 0 0 6px;
   font: 650 var(--type-section) / 1.15 var(--v2-font-sans);
