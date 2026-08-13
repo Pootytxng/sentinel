@@ -27,10 +27,10 @@
      Published truth is carried separately by published_release_* below. Do not conflate them. -->
 <!-- STATE:source_main_commit=51956ed0 -->
 <!-- STATE:latest_release_version=0.9.20 -->
-<!-- STATE:candidate_version=0.9.19 -->
+<!-- STATE:candidate_version=0.9.20 -->
 <!-- STATE:candidate_branch=main -->
 <!-- STATE:candidate_published=no-unsigned-local-only -->
-<!-- STATE:candidate_installed=yes-owner-desk-only -->
+<!-- STATE:candidate_installed=no-pending-prove -->
 <!-- STATE:aborted_source_only_release=v0.9.9-664aa5e -->
 <!-- STATE:v0910_release_debris=deleted-2026-07-28 -->
 <!-- STATE:v0910_source_tag=92c7608-preserved -->
@@ -198,10 +198,11 @@ regex ends the section at the first zulu letter it meets - issue #123 has the fi
 deferred look (the mid-apply consent panel, unreachable at 9/9-applied) transfers to the first real
 apply, not to a decision.
 
-1. **Candidate v0.9.19 publish GO/NO-GO (open, written 2026-08-13 date-first per #123)** — v0.9.19
-   carries design-foundation step ① (TYPE-1 six-step type scale with the 13px floor + COLOR-1 one
-   accent, rooms' preset hues deleted) and the update-pill attention state. Desk ship + visual
-   review first; publish only on an explicit owner GO given to exactly ONE lane.
+1. **Candidate v0.9.20 publish GO/NO-GO (open, written 2026-08-13 date-first per #123)** — carries
+   design-foundation step ① (TYPE-1 six-step type scale with the 13px floor + COLOR-1 one accent,
+   rooms' preset hues deleted), the update-pill attention state, and the arc-gauge ring-overflow
+   fix the v0.9.19 desk look caught (`64fe3579`; v0.9.19 was desk-only, spent, never published).
+   Desk ship + visual review first; publish only on an explicit owner GO given to exactly ONE lane.
 2. **Widening the invitee fleet onto the published build (now v0.9.18)** — the publishes themselves are **CLOSED** (v0.9.17 then v0.9.18, both 9/9). What is left
    was never a pipeline question: **whether/when the remaining invitees move onto the updater path.** Six people hold the hand-sent
    0.9.0 link and would each have to install once by hand to join it; everyone already on it is offered v0.9.18 automatically. Every
