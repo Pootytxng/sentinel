@@ -25,12 +25,12 @@
 <!-- latest_release_version is enforced by check (1) to equal src-tauri/tauri.conf.json's version, so it
      means "the version THIS TREE is configured to build" — NOT "the newest published release".
      Published truth is carried separately by published_release_* below. Do not conflate them. -->
-<!-- STATE:source_main_commit=711f7a71 -->
+<!-- STATE:source_main_commit=51956ed0 -->
 <!-- STATE:latest_release_version=0.9.18 -->
-<!-- STATE:candidate_version=0.9.18 -->
+<!-- STATE:candidate_version=0.9.19 -->
 <!-- STATE:candidate_branch=main -->
-<!-- STATE:candidate_published=yes-published-2026-08-12 -->
-<!-- STATE:candidate_installed=yes-owner-desk-only -->
+<!-- STATE:candidate_published=no-unsigned-local-only -->
+<!-- STATE:candidate_installed=no-pending-prove -->
 <!-- STATE:aborted_source_only_release=v0.9.9-664aa5e -->
 <!-- STATE:v0910_release_debris=deleted-2026-07-28 -->
 <!-- STATE:v0910_source_tag=92c7608-preserved -->
@@ -197,16 +197,20 @@ regex ends the section at the first zulu letter it meets - issue #123 has the fi
 deferred look (the mid-apply consent panel, unreachable at 9/9-applied) transfers to the first real
 apply, not to a decision.
 
-1. **Widening the invitee fleet onto the published build (now v0.9.18)** — the publishes themselves are **CLOSED** (v0.9.17 then v0.9.18, both 9/9). What is left
+1. **Candidate v0.9.19 publish GO/NO-GO (open, written 2026-08-13 date-first per #123)** — v0.9.19
+   carries design-foundation step ① (TYPE-1 six-step type scale with the 13px floor + COLOR-1 one
+   accent, rooms' preset hues deleted) and the update-pill attention state. Desk ship + visual
+   review first; publish only on an explicit owner GO given to exactly ONE lane.
+2. **Widening the invitee fleet onto the published build (now v0.9.18)** — the publishes themselves are **CLOSED** (v0.9.17 then v0.9.18, both 9/9). What is left
    was never a pipeline question: **whether/when the remaining invitees move onto the updater path.** Six people hold the hand-sent
    0.9.0 link and would each have to install once by hand to join it; everyone already on it is offered v0.9.18 automatically. Every
    stated precondition is met — the v0.9.11 canary PASSED on the normal updater path and at least two testers auto-updated onto
    v0.9.12 unaided — so this is a distribution call, not a readiness one. **Owner territory: it means naming humans and messaging
    them.** Worth saying when you do: v0.9.17 renamed three rooms a returning tester already learned and nothing in the app
    tells them the names changed.
-2. Code-signing route + legal finalization (PUBLIC gates).
-3. When/whether to arm Receipts (its own security review + owner sign-off).
-4. Tier 1 case-intelligence direction is approved. Do not re-ask that product decision; bring back
+3. Code-signing route + legal finalization (PUBLIC gates).
+4. When/whether to arm Receipts (its own security review + owner sign-off).
+5. Tier 1 case-intelligence direction is approved. Do not re-ask that product decision; bring back
    only the exact endpoint, signing custody, disclosure, security review and measured dark/canary
    evidence required to arm real traffic.
 
