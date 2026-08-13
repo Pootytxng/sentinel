@@ -25,12 +25,12 @@
 <!-- latest_release_version is enforced by check (1) to equal src-tauri/tauri.conf.json's version, so it
      means "the version THIS TREE is configured to build" — NOT "the newest published release".
      Published truth is carried separately by published_release_* below. Do not conflate them. -->
-<!-- STATE:source_main_commit=6e7d9669 -->
+<!-- STATE:source_main_commit=4df1fad5 -->
 <!-- STATE:latest_release_version=0.9.17 -->
-<!-- STATE:candidate_version=0.9.17 -->
+<!-- STATE:candidate_version=0.9.18 -->
 <!-- STATE:candidate_branch=main -->
-<!-- STATE:candidate_published=yes-published-2026-08-12 -->
-<!-- STATE:candidate_installed=yes-owner-desk-only -->
+<!-- STATE:candidate_published=no-unsigned-local-only -->
+<!-- STATE:candidate_installed=no-pending-prove -->
 <!-- STATE:aborted_source_only_release=v0.9.9-664aa5e -->
 <!-- STATE:v0910_release_debris=deleted-2026-07-28 -->
 <!-- STATE:v0910_source_tag=92c7608-preserved -->
@@ -188,7 +188,13 @@ moment the next bump lands without a publish — the honest name for that state 
 
 ## Required owner decisions (live)
 
-1. **Widening the invitee fleet onto v0.9.17** — the publish itself is **CLOSED** (v0.9.17 published 2026-08-12, 9/9). What is left
+1. **Candidate v0.9.18 — GO/NO-GO to PUBLISH after the look.** v0.9.18 carries the three changes
+   landed on `main` after the v0.9.17 publish: intake band default OFF (`4d1afa92`), the popout
+   modal-contract guard (`b44ec358`), and the three-popouts-onto-one-Sheet convergence (#119,
+   `6e7d9669` — never visually reviewed), plus the bento lane's #120 and the quiet-launch
+   SW_MAXIMIZE fix (issue #121 context). The desk ship + visual review proceed under standing
+   execute permission; **publishing it to the fleet is the owner's call once the look has evidence.**
+2. **Widening the invitee fleet onto v0.9.17** — the publish itself is **CLOSED** (v0.9.17 published 2026-08-12, 9/9). What is left
    was never a pipeline question: **whether/when the remaining invitees move onto the updater path.** Six people hold the hand-sent
    0.9.0 link and would each have to install once by hand to join it; everyone already on it is offered v0.9.17 automatically. Every
    stated precondition is met — the v0.9.11 canary PASSED on the normal updater path and at least two testers auto-updated onto
@@ -196,9 +202,9 @@ moment the next bump lands without a publish — the honest name for that state 
    them.** Two things worth saying when you do: v0.9.17 renames three rooms a returning tester already learned and nothing in the app
    tells them the names changed; and it is the second published build in one day, so anyone who updated this morning gets prompted
    again.
-2. Code-signing route + legal finalization (PUBLIC gates).
-3. When/whether to arm Receipts (its own security review + owner sign-off).
-4. Tier 1 case-intelligence direction is approved. Do not re-ask that product decision; bring back
+3. Code-signing route + legal finalization (PUBLIC gates).
+4. When/whether to arm Receipts (its own security review + owner sign-off).
+5. Tier 1 case-intelligence direction is approved. Do not re-ask that product decision; bring back
    only the exact endpoint, signing custody, disclosure, security review and measured dark/canary
    evidence required to arm real traffic.
 
