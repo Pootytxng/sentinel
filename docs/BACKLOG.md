@@ -31,12 +31,11 @@
   tier in `launch-focus-guard.test.mjs` that watches `GetForegroundWindow` across a real launch.
   Shipped: installed build `3155c7a0`, self-review **PASS** on round 3 (round 2 caught that P2 was
   only half-fixed — a hand-added cooler still occluded the CPU — and that is now fixed and guarded).
-- [ ] **The "add a part" form is mounted nowhere** — found during the PR #102 self-review
-  (2026-08-11). `<RigViewer>` renders live only from `LabConsole.tsx`, always `chromeless`, and
-  `chromeless` hides the add-a-part form, the explode/orbit controls and the monitor nudge. So the
-  manual-parts feature (`manual-parts.ts`, `compy_rig_manual_parts`, the user-added evidence copy)
-  is reachable in tests only — a user cannot add the PSU or cooler Compy admits it cannot read.
-  Either mount a non-chromeless viewer somewhere real or move the form into the Lab's own chrome.
+- [x] **The "add a part" form is mounted nowhere** — CLOSED by Train 1 (2026-08-12): the form was
+  extracted verbatim into `RigManualParts` and mounted in the Lab's own chrome
+  (`LabConsole.tsx:480`), while the chromeless hologram keeps rendering; a guard block fails the
+  build if it ever unmounts again (`lab-console.test.tsx:339`). Shipped desk v0.9.14, published
+  v0.9.15 → v0.9.17. This row had sat un-ticked through the fix — closed on code evidence 2026-08-12.
 - [ ] **Q8 / issue #91 — COMPY CARE: primary PC-doctor directive + Capability Exception Gate
   (OWNER-APPROVED 2026-08-09).** Queue position is exact: PR #90 is now MERGED and its four
   post-merge defects are repaired in PR #102; **land #102 first**, then rebase #91,
