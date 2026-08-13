@@ -23,7 +23,8 @@ import { PROVENANCE_LABEL, PROVENANCE_NOTE } from "../data/provenance";
 import { recMutation } from "../data/rec-mutations";
 import { slimProofLine } from "../data/slim-proof";
 import { SlimRecRow, SlimDetailRow } from "../design/SlimRecRow";
-import { ActionDrawer, type DrawerRec } from "./ActionDrawer";
+import { ActionDetailsSheet, type ActionRec } from "./ActionDetails";
+import { Sheet } from "../design/bento";
 import { gameModeRevertedExternally } from "./dashboard-data";
 import { SidePileItem, SIDE_PILE_ORDER } from "./side-pile";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
@@ -36,8 +37,8 @@ import "./Fix.css";
 function livingOn(): boolean {
   return typeof document !== "undefined" && document.documentElement.dataset.living === "on";
 }
-// Dashboard-energy preview — gates the Action Drawer ("Details ›" → the pop-up that shows exactly what
-// a tweak touches). DOM-read; the surface re-renders fresh on navigation.
+// Dashboard-energy preview — gates the action details sheet ("Details ›" → the popout that shows
+// exactly what a tweak touches). DOM-read; the surface re-renders fresh on navigation.
 function dashOn(): boolean {
   return typeof document !== "undefined" && document.documentElement.dataset.dashV2 === "on";
 }
@@ -158,7 +159,7 @@ function humanizeWhen(iso: string, t: TFunction): string {
 }
 
 // Labels come from the shared provenance source of truth so they can't drift from the
-// Home limiter / ActionDrawer wording; the CSS class stays local to this surface.
+// Home limiter / action-details wording; the CSS class stays local to this surface.
 const EVIDENCE: Record<Rec["provenance"], { label: string; cls: string }> = {
   verified: { label: PROVENANCE_LABEL.verified, cls: "verified" },
   "measured-signal": { label: PROVENANCE_LABEL["measured-signal"], cls: "measured" },
@@ -247,6 +248,13 @@ function GameModeNote({
   return null;
 }
 
+// The rect a popout should grow out of: the whole ROW, falling back to the control itself if the
+// row can't be found. Handed to <Sheet origin>, which measures against it so the panel expands from
+// the thing you clicked instead of fading in from nowhere (see design/bento/Sheet.tsx).
+function rowOrigin(el: HTMLElement): DOMRect {
+  return (el.closest("li") ?? el).getBoundingClientRect();
+}
+
 // A row for an appliable rec — title, evidence, reason, and the trust-switch (right-aligned). When
 // applied, the row carries the named-prior snapshot line in its main column.
 function FixRow({
@@ -257,7 +265,7 @@ function FixRow({
   onToggle,
   onWhatsThis,
   onDismiss,
-  onOpenDrawer,
+  onOpenDetails,
   vendor,
   gameModeReverted,
 }: {
@@ -268,7 +276,7 @@ function FixRow({
   onToggle: () => void;
   onWhatsThis: (id: string) => void;
   onDismiss: (id: string) => void;
-  onOpenDrawer?: () => void;
+  onOpenDetails?: (origin: DOMRect) => void;
   vendor?: GpuVendor;
   gameModeReverted?: boolean;
 }) {
@@ -280,8 +288,10 @@ function FixRow({
           <RecTitle id={rec.id} title={rec.title} />
           <EvidenceChip p={rec.provenance} />
           <WhatsThis id={rec.id} onOpen={onWhatsThis} />
-          {onOpenDrawer && (
-            <button className="fix-details" onClick={onOpenDrawer} title={t("optimize.fix.seeExactlyWhatChanges")} aria-label={t("optimize.fix.seeExactlyWhatChanges")}>
+          {onOpenDetails && (
+            // The rect of the ROW, not the button: the sheet grows out of the thing you opened,
+            // which is what keeps a popout reading as the same object rather than a new place.
+            <button className="fix-details" onClick={(e) => onOpenDetails(rowOrigin(e.currentTarget))} title={t("optimize.fix.seeExactlyWhatChanges")} aria-label={t("optimize.fix.seeExactlyWhatChanges")}>
               {t("optimize.fix.detailsArrow")}
             </button>
           )}
@@ -773,13 +783,13 @@ function ActiveChangeCard({
   busy,
   onRollback,
   onWhatsThis,
-  onOpenDrawer,
+  onOpenDetails,
 }: {
   change: AppliedChange;
   busy: boolean;
   onRollback: () => void;
   onWhatsThis: (id: string) => void;
-  onOpenDrawer?: () => void;
+  onOpenDetails?: (origin: DOMRect) => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -788,8 +798,8 @@ function ActiveChangeCard({
         <div className="fix-row-head">
           <RecTitle id={change.rec_id} title={change.rec_title} />
           <WhatsThis id={change.rec_id} onOpen={onWhatsThis} />
-          {onOpenDrawer && (
-            <button className="fix-details" onClick={onOpenDrawer} title={t("optimize.fix.seeExactlyWhatChanges")} aria-label={t("optimize.fix.seeExactlyWhatChanges")}>
+          {onOpenDetails && (
+            <button className="fix-details" onClick={(e) => onOpenDetails(rowOrigin(e.currentTarget))} title={t("optimize.fix.seeExactlyWhatChanges")} aria-label={t("optimize.fix.seeExactlyWhatChanges")}>
               {t("optimize.fix.detailsArrow")}
             </button>
           )}
@@ -979,6 +989,8 @@ export default function Fix({
   // sheet → onApplyBatch runs the existing apply per item (per-item ledger receipts, failure
   // isolation). Copy never promises performance.
   const safeBatch = worthFixing.filter((r) => r.severity === "safe");
+  // `null` = closed. Open carries the rect of the bar button so the consent sheet grows out of it.
+  const [sheetOrigin, setSheetOrigin] = useState<DOMRect | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [batching, setBatching] = useState(false);
   // Slim master-detail rows are the Fixes segment's one look (P4 dedup); standalone Tune
@@ -988,8 +1000,9 @@ export default function Fix({
   // Recommended (safe-tier) row SELECTED — one-tap deselect; the ticked list IS exactly what will
   // change. Selection ≠ application: Apply stays the explicit act. NO auto-apply on render, ever.
   const [sheetSelected, setSheetSelected] = useState<Set<string>>(new Set());
-  const openSheet = () => {
+  const openSheet = (origin: DOMRect | null) => {
     if (slim) setSheetSelected(new Set(safeBatch.map((r) => r.id)));
+    setSheetOrigin(origin);
     setSheetOpen(true);
   };
   const toggleSheetItem = (id: string) =>
@@ -999,16 +1012,13 @@ export default function Fix({
       else next.add(id);
       return next;
     });
-  // Esc closes the consent sheet (parity with the other modals) — but never mid-apply, mirroring
-  // the backdrop's own guard so a keypress can't dismiss the sheet while a batch is running.
-  useEffect(() => {
-    if (!sheetOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !batching) setSheetOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [sheetOpen, batching]);
+  // Escape / backdrop / close are the Sheet's now (popout convergence 2026-08-13) — this surface
+  // used to hand-roll all three, plus its own keydown listener. What it still owns is the ONE rule
+  // the Sheet can't know: never dismiss mid-apply. That rides in as `dismissible={!batching}` on
+  // the sheet below, with this second check as belt-and-braces on the close path itself.
+  const closeSheet = () => {
+    if (!batching) setSheetOpen(false);
+  };
   const [batchSummary, setBatchSummary] = useState<{
     applied: number;
     skipped: { title: string; reason: string }[];
@@ -1075,14 +1085,21 @@ export default function Fix({
   // just the one whose id matches. Disabling only the matching row let a user start a SECOND apply/
   // rollback on a different rec while the first invoke was still pending (the app is interactive again
   // the moment UAC closes) — a second apply could snapshot a prior that already reflects the first
-  // apply's mutation, corrupting the rollback chain. This matches the Action Drawer's own guard
+  // apply's mutation, corrupting the rollback chain. This matches the details sheet's own guard
   // (`busy={busyId !== null}`) and the row `busy` prop only disables (no misleading per-row spinner).
   const rowBusy = (_rec: Rec) => busyId !== null;
   const living = livingOn();
   const dashV2 = dashOn();
-  // Action Drawer state: the rec/change to present + how its primary action resolves (apply vs roll back).
-  const [drawer, setDrawer] = useState<
-    null | { rec: DrawerRec; applied: boolean; restoresLabel?: string | null; primary: () => void }
+  // Action-details state: the rec/change to present, the row it was opened from (so the sheet grows
+  // out of it), and how its primary action resolves (apply vs roll back).
+  const [details, setDetails] = useState<
+    null | {
+      rec: ActionRec;
+      applied: boolean;
+      origin: DOMRect | null;
+      restoresLabel?: string | null;
+      primary: () => void;
+    }
   >(null);
 
   return (
@@ -1165,7 +1182,7 @@ export default function Fix({
       )}
       {safeBatch.length >= 2 && (
         <div className="fix-applyall-bar">
-          <button className="fix-applyall" onClick={openSheet}>
+          <button className="fix-applyall" onClick={(e) => openSheet(e.currentTarget.getBoundingClientRect())}>
             {slim
               ? t("optimize.fix.applyReviewedCount", { count: safeBatch.length })
               : t("optimize.fix.applySafeFixesCount", { count: safeBatch.length })}
@@ -1222,12 +1239,13 @@ export default function Fix({
                 onToggle={() => onToggleRec(rec.id)}
                 onWhatsThis={onOpenLibrary}
                 onDismiss={dismiss}
-                onOpenDrawer={
+                onOpenDetails={
                   dashV2
-                    ? () =>
-                        setDrawer({
+                    ? (origin) =>
+                        setDetails({
                           rec: { id: rec.id, title: rec.title, description: rec.description, impact: rec.impact, provenance: rec.provenance },
                           applied: false,
+                          origin,
                           primary: () => onToggleRec(rec.id),
                         })
                     : undefined
@@ -1240,64 +1258,23 @@ export default function Fix({
 
       {/* §4 consent sheet — the ONE consent for the batch. Lists every item + its one-line change;
           approve → sequential apply (per-item receipts, failure isolation). Copy never promises a boost.
-          Backdrop/modal classes are doorknob-sanctioned for their close handlers. */}
+
+          POPOUT CONVERGENCE (2026-08-13): this was a hand-rolled backdrop + modal with its own
+          z-index (120), its own Escape handler, no focus trap, no focus restore and a blurred
+          scrim. It is the canonical <Sheet> now — same title, same note, same list, same two
+          actions, same "not while a batch is running" rule, which the Sheet carries as
+          `dismissible`. The inner classes are unchanged so the room's styles keep matching. */}
       {sheetOpen && (
-        <div
-          className="fix-applyall-backdrop"
-          onClick={() => {
-            if (!batching) setSheetOpen(false);
-          }}
-        >
-          <div
-            className="fix-applyall-modal"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="fix-applyall-h"
-          >
-            <h3 id="fix-applyall-h" className="fix-applyall-h">
-              {t("optimize.fix.applyTheseChangesTitle", {
-                count: slim ? sheetSelected.size : safeBatch.length,
-              })}
-            </h3>
-            <p className="fix-applyall-note">
-              {t("optimize.fix.applyAllNote")}
-              {slim && t("optimize.fix.applyAllNoteSlimSuffix")}
-            </p>
-            <ul className="fix-applyall-list">
-              {safeBatch.map((r) =>
-                slim ? (
-                  // §8c: pre-selected Recommended with one-tap deselect — the ticked list IS the
-                  // consent screen. Apply below stays the explicit act (selection ≠ application).
-                  <li key={r.id} className="fix-applyall-item">
-                    <label className="fix-applyall-pick">
-                      <input
-                        type="checkbox"
-                        checked={sheetSelected.has(r.id)}
-                        disabled={batching}
-                        onChange={() => toggleSheetItem(r.id)}
-                        aria-label={t("optimize.fix.includeAriaLabel", { title: r.title })}
-                      />
-                      <span className="fix-applyall-pick-text">
-                        <span className="fix-applyall-item-title">{r.title}</span>
-                        <span className="fix-applyall-item-what">{r.impact}</span>
-                      </span>
-                    </label>
-                  </li>
-                ) : (
-                  <li key={r.id} className="fix-applyall-item">
-                    <span className="fix-applyall-item-title">{r.title}</span>
-                    <span className="fix-applyall-item-what">{r.impact}</span>
-                  </li>
-                ),
-              )}
-            </ul>
-            <div className="fix-applyall-actions">
-              <button
-                className="fix-applyall-cancel"
-                disabled={batching}
-                onClick={() => setSheetOpen(false)}
-              >
+        <Sheet
+          title={t("optimize.fix.applyTheseChangesTitle", {
+            count: slim ? sheetSelected.size : safeBatch.length,
+          })}
+          origin={sheetOrigin}
+          onClose={closeSheet}
+          dismissible={!batching}
+          footer={
+            <>
+              <button className="fix-applyall-cancel" disabled={batching} onClick={closeSheet}>
                 {t("optimize.fix.cancel")}
               </button>
               <button
@@ -1311,9 +1288,42 @@ export default function Fix({
                     ? t("optimize.fix.applySelectedCount", { count: sheetSelected.size })
                     : t("optimize.fix.applyAllCount", { count: safeBatch.length })}
               </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        >
+          <p className="fix-applyall-note">
+            {t("optimize.fix.applyAllNote")}
+            {slim && t("optimize.fix.applyAllNoteSlimSuffix")}
+          </p>
+          <ul className="fix-applyall-list">
+            {safeBatch.map((r) =>
+              slim ? (
+                // §8c: pre-selected Recommended with one-tap deselect — the ticked list IS the
+                // consent screen. Apply below stays the explicit act (selection ≠ application).
+                <li key={r.id} className="fix-applyall-item">
+                  <label className="fix-applyall-pick">
+                    <input
+                      type="checkbox"
+                      checked={sheetSelected.has(r.id)}
+                      disabled={batching}
+                      onChange={() => toggleSheetItem(r.id)}
+                      aria-label={t("optimize.fix.includeAriaLabel", { title: r.title })}
+                    />
+                    <span className="fix-applyall-pick-text">
+                      <span className="fix-applyall-item-title">{r.title}</span>
+                      <span className="fix-applyall-item-what">{r.impact}</span>
+                    </span>
+                  </label>
+                </li>
+              ) : (
+                <li key={r.id} className="fix-applyall-item">
+                  <span className="fix-applyall-item-title">{r.title}</span>
+                  <span className="fix-applyall-item-what">{r.impact}</span>
+                </li>
+              ),
+            )}
+          </ul>
+        </Sheet>
       )}
       </>
       )}
@@ -1336,12 +1346,13 @@ export default function Fix({
                 busy={busyId !== null}
                 onRollback={() => onRollback(c)}
                 onWhatsThis={onOpenLibrary}
-                onOpenDrawer={
+                onOpenDetails={
                   dashV2
-                    ? () =>
-                        setDrawer({
+                    ? (origin) =>
+                        setDetails({
                           rec: { id: c.rec_id, title: c.rec_title },
                           applied: true,
+                          origin,
                           restoresLabel: c.restores_label,
                           primary: () => onRollback(c),
                         })
@@ -1576,23 +1587,24 @@ export default function Fix({
       </>
       )}
 
-      {/* The Action Drawer is opened from either side (fixes rows + active-change cards), so it stays
-          mounted in every view; it self-gates on the `drawer` state. */}
-      {drawer && (
-        <ActionDrawer
-          rec={drawer.rec}
-          applied={drawer.applied}
+      {/* The details sheet is opened from either side (fixes rows + active-change cards), so it stays
+          mounted in every view; it self-gates on the `details` state. */}
+      {details && (
+        <ActionDetailsSheet
+          rec={details.rec}
+          applied={details.applied}
           busy={busyId !== null}
-          restoresLabel={drawer.restoresLabel}
+          origin={details.origin}
+          restoresLabel={details.restoresLabel}
           onApply={() => {
-            drawer.primary();
-            setDrawer(null);
+            details.primary();
+            setDetails(null);
           }}
           onRollback={() => {
-            drawer.primary();
-            setDrawer(null);
+            details.primary();
+            setDetails(null);
           }}
-          onClose={() => setDrawer(null)}
+          onClose={() => setDetails(null)}
         />
       )}
     </section>

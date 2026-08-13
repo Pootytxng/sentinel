@@ -652,37 +652,12 @@
   color: var(--ix-text-2);
 }
 
-/* Consent sheet (the single consent) */
-.fix-applyall-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 120;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(2px);
-}
-.fix-applyall-modal {
-  width: 100%;
-  max-width: 460px;
-  max-height: 80vh;
-  overflow-y: auto;
-  padding: 20px 22px;
-  border-radius: var(--ix-radius);
-  border: 1px solid var(--ix-glass-border);
-  border-top-color: var(--ix-glass-top);
-  background: var(--ix-glass-fill);
-  box-shadow: 0 30px 80px -28px rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(12px);
-}
-.fix-applyall-h {
-  margin: 0 0 6px;
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--ix-text-1);
-}
+/* Consent sheet (the single consent) — CONTENT ONLY.
+   Its backdrop, panel, heading and action rail were deleted by the popout convergence
+   (2026-08-13): the consent sheet is the canonical .v2-sheet now (design/bento/bento.css), which
+   owns the scrim, the z-index, the head and the footer rail. What survives here is what sits
+   INSIDE the panel — the note, the item list, the two buttons — under its original class names,
+   so nothing else that matches them had to move. */
 .fix-applyall-note {
   margin: 0 0 14px;
   font-size: 12.5px;
@@ -731,11 +706,6 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-}
-.fix-applyall-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
 }
 .fix-applyall-cancel,
 .fix-applyall-go {
@@ -825,4 +795,130 @@
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--ix-text-2, #b8bcc8);
+}
+
+/* ── Action details (the per-tweak popout's CONTENT) ───────────────────────────────────────────
+   Moved here verbatim from the deleted ActionDrawer.css by the popout convergence (2026-08-13).
+   The drawer's own chrome — a right-sliding fixed panel at z-index 200, a `backdrop-filter:
+   blur(3px)` scrim that re-rastered the whole window on every frame the live room behind it
+   ticked, and its slide/fade keyframes — is gone with the implementation. These rules are only
+   what sits inside the panel, and they keep their ad-* names on purpose: the markup was moved,
+   not rewritten, so anything else matching them still matches. */
+.ad-block {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.ad-eyebrow {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ix-accent-text, #7defcf);
+}
+.ad-text {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ix-text-2, #b8bcc8);
+}
+.ad-mono-soft {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12.5px;
+  color: var(--ix-text-1, #f2f3f7);
+}
+.ad-muted {
+  color: var(--ix-text-3, #828896);
+}
+.ad-revert {
+  padding: 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ix-accent, #2ee6c0) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ix-accent, #2ee6c0) 20%, transparent);
+}
+
+.ad-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.ad-flag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: var(--ix-text-2, #b8bcc8);
+  background: color-mix(in srgb, #ffffff 6%, transparent);
+  border: 1px solid color-mix(in srgb, #ffffff 9%, transparent);
+}
+.ad-flag-warn {
+  color: var(--attention, #f5b740);
+  border-color: color-mix(in srgb, var(--attention, #f5b740) 32%, transparent);
+}
+
+.ad-chip {
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+.ad-tone-ready {
+  color: var(--ready, #46d98a);
+  background: color-mix(in srgb, var(--ready, #46d98a) 14%, transparent);
+}
+.ad-tone-accent {
+  color: var(--ix-accent, #2ee6c0);
+  background: color-mix(in srgb, var(--ix-accent, #2ee6c0) 14%, transparent);
+}
+.ad-tone-muted {
+  color: var(--ix-text-3, #828896);
+  background: color-mix(in srgb, #ffffff 7%, transparent);
+}
+
+/* The two footer controls. `.ad-action` dropped the drawer's `flex: 1` — that stretched the
+   primary across a 460px drawer footer; in the sheet's right-aligned footer rail it would stretch
+   it across 880px. Colour, weight, disabled state and hover are untouched. */
+.ad-secondary {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, #ffffff 10%, transparent);
+  background: transparent;
+  color: var(--ix-text-2, #b8bcc8);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ad-secondary:hover {
+  border-color: color-mix(in srgb, #ffffff 18%, transparent);
+  color: var(--ix-text-1, #f2f3f7);
+}
+.ad-action {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 140ms ease, box-shadow 140ms ease;
+}
+.ad-action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.ad-apply {
+  background: var(--ix-accent, #2ee6c0);
+  color: var(--ix-accent-ink, #06231c);
+}
+.ad-apply:hover:not(:disabled) {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ix-accent, #2ee6c0) 50%, transparent), 0 8px 22px -10px var(--ix-accent, #2ee6c0);
+}
+.ad-rollback {
+  background: color-mix(in srgb, var(--attention, #f5b740) 18%, transparent);
+  color: var(--attention, #f5b740);
+  border-color: color-mix(in srgb, var(--attention, #f5b740) 40%, transparent);
+}
+.ad-rollback:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--attention, #f5b740) 26%, transparent);
 }

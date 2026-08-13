@@ -27,6 +27,12 @@ import { join } from "path";
 // `.ad-backdrop` (ActionDrawer, 200), `.fix-applyall-backdrop` (120), `.theme-backdrop` (90) and
 // `.lx-backdrop` (Learn, 50). None was a live defect once the confirm moved to 2000, and none would
 // have been caught if it had been.
+//
+// The derivation earned itself again on 2026-08-13: the popout convergence DELETED `.ad-backdrop`
+// and `.fix-applyall-backdrop` (both overlays became the canonical `.v2-sheet-backdrop`, z 1400),
+// and this guard needed no edit to keep covering them — the layer that replaced them was already
+// enrolled the day it was written. A hand-written watch-list would now be naming two rules that no
+// longer exist while silently not checking the one that does.
 
 const CSS_ROOT = join("src");
 

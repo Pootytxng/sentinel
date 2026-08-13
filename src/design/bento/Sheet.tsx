@@ -27,6 +27,14 @@ import "./bento.css";
 // resource-hungry app on the machine (owner, 2026-08-06). The scrim is a flat fill and the settle
 // is compositor-only opacity + transform — both free after the first frame. See bento.css.
 //
+// IT IS THE ONLY POPOUT (convergence, 2026-08-13). The app carried three overlay implementations
+// with three different behaviours: this one, a right-sliding ActionDrawer (z 200, blurred backdrop,
+// no Escape stand-down, a looser focus trap) and a hand-rolled apply-all consent popout inside
+// Fix.tsx (z 120, its own Escape handler, no focus trap, no focus restore). Same job, three
+// contracts, and only this one was guarded. The other two were deleted onto this component; the one
+// behaviour they had that it lacked — "you cannot dismiss me while I am applying" — became the
+// `dismissible` option below rather than a reason to keep a second implementation.
+//
 // KEYS ARE TRAPPED, NOT SHARED. Same reasoning as ConfirmDialog: a modal that lets Escape leak to
 // background window handlers tears down whatever else is listening. One deliberate exception — if a
 // ConfirmDialog is open ON TOP of this sheet, Escape belongs to the confirm, so this handler stands
@@ -50,12 +58,39 @@ export type SheetProps = {
   /** The rect of the tile that opened it, so the panel can grow out of exactly that tile. */
   origin?: DOMRect | null;
   onClose: () => void;
+  /**
+   * Whether the user may dismiss the sheet RIGHT NOW. Default true.
+   *
+   * Added 2026-08-13 by the popout convergence, for the one case the hand-rolled apply-all consent
+   * popout had and this component did not: a sheet that is currently EXECUTING the thing it asked
+   * consent for. While a batch apply is mid-flight, Escape, a backdrop click and the close button
+   * must all do nothing — dismissing the consent panel out from under a running mutation leaves the
+   * user with no view of an operation that is still touching their machine. The retired popout
+   * enforced this by hand in two places (a `!batching` check in its own Escape handler and another
+   * in its backdrop onClick); pinning it here is what let that implementation be deleted rather than
+   * kept for one behaviour.
+   *
+   * The close button is rendered `disabled` when this is false, so the panel never shows a control
+   * that does nothing — same reason the retired popout disabled its own Cancel mid-apply.
+   *
+   * Expected to flip DURING a sheet's life, not at open: a sheet that opens undismissible opens with
+   * its close button disabled, and focus (which lands there) has nowhere to go.
+   */
+  dismissible?: boolean;
   /** Pinned to the bottom of the panel — the one primary action, if this sheet has one. */
   footer?: ReactNode;
   children: ReactNode;
 };
 
-export function Sheet({ title, sub, origin, onClose, footer, children }: SheetProps) {
+export function Sheet({
+  title,
+  sub,
+  origin,
+  onClose,
+  dismissible = true,
+  footer,
+  children,
+}: SheetProps) {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -102,12 +137,19 @@ export function Sheet({ title, sub, origin, onClose, footer, children }: SheetPr
     panel.style.opacity = "";
   }, [origin, reduced]);
 
-  const close = useCallback(() => onClose(), [onClose]);
+  // ONE close path for all three dismissals (Escape, backdrop, the button), so `dismissible` can
+  // never hold for two of them and leak through the third.
+  const close = useCallback(() => {
+    if (!dismissible) return;
+    onClose();
+  }, [onClose, dismissible]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (confirmIsOpen()) return; // the dialog above us owns the keyboard
       if (e.key === "Escape") {
+        // Swallowed even when `close` is a no-op (dismissible=false): an undismissible sheet still
+        // OWNS the keyboard, so Escape must not fall through to a background handler behind it.
         e.preventDefault();
         e.stopImmediatePropagation();
         close();
@@ -156,6 +198,7 @@ export function Sheet({ title, sub, origin, onClose, footer, children }: SheetPr
             type="button"
             className="v2-sheet-close"
             onClick={close}
+            disabled={!dismissible}
             aria-label={t("common.sheet.close")}
           >
             {t("common.sheet.close")}
