@@ -1,6 +1,6 @@
 [package]
 name = "compy"
-version = "0.9.23"
+version = "0.9.24"
 description = "Hardware-aware Windows PC optimization for everyday gamers"
 authors = ["Kuya"]
 edition = "2021"
