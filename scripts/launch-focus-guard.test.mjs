@@ -104,6 +104,26 @@ describe("nothing downstream is allowed to re-focus the window", () => {
     expect(plugin).toMatch(/StateFlags::all\(\)\s*-\s*tauri_plugin_window_state::StateFlags::VISIBLE/);
   });
 
+  it("a QUIET launch also drops StateFlags::MAXIMIZED, because SW_MAXIMIZE is an activating show", () => {
+    // FOUND 2026-08-13 while chasing issue #121: the runtime tier's first-ever strict run (idle
+    // desk, foreground rights granted) fronted a --no-activate launch seeded with a maximized saved
+    // state for 54/54 samples against the v0.9.17 binary — every earlier green was a skip (Compy
+    // already running) or a weak run (rights refused, so nothing could have activated).
+    // `restore_state` reaches maximize through ShowWindow(SW_MAXIMIZE), an ACTIVATING show command,
+    // so a quiet launch must never issue it — a real vector even though #121's measurement later
+    // showed a second, system-level fronting that this fix does not (and cannot) close. The fix
+    // branches the state flags on `suppress_activation`; this pins that branch so a one-line
+    // "simplification" back to a single flag set cannot silently rearm the steal.
+    const plugin = LIB_RS.slice(
+      LIB_RS.indexOf("tauri_plugin_window_state::Builder::default()"),
+      LIB_RS.indexOf(".invoke_handler("),
+    );
+    expect(plugin).toMatch(/with_state_flags\s*\(\s*if\s+suppress_activation\b/);
+    expect(plugin).toMatch(
+      /StateFlags::all\(\)\s*-\s*tauri_plugin_window_state::StateFlags::VISIBLE\s*-\s*tauri_plugin_window_state::StateFlags::MAXIMIZED/,
+    );
+  });
+
   it("the relaunch path carries the caller's intent instead of focusing regardless", () => {
     // `show_or_recreate_main` used to call `set_focus()` unconditionally, so a tooling relaunch that
     // found a live instance stole the foreground no matter what the new process had been told.
@@ -265,7 +285,7 @@ function unmeasurableBecauseRunning() {
 }
 
 /** Run the probe and return its parsed result. Throws with the probe's own words on failure. */
-function measureLaunch({ args = [], env = {}, seconds = 6, savedState = null }) {
+function measureLaunch({ args = [], env = {}, seconds = 6, savedState = null, grant = true }) {
   // A throwaway APPDATA so a measurement never writes to the owner's Trust Ledger, and so the
   // window-state file each launch reads is a known one rather than whatever he left behind.
   const sandbox = mkdtempSync(join(tmpdir(), "compy-fg-"));
@@ -287,6 +307,7 @@ function measureLaunch({ args = [], env = {}, seconds = 6, savedState = null }) 
       "-DurationSeconds",
       String(seconds),
       ...(args.length ? ["-ArgumentList", args.join(",")] : []),
+      ...(grant ? [] : ["-NoGrant"]),
     ],
     {
       encoding: "utf8",
@@ -356,15 +377,16 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
     "a quiet launch opens a real visible window and never takes the foreground",
     () => {
       if (unmeasurableBecauseRunning()) return;
-      const result = measureLaunch({ args: ["--no-activate"], savedState: MAXIMIZED_STATE });
-      if (!result.rightsGranted) {
-        // Honest caveat, not a failure: this run's shell had no foreground rights to hand over, so
-        // "never took the foreground" is weaker evidence than it looks. The self-test above turns the
-        // same fact into a hard failure whenever proof is actually being demanded.
-        console.log(
-          "[launch-focus-guard] WEAK EVIDENCE: no foreground rights were available to grant, so an activating launch could not have taken the foreground either. Pair this with the COMPY_PROVE_ACTIVATION self-test.",
-        );
-      }
+      // UNGRANTED BY DESIGN (issue #121) -- the same principle the probe already applies to the
+      // relaunch case: a granted launch measures the OS, not Compy. Measured 2026-08-13 on an
+      // input-idle desk: with the grant taken, Windows fronted the fresh launch at/before its first
+      // window against a binary with no activation path left in it, so the granted configuration is
+      // unpassable by ANY correct app. Ungranted is also the condition production has -- npm,
+      // vitest, and ship-reinstall all launch from background tooling. The steal class this guard
+      // exists for (tao's set_focus, which raises through AttachThreadInput even where the OS would
+      // not) needs no grant, so it still fails this test. The opt-in COMPY_PROVE_ACTIVATION
+      // self-test above remains the probe-blindness check.
+      const result = measureLaunch({ args: ["--no-activate"], savedState: MAXIMIZED_STATE, grant: false });
       // Ordered most-diagnostic-first: "never took the foreground" is also true of an app that
       // crashed on startup, and that would be a worse bug passing as a fix.
       expect(result.exited, `the app exited during the measurement (code ${result.exitCode})`).toBe(false);

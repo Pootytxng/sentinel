@@ -28,7 +28,15 @@ param(
   [ValidateSet("none", "quiet", "loud")][string]$RelaunchWith = "none",
   [double]$DurationSeconds = 6,
   [int]$IntervalMs = 100,
-  [int]$SettleMs = 2000
+  [int]$SettleMs = 2000,
+  # ISSUE #121: skip the AllowSetForegroundWindow grant for the initial launch. Measured 2026-08-13:
+  # when the grant TAKES (input-idle desk), Windows fronts the fresh launch on the launcher's behalf
+  # -- at/before the app's first window, against a binary with no activation path left in it. In
+  # that context the quiet assertion is unpassable by ANY correct app, so a caller measuring app
+  # politeness (not launch-context behaviour) launches ungranted. The steal class this guard exists
+  # for -- tao's set_focus, which reaches SetForegroundWindow through AttachThreadInput and raises
+  # even where the OS would not -- needs no grant to succeed, so it stays detectable.
+  [switch]$NoGrant
 )
 $ErrorActionPreference = "Stop"
 
@@ -53,7 +61,7 @@ function Get-ForegroundOwner {
 # that crashed on launch, and that would be a far worse bug passing as a fix.
 function Measure-Foreground {
   param([System.Diagnostics.Process]$Target, [double]$Seconds)
-  $samples = 0; $owned = 0; $present = 0; $firstMs = -1
+  $samples = 0; $owned = 0; $present = 0; $firstMs = -1; $firstWindowMs = -1
   $sawWindow = $false; $sawVisibleWindow = $false
   $before = Get-ForegroundOwner
   $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -71,6 +79,7 @@ function Measure-Foreground {
       $Target.Refresh()
       if ($Target.MainWindowHandle -ne [IntPtr]::Zero) {
         $sawWindow = $true
+        if ($firstWindowMs -lt 0) { $firstWindowMs = [int]$sw.Elapsed.TotalMilliseconds }
         if ([CompyProbe.Win]::IsWindowVisible($Target.MainWindowHandle) -and -not [CompyProbe.Win]::IsIconic($Target.MainWindowHandle)) {
           $sawVisibleWindow = $true
         }
@@ -85,6 +94,10 @@ function Measure-Foreground {
     ownedForegroundSamples = $owned
     everTookForeground     = ($owned -gt 0)
     firstForegroundMs      = $firstMs
+    # When the target FIRST had a main window, on the same sampling clock as firstForegroundMs.
+    # firstForegroundMs < firstWindowMs means the foreground moved to the target BEFORE it had any
+    # window to steal with — that is Windows fronting a fresh launch (issue #121), not the app.
+    firstWindowMs          = $firstWindowMs
     sawWindow              = $sawWindow
     sawVisibleWindow       = $sawVisibleWindow
     exited                 = $Target.HasExited
@@ -126,7 +139,7 @@ if ($existing.Count -gt 0) {
 # explicitly asked to — which reads as "the fix works" when nothing was proven at all.
 Start-Sleep -Milliseconds $SettleMs
 
-$started = Start-Target -Args $ArgumentList -Grant
+$started = Start-Target -Args $ArgumentList -Grant:(-not $NoGrant)
 $proc = $started.Process
 $relaunchProc = $null
 try {
