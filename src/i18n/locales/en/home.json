@@ -8,6 +8,7 @@
     },
     "intake": {
       "prompt": "What are you here to do?",
+      "panelTitle": "Pick what's closest",
       "applying": "Applying…",
       "rows": {
         "lastSession": {

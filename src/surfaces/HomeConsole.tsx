@@ -289,6 +289,12 @@ export function HomeConsole({
   // Fast-path (option C) transient state: a busy guard against double-submit, and a real receipt
   // built from the batch result (never a fabricated "done" — it names applied AND skipped).
   const [fastPathBusy, setFastPathBusy] = useState(false);
+  // UX-1 — the front door's one disclosure. The intent panel used to be a permanent band gated by
+  // compy_home_intake; it is now the destination of the screen's single primary button, opened in
+  // place. The flag survives with a NARROWER job: "1" pins the panel open on arrival (the legacy
+  // always-visible band, for anyone who wants it back), default keeps it folded behind the button.
+  // Nothing was deleted and nothing moved rooms — the affordance census still finds every row.
+  const [frontDoorOpen, setFrontDoorOpen] = useState(intakeOn);
   const [fastPathReceipt, setFastPathReceipt] = useState<{
     applied: number;
     skipped: number;
@@ -548,7 +554,9 @@ export function HomeConsole({
   // to undefined means "no wiring", not "loading") so an isolated mount never shows a stuck
   // "Checking…"; recs===null IS the loading state. Its apply-set is safeFixesReadyList — the
   // SAME predicate the Optimize verdict counts, so the count and the applied ids can't diverge.
-  const fastPathAvailable = intakeOn && !!onApplyBatch && !!isAppliable && recs !== undefined;
+  // UX-1: no longer gated on `intakeOn` — the panel's visibility is now the front door's business,
+  // and availability is purely "is this wired up", which is what this flag always actually meant.
+  const fastPathAvailable = !!onApplyBatch && !!isAppliable && recs !== undefined;
   const revertedIds = new Set(deriveReverted(changes).map((r) => r.rec_id));
   const eligibleStack =
     recs && isAppliable ? safeFixesReadyList(recs, isAppliable, revertedIds) : [];
@@ -565,7 +573,12 @@ export function HomeConsole({
     (row) =>
       rooms?.some((rm) => rm.key === row.room) && !(lastSessionRendered && row.room === "play"),
   );
-  const intakeRenders = intakeOn && (fastPathAvailable || intakeRows.length > 0);
+  // UX-1 splits the old single boolean in two: AVAILABLE decides whether the front-door button
+  // exists at all (never offer a door onto an empty room), OPEN decides whether the panel is
+  // showing. The button is the screen's one primary action, so it must not render as a promise
+  // with nothing behind it.
+  const intakeAvailable = fastPathAvailable || intakeRows.length > 0;
+  const intakeRenders = intakeAvailable && frontDoorOpen;
   // The Care entry (issue #91, discovery contract): ALWAYS visible, independent of `intakeOn` —
   // crash rescue is the one thing a user comes to Home in distress to find, and it must not be
   // behind the same switch as the optimization band. The single condition it does obey is the
@@ -605,6 +618,9 @@ export function HomeConsole({
     <RoomShell
       room="home"
       doorOpen={!dockRenders}
+      /* UX-1: the caveat that qualifies the verdict now outranks it in the shell, because the
+         verdict itself moved into the h1. Self-nulls when the ledger is healthy. */
+      notice={<LedgerHealthNotice health={ledgerHealth} />}
       verdict={
         <>
           <span className="hc-masthead-eyebrow">
@@ -612,10 +628,48 @@ export function HomeConsole({
             {t("home.homeConsole.masthead.eyebrow")} <span className="hc-eyebrow-sep">·</span>{" "}
             <span className="hc-mono">{dateline}</span>
           </span>
-          {/* Title only in the h1 (owner title-header law 2026-07-10 ×2) — the posture
-              verdict lives in its body context strip above the stage. */}
-          <span className="hc-headline">{t("common.rail.home", { defaultValue: "Home" })}</span>
+          {/* UX-1 — THE FRONT DOOR IS A VERDICT (docs/decisions/2026-08-11-design-foundation.md,
+              decision 1). This REPLACES the owner title-header law of 2026-07-10 for Home only,
+              and the replacement is the whole point of the step: the audit measured that the one
+              element on this screen bigger than 19px was the word "Home" — a label nobody came
+              here to read — while the answer they did come for rendered a third smaller, in the
+              body. The room title is redundant with the rail that navigated here; the verdict is
+              not redundant with anything. So the h1 now speaks postureLine's real headline at
+              --type-verdict (40px), and "Home" is gone rather than demoted, because a second
+              copy of a label the rail already shows is exactly the noise TYPE-1 cleared.
+              Still rendered exactly ONCE on the screen (one-mention law) — the body copy is
+              deleted in the same change, not duplicated up here. */}
+          <span
+            className={`hc-headline hc-verdict-line hc-verdict-${posture.tone}`}
+            key={posture.headline}
+          >
+            {posture.headline}
+          </span>
         </>
+      }
+      /* The because-line. It qualifies the verdict, so it sits directly beneath it in the
+         header rather than starting the body — progressive disclosure reads top-down. */
+      sub={dekRedundant ? undefined : <span className="hc-verdict-dek">{dek}</span>}
+      /* UX-1 decision 1 — ONE ACTION. "What are you here to do?" was already the strongest idea
+         in the product and was spending it inside a 9px band the owner switched off on sight
+         (theme.ts, 2026-08-12). Promoted here to the single filled primary button on the screen.
+         It opens IN PLACE rather than navigating: progressive disclosure, and there is nowhere
+         to navigate to until step ③ builds the interview. Every other control on Home — the
+         re-run outline button, the care entry, the dock doors, the view toggles — is quieter
+         than this one by construction, so the Duolingo rule (more than one primary = none)
+         holds without deleting anything. */
+      primaryAction={
+        intakeAvailable ? (
+          <button
+            type="button"
+            className="hc-front-door"
+            aria-expanded={frontDoorOpen}
+            aria-controls="hc-front-door-panel"
+            onClick={() => setFrontDoorOpen((open) => !open)}
+          >
+            {t("home.homeConsole.intake.prompt")}
+          </button>
+        ) : undefined
       }
       measured={
         <RerunCheckBand
@@ -628,18 +682,10 @@ export function HomeConsole({
       }
     >
       <div className="home-console" data-motion={reduced ? "reduced" : "full"}>
-        {/* THE COLD-OPEN VERDICT — relocated out of the h1 (title-header law): postureLine's
-            real headline + its trimmed sentence, tone-inked, rendered exactly ONCE on this
-            screen (one-mention law). */}
-        {/* Above the verdict it qualifies — a caveat printed under its subject has already failed
-            at its job. */}
-        <LedgerHealthNotice health={ledgerHealth} />
-        <div className={`hc-verdict hc-verdict-${posture.tone}`}>
-          <span className="hc-verdict-line" key={posture.headline}>
-            {posture.headline}
-          </span>
-          {!dekRedundant && <span className="hc-verdict-dek">{dek}</span>}
-        </div>
+        {/* UX-1: the cold-open verdict and its because-line no longer start the body — they ARE
+            the header now (RoomShell verdict/sub above), and the ledger caveat that qualifies
+            them moved to the shell's notice slot so it still prints ABOVE its subject. What
+            starts the body instead is what the one primary button opens. */}
         {/* THE CARE ENTRY (issue #91 Tier 1, visible half) — one compact door to crash rescue,
             rendered OUTSIDE the intake band's gate on purpose. A user whose PC just crashed is the
             least likely person to go turn a Settings band back on to find help, and the tester who
@@ -672,8 +718,14 @@ export function HomeConsole({
             always starts its own row, so its absence just moves the rest of the grid up intact —
             and the band was born full-width anyway (it reads as a strip, not a card). */}
         {intakeRenders && (
-          <BentoTile title={t("home.homeConsole.intake.prompt")} span="full">
-          <section className="hc-intake" aria-label={t("home.homeConsole.intake.prompt")}>
+          /* UX-1: the tile no longer repeats the question — the primary button above just asked
+             it, and this is the answer space. `id` is what that button's aria-controls points at. */
+          <BentoTile title={t("home.homeConsole.intake.panelTitle")} span="full">
+          <section
+            id="hc-front-door-panel"
+            className="hc-intake"
+            aria-label={t("home.homeConsole.intake.prompt")}
+          >
             {/* Option C — the always-available one-tap "just make it faster, safely" fast path.
                 Honest state machine: applied receipt › loading › all-clear › ready-with-apply. */}
             {fastPathAvailable && (

@@ -520,7 +520,7 @@ describe("HomeConsole — the face a default-flag user actually lands on", () =>
     expect(box).toBeTruthy();
     expect(screen.getByText(title)).toBeTruthy();
 
-    const verdict = container.querySelector(".hc-verdict");
+    const verdict = container.querySelector(".hc-verdict-line");
     expect(verdict).toBeTruthy();
     // The verdict is the reassurance; a caveat printed under it has already failed at its job.
     expect(box!.compareDocumentPosition(verdict!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -531,7 +531,7 @@ describe("HomeConsole — the face a default-flag user actually lands on", () =>
     const { container } = await mountConsole();
 
     expect(container.querySelector(".ledger-health")).toBeNull();
-    expect(container.querySelector(".hc-verdict")).toBeTruthy();
+    expect(container.querySelector(".hc-verdict-line")).toBeTruthy();
   });
 
   it("UNKNOWN health leaves the room BYTE-IDENTICAL to a healthy ledger", async () => {
@@ -575,7 +575,7 @@ describe("HomeConsole — the face a default-flag user actually lands on", () =>
       await Promise.resolve();
     });
 
-    expect(container.querySelector(".hc-verdict")).toBeTruthy();
+    expect(container.querySelector(".hc-verdict-line")).toBeTruthy();
     expect(container.querySelector(".ledger-health")).toBeTruthy();
     expect(screen.getByText(QUARANTINED_TITLE)).toBeTruthy();
   });

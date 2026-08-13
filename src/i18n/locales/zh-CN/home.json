@@ -7,6 +7,7 @@
       "label": "崩溃与卡死救援"
     },
     "intake": {
+      "panelTitle": "选择最接近的一项",
       "prompt": "你想做什么?",
       "applying": "正在应用…",
       "rows": {

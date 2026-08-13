@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach, beforeAll } from "vitest";
-import { render, screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, waitFor, fireEvent, act } from "@testing-library/react";
 import { ShellV2 } from "../design/ShellV2";
 import { railFor } from "../design/homeRail";
 import { postureLine } from "./command-center-data";
@@ -193,21 +193,53 @@ const mount = (p = props) =>
   );
 
 describe("HomeConsole — masthead (the proven HomeHud register)", () => {
-  it("title-header law: the h1 is the room TITLE; the posture verdict renders ONCE, in body context", () => {
+  // UX-1 REPLACES the title-header law FOR HOME (docs/decisions/2026-08-11-design-foundation.md
+  // decision 1; the old law was owner 2026-07-10 ×2 and is still in force in the other rooms).
+  // The law it replaced put the room's NAME in the h1 and pushed the answer into the body a step
+  // smaller — which the navigation audit measured as the screen's central defect: the only element
+  // over 19px was the word "Home". This test is the inverse pin, and it is deliberately strict in
+  // both directions: the verdict must be IN the h1, and the room title must be GONE (not merely
+  // demoted), because a second copy of a label the rail already renders is the noise TYPE-1 cleared.
+  it("UX-1 front-door law: the h1 IS the verdict, the room title is gone, and it renders ONCE", () => {
     const posture = postureLine(readiness, priorities, activeChangeCount(props.changes), i18n.t);
     const c = mount().container;
     const h1 = c.querySelector(".v2-verdict h1")!;
-    expect(h1.querySelector(".hc-headline")!.textContent).toBe("Home");
-    expect(h1.textContent).not.toContain(posture.headline);
-    // The relocated verdict: postureLine's real output, exactly once (one-mention law),
-    // inside the room body — never a second copy anywhere on the screen.
+    expect(h1.querySelector(".hc-headline")!.textContent).toBe(posture.headline);
+    expect(h1.textContent).not.toContain("Home");
+    // One-mention law survives the move: postureLine's real output appears exactly once on the
+    // whole screen, and that one instance is now in the header rather than the body.
     const lines = Array.from(c.querySelectorAll(".hc-verdict-line"));
     expect(lines).toHaveLength(1);
     expect(lines[0].textContent).toBe(posture.headline);
-    expect(lines[0].closest(".home-console")).not.toBeNull();
+    expect(lines[0].closest(".v2-verdict")).not.toBeNull();
+    expect(lines[0].closest(".home-console")).toBeNull();
     expect(c.querySelector(".hc-masthead-eyebrow .hc-led-ok")).not.toBeNull();
     expect(c.querySelector(".hc-led-scan")).toBeNull();
     expect(c.querySelector(".v2-measured")!.textContent).toContain("3/3");
+  });
+
+  // UX-1 decision 1's second half: ONE action. The front door is the screen's only filled primary
+  // and it must open something real — a primary button that promises a room with nothing in it is
+  // the dead end the whole design foundation exists to remove.
+  it("one action: the front door is the single primary, and it opens the intent panel in place", () => {
+    // The front door only exists when there is somewhere behind it — the intent rows are filtered
+    // to rooms the live rail actually renders, so this mount needs the real rail.
+    const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
+    const door = c.querySelector<HTMLButtonElement>(".v2-verdict-action .hc-front-door")!;
+    expect(door).not.toBeNull();
+    expect(door.textContent).toBe(i18n.t("home.homeConsole.intake.prompt"));
+    // Closed on arrival (compy_home_intake defaults off) — the answer comes first, the menu second.
+    expect(door.getAttribute("aria-expanded")).toBe("false");
+    expect(c.querySelector("#hc-front-door-panel")).toBeNull();
+    act(() => {
+      door.click();
+    });
+    expect(door.getAttribute("aria-expanded")).toBe("true");
+    const panel = c.querySelector("#hc-front-door-panel");
+    expect(panel).not.toBeNull();
+    expect(panel!.querySelectorAll(".hc-intake-row").length).toBeGreaterThan(0);
+    // …and exactly one filled primary on the screen, or per Duolingo there are none.
+    expect(c.querySelectorAll(".hc-front-door")).toHaveLength(1);
   });
 
   it("attention state: verdict strip carries the warn tone class + the real headline", () => {
@@ -224,18 +256,23 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
     const posture = postureLine(attn, priorities, activeChangeCount(props.changes), i18n.t);
     const c = mount({ ...props, readiness: attn }).container;
     expect(posture.tone).toBe("attention");
-    const strip = c.querySelector(".hc-verdict")!;
-    expect(strip.className).toContain("hc-verdict-attention");
-    expect(strip.querySelector(".hc-verdict-line")!.textContent).toBe(posture.headline);
-    expect(c.querySelector(".v2-verdict h1")!.textContent).not.toContain(posture.headline);
+    // UX-1: the tone class rides the verdict line itself now that the line IS the h1's content —
+    // there is no separate strip wrapper left to carry it.
+    const line = c.querySelector(".hc-verdict-line")!;
+    expect(line.className).toContain("hc-verdict-attention");
+    expect(line.textContent).toBe(posture.headline);
+    expect(c.querySelector(".v2-verdict h1")!.textContent).toContain(posture.headline);
   });
 
-  it("header-slop pin: no lede/explainer node anywhere in the console header, and no sub line", () => {
+  it("header-slop pin: no lede/explainer node anywhere in the console header", () => {
     const c = mount().container;
     expect(c.querySelector(".home-console-lede")).toBeNull();
     expect(c.querySelector(".hc-lede")).toBeNull();
-    // The dek moved to body context with the verdict — the header keeps no descriptive line.
-    expect(c.querySelector(".v2-verdict-sub")).toBeNull();
+    // UX-1 inverts the old "no sub line" half of this pin: the sub slot is no longer slop, it is
+    // the because-line that belongs directly under the verdict it explains. What stays banned is a
+    // free-floating explainer — the sub must carry the dek and nothing else.
+    const sub = c.querySelector(".v2-verdict-sub");
+    if (sub) expect(sub.querySelector(".hc-verdict-dek")).not.toBeNull();
   });
 });
 

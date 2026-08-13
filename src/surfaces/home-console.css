@@ -54,45 +54,104 @@
   color: var(--v2-accent-text, var(--v2-accent));
   letter-spacing: 0;
 }
+/* ── UX-1: THE FRONT DOOR IS A VERDICT (docs/decisions/2026-08-11-design-foundation.md §1) ──
+   The header used to hold the word "Home" at --type-section and the answer lived a block down
+   at --type-card — the audit's exact finding, that the biggest thing on the screen was a label
+   and the answer was a third smaller. Now the h1 IS the answer, at the scale's top step, and
+   the room title is gone (the rail already says where you are). Verdict, then because-line,
+   then ONE primary button — a vertical stack, so the header reads as a sentence you fall down
+   rather than a toolbar you scan across. */
+:root[data-v2="on"] .v2-room[data-room="home"] .v2-verdict {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+}
 /* The verdict speaks in sentence case — calm confidence, not a shouted banner (the round-1
    type-voice correction carried over from the HUD masthead). */
 :root[data-v2="on"] .v2-verdict h1:has(.hc-headline) {
   display: block;
-  margin: 0 0 6px;
-  font: 650 var(--type-section) / 1.15 var(--v2-font-sans);
-  letter-spacing: -0.01em;
+  margin: 0;
+  font: var(--type-verdict-weight) var(--type-verdict) / 1.1 var(--v2-font-sans);
+  letter-spacing: -0.02em;
   color: var(--v2-text);
-  max-width: 34ch;
+  max-width: 20ch;
   text-wrap: balance;
 }
 :root[data-v2="on"] .hc-headline {
   display: block;
 }
+/* The line inherits the h1's step rather than declaring its own — one owner for the verdict's
+   size, so the h1 rule above is the only place it can be changed. */
+:root[data-v2="on"] .hc-verdict-line {
+  font: inherit;
+  color: inherit;
+  text-wrap: balance;
+}
+/* Attention state inks the verdict warn (the LED already carries the signal — the ink agrees,
+   never a second alarm). The ambient-HUD foil paints the h1 through background-clip:text with a
+   transparent fill, which would swallow that hue, so the warn state opts out of the foil rather
+   than losing the colour. COLOR-1 §4 still holds: the WORD carries the state, hue only agrees. */
+:root[data-v2="on"] .v2-verdict h1:has(.hc-verdict-attention) {
+  background-image: none;
+  -webkit-text-fill-color: var(--v2-warn);
+  color: var(--v2-warn);
+  animation: none;
+}
 :root[data-v2="on"] .hc-mono {
   font-family: var(--v2-font-mono);
 }
-/* ── The cold-open verdict — relocated from the h1 (owner title-header law 2026-07-10):
-   the header is a TITLE; the posture answer speaks here, first thing in the body. Sentence
-   case, calm; attention state inks the line warn (the LED already carries the signal — the
-   ink agrees, never a second alarm). ── */
-:root[data-v2="on"] .hc-verdict {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-:root[data-v2="on"] .hc-verdict-line {
-  font: 650 var(--type-card) / 1.2 var(--v2-font-sans);
-  letter-spacing: -0.005em;
-  color: var(--v2-text);
-  text-wrap: balance;
-}
-:root[data-v2="on"] .hc-verdict-attention .hc-verdict-line {
-  color: var(--v2-warn);
-}
-:root[data-v2="on"] .hc-verdict-dek {
-  font: 400 var(--type-label) / 1.5 var(--v2-font-sans);
+/* The because-line, in the shell's sub slot directly under the verdict it explains. Body step,
+   not the label floor — this is a sentence a person reads, not a machine field. */
+:root[data-v2="on"] .v2-room[data-room="home"] .v2-verdict-sub {
+  font: var(--type-body-weight) var(--type-body) / 1.5 var(--v2-font-sans);
   color: var(--v2-muted);
   max-width: 62ch;
+}
+:root[data-v2="on"] .hc-verdict-dek {
+  color: inherit;
+}
+/* THE ONE ACTION. The only filled accent button on this screen — everything else here is an
+   outline (re-run), a card (care), a door (dock) or a toggle (view controls), so the Duolingo
+   rule holds by weight rather than by deletion. Left-aligned under the verdict: the base shell
+   pushes this slot to the right with margin-left:auto, which is a toolbar's instinct, not a
+   front door's. */
+:root[data-v2="on"] .v2-room[data-room="home"] .v2-verdict-action {
+  margin-left: 0;
+}
+:root[data-v2="on"] .hc-front-door {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-card);
+  font-weight: var(--type-card-weight);
+  letter-spacing: -0.005em;
+  /* Ink is the page ground, not a literal: the shipped accent is a light violet, so the darkest
+     token in the system is the legible ink on it, and it follows the theme rather than freezing
+     one hex. (A user who picks a very dark accent in the picker is choosing a darker button;
+     that trade lives with the picker, and COLOR-1 kept the picker on purpose.) */
+  color: var(--v2-bg);
+  background: var(--v2-accent);
+  border: 1px solid var(--v2-accent);
+  border-radius: var(--v2-r-sm);
+  padding: 12px 22px;
+  cursor: pointer;
+  transition: filter 0.12s ease, transform 0.12s ease;
+}
+:root[data-v2="on"] .hc-front-door:hover {
+  filter: brightness(1.08);
+}
+:root[data-v2="on"] .hc-front-door:active {
+  transform: translateY(1px);
+}
+/* Open state reads as open — the panel below is the button's own disclosure, so the control
+   stops shouting once it has been used (a pressed door is not still an invitation). */
+:root[data-v2="on"] .hc-front-door[aria-expanded="true"] {
+  color: var(--v2-text);
+  background: transparent;
+  border-color: var(--v2-accent-line);
 }
 /* The readout strip — measured provenance as segmented instrument fields. */
 :root[data-v2="on"] .v2-measured:has(.hc-readout-seg) {

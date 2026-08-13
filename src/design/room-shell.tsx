@@ -54,6 +54,7 @@ export function ForwardDoor({ to, label }: { to: HomeRailId; label: string }) {
 
 export function RoomShell({
   room,
+  notice,
   verdict,
   sub,
   measured,
@@ -63,6 +64,11 @@ export function RoomShell({
   children,
 }: {
   room: HomeRailId;
+  /** UX-1: a caveat that QUALIFIES the verdict, so it must print ABOVE it — a warning placed
+   *  under its subject has already failed at its job. Before UX-1 the verdict lived in the
+   *  room body and a caveat could simply precede it there; now the verdict is the h1, so the
+   *  shell owns the one slot that outranks it. Renders nothing when null (the healthy case). */
+  notice?: ReactNode;
   verdict: ReactNode;
   sub?: ReactNode;
   measured?: ReactNode;
@@ -84,6 +90,7 @@ export function RoomShell({
   const doorLabel = door ? t(`common.roomShell.door.${room}`, door.label) : null;
   return (
     <section className="v2-room" data-room={room}>
+      {notice != null && <div className="v2-notice-slot">{notice}</div>}
       <header className="v2-verdict">
         <h1>{verdict}</h1>
         {sub != null && <span className="v2-verdict-sub">{sub}</span>}
