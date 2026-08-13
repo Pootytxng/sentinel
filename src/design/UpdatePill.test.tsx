@@ -19,7 +19,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: updaterMocks.invoke,
 }));
 
-import { UpdatePill } from "./UpdatePill";
+import { UpdatePill, changelogItems } from "./UpdatePill";
 import updaterCapability from "../../src-tauri/capabilities/updater.json";
 
 const RECHECK_MS = 4 * 60 * 60 * 1000;
@@ -71,6 +71,39 @@ describe("UpdatePill", () => {
     const { container } = render(<UpdatePill />);
     await act(async () => {});
     expect(container.firstChild).toBeNull();
+  });
+
+  it("an available update wears the attention state, not the quiet outline", async () => {
+    // Owner ask 2026-08-13: a tester's pending update sat unnoticed because the offer read as
+    // topbar chrome. Available must carry v2-update-avail (filled pill + pulsing LED in CSS);
+    // busy/error phases must NOT — attention is for the state that needs a decision.
+    const update = makeUpdate();
+    updaterMocks.check.mockResolvedValue(update);
+    render(<UpdatePill />);
+    const pill = await screen.findByText(/update ready · v9\.9\.9/);
+    expect(pill.closest("button")?.className).toContain("v2-update-avail");
+  });
+
+  it("renders release notes as a plain what's-new list, version prefix stripped", async () => {
+    const update = makeUpdate();
+    update.body =
+      "v9.9.9: the intake band goes back to default OFF; the popout modal contract gains its guard";
+    updaterMocks.check.mockResolvedValue(update);
+    render(<UpdatePill />);
+    fireEvent.click(await screen.findByText(/update ready/));
+    expect(screen.getByText("What's new")).toBeTruthy();
+    const items = screen.getAllByRole("listitem").map((li) => li.textContent);
+    expect(items).toEqual([
+      "the intake band goes back to default OFF",
+      "the popout modal contract gains its guard",
+    ]);
+  });
+
+  it("changelogItems never returns empty for non-empty notes", () => {
+    expect(changelogItems("- a\n- b")).toEqual(["a", "b"]);
+    expect(changelogItems("1. first\n2) second")).toEqual(["first", "second"]);
+    expect(changelogItems(";;;")).toEqual([";;;"]);
+    expect(changelogItems("just one plain sentence")).toEqual(["just one plain sentence"]);
   });
 
   it("offers → consent → downloads → installs → relaunches; never downloads before consent", async () => {

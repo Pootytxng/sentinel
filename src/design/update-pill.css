@@ -1,0 +1,31 @@
+/* ── Update pill ATTENTION state (owner ask 2026-08-13) ──────────────────────────────────────────
+   A tester's pending update sat unnoticed because the offer read as topbar chrome. When an update
+   is AVAILABLE (a decision is being asked for), the pill fills with the ok tint at full contrast
+   and its LED pulses; every other phase keeps shell-v2.css's quiet outline.
+
+   Separate sheet on purpose: shell-v2.css bans @media/@keyframes (its scoping guard parses depth-0
+   headers), the same reason room-accent-picker.css owns its own pop-in. Laws kept anyway: every
+   selector scoped under [data-v2="on"], no color literals (color-mix composes --v2-* tokens with
+   the `transparent` keyword only), fonts untouched.
+
+   Motion stands down through <html data-motion="reduced">, never a raw prefers-reduced-motion
+   query — src/design/use-motion.ts is the single source of truth (motion law, command-palette.css
+   precedent). */
+
+:root[data-v2="on"] .v2-update-avail {
+  background: color-mix(in srgb, var(--v2-ok) 16%, transparent);
+  border-color: var(--v2-ok);
+  color: var(--v2-ok);
+  font-weight: 600;
+  cursor: pointer;
+}
+:root[data-v2="on"] .v2-update-avail .v2-update-led {
+  animation: v2-update-pulse 1.6s ease-in-out infinite;
+}
+@keyframes v2-update-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--v2-ok) 55%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--v2-ok) 0%, transparent); }
+}
+:root[data-motion="reduced"][data-v2="on"] .v2-update-avail .v2-update-led {
+  animation: none;
+}

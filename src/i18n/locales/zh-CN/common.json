@@ -114,7 +114,8 @@
     "versionTitle": "Compy v{{version}}",
     "updateNow": "立即更新",
     "later": "以后再说",
-    "fineprint": "安装前会验证签名 · Compy 会自动重启"
+    "fineprint": "安装前会验证签名 · Compy 会自动重启",
+    "whatsNew": "更新内容"
   },
   "walkthrough": {
     "whichCard": "选择显卡",

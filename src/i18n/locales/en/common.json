@@ -115,7 +115,8 @@
     "versionTitle": "Compy v{{version}}",
     "updateNow": "Update now",
     "later": "Later",
-    "fineprint": "Signature-verified before install · Compy restarts itself"
+    "fineprint": "Signature-verified before install · Compy restarts itself",
+    "whatsNew": "What's new"
   },
   "walkthrough": {
     "whichCard": "Which card?",
