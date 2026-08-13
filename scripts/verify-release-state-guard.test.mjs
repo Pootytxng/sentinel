@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import {
   embeddedStampTokens,
   extractCitations,
+  ownerDecisionsSection,
   validateOwnerDecisionVersions,
   verifyRepo,
 } from "./verify-release-state.mjs";
@@ -43,6 +44,34 @@ describe("release-state owner-decision version guard", () => {
     expect(validateOwnerDecisionVersions(section, "0.9.10", "0.9.11")).toEqual([
       "STALE-DECISION: first live owner decision must name candidate v0.9.11",
     ]);
+  });
+});
+
+// #123: the extraction lookahead used \Z, which JavaScript parses as a literal letter Z. Any capital
+// Z in the section body - hit for real by an ISO publish timestamp during the v0.9.18 doc-sync -
+// truncated the section BEFORE the numbered list, and a truthful decision then read as STALE.
+describe("owner-decisions section extraction (#123)", () => {
+  it("REGRESSION: an ISO timestamp's Z inside the section no longer truncates it", () => {
+    const doc = `## Required owner decisions (live)
+
+Publish closed 2026-08-13T06:57:36Z - receipt in the release transaction.
+
+1. **Publish GO/NO-GO for the next prepared release (v0.9.19)** - pending.
+
+## Gate matrix
+
+| gate | state |
+`;
+    const section = ownerDecisionsSection(doc);
+    expect(section).toContain("v0.9.19");
+    expect(section).not.toContain("Gate matrix");
+    expect(validateOwnerDecisionVersions(section, "0.9.18", "0.9.19")).toEqual([]);
+  });
+
+  it("still stops at the next heading, still reaches true end-of-input, still misses cleanly", () => {
+    const lastSection = "## Required owner decisions\n\n1. the doc ends here (v0.9.19)";
+    expect(ownerDecisionsSection(lastSection)).toContain("ends here");
+    expect(ownerDecisionsSection("no such section anywhere")).toBe("");
   });
 });
 

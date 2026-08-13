@@ -39,6 +39,15 @@ export const REQUIRED_SECTIONS = ["CURRENT STATE", "Gate matrix", "Release block
 const MAX_ANCHOR_LAG = 10; // commits the marker may trail the mainline before it stops being current
 const DOC_REL = "docs/RELEASE_STATE.md";
 
+// #123: JavaScript RegExp has no \Z anchor - the old lookahead's `\Z` parsed as a literal letter,
+// so any capital Z inside the section (an ISO timestamp suffix, say) truncated it BEFORE the
+// numbered list and a truthful decision read as STALE. `(?![\s\S])` is JS's real end-of-input;
+// the m-flagged `^##` alternative still stops the section at the next heading.
+export function ownerDecisionsSection(docText) {
+  const m = docText.match(/##\s+Required owner decisions[\s\S]*?(?=^##\s|(?![\s\S]))/m);
+  return m ? m[0] : "";
+}
+
 export function validateOwnerDecisionVersions(section, latestVersion, candidateVersion) {
   const failures = [];
   if (!section) return ["STALE-DECISION: Required owner decisions section is missing"];
@@ -234,9 +243,8 @@ function checkCurrentState(root, docLines, { machine }) {
   // (4) The live publish decision must name the candidate anchor. Historical checkpoint versions may
   // be explained in the same paragraph; treating those facts as stale decisions made a truthful
   // v0.9.11 decision fail merely because it preserved v0.9.9/v0.9.10 provenance.
-  const decMatch = docText.match(/##\s+Required owner decisions[\s\S]*?(?=^##\s|\Z)/m);
   stateFail.push(
-    ...validateOwnerDecisionVersions(decMatch ? decMatch[0] : "", latestVersion, anchor("candidate_version")),
+    ...validateOwnerDecisionVersions(ownerDecisionsSection(docText), latestVersion, anchor("candidate_version")),
   );
 
   // (5) exactly one 'Bottom line' section.
