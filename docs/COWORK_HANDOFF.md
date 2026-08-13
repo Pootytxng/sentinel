@@ -9,9 +9,15 @@
 
 - **Cowork (you)** — strategy, specs, docs, copy, design judgment, and REVIEW. You write paste-ready
   prompts for the build session, audit its reports, make design calls, research. You have a host
-  shell + file access and you USE them to verify ground truth in the repo directly.
-- **CC ("Claude Code" in VS Code)** — owns all git, compiling, tests, Windows verification, installers.
-  Everything that touches the build lands there. You hand CC paste-ready prompts; it reports back.
+  shell + file access and you USE them to verify ground truth in the repo directly. **Since
+  2026-08-12 you also hold the owner's standing merge + execute permission** ("i permit you to
+  proceed with everything yourself") — under the SAME gates as CC (`docs/RELEASE_AUTONOMY.md`,
+  pre-push gate, WORK_CONTROL claims), Cowork may implement, commit, merge, ship and publish. It
+  has done so (PRs #114–#119, published v0.9.15/v0.9.17). Cowork keeps cross-session state in the
+  HQ project ledger (`claude/HQ_DECISION_LEDGER.md`, Cowork project `019ff3cc…`).
+- **CC ("Claude Code" in VS Code)** — the DEFAULT implementation owner: git, compiling, tests,
+  Windows verification, installers. Default, not exclusive — either lane writes only under a
+  WORK_CONTROL claim, one writer per folder/scope.
 - **Kuya (owner)** — owns money, brand (product name, logo, price presentation), people (tester
   invites/sends), and anything irreversible. He drives; he decides final execution order.
   **Aesthetic taste is NOT his to carry** — agents decide it and show him a before/after to veto
