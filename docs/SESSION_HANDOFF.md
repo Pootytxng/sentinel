@@ -12,10 +12,17 @@
 
 ## Lane
 
-**None open.** The last lane (`claude/compy-foreground-courtesy-rebuild-60b17e`, PR #102) merged as
-`3d5b8d73` on 2026-08-11: the quiet launch rebuilt where it can actually work, the four PR #90
-defects re-proven and repaired, and three gates that had drifted off the real repo. The build on the
-owner's desk is `3155c7a0 · release` and its self-review is a PASS.
+**None open.** The last lane (`claude/bento-conversion`, PR #120) closed the bento conversion's
+follow-ups: the Lab rig picker's `data-rig-part` hooks with a behavioural guard, and the fixture
+preview that finally let the two experiment-bench states nobody could reach be looked at. Both
+carry a self-review PASS. It merged after taking `origin/main` (PR #119, the popout convergence) —
+the only conflict was `docs/RELEASE_STATE.md`, where the lane's desk-ship row and main's v0.9.17
+publish row both claimed the owner's machine; resolved by reading the stamp out of the installed
+binary rather than trusting either doc.
+
+The build on the owner's desk is `a71b377c · release · shell 0.9.15` — an **unsigned desk-only**
+build cut from this lane, so the desk sits ahead of the published fleet build v0.9.17 (`a614744c`).
+A publish must re-cut from `main` with the owner's signing key.
 
 A fresh session should NOT resume from this file. Read `CLAUDE.md`, then `docs/RELEASE_STATE.md`
 (live gate state) and `docs/BACKLOG.md` (what to pick up next).

@@ -171,6 +171,11 @@ export const RigViewer = memo(function RigViewer({
                   <button
                     type="button"
                     className="rig-picker-item"
+                    // The scene itself is a WebGL canvas — a mesh has no selector, so a live review
+                    // (or any driver outside jsdom) could only reach a part by matching its
+                    // localized label or by counting rows, both of which move. The id is the same
+                    // one the hologram selects by, so this is the stable way in.
+                    data-rig-part={item.id}
                     aria-pressed={selectedId === item.id}
                     onClick={() => select(item.id, item)}
                     onFocus={() => setHoveredId(item.id)}

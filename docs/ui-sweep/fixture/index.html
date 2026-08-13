@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Mirrors the product index.html so the preview inherits the same UA-level dark defaults.
+         The favicon is deliberately omitted: this page must never be mistaken for the app. -->
+    <meta name="color-scheme" content="dark" />
+    <title>FIXTURE PREVIEW — Experiment Bench (invented data)</title>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <!-- ./main.tsx, NOT /src/main.tsx. The product entry calls getCurrentWindow() at module scope
+         (dies outside Tauri) and imports no CSS of its own. See main.tsx's header. -->
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>
