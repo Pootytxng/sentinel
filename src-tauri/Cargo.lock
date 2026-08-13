@@ -496,7 +496,7 @@ dependencies = [
 
 [[package]]
 name = "compy"
-version = "0.9.21"
+version = "0.9.22"
 dependencies = [
  "adlx",
  "chrono",
