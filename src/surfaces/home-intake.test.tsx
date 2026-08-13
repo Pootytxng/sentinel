@@ -40,7 +40,7 @@ const fastPathAppliedNote = (applied: number, skipped: number) =>
   fastPathAppliedNoteRaw(applied, skipped, i18n.t);
 
 // Guards for the Home intake band (BACKLOG:916 — the pre-room intent router + one-tap fast path,
-// behind compy_home_intake, DEFAULT ON). The owner's greenlit direction (2026-07-14):
+// behind compy_home_intake, DEFAULT OFF). The owner's greenlit direction (2026-07-14):
 //   "lift the proven 'what are you here to do?' idiom up one level to Home, where the rows route to
 //    the right ROOM instead of the right Lab station / i like option a / … c might be good to have
 //    as an always available option … some combination of both might be best ill let you decide"
@@ -224,11 +224,15 @@ function renderHome(extra: Partial<React.ComponentProps<typeof HomeRoom>> = {}) 
   );
 }
 
-describe("Home intake band — flag gating (compy_home_intake GRADUATED to DEFAULT ON 2026-08-11)", () => {
-  it("key ABSENT: the band renders — this is what a first-run user actually gets", () => {
-    // The polarity flip is the whole point, so it is asserted from the state a fresh install is
-    // really in: nothing written to localStorage at all. A test that only ever sets the key
-    // explicitly would pass identically before and after the graduation and prove nothing.
+// Flag gating. The default has moved twice and the SECOND move is an owner taste call made on
+// sight, not an argument: shipped OFF → graduated ON 2026-08-11 (a discoverability surface that is
+// off by default helps nobody) → **back OFF 2026-08-12** when the owner finally saw it on a real
+// build: "the what are you here to do text box was ugly looks cleaner without it". His front door,
+// his call. What matters for THIS file is that the polarity is asserted from the state a fresh
+// install is really in — nothing in localStorage — because a test that only ever sets the key
+// explicitly passes identically under either default and proves nothing.
+describe("Home intake band — flag gating (compy_home_intake back to DEFAULT OFF 2026-08-12)", () => {
+  it("key ABSENT: NO band — this is what a first-run user actually gets", () => {
     const c = renderHome({
       rooms: liveRooms,
       recs: [rec({ id: "safe-ok" })],
@@ -237,32 +241,40 @@ describe("Home intake band — flag gating (compy_home_intake GRADUATED to DEFAU
     }).container;
     expect(localStorage.getItem("compy_home_intake")).toBeNull(); // nothing opted anything in
     expect(c.querySelector(".home-console")).not.toBeNull();
-    expect(c.querySelector(".hc-intake")).not.toBeNull();
-  });
-
-  it("key '0' (explicit off): no band — the Settings failsafe still works", () => {
-    // ship-approved-work-as-the-build graduates the DEFAULT; it never removes the escape hatch.
-    localStorage.setItem("compy_home_intake", "0");
-    const c = renderHome({ rooms: liveRooms }).container;
     expect(c.querySelector(".hc-intake")).toBeNull();
   });
 
-  it("key '1' (explicit on): the band renders", () => {
+  it("key '1' (explicit opt-in): the band renders", () => {
     localStorage.setItem("compy_home_intake", "1");
     const c = renderHome({ rooms: liveRooms }).container;
     expect(c.querySelector(".hc-intake")).not.toBeNull();
   });
 
-  it("only the literal string '0' turns it off, so a junk value fails ON", () => {
-    // Matches readMonitorConsole / readLivingInstrument / readSetupStepper: `!== "0"`. The failure
-    // mode worth pinning is a discoverability surface silently vanishing because something wrote
-    // "false" or "" into the key.
-    for (const junk of ["false", "", "no", "OFF"]) {
+  it("key '0' (explicit off): no band", () => {
+    localStorage.setItem("compy_home_intake", "0");
+    const c = renderHome({ rooms: liveRooms }).container;
+    expect(c.querySelector(".hc-intake")).toBeNull();
+  });
+
+  it("only the literal string '1' turns it on, so a junk value fails OFF", () => {
+    // Polarity inverted with the default: the reader is now `=== "1"`. The failure mode worth
+    // pinning is the opposite of the old one — a surface the owner removed on sight quietly coming
+    // back because something wrote "true" or "yes" into the key.
+    for (const junk of ["true", "", "yes", "ON", "0"]) {
       localStorage.setItem("compy_home_intake", junk);
       const c = renderHome({ rooms: liveRooms }).container;
-      expect(c.querySelector(".hc-intake"), `value ${JSON.stringify(junk)}`).not.toBeNull();
+      expect(c.querySelector(".hc-intake"), `value ${JSON.stringify(junk)}`).toBeNull();
       cleanup();
     }
+  });
+
+  it("the Care entry does NOT come off with it — the band's default is a layout call, not a safety one", () => {
+    // The reason the extraction (issue #91) had to land BEFORE this flip: if crash rescue were
+    // still a row in this band, the owner's taste call would have silently removed the app's only
+    // crash-help door for every user at once.
+    const c = renderHome({ rooms: liveRooms }).container;
+    expect(c.querySelector(".hc-intake")).toBeNull();
+    expect(c.querySelector(".hc-care-entry")).not.toBeNull();
   });
 });
 

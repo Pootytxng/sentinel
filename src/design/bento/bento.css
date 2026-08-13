@@ -286,6 +286,14 @@
   border-color: var(--v2-line-strong);
 }
 
+/* Disabled ONLY while a sheet is executing what it asked consent for (Sheet's `dismissible`).
+   It stays visible and labelled — a control that is momentarily unavailable, never one that
+   vanishes mid-operation and leaves the user wondering where the way out went. */
+:root[data-v2="on"] .v2-sheet-close:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 :root[data-v2="on"] .v2-sheet-close:focus-visible {
   outline: 2px solid var(--v2-accent);
   outline-offset: 2px;
