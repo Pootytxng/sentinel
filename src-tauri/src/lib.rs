@@ -1124,15 +1124,31 @@ pub fn run() {
         // SetForegroundWindow, which overrides the polite SW_SHOWNOACTIVATE the config above just
         // bought — so the window came up, THEN was yanked to the front, and the owner's game
         // minimised. Dropping VISIBLE removes the plugin's show/focus entirely and changes nothing
-        // else: the window is still created visible by the config, and size/position/maximized are
-        // still restored. It also fixes a latent bug — a window closed to tray saved `visible:false`
+        // else: the window is still created visible by the config, and size/position (plus
+        // maximized, for owner-initiated launches — see part 3) are still restored. It also fixes a latent bug — a window closed to tray saved `visible:false`
         // and the plugin then refused to show it at all on the NEXT launch ("Compy won't open").
+        // FOREGROUND COURTESY, part 3 — MAXIMIZED is dropped from the restore on QUIET launches
+        // only. `restore_state` reaches a maximized window through `ShowWindow(SW_MAXIMIZE)`, which
+        // is an ACTIVATING show command: on any launch where Windows permits a foreground change,
+        // that restore is a working foreground steal, so a quiet launch must never issue it. There
+        // is no non-activating maximize in ShowWindow's vocabulary, so the quiet path restores
+        // size/position and gives up maximized; the owner's own launches keep the full restore.
+        //
+        // HONEST SCOPE (2026-08-13, issue #121): this closes a vector, it did NOT close the
+        // measurement that found it. launch-focus-guard's first-ever STRICT runtime run (idle desk,
+        // foreground rights granted) saw a quiet launch fronted from 6ms — before any window can
+        // exist — and the fronting persisted after this fix. That is system-level launch activation
+        // in the launcher chain, outside anything this process does; #121 owns it.
         .plugin(
             tauri_plugin_window_state::Builder::default()
-                .with_state_flags(
+                .with_state_flags(if suppress_activation {
                     tauri_plugin_window_state::StateFlags::all()
-                        - tauri_plugin_window_state::StateFlags::VISIBLE,
-                )
+                        - tauri_plugin_window_state::StateFlags::VISIBLE
+                        - tauri_plugin_window_state::StateFlags::MAXIMIZED
+                } else {
+                    tauri_plugin_window_state::StateFlags::all()
+                        - tauri_plugin_window_state::StateFlags::VISIBLE
+                })
                 .with_denylist(&["overlay"])
                 .build(),
         )
