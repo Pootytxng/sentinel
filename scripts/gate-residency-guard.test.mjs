@@ -102,9 +102,17 @@ const RESIDENCY = {
     kind: "manual",
     why: "Starts a lane agent. Spending and process-spawning by design, so it stays hand-driven.",
   },
+  "inspect-process-mutex-recovery.ps1": {
+    kind: "manual",
+    why: "Read-only recovery diagnosis by default; explicit issue-backed clearing changes a local safety interlock and must remain operator-driven.",
+  },
   "license-tool.mjs": {
     kind: "manual",
     why: "Mints and inspects Pro licences for the dark license gate. Touches key material; resident execution has nothing to assert and no business handling keys.",
+  },
+  "process-mutex-harness.ps1": {
+    kind: "npm-test",
+    runner: "scripts/process-mutex-guard.test.mjs",
   },
   "markdown-link-guard.mjs": { kind: "npm-test", runner: "scripts/markdown-link-guard.test.mjs" },
   "production-adapter-lookup-harness.ps1": {

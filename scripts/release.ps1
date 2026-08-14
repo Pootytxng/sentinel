@@ -29,6 +29,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+. (Join-Path $PSScriptRoot "lib\process-mutex.ps1")
+$releasePipelineMutex = Enter-CompyProcessMutex `
+  -Name "Local\Compy.ReleasePipeline.v1" `
+  -Resource "ReleasePipeline"
+try {
 # Every external program below runs through this helper. Windows PowerShell 5.1 promotes a NATIVE
 # command's stderr into a TERMINATING NativeCommandError under "Stop" whenever that stderr is
 # redirected, and `2>$null` causes it rather than preventing it. That killed the v0.9.9 publish at
@@ -570,3 +575,6 @@ Write-Host "After that proof, the fleet-visible owner action is:"
 Write-Host "  powershell -NoProfile -File .\scripts\release-publish.ps1"
 # Explicit success exit for the nested powershell.exe process used by release-prepare.ps1.
 exit 0
+} finally {
+  Exit-CompyProcessMutex $releasePipelineMutex
+}
