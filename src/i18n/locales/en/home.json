@@ -59,7 +59,7 @@
       "storage": "Storage",
       "gpu": "GPU",
       "cpu": "CPU",
-      "cpuNoTemp": "no temp — this build ships no kernel driver"
+      "cpuNoTemp": "no CPU temp — needs a sensor app"
     },
     "dense": {
       "model": "model",
@@ -118,7 +118,7 @@
       "diskFull": "C: {{pct}}% full",
       "gpu": "GPU",
       "cpu": "CPU",
-      "cpuNoTemp": "no temp — this build ships no kernel driver"
+      "cpuNoTemp": "no CPU temp — needs a sensor app"
     },
     "stage": {
       "loading3d": "Loading your rig in 3D…",
@@ -362,8 +362,8 @@
     "rules": {
       "tag": "HOUSE RULES",
       "title": "What Compy refuses to do",
-      "noKernelDriver": "No kernel driver — stays in user space",
-      "noInjection": "No game injection — anti-cheat safe by design",
+      "noKernelDriver": "Nothing installed deep inside Windows",
+      "noInjection": "Never touches your games — safe with anti-cheat",
       "wifiOff": "No account, no telemetry — the only call out is a signed update check",
       "kickerPre": "The sketchy tweaks aren't missing.",
       "kickerEmph": "They're refused."

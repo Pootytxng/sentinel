@@ -474,7 +474,7 @@
   },
   "receiptsConsent": {
     "title": "Share your receipts (opt-in)",
-    "hint": "Off by default, anonymous by design. If you opt in, Compy shares only measured outcomes — your hardware class and session numbers, never your name, paths, or anything that identifies this PC. You can inspect the exact payload below before anything is ever sent.",
+    "hint": "Off by default, anonymous by design. If you opt in, Compy shares only measured outcomes — your hardware class and session numbers, never your name, paths, or anything that identifies this PC. You can see exactly what would be sent, below, before anything ever leaves this PC.",
     "inspectButton": "Inspect your receipt"
   }
 }

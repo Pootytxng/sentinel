@@ -252,7 +252,7 @@ describe("Instrument-HUD flag-on pilot (same measured numbers, new presentation)
     // Trust ledger shows the real applied change, not an invented stat.
     expect(c.textContent).toContain("Hardware-accelerated GPU scheduling");
     // CPU temp stays honestly absent (LOCKED rule 1 voice — plain-English refusal, no jargon).
-    expect(c.textContent).toContain("no temp — this build ships no kernel driver");
+    expect(c.textContent).toContain("no CPU temp — needs a sensor app");
   });
 
   it("readout strip carries the real check counts; scan state only while checks run", () => {

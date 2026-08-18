@@ -92,8 +92,9 @@ describe("Monitor — Basic/Advanced split", () => {
     expect(screen.queryByText("Live monitor")).toBeNull();
     expect(screen.queryByText("In-game overlay")).toBeNull();
     expect(screen.queryByText("Tuning presets")).toBeNull();
-    // The honesty line survives the slim-down (method stated, no injection/kernel driver).
-    expect(screen.getByText(/anti-cheat safe — no injection, no kernel driver/)).toBeInTheDocument();
+    // The honesty line survives the slim-down AND the 2026-08-18 plain-English pass: same claim
+    // (nothing added to the game, nothing installed deep in Windows), said without the jargon.
+    expect(screen.getByText(/nothing added to it, and no driver installed deep in Windows/)).toBeInTheDocument();
   });
 
   it("switching to Advanced restores today's panels exactly (live cards + presets + segments)", () => {

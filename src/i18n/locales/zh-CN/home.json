@@ -55,7 +55,7 @@
       "storage": "存储",
       "gpu": "GPU",
       "cpu": "CPU",
-      "cpuNoTemp": "无温度读数——当前版本不内置内核驱动"
+      "cpuNoTemp": "无 CPU 温度——需要传感器软件"
     },
     "dense": {
       "model": "型号",
@@ -114,7 +114,7 @@
       "diskFull": "C 盘已用 {{pct}}%",
       "gpu": "GPU",
       "cpu": "CPU",
-      "cpuNoTemp": "无温度读数——当前版本不内置内核驱动"
+      "cpuNoTemp": "无 CPU 温度——需要传感器软件"
     },
     "stage": {
       "loading3d": "正在以 3D 方式加载你的主机…",
@@ -347,8 +347,8 @@
     "rules": {
       "tag": "使用守则",
       "title": "Compy 绝不会做的事",
-      "noKernelDriver": "无内核驱动——始终运行在用户态",
-      "noInjection": "不注入游戏进程——设计上对反作弊系统安全",
+      "noKernelDriver": "不会安装深入 Windows 底层的组件",
+      "noInjection": "绝不触碰你的游戏——对反作弊安全",
       "wifiOff": "无需账号、无遥测数据——唯一的对外连接是签名更新检查",
       "kickerPre": "可疑的优化项并非缺失。",
       "kickerEmph": "而是被拒绝了。"

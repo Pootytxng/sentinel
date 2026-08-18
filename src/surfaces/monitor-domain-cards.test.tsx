@@ -62,7 +62,7 @@ describe("MonitorDomainCards (T3+T4b)", () => {
     const { container } = mount();
     expect(container.querySelectorAll(".mdc-face")).toHaveLength(4);
     expect(screen.queryByText("Overall CPU usage")).toBeNull();
-    expect(screen.queryByText(/kernel driver/)).toBeNull();
+    expect(screen.queryByText(/deep inside Windows/)).toBeNull();
   });
 
   it("CPU card expands to the FULL classic panel — every row + the driver-free temp note, once", () => {
@@ -72,7 +72,7 @@ describe("MonitorDomainCards (T3+T4b)", () => {
     expect(screen.getByText("Clock speed")).toBeInTheDocument();
     expect(screen.getByText("CPU temperature")).toBeInTheDocument();
     expect(screen.getByText("Memory used")).toBeInTheDocument();
-    expect(screen.getAllByText(/kernel driver/)).toHaveLength(1);
+    expect(screen.getAllByText(/deep inside Windows/)).toHaveLength(1);
     expect(container.querySelectorAll(".mdc-detail .cpu-core")).toHaveLength(16);
     // Click again → collapses (toggle, never a dead end).
     fireEvent.click(screen.getByRole("button", { name: /CPU/ }));
