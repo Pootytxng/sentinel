@@ -227,7 +227,13 @@ if (ceiling && carriedPerTurn > 0.55 * ceiling) {
   flags.push(`🟢 avg carried context ${K(carriedPerTurn)}/turn = ${(100 * carriedPerTurn / ceiling).toFixed(0)}% of the ${K(ceiling)} ceiling.`);
 }
 
-// Doc boot tax, in BYTES. The line budgets in scripts/doc-budget.ps1 are structurally blind to this:
+// Doc boot tax, in BYTES. These are TARGETS, not the gate. The gate is $byteBudgets in
+// scripts/doc-budget.ps1, and for three docs it currently holds a RATCHET (their 2026-08-18 size)
+// rather than the target, because bringing them down is a content call. Deliberately two different
+// numbers with two different jobs: the gate blocks growth, this line keeps nagging toward the goal.
+// Naming them both "budget" is how docs drift, so this one says target and points at the gate.
+//
+// The line budgets in scripts/doc-budget.ps1 are structurally blind to bytes:
 // docs/BACKLOG.md passed 1286/1400 lines while weighing 142 KB, because a line budget cannot see a
 // 113-byte average line. Tokens are charged by bytes, so the boot-tax budget is in bytes.
 // 48 KB is not invented: it is MAX_UNBOUNDED_BYTES in .claude/hooks/big-read-guard.mjs — the point
@@ -245,7 +251,7 @@ const DOC_BYTE_BUDGETS = [
 for (const [rel, budget, advice] of DOC_BYTE_BUDGETS) {
   try {
     const sz = statSync(join(REPO, rel)).size;
-    if (sz > budget) flags.push(`🟡 ${rel} is ${(sz / 1024).toFixed(1)} KB (> ${(budget / 1024).toFixed(0)} KB byte budget) — ${advice}.`);
+    if (sz > budget) flags.push(`🟡 ${rel} is ${(sz / 1024).toFixed(1)} KB (> ${(budget / 1024).toFixed(0)} KB byte TARGET; the gate's current ratchet is in scripts/doc-budget.ps1) — ${advice}.`);
   } catch { /* absent is not a failure */ }
 }
 // FLOOR TREND (added 2026-08-18, bug→guard). The defect: the fixed per-turn floor stepped from a
