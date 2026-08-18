@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { fmtGB, fmtGHz } from "./hardware-format";
 import { prettyGameName } from "./game-name";
+import { CpuTempOffer } from "./CpuTempOffer";
 import "../i18n";
 
 // The deep Monitoring panels — moved VERBATIM out of App.tsx (T3, spec
@@ -329,6 +330,9 @@ export function CpuMonitorPanel({
           />
         )}
       </div>
+      {/* No monitor is publishing a CPU temperature: make it an OFFER, not a dead end (Q9c). The
+          block detects what the user already has and gives the one next step that fits. */}
+      {!cpuTemp && <CpuTempOffer />}
       {/* Per-core mini-grid — surfaces uneven core loading at a glance.
           Useful for spotting single-threaded bottlenecks vs an evenly
           loaded workload. */}

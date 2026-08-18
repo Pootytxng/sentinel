@@ -1,0 +1,68 @@
+/* The CPU-temp offer — the block that replaced a dead-end sentence (Q9c).
+   Reads as an OFFER, not an error: accent-tinted like the rig nudge it is a sibling of, sitting
+   directly under the temperature row it explains. */
+.cpu-temp-offer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r, 10px);
+  border: 1px solid color-mix(in srgb, var(--ix-accent, var(--accent)) 38%, transparent);
+  background: color-mix(in srgb, var(--ix-accent, var(--accent)) 6%, transparent);
+}
+
+.cpu-temp-offer-title {
+  font-size: var(--type-label);
+  font-weight: 700;
+  color: var(--ix-accent-text, var(--accent, #2ee6c0));
+}
+
+.cpu-temp-offer-why,
+.cpu-temp-offer-state,
+.cpu-temp-offer-how {
+  margin: 0;
+  font-size: var(--type-label);
+  line-height: 1.55;
+  color: var(--ix-text-2, var(--fg-2, #c4ccda));
+}
+
+.cpu-temp-offer-why {
+  color: var(--ix-text-3, var(--muted, #8b95a8));
+}
+
+/* The exact switch to flip — the sentence that turns "it's broken" into "do this". */
+.cpu-temp-offer-how {
+  padding-left: 10px;
+  border-left: 2px solid color-mix(in srgb, var(--ix-accent, var(--accent)) 45%, transparent);
+}
+
+.cpu-temp-offer-actions {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.cpu-temp-offer-actions > button {
+  flex: 0 0 auto;
+}
+
+.cpu-temp-offer-note {
+  flex: 1 1 240px;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--type-label);
+  line-height: 1.45;
+  color: var(--ix-text-3, var(--muted, #8b95a8));
+}
+
+.cpu-temp-offer-failed {
+  color: var(--ix-warn, #f5a35c);
+}
+
+.cpu-temp-offer-recheck {
+  align-self: flex-start;
+}
