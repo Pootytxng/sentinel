@@ -17,7 +17,7 @@
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, PartialEq)]
 pub(crate) struct CpuTemp {
     pub temp_c: f64,
     /// The monitoring tool the reading came from — always shown, so the number is attributable.
@@ -46,10 +46,84 @@ struct OhmSensor {
     identifier: String,
 }
 
+/// How long a successful reading is reused before the sources are probed again. A monitor app
+/// publishes at ~1 Hz at best, so re-probing faster than this cannot return a fresher number — it
+/// only costs a shared-memory map (cheap) or a WMI round trip (not cheap).
+const HIT_TTL_MS: u64 = 900;
+/// How long a MISS is remembered before the sources are probed again. This is the expensive case
+/// and the common one: with no monitor app installed, `read_cpu_temp_inner` falls all the way
+/// through to two WMI namespace connections, EVERY call. A caller polling at 1 Hz therefore paid
+/// two failed WMI connects a second for as long as its surface was open. Compy's standing bar is
+/// to be the least resource-hungry app on the machine, so a miss is remembered: someone who has no
+/// sensor app installed is not about to acquire one mid-poll, and the recheck button
+/// (`get_sensor_sources` + this) is the path for someone who just started one.
+const MISS_TTL_MS: u64 = 15_000;
+
+/// Last probe result + when it was taken. `None` inside the tuple is a REMEMBERED MISS, not
+/// "never probed" — that distinction is the whole point of the backoff, so it must not collapse
+/// into `Option<Option<..>>` ambiguity at the call site.
+static TEMP_CACHE: std::sync::Mutex<Option<(std::time::Instant, Option<CpuTemp>)>> =
+    std::sync::Mutex::new(None);
+
 /// Read CPU temp from a user-installed tool, if one is publishing. WMI runs on an MTA worker
 /// thread (the COM-apartment fix); tries each known source and returns the first hit.
+///
+/// Cached with separate hit/miss TTLs (see the constants above). The cache is a COST control, not
+/// a correctness one: it can only ever return a value the sources really published, and it never
+/// invents or extends a reading past its TTL — a stale hit expires into a fresh probe, and an
+/// expired miss probes again rather than answering "unknown" forever. `read_cpu_temp_uncached`
+/// exists for the paths that must not see a cached answer.
 pub(crate) fn read_cpu_temp() -> Option<CpuTemp> {
+    // A poisoned lock must not take the reading down with it — fall back to probing directly.
+    let Ok(mut cache) = TEMP_CACHE.lock() else {
+        return read_cpu_temp_uncached();
+    };
+    read_cpu_temp_cached_in(
+        &mut cache,
+        std::time::Instant::now(),
+        read_cpu_temp_uncached,
+    )
+}
+
+/// The cache policy itself, with the clock and the prober injected so it can be tested without a
+/// sensor app, a WMI service, or a sleep. `probe` runs at most once per call, and only when the
+/// stored entry is absent or past the TTL its own kind earns.
+fn read_cpu_temp_cached_in<F: FnOnce() -> Option<CpuTemp>>(
+    cache: &mut Option<(std::time::Instant, Option<CpuTemp>)>,
+    now: std::time::Instant,
+    probe: F,
+) -> Option<CpuTemp> {
+    if let Some((taken_at, value)) = cache.as_ref() {
+        let ttl = std::time::Duration::from_millis(if value.is_some() {
+            HIT_TTL_MS
+        } else {
+            MISS_TTL_MS
+        });
+        // saturating_duration_since, not duration_since: a non-monotonic reading must degrade to
+        // "probe again", never panic on the app's temperature row.
+        if now.saturating_duration_since(*taken_at) < ttl {
+            return value.clone();
+        }
+    }
+    let fresh = probe();
+    *cache = Some((now, fresh.clone()));
+    fresh
+}
+
+/// The uncached probe. Used by the cache itself and by anything that must observe the live
+/// sources right now (e.g. immediately after the user starts a sensor app from the offer).
+pub(crate) fn read_cpu_temp_uncached() -> Option<CpuTemp> {
     crate::hardware::on_wmi_thread(read_cpu_temp_inner)
+}
+
+/// Drop the memoised reading, so the very next `read_cpu_temp` probes the sources again. Called
+/// when the user has just acted on the offer (started a monitor, or hit Re-check): making them
+/// wait out a 15s miss backoff for a change THEY just made would be the dead end the offer exists
+/// to remove.
+pub(crate) fn invalidate_temp_cache() {
+    if let Ok(mut cache) = TEMP_CACHE.lock() {
+        *cache = None;
+    }
 }
 
 fn read_cpu_temp_inner() -> Option<CpuTemp> {
@@ -629,6 +703,11 @@ fn running_process_names() -> Vec<String> {
 
 /// The live read-only sensor-source scan behind the CPU-temp offer.
 pub(crate) fn read_sensor_sources() -> SensorSourceReport {
+    // This is what the offer's "Re-check" button and its post-launch rechecks call. The user is
+    // asking, right now, whether the picture changed — so the memoised temperature must not
+    // outlive their question (a 15s miss backoff would otherwise make a monitor they just started
+    // look like it did nothing).
+    invalidate_temp_cache();
     build_sensor_source_report(
         &running_process_names(),
         |spec, running| match spec.id {
@@ -661,7 +740,107 @@ pub(crate) fn launch_sensor_app(id: &str) -> Result<(), String> {
         .arg(&path)
         .spawn()
         .map(|_| ())
-        .map_err(|e| format!("could not start {}: {e}", path.display()))
+        .map_err(|e| format!("could not start {}: {e}", path.display()))?;
+    // The user just started a monitor at their own click; the remembered miss is now known-stale.
+    invalidate_temp_cache();
+    Ok(())
+}
+
+#[cfg(test)]
+mod temp_cache_tests {
+    use super::*;
+    use std::cell::Cell;
+    use std::time::{Duration, Instant};
+
+    fn temp(c: f64) -> CpuTemp {
+        CpuTemp { temp_c: c, source: "test".into(), label: "CPU Package".into() }
+    }
+
+    /// A miss is the EXPENSIVE case — with no monitor app installed, an uncached probe falls
+    /// through to two WMI namespace connections. A 1 Hz caller must not pay that every tick.
+    #[test]
+    fn a_miss_is_remembered_for_the_miss_ttl() {
+        let mut cache = None;
+        let probes = Cell::new(0);
+        let t0 = Instant::now();
+        let probe = || {
+            probes.set(probes.get() + 1);
+            None
+        };
+        assert_eq!(read_cpu_temp_cached_in(&mut cache, t0, probe), None);
+        // 14 further ticks INSIDE the backoff window (15s is the boundary itself, covered by
+        // `a_miss_probes_again_after_the_backoff`): still exactly ONE probe.
+        for i in 1..=14 {
+            let later = t0 + Duration::from_millis(i * 1000);
+            assert_eq!(read_cpu_temp_cached_in(&mut cache, later, probe), None);
+        }
+        assert_eq!(probes.get(), 1, "a remembered miss must not re-probe inside MISS_TTL_MS");
+    }
+
+    /// Remembering is not the same as giving up: once the backoff expires the sources are asked
+    /// again, so a monitor started while Compy was open still turns up.
+    #[test]
+    fn a_miss_probes_again_after_the_backoff() {
+        let probes = Cell::new(0);
+        let t0 = Instant::now();
+        let probe = || {
+            probes.set(probes.get() + 1);
+            Some(temp(61.0))
+        };
+        // Seed a remembered MISS by hand, taken exactly MISS_TTL_MS ago.
+        let mut cache = Some((t0, None));
+        let after = t0 + Duration::from_millis(MISS_TTL_MS);
+        let got = read_cpu_temp_cached_in(&mut cache, after, probe);
+        assert_eq!(probes.get(), 1);
+        assert_eq!(got.map(|t| t.temp_c), Some(61.0));
+    }
+
+    /// A hit is reused only briefly — a monitor publishes at ~1 Hz, so a sub-second re-probe
+    /// cannot return a fresher number, but the row must never show a number that has gone stale.
+    #[test]
+    fn a_hit_expires_far_sooner_than_a_miss() {
+        const _: () = assert!(HIT_TTL_MS < MISS_TTL_MS);
+        let mut cache = None;
+        let probes = Cell::new(0);
+        let t0 = Instant::now();
+        let probe = || {
+            probes.set(probes.get() + 1);
+            Some(temp(55.0))
+        };
+        assert_eq!(read_cpu_temp_cached_in(&mut cache, t0, probe).map(|t| t.temp_c), Some(55.0));
+        // Inside the hit TTL: reused.
+        let inside = t0 + Duration::from_millis(HIT_TTL_MS - 1);
+        assert_eq!(read_cpu_temp_cached_in(&mut cache, inside, probe).map(|t| t.temp_c), Some(55.0));
+        assert_eq!(probes.get(), 1);
+        // Past it: probed again, so the displayed number can never be older than HIT_TTL_MS.
+        let outside = t0 + Duration::from_millis(HIT_TTL_MS);
+        let _ = read_cpu_temp_cached_in(&mut cache, outside, probe);
+        assert_eq!(probes.get(), 2);
+    }
+
+    /// The cache may only ever hand back something a source really published. It must have no way
+    /// to invent a reading, which is the honest-measurement law at the caching layer.
+    #[test]
+    fn the_cache_never_manufactures_a_reading() {
+        let mut cache = None;
+        let t0 = Instant::now();
+        let got = read_cpu_temp_cached_in(&mut cache, t0, || None);
+        assert_eq!(got, None);
+        assert!(matches!(cache, Some((_, None))), "a miss must be stored AS a miss");
+    }
+
+    /// Acting on the offer (starting a monitor, hitting Re-check) must not leave the user waiting
+    /// out a backoff for a change they just made.
+    #[test]
+    fn invalidate_clears_the_shared_cache() {
+        {
+            let mut guard = TEMP_CACHE.lock().expect("cache lock");
+            *guard = Some((Instant::now(), Some(temp(70.0))));
+        }
+        invalidate_temp_cache();
+        let guard = TEMP_CACHE.lock().expect("cache lock");
+        assert!(guard.is_none(), "invalidate_temp_cache must drop the stored entry");
+    }
 }
 
 #[cfg(test)]

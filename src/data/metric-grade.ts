@@ -72,6 +72,25 @@ export function gradeGpuTempC(c: number | null | undefined): Grade {
   return "bad";
 }
 
+/**
+ * CPU temperature (°C). Deliberately CONSERVATIVE and deliberately generic.
+ *
+ * Compy does not read this itself — it displays what a monitor the user runs is publishing
+ * (cpu_temp.rs), and it has no reliable user-mode way to learn that CPU's real Tjmax. Modern
+ * desktop parts (Zen 4/5, incl. the X3D line, and Intel 13/14th gen) sit in the 70-85°C band
+ * under sustained load BY DESIGN and only throttle in the low-to-mid 90s, so anything tighter
+ * than this would cry "hot" at a machine that is behaving exactly as its vendor intended — a
+ * false alarm is a fabricated claim in the other direction. Same honesty caveat as
+ * `gradeGpuTempC`: per-vendor Tjmax tuning is a future refinement, not something to guess now.
+ */
+export function gradeCpuTempC(c: number | null | undefined): Grade {
+  const t = num(c);
+  if (t == null) return "neutral";
+  if (t < 80) return "good";
+  if (t < 90) return "ok";
+  return "bad";
+}
+
 /** RAM pressure (% used). High pressure is the invisible stutter cause; the % is already per-rig. */
 export function gradeRamPct(pct: number | null | undefined): Grade {
   const p = num(pct);

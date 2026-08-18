@@ -161,7 +161,12 @@ export const HARDWARE_LESSONS: readonly HardwareLesson[] = [
       "Fewer startup apps fighting for CPU time (Compy's startup review)",
     ],
     tab: { id: "check", tie: "The Check tab scans for CPU limiters and applies the top fix." },
-    note: "One honest gap: CPU temperature needs a kernel driver to read, and this build ships none — GPU temperature comes from the vendor's own SDK instead.",
+    // C-19 — this note used to say CPU temperature "needs a kernel driver to read, and this build
+    // ships none", full stop. That is only half the truth: Compy reads it out of a monitor app's
+    // published shared memory (HWiNFO) or WMI namespace (LibreHardwareMonitor) when one is running,
+    // which is driver-free and is what cpu_temp.rs actually does. Stating the gap without stating
+    // the working path taught the user a dead end.
+    note: "One honest gap: reading CPU temperature directly needs a kernel driver, and Compy ships none. If you run HWiNFO or LibreHardwareMonitor, Compy reads the temperature they already publish — Home shows you how.",
   },
   {
     kind: "ram",

@@ -59,7 +59,7 @@
       "storage": "Storage",
       "gpu": "GPU",
       "cpu": "CPU",
-      "cpuNoTemp": "no CPU temp — needs a sensor app"
+      "cpuNoTemp": "no CPU temp — see below"
     },
     "dense": {
       "model": "model",
@@ -73,7 +73,8 @@
     "bento": {
       "rig": "Your PC",
       "findings": "Findings",
-      "parts": "All parts"
+      "parts": "All parts",
+      "tour": "Compy tour"
     },
     "specs": {
       "eyebrow": "Detected",
@@ -106,6 +107,9 @@
       "pending": "Still reading this PC.",
       "lastSessionNone": "No before-and-after yet — play a monitored session.",
       "lastSessionOff": "Session comparison is off in Settings."
+    },
+    "cpuTemp": {
+      "tileTitle": "CPU temperature"
     }
   },
   "homeHud": {
@@ -321,15 +325,12 @@
     "skipHint": "click to skip"
   },
   "setupLauncherCard": {
-    "title": "Set up & tour Compy",
-    "sub": "A guided setup and a 3D fly-through of everything Compy does — about 2 minutes.",
+    "title": "Take the Compy tour",
+    "sub": "A 3D fly-through of your PC and everything Compy does — about 2 minutes.",
     "start": "Start ▸"
   },
   "setupTour": {
-    "leg": {
-      "setup": "Guided setup",
-      "tour": "Hardware tour"
-    },
+    "flowName": "Compy tour",
     "dialogAria": "Compy setup and tour",
     "skipAria": "Skip setup and tour",
     "skip": "Skip ✕",
