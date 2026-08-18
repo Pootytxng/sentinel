@@ -22,6 +22,26 @@
 > in [RELEASE_STATE.md](RELEASE_STATE.md). Historical priority sections below remain evidence, not the
 > current pull order.
 
+- [x] **PRODUCT-CONFORMANCE DRIFT — the class the owner caught on his own desk (2026-08-18).** Three
+  defects in one screenshot: his removed "What are you here to do?" box back as the largest button
+  (`compy_home_intake` consulted about the panel, not the question), nine user-facing Rust strings
+  naming rooms retired 2026-08-12 (Monitor/Blackbook/Lab), and TWO tests actively defending both.
+  Fixed + guarded in `8db70795`: `src/room-name-copy-guard.test.ts` (driven off `HOME_RAIL`, carries
+  its own disarm proof) and self-review rubric item 10 (prior owner decisions; a git log -S is
+  required evidence). **Root cause, recorded because it generalises:** all 167 guards check safety,
+  release integrity or "nothing was deleted" — the affordance census CERTIFIED the regression
+  because it rewards KEEPING affordances and his decision was to remove one. No audit in the repo
+  asks "does the app still match what the owner decided". Codex's weekly automation is coordination-
+  only (branches/claims/worktrees) and writes to `$CODEX_HOME`, outside the repo, where no lane
+  reads it.
+- [ ] **Product-conformance audit (DELEGATED to Cowork 2026-08-18, read-only).** Cross-check every
+  decision in `docs/UI_VISION_BACKLOG.md` + `docs/decisions/*` against live code; findings land in
+  `docs/CONFORMANCE_AUDIT_2026-08-18.md`. Then: extend the Codex weekly automation with this scope
+  and make it write INTO the repo. Not started by Claude Code — do not duplicate it.
+- [ ] **Home front door restructure (UX-1 step ② completion, owner-approved direction 2026-08-18).**
+  Cut to verdict → one action → hero: fold the drift paragraph + "16/16 measured · 1 flagged" into
+  one plain sentence with the fix inline, de-stripe the Crash & Freeze row, drop the topbar taglines
+  (UX-1 decision ②, still live at `ShellV2.tsx:45`). Owner wants a viewable before/after, not prose.
 - [x] **PR #90 recovery + the quiet launch, rebuilt** — PR [#102](https://github.com/Pootytxng/sentinel/pull/102).
   #90 is MERGED; its four unverified Codex claims were re-proven and repaired (P1 the Lab evidence
   map now answers for all three of its clickable lists · P2 ghost-fan shadowing pinned by regression

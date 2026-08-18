@@ -205,6 +205,25 @@ the project's own title-header law, and each room already repeats its name as an
 after a crash, and the tour is also mislabelled (`GUIDED SETUP` on step 1, `HARDWARE TOUR` on
 step 5). The tour becomes a card the user can choose.
 
+**⚠️ SHIPPED, THEN PARTLY REGRESSED — owner caught it on his own desk 2026-08-18.** UX-1 shipped in
+v0.9.24 (`f1766e86`) and was self-reviewed PASS. What it also did: it took the intake question the
+owner had removed on sight six days earlier (2026-08-12, `4d1afa92` — *"the what are you here to do
+text box was ugly looks cleaner without it"*) and made it the screen's single largest button, by
+narrowing `compy_home_intake` to mean "pins the panel open" instead of "asks the question". His
+off-switch read off the whole time. Repaired + guarded in `8db70795`; the self-review rubric grew
+item 10 (prior owner decisions) because the rubric that passed UX-1 had no question that could have
+caught this, and the `affordance-census` guard actively certified it — the census rewards KEEPING
+affordances, and his decision was to remove one.
+
+**Still open from UX-1 after that repair:** decision ② (drop the topbar taglines) never shipped —
+`ShellV2.tsx:45` still carries `home: "how your PC is doing"` for every room. Decision ③ (first run
+lands on the diagnosis, not the hardware tour) unverified. And the owner's 2026-08-18 verdict on the
+front door as it stands: the drift paragraph, the "16/16 measured · 1 flagged" strip and the striped
+Crash & Freeze row stack three status idioms above the hero. Approved direction: cut to **verdict →
+one action → hero**, one plain sentence carrying the drift + check state with its fix inline, and the
+intake question stays off Home until the step-③ interview behind it actually exists. Ships with a
+viewable before/after, per the taste decree — not prose.
+
 Full evidence, screenshots and the remaining copy/layout findings:
 [`docs/decisions/2026-08-11-design-navigation-audit.md`](decisions/2026-08-11-design-navigation-audit.md).
 

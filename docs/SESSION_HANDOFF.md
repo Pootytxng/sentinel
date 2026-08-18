@@ -12,22 +12,36 @@
 
 ## Lane
 
-**None open as of 2026-08-18.** The data-root lane landed and its two branches are deleted:
+**OPEN — `fix/owner-decision-conformance-guards` (`8db70795`+), product-conformance repair.**
+Opened 2026-08-18 after the owner opened his own desk build and found three defects in one screenshot
+that 167 green guards had all missed.
 
-- **PR [#132](https://github.com/Pootytxng/sentinel/pull/132)** (`973be73b`) — the §A0 updater-key
-  backup tooling: `scripts/backup-updater-key.ps1` / `restore-updater-key.ps1` and
-  `scripts/updater-key-backup-guard.test.mjs`.
-- **PR [#131](https://github.com/Pootytxng/sentinel/pull/131)** (`6b41f098`), issue
-  [#130](https://github.com/Pootytxng/sentinel/issues/130), now CLOSED — `src-tauri/src/data_root.rs`:
-  the persistence root resolved by where it LANDS (`canonicalize` + NTFS `(volume serial, file id)`)
-  rather than by the `APPDATA` string, with a `MutationRoot` capability every ledger write and every
-  rollback must hold, plus `scripts/recover-data-root.mjs` and the owner's split-ledger recovery.
+**Landed in `8db70795`:**
+- `compy_home_intake` gates the QUESTION again, not just the panel it opens (`HomeConsole.tsx`,
+  `intakeAvailable` leads with `intakeOn`). He removed that box on sight 2026-08-12 (`4d1afa92`);
+  UX-1 (`f1766e86`) put it back as the screen's largest button while the flag still read off.
+- Nine user-facing Rust strings renamed off retired rooms (Monitor→Live, Blackbook→History,
+  Lab→Test): `readiness.rs` ×2, `intelligence_patterns.rs` ×5, `experiment.rs` ×1, plus the
+  assertion in `readiness.rs` that was pinning `"the Lab"` in place.
+- `src/room-name-copy-guard.test.ts` — new, driven off `HOME_RAIL`, **carries its own disarm proof**
+  (it silently false-greened twice while being written: one lost backslash level, one rewritten
+  directory walk).
+- Self-review **rubric item 10 — prior owner decisions** (`.claude/agents/self-reviewer.md`), the
+  check whose absence let UX-1 through. `affordance-census` had *certified* the regression: it
+  rewards KEEPING affordances and his decision was to remove one.
 
-Merged in that order because #131's pre-push branch-disposition audit stayed red until #132's rows
-reached `main`. Both rows are now dropped again — a MERGED row is perishable.
+**Next in this lane (item 4 of the owner's approved four):** the Home front-door restructure —
+verdict → one action → hero. Fold the drift paragraph + "16/16 measured · 1 flagged" into one plain
+sentence with its fix inline, de-stripe the Crash & Freeze row, drop the topbar taglines (UX-1
+decision ②, still live at `ShellV2.tsx:45`). **Ships with a viewable before/after via `SendUserFile`,
+per the taste decree — prose describing a look does not count.** Self-review is mandatory before any
+done-claim, and rubric item 10 now applies to this diff too.
 
-A fresh session should NOT resume from this file. Read `CLAUDE.md`, then `docs/RELEASE_STATE.md`
-(live gate state) and `docs/BACKLOG.md` (what to pick up next).
+**Delegated, do not duplicate:** the owner pasted a read-only product-conformance audit brief into
+**Cowork** on 2026-08-18 — every decision in `docs/UI_VISION_BACKLOG.md` + `docs/decisions/*` vs live
+code, output to `docs/CONFORMANCE_AUDIT_2026-08-18.md`. Also queued: extend the Codex weekly
+automation with that scope and make it write INTO the repo (today it is coordination-only and writes
+to `$CODEX_HOME`, where no lane can read it).
 
 ## Carried forward — these outlive the lane
 
