@@ -4,11 +4,16 @@ import { RerunCheckBand } from "./RerunCheckBand";
 import { LAST_CHECK_KEY, formatCheckAge, type LastCheck } from "./last-check";
 import type { GameReadiness, ReadinessCheck, ReadinessStatus } from "../types";
 
-// RerunCheckBand — Home's single Re-run affordance (owner-approved "A · Status band"). These guards
-// pin the two properties the honesty law makes non-negotiable:
+// RerunCheckBand — Home's check line + its single Re-run affordance. These guards pin the properties
+// the honesty law makes non-negotiable:
 //   1. an AGE only renders when a real check record exists (localStorage snapshot); the no-snapshot
-//      fallback shows LIVE counts and NO age — never a time we didn't measure.
-//   2. the Re-run action is wired (onRunCheck fires) and locks out while a check is running.
+//      fallback shows LIVE counts and NO age — never a time we didn't measure. The old uppercase tag
+//      row ("Last check" vs "Checks") used to carry that distinction; the sentence now carries it in
+//      words, so these tests assert on the SENTENCE, which is what a user actually reads.
+//   2. UNMEASURED IS NEVER COUNTED AS CLEAN (bug→guard, 2026-08-18). The old clean line printed a
+//      bare `measured/total`, so "14/16" meant BOTH "two failed" and "two were unreadable". A user
+//      cannot act on a number that means two opposite things.
+//   3. the Re-run action is wired (onRunCheck fires) and locks out while a check is running.
 // Plus formatCheckAge's pure boundaries (bug→guard: coarse ages must not over-state precision).
 
 afterEach(cleanup);
@@ -40,6 +45,9 @@ const storeCheck = (v: Partial<LastCheck>) =>
     JSON.stringify({ at: Date.now(), total: 16, green: 16, fixCount: 0, ...v }),
   );
 
+/** What the user actually reads. The old tests asserted on tag labels and bare ratios. */
+const line = () => document.querySelector(".rcb-status")?.textContent ?? "";
+
 describe("formatCheckAge — coarse honest ages", () => {
   const base = 1_000_000_000_000;
   it("under a minute → just now", () => expect(formatCheckAge(base, base + 30_000)).toBe("just now"));
@@ -51,42 +59,79 @@ describe("formatCheckAge — coarse honest ages", () => {
 });
 
 describe("RerunCheckBand honesty — age only with a real record", () => {
-  it("with a stored snapshot: shows the age + clean ratio", () => {
+  it("with an all-clean snapshot: names when it was checked and amplifies the win", () => {
     storeCheck({ at: Date.now() - 2 * 3_600_000, total: 16, green: 16, fixCount: 0 });
     render(<RerunCheckBand readiness={readiness({})} checking={false} onRunCheck={() => {}} />);
-    expect(screen.getByText("Last check")).toBeTruthy();
-    expect(screen.getByText(/2h ago/)).toBeTruthy();
-    expect(screen.getByText("16/16")).toBeTruthy();
+    expect(line()).toContain("2h ago");
+    expect(line()).toContain("all 16 looked good");
   });
 
-  it("with a snapshot that has fixes: shows age + fix count, no clean ratio", () => {
+  it("with a snapshot that has fixes: age + how many to fix, in words", () => {
     storeCheck({ at: Date.now() - 5 * 60_000, total: 16, green: 14, fixCount: 2 });
     render(<RerunCheckBand readiness={readiness({})} checking={false} onRunCheck={() => {}} />);
-    expect(screen.getByText(/5m ago/)).toBeTruthy();
-    expect(screen.getByText("2")).toBeTruthy();
-    expect(screen.getByText(/to fix/)).toBeTruthy();
+    expect(line()).toContain("5m ago");
+    expect(line()).toContain("2 things to fix");
+  });
+
+  it("singular reads as English, not as a template", () => {
+    storeCheck({ at: Date.now() - 5 * 60_000, total: 16, green: 15, fixCount: 1 });
+    render(<RerunCheckBand readiness={readiness({})} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("1 thing to fix");
   });
 
   it("NO snapshot: falls back to live counts with NO age", () => {
     const r = readiness({ checks: [chk("ready"), chk("ready"), chk("ready")] });
     render(<RerunCheckBand readiness={r} checking={false} onRunCheck={() => {}} />);
-    // Honesty: the fallback tag is "Checks", never "Last check", and no age string appears.
-    expect(screen.getByText("Checks")).toBeTruthy();
-    expect(screen.queryByText("Last check")).toBeNull();
-    expect(screen.queryByText(/ago|just now|yesterday/)).toBeNull();
-    // Live measured/total ratio still renders (the "3/3"-style honest count).
-    expect(screen.getByText("3/3")).toBeTruthy();
+    // Honesty: with nothing stored the line states no time at all — never a time we didn't measure.
+    expect(line()).not.toMatch(/ago|just now|yesterday|Checked/);
+    expect(line()).toContain("All 3 checks look good");
   });
 
-  it("fallback with unknowns + attention: measured/total excludes unknowns, flags attention", () => {
+  it("fallback with unknowns + attention: counts the flagged ones, excludes the unreadable", () => {
     const r = readiness({
       checks: [chk("ready"), chk("ready"), chk("attention"), chk("unknown")],
       attention_count: 1,
       unknown_count: 1,
     });
     render(<RerunCheckBand readiness={r} checking={false} onRunCheck={() => {}} />);
-    expect(screen.getByText("3/4")).toBeTruthy(); // 4 total − 1 unknown measured
-    expect(screen.getByText(/1 flagged/)).toBeTruthy();
+    expect(line()).toContain("1 of 4 checks needs a look");
+  });
+
+  // bug → guard (2026-08-18): the honesty hole the old ratio hid. Two checks Compy CANNOT read must
+  // never render the same way as two checks Compy read and found broken — a user acts differently on
+  // each, and "unmeasured" silently folded into a dirty-looking number is exactly the claim the
+  // receipts doctrine bars. No attention, two unknowns: the line must say so.
+  it("unreadable checks are named as unreadable, never counted as clean OR as problems", () => {
+    const r = readiness({
+      checks: [chk("ready"), chk("ready"), chk("unknown"), chk("unknown")],
+      attention_count: 0,
+      unknown_count: 2,
+    });
+    render(<RerunCheckBand readiness={r} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("2 of 4 checks look good");
+    expect(line()).toContain("couldn't be measured");
+    expect(line(), "claimed all clear while two checks were unreadable").not.toContain("All 4");
+  });
+
+  it("the same honesty holds for a stored snapshot with unreadable checks", () => {
+    storeCheck({ at: Date.now() - 60_000, total: 16, green: 14, fixCount: 0 });
+    render(<RerunCheckBand readiness={readiness({})} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("14 of 16 looked good");
+    expect(line()).toContain("couldn't be measured");
+    expect(line(), "claimed all 16 clean off a 14-green snapshot").not.toContain("all 16 looked");
+  });
+
+  // The row is a status line, not a destination. It had grown into a bordered panel with an
+  // uppercase tag stacked above its own sentence, which is what made it a third competing card
+  // above Home's fold. Structure guard so it cannot grow the walls back.
+  it("is ONE row: no uppercase tag block, one sentence, one button", () => {
+    const r = readiness({ checks: [chk("ready")] });
+    const { container } = render(
+      <RerunCheckBand readiness={r} checking={false} onRunCheck={() => {}} />,
+    );
+    expect(container.querySelectorAll(".rcb-status").length).toBe(1);
+    expect(container.querySelectorAll(".rcb-btn").length).toBe(1);
+    expect(container.querySelector(".rcb-tag"), "the uppercase tag row is back").toBeNull();
   });
 });
 
@@ -98,7 +143,7 @@ describe("RerunCheckBand — Re-run action wiring", () => {
     expect(onRunCheck).toHaveBeenCalledOnce();
   });
 
-  it("while checking: button is disabled, label is Checking…, and status reads running", () => {
+  it("while checking: button is disabled, label is Checking…, and the line reads running", () => {
     const onRunCheck = vi.fn();
     // Even with a stored snapshot, checking must ignore it and show the live running state.
     storeCheck({});
@@ -107,7 +152,8 @@ describe("RerunCheckBand — Re-run action wiring", () => {
     expect((btn as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(btn);
     expect(onRunCheck).not.toHaveBeenCalled();
-    expect(screen.getByText("running checks…")).toBeTruthy();
-    expect(screen.queryByText("Last check")).toBeNull();
+    // Checking IGNORES the stored snapshot: no stale age while a live check is in flight.
+    expect(line()).toContain("Checking your PC now");
+    expect(line()).not.toMatch(/ago|just now|yesterday|Checked /);
   });
 });

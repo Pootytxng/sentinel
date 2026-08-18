@@ -215,7 +215,9 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
     expect(lines[0].closest(".home-console")).toBeNull();
     expect(c.querySelector(".hc-masthead-eyebrow .hc-led-ok")).not.toBeNull();
     expect(c.querySelector(".hc-led-scan")).toBeNull();
-    expect(c.querySelector(".v2-measured")!.textContent).toContain("3/3");
+    // The check line is a plain sentence now, not the `3/3` ratio the navigation audit put on its
+    // own jargon list (2026-08-11 §3). Same measured fact, said the way a person would say it.
+    expect(c.querySelector(".v2-measured")!.textContent).toContain("All 3 checks look good");
   });
 
   // UX-1 decision 1's second half: ONE action. The front door is the screen's only filled primary
@@ -332,7 +334,7 @@ describe("HomeConsole — the console stage (hologram center + honest corner gau
     cleanup();
     const checking = mount({ ...props, readiness: null, priorities: null }).container;
     expect(checking.querySelector(".hc-tl .ag-tag-ny")).not.toBeNull();
-    expect(checking.querySelector(".v2-measured")!.textContent).toContain("running checks…");
+    expect(checking.querySelector(".v2-measured")!.textContent).toContain("Checking your PC now");
   });
 
   it("GPU temp gauge shows the polled reading once it lands", async () => {
@@ -510,7 +512,7 @@ describe("HomeConsole — the detected record (boxed templates, always open)", (
 describe("HomeConsole — the #1-limiter readout (measured fact + its fix route)", () => {
   it("renders the top limiter's real title, quiet confidence tag, and the jump control", () => {
     const jump = vi.fn();
-    const c = mount({ ...props, onSeeInFix: jump, fixRoomLabel: "Lab" }).container;
+    const c = mount({ ...props, onSeeInFix: jump, fixRoomLabel: "Test" }).container;
     const row = c.querySelector(".hc-limiter")!;
     expect(row).not.toBeNull();
     expect(row.textContent).toContain("C: drive is 87% full");
@@ -550,11 +552,11 @@ describe("HomeConsole — the masthead band's route to the fixes", () => {
       checks: [{ id: "ref", label: "Refresh rate below max", status: "attention", detail: "", value: null }],
       attention_count: 1,
     };
-    const c = mount({ ...props, readiness: attn, onSeeInFix: jump, fixRoomLabel: "Lab" }).container;
+    const c = mount({ ...props, readiness: attn, onSeeInFix: jump, fixRoomLabel: "Test" }).container;
     const band = c.querySelector(".rcb")!;
     const fix = band.querySelector<HTMLButtonElement>(".rcb-fix")!;
     expect(fix, "the band names a fix count with no way to reach the fixes").not.toBeNull();
-    expect(fix.textContent).toContain("Fix them in Lab");
+    expect(fix.textContent).toContain("Fix in Test");
     // One primary action, never two: .rcb-btn stays the band's only button-looking control.
     expect(band.querySelectorAll(".rcb-btn").length).toBe(1);
     fireEvent.click(fix);
@@ -562,7 +564,7 @@ describe("HomeConsole — the masthead band's route to the fixes", () => {
   });
 
   it("shows NO route when there is nothing to fix — a clean rig is not sent anywhere", () => {
-    const c = mount({ ...props, fixRoomLabel: "Lab" }).container;
+    const c = mount({ ...props, fixRoomLabel: "Test" }).container;
     expect(c.querySelector(".rcb")).not.toBeNull();
     expect(c.querySelector(".rcb-fix")).toBeNull();
   });

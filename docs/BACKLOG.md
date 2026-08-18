@@ -34,14 +34,55 @@
   asks "does the app still match what the owner decided". Codex's weekly automation is coordination-
   only (branches/claims/worktrees) and writes to `$CODEX_HOME`, outside the repo, where no lane
   reads it.
-- [ ] **Product-conformance audit (DELEGATED to Cowork 2026-08-18, read-only).** Cross-check every
-  decision in `docs/UI_VISION_BACKLOG.md` + `docs/decisions/*` against live code; findings land in
-  `docs/CONFORMANCE_AUDIT_2026-08-18.md`. Then: extend the Codex weekly automation with this scope
-  and make it write INTO the repo. Not started by Claude Code — do not duplicate it.
-- [ ] **Home front door restructure (UX-1 step ② completion, owner-approved direction 2026-08-18).**
-  Cut to verdict → one action → hero: fold the drift paragraph + "16/16 measured · 1 flagged" into
-  one plain sentence with the fix inline, de-stripe the Crash & Freeze row, drop the topbar taglines
-  (UX-1 decision ②, still live at `ShellV2.tsx:45`). Owner wants a viewable before/after, not prose.
+- [x] **Product-conformance audit — DELIVERED by Cowork 2026-08-18**, read-only, 469 lines:
+  [`docs/CONFORMANCE_AUDIT_2026-08-18.md`](CONFORMANCE_AUDIT_2026-08-18.md). 26 recorded decisions
+  graded against `main@e6feb861`'s committed blobs. **9 HONORED · 1 SILENTLY REVERSED · 9 NEVER
+  BUILT · 4 PARTIAL · 1 DOC DRIFT · 1 never resolved · 1 not-yet-built-no-drift.** Its three top
+  findings (C-01 intake flag, C-02 room renames, C-03 topbar taglines) are the three this train
+  fixed, arrived at independently. **The unbuilt remainder is the queue below — that is what the
+  audit bought.**
+- [ ] **Extend the Codex weekly automation with product-conformance scope, and make it write INTO the
+  repo.** Today it is coordination-only (branches/claims/worktrees) and writes to `$CODEX_HOME`,
+  outside the repo, where no lane ever reads it — which is why six days of drift went unseen. The
+  audit above is the template for what the weekly run should re-check. Still delegated; do not
+  duplicate.
+- [x] **Home front door restructure (UX-1 ② completion, owner-approved direction 2026-08-18).**
+  Verdict → one action → hero. Shipped: topbar taglines gone (audit C-03, decided 2026-08-11, six
+  days late) with a `ShellV2.test.tsx` case that fails if one grows back · the check strip stopped
+  being a bordered card with an uppercase `CHECKS` tag and is now one plain sentence, which also
+  closes audit §3's `16/16 clean` jargon finding · Home's Crash & Freeze row de-striped, with
+  `src/side-stripe-guard.test.ts` failing the build on any NEW >1px coloured side border (three
+  known offenders baselined and named, not fixed blind — they live on rooms this train did not open).
+  **Found while rewriting the line:** `measured/total` rendered identically for "two checks failed"
+  and "two checks were unreadable"; the sentence now distinguishes them and that is test-pinned.
+
+### Conformance queue — the audit's unbuilt decisions, in owner-value order
+
+- [ ] **C-04 · Rename the Home room to a question it answers** (Health / Diagnosis). UX-1 ① third
+  clause; never built. Owner territory only for the *word* — the restructure is mine.
+- [ ] **C-05 · First run lands on the diagnosis, not the 10-step hardware tour.** Compy's identity is
+  the first place you go after a crash; the tour is also mislabelled two different things across its
+  own steps. Biggest single first-impression item left.
+- [ ] **C-08 · Keep the honesty, change the voice.** Engineer-speak on consumer surfaces —
+  `ETW · external · anti-cheat safe`, `no temp — Compy won't ship a kernel driver`. Same facts, said
+  the way the check line now says its own. Pairs naturally with C-06.
+- [ ] **C-06 · Wording pass + a banned-term build guard.** The guard is the durable half: `16/16
+  clean` came back after being ruled jargon, and only a build guard stops that class.
+- [ ] **C-09 · Build identifiers out of consumer chrome.** `0.9.25` beside the wordmark and
+  `555e2996 · release` in the topbar are dev furniture. Settings §C About **already** carries the
+  stamp and is test-pinned, so the destination exists. Split OUT of the front-door train on purpose:
+  it is shell chrome in every room, not Home, and it touches the `hud-frame-flag` no-duplication
+  guard. Small and ready.
+- [ ] **C-10 · No raw OS `<select>` inside the custom UI** ("Choose a change…").
+- [ ] **C-11 · Group repeated ledger events** — "applied 3×, currently on". The same event printed
+  three times reads as a malfunction.
+- [ ] **C-17 · Mechanize the mono-for-machine-values-only law** (TYPE-1 residual, self-declared).
+- [ ] **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it.** Owner fork, never resolved,
+  still parked by exemption.
+- [ ] **C-12 · DOC DRIFT: `CommandPalette` is recorded as parked-then-dropped in UI backlog §D, but
+  it is built and DEFAULT ON.** Doc-only fix; cheap.
+- [ ] **C-13 · Foundation tooling gap: axe-core in vitest (rank 3) and Figma MCP (rank 2) never
+  landed; only shadcn did.** axe-core is the one with a guard shape.
 - [x] **PR #90 recovery + the quiet launch, rebuilt** — PR [#102](https://github.com/Pootytxng/sentinel/pull/102).
   #90 is MERGED; its four unverified Codex claims were re-proven and repaired (P1 the Lab evidence
   map now answers for all three of its clickable lists · P2 ghost-fan shadowing pinned by regression
@@ -941,40 +982,6 @@ owner's machine and a stable candidate, not more code. Evidence rows updated in
   any of it — Actions blocked since Jul 9 by the owner's $0 budget (decree above). Local IS the gate.**
 - **Next:** owner call — push `chore/ci-encoding-and-state-truth`, and decide the `d9ced24`/`v0.9.8`
   publish. Nothing here was pushed, tagged, merged, installed, or distributed.
-
-### Cycle 2026-07-17a — ✅ INTELLIGENCE PHASE 1 SHIPPED (CC, owner directive `docs/reviews/2026-07-16-owner-directive-intelligence-platform.md` §5): `8f612d2` foundation + What-Changed read-only slice · `d45bb1c` game-name class sweep (bug→guard) · LIVE `d45bb1c`
-
-- **Train `8f612d2` (23 files, +3984/−28):** new `src-tauri/src/intelligence.rs` domain layer
-  (identity snapshots · change events · confidence bands **unknown/low/medium/high ONLY**, no
-  numerics) + 3 query commands (`get_intelligence_timeline` · `what_changed_for_session` ·
-  `get_intelligence_headline`) + the FE What-Changed engine + surfaces behind `compy_intelligence`
-  **default ON**. Deterministic/inspectable/local; zero telemetry/network/account/remote; NO
-  mutation-boundary change. 28 new Rust guards + FE pins. Honesty note for future writeups: the
-  query commands are NOT literally pure reads — each calls `refresh_identity_snapshots_async()`
-  which may write `intelligence.json` (own store only, throttled, mutex-guarded, atomic
-  tmp+rename); `monitoring.rs` gains a per-tick `load_session()` BEHAVIORAL additive read
-  populating `SessionSummary.gaming_mode_active` (`#[serde(default)]`).
-- **Fix `d45bb1c` (6 files, +58/−19):** self-review caught `Palworld-Win64-Shipping` in a Black
-  Box headline while every neighboring surface showed `Palworld` — class-swept BOTH language
-  layers (`blackbox.rs` display prettifier delegates to shared `intelligence::pretty_game_name`;
-  FE `sessionTrends`/`SessionDebrief`/`TuningDebrief` display sites on `prettyGameName`).
-  **MATCHING stays raw everywhere** — `norm_app` keeps its own `.exe`-strip (a launcher exe and
-  its shipping binary are different processes and must not merge). bug→guard: cargo
-  `headline_strips_shipping_suffix_like_every_other_surface` + vitest grouping pin.
-- **Reviewer chain:** rust-tauri-reviewer full-diff **"VERDICT: PASS"** + incremental
-  **"Verdict: PASS … none Critical, none Warning"** · train self-review round-2 **PASS** ·
-  fix-lane self-review round-1 **FAIL** (TS sweep missed the Rust-layer prettifier — the
-  completeness-critic-grep failure mode) → fix → round-2 full-fresh **PASS** (live capture on
-  real `sessions.json`, completeness grep both languages: zero additional misses).
-- **Shipped:** installer `Compy_0.9.0_x64-setup.exe` SHA-256
-  `8063F95744C6AF00C760FD3F77DA63FBD9B68B279773307D6D1AEB5773A52E0D`, silent reinstall done, live
-  exe stamp-verified `d45bb1c` CLEAN (no `+dirty`). Verify: cargo **754/754** (count UP) · clippy
-  clean · vitest **1708/1708** (183 files; export-library passed this run) · verify-release-state
-  46/46.
-- **§0.11 lane separation honored:** Optimization Cleanup is its own train — Phase 1 (restore
-  ARMED, shipped 2026-07-16) left exactly where it was; nothing folded in.
-- **Board retention:** 4 oldest cycles (13f/13e/13d/13c) moved verbatim to `BACKLOG_ARCHIVE.md`
-  (104 lines); board at 12 cycles.
 
 ## ⛔ Persistent-workflow protocol (read before declaring "done")
 

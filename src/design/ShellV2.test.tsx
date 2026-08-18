@@ -4,8 +4,8 @@ import { ShellV2, ROOM_CRUMB } from "./ShellV2";
 import { railFor, HOME_RAIL } from "./homeRail";
 
 // V2-2 shell guards: the rail renders the blessed room set with WORKING digit hints (a hint that
-// does nothing is a fake affordance), the topbar carries room title + plain-English crumb + the
-// real build stamp (never a fabricated one), and the footer states the outbound-honesty +
+// does nothing is a fake affordance), the topbar carries the room title + the real build stamp
+// (never a fabricated one) and NO tagline, and the footer states the outbound-honesty +
 // reversibility promises with the MEASURED ledger count. (Updater ARMED 2026-07-22: the footer
 // names the signed update check as the one outbound call — "zero outbound" would now be a lie.)
 
@@ -79,7 +79,10 @@ describe("ShellV2 rail", () => {
     expect(onNavigate).toHaveBeenCalledWith("play");
   });
 
-  it("every rail id has a plain-English crumb", () => {
+  // The crumbs outlived the topbar that used to print them: CommandPalette reads the same
+  // `common.shellV2.crumb.*` keys as its per-door hint, where the room's own h1 is NOT on screen.
+  // So every rail id still owes a sentence — it is just no longer shown next to the room title.
+  it("every rail id has a plain-English crumb for the palette to hint with", () => {
     for (const r of HOME_RAIL) expect(ROOM_CRUMB[r.id]).toBeTruthy();
   });
 
@@ -177,10 +180,23 @@ describe("ShellV2 digit shortcuts (the kbd hints must WORK)", () => {
 });
 
 describe("ShellV2 topbar", () => {
-  it("shows the active room title, its crumb, and the REAL build stamp once fetched", async () => {
+  it("shows the active room title and the REAL build stamp once fetched", async () => {
     const { container } = render(shell({ activeId: "play" }));
     expect(container.querySelector(".v2-room-title")?.textContent).toBe("Live");
-    expect(screen.getByText(`· ${ROOM_CRUMB.play}`)).toBeTruthy();
     await waitFor(() => expect(screen.getByText("ab12cd3 · dev")).toBeTruthy());
+  });
+
+  // bug -> guard (2026-08-18). The navigation audit MEASURED this one: the topbar printed
+  // `Live · watch it live` while the room below printed its own name as an h1 ~90px lower, which
+  // is the title-header law violation the project had already written down. Ruling: "drop the
+  // topbar tagline; keep one name per room" (docs/decisions/2026-08-11-design-navigation-audit.md
+  // §3, order-of-work #3). It sat unshipped for six days. This fails if it grows back.
+  it("prints NO tagline beside the room title — one name per room", () => {
+    const { container } = render(shell({ activeId: "play" }));
+    expect(container.querySelector(".v2-crumb"), "the topbar tagline is back").toBeNull();
+    const top = container.querySelector(".v2-top")?.textContent ?? "";
+    for (const r of HOME_RAIL) {
+      expect(top, `the topbar is printing ${r.id}'s crumb again`).not.toContain(ROOM_CRUMB[r.id]);
+    }
   });
 });

@@ -1,34 +1,30 @@
-/* Re-run check band — the Home masthead status + action module (owner-approved "A · Status band").
-   Lives in RoomShell's `measured` slot: an upgraded provenance line that carries the SINGLE Re-run
-   affordance (so Home keeps one primary action, never two). Honest by construction — the age only
-   shows when a real check completed (see last-check.ts).
+/* Home's check line — one sentence, a state dot, and the single Re-run control.
+   Lives in RoomShell's `measured` slot.
+
+   NOT A CARD ANYMORE (2026-08-18). It used to be a bordered, filled panel with a stacked uppercase
+   tag above its status line, which made it a THIRD block competing above Home's fold after the
+   verdict and its because-line — the clutter the owner named on sight. A status line is not a
+   destination and does not need walls: the border, the panel fill and the tag row are gone, and what
+   is left is one row of type that reads as a caption to the verdict above it. See RerunCheckBand.tsx
+   for the copy reasoning.
 
    LAWS (test-pinned in tokens-v2-guard.test.ts):
    - EVERY selector scoped under [data-v2="on"].
    - NO color literals (hex/rgb/hsl) — every color from a --v2-* token.
-   - Font declarations reference only var(--v2-font-*). The count ratio is a MACHINE VALUE → mono. */
+   - Font declarations reference only var(--v2-font-*). */
 
 :root[data-v2="on"] .rcb {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  border: 1px solid var(--v2-line);
-  border-radius: var(--v2-r);
-  background: var(--v2-panel);
-  padding: 14px 18px;
+  gap: 10px;
+  /* Sits directly under the header's because-line, so it owes that line air, not a box. */
+  padding: 2px 0 0;
   font-family: var(--v2-font-sans);
   font-size: var(--type-label);
 }
-:root[data-v2="on"] .rcb-left {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  min-width: 0;
-}
 :root[data-v2="on"] .rcb-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex: none;
   background: var(--v2-ok);
@@ -42,26 +38,13 @@
   background: var(--v2-faint);
   box-shadow: 0 0 0 3px var(--v2-line);
 }
-:root[data-v2="on"] .rcb-tag {
-  font-family: var(--v2-font-mono);
-  font-size: var(--type-label);
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--v2-faint);
-}
 :root[data-v2="on"] .rcb-status {
-  margin-top: 3px;
+  margin: 0;
+  min-width: 0;
   font-size: var(--type-label);
   color: var(--v2-muted);
 }
-:root[data-v2="on"] .rcb-status b {
-  font-weight: 600;
-  color: var(--v2-text);
-}
-:root[data-v2="on"] .rcb-num {
-  font-family: var(--v2-font-mono);
-}
-/* The route to the fixes. Deliberately a LINK, not a button — .rcb-btn stays the band's only
+/* The route to the fixes. Deliberately a LINK, not a button — .rcb-btn stays the row's only
    button, so the count gains a destination without Home growing a second primary action. */
 :root[data-v2="on"] .rcb-fix {
   margin-left: 10px;
@@ -84,6 +67,8 @@
   align-items: center;
   gap: 7px;
   flex: none;
+  /* Pushed to the far edge now that no panel is holding the row together. */
+  margin-left: auto;
   font-family: var(--v2-font-sans);
   font-size: var(--type-label);
   font-weight: 600;
@@ -91,7 +76,7 @@
   background: transparent;
   border: 1px solid var(--v2-accent-line);
   border-radius: var(--v2-r-sm);
-  padding: 8px 16px;
+  padding: 7px 15px;
   cursor: pointer;
   transition: background 0.12s ease, border-color 0.12s ease;
 }

@@ -171,10 +171,6 @@
   font-weight: 600;
   font-size: var(--type-label);
 }
-/* Crumb is a real sentence → muted (4.5 floor), not the mockup's faint (caption tier). */
-:root[data-v2="on"] .v2-crumb {
-  color: var(--v2-muted);
-}
 :root[data-v2="on"] .v2-stamp {
   margin-left: auto;
   font: var(--type-label) var(--v2-font-mono);

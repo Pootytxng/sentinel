@@ -215,14 +215,30 @@ item 10 (prior owner decisions) because the rubric that passed UX-1 had no quest
 caught this, and the `affordance-census` guard actively certified it — the census rewards KEEPING
 affordances, and his decision was to remove one.
 
-**Still open from UX-1 after that repair:** decision ② (drop the topbar taglines) never shipped —
-`ShellV2.tsx:45` still carries `home: "how your PC is doing"` for every room. Decision ③ (first run
-lands on the diagnosis, not the hardware tour) unverified. And the owner's 2026-08-18 verdict on the
-front door as it stands: the drift paragraph, the "16/16 measured · 1 flagged" strip and the striped
-Crash & Freeze row stack three status idioms above the hero. Approved direction: cut to **verdict →
-one action → hero**, one plain sentence carrying the drift + check state with its fix inline, and the
-intake question stays off Home until the step-③ interview behind it actually exists. Ships with a
-viewable before/after, per the taste decree — not prose.
+**✅ FRONT-DOOR RESTRUCTURE SHIPPED 2026-08-18** (same train, second commit). Decision ② is live: the
+topbar prints the room name and nothing else, and a `ShellV2.test.tsx` case fails if a tagline grows
+back. The check strip stopped being a bordered card with an uppercase `CHECKS` tag — it is one plain
+sentence now ("All 16 checks look good" / "1 of 16 checks needs a look · Fix in Test →"), which also
+closes audit §3's own jargon finding on `16/16 clean`. Home's Crash & Freeze row lost its 2px accent
+side stripe, and `src/side-stripe-guard.test.ts` now fails the build on any new one.
+
+**Bonus honesty fix found while rewriting that line:** the old `measured/total` ratio rendered
+identically for "two checks FAILED" and "two checks could not be read at all". A user acts
+differently on each. The sentence now says which — `2 of 4 checks look good · 2 couldn't be measured`
+— and that is test-pinned in `RerunCheckBand.test.tsx`.
+
+**Still open from UX-1:** decision ① third clause (rename the Home room to something that answers a
+question — Health / Diagnosis) and decision ③ (first run lands on the diagnosis, not the 10-step
+hardware tour) — both **NEVER BUILT** per the conformance audit, C-04 and C-05. The intake question
+stays OFF Home until the step-③ interview behind it exists; note the navigation audit §5 rates that
+band the best navigation idea in the product, so it is a *deferral*, not a retirement, and it is
+still reachable from Settings.
+
+**Known side stripes left standing**, baselined in `src/side-stripe-guard.test.ts` rather than fixed
+blind, because each needs a visual review of a surface this train did not open: `.detail-flag`
+(`src/App.css`), `.cpu-temp-offer-how` (`src/surfaces/CpuTempOffer.css`), `.ss-detail`
+(`src/surfaces/monitor-console.css`). Each is a one-line CSS deletion plus a self-review of that
+room. Do not add to that baseline — fix the rule.
 
 Full evidence, screenshots and the remaining copy/layout findings:
 [`docs/decisions/2026-08-11-design-navigation-audit.md`](decisions/2026-08-11-design-navigation-audit.md).
