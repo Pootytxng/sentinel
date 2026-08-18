@@ -1,6 +1,10 @@
 /* Home's check line — one sentence, a state dot, and the single Re-run control.
    Lives in RoomShell's `measured` slot.
 
+   NO BORDERED CONTROL EITHER (2026-08-18, second pass). Dissolving the panel left a bordered button
+   floating at the row's right edge, which the owner had named alongside the panel itself. The row is
+   now type only: dot, sentence, and its actions as inline links. Pinned in RerunCheckBand.test.tsx.
+
    NOT A CARD ANYMORE (2026-08-18). It used to be a bordered, filled panel with a stacked uppercase
    tag above its status line, which made it a THIRD block competing above Home's fold after the
    verdict and its because-line — the clutter the owner named on sight. A status line is not a
@@ -62,34 +66,30 @@
 :root[data-v2="on"] .rcb-fix:focus-visible {
   text-decoration: underline;
 }
-:root[data-v2="on"] .rcb-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  flex: none;
-  /* Pushed to the far edge now that no panel is holding the row together. */
-  margin-left: auto;
+/* The Re-run affordance. A LINK, not a bordered button — see RerunCheckBand.tsx's header for why
+   it is demoted rather than deleted. Muted rather than accent, so the accent stays reserved for the
+   fix route: on a row that reports a problem, "go fix it" outranks "measure it again". */
+:root[data-v2="on"] .rcb-run {
+  padding: 0;
+  border: 0;
+  background: transparent;
   font-family: var(--v2-font-sans);
   font-size: var(--type-label);
   font-weight: 600;
-  color: var(--v2-text);
-  background: transparent;
-  border: 1px solid var(--v2-accent-line);
-  border-radius: var(--v2-r-sm);
-  padding: 7px 15px;
+  color: var(--v2-muted);
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  text-underline-offset: 3px;
 }
-:root[data-v2="on"] .rcb-btn:hover {
-  background: var(--v2-accent-dim);
-  border-color: var(--v2-accent);
+:root[data-v2="on"] .rcb-run:hover,
+:root[data-v2="on"] .rcb-run:focus-visible {
+  color: var(--v2-text);
+  text-decoration: underline;
 }
-:root[data-v2="on"] .rcb-btn:disabled {
+:root[data-v2="on"] .rcb-run:disabled {
   color: var(--v2-faint);
-  border-color: var(--v2-line);
   cursor: default;
+  text-decoration: none;
 }
-:root[data-v2="on"] .rcb-ic {
-  display: inline-flex;
-  align-items: center;
+:root[data-v2="on"] .rcb-sep {
+  color: var(--v2-faint);
 }

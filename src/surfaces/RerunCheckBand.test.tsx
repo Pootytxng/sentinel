@@ -3,6 +3,8 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { RerunCheckBand } from "./RerunCheckBand";
 import { LAST_CHECK_KEY, formatCheckAge, type LastCheck } from "./last-check";
 import type { GameReadiness, ReadinessCheck, ReadinessStatus } from "../types";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 // RerunCheckBand — Home's check line + its single Re-run affordance. These guards pin the properties
 // the honesty law makes non-negotiable:
@@ -124,14 +126,51 @@ describe("RerunCheckBand honesty — age only with a real record", () => {
   // The row is a status line, not a destination. It had grown into a bordered panel with an
   // uppercase tag stacked above its own sentence, which is what made it a third competing card
   // above Home's fold. Structure guard so it cannot grow the walls back.
-  it("is ONE row: no uppercase tag block, one sentence, one button", () => {
+  //
+  // bug->guard (owner, 2026-08-18): the FIRST pass removed the panel and left the bordered "Re-run
+  // check" button standing at the row's right edge — one of the three controls he had named by name
+  // as clutter, still shipped, while the report said the strip was dealt with. A capture of the live
+  // build is what caught it. These pins fail if either wall comes back.
+  it("is ONE row of type: no tag block, no bordered button, actions are inline links", () => {
     const r = readiness({ checks: [chk("ready")] });
     const { container } = render(
       <RerunCheckBand readiness={r} checking={false} onRunCheck={() => {}} />,
     );
     expect(container.querySelectorAll(".rcb-status").length).toBe(1);
-    expect(container.querySelectorAll(".rcb-btn").length).toBe(1);
+    expect(container.querySelectorAll(".rcb-run").length).toBe(1);
     expect(container.querySelector(".rcb-tag"), "the uppercase tag row is back").toBeNull();
+    expect(container.querySelector(".rcb-btn"), "the bordered Re-run button is back").toBeNull();
+    // The run control lives INSIDE the sentence, not as a sibling floated to the far edge.
+    expect(container.querySelector(".rcb-status .rcb-run")).not.toBeNull();
+  });
+
+  // The affordance itself must survive the demotion: this control is the only entry point to
+  // <FirstCheck> (App.tsx setShowFirstCheck), so losing it strands a whole flow, and dropping its
+  // text label would blind src/affordance-census.test.ts to it.
+  it("keeps a NAMED, reachable Re-run control after the demotion", () => {
+    const onRunCheck = vi.fn();
+    render(<RerunCheckBand readiness={readiness({})} checking={false} onRunCheck={onRunCheck} />);
+    const run = screen.getByRole("button", { name: /Re-run check/ });
+    expect(run.className).toContain("rcb-run");
+    fireEvent.click(run);
+    expect(onRunCheck).toHaveBeenCalledOnce();
+  });
+
+  // Static CSS pin: jsdom loads no stylesheets, so a structure test cannot see a border coming back
+  // on the control it just approved. Read the file instead (the .rcb-verdict-scale precedent).
+  it("CSS: no rule inside the .rcb scope paints a border or a panel fill", () => {
+    const css = readFileSync(join("src", "surfaces", "RerunCheckBand.css"), "utf8");
+    const offenders = css
+      .split("}")
+      .filter((block) => /\.rcb/.test(block))
+      .flatMap((block) =>
+        [...block.matchAll(/^\s*(border|background)\s*:\s*([^;]+);/gm)]
+          .filter(([, , value]) => !/^(0|none|transparent)$/.test(value.trim()))
+          // The state dot IS a painted disc — that is the whole control, not a wall.
+          .filter(() => !/\.rcb-dot/.test(block))
+          .map(([, prop, value]) => `${block.trim().split("{")[0].trim()} { ${prop}: ${value} }`),
+      );
+    expect(offenders, "the band grew walls back").toEqual([]);
   });
 });
 

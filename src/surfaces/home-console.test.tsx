@@ -557,8 +557,10 @@ describe("HomeConsole — the masthead band's route to the fixes", () => {
     const fix = band.querySelector<HTMLButtonElement>(".rcb-fix")!;
     expect(fix, "the band names a fix count with no way to reach the fixes").not.toBeNull();
     expect(fix.textContent).toContain("Fix in Test");
-    // One primary action, never two: .rcb-btn stays the band's only button-looking control.
-    expect(band.querySelectorAll(".rcb-btn").length).toBe(1);
+    // One primary action, never two — and since 2026-08-18 not even one BOX: the band's controls
+    // are inline links (.rcb-fix, .rcb-run), so the row stays type rather than growing a control.
+    expect(band.querySelectorAll(".rcb-run").length).toBe(1);
+    expect(band.querySelector(".rcb-btn"), "the bordered Re-run button is back").toBeNull();
     fireEvent.click(fix);
     expect(jump).toHaveBeenCalled();
   });

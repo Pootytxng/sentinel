@@ -9,6 +9,17 @@ import "./RerunCheckBand.css";
 // Home's check status + its single Re-run affordance (RoomShell's `measured` slot; no separate
 // primaryAction button — one primary action, never two).
 //
+// THE BOX IS GONE TOO (2026-08-18, second pass). The 2026-08-18 pass below dissolved the PANEL but
+// left a bordered, icon-bearing "Re-run check" button sitting at the far right of the row — and the
+// owner had named that control by name, in the same breath as the panel, as "the exact clutter". A
+// capture of the shipped build confirmed it: two of his three objections were fixed and this one was
+// not. It is now a quiet text affordance in the same register as the fix link, separated by a middot.
+// NOT DELETED, deliberately: this control is the ONLY entry point to <FirstCheck> (App.tsx
+// `setShowFirstCheck`), the full-screen check with its own verdict and its own route into the Lab —
+// Check.tsx's re-run is a different mechanism on a different surface. Removing the button would have
+// stranded a whole flow to satisfy a look. Demoting it costs nothing and keeps the affordance
+// reachable and named (src/affordance-census.test.ts still sees its literal t(...) key).
+//
 // ONE PLAIN SENTENCE (2026-08-18). This used to be a bordered panel: a status dot, a small uppercase
 // `CHECKS` tag, and the line `16/16 measured · 1 flagged` stacked beneath it. Two problems the owner
 // named on sight, and the navigation audit had already written down:
@@ -33,22 +44,6 @@ import "./RerunCheckBand.css";
 // route to those fixes — a text link, not a rival button, so "one primary action" still holds. A
 // named flag with no way to act on it is the dead-end this app exists to avoid.
 
-const REFRESH_ICON = (
-  <svg
-    viewBox="0 0 24 24"
-    width="13"
-    height="13"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-    <path d="M21 3v6h-6" />
-  </svg>
-);
 
 export function RerunCheckBand({
   readiness,
@@ -114,20 +109,22 @@ export function RerunCheckBand({
       <p className="rcb-status">
         {sentence}
         {/* A count is only honest if it goes somewhere: the flag names its own fix inline.
-            A text LINK, never a second button — Home keeps ONE primary action. */}
+            A text LINK, never a button — Home keeps ONE primary action. */}
         {warn && onSeeInFix ? (
           <button type="button" className="rcb-fix" onClick={onSeeInFix}>
             {t("optimize.rerunCheckBand.fixLink", { room: fixRoomLabel })}
             <span aria-hidden="true"> →</span>
           </button>
         ) : null}
+        <span className="rcb-sep" aria-hidden="true">
+          {" · "}
+        </span>
+        <button type="button" className="rcb-run" onClick={onRunCheck} disabled={checking}>
+          {checking
+            ? t("optimize.rerunCheckBand.checkingButton")
+            : t("optimize.rerunCheckBand.rerunButton")}
+        </button>
       </p>
-      <button type="button" className="rcb-btn" onClick={onRunCheck} disabled={checking}>
-        <span className="rcb-ic">{REFRESH_ICON}</span>
-        {checking
-          ? t("optimize.rerunCheckBand.checkingButton")
-          : t("optimize.rerunCheckBand.rerunButton")}
-      </button>
     </div>
   );
 }
