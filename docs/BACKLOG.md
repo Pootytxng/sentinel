@@ -87,13 +87,19 @@
     it, not the first. Payload preview, scrubbed allowlist and a real off switch stay mandatory —
     they are what makes the disclosure true. Amend
     `src/capability-exception-policy-guard.test.ts` (it currently asserts Tier 2 default-OFF) citing
-    the decision record, never by weakening the invariant. 🪪 **owner-gated sub-item:** EU/UK
-    distribution needs a region check before default-ON ships there.
+    the decision record, never by weakening the invariant. **Destination decided (B_land, 2026-08-18):** the
+    same-origin Pages-Function → D1 pattern `functions/api/waitlist.ts` already proves, writing to
+    D1 `compy_reports` (`73f5e8a3-1827-42e3-8543-9fedc3750532`). Separate endpoint and separate
+    table from Tier 3 — storage may be shared, consent and transport never. 🪪 **owner-gated
+    sub-item:** EU/UK distribution needs a region check before default-ON ships there.
   - [ ] **Q9b — build Tier 3 in-app feedback + crash reports.** Own module
     (`src-tauri/src/case_evidence_upload.rs`), never inside `support_evidence.rs`. Tier 3's gate is
     unchanged and applies in full: per-case consent, preview/redaction, named recipient, retention,
-    deletion receipt, no background queue, no inherited consent. 🪪 **blocked on the owner:** a landing
-    spot he controls (free tier fine) — it becomes the named recipient in the consent screen.
+    deletion receipt, no background queue, no inherited consent. **Destination decided (B_land, 2026-08-18):** D1 `compy_reports` on the
+    owner's Cloudflare account, reached through its own `functions/api/` endpoint — no email inbox
+    anywhere in the design. The consent screen names it: *"Compy's own store on compy.gg"*. Define
+    the schema in this change (retention column + a ticket id the deletion receipt can quote); the
+    database is empty on purpose. Residual: one `wrangler pages deploy` at ship time (B7).
   - [ ] **Q9c — CPU temperature that feels native, with no driver.** *Most of this already exists:*
     `src-tauri/src/cpu_temp.rs` reads HWiNFO's `Global\HWiNFO_SENS_SM2` shared memory and the
     LibreHardware/OpenHardware WMI namespaces, driver-free, and Monitor shows the value attributed to

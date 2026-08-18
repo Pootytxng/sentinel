@@ -54,6 +54,21 @@ local-only (`src/support-evidence-outbound-guard.test.ts` enforces the separatio
 **Still needs the owner:** somewhere for the reports to land. Free tier is fine; it must be an
 account the owner controls, because it becomes the named recipient in the consent screen.
 
+## 3b. Where both tiers land — no email, ever (owner asked, 2026-08-18)
+
+The owner declined to make his personal Gmail the funnel and named a future security risk. He is
+right, and the repo already contains the better answer: `functions/api/waitlist.ts` — a same-origin
+Cloudflare Pages Function writing to D1, with the raw IP hashed before storage, a per-IP-hour rate
+limit and a honeypot. **Both new tiers reuse that pattern.** An address printed inside a shipped app
+is a permanent attack surface and a permanent identity link; a write-only endpoint is neither.
+
+**Decided:** D1 database `compy_reports` (`73f5e8a3-1827-42e3-8543-9fedc3750532`, WNAM), created on
+the owner's existing Cloudflare account at $0. Tier 2 and Tier 3 get **separate endpoints and
+separate tables** — shared storage is fine, shared consent or transport is not (2026-08-09 rule,
+unchanged). Reports are read by Claude through the connected Cloudflare tooling; the owner opens no
+inbox. The only owner step left is a single `wrangler pages deploy` at ship time, because site
+auto-deploy is cancelled by his own decision (checklist B7) and a deploy reaches the public.
+
 ## 4. CPU temperature — the third-party-driver route is closed by Windows, not by us
 
 The owner asked for native CPU temperature via a popular open-source driver, without paying for
