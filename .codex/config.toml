@@ -1,5 +1,11 @@
 # Codex project config for the Compy repo.
 #
+# ⚠ NOT LOADED BY DEFAULT (verified 2026-08-18, codex-cli 0.146.0). `codex doctor` reports exactly
+# one config source: %USERPROFILE%\.codex\config.toml. This file governs Codex only when CODEX_HOME
+# points at this directory. Editing it to change sandbox/approval behaviour does NOTHING otherwise --
+# change the global config, or launch with `-c sandbox_mode=...`. Keep this file as the portable
+# read-only scaffold it documents below; do not treat it as the live lane setting.
+#
 # Deliberately minimal. Removed 2026-07-19 (portability/lane-hardening train):
 #   - shell_environment_policy.set CLAUDE_CODE_SUBAGENT_MODEL / CLAUDE_CODE_AUTO_COMPACT_WINDOW:
 #     these are Claude Code env-var names; they do not configure Codex, so they did nothing here.
