@@ -51,12 +51,20 @@
 }
 
 .cpu-temp-offer-note {
-  flex: 1 1 240px;
   min-width: 0;
   margin: 0;
   font-size: var(--type-label);
   line-height: 1.45;
   color: var(--ix-text-3, var(--muted, #8b95a8));
+}
+
+/* The flex sizing belongs to the note that sits BESIDE a button, not to the class. Self-review
+   catch: as a bare `.cpu-temp-offer-note` rule, `flex: 1 1 240px` also applied to the standalone
+   "starting…" and "couldn't start" lines, which are direct children of this COLUMN flex container
+   — where a 240px flex-basis is a 240px HEIGHT. It opened a ~250px dead gap above "Check again",
+   in exactly the two states a user reaches by clicking Start. */
+.cpu-temp-offer-actions > .cpu-temp-offer-note {
+  flex: 1 1 240px;
 }
 
 .cpu-temp-offer-failed {
@@ -65,4 +73,18 @@
 
 .cpu-temp-offer-recheck {
   align-self: flex-start;
+}
+
+/* Nothing in this block is destructive — the offer starts an app, opens a download page or
+   re-reads. The app-wide `.btn-small:hover` paints --danger RED (App.css:1399), which false-signals
+   "this will break something" on every one of them. Same catch, same fix as the gaming toast
+   (App.css:2941). The `-on` rule is re-declared because the two selectors TIE on specificity. */
+.cpu-temp-offer .btn-small:hover:not(:disabled) {
+  color: var(--ix-text-1, var(--fg, #e8ecf3));
+  border-color: var(--ix-line, var(--border-strong, #2b3242));
+}
+
+.cpu-temp-offer .btn-small.btn-small-on:hover:not(:disabled) {
+  color: var(--ix-accent-text, var(--accent, #2ee6c0));
+  border-color: var(--ix-accent, var(--accent, #2ee6c0));
 }

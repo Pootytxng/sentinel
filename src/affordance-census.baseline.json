@@ -3306,7 +3306,6 @@
     "monitor.monitorPanels.clockSpeedSublabel",
     "monitor.monitorPanels.coreTooltip",
     "monitor.monitorPanels.cpuPanelName",
-    "monitor.monitorPanels.cpuTempFallback",
     "monitor.monitorPanels.cpuTempVia",
     "monitor.monitorPanels.cpuTemperatureLabel",
     "monitor.monitorPanels.enableFpsMonitoring",

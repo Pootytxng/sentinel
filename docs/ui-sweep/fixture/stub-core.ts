@@ -253,3 +253,23 @@ export function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<
       return Promise.reject(new Error(`FIXTURE PREVIEW — no stub for "${cmd}". Add one before reviewing this state.`));
   }
 }
+
+// ── SHAPE PARITY WITH THE REAL @tauri-apps/api/core ──────────────────────────────────────────────
+// vite.config.mts aliases the WHOLE module to this file, so every named export any file in the
+// reachable graph imports from it must exist here — a missing one is a module-graph SyntaxError
+// that blanks the entire page before React paints, not a broken feature in one corner.
+// Self-review caught exactly that: @tauri-apps/plugin-updater (pulled in via ShellV2 → UpdatePill)
+// imports { Resource, Channel, invoke }, and the two missing names killed every fixture state.
+// Pinned by src/fixture-parity-guard.test.ts so a new plugin cannot repeat it silently.
+export class Channel<T = unknown> {
+  id = 0;
+  onmessage: (msg: T) => void = () => {};
+  toJSON() {
+    return `__CHANNEL__:${this.id}`;
+  }
+}
+
+export class Resource {
+  constructor(readonly rid: number = 0) {}
+  async close(): Promise<void> {}
+}

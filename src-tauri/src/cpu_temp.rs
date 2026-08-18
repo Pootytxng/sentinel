@@ -461,6 +461,7 @@ const SENSOR_APPS: &[SensorAppSpec] = &[
             ("ProgramFiles", "LibreHardwareMonitor\\LibreHardwareMonitor.exe"),
             ("ProgramW6432", "LibreHardwareMonitor\\LibreHardwareMonitor.exe"),
             ("ProgramFiles(x86)", "LibreHardwareMonitor\\LibreHardwareMonitor.exe"),
+            // data-root-allow: a third-party app's own install root, not a Compy data path.
             ("LOCALAPPDATA", "Programs\\LibreHardwareMonitor\\LibreHardwareMonitor.exe"),
             ("ProgramFiles", "OpenHardwareMonitor\\OpenHardwareMonitor.exe"),
         ],

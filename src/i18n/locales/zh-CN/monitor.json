@@ -167,7 +167,6 @@
     "clockSpeedSublabel": "实时当前主频——睿频时升高，空闲降频时降低",
     "cpuTemperatureLabel": "CPU 温度",
     "cpuTempVia": "{{label}} · 来自 {{source}}",
-    "cpuTempFallback": "还没有传感器应用在发布它",
     "cpuTempOffer": {
       "title": "开启 CPU 温度",
       "why": "Compy 本身不安装任何驱动（这正是它对反作弊安全的原因），因此它显示的是免费监控工具发布的温度。",

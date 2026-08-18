@@ -167,7 +167,6 @@
     "clockSpeedSublabel": "Live current clock — rises under boost, drops when idle/parked",
     "cpuTemperatureLabel": "CPU temperature",
     "cpuTempVia": "{{label}} · via {{source}}",
-    "cpuTempFallback": "No sensor app is publishing it yet",
     "cpuTempOffer": {
       "title": "Turn CPU temperature on",
       "why": "Compy ships no driver of its own — that is what keeps it anti-cheat-safe — so it shows the temperature a free monitor app publishes.",

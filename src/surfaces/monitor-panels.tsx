@@ -310,7 +310,7 @@ export function CpuMonitorPanel({
           sublabel={
             cpuTemp
               ? t("monitor.monitorPanels.cpuTempVia", { label: cpuTemp.label, source: cpuTemp.source })
-              : t("monitor.monitorPanels.cpuTempFallback")
+              : undefined
           }
         />
         {cpu.ram_total_bytes > 0 && (

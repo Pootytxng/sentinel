@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 
 // FIXTURE-PARITY GUARD (2026-08-12).
@@ -168,5 +168,64 @@ describe("fixture preview parity with the product entry", () => {
         `"${cmd}"`,
       );
     }
+  });
+  it("exports every name the aliased module graph imports from @tauri-apps/api/core", () => {
+    // bug→guard (self-review round 2, 2026-08-18): vite.config.mts aliases the WHOLE
+    // "@tauri-apps/api/core" module to stub-core.ts. A named import it does NOT export is not a
+    // degraded feature — it is a module-graph SyntaxError that blanks EVERY fixture state before
+    // React paints. @tauri-apps/plugin-updater (reached via ShellV2 → UpdatePill) imports
+    // { Resource, Channel, invoke }; the two missing names cost a whole review round, and the
+    // failure looked like "the rig is broken", not like "a dependency changed".
+    //
+    // Scope note: this reads node_modules on purpose. The offending import lives in a shipped
+    // dependency, not in src — a guard that only walked src would not have caught it.
+    const stub = read("docs/ui-sweep/fixture/stub-core.ts");
+    const exported = new Set(
+      [...stub.matchAll(/export\s+(?:const|function|class)\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1]),
+    );
+    const sources: string[] = [];
+    const walk = (dir: string) => {
+      let names: string[];
+      try {
+        names = readdirSync(dir);
+      } catch {
+        return; // node_modules layout varies; a missing plugin dir is not a failure
+      }
+      for (const name of names) {
+        const p = join(dir, name);
+        if (statSync(p).isDirectory()) walk(p);
+        else if (/\.(tsx?|m?js)$/.test(p)) sources.push(p);
+      }
+    };
+    walk("src");
+    for (const pkg of ["plugin-updater", "plugin-process", "plugin-opener", "api"]) {
+      walk(join("node_modules", "@tauri-apps", pkg, "dist-js"));
+    }
+    const needed = new Set<string>();
+    for (const file of sources) {
+      const text = readFileSync(file, "utf8");
+      for (const m of text.matchAll(/import\s*\{([^}]*)\}\s*from\s*['"]@tauri-apps\/api\/core['"]/g)) {
+        for (const raw of m[1].split(",")) {
+          const name = raw.trim().split(/\s+as\s+/)[0].trim();
+          if (name && name !== "type") needed.add(name.replace(/^type\s+/, ""));
+        }
+      }
+    }
+    expect(needed.size, "found no @tauri-apps/api/core named imports — this guard went vacuous").toBeGreaterThan(0);
+    const missing = [...needed].filter((n) => !exported.has(n)).sort();
+    expect(
+      missing,
+      "stub-core.ts must export these or the fixture page blanks with a module SyntaxError",
+    ).toEqual([]);
+  });
+  it("redirects the bare root to the fixture page", () => {
+    // Two review rounds burned time on `http://localhost:5199/` serving the REAL app (repo-root
+    // index.html → src/main.tsx → IPC failure → ErrorBoundary), which reads as "the rig is broken".
+    // The redirect is the fix; this pins it so a config tidy-up cannot quietly reinstate the trap.
+    const cfg = read("docs/ui-sweep/fixture/vite.config.mts");
+    expect(cfg, "fixture root no longer redirects — `/` serves the real app and looks broken").toMatch(
+      /Location.*docs\/ui-sweep\/fixture\/index\.html/,
+    );
+    expect(cfg).toMatch(/plugins:\s*\[react\(\),\s*redirectRootToFixture\]/);
   });
 });

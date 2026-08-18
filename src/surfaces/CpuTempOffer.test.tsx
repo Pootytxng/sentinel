@@ -10,6 +10,8 @@
 // switch to flip — and it never tells someone to install what is already running.
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 const backend = vi.hoisted(() => ({
   report: null as unknown,
@@ -153,5 +155,39 @@ describe("CpuTempOffer — every state ends in something the user can do", () =>
         ).length,
       ).toBeGreaterThanOrEqual(2),
     );
+  });
+});
+
+// bug→guard (self-review round 2, 2026-08-18): the offer shipped BESIDE the dead end instead of
+// replacing it — the temperature row still carried its `cpuTempFallback` sublabel ("No sensor app
+// is publishing it yet") while the offer sat directly underneath, so the user read the dead-end
+// sentence first and the fix second. tsc and every unit test were green: nothing here rendered the
+// two together. This mounts the real panel and pins that the retired sentence is gone for good.
+describe("the panel replaces the dead end, it does not stack on top of it", () => {
+  it("renders the offer and NOT the retired fallback sentence when no temp is published", async () => {
+    backend.report = { apps: [], scanned: 12 } as SensorSourceReport;
+    const { CpuMonitorPanel } = await import("./monitor-panels");
+    const cpu = {
+      usage_overall_pct: 21,
+      usage_per_core_pct: [10, 20],
+      frequency_mhz: 4700,
+      ram_used_bytes: 8_000_000_000,
+      ram_total_bytes: 32_000_000_000,
+    };
+    render(<CpuMonitorPanel cpu={cpu} history={[cpu]} cpuTemp={null} />);
+    await waitFor(() => expect(screen.getByText(/Turn CPU temperature on/i)).toBeTruthy());
+    expect(
+      screen.queryByText(/No sensor app is publishing it yet/i),
+      "the retired dead-end sublabel is back — the offer must REPLACE it, not stack under it",
+    ).toBeNull();
+  });
+
+  it("keeps the retired copy out of the shipped locales", () => {
+    for (const locale of ["en", "zh-CN"]) {
+      const json = readFileSync(join("src", "i18n", "locales", locale, "monitor.json"), "utf8");
+      expect(json, `${locale} still ships monitor.monitorPanels.cpuTempFallback`).not.toContain(
+        "cpuTempFallback",
+      );
+    }
   });
 });
