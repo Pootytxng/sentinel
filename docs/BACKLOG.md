@@ -68,7 +68,7 @@
   the way the check line now says its own. Pairs naturally with C-06.
 - [ ] **C-06 · Wording pass + a banned-term build guard.** The guard is the durable half: `16/16
   clean` came back after being ruled jargon, and only a build guard stops that class.
-- [ ] **C-09 · Build identifiers out of consumer chrome.** `0.9.25` beside the wordmark and
+- [x] **C-09 · Build identifiers out of consumer chrome.** SHIPPED 2026-08-18 (`6d047c2a`), self-review PASS. `0.9.25` beside the wordmark and
   `555e2996 · release` in the topbar are dev furniture. Settings §C About **already** carries the
   stamp and is test-pinned, so the destination exists. Split OUT of the front-door train on purpose:
   it is shell chrome in every room, not Home, and it touches the `hud-frame-flag` no-duplication
