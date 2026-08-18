@@ -49,6 +49,7 @@ const APP_COMMANDS: &[&str] = &[
     "get_cpu_sensors",
     "get_cpu_temp",
     "get_crash_blackbox",
+    "get_data_root_report",
     "get_diagnostics",
     "get_experiment_gate",
     "get_experiments",

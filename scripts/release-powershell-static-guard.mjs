@@ -18,6 +18,7 @@ export const releaseCriticalPowerShell = [
   "scripts/lib/runtime-proof.ps1",
   "scripts/lib/release-transaction.ps1",
   "scripts/lib/release-publish-adapter.ps1",
+  "scripts/lib/canonical-data-root.ps1",
 ];
 
 const entrypoints = new Set([

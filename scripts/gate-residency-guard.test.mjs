@@ -127,6 +127,14 @@ const RESIDENCY = {
     kind: "manual",
     why: "Drives the INSTALLED build over a CDP port on the owner's desk and records raw traces to docs/perf/raw/ — one of its legs parks the machine hands-off for ten minutes. A resident runner would need a live app, a real GPU and a user who is not touching the mouse; CI has none of the three. What IS resident is the artifact it produces: scripts/perf-budget-guard.test.mjs re-derives every published number from those traces on every `npm test`, so a hand-edited baseline fails even though the probe never re-runs.",
   },
+  // A one-time recovery tool (#130), but its merge core is pure and IS resident: every refusal
+  // and the byte-preservation splice are exercised on every `npm test`. The tool is the thing
+  // that will one day be pointed at a real Trust Ledger, so "nobody runs it between incidents"
+  // is the argument FOR keeping its core under a resident runner, not against.
+  "recover-data-root.mjs": {
+    kind: "npm-test",
+    runner: "scripts/recover-data-root.test.mjs",
+  },
   "release-powershell-static-guard.mjs": {
     kind: "npm-test",
     runner: "scripts/release-powershell-static-guard.test.mjs",

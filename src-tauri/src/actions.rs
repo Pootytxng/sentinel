@@ -2542,7 +2542,7 @@ mod preload_removal_tests {
         // A garbled ledger pair (reinstall action + task snapshot) must fail safe, never guess.
         let r = RollbackAction::ReinstallPreloadApp { app: KnownPreloadApp::OfficeHub };
         let s = Snapshot::ScheduledTask { prior_state: "Ready".into() };
-        assert!(dispatch_rollback(&r, &s).is_err());
+        assert!(dispatch_rollback(&crate::data_root::test_mutation_root(), &r, &s).is_err());
     }
 
     // ── Live QA harness (manual; #[ignore], run at arming time) — proves the remove→reinstall
@@ -4519,7 +4519,16 @@ pub(crate) fn rollback_visual_effects_typed(
 // Dispatches a RollbackAction against its corresponding Snapshot. The match
 // is exhaustive on the (action, snapshot) pair — a mismatch is a contract
 // violation and returns Err rather than performing the wrong rollback.
-pub(crate) fn dispatch_rollback(action: &RollbackAction, snapshot: &Snapshot) -> Result<(), String> {
+//
+// Takes the `MutationRoot` capability (#130). The path is not consulted — POSSESSION is the proof:
+// this token exists only when Compy has verified the data root is the machine's own, so a
+// container-redirected launch cannot reach a rollback at all. Undoing a real Windows change on the
+// strength of a receipt read out of someone else's sandbox is the failure this prevents.
+pub(crate) fn dispatch_rollback(
+    _root: &crate::data_root::MutationRoot,
+    action: &RollbackAction,
+    snapshot: &Snapshot,
+) -> Result<(), String> {
     use RollbackAction as R;
     use Snapshot as S;
     match (action, snapshot) {
@@ -5668,6 +5677,7 @@ mod startup_approval_tests {
     #[test]
     fn a_mismatched_action_snapshot_pair_refuses_rather_than_guessing() {
         let err = dispatch_rollback(
+            &crate::data_root::test_mutation_root(),
             &RollbackAction::RestoreStartupApprovalFromSnapshot,
             &Snapshot::HwSchMode { prior: Some(1) },
         );

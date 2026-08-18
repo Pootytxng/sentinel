@@ -14,6 +14,7 @@ mod game_state; // Measurement Platform 2.0 (Task E) — additive per-session Ga
 mod drift; // Drift Watch — notices readiness checks that were good and regressed (outside Compy).
 mod stutter; // Stutter Forensics — correlates a session's worst dips with concurrent signals.
 mod cpu_temp; // CPU temp via interop with a user-installed monitor (HWiNFO/LHM/OHM) — driver-free.
+mod data_root; // #130 — the canonical data-root resolver: detects a container/junction-redirected persistence root instead of trusting the APPDATA *string*, halts on a split rather than guessing, and hands out `MutationRoot` (the capability type every Windows-mutation and receipt-write path now requires) only for a verified canonical root.
 mod diagnostics;
 mod experiment; // Intelligence Phase 3 — user-started single-variable experiment engine + optimization simulator. ARMED 2026-07-17 (experiment_gate()==true, owner sign-off; orchestrates the existing audited mutation boundary — no new apply/rollback primitive; user-started only, defense-in-depth gate checks retained).
 mod export;
@@ -425,11 +426,25 @@ fn get_build_stamp() -> String {
     build_stamp()
 }
 
+/// The directory Compy READS from. It is **not** authorization to write a receipt or change
+/// Windows — that is `data_root::mutation_root()`, and only a verified-canonical root yields one.
+///
+/// Was: `APPDATA` joined with `Compy`, silently falling back to `C:\Temp`. That is the #130 defect.
+/// Under an MSIX-packaged host the `APPDATA` string is *correct* and the resolution is redirected,
+/// so Compy changed the real machine and filed the receipt into a sandbox no normal launch can see.
+/// See `data_root` for the mechanism and the guards.
 pub(crate) fn compy_data_dir() -> PathBuf {
-    let app_data = std::env::var("APPDATA").unwrap_or_else(|_| "C:\\Temp".into());
-    let dir = PathBuf::from(&app_data).join("Compy");
-    migrate_legacy_data_once(std::path::Path::new(&app_data), &dir);
-    dir
+    let decision = data_root::decision();
+    // GUARD 1 (design doc §Guards): the legacy Sentinel→Compy migration runs ONLY against a verified
+    // canonical root. It is a recursive COPY of the whole pre-rename data dir — run against a
+    // redirected root it would duplicate the entire Trust Ledger into somebody else's sandbox,
+    // turning one split root into two equally plausible-looking histories.
+    if let data_root::DataRootDecision::Canonical { root } = decision {
+        if let Some(app_data) = root.parent() {
+            migrate_legacy_data_once(app_data, root);
+        }
+    }
+    decision.effective_root()
 }
 
 // One-time, COPY-not-move migration of the pre-rename data dir (`%APPDATA%\Sentinel`) into the new
@@ -1196,6 +1211,9 @@ pub fn run() {
             get_priorities,
             priorities_from,
             get_build_stamp,
+            // #130 — read-only: which data root is live, which predicates fired, and any foreign ledgers.
+            // Surfaced in Settings and the support export so "which ledger am I looking at" is answerable.
+            data_root::get_data_root_report,
             receipts::get_receipts_gate,
             receipts::preview_receipt_payload,
             support_evidence::preview_support_evidence,

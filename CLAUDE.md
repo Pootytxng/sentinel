@@ -181,13 +181,11 @@ A `ship-reminder` PostToolUse hook nudges this after any `tauri build`.
 
 ### Rust module map (`lib.rs` carved into safety-boundary modules)
 
-Complete as of 2026-08-04 (45 `.rs` files; line counts drift, treat as rough). **Mutation/rollback +
+Complete 2026-08-18 (46 `.rs` files; line counts rough). **Mutation/rollback +
 gate-relevant modules are starred ★ — scope any mutation-gate change against these first.** The
 read-only remainder (hardware/sensors, monitoring/FPS, benchmark/Lab, advisory/ranking/export,
 intelligence/measurement) lives in **`src-tauri/CLAUDE.md`**, which auto-loads only when work touches
-`src-tauri/`. **Mechanically verified — run `node scripts/verify-module-map.mjs` before trusting
-either half;** it fails on a missing or ghost module, a wrong file count, a module declared in both
-halves, an unstarred mutator, or a delegated half that has gone missing.
+`src-tauri/`. **Mechanically verified — run `node scripts/verify-module-map.mjs` before trusting either half.**
 
 **Core wiring & entry**
 - `main.rs` — argv router: `--fps-capture` → headless ETW helper (`run_fps_capture`); `--run-elevated <hex>` → elevated-PowerShell child (elevation boundary, owner territory); else `run()`. Runs BEFORE any window.
@@ -205,6 +203,7 @@ halves, an unstarred mutator, or a delegated half that has gone missing.
 - ★ `receipts.rs` (~415) — Receipts telemetry gate (built dark, opt-in, default-OFF; new outbound boundary).
 - ★ `license.rs` (~355) — Compy Pro license gate (built dark).
 - ★ `drift.rs` (~351) — applied-change drift detection vs live machine state.
+- ★ `data_root.rs` (~1050) — canonical data-root resolver (#130): measures where the root LANDS, not the `APPDATA` string; halts on a split; issues `MutationRoot`, the capability `history.rs`/`actions.rs` now require. Guard: `scripts/data-root-guard.test.mjs`.
 
 ## LOCKED safety rules — do not cross without an explicit product-owner decision
 
