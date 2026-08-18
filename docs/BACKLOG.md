@@ -63,10 +63,10 @@
 - [ ] **C-05 · First run lands on the diagnosis, not the 10-step hardware tour.** Compy's identity is
   the first place you go after a crash; the tour is also mislabelled two different things across its
   own steps. Biggest single first-impression item left.
-- [ ] **C-08 · Keep the honesty, change the voice.** Engineer-speak on consumer surfaces —
+- [x] **C-08 · Keep the honesty, change the voice.** SHIPPED 2026-08-18 (`4c9e440e`). Engineer-speak on consumer surfaces —
   `ETW · external · anti-cheat safe`, `no temp — Compy won't ship a kernel driver`. Same facts, said
   the way the check line now says its own. Pairs naturally with C-06.
-- [ ] **C-06 · Wording pass + a banned-term build guard.** The guard is the durable half: `16/16
+- [x] **C-06 · Wording pass + a banned-term build guard.** SHIPPED 2026-08-18 (`4c9e440e`) — the guard scanned 199 files and none of the 18 locale files holding 237,925 bytes of copy; now it reads them. The durable half: `16/16
   clean` came back after being ruled jargon, and only a build guard stops that class.
 - [x] **C-09 · Build identifiers out of consumer chrome.** SHIPPED 2026-08-18 (`6d047c2a`), self-review PASS. `0.9.25` beside the wordmark and
   `555e2996 · release` in the topbar are dev furniture. Settings §C About **already** carries the
