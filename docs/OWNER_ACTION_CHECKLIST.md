@@ -131,14 +131,6 @@ the Care-entry block in `src/surfaces/home-intake.test.tsx`.
 on your real screen at your real resolution — the visual self-review the plan asks for (Task 8
 step 5) has not run. That is a look, not a decision, and the feature reaches users either way.
 
-### A_ref. ✅ CLOSED 2026-08-11 — the six dead branches are gone
-You said "you have full permission", so the pile is cleared: `docs/close-recovery-lane`,
-`codex/compy-care-capability-gate`, `claude/admiring-lumiere-648403`,
-`claude/compy-recovery-closeout-391516`, `claude/merge-prs-tauri-visibility-c5660e` and
-`claude/checklist-owner-items-c5660e` were each proven MERGED first, then deleted on GitHub, and
-their now-dead rows dropped from `docs/BRANCH_DISPOSITIONS.md` in the same commit. Nothing is left
-for you here.
-
 ### A_ref2. One more dead branch — a single delete click  ·  ⏳ NEW 2026-08-11
 A sixth-and-final leftover appeared right after A_ref closed: `docs/untangle-dispositions`. A session
 fixed the branch-record duplicate there, but its push was blocked long enough that another lane fixed
@@ -146,41 +138,7 @@ the exact same thing first (PRs #109 and #110). The branch now carries nothing `
 abandoned rather than merged. Its row in `docs/BRANCH_DISPOSITIONS.md` is marked SUPERSEDED and goes
 when the ref does. Nothing is lost: nothing on it is unique.
 
-### A_hook. ✅ CLOSED 2026-08-12 — the handoff-block guard is registered and live
-You pointed out (again) that sessions were ending without telling you whether to archive or delete
-them, which is how your sidebar fills with work you can't tell apart. That rule was written in
-`CLAUDE.md` the whole time and kept getting missed, so it is now a guard instead of a paragraph:
-`.claude/hooks/handoff-block-guard.mjs` refuses to let a session end without both a disposition and
-a real next step. It is merged and tested (PR [#106](https://github.com/Pootytxng/sentinel/pull/106)).
-
-**It is now registered.** The entry sits third in the `Stop` hooks array of `.claude/settings.json`,
-after the autopilot queue check and the context-size advisor. Proven live rather than read back: fed
-a synthetic transcript, a reply carrying neither a disposition nor a next action is blocked with the
-correction text, a compliant reply passes untouched, and `stop_hook_active` short-circuits so the
-guard can never loop a session. Nothing is left for you here — a session that ends without telling
-you archive/delete plus a next step now gets stopped before you see it.
-
-### A_disk. ✅ 10.24 GB reclaimed 2026-08-12 — an empty husk is all that is left
-`.claude/worktrees/nodejs-background-execution-fd4def` was a leftover checkout from a finished
-session. Git had already stopped tracking it (`git worktree remove` deregistered it successfully);
-what remained was build output. Measured before deletion it was **10.24 GB, not 9** — and every file
-and subfolder in it is now gone, deleted 2026-08-12 from a Cowork session. Six other dead folders
-from the same era were empty and were already gone.
-
-What survived the sweep is the **empty top-level folder — 0 bytes, 0 children.** Windows still will
-not unlink the directory itself, and nothing on this machine names it: no running process carries
-that path on its command line, which points at a finished session's working directory as the holder.
-That kind of hold only clears on restart. **There is nothing to do and nothing at stake** — an empty
-folder costs no disk. If you want it gone, restart the machine at whatever moment suits you and then
-run this (or say the word and a session will):
-
-```
-Remove-Item -Recurse -Force "C:\Users\Kuya\code\sentinel\.claude\worktrees\nodejs-background-execution-fd4def"
-```
-
-Nothing in the folder was ever unique — the branch and every commit live on GitHub.
-
-### A-closed. Nine §A items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
+### A-closed. Twelve §A items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
 None of them is waiting on you. The §A items still open above are A0, A_ci, A_rig and
 A_ref2 (**A_ref closed 2026-08-11; A_hook and A_disk closed 2026-08-12; A_crash closed 2026-08-12
@@ -342,6 +300,24 @@ and the site-glow/"full overhaul" gate.
   the 🔴 list is complete or still short an item.** The first build target is **DECIDED** — the Instrument
   Bench Phase-1 build (the drag gallery is deleted, not a build option). Note: your original **"Feature Roadmap Checklist (CC Brief)"**
   is NOT in the repo — if *that's* the list you meant, you'd need to re-share it.
+
+### B_dataroot. Your Trust Ledger is split in two - pick the recovery  ·  ⏳ NEW 2026-08-18  ·  [#130](https://github.com/Pootytxng/sentinel/issues/130)
+Compy was launched at least once inside the packaged Claude app, which redirected its data folder
+without changing the path it reads. It has been writing to two different change histories: **3
+recorded changes in your normal folder, 61 in the redirected copy** - and **12 real changes are on
+your PC right now with no receipt Compy can see**, so it cannot offer to undo them.
+
+The code fix is in (`795d8ff5`): Compy now checks where its folder actually lands, and **refuses to
+change anything on your machine while two histories exist** rather than guessing which is yours.
+That refusal is working as designed - and it means applies and rollbacks are blocked on your desk
+until you choose.
+
+**What only you can decide:** leave it frozen (**A**), **merge** the 61 into your normal history and
+archive the redirected copy (**B**, recommended - the IDs do not overlap so nothing is lost), or
+archive the redirected copy and accept losing undo for those 12 (**D**). Full evidence, exact
+conditions and what is explicitly NOT in the plan: the recovery comment on #130. **Nothing is
+copied, merged, moved or undone without your answer.**
+
 
 ### B_startup. A Windows mutation lives outside `actions.rs` — decide whether that's allowed  ·  ⏳ NEW 2026-08-02
 Found mechanically by `scripts/verify-module-map.mjs` on its first run. `set_startup_entry_enabled`
