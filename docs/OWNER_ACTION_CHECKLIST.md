@@ -301,6 +301,24 @@ nothing is deleted until you pick.
 
 ---
 
+### B_land. Where should user feedback and crash reports land?  ·  ⏳ NEW 2026-08-18
+You approved in-app feedback + crash reports (Tier 3, decision record
+[`decisions/2026-08-18-outbound-capability-expansion.md`](decisions/2026-08-18-outbound-capability-expansion.md)).
+I can build the whole thing, but the destination has to be **an account you own** — because the
+consent screen names the recipient out loud, and that name has to be true. A free Google Form,
+a dedicated Gmail address, or a GitHub issue tracker all work; free tier is fine. **Give me one and
+I wire it.** Until then Tier 3 gets built against a placeholder and cannot ship.
+
+### B_eu. Analytics default-ON — one region question before it ships to strangers  ·  ⏳ NEW 2026-08-18
+Same decision record. Usage analytics going **on by default with disclosure** is normal and legal in
+the US. In the **EU/UK**, non-essential analytics generally needs the user to say yes first, and
+"disclosed but on" is not yes. It changes nothing about the local app or your own machine — it only
+matters once Compy is downloadable by Europeans. **Your call:** (a) US-first, ship default-ON and
+region-gate later, (b) ask on first run everywhere (fewer people say yes, but zero legal exposure).
+I would take (a) — you have no EU distribution today and (b) can be added the day you do.
+
+---
+
 ## §C — Release gates — your money / legal calls  ·  🔒
 These gate **public** release only (not the local app you use daily). Full list:
 [`ARCHITECTURE_LOCKS.md`](ARCHITECTURE_LOCKS.md) pre-launch section.

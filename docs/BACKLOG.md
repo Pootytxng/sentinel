@@ -73,6 +73,31 @@
     Plans: `docs/superpowers/plans/2026-08-09-capability-exception-policy-rails.md` then
     `docs/superpowers/plans/2026-08-09-outbound-case-intelligence-tier1.md`.
 
+- [ ] **Q9 — OUTBOUND CAPABILITY EXPANSION (OWNER DECISION 2026-08-18).** Record:
+  `docs/decisions/2026-08-18-outbound-capability-expansion.md`. The owner judged that building
+  *around* the outbound restrictions cost more than the restrictions were worth. **Runs BEFORE Q8's
+  Tier 1 build** — Q9a is a day's work and tells us what users actually do, which is the input Tier 1's
+  catalog is guessing at today. Ordering is a lane decision, not an owner gate; say so if it should flip.
+  - [ ] **Q9a — arm Tier 2 usage analytics, default-ON + disclosed.** `receipts.rs` is already built
+    dark (`receipts_gate()` at `src-tauri/src/receipts.rs:18`); this is a switch, a first-run
+    disclosure, and the privacy/EULA text in the SAME change. Payload preview, scrubbed allowlist and
+    a real off switch stay mandatory — they are what makes the disclosure true. Amend
+    `src/capability-exception-policy-guard.test.ts` (it currently asserts Tier 2 default-OFF) citing
+    the decision record, never by weakening the invariant. 🪪 **owner-gated sub-item:** EU/UK
+    distribution needs a region check before default-ON ships there.
+  - [ ] **Q9b — build Tier 3 in-app feedback + crash reports.** Own module
+    (`src-tauri/src/case_evidence_upload.rs`), never inside `support_evidence.rs`. Tier 3's gate is
+    unchanged and applies in full: per-case consent, preview/redaction, named recipient, retention,
+    deletion receipt, no background queue, no inherited consent. 🪪 **blocked on the owner:** a landing
+    spot he controls (free tier fine) — it becomes the named recipient in the consent screen.
+  - [ ] **Q9c — CPU temperature that feels native, with no driver.** The third-party-driver route is
+    closed by Windows, not by us: every free option reads through WinRing0, which is on Microsoft's
+    vulnerable-driver blocklist (default-enforced since Win11 22H2) and flagged by Defender as
+    `VulnerableDriver:WinNT/Winring0` — our installer would trip Windows Security itself. Instead:
+    auto-detect a running HWiNFO / Libre Hardware Monitor shared-memory source, one click to turn
+    temperatures on, and stop presenting it as a limitation. A Compy-signed driver stays
+    policy-possible but costs an EV certificate, so ZERO-BUDGET LAW parks it until revenue exists.
+
 - [x] **Q0 — LabDeck glance-first presentation pilot: CLOSED, redirected 2026-08-02.** Issue
   [#14](https://github.com/Pootytxng/sentinel/issues/14) is not canonical and was never merged
   wholesale — closing verdict redirects into issue [#49](https://github.com/Pootytxng/sentinel/issues/49)'s
