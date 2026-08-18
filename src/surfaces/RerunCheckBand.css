@@ -48,8 +48,9 @@
   font-size: var(--type-label);
   color: var(--v2-muted);
 }
-/* The route to the fixes. Deliberately a LINK, not a button — .rcb-btn stays the row's only
-   button, so the count gains a destination without Home growing a second primary action. */
+/* The route to the fixes. Deliberately a LINK — the count gains a destination without Home growing
+   a second primary action. (It used to say ".rcb-btn stays the row's only button"; that button was
+   demoted to .rcb-run in the same commit that made this row type-only.) */
 :root[data-v2="on"] .rcb-fix {
   margin-left: 10px;
   padding: 0;

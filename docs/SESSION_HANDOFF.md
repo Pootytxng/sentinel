@@ -28,6 +28,16 @@ the copy lives in. Fixed; 27 English + 12 zh-CN engineer-speak hits are now 2 an
 with a stated reason (LOCKED rule 5's NVIDIA line, and Expert View naming the registry key it exists
 to name). When you find the next silent revert, check the guard's FILE FILTER before its rules.
 
+**Two of three is not three, and only looking caught it.** The owner named three Home controls as
+clutter; #136 was reported as clearing all three. A capture of the shipped build showed the bordered
+"Re-run check" button still standing. **4,979 green tests could not see it — every pin asserted the
+button was PRESENT**, so the suite was defending the old intent perfectly. Fixed in `436818c2` by
+DEMOTING it to an inline text link, never deleting it: that control is the only entry point to
+`<FirstCheck>`, so a delete would have stranded a flow to satisfy a look. Self-review PASS 10/10 on
+the installed binary, all three items now confirmed absent from the live DOM. **Rule of thumb this
+earned: when a report says a visual item is fixed, the pins that would prove it are the same pins
+that were written when it was wanted — capture the screen, do not re-read the tests.**
+
 **The ship path was dead and nothing said so** — found by running it, not by a test. Two independent
 breaks in `scripts/ship-reinstall.ps1`, the LAW-mandated post-build step:
 1. `scripts/lib/canonical-data-root.ps1` shipped BOM-less in #130. PowerShell 5.1 decodes a BOM-less
