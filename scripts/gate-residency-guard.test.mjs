@@ -53,6 +53,10 @@ const RESIDENCY = {
     kind: "npm-test",
     runner: "scripts/alias-propagation-harness.test.mjs",
   },
+  "backup-updater-key.ps1": {
+    kind: "npm-test",
+    runner: "scripts/updater-key-backup-guard.test.mjs",
+  },
   "branch-disposition-audit.mjs": {
     kind: "npm-test",
     runner: "scripts/branch-disposition-audit.test.mjs",
@@ -204,6 +208,10 @@ const RESIDENCY = {
     kind: "release-entry",
     staticGuard: "scripts/verify-release-gate.test.mjs",
     why: "The full local release gate. Hosted CI is off by owner decision, so this is the release proof — every gate it relays is separately resident, which is what makes running it a release-time act rather than the only line of defence.",
+  },
+  "restore-updater-key.ps1": {
+    kind: "npm-test",
+    runner: "scripts/updater-key-backup-guard.test.mjs",
   },
   "verify-updater-signature.mjs": {
     kind: "npm-test",

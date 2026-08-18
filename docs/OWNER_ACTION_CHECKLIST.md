@@ -32,6 +32,14 @@
     item asks for a copy **off this machine** (password-manager attachment or your personal cloud), and
     that has not happened yet. Moving it also *shrinks* the exposure: a Desktop folder is the first
     place anything that ever runs on this PC looks.
+  - **The tool exists now — 2 minutes, 2026-08-18.** `scripts/backup-updater-key.ps1` wraps the key
+    in AES-256-GCM under a passphrase you type and writes ONE armored text file — safe to email
+    yourself or keep on your phone, and it carries its own restore instructions so recovery never
+    needs this repo. Encryption is not ceremony: the fleet anchor is **passwordless**, so the raw
+    bytes ARE the secret. Run `pwsh scripts/backup-updater-key.ps1`, then prove it opens with
+    `pwsh scripts/restore-updater-key.ps1 -BackupPath <the .txt> -Verify` (writes nothing).
+    **Put the passphrase in your password manager** — the one thing the file cannot carry for you.
+    Round-trip, wrong-passphrase, tamper and no-clobber behaviour: `scripts/updater-key-backup-guard.test.mjs`.
   **Lose it** → the fleet can never receive another update (one-time re-send of new-key builds
   required). **Leak it** → whoever holds it can sign an update that Compy installs **silently on every
   install**, because the updater has been live since 2026-07-22. That makes this the highest-consequence
@@ -110,27 +118,6 @@ labelled *upper bound proven on fast hardware*, and the one bad finding below st
 of rig: **idle Compy burns ~half a CPU core doing nothing**, which will be worse, not better, on a
 weaker machine.
 
-### A_crash. ✅ CLOSED 2026-08-12 — the flag it was waiting on no longer gates it
-A tester whose PC had crashed searched Compy, found nothing that said "crash", and went to Windows
-Event Viewer instead — while Compy's own crash-evidence reader sat one room away, named "Black Box".
-Both causes are fixed: the Home door lands **on** the evidence instead of dropping you at the Lab
-door, and the station is called **Crash & Freeze Rescue** everywhere it is named.
-
-**✅ The flag question this item asked you to answer is GONE — nothing here is waiting on you.**
-When this was written, that Home door was a row inside the intake band, so it inherited
-`compy_home_intake` and the ask was "flip it and eyeball it". Two things happened since:
-the band **graduated to default-ON 2026-08-11** (so the flip you were asked for already
-happened), and on **2026-08-12** the crash door was **extracted out of the band entirely** into
-the always-visible Care entry the #91 discovery contract requires — independent of that flag in
-every state, including the `"0"` Settings failsafe. A user who switches the optimization band off
-keeps crash rescue, which is the point: the people most likely to silence a busy band overlap hard
-with the people whose PC keeps crashing. Pinned by `src/surfaces/care-home-route-guard.test.ts` and
-the Care-entry block in `src/surfaces/home-intake.test.tsx`.
-
-**What is genuinely still yours here: nothing structural, one look.** The entry has not been seen
-on your real screen at your real resolution — the visual self-review the plan asks for (Task 8
-step 5) has not run. That is a look, not a decision, and the feature reaches users either way.
-
 ### A_ref2. One more dead branch — a single delete click  ·  ⏳ NEW 2026-08-11
 A sixth-and-final leftover appeared right after A_ref closed: `docs/untangle-dispositions`. A session
 fixed the branch-record duplicate there, but its push was blocked long enough that another lane fixed
@@ -138,17 +125,16 @@ the exact same thing first (PRs #109 and #110). The branch now carries nothing `
 abandoned rather than merged. Its row in `docs/BRANCH_DISPOSITIONS.md` is marked SUPERSEDED and goes
 when the ref does. Nothing is lost: nothing on it is unique.
 
-### A-closed. Twelve §A items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
+### A-closed. Thirteen §A items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
-None of them is waiting on you. The §A items still open above are A0, A_ci, A_rig and
-A_ref2 (**A_ref closed 2026-08-11; A_hook and A_disk closed 2026-08-12; A_crash closed 2026-08-12
-when the Care entry was extracted out of the flag that gated it**); the one that actually needs
-your hands is **A0** (get the updater signing key off this machine) — A_ref2 is a ref deletion a
-session is clearing, not a click you owe. Archived
-2026-08-04 (TOKEN LAW §1 — history leaves the live doc, never gets deleted): **A0b** zh-CN merged +
-published in v0.9.11 · **A1** Gaming Mode QA signed off · **A2** beta smoke (sitting waived; the live
-beta thread is **§B2** below) · **A3** Lab Ops Console · **A4** Home console · **A5** Monitor v5
-flight deck · **A6** three-train eyeball · **A7** JARVIS motion · **A8** Blackbook logbook · **A9**
+None of them is waiting on you. The §A items still open above are **A0, A_ci, A_rig and A_ref2**;
+the one that actually needs your hands is **A0** (get the updater signing key off this machine, now
+a 2-minute scripted job) — A_ref2 is a ref deletion a session is clearing, not a click you owe.
+Archived 2026-08-18: **A_crash** · **A_ref** · **A_hook** · **A_disk**, all closed 2026-08-11/12.
+Archived 2026-08-04 (TOKEN LAW §1 — history leaves the live doc, never gets deleted): **A0b** zh-CN
+merged + published in v0.9.11 · **A1** Gaming Mode QA signed off · **A2** beta smoke (sitting waived;
+the live beta thread is **§B2** below) · **A3** Lab Ops Console · **A4** Home console · **A5** Monitor
+v5 flight deck · **A6** three-train eyeball · **A7** JARVIS motion · **A8** Blackbook logbook · **A9**
 per-room accents + palette. Your verdicts are preserved verbatim there.
 
 ---

@@ -169,6 +169,33 @@ metric so no two read as near-twins. The dark tones (Rust, Olive, Pine, Slate, P
   paired light text tint, ≥4.5:1 guard-pinned). **Nothing holds the eyeball anymore** — flip the preview on,
   try a dark tone anywhere, and give the verdict. Full thread: [`BACKLOG.md`](../BACKLOG.md) Cycle 2026-07-12l.
 
+---
+
+> **Moved 2026-08-18** under TOKEN LAW §1, when §A0 gained its scripted backup tool and the live
+> checklist went over budget. Four §A sections below were already marked CLOSED in the live doc;
+> their verdicts are preserved verbatim. Nothing here is waiting on the owner.
+
+### A_crash. ✅ CLOSED 2026-08-12 — the flag it was waiting on no longer gates it
+A tester whose PC had crashed searched Compy, found nothing that said "crash", and went to Windows
+Event Viewer instead — while Compy's own crash-evidence reader sat one room away, named "Black Box".
+Both causes are fixed: the Home door lands **on** the evidence instead of dropping you at the Lab
+door, and the station is called **Crash & Freeze Rescue** everywhere it is named.
+
+**✅ The flag question this item asked you to answer is GONE — nothing here is waiting on you.**
+When this was written, that Home door was a row inside the intake band, so it inherited
+`compy_home_intake` and the ask was "flip it and eyeball it". Two things happened since:
+the band **graduated to default-ON 2026-08-11** (so the flip you were asked for already
+happened), and on **2026-08-12** the crash door was **extracted out of the band entirely** into
+the always-visible Care entry the #91 discovery contract requires — independent of that flag in
+every state, including the `"0"` Settings failsafe. A user who switches the optimization band off
+keeps crash rescue, which is the point: the people most likely to silence a busy band overlap hard
+with the people whose PC keeps crashing. Pinned by `src/surfaces/care-home-route-guard.test.ts` and
+the Care-entry block in `src/surfaces/home-intake.test.tsx`.
+
+**What is genuinely still yours here: nothing structural, one look.** The entry has not been seen
+on your real screen at your real resolution — the visual self-review the plan asks for (Task 8
+step 5) has not run. That is a look, not a decision, and the feature reaches users either way.
+
 ### A_ref. ✅ CLOSED 2026-08-11 — the six dead branches are gone
 You said "you have full permission", so the pile is cleared: `docs/close-recovery-lane`,
 `codex/compy-care-capability-gate`, `claude/admiring-lumiere-648403`,
