@@ -399,7 +399,10 @@ here as decisions.
   You were right, and none of it was written down as decided — that gap is the finding, not the
   pixels. **Shipped already** (PR [#136](https://github.com/Pootytxng/sentinel/pull/136) → `dbf174d2`,
   self-review PASS): the question is gone when there is nothing to answer, the topbar tagline is
-  gone, the CHECKS card is one plain sentence, the accent side-stripe is gone. Full list and what
+  gone, the accent side-stripe is gone. **Correction:** that PR did NOT clear the third one you
+  named — the bordered "Re-run check" button was still on the shipped build, and a screenshot is
+  what caught it, not the 4,979 passing tests. It is now a plain text link (`436818c2`, self-review
+  PASS 10/10 on the installed binary). All three are confirmed gone from the live app. Full list and what
   remains: [`CONFORMANCE_AUDIT_2026-08-18.md`](CONFORMANCE_AUDIT_2026-08-18.md), queue in
   [`BACKLOG.md`](BACKLOG.md) (C-04 … C-17).
   **The one call I want your eye on — recommendation attached, not a menu:** rename the **Home** room
