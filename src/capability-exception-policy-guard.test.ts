@@ -51,7 +51,10 @@ const REQUIRED: Record<string, string[]> = {
     "no longer categorically forbidden",
     "no third-party game/process injection. this remains absolute",
     "tier 1 signed advisory download / no machine-data upload",
-    "tier 2 opt-in scrubbed incident fingerprint",
+    "tier 2 scrubbed incident fingerprint",
+    // The 2026-08-18 §2 amendment, pinned so the brief cannot drift in EITHER direction: not back to
+    // the retired "opt-in, default-OFF", and not into losing the two guarantees that replaced it.
+    "on by default once armed, disclosed at first run, with a real off switch",
     "tier 3 explicit per-case evidence upload",
     "signed remote rules — triple-gated off",
   ],
@@ -78,6 +81,7 @@ const REQUIRED: Record<string, string[]> = {
     "a compy driver is policy-possible",
     "current runtime remains driver-free",
     "no machine-derived incident payload",
+    "on by default once armed, disclosed at first run, real off switch, previewable",
     "tier 1 does not authorize tier 2 or 3",
     "tier 1's initial kill switch is local and deny-only",
     "any remotely delivered disable signal is a new inbound trust surface",
@@ -99,7 +103,7 @@ const REQUIRED: Record<string, string[]> = {
     "no third-party game/process injection",
     "current build ships no compy driver",
     "tier 1 signed advisory download/no machine upload",
-    "tier 2 opt-in scrubbed fingerprint",
+    "tier 2 scrubbed fingerprint, on by default once armed, disclosed at first run",
     "tier 3 explicit per-case evidence upload",
   ],
   "docs/PRIVACY.md": [

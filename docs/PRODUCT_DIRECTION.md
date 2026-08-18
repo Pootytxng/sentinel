@@ -216,7 +216,8 @@ prescription/conditioning wing, not the front door.
 - **No third-party game/process injection.** Current build ships no Compy driver. Any driver proposal
   needs its own proven-need/security/anti-cheat/signing/rollback record and later arming decision.
 - **Outbound is tiered, never globally unlocked:** updater live; Tier 1 signed advisory download/no
-  machine upload; Tier 2 opt-in scrubbed fingerprint; Tier 3 explicit per-case evidence upload.
+  machine upload; Tier 2 scrubbed fingerprint, on by default once armed, disclosed at first run;
+  Tier 3 explicit per-case evidence upload.
   Remote mutation rules remain signed and OFF.
 - **New features stay read-only, reversible, session-scoped or advisory by default.** Mutations still
   ride the one `actions.rs` boundary, mutation-gate QA and full rollback contract.

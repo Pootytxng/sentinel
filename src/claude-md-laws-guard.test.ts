@@ -119,7 +119,7 @@ const REQUIRED: { law: string; markers: string[] }[] = [
       "never fabricate, never claim unmeasured",
       "default-OFF",
       "Tier 1 signed advisory download / no machine-data upload",
-      "Tier 2 opt-in scrubbed incident fingerprint",
+      "Tier 2 scrubbed incident fingerprint",
       "Tier 3 explicit per-case evidence upload",
     ],
   },

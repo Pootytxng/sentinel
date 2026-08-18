@@ -62,8 +62,8 @@
     pull only, local matching against existing crash incidents, zero machine-derived upload, separate
     key/schema/domain/cache from privileged remote rules. Runtime stays hard-false until exact
     endpoint, signing custody, disclosures, security review and canary evidence are approved.
-  - **Tier 2 — NOT authorized by Tier 1:** opt-in scrubbed incident fingerprint, default OFF,
-    payload preview, no raw log/dump/path/serial.
+  - **Tier 2 — NOT authorized by Tier 1:** scrubbed incident fingerprint — on by default once armed,
+    disclosed at first run, real off switch, payload preview, no raw log/dump/path/serial (2026-08-18 §2).
   - **Tier 3 — NOT authorized by Tier 1:** explicit one-case evidence upload after preview/redaction,
     named recipient + retention/deletion receipt, no background queue or inherited consent.
   - **Driver posture:** no driver is needed for Tier 1. A Compy driver is policy-possible only through

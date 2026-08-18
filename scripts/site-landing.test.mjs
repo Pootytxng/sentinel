@@ -278,6 +278,65 @@ describe("legal pages (rendered from the .md source — privacy.html / eula.html
       expect(url, "still zero external origin").toMatch(/^https:\/\/compy\.gg\//);
     }
   });
+
+  // GUARD (2026-08-18). site/eula.html and site/privacy.html are HAND-RENDERED copies of
+  // docs/EULA.md and docs/PRIVACY.md — there is no generator, so a correction to the source can
+  // simply fail to reach the published page. Found for real: the EULA's §10 still said the app's
+  // one network use was nothing at all, a month after the signed updater went live. That is the
+  // worst genre of drift available here — the PUBLISHED legal text is the one a user is held to,
+  // and it was describing a build that no longer exists.
+  //
+  // Paragraph-level, not word-level: the check strips markdown emphasis from the source and tags
+  // from the page, normalizes whitespace and the spaces tag-stripping leaves before punctuation,
+  // then requires every substantial source paragraph to appear verbatim in the page. Headings,
+  // bullets, tables, blockquotes and the draft-status header are excluded — those legitimately
+  // differ between the two renderings.
+  it("publish every paragraph of the .md sources — the html copies cannot silently drift", () => {
+    const norm = (s) =>
+      s
+        .replace(/\s+/g, " ")
+        .replace(/\s+([.,;:)\]])/g, "$1")
+        .replace(/([(\[])\s+/g, "$1")
+        .trim();
+    const pageText = (h) =>
+      norm(
+        h
+          .replace(/<[^>]+>/g, " ")
+          .replace(/&amp;/g, "&")
+          .replace(/&nbsp;/g, " ")
+          .replace(/&#39;/g, "'")
+          .replace(/&quot;/g, '"')
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">"),
+      );
+    const sourceParagraphs = (md) =>
+      md
+        .split(/\n\s*\n/)
+        .map((p) => p.trim())
+        .filter(
+          (p) =>
+            p &&
+            !p.startsWith("#") &&
+            !p.startsWith("-") &&
+            !p.startsWith(">") &&
+            !p.startsWith("|") &&
+            !/^\*\*Status:/.test(p) &&
+            p.length > 90,
+        )
+        .map((p) => norm(p.replace(/\*/g, "").replace(/`/g, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")));
+
+    for (const [source, page, html] of [
+      ["docs/EULA.md", "site/eula.html", eula],
+      ["docs/PRIVACY.md", "site/privacy.html", privacy],
+    ]) {
+      const body = pageText(html);
+      const paragraphs = sourceParagraphs(readFileSync(join(root, ...source.split("/")), "utf8"));
+      // If this ever reads 0 the extraction broke and the whole assertion below is vacuous.
+      expect(paragraphs.length, `${source}: no paragraphs extracted`).toBeGreaterThan(5);
+      const missing = paragraphs.filter((p) => !body.includes(p)).map((p) => p.slice(0, 100));
+      expect(missing, `${page} has not been updated to match ${source}`).toEqual([]);
+    }
+  });
 });
 
 // R6 Lane D guard: every COMMITTED top-level site/ page must (1) link Privacy + Terms in its

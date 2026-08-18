@@ -18,13 +18,13 @@ const axes = [
   },
   {
     tag: "AXIS 02 // KERNEL & ANTI-CHEAT",
-    title: "No kernel driver. No game injection. Ever.",
+    title: "No kernel driver. No game injection.",
     compy:
       "FPS and frametimes come from Windows' own event stream (ETW), GPU sensors from the vendors' official libraries. Nothing touches a game's process, so there is nothing for anti-cheat to object to.",
     playbook:
       "Kernel drivers and overlay injection are the standard shortcut to deeper data — and the standard source of anti-cheat flags and blue screens.",
     tradeoff:
-      "It costs us real capability: no CPU temperature on most rigs, because reading it honestly needs a kernel driver. We show the gap instead of faking the number.",
+      "It costs us the direct route: CPU temperature needs a kernel driver to read first-hand, and this build ships none. So Compy reads it from a free sensor app you run yourself, and offers to set that up — rather than shipping a driver or faking the number.",
   },
   {
     tag: "AXIS 03 // CATALOG TRANSPARENCY",

@@ -282,7 +282,8 @@ function readIfPresent(path: string): { built: boolean; source: string } {
 }
 
 export const TIER_EVIDENCE_FIXTURE: Record<"tier2" | "tier3", string> = {
-  tier2: "default-off by construction; payload preview shown before send; scrub allowlist applied",
+  tier2:
+    "disclosed at first run; a real off switch in Settings; payload preview shown before send; scrub allowlist applied",
   tier3: "explicit per-case consent; redaction preview; named recipient; retention window; deletion receipt",
 };
 
@@ -291,8 +292,15 @@ export const TIER_EVIDENCE_FIXTURE: Record<"tier2" | "tier3", string> = {
 const TIER_ARMING_EVIDENCE: Record<TierId, { needs: string; re: RegExp }[]> = {
   // Tier 1 never uploads, so it has no consent surface to prove; its invariant is transport shape.
   tier1: [],
+  // AMENDED 2026-08-18 (docs/decisions/2026-08-18-outbound-capability-expansion.md §2). Tier 2 was
+  // defined "opt-in, default-OFF"; it is now on by default once armed. That is a LOOSER default and
+  // therefore a TIGHTER obligation: what made default-OFF safe was that silence implied no
+  // collection, and with the default flipped, the first-run disclosure and the off switch are the
+  // only things standing where that used to. So the requirement is not dropped, it MOVES — arming
+  // without a disclosure or without a real off switch is the failure this now catches.
   tier2: [
-    { needs: "default-OFF", re: /default[-_ ]?off/i },
+    { needs: "the first-run disclosure", re: /disclos/i },
+    { needs: "a real off switch", re: /off switch|switch(able)? off|opt[-_ ]?out/i },
     { needs: "payload preview", re: /preview/i },
     { needs: "a scrubbed allowlist", re: /allow[-_ ]?list|allowlist|scrub/i },
   ],
@@ -464,7 +472,7 @@ describe("outbound tier separation", () => {
     expect(auditOutboundTiers(snap).join(" ")).toMatch(/tier 1 .*(upload|post)/i);
   });
 
-  it("Tier 2 cannot arm without default-OFF, payload preview and a scrubbed allowlist", () => {
+  it("Tier 2 cannot arm without disclosure, an off switch, payload preview and a scrubbed allowlist", () => {
     const snap = readOutboundSnapshot();
     const t2 = tierOf(snap, "tier2");
     t2.built = true;

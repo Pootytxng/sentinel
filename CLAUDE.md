@@ -1,9 +1,7 @@
 # CLAUDE.md — Compy project brief & resume point
 
-<!-- SIZE + LAW BUDGET. Auto-loads on EVERY session boot, so every byte is paid forever.
-     `src/claude-md-laws-guard.test.ts` fails the build on a dropped law marker, a byte-budget breach
-     or a dead pointer, and its header carries the trim history. Add project LAWS here; put anything
-     narrative, historical or explanatory in docs/ and link it. -->
+<!-- Every byte loads on EVERY boot. `src/claude-md-laws-guard.test.ts` enforces the law markers,
+     the byte budget and dead pointers, and its failure message says how to respond. -->
 
 > **Auto-loads into every Claude Code session rooted in this repo** — durable, in-git, portable.
 > Fresh session: read this, then `docs/RELEASE_STATE.md` (live gate state) + `docs/BACKLOG.md` (next).
@@ -48,9 +46,10 @@ must be in context at all times:
 - **Outbound + Capability Exception Gate (owner decision 2026-08-09):** zero-outbound absolutism <!-- outbound-claim-allow -->
   is retired; the signed updater is live. New capabilities stay local/user-mode by default and cross
   a boundary only through a named, reviewed exception. Outbound has three distinct tiers: **Tier 1
-  signed advisory download / no machine-data upload; Tier 2 opt-in scrubbed incident fingerprint;
-  Tier 3 explicit per-case evidence upload.** Never merge their consent or transport. Receipts stays
-  default-OFF; `src/outbound-claim-guard.test.ts` rejects absolute offline claims.
+  signed advisory download / no machine-data upload; Tier 2 scrubbed incident fingerprint; Tier 3
+  explicit per-case evidence upload.** Never merge their consent or transport. Receipts has no send
+  path yet; **2026-08-18 §2 — on by default once armed, disclosed at first run, with a real off
+  switch.** `src/outbound-claim-guard.test.ts` rejects absolute offline claims.
 - **ONE MUTATION BOUNDARY (mechanical, 2026-08-03):** Compy changes Windows from
   `src-tauri/src/actions.rs` and **nowhere else** — snapshot → apply → verify → receipt → rollback.
   `src/mutation-boundary-guard.test.ts` fails the build on a registry write, service/task change,
@@ -121,9 +120,9 @@ restore is. **Diagnose elevation behavior with read-only probes only** (read the
 token integrity level, time a hands-off elevation, read the ledger); if a setting genuinely must
 change to proceed, that is a welfare-check, full stop. Mirrored in `docs/COWORK_HANDOFF.md`.
 
-**Precedent (2026-06-10):** a session flipped `ConsentPromptBehaviorAdmin` to diagnose and its own
-safety layer auto-switched mid-work: **treat a model auto-switch on security-sensitive work as a
-STOP signal** — halt and involve the owner.
+**Precedent:** a session flipped `ConsentPromptBehaviorAdmin` to diagnose and its safety layer
+auto-switched mid-work: **treat a model auto-switch on security-sensitive work as a STOP signal** —
+halt and involve the owner.
 
 ### Reports, subagents, self-review
 
@@ -200,7 +199,7 @@ intelligence/measurement) lives in **`src-tauri/CLAUDE.md`**, which auto-loads o
 - ★ `services.rs` (~1040) — service-suspend/debloat mutation surface (ARMED).
 - ★ `gpu_profile.rs` (~590) — GPU profile handling (apply structurally impossible → advisory; AMD state not user-mode readable).
 - ★ `remote_rules.rs` (~590) — signed remote-rules (Ed25519 verify wired, fetch triple-gated OFF).
-- ★ `receipts.rs` (~415) — Receipts telemetry gate (built dark, opt-in, default-OFF; outbound Tier 2).
+- ★ `receipts.rs` (~415) — Receipts telemetry gate (built dark, no send path, default-OFF; outbound Tier 2).
 - ★ `license.rs` (~355) — Compy Pro license gate (built dark).
 - ★ `drift.rs` (~351) — applied-change drift detection vs live machine state.
 - ★ `data_root.rs` (~1050) — canonical data-root resolver (#130): measures where the root LANDS, not the `APPDATA` string; halts on a split; issues `MutationRoot`, the capability `history.rs`/`actions.rs` now require. Guard: `scripts/data-root-guard.test.mjs`.
@@ -216,7 +215,7 @@ intelligence/measurement) lives in **`src-tauri/CLAUDE.md`**, which auto-loads o
    - **(a) Stays barred regardless of measured fps** — timer/HPET hacks · bcdedit boot params · MMCSS abuse · **core-parking writes** · Defender disable · MPO disable · fixed pagefile forcing · ungated kernel-level capability · anything that trips EAC/BattlEye. Excluded for SAFETY / STABILITY / SECURITY / ANTI-CHEAT; **measurement does NOT make these safe.**
    - **(b) Becomes a candidate** once it proves measurable benefit AND clears the rails — anything previously excluded merely as unmeasured "optimizer-rot / snake-oil."
    - **Structurally impossible (don't attempt):** GPU-profile apply — AMD profile state isn't user-mode readable, so rollback-first cannot be satisfied.
-   - The Lab's proving loop is the qualifying pipeline (candidate → proves benefit on the bench → clears the rails → mutation-gate QA → joins the catalog). Catalog policy blueprint: `docs/superpowers/specs/2026-07-08-lab-proving-ground.md` (**its §2/§3/§8 UI direction is SUPERSEDED** — owner-rejected 2026-07-09; live Lab UI = `docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md` "The Instrument Bench", plan `docs/superpowers/plans/2026-07-09-lab-instrument-bench-p1.md`).
+   - The Lab's proving loop is the qualifying pipeline (candidate → proves benefit on the bench → clears the rails → mutation-gate QA → joins the catalog). Catalog policy blueprint: `docs/superpowers/specs/2026-07-08-lab-proving-ground.md` (**§2/§3/§8 UI direction SUPERSEDED** — owner-rejected 2026-07-09; live Lab UI = `docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md`, plan `docs/superpowers/plans/2026-07-09-lab-instrument-bench-p1.md`).
    - Product value also grows *upward* (gaming readiness, monitoring, session summaries, priority ranking, export) — see `docs/PRODUCT_DIRECTION.md`. **Any new feature that is not a catalog tweak stays read-only / advisory / reversible / session-scoped by default; an exception requires rule 1.**
 
 ## Dev machine (for hardware-specific work)
