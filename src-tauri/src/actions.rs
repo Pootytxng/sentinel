@@ -3519,10 +3519,20 @@ pub(crate) fn apply_eee_disable() -> Result<ApplyResult, String> {
     })
 }
 
-pub(crate) fn rollback_eee_disable_typed(adapters: &[EeeNicSnapshot]) -> Result<(), String> {
-    if adapters.is_empty() {
-        return Err("snapshot had no EEE adapters to roll back".into());
-    }
+/// PURE: build the ROLLBACK script from the snapshot. Extracted (2026-08-18) so the restore path
+/// is testable the way the apply path already was — under rollback-first integrity the undo deserves
+/// at least the coverage of the do, and this half was only ever asserted through the elevated call.
+///
+/// WHY THIS ESCAPES RATHER THAN REFUSES. Everywhere else in this file a token bound for an elevated
+/// command is REFUSED by `ps_safe` / `ps_safe_squoted` if it carries anything outside a documented
+/// alphabet. Here the tokens are adapter names, driver property names and the driver's own prior
+/// value strings — vendor text Compy did not choose and cannot constrain, read back out of a
+/// snapshot. Refusing an apostrophe would make a legitimately-named NIC UNROLLBACKABLE, a worse
+/// failure than the one it prevents. Inside a PowerShell single-quoted literal the ONLY
+/// metacharacter is `'`, and doubling it is the complete, documented escape — so the safety here
+/// rests on a proof rather than an alphabet: `eee_scripts_never_break_out_of_their_quotes` fuzzes
+/// both builders and re-parses the emitted script back to the exact input tokens.
+pub(crate) fn build_eee_rollback_script(adapters: &[EeeNicSnapshot]) -> String {
     let mut ps = String::new();
     for a in adapters {
         ps.push_str(&format!(
@@ -3535,6 +3545,14 @@ pub(crate) fn rollback_eee_disable_typed(adapters: &[EeeNicSnapshot]) -> Result<
     // Same deterministic-exit-0 tail as the apply: a silently-skipped pair must never read as an
     // elevation failure (restored values come from the snapshot = the driver's own prior strings).
     ps.push_str("$null = 0");
+    ps
+}
+
+pub(crate) fn rollback_eee_disable_typed(adapters: &[EeeNicSnapshot]) -> Result<(), String> {
+    if adapters.is_empty() {
+        return Err("snapshot had no EEE adapters to roll back".into());
+    }
+    let ps = build_eee_rollback_script(adapters);
     run_elevated_powershell(&ps)
         .map_err(|e| format!("Couldn't restore Energy Efficient Ethernet — {}", e))?;
     Ok(())
@@ -5271,6 +5289,134 @@ mod restores_label_tests {
 mod ipc_input_fuzz_tests {
     use super::*;
     use crate::fuzz_support::{hostile_string, mutate_text, Rng, SEEDS};
+
+    // ── EEE: the one interpolation site that ESCAPES instead of REFUSING ──────────────────────
+    //
+    // Independent Rust/Tauri security review (issue #133 Task 7) flagged the EEE builders for not
+    // going through `ps_safe_squoted` like every other elevated interpolation in this file. They
+    // cannot: the tokens are adapter names, driver property names and the driver's own prior value
+    // strings — vendor text read back out of a snapshot, not something Compy chose. Refusing an
+    // apostrophe there would make a legitimately-named NIC UNROLLBACKABLE, which is a worse failure
+    // than the one it prevents (rollback-first integrity, LOCKED rule 3).
+    //
+    // So this site keeps the escape and pays for it with a PROOF instead of an alphabet: for any
+    // input whatsoever, re-parsing the emitted script's single-quoted literals must return the
+    // EXACT input tokens. If a token could terminate its literal early — the definition of a
+    // breakout — the parse would return something else, or fail. Both builders are covered, because
+    // the rollback half is the half a tampered history.json feeds.
+    /// Read the PowerShell single-quoted literals out of a script, in order, unescaping `''`.
+    /// Returns None if the script is not well-formed (an unterminated literal = a breakout).
+    fn parse_squoted_literals(script: &str) -> Option<Vec<String>> {
+        let cs: Vec<char> = script.chars().collect();
+        let mut out = Vec::new();
+        let mut i = 0;
+        while i < cs.len() {
+            if cs[i] != '\'' {
+                i += 1;
+                continue;
+            }
+            i += 1; // opening quote
+            let mut lit = String::new();
+            loop {
+                match cs.get(i) {
+                    None => return None, // unterminated literal
+                    Some('\'') => {
+                        if cs.get(i + 1) == Some(&'\'') {
+                            lit.push('\'');
+                            i += 2;
+                        } else {
+                            i += 1; // closing quote
+                            break;
+                        }
+                    }
+                    Some(c) => {
+                        lit.push(*c);
+                        i += 1;
+                    }
+                }
+            }
+            out.push(lit);
+        }
+        Some(out)
+    }
+
+    #[test]
+    fn eee_scripts_never_break_out_of_their_quotes() {
+        for seed in SEEDS {
+            let mut rng = Rng::seeded(seed);
+            for case in 0..300 {
+                let tok = |rng: &mut Rng| -> String {
+                    if rng.flag() {
+                        hostile_string(rng, 4)
+                    } else {
+                        mutate_text(rng, "Realtek PCIe GbE Family Controller")
+                    }
+                };
+                // 1..=3 adapters, because a rig with two eligible NICs is the shape the mutation
+                // path actually emits — several `Set-NetAdapterAdvancedProperty ...; ` statements
+                // concatenated into ONE elevated script. Reviewer catch (#133 Task 7): proving the
+                // escape at N=1 does not prove it for the script the apply path really builds.
+                let n = 1 + rng.below(3);
+                let triples: Vec<(String, String, String)> =
+                    (0..n).map(|_| (tok(&mut rng), tok(&mut rng), tok(&mut rng))).collect();
+
+                let apply = build_eee_apply_script(
+                    &triples
+                        .iter()
+                        .map(|(name, display, value)| {
+                            (
+                                EeeProperty {
+                                    adapter_name: name.clone(),
+                                    display_name: display.clone(),
+                                    current_value: "On".into(),
+                                    valid_values: vec!["On".into(), "Off".into()],
+                                },
+                                value.clone(),
+                            )
+                        })
+                        .collect::<Vec<_>>(),
+                );
+                let rollback = build_eee_rollback_script(
+                    &triples
+                        .iter()
+                        .map(|(name, display, value)| EeeNicSnapshot {
+                            adapter_name: name.clone(),
+                            property_display_name: display.clone(),
+                            prior_value: value.clone(),
+                        })
+                        .collect::<Vec<_>>(),
+                );
+
+                let expected: Vec<String> = triples
+                    .iter()
+                    .flat_map(|(a, b, c)| [a.clone(), b.clone(), c.clone()])
+                    .collect();
+                for (which, script) in [("apply", &apply), ("rollback", &rollback)] {
+                    let lits = parse_squoted_literals(script).unwrap_or_else(|| {
+                        panic!("seed {seed} case {case} n={n}: {which} script has an unterminated literal — a token escaped its quotes: {script:?}")
+                    });
+                    assert_eq!(
+                        lits, expected,
+                        "seed {seed} case {case} n={n}: {which} script did not re-parse to its input tokens — the escape leaked"
+                    );
+                }
+            }
+        }
+    }
+
+    // The reviewer's second question, answered by proof rather than by recollection: the fuzz above
+    // can emit a NUL inside an adapter name, and that string ends up as ONE argument to
+    // powershell.exe. Win32 command lines are NUL-terminated, so a silent truncation there would
+    // turn a rejected token into a SHORTER command that still runs. Rust's std refuses the arg
+    // instead — the whole elevated call fails loudly, which is the correct outcome for a mutation.
+    #[test]
+    fn an_embedded_nul_fails_the_command_instead_of_truncating_it() {
+        let err = std::process::Command::new("cmd.exe")
+            .args(["/c", "echo hi\0 && whoami"])
+            .output()
+            .expect_err("an embedded NUL must be refused, not silently truncated into a shorter command");
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    }
 
     // The documented alphabets, restated so an edit to a guard has to be a deliberate decision that
     // updates this contract too, not a quiet widening.
