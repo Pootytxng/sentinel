@@ -59,7 +59,7 @@
       "storage": "Storage",
       "gpu": "GPU",
       "cpu": "CPU",
-      "cpuNoTemp": "no temp — Compy won't ship a kernel driver"
+      "cpuNoTemp": "no temp — this build ships no kernel driver"
     },
     "dense": {
       "model": "model",
@@ -118,7 +118,7 @@
       "diskFull": "C: {{pct}}% full",
       "gpu": "GPU",
       "cpu": "CPU",
-      "cpuNoTemp": "no temp — Compy won't ship a kernel driver"
+      "cpuNoTemp": "no temp — this build ships no kernel driver"
     },
     "stage": {
       "loading3d": "Loading your rig in 3D…",

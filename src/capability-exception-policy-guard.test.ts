@@ -1,4 +1,5 @@
-import { readFileSync } from "fs";
+import { readdirSync, readFileSync, statSync } from "fs";
+import { join } from "path";
 import { describe, expect, it } from "vitest";
 
 // Capability Exception policy coherence guard (2026-08-09).
@@ -304,5 +305,103 @@ describe("Capability Exception policy coherence", () => {
     expect(auditCapabilityExceptionPolicy(snapshot)).toContain(
       "forbidden policy: catalog-supplied transport origin",
     );
+  });
+});
+
+// ── SHIPPED COPY MUST NOT OUTLIVE THE DECISION (#133) ──────────────────────────────────────────
+//
+// The block above pins the POLICY documents. This one pins what a user actually reads, because the
+// 2026-08-09 decision moved a line the app's own copy was still standing on: a Compy driver is no
+// longer categorically forbidden — it is policy-possible only through its own approved record, and
+// the current build ships none.
+//
+// That makes two opposite failures possible, and this guard rejects both:
+//
+//   "Compy will never ship a kernel driver"  — a permanent promise the owner has not made, and one
+//                                              that would have to be publicly broken later.
+//   "Compy's driver reads your CPU temp"     — marketing a capability that does not exist.
+//
+// The honest form is the time-scoped fact: this build installs no kernel driver, so CPU temperature
+// is external-monitor-only. Game/process injection is NOT in scope here — that ban stays absolute
+// and its own guards keep it that way.
+
+// join() rather than "a/b" literals: walk() emits child paths through join(), so on Windows a
+// slash-literal top-level entry lands in the corpus spelled differently from everything under it,
+// and the corpus assertion below then fails on a file that IS being scanned.
+const COPY_ROOTS = [
+  join("src", "i18n"), join("src", "data"), join("src", "surfaces"),
+  join("src", "Onboarding.tsx"), join("site-app", "src", "pages"),
+];
+const COPY_DOCS = [
+  join("docs", "BETA_TESTER_README.md"), join("docs", "PRIVACY.md"), join("docs", "EULA.md"),
+];
+const COPY_EXT = /\.(ts|tsx|json|astro|md)$/;
+
+// A promise about the FUTURE of a driver, in the forms this repo has actually used.
+const DRIVER_PROMISE = /(won't|will not|will never|never)\s+(ship|install|include|build|add)\s+(a\s+)?(kernel\s+)?driver/i;
+// The same promise made with a pronoun — "CPU temperature needs a kernel driver, and Compy will
+// never ship one" — which the noun form above walks straight past. This is how the setup tour said
+// it, so it is not a hypothetical.
+const DRIVER_PROMISE_PRONOUN = /(won't|will not|will never|never)\s+(ship|install|include|build|add)\s+one\b/i;
+// A claim that a driver already exists and does something.
+// `\b` on `our` matters more than it looks: without it, "y[our driver] tool" — which is the GPU
+// VENDOR's driver, not Compy's — matches, and the guard reports five false defects in copy that was
+// already correct. A guard that cries wolf gets weakened by the next person to hit it.
+const DRIVER_CLAIM = /\b(our|compy's|the compy)\s+(kernel\s+)?driver\b/i;
+
+function collectCopy(): string[] {
+  const out: string[] = [];
+  const walk = (p: string) => {
+    let st;
+    try { st = statSync(p); } catch { return; }
+    if (st.isDirectory()) { for (const n of readdirSync(p)) walk(join(p, n)); return; }
+    if (COPY_EXT.test(p) && !/\.(test|spec)\./.test(p)) out.push(p);
+  };
+  for (const r of COPY_ROOTS) walk(r);
+  for (const d of COPY_DOCS) walk(d);
+  return out;
+}
+
+export function findDriverOverclaims(text: string): string[] {
+  const hits: string[] = [];
+  text.split("\n").forEach((line, i) => {
+    const pronounForm = /driver/i.test(line) && DRIVER_PROMISE_PRONOUN.test(line);
+    if (DRIVER_PROMISE.test(line) || pronounForm) hits.push(`${i + 1}: permanent "no driver ever" promise`);
+    if (DRIVER_CLAIM.test(line)) hits.push(`${i + 1}: claims a Compy driver exists`);
+  });
+  return hits;
+}
+
+describe("shipped copy matches the capability exception gate", () => {
+  it("has a real corpus (a copy guard whose corpus emptied would pass loudest)", () => {
+    const files = collectCopy();
+    expect(files).toContain(join("src", "i18n", "locales", "en", "home.json"));
+    expect(files).toContain(join("docs", "BETA_TESTER_README.md"));
+    expect(files.length).toBeGreaterThan(30);
+  });
+
+  it("catches both directions (positive controls)", () => {
+    expect(findDriverOverclaims("Compy won't ship a kernel driver")).toHaveLength(1);
+    expect(findDriverOverclaims("we will never install a driver")).toHaveLength(1);
+    expect(findDriverOverclaims("our kernel driver reads the sensor")).toHaveLength(1);
+    expect(findDriverOverclaims("CPU temp needs a kernel driver, and Compy will never ship one")).toHaveLength(1);
+    // The honest, time-scoped form must stay legal, or the guard forces a lie in the other direction.
+    expect(findDriverOverclaims("This build installs no kernel driver.")).toEqual([]);
+    expect(findDriverOverclaims("Compy ships no kernel driver, so CPU temp is monitor-only.")).toEqual([]);
+    // The GPU vendor s driver is not Compy s driver.
+    expect(findDriverOverclaims("Capture your driver settings before and after a change.")).toEqual([]);
+  });
+
+  it("no shipped surface promises a driver will never exist, or claims one already does", () => {
+    const offenders: string[] = [];
+    for (const file of collectCopy()) {
+      for (const hit of findDriverOverclaims(readFileSync(file, "utf8"))) offenders.push(`${file}:${hit}`);
+    }
+    expect(
+      offenders,
+      "The owner retired the categorical driver ban on 2026-08-09: a driver is policy-possible " +
+        "only under its own approved record, and this build ships none. Say the time-scoped fact, " +
+        "not a permanent promise and not a capability that does not exist:\n  " + offenders.join("\n  "),
+    ).toEqual([]);
   });
 });

@@ -85,7 +85,7 @@ export function verifyUpdaterArtifactFiles(installerPath, signaturePath, configP
   const config = JSON.parse(readFileSync(configPath, "utf8"));
   const encodedPublicKey = config?.plugins?.updater?.pubkey;
   if (typeof encodedPublicKey !== "string" || encodedPublicKey.length === 0) {
-    throw new Error("tauri.conf.json has no updater public key");
+    throw new Error("tauri.conf.json is missing the updater public key");
   }
 
   verifyUpdaterArtifactBuffer(

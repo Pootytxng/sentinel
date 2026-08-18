@@ -55,7 +55,7 @@
       "storage": "存储",
       "gpu": "GPU",
       "cpu": "CPU",
-      "cpuNoTemp": "无温度读数——Compy 不会内置内核驱动"
+      "cpuNoTemp": "无温度读数——当前版本不内置内核驱动"
     },
     "dense": {
       "model": "型号",
@@ -114,7 +114,7 @@
       "diskFull": "C 盘已用 {{pct}}%",
       "gpu": "GPU",
       "cpu": "CPU",
-      "cpuNoTemp": "无温度读数——Compy 不会内置内核驱动"
+      "cpuNoTemp": "无温度读数——当前版本不内置内核驱动"
     },
     "stage": {
       "loading3d": "正在以 3D 方式加载你的主机…",

@@ -30,9 +30,9 @@ code-signed, and code-signing certificates cost money — this beta is free, uns
 earned its keep yet. Signing happens before any public release.
 
 What the warning does NOT mean: it's not a virus flag, and it doesn't change what the app can do.
-For the record, here's what Compy deliberately never does — no kernel driver, no game injection,
-no network calls, no account, no auto-update. You can verify the no-network claim yourself with
-any firewall monitor; we'd honestly love it if one of you did.
+For the record, here's what Compy deliberately never does — no game injection, no account, and
+nothing about your system is uploaded anywhere. The current build installs no kernel driver either.
+The one thing it does reach out for is its own update check, signed and described in section 6.
 
 **To proceed:** click **More info** → **Run anyway.**
 
@@ -91,9 +91,13 @@ gear — **Appearance has three themes; tell us which one you ended up keeping.*
 
 ## 6. Privacy
 
-No telemetry, no account, no remote anything, no updater. **Nothing about your system leaves your
-PC unless you choose to send it to us.** Export reports are local files; review one before sharing
-— it contains hardware names and app state, nothing else.
+No telemetry, no account, no data about your machine sent anywhere. **Nothing about your system
+leaves your PC unless you choose to send it to us.** Export reports are local files; review one
+before sharing — it contains hardware names and app state, nothing else.
+
+Compy does make exactly one outbound call, and you should know about it: it asks GitHub whether a
+newer signed version exists, and downloads it only with your say-so. That check sends no
+information about your machine, and you can switch it off in Settings.
 
 ---
 
@@ -115,8 +119,8 @@ complaints all welcome.
 
 ## 8. Known limitations (honesty section)
 
-- **No CPU temperature** — reading it needs a kernel driver, and we won't ship one. By design,
-  forever. (GPU temperature works.)
+- **No CPU temperature** — reading it needs a kernel driver, and this build ships none. (GPU
+  temperature works.)
 - **1% low is a live estimate**, not benchmark-grade.
 - **Comparison verdicts need two sessions of the same game** — different games don't compare.
 - **Overlay**: borderless/windowed only, not exclusive fullscreen.

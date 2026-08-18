@@ -170,7 +170,7 @@
     "cpuTempFallback": "Run HWiNFO (Shared Memory Support on) or LibreHardwareMonitor to show CPU temp",
     "memoryUsedLabel": "Memory used",
     "kernelDriverNoteWithTemp": "CPU temperature here is read driver-free from a sensor tool you're already running — Compy installs no kernel driver of its own. GPU temperature comes straight from the vendor's user-mode library.",
-    "kernelDriverNoteNoTemp": "Compy won't install a kernel driver, so it doesn't read CPU temperature on its own — it shows only what a sensor app you run publishes, driver-free (see the row above). GPU temperature comes straight from the vendor's user-mode library, so it always shows.",
+    "kernelDriverNoteNoTemp": "This build installs no kernel driver, so Compy doesn't read CPU temperature on its own — it shows only what a sensor app you run publishes, driver-free (see the row above). GPU temperature comes straight from the vendor's user-mode library, so it always shows.",
     "coreTooltip": "Core {{index}}: {{percent}}%",
     "nvidiaUnverifiedTitle": "NVIDIA sensor readings come from NVML but haven't been verified on real NVIDIA hardware yet. Treat values as provisional.",
     "unverified": "unverified",

@@ -200,7 +200,7 @@ intelligence/measurement) lives in **`src-tauri/CLAUDE.md`**, which auto-loads o
 - ★ `services.rs` (~1040) — service-suspend/debloat mutation surface (ARMED).
 - ★ `gpu_profile.rs` (~590) — GPU profile handling (apply structurally impossible → advisory; AMD state not user-mode readable).
 - ★ `remote_rules.rs` (~590) — signed remote-rules (Ed25519 verify wired, fetch triple-gated OFF).
-- ★ `receipts.rs` (~415) — Receipts telemetry gate (built dark, opt-in, default-OFF; new outbound boundary).
+- ★ `receipts.rs` (~415) — Receipts telemetry gate (built dark, opt-in, default-OFF; outbound Tier 2).
 - ★ `license.rs` (~355) — Compy Pro license gate (built dark).
 - ★ `drift.rs` (~351) — applied-change drift detection vs live machine state.
 - ★ `data_root.rs` (~1050) — canonical data-root resolver (#130): measures where the root LANDS, not the `APPDATA` string; halts on a split; issues `MutationRoot`, the capability `history.rs`/`actions.rs` now require. Guard: `scripts/data-root-guard.test.mjs`.

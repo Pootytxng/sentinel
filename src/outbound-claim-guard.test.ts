@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync, readdirSync, statSync } from "fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 
 // OUTBOUND-CLAIM GUARD (2026-08-03). Replaces the receipts-only copy guard.
@@ -51,12 +51,26 @@ const EXT = /\.(ts|tsx|js|jsx|mjs|json|html|astro|md|css|rs)$/;
 const EXCLUDE_DIRS = new Set([
   "node_modules", ".git", ".github", "dist", "dist-web", "dist-site", "target",
   "coverage", "__snapshots__", ".vite", ".astro", ".claude",
+  // src-tauri/gen is Tauri's generated schema mirror of capabilities/ — authored copy lives in the
+  // source it is generated FROM, and flagging both reports one defect twice.
+  "gen",
 ]);
 
 // docs/ is an internal record shelf: dated specs, reviews, audits and changelogs legitimately
-// preserve absolutes that were TRUE when written — rewriting history would be dishonest. The two
-// legal documents are the exception: they are published to the website, so they are live copy.
-const DOCS_LIVE = new Set([join("docs", "PRIVACY.md"), join("docs", "EULA.md")]);
+// preserve absolutes that were TRUE when written — rewriting history would be dishonest. These are
+// the exceptions: text that is PUBLISHED or HANDED TO A TESTER is live copy, and a tester reading
+// "no network calls, no auto-update" in their own guide is not reading history, they are being told
+// something false about the build in front of them. (Added 2026-08-18 after exactly that: the beta
+// guide still promised no updater a month after the signed updater armed.)
+const DOCS_LIVE = new Set([
+  join("docs", "PRIVACY.md"),
+  join("docs", "EULA.md"),
+  join("docs", "BETA_TESTER_README.md"),
+]);
+
+// collect() skips leading-underscore paths as local scratch. This one is a message the owner pastes
+// to real testers, so it is force-included despite the underscore.
+const DISTRIBUTION_FILES = ["_tester-message.md"];
 
 // Tests hold fixtures and quoted examples; this file plants a phrase on purpose.
 const SKIP_FILE = /\.(test|spec)\.[tj]sx?$/;
@@ -84,6 +98,7 @@ function collect(): string[] {
     }
   };
   walk(".");
+  for (const f of DISTRIBUTION_FILES) if (existsSync(f) && !out.includes(f)) out.push(f);
   return out;
 }
 
@@ -106,6 +121,12 @@ const FORBIDDEN = [
   "zero outbound",
   "zero-outbound",
   "never sent anywhere",
+  // Added 2026-08-18: the beta tester guide still carried all three of these a month after the
+  // signed updater armed, in the same document that tells testers to get onto that updater.
+  "no network calls",
+  "no remote anything",
+  "no updater",
+  "no auto-update",
   "不会离开你的电脑",
   "从不联网",
 ];
