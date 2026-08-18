@@ -94,12 +94,17 @@
     unchanged and applies in full: per-case consent, preview/redaction, named recipient, retention,
     deletion receipt, no background queue, no inherited consent. 🪪 **blocked on the owner:** a landing
     spot he controls (free tier fine) — it becomes the named recipient in the consent screen.
-  - [ ] **Q9c — CPU temperature that feels native, with no driver.** The third-party-driver route is
+  - [ ] **Q9c — CPU temperature that feels native, with no driver.** *Most of this already exists:*
+    `src-tauri/src/cpu_temp.rs` reads HWiNFO's `Global\HWiNFO_SENS_SM2` shared memory and the
+    LibreHardware/OpenHardware WMI namespaces, driver-free, and Monitor shows the value attributed to
+    its source. **The gap is purely UX** — with no sensor app running the user gets a sentence telling
+    them to go run one (`monitor.monitorPanels.cpuTempFallback`), which is a dead end and violates the
+    name-it-AND-fix-it-inline law. Make it an offer: detect installed-but-not-running vs not-installed,
+    launch it or link the download, and say how to switch HWiNFO's Shared Memory Support on. UI change
+    → the self-review law applies. The third-party-driver route is
     closed by Windows, not by us: every free option reads through WinRing0, which is on Microsoft's
     vulnerable-driver blocklist (default-enforced since Win11 22H2) and flagged by Defender as
-    `VulnerableDriver:WinNT/Winring0` — our installer would trip Windows Security itself. Instead:
-    auto-detect a running HWiNFO / Libre Hardware Monitor shared-memory source, one click to turn
-    temperatures on, and stop presenting it as a limitation. A Compy-signed driver stays
+    `VulnerableDriver:WinNT/Winring0` — our installer would trip Windows Security itself. A Compy-signed driver stays
     policy-possible but costs an EV certificate, so ZERO-BUDGET LAW parks it until revenue exists.
 
 - [x] **Q0 — LabDeck glance-first presentation pilot: CLOSED, redirected 2026-08-02.** Issue
