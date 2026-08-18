@@ -58,7 +58,14 @@ breaks in `scripts/ship-reinstall.ps1`, the LAW-mandated post-build step:
 `main@e6feb861`: **9 HONORED · 1 SILENTLY REVERSED · 9 NEVER BUILT · 4 PARTIAL · 1 DOC DRIFT.** It
 reached C-01/C-02/C-03 independently as its own top three — the same three the owner found by eye.
 The survivors are queued in `docs/BACKLOG.md` § *Conformance queue* in owner-value order, starting
-C-04, C-05, C-10 (C-06/C-08/C-09 are shipped). Take from there, not from this file.
+C-04, C-05, C-19, C-10 (C-06/C-08/C-09 are shipped). Take from there, not from this file.
+
+**C-19 is new this session, from the owner's own question.** He was told the CPU-temperature
+work would show up under "Monitor → CPU". There is no Monitor room — the rooms are Home · Check ·
+Live · Tune · History · Test — and the reading actually sits at **Live → Advanced → CPU card → open
+detail**. The wrong name is the small half; the real finding is that "is my CPU running hot" is a
+front-door question for a PC doctor and its answer is three clicks deep behind a mode the user
+must know to switch into. Surfacing decision, not a sensor one — the reading already works.
 
 Also open, owner-flagged as optional: 15 bare `.btn-small` buttons hover `--danger` red on 5
 surfaces that destroy nothing (baseline in `src/button-legibility-guard.test.ts`).
@@ -83,7 +90,8 @@ can read it) — that is the mechanism that would have caught this drift without
 
 ## Verification at the merge head
 
-`#136` at `ec88cfa3`, `scripts/verify-local.ps1` via `.githooks/pre-push` → **PASS**. Corroborated
+`main` at `256264ad`, `scripts/verify-local.ps1` via `.githooks/pre-push` → **PASS** (as did every
+push this session: `80397326`, `3e7648c8`, `436818c2`, `1664f0e1`, `88292929`). Corroborated
 in-session: vitest 337 files / 4972 tests green · `tsc --noEmit` clean · `doc-budget.ps1` ALL PASS ·
 `branch-disposition-audit` OK. Self-review **PASS**, 10/10, before/after captures in
 `docs/ui-sweep/shots/`.
