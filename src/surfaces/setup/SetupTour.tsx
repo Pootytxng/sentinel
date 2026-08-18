@@ -125,7 +125,14 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
 
   const focusId = step.kind === "lesson" ? (step.focusId ?? null) : null;
   const isLast = i === steps.length - 1;
-  const legLabel = step.leg === "setup" ? t("home.setupTour.leg.setup") : t("home.setupTour.leg.tour");
+  // C-05 — ONE FLOW, ONE NAME. The header used to read "GUIDED SETUP" on step 1 and "HARDWARE
+  // TOUR" on step 5 (docs/decisions/2026-08-11-design-navigation-audit.md §4: "The flow is also
+  // called two different things"), so the app introduced itself under two names inside a single
+  // ten-step run. The leg is still in the step model (buildSetupSteps orders by it); what is gone
+  // is rendering it as a NAME. Progress is the step counter's job — it is already in the footer,
+  // and it never has to lie about what the flow is called.
+  // Pinned by src/first-run-front-door-guard.test.ts (one-name case).
+  const flowName = t("home.setupTour.flowName");
 
   return (
     <div
@@ -141,7 +148,7 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
           <span className="st-brand">
             <Wordmark size={19} />
           </span>
-          <span className="st-leg">{legLabel}</span>
+          <span className="st-leg">{flowName}</span>
           <button className="st-skip" onClick={finish} aria-label={t("home.setupTour.skipAria")}>
             {t("home.setupTour.skip")}
           </button>

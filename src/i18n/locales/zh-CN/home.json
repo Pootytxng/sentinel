@@ -55,7 +55,7 @@
       "storage": "存储",
       "gpu": "GPU",
       "cpu": "CPU",
-      "cpuNoTemp": "无 CPU 温度——需要传感器软件"
+      "cpuNoTemp": "无 CPU 温度——见下方"
     },
     "dense": {
       "model": "型号",
@@ -69,7 +69,8 @@
     "bento": {
       "rig": "你的电脑",
       "findings": "发现",
-      "parts": "全部硬件"
+      "parts": "全部硬件",
+      "tour": "Compy 导览"
     },
     "specs": {
       "eyebrow": "已检测",
@@ -102,6 +103,9 @@
       "pending": "正在读取这台电脑。",
       "lastSessionNone": "还没有前后对比——先进行一次受监控的游戏会话。",
       "lastSessionOff": "会话对比已在设置中关闭。"
+    },
+    "cpuTemp": {
+      "tileTitle": "CPU 温度"
     }
   },
   "homeHud": {
@@ -306,15 +310,12 @@
     "skipHint": "点击跳过"
   },
   "setupLauncherCard": {
-    "title": "设置与导览 Compy",
-    "sub": "一次引导式设置,外加一段 Compy 全部功能的 3D 漫游导览——大约 2 分钟。",
+    "title": "开始 Compy 导览",
+    "sub": "一段关于你的电脑和 Compy 全部功能的 3D 漫游——大约 2 分钟。",
     "start": "开始 ▸"
   },
   "setupTour": {
-    "leg": {
-      "setup": "引导设置",
-      "tour": "硬件导览"
-    },
+    "flowName": "Compy 导览",
     "dialogAria": "Compy 设置与导览",
     "skipAria": "跳过设置与导览",
     "skip": "跳过 ✕",

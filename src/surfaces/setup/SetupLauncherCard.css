@@ -89,3 +89,26 @@
 :root[data-motion="reduced"] {
   .stl-ring { animation: none; opacity: 0.5; transform: scale(0.9); }
 }
+
+/* BENTO: the tile IS the box (precedent: `.v2-tile-body .hc-limiter`, home-console.css, and
+   `.hc-specs` on the Detected tile). HomeConsole mounts this card inside a `.v2-tile-full` that
+   already draws a frame, a fill and a radius — keeping the card's own shell there is a box in a
+   box. Only the shell goes; the flex row, the orb, the gap and the copy are untouched, so nothing
+   moves. Scoped to `.v2-tile-body`, so the HomeV2 (`.hv2-full`) and HomeHud (`.hud-full`) mounts,
+   which have no tile around them, keep their frame. */
+.v2-tile-body > .stl-card {
+  padding: 0;
+  margin-bottom: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+/* The hover glow bloomed off an edge that no longer exists in this mount, so the affordance moves
+   to the one element that still reads as a control: the "Start ▸" cue brightens. */
+.v2-tile-body > .stl-card:hover {
+  box-shadow: none;
+}
+.v2-tile-body > .stl-card:hover .stl-go {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

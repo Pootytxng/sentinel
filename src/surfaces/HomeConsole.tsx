@@ -21,7 +21,7 @@ import { activeChangeCount } from "./dashboard-data";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { useDocumentVisible } from "../data/use-document-visible";
 import { gpuVendor } from "./walkthroughs";
-import { gradeFps, gradeLow1, type Grade } from "../data/metric-grade";
+import { gradeFps, gradeLow1, gradeCpuTempC, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
 import { HardwareGrid } from "./HardwareGrid";
 import { ArcGauge, type ArcTone } from "../design/console/ArcGauge";
@@ -31,6 +31,8 @@ import { ReticleCursor } from "../design/console/ReticleCursor";
 import { useConfirmOptional } from "../design/ConfirmDialog";
 import { safeFixesReadyList } from "./optimize-v2-data";
 import { RerunCheckBand } from "./RerunCheckBand";
+import { SetupLauncherCard } from "./setup/SetupLauncherCard";
+import { CpuTempOffer } from "./CpuTempOffer";
 import { deriveReverted } from "./use-scan";
 import { BentoGrid, BentoTile, Sheet, useSheet } from "../design/bento";
 import {
@@ -355,6 +357,16 @@ export function HomeConsole({
   // ── live probes (existing read-only commands; a failure just omits the value) — HomeHud's
   // 5s poll, ported verbatim ──
   const [gpuTemp, setGpuTemp] = useState<number | null>(null);
+  // C-19 — "is my CPU running hot" is a front-door question, so Home MEASURES it instead of
+  // asserting it away. This callout used to print a hardcoded "no CPU temp — needs a sensor app"
+  // with no probe behind it at all: it said unavailable even while HWiNFO was publishing, which
+  // is a fabricated negative and exactly what the honest-measurement law forbids in both
+  // directions. `get_cpu_temp` is memoised backend-side (cpu_temp.rs, hit/miss TTLs), so joining
+  // this 5s poll costs a shared-memory read on a machine that has a monitor and one WMI probe per
+  // 15s on a machine that does not.
+  const [cpuTemp, setCpuTemp] = useState<{ temp_c: number; source: string; label: string } | null>(
+    null,
+  );
   const [mem, setMem] = useState<{ used: number; total: number; level: string } | null>(null);
   // Q7 idle-cost: pause while the window is hidden. Home is the DEFAULT room, so without this the
   // canonical face calls into the vendor GPU SDK every 5s for the whole time the owner is alt-tabbed
@@ -375,6 +387,9 @@ export function HomeConsole({
             setMem(m ? { used: m.used_bytes, total: m.total_bytes, level: m.level } : null),
         )
         .catch(() => !cancelled && setMem(null));
+      invoke<{ temp_c: number; source: string; label: string } | null>("get_cpu_temp")
+        .then((c) => !cancelled && setCpuTemp(c ?? null))
+        .catch(() => !cancelled && setCpuTemp(null));
     };
     poll();
     const id = window.setInterval(poll, 5000);
@@ -452,6 +467,11 @@ export function HomeConsole({
   const checking = readiness == null; // checks literally still running
   const vendor = gpuVendor(hw.gpus?.[0]?.name);
   const gpuGrade = gradeGpuTempForVendor(vendor, gpuTemp);
+  // No vendor gate here: unlike the GPU (LOCKED rule 5 — NVIDIA's sensor path is implemented but
+  // not hardware-verified), this number never comes from a Compy sensor path at all. It is
+  // whatever monitor the USER installed is publishing, so its trustworthiness does not vary by
+  // which CPU is in the socket — only the ramp is generic, and gradeCpuTempC says so.
+  const cpuTempGrade = gradeCpuTempC(cpuTemp?.temp_c ?? null);
 
   // Readiness reuses the same ready/total ratio the Command Center's signal ring derives (no
   // invented 0–100 "score") — LabConsole's exact derivation; null while checks are running.
@@ -983,12 +1003,25 @@ export function HomeConsole({
                   name={t("home.homeConsole.callout.gpu")}
                   detail={shortModel(hw.gpus[0]?.name)}
                 />
+                {/* C-19 — the CPU callout answers "is it running hot", or hands over the ONE
+                    next step that would let it. Measured ⇒ the number, graded and attributed to
+                    the monitor it came from. Unmeasured ⇒ still honestly unknown (never a
+                    fabricated 0), but no longer a DEAD END: it opens the CpuTempOffer, which was
+                    built for exactly this and had become unreachable — its only mount was inside
+                    CpuMonitorPanel, which hangs off Play's `deepMonitoring` slot, and that slot
+                    only renders when `showLive` is true while Play itself only mounts at
+                    advanced+Sessions (MonitorV2.tsx), where `showLive` is false. */}
                 <Callout
-                  tone={null}
+                  tone={cpuTemp ? gradeTone(cpuTempGrade) : null}
                   name={t("home.homeConsole.callout.cpu")}
                   detail={hw.cpu_arch?.family_label || undefined}
-                  value={t("home.homeConsole.callout.cpuNoTemp")}
-                  mono={false}
+                  value={
+                    cpuTemp
+                      ? `${Math.round(cpuTemp.temp_c)}°C`
+                      : t("home.homeConsole.callout.cpuNoTemp")
+                  }
+                  valueTone={cpuTemp ? gradeTone(cpuTempGrade) : null}
+                  mono={!!cpuTemp}
                 />
               </div>
             </>
@@ -1140,6 +1173,32 @@ export function HomeConsole({
           </section>
           </BentoTile>
         )}
+        {/* THE TOUR, AS AN OFFER (C-05). The tour used to auto-open over a fresh install and BE
+            the front door; the diagnosis above is the front door now, and this is the card the
+            decision asked for instead ("offer the tour as a card the user can choose",
+            docs/decisions/2026-08-11-design-navigation-audit.md §4).
+            It is mounted HERE and not only in HomeV2/HomeHud because HomeConsole is the DEFAULT
+            Home — without this tile, removing the auto-open would have stranded the whole flow
+            behind Settings, which is the half of C-05 that had "already been built" and was not.
+            LAST in the grid, quiet, below the answer — the same placement its two sibling Home
+            branches already use. Pinned by src/first-run-front-door-guard.test.ts. */}
+        {/* C-19 — THE FIX FOR THE ONE FLAG HOME CAN RAISE ABOUT ITSELF, BOXED.
+            The CPU callout on the annotation plane names the gap; the name-it-AND-fix-it-inline
+            law says a flag with no fix beside it is a dead end. The fix does NOT go on the plane:
+            the owner's 2026-08-06 call is that annotation planes carry live state as plain text,
+            labels and not controls (home-console-standard-readout-guard.test.tsx), and congestion
+            is answered with layout — "better grouping and boxed templates". So it is a box, and it
+            is only here while there is nothing to read: once a sensor app publishes, the whole
+            tile goes away rather than becoming permanent furniture. */}
+        {!cpuTemp && (
+          <BentoTile title={t("home.homeConsole.cpuTemp.tileTitle")} span="full">
+            <CpuTempOffer />
+          </BentoTile>
+        )}
+
+        <BentoTile title={t("home.homeConsole.bento.tour")} span="full">
+          <SetupLauncherCard />
+        </BentoTile>
         </BentoGrid>
 
         {/* THE DOCK — navigate into the rooms the rail actually shows. Deliberately OUTSIDE the
@@ -1160,6 +1219,10 @@ export function HomeConsole({
           <HardwareGrid hw={hw} />
         </Sheet>
       )}
+
+      {/* The CPU-temperature offer, finally on a reachable path (C-19). Rendered verbatim — it
+          already owns the whole honest ladder (already publishing / HWiNFO's Shared Memory
+          Support off / installed but closed / nothing installed) and its own Re-check. */}
     </RoomShell>
   );
 }

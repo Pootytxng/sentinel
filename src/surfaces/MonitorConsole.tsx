@@ -19,6 +19,7 @@ import {
   gradeLow1,
   gradeFrametimeMs,
   gradeRamPct,
+  gradeCpuTempC,
   gradeColor,
   type Grade,
 } from "../data/metric-grade";
@@ -133,6 +134,13 @@ export function MonitorConsole({
   const { t } = useTranslation();
   const reduced = useReducedMotion();
   const [cpu, setCpu] = useState<CpuSnap | null>(null);
+  // C-19 — CPU TEMPERATURE ON THE DEFAULT FACE. It was not on this face in either mode, and the
+  // surface that did have it (CpuMonitorPanel, via MonitorDomainCards) hangs off Play's
+  // `deepMonitoring` slot, which only renders while `showLive` — and Play itself only mounts at
+  // advanced+Sessions, where `showLive` is false. So the reading had no path at all on default
+  // flags. Backend-memoised (cpu_temp.rs), so joining this 1 Hz tick costs a shared-memory read,
+  // or one WMI probe per 15s on a machine with no monitor app.
+  const [cpuTemp, setCpuTemp] = useState<{ temp_c: number } | null>(null);
   const [gpu, setGpu] = useState<GpuSnap | null>(null);
   const [fps, setFps] = useState<FpsLite | null>(null);
   const [fpsBusy, setFpsBusy] = useState(false);
@@ -201,6 +209,9 @@ export function MonitorConsole({
     const tick = () => {
       invoke<CpuSnap>("get_cpu_sensors").then((c) => !cancelled && c && setCpu(c)).catch(() => {});
       invoke<GpuSnap[]>("get_gpu_sensors").then((g) => !cancelled && setGpu(pickGpu(g))).catch(() => {});
+      invoke<{ temp_c: number } | null>("get_cpu_temp")
+        .then((c) => !cancelled && setCpuTemp(c ?? null))
+        .catch(() => !cancelled && setCpuTemp(null));
       invoke<FpsLite>("get_fps_status")
         .then((f) => {
           if (cancelled || !f) return;
@@ -518,6 +529,19 @@ export function MonitorConsole({
                   measured={gpu?.utilization_gpu_pct != null}
                 />
               )}
+              {/* Beside the GPU's temperature, because "is it running hot" is ONE question with
+                  two answers — and in BOTH modes, because the whole point of C-19 is that it must
+                  not sit behind the Advanced toggle. Null renders ArcGauge's honest NOT-YET; the
+                  ladder that turns that into a fix (CpuTempOffer) lives on Home's CPU callout, so
+                  the same offer is not printed twice (one-mention law). */}
+              <ArcGauge
+                label={t("monitor.monitorConsole.cpuTempLabel")}
+                value={cpuTemp ? Math.round(cpuTemp.temp_c) : null}
+                max={100}
+                unit="°C"
+                tone={arcTone(gradeCpuTempC(cpuTemp?.temp_c ?? null))}
+                measured={cpuTemp != null}
+              />
               <ArcGauge
                 label={t("monitor.monitorConsole.cpuLabel")}
                 value={cpu ? Math.round(cpu.usage_overall_pct) : null}

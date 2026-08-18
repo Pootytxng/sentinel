@@ -60,9 +60,9 @@
   },
   "setup": {
     "sectionTitle": "Setup",
-    "title": "Re-run the guided setup",
-    "sub": "Replay the intro, then run a fresh first check.",
-    "action": "Re-run setup"
+    "title": "Take the Compy tour again",
+    "sub": "Replay the tour, then run a fresh first check.",
+    "action": "Take the tour"
   },
   "about": {
     "sectionTitle": "About",

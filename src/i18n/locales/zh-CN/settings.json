@@ -60,9 +60,9 @@
   },
   "setup": {
     "sectionTitle": "初始设置",
-    "title": "重新运行引导设置",
-    "sub": "重新播放介绍动画,然后进行一次全新的初次检测。",
-    "action": "重新运行设置"
+    "title": "重新观看 Compy 导览",
+    "sub": "重新播放导览,然后进行一次全新的初次检测。",
+    "action": "开始导览"
   },
   "about": {
     "sectionTitle": "关于",

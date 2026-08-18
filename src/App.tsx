@@ -12,7 +12,7 @@ import pkg from "../package.json";
 import "./i18n";
 import { ONBOARDED_KEY } from "./Onboarding";
 import FirstCheck, { FIRST_CHECK_KEY } from "./surfaces/FirstCheck";
-import { SetupTour, SETUP_TOUR_KEY } from "./surfaces/setup/SetupTour";
+import { SetupTour } from "./surfaces/setup/SetupTour";
 import { LibraryContext } from "./surfaces/library-context";
 import { Term } from "./design/Term";
 import { Wordmark } from "./design/Wordmark";
@@ -592,16 +592,19 @@ function App() {
     window.addEventListener("compy:open-settings", on);
     return () => window.removeEventListener("compy:open-settings", on);
   }, []);
-  // The combined "Setup & Tour" (HoloLens) is the first-run experience AND the always-present Home
-  // launcher. The legacy Onboarding auto-modal is retired; FirstCheck stays reachable on demand via
-  // the explicit "Re-run check" (Home / Settings), never as an auto-modal.
+  // The tour (HoloLens) is an OFFER, never the front door. The legacy Onboarding auto-modal is
+  // retired; FirstCheck stays reachable on demand via the explicit "Re-run check" (Home / Settings),
+  // never as an auto-modal.
   const [showFirstCheck, setShowFirstCheck] = useState(false);
-  // Auto-open the tour ONLY on a truly fresh install (never toured AND never onboarded) — never
-  // re-nag a returning user; they reach it from the Home launcher card or Settings.
-  const [showSetupTour, setShowSetupTour] = useState(
-    () =>
-      lsGet(SETUP_TOUR_KEY) !== "1" && lsGet(ONBOARDED_KEY) !== "1",
-  );
+  // C-05 (docs/decisions/2026-08-11-design-navigation-audit.md §4) — THE TOUR STOPS BEING THE FRONT
+  // DOOR. It used to auto-open on a truly fresh install, so the first thing someone whose PC had
+  // just crashed met was a ten-step hardware lecture: Compy's own identity is "the first place you
+  // go after a crash", and the diagnosis was behind the lecture. It now opens ONLY on an explicit
+  // choice — the Home tour card (compy:start-tour) or Settings — and a fresh install lands straight
+  // on Home's verdict. The keys are still WRITTEN on finish (SetupTour/handleSetupTourDone) so the
+  // "have they seen it" signal survives; nothing READS them to force the modal any more.
+  // Pinned by src/first-run-front-door-guard.test.ts — an auto-open regression fails the build.
+  const [showSetupTour, setShowSetupTour] = useState(false);
   // Open the tour on demand from the Home launcher card (mirrors the open-settings event pattern).
   useEffect(() => {
     const on = () => {

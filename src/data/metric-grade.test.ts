@@ -4,6 +4,7 @@ import {
   gradeLow1,
   gradeFrametimeMs,
   gradeGpuTempC,
+  gradeCpuTempC,
   gradeRamPct,
   gradeColor,
 } from "./metric-grade";
@@ -61,6 +62,19 @@ describe("metric-grade — GPU temp + RAM ramps", () => {
     expect(gradeGpuTempC(80)).toBe("ok");
     expect(gradeGpuTempC(88)).toBe("bad");
     expect(gradeGpuTempC(null)).toBe("neutral");
+  });
+  it("cpu temp ramp is looser than the GPU's, on purpose", () => {
+    expect(gradeCpuTempC(62)).toBe("good");
+    expect(gradeCpuTempC(84)).toBe("ok");
+    expect(gradeCpuTempC(93)).toBe("bad");
+    expect(gradeCpuTempC(null)).toBe("neutral");
+    // The regression this pins: an 82°C X3D under sustained load is BEHAVING, and a ramp copied
+    // from the GPU's would have called it "bad" and sent a healthy machine to a fix it does not
+    // need. Compy has no user-mode read of this CPU's real Tjmax, so the ramp stays conservative.
+    expect(gradeGpuTempC(82)).toBe("ok");
+    expect(gradeCpuTempC(82)).toBe("ok");
+    expect(gradeCpuTempC(88)).toBe("ok");
+    expect(gradeGpuTempC(88)).toBe("bad");
   });
   it("ram pressure ramp", () => {
     expect(gradeRamPct(56)).toBe("good");
