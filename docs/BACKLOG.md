@@ -68,11 +68,17 @@
   self-review PASS. The durable half: `plain-language-guard` scanned 199 `.tsx?` files and NONE of
   the 18 locale files holding the copy it exists to police — **when a decision silently reverts,
   check the guard's FILE FILTER before its rules.** Full record: `docs/RELEASE_STATE.md` installed row.
-- [ ] **C-18 · Delete the unreachable Monitor/Play copy surfaces.** Self-review on `80397326` found
-  ~9 of C-06's 24 rewritten English keys sit in `Play.tsx`, `monitor-panels.tsx`,
-  `MonitorDomainCards.tsx`, `SessionDebrief.tsx` — components the room router no longer mounts
-  (`MonitorConsole`/`MonitorV2` replaced them). The copy still ships in the bundle and can resurface,
-  so deleting components + keys is the fix, not another copy pass over dead surfaces.
+- [ ] **C-18 · Retire the classic `Monitor.tsx` shell — and ONLY that.** **This item was WRONG when
+  first written and is corrected here; do not act on the earlier version.** A self-review reported
+  `Play.tsx`, `monitor-panels.tsx`, `MonitorDomainCards.tsx` and `SessionDebrief.tsx` as unmounted,
+  which would have licensed deleting live code. Traced by hand: `MonitorV2` imports `Play`
+  (MonitorV2.tsx:4) for its ADVANCED face, `MonitoringTab` mounts `MonitorDomainCards`
+  (App.tsx:1773), that card's detail renders `CpuMonitorPanel` from `monitor-panels.tsx`
+  (MonitorDomainCards.tsx:146) — which is where `CpuTempOffer` lives — and `SessionDebrief` renders
+  inside `Play` (Play.tsx:488). All reachable: **Live → Advanced**. `MonitorConsole` replaced the
+  BASIC face only. The one genuinely unreferenced surface is `src/surfaces/Monitor.tsx` (the classic
+  shell), named only in comments. Precedent: [[audit-needs-completeness-critic-grep]] — grep the
+  class yourself before believing a subagent's "nothing mounts this".
 - [ ] **C-10 · No raw OS `<select>` inside the custom UI** ("Choose a change…").
 - [ ] **C-11 · Group repeated ledger events** — "applied 3×, currently on". The same event printed
   three times reads as a malfunction.
@@ -83,13 +89,9 @@
   it is built and DEFAULT ON.** Doc-only fix; cheap.
 - [ ] **C-13 · Foundation tooling gap: axe-core in vitest (rank 3) and Figma MCP (rank 2) never
   landed; only shadcn did.** axe-core is the one with a guard shape.
-- [x] **PR #90 recovery + the quiet launch, rebuilt** — PR [#102](https://github.com/Pootytxng/sentinel/pull/102).
-  #90 is MERGED; its four unverified Codex claims were re-proven and repaired (P1 the Lab evidence
-  map now answers for all three of its clickable lists · P2 ghost-fan shadowing pinned by regression
-  coverage · P3 the hologram has a real keyboard route, #49 a11y · P4 `work-control-gate.mjs`
-  resolves the head itself instead of trusting a receipt's self-declared SHA). PR #100 closed as
-  measured-inert and rebuilt through `WebviewWindowBuilder` + `SW_SHOWNOACTIVATE`, with a RUNTIME
-  tier in `launch-focus-guard.test.mjs` that watches `GetForegroundWindow` across a real launch.
+- [x] **PR #90 recovery + the quiet launch, rebuilt** — PR [#102](https://github.com/Pootytxng/sentinel/pull/102),
+  #90 MERGED (its four unverified Codex claims re-proven + repaired), #100 closed measured-inert and
+  rebuilt via `WebviewWindowBuilder` + `SW_SHOWNOACTIVATE`. Detail: `docs/CHANGELOG.md`.
 - [ ] **`launch-focus-guard` RUNTIME tier is intermittent under the pre-push gate — NOT root-caused.**
   2026-08-18: the quiet-launch case rejected three consecutive pushes of the same tree
   (`Compy held the foreground for 33/55 samples (first at 2430ms)`), then PASSED the fourth with that
