@@ -276,6 +276,56 @@ describe("Home intake band — flag gating (compy_home_intake back to DEFAULT OF
     expect(c.querySelector(".hc-intake")).toBeNull();
     expect(c.querySelector(".hc-care-entry")).not.toBeNull();
   });
+
+  // bug -> guard (owner caught it on his own desk 2026-08-18). This block already named the exact
+  // failure mode — "a surface the owner removed on sight quietly coming back" — and then proved it
+  // against the wrong element. Every assertion above interrogates `.hc-intake`, the PANEL. UX-1
+  // (f1766e86) left the panel gated and promoted the band's QUESTION up to `.hc-front-door`, the
+  // screen's single primary button, which nothing here ever looked at. So the flag read "off", the
+  // panel stayed closed, this whole describe passed green — and "What are you here to do?" came
+  // back six days later as the LARGEST control on the front door, which is the one place the owner
+  // had pointed at when he removed it.
+  //
+  // The lesson is the assertion's altitude, not the selector: the owner's call was about the
+  // QUESTION, so the guard has to be about the question, wherever it renders. A future train that
+  // moves it into a third element fails here instead of shipping.
+  describe("the QUESTION, not just the panel (bug -> guard, 2026-08-18)", () => {
+    const OFF_STATES: [string, () => void][] = [
+      ["absent (what a fresh install really gets)", () => localStorage.removeItem("compy_home_intake")],
+      ['"0" (the explicit Settings off)', () => localStorage.setItem("compy_home_intake", "0")],
+      ['junk ("true") — fails OFF like every other non-"1"', () => localStorage.setItem("compy_home_intake", "true")],
+    ];
+
+    for (const [name, set] of OFF_STATES) {
+      it(`asks nothing with the flag ${name}`, () => {
+        set();
+        const c = renderHome({
+          rooms: liveRooms,
+          recs: [rec({ id: "safe-ok" })],
+          isAppliable: () => true,
+          onApplyBatch: async () => ({ applied: 0, skipped: [] }),
+        }).container;
+        // The panel — what the original guard checked.
+        expect(c.querySelector(".hc-intake"), "panel").toBeNull();
+        // The button — what it missed, and what actually shipped back.
+        expect(c.querySelector(".hc-front-door"), "front-door button").toBeNull();
+        // And the words themselves, so a THIRD element can't carry them in later.
+        expect(
+          c.textContent ?? "",
+          `the intake question is on Home with compy_home_intake ${name}`,
+        ).not.toContain(i18n.t("home.homeConsole.intake.prompt"));
+      });
+    }
+
+    it('asks it again the moment the owner opts back in with "1"', () => {
+      // The guard is "off means off", never "deleted" — the opt-in path has to stay real, or this
+      // becomes a guard against the feature instead of a guard against ignoring the owner.
+      localStorage.setItem("compy_home_intake", "1");
+      const c = renderHome({ rooms: liveRooms }).container;
+      expect(c.querySelector(".hc-front-door"), "front-door button").not.toBeNull();
+      expect(c.textContent ?? "").toContain(i18n.t("home.homeConsole.intake.prompt"));
+    });
+  });
 });
 
 // bug->guard (issue #91 Compy Care Tier 1, discovery contract — extracted 2026-08-12): crash

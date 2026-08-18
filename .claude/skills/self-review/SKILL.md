@@ -31,7 +31,7 @@ worker's context; only the verdict returns.
    - the owner's exact ask, quoted;
    - files touched + the specific elements/selectors changed;
    - states to exercise (hover / empty / loading / error) if relevant.
-2. **Receive** the single `SELF-REVIEW` block (7 rubric items, one evidence line each, VERDICT).
+2. **Receive** the single `SELF-REVIEW` block (10 rubric items, one evidence line each, VERDICT).
 3. **On FAIL:** apply the fix list, then re-dispatch for a full fresh review (from the top — a fix
    can break a neighboring item). Repeat until PASS.
 4. **On PASS:** quote the block in your done-report. That is the claim's license.

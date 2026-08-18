@@ -221,25 +221,46 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
   // UX-1 decision 1's second half: ONE action. The front door is the screen's only filled primary
   // and it must open something real — a primary button that promises a room with nothing in it is
   // the dead end the whole design foundation exists to remove.
-  it("one action: the front door is the single primary, and it opens the intent panel in place", () => {
+  //
+  // CORRECTED 2026-08-18. As written, this test mounted with compy_home_intake at its DEFAULT OFF
+  // and asserted the front door renders anyway — it even said so in its own comment ("Closed on
+  // arrival (compy_home_intake defaults off)"). That is not a test of UX-1; it is a test that the
+  // owner's 2026-08-12 removal of this exact question (`4d1afa92`) does not apply. A suite that
+  // pins the defect is worse than no suite: it makes the regression permanent and green. UX-1's
+  // real claim — ONE filled primary, opening something real, never a dead end — is unchanged and
+  // is asserted below in the state where the door legitimately exists.
+  it("one action: opted in, the front door is the single primary and toggles the intent panel", () => {
+    localStorage.setItem("compy_home_intake", "1"); // the ONLY state this door exists in
     // The front door only exists when there is somewhere behind it — the intent rows are filtered
     // to rooms the live rail actually renders, so this mount needs the real rail.
     const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
     const door = c.querySelector<HTMLButtonElement>(".v2-verdict-action .hc-front-door")!;
     expect(door).not.toBeNull();
     expect(door.textContent).toBe(i18n.t("home.homeConsole.intake.prompt"));
-    // Closed on arrival (compy_home_intake defaults off) — the answer comes first, the menu second.
-    expect(door.getAttribute("aria-expanded")).toBe("false");
-    expect(c.querySelector("#hc-front-door-panel")).toBeNull();
-    act(() => {
-      door.click();
-    });
+    // Opting in pins the panel OPEN on arrival — that is what the flag now means.
     expect(door.getAttribute("aria-expanded")).toBe("true");
     const panel = c.querySelector("#hc-front-door-panel");
     expect(panel).not.toBeNull();
     expect(panel!.querySelectorAll(".hc-intake-row").length).toBeGreaterThan(0);
+    // …and it really is a door, not a label: it closes again.
+    act(() => {
+      door.click();
+    });
+    expect(door.getAttribute("aria-expanded")).toBe("false");
+    expect(c.querySelector("#hc-front-door-panel")).toBeNull();
     // …and exactly one filled primary on the screen, or per Duolingo there are none.
     expect(c.querySelectorAll(".hc-front-door")).toHaveLength(1);
+  });
+
+  it("default (nothing opted in): Home asks nothing — no primary, no panel", () => {
+    // The owner's front door, his call (4d1afa92). Duplicated deliberately from
+    // home-intake.test.tsx: that file guards the flag, this one guards the SCREEN, and the
+    // regression got through precisely because each assumed the other was watching.
+    const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
+    expect(localStorage.getItem("compy_home_intake")).toBeNull();
+    expect(c.querySelector(".hc-front-door")).toBeNull();
+    expect(c.querySelector("#hc-front-door-panel")).toBeNull();
+    expect(c.textContent ?? "").not.toContain(i18n.t("home.homeConsole.intake.prompt"));
   });
 
   it("attention state: verdict strip carries the warn tone class + the real headline", () => {

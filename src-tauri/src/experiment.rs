@@ -524,7 +524,7 @@ pub(crate) fn simulate(ctx: &SimContext) -> SimulatorReport {
             Confidence::High,
             "This is an advisory to act on yourself — Compy has no one-click change for it, so \
              there's no automatic before/after it can run. Do it manually if you want, then measure \
-             the result in the Lab."
+             the result in Test."
                 .into(),
         )
     } else if ctx.already_active {

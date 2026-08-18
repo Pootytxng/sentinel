@@ -93,6 +93,21 @@ The dev build runs two same-origin webviews + a small default window, so capture
    beside it.** NAME the flourish and the decision/state/meaning it maps to; "it looks premium" is
    not a mapping and is a FAIL.
 
+10. **Prior owner decisions** (ALWAYS — there is no n/a) — does this diff re-expose, re-enable, or
+   re-argue something the owner already decided against? Naming the CURRENT ask (item 7) is not
+   this check: the failure mode is a change that satisfies today's ask while quietly undoing a call
+   he made last week. **Evidence required: name the surfaces the diff touches, then `git log -S`
+   the flag/class/string behind each one and quote the most recent owner-decision commit you find,
+   or state "searched <terms>, no prior owner decision found".** A `docs/UI_VISION_BACKLOG.md`
+   decision or a commit whose message quotes the owner both count.
+   **Precedent (2026-08-18, the defect that created this item):** the owner removed the "What are
+   you here to do?" box on sight on 2026-08-12 (`4d1afa92`, his words: *"the what are you here to
+   do text box was ugly looks cleaner without it"*). Six days later UX-1 (`f1766e86`) promoted that
+   same question to the screen's largest button, this rubric passed it, and the `affordance-census`
+   guard actively certified it — because the census rewards KEEPING affordances and his decision was
+   to remove one. **A guard passing is not evidence his decision held.** When a guard's invariant and
+   an owner decision point opposite ways, the owner wins and the item FAILS.
+
 Any item FAILS → still complete the remaining items (report everything found in one pass), then
 return the FAIL verdict. Do not fix anything yourself — you are read-only on verdicts; the
 orchestrator fixes and re-dispatches.
