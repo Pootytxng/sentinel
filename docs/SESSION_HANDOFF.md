@@ -78,7 +78,7 @@ owed**; the in-lane self-review does not substitute for it.
 - Do not append to this file — replace it. It is the *current* lane's state, never a log.
 - Do not `gh api -X DELETE` a ref — policy blocks it here. `git push origin --delete <branch>` works
   and correctly skips the gate (`pre-push: deletion-only push, nothing to verify`).
-- Do not `gh pr merge --delete-branch` — it once set `core.bare=true` repo-wide and corrupted every
-  worktree. Merge without the flag, then prune the ref separately.
+- Do not pass `--delete-branch` to `gh pr merge`; land it without the flag. That flag once set
+  `core.bare=true` repo-wide and corrupted every worktree. Prune the ref separately afterwards.
 - Do not `git push` casually — `.githooks/pre-push` runs the full local gate (~4 minutes). Background
   it rather than letting it time out, and never pipe it through `tail` (SSH idle drop).
