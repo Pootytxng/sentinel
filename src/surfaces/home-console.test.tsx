@@ -215,31 +215,54 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
     expect(lines[0].closest(".home-console")).toBeNull();
     expect(c.querySelector(".hc-masthead-eyebrow .hc-led-ok")).not.toBeNull();
     expect(c.querySelector(".hc-led-scan")).toBeNull();
-    expect(c.querySelector(".v2-measured")!.textContent).toContain("3/3");
+    // The check line is a plain sentence now, not the `3/3` ratio the navigation audit put on its
+    // own jargon list (2026-08-11 §3). Same measured fact, said the way a person would say it.
+    expect(c.querySelector(".v2-measured")!.textContent).toContain("All 3 checks look good");
   });
 
   // UX-1 decision 1's second half: ONE action. The front door is the screen's only filled primary
   // and it must open something real — a primary button that promises a room with nothing in it is
   // the dead end the whole design foundation exists to remove.
-  it("one action: the front door is the single primary, and it opens the intent panel in place", () => {
+  //
+  // CORRECTED 2026-08-18. As written, this test mounted with compy_home_intake at its DEFAULT OFF
+  // and asserted the front door renders anyway — it even said so in its own comment ("Closed on
+  // arrival (compy_home_intake defaults off)"). That is not a test of UX-1; it is a test that the
+  // owner's 2026-08-12 removal of this exact question (`4d1afa92`) does not apply. A suite that
+  // pins the defect is worse than no suite: it makes the regression permanent and green. UX-1's
+  // real claim — ONE filled primary, opening something real, never a dead end — is unchanged and
+  // is asserted below in the state where the door legitimately exists.
+  it("one action: opted in, the front door is the single primary and toggles the intent panel", () => {
+    localStorage.setItem("compy_home_intake", "1"); // the ONLY state this door exists in
     // The front door only exists when there is somewhere behind it — the intent rows are filtered
     // to rooms the live rail actually renders, so this mount needs the real rail.
     const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
     const door = c.querySelector<HTMLButtonElement>(".v2-verdict-action .hc-front-door")!;
     expect(door).not.toBeNull();
     expect(door.textContent).toBe(i18n.t("home.homeConsole.intake.prompt"));
-    // Closed on arrival (compy_home_intake defaults off) — the answer comes first, the menu second.
-    expect(door.getAttribute("aria-expanded")).toBe("false");
-    expect(c.querySelector("#hc-front-door-panel")).toBeNull();
-    act(() => {
-      door.click();
-    });
+    // Opting in pins the panel OPEN on arrival — that is what the flag now means.
     expect(door.getAttribute("aria-expanded")).toBe("true");
     const panel = c.querySelector("#hc-front-door-panel");
     expect(panel).not.toBeNull();
     expect(panel!.querySelectorAll(".hc-intake-row").length).toBeGreaterThan(0);
+    // …and it really is a door, not a label: it closes again.
+    act(() => {
+      door.click();
+    });
+    expect(door.getAttribute("aria-expanded")).toBe("false");
+    expect(c.querySelector("#hc-front-door-panel")).toBeNull();
     // …and exactly one filled primary on the screen, or per Duolingo there are none.
     expect(c.querySelectorAll(".hc-front-door")).toHaveLength(1);
+  });
+
+  it("default (nothing opted in): Home asks nothing — no primary, no panel", () => {
+    // The owner's front door, his call (4d1afa92). Duplicated deliberately from
+    // home-intake.test.tsx: that file guards the flag, this one guards the SCREEN, and the
+    // regression got through precisely because each assumed the other was watching.
+    const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
+    expect(localStorage.getItem("compy_home_intake")).toBeNull();
+    expect(c.querySelector(".hc-front-door")).toBeNull();
+    expect(c.querySelector("#hc-front-door-panel")).toBeNull();
+    expect(c.textContent ?? "").not.toContain(i18n.t("home.homeConsole.intake.prompt"));
   });
 
   it("attention state: verdict strip carries the warn tone class + the real headline", () => {
@@ -311,7 +334,7 @@ describe("HomeConsole — the console stage (hologram center + honest corner gau
     cleanup();
     const checking = mount({ ...props, readiness: null, priorities: null }).container;
     expect(checking.querySelector(".hc-tl .ag-tag-ny")).not.toBeNull();
-    expect(checking.querySelector(".v2-measured")!.textContent).toContain("running checks…");
+    expect(checking.querySelector(".v2-measured")!.textContent).toContain("Checking your PC now");
   });
 
   it("GPU temp gauge shows the polled reading once it lands", async () => {
@@ -489,7 +512,7 @@ describe("HomeConsole — the detected record (boxed templates, always open)", (
 describe("HomeConsole — the #1-limiter readout (measured fact + its fix route)", () => {
   it("renders the top limiter's real title, quiet confidence tag, and the jump control", () => {
     const jump = vi.fn();
-    const c = mount({ ...props, onSeeInFix: jump, fixRoomLabel: "Lab" }).container;
+    const c = mount({ ...props, onSeeInFix: jump, fixRoomLabel: "Test" }).container;
     const row = c.querySelector(".hc-limiter")!;
     expect(row).not.toBeNull();
     expect(row.textContent).toContain("C: drive is 87% full");
@@ -529,11 +552,11 @@ describe("HomeConsole — the masthead band's route to the fixes", () => {
       checks: [{ id: "ref", label: "Refresh rate below max", status: "attention", detail: "", value: null }],
       attention_count: 1,
     };
-    const c = mount({ ...props, readiness: attn, onSeeInFix: jump, fixRoomLabel: "Lab" }).container;
+    const c = mount({ ...props, readiness: attn, onSeeInFix: jump, fixRoomLabel: "Test" }).container;
     const band = c.querySelector(".rcb")!;
     const fix = band.querySelector<HTMLButtonElement>(".rcb-fix")!;
     expect(fix, "the band names a fix count with no way to reach the fixes").not.toBeNull();
-    expect(fix.textContent).toContain("Fix them in Lab");
+    expect(fix.textContent).toContain("Fix in Test");
     // One primary action, never two: .rcb-btn stays the band's only button-looking control.
     expect(band.querySelectorAll(".rcb-btn").length).toBe(1);
     fireEvent.click(fix);
@@ -541,7 +564,7 @@ describe("HomeConsole — the masthead band's route to the fixes", () => {
   });
 
   it("shows NO route when there is nothing to fix — a clean rig is not sent anywhere", () => {
-    const c = mount({ ...props, fixRoomLabel: "Lab" }).container;
+    const c = mount({ ...props, fixRoomLabel: "Test" }).container;
     expect(c.querySelector(".rcb")).not.toBeNull();
     expect(c.querySelector(".rcb-fix")).toBeNull();
   });

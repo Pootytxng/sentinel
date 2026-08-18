@@ -577,7 +577,16 @@ export function HomeConsole({
   // exists at all (never offer a door onto an empty room), OPEN decides whether the panel is
   // showing. The button is the screen's one primary action, so it must not render as a promise
   // with nothing behind it.
-  const intakeAvailable = fastPathAvailable || intakeRows.length > 0;
+  //
+  // `intakeOn` is the FIRST term as of 2026-08-18, and the omission it repairs is the whole reason
+  // this line carries a comment. UX-1 narrowed compy_home_intake to "pins the panel open" and let
+  // the button render unconditionally — but the flag was never about the panel. The owner switched
+  // it off on sight on 2026-08-12 ("the what are you here to do text box was ugly looks cleaner
+  // without it"), and six days later his own front door was asking the question again, larger than
+  // before, because a flag that reads "off" was only being consulted about where the answer opens.
+  // Off means the question is not asked. Guarded by home-intake.test.tsx, "the QUESTION, not just
+  // the panel".
+  const intakeAvailable = intakeOn && (fastPathAvailable || intakeRows.length > 0);
   const intakeRenders = intakeAvailable && frontDoorOpen;
   // The Care entry (issue #91, discovery contract): ALWAYS visible, independent of `intakeOn` —
   // crash rescue is the one thing a user comes to Home in distress to find, and it must not be

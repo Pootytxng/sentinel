@@ -243,7 +243,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary]) -> PatternReport {
                             "The same drift showing up in another game (system-wide, not game-side).".into(),
                         ],
                         next_test: degrading.then(|| format!(
-                            "Open Blackbook, pick the last good {game} session and the first slow one, and run \"What changed?\" between them."
+                            "Open History, pick the last good {game} session and the first slow one, and run \"What changed?\" between them."
                         )),
                     });
                 }
@@ -283,7 +283,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary]) -> PatternReport {
                         "More sessions continuing the climb.".into(),
                         "The same climb in other games (points at the machine, not the game).".into(),
                     ],
-                    next_test: (change_c > 0.0).then(|| "Check dust filters and fan behavior, then watch the next session's peak temperature in Monitor.".to_string()),
+                    next_test: (change_c > 0.0).then(|| "Check dust filters and fan behavior, then watch the next session's peak temperature in Live.".to_string()),
                 });
             }
         } else if n >= MIN_TREND_SESSIONS {
@@ -326,7 +326,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary]) -> PatternReport {
                         "More sessions continuing the climb.".into(),
                         "The same climb showing up in the GPU thermal trend too (points at the case/cooling, not one component).".into(),
                     ],
-                    next_test: (change_c > 0.0).then(|| "Check CPU cooler contact/dust and case airflow, then watch the next session's peak CPU temperature in Monitor.".to_string()),
+                    next_test: (change_c > 0.0).then(|| "Check CPU cooler contact/dust and case airflow, then watch the next session's peak CPU temperature in Live.".to_string()),
                 });
             }
         } else if n >= MIN_TREND_SESSIONS {
@@ -444,7 +444,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary]) -> PatternReport {
                                     "The same split in another game.".into(),
                                 ],
                                 next_test: Some(
-                                    "Pick one session from each driver in Blackbook and run \"What changed?\" — it will lay out this window's other changes too.".into()
+                                    "Pick one session from each driver in History and run \"What changed?\" — it will lay out this window's other changes too.".into()
                                 ),
                             });
                         }
@@ -549,7 +549,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary]) -> PatternReport {
                         "Temps or RAM climbing across the same sessions (something building up).".into(),
                         "FPS recovering right after a restart mid-play.".into(),
                     ],
-                    next_test: Some("Watch one long session in Monitor — if temps or RAM climb as FPS fades, that is the lead to chase.".into()),
+                    next_test: Some("Watch one long session in Live — if temps or RAM climb as FPS fades, that is the lead to chase.".into()),
                 });
             } else if usable > 0 && usable < MIN_FADE_SESSIONS && n >= MIN_TREND_SESSIONS {
                 coverage.push(format!(

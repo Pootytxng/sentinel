@@ -753,7 +753,11 @@
   background: var(--ix-glass-fill);
   border: 1px solid var(--ix-glass-border);
   border-top-color: var(--ix-glass-top);
-  border-left: 2px solid var(--ix-accent-text);
+  /* NO SIDE STRIPE (2026-08-18). A >1px coloured `border-left` used as an accent on a card or
+     callout is a banned pattern — it is the reflex move, never a designed one, and on Home it made
+     the calmest row on the screen shout in accent while the verdict above it did not. The signal
+     the stripe was carrying already exists in `.hc-care-label`, which is accent-coloured text.
+     Guarded by src/side-stripe-guard.test.ts. */
   border-radius: var(--ix-radius);
   overflow: hidden;
 }

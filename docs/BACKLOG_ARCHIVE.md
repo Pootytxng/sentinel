@@ -6,6 +6,46 @@
 > Current truth lives in docs/RELEASE_STATE.md — these are point-in-time records.
 
 ---
+## ARCHIVED 2026-08-18 — oldest steering-log cycle (moved verbatim)
+
+> Moved out of `docs/BACKLOG.md` under its own retention rule (newest ~12 cycles) to make room for
+> the product-conformance queue the 2026-08-18 audit produced. Verbatim, unedited.
+
+### Cycle 2026-07-17a — ✅ INTELLIGENCE PHASE 1 SHIPPED (CC, owner directive `docs/reviews/2026-07-16-owner-directive-intelligence-platform.md` §5): `8f612d2` foundation + What-Changed read-only slice · `d45bb1c` game-name class sweep (bug→guard) · LIVE `d45bb1c`
+
+- **Train `8f612d2` (23 files, +3984/−28):** new `src-tauri/src/intelligence.rs` domain layer
+  (identity snapshots · change events · confidence bands **unknown/low/medium/high ONLY**, no
+  numerics) + 3 query commands (`get_intelligence_timeline` · `what_changed_for_session` ·
+  `get_intelligence_headline`) + the FE What-Changed engine + surfaces behind `compy_intelligence`
+  **default ON**. Deterministic/inspectable/local; zero telemetry/network/account/remote; NO
+  mutation-boundary change. 28 new Rust guards + FE pins. Honesty note for future writeups: the
+  query commands are NOT literally pure reads — each calls `refresh_identity_snapshots_async()`
+  which may write `intelligence.json` (own store only, throttled, mutex-guarded, atomic
+  tmp+rename); `monitoring.rs` gains a per-tick `load_session()` BEHAVIORAL additive read
+  populating `SessionSummary.gaming_mode_active` (`#[serde(default)]`).
+- **Fix `d45bb1c` (6 files, +58/−19):** self-review caught `Palworld-Win64-Shipping` in a Black
+  Box headline while every neighboring surface showed `Palworld` — class-swept BOTH language
+  layers (`blackbox.rs` display prettifier delegates to shared `intelligence::pretty_game_name`;
+  FE `sessionTrends`/`SessionDebrief`/`TuningDebrief` display sites on `prettyGameName`).
+  **MATCHING stays raw everywhere** — `norm_app` keeps its own `.exe`-strip (a launcher exe and
+  its shipping binary are different processes and must not merge). bug→guard: cargo
+  `headline_strips_shipping_suffix_like_every_other_surface` + vitest grouping pin.
+- **Reviewer chain:** rust-tauri-reviewer full-diff **"VERDICT: PASS"** + incremental
+  **"Verdict: PASS … none Critical, none Warning"** · train self-review round-2 **PASS** ·
+  fix-lane self-review round-1 **FAIL** (TS sweep missed the Rust-layer prettifier — the
+  completeness-critic-grep failure mode) → fix → round-2 full-fresh **PASS** (live capture on
+  real `sessions.json`, completeness grep both languages: zero additional misses).
+- **Shipped:** installer `Compy_0.9.0_x64-setup.exe` SHA-256
+  `8063F95744C6AF00C760FD3F77DA63FBD9B68B279773307D6D1AEB5773A52E0D`, silent reinstall done, live
+  exe stamp-verified `d45bb1c` CLEAN (no `+dirty`). Verify: cargo **754/754** (count UP) · clippy
+  clean · vitest **1708/1708** (183 files; export-library passed this run) · verify-release-state
+  46/46.
+- **§0.11 lane separation honored:** Optimization Cleanup is its own train — Phase 1 (restore
+  ARMED, shipped 2026-07-16) left exactly where it was; nothing folded in.
+- **Board retention:** 4 oldest cycles (13f/13e/13d/13c) moved verbatim to `BACKLOG_ARCHIVE.md`
+  (104 lines); board at 12 cycles.
+
+---
 ## ARCHIVED 2026-08-06 — two oldest steering-log cycles (moved verbatim)
 
 > Moved out of `docs/BACKLOG.md` under its own retention rule (the board keeps the newest ~12

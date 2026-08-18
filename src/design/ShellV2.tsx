@@ -265,9 +265,13 @@ export function ShellV2({
             <span className="v2-room-title">
               {active ? railLabel(active) : t("common.shellV2.fallbackTitle")}
             </span>
-            {active && (
-              <span className="v2-crumb">· {t(`common.shellV2.crumb.${active.id}`)}</span>
-            )}
+            {/* NO TAGLINE HERE. The topbar printed `Live · watch it live` while the room below
+                printed its own name as an h1 — the title-header law violation the navigation audit
+                measured and ruled on: "drop the topbar tagline; keep one name per room"
+                (docs/decisions/2026-08-11-design-navigation-audit.md §3 + order-of-work #3, shipped
+                2026-08-18, six days late). The crumb STRINGS stay — CommandPalette reads the same
+                `common.shellV2.crumb.*` keys as its per-door hint, where the room's own h1 is NOT on
+                screen, so there it describes rather than duplicates. */}
             {/* Search box. `v2-stamp` carries the margin-left:auto that pushes the right-hand
                 cluster over, so this sits before it and the cluster order is unchanged. */}
             {paletteEnabled && (
