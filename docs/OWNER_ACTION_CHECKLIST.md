@@ -301,23 +301,6 @@ and the site-glow/"full overhaul" gate.
   Bench Phase-1 build (the drag gallery is deleted, not a build option). Note: your original **"Feature Roadmap Checklist (CC Brief)"**
   is NOT in the repo — if *that's* the list you meant, you'd need to re-share it.
 
-### B_dataroot. Trust Ledger merge - you said B, and one command is waiting on you  ·  ⏳ 2026-08-18  ·  [#130](https://github.com/Pootytxng/sentinel/issues/130)
-Compy was launched at least once inside the packaged Claude app, which redirected its data folder
-without changing the path it reads. It wrote two separate change histories: **3 in your normal
-folder, 61 in the redirected copy** - and **12 real changes are on your PC right now with no receipt
-Compy can see**. The code fix is in: Compy now checks where its folder actually lands and **refuses
-to change anything while two histories exist**, which is why applies and rollbacks are blocked on
-your desk until the merge runs.
-
-**You picked B (merge).** The tool is built, tested and pushed (`f9057727`), and a rehearsal on your
-real files confirms **3 + 61 = 64 receipts, no clashes, nothing lost**. It backs up both files
-before it writes and never deletes anything.
-
-**What is still on you:** my safety layer blocked me from writing to your real history file, and I
-did not work around it. Say **"run the merge"** and I will - or the exact command is in
-`docs/SESSION_HANDOFF.md` if you would rather it ran under your own hands.
-
-
 ### B_startup. A Windows mutation lives outside `actions.rs` — decide whether that's allowed  ·  ⏳ NEW 2026-08-02
 Found mechanically by `scripts/verify-module-map.mjs` on its first run. `set_startup_entry_enabled`
 (`lib.rs`, a `#[tauri::command]`) writes `HKCU\...\StartupApproved\Run` directly: **no typed rollback

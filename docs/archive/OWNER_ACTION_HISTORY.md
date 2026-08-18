@@ -210,3 +210,23 @@ Remove-Item -Recurse -Force "C:\Users\Kuya\code\sentinel\.claude\worktrees\nodej
 ```
 
 Nothing in the folder was ever unique — the branch and every commit live on GitHub.
+
+### B_dataroot. ✅ Trust Ledger merged 2026-08-18 — one history again, 64 receipts
+The owner said **"run the merge"** on 2026-08-18 and it ran, from the lane worktree:
+`node scripts/recover-data-root.mjs --apply` over the canonical ledger (3 receipts) and the
+packaged-Claude overlay copy (61). Both inputs hashed byte-for-byte identical to the rehearsal
+before the write (`41E8CDC1…B4203`, `ABB928FE…57EA`), both were backed up to
+`C:\Users\Kuya\code\compy-data-root-recovery\` first, and the union wrote **64 receipts** (39
+applied, 25 rolled back, `2026-05-28` → `2026-07-29`, zero id collisions, all 64 ids unique on
+read-back, new hash `8429CEA3…0F38`).
+
+Then the overlay folder was **moved, not deleted** — all 58 files to
+`C:\Users\Kuya\code\compy-data-root-recovery\overlay-Compy\`. Note that only `history.json` was
+merged: the overlay's other files (`sessions.json`, `benchmark.json`, `experiments.json`,
+`drift.json`, `intelligence.json`, `exports/`) had canonical counterparts of their own and are
+archived intact rather than unioned. Nothing was lost; recovering any of it is a copy away.
+
+The PowerShell resolver (`scripts/lib/canonical-data-root.ps1`, the parity twin of
+`src-tauri/src/data_root.rs`) re-run afterward on the real desk returns
+`C:\Users\Kuya\AppData\Roaming\Compy`, Exists = True — **`Canonical`**, no longer `Conflict`. Applies
+and rollbacks are unblocked on this machine.
