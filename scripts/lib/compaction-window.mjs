@@ -35,10 +35,29 @@ export const DOCUMENTED_FALLBACK_WINDOW = 250_000;
  * likely mechanism is that the harness reserves the max output budget (150k - 32k ≈ 118k), but the
  * ratio is what we can prove, so the ratio is what is stored.
  *
- * This matters because it is 20% of the window, and the advisor's warn line was set from the wrong
- * number: 0.85 × 150k = 127.5k sat ABOVE a ceiling of ~119k, so the advisory could never fire once.
+ * CORRECTION 2026-08-18 — that ratio was fitted to ONE window and is wrong at the current one.
+ *
+ * Re-measured across every transcript under ~/.claude/projects with >=20 assistant turns, split at
+ * the 2026-08-07 window change. Under the live 250000 window, 12+ independent sessions pin their
+ * peak turn at 216-217k in a +/-1k band. The stored fraction predicts 192.5-200k. It is short by
+ * ~24k, i.e. 12% of the window, and every report written since 2026-08-07 has printed a compaction
+ * point that does not exist.
+ *
+ * 250000 - 217000 = 33k, and the code comment above already guessed the mechanism: the harness
+ * reserves the max output budget. That reservation is ADDITIVE, so it cannot be modelled as a
+ * fraction — a fraction only looked right because it was fitted at a single window.
+ *
+ * Honest limit of the evidence: with only one window actually in force, additive-33k and
+ * proportional-0.867 both fit. Additive is preferred because it matches a known mechanism and
+ * because the proportional model has already been falsified once. The falsifying test is one more
+ * window change: additive predicts (window - 33k), proportional predicts (window * 0.867).
  */
-export const NATIVE_COMPACT_FRACTION = [0.77, 0.8];
+export const NATIVE_COMPACT_RESERVE = 33_000;
+
+/** Where auto-compaction actually fires for a given window. Measured, single source of truth. */
+export function nativeCompactCeiling(window) {
+  return Math.max(0, Math.round(window) - NATIVE_COMPACT_RESERVE);
+}
 
 const ENV_KEY = "CLAUDE_CODE_AUTO_COMPACT_WINDOW";
 
@@ -112,7 +131,7 @@ export const MIN_WORKING_HEADROOM = 60_000;
 export function usableHeadroom(resolved, floorTokens) {
   const k = (n) => `${Math.round(n / 1000)}k`;
   const floor = Math.max(0, Number(floorTokens) || 0);
-  const ceiling = Math.round(resolved.window * NATIVE_COMPACT_FRACTION[0]);
+  const ceiling = nativeCompactCeiling(resolved.window);
   const headroom = ceiling - floor;
   const ok = headroom >= MIN_WORKING_HEADROOM;
   return {
@@ -141,7 +160,6 @@ export function loadProjectSettings(repoRoot) {
 /** Human-readable basis line for the report header, so a reader never has to guess the threshold. */
 export function describeWindow(resolved) {
   const k = (n) => `${Math.round(n / 1000)}k`;
-  const [lo, hi] = NATIVE_COMPACT_FRACTION;
   const basis =
     resolved.source === "env"
       ? `${ENV_KEY} in the environment`
@@ -151,7 +169,7 @@ export function describeWindow(resolved) {
   const ignoredNote = resolved.ignored.length
     ? ` · ignored invalid ${resolved.ignored.map((i) => `${i.from}="${i.value}"`).join(", ")}`
     : "";
-  return `${k(resolved.window)} (${basis}; native compaction fires ≈${k(resolved.window * lo)}-${k(resolved.window * hi)})${ignoredNote}`;
+  return `${k(resolved.window)} (${basis}; native compaction fires ≈${k(nativeCompactCeiling(resolved.window))}, measured 2026-08-18 as window − ${k(NATIVE_COMPACT_RESERVE)} reserve)${ignoredNote}`;
 }
 
 /**
@@ -165,11 +183,31 @@ export function describeWindow(resolved) {
  * @param {ReturnType<typeof resolveCompactionWindow>} resolved
  * @returns {{over: Array<object>, threshold: number, flag: string|null}}
  */
-export function flagPeakContext(rows, resolved) {
+export function flagPeakContext(rows, resolved, { configuredSince = null } = {}) {
   const k = (n) => `${Math.round(n / 1000)}k`;
   const threshold = resolved.window;
-  const over = (rows || []).filter((r) => Number(r?.peakCtx || 0) > threshold);
-  if (!over.length) return { over, threshold, flag: null };
+
+  // 2026-08-18 — a flag that cannot tell "before the fix" from "after the fix" cries wolf forever.
+  // CLAUDE_CODE_AUTO_COMPACT_WINDOW did not exist before 2026-08-07; sessions older than that ran
+  // on the model default and peaked as high as 514k. They are not evidence that the boundary is
+  // failing NOW, but they stay in the rolling 80-session sample for weeks, re-raising the same 🔴
+  // every Monday. Rows dated before `configuredSince` are excluded from the flag and counted
+  // separately so the history is reported, not hidden.
+  const dated = (rows || []).filter((r) => r && (!configuredSince || !r.date || r.date >= configuredSince));
+  const excluded = (rows || []).length - dated.length;
+
+  const over = dated.filter((r) => Number(r?.peakCtx || 0) > threshold);
+  if (!over.length) {
+    return {
+      over,
+      threshold,
+      excluded,
+      flag: null,
+      note: excluded
+        ? `🟢 0/${dated.length} sessions since ${configuredSince} exceeded the ${k(threshold)} window (${excluded} older sessions predate the setting and are excluded).`
+        : null,
+    };
+  }
 
   const basis = resolved.configured
     ? `configured window ${k(threshold)}`
@@ -184,8 +222,10 @@ export function flagPeakContext(rows, resolved) {
   return {
     over,
     threshold,
+    excluded,
+    note: null,
     flag:
-      `🔴 ${over.length}/${rows.length} sessions peaked past the ${basis} — auto-compaction did not fire when it ` +
+      `🔴 ${over.length}/${dated.length} sessions peaked past the ${basis} — auto-compaction did not fire when it ` +
       `should have. Worst: ${worst}. Cache-read cost per turn scales with carried context.`,
   };
 }

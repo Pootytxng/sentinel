@@ -19,6 +19,41 @@ $budgets = @{
   # The half that only loads for Rust work. Budgeted so it cannot become the new dumping ground.
   "src-tauri/CLAUDE.md" = 120
 }
+# BYTE budgets, added 2026-08-18. The line budgets above are structurally blind to the thing the
+# token law exists to control: docs/BACKLOG.md passed 1286/1400 LINES while weighing 142 KB, because
+# a line budget cannot see a 113-byte average line, and docs/RELEASE_STATE.md passed 252/300 lines at
+# 222 bytes per line. Tokens are charged by bytes. Both budgets now apply; a doc must clear both.
+#
+# The numbers are derived, not chosen:
+#   48 KB = MAX_UNBOUNDED_BYTES in .claude/hooks/big-read-guard.mjs. Past it, this repo's own guard
+#           already refuses to read the file whole - so a doc over it has become unreadable by its
+#           own rules.
+#   120 KB = the boot-tax line scripts/usage-audit.mjs has flagged since 2026-07-13. BACKLOG is read
+#           by section by law, so it keeps the wider line.
+#   20 KB = Anthropic's published "keep CLAUDE.md under ~200 lines" (code.claude.com/docs/en/costs)
+#           at this repo's ~110 bytes/line. CLAUDE.md is auto-loaded on EVERY session boot, so it is
+#           the most expensive file in the repo per byte.
+# Three docs are ABOVE their derived target today. They are seeded at a RATCHET - their size on
+# 2026-08-18 - so any further growth fails immediately, rather than at the target, because shipping
+# a red gate is worse than shipping a working ratchet, and because bringing them down is a CONTENT
+# decision owned by whoever writes them, not a mechanical trim (bytes are content; re-wrapping a
+# long line does not remove any). The budget may only ever move DOWN. Lower each as its pass lands:
+#   docs/BACKLOG.md        142KB -> 120KB   archive the oldest steering-log cycles to BACKLOG_ARCHIVE.md
+#                                           (largest blocks: the A4 advisory recount ~20KB and the
+#                                           conformance queue ~19KB, both largely shipped)
+#   docs/RELEASE_STATE.md   57KB ->  48KB   the CURRENT STATE section alone is 31KB at 328 bytes/line;
+#                                           superseded snapshot prose belongs in docs/archive/
+# (CLAUDE.md is handled by its own older guard - see the note under the table.)
+$byteBudgets = @{
+  "docs/BACKLOG.md" = 145408
+  "docs/RELEASE_STATE.md" = 58368
+  "docs/OWNER_ACTION_CHECKLIST.md" = 40960
+  "src-tauri/CLAUDE.md" = 10240
+}
+# CLAUDE.md is deliberately NOT in the table above. Its byte ceiling already exists and predates
+# this one: src/claude-md-laws-guard.test.ts, "is under 25000 bytes (re-bloat guard)". Restating it
+# here would be a second source of truth for the same number - the exact drift bomb this repo
+# already disarmed for MAX_CONTINUES. One ceiling, one owner; that guard keeps it.
 $root = Split-Path $PSScriptRoot -Parent
 $fail = 0
 foreach ($f in ($budgets.Keys | Sort-Object)) {
@@ -28,5 +63,14 @@ foreach ($f in ($budgets.Keys | Sort-Object)) {
   $b = $budgets[$f]
   if ($n -le $b) { Write-Host "PASS  $f  $n/$b" }
   else { Write-Host "FAIL  $f  $n/$b  -> archive history/log sections to docs/archive/, never delete"; $fail = 1 }
+}
+foreach ($f in ($byteBudgets.Keys | Sort-Object)) {
+  $p = Join-Path $root $f
+  if (-not (Test-Path $p)) { Write-Host "SKIP  $f bytes (missing)"; continue }
+  $n = (Get-Item $p).Length
+  $b = $byteBudgets[$f]
+  $nk = [math]::Round($n / 1KB, 1); $bk = [math]::Round($b / 1KB, 0)
+  if ($n -le $b) { Write-Host "PASS  $f  ${nk}KB/${bk}KB" }
+  else { Write-Host "FAIL  $f  ${nk}KB/${bk}KB  -> over the BYTE budget; archive prose, never delete"; $fail = 1 }
 }
 if ($fail) { exit 1 } else { Write-Host "doc-budget: ALL PASS" }

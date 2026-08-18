@@ -246,14 +246,16 @@ returns false, so the real `runas` branch is live (not the direct-spawn fallback
 6. **`docs/RECEIPTS_DOCTRINE.md`** (money/product direction) · **`docs/CHANGELOG.md`** (dated banners +
    full change history, point-in-time). Treat any file:line claim as point-in-time.
 
-## TOKEN LAW (owner decree 2026-07-22, after a same-week cap-out; permanent, both lanes)
+## TOKEN LAW (rebuilt on a cost model 2026-08-18)
 
-1. **Docs carry CURRENT STATE only.** History and dated banners move to `docs/archive/*` — move, never
-   delete, leave a pointer. **`scripts/doc-budget.ps1` enforces line budgets: run it in every verify
-   pass; a FAIL means archive before you commit.**
-2. **Read big docs by section** (search first, then offset/length) — never whole-file re-reads of
-   RELEASE_STATE / BACKLOG / CHANGELOG.
-3. **Edit with minimal anchors** — smallest unique match, ≤3 lines of context.
-4. **Screenshots/images only when the next action depends on seeing one.**
-5. A weekly Cowork sweep ("Sentinel weekly token/doc budget sweep", Mondays 6 AM PT) runs the budget
-   check and archives overages. **Extend that sweep — never build a parallel monitor.**
+**Full policy: `claude/TOKEN_ECONOMY_LAW.md` (HQ); it wins over this and
+`.claude/USAGE_ECONOMICS.md`.** Carried context is **85% of measured spend**, output 15%.
+
+1. **Current state only** — history to `docs/archive/*`: move, never delete, leave a pointer.
+   `scripts/doc-budget.ps1` enforces LINE and BYTE budgets; a FAIL means archive first.
+2. **Read big docs by section** (`big-read-guard` DENIES unbounded reads); **minimal edit anchors**.
+3. **Delegate anything VERBOSE to a subagent**, hard or not: fresh context window, only the summary
+   returns, so what it reads never enters this prefix.
+4. **`/clear` between unrelated tasks · one lane, one directory · never change model, effort, plugin
+   or MCP server mid-session** — each rebuilds the cached prefix.
+5. **`scripts/usage-audit.mjs` is the authority.** Extend that audit; never build a parallel monitor.

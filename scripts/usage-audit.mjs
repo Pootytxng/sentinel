@@ -31,7 +31,9 @@ import {
 } from "./lib/compaction-window.mjs";
 
 const ROOT = join(homedir(), ".claude", "projects");
-const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
+// USAGE_AUDIT_REPO exists so the audit can be exercised against the real repo from a scratch
+// checkout without editing the live tree. Production path is unchanged when it is unset.
+const REPO = process.env.USAGE_AUDIT_REPO || join(dirname(fileURLToPath(import.meta.url)), "..");
 const argv = process.argv.slice(2);
 const N = (() => { const i = argv.indexOf("--sessions"); return i >= 0 ? parseInt(argv[i + 1], 10) : 80; })();
 const WRITE_REPORT = argv.includes("--report");
@@ -174,8 +176,12 @@ const flags = [];
 // wired in here, so the literal it replaced stayed live and the guard test guarded a function
 // nothing called. Wired 2026-08-07.
 const windowInfo = resolveCompactionWindow({ env: process.env, settings: loadProjectSettings(REPO) });
-const peakFlag = flagPeakContext(rows, windowInfo).flag;
-if (peakFlag) flags.push(peakFlag);
+// CLAUDE_CODE_AUTO_COMPACT_WINDOW did not exist before this date; sessions older than it ran on the
+// model default and peaked as high as 514k. Counting them re-raises a fixed problem every Monday.
+const WINDOW_CONFIGURED_SINCE = "2026-08-07";
+const peak = flagPeakContext(rows, windowInfo, { configuredSince: WINDOW_CONFIGURED_SINCE });
+if (peak.flag) flags.push(peak.flag);
+else if (peak.note) flags.push(peak.note);
 
 // The floor flag, and the one that would have caught the August thrash three weeks early: a session
 // opens with its fixed payload, so a rising first turn silently eats the room to work in.
@@ -189,10 +195,91 @@ if (room && !room.ok) {
   );
 }
 if (agents.offRouted) flags.push(`🟡 ${agents.offRouted}/${agents.total} subagent runs on opus/fable (routing law: cheapest capable model). Check spawn sites pass no model override.`);
+
+// ---------------------------------------------------------------------------------------------
+// COST MODEL (added 2026-08-18). Until now this report counted tokens and flagged nothing about
+// what they COST — so every control the repo owns pointed at output, which the first weighted
+// measurement showed is only ~16% of the bill. Weights are the published price ratios normalised
+// to one base-input token (platform.claude.com/docs/en/build-with-claude/prompt-caching):
+//   cache read 0.1x · cache write 2.0x at the 1h TTL Claude Code auto-requests on a subscription ·
+//   output 5x for Opus-class. They are ratios, not dollars: the shares are what matter.
+const COST_W = { read: 0.1, write: 2.0, out: 5.0, input: 1.0 };
+const spend = {
+  "carried context (cache-read)": g.cacheRead * COST_W.read,
+  "prefix build (cache-write)": g.cacheWrite * COST_W.write,
+  "new work (output + thinking)": g.out * COST_W.out,
+};
+const spendTotal = Object.values(spend).reduce((a, b) => a + b, 0) || 1;
+const ctxShare = 100 * (spend["carried context (cache-read)"] + spend["prefix build (cache-write)"]) / spendTotal;
+const carriedPerTurn = g.cacheRead / Math.max(1, g.msgs);
+
+// The control that was missing entirely: carried context per turn, against the real ceiling.
+// A session that habitually runs near the ceiling pays that whole context back on every turn.
+const ceiling = room ? room.ceiling : 0;
+if (ceiling && carriedPerTurn > 0.55 * ceiling) {
+  flags.push(
+    `🔴 avg carried context ${K(carriedPerTurn)}/turn is ${(100 * carriedPerTurn / ceiling).toFixed(0)}% of the ` +
+      `${K(ceiling)} compaction ceiling. Carried context is ${ctxShare.toFixed(0)}% of measured spend — ` +
+      `every turn re-reads it. Lever order: /clear between unrelated tasks · cut the per-turn floor · ` +
+      `lower CLAUDE_CODE_AUTO_COMPACT_WINDOW so the ceiling itself is lower.`,
+  );
+} else if (ceiling) {
+  flags.push(`🟢 avg carried context ${K(carriedPerTurn)}/turn = ${(100 * carriedPerTurn / ceiling).toFixed(0)}% of the ${K(ceiling)} ceiling.`);
+}
+
+// Doc boot tax, in BYTES. The line budgets in scripts/doc-budget.ps1 are structurally blind to this:
+// docs/BACKLOG.md passed 1286/1400 lines while weighing 142 KB, because a line budget cannot see a
+// 113-byte average line. Tokens are charged by bytes, so the boot-tax budget is in bytes.
+// 48 KB is not invented: it is MAX_UNBOUNDED_BYTES in .claude/hooks/big-read-guard.mjs — the point
+// past which this repo already refuses to read a file whole. BACKLOG is read by section by law, so
+// it keeps the wider 120 KB line this audit has always used.
+const DOC_BYTE_BUDGETS = [
+  ["docs/BACKLOG.md", 120 * 1024, "archive old steering-log cycles to docs/BACKLOG_ARCHIVE.md per its retention rule"],
+  ["docs/RELEASE_STATE.md", 48 * 1024, "past big-read-guard's own unbounded-read budget — it can no longer be read whole"],
+  // 20 KB ≈ Anthropic's published "keep CLAUDE.md under ~200 lines" at this repo's ~110 bytes/line
+  // (code.claude.com/docs/en/costs). It is auto-loaded on every boot of every session, so it is the
+  // most expensive byte in the repo.
+  ["CLAUDE.md", 20 * 1024, "auto-loaded on every session boot; move detail into a skill"],
+  ["docs/OWNER_ACTION_CHECKLIST.md", 48 * 1024, "archive completed items"],
+];
+for (const [rel, budget, advice] of DOC_BYTE_BUDGETS) {
+  try {
+    const sz = statSync(join(REPO, rel)).size;
+    if (sz > budget) flags.push(`🟡 ${rel} is ${(sz / 1024).toFixed(1)} KB (> ${(budget / 1024).toFixed(0)} KB byte budget) — ${advice}.`);
+  } catch { /* absent is not a failure */ }
+}
+// FLOOR TREND (added 2026-08-18, bug→guard). The defect: the fixed per-turn floor stepped from a
+// 53k median to 83k in a single day (2026-08-04, a settings rewrite + a plugin update) and no
+// instrument said a word for eleven days — the absolute-breach flag only fires once headroom is
+// already gone, which at the corrected 217k ceiling is months away. The floor is re-read on EVERY
+// turn: at a 66k floor against 110k avg carried context it is ~60% of all cache-read, which is
+// ~27% of measured spend. A step change in it is the most expensive silent event in the system.
 try {
-  const bl = statSync(join(REPO, "docs", "BACKLOG.md")).size;
-  if (bl > 120 * 1024) flags.push(`🟡 docs/BACKLOG.md is ${(bl / 1024).toFixed(0)} KB (> 120 KB boot-tax line) — archive old steering-log cycles to docs/BACKLOG_ARCHIVE.md per its retention rule.`);
-} catch { /* ok */ }
+  const outDir = join(REPO, "docs", "usage-audit");
+  const today = new Date().toISOString().slice(0, 10);
+  const prior = readdirSync(outDir)
+    .filter((f) => /^REPORT-\d{4}-\d{2}-\d{2}\.md$/.test(f) && !f.includes(today))
+    .sort()
+    .pop();
+  if (prior && floorP75) {
+    const m = readFileSync(join(outDir, prior), "utf8").match(/fixed floor p75 \*\*(\d+)k\*\*/);
+    const was = m ? Number(m[1]) * 1000 : 0;
+    if (was) {
+      const delta = floorP75 - was;
+      if (delta >= 8_000) {
+        flags.push(
+          `🔴 per-turn floor rose ${K(delta)} since ${prior.slice(7, 17)} (${K(was)} → ${K(floorP75)}). ` +
+            `The floor is re-read on every turn, so this is a permanent tax on every session until it is ` +
+            `cut. Check what changed: settings/env, an added plugin or MCP server, a grown auto-loaded ` +
+            `CLAUDE.md, new skills or agents. Compare against docs/usage-audit/${prior}.`,
+        );
+      } else if (delta <= -8_000) {
+        flags.push(`🟢 per-turn floor FELL ${K(-delta)} since ${prior.slice(7, 17)} (${K(was)} → ${K(floorP75)}) — whatever was done, it worked.`);
+      }
+    }
+  }
+} catch { /* no prior report is not a failure */ }
+
 if (g.notReadErrs > rows.length) flags.push(`🟡 ${g.notReadErrs} "file not read yet" Edit errors (> 1/session avg) — Read before Edit, even for files known from prior sessions.`);
 if (!flags.length) flags.push("🟢 No health flags — context discipline, subagent routing, boot tax, and edit discipline all within bounds.");
 
@@ -205,6 +292,23 @@ lines.push(
   `Compaction window: ${describeWindow(windowInfo)}` +
     (room ? ` · fixed floor p75 **${K(room.floor)}** → working headroom **${K(room.headroom)}**${room.ok ? "" : " 🔴"}` : ""),
 );
+// The floor metric is the FIRST recorded turn, which also contains the opening prompt. A session
+// opened with a pasted skill body or handoff reports a higher "floor" than one opened with "hi".
+// The spread is how much of the number is payload and how much is the opening — print it rather
+// than let a contaminated p75 drive a window decision again (it did, on 2026-08-07).
+if (floors.length >= 4) {
+  const q = (f) => floors[Math.min(floors.length - 1, Math.floor(floors.length * f))];
+  lines.push(
+    `First-turn spread: p25 **${K(q(0.25))}** · median ${K(q(0.5))} · p75 ${K(q(0.75))} · max ${K(floors[floors.length - 1])} ` +
+      `(p25 is the cleanest estimate of the true fixed floor; higher quantiles include the opening prompt).`,
+  );
+}
+lines.push("");
+lines.push("## Where the money goes (cost-weighted, not raw counts)");
+for (const [k, v] of Object.entries(spend).sort((a, b) => b[1] - a[1])) {
+  lines.push(`- **${(100 * v / spendTotal).toFixed(1)}%** ${k}`);
+}
+lines.push(`- carried context (read + write) = **${ctxShare.toFixed(0)}%** of spend. Optimise context, not verbosity.`);
 lines.push("");
 lines.push("## Health flags");
 for (const f of flags) lines.push(`- ${f}`);

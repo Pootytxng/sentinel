@@ -137,9 +137,32 @@ describe("working headroom (ceiling − floor) is the number that decides thrash
   });
 
   it("does not let a bigger window paper over an unbounded floor", () => {
+    // Re-pinned 2026-08-18 (law-3 corollary: a guard whose law the change supersedes gets re-pinned,
+    // not deleted). The intent is unchanged — a growing floor must still fail regardless of window.
+    // The NUMBERS moved because the ceiling model was corrected from window*0.77 to window-33k:
+    // at 250k the real ceiling is 217k, not 192.5k, so the breach point moved from 132.5k to 157k.
     const wide = resolveCompactionWindow({ env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: "250000" } });
     expect(usableHeadroom(wide, 86_000).ok).toBe(true);
-    expect(usableHeadroom(wide, 140_000).ok).toBe(false); // floor still wins if it keeps growing
+    expect(usableHeadroom(wide, 160_000).ok).toBe(false); // floor still wins if it keeps growing
+
+    // The cutoff is exactly ceiling − MIN_WORKING_HEADROOM, with no slack either side.
+    const breach = 217_000 - MIN_WORKING_HEADROOM;
+    expect(usableHeadroom(wide, breach).ok).toBe(true);
+    expect(usableHeadroom(wide, breach + 1).ok).toBe(false);
+  });
+
+  it("the corrected ceiling reproduces BOTH measured windows; the retired fraction reproduced only one", () => {
+    // This is the whole case for the 2026-08-18 correction, as an assertion rather than a claim.
+    // 150k window, measured peak band 116.0k-119.9k (20+ sessions, pre-2026-08-07).
+    // 250k window, measured peak band 216k-217k (12+ sessions, post-2026-08-07).
+    // additive (window-33k):   150k -> 117k  ✓ inside band   |  250k -> 217k  ✓ inside band
+    // proportional (0.77):     150k -> 115.5k ✓ just inside  |  250k -> 192.5k ✗ short by 24k
+    const at150 = resolveCompactionWindow({ env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: "150000" } });
+    const at250 = resolveCompactionWindow({ env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: "250000" } });
+    expect(usableHeadroom(at150, 0).ceiling).toBeGreaterThanOrEqual(116_000);
+    expect(usableHeadroom(at150, 0).ceiling).toBeLessThanOrEqual(120_000);
+    expect(usableHeadroom(at250, 0).ceiling).toBeGreaterThanOrEqual(216_000);
+    expect(usableHeadroom(at250, 0).ceiling).toBeLessThanOrEqual(218_000);
   });
 
   it("treats a missing or junk floor as zero rather than passing by accident", () => {

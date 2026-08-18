@@ -20,9 +20,9 @@ const BUDGET_SCRIPT = join(ROOT, "scripts", "doc-budget.ps1");
 // A `"path" = 300` row inside the $budgets hashtable. Comments live in that block too (the CLAUDE.md
 // rows carry their rationale inline), so anything not shaped like a row is skipped rather than
 // guessed at.
-export function parseBudgets(text) {
+export function parseBudgets(text, table = "budgets") {
   const lines = text.split(/\r?\n/);
-  const start = lines.findIndex((l) => /^\s*\$budgets\s*=\s*@\{/.test(l));
+  const start = lines.findIndex((l) => new RegExp(`^\\s*\\$${table}\\s*=\\s*@\\{`).test(l));
   if (start === -1) return {};
   const budgets = {};
   for (const line of lines.slice(start + 1)) {
@@ -94,6 +94,78 @@ describe("the hot docs as they stand", () => {
     }
     // FAIL = MOVE history/log sections to docs/archive/ (append at top, leave a pointer). Never
     // delete, and never raise the number to make this green — the budget IS the decree.
+    expect(over).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// BYTE budgets, added 2026-08-18.
+//
+// The caught defect: on 2026-08-18 every hot doc PASSED its line budget while three of them were
+// over the boot-tax line the usage audit had been flagging for three consecutive weeks.
+// docs/BACKLOG.md was 1286/1400 lines and 142 KB; docs/RELEASE_STATE.md was 252/300 lines and
+// 56 KB, i.e. 222 bytes per line. A line budget cannot see a long line, and tokens are charged by
+// bytes — so the gate that exists to enforce TOKEN LAW 1 was structurally blind to it.
+//
+// Same discipline as the line table: the numbers are PARSED from doc-budget.ps1, never restated.
+describe("byte budgets (the line budget cannot see a long line)", () => {
+  const script = readFileSync(BUDGET_SCRIPT, "utf8");
+  const byteBudgets = parseBudgets(script, "byteBudgets");
+
+  it("declares a byte table covering the most-read docs", () => {
+    expect(Object.keys(byteBudgets).length).toBeGreaterThanOrEqual(4);
+    expect(byteBudgets["docs/BACKLOG.md"]).toBeGreaterThan(0);
+    expect(byteBudgets["docs/RELEASE_STATE.md"]).toBeGreaterThan(0);
+  });
+
+  it("does NOT restate CLAUDE.md's byte ceiling — that guard already exists", () => {
+    // Found the hard way on 2026-08-18: src/claude-md-laws-guard.test.ts has enforced
+    // "CLAUDE.md is under 25000 bytes (re-bloat guard)" since before this table existed, and the
+    // first draft of this table quietly added a second, looser number for the same file. Two
+    // ceilings for one file is the MAX_CONTINUES drift bomb again. One ceiling, one owner.
+    expect(byteBudgets["CLAUDE.md"]).toBeUndefined();
+  });
+
+  it("no budget is slack — a budget far above the real size has stopped being a budget", () => {
+    // Three docs ship at a RATCHET (their 2026-08-18 size) rather than at their derived target,
+    // because bringing them down is a content decision, not a mechanical trim. A ratchet is only
+    // honest while it stays pinned to reality: the moment a doc shrinks, the budget must follow it
+    // down, and a budget can never be padded to buy room in advance. 8 KB is the working slack.
+    // This is what forces the ratchet toward the target instead of letting it sit forever.
+    const slack = [];
+    for (const [rel, budget] of Object.entries(byteBudgets)) {
+      const path = join(ROOT, ...rel.split("/"));
+      if (!existsSync(path)) continue;
+      const bytes = Buffer.byteLength(readFileSync(path));
+      if (budget - bytes > 8 * 1024) {
+        slack.push(`${rel} budget ${(budget / 1024).toFixed(0)}KB vs actual ${(bytes / 1024).toFixed(1)}KB — lower it`);
+      }
+    }
+    expect(slack).toEqual([]);
+  });
+
+  it("parses nothing rather than inventing an empty pass when the table is gone", () => {
+    expect(parseBudgets("# no tables here\n", "byteBudgets")).toEqual({});
+  });
+
+  it("does not confuse the two tables", () => {
+    const lineBudgets = parseBudgets(script, "budgets");
+    // Both name docs/BACKLOG.md, and the numbers must be different units — lines are small,
+    // bytes large. (CLAUDE.md is deliberately absent from the byte table; see above.)
+    expect(lineBudgets["docs/BACKLOG.md"]).toBeLessThan(byteBudgets["docs/BACKLOG.md"]);
+    expect(lineBudgets["docs/RELEASE_STATE.md"]).toBeLessThan(byteBudgets["docs/RELEASE_STATE.md"]);
+  });
+
+  it("are every one of them inside budget", () => {
+    const over = [];
+    for (const [rel, budget] of Object.entries(byteBudgets)) {
+      const path = join(ROOT, ...rel.split("/"));
+      if (!existsSync(path)) continue; // the gate SKIPs a missing file; so do we.
+      const bytes = Buffer.byteLength(readFileSync(path));
+      if (bytes > budget) over.push(`${rel} ${(bytes / 1024).toFixed(1)}KB/${(budget / 1024).toFixed(0)}KB`);
+    }
+    // FAIL = MOVE prose to docs/archive/ (append at top, leave a pointer). Never delete, and never
+    // raise the number to make this green — the budget IS the decree.
     expect(over).toEqual([]);
   });
 });
