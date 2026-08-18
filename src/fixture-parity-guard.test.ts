@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 
 // FIXTURE-PARITY GUARD (2026-08-12).
@@ -83,12 +83,22 @@ describe("fixture preview parity with the product entry", () => {
     expect(cssChain(read(FIXTURE_ENTRY))).toContain("src/surfaces/lab-v2.css");
   });
 
-  it("renders inside the room element that re-point is scoped to", () => {
-    // The sheet alone is not enough — the selector needs the element. RoomShell's real markup is
-    // <section class="v2-room" data-room="lab"> (src/design/room-shell.tsx).
+  it("loads the Monitor room token re-point, for the same reason", () => {
+    // The CPU-temp offer (Q9c) renders inside the Monitor room, whose --ix-* re-point lives in
+    // monitor-v2.css and is imported by MonitorV2.tsx — not by App.tsx's chain. Same failure mode
+    // as the Lab sheet above: without it the offer paints in instrument.css's :root palette, a
+    // different accent from the shipped app, under a banner claiming fidelity.
+    expect(cssChain(read(FIXTURE_ENTRY))).toContain("src/surfaces/monitor-v2.css");
+  });
+
+  it("renders inside the room elements those re-points are scoped to", () => {
+    // The sheets alone are not enough — the selectors need the elements. RoomShell's real markup is
+    // <section class="v2-room" data-room="{room}"> (src/design/room-shell.tsx); the Lab states
+    // mount data-room="lab", the CPU-temp states data-room="play" (MonitorV2.tsx passes room="play").
     const fixture = read(FIXTURE_ENTRY);
     expect(fixture).toMatch(/className="v2-room"/);
     expect(fixture).toMatch(/data-room="lab"/);
+    expect(fixture).toMatch(/data-room="play"/);
   });
 
   it("sets every <html> dataset attribute the product entry sets", () => {
@@ -141,5 +151,81 @@ describe("fixture preview parity with the product entry", () => {
       expect(stub, `stub-core.ts stopped blocking ${cmd}`).toContain(`"${cmd}"`);
     }
     expect(stub).toMatch(/BLOCKED\.includes\(cmd\)/);
+  });
+
+  it("answers every command the CPU-temp offer sends", () => {
+    // The stub's default branch rejects loudly, which is right — but for THIS component a rejected
+    // get_sensor_sources is indistinguishable from "nothing installed": the offer falls back to the
+    // downloads and renders a perfectly plausible page. A reviewer would then pass the install
+    // branch while believing they were looking at one of the other four. So the stub must answer
+    // both commands by name, and the component must not have grown a third.
+    const stub = read("docs/ui-sweep/fixture/stub-core.ts");
+    const component = read("src/surfaces/CpuTempOffer.tsx");
+    const commands = [...component.matchAll(/invoke(?:<[^>]*>)?\(\s*"([^"]+)"/g)].map((m) => m[1]);
+    expect(commands.length).toBeGreaterThan(0);
+    for (const cmd of new Set(commands)) {
+      expect(stub, `stub-core.ts has no answer for "${cmd}" — the offer would render the wrong branch`).toContain(
+        `"${cmd}"`,
+      );
+    }
+  });
+  it("exports every name the aliased module graph imports from @tauri-apps/api/core", () => {
+    // bug→guard (self-review round 2, 2026-08-18): vite.config.mts aliases the WHOLE
+    // "@tauri-apps/api/core" module to stub-core.ts. A named import it does NOT export is not a
+    // degraded feature — it is a module-graph SyntaxError that blanks EVERY fixture state before
+    // React paints. @tauri-apps/plugin-updater (reached via ShellV2 → UpdatePill) imports
+    // { Resource, Channel, invoke }; the two missing names cost a whole review round, and the
+    // failure looked like "the rig is broken", not like "a dependency changed".
+    //
+    // Scope note: this reads node_modules on purpose. The offending import lives in a shipped
+    // dependency, not in src — a guard that only walked src would not have caught it.
+    const stub = read("docs/ui-sweep/fixture/stub-core.ts");
+    const exported = new Set(
+      [...stub.matchAll(/export\s+(?:const|function|class)\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1]),
+    );
+    const sources: string[] = [];
+    const walk = (dir: string) => {
+      let names: string[];
+      try {
+        names = readdirSync(dir);
+      } catch {
+        return; // node_modules layout varies; a missing plugin dir is not a failure
+      }
+      for (const name of names) {
+        const p = join(dir, name);
+        if (statSync(p).isDirectory()) walk(p);
+        else if (/\.(tsx?|m?js)$/.test(p)) sources.push(p);
+      }
+    };
+    walk("src");
+    for (const pkg of ["plugin-updater", "plugin-process", "plugin-opener", "api"]) {
+      walk(join("node_modules", "@tauri-apps", pkg, "dist-js"));
+    }
+    const needed = new Set<string>();
+    for (const file of sources) {
+      const text = readFileSync(file, "utf8");
+      for (const m of text.matchAll(/import\s*\{([^}]*)\}\s*from\s*['"]@tauri-apps\/api\/core['"]/g)) {
+        for (const raw of m[1].split(",")) {
+          const name = raw.trim().split(/\s+as\s+/)[0].trim();
+          if (name && name !== "type") needed.add(name.replace(/^type\s+/, ""));
+        }
+      }
+    }
+    expect(needed.size, "found no @tauri-apps/api/core named imports — this guard went vacuous").toBeGreaterThan(0);
+    const missing = [...needed].filter((n) => !exported.has(n)).sort();
+    expect(
+      missing,
+      "stub-core.ts must export these or the fixture page blanks with a module SyntaxError",
+    ).toEqual([]);
+  });
+  it("redirects the bare root to the fixture page", () => {
+    // Two review rounds burned time on `http://localhost:5199/` serving the REAL app (repo-root
+    // index.html → src/main.tsx → IPC failure → ErrorBoundary), which reads as "the rig is broken".
+    // The redirect is the fix; this pins it so a config tidy-up cannot quietly reinstate the trap.
+    const cfg = read("docs/ui-sweep/fixture/vite.config.mts");
+    expect(cfg, "fixture root no longer redirects — `/` serves the real app and looks broken").toMatch(
+      /Location.*docs\/ui-sweep\/fixture\/index\.html/,
+    );
+    expect(cfg).toMatch(/plugins:\s*\[react\(\),\s*redirectRootToFixture\]/);
   });
 });

@@ -100,7 +100,7 @@
     "helpMid2": " 获取。不会向你的游戏注入任何代码,也不需要",
     "kernelDriverTerm": "内核驱动程序",
     "helpPost": "——兼容反作弊系统。浮层会显示在无边框或窗口化游戏画面上(不支持独占全屏)。图表展示最近一分钟的数据。",
-    "gpuSensorsUnavailable": "显卡传感器不可用。Compy 通过 NVML 读取显卡遥测数据,NVML 随 NVIDIA 驱动程序一同安装。AMD(ADLX)和 Intel(GPA)的支持已在规划中——一旦上线,你的显卡也会在这里拥有专属面板。",
+    "gpuSensorsUnavailable": "显卡传感器不可用。Compy 通过 NVML(随 NVIDIA 驱动一同安装)和 ADLX(随 AMD 驱动一同安装)读取显卡遥测数据——无需额外安装任何东西。如果你用的是 NVIDIA 或 AMD 显卡,这说明驱动的传感器服务没有响应,更新或重新安装显卡驱动通常就能恢复。Intel 显卡目前还没有专属面板。",
     "collectingFirstSample": "正在采集首个样本…"
   },
   "diagnostics": {

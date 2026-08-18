@@ -375,6 +375,295 @@ fn cstr(buf: &[u8]) -> String {
     String::from_utf8_lossy(&buf[..end]).into_owned()
 }
 
+// ── Sensor-source status: what the user can DO when nothing is publishing (Q9c) ──────────────────
+//
+// With no monitor running, the CPU-temp row used to render one sentence telling the user to go run
+// one. That is a dead end, and it breaks the name-it-AND-fix-it-inline law. Compy can observe enough
+// read-only to make it an OFFER instead: installed but not running (start it) · running but not
+// publishing (HWiNFO's "Shared Memory Support" is off — by far the most common cause, and the free
+// version resets it roughly every 12 hours) · not installed at all (link the download).
+//
+// Boundaries this respects, deliberately:
+//   - READ-ONLY observation: process image names, fixed install roots, HKLM `App Paths` (writable by
+//     admins only), and whether the shared-memory section opens. No registry WRITE, no service, no
+//     Windows state change — this module stays outside the mutation boundary by construction.
+//   - COMPY NEVER ELEVATES FOR THIS. Starting the app is handed to the shell (`explorer.exe <path>`,
+//     the idiom history.rs/export.rs already use). If the app's OWN manifest wants admin, Windows
+//     shows HWiNFO's prompt — Compy asks for no privilege it doesn't already hold, and runs no
+//     elevated command of its own.
+//   - The UI passes a catalog ID, never a path. Every launchable path is resolved HERE from fixed
+//     roots, and its file name must be one this module names.
+//   - Copy lives in the frontend i18n; this is DATA ONLY. Both locales then describe one observed
+//     state, and neither can drift into a claim the backend never made.
+
+/// One supported sensor app, as Compy can honestly observe it from user mode.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SensorAppStatus {
+    /// Closed-catalog id the UI keys its copy and actions off: `"hwinfo"` | `"lhm"`.
+    pub id: String,
+    /// A process of this app is running right now.
+    pub running: bool,
+    /// It is publishing readings Compy can read right now. `running && !publishing` is the
+    /// actionable case — HWiNFO with Shared Memory Support switched off.
+    pub publishing: bool,
+    /// An executable was resolved on disk, so `launch_sensor_app` has something to start.
+    pub launchable: bool,
+    /// Present on this PC at all (running, publishing, or found on disk).
+    pub installed: bool,
+}
+
+/// The read-only picture behind the CPU-temp offer.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SensorSourceReport {
+    pub apps: Vec<SensorAppStatus>,
+    /// How many processes the scan actually saw. `0` means the scan did not run, so `running:
+    /// false` means UNKNOWN, not "no" — the UI must not claim "not installed" off a scan that never
+    /// happened. Same coverage-honesty contract as `overlay_tools::OverlayScan::scanned`.
+    pub scanned: usize,
+}
+
+/// One catalog entry. Everything here is a compile-time constant: no path, name or key in this
+/// struct can come from the webview, the ledger or a file.
+struct SensorAppSpec {
+    id: &'static str,
+    /// Exact process image names, matched case-insensitively (never a substring).
+    processes: &'static [&'static str],
+    /// The ONLY executable file names this module will ever start.
+    executables: &'static [&'static str],
+    /// `(environment root, path under it)` — fixed default install locations.
+    install_paths: &'static [(&'static str, &'static str)],
+    /// `HKLM\...\App Paths\<name>` entries, for a non-default install directory. HKLM is
+    /// admin-writable only, and the resolved path is still name-checked against `executables`.
+    app_paths: &'static [&'static str],
+}
+
+const SENSOR_APPS: &[SensorAppSpec] = &[
+    SensorAppSpec {
+        id: "hwinfo",
+        processes: &["HWiNFO64.EXE", "HWiNFO32.EXE", "HWiNFO.EXE"],
+        executables: &["HWiNFO64.EXE", "HWiNFO32.EXE", "HWiNFO.EXE"],
+        install_paths: &[
+            ("ProgramFiles", "HWiNFO64\\HWiNFO64.EXE"),
+            ("ProgramW6432", "HWiNFO64\\HWiNFO64.EXE"),
+            ("ProgramFiles(x86)", "HWiNFO64\\HWiNFO64.EXE"),
+            ("ProgramFiles(x86)", "HWiNFO32\\HWiNFO32.EXE"),
+        ],
+        app_paths: &["HWiNFO64.EXE", "HWiNFO32.EXE"],
+    },
+    SensorAppSpec {
+        id: "lhm",
+        processes: &["LibreHardwareMonitor.exe", "OpenHardwareMonitor.exe"],
+        executables: &["LibreHardwareMonitor.exe", "OpenHardwareMonitor.exe"],
+        // LibreHardwareMonitor ships as a portable zip far more often than as an installer, so the
+        // fixed roots below are a best effort: when it isn't found the offer degrades to the
+        // download link, never to a wrong claim.
+        install_paths: &[
+            ("ProgramFiles", "LibreHardwareMonitor\\LibreHardwareMonitor.exe"),
+            ("ProgramW6432", "LibreHardwareMonitor\\LibreHardwareMonitor.exe"),
+            ("ProgramFiles(x86)", "LibreHardwareMonitor\\LibreHardwareMonitor.exe"),
+            // data-root-allow: a third-party app's own install root, not a Compy data path.
+            ("LOCALAPPDATA", "Programs\\LibreHardwareMonitor\\LibreHardwareMonitor.exe"),
+            ("ProgramFiles", "OpenHardwareMonitor\\OpenHardwareMonitor.exe"),
+        ],
+        app_paths: &["LibreHardwareMonitor.exe"],
+    },
+];
+
+fn spec_for_id(id: &str) -> Option<&'static SensorAppSpec> {
+    SENSOR_APPS.iter().find(|a| a.id == id)
+}
+
+/// Pure: is one catalog app among the running process image names? Exact, case-insensitive match —
+/// a substring match would count an unrelated helper process and fabricate a state.
+fn app_is_running(spec: &SensorAppSpec, process_names: &[String]) -> bool {
+    process_names
+        .iter()
+        .any(|p| spec.processes.iter().any(|w| w.eq_ignore_ascii_case(p.trim())))
+}
+
+/// Pure: may this resolved path be started? Only when its file name is one the catalog names. The
+/// registry value is admin-written, but a path is still a path — this name check is what makes "we
+/// only ever start these executables" true rather than merely intended.
+fn is_allowed_executable(spec: &SensorAppSpec, path: &std::path::Path) -> bool {
+    let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
+    spec.executables.iter().any(|e| e.eq_ignore_ascii_case(name))
+}
+
+/// Resolve an executable for this app: the fixed install roots first, then `App Paths`. Returns only
+/// a path that exists AND passes `is_allowed_executable`. Read-only.
+fn resolve_executable(spec: &SensorAppSpec) -> Option<std::path::PathBuf> {
+    for (root, rel) in spec.install_paths {
+        let Some(base) = std::env::var_os(root) else {
+            continue;
+        };
+        let path = std::path::Path::new(&base).join(rel);
+        if path.is_file() && is_allowed_executable(spec, &path) {
+            return Some(path);
+        }
+    }
+    for name in spec.app_paths {
+        let Some(path) = app_paths_lookup(name) else {
+            continue;
+        };
+        if path.is_file() && is_allowed_executable(spec, &path) {
+            return Some(path);
+        }
+    }
+    None
+}
+
+/// Read `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\<exe>`'s default value — the
+/// documented place an installer records where it put its executable. READ ONLY.
+fn app_paths_lookup(exe: &str) -> Option<std::path::PathBuf> {
+    use winreg::enums::{HKEY_LOCAL_MACHINE, KEY_READ};
+    let key = winreg::RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey_with_flags(
+            format!("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\{exe}"),
+            KEY_READ,
+        )
+        .ok()?;
+    let raw: String = key.get_value("").ok()?;
+    let trimmed = raw.trim().trim_matches('"');
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(std::path::PathBuf::from(trimmed))
+}
+
+/// Is HWiNFO's shared-memory sensor block open right now? Cheap (a handle open — no parse, no WMI),
+/// and it is exactly the signal that separates "HWiNFO is running" from "HWiNFO is running with
+/// Shared Memory Support ON" — the difference the user needs named.
+fn hwinfo_shared_memory_open() -> bool {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Memory::{OpenFileMappingW, FILE_MAP_READ};
+    for name in ["Global\\HWiNFO_SENS_SM2", "HWiNFO_SENS_SM2"] {
+        let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+        unsafe {
+            if let Ok(handle) = OpenFileMappingW(FILE_MAP_READ.0, false, PCWSTR(wide.as_ptr())) {
+                let _ = CloseHandle(handle);
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Is a LibreHardware/OpenHardware WMI namespace answering with sensors? Only ever called when the
+/// process is running — the WMI round-trip is the expensive probe here, and Compy's standing bar is
+/// to be the least resource-hungry app on the PC.
+fn lhm_publishing() -> bool {
+    crate::hardware::on_wmi_thread(|| {
+        for ns in ["LibreHardwareMonitor", "OpenHardwareMonitor"] {
+            let Ok(com) = wmi::COMLibrary::new() else {
+                continue;
+            };
+            let Ok(conn) = wmi::WMIConnection::with_namespace_path(&format!("root\\{ns}"), com)
+            else {
+                continue;
+            };
+            let sensors: Vec<OhmSensor> = conn
+                .raw_query(
+                    "SELECT Name, Value, Identifier FROM Sensor WHERE SensorType = 'Temperature'",
+                )
+                .unwrap_or_default();
+            if !sensors.is_empty() {
+                return true;
+            }
+        }
+        false
+    })
+}
+
+/// Pure report builder — the probes are injected, so every state combination is unit-testable
+/// without owning a PC in that state. `publishing` is told whether the app is running, so a probe
+/// may decline to pay for itself when the app is down.
+fn build_sensor_source_report<P, L>(
+    process_names: &[String],
+    publishing: P,
+    launchable: L,
+) -> SensorSourceReport
+where
+    P: Fn(&'static SensorAppSpec, bool) -> bool,
+    L: Fn(&'static SensorAppSpec) -> bool,
+{
+    let apps = SENSOR_APPS
+        .iter()
+        .map(|spec| {
+            let running = app_is_running(spec, process_names);
+            let is_publishing = publishing(spec, running);
+            let can_launch = launchable(spec);
+            SensorAppStatus {
+                id: spec.id.to_string(),
+                running,
+                publishing: is_publishing,
+                launchable: can_launch,
+                // Publishing proves presence even if the process scan missed the image name (it can
+                // run under another account), so it counts toward "installed" too.
+                installed: running || is_publishing || can_launch,
+            }
+        })
+        .collect();
+    SensorSourceReport {
+        apps,
+        scanned: process_names.len(),
+    }
+}
+
+/// Enumerate running process image names (read-only). Empty on failure, so the surface degrades to
+/// "we don't know" rather than to a false claim.
+fn running_process_names() -> Vec<String> {
+    let mut sys = sysinfo::System::new();
+    sys.refresh_processes_specifics(
+        sysinfo::ProcessesToUpdate::All,
+        true,
+        sysinfo::ProcessRefreshKind::nothing(),
+    );
+    sys.processes()
+        .values()
+        .map(|p| p.name().to_string_lossy().into_owned())
+        .collect()
+}
+
+/// The live read-only sensor-source scan behind the CPU-temp offer.
+pub(crate) fn read_sensor_sources() -> SensorSourceReport {
+    build_sensor_source_report(
+        &running_process_names(),
+        |spec, running| match spec.id {
+            // Cheap handle open, asked unconditionally: the section is the ground truth for
+            // "temperatures are actually readable right now".
+            "hwinfo" => hwinfo_shared_memory_open(),
+            // Expensive WMI round-trip — only worth paying for when the app is actually up.
+            "lhm" => running && lhm_publishing(),
+            _ => false,
+        },
+        |spec| resolve_executable(spec).is_some(),
+    )
+}
+
+/// Start a catalog sensor app on the user's behalf. `id` is a catalog key, NEVER a path: the
+/// executable is resolved here, from fixed roots, and name-checked before the shell sees it.
+///
+/// Compy elevates nothing. The path is handed to `explorer.exe` — the shell then honours the target's
+/// OWN manifest, so HWiNFO's admin prompt is HWiNFO's, raised at the user's own click. `Ok(())` means
+/// the shell accepted the request, not that the app is up; the caller re-reads the report to find
+/// that out, which is what keeps the failure path honest.
+pub(crate) fn launch_sensor_app(id: &str) -> Result<(), String> {
+    let spec = spec_for_id(id).ok_or_else(|| format!("unknown sensor app: {id}"))?;
+    let path = resolve_executable(spec)
+        .ok_or_else(|| format!("no installed executable found for {}", spec.id))?;
+    if !is_allowed_executable(spec, &path) {
+        return Err(format!("refusing to start {}", path.display()));
+    }
+    std::process::Command::new("explorer.exe")
+        .arg(&path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("could not start {}: {e}", path.display()))
+}
+
 #[cfg(test)]
 mod hwinfo_tests {
     use super::*;
@@ -518,5 +807,151 @@ mod hwinfo_tests {
         set_size_reading_elem(&mut buf, 1_000_000); // 10 * 1_000_000 ≫ buf.len()
         assert!(unsafe { parse_hwinfo(buf.as_ptr(), buf.len()) }.is_none());
         assert!(unsafe { parse_hwinfo_fans(buf.as_ptr(), buf.len()) }.is_empty());
+    }
+}
+#[cfg(test)]
+mod sensor_source_tests {
+    use super::*;
+
+    fn names(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    fn app<'a>(r: &'a SensorSourceReport, id: &str) -> &'a SensorAppStatus {
+        r.apps.iter().find(|a| a.id == id).expect("catalog app present")
+    }
+
+    /// Probe stubs, so every state below is reachable without owning a PC in that state.
+    fn report(running: &[&str], publishing: &[&str], launchable: &[&str]) -> SensorSourceReport {
+        let publishing: Vec<String> = names(publishing);
+        let launchable: Vec<String> = names(launchable);
+        build_sensor_source_report(
+            &names(running),
+            |spec, _running| publishing.iter().any(|p| p == spec.id),
+            |spec| launchable.iter().any(|l| l == spec.id),
+        )
+    }
+
+    #[test]
+    fn running_match_is_exact_and_case_insensitive() {
+        let hwinfo = spec_for_id("hwinfo").expect("hwinfo in catalog");
+        assert!(app_is_running(hwinfo, &names(&["HWiNFO64.EXE"])));
+        assert!(app_is_running(hwinfo, &names(&["hwinfo64.exe"])));
+        // Substring/prefix matches would fabricate a state out of an unrelated process.
+        assert!(!app_is_running(hwinfo, &names(&["HWiNFO64_helper.exe"])));
+        assert!(!app_is_running(hwinfo, &names(&["notHWiNFO64.EXE"])));
+        assert!(!app_is_running(hwinfo, &names(&["chrome.exe", "steam.exe"])));
+    }
+
+    #[test]
+    fn only_catalog_executables_may_ever_be_started() {
+        let hwinfo = spec_for_id("hwinfo").expect("hwinfo in catalog");
+        assert!(is_allowed_executable(
+            hwinfo,
+            std::path::Path::new("C:\\Program Files\\HWiNFO64\\HWiNFO64.EXE")
+        ));
+        // A registry value is admin-written, but the name check is what makes the promise true: a
+        // planted `App Paths` entry pointing anywhere else must not become something Compy starts.
+        for hostile in [
+            "C:\\Windows\\System32\\cmd.exe",
+            "C:\\Users\\Public\\payload.exe",
+            "C:\\Program Files\\HWiNFO64\\HWiNFO64.EXE.bat",
+        ] {
+            assert!(
+                !is_allowed_executable(hwinfo, std::path::Path::new(hostile)),
+                "{hostile} must never be launchable"
+            );
+        }
+    }
+
+    #[test]
+    fn every_resolvable_path_lands_on_an_allowlisted_executable() {
+        // The resolver may only ever produce a name `is_allowed_executable` accepts. Pinning it on
+        // the CATALOG (rather than on one resolved path) means a future entry with a typo'd or
+        // foreign file name fails here instead of silently never resolving on a user's PC.
+        for spec in SENSOR_APPS {
+            for (root, rel) in spec.install_paths {
+                let path = std::path::Path::new("C:\\root").join(rel);
+                assert!(
+                    is_allowed_executable(spec, &path),
+                    "{}: install path under {root} ends in a file name the catalog won't start: {rel}",
+                    spec.id
+                );
+            }
+            for exe in spec.app_paths {
+                let path = std::path::Path::new("C:\\root").join(exe);
+                assert!(
+                    is_allowed_executable(spec, &path),
+                    "{}: App Paths key {exe} is not an executable the catalog will start",
+                    spec.id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn nothing_installed_reports_no_offer_to_start() {
+        let r = report(&["chrome.exe"], &[], &[]);
+        for id in ["hwinfo", "lhm"] {
+            let a = app(&r, id);
+            assert!(!a.running && !a.publishing && !a.launchable && !a.installed);
+        }
+        assert_eq!(r.scanned, 1);
+    }
+
+    #[test]
+    fn installed_but_not_running_is_launchable() {
+        let r = report(&["chrome.exe"], &[], &["hwinfo"]);
+        let a = app(&r, "hwinfo");
+        assert!(a.installed && a.launchable);
+        assert!(!a.running, "not running is the whole point of this state");
+        assert!(!a.publishing);
+    }
+
+    #[test]
+    fn running_without_shared_memory_is_its_own_state() {
+        // HWiNFO up, section closed: the "Shared Memory Support is off" case. It must be
+        // distinguishable from not-installed, or the UI can only repeat "go install something".
+        let r = report(&["HWiNFO64.EXE"], &[], &["hwinfo"]);
+        let a = app(&r, "hwinfo");
+        assert!(a.running && a.installed);
+        assert!(!a.publishing);
+    }
+
+    #[test]
+    fn publishing_counts_as_installed_even_if_the_scan_missed_the_process() {
+        // HWiNFO elevated under another account can be absent from an unprivileged process scan
+        // while its section is plainly readable. Presence must follow the evidence.
+        let r = report(&[], &["hwinfo"], &[]);
+        let a = app(&r, "hwinfo");
+        assert!(a.publishing && a.installed);
+        assert!(!a.running);
+    }
+
+    #[test]
+    fn an_empty_scan_is_recorded_so_the_ui_can_stay_silent() {
+        // scanned == 0 means the enumeration failed. `running: false` is then UNKNOWN, and the
+        // surface must not turn it into "not installed".
+        let r = report(&[], &[], &[]);
+        assert_eq!(r.scanned, 0);
+        assert!(r.apps.iter().all(|a| !a.installed));
+    }
+
+    #[test]
+    fn launch_refuses_an_id_outside_the_catalog() {
+        // The webview passes an ID, never a path — an unknown one must die here, not resolve to
+        // anything on disk.
+        for id in ["", "cmd", "hwinfo64.exe", "C:\\Windows\\System32\\cmd.exe", "../hwinfo"] {
+            assert!(spec_for_id(id).is_none(), "{id} must not resolve to a catalog app");
+            assert!(launch_sensor_app(id).is_err(), "{id} must be refused");
+        }
+    }
+
+    #[test]
+    fn catalog_ids_are_unique_and_stable() {
+        // The frontend keys its copy and its buttons off these ids; a duplicate or a rename that
+        // isn't mirrored in i18n would silently strip the offer of its action.
+        let ids: Vec<&str> = SENSOR_APPS.iter().map(|s| s.id).collect();
+        assert_eq!(ids, vec!["hwinfo", "lhm"]);
     }
 }

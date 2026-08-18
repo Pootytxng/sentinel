@@ -94,10 +94,12 @@ jurisdictions do not allow certain exclusions; some rights may not apply to you.
 
 ## 10. Privacy
 
-The Software itself runs locally and collects no personal data. Separately, the Compy **website**
-(including the launch-waitlist form) collects your email address — and a one-way hash of your IP
-address for spam prevention — only if you choose to submit it. Full detail, including retention and
-how to request deletion, is in `PRIVACY.md`.
+The Software itself runs locally and collects no personal data. Its one automatic network use is a
+**signed update check** (live since 2026-07-22), which carries none of your data and which you can
+switch off in Settings; an installer downloads only after you approve it. Separately, the Compy
+**website** (including the launch-waitlist form) collects your email address — and a one-way hash of
+your IP address for spam prevention — only if you choose to submit it. Full detail, including
+retention and how to request deletion, is in `PRIVACY.md`.
 
 ## 11. Changes to these terms
 

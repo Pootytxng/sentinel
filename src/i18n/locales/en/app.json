@@ -100,7 +100,7 @@
     "helpMid2": ". No injection into your games, no ",
     "kernelDriverTerm": "kernel driver",
     "helpPost": " — anti-cheat compatible. The overlay draws over borderless/windowed games (not exclusive fullscreen). Charts show the last minute.",
-    "gpuSensorsUnavailable": "GPU sensors unavailable. Compy reads GPU telemetry from NVML, which ships with the NVIDIA driver. AMD (ADLX) and Intel (GPA) support is on the roadmap — your GPU will get its own panel here once that lands.",
+    "gpuSensorsUnavailable": "GPU sensors unavailable. Compy reads GPU telemetry from NVML (installed with the NVIDIA driver) and ADLX (installed with the AMD driver) — nothing extra to install. On an NVIDIA or AMD card this means the driver's sensor service isn't answering, and updating or reinstalling the GPU driver is what usually brings it back. Intel GPUs don't have a panel here yet.",
     "collectingFirstSample": "Collecting first sample…"
   },
   "diagnostics": {

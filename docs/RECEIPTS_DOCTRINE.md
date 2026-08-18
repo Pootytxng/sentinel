@@ -32,10 +32,10 @@ This is the grand re-opening. We were never open; now we are, and the door says 
 ## 2. Law changes — retired · reframed · untouchable
 
 ### RETIRED (these were self-gags, not virtues)
-- **No-telemetry absolutism.** Replaced by **Receipts telemetry**: opt-in, anonymous, default-OFF
-  results sharing + install counting. Purpose: aggregate real measured outcomes → marketing claims
-  that are exciting AND true ("RX 6600 rigs measured +X% 1%-lows after these 3 fixes — N=412").
-  Constraints (non-negotiable): consent-first UI, default OFF, anonymous (no PII, no rig serials),
+- **No-telemetry absolutism.** Replaced by **Receipts telemetry**: anonymous results sharing +
+  install counting, **on by default once armed, disclosed at first run** (amended 2026-08-18 §2).
+  Purpose: aggregate real measured outcomes → marketing claims that are exciting AND true ("RX 6600 rigs measured +X% 1%-lows after these 3 fixes — N=412").
+  Constraints (non-negotiable): first-run disclosure, a real off switch, anonymous (no PII/serials),
   kill-switch, no third-party trackers, payload inspectable by the user before send. It is a NEW
   outbound-network boundary → rides its own spec + security review + **owner sign-off before ship**
   (CLAUDE.md stop-rule 3). The signed updater is already live, so zero-outbound is not a current

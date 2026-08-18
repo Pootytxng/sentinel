@@ -761,6 +761,24 @@ fn get_fan_sensors() -> Vec<cpu_temp::FanSensor> {
     cpu_temp::read_fans()
 }
 
+// What Compy can observe, read-only, about the sensor apps it reads temperatures FROM — so the
+// CPU-temp row can make an offer (start the one you already have / turn HWiNFO's Shared Memory
+// Support on / get one) instead of a dead-end sentence. Enumerates processes, checks fixed install
+// paths and asks whether HWiNFO's shared-memory section is open. Changes nothing. See cpu_temp.rs.
+#[tauri::command]
+fn get_sensor_sources() -> cpu_temp::SensorSourceReport {
+    cpu_temp::read_sensor_sources()
+}
+
+// Start a sensor app the user already has, at their click. `app` is a catalog ID ("hwinfo" | "lhm"),
+// never a path — the executable is resolved and name-checked in cpu_temp.rs, and the launch is
+// handed to the shell, so Compy elevates nothing: any admin prompt is that app's own manifest
+// asking. Not a Windows mutation (nothing is written, nothing is configured).
+#[tauri::command]
+fn launch_sensor_app(app: String) -> Result<(), String> {
+    cpu_temp::launch_sensor_app(&app)
+}
+
 // Live calibration trial: measure the rig's run-to-run noise on the running game (read-only;
 // no tweak, no mutation). Validates the whole capture -> window -> verdict pipeline.
 #[tauri::command]
@@ -1226,6 +1244,8 @@ pub fn run() {
             cancel_benchmark,
             get_cpu_temp,
             get_fan_sensors,
+            get_sensor_sources,
+            launch_sensor_app,
             start_calibration,
             cancel_trial,
             start_tweak_trial,

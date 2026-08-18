@@ -45,15 +45,25 @@ import "../../../src/surfaces/ambient-hud.css";
 // :root values — a different palette from the real app, under a banner claiming fidelity.
 import "../../../src/surfaces/lab-v2.css";
 
+// And the Monitor room's re-point, for the same reason and by the same mechanism. The CPU-temp
+// offer renders inside <section class="v2-room" data-room="play"> (MonitorV2.tsx:126), which is the
+// DECLARING element for the --ix-* family CpuTempOffer.css resolves its accent, text and border
+// from. Without this sheet the offer would paint in instrument.css's :root palette — a different
+// accent from the shipped app, under a banner claiming fidelity.
+import "../../../src/surfaces/monitor-v2.css";
+
 // i18next init (side-effect import) before first render, same as src/main.tsx. Tauri-free.
 import "../../../src/i18n";
 import { readLanguage } from "../../../src/i18n/language";
 import { applyMotionAttribute } from "../../../src/design/use-motion";
 import { applyRoomAccents } from "../../../src/design/theme";
 import ExperimentBench from "../../../src/surfaces/ExperimentBench";
+// The CPU panel is mounted whole, not just the offer: the offer's job is to replace a dead-end
+// sublabel on the temperature row, so the row above it is part of what review has to judge.
+import { CpuMonitorPanel, type CpuSensorSnapshot } from "../../../src/surfaces/monitor-panels";
 // Same module instance the bench's aliased `@tauri-apps/api/core` import resolves to (both land on
 // this directory's stub-core.ts), so this reads the state the bench is actually rendering.
-import { getState } from "./stub-core";
+import { getState, isCpuTempState } from "./stub-core";
 
 // ══ src/main.tsx's pre-paint dataset block, hand-replicated ════════════════════════════════════
 // The overlay branch is dropped on purpose: detecting it needs getCurrentWindow(). This page is
@@ -158,7 +168,10 @@ function FixtureBanner() {
     >
       Fixture preview — invented data, not a measurement
       <span style={{ display: "block", fontWeight: 500, textTransform: "none", opacity: 0.85 }}>
-        state: <code>{getState()}</code> · no backend · Start / Conclude / Restore are blocked
+        state: <code>{getState()}</code> · no backend ·{" "}
+        {isCpuTempState()
+          ? "nothing is started — every CPU number here is invented"
+          : "Start / Conclude / Restore are blocked"}
       </span>
     </div>
   );
@@ -169,13 +182,36 @@ function FixtureBanner() {
 // --ix-* re-point selector matches — see the lab-v2.css note above. The rest of RoomShell (the
 // verdict header, doors, quiet slot) is deliberately NOT replicated: it is chrome around the
 // bench, not the subject of this review, and faking it would put invented copy on screen.
+// INVENTED, like everything else on this page. Shape matches `CpuSensorSnapshot`
+// (src/surfaces/monitor-panels.tsx:12). Two identical history entries because one would trip the
+// panel's "warming up" branch, which is a different state from the one under review.
+const CPU: CpuSensorSnapshot = {
+  usage_overall_pct: 21.4,
+  usage_per_core_pct: [34, 12, 8, 41, 17, 6, 22, 9, 55, 13, 7, 19, 28, 11, 5, 24],
+  frequency_mhz: 4712,
+  ram_used_bytes: 11_400_000_000,
+  ram_total_bytes: 31_580_000_000,
+};
+
+// The CPU-temp states mount the Monitor room, the bench states the Lab room. Each room element is
+// the declaring element for its own --ix-* re-point (see the sheet notes above), so the wrapper is
+// not decoration — swap it and the palette in the screenshot stops being the app's.
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <FixtureBanner />
-    <section className="v2-room" data-room="lab">
-      <div className="v2-room-body">
-        <ExperimentBench />
-      </div>
-    </section>
+    {isCpuTempState() ? (
+      <section className="v2-room" data-room="play">
+        <div className="v2-room-body">
+          {/* cpuTemp={null} is the whole point: it is the branch that renders the offer. */}
+          <CpuMonitorPanel cpu={CPU} history={[CPU, CPU]} cpuTemp={null} />
+        </div>
+      </section>
+    ) : (
+      <section className="v2-room" data-room="lab">
+        <div className="v2-room-body">
+          <ExperimentBench />
+        </div>
+      </section>
+    )}
   </React.StrictMode>,
 );

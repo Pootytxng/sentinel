@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 
 // Button-legibility guard. The "Turn it back on" button shipped ILLEGIBLE — muted-gray text on an
@@ -72,5 +72,84 @@ describe("button legibility", () => {
     // The regressed shape: a lone `.btn-small-on` rule that loses the cascade tie.
     const bare = all.filter((r) => r.sel === ".btn-small-on").map((r) => r.sel);
     expect(bare, "a bare .btn-small-on selector loses the tie to the later .btn-small base rule").toEqual([]);
+  });
+});
+
+// ── FALSE-DANGER HOVER CENSUS (bug→guard, 2026-08-18) ────────────────────────────────────────
+//
+// THE BUG SHAPE, now caught three separate times by three separate self-reviews: `.btn-small:hover`
+// paints --danger RED (App.css:1399). That is right for a ghost button that destroys something and
+// WRONG for every other one — a red hover tells the user "this will break something" about a button
+// that starts an app, exports a file or dismisses a toast. It is invisible to tsc, to vitest and to
+// a screenshot nobody hovered. Fixed at the root for `.btn.btn-small` (App.css:1929), scoped for the
+// gaming toast (App.css:2941), and scoped again for the CPU-temp offer (CpuTempOffer.css).
+//
+// A static guard cannot know whether a given button is destructive — only the author does. So this
+// is a RATCHET, not a rule: the bare-`.btn-small` call sites that exist today are recorded, and a
+// NEW one fails the build until whoever adds it makes the hover decision and records it here. That
+// is the whole point — the decision has to be made once, in the open, rather than defaulted into.
+describe("false-danger hover census (bare .btn-small)", () => {
+  // Bare = `.btn-small` WITHOUT `.btn` (App.css:1929 already fixes that combination at the root)
+  // and WITHOUT `.btn-small-on` (App.css:575 holds accent through hover).
+  //
+  // Recorded, NOT endorsed: most of these have never been hover-reviewed. Lowering a count is
+  // progress; raising one needs a line in the fix column below.
+  const BASELINE: Record<string, number> = {
+    "src/App.tsx": 4, // overlay/gaming toasts — not reviewed
+    "src/Onboarding.tsx": 2, // demo reset — not reviewed
+    "src/surfaces/CpuTempOffer.tsx": 2, // FIXED: scoped hover in CpuTempOffer.css
+    "src/surfaces/GamingMode.tsx": 4, // FIXED for the toast subset by App.css:2941
+    "src/surfaces/rig/RigViewer.tsx": 1, // rig nudge CTA — not reviewed
+    "src/surfaces/SessionDebrief.tsx": 3, // dismiss/export non-destructive, revert IS — not reviewed
+    "src/surfaces/setup/SetupTour.tsx": 1, // "Back" — not reviewed
+  };
+
+  function census(): Record<string, number> {
+    const out: Record<string, number> = {};
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const p = join(dir, name);
+        if (statSync(p).isDirectory()) walk(p);
+        else if (name.endsWith(".tsx") && !name.endsWith(".test.tsx")) {
+          const src = readFileSync(p, "utf8");
+          let n = 0;
+          for (const m of src.matchAll(/className=(?:"([^"]*)"|\{`([^`]*)`\})/g)) {
+            const raw = m[1] ?? m[2] ?? "";
+            // Token split, NOT a \b regex: `\bbtn\b` matches INSIDE "btn-small" (the hyphen is a
+            // word boundary), which silently emptied the first draft of this census to zero.
+            const tokens = raw.split(/[\s`${}?:'"]+/).filter(Boolean);
+            if (!tokens.includes("btn-small")) continue;
+            if (raw.includes("btn-small-on")) continue;
+            if (tokens.includes("btn")) continue;
+            n++;
+          }
+          if (n) out[p.split("\\").join("/")] = n;
+        }
+      }
+    };
+    walk("src");
+    return out;
+  }
+
+  it("records every bare .btn-small call site — a new one must decide its hover first", () => {
+    expect(
+      census(),
+      "bare `.btn-small` hovers RED (--danger). If the button is destructive, record it here. " +
+        "If it is not, scope a non-danger hover the way CpuTempOffer.css and App.css:2941 do.",
+    ).toEqual(BASELINE);
+  });
+
+  it("keeps the scoped non-destructive hovers that were already fixed", () => {
+    const offer = readFileSync(join("src", "surfaces", "CpuTempOffer.css"), "utf8");
+    for (const [label, sheet, scope] of [
+      ["gaming toast", css, ".gaming-toast"],
+      ["CPU-temp offer", offer.replace(/\/\*[\s\S]*?\*\//g, ""), ".cpu-temp-offer"],
+    ] as const) {
+      const hover = new RegExp(
+        `\\${scope}\\s+(?:button)?\\.btn-small:hover:not\\(:disabled\\)\\s*\\{([^}]*)\\}`,
+      ).exec(sheet);
+      expect(hover, `${label} lost its non-destructive .btn-small hover override`).toBeTruthy();
+      expect(hover?.[1], `${label}'s hover override went back to --danger`).not.toMatch(/--danger/);
+    }
   });
 });

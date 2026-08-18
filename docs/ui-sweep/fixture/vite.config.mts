@@ -19,11 +19,28 @@ import { dirname, resolve } from "node:path";
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../../..");
 
+// Two self-reviews in a row lost time to the same trap: `http://localhost:5199/` serves the REPO
+// root's index.html — the REAL app — which mounts src/main.tsx, fails its first Tauri IPC call
+// outside Tauri, and renders an ErrorBoundary that looks exactly like "the fixture is broken".
+// The root is not movable (see below), so redirect the bare root to the fixture page instead.
+const redirectRootToFixture = {
+  name: "fixture-root-redirect",
+  configureServer(server: { middlewares: { use: (fn: (req: any, res: any, next: () => void) => void) => void } }) {
+    server.middlewares.use((req, res, next) => {
+      const [path, query] = String(req.url ?? "/").split("?");
+      if (path !== "/" && path !== "/index.html") return next();
+      res.statusCode = 302;
+      res.setHeader("Location", `/docs/ui-sweep/fixture/index.html${query ? `?${query}` : ""}`);
+      res.end();
+    });
+  },
+};
+
 export default defineConfig({
   // Root is the REPO root, not this folder, so `/src/...` resolves the way the app's own imports
   // expect. The page is served at /docs/ui-sweep/fixture/index.html.
   root: repoRoot,
-  plugins: [react()],
+  plugins: [react(), redirectRootToFixture],
   resolve: {
     alias: [
       // Anchored: `@tauri-apps/api/window`, `/event`, and the plugins must keep resolving to the
