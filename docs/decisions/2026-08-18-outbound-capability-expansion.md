@@ -24,8 +24,12 @@ outbound surface is live. That guard enforces truth, not silence, and stays.
 ## 2. Tier 2 — usage analytics: ARM IT, ON BY DEFAULT (AMENDS the 2026-08-09 tier definition)
 
 **Amended:** Tier 2 was defined as "opt-in, default-OFF". It is now **on by default, disclosed at
-first run, and switchable off in Settings.** `receipts.rs` is already built dark
-(`receipts_gate()` at `src-tauri/src/receipts.rs:18`); this is a switch plus disclosure, not a build.
+first run, and switchable off in Settings.** **Correction to the first draft of this record:** this is not a switch
+plus disclosure. `receipts.rs` has the payload builder, the scrub, the preview command and a mounted
+consent surface, but the send path does not exist anywhere in the app — no HTTP call, no endpoint, no
+queue — and the webview capability/CSP does not permit one. Arming therefore means: a $0 receiving
+endpoint, the Rust send path, the capability/CSP widening, the disclosure, the copy.
+`receipts_gate()` at `src-tauri/src/receipts.rs:18` flips last.
 
 **Unchanged and non-negotiable, because they are what makes the disclosure true:**
 payload preview · scrubbed allowlist (no raw logs, dumps, paths or serials) · a real off switch ·

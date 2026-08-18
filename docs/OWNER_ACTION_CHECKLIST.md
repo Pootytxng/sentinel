@@ -301,13 +301,18 @@ nothing is deleted until you pick.
 
 ---
 
-### B_land. Where should user feedback and crash reports land?  ·  ⏳ NEW 2026-08-18
-You approved in-app feedback + crash reports (Tier 3, decision record
+### B_land. Both new features need somewhere to send to — two accounts, $0  ·  ⏳ NEW 2026-08-18
+You approved usage analytics and in-app feedback/crash reports (decision record
 [`decisions/2026-08-18-outbound-capability-expansion.md`](decisions/2026-08-18-outbound-capability-expansion.md)).
-I can build the whole thing, but the destination has to be **an account you own** — because the
-consent screen names the recipient out loud, and that name has to be true. A free Google Form,
-a dedicated Gmail address, or a GitHub issue tracker all work; free tier is fine. **Give me one and
-I wire it.** Until then Tier 3 gets built against a placeholder and cannot ship.
+Neither can exist without a destination, and I won't invent one:
+- **Feedback + crash reports** must land in **an account you own** — the consent screen says the
+  recipient's name out loud, so that name has to be true. A dedicated Gmail, a Google Form, or a
+  GitHub issue tracker all work.
+- **Analytics** needs a tiny receiving endpoint. Cloudflare's free tier already covers it and you
+  already have an account — say the word and I'll stand it up under a subdomain you control.
+
+Free tier is fine for both, and nothing here costs money. **Name them and I wire both.** Until then
+each gets built against a placeholder and cannot ship.
 
 ### B_eu. Analytics default-ON — one region question before it ships to strangers  ·  ⏳ NEW 2026-08-18
 Same decision record. Usage analytics going **on by default with disclosure** is normal and legal in

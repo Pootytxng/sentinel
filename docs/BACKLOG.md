@@ -76,12 +76,16 @@
 - [ ] **Q9 — OUTBOUND CAPABILITY EXPANSION (OWNER DECISION 2026-08-18).** Record:
   `docs/decisions/2026-08-18-outbound-capability-expansion.md`. The owner judged that building
   *around* the outbound restrictions cost more than the restrictions were worth. **Runs BEFORE Q8's
-  Tier 1 build** — Q9a is a day's work and tells us what users actually do, which is the input Tier 1's
-  catalog is guessing at today. Ordering is a lane decision, not an owner gate; say so if it should flip.
-  - [ ] **Q9a — arm Tier 2 usage analytics, default-ON + disclosed.** `receipts.rs` is already built
-    dark (`receipts_gate()` at `src-tauri/src/receipts.rs:18`); this is a switch, a first-run
-    disclosure, and the privacy/EULA text in the SAME change. Payload preview, scrubbed allowlist and
-    a real off switch stay mandatory — they are what makes the disclosure true. Amend
+  Tier 1 build** — Q9a tells us what users actually do, which is the input Tier 1's catalog is
+  guessing at today. Ordering is a lane decision, not an owner gate; say so if it should flip.
+  - [ ] **Q9a — arm Tier 2 usage analytics, default-ON + disclosed.** *Bigger than a switch:*
+    `receipts.rs` has the payload builder, the scrub, the preview command and a mounted consent
+    surface, but **no send path exists at all** — no HTTP call, no endpoint, no queue, and the
+    webview capability/CSP does not permit one. So the work is: a receiving endpoint ($0 tier), the
+    Rust send path, the capability/CSP widening, the first-run disclosure, and the privacy/EULA text
+    — one coherent change. `receipts_gate()` at `src-tauri/src/receipts.rs:18` is the last line of
+    it, not the first. Payload preview, scrubbed allowlist and a real off switch stay mandatory —
+    they are what makes the disclosure true. Amend
     `src/capability-exception-policy-guard.test.ts` (it currently asserts Tier 2 default-OFF) citing
     the decision record, never by weakening the invariant. 🪪 **owner-gated sub-item:** EU/UK
     distribution needs a region check before default-ON ships there.
