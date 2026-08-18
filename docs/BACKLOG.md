@@ -100,14 +100,14 @@
     anywhere in the design. The consent screen names it: *"Compy's own store on compy.gg"*. Define
     the schema in this change (retention column + a ticket id the deletion receipt can quote); the
     database is empty on purpose. Residual: one `wrangler pages deploy` at ship time (B7).
-  - [ ] **Q9c — CPU temperature that feels native, with no driver.** *Most of this already exists:*
+  - [x] **Q9c — CPU temperature that feels native, with no driver.** *Shipped 2026-08-18 (PR pending):*
+    `src/surfaces/CpuTempOffer.tsx` replaces the dead-end sentence with an offer that detects what is
+    installed, starts it or links the download, and names HWiNFO's Shared Memory Support switch.
+    Self-review PASS round 3 (6 fixture states). *Background:*
     `src-tauri/src/cpu_temp.rs` reads HWiNFO's `Global\HWiNFO_SENS_SM2` shared memory and the
     LibreHardware/OpenHardware WMI namespaces, driver-free, and Monitor shows the value attributed to
-    its source. **The gap is purely UX** — with no sensor app running the user gets a sentence telling
-    them to go run one (`monitor.monitorPanels.cpuTempFallback`), which is a dead end and violates the
-    name-it-AND-fix-it-inline law. Make it an offer: detect installed-but-not-running vs not-installed,
-    launch it or link the download, and say how to switch HWiNFO's Shared Memory Support on. UI change
-    → the self-review law applies. The third-party-driver route is
+    its source. **The gap was purely UX** — with no sensor app running the user got one sentence telling
+    them to go run one, a dead end under the name-it-AND-fix-it-inline law. The third-party-driver route is
     closed by Windows, not by us: every free option reads through WinRing0, which is on Microsoft's
     vulnerable-driver blocklist (default-enforced since Win11 22H2) and flagged by Defender as
     `VulnerableDriver:WinNT/Winring0` — our installer would trip Windows Security itself. A Compy-signed driver stays
