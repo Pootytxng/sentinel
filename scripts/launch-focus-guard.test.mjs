@@ -392,9 +392,28 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
       expect(result.exited, `the app exited during the measurement (code ${result.exitCode})`).toBe(false);
       expect(result.sawWindow, "the app never opened a window at all").toBe(true);
       expect(result.sawVisibleWindow, "the window existed but was hidden or minimised -- the fix must stay out of the foreground, not out of sight").toBe(true);
+      // The message carries the fields that tell the two causes APART, because without them a
+      // failure is unactionable -- measured 2026-08-18, when this rejected four pushes (one of them
+      // docs-only, against a PREBUILT binary the diff could not have changed) and every reading was
+      // lost to a message that quoted only the count. It could not be reproduced on demand: green
+      // standalone x3, green at 97% CPU x3, green through the gate's own `npm test`. So the next
+      // occurrence has to explain itself.
+      //
+      // firstForegroundMs vs firstWindowMs is the discriminator the probe already returns and this
+      // assertion used to discard. Foreground BEFORE the window exists is Windows fronting a fresh
+      // launch (issue #121, system-level, outside this process). Foreground well AFTER the window
+      // exists is something in-process raising it, which is the steal this guard is for. Both fail
+      // -- the count stays `toBe(0)` and nothing here is softened -- but they have different owners.
+      const raise =
+        result.firstForegroundMs >= 0 && result.firstWindowMs >= 0
+          ? `${result.firstForegroundMs - result.firstWindowMs}ms after its window appeared`
+          : "with no window timing recorded";
       expect(
         result.ownedForegroundSamples,
-        `Compy held the foreground for ${result.ownedForegroundSamples}/${result.samples} samples (first at ${result.firstForegroundMs}ms). This is the owner's game being minimised.`,
+        `Compy held the foreground for ${result.ownedForegroundSamples}/${result.samples} samples ` +
+          `(first at ${result.firstForegroundMs}ms, ${raise}; window at ${result.firstWindowMs}ms, ` +
+          `visible=${result.sawVisibleWindow}; foreground pid before=${result.foregroundPidBefore}, ` +
+          `after=${result.foregroundPidAfter}). This is the owner's game being minimised.`,
       ).toBe(0);
     },
     120_000,
