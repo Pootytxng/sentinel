@@ -522,12 +522,16 @@ fn contiguous_run_end(changes: &[SessionChange], start: usize) -> usize {
 /// it (a mislabeled power-plan change still takes the NON-elevated path, defers
 /// nothing, and simply confirms inline). Everything else = audited `dispatch_rollback`.
 fn restore_one_change(change: &SessionChange) -> Result<(), String> {
+    // #130 — restoring a staged session change is a Windows mutation like any other, so it needs
+    // the same proof of a canonical data root. Taken BEFORE the match, so both arms are covered and
+    // not just the ones that reach the shared dispatcher.
+    let root = crate::data_root::mutation_root()?;
     match (&change.rollback_action, &change.snapshot) {
         (RollbackAction::RestorePowerPlanFromSnapshot, Snapshot::PowerPlan { prior_guid }) => {
             restore_power_plan_unelevated(prior_guid)
         }
         // All other audited changes restore via the shared typed dispatcher.
-        (action, snapshot) => actions::dispatch_rollback(action, snapshot),
+        (action, snapshot) => actions::dispatch_rollback(&root, action, snapshot),
     }
 }
 

@@ -33,6 +33,7 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 # command's stderr into a TERMINATING NativeCommandError under "Stop" whenever that stderr is
 # redirected, and `2>$null` causes it rather than preventing it. That killed the v0.9.9 publish at
 # the expected-404 releases-tag probe, one release after the same class killed the runtime proof.
+. (Join-Path $PSScriptRoot "lib\canonical-data-root.ps1")
 . (Join-Path $PSScriptRoot "lib\native-process.ps1")
 . (Join-Path $PSScriptRoot "lib\release-artifacts.ps1")
 . (Join-Path $PSScriptRoot "lib\release-transaction.ps1")
@@ -97,8 +98,12 @@ function Assert-NoPendingGamingContract([string]$Phase) {
   # still be un-restored — never bump a version or publish over that. Same definition ship-reinstall
   # uses: any `gaming-session*` contract blocks EXCEPT a cleanly-cleared backup
   # (gaming-session.cleared-<ts>.json.bak), which is the app's own "already restored" marker.
-  $dir = Join-Path $env:APPDATA "Compy"
-  if (-not (Test-Path -LiteralPath $dir -PathType Container)) { return }
+  # #130: PROVE the root before reading it. `Join-Path $env:APPDATA "Compy"` used to be joined
+  # blind and then skipped when absent - fail-open twice over. From a container-redirected shell
+  # that inspected an overlay and passed a gate it had never looked at.
+  $verified = Get-CanonicalCompyDataRoot -Phase $Phase
+  if (-not $verified.Exists) { return }
+  $dir = $verified.Path
   $pending = @(Get-ChildItem -LiteralPath $dir -Force -ErrorAction Stop |
     Where-Object { $_.Name -like "gaming-session*" } |
     Where-Object { $_.Name -notlike "*.cleared-*.json.bak" })

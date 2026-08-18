@@ -61,21 +61,38 @@ pub enum DataRootDecision {
 }
 ```
 
-### Detection — three independent predicates, all must hold for `Canonical`
+### Detection — one decisive predicate, three corroborating (AMENDED 2026-08-18, implementation)
 
-1. **No inherited package identity.** `GetCurrentPackageFamilyName` (kernel32, `appmodel.h`) must
-   return `APPMODEL_ERROR_NO_PACKAGE` (15700). Compy ships as a per-user NSIS install and has no
-   package identity of its own, so *any* package family name means Compy is running inside somebody
-   else's container. This is the direct, documented, deterministic test for the failure that
-   actually occurred — it does not depend on inspecting paths the container is already lying about.
-2. **`APPDATA` is where it should be.** It must equal `%USERPROFILE%\AppData\Roaming`
-   case-insensitively, and must not lie under `...\AppData\Local\Packages\`.
-3. **The resolved root's final path agrees.** `GetFinalPathNameByHandle` on the opened directory must
-   not resolve under `...\AppData\Local\Packages\`.
+> **Predicate 1 was falsified during implementation and is DEMOTED.** It said package identity was
+> decisive: *"any family name means it is inside somebody else's container."* The session that built
+> this ran in Store PowerShell (`WindowsApps\Microsoft.PowerShell_...\pwsh.exe`) — a packaged app
+> **with** package identity and with **no filesystem redirection at all**: it read the canonical
+> ledger and the overlay as two distinct files. Package identity and container redirection are
+> independent properties. As originally specified the resolver would return `Redirected` on a clean
+> machine and halt Compy for a user whose only sin is a Store terminal. **A halt on a false positive
+> in the persistence layer is worse than the bug it guards against**, so identity became evidence,
+> not a verdict. Kept in `get_data_root_report()` and used as the overlay lookup key for P4; never
+> sufficient alone to force `Redirected`.
 
-Predicate 1 catches container inheritance; 2 catches env tampering; 3 catches a host that redirects
-by junction rather than by container. Any predicate failing produces `Redirected` with the evidence
-that failed — never a silent correction, never a "best guess" root.
+**P3 is now the decisive test** — it measures the thing that actually matters, where the opened root
+*lands*, and it discriminated correctly in both directions on every piece of evidence gathered.
+
+1. **Package identity** (`GetCurrentPackageFamilyName`) — *evidence only*. Recorded, reported, and
+   used to locate the host's own overlay for P4. Never a halt on its own.
+2. **`APPDATA` is where it should be.** Equal to `%USERPROFILE%\AppData\Roaming` case-insensitively,
+   and not under `...\AppData\Local\Packages\`. Cheap; catches env tampering. Failing => `Redirected`.
+3. **DECISIVE — the resolved final path.** `std::fs::canonicalize` (`GetFinalPathNameByHandle`) on
+   the opened root must not resolve under `...\AppData\Local\Packages\`. Catches container
+   inheritance *and* junction redirection, and stays quiet on a merely-packaged, unredirected host.
+4. **NEW — NTFS identity vs the host's overlay.** If this process has a package family name, resolve
+   that package's `LocalCache\Roaming\Compy` and compare `(volume serial, file id)` with the root we
+   opened. Same file => our "canonical" root *is* the overlay => `Redirected`. This is the identity
+   form of the owner's observation that `Get-Item` on the redirected ledger returns a populated
+   `Target` pointing into `LocalCache\Roaming` — the same resolution, taken by handle rather than
+   through .NET's weaker `LinkTarget`, which has no direct Rust equivalent.
+
+Any of P2–P4 failing produces `Redirected` with the evidence that failed — never a silent
+correction, never a best-guess root.
 
 ### Conflict detection belongs on the clean side
 
@@ -121,10 +138,19 @@ the support export, so "which ledger am I looking at" is answerable without a de
 
 ### Preflight parity
 
-`scripts/release.ps1` and `scripts/ship-reinstall.ps1` stop composing `Join-Path $env:APPDATA "Compy"`
-and instead consume the same contract. Until they do, both must **refuse** rather than pass when the
-host has a package identity — a Gaming Mode gate that cannot see the real contract must fail closed,
-not open.
+**Done.** `scripts/lib/canonical-data-root.ps1` is the same decision in PowerShell:
+`Get-CanonicalCompyDataRoot -Phase <name>` returns a *proven* root or throws. `release.ps1` and
+`ship-reinstall.ps1` dot-source it and no longer compose `Join-Path $env:APPDATA "Compy"`.
+
+Both previously failed open **twice**: they joined the path blind, then returned early when the
+directory was absent — so from a redirected shell each would inspect an overlay, find no pending
+Gaming Mode contract, and report PASS about a folder it had never looked at. The helper needs no
+`MutationRoot` (there is no capability to hand out, only a path or a refusal), and it carries two
+refusal tails on purpose: a wrong shell is fixed by relaunching, a real split is not, and telling
+the operator to retry would send them round a loop that cannot close.
+
+*Verified on the owner's desk 2026-08-18: it refuses, naming both roots — parity with the Rust
+`Conflict`.*
 
 ## Guards (each falsified before being trusted, per the standing law)
 
@@ -138,8 +164,27 @@ not open.
 5. `COMPY_MEASUREMENT_DATA_ROOT` set → `Sandbox`, and `MutationRoot::from_decision` returns `None`.
 6. Static guard: no source file outside the resolver module composes a data path from `APPDATA`
    directly — the same shape as `mutation-boundary-guard`, extended to persistence roots.
+7. **NEW (P4)** — a probe whose package overlay shares our root's `(volume serial, file id)` =>
+   `Redirected`; and package identity **alone**, on a root that resolves cleanly, => `Canonical`.
+   The second half is the falsification of demoted predicate 1 and must never regress.
+
+**Shipped as:** 16 unit guards in `src-tauri/src/data_root.rs` (pure `resolve()` over synthetic
+probes — every variant falsifiable without a container or a second data root), plus
+`scripts/data-root-guard.test.mjs`, the static guard, which covers Rust *and* the PowerShell
+preflights and was itself falsified in both languages before being trusted. Legitimate non-root
+reads (the support-header path scrubber, the install-dir debug log) carry a greppable
+`data-root-allow` marker with its reason, block-form above the line.
+
+**One test-build escape, stated plainly.** The pre-existing mutation/rollback suites drive the real
+gateways against the real `%APPDATA%\Compy` ledger, and this desk is *currently in the `Conflict`
+state this module detects* — so under the shipped rule all ten would refuse, replacing real
+assertions with a tautology. `mutation_root()` is therefore `#[cfg(test)]`-overridden to issue the
+token for the effective root, preserving exactly their prior behavior. **Release builds have no such
+path**, and nothing is left unproven: refusal is falsified variant-by-variant through the pure
+`mutation_root_from()`, and `begin_mutation()` remains the single place any gateway obtains a token.
 
 ## Deliberately out of scope here
 
-Recovery and migration of the existing split on this desk. That needs the canonical side read by an
-out-of-container instrument first (#130), and it is owner-gated.
+Recovery and migration of the existing split on this desk. The out-of-container read is now
+**done** (#130, 2026-08-18: canonical = 3 receipts, overlay = 61, zero ID overlap), so recovery is
+unblocked *technically* — and stays owner-gated. It is proposed on #130, never performed.

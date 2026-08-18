@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::actions::*;
 use crate::compy_data_dir;
+use crate::data_root::MutationRoot;
 use crate::{
     current_power_plan_name, eee_disabled_on_any_eligible_adapter, fast_startup_state,
     game_bar_disabled, game_mode_enabled, hags_state, mouse_accel_disabled,
@@ -303,6 +304,29 @@ fn history_path() -> PathBuf {
     compy_data_dir().join("history.json")
 }
 
+/// The ledger under a VERIFIED-canonical root (#130). Mutation paths resolve their ledger through
+/// the capability token, never through `compy_data_dir()`, so a load and the save that follows it
+/// can never end up pointed at two different roots.
+fn ledger_path_for(root: &MutationRoot) -> PathBuf {
+    root.path().join("history.json")
+}
+
+/// Load the ledger a mutation is about to write. Same fail-loud behavior as `load_history`, but
+/// read from the capability root — see `ledger_path_for`.
+fn load_history_for(root: &MutationRoot) -> Result<Vec<AppliedChange>, String> {
+    let loaded = load_history_from(&ledger_path_for(root));
+    if let Err(e) = &loaded {
+        crate::support_evidence::record(
+            crate::support_evidence::EventKind::Ledger,
+            "ledger_load",
+            "unreadable",
+            crate::support_evidence::Outcome::Failed,
+            e,
+        );
+    }
+    loaded
+}
+
 // load/save are split into path-parameterized cores so the JSON round-trip and
 // the corrupt-file-fails-safe behavior are unit-testable without touching the
 // real %APPDATA% history file. The no-arg wrappers preserve prior behavior.
@@ -356,10 +380,14 @@ fn load_history_from(path: &Path) -> Result<Vec<AppliedChange>, String> {
     }
 }
 
-fn save_history(h: &[AppliedChange]) -> Result<(), String> {
-    let saved = std::fs::create_dir_all(compy_data_dir())
+/// Persist the ledger. Takes the `MutationRoot` capability rather than a path: a receipt may only
+/// ever be written under a root Compy has PROVEN is the machine's own (#130). Under a redirected
+/// root no token exists, so this function is unreachable — that is the fix, expressed as a type
+/// instead of as a check someone has to remember to write.
+fn save_history(root: &MutationRoot, h: &[AppliedChange]) -> Result<(), String> {
+    let saved = std::fs::create_dir_all(root.path())
         .map_err(|e| e.to_string())
-        .and_then(|()| save_history_to(&history_path(), h));
+        .and_then(|()| save_history_to(&ledger_path_for(root), h));
     // The write side of the same story: a receipt that cannot be persisted is the failure that
     // strands a real machine change with no rollback contract. Support needs to see it happened.
     if let Err(e) = &saved {
@@ -397,14 +425,33 @@ fn save_history_to(path: &Path, h: &[AppliedChange]) -> Result<(), String> {
 /// elevation, so nothing is changed. (Not a TOCTOU guarantee — the volume could still fill in the
 /// millisecond between canary and receipt — but it converts the common, deterministic un-writable
 /// cases from "silent orphaned mutation" into "clean pre-mutation refusal.")
-fn ensure_ledger_writable(history: &[AppliedChange]) -> Result<(), String> {
-    save_history(history).map_err(|e| {
+fn ensure_ledger_writable(root: &MutationRoot, history: &[AppliedChange]) -> Result<(), String> {
+    save_history(root, history).map_err(|e| {
         format!(
             "refusing to apply: the change ledger isn't writable right now, so this change \
              couldn't be recorded — and an unrecorded change can't be rolled back. Nothing on \
              your system was changed. ({e})"
         )
     })
+}
+
+/// The opening move of EVERY mutation, in the one order that is safe, so no gateway can do two of
+/// the three and skip the third:
+///
+/// 1. **#130** — prove the data root is the machine own verified-canonical root, and take the
+///    `MutationRoot` capability. A redirected, conflicted or unavailable root refuses right here,
+///    before anything on the machine is touched, and explains itself in plain English.
+/// 2. **H1 read side** — load the ledger. A change that cannot be recorded must not happen.
+/// 3. **H1 write side** — prove the ledger is writable with a content-identical canary save, so a
+///    readable-but-unwritable ledger cannot let the mutation land and then orphan its receipt.
+///
+/// Returning the token alongside the history is what makes the rest of the gateway honest: the
+/// receipt it later saves goes to the SAME root it just read.
+fn begin_mutation() -> Result<(MutationRoot, Vec<AppliedChange>), String> {
+    let root = crate::data_root::mutation_root()?;
+    let history = load_history_for(&root)?;
+    ensure_ledger_writable(&root, &history)?;
+    Ok((root, history))
 }
 
 /// Every rec id Compy can ACTUALLY one-click apply, mapped to its audited `apply_*`. This is the
@@ -438,7 +485,7 @@ fn apply_fn_for(rec_id: &str) -> Option<fn() -> Result<ApplyResult, String>> {
 
 /// The ONE dispatch from rec id to its audited apply_* — `apply_recommendation` and the §4 batch
 /// orchestrator both go through here, so there is no second copy of the match to drift.
-fn dispatch_apply(rec_id: &str) -> Result<ApplyResult, String> {
+fn dispatch_apply(_root: &MutationRoot, rec_id: &str) -> Result<ApplyResult, String> {
     match apply_fn_for(rec_id) {
         Some(f) => f(),
         None => Err(format!("'{}' is not yet supported for one-click apply", rec_id)),
@@ -513,8 +560,7 @@ pub(crate) fn restore_leftover(
     let _lock = HISTORY_LOCK
         .lock()
         .map_err(|_| "history lock poisoned".to_string())?;
-    let mut history = load_history()?;
-    ensure_ledger_writable(&history)?;
+    let (root, mut history) = begin_mutation()?;
     let result = match detector_id {
         "memory-compression-off" => crate::actions::restore_memory_compression(),
         "mmcss-tampering" => crate::actions::restore_mmcss_defaults(),
@@ -531,7 +577,7 @@ pub(crate) fn restore_leftover(
     let mut change = build_applied_change(detector_id, display_title, result)?;
     change.provenance = Some("leftover_adopted".to_string());
     history.push(change.clone());
-    save_history(&history)?;
+    save_history(&root, &history)?;
     Ok(into_view(change))
 }
 
@@ -574,14 +620,14 @@ fn apply_recommendation_inner(rec_id: &str, rec_title: &str) -> Result<AppliedCh
     // Load BEFORE dispatching (H1): if the ledger can't record a receipt, the change must not
     // happen at all — never mutate what can't be written down. Same audited dispatch + receipt
     // as before; only the refusal moved ahead of the mutation.
-    let mut history = load_history()?;
-    // ...and prove the ledger is WRITABLE too (H1 write side): a readable-but-unwritable ledger
-    // would let the mutation succeed and then orphan its receipt. Refuse before elevation.
-    ensure_ledger_writable(&history)?;
-    let result = dispatch_apply(rec_id)?;
+    // ...and prove the root and the ledger together (#130 + the H1 write side): a readable-but-
+    // unwritable ledger, or a redirected root, would let the mutation succeed and then orphan or
+    // misfile its receipt. Refuse before elevation.
+    let (root, mut history) = begin_mutation()?;
+    let result = dispatch_apply(&root, rec_id)?;
     let change = build_applied_change(rec_id, rec_title, result)?;
     history.push(change.clone());
-    save_history(&history)?;
+    save_history(&root, &history)?;
     Ok(into_view(change))
 }
 
@@ -599,8 +645,7 @@ pub(crate) fn suspend_known_service(service_name: String) -> Result<AppliedChang
     let service = crate::actions::KnownService::from_name(&service_name)
         .ok_or_else(|| format!("'{}' isn't a Compy-suspendable service.", service_name))?;
     let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
-    let mut history = load_history()?;
-    ensure_ledger_writable(&history)?;
+    let (root, mut history) = begin_mutation()?;
     let result = crate::actions::apply_service_suspend(service)?;
     let change = build_applied_change(
         &format!("service-suspend:{}", service_name),
@@ -608,7 +653,7 @@ pub(crate) fn suspend_known_service(service_name: String) -> Result<AppliedChang
         result,
     )?;
     history.push(change.clone());
-    save_history(&history)?;
+    save_history(&root, &history)?;
     Ok(into_view(change))
 }
 
@@ -628,8 +673,7 @@ pub(crate) fn set_startup_entry_enabled(
     enabled: bool,
 ) -> Result<AppliedChangeView, String> {
     let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
-    let mut history = load_history()?;
-    ensure_ledger_writable(&history)?;
+    let (root, mut history) = begin_mutation()?;
     let result = crate::actions::apply_startup_entry_enabled(&name, enabled)?;
     let change = build_applied_change(
         &format!("startup-entry:{}", name),
@@ -641,7 +685,7 @@ pub(crate) fn set_startup_entry_enabled(
         result,
     )?;
     history.push(change.clone());
-    save_history(&history)?;
+    save_history(&root, &history)?;
     Ok(into_view(change))
 }
 
@@ -658,8 +702,7 @@ pub(crate) fn disable_known_bloat_task(task_id: String) -> Result<AppliedChangeV
     let task = crate::actions::KnownBloatTask::from_id(&task_id)
         .ok_or_else(|| format!("'{}' isn't a Compy-removable telemetry task.", task_id))?;
     let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
-    let mut history = load_history()?;
-    ensure_ledger_writable(&history)?;
+    let (root, mut history) = begin_mutation()?;
     let result = crate::actions::apply_disable_scheduled_task(task)?;
     let change = build_applied_change(
         &format!("bloat-task:{}", task_id),
@@ -667,7 +710,7 @@ pub(crate) fn disable_known_bloat_task(task_id: String) -> Result<AppliedChangeV
         result,
     )?;
     history.push(change.clone());
-    save_history(&history)?;
+    save_history(&root, &history)?;
     Ok(into_view(change))
 }
 
@@ -685,8 +728,7 @@ pub(crate) fn remove_known_preload_app(app_id: String) -> Result<AppliedChangeVi
     let app = crate::actions::KnownPreloadApp::from_id(&app_id)
         .ok_or_else(|| format!("'{}' isn't a Compy-removable preinstalled app.", app_id))?;
     let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
-    let mut history = load_history()?;
-    ensure_ledger_writable(&history)?;
+    let (root, mut history) = begin_mutation()?;
     let result = crate::actions::apply_remove_preload_app(app)?;
     let change = build_applied_change(
         &format!("preload-app:{}", app_id),
@@ -694,7 +736,7 @@ pub(crate) fn remove_known_preload_app(app_id: String) -> Result<AppliedChangeVi
         result,
     )?;
     history.push(change.clone());
-    save_history(&history)?;
+    save_history(&root, &history)?;
     Ok(into_view(change))
 }
 
@@ -790,8 +832,7 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
     // H1: refuse the whole batch before phase 1 if the ledger can't record receipts — readable
     // (load) AND writable (canary), so a readable-but-unwritable ledger can't let phase-1 mutations
     // (HKCU, immediate) succeed and then orphan their receipts.
-    let mut history = load_history()?;
-    ensure_ledger_writable(&history)?;
+    let (root, mut history) = begin_mutation()?;
     let mut outcomes: Vec<BatchItemOutcome> = Vec::new();
     let mut applied = 0usize;
 
@@ -810,7 +851,7 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
         let guard = ElevationDeferral::begin()?;
         let mut cursor = 0usize;
         for it in &items {
-            match dispatch_apply(&it.rec_id) {
+            match dispatch_apply(&root, &it.rec_id) {
                 Err(e) => outcomes.push(outcome_skipped(&it.rec_id, &it.rec_title, e)),
                 Ok(result) => {
                     let now = guard.deferred_count();
@@ -837,18 +878,18 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
     // Persist phase-1 receipts before the elevation step — a cancelled UAC must never cost the
     // non-elevated items their ledger entries.
     if applied > 0 {
-        save_history(&history)?;
+        save_history(&root, &history)?;
     }
 
     // ── Phase 2 — ONE elevation for every deferred command, receipts to a result FILE (data,
     // not code: reading it never executes anything), then a ledger receipt per confirmed item.
     let mut elevation_prompts = 0usize;
     if !staged.is_empty() {
-        let receipts_path = compy_data_dir().join(format!(
+        let receipts_path = root.path().join(format!(
             "elevation-batch-{}.receipts",
             Utc::now().timestamp_millis()
         ));
-        std::fs::create_dir_all(compy_data_dir()).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(root.path()).map_err(|e| e.to_string())?;
         let _ = std::fs::remove_file(&receipts_path);
         // Checked (never indexed) command attribution: by construction every staged range lies
         // inside all_cmds, but a panic HERE would poison HISTORY_LOCK for the whole session — so
@@ -890,7 +931,7 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
                         }
                     }
                 }
-                save_history(&history)?;
+                save_history(&root, &history)?;
             }
         }
         let _ = std::fs::remove_file(&receipts_path);
@@ -921,9 +962,12 @@ fn rollback_change_inner(change_id: &str) -> Result<(), String> {
     let _lock = HISTORY_LOCK
         .lock()
         .map_err(|_| "history lock poisoned".to_string())?;
+    // #130: prove the root before anything else — a rollback dispatched against a redirected
+    // ledger would undo a change the receipt in front of us does not actually describe.
+    let root = crate::data_root::mutation_root()?;
     // H1: a corrupt ledger refuses the rollback loudly (the file is preserved for recovery)
     // rather than reporting "change not found" against a silently-empty list.
-    let mut history = load_history()?;
+    let mut history = load_history_for(&root)?;
     let idx = history
         .iter()
         .position(|c| c.id == change_id)
@@ -937,13 +981,13 @@ fn rollback_change_inner(change_id: &str) -> Result<(), String> {
 
     let (action, snapshot) = resolve_rollback(&change)?;
 
-    dispatch_rollback(&action, &snapshot)?;
+    dispatch_rollback(&root, &action, &snapshot)?;
 
     history[idx].status = "rolled_back".into();
     // Honest rollback dating (Intelligence Phase 2): stamped at the moment the rollback
     // actually dispatched. Only entries rolled back from this stamp onward carry a date.
     history[idx].rolled_back_at = Some(Utc::now().to_rfc3339());
-    save_history(&history)?;
+    save_history(&root, &history)?;
     Ok(())
 }
 
@@ -1825,6 +1869,7 @@ mod leftover_restore_tests {
         assert!(err.contains("cannot roll back blind"));
         // The (action, snapshot) pair contract holds for the new variants too.
         let mismatch = dispatch_rollback(
+            &crate::data_root::test_mutation_root(),
             &RollbackAction::RestoreMemoryCompressionFromSnapshot,
             &Snapshot::PrioritySeparation { prior_value: Some(2) },
         );
@@ -1882,7 +1927,7 @@ mod leftover_restore_tests {
                 Snapshot::CoreParking { prior_ac_pct: Some(0), prior_dc_pct: Some(0) },
             ),
         ] {
-            assert!(dispatch_rollback(&a, &s).is_err(), "mismatched pair must be rejected");
+            assert!(dispatch_rollback(&crate::data_root::test_mutation_root(), &a, &s).is_err(), "mismatched pair must be rejected");
         }
     }
 
@@ -2033,6 +2078,7 @@ mod leftover_restore_tests {
         assert_eq!(before, after, "no receipt without a mutation");
         // Pair contract: the new variant rejects mismatches.
         assert!(dispatch_rollback(
+            &crate::data_root::test_mutation_root(),
             &RollbackAction::RestorePagefileFromSnapshot,
             &Snapshot::Mpo { prior_overlay_test_mode: None },
         )

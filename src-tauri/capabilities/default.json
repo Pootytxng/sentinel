@@ -47,6 +47,7 @@
     "allow-get-cpu-sensors",
     "allow-get-cpu-temp",
     "allow-get-crash-blackbox",
+    "allow-get-data-root-report",
     "allow-get-diagnostics",
     "allow-get-experiment-gate",
     "allow-get-experiments",

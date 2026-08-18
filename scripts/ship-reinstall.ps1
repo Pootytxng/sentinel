@@ -28,6 +28,7 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 # Runtime proof mechanism (Invoke-NativeProcess / Invoke-CompyRuntimeProof). Lives in its own
 # dot-sourced file so the release-pipeline tests can drive it directly. See its header for the
 # 2026-07-27 NativeCommandError incident it exists to make impossible.
+. (Join-Path $PSScriptRoot "lib\canonical-data-root.ps1")
 . (Join-Path $PSScriptRoot "lib\runtime-proof.ps1")
 # Every external command in this script runs through the shared native-process abstraction. Windows PowerShell 5.1
 # turns a native command's stderr into a TERMINATING error under "Stop" (that is what broke the
@@ -115,9 +116,12 @@ if ($treeDirt.Count -gt 0 -and -not $AllowDirty) {
 # Gaming Mode restore orchestrator. Any live, pending, unreadable, temp, or quarantined contract may
 # therefore represent session-scoped Windows changes that still need recovery. Refuse BEFORE touching
 # a process or installer; never parse, delete, quarantine, or guess from this ship script.
-$gamingDataDir = Join-Path $env:APPDATA "Compy"
+# #130: the root is PROVEN canonical before it is read - a redirected or split root throws here
+# rather than reporting "no pending contract" about a folder it never looked at.
+$verifiedGamingRoot = Get-CanonicalCompyDataRoot -Phase "gaming-mode restore gate"
+$gamingDataDir = $verifiedGamingRoot.Path
 $pendingGamingContracts = @()
-if (Test-Path -LiteralPath $gamingDataDir -PathType Container) {
+if ($verifiedGamingRoot.Exists) {
   # A cleanly-CLEARED session backup (the app renames an ended contract to
   # gaming-session.cleared-<ts>.json.bak) is the app's OWN "already restored" marker and does NOT need
   # recovery (gaming_session.rs documented intent: cleared sessions don't qualify). Exclude ONLY that

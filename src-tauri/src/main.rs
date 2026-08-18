@@ -38,6 +38,8 @@ fn main() {
 #[cfg(debug_assertions)]
 fn log_launch(is_helper: bool) {
     use std::io::Write;
+    // data-root-allow: the NSIS per-user INSTALL dir for launch-debug.log, not the data root.
+    // This runs before `run()` and before any resolver exists; it never touches the Trust Ledger.
     let base = match std::env::var("LOCALAPPDATA") {
         Ok(b) => b,
         Err(_) => return,

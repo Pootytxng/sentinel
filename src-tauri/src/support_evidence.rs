@@ -163,6 +163,9 @@ fn scrub_literals(input: &str) -> String {
 fn display_location(path: &Path) -> String {
     let raw = path.to_string_lossy().to_string();
     // Deepest roots first — USERPROFILE is a prefix of both AppData roots, so it must lose.
+    // data-root-allow: display SCRUBBING, the reverse direction. These turn an already-resolved
+    // path back into `%APPDATA%\...` for the support header so the account name never leaks;
+    // no path is composed from them and nothing is opened.
     let roots: Vec<(&str, String)> = ["LOCALAPPDATA", "APPDATA", "USERPROFILE"]
         .into_iter()
         .filter_map(|var| std::env::var(var).ok().map(|root| (var, root)))
@@ -541,6 +544,11 @@ pub struct EvidenceBundle {
     pub events: Vec<SupportEvent>,
     /// Records that could not be parsed and were therefore left out. Surfaced, not hidden.
     pub unreadable_records: usize,
+    /// Which data root Compy resolved, and whether it trusts it (#130). A bundle that does not say
+    /// this cannot be read safely: the same app on the same machine can be writing to two different
+    /// change histories, and every event below would look identical either way. Path-free by
+    /// design - `location` above is the scrubbed path.
+    pub data_root: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -605,6 +613,7 @@ pub fn render(bundle: &EvidenceBundle, projection: Projection) -> String {
                 out.push_str(&format!("- Build: {}\n", bundle.build_stamp));
                 out.push_str(&format!("- Generated: {}\n", bundle.generated_at));
                 out.push_str(&format!("- Stored at: {}\n", bundle.location));
+                out.push_str(&format!("- Data root: {}\n", bundle.data_root));
                 out.push_str(&format!(
                     "- Retention: newest {} records, at most {} bytes\n",
                     bundle.retention.max_events, bundle.retention.max_bytes
@@ -675,6 +684,7 @@ pub fn build_bundle(path: &Path, generated_at: String, location: String) -> Evid
         location,
         events,
         unreadable_records,
+        data_root: crate::data_root::support_summary(),
     }
 }
 
@@ -822,9 +832,10 @@ mod tests {
 
     fn fixed_roots() -> Vec<(&'static str, String)> {
         vec![
-            ("LOCALAPPDATA", r"C:\Users\Kuya\AppData\Local".to_string()),
-            ("APPDATA", r"C:\Users\Kuya\AppData\Roaming".to_string()),
-            ("USERPROFILE", r"C:\Users\Kuya".to_string()),
+            // data-root-allow: fixed test fixture for the scrubber, not a live environment read.
+            ("LOCALAPPDATA", r"C:\Users\Kuya\AppData\Local".to_string()), // data-root-allow
+            ("APPDATA", r"C:\Users\Kuya\AppData\Roaming".to_string()), // data-root-allow
+            ("USERPROFILE", r"C:\Users\Kuya".to_string()), // data-root-allow
         ]
     }
 
@@ -853,6 +864,8 @@ mod tests {
         // Uses the real environment deliberately — this is the value the owner's machine renders.
         // Builds the path by hand rather than calling support_dir(), which would run the legacy
         // data-dir migration as a side effect.
+        // data-root-allow: this test asserts the SCRUBBER renders the owner's real location
+        // readably; calling the resolver here would run the legacy migration as a side effect.
         let Ok(app_data) = std::env::var("APPDATA") else { return };
         let shown = display_location(&PathBuf::from(&app_data).join("Compy").join("support"));
 
@@ -1015,6 +1028,7 @@ mod tests {
             location: r"%APPDATA%\Compy\support".into(),
             events,
             unreadable_records: 0,
+            data_root: "normal (verified)".into(),
         }
     }
 
