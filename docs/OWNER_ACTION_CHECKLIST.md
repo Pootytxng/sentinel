@@ -393,6 +393,21 @@ here as decisions.
   Your eyeball is optional — you'll only see these on a first run / tour re-trigger; the main app's live
   look is unchanged.
 
+- 🔨 **Home front door — the clutter you flagged 2026-08-18.** You saw Home on `555e2996` and called
+  the stacked wording, the "What are you here to do?" question, the drop-down and the
+  "16/16 measured · 1 flagged · Re-run check" band the exact opposite of the neat bento we agreed on.
+  You were right, and none of it was written down as decided — that gap is the finding, not the
+  pixels. **Shipped already** (PR [#136](https://github.com/Pootytxng/sentinel/pull/136) → `dbf174d2`,
+  self-review PASS): the question is gone when there is nothing to answer, the topbar tagline is
+  gone, the CHECKS card is one plain sentence, the accent side-stripe is gone. Full list and what
+  remains: [`CONFORMANCE_AUDIT_2026-08-18.md`](CONFORMANCE_AUDIT_2026-08-18.md), queue in
+  [`BACKLOG.md`](BACKLOG.md) (C-04 … C-17).
+  **The one call I want your eye on — recommendation attached, not a menu:** rename the **Home** room
+  to what it answers (**"Health"**). Home names a location; every other room names a job, and the
+  front door is where Compy either reads as a PC doctor or as a launcher. Say no and it stays Home.
+  Everything else in that queue is taste and therefore mine — I ship it and hand you a before/after
+  to veto on sight, per the 2026-08-07 decree.
+
 ---
 
 ## Where the full lists live (so nothing is buried again)

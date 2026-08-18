@@ -90,6 +90,16 @@
   resolves the head itself instead of trusting a receipt's self-declared SHA). PR #100 closed as
   measured-inert and rebuilt through `WebviewWindowBuilder` + `SW_SHOWNOACTIVATE`, with a RUNTIME
   tier in `launch-focus-guard.test.mjs` that watches `GetForegroundWindow` across a real launch.
+- [ ] **`launch-focus-guard` RUNTIME tier is intermittent under the pre-push gate — NOT root-caused.**
+  2026-08-18: the quiet-launch case rejected three consecutive pushes of the same tree
+  (`Compy held the foreground for 33/55 samples (first at 2430ms)`), then PASSED the fourth with that
+  identical tree. Ruled out by measurement, not guesswork: worker count (green at `--maxWorkers=4`
+  AND full parallelism), the gate's own `npm test` (exit 0), the file alone (17/17 ×3), and the
+  Windows foreground-lock timeout (`ForegroundLockTimeout` is INT_MAX on this desk, so it never
+  expires). **Do not "fix" this with a skip.** First foreground at ~2.4s is a window being RAISED
+  well after creation, and if that is real under load it is real while the owner games — the exact
+  thing this guard exists to catch. Next step is instrumenting the probe to record WHAT raised the
+  window, not silencing the reading.
   Shipped: installed build `3155c7a0`, self-review **PASS** on round 3 (round 2 caught that P2 was
   only half-fixed — a hand-added cooler still occluded the CPU — and that is now fixed and guarded).
 - [x] **The "add a part" form is mounted nowhere** — CLOSED by Train 1 (2026-08-12): the form was
