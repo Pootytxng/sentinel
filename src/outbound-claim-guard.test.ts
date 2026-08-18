@@ -202,3 +202,298 @@ describe("outbound-claim guard", () => {
     ).toEqual([]);
   });
 });
+
+// ── Per-tier model, snapshot and audit (#91) ────────────────────────────────────────────────────
+//
+// Everything below is PURE over a snapshot so the positive controls can mutate an in-memory tier
+// instead of editing working files — the same discipline the policy-coherence guard uses.
+
+export type TierId = "tier1" | "tier2" | "tier3";
+
+export interface TierSnapshot {
+  id: TierId;
+  label: string;
+  /** Repo path that implements this tier. Reserved paths are named even before they exist, so an
+   *  unbuilt tier is a fact the audit can state rather than a blind spot. */
+  module: string;
+  built: boolean;
+  armed: boolean;
+  source: string;
+}
+
+export interface OutboundSnapshot {
+  updaterArmed: boolean;
+  remoteRulesArmed: boolean;
+  tiers: TierSnapshot[];
+  copy: { file: string; text: string }[];
+}
+
+export function tierOf(snap: OutboundSnapshot, id: TierId): TierSnapshot {
+  const t = snap.tiers.find((x) => x.id === id);
+  if (!t) throw new Error(`tier ${id} missing from snapshot`);
+  return t;
+}
+
+/** Reads a `fn name() -> bool { .. }` gate literal, tolerating a commented body (remote_rules.rs
+ *  explains itself for five lines before returning false). Missing file/function → not armed. */
+export function rustGateLiteral(source: string, fnName: string): boolean {
+  // Deliberately string-scanned rather than regex-built: a dynamic `new RegExp` over an escaped
+  // template is exactly the kind of expression that can silently compile to something that matches
+  // nothing, and a gate reader that always answers "not armed" is worse than no reader at all.
+  const at = source.indexOf(`fn ${fnName}(`);
+  if (at < 0) return false;
+  const open = source.indexOf("{", at);
+  if (open < 0 || !source.slice(at, open).includes("bool")) return false;
+  let depth = 0;
+  let end = -1;
+  for (let i = open; i < source.length; i++) {
+    if (source[i] === "{") depth++;
+    else if (source[i] === "}" && --depth === 0) { end = i; break; }
+  }
+  if (end < 0) return false;
+  const lits = stripComments(source.slice(open + 1, end)).match(/\b(true|false)\b/g);
+  return lits ? lits[lits.length - 1] === "true" : false;
+}
+
+function readIfPresent(path: string): { built: boolean; source: string } {
+  try { return { built: true, source: readFileSync(path, "utf8") }; }
+  catch { return { built: false, source: "" }; }
+}
+
+export const TIER_EVIDENCE_FIXTURE: Record<"tier2" | "tier3", string> = {
+  tier2: "default-off by construction; payload preview shown before send; scrub allowlist applied",
+  tier3: "explicit per-case consent; redaction preview; named recipient; retention window; deletion receipt",
+};
+
+// What each tier must PROVE about itself. Keyed by tier id and consulted only for that tier — this
+// keying is the mechanical form of "one tier cannot satisfy another tier's gate".
+const TIER_ARMING_EVIDENCE: Record<TierId, { needs: string; re: RegExp }[]> = {
+  // Tier 1 never uploads, so it has no consent surface to prove; its invariant is transport shape.
+  tier1: [],
+  tier2: [
+    { needs: "default-OFF", re: /default[-_ ]?off/i },
+    { needs: "payload preview", re: /preview/i },
+    { needs: "a scrubbed allowlist", re: /allow[-_ ]?list|allowlist|scrub/i },
+  ],
+  tier3: [
+    { needs: "explicit per-case consent", re: /per[-_ ]?case|explicit consent/i },
+    { needs: "preview/redaction", re: /redact|preview/i },
+    { needs: "a named recipient", re: /recipient/i },
+    { needs: "a retention window", re: /retention/i },
+    { needs: "a deletion receipt", re: /delet(e|ion)/i },
+  ],
+};
+
+// Tier 1 is a signed GET of public advisory knowledge. Any request that can CARRY something is the
+// exact thing the owner decision separates from Tier 2/3, so shape is checked, not intent.
+const UPLOAD_SHAPE = /\b(post|put|patch)\s*\(|multipart|\.body\s*\(|\bupload/i;
+
+// Copy that admits an upload without naming which tier or whose consent. The qualifier list keeps
+// honest sentences legal: "nothing is uploaded unless you approve the file" says the whole truth.
+const VAGUE_UPLOAD = [
+  /uploads? may occur/i,
+  /data may be uploaded/i,
+  /we may upload/i,
+  /your (data|files?|logs?) (is|are) uploaded/i,
+];
+const CONSENT_QUALIFIER = /unless you|only when you|only if you|you (pick|choose|approve|select)|per[-_ ]?case|opt[-_ ]?in/i;
+
+export function auditOutboundTiers(snap: OutboundSnapshot): string[] {
+  const findings: string[] = [];
+
+  for (const t of snap.tiers) {
+    if (t.armed && !t.built) {
+      findings.push(`${t.label} is armed but not built — ${t.module} does not exist`);
+      continue;
+    }
+    if (t.id === "tier1" && t.built) {
+      const hit = t.source.match(UPLOAD_SHAPE);
+      if (hit) {
+        findings.push(
+          `${t.label} must stay download-only, but ${t.module} carries an upload-shaped call ` +
+            `(${hit[0]}). An upload here is Tier 2/3 territory and needs its own gate.`,
+        );
+      }
+    }
+    if (t.armed) {
+      const missing = TIER_ARMING_EVIDENCE[t.id]
+        .filter((e) => !e.re.test(t.source))
+        .map((e) => e.needs);
+      if (missing.length) {
+        findings.push(
+          `${t.label} is armed without ${missing.join(", ")} in ${t.module}. ` +
+            `Another tier's evidence does not count toward this one.`,
+        );
+      }
+    }
+  }
+
+  for (const { file, text } of snap.copy) {
+    const body = stripComments(text);
+    for (const line of body.split("\n")) {
+      if (line.includes(ALLOW_MARKER)) continue;
+      if (!VAGUE_UPLOAD.some((re) => re.test(line))) continue;
+      if (CONSENT_QUALIFIER.test(line)) continue;
+      findings.push(
+        `${file} admits an upload without naming the tier or the consent that authorises it: ` +
+          `"${line.trim().slice(0, 90)}"`,
+      );
+    }
+  }
+
+  return findings;
+}
+
+export function readOutboundSnapshot(): OutboundSnapshot {
+  const receipts = readIfPresent(join("src-tauri", "src", "receipts.rs"));
+  const caseIntel = readIfPresent(join("src-tauri", "src", "case_intelligence.rs"));
+  const caseUpload = readIfPresent(join("src-tauri", "src", "case_evidence_upload.rs"));
+  const remote = readIfPresent(join("src-tauri", "src", "remote_rules.rs"));
+
+  return {
+    updaterArmed: updaterArmed(),
+    remoteRulesArmed: rustGateLiteral(remote.source, "remote_fetch_enabled"),
+    tiers: [
+      {
+        id: "tier1",
+        label: "Tier 1 (signed case knowledge)",
+        module: "src-tauri/src/case_intelligence.rs",
+        built: caseIntel.built,
+        armed: rustGateLiteral(caseIntel.source, "case_intelligence_gate"),
+        source: caseIntel.source,
+      },
+      {
+        id: "tier2",
+        label: "Tier 2 (scrubbed incident fingerprint)",
+        module: "src-tauri/src/receipts.rs",
+        built: receipts.built,
+        armed: receipts.built && receiptsArmed(),
+        source: receipts.source,
+      },
+      {
+        id: "tier3",
+        label: "Tier 3 (per-case evidence upload)",
+        module: "src-tauri/src/case_evidence_upload.rs",
+        built: caseUpload.built,
+        armed: rustGateLiteral(caseUpload.source, "case_evidence_upload_gate"),
+        source: caseUpload.source,
+      },
+    ],
+    copy: collect().map((file) => ({ file, text: readFileSync(file, "utf8") })),
+  };
+}
+
+// ── TIER-AWARE OUTBOUND INVARIANTS (#91, Capability Exception Gate) ─────────────────────────────
+//
+// WHY THIS EXISTS. The guard above asks ONE question — "is anything live?" — and that question
+// stopped being sufficient on 2026-08-09, when the owner retired zero-outbound absolutism and
+// replaced it with THREE separately-consented tiers:
+//
+//   Tier 1  signed advisory DOWNLOAD, no machine data ever leaves
+//   Tier 2  opt-in scrubbed incident fingerprint
+//   Tier 3  explicit per-case evidence upload
+//
+// The failure mode this pins is tier COLLAPSE: Tier 1 ships, and its approval is quietly read as
+// permission for the other two — a download gate growing an upload, or Tier 2/3 arming on Tier 1's
+// consent. Merging their transport or their consent is exactly what the decision forbids, so the
+// audit is per-tier by construction and a positive control proves one tier's evidence cannot clear
+// another's gate.
+
+describe("outbound tier separation", () => {
+  it("reads a snapshot of every tier from the repo, so the audit cannot drift from reality", () => {
+    const snap = readOutboundSnapshot();
+    expect(snap.tiers.map((t) => t.id)).toEqual(["tier1", "tier2", "tier3"]);
+    expect(typeof snap.updaterArmed).toBe("boolean");
+    expect(typeof snap.remoteRulesArmed).toBe("boolean");
+  });
+
+  it("the live repo satisfies every tier invariant", () => {
+    expect(auditOutboundTiers(readOutboundSnapshot())).toEqual([]);
+  });
+
+  it("the gate reader survives a commented body, and cannot silently answer 'false' forever", () => {
+    // remote_rules.rs explains itself for five lines before returning false. A naive
+    // `-> bool { (true|false) }` regex misses that shape and reports "not armed" for a gate it
+    // never actually read — the exact rot this guard is supposed to be immune to.
+    const commentedTrue = ["fn g() -> bool {", "  // false is the safe default", "  true", "}"].join("\n");
+    const commentedFalse = ["fn g() -> bool {", "  // would be: KEY != [0u8; 32]", "  false", "}"].join("\n");
+    expect(rustGateLiteral(commentedTrue, "g")).toBe(true);
+    expect(rustGateLiteral(commentedFalse, "g")).toBe(false);
+    expect(rustGateLiteral("fn g() -> bool { true }", "other")).toBe(false);
+  });
+
+  it("the gates it reads still exist under those names (a rename must break this, not disarm it)", () => {
+    expect(readFileSync(join("src-tauri", "src", "remote_rules.rs"), "utf8"))
+      .toMatch(/fn\s+remote_fetch_enabled\s*\(\s*\)\s*->\s*bool/);
+    expect(readFileSync(join("src-tauri", "src", "receipts.rs"), "utf8"))
+      .toMatch(/fn\s+receipts_gate\s*\(\s*\)\s*->\s*bool/);
+    // Current truth, asserted so arming shows up here as a red test rather than as silence.
+    const snap = readOutboundSnapshot();
+    expect(snap.remoteRulesArmed, "remote rules fetch is triple-gated OFF").toBe(false);
+    expect(tierOf(snap, "tier2").armed).toBe(receiptsArmed());
+    expect(tierOf(snap, "tier1").built, "Tier 1 is approved but not built").toBe(false);
+    expect(tierOf(snap, "tier3").built, "Tier 3 is not authorized by Tier 1").toBe(false);
+  });
+
+  it("Tier 1 fails the moment it grows an upload", () => {
+    const snap = readOutboundSnapshot();
+    const t1 = tierOf(snap, "tier1");
+    t1.built = true;
+    t1.source = 'client.post(CATALOG_URL).body(incident_payload).send()';
+    expect(auditOutboundTiers(snap).join(" ")).toMatch(/tier 1 .*(upload|post)/i);
+  });
+
+  it("Tier 2 cannot arm without default-OFF, payload preview and a scrubbed allowlist", () => {
+    const snap = readOutboundSnapshot();
+    const t2 = tierOf(snap, "tier2");
+    t2.built = true;
+    t2.armed = true;
+    t2.source = "fn receipts_gate() -> bool { true }";
+    expect(auditOutboundTiers(snap).join(" ")).toMatch(/tier 2/i);
+  });
+
+  it("Tier 3 cannot arm without per-case consent, preview/redaction, recipient, retention and deletion", () => {
+    const snap = readOutboundSnapshot();
+    const t3 = tierOf(snap, "tier3");
+    t3.built = true;
+    t3.armed = true;
+    t3.source = "fn upload_case_evidence() { post(recipient, evidence) }";
+    expect(auditOutboundTiers(snap).join(" ")).toMatch(/tier 3/i);
+  });
+
+  it("one tier's evidence cannot satisfy another tier's gate", () => {
+    const snap = readOutboundSnapshot();
+    // Tier 1 is handed EVERY marker Tier 2 and Tier 3 would need. Tier 2 still arms with nothing.
+    const t1 = tierOf(snap, "tier1");
+    t1.built = true;
+    t1.source = TIER_EVIDENCE_FIXTURE.tier2 + "\n" + TIER_EVIDENCE_FIXTURE.tier3;
+    const t2 = tierOf(snap, "tier2");
+    t2.built = true;
+    t2.armed = true;
+    t2.source = "fn receipts_gate() -> bool { true }";
+    expect(auditOutboundTiers(snap).join(" ")).toMatch(/tier 2/i);
+  });
+
+  it("an armed tier that was never built is a contradiction, not a pass", () => {
+    const snap = readOutboundSnapshot();
+    const t1 = tierOf(snap, "tier1");
+    t1.built = false;
+    t1.armed = true;
+    expect(auditOutboundTiers(snap).join(" ")).toMatch(/tier 1 .*armed .*not built/i);
+  });
+
+  it("rejects vague upload copy that hides which tier and which consent", () => {
+    const snap = readOutboundSnapshot();
+    snap.copy.push({ file: "site/fake.html", text: "Uploads may occur to improve Compy." });
+    expect(auditOutboundTiers(snap).join(" ")).toMatch(/site\/fake\.html/);
+  });
+
+  it("tier-qualified upload copy stays legal", () => {
+    const snap = readOutboundSnapshot();
+    snap.copy.push({
+      file: "site/fake.html",
+      text: "Nothing is uploaded unless you pick a case and approve the exact file we send.",
+    });
+    expect(auditOutboundTiers(snap)).toEqual([]);
+  });
+});
