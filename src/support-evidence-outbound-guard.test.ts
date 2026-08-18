@@ -249,3 +249,88 @@ describe("support-evidence outbound guard: the evidence bundle never leaves by i
     expect(detectRust(benign)).toEqual([]);
   });
 });
+
+// ── TIER SEPARATION (#133, Capability Exception Gate) ───────────────────────────────────────────
+//
+// WHY THIS EXISTS: the guard above proves support evidence has no transport OF ITS OWN. That was
+// the whole story while Compy had no approved upload path at all. The 2026-08-09 owner decision
+// changes the threat: Tier 1 (a signed download of public advisory knowledge) is approved to build,
+// and it will be network-capable by construction. The moment a network-capable module and the
+// evidence bundle can see each other, "the user is the transport" stops being structural — nobody
+// has to write an uploader, they only have to write an import.
+//
+// So the boundary being pinned here is REACHABILITY, not transport. Tier 3 (explicit per-case
+// evidence upload) is the only tier that may ever carry this bundle, it is not authorized by Tier 1,
+// and when it is authorized it gets its own module and its own plan. It does not get to grow inside
+// support_evidence.rs.
+
+const TIER1_MODULE = join("src-tauri", "src", "case_intelligence.rs");
+const TIER3_MODULE = join("src-tauri", "src", "case_evidence_upload.rs");
+
+// Ways one Rust module reaches another in this crate: a `mod`/`use` declaration, or a
+// `crate::`/`super::` path used inline. The pattern is assembled from regex LITERALS rather than an
+// escaped string — a hand-escaped `new RegExp("...")` is one lost backslash away from matching
+// nothing at all, and a separation check that silently matches nothing reads exactly like a pass.
+const PATH_LEAD = /(?:\bmod\s+|\buse\s+|crate::|super::)/;
+const NOT_WORD_CHAR = /(?![A-Za-z0-9_])/;
+
+function referencesModule(source: string, moduleStem: string): boolean {
+  const re = new RegExp(PATH_LEAD.source + moduleStem + NOT_WORD_CHAR.source);
+  return re.test(stripRustComments(source));
+}
+
+describe("support evidence stays unreachable from the outbound tiers", () => {
+  const module = readFileSync(MODULE, "utf8");
+
+  it("states today's tier truth, so this block cannot pass by being vacuous", () => {
+    // Every assertion below is conditional on a tier module existing. If both stay unbuilt forever
+    // and nobody notices, the conditionals are green because they never ran. This is the tripwire:
+    // when a tier lands, THIS test fails first and tells the author the separation checks just went
+    // live — it is not a reason to delete them.
+    expect(existsSync(TIER1_MODULE), "Tier 1 is approved but not built (docs/RELEASE_STATE.md)").toBe(false);
+    expect(existsSync(TIER3_MODULE), "Tier 3 is not authorized by Tier 1 and has no module").toBe(false);
+  });
+
+  it("the evidence store never reaches a tier module", () => {
+    for (const stem of ["case_intelligence", "case_evidence_upload"]) {
+      expect(
+        referencesModule(module, stem),
+        `support_evidence.rs reaches ${stem}. A network-capable module and the evidence bundle ` +
+          `must not be able to see each other — that reachability is what makes "the user is the ` +
+          `transport" structural rather than a promise.`,
+      ).toBe(false);
+    }
+  });
+
+  it("Tier 1 never reaches the evidence store, and never grows a transport for it", () => {
+    if (!existsSync(TIER1_MODULE)) return;
+    const tier1 = readFileSync(TIER1_MODULE, "utf8");
+    expect(referencesModule(tier1, "support_evidence"), "Tier 1 downloads public knowledge; it has no business reading the local evidence bundle").toBe(false);
+    expect(mentionsEvidence(stripRustComments(tier1))).toBe(false);
+  });
+
+  it("no frontend surface wires an evidence command to a tier command", () => {
+    // The Rust halves can stay perfectly separate and the frontend can still hand one to the other.
+    const offenders = collectWeb("src")
+      .concat(collectWeb("site-app"))
+      .filter((f) => {
+        const src = stripRustComments(readFileSync(f, "utf8"));
+        return mentionsEvidence(src) && /case_intelligence|case_evidence_upload|upload_case/.test(src);
+      });
+    expect(
+      offenders,
+      "a frontend file holds both the support-evidence commands and a case-upload command; that " +
+        "file is an uploader with extra steps:\n  " + offenders.join("\n  "),
+    ).toEqual([]);
+  });
+
+  it("catches the shapes it was written for (positive controls)", () => {
+    expect(referencesModule("use crate::case_intelligence::fetch;", "case_intelligence")).toBe(true);
+    expect(referencesModule("mod case_evidence_upload;", "case_evidence_upload")).toBe(true);
+    expect(referencesModule("let x = super::case_intelligence::CATALOG;", "case_intelligence")).toBe(true);
+    // Describing the ban is not the ban being broken.
+    expect(referencesModule("// never use crate::case_intelligence here", "case_intelligence")).toBe(false);
+    // A different module with a similar prefix is not a match.
+    expect(referencesModule("use crate::case_intelligence_docs::X;", "case_intelligence")).toBe(false);
+  });
+});
