@@ -37,9 +37,12 @@
   build if it ever unmounts again (`lab-console.test.tsx:339`). Shipped desk v0.9.14, published
   v0.9.15 → v0.9.17. This row had sat un-ticked through the fix — closed on code evidence 2026-08-12.
 - [ ] **Q8 / issue #91 — COMPY CARE: primary PC-doctor directive + Capability Exception Gate
-  (OWNER-APPROVED 2026-08-09).** Queue position is exact: PR #90 is now MERGED and its four
-  post-merge defects are repaired in PR #102; **land #102 first**, then rebase #91,
-  land policy/guards, and start Tier 1 domain/backend dark implementation. Do not compete with issue #49's Lab shell, revive draft PR #50, or adopt #55's
+  (OWNER-APPROVED 2026-08-09).** PR #102 merged 2026-08-12; #91 closed as a directive.
+  **Policy rails are LANDED (issue #133, 2026-08-18):** tier-aware outbound guard, support-evidence
+  tier separation, and the copy audit that caught the beta guide still promising "no updater" a month
+  after it armed. **Next is the Tier 1 dark implementation**
+  (`docs/superpowers/plans/2026-08-09-outbound-case-intelligence-tier1.md`); runtime stays hard-false.
+  Do not compete with issue #49's Lab shell, revive draft PR #50, or adopt #55's
   stale Project Doctor claim. Rust-side Tier 1 keeps production CSP unchanged, so it does not trigger
   #64 Q2b; any proposal for webview fetch/remote content/CSP widening does.
   - **Primary product:** "Compy Care" umbrella; user-facing rescue entry is **Crash & Freeze Rescue**
