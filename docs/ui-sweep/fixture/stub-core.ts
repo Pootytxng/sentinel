@@ -126,7 +126,64 @@ const STATES: Record<string, { experiments: unknown[]; sessions: unknown[] }> = 
   "running-no-session": { experiments: [RUNNING, ...HISTORY], sessions: [session()] },
 };
 
-export const STATE_NAMES = Object.keys(STATES);
+// CPU-TEMP OFFER STATES (Q9c).
+// Same reason as the bench above, different wall. The offer's branches are decided by what sensor
+// apps this machine has — and the owner's machine has NONE installed, so live it can only ever
+// render the "install" branch. The others (already running with Shared Memory off, an
+// installed-and-closed app, a monitor publishing sensors but no CPU temperature, a failed start)
+// are unreachable here without installing third-party software on his PC to take a screenshot.
+//
+// These are OBSERVATIONS, not measurements — booleans about which processes exist. Nothing here is
+// a temperature and nothing here may be quoted as one.
+type SensorAppId = "hwinfo" | "lhm";
+const sensorApp = (
+  id: SensorAppId,
+  over: Partial<{ running: boolean; publishing: boolean; launchable: boolean }> = {},
+) => {
+  const running = over.running ?? false;
+  const publishing = over.publishing ?? false;
+  const launchable = over.launchable ?? false;
+  return { id, running, publishing, launchable, installed: running || publishing || launchable };
+};
+
+// `launchFails` is the branch where the shell refuses the start — the offer must then say what to
+// do (open it from the Start menu) rather than going quiet, which is the dead end this whole
+// component replaced.
+const CPU_TEMP_STATES: Record<
+  string,
+  { apps: ReturnType<typeof sensorApp>[]; scanned: number; launchFails?: boolean }
+> = {
+  "cputemp-install": { apps: [sensorApp("hwinfo"), sensorApp("lhm")], scanned: 214 },
+  "cputemp-start": {
+    apps: [sensorApp("hwinfo", { launchable: true }), sensorApp("lhm")],
+    scanned: 214,
+  },
+  "cputemp-start-failed": {
+    apps: [sensorApp("hwinfo", { launchable: true }), sensorApp("lhm")],
+    scanned: 214,
+    launchFails: true,
+  },
+  "cputemp-shared-memory": {
+    apps: [sensorApp("hwinfo", { running: true, launchable: true }), sensorApp("lhm")],
+    scanned: 217,
+  },
+  "cputemp-not-publishing": {
+    apps: [sensorApp("hwinfo"), sensorApp("lhm", { running: true, launchable: true })],
+    scanned: 216,
+  },
+  "cputemp-publishing": {
+    apps: [
+      sensorApp("hwinfo", { running: true, publishing: true, launchable: true }),
+      sensorApp("lhm"),
+    ],
+    scanned: 217,
+  },
+};
+
+export const STATE_NAMES = [...Object.keys(STATES), ...Object.keys(CPU_TEMP_STATES)];
+
+/** Which surface a state name belongs to — main.tsx mounts the bench or the CPU panel on this. */
+export const isCpuTempState = (name: string = current) => name in CPU_TEMP_STATES;
 
 // The state is chosen by `?state=` on the URL so a capture run is a plain navigation — one page
 // load per shot, no leftover state from the previous one, and the URL in the address bar names the
@@ -134,7 +191,7 @@ export const STATE_NAMES = Object.keys(STATES);
 function initialState(): string {
   try {
     const q = new URLSearchParams(window.location.search).get("state");
-    if (q && STATES[q]) return q;
+    if (q && (STATES[q] || CPU_TEMP_STATES[q])) return q;
   } catch {
     /* no URL (never in a browser) — fall through to the default */
   }
@@ -145,7 +202,7 @@ let current = initialState();
 
 export const getState = () => current;
 export function setState(name: string): boolean {
-  if (!STATES[name]) return false;
+  if (!STATES[name] && !CPU_TEMP_STATES[name]) return false;
   current = name;
   return true;
 }
@@ -159,6 +216,22 @@ export function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<
     return Promise.reject(
       new Error(`FIXTURE PREVIEW — "${cmd}" is blocked. No Windows change was applied, and none can be from here.`),
     );
+  }
+  // Answered ahead of the bench lookup: the CPU-temp states carry no experiments/sessions at all.
+  const sensors = CPU_TEMP_STATES[current];
+  if (sensors) {
+    if (cmd === "get_sensor_sources") {
+      return Promise.resolve({ apps: sensors.apps, scanned: sensors.scanned } as T);
+    }
+    // There is no backend here, so nothing is ever started — the resolve only lets the offer show
+    // its "starting" copy, and the reject lets it show the failure branch.
+    if (cmd === "launch_sensor_app") {
+      return sensors.launchFails
+        ? Promise.reject(
+            new Error('FIXTURE PREVIEW — "launch_sensor_app" is refused in this state.'),
+          )
+        : Promise.resolve(null as T);
+    }
   }
   const state = STATES[current];
   switch (cmd) {

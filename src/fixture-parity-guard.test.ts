@@ -83,12 +83,22 @@ describe("fixture preview parity with the product entry", () => {
     expect(cssChain(read(FIXTURE_ENTRY))).toContain("src/surfaces/lab-v2.css");
   });
 
-  it("renders inside the room element that re-point is scoped to", () => {
-    // The sheet alone is not enough — the selector needs the element. RoomShell's real markup is
-    // <section class="v2-room" data-room="lab"> (src/design/room-shell.tsx).
+  it("loads the Monitor room token re-point, for the same reason", () => {
+    // The CPU-temp offer (Q9c) renders inside the Monitor room, whose --ix-* re-point lives in
+    // monitor-v2.css and is imported by MonitorV2.tsx — not by App.tsx's chain. Same failure mode
+    // as the Lab sheet above: without it the offer paints in instrument.css's :root palette, a
+    // different accent from the shipped app, under a banner claiming fidelity.
+    expect(cssChain(read(FIXTURE_ENTRY))).toContain("src/surfaces/monitor-v2.css");
+  });
+
+  it("renders inside the room elements those re-points are scoped to", () => {
+    // The sheets alone are not enough — the selectors need the elements. RoomShell's real markup is
+    // <section class="v2-room" data-room="{room}"> (src/design/room-shell.tsx); the Lab states
+    // mount data-room="lab", the CPU-temp states data-room="play" (MonitorV2.tsx passes room="play").
     const fixture = read(FIXTURE_ENTRY);
     expect(fixture).toMatch(/className="v2-room"/);
     expect(fixture).toMatch(/data-room="lab"/);
+    expect(fixture).toMatch(/data-room="play"/);
   });
 
   it("sets every <html> dataset attribute the product entry sets", () => {
@@ -141,5 +151,22 @@ describe("fixture preview parity with the product entry", () => {
       expect(stub, `stub-core.ts stopped blocking ${cmd}`).toContain(`"${cmd}"`);
     }
     expect(stub).toMatch(/BLOCKED\.includes\(cmd\)/);
+  });
+
+  it("answers every command the CPU-temp offer sends", () => {
+    // The stub's default branch rejects loudly, which is right — but for THIS component a rejected
+    // get_sensor_sources is indistinguishable from "nothing installed": the offer falls back to the
+    // downloads and renders a perfectly plausible page. A reviewer would then pass the install
+    // branch while believing they were looking at one of the other four. So the stub must answer
+    // both commands by name, and the component must not have grown a third.
+    const stub = read("docs/ui-sweep/fixture/stub-core.ts");
+    const component = read("src/surfaces/CpuTempOffer.tsx");
+    const commands = [...component.matchAll(/invoke(?:<[^>]*>)?\(\s*"([^"]+)"/g)].map((m) => m[1]);
+    expect(commands.length).toBeGreaterThan(0);
+    for (const cmd of new Set(commands)) {
+      expect(stub, `stub-core.ts has no answer for "${cmd}" — the offer would render the wrong branch`).toContain(
+        `"${cmd}"`,
+      );
+    }
   });
 });
