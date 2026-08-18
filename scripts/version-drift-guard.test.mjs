@@ -7,12 +7,16 @@
 //   Guard A: all three manifests + Cargo.lock state the SAME version.
 //   Guard B: ship-reinstall.ps1 contains NO hardcoded Compy_<semver> installer literal —
 //   it must derive the filename from tauri.conf.json (the single source of truth).
-//   Guard C: ship-reinstall.ps1 starts with a UTF-8 BOM — Windows PowerShell 5.1 decodes a
-//   BOM-less file as ANSI, turning its em-dashes into mojibake that parse-errors the whole
-//   script (caught live at the 0.9.0 ship after an edit re-saved the file without the BOM).
+//   Guard C: EVERY scripts/**/*.ps1 holding a non-ASCII byte starts with a UTF-8 BOM — Windows
+//   PowerShell 5.1 decodes a BOM-less file as ANSI, so an em-dash becomes the mojibake `a€"`
+//   whose trailing byte is a SMART QUOTE, which 5.1 honours as a string delimiter — one em-dash
+//   inside a string unterminates it and parse-errors the whole file. Caught live twice: at the
+//   0.9.0 ship (ship-reinstall.ps1 re-saved without its BOM) and on 2026-08-18, when
+//   scripts/lib/canonical-data-root.ps1 shipped BOM-less in #130 and killed ship-reinstall.ps1
+//   through the dot-source — the guard covered only the entry script, never the libs it loads.
 // Policy: docs/superpowers/specs/2026-07-16-version-policy-proposal.md (0.9.0 now, 1.0.0 at the bar).
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -56,10 +60,76 @@ describe("Guard B — ship-reinstall.ps1 derives the installer name, never hardc
   });
 });
 
-describe("Guard C — ship-reinstall.ps1 keeps its UTF-8 BOM (PowerShell 5.1 reads ANSI without it)", () => {
-  it("first character is U+FEFF", () => {
-    // readFileSync("utf8") preserves a leading BOM as ﻿ — exactly what we pin.
-    expect(read("scripts/ship-reinstall.ps1").charCodeAt(0)).toBe(0xfeff);
+describe("Guard C — every non-ASCII scripts/*.ps1 keeps its UTF-8 BOM (5.1 reads ANSI without it)", () => {
+  // Walk scripts/ rather than naming files: the 2026-08-18 failure was a NEW lib nobody thought
+  // to add to a list. A guard you have to remember to extend is the guard that already failed.
+  const ps1Files = [];
+  (function walk(dir) {
+    for (const e of readdirSync(join(root, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${e.name}`;
+      if (e.isDirectory()) walk(rel);
+      else if (e.name.endsWith(".ps1")) ps1Files.push(rel);
+    }
+  })("scripts");
+
+  // Read as BYTES: reading utf8 would silently repair the very thing under test.
+  const bytes = (p) => readFileSync(join(root, p));
+  const hasBom = (b) => b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf;
+  const hasNonAscii = (b) => b.some((x) => x > 0x7f);
+
+  it("finds the .ps1 files at all (a zero-file sweep would pass vacuously)", () => {
+    expect(ps1Files.length).toBeGreaterThan(20);
+    expect(ps1Files).toContain("scripts/ship-reinstall.ps1");
+    expect(ps1Files).toContain("scripts/lib/canonical-data-root.ps1");
+  });
+
+  it("DISARM PROOF: the predicate rejects a BOM-less em-dash file", () => {
+    const emDash = Buffer.from("# a — b", "utf8");
+    expect(hasNonAscii(emDash)).toBe(true);
+    expect(hasBom(emDash)).toBe(false);
+  });
+
+  it("no .ps1 carries non-ASCII without a BOM", () => {
+    const offenders = ps1Files.filter((p) => {
+      const b = bytes(p);
+      return hasNonAscii(b) && !hasBom(b);
+    });
+    expect(
+      offenders,
+      `These PowerShell files contain non-ASCII (em-dash, arrow, smart quote) but have no UTF-8 ` +
+        `BOM. Windows PowerShell 5.1 will decode them as ANSI and parse-error the file — and if ` +
+        `any of them is dot-sourced by ship-reinstall.ps1 or release.ps1, that ships nothing. ` +
+        `Fix: re-save each with a UTF-8 BOM (do NOT just delete the em-dash; the next one lands ` +
+        `the same way).`,
+    ).toEqual([]);
+  });
+});
+
+describe("Guard E — the ship proof's frontend version cross-check has a live source", () => {
+  // bug->guard (2026-08-18): navigation audit s4 moved build identifiers out of the rail. The DOM
+  // read that scripts/lib/runtime-proof.ps1 depended on went with them, so `powershell
+  // ship-reinstall.ps1 -VerifyRuntime` died on a missing property — the LAW-mandated ship path,
+  // broken by a UI decision three files away. The seam replaces the DOM read; these pins make the
+  // two ends fail together instead of one end going quiet.
+  const app = read("src/App.tsx");
+  const probe = read("scripts/e2e-updater-probe.mjs");
+  const proof = read("scripts/lib/runtime-proof.ps1");
+
+  it("App.tsx publishes the built version on the global, from the canonical constant", () => {
+    expect(app).toMatch(/__COMPY_UI_VERSION__\s*\]?\s*=\s*APP_VERSION/);
+    expect(app).toContain("const APP_VERSION = pkg.version;");
+  });
+
+  it("the probe reads that same global in its DEFAULT preset (not only `about`)", () => {
+    const stampPreset = probe.slice(probe.indexOf("stamp: `"), probe.indexOf("  // Settings"));
+    expect(stampPreset).toContain("__COMPY_UI_VERSION__");
+    expect(stampPreset).toContain("uiVersion:");
+  });
+
+  it("the PowerShell proof still COMPARES it — a mount check alone would pass a stale bundle", () => {
+    expect(proof).toContain("$payload.uiVersion");
+    expect(proof).toContain("-cne $ExpectedVersion");
+    expect(proof).not.toContain("railVersion");
   });
 });
 

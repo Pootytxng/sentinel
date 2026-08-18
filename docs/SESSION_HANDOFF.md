@@ -12,25 +12,35 @@
 
 ## Lane
 
-**NONE OPEN.** `fix/owner-decision-conformance-guards` merged as `dbf174d2` (PR
-[#136](https://github.com/Pootytxng/sentinel/pull/136)) and the ref is pruned. Do not read "none
-open" as "nothing in flight" — `docs/WORK_CONTROL.md` and `git branch -a` are what say that.
+**NONE OPEN.** Everything below is on `origin/main`; no branch, no PR, nothing half-landed.
 
-**What that lane was, because the reason outlives it:** the owner opened his own desk build and
-found three defects in ONE screenshot that 167 green guards had all missed. Every one was already a
-recorded decision. Landed: the `compy_home_intake` flag gates the QUESTION again (he removed that box
-on sight in `4d1afa92`; UX-1 put it back as the screen's largest button) · nine stale room names out
-of Rust copy · the topbar tagline dropped, decided 2026-08-11 and never built · the checks strip
-dissolved from a bordered `16/16 measured · 1 flagged` panel into one plain sentence. Plus an
-honesty fix: `measured/total` used to render identically whether a check FAILED or could not be
-READ, and a PC doctor that conflates unknown with broken is not honest.
+Shipped this session, newest first: **the ship path repaired** (below) · **C-06 + C-08** the
+plain-English copy pass and the guard that holds it (`4c9e440e`) · **the launch-focus diagnostics**
+(`dc01f330`) · **the Home finding and the gate flake written into tracking** (`d9923c66`) · **C-09**
+build identifiers out of consumer chrome (`6d047c2a`, `00d7020e`).
 
-**Guards that came with it, so the same class cannot silently revert again:**
-`src/room-name-copy-guard.test.ts` · `src/side-stripe-guard.test.ts` (three pre-existing offenders
-baselined BY NAME) · the `.v2-crumb` regression test in `ShellV2.test.tsx` · the intake question
-pinned absent across all three OFF states · **self-review rubric item 10 — prior owner decisions**,
-the check whose absence let UX-1 through. `affordance-census` had *certified* that regression: it
-rewards KEEPING affordances, and his decision was to remove one.
+**The finding that matters more than the copy:** `src/plain-language-guard.test.ts` scanned
+`/\.(tsx?)$/` — 199 files, and NONE of the 18 locale files holding 237,925 bytes of the consumer copy
+it exists to police. Its own header says it mirrors `voice-guard.test.ts`, which has scanned
+`tsx?|css|json` all along. Two sibling guards, one blind, both green for months. That is the
+mechanism behind "we decided this already and it came back" — nothing was ever looking at the file
+the copy lives in. Fixed; 27 English + 12 zh-CN engineer-speak hits are now 2 and 1, both allowlisted
+with a stated reason (LOCKED rule 5's NVIDIA line, and Expert View naming the registry key it exists
+to name). When you find the next silent revert, check the guard's FILE FILTER before its rules.
+
+**The ship path was dead and nothing said so** — found by running it, not by a test. Two independent
+breaks in `scripts/ship-reinstall.ps1`, the LAW-mandated post-build step:
+1. `scripts/lib/canonical-data-root.ps1` shipped BOM-less in #130. PowerShell 5.1 decodes a BOM-less
+   file as ANSI, an em-dash becomes mojibake ending in a SMART QUOTE, and 5.1 honours that as a
+   string delimiter — one em-dash inside a string parse-errors the whole file, and the dot-source
+   killed the entry script. Guard C existed for exactly this and covered only `ship-reinstall.ps1`,
+   never the libs it loads. **Now walks every `scripts/**/*.ps1`;** five more offenders were fixed
+   with it, including `backup-updater-key.ps1` — the owner's own §A0 task.
+2. C-09 moved build identifiers out of the rail, and `runtime-proof.ps1` read the version off that
+   rail. Rather than drop the check (it is what catches a stale frontend beside a fresh binary), the
+   bundle now publishes `__COMPY_UI_VERSION__` on mount and the proof compares THAT. Guard E pins
+   both ends so they fail together. **Lesson: a green suite proved nothing here — no test ran the
+   ship script.**
 
 ## Next — the conformance queue
 
@@ -38,7 +48,7 @@ rewards KEEPING affordances, and his decision was to remove one.
 `main@e6feb861`: **9 HONORED · 1 SILENTLY REVERSED · 9 NEVER BUILT · 4 PARTIAL · 1 DOC DRIFT.** It
 reached C-01/C-02/C-03 independently as its own top three — the same three the owner found by eye.
 The survivors are queued in `docs/BACKLOG.md` § *Conformance queue* in owner-value order, starting
-C-04, C-05, C-08. Take from there, not from this file.
+C-04, C-05, C-10 (C-06/C-08/C-09 are shipped). Take from there, not from this file.
 
 Also open, owner-flagged as optional: 15 bare `.btn-small` buttons hover `--danger` red on 5
 surfaces that destroy nothing (baseline in `src/button-legibility-guard.test.ts`).

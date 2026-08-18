@@ -223,7 +223,7 @@ const requiredTokens = new Map([
   [
     "scripts/lib/runtime-proof.ps1",
     [
-      '("" + $payload.railVersion).Trim() -cne $ExpectedVersion',
+      '("" + $payload.uiVersion).Trim() -cne $ExpectedVersion',
       "Wait-LoopbackPortClosed",
       "CDP/debugging port",
     ],

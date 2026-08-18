@@ -525,6 +525,15 @@ type Priorities = {
 
 const APP_VERSION = pkg.version;
 
+// SHIP-PROOF SEAM (2026-08-18). scripts/lib/runtime-proof.ps1 cross-checks the version the MOUNTED
+// FRONTEND was built with against the backend build stamp — that pairing is the only thing that
+// catches a stale bundle shipped beside a fresh binary. It used to read the number off the rail;
+// navigation audit s4 moved build identifiers into Settings > About, so the DOM can no longer
+// answer on an arbitrary room and the check died with the ship script (caught live 2026-08-18).
+// The bundle now publishes the value it was compiled with instead. Not rendered, not user-visible,
+// read only by the ship proof. Pinned by scripts/version-drift-guard.test.mjs Guard E.
+(globalThis as { __COMPY_UI_VERSION__?: string }).__COMPY_UI_VERSION__ = APP_VERSION;
+
 function App() {
   const { t } = useTranslation();
   const [hw, setHw] = useState<HardwareInfo | null>(null);

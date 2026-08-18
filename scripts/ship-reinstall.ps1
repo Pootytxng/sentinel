@@ -318,7 +318,7 @@ Write-Output ("installer SHA-256 : " + $sha)
 Write-Output ("live exe          : " + $exe + $(if ($NoLaunch) { " (not launched)" } else { " (launched)" }))
 Write-Output ("installed version : " + $installedVersion + " (Windows Apps: " + $uninstall.DisplayVersion + ")")
 if ($runtimeProof) {
-  Write-Output ("runtime proof     : " + $runtimeProof.Stamp + " · shell " + $runtimeProof.RailVersion)
+  Write-Output ("runtime proof     : " + $runtimeProof.Stamp + " · shell " + $runtimeProof.UiVersion)
   Write-Output ("proof attempts    : " + $runtimeProof.Attempts + " (" + $runtimeProof.TransientFailures + " expected transient)")
 } else {
   Write-Output "Desktop now holds exactly one installer. Runtime proof was not requested."

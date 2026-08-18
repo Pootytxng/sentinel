@@ -27,12 +27,14 @@ if (!port) {
 const EXPRS = {
   // `railVersion` was dropped 2026-08-18: the rail no longer prints a version number, because the
   // navigation audit §4 moved build identifiers into Settings → About. It cross-checked the
-  // rendered version against the backend, so the check is not free to lose — but the surface that
-  // replaces it (`.set-about-version`) only exists while Settings is open, and a field that reads
-  // null on every other room would be a check in name only. Use the `about` preset below with
-  // Settings open when that comparison is the point.
+  // rendered version against the backend, so the check was not free to lose — and the surface that
+  // replaces it (`.set-about-version`) only exists while Settings is open, so a DOM read would be
+  // null on every other room, a check in name only. `uiVersion` restores the SAME comparison from
+  // a seam the bundle publishes on mount (src/App.tsx `__COMPY_UI_VERSION__`), which is true on
+  // every room. Use the `about` preset below when the RENDERED text is what you need to prove.
   stamp: `(async () => ({
     stamp: await window.__TAURI_INTERNALS__.invoke("get_build_stamp").catch((e) => "ERR:" + e),
+    uiVersion: window.__COMPY_UI_VERSION__ ?? null,
     pill: document.querySelector(".v2-update")?.textContent ?? null,
   }))()`,
   // Settings → About must be OPEN for this one; null means "not on screen", never "absent".

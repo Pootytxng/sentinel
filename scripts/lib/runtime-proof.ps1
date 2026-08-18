@@ -1,4 +1,4 @@
-# runtime-proof.ps1 - the release runtime proof, isolated so it can be exercised by tests.
+﻿# runtime-proof.ps1 - the release runtime proof, isolated so it can be exercised by tests.
 #
 # ASCII ONLY. Windows PowerShell 5.1 decodes a BOM-less file as ANSI, so keeping every byte in this
 # file ASCII means it needs no BOM and no character in it can ever mojibake. (ship-reinstall.ps1
@@ -90,7 +90,7 @@ function Invoke-CompyRuntimeProof {
         # The probe's own error marker: the shell is up but the command has not answered yet.
         $payload = $null
         $lastFailure = "shell has not answered get_build_stamp yet"
-      } elseif (-not $payload.railVersion) {
+      } elseif (-not $payload.uiVersion) {
         $payload = $null
         $lastFailure = "shell has not mounted its version yet"
       }
@@ -100,12 +100,12 @@ function Invoke-CompyRuntimeProof {
       if ($payload.stamp -ne $ExpectedStamp) {
         throw "RUNTIME STAMP MISMATCH: running app reports '$($payload.stamp)'; expected '$ExpectedStamp'."
       }
-      if (("" + $payload.railVersion).Trim() -cne $ExpectedVersion) {
-        throw "RUNTIME VERSION MISMATCH: the mounted shell does not show version $ExpectedVersion (found '$($payload.railVersion)')."
+      if (("" + $payload.uiVersion).Trim() -cne $ExpectedVersion) {
+        throw "RUNTIME VERSION MISMATCH: the mounted bundle was built as version '$($payload.uiVersion)', not $ExpectedVersion."
       }
       return [pscustomobject]@{
         Stamp             = $payload.stamp
-        RailVersion       = $payload.railVersion
+        UiVersion         = $payload.uiVersion
         Pill              = $payload.pill
         Attempts          = $attempts
         TransientFailures = $transientFailures

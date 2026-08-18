@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Make an ENCRYPTED, off-machine-safe backup of the Compy updater signing key (checklist §A0).
 

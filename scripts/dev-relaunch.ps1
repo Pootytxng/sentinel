@@ -1,4 +1,4 @@
-# dev-relaunch.ps1 — the build-refresh discipline, codified.
+﻿# dev-relaunch.ps1 — the build-refresh discipline, codified.
 #
 # Stops any running Compy (installed OR dev) so the single-instance lock is free, frees the Vite dev
 # port, then starts a fresh `npm run tauri dev`. Run from the repo root, in the BACKGROUND so it

@@ -1,4 +1,4 @@
-# release.ps1 - fail-closed Compy updater release pipeline. The three explicit entrypoints are
+﻿# release.ps1 - fail-closed Compy updater release pipeline. The three explicit entrypoints are
 # release-prepare.ps1, release-prove.ps1, and release-publish.ps1; they map to the stage, prove, and
 # publish modes below so preparation, local proof, and the fleet-visible owner action stay distinct.
 #

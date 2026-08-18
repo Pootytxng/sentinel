@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 <#
 .SYNOPSIS
   Live, read-only view of the Compy lane fleet — see at a glance which lanes are actively

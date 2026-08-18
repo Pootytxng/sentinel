@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 <#
 .SYNOPSIS
   [DEPRECATED for perpetual use — prefer scripts/compy-burst.workflow.js for cost control; see docs/LANE_WORKFLOW.md]

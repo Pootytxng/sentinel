@@ -1,4 +1,4 @@
-# CANONICAL DATA ROOT — preflight parity with the Rust resolver (#130, 2026-08-18).
+﻿# CANONICAL DATA ROOT — preflight parity with the Rust resolver (#130, 2026-08-18).
 #
 # WHY THIS EXISTS — a real defect, not a hypothetical:
 #

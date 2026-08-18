@@ -45,7 +45,7 @@ const CAPTURE_TIMEOUT_MS = DEFAULT_PICK_TIMEOUT_MS * 2;
 // exit 0, or a message on stderr and a nonzero exit.
 const FAKE_PROBE = `import { appendFileSync, readFileSync } from "node:fs";
 const [mode, counterFile, failCount] = process.argv.slice(2);
-const good = { stamp: "abc1234 \\u00b7 release", railVersion: "${EXPECTED_RAIL}", pill: "release" };
+const good = { stamp: "abc1234 \\u00b7 release", uiVersion: "${EXPECTED_RAIL}", pill: "release" };
 const count = (() => {
   appendFileSync(counterFile, "x");
   return readFileSync(counterFile, "utf8").length;
@@ -55,8 +55,8 @@ if (mode === "always-fail" || (mode === "flaky" && count <= Number(failCount))) 
   process.exit(1);
 }
 if (mode === "stamp-mismatch") { console.log(JSON.stringify({ ...good, stamp: "deadbee \\u00b7 release" })); process.exit(0); }
-if (mode === "version-mismatch") { console.log(JSON.stringify({ ...good, railVersion: "v0.0.1" })); process.exit(0); }
-if (mode === "version-prefix-collision") { console.log(JSON.stringify({ ...good, railVersion: "9.9.90" })); process.exit(0); }
+if (mode === "version-mismatch") { console.log(JSON.stringify({ ...good, uiVersion: "v0.0.1" })); process.exit(0); }
+if (mode === "version-prefix-collision") { console.log(JSON.stringify({ ...good, uiVersion: "9.9.90" })); process.exit(0); }
 console.log(JSON.stringify(good));
 process.exit(0);
 `;
@@ -135,7 +135,7 @@ try {
         -TimeoutSeconds $timeout \`
         -RetryDelayMs 100
       Write-Output ("STAMP_CODES=" + (([int[]][char[]]$proof.Stamp) -join ","))
-      Write-Output ("RAIL=" + $proof.RailVersion)
+      Write-Output ("RAIL=" + $proof.UiVersion)
       Write-Output ("ATTEMPTS=" + $proof.Attempts)
       Write-Output ("TRANSIENT=" + $proof.TransientFailures)
     } catch {
