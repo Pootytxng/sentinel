@@ -20,31 +20,22 @@
 
 ### A0. NEW 2026-07-23 — Live updater: key backup + the LAST manual send
 
-- ⏳ **Back up the updater signing key (2 minutes, genuinely important) — STILL OPEN, and here is the
-  correction, 2026-08-06.** You produced `C:\Users\Kuya\Desktop\COMPY KEY\` and called it *"the old
-  compy key."* Two things about that, both verified read-only (the private half was never opened):
-  - **It is not old — it is the LIVE key.** Its public half is byte-identical to
-    `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`, and its ID `43711DD10AAB67D7` is the
-    same fleet anchor pinned in `scripts/updater-trust-root-guard.test.mjs:23`. This is the key every
-    shipped Compy trusts. There is no second, newer key to go looking for.
-  - **A Desktop folder is not a backup.** It hashes identical to `C:\Users\Kuya\.tauri\compy-updater.key`
-    — same key, two copies, **same machine, same disk**. One failed drive still loses the fleet. This
-    item asks for a copy **off this machine** (password-manager attachment or your personal cloud), and
-    that has not happened yet. Moving it also *shrinks* the exposure: a Desktop folder is the first
-    place anything that ever runs on this PC looks.
-  - **The tool exists now — 2 minutes, 2026-08-18.** `scripts/backup-updater-key.ps1` wraps the key
-    in AES-256-GCM under a passphrase you type and writes ONE armored text file — safe to email
-    yourself or keep on your phone, and it carries its own restore instructions so recovery never
-    needs this repo. Encryption is not ceremony: the fleet anchor is **passwordless**, so the raw
-    bytes ARE the secret. Run `pwsh scripts/backup-updater-key.ps1`, then prove it opens with
-    `pwsh scripts/restore-updater-key.ps1 -BackupPath <the .txt> -Verify` (writes nothing).
-    **Put the passphrase in your password manager** — the one thing the file cannot carry for you.
-    Round-trip, wrong-passphrase, tamper and no-clobber behaviour: `scripts/updater-key-backup-guard.test.mjs`.
-  **Lose it** → the fleet can never receive another update (one-time re-send of new-key builds
-  required). **Leak it** → whoever holds it can sign an update that Compy installs **silently on every
-  install**, because the updater has been live since 2026-07-22. That makes this the highest-consequence
-  secret in the project. Same custody class as the remote-rules key law.
-  Repo side is clean and now mechanically enforced: no key material has ever been committed on any
+- ✅ **Updater signing key backed up OFF this machine — CLOSED 2026-08-18 (owner-reported).** The
+  owner ran `scripts/backup-updater-key.ps1`, proved the armored file opens with
+  `scripts/restore-updater-key.ps1 -Verify`, and stored the result off this PC with the passphrase in
+  his password manager. The fleet anchor (`43711DD10AAB67D7`, the pubkey pinned in
+  `src-tauri/tauri.conf.json` and `scripts/updater-trust-root-guard.test.mjs:23`) now survives a dead
+  drive. **Why it mattered:** lose it → the fleet can never receive another update; leak it → whoever
+  holds it can sign an update Compy installs silently on every install, because the updater has been
+  live since 2026-07-22. Backup/restore behaviour stays pinned by
+  `scripts/updater-key-backup-guard.test.mjs`.
+- ⏳ **Residual (small, owner's hands): the `C:\Users\Kuya\Desktop\COMPY KEY\` copy.** It hashes
+  identical to `C:\Users\Kuya\.tauri\compy-updater.key` — same secret, same disk, and a Desktop folder
+  is the first place anything that ever runs on this PC looks. Now that an off-machine backup exists,
+  deleting the Desktop folder is pure exposure reduction with no recovery cost. Deleting key material
+  is owner territory, so it stays here rather than being done for you. The `.tauri` copy is the one
+  the release train actually signs with — leave that one alone.
+  Repo side is clean and mechanically enforced: no key material has ever been committed on any
   branch, and `scripts/secret-containment-guard.test.mjs` fails the build if key/`.env` patterns leave
   `.gitignore` or if key material ever lands in the index. Nothing for you in that half.
 - ✅ **One-tester canary — PASS (recorded 2026-07-28).** A tester completed it through Compy's
@@ -127,9 +118,10 @@ when the ref does. Nothing is lost: nothing on it is unique.
 
 ### A-closed. Thirteen §A items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
-None of them is waiting on you. The §A items still open above are **A0, A_ci, A_rig and A_ref2**;
-the one that actually needs your hands is **A0** (get the updater signing key off this machine, now
-a 2-minute scripted job) — A_ref2 is a ref deletion a session is clearing, not a click you owe.
+None of them is waiting on you. **A0's key backup is CLOSED (2026-08-18)** — the signing key is
+backed up off this machine and verified. The §A items still open above are **A_ci, A_rig and
+A_ref2**, plus A0's one small residual (delete the redundant `Desktop\COMPY KEY\` copy). None of
+them is urgent — A_ref2 is a ref deletion a session is clearing, not a click you owe.
 Archived 2026-08-18: **A_crash** · **A_ref** · **A_hook** · **A_disk**, all closed 2026-08-11/12.
 Archived 2026-08-04 (TOKEN LAW §1 — history leaves the live doc, never gets deleted): **A0b** zh-CN
 merged + published in v0.9.11 · **A1** Gaming Mode QA signed off · **A2** beta smoke (sitting waived;
