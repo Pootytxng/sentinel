@@ -174,6 +174,29 @@ describe("the gate is wired to something that runs it", () => {
     expect(scrub.indexOf("unset ")).toBeLessThan(scrub.indexOf("verify-local.ps1"));
   });
 
+  it("skips the gate ONLY for a push that is entirely deletions", () => {
+    // bug->guard, 2026-08-18, and the bug was this gate deadlocking itself. `git push origin
+    // --delete <merged-branch>` runs this hook, which runs the disposition audit, which fails
+    // BECAUSE that ref still exists on origin — the gate blocking the push that would satisfy it.
+    // Two lanes hit it in one session and paid five commits of disposition-row churn to get out.
+    //
+    // The skip is safe for exactly one reason: a deletion cannot introduce code. So the guard's
+    // job is to keep it that narrow. It must key off the all-zero LOCAL sha git puts on a delete
+    // line, and it must require EVERY line to be one — a mixed push (delete + update) runs the
+    // full gate. A skip that widened to "any push containing a deletion" would be a hole.
+    const code = hook.split(/\r?\n/).filter((l) => !l.trimStart().startsWith("#")).join("\n");
+    expect(code, "the deletion skip must read the ref lines git sends on stdin").toMatch(
+      /refs="\$\(cat\)"/,
+    );
+    expect(code, "the skip must key off the all-zero local sha, not a branch name or a flag").toMatch(
+      /0\\{40\\}/,
+    );
+    // `grep -qv <not-a-delete>` negated: skip only when NO line fails the delete shape.
+    expect(code, "the skip must require every line to be a deletion").toMatch(/!\s*printf[^|]*\|\s*grep -qv/);
+    // And it has to be decided before the gate is spent, not after.
+    expect(code.indexOf('refs="$(cat)"')).toBeLessThan(code.indexOf("verify-local.ps1"));
+  });
+
   it("keeps the hook bypassable only on purpose", () => {
     // `git push --no-verify` exists and always will. What must not exist is a hook that passes by
     // accident: the shell script has to stop on the first error rather than run on.

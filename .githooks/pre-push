@@ -43,4 +43,23 @@ unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_NAMESPACE \
       GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_QUARANTINE_PATH \
       GIT_PREFIX GIT_REFLOG_ACTION 2>/dev/null || true
 
+# ---------------------------------------------------------------------------------------------
+# Pure DELETIONS skip the gate, and this is not a loosening -- it is the fix to a deadlock the gate
+# creates for itself. Deleting a merged ref (`git push origin --delete <branch>`) runs this hook,
+# which runs the disposition audit, which FAILS precisely because that ref still exists on origin.
+# The gate blocks the push that would satisfy it. Working around it cost five commits of row churn
+# on 2026-08-18 (a row added, flipped to MERGED, rejected by MERGED's own re-proof, re-dispositioned
+# SUPERSEDED, then dropped) -- twice in one session, and it would repeat on every lane.
+#
+# A deletion cannot introduce code: git sends one line per ref as `<local> <lsha> <remote> <rsha>`,
+# and a delete has the all-zero local sha. If EVERY line is a delete there is nothing to verify, so
+# the gate is skipped; any line that is not a delete runs the full gate as before. Pinned by
+# scripts/local-gate-guard.test.mjs so it cannot widen into "skip when convenient".
+# ---------------------------------------------------------------------------------------------
+refs="$(cat)"
+if [ -n "$refs" ] && ! printf '%s\n' "$refs" | grep -qv '^[^ ]* 0\{40\} '; then
+  echo "pre-push: deletion-only push, nothing to verify — gate skipped." >&2
+  exit 0
+fi
+
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$repo/scripts/verify-local.ps1"
