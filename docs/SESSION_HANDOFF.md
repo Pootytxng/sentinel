@@ -12,65 +12,73 @@
 
 ## Lane
 
-**OPEN — `fix/owner-decision-conformance-guards` (`8db70795`+), product-conformance repair.**
-Opened 2026-08-18 after the owner opened his own desk build and found three defects in one screenshot
-that 167 green guards had all missed.
+**NONE OPEN.** `fix/owner-decision-conformance-guards` merged as `dbf174d2` (PR
+[#136](https://github.com/Pootytxng/sentinel/pull/136)) and the ref is pruned. Do not read "none
+open" as "nothing in flight" — `docs/WORK_CONTROL.md` and `git branch -a` are what say that.
 
-**Landed in `8db70795`:**
-- `compy_home_intake` gates the QUESTION again, not just the panel it opens (`HomeConsole.tsx`,
-  `intakeAvailable` leads with `intakeOn`). He removed that box on sight 2026-08-12 (`4d1afa92`);
-  UX-1 (`f1766e86`) put it back as the screen's largest button while the flag still read off.
-- Nine user-facing Rust strings renamed off retired rooms (Monitor→Live, Blackbook→History,
-  Lab→Test): `readiness.rs` ×2, `intelligence_patterns.rs` ×5, `experiment.rs` ×1, plus the
-  assertion in `readiness.rs` that was pinning `"the Lab"` in place.
-- `src/room-name-copy-guard.test.ts` — new, driven off `HOME_RAIL`, **carries its own disarm proof**
-  (it silently false-greened twice while being written: one lost backslash level, one rewritten
-  directory walk).
-- Self-review **rubric item 10 — prior owner decisions** (`.claude/agents/self-reviewer.md`), the
-  check whose absence let UX-1 through. `affordance-census` had *certified* the regression: it
-  rewards KEEPING affordances and his decision was to remove one.
+**What that lane was, because the reason outlives it:** the owner opened his own desk build and
+found three defects in ONE screenshot that 167 green guards had all missed. Every one was already a
+recorded decision. Landed: the `compy_home_intake` flag gates the QUESTION again (he removed that box
+on sight in `4d1afa92`; UX-1 put it back as the screen's largest button) · nine stale room names out
+of Rust copy · the topbar tagline dropped, decided 2026-08-11 and never built · the checks strip
+dissolved from a bordered `16/16 measured · 1 flagged` panel into one plain sentence. Plus an
+honesty fix: `measured/total` used to render identically whether a check FAILED or could not be
+READ, and a PC doctor that conflates unknown with broken is not honest.
 
-**Next in this lane (item 4 of the owner's approved four):** the Home front-door restructure —
-verdict → one action → hero. Fold the drift paragraph + "16/16 measured · 1 flagged" into one plain
-sentence with its fix inline, de-stripe the Crash & Freeze row, drop the topbar taglines (UX-1
-decision ②, still live at `ShellV2.tsx:45`). **Ships with a viewable before/after via `SendUserFile`,
-per the taste decree — prose describing a look does not count.** Self-review is mandatory before any
-done-claim, and rubric item 10 now applies to this diff too.
+**Guards that came with it, so the same class cannot silently revert again:**
+`src/room-name-copy-guard.test.ts` · `src/side-stripe-guard.test.ts` (three pre-existing offenders
+baselined BY NAME) · the `.v2-crumb` regression test in `ShellV2.test.tsx` · the intake question
+pinned absent across all three OFF states · **self-review rubric item 10 — prior owner decisions**,
+the check whose absence let UX-1 through. `affordance-census` had *certified* that regression: it
+rewards KEEPING affordances, and his decision was to remove one.
 
-**Delegated, do not duplicate:** the owner pasted a read-only product-conformance audit brief into
-**Cowork** on 2026-08-18 — every decision in `docs/UI_VISION_BACKLOG.md` + `docs/decisions/*` vs live
-code, output to `docs/CONFORMANCE_AUDIT_2026-08-18.md`. Also queued: extend the Codex weekly
-automation with that scope and make it write INTO the repo (today it is coordination-only and writes
-to `$CODEX_HOME`, where no lane can read it).
+## Next — the conformance queue
+
+`docs/CONFORMANCE_AUDIT_2026-08-18.md` (Cowork lane) graded 26 recorded decisions against
+`main@e6feb861`: **9 HONORED · 1 SILENTLY REVERSED · 9 NEVER BUILT · 4 PARTIAL · 1 DOC DRIFT.** It
+reached C-01/C-02/C-03 independently as its own top three — the same three the owner found by eye.
+The survivors are queued in `docs/BACKLOG.md` § *Conformance queue* in owner-value order, starting
+C-04, C-05, C-08. Take from there, not from this file.
+
+Also open, owner-flagged as optional: 15 bare `.btn-small` buttons hover `--danger` red on 5
+surfaces that destroy nothing (baseline in `src/button-legibility-guard.test.ts`).
+
+**Delegated — do NOT duplicate:** Cowork owes an adversarial audit of the EEE rollback-script change
+in `actions.rs` (#135). Queued: extend the Codex weekly automation with product-conformance scope and
+make it write INTO the repo (today it is coordination-only and writes to `$CODEX_HOME`, where no lane
+can read it) — that is the mechanism that would have caught this drift without the owner's eyes.
 
 ## Carried forward — these outlive the lane
 
-- **RETIRED 2026-08-18 — the installed build now carries `data_root.rs`.** The desk build `421657a9`
-  (v0.9.25, unsigned/desk-only) was built and silently installed, and the resolver's strings are
-  present in `%LOCALAPPDATA%\Compy\compy.exe`. The Trust Ledger can no longer split by launch path,
-  so the "Desktop / Start menu only" restriction is LIFTED. The FLEET is still on published
-  `efde8310` and does not have it — a publish re-cut from `main` with the signing key closes that.
-- **Do not touch `C:\Users\Kuya\code\compy-data-root-recovery\`.** It holds the only copies of the
-  pre-merge ledgers and the archived overlay (58 files). No deletes, no pruning, not even of
-  "duplicates".
-- **§A0 is now the owner's to run, and it is 2 minutes.** `pwsh scripts/backup-updater-key.ps1`,
-  then `pwsh scripts/restore-updater-key.ps1 -BackupPath <the .txt> -Verify`, passphrase into his
-  password manager. Details in `docs/OWNER_ACTION_CHECKLIST.md` §A0.
-- **Nice-to-have, unbuilt:** a Settings row surfacing `get_data_root_report()`. The command and the
-  support-export line exist, and the halt text already explains itself at the point of failure.
+- **The installed build carries `data_root.rs`** (desk `421657a9`, v0.9.25, unsigned/desk-only), so
+  the Trust Ledger can no longer split by launch path and the "Desktop / Start menu only"
+  restriction is LIFTED. The FLEET is still on published `efde8310` and does NOT have it — a publish
+  re-cut from `main` with the signing key closes that.
+- **Do not touch `C:\Users\Kuya\code\compy-data-root-recovery\`.** Only copies of the pre-merge
+  ledgers and the archived overlay (58 files). No deletes, no pruning, not even of "duplicates".
+- **§A0 is the owner's to run, and it is 2 minutes.** `pwsh scripts/backup-updater-key.ps1`, then
+  `pwsh scripts/restore-updater-key.ps1 -BackupPath <the .txt> -Verify`, passphrase into his password
+  manager. Details in `docs/OWNER_ACTION_CHECKLIST.md` §A0.
+- **Nice-to-have, unbuilt:** a Settings row surfacing `get_data_root_report()`.
 
-## Verification at the merge heads
+## Verification at the merge head
 
-`#132` at `8aeacf45` and `#131` at `18685d21`, both `scripts/verify-local.ps1` → **PASS**:
-vitest 334 files / 4311 passed · tsc + build clean · cargo 946 passed / 0 failed · clippy clean.
-Merge receipts recorded a **warning, not a pass**, on the final independent review: no non-writing
-model (Codex) was reachable from the merging session, so that review is unverified rather than
-self-approved.
+`#136` at `ec88cfa3`, `scripts/verify-local.ps1` via `.githooks/pre-push` → **PASS**. Corroborated
+in-session: vitest 337 files / 4972 tests green · `tsc --noEmit` clean · `doc-budget.ps1` ALL PASS ·
+`branch-disposition-audit` OK. Self-review **PASS**, 10/10, before/after captures in
+`docs/ui-sweep/shots/`.
+
+**The merge receipt records a WARNING, not a pass, on the final independent review** — no non-writing
+model (Codex) was reachable from the merging session, so that review is *unverified*, not
+self-approved. Same condition as the `#131`/`#132` heads. **A Codex pass over `dbf174d2` is still
+owed**; the in-lane self-review does not substitute for it.
 
 ## Do NOT
 
 - Do not append to this file — replace it. It is the *current* lane's state, never a log.
-- Do not treat this "none open" note as evidence that nothing is in flight: `docs/WORK_CONTROL.md`
-  and `git branch -a` are what say whether another lane holds a claim.
-- Do not `git push` casually — `.githooks/pre-push` runs the full local gate (~4 minutes), including
-  for a `--delete` refspec. Background it rather than letting it time out.
+- Do not `gh api -X DELETE` a ref — policy blocks it here. `git push origin --delete <branch>` works
+  and correctly skips the gate (`pre-push: deletion-only push, nothing to verify`).
+- Do not `gh pr merge --delete-branch` — it once set `core.bare=true` repo-wide and corrupted every
+  worktree. Merge without the flag, then prune the ref separately.
+- Do not `git push` casually — `.githooks/pre-push` runs the full local gate (~4 minutes). Background
+  it rather than letting it time out, and never pipe it through `tail` (SSH idle drop).
