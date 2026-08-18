@@ -5,7 +5,7 @@
 $ErrorActionPreference = "Stop"
 $budgets = @{
   "docs/RELEASE_STATE.md" = 300
-  "docs/BACKLOG.md" = 1400
+  "docs/BACKLOG.md" = 1200
   "docs/OWNER_ACTION_CHECKLIST.md" = 450
   "docs/BETA_DISTRIBUTION_RECORD.md" = 250
   "docs/BRANCH_DISPOSITIONS.md" = 120
@@ -38,14 +38,16 @@ $budgets = @{
 # a red gate is worse than shipping a working ratchet, and because bringing them down is a CONTENT
 # decision owned by whoever writes them, not a mechanical trim (bytes are content; re-wrapping a
 # long line does not remove any). The budget may only ever move DOWN. Lower each as its pass lands:
-#   docs/BACKLOG.md        142KB -> 120KB   archive the oldest steering-log cycles to BACKLOG_ARCHIVE.md
-#                                           (largest blocks: the A4 advisory recount ~20KB and the
-#                                           conformance queue ~19KB, both largely shipped)
+#   docs/BACKLOG.md        122KB -> 120KB   RATCHETED DOWN 2026-08-18 from 142KB: the 2026-07-27a
+#                                           ... 2026-08-04a steering-log cycles moved to
+#                                           docs/archive/BACKLOG_STEERING_LOG_2026-07-27_TO_2026-08-04.md.
+#                                           Next blocks: the A4 advisory recount ~20KB and the
+#                                           conformance queue, both largely shipped.
 #   docs/RELEASE_STATE.md   57KB ->  48KB   the CURRENT STATE section alone is 31KB at 328 bytes/line;
 #                                           superseded snapshot prose belongs in docs/archive/
 # (CLAUDE.md is handled by its own older guard - see the note under the table.)
 $byteBudgets = @{
-  "docs/BACKLOG.md" = 145408
+  "docs/BACKLOG.md" = 124928
   "docs/RELEASE_STATE.md" = 58368
   "docs/OWNER_ACTION_CHECKLIST.md" = 40960
   "src-tauri/CLAUDE.md" = 10240
