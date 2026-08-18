@@ -145,7 +145,7 @@ const shell = (child: React.ReactNode) => (
     activeId="home"
     onNavigate={() => {}}
     ledgerCount={1}
-    version="0.1.0"
+   
   >
     {child}
   </ShellV2>

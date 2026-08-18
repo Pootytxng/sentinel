@@ -1384,7 +1384,6 @@ function App() {
           activeId={activeHomeId}
           onNavigate={navHome}
           ledgerCount={changes.length}
-          version={APP_VERSION}
           rig={hw ? [hw.cpu_brand, hw.gpus[0]?.name].filter(Boolean).join(" · ") : null}
           // Command-palette destinations. Each is the SAME single writer the rest of the app routes
           // through — openLabStation persists the station intent before the room mounts,

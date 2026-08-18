@@ -6,7 +6,7 @@ import { join } from "path";
 //
 // The RoomShell `quiet` slot is the room's "more, not attention-needing" drawer (P5 calm chrome).
 // It shipped set in --v2-faint — the ink this design system reserves for MACHINE METADATA
-// (.v2-measured provenance lines, .v2-version stamps) — with a colour-only hover. That made the
+// (.v2-measured provenance lines, and the rail version stamp it also used to set) — with a colour-only hover. That made the
 // row that opens real content read FAINTER and DEADER than the ForwardDoor, which the P6 law
 // explicitly calls "quiet chrome, a doorknob not a CTA". Testers read it as footer legalese.
 //
@@ -37,7 +37,7 @@ describe("quiet slot reads as a control, not as fine print", () => {
     const ink = decl(rule(QUIET), "color");
     expect(ink).toBe("var(--v2-muted)");
     // Stated as its own assertion so a regression names the actual mistake.
-    expect(ink, "--v2-faint is metadata ink (.v2-measured/.v2-version), not control ink").not.toMatch(
+    expect(ink, "--v2-faint is metadata ink (.v2-measured), not control ink").not.toMatch(
       /--v2-faint/,
     );
   });

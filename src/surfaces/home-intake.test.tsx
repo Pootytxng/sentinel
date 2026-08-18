@@ -216,7 +216,7 @@ function renderHome(extra: Partial<React.ComponentProps<typeof HomeRoom>> = {}) 
         activeId="home"
         onNavigate={() => {}}
         ledgerCount={1}
-        version="0.1.0"
+       
       >
         <HomeRoom {...baseProps} {...extra} />
       </ShellV2>

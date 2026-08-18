@@ -203,7 +203,7 @@ const mount = () =>
       activeId="home"
       onNavigate={() => {}}
       ledgerCount={1}
-      version="0.1.0"
+     
     >
       <HomeConsole
         hw={hw}

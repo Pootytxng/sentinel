@@ -5,23 +5,24 @@
 // "0" removes frame + shell reticle entirely, and the stage-scoped ReticleCursor instances
 // SELF-DEFER while the flag is on (one reticle, never two) but return when it's off.
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, waitFor } from "@testing-library/react";
+import { render, cleanup } from "@testing-library/react";
 import { useRef } from "react";
 import { ShellV2 } from "../ShellV2";
 import { ReticleCursor } from "./ReticleCursor";
 import { railFor } from "../homeRail";
 
-// Mutable stamp behavior: the honest-omission pin flips this to a rejecting probe.
-let stampResult: () => Promise<string> = () => Promise.resolve("ab12cd3 · dev");
+// The shell no longer probes `get_build_stamp` (the topbar node it fed was removed 2026-08-18),
+// so this answers the command with the stamp the duplication pin above searches the DOM for. If
+// the shell ever starts printing it again, that pin fails — which is the point of keeping the
+// mock rather than deleting it along with the probe.
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string) =>
-    cmd === "get_build_stamp" ? stampResult() : Promise.resolve(null),
+    cmd === "get_build_stamp" ? Promise.resolve("ab12cd3 · dev") : Promise.resolve(null),
 }));
 
 afterEach(() => {
   cleanup();
   localStorage.clear();
-  stampResult = () => Promise.resolve("ab12cd3 · dev");
 });
 
 const ITEMS = railFor(true);
@@ -32,7 +33,7 @@ const shell = (over: Partial<Parameters<typeof ShellV2>[0]> = {}) => (
     activeId="home"
     onNavigate={() => {}}
     ledgerCount={41}
-    version="0.1.0"
+   
     {...over}
   >
     <div data-testid="room">room</div>
@@ -61,13 +62,18 @@ describe("compy_hud_frame default ON (the HUD frame + shell reticle)", () => {
     expect(readout?.textContent).toContain("Ryzen 7 · RX 9070 XT");
     // System clock: HH:MM:SS — real, ticking, never fabricated.
     expect(readout?.textContent).toMatch(/\d{1,2}:\d{2}:\d{2}/);
-    // NO DUPLICATION (self-review 2026-07-15): the ledger count lives in the rail foot and
-    // the build stamp in the topbar — the readout must never repeat either on screen.
-    await waitFor(() =>
-      expect(container.querySelector(".v2-stamp")?.textContent).toContain("ab12cd3 · dev"),
-    );
+    // NO DUPLICATION (self-review 2026-07-15): the ledger count lives in the rail foot, and the
+    // build stamp now lives in Settings → About (navigation audit §4, topbar node removed
+    // 2026-08-18). This used to prove "the stamp is in the topbar, not here"; with the topbar node
+    // gone it proves the STRONGER thing — no build stamp anywhere in the shell.
+    //
+    // The settle stays on purpose. The shell no longer probes for a stamp, so there is nothing to
+    // await today; but if a future change reintroduces an async probe, asserting before it resolved
+    // would pass vacuously and hide precisely the regression this line exists to catch.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(container.querySelector(".v2-stamp")).toBeNull();
+    expect(container.textContent).not.toContain("ab12cd3");
     expect(readout?.textContent).not.toContain("ledger");
-    expect(readout?.textContent).not.toContain("ab12cd3");
   });
 
   it("mounts the shell-scoped reticle (appWide), direct child of .v2-shell", () => {
@@ -76,9 +82,8 @@ describe("compy_hud_frame default ON (the HUD frame + shell reticle)", () => {
   });
 
   it("HONEST OMISSION: no rig probe → the segment is absent, not faked (clock alone remains)", async () => {
-    stampResult = () => Promise.reject(new Error("probe failed"));
     const { container } = render(shell({ rig: null }));
-    // Let the rejected stamp promise settle — the readout must never gain a stamp either way.
+    // Let any pending probe settle — the readout must never gain a segment either way.
     await new Promise((r) => setTimeout(r, 0));
     const text = container.querySelector(".hud-frame-readout")?.textContent ?? "";
     // Clock only — no separator, no fabricated rig/stamp/ledger segment.

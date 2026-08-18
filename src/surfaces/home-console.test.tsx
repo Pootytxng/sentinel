@@ -186,7 +186,7 @@ const mount = (p = props) =>
       activeId="home"
       onNavigate={() => {}}
       ledgerCount={1}
-      version="0.1.0"
+     
     >
       <HomeConsole {...p} />
     </ShellV2>,

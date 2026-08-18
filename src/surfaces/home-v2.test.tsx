@@ -156,7 +156,7 @@ function mount(over?: Partial<Parameters<typeof HomeV2>[0]>) {
       activeId="home"
       onNavigate={() => {}}
       ledgerCount={props.changes.length}
-      version="0.1.0"
+     
     >
       <HomeV2 {...props} />
     </ShellV2>,

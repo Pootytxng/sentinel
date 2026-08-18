@@ -39,7 +39,7 @@ const shell = (over: Partial<Parameters<typeof ShellV2>[0]> = {}) => (
     activeId="home"
     onNavigate={() => {}}
     ledgerCount={41}
-    version="0.1.0"
+   
     {...over}
   >
     <div data-testid="room">room</div>
@@ -168,7 +168,7 @@ describe("ShellV2 digit shortcuts (the kbd hints must WORK)", () => {
   it("never fires while typing or with a modifier held", () => {
     const onNavigate = vi.fn();
     render(
-      <ShellV2 items={ITEMS} activeId="home" onNavigate={onNavigate} ledgerCount={0} version="0.1.0">
+      <ShellV2 items={ITEMS} activeId="home" onNavigate={onNavigate} ledgerCount={0}>
         <input aria-label="field" />
       </ShellV2>,
     );
@@ -180,10 +180,37 @@ describe("ShellV2 digit shortcuts (the kbd hints must WORK)", () => {
 });
 
 describe("ShellV2 topbar", () => {
-  it("shows the active room title and the REAL build stamp once fetched", async () => {
+  it("shows the active room title", () => {
     const { container } = render(shell({ activeId: "play" }));
     expect(container.querySelector(".v2-room-title")?.textContent).toBe("Live");
-    await waitFor(() => expect(screen.getByText("ab12cd3 · dev")).toBeTruthy());
+  });
+
+  // bug -> guard (2026-08-18, conformance audit C-09). Build identifiers are developer furniture:
+  // the topbar carried `555e2996 · release` and the rail carried `0.9.25`, on every screen, for a
+  // consumer who has no use for either. The navigation audit §4 ruled they belong in Settings →
+  // About — which already shows BOTH and is itself test-pinned, so this is a move, not a deletion.
+  //
+  // Asserted on the whole shell, not just the topbar: the point is that no chrome prints a build
+  // identifier anywhere, and a check scoped to one container would miss it reappearing in the other.
+  it("prints NO build identifier in chrome — those live in Settings -> About", async () => {
+    const { container } = render(shell({ activeId: "play" }));
+    // Settle first: the removed probe was async, so a synchronous assertion would have passed even
+    // while the stamp was still on its way, and reported green for the bug it exists to catch.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(container.querySelector(".v2-stamp"), "the topbar build stamp is back").toBeNull();
+    expect(container.querySelector(".v2-version"), "the rail version number is back").toBeNull();
+    const shellText = container.querySelector(".v2-shell")?.textContent ?? "";
+    expect(shellText, "chrome is printing the build stamp again").not.toContain("ab12cd3");
+    expect(shellText, "chrome is printing a version number again").not.toMatch(/\bv?\d+\.\d+\.\d+\b/);
+  });
+
+  // The right-hand cluster is held over by an unconditional spacer. Every member of that cluster
+  // (search box, update pill, accent picker) is conditional, so when `.v2-stamp` carried the
+  // margin-left:auto its removal collapsed the cluster against the room title — and hanging the
+  // margin on any one member would only hide the same bug behind that member's flag.
+  it("keeps the right-hand cluster right-aligned with no palette, pill or picker rendered", () => {
+    const { container } = render(shell({ activeId: "play" }));
+    expect(container.querySelector(".v2-top > .v2-top-spacer"), "the spacer is gone").toBeTruthy();
   });
 
   // bug -> guard (2026-08-18). The navigation audit MEASURED this one: the topbar printed

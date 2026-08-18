@@ -50,11 +50,8 @@
   gap: 9px;
   padding: 4px 10px 16px;
 }
-:root[data-v2="on"] .v2-version {
-  margin-left: auto;
-  font: var(--type-label) var(--v2-font-mono);
-  color: var(--v2-faint);
-}
+/* `.v2-version` deleted 2026-08-18 — the version number moved out of consumer chrome into
+   Settings → About (navigation audit §4). Nothing replaces it beside the wordmark. */
 :root[data-v2="on"] .v2-nav {
   display: flex;
   flex-direction: column;
@@ -171,10 +168,11 @@
   font-weight: 600;
   font-size: var(--type-label);
 }
-:root[data-v2="on"] .v2-stamp {
+/* `.v2-stamp` deleted 2026-08-18 with the version above — build identifiers live in Settings →
+   About. The margin-left:auto it used to carry now belongs to the unconditional spacer, because
+   every remaining member of the right-hand cluster is conditional. */
+:root[data-v2="on"] .v2-top-spacer {
   margin-left: auto;
-  font: var(--type-label) var(--v2-font-mono);
-  color: var(--v2-faint);
 }
 
 /* ── Content ── */
@@ -218,7 +216,7 @@
 }
 /* The quiet slot's expander head — "more, not attention-needing" (P5 calm chrome), but it
    still has to READ as a control. It used to be set in --v2-faint, the ink this system
-   reserves for machine metadata (.v2-measured, .v2-version), with a colour-only hover — i.e.
+   reserves for machine metadata (.v2-measured), with a colour-only hover — i.e.
    fainter and deader than the forward door that the P6 law explicitly calls "a doorknob, not
    a CTA". That inversion is what testers read as footer legalese. Fix is affordance weight,
    not attention weight: door-parity ink, and a NEUTRAL hover lift — deliberately not the

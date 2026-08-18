@@ -17,7 +17,7 @@ function renderShell() {
       activeId="home"
       onNavigate={() => {}}
       ledgerCount={0}
-      version="0.0.0"
+     
       onOpenStation={() => {}}
       onOpenEntry={() => {}}
       onOpenSettings={() => {}}
@@ -96,7 +96,7 @@ describe("ON (default) — the box is visible, not just a shortcut", () => {
         activeId="home"
         onNavigate={onNavigate}
         ledgerCount={0}
-        version="0.0.0"
+       
       >
         <div>room</div>
       </ShellV2>,
@@ -130,7 +130,7 @@ describe('OFF ("0") — the pre-palette shell, byte-identical', () => {
         activeId="home"
         onNavigate={onNavigate}
         ledgerCount={0}
-        version="0.0.0"
+       
       >
         <div>room</div>
       </ShellV2>,

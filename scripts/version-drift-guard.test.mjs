@@ -89,20 +89,37 @@ describe("Guard D — the VISIBLE app version tracks the canonical manifest, nev
   });
 });
 
-describe("Guard E — both production render sites consume APP_VERSION, never a literal", () => {
+describe("Guard E — the production render site consumes APP_VERSION, never a literal", () => {
   // corrective follow-up (2026-07-20): Guard D pins the DECLARATION
   // (`const APP_VERSION = pkg.version;`), but a render site could still hand a hardcoded semver to a
   // component and bypass it entirely (e.g. `<Settings appVersion="0.1.0" />`) — the UI would show
-  // stale text while Guard D stayed green. APP_VERSION reaches the screen through exactly TWO props:
-  // the Settings pane (`appVersion=`) and the ShellV2 rail (`version=`). Pin BOTH to the constant and
-  // forbid a semver literal at either prop, so wiring a fresh site to a literal fails the guard.
+  // stale text while Guard D stayed green. Pin the site to the constant and forbid a semver literal
+  // at any version prop, so wiring a fresh site to a literal fails the guard.
+  //
+  // ONE site, not two, since 2026-08-18. APP_VERSION used to also reach `<ShellV2 version=…>`, which
+  // printed it beside the wordmark on every screen; the navigation audit §4 moved build identifiers
+  // into Settings → About and the prop was removed with the render rather than left dangling. The
+  // guard did NOT shrink: the literal check below still covers every `version=`/`appVersion=` prop
+  // in the file, and the new assertion below pins the removal itself, so re-wiring the shell to a
+  // version is a deliberate act that has to come here first.
   const app = read("src/App.tsx");
 
   it("the Settings render site passes appVersion={APP_VERSION}", () => {
     expect(app).toContain("appVersion={APP_VERSION}");
   });
-  it("the ShellV2 render site passes version={APP_VERSION}", () => {
-    expect(app).toContain("version={APP_VERSION}");
+  it("the shell is handed NO version — build identifiers live in Settings -> About", () => {
+    // Deliberately the bare prop, not `version={APP_VERSION}`: the point is that chrome on every
+    // screen carries no build identifier at all, whatever its source. `appVersion=` is excluded by
+    // the leading boundary so the Settings site above cannot satisfy or trip this.
+    const HANDED_A_VERSION = /(?<![A-Za-z])version=/;
+    // DISARM PROOF. A `not.toMatch` passes just as green when the pattern can never match anything,
+    // and this one leans on a lookbehind that is easy to get backwards. Prove both directions on
+    // fixed strings before trusting the verdict on the real file.
+    expect(HANDED_A_VERSION.test("<ShellV2 version={APP_VERSION}>"), "would not catch the prop").toBe(true);
+    expect(HANDED_A_VERSION.test('<ShellV2 version="0.9.25">'), "would not catch a literal").toBe(true);
+    expect(HANDED_A_VERSION.test("<Settings appVersion={APP_VERSION} />"), "false-positives on Settings").toBe(false);
+
+    expect(app, "ShellV2 is being handed a version again").not.toMatch(HANDED_A_VERSION);
   });
   it("no version prop is fed a hardcoded semver literal", () => {
     // matches appVersion="1.2.3" / appVersion={"1.2.3"} / version="1.2.3" / version={"1.2.3"};

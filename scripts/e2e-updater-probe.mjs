@@ -25,10 +25,21 @@ if (!port) {
 }
 
 const EXPRS = {
+  // `railVersion` was dropped 2026-08-18: the rail no longer prints a version number, because the
+  // navigation audit §4 moved build identifiers into Settings → About. It cross-checked the
+  // rendered version against the backend, so the check is not free to lose — but the surface that
+  // replaces it (`.set-about-version`) only exists while Settings is open, and a field that reads
+  // null on every other room would be a check in name only. Use the `about` preset below with
+  // Settings open when that comparison is the point.
   stamp: `(async () => ({
     stamp: await window.__TAURI_INTERNALS__.invoke("get_build_stamp").catch((e) => "ERR:" + e),
-    railVersion: document.querySelector(".v2-version")?.textContent ?? null,
     pill: document.querySelector(".v2-update")?.textContent ?? null,
+  }))()`,
+  // Settings → About must be OPEN for this one; null means "not on screen", never "absent".
+  about: `(async () => ({
+    stamp: await window.__TAURI_INTERNALS__.invoke("get_build_stamp").catch((e) => "ERR:" + e),
+    aboutVersion: document.querySelector(".set-about-version")?.textContent ?? null,
+    aboutStamp: document.querySelector(".set-about-stamp")?.textContent ?? null,
   }))()`,
   pill: `({
     pill: document.querySelector(".v2-update")?.textContent ?? null,

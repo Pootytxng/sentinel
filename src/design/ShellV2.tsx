@@ -1,7 +1,7 @@
 // V2 product shell (V2-2, spec 2026-07-02-v2-shell-sourcing-and-plan) — the Linear/Geist-discipline
 // chrome from the owner-approved mockup: 216px rail (wordmark · rooms with digit hints · the
-// outbound-honesty/reversible footer) + 46px topbar (room title · plain-English crumb · build
-// stamp · update pill when a signed update is live)
+// outbound-honesty/reversible footer) + 46px topbar (room title · search · update pill when a
+// signed update is live)
 // + a scrolling content lane. Renders ONLY when App's compy_v2 state is on; flag off, this tree
 // never mounts and the app is byte-identical (tokens-v2-guard.test.ts pins the CSS side).
 //
@@ -18,7 +18,6 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { invoke } from "@tauri-apps/api/core";
 // Side-effect import: guarantees the i18next instance is initialized (resources loaded, language
 // resolved) before this file's t() calls ever run — same bootstrap src/i18n/language.ts relies on.
 import "../i18n";
@@ -66,7 +65,6 @@ export function ShellV2({
   activeId,
   onNavigate,
   ledgerCount,
-  version,
   rig,
   onOpenStation,
   onOpenEntry,
@@ -77,7 +75,6 @@ export function ShellV2({
   activeId: HomeRailId | undefined;
   onNavigate: (id: HomeRailId) => void;
   ledgerCount: number;
-  version: string;
   // Command-palette destinations beyond the rail. Each is the app's EXISTING single writer for that
   // kind of navigation, passed in rather than reached for — the shell owns chrome, not routing.
   // Any one omitted → the palette does not index that group, so it can never offer a dead door.
@@ -124,16 +121,16 @@ export function ShellV2({
     if (changed && jarvis) setWipe((w) => w + 1);
   }, [activeId, jarvis]);
 
-  // Build stamp (compile-time provenance, same probe Settings→About uses). Fetch fails → no stamp
-  // rendered — never a fabricated one.
-  const [stamp, setStamp] = useState<string | null>(null);
-  useEffect(() => {
-    invoke<string>("get_build_stamp")
-      .then(setStamp)
-      .catch(() => {
-        /* probe failed — the topbar just omits the stamp */
-      });
-  }, []);
+  // NO BUILD-STAMP PROBE HERE. The topbar used to invoke `get_build_stamp` on every shell mount and
+  // print `555e2996 · release` beside the room name. The command still exists and Settings → About
+  // still shows it — that is where the navigation audit put build identifiers (§4), and it is the
+  // surface a user visits deliberately rather than one they cannot escape. The invoke went with the
+  // render on purpose: an IPC call per mount whose only consumer was deleted chrome is pure cost,
+  // and Compy's standing bar is to be the least resource-hungry app on the machine.
+  //
+  // `get_build_stamp` remains the ship-verification path (CLAUDE.md: verify live == build via the
+  // STAMP over a CDP port, never an exe hash) — that calls the COMMAND, not this DOM node, so
+  // removing the node does not touch it.
 
   // Ledger health, for the footer count below. The rail is app-level chrome, so this one probe is
   // what stops EVERY room — including the ones that never mounted a health check of their own —
@@ -197,9 +194,14 @@ export function ShellV2({
     <V2NavContext.Provider value={nav}>
       <div className={hudFrame ? "v2-shell v2-shell-hud" : "v2-shell"} ref={shellRef}>
         <nav className="v2-rail" aria-label={t("common.shellV2.navAriaLabel")}>
+          {/* NO VERSION NUMBER HERE. Build identifiers are developer furniture, and the navigation
+              audit ruled they belong in Settings → About, not in consumer chrome on every screen
+              (docs/decisions/2026-08-11-design-navigation-audit.md §4). About already carries
+              `v{appVersion}` AND the build stamp, and is test-pinned (Settings.test.tsx), so this
+              is a removal with a destination, not a loss. The `version` prop went with it — a prop
+              kept alive for a render that no longer exists is the next session's red herring. */}
           <div className="v2-wordmark">
             <Wordmark size={16} />
-            <span className="v2-version">{version}</span>
           </div>
           <div className="v2-nav" role="tablist">
             {items.map((item, i) => (
@@ -272,8 +274,13 @@ export function ShellV2({
                 2026-08-18, six days late). The crumb STRINGS stay — CommandPalette reads the same
                 `common.shellV2.crumb.*` keys as its per-door hint, where the room's own h1 is NOT on
                 screen, so there it describes rather than duplicates. */}
-            {/* Search box. `v2-stamp` carries the margin-left:auto that pushes the right-hand
-                cluster over, so this sits before it and the cluster order is unchanged. */}
+            {/* The right-hand cluster is pushed over by this spacer, NOT by a margin-left:auto on
+                its first member. `.v2-stamp` used to carry that margin, so deleting the stamp
+                collapsed the whole cluster leftward against the room title. Every remaining member
+                (search, update pill, accent picker) is CONDITIONAL, so hanging the margin on any
+                one of them just moves the same bug behind a flag. An unconditional spacer cannot. */}
+            <span className="v2-top-spacer" aria-hidden="true" />
+            {/* Search box. */}
             {paletteEnabled && (
               <button
                 type="button"
@@ -294,7 +301,6 @@ export function ShellV2({
                 <kbd>Ctrl K</kbd>
               </button>
             )}
-            {stamp && <span className="v2-stamp">{stamp}</span>}
             <UpdatePill />
             {roomIdentity && active && PICKABLE_ROOMS.includes(active.id as PickableRoom) && (
               <RoomAccentPicker room={active.id as PickableRoom} roomLabel={railLabel(active)} />
