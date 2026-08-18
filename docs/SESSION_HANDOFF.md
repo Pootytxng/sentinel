@@ -31,10 +31,11 @@ A fresh session should NOT resume from this file. Read `CLAUDE.md`, then `docs/R
 
 ## Carried forward — these outlive the lane
 
-- **The shipped build does NOT carry `data_root.rs`.** v0.9.25 still joins `APPDATA`, so launching
-  Compy as a child of the packaged Claude app would re-split the Trust Ledger again. **Until a build
-  carrying the resolver ships, Compy is launched from the Desktop / Start menu only** — never from
-  inside another app's terminal. Shipping that build retires this caveat.
+- **RETIRED 2026-08-18 — the installed build now carries `data_root.rs`.** The desk build `421657a9`
+  (v0.9.25, unsigned/desk-only) was built and silently installed, and the resolver's strings are
+  present in `%LOCALAPPDATA%\Compy\compy.exe`. The Trust Ledger can no longer split by launch path,
+  so the "Desktop / Start menu only" restriction is LIFTED. The FLEET is still on published
+  `efde8310` and does not have it — a publish re-cut from `main` with the signing key closes that.
 - **Do not touch `C:\Users\Kuya\code\compy-data-root-recovery\`.** It holds the only copies of the
   pre-merge ledgers and the archived overlay (58 files). No deletes, no pruning, not even of
   "duplicates".
