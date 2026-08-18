@@ -13,7 +13,7 @@
 ## Lane
 
 **DATA-ROOT INTEGRITY — issue [#130](https://github.com/Pootytxng/sentinel/issues/130).**
-Branch `agent/data-root-integrity` @ `24ddd2ba`, worktree
+Branch `agent/data-root-integrity` @ `47714978`, worktree
 `C:\Users\Kuya\code\sentinel-data-root-integrity` — clean, pushed, **no PR opened**. The ownership
 claim is posted on #130 (Claude Code is the write owner).
 
@@ -61,21 +61,44 @@ variant-by-variant through the pure `mutation_root_from()`.
 **Verification:** cargo 946 passed / 0 failed · clippy clean · tsc clean · vitest 332 files / 4283
 passed · `doc-budget` ALL PASS · `verify-module-map` OK · `verify-release-state` 0 broken.
 
-## Blocked on the owner — the ONLY thing stopping this lane
+## Blocked on the owner - the ONLY thing stopping this lane
 
-The resolver correctly returns **`Conflict`** on Kuya's machine (canonical 3 receipts vs 61 in
-`…\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Compy\history.json`), so **this build refuses
-every apply and rollback on his desk until recovery.** Designed contract, not a regression.
+He answered **B** (union merge, then archive the overlay). The tool is built, tested and pushed;
+**the merge itself has NOT run.** The harness auto-mode classifier blocked the write to the real
+`%APPDATA%\Compy\history.json` twice. That is the right instinct and was not routed around - it
+needs his go-ahead or a Bash permission rule.
 
-He must pick **A** (freeze) / **B** (union merge + archive the overlay — recommended; receipt IDs
-are provably disjoint) / **D** (archive and accept losing undo for the 12 live-but-unrollbackable
-changes). Full evidence + exact preconditions: the recovery comment on #130; owner-facing summary:
-`docs/OWNER_ACTION_CHECKLIST.md` §B_dataroot.
+`f9057727` - `scripts/recover-data-root.mjs` + 15 falsified guards. Receipts are spliced as their
+**exact source bytes**, never re-serialized: a `JSON.parse`/`stringify` round-trip would rewrite
+`1.0` to `1` and round an integer past 2^53 *inside a snapshot* - the value a rollback writes back
+onto Windows. Aborts on an id present in BOTH ledgers, a repeated id, a missing `id`/`applied_at`,
+or a non-array. Dry-run by default; `--apply` takes hash-verified byte-for-byte backups of both
+ledgers first and writes via the same temp+rename swap `history.rs` uses. `47714978` - residency
+classified `npm-test` (the gate caught the new script, as designed).
 
-**If he answers B:** build the union-merge tool **unit-tested over fixtures first, as its own
-commit** — abort on any receipt-ID collision, byte-for-byte backups of both ledgers before
-anything, no rollback/reapply/dedupe as part of recovery, the legacy contract-less receipt carried
-across as-is, and the overlay copy **moved** (never deleted) only after the merged ledger verifies.
+**Dry run on the real desk, verified:** 3 + 61 -> **64 receipts** (39 applied, 25 rolled back),
+`2026-05-28` -> `2026-07-29`, **zero id collisions**, both source hashes unchanged
+(`41E8CDC1...B4203`, `ABB928FE...57EA`). Precondition 1 re-checked: compy not running, no pending
+Gaming Mode contract in either root.
+
+**The exact command still to run**, from `C:\Users\Kuya\code\sentinel-data-root-integrity`:
+
+```
+node scripts/recover-data-root.mjs --apply \
+  --canonical "C:/Users/Kuya/AppData/Roaming/Compy/history.json" \
+  --foreign "C:/Users/Kuya/AppData/Local/Packages/Claude_pzs8sxrjxfjjc/LocalCache/Roaming/Compy/history.json" \
+  --archive "C:/Users/Kuya/code/compy-data-root-recovery"
+```
+
+Then, and only then: **move** (never delete) the overlay `Compy` folder to
+`C:\Users\Kuya\code\compy-data-root-recovery\overlay-Compy\`, and re-run the resolver - it must
+return `Canonical`. If it does not, revert from the backups the tool just took.
+
+**Correction to the record:** the canonical ledger's mtime moved to `2026-08-18T06:01:50Z` during
+`cargo test`. Its **content is byte-identical** (hash unchanged, re-verified today). Cause:
+`ensure_ledger_writable()` re-saves the current ledger as a writability canary, reachable in test
+builds through the `#[cfg(test)]` `mutation_root()` escape. The earlier "neither data root was
+written" phrasing was imprecise - no receipt changed, but a file timestamp did.
 
 ## Also open in this lane (not blocked)
 
@@ -86,8 +109,9 @@ across as-is, and the overlay copy **moved** (never deleted) only after the merg
 ## Do NOT
 
 - Do not append to this file — replace it. It is the *current* lane's state, never a log.
-- **Do not touch either data root.** Both stay byte-for-byte: no copy, merge, rename, delete,
-  dedupe, quarantine, reapply or rollback. Standing invariant, not a phase.
+- **Do not touch either data root except through the approved option-B steps above.** Outside
+  those exact steps the invariant stands: no copy, rename, delete, dedupe, quarantine, reapply
+  or rollback. Nothing is ever deleted - the overlay is *moved*, both originals backed up first.
 - Do not run `scripts/release.ps1` or `scripts/ship-reinstall.ps1` in this lane.
 - Do not treat a lane note as evidence of what else is in flight: `docs/WORK_CONTROL.md` and
   `git branch -a` are what say whether another lane holds a claim.

@@ -301,22 +301,21 @@ and the site-glow/"full overhaul" gate.
   Bench Phase-1 build (the drag gallery is deleted, not a build option). Note: your original **"Feature Roadmap Checklist (CC Brief)"**
   is NOT in the repo — if *that's* the list you meant, you'd need to re-share it.
 
-### B_dataroot. Your Trust Ledger is split in two - pick the recovery  ·  ⏳ NEW 2026-08-18  ·  [#130](https://github.com/Pootytxng/sentinel/issues/130)
+### B_dataroot. Trust Ledger merge - you said B, and one command is waiting on you  ·  ⏳ 2026-08-18  ·  [#130](https://github.com/Pootytxng/sentinel/issues/130)
 Compy was launched at least once inside the packaged Claude app, which redirected its data folder
-without changing the path it reads. It has been writing to two different change histories: **3
-recorded changes in your normal folder, 61 in the redirected copy** - and **12 real changes are on
-your PC right now with no receipt Compy can see**, so it cannot offer to undo them.
+without changing the path it reads. It wrote two separate change histories: **3 in your normal
+folder, 61 in the redirected copy** - and **12 real changes are on your PC right now with no receipt
+Compy can see**. The code fix is in: Compy now checks where its folder actually lands and **refuses
+to change anything while two histories exist**, which is why applies and rollbacks are blocked on
+your desk until the merge runs.
 
-The code fix is in (`795d8ff5`): Compy now checks where its folder actually lands, and **refuses to
-change anything on your machine while two histories exist** rather than guessing which is yours.
-That refusal is working as designed - and it means applies and rollbacks are blocked on your desk
-until you choose.
+**You picked B (merge).** The tool is built, tested and pushed (`f9057727`), and a rehearsal on your
+real files confirms **3 + 61 = 64 receipts, no clashes, nothing lost**. It backs up both files
+before it writes and never deletes anything.
 
-**What only you can decide:** leave it frozen (**A**), **merge** the 61 into your normal history and
-archive the redirected copy (**B**, recommended - the IDs do not overlap so nothing is lost), or
-archive the redirected copy and accept losing undo for those 12 (**D**). Full evidence, exact
-conditions and what is explicitly NOT in the plan: the recovery comment on #130. **Nothing is
-copied, merged, moved or undone without your answer.**
+**What is still on you:** my safety layer blocked me from writing to your real history file, and I
+did not work around it. Say **"run the merge"** and I will - or the exact command is in
+`docs/SESSION_HANDOFF.md` if you would rather it ran under your own hands.
 
 
 ### B_startup. A Windows mutation lives outside `actions.rs` — decide whether that's allowed  ·  ⏳ NEW 2026-08-02
