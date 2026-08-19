@@ -1,63 +1,67 @@
-# Session Handoff
+# Session handoff — 2026-08-18 (conformance C-10 / C-11 / C-17)
 
-> **REPLACE this file's content every time you write it — never append.** It holds only the
-> *current* lane's state, not a log. One lane at a time. When the lane lands (merged + branch
-> deleted), clear this file back to the template in git history.
->
-> Written by `.claude/hooks/context-size-advisor.mjs` when it detects context-thrash (fast
-> drop→refill cycles with no real headroom gained — see `scripts/lib/context-thrash.mjs`), and by
-> any session that sees its own context filling fast. Read this FIRST on a fresh session that
-> mentions "continue" or "resume" with no other lead. Budget: 120 lines
-> (`scripts/doc-budget.ps1`) — if you're about to blow it, cut detail, don't skip the write.
+**This lane is CLOSED.** PR [#139](https://github.com/Pootytxng/sentinel/pull/139) is merged to
+`main` as `2f79febb`, the branch ref is deleted, its disposition row is dropped, and the owner's
+desk build is rebuilt from `main` and runtime-proved. Nothing here is waiting on the next session.
 
-## Lane
+## What shipped
 
-**OPEN — `feat/conformance-c10-c11-c17`, PR [#139](https://github.com/Pootytxng/sentinel/pull/139) (draft).**
-Directory `c:\Users\Kuya\code\sentinel`, three commits on top of `main` `d6a12e49`:
+- **C-10** — the last five native `<select>`s are gone. `src/design/Picker.tsx` is the app's one
+  dropdown (portalled, token-drawn, ARIA APG select-only-combobox); `no-raw-select-guard.test.ts`
+  bans the element under `src/`.
+- **C-11** — repeated ledger applies collapse into one row. The owner's 64 applies (37 of them the
+  same tweak) render as 17 rows instead of 30.
+- **C-17** — the mono-is-for-machine-values law is a census with a down-only ratchet, not a comment.
+- Follow-on fixes: `WhatChangedPanel` compares what the user is LOOKING at, not state one render
+  behind; the Experiment Bench can clear a pick again.
 
-- `3eca4a9f` — the three conformance items (code + tests + two new guards).
-- `e0da2f26` — BACKLOG tick, C-17b opened, and the two ledger archives.
-- `7f151d2c` — the budget ratchet + this branch's disposition row.
+## What the review round cost, and why it was worth it
 
-Shipped: **C-10** (one in-app dropdown, `<select>` banned), **C-11** (repeated ledger applies
-collapse into one row), **C-17** (the mono-for-machine-values law becomes a census with a
-down-only ratchet). **C-04 untouched** — the word "Health"/"Diagnosis" is owner territory.
+Three independent review rounds: **REQUEST CHANGES** at `5d572db6` → APPROVE at `f88b25db` →
+APPROVE at `640fb78e`. It found three blockers, two of them in guards I had just written:
 
-Inherited housekeeping is CLOSED: `origin/feat/front-door-diagnosis-c05-c19` was already gone from
-origin and had no row left in `docs/BRANCH_DISPOSITIONS.md`. Nothing to prune.
+1. `no-raw-select-guard` could not see a `<select` that ENDED a line — the scan splits on newlines
+   and the lookahead had no character left. Its own mutation test passed because it fed the matcher
+   a string that still carried its newline: a code path the real sweep never runs. One scanner now
+   serves both, and the fix is disarm-probed.
+2. `classifyForegroundReading` — mine, from earlier the same day — split a red gate green on a false
+   premise. I claimed `firstForegroundMs < firstWindowMs` proved Windows fronted the launch. The
+   probe polls at 100ms and, inside one iteration, reads the foreground first and the window second
+   with a `Process.Refresh()` between them, so a 5ms lead is the loop's own ordering. It now needs a
+   full poll of margin and reports `unattributable-at-launch` when it cannot tell.
+3. `COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF` was documented as enforced by "the release gate". No
+   release gate exists and nothing sets it. Said plainly now, in both places.
 
-## Both laws in the brief bit again, and both held
+**Read that as a standing lesson: a guard's mutation test must run the guard's REAL code path.**
+Feeding the matcher a hand-built string proves the matcher, not the guard.
 
-**Reachability.** Grep said five `<select>`s; only the live DOM proved they were gone.
-`document.querySelectorAll('select').length === 0` was measured on Home, Live, History and all six
-Test-room instrument tabs, with four of the five Pickers opened and inspected. The fifth
-(SessionInvestigator's three) renders `null` today — its guard needs two sessions of the SAME game
-and the owner has one each of two games. Reported unreachable-today, not claimed verified.
+## Open, and deliberately not closed here
 
-**Ship scripts.** No test runs them, so they were run. See the desk-build row in
-`docs/RELEASE_STATE.md`.
+- **#121 — Compy raises its own window ~120ms after it appears, under load.** Measured twice this
+  session against the release binary (`132ms` / `128ms`, window at `13ms`). Pre-existing on `main`;
+  this lane changed no `src-tauri`. The guard fails it correctly. Telling the two launch causes apart
+  needs an `EVENT_SYSTEM_FOREGROUND` hook, not a finer reading of a 100ms poll. Detail in
+  `docs/BACKLOG.md` under the `launch-focus-guard` row. **Do not close this with a skip.**
+- **C-17b** — the 12 recorded mono-on-prose violations are still unpaid; none was reachable on a
+  screen this lane could verify live.
+- **C-04** — renaming Home to Health/Diagnosis is still owner territory for the WORD.
+- The session's own working directory, `.claude/worktrees/data-root-integrity-432797`, **does not
+  exist on disk**. Every git command silently resolved to the main checkout, which is where this work
+  happened. If a future session is launched there, its project hooks and memory will not load
+  (global law §5) — relaunch rooted at `c:\Users\Kuya\code\sentinel`.
 
-## What the guards caught, which is the part worth keeping
+## Owner's desk right now
 
-- `border-hygiene-guard` rejected the Picker's chevron (`border-right-color`). The fix was better
-  CSS — both edges `currentColor`, recoloured by one `color` property — not an exemption.
-- The **doc-budget slack guard** failed the pre-push gate after the archiving: a budget left more
-  than 8KB above the file it governs is room banked in advance. Both budgets were ratcheted down
-  in the same commit (`122→114KB`, `57→48KB`).
-- Both new guards were **mutation-tested** before being believed (precedent 97e00fd: a guard once
-  shipped vacuous). Reintroducing a `<select>`, and adding one mono-on-prose rule, each fail with
-  a file:line message.
+`0.9.25`, embedded stamp `2f79febb`, installed silently, one installer on the Desktop, runtime proof
+`2f79febb · release · shell 0.9.25`. Self-review verdict **PASS**. His only job is to look at it.
 
-## The scope call, stated not hidden
+## Paste-ready prompt for the next session
 
-The mono census recorded **12 real violations** and this lane did **not** restyle them. None was
-reachable on a screen the lane could verify live, and an unseen type change across six surfaces is
-exactly the claim the reachability law exists to stop. Logged as **C-17b** in `docs/BACKLOG.md`
-with the ceiling pinned at 12, so the debt can only shrink.
-
-## Next
-
-1. PR #139 out of draft and merged (`scripts/work-control-gate.mjs` first — `mark-pr-ready` and
-   `merge-pr` are proof-dependent transitions).
-2. **C-17b** — 12 mono-on-prose rules; each needs its screen reached before its type changes.
-3. The conformance queue continues in `docs/BACKLOG.md`. **C-04 stays owner-gated on the word.**
+> Read `docs/RELEASE_STATE.md` (gate matrix) then `docs/BACKLOG.md`. `main` is at `2f79febb`, clean,
+> no open branch or PR; the C-10/C-11/C-17 conformance lane is merged and on the owner's desk.
+> Take the next non-gated `[ ]` item. Two things to know before you touch the launch-focus guard:
+> its runtime tier only measures when NO compy is running, and the ~120ms in-process window raise it
+> catches under load is a real, open, pre-existing defect (#121) — not a flake, and not to be
+> skipped. And when you write a guard, make its mutation test call the guard's own entry point: a
+> hand-built string proved a matcher that the real scanner never reached, and it shipped green over a
+> live blind spot.

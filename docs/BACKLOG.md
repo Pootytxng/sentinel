@@ -102,8 +102,16 @@
 - [x] **C-10 · SHIPPED** (`3eca4a9f`). Seven raw `<select>`s, four of them measured live on one Lab
   screen. Replaced by `src/design/Picker.tsx` — one portalled, token-drawn dropdown on the ARIA APG
   select-only-combobox pattern (focus stays on the trigger, so nothing can drop focus to `<body>`),
-  with full keyboard + typeahead parity. `no-raw-select-guard.test.ts` bans `<select>` under `src/`
-  with no escape hatch; mutation-tested.
+  with keyboard + typeahead parity (one deliberate divergence, named in the file: a closed native
+  `<select>` commits on an arrow key, this one opens instead). `no-raw-select-guard.test.ts` bans
+  `<select>` under `src/` with no escape hatch; mutation-tested. **Two defects an independent review
+  caught after the first push, both fixed in the same PR** (#139): the guard could not see a
+  `<select` that ENDED a line — Prettier's own output for a wrapped opening tag — because the scan
+  splits on newlines and the lookahead had no character left, and its mutation test proved a code
+  path the real sweep never ran (one scanner now serves both); and the port had turned the blank
+  `<option value="">` into a `placeholder`, which renders but cannot be chosen, silently removing the
+  only way to CLEAR a pick in the Experiment Bench. Every existing test picked forward, so nothing
+  noticed — the regression test goes backwards.
 - [x] **C-11 · SHIPPED** (`3eca4a9f`). The owner's ledger holds 64 applies, **37 of them the same
   tweak** — the 30-row tape was one sentence printed over and over. `buildLogbook` folds by `rec_id`
   into a row that sits at the latest apply and states "applied N times since <date>", and carries
