@@ -6,6 +6,37 @@
 > Current truth lives in docs/RELEASE_STATE.md — these are point-in-time records.
 
 ---
+## ARCHIVED 2026-08-19 — Cycle 2026-08-06a (moved verbatim)
+
+> Moved out of `docs/BACKLOG.md` for the byte budget when Cycle 2026-08-19a landed. Verbatim, unedited.
+
+### Cycle 2026-08-06a — ✅ IDLE COST TEARDOWN: HALF A CORE WAS DECORATION NOBODY WAS LOOKING AT (CC): `e12467f5` … `e34db6f7` (14 commits) on `claude/idle-cost-teardown-1f6a80` — PR [#76](https://github.com/Pootytxng/sentinel/pull/76), issue [#75](https://github.com/Pootytxng/sentinel/issues/75), **unmerged** (owner decides the merge)
+
+Q7 left a measured but unattributed number: the app burned **50.165% of one core sitting still**. This
+cycle attributed it. `scripts/q7-probe.mjs` gained a subtraction waterfall — disable one animation,
+re-measure, name its cost — and the answer was one line of CSS: the title foil sweep in
+`src/surfaces/ambient-hud.css` ran `background-clip: text` on an `infinite` loop, repainting the big
+room titles every frame in every room, forever, for **29.793% of a core on its own**. The rest was the
+Lenis rAF spine ticking with nobody scrolling, two aurora backdrops repainting instead of compositing,
+and three 3D scenes rendering at full cadence while parked. Re-measured on the shipped 0.9.13 build:
+**50.165% → 23.348% of one core**, a 54% cut, reproduced across two 10-minute bare runs.
+
+Two defects the self-review caught, both in the new scroll-park path, both now guarded rather than
+just fixed: the parked spine handed Lenis the entire idle gap on wake (`50e5edda` — scroll snapped),
+and a second park overwrote the first one's interval so the accumulated offset was wrong
+(`3ad6eb48` — the lane teleported). `src/design/jarvis/lenis-wake-guard.test.tsx` pins all five
+wake paths, the monotonic clock across three parks, and overlapping parks counted once each.
+
+- **Look substitution, surfaced not gated** (`OWNER_ACTION_CHECKLIST.md` §D): the foil now sweeps a bounded
+  number of times and settles, instead of forever. One-word revert is `both` → `infinite`.
+- **DISCLOSED GAP:** `TwoFuturesScene` could not be visually verified — it only mounts with a measured
+  before/after pair this desk lacks; its diff is an `aria-hidden` label only.
+- 0.9.13 declared and silently reinstalled; desk verified live at `3ad6eb48 · release`.
+
+cargo 922/922 · vitest 308 files / 3994 tests · tsc clean · doc-truth 30/30 0 drift · doc-budget PASS ·
+branch-disposition-audit 22/22 · self-reviewer **VERDICT: PASS** (round 3)
+
+---
 ## ARCHIVED 2026-08-18 — oldest steering-log cycle (moved verbatim)
 
 > Moved out of `docs/BACKLOG.md` under its own retention rule (newest ~12 cycles) to make room for

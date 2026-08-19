@@ -603,31 +603,37 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
-### Cycle 2026-08-06a — ✅ IDLE COST TEARDOWN: HALF A CORE WAS DECORATION NOBODY WAS LOOKING AT (CC): `e12467f5` … `e34db6f7` (14 commits) on `claude/idle-cost-teardown-1f6a80` — PR [#76](https://github.com/Pootytxng/sentinel/pull/76), issue [#75](https://github.com/Pootytxng/sentinel/issues/75), **unmerged** (owner decides the merge)
+### Cycle 2026-08-19a — ✅ THE SCALE WAS THE TRIGGER, NOT THE RIG (CC): `75880de1` on `perf/idle-127-ambient-raster` — issue [#127](https://github.com/Pootytxng/sentinel/issues/127)
 
-Q7 left a measured but unattributed number: the app burned **50.165% of one core sitting still**. This
-cycle attributed it. `scripts/q7-probe.mjs` gained a subtraction waterfall — disable one animation,
-re-measure, name its cost — and the answer was one line of CSS: the title foil sweep in
-`src/surfaces/ambient-hud.css` ran `background-clip: text` on an `infinite` loop, repainting the big
-room titles every frame in every room, forever, for **29.793% of a core on its own**. The rest was the
-Lenis rAF spine ticking with nobody scrolling, two aurora backdrops repainting instead of compositing,
-and three 3D scenes rendering at full cadence while parked. Re-measured on the shipped 0.9.13 build:
-**50.165% → 23.348% of one core**, a 54% cut, reproduced across two 10-minute bare runs.
+**Whole-app idle on Home: 19.632 → 10.483 percent of one core**, measured against the INSTALLED
+binary before and after (`docs/perf/raw/idle-attribution-2026-08-19-{A-rig-on,D-installed-fix}.json`).
+**#127's own diagnosis did not reproduce:** the rAF band is 0.201 points and fired ZERO frames, so
+the 3D rig was never the cost, and the dependency-bump theory is dead (r3f/drei/three identical in
+the lockfile at the baseline commit, at `efde8310`, at HEAD and on disk). The rAF registration
+stacks were already sitting in the committed evidence, unread — they name GSAP's ticker and
+`ReticleCursor`, never the rig chunk.
 
-Two defects the self-review caught, both in the new scroll-park path, both now guarded rather than
-just fixed: the parked spine handed Lenis the entire idle gap on wake (`50e5edda` — scroll snapped),
-and a second park overwrote the first one's interval so the accumulated offset was wrong
-(`3ad6eb48` — the lane teleported). `src/design/jarvis/lenis-wake-guard.test.tsx` pins all five
-wake paths, the monotonic clock across three parks, and overlapping parks counted once each.
+The cost was two decorative CSS animations that Cycle 2026-08-06a's guard treats as free because
+they animate `transform`. That cycle removed `aurora`'s blur and **left its `scale()`** — the
+multiplier went, the trigger stayed, and the layer still cost **13.257 points** (67.5% of idle) on
+`body::before`, i.e. in every room. The two `.stl-ring` pulses on every Home cost **4.156**, and
+that one is not about scale: 4.156 shipped / 4.001 promoted / 4.721 animating opacity alone —
+**running forever was the cost, not the property.** Fix: aurora drifts on pure `translate3d`; both
+always-on pings are now bounded. Two new guards, both falsified on purpose; `.stl-ring` joined the
+always-on inventory it should always have been in. `q7-probe` gained `--inject-css`, which A/B-ed
+each hypothesis against the shipped binary in ~6 min instead of a rebuild.
 
-- **Look substitution, surfaced not gated** (`OWNER_ACTION_CHECKLIST.md` §D): the foil now sweeps a bounded
-  number of times and settles, instead of forever. One-word revert is `both` → `infinite`.
-- **DISCLOSED GAP:** `TwoFuturesScene` could not be visually verified — it only mounts with a measured
-  before/after pair this desk lacks; its diff is an `aria-hidden` label only.
-- 0.9.13 declared and silently reinstalled; desk verified live at `3ad6eb48 · release`.
+**Stated scope:** the update-pill LED got the same bounded treatment but was **not separately
+measured** (no update available during the runs). Post-fix baselines are noisy, so the total is
+quotable and single-run per-animation splits are not. `ReticleCursor` writes a transform every
+frame while the pointer rests in the window — a live idle cost, not yet filed.
 
-cargo 922/922 · vitest 308 files / 3994 tests · tsc clean · doc-truth 30/30 0 drift · doc-budget PASS ·
-branch-disposition-audit 22/22 · self-reviewer **VERDICT: PASS** (round 3)
+### Cycle 2026-08-06a — ARCHIVED
+
+Moved verbatim to [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-19, byte budget). The
+idle-cost teardown that halved decorative CPU — and, per Cycle 2026-08-19a above, took out
+`aurora`'s blur while leaving its `scale()`, the part that was actually costing 13.257 points.
+
 
 ### Cycles 2026-08-04b … 2026-08-04g — ARCHIVED
 
