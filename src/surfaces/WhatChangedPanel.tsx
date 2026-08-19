@@ -600,6 +600,18 @@ export function SessionInvestigator({
   const [busy, setBusy] = useState(false);
 
   const active = groups.find((g) => g.game === game) ?? groups[0] ?? null;
+  // What each Picker SHOWS is derived from `active`, not read straight off the raw state. The
+  // effect below repairs the state, but it runs after paint: with the raw state a first render
+  // (and every render where a group set changed) draws an empty trigger for a frame. The native
+  // `<select>` this replaced never showed that, because a browser falls back to the first option
+  // when `value` matches none — the Picker deliberately shows its placeholder instead, so the
+  // fallback has to be written down here rather than inherited from the platform.
+  const starts = active?.sessions.map((s) => s.started_at) ?? [];
+  const shownGame = active?.game ?? "";
+  const shownBaseline = starts.includes(baselineAt) ? baselineAt : (starts[0] ?? "");
+  const shownCurrent = starts.includes(currentAt)
+    ? currentAt
+    : (starts[starts.length - 1] ?? "");
 
   // Keep the selections valid as the group set changes (game list, default picks).
   useEffect(() => {
@@ -610,10 +622,9 @@ export function SessionInvestigator({
       return;
     }
     if (game !== active.game) setGame(active.game);
-    const starts = active.sessions.map((s) => s.started_at);
-    if (!starts.includes(baselineAt)) setBaselineAt(starts[0]);
-    if (!starts.includes(currentAt)) setCurrentAt(starts[starts.length - 1]);
-  }, [active, game, baselineAt, currentAt]);
+    if (baselineAt !== shownBaseline) setBaselineAt(shownBaseline);
+    if (currentAt !== shownCurrent) setCurrentAt(shownCurrent);
+  }, [active, game, baselineAt, currentAt, shownBaseline, shownCurrent]);
 
   if (!on || !expert || groups.length === 0) return null;
 
@@ -657,7 +668,7 @@ export function SessionInvestigator({
             <span id="wcp-inv-game">{t("optimize.whatChangedPanel.gameLabel")}</span>
             <Picker
               labelledBy="wcp-inv-game"
-              value={game}
+              value={shownGame}
               onChange={setGame}
               options={groups.map((g) => ({ value: g.game, label: `${g.game} (${g.sessions.length})` }))}
             />
@@ -667,7 +678,7 @@ export function SessionInvestigator({
           <span id="wcp-inv-baseline">{t("optimize.whatChangedPanel.baselineGoodLabel")}</span>
           <Picker
             labelledBy="wcp-inv-baseline"
-            value={baselineAt}
+            value={shownBaseline}
             onChange={setBaselineAt}
             options={(active?.sessions ?? []).map((s) => ({
               value: s.started_at,
@@ -679,7 +690,7 @@ export function SessionInvestigator({
           <span id="wcp-inv-current">{t("optimize.whatChangedPanel.compareSuspectLabel")}</span>
           <Picker
             labelledBy="wcp-inv-current"
-            value={currentAt}
+            value={shownCurrent}
             onChange={setCurrentAt}
             options={(active?.sessions ?? []).map((s) => ({
               value: s.started_at,

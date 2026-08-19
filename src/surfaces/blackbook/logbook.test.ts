@@ -230,6 +230,25 @@ describe("buildLogbook — repeats collapse into one row (C-11)", () => {
     expect(c.at).toBe(Date.parse("2026-06-05T10:00:00Z"));
   });
 
+  it("two applies BOTH reading live is a real ledger state, and the newest of them wins", () => {
+    // Not hypothetical: `is_still_active` is a per-REC live probe, not a per-entry fact, and a
+    // re-apply does not supersede the earlier `applied` row. A drift-then-reapply cycle — the exact
+    // pattern behind the owner's 37 toggles — leaves two rows both reading active. The row must
+    // carry the NEWEST of them: that is the apply whose snapshot an undo restores from, so undoing
+    // the older one would roll the machine back to a state two applies ago.
+    const r = buildLogbook({
+      changes: [
+        change({ id: "first", applied_at: "2026-06-01T10:00:00Z", status: "applied", is_still_active: true }),
+        change({ id: "second", applied_at: "2026-06-05T10:00:00Z", status: "applied", is_still_active: true }),
+      ],
+    });
+    const c = r[0] as Extract<LogbookRecord, { kind: "change" }>;
+    expect(c.id).toBe("second");
+    expect(c.count).toBe(2);
+    expect(c.active).toBe(true);
+    expect(c.firstAt).toBe(Date.parse("2026-06-01T10:00:00Z"));
+  });
+
   it("with nothing live, the newest apply represents the group", () => {
     const r = buildLogbook({
       changes: [

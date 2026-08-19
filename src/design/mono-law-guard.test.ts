@@ -50,6 +50,15 @@ import { join } from "path";
 // It preserves every existing classification and files anything new as `UNCLASSIFIED`, which still
 // FAILS — so the regenerator can fix churn but can never bless a new mono rule on your behalf.
 
+// ── WHAT THIS DOES NOT SEE (independent review, 2026-08-18 — written down rather than implied) ──
+// `MONO_FACE` is a name list, so a mono stack that names neither `monospace` nor one of the four
+// listed families (`--x: 'JetBrains Mono';` with no generic fallback) is invisible to the fixed
+// point — as is any font applied from a `.tsx` (`style={{ fontFamily }}`, CSS-in-JS), since only
+// `.css` under `src/` is walked. Both are reachable holes, not theoretical ones. The census is
+// therefore evidence about STYLESHEETS, and a "0 undeclared" result is not a proof that no prose
+// anywhere renders in mono. Close either hole by widening the walk/regex, never by widening the
+// census.
+
 const CENSUS_PATH = join("src", "design", "mono-census.baseline.json");
 
 type Bucket = "value" | "chrome-tag" | "violation" | "UNCLASSIFIED";

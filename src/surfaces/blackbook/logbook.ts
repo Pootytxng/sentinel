@@ -137,7 +137,12 @@ function collapseRepeats(applies: LogbookChange[]): LogbookChange[] {
     }
     const newest = g.reduce((x, y) => (y.at > x.at ? y : x));
     const oldest = g.reduce((x, y) => (y.at < x.at ? y : x));
-    // Prefer the live apply; among several (which the ledger should never hold) the newest live one.
+    // Prefer the live apply; among several, the newest live one. Several IS possible, and the
+    // comment here used to claim otherwise: `is_still_active` is a live-state probe per REC
+    // (history.rs), not a per-entry fact, and re-applying does not supersede the earlier
+    // `applied` row — so a drift-then-reapply cycle, the exact pattern that produced the
+    // owner's 37 toggles, leaves two rows both reading active. Taking the newest is then the
+    // only defensible choice: it is the apply whose snapshot an undo would restore from.
     const live = g.filter((r) => r.active).reduce<LogbookChange | null>((x, y) => (x && x.at > y.at ? x : y), null);
     const rep = live ?? newest;
     out.push({ ...rep, at: newest.at, firstAt: oldest.at, count: g.length });

@@ -28,6 +28,12 @@ import { join } from "path";
 // need ever appears, deleting this file is a reviewable commit; adding `// select-allow` to a line
 // is not.
 
+// WHAT IT DOES NOT SEE (independent review, 2026-08-18): the scan is literal, so a dynamic tag
+// (`const El = "select"; <El />`) or a concatenated `createElement("sel" + "ect")` walks past it.
+// Neither is a plausible accident - this guard exists to stop the element being TYPED by habit, and
+// nobody reaches for a computed tag name by habit - but a deliberate route around a guard should be
+// documented rather than discovered, so it is written here instead of assumed absent.
+
 const ROOT = "src";
 
 /** Every .tsx under src/, minus tests — a test may legitimately assert about a `<select>` (this
