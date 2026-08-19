@@ -153,6 +153,13 @@
   `COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF=1`. Five tests pin the classifier, including the 2430ms
   reading. **Still not root-caused** — the open question is why Windows fronts the launch at all when
   the probe refuses the foreground grant.
+  **And the split immediately earned itself: under the FULL suite the same binary reads
+  `50/54 samples, first foreground 132ms, window at 13ms` — a raise 119ms AFTER the window existed,
+  which is the in-process class and fails.** So there really are two failures wearing one message:
+  idle → the OS fronts the launch before Compy has a window (not ours); under load → something
+  raises the window ~120ms after creation (ours, intermittent, reproduces only under full
+  parallelism — 3/3 green standalone). The next step is unchanged and now better aimed: instrument
+  WHAT raises the window at ~120ms, with the suite running.
   Shipped: installed build `3155c7a0`, self-review **PASS** on round 3 (round 2 caught that P2 was
   only half-fixed — a hand-added cooler still occluded the CPU — and that is now fixed and guarded).
 - [x] **The "add a part" form is mounted nowhere** — CLOSED by Train 1 (2026-08-12): the form was
