@@ -603,27 +603,25 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
-### Cycle 2026-08-19b — ✅ THE FLEET MOVED (CC): **v0.9.26 published**, source `5e64074c`, release id `372920800`
+### Cycle 2026-08-19c — ✅ THE LAST IDLE FRAME LOOP (CC): issue #142 filed and fixed
 
-PR [#141](https://github.com/Pootytxng/sentinel/pull/141) merged (`85ed8065`), then the owner's
-fleet-move GO executed end to end: transaction **9 of 9**, alias attempt 1 in 3.7s, desk and fleet
-back on the same bytes after three lanes of deliberate divergence. Testers now get the #127 idle
-fix, the canonical data root, the CPU-temp offer and the C-10/C-11/C-17 conformance work.
+`ReticleCursor` started a rAF loop on `pointerenter` and only stopped it on `pointerleave`, so a
+pointer merely RESTING inside the window held the loop open for the whole visit. Measured on the
+shipped v0.9.26 binary (`q7-probe` port + rAF-call counter in the live page): pointer outside
+**0 calls/s**, pointer motionless inside **250 calls/s** (750 frames per 3s). After #127 that was
+the app's only remaining idle frame loop. The lerp converges asymptotically and never arrives, so
+there was no self-terminating condition; it now parks at sub-pixel distance and wakes on real input.
 
-**Four latent pipeline defects surfaced, each costing a ~13-minute cycle to find, each fixed with a
-falsified guard** — same class every time: *the release `.ps1` files are executed by nothing in the
-suite.* ① a stale staged receipt bound to an older commit read as FAIL, now PENDING (`5d21961a`).
-② `Set-StrictMode -Version Latest` at file scope in a DOT-SOURCED library made the whole pipeline
-strict and killed prove on an optional hook property (`b8e31e67`). ③ a powershell-spawning test
-needed `it.runIf(windows)` (`0e885823`). ④ two guards timed out only at full parallelism
-(`b3e82e9b`).
+- [x] **#142 — park the reticle frame loop when nothing is moving.** Guard
+  `src/design/console/reticle-idle-guard.test.tsx` drives the component's real effect through a fake
+  frame scheduler (parks · wakes · still repaints the corner-spread · still cancels on leave),
+  falsified against the pre-fix source. Pixel output unchanged, so no visual review was owed.
 
-- [x] **Release preflight — fail in SECONDS, not after a verify + build.** `release.ps1` now resolves
-  the version it is about to cut BEFORE the expensive gates and refuses on a leftover local/remote
-  tag or a `RELEASE_STATE.md` still naming the previous candidate, each with the exact command that
-  clears it. The doc rule stays in one implementation: `verify-release-state.mjs --stage-candidate`.
-  Guards: `release-pipeline-guard` (ordering) + `verify-release-state-guard` (detector), both
-  disarm-probed.
+### Cycle 2026-08-19b — ARCHIVED
+
+Moved verbatim to [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-19, byte budget — the
+ledger was 0.5KB from its wall). The v0.9.26 fleet move and the four release-pipeline defects it
+surfaced.
 
 ### Cycle 2026-08-19a — ARCHIVED
 

@@ -41,11 +41,24 @@ export function ReticleCursor({
       ty = 0,
       raf = 0,
       snap = false;
+    // The lerp below converges asymptotically and NEVER arrives, so "keep going until we get there"
+    // is a loop that runs for the whole visit. Park it once the remaining distance can no longer
+    // change a rendered pixel: snap exactly onto the target, write once, stop scheduling. `wake()`
+    // restarts it for anything that actually moves something (#142, idle-cost class of #127).
+    const SETTLED = 0.05; // px — an order of magnitude below one device pixel at any sane DPR
     const loop = () => {
       rx += (tx - rx) * 0.35;
       ry += (ty - ry) * 0.35;
+      const settled = Math.abs(tx - rx) < SETTLED && Math.abs(ty - ry) < SETTLED;
+      if (settled) {
+        rx = tx;
+        ry = ty;
+      }
       el.style.transform = `translate(${rx}px, ${ry}px) translate(-50%, -50%) scale(${snap ? 1.7 : 1})`;
-      raf = requestAnimationFrame(loop);
+      raf = settled ? 0 : requestAnimationFrame(loop);
+    };
+    const wake = () => {
+      if (!raf) raf = requestAnimationFrame(loop);
     };
     let escaped = false;
     const onMove = (e: PointerEvent) => {
@@ -58,17 +71,19 @@ export function ReticleCursor({
         escaped = esc;
         el.style.opacity = escaped ? "0" : "1";
       }
+      wake();
     };
     const onEnter = () => {
       scope.classList.add("lc-has-reticle");
       el.style.opacity = "1";
-      if (!raf) raf = requestAnimationFrame(loop);
+      wake();
     };
     const onLeave = () => {
       scope.classList.remove("lc-has-reticle");
       el.style.opacity = "0";
       // Stop the rAF loop while the pointer is away — an invisible reticle must not write a
       // transform every frame for the tab's whole lifetime (idle-GPU discipline). onEnter restarts it.
+      // A RESTING pointer inside the scope is handled by the loop parking itself, above.
       if (raf) {
         cancelAnimationFrame(raf);
         raf = 0;
@@ -76,11 +91,18 @@ export function ReticleCursor({
     };
     const isTarget = (e: Event) =>
       e.target instanceof Element && !!e.target.closest("[data-target], button:not(:disabled)");
+    // A scale change is one frame of work, not a reason to hold the loop open — wake, draw, park.
     const onOver = (e: Event) => {
-      if (isTarget(e)) snap = true;
+      if (isTarget(e)) {
+        snap = true;
+        wake();
+      }
     };
     const onOut = (e: Event) => {
-      if (isTarget(e)) snap = false;
+      if (isTarget(e)) {
+        snap = false;
+        wake();
+      }
     };
 
     scope.addEventListener("pointermove", onMove);

@@ -1,59 +1,57 @@
-# Session handoff — 2026-08-19 (the fleet moved: v0.9.26 published)
+# Session handoff — 2026-08-19 (the last idle frame loop: issue #142 filed and fixed)
 
-**Lane CLOSED.** `main` is at the release commit `5e64074c`, pushed, tree clean. Nothing is
-half-finished and nothing is waiting on the owner.
+**Lane CLOSED.** Work landed on `main`, tree clean. Nothing is half-finished and nothing is waiting
+on the owner.
 
 ## What happened
 
-1. **PR [#141](https://github.com/Pootytxng/sentinel/pull/141) reviewed and merged** — real merge
-   commit `85ed8065` (not a squash, so the branch stays an ancestor and its disposition row is a
-   no-op). `docs/BRANCH_DISPOSITIONS.md` row flipped CLAIMED → MERGED in `da864d0e`.
-   **The `origin/perf/idle-127-ambient-raster` ref was NOT pruned** — the `gh api -X DELETE` was
-   denied by this session's permission layer, so the ref is still on origin and the row says so.
-2. **The owner's fleet-move GO executed end to end.** **v0.9.26 published**, source `5e64074c`,
-   release id `372920800`, published `2026-08-19T09:14:02Z`, transaction **9 of 9**, alias attempt 1
-   in 3.7s. Installer SHA-256 `4b72d681…94e98`, manifest SHA-256 `c9d33470…48b1`, both byte-matching
-   the signed receipt. Runtime-proved `5e64074c · release · shell 0.9.26` on attempt 1; one
-   installer on the Desktop. **Desk and fleet are the same bytes again.**
-3. **Four latent release-pipeline defects, found by the run and each fixed with a falsified guard.**
-   Same class every time — the release `.ps1` files are executed by nothing in the suite, so
-   production-only paths fail only in a real run, ~13 minutes at a time:
-   - `5d21961a` — a staged receipt bound to an OLDER commit reported FAIL; it now reports PENDING,
-     keyed on the receipt's own commit. Guard also pins the ordering (HEAD must resolve before the
-     signature gate, or the branch is dead code).
-   - `b8e31e67` — `Set-StrictMode -Version Latest` at **file scope** in a **dot-sourced** library
-     made release.ps1 and ship-reinstall.ps1 strict for their whole run, and prove died reading an
-     optional hook property. Strict mode now lives inside the library's functions; the guard
-     dot-sources the library and probes the caller's scope.
-   - `0e885823` — a powershell-spawning test must gate with `it.runIf(windows)`.
-   - `b3e82e9b` — two guards timed out only at full parallelism (memoized corpus walk + real
-     timeouts), reproduced twice before being called a defect, not a flake.
-4. **The deferred preflight is delivered** (`ca741e0e` filed it, this train closed it):
-   `release.ps1` now resolves the version it is about to cut **before** the expensive gates and
-   refuses in seconds on a leftover local/remote tag or a `RELEASE_STATE.md` still naming the
-   previous candidate — each message carries the exact command that clears it. The doc rule stays in
-   one implementation: `node scripts/verify-release-state.mjs --stage-candidate <version>`.
-   Guards: `release-pipeline-guard` (ordering) + `verify-release-state-guard` (detector), **both
-   disarm-probed** (4 tests fail when the check is neutered).
+**One item, taken as the recommended next step: `ReticleCursor`'s idle cost — measured on the
+previous train, filed here as [#142](https://github.com/Pootytxng/sentinel/issues/142), fixed, and
+guarded.**
+
+1. **The defect.** The reticle starts a rAF loop on `pointerenter` and only stops it on
+   `pointerleave`. Its lerp (`rx += (tx - rx) * 0.35`) converges asymptotically and never arrives, so
+   there was no self-terminating condition: a pointer merely RESTING inside the window held the loop
+   open for the whole visit, writing a `transform` every frame to produce identical pixels.
+2. **Measured on the shipped binary** — installed v0.9.26 (`5e64074c`), launched by
+   `scripts/q7-probe.mjs` with a debug port, `requestAnimationFrame` wrapped in the live page and
+   scheduling calls counted over 3s windows:
+   | pointer state | rAF calls/s |
+   |---|---|
+   | resting outside the window | 0 |
+   | resting motionless inside | **250** (750 frames / 3s) |
+   The zero row is the point: after #127 Compy's idle frame cost is genuinely zero, and this was the
+   only loop that turned it back on — which the pointer does most of the time the app is open.
+   *Instrument note:* counting `style` attribute mutations instead reads a misleading 0 — once the
+   lerp underflows, the written string is byte-identical and Blink files no mutation record while the
+   loop still runs. Count rAF scheduling calls.
+3. **The fix** (`src/design/console/ReticleCursor.tsx`): park at sub-pixel distance — snap exactly
+   onto the target, write once, stop scheduling — and `wake()` from move/enter/over/out. A snap-scale
+   change is one frame of work, not a reason to hold the loop open. Pixel output is unchanged.
+4. **The guard** (bug→guard, before the fix counted):
+   `src/design/console/reticle-idle-guard.test.tsx` drives the component's real effect through a fake
+   frame scheduler — parks · wakes · still repaints the corner-spread · still cancels on leave.
+   Falsified against the pre-fix source: the first three go red, the pointerleave test stays green.
+5. **The probe launch was put back** — `node scripts/q7-probe.mjs restore`, `debugPortStillOpen:
+   false`. No debugging port is left on the owner's desk build.
 
 ## State
 
-- `docs/RELEASE_STATE.md` stamped: published/owner-installed/manifest anchors all v0.9.26 at
-  `5e64074c`, owner decision 1 CLOSED, the desk/fleet divergence prose retired.
-  `node scripts/verify-release-state.mjs --strict` → 31 citations, 0 drift.
-- `docs/BACKLOG.md` cycle **2026-08-19b**; cycle 2026-08-19a moved verbatim to
-  `docs/BACKLOG_ARCHIVE.md` for the byte budget. `doc-budget.ps1` ALL PASS.
-- This session started **without a launch token** (not started through `compy-entry.ps1`). Branch
-  and folder were verified correct and no competing Work Control claim existed, so work proceeded;
-  no claim was registered for it.
+- `docs/BACKLOG.md` cycle **2026-08-19c**; cycle 2026-08-19b moved verbatim to
+  `docs/BACKLOG_ARCHIVE.md` — the ledger was 0.5KB from its byte wall. `doc-budget.ps1` ALL PASS.
+- `docs/RELEASE_STATE.md` untouched: no gate moved, no artifact changed. The fix is on `main` and is
+  **not in any published build** — it ships with the next release cut (current fleet: v0.9.26).
+- This session started **without a launch token** (not started through `compy-entry.ps1`). Folder
+  (`c:\Users\Kuya\code\sentinel`), branch (`main`) and a clean tree were verified, and no open
+  `work-control` issue claimed an overlapping lane, so work proceeded; no claim was registered.
 
 ## Known, not chased here
 
-- `ReticleCursor` writes a transform every frame while the pointer rests inside the window — a live
-  idle cost, measured but not filed as an issue.
+- No visual review was run: the change removes frames that produced no pixel change, so there is
+  nothing to look at (memory: dont-launch-build-without-visual-change). The fixed build's live rAF
+  number will be confirmable after the next install with the same probe expression recorded in #142.
 - #121 (in-process window raise under load) and #140 (CPU temp / PawnIO) are untouched and open.
-- The fleet is offered v0.9.26; **what is offered is not what is taken** — no tester is known to
-  have updated past 0.9.12, so this is a fourteen-number jump for whoever takes it.
+- The fleet is offered v0.9.26; no tester is known to have updated past 0.9.12.
 
 ## Next session
 

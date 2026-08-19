@@ -6,6 +6,34 @@
 > Current truth lives in docs/RELEASE_STATE.md — these are point-in-time records.
 
 ---
+## ARCHIVED 2026-08-19 — Cycle 2026-08-19b (moved verbatim)
+
+> Moved out of `docs/BACKLOG.md` for the byte budget the same day it landed — the live
+> ledger was 0.5KB from its wall when Cycle 2026-08-19c was written. Verbatim, unedited.
+
+### Cycle 2026-08-19b — ✅ THE FLEET MOVED (CC): **v0.9.26 published**, source `5e64074c`, release id `372920800`
+
+PR [#141](https://github.com/Pootytxng/sentinel/pull/141) merged (`85ed8065`), then the owner's
+fleet-move GO executed end to end: transaction **9 of 9**, alias attempt 1 in 3.7s, desk and fleet
+back on the same bytes after three lanes of deliberate divergence. Testers now get the #127 idle
+fix, the canonical data root, the CPU-temp offer and the C-10/C-11/C-17 conformance work.
+
+**Four latent pipeline defects surfaced, each costing a ~13-minute cycle to find, each fixed with a
+falsified guard** — same class every time: *the release `.ps1` files are executed by nothing in the
+suite.* ① a stale staged receipt bound to an older commit read as FAIL, now PENDING (`5d21961a`).
+② `Set-StrictMode -Version Latest` at file scope in a DOT-SOURCED library made the whole pipeline
+strict and killed prove on an optional hook property (`b8e31e67`). ③ a powershell-spawning test
+needed `it.runIf(windows)` (`0e885823`). ④ two guards timed out only at full parallelism
+(`b3e82e9b`).
+
+- [x] **Release preflight — fail in SECONDS, not after a verify + build.** `release.ps1` now resolves
+  the version it is about to cut BEFORE the expensive gates and refuses on a leftover local/remote
+  tag or a `RELEASE_STATE.md` still naming the previous candidate, each with the exact command that
+  clears it. The doc rule stays in one implementation: `verify-release-state.mjs --stage-candidate`.
+  Guards: `release-pipeline-guard` (ordering) + `verify-release-state-guard` (detector), both
+  disarm-probed.
+
+---
 ## ARCHIVED 2026-08-19 — Cycle 2026-08-19a (moved verbatim)
 
 > Moved out of `docs/BACKLOG.md` for the byte budget once v0.9.26 carried this fix to the fleet
