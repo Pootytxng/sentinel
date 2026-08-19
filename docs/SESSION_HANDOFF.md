@@ -1,67 +1,82 @@
-# Session handoff — 2026-08-18 (conformance C-10 / C-11 / C-17)
+# Session handoff — 2026-08-19 (#127 idle CPU: the scale was the trigger, not the rig)
 
-**This lane is CLOSED.** PR [#139](https://github.com/Pootytxng/sentinel/pull/139) is merged to
-`main` as `2f79febb`, the branch ref is deleted, its disposition row is dropped, and the owner's
-desk build is rebuilt from `main` and runtime-proved. Nothing here is waiting on the next session.
+**Lane OPEN.** Branch `perf/idle-127-ambient-raster`, one commit `75880de1` on top of `4d1b3d8e`.
+Not pushed, no PR yet. A `npm run tauri build` was running when this was written
+(log: scratchpad `build.log`); nothing after the build has been done.
 
-## What shipped
+## What was settled, with evidence
 
-- **C-10** — the last five native `<select>`s are gone. `src/design/Picker.tsx` is the app's one
-  dropdown (portalled, token-drawn, ARIA APG select-only-combobox); `no-raw-select-guard.test.ts`
-  bans the element under `src/`.
-- **C-11** — repeated ledger applies collapse into one row. The owner's 64 applies (37 of them the
-  same tweak) render as 17 rows instead of 30.
-- **C-17** — the mono-is-for-machine-values law is a census with a down-only ratchet, not a comment.
-- Follow-on fixes: `WhatChangedPanel` compares what the user is LOOKING at, not state one render
-  behind; the Experiment Bench can clear a pick again.
+Re-measured the owner's CURRENT desk build (`2f79febb`), not the 6-day-old `efde8310` reading #127
+was written from. Three runs, all committed:
+`docs/perf/raw/idle-attribution-2026-08-19-{A-rig-on,B-h1-no-scale,C-no-scale-anywhere}.json`.
 
-## What the review round cost, and why it was worth it
+| | A (as shipped) | B (aurora no-scale) | C (no scale anywhere) |
+|---|---|---|---|
+| total idle, % of one core | 19.632 | 9.448 | 9.421 |
+| `aurora` | 13.257 | -0.105 | 2.76 |
+| `stl-pulse` | 4.156 | 4.001 | 4.721 |
+| rAF band | 0.201 | 1.807 | 0.778 |
 
-Three independent review rounds: **REQUEST CHANGES** at `5d572db6` → APPROVE at `f88b25db` →
-APPROVE at `640fb78e`. It found three blockers, two of them in guards I had just written:
+1. **#127's headline does not reproduce.** rAF band is 0.201 points and fired ZERO frames in the
+   running phase; `concurrentLoopsAtRest: 0`. Demand mode is holding and the 3D rig is not the cost.
+2. **The growth hypothesis is dead.** `@react-three/fiber` 9.6.1, `@react-three/drei` 10.7.7,
+   `three` 0.184.0 — identical in `package-lock.json` at the 2026-08-06 baseline commit (`58a80975`),
+   at `efde8310`, at HEAD, and on disk. No bump to explain the 11x.
+3. **Nobody had read the rAF registration stacks already in the committed evidence.** They name
+   GSAP's ticker and `ReticleCursor` (`src/design/console/ReticleCursor.tsx:45-47`), both in
+   `index-*.js`. The `RigHologram-*.js` chunk appears only in the INTERVAL list. The OrbitControls
+   latch was a plausible story the evidence never supported.
+4. **Two real defects, both measured:** `aurora` (`body::before`, every room) 13.257 points, and
+   `stl-pulse` (two rings, all three Home surfaces, unconditional) 4.156.
+5. **The old guard's model is falsified.** Both animate transform only, which
+   `ambient-animation-cost-guard` treats as free. Scale is NOT free on a full-window layer (it
+   re-rasters), and on a small always-on surface running forever IS the cost — `stl-pulse` measured
+   4.156 shipped, 4.001 promoted with `will-change`, 4.721 as opacity-only. Three mechanisms, one
+   number.
 
-1. `no-raw-select-guard` could not see a `<select` that ENDED a line — the scan splits on newlines
-   and the lookahead had no character left. Its own mutation test passed because it fed the matcher
-   a string that still carried its newline: a code path the real sweep never runs. One scanner now
-   serves both, and the fix is disarm-probed.
-2. `classifyForegroundReading` — mine, from earlier the same day — split a red gate green on a false
-   premise. I claimed `firstForegroundMs < firstWindowMs` proved Windows fronted the launch. The
-   probe polls at 100ms and, inside one iteration, reads the foreground first and the window second
-   with a `Process.Refresh()` between them, so a 5ms lead is the loop's own ordering. It now needs a
-   full poll of margin and reports `unattributable-at-launch` when it cannot tell.
-3. `COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF` was documented as enforced by "the release gate". No
-   release gate exists and nothing sets it. Said plainly now, in both places.
+## What `75880de1` changes
 
-**Read that as a standing lesson: a guard's mutation test must run the guard's REAL code path.**
-Feeding the matcher a hand-built string proves the matcher, not the guard.
+- `src/App.css` — `@keyframes aurora` drops `scale(1.09)`; the drift stays as pure `translate3d`.
+- `src/surfaces/setup/SetupLauncherCard.css` — `.stl-ring` becomes `stl-pulse 2.4s ease-out 6
+  forwards` (bounded ping, parks invisible).
+- `src/design/update-pill.css` — `.v2-update-led::after` becomes 10 iterations + base `opacity: 0`.
+  **Same class, NOT separately measured** (no update was available during the runs).
+- `src/ambient-animation-cost-guard.test.ts` — guards 4 and 5, `.stl-ring` added to
+  `ALWAYS_ON_AMBIENT` (inventory gap), and a falsification suite that drives the guards' OWN
+  functions through the same `parseRules` the disk tests use.
+- `scripts/q7-probe.mjs` — new `--inject-css FILE`: A/B a CSS hypothesis against the SHIPPED binary
+  in ~6 minutes instead of a rebuild. Records the override text in the run, and throws if it did not
+  land.
 
-## Open, and deliberately not closed here
+Verified: `tsc --noEmit` clean; `vitest run --maxWorkers=4` 342 files / 5062 passed, 1 skipped.
+Disarm-probed: re-introduced both defects on disk, both guards failed with the right `file:line`,
+restored, green.
 
-- **#121 — Compy raises its own window ~120ms after it appears, under load.** Measured twice this
-  session against the release binary (`132ms` / `128ms`, window at `13ms`). Pre-existing on `main`;
-  this lane changed no `src-tauri`. The guard fails it correctly. Telling the two launch causes apart
-  needs an `EVENT_SYSTEM_FOREGROUND` hook, not a finer reading of a 100ms poll. Detail in
-  `docs/BACKLOG.md` under the `launch-focus-guard` row. **Do not close this with a skip.**
-- **C-17b** — the 12 recorded mono-on-prose violations are still unpaid; none was reachable on a
-  screen this lane could verify live.
-- **C-04** — renaming Home to Health/Diagnosis is still owner territory for the WORD.
-- The session's own working directory, `.claude/worktrees/data-root-integrity-432797`, **does not
-  exist on disk**. Every git command silently resolved to the main checkout, which is where this work
-  happened. If a future session is launched there, its project hooks and memory will not load
-  (global law §5) — relaunch rooted at `c:\Users\Kuya\code\sentinel`.
+## Exact next steps
 
-## Owner's desk right now
+1. Check the build finished, then `powershell -NoProfile -Command "& 'C:\Users\Kuya\code\sentinel\scripts\ship-reinstall.ps1'"`.
+   (Both preflights were re-read as the driver required — `ship-reinstall.ps1:118` and
+   `release.ps1:100` now resolve the data root through `Get-CanonicalCompyDataRoot`, which halts on a
+   redirected/split root before reading it, so the fail-open path is closed.)
+2. Prove live == build via the embedded stamp, never an exe hash.
+3. Re-measure: `node scripts/q7-probe.mjs attribute --port 9455 --settle 45 --phase 60 --out docs/perf/raw/idle-attribution-2026-08-19-D-installed-fix.json`.
+   Acceptance is the probe, not a feeling: the CSS band must collapse vs `...-A-rig-on.json`.
+   **Never let a run overwrite `docs/perf/raw/idle-attribution.json`** — that is the preserved
+   2026-08-06 baseline; always pass `--out`.
+4. Self-review the live Home: the aurora no longer breathes, and the setup-card rings stop after
+   ~15s and leave no visible ring. Both need eyes, not just a number.
+5. Update `docs/RELEASE_STATE.md:65` (stamp + installer SHA-256), push, PR, and comment the real
+   attribution on #127.
 
-`0.9.25`, embedded stamp `2f79febb`, installed silently, one installer on the Desktop, runtime proof
-`2f79febb · release · shell 0.9.25`. Self-review verdict **PASS**. His only job is to look at it.
+## Known, not chased here
 
-## Paste-ready prompt for the next session
-
-> Read `docs/RELEASE_STATE.md` (gate matrix) then `docs/BACKLOG.md`. `main` is at `2f79febb`, clean,
-> no open branch or PR; the C-10/C-11/C-17 conformance lane is merged and on the owner's desk.
-> Take the next non-gated `[ ]` item. Two things to know before you touch the launch-focus guard:
-> its runtime tier only measures when NO compy is running, and the ~120ms in-process window raise it
-> catches under load is a real, open, pre-existing defect (#121) — not a flake, and not to be
-> skipped. And when you write a guard, make its mutation test call the guard's own entry point: a
-> hand-built string proved a matcher that the real scanner never reached, and it shipped green over a
-> live blind spot.
+- The machine baseline is noisy: the stabilizer's 8s windows swing ~6-14 points on every run
+  (run B never settled). The ~10-point delta is far above that, but do not quote 3-decimal precision
+  from a single run.
+- `ReticleCursor` writes a transform every frame while the pointer is inside the scope, even
+  motionless, and only stops on `pointerleave`. It did not register in these runs (the pointer was
+  outside), but it is a live idle cost whenever the mouse rests over the window. Not filed yet.
+- `wt-click` (Walkthrough) and `st-pulse` (SetupTour) are the same infinite-animation class but are
+  bounded to a surface the user is actively looking at. Left alone deliberately.
+- #121 is still real and open. #140 (CPU temp / PawnIO) was not touched — one lane at a time.
+- The fleet is still three lanes behind the desk; moving it is the owner's GO and he has not given it.
