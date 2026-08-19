@@ -250,6 +250,21 @@ describe("Picker — accessibility contract", () => {
     expect(trigger()).toHaveTextContent("Nothing to pick");
   });
 
+  it("an option whose value is empty keeps the UNCHOSEN look while staying re-selectable", () => {
+    // ExperimentBench needs both: the native <select> it replaced had a blank <option value=""> the
+    // user could go back to, and it read as "nothing chosen". Carrying that entry as an option must
+    // not make the trigger look like a made choice.
+    const withEmpty: PickerOption[] = [{ value: "", label: "Choose a change…" }, ...OPTIONS];
+    const onPick = vi.fn();
+    render(<Harness initial="b" options={withEmpty} onPick={onPick} />);
+    expect(trigger().dataset.placeholder).toBe("false");
+    fireEvent.click(trigger());
+    fireEvent.click(option(""));
+    expect(onPick).toHaveBeenCalledWith("");
+    expect(trigger()).toHaveTextContent("Choose a change…");
+    expect(trigger().dataset.placeholder).toBe("true");
+  });
+
   it("shows the placeholder when the value matches no option (a stale id, not a crash)", () => {
     render(<Harness initial="gone" placeholder="Choose…" />);
     expect(trigger()).toHaveTextContent("Choose…");

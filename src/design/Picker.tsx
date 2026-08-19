@@ -337,7 +337,10 @@ export function Picker({
         disabled={disabled}
         className="pk-trigger"
         data-open={open ? "true" : "false"}
-        data-placeholder={selected ? "false" : "true"}
+        // An option whose value is the empty string IS the empty state, not a choice: a consumer that
+        // needs "back to nothing" to be re-selectable (ExperimentBench, matching the blank
+        // `<option value="">` it replaced) should not lose the dimmed unchosen look for having it.
+        data-placeholder={selected && selected.value !== "" ? "false" : "true"}
         onClick={() => (open ? setOpen(false) : openWith(selectedIndex))}
         onKeyDown={onKeyDown}
       >
