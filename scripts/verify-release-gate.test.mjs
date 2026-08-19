@@ -145,6 +145,38 @@ describe("verify-release.ps1 reports absence out loud", () => {
     expect(RUNNER_CODE).toMatch(/Test-Path -LiteralPath \$stageSignaturePath[\s\S]*Status "FAIL"/);
   });
 
+  // bug->guard, 2026-08-19. The v0.9.26 stage was hard-blocked by a file from five days earlier:
+  // the desk had rebuilt Compy_0.9.25_x64-setup.exe in place (desk and fleet diverge by design and
+  // share a version string), so v0.9.25's staged receipt still pointed at that path while its .sig
+  // matched the bytes that used to be there. The signature check did its job and said FAIL, and a
+  // FAIL here aborts release.ps1 before it can stage anything -- so a stale artifact could veto
+  // every future release until someone deleted it by hand. A receipt bound to a commit that is not
+  // HEAD is a previous candidate, which is an ABSENCE of one for this run, not a bad signature.
+  it("treats a receipt from an earlier commit as nothing staged, not as a bad signature", () => {
+    expect(RUNNER_CODE).toMatch(
+      /\$stagedCommit -and \$commit -ne "unknown" -and \$stagedCommit -ne \$commit[\s\S]{0,400}?Status "PENDING"/,
+    );
+    // The receipt's commit has to be read from the receipt itself, not assumed.
+    expect(RUNNER_CODE).toMatch(/\$stagedCommit = \[string\]\(\(ConvertFrom-Json/);
+  });
+
+  // The branch above is dead code if HEAD is resolved after the gate that consults it -- $commit
+  // would still be "unknown" there and every stale receipt would go back to failing. Order is the
+  // load-bearing part, so it is what gets asserted.
+  it("resolves HEAD before the signature gate that compares against it", () => {
+    const headResolved = RUNNER_CODE.indexOf('"rev-parse", "HEAD"');
+    const signatureGate = RUNNER_CODE.indexOf('VERIFY: updater signature verification');
+    expect(headResolved, "verify-release.ps1 no longer resolves HEAD").toBeGreaterThan(-1);
+    expect(signatureGate, "the signature gate is gone").toBeGreaterThan(-1);
+    expect(headResolved).toBeLessThan(signatureGate);
+  });
+
+  // Unchanged, and the half that must never be softened: a candidate staged for THIS commit whose
+  // signature does not verify is a real failure of the thing about to ship.
+  it("still fails a candidate that IS this run's and cannot be verified", () => {
+    expect(RUNNER_CODE).toMatch(/\$signatureFailures\.Count -gt 0[\s\S]{0,200}?Status "FAIL"/);
+  });
+
   // scripts/release.ps1 runs this script twice before it builds anything, through
   // Invoke-StreamedProcess with no -AllowExitCodes, so any nonzero exit aborts the release. At that
   // point no candidate is staged. Calling that BLOCKED would exit 3 and break staging on a clean

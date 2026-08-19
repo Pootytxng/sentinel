@@ -167,19 +167,48 @@ if (-not $nodePath) {
   }
 }
 
+# HEAD is resolved here, not beside the evidence pack below, because the signature gate has to know
+# whether a receipt sitting in the bundle directory belongs to THIS run or to an older one.
+$commit = "unknown"
+if ($gitPath) {
+  $head = Invoke-NativeProcess -Command $gitPath -ArgumentList @("-C", $repo, "rev-parse", "HEAD") -TimeoutMs 60000
+  if ($head.ExitCode -eq 0) { $commit = $head.StdOut.Trim() }
+}
+
 # Updater signature: prove the staged candidate, or say plainly that there is nothing staged to
 # prove. An absent candidate is PENDING (see the header): release.ps1 calls this script before it
 # builds, and verifies the signature itself once a candidate exists. A receipt whose detached
 # signature is missing is a real FAIL, not an absence - the artifact is there and unproved.
+#
+# SUPERSEDED IS ALSO AN ABSENCE (2026-08-19). A receipt is bound to the commit it was staged for.
+# Desk and fleet diverge by design, so the owner desk regularly runs `npm run tauri build` at the
+# SAME version string as the last release - which overwrites that release's installer in place and
+# leaves its detached .sig behind. The signature then correctly fails to verify, and this gate
+# reported FAIL: a hard block on staging the NEXT release, caused by nothing but an old file. That
+# is exactly what happened on the v0.9.26 stage (receipt for efde8310 / v0.9.25, whose installer the
+# desk rebuilt 5 days later). A receipt written for a DIFFERENT commit is not this run's candidate
+# at all, so it is PENDING for the same reason no receipt at all is. Bound to HEAD and unverifiable
+# stays FAIL - that is the case where something really is wrong with the candidate about to ship.
 Write-Host ""
 Write-Host "VERIFY: updater signature verification"
 $stageReceiptPath = Join-Path $bundleDir "release-stage.json"
 $stageSignaturePath = "$stageReceiptPath.sig"
+$stagedCommit = ""
+if (Test-Path -LiteralPath $stageReceiptPath -PathType Leaf) {
+  try {
+    $stagedCommit = [string]((ConvertFrom-Json (Get-Content -LiteralPath $stageReceiptPath -Raw)).commit)
+  } catch {
+    # An unparsable receipt is not a superseded one; fall through and let the checks below judge it.
+    $stagedCommit = ""
+  }
+}
 $tauriConfPath = Join-Path $repo "src-tauri\tauri.conf.json"
 if (-not $nodePath) {
   Add-GateResult -Name "updater signature verification" -Status "BLOCKED" -Detail "required executable 'node' was not found on PATH, so this check did not run"
 } elseif (-not (Test-Path -LiteralPath $stageReceiptPath -PathType Leaf)) {
   Add-GateResult -Name "updater signature verification" -Status "PENDING" -Detail "no staged release candidate under the nsis bundle directory, so there is no signature to verify yet; scripts/release.ps1 stages one later in the same run and verifies it there"
+} elseif ($stagedCommit -and $commit -ne "unknown" -and $stagedCommit -ne $commit) {
+  Add-GateResult -Name "updater signature verification" -Status "PENDING" -Detail "the staged receipt under the nsis bundle directory was written for commit $stagedCommit, not this run's HEAD $commit, so it belongs to a previous release and not to this run; there is nothing staged for THIS run to prove yet, and scripts/release.ps1 stages and verifies one later in the same run"
 } elseif (-not (Test-Path -LiteralPath $stageSignaturePath -PathType Leaf)) {
   Add-GateResult -Name "updater signature verification" -Status "FAIL" -Detail "a staged receipt exists at $stageReceiptPath but its detached signature is missing"
 } else {
@@ -227,12 +256,6 @@ $blocked = @($results | Where-Object { $_.status -eq "BLOCKED" })
 $pending = @($results | Where-Object { $_.status -eq "PENDING" })
 $passed = @($results | Where-Object { $_.status -eq "PASS" })
 $overall = if ($failed.Count -gt 0) { "FAIL" } elseif ($blocked.Count -gt 0) { "BLOCKED" } elseif ($pending.Count -gt 0) { "PENDING" } else { "PASS" }
-
-$commit = "unknown"
-if ($gitPath) {
-  $head = Invoke-NativeProcess -Command $gitPath -ArgumentList @("-C", $repo, "rev-parse", "HEAD") -TimeoutMs 60000
-  if ($head.ExitCode -eq 0) { $commit = $head.StdOut.Trim() }
-}
 
 $supplyChainEvidence = $null
 if (Test-Path -LiteralPath $supplyChainPath -PathType Leaf) {
