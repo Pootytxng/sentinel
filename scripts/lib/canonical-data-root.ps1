@@ -22,7 +22,15 @@
 # `scripts/data-root-guard.test.mjs` fails the build if a script composes a data path from
 # `$env:APPDATA` without coming through here.
 
-Set-StrictMode -Version Latest
+# STRICT MODE IS PER-FUNCTION, NOT FILE-SCOPE (2026-08-19). This library is DOT-SOURCED, so
+# anything it does at file scope happens in the CALLER's scope. `Set-StrictMode -Version Latest`
+# here therefore made release.ps1 and ship-reinstall.ps1 strict for their entire run -- and under
+# Latest, reading a property that does not exist is a terminating error rather than $null. That is
+# how the v0.9.26 release-prove died at stage runtime_proved: the production adapter asks
+# `if ($Context.RuntimeInspector)` to detect an OPTIONAL hook, which is absent in production and
+# present only in the sandbox harness, so the tests could never see it. A dot-sourced library does
+# not get to change how its caller's unrelated code behaves; it sets strict mode inside its own
+# functions, where it belongs. Guarded by scripts/data-root-guard.test.mjs.
 
 $script:PackagesSegment = '\appdata\local\packages\'
 
@@ -39,6 +47,7 @@ function Deny-CompyDataRoot {
     [Parameter(Mandatory)][string]$Why,
     [Parameter(Mandatory)][string]$Tail
   )
+  Set-StrictMode -Version Latest
   throw "Refused ($Phase): $Why $Tail"
 }
 
@@ -53,6 +62,7 @@ function Get-CanonicalCompyDataRoot {
   #>
   [CmdletBinding()]
   param([Parameter(Mandatory)][string]$Phase)
+  Set-StrictMode -Version Latest
 
   # Two refusal tails on purpose. A wrong-shell problem is fixed by relaunching; a real split is
   # not, and telling the operator to "just retry" would send them round a loop that cannot close.

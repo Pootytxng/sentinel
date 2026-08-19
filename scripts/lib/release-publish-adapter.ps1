@@ -180,8 +180,14 @@ function Test-BinaryContainsExactAscii {
 
 function Inspect-ProductionRuntime {
   param([Parameter(Mandatory = $true)][psobject]$Context)
-  if ($Context.RuntimeInspector) {
-    return Invoke-ReleaseScriptBlock -ScriptBlock $Context.RuntimeInspector -ArgumentList @($Context)
+  # Probed through PSObject.Properties, not read directly: this hook is OPTIONAL (the sandbox
+  # harness supplies it, production never does), and a direct read of an absent property is a
+  # terminating error the moment anything up the call chain has turned strict mode on. That is
+  # exactly what killed the v0.9.26 prove run; the leak is fixed in canonical-data-root.ps1, and
+  # this reads the way release-transaction.ps1 already reads its own optional context values.
+  $runtimeInspector = $Context.PSObject.Properties['RuntimeInspector']
+  if ($runtimeInspector -and $runtimeInspector.Value) {
+    return Invoke-ReleaseScriptBlock -ScriptBlock $runtimeInspector.Value -ArgumentList @($Context)
   }
   # The journal never decides this verdict. A proof that just completed in this process is valid;
   # otherwise an exact installed payload is subjected to a fresh live mounted-shell proof below.

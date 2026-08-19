@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "fs";
+import { spawnSync } from "node:child_process";
 import { join } from "path";
 
 // DATA-ROOT GUARD (#130, 2026-08-18).
@@ -139,6 +140,37 @@ describe("data-root guard: the persistence root is resolved in one place", () =>
       /fn dispatch_rollback\(\s*_?root: &crate::data_root::MutationRoot/,
     );
   });
+
+  // bug->guard, 2026-08-19. This library is DOT-SOURCED, so its file scope IS the caller's scope.
+  // `Set-StrictMode -Version Latest` at file scope therefore made release.ps1 and ship-reinstall.ps1
+  // strict for their whole run, and under Latest a read of a property that does not exist is a
+  // terminating error instead of $null. The release pipeline probes optional context values that
+  // way in a dozen places, so the v0.9.26 release-prove died at stage runtime_proved on
+  // `$Context.RuntimeInspector` -- a hook only the sandbox harness supplies, which is why every
+  // test passed. The rule: a dot-sourced library sets strict mode inside its own functions, never
+  // at file scope, because it does not get to change how its caller's unrelated code behaves.
+  it("dot-sourcing the preflight does not make the CALLER strict", () => {
+    if (process.platform !== "win32") return;
+    const text = readFileSync(join(SCRIPTS, "lib", "canonical-data-root.ps1"), "utf8");
+    const fileScopeStrict = /^Set-StrictMode/m.test(text);
+    expect(fileScopeStrict, "Set-StrictMode is back at file scope, where it leaks into the caller").toBe(false);
+    expect(text, "the library must still be strict INSIDE its functions").toMatch(/^  Set-StrictMode -Version Latest$/m);
+
+    // Behavioural, because the static half above can be satisfied by a library that is simply not
+    // strict anywhere. This is the exact shape that failed: dot-source, then read an absent
+    // property the way the release adapter does.
+    const probe = spawnSync(
+      "powershell.exe",
+      [
+        "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command",
+        ". '" + join(SCRIPTS, "lib", "canonical-data-root.ps1") + "'; " +
+          "$o = [pscustomobject]@{ A = 1 }; " +
+          "try { if ($o.Missing) { 'TRUTHY' } else { 'FALSY' } } catch { 'THREW' }",
+      ],
+      { encoding: "utf8", shell: false, windowsHide: true },
+    );
+    expect((probe.stdout || "").trim(), `powershell said: ${probe.stdout} ${probe.stderr}`).toBe("FALSY");
+  }, 120_000);
 
   it("both release preflights prove the root before reading it", () => {
     for (const script of [join(SCRIPTS, "release.ps1"), join(SCRIPTS, "ship-reinstall.ps1")]) {
