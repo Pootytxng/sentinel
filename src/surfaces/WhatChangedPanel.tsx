@@ -628,13 +628,16 @@ export function SessionInvestigator({
 
   if (!on || !expert || groups.length === 0) return null;
 
+  // Compares what the user is LOOKING AT. The raw state is one render behind after a group switch,
+  // so reading it here would let the button's enabled-ness — and, in that window, the comparison
+  // itself — belong to the previous game while the pickers already show the new one.
   const run = () => {
-    if (!baselineAt || !currentAt) return;
+    if (!shownBaseline || !shownCurrent) return;
     setBusy(true);
     setOutcome(null);
     invoke<WhatChangedOutcome>("what_changed_between", {
-      baselineStartedAt: baselineAt,
-      currentStartedAt: currentAt,
+      baselineStartedAt: shownBaseline,
+      currentStartedAt: shownCurrent,
     })
       .then((o) => setOutcome(o))
       .catch(() => setOutcome(null)) // fetch failure → no report; never a fabricated one
@@ -648,7 +651,7 @@ export function SessionInvestigator({
       avg: s.avg_fps.toFixed(1),
     });
 
-  const sameSession = baselineAt === currentAt;
+  const sameSession = shownBaseline === shownCurrent;
 
   return (
     <div className={`wcp-investigate${arcV2 ? " arc-v2" : ""}`}>
@@ -702,7 +705,7 @@ export function SessionInvestigator({
           type="button"
           className="wcp-inv-run"
           onClick={run}
-          disabled={busy || sameSession || !baselineAt || !currentAt}
+          disabled={busy || sameSession || !shownBaseline || !shownCurrent}
         >
           {busy
             ? t("optimize.whatChangedPanel.comparingEllipsis")
