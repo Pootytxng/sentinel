@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "fs";
 import { spawnSync } from "node:child_process";
+import { windows, WINDOWS_ONLY } from "./lib/windows-only.mjs";
 import { join } from "path";
 
 // DATA-ROOT GUARD (#130, 2026-08-18).
@@ -149,8 +150,7 @@ describe("data-root guard: the persistence root is resolved in one place", () =>
   // `$Context.RuntimeInspector` -- a hook only the sandbox harness supplies, which is why every
   // test passed. The rule: a dot-sourced library sets strict mode inside its own functions, never
   // at file scope, because it does not get to change how its caller's unrelated code behaves.
-  it("dot-sourcing the preflight does not make the CALLER strict", () => {
-    if (process.platform !== "win32") return;
+  it.runIf(windows)(`dot-sourcing the preflight does not make the CALLER strict ${WINDOWS_ONLY}`, () => {
     const text = readFileSync(join(SCRIPTS, "lib", "canonical-data-root.ps1"), "utf8");
     const fileScopeStrict = /^Set-StrictMode/m.test(text);
     expect(fileScopeStrict, "Set-StrictMode is back at file scope, where it leaks into the caller").toBe(false);
