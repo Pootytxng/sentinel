@@ -1,4 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// GATE RELIABILITY (2026-08-19): this file reads 200+ shipped files off disk. Building the corpus
+// once (see collect() below) cut it from ~8s to ~5s, but under the pre-push gate's full
+// parallelism disk contention still puts it near the 15s default -- which is a statement about
+// machine load, not about the copy being scanned. Raising it changes nothing this guard asserts.
+vi.setConfig({ testTimeout: 60_000 });
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 
@@ -80,15 +86,23 @@ const SKIP_FILE = /\.(test|spec)\.[tj]sx?$/;
 // Greppable on purpose: `git grep outbound-claim-allow` lists every exemption in the repo.
 const ALLOW_MARKER = "outbound-claim-allow";
 
+// GATE RELIABILITY (2026-08-19): two tests ask for this corpus and each one rebuilt it -- a full
+// walk of docs/, site/, site-app/ and every committed evidence dump, then a read of 200+ files,
+// done twice. In isolation that was ~8s of a 15s timeout; under the pre-push gate's full
+// parallelism it went OVER and failed the push twice with nothing wrong in the repo. Building it
+// once does NOT narrow what is scanned: the corpus assertions below still pin the exact files by
+// name, so a shrunk corpus fails them. (readdir's withFileTypes would remove the per-entry stat
+// too, but this repo ships no @types/node and the shimmed fs types reject the option.)
+let corpusCache: string[] | null = null;
+
 function collect(): string[] {
+  if (corpusCache) return corpusCache;
   const out: string[] = [];
   const walk = (dir: string) => {
     for (const name of readdirSync(dir)) {
       if (name.startsWith("_")) continue; // local scratch
       const rel = dir === "." ? name : join(dir, name);
-      let st;
-      try { st = statSync(rel); } catch { continue; }
-      if (st.isDirectory()) {
+      if (statIsDir(rel)) {
         if (!EXCLUDE_DIRS.has(name)) walk(rel);
         continue;
       }
@@ -99,7 +113,14 @@ function collect(): string[] {
   };
   walk(".");
   for (const f of DISTRIBUTION_FILES) if (existsSync(f) && !out.includes(f)) out.push(f);
+  corpusCache = out;
   return out;
+}
+
+// statSync throws on a vanished or unreadable entry; a walk that dies on one is a guard that stops
+// guarding, so an unreadable path is simply not a directory to descend into.
+function statIsDir(rel: string): boolean {
+  try { return statSync(rel).isDirectory(); } catch { return false; }
 }
 
 // Engineering comments legitimately say "zero outbound" about ONE module (BlackBox, hardware.rs)

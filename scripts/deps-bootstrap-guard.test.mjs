@@ -28,7 +28,14 @@
 //
 // The behavioural half needs Windows PowerShell; the static half does not and runs everywhere.
 
-import { describe, expect, it, beforeAll, afterAll } from "vitest";
+import { describe, expect, it, beforeAll, afterAll, vi } from "vitest";
+
+// GATE RELIABILITY (2026-08-19): every behavioural test below spawns powershell.exe, which runs
+// `npm ls` against a real fixture tree. That is seconds of process + disk work per test even on an
+// idle machine, and the pre-push gate runs this file alongside 341 others at full parallelism --
+// where it blew the 15s default twice in a row and failed a push that had nothing wrong with it.
+// The timeout is not the assertion; raising it changes nothing about what these tests prove.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 import { windows, WINDOWS_ONLY } from "./lib/windows-only.mjs";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
@@ -215,3 +222,4 @@ describe("the probe cannot quietly become an answer that is always yes", () => {
     expect(helper).toMatch(/finally/);
   });
 });
+
