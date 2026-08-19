@@ -25,12 +25,12 @@
 <!-- latest_release_version is enforced by check (1) to equal src-tauri/tauri.conf.json's version, so it
      means "the version THIS TREE is configured to build" — NOT "the newest published release".
      Published truth is carried separately by published_release_* below. Do not conflate them. -->
-<!-- STATE:source_main_commit=2f79febb -->
+<!-- STATE:source_main_commit=5d21961a -->
 <!-- STATE:latest_release_version=0.9.25 -->
-<!-- STATE:candidate_version=0.9.25 -->
+<!-- STATE:candidate_version=0.9.26 -->
 <!-- STATE:candidate_branch=main -->
-<!-- STATE:candidate_published=yes-published -->
-<!-- STATE:candidate_installed=yes-owner-desk-only -->
+<!-- STATE:candidate_published=no-preparing -->
+<!-- STATE:candidate_installed=no-not-yet -->
 <!-- STATE:aborted_source_only_release=v0.9.9-664aa5e -->
 <!-- STATE:v0910_release_debris=deleted-2026-07-28 -->
 <!-- STATE:v0910_source_tag=92c7608-preserved -->
@@ -209,7 +209,18 @@ regex ends the section at the first zulu letter it meets - issue #123 has the fi
 deferred look (the mid-apply consent panel, unreachable at 9/9-applied) transfers to the first real
 apply, not to a decision.
 
-1. **Candidate v0.9.25 publish GO/NO-GO - CLOSED 2026-08-13, published 22:34Z, transaction 9 of 9.**
+1. **Candidate v0.9.26 publish GO/NO-GO - GO GIVEN 2026-08-19 in chat ("the fleet-move GO"), OPEN until the transaction closes.**
+   The fleet has been three lanes behind the
+   desk since v0.9.25 (published `efde8310`) while the desk ran unsigned builds carrying the
+   data-root resolver, the CPU-temp offer, the C-10/C-11/C-17 conformance work and the #127 idle-CPU
+   fix. This candidate re-cuts from `main` with the signing key and closes that gap. What the owner
+   is saying yes to, in his words back to him: testers get a build that costs about half as much CPU
+   sitting idle, a front door that answers what is wrong with the PC, CPU temperature out from
+   behind Advanced, and a Trust Ledger that can no longer split across two folders. The GO covers
+   the publish; it does not waive any gate, and the transaction still has to close 9 of 9 on its own
+   evidence.
+
+2. **Candidate v0.9.25 publish GO/NO-GO - CLOSED 2026-08-13, published 22:34Z, transaction 9 of 9.**
    (Date-first, no zulu suffix, per #123.) Two defects neither the suite nor a reviewer caught, both
    found by people: the owner reported v0.9.24 "runs a lot slower than before", and tester Jaikaran
    reported on v0.9.12 that written feedback vanishes when he leaves Settings - still reproducible in
