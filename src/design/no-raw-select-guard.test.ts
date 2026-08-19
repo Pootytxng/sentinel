@@ -51,28 +51,38 @@ function sourceFiles(dir: string): string[] {
 /** JSX `<select>` / `<select ...>` and `React.createElement("select", ...)`. Built from RegExp
  *  literals' own `.source` rather than a hand-escaped string: a sibling guard reported green over
  *  nine live violations because a heredoc ate one backslash level on the way in (2026-08-18). */
-const JSX_SELECT = new RegExp([/<select(?=[\s/>])/.source].join("|"), "g");
+const JSX_SELECT = new RegExp([/<select(?=[\s/>]|$)/.source].join("|"), "g");
+// `|$` is load-bearing, and it is the bug an independent review caught on 2026-08-18: the scan
+// runs line by line, so a Prettier-wrapped opening tag whose line ENDS at `<select` had no next
+// character left for the lookahead to see, and walked straight past the guard. The original
+// mutation test missed it because it fed the matcher a string that still carried its newline —
+// a code path `violations()` never takes. Both are fixed: one scanner, fed the same way by both.
 const CREATE_ELEMENT_SELECT = new RegExp(
   [/createElement\(\s*["']select["']/.source].join("|"),
   "g",
 );
 
-function violations(): { file: string; line: number; text: string }[] {
-  const out: { file: string; line: number; text: string }[] = [];
-  for (const file of sourceFiles(ROOT)) {
-    // Strip comments so a `<select>` NAMED in prose (this file's own header, Picker.tsx's) is not a
-    // violation. The law is about what renders, not about what we are allowed to say.
-    const raw = readFileSync(file, "utf8");
-    const src = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    src.split(String.fromCharCode(10)).forEach((line, i) => {
-      JSX_SELECT.lastIndex = 0;
-      CREATE_ELEMENT_SELECT.lastIndex = 0;
-      if (JSX_SELECT.test(line) || CREATE_ELEMENT_SELECT.test(line)) {
-        out.push({ file, line: i + 1, text: line.trim() });
-      }
-    });
-  }
+/** The ONE scanner. Both the repo sweep and the mutation tests below go through this, so a test
+ *  can never prove a code path the real sweep does not run. */
+function scanSource(raw: string): { line: number; text: string }[] {
+  // Strip comments so a `<select>` NAMED in prose (this file's own header, Picker.tsx's) is not a
+  // violation. The law is about what renders, not about what we are allowed to say.
+  const src = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const out: { line: number; text: string }[] = [];
+  src.split(String.fromCharCode(10)).forEach((line, i) => {
+    JSX_SELECT.lastIndex = 0;
+    CREATE_ELEMENT_SELECT.lastIndex = 0;
+    if (JSX_SELECT.test(line) || CREATE_ELEMENT_SELECT.test(line)) {
+      out.push({ line: i + 1, text: line.trim() });
+    }
+  });
   return out;
+}
+
+function violations(): { file: string; line: number; text: string }[] {
+  return sourceFiles(ROOT).flatMap((file) =>
+    scanSource(readFileSync(file, "utf8")).map((hit) => ({ file, ...hit })),
+  );
 }
 
 describe("no raw OS <select> inside the custom UI (C-10)", () => {
@@ -88,17 +98,20 @@ describe("no raw OS <select> inside the custom UI (C-10)", () => {
   // A guard that only ever passes is not evidence that it works (the mutation-testing law, applied
   // to the guard itself). These prove the matcher actually fires on the shapes it claims to catch.
   it("its matcher fires on the shapes it claims to catch", () => {
+    const nl = String.fromCharCode(10);
     const cases = [
       `<select className="x">`,
       `<select>`,
-      `<select`.concat(String.fromCharCode(10)), // attributes wrapped onto following lines
+      // Prettier's output for a long opening tag: the line ENDS at the tag name. This is the shape
+      // that used to escape, so it is fed in exactly as a file would carry it — as source with
+      // newlines, scanned by the same function that sweeps the repo.
+      [`<select`, `  className="x"`, `>`].join(nl),
+      [`  <select`, `    value={v}`, `  >`].join(nl),
       `React.createElement("select", null)`,
       `createElement('select', {})`,
     ];
     for (const c of cases) {
-      JSX_SELECT.lastIndex = 0;
-      CREATE_ELEMENT_SELECT.lastIndex = 0;
-      expect(JSX_SELECT.test(c) || CREATE_ELEMENT_SELECT.test(c), c).toBe(true);
+      expect(scanSource(c).length, c).toBeGreaterThan(0);
     }
   });
 
@@ -109,11 +122,11 @@ describe("no raw OS <select> inside the custom UI (C-10)", () => {
       `<SelectableRow />`,
       `aria-selected="true"`,
       `document.querySelectorAll("select")`,
+      // The near-miss of the `|$` fix: a line that ends mid-word is still not a tag.
+      `const kind = pickerSelect`,
     ];
     for (const c of cases) {
-      JSX_SELECT.lastIndex = 0;
-      CREATE_ELEMENT_SELECT.lastIndex = 0;
-      expect(JSX_SELECT.test(c) || CREATE_ELEMENT_SELECT.test(c), c).toBe(false);
+      expect(scanSource(c), c).toEqual([]);
     }
   });
 

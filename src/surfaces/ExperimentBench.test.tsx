@@ -250,6 +250,34 @@ describe("ExperimentBench (armed)", () => {
     expect(screen.getByText(/244/)).toBeInTheDocument(); // baseline avg fps
   });
 
+  // bug->guard (independent review, 2026-08-18): the C-10 port first carried the empty entry as the
+  // Picker's `placeholder`, which is not an option and so cannot be chosen. That silently removed
+  // the `<select>`'s blank `<option value="">` — the only way back out of a pick — and no test
+  // noticed, because every test only ever picks FORWARD. This one goes back.
+  it("the empty entry is re-selectable, and choosing it clears the pick and the simulator card", async () => {
+    state.gate = true;
+    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.sessions = [VALORANT_SESSION];
+    state.sim = WORTH_TESTING_SIM;
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-bench");
+
+    const trigger = await pickChange("test-rec");
+    expect(await screen.findByText("Worth testing")).toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    const empty = await waitFor(() => {
+      const el = document.querySelector('[role="listbox"] [data-value=""]');
+      expect(el, "the empty entry is not in the list at all").not.toBeNull();
+      return el as HTMLElement;
+    });
+    fireEvent.click(empty);
+
+    await waitFor(() => expect(screen.queryByText("Worth testing")).toBeNull());
+    expect(trigger).not.toHaveTextContent("Test tweak");
+    expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
+  });
+
   // The regression test for the CI failure itself, run under the condition that produced it: the
   // initial ledger reads land LATE, so the picker is still disabled when a test first reaches it.
   // This is what a loaded runner does to this component. Before the fix the change event vanished

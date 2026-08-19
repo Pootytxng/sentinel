@@ -143,16 +143,22 @@
   window, not silencing the reading.
   **2026-08-18 (later, this lane): a DIFFERENT signature, and it is now split from the one above.**
   Reproduced 3/3 against the 0.9.25 desk build with VS Code holding the foreground: `55/55 samples,
-  first foreground 7ms, first window 12ms` — the foreground was taken 5ms BEFORE Compy had a window
-  to raise, so nothing in-process can have done it. That is the system-level fronting the guard's own
-  comments already record twice ("a fix that does not (and cannot) close it"; "the granted
-  configuration is unpassable by ANY correct app"), and it had never been measured before because
-  every earlier run SKIPPED — a compy was running each time. `classifyForegroundReading` now splits
-  the two by the probe's own timings: an at-or-after-window raise (the 2430ms reading above) stays a
-  hard failure, a before-window fronting is reported UNMEASURABLE by name and still fails under
-  `COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF=1`. Five tests pin the classifier, including the 2430ms
-  reading. **Still not root-caused** — the open question is why Windows fronts the launch at all when
-  the probe refuses the foreground grant.
+  first foreground 7ms, first window 12ms`, and it had never been measured before because every
+  earlier run SKIPPED — a compy was running each time. **The first reading of this was wrong and an
+  independent review caught it the same day:** it was written up as proof that Windows fronted the
+  launch before Compy had a window, i.e. not ours. It proves no such thing. The probe polls at
+  100ms and, inside one iteration, reads the foreground FIRST and the window SECOND with a
+  `Process.Refresh()` in between, so a 5ms "foreground first" lead is the loop's own ordering. An
+  in-process raise that beat the first sample produces an identical reading. `classifyForegroundReading`
+  now compares the two with a margin of one poll: more than one interval past the window is an
+  in-process raise and a hard failure (the 2430ms and 132ms readings), anything inside one poll is
+  reported `unattributable-at-launch` — UNMEASURABLE by name, claiming nothing about cause. Nine
+  tests pin it, including a drift pin against the probe's declared interval.
+  `COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF=1` refuses that skip; **nothing in the repo sets it today**
+  (an earlier comment claimed "the release gate does" — it does not exist), so it is a by-hand
+  switch until a release gate is built. **Still not root-caused, and now honestly bounded:** telling
+  the two causes apart at launch needs a finer instrument — an `EVENT_SYSTEM_FOREGROUND` hook that
+  records each foreground change with its source — not a finer reading of a 100ms poll.
   **And the split immediately earned itself: under the FULL suite the same binary reads
   `50/54 samples, first foreground 132ms, window at 13ms` — a raise 119ms AFTER the window existed,
   which is the in-process class and fails.** So there really are two failures wearing one message:

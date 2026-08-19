@@ -95,8 +95,12 @@ function Measure-Foreground {
     everTookForeground     = ($owned -gt 0)
     firstForegroundMs      = $firstMs
     # When the target FIRST had a main window, on the same sampling clock as firstForegroundMs.
-    # firstForegroundMs < firstWindowMs means the foreground moved to the target BEFORE it had any
-    # window to steal with — that is Windows fronting a fresh launch (issue #121), not the app.
+    # COMPARE THESE ONLY WITH A MARGIN OF ONE $IntervalMs. Within a single iteration the foreground
+    # is read first and the window second, with a Process.Refresh() (slow, heuristic) in between, so
+    # a few-ms "foreground first" lead is this loop's own ordering, not the machine's. A gap larger
+    # than one interval is real: that is a raise well after the window existed. Anything smaller
+    # cannot tell an in-process raise apart from Windows fronting a fresh launch (issue #121) -- an
+    # earlier reader of this field claimed it could, and was wrong (corrected 2026-08-18).
     firstWindowMs          = $firstWindowMs
     sawWindow              = $sawWindow
     sawVisibleWindow       = $sawVisibleWindow

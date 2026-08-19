@@ -32,8 +32,11 @@ import "./Picker.css";
 // focus on the trigger for the whole interaction: the active option is carried by
 // `aria-activedescendant` instead of by moving focus into the list. There is no focus to restore on
 // close, so the class of bug where a dropdown closes and focus lands on `<body>` cannot happen.
-// Full keyboard parity with the native control it replaces, typeahead included — a keyboard user
-// must not pay for the visual fix.
+// Keyboard parity with the native control it replaces, typeahead included — a keyboard user must
+// not pay for the visual fix. ONE deliberate divergence, so "parity" is not read as absolute: on a
+// closed native <select>, an arrow key changes the value on the spot; here it opens the list and
+// moves a highlight instead, and nothing commits until Enter. That is the APG pattern, and it is
+// the safer one beside an Apply button — see the Tab note further down for the same reasoning.
 
 export type PickerOption = {
   value: string;
@@ -196,10 +199,8 @@ export function Picker({
         return;
       }
     }
-    // A single repeated character also matches the option we are already on (native behaviour).
-    if (from >= 0 && options[from] && !options[from].disabled && options[from].label.toLowerCase().startsWith(q)) {
-      if (open) setActive(from);
-    }
+    // No trailing "also match where we already are" case: the loop's last turn (`n === length`)
+    // wraps back to `from` itself, so the option under the cursor is already the last one tried.
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {

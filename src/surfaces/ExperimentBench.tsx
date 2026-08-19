@@ -401,9 +401,16 @@ export default function ExperimentBench() {
               labelledBy="exp-pick-label"
               value={pickId}
               disabled={busy || simBusy}
-              placeholder={t("lab.experimentBench.chooseChange")}
               onChange={(v) => runSim(v)}
-              options={options.map((r) => ({ value: r.id, label: r.title }))}
+              // The empty entry is a real, re-selectable option rather than a `placeholder`, because
+              // that is what the `<select>` this replaced had: its blank `<option value="">` was how
+              // a user backed out of a pick, and `runSim("")` still clears the pick, the sim and the
+              // error. Carried as a placeholder it would show once and never be reachable again —
+              // a one-way door where the old control had a door (caught in review, 2026-08-18).
+              options={[
+                { value: "", label: t("lab.experimentBench.chooseChange") },
+                ...options.map((r) => ({ value: r.id, label: r.title })),
+              ]}
             />
           </div>
           {options.length === 0 && (
