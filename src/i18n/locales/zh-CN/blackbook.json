@@ -90,7 +90,8 @@
       "stillOn": "仍在生效",
       "rolledBack": "已撤销",
       "noLongerActive": "已不再生效",
-      "restoresPre": "撤销后将恢复为"
+      "restoresPre": "撤销后将恢复为",
+      "repeat": "自 {{since}} 起已应用 {{times}} 次"
     },
     "sessionBody": {
       "titlePre": "你玩了",

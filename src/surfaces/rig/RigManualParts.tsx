@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 // is the first (or only) thing a test/entry point loads — mirrors RigViewer's own `import "../../i18n"`.
 import "../../i18n";
 import { useManualParts, MANUAL_KINDS, manualKindLabel, type ManualKind } from "./manual-parts";
+import { Picker } from "../../design/Picker";
 import "./RigViewer.css";
 
 // The "add a part" form + user-added list, extracted VERBATIM from RigViewer's !chromeless chrome
@@ -31,18 +32,15 @@ export function RigManualParts() {
     <div className="rig-manual">
       <form className="rig-manual-form" onSubmit={onAdd}>
         <span className="rig-manual-label">{t("gaming.rigViewer.addPartLabel")}</span>
-        <select
+        {/* C-10: was a native <select> — its OS-drawn menu was the one light-grey Windows surface
+            left in the Lab. Same options, same order, drawn from our own tokens. */}
+        <Picker
           className="rig-manual-select"
           value={kind}
-          onChange={(e) => setKind(e.target.value as ManualKind)}
+          onChange={(v) => setKind(v as ManualKind)}
           aria-label={t("gaming.rigViewer.componentTypeAriaLabel")}
-        >
-          {MANUAL_KINDS.map((k) => (
-            <option key={k.value} value={k.value}>
-              {manualKindLabel(k.value, t)}
-            </option>
-          ))}
-        </select>
+          options={MANUAL_KINDS.map((k) => ({ value: k.value, label: manualKindLabel(k.value, t) }))}
+        />
         <input
           className="rig-manual-input"
           value={name}

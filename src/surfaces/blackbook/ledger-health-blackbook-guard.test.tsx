@@ -81,12 +81,15 @@ const change = (over: Partial<LogbookChange> = {}): LogbookChange => ({
   kind: "change",
   at: Date.parse("2026-07-10T12:00:00Z"),
   id: "c1",
+  recId: "hags",
   title: "Enable Hardware-accelerated GPU scheduling",
   active: true,
   rolledBack: false,
   restoresLabel: "Off",
   appliedLabel: "On",
   payoffLabel: "Input latency",
+  count: 1,
+  firstAt: Date.parse("2026-07-10T12:00:00Z"),
   ...over,
 });
 const session = (over: Partial<LogbookSession> = {}): LogbookSession => ({

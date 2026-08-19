@@ -151,12 +151,12 @@ afterEach(() => {
   state.loadGate = null;
 });
 
-// bug->guard (CI run 30696118350, 2026-08-01). Setting a <select> to a value that has NO matching
-// <option> yet is a SILENT NO-OP: the value stays "", React's onChange runs with "", no simulation
-// is requested, and nothing anywhere reports a problem.
+// bug->guard (CI run 30696118350, 2026-08-01). Picking a value that has NO matching option yet is a
+// SILENT NO-OP: the value stays "", onChange runs with "", no simulation is requested, and nothing
+// anywhere reports a problem.
 //
 // Every test here used to fire straight at whatever `findByRole("combobox")` returned. That resolves
-// the moment the SELECT exists — but the OPTIONS arrive separately, from get_recommendations. On a
+// the moment the control exists — but the OPTIONS arrive separately, from get_recommendations. On a
 // fast desk both land in the same microtask flush, so it worked ~always. On a loaded CI runner the
 // recs landed after the change event, the pick evaporated, and the failure surfaced three lines
 // down as "Unable to find an element with the text: Worth testing" — accusing the assertion instead
@@ -167,15 +167,24 @@ afterEach(() => {
 // So: wait for the option to EXIST, wait for the control to be USABLE, fire, then PROVE the pick
 // took. Do not replace this with a bare fireEvent — the entire failure mode is that a bare
 // fireEvent looks like it worked.
+//
+// C-10 (2026-08-18): the control is `design/Picker.tsx` now, not a native <select>, so the shape of
+// each step changed while every step survived. The options live in a listbox PORTALLED to <body>,
+// addressed by `[data-value]` (the replacement for `<option value>`), and the pick is proven by the
+// trigger's rendered label rather than by a form value.
 const pickChange = async (value: string) => {
-  const select = await screen.findByRole("combobox");
-  await waitFor(() =>
-    expect(select.querySelector(`option[value="${value}"]`), `no <option value="${value}"> yet`).not.toBeNull(),
-  );
-  await waitFor(() => expect(select).toBeEnabled());
-  fireEvent.change(select, { target: { value } });
-  await waitFor(() => expect(select).toHaveValue(value));
-  return select;
+  const trigger = await screen.findByRole("combobox");
+  await waitFor(() => expect(trigger).toBeEnabled());
+  fireEvent.click(trigger);
+  const option = await waitFor(() => {
+    const el = document.querySelector(`[role="listbox"] [data-value="${value}"]`);
+    expect(el, `no option [data-value="${value}"] yet`).not.toBeNull();
+    return el as HTMLElement;
+  });
+  const label = option.textContent ?? "";
+  fireEvent.click(option);
+  await waitFor(() => expect(trigger).toHaveTextContent(label));
+  return trigger;
 };
 
 describe("ExperimentBench (dark)", () => {
@@ -241,6 +250,34 @@ describe("ExperimentBench (armed)", () => {
     expect(screen.getByText(/244/)).toBeInTheDocument(); // baseline avg fps
   });
 
+  // bug->guard (independent review, 2026-08-18): the C-10 port first carried the empty entry as the
+  // Picker's `placeholder`, which is not an option and so cannot be chosen. That silently removed
+  // the `<select>`'s blank `<option value="">` — the only way back out of a pick — and no test
+  // noticed, because every test only ever picks FORWARD. This one goes back.
+  it("the empty entry is re-selectable, and choosing it clears the pick and the simulator card", async () => {
+    state.gate = true;
+    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.sessions = [VALORANT_SESSION];
+    state.sim = WORTH_TESTING_SIM;
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-bench");
+
+    const trigger = await pickChange("test-rec");
+    expect(await screen.findByText("Worth testing")).toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    const empty = await waitFor(() => {
+      const el = document.querySelector('[role="listbox"] [data-value=""]');
+      expect(el, "the empty entry is not in the list at all").not.toBeNull();
+      return el as HTMLElement;
+    });
+    fireEvent.click(empty);
+
+    await waitFor(() => expect(screen.queryByText("Worth testing")).toBeNull());
+    expect(trigger).not.toHaveTextContent("Test tweak");
+    expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
+  });
+
   // The regression test for the CI failure itself, run under the condition that produced it: the
   // initial ledger reads land LATE, so the picker is still disabled when a test first reaches it.
   // This is what a loaded runner does to this component. Before the fix the change event vanished
@@ -258,8 +295,10 @@ describe("ExperimentBench (armed)", () => {
     // bare fireEvent here would set nothing. If this ever stops being true the repro has rotted and
     // the test below is passing for the wrong reason. Held open by the gate rather than by a timer,
     // so a slow machine cannot let the reads land early and turn the precondition into a race.
-    const select = await screen.findByRole("combobox");
-    expect(select.querySelector('option[value="test-rec"]')).toBeNull();
+    const trigger = await screen.findByRole("combobox");
+    fireEvent.click(trigger);
+    expect(document.querySelector('[role="listbox"] [data-value="test-rec"]')).toBeNull();
+    fireEvent.click(trigger); // close again, so pickChange below drives it from the same state
 
     landTheReads();
     await pickChange("test-rec");
@@ -314,8 +353,9 @@ describe("ExperimentBench (armed)", () => {
     expect(screen.queryByText("Worth testing")).toBeNull();
     // Start is no longer offered for an already-applied change (the blocked verdict hides the launcher CTA).
     expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
-    // …and the pick stayed visible in the dropdown instead of silently disappearing.
-    expect(screen.getByRole("combobox")).toHaveValue("test-rec");
+    // …and the pick stayed visible in the dropdown instead of silently disappearing. The Picker
+    // (C-10) shows the chosen option's LABEL on its trigger; there is no form value to read.
+    expect(screen.getByRole("combobox")).toHaveTextContent("Test tweak");
   });
 
   // Guard for Measurement-2.0 Task A (2026-07-18): the refocus fix (W2) only fires on OS focus /
@@ -343,7 +383,7 @@ describe("ExperimentBench (armed)", () => {
     await waitFor(() => expect(screen.getByText("Already configured")).toBeInTheDocument());
     expect(screen.queryByText("Worth testing")).toBeNull();
     expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
-    expect(screen.getByRole("combobox")).toHaveValue("test-rec");
+    expect(screen.getByRole("combobox")).toHaveTextContent("Test tweak");
   });
 
   it("with a running experiment: shows the running panel with conclude + restore", async () => {

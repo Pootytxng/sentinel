@@ -48,12 +48,15 @@ const change = (over: Partial<LogbookChange> = {}): LogbookChange => ({
   kind: "change",
   at: Date.parse("2026-07-10T12:00:00Z"),
   id: "c1",
+  recId: "hags",
   title: "Enable Hardware-accelerated GPU scheduling",
   active: true,
   rolledBack: false,
   restoresLabel: "Off",
   appliedLabel: "On",
   payoffLabel: "Input latency",
+  count: 1,
+  firstAt: Date.parse("2026-07-10T12:00:00Z"),
   ...over,
 });
 const session = (over: Partial<LogbookSession> = {}): LogbookSession => ({
@@ -173,6 +176,31 @@ describe("BlackbookConsole — the tape renders each real record kind", () => {
     expect(deltas.length).toBe(1); // only the one with a same-game prior
     expect(deltas[0].textContent).toContain("+30 fps vs last");
     expect(container.textContent).not.toContain("(s)");
+  });
+});
+
+describe("BlackbookConsole — a collapsed repeat states its count (C-11)", () => {
+  // buildLogbook folds repeats; this pins that the row SAYS so. A fold the UI doesn't narrate is
+  // just missing history — the count and the start date are what make the collapse honest.
+  it("count > 1 renders 'applied N times since <date>'; count 1 renders no such note", () => {
+    useReduced();
+    const { container } = mountConsole([
+      change({
+        count: 37,
+        firstAt: Date.parse("2026-05-28T10:00:00Z"),
+        title: "Enable Windows Game Mode",
+      }),
+    ]);
+    expect(container.querySelectorAll(".bc-tape .bc-row").length).toBe(1);
+    const note = container.querySelector(".bc-repeat");
+    expect(note).not.toBeNull();
+    expect(note!.textContent).toContain("37");
+    // The date is locale-formatted; assert the month it must name rather than a fixed string.
+    expect(note!.textContent).toMatch(/May/);
+
+    cleanup();
+    const single = mountConsole([change()]).container;
+    expect(single.querySelector(".bc-repeat")).toBeNull();
   });
 });
 

@@ -131,7 +131,11 @@
   font-size: var(--type-label);
   color: var(--ix-text-3, var(--muted, #8b95a8));
 }
-.rig-manual-select,
+/* `.rig-manual-select` is now a LAYOUT hook on the Picker's root (C-10); the control's own look
+   lives in design/Picker.css. Re-declaring border/background here would frame the trigger twice. */
+.rig-manual-select {
+  flex: 0 0 auto;
+}
 .rig-manual-input {
   font: inherit;
   font-size: var(--type-label);
@@ -145,7 +149,6 @@
   min-width: 0;
   flex: 1 1 160px;
 }
-.rig-manual-select:focus-visible,
 .rig-manual-input:focus-visible {
   outline: 2px solid var(--ix-accent, var(--accent));
   outline-offset: 1px;

@@ -232,6 +232,51 @@ const MAXIMIZED_STATE = {
   },
 };
 
+/** The probe's sampling interval, from `scripts/lib/foreground-probe.ps1` (`[int]$IntervalMs`).
+ *  It is this file's RESOLUTION: two events stamped less than one interval apart were seen in the
+ *  same poll, so their order is an artifact of the poll, not a measurement. Pinned against drift by
+ *  a test below. */
+const PROBE_INTERVAL_MS = 100;
+
+/**
+ * WHICH reading is this? The count alone cannot say, and answering it is the difference between a
+ * guard and a coin flip.
+ *
+ * `"in-process-raise"` — Compy reached the foreground at least one full sample AFTER its own window
+ * existed. Nothing outside the process is plausibly waiting 100ms+ past window creation to front a
+ * launch; this is something in-process raising it (tao's `set_focus` raises through
+ * `AttachThreadInput`, which fronts a window even where the OS would refuse). ALWAYS a failure. The
+ * 2026-08-18 readings in BACKLOG — 2430ms, and 132ms with the window at 13ms — classify here.
+ *
+ * `"unattributable-at-launch"` — Compy owned the foreground, but the foreground and the window were
+ * first seen within ONE sample of each other. **This does not prove Windows fronted it**, which is
+ * what an earlier version of this function claimed and an independent review correctly rejected on
+ * 2026-08-18: inside one loop iteration the probe reads the foreground first and the window second,
+ * with a `Process.Refresh()` (a slow, heuristic API) in between, so a few-ms "foreground first" lead
+ * is exactly what a fast launch produces whichever cause is real. The honest statement is that at
+ * 100ms polling the two causes are indistinguishable — an in-process raise that beat the first
+ * sample looks identical to Windows fronting a fresh launch (issue #121). So the run is reported
+ * UNMEASURABLE by name, the same category as "a compy was already running", rather than being
+ * scored either way. Closing this needs a finer instrument (an event hook on
+ * EVENT_SYSTEM_FOREGROUND), not a finer opinion — logged in BACKLOG under #121.
+ *
+ * This is deliberately NOT a skip of the failing case: the in-process class stays a hard zero, the
+ * discriminator is a real margin rather than a sign test, and an unmeasurable run says so by name.
+ */
+export function classifyForegroundReading({
+  ownedForegroundSamples,
+  firstForegroundMs,
+  firstWindowMs,
+  intervalMs = PROBE_INTERVAL_MS,
+}) {
+  if (!ownedForegroundSamples) return "clean";
+  // Owning the foreground with no timing for it is a broken reading; treat it as the defect, never
+  // as an excuse.
+  if (firstForegroundMs < 0 || firstWindowMs < 0) return "in-process-raise";
+  if (firstForegroundMs - firstWindowMs > intervalMs) return "in-process-raise";
+  return "unattributable-at-launch";
+}
+
 /**
  * The newest built compy.exe that is actually NEWER than the sources this file pins. A stale binary
  * would let the runtime tier "prove" a fix that predates the code -- the same false-pass, one level
@@ -329,6 +374,74 @@ function measureLaunch({ args = [], env = {}, seconds = 6, savedState = null, gr
   return { ...parsed.initial, launchedPid: parsed.launchedPid, rightsGranted: parsed.rightsGranted };
 }
 
+// The discriminator decides whether a reading is Compy's fault or the OS's, so it gets its own
+// tests: it runs on every machine (no binary, no Windows needed), and a one-line "simplification"
+// that classified the raise case as unmeasurable would disarm the runtime tier completely.
+describe("the foreground reading is classified by CAUSE, not by count", () => {
+  it("a clean run is clean", () => {
+    expect(classifyForegroundReading({ ownedForegroundSamples: 0, firstForegroundMs: -1, firstWindowMs: 40 })).toBe(
+      "clean",
+    );
+  });
+
+  it("the 2026-08-18 BACKLOG reading — foreground 2430ms, long after the window — still FAILS", () => {
+    // The reading the owner's note protects: "First foreground at ~2.4s is a window being RAISED
+    // well after creation, and if that is real under load it is real while the owner games."
+    expect(
+      classifyForegroundReading({ ownedForegroundSamples: 33, firstForegroundMs: 2430, firstWindowMs: 120 }),
+    ).toBe("in-process-raise");
+  });
+
+  it("the 2026-08-18 loaded-gate reading — foreground 132ms, window 13ms — still FAILS", () => {
+    // 119ms apart is more than a poll, so the ordering is real and not the probe's own.
+    expect(
+      classifyForegroundReading({ ownedForegroundSamples: 50, firstForegroundMs: 132, firstWindowMs: 13 }),
+    ).toBe("in-process-raise");
+  });
+
+  it("a raise INSIDE one poll of the window is unmeasurable, in either order", () => {
+    // The correction an independent review forced on 2026-08-18. The probe reads the foreground
+    // first and the window second within one iteration, with a Process.Refresh() in between, so a
+    // few-ms lead either way is the poll's artifact. Both of these are the same non-answer.
+    for (const [fg, win] of [
+      [7, 12], // the idle desk reading, reproduced 3/3
+      [12, 12],
+      [95, 12], // still inside one 100ms poll
+    ]) {
+      expect(
+        classifyForegroundReading({ ownedForegroundSamples: 55, firstForegroundMs: fg, firstWindowMs: win }),
+        `${fg}/${win}`,
+      ).toBe("unattributable-at-launch");
+    }
+  });
+
+  it("one poll past the window is the boundary, and the far side of it FAILS", () => {
+    const win = 12;
+    expect(
+      classifyForegroundReading({ ownedForegroundSamples: 55, firstForegroundMs: win + 100, firstWindowMs: win }),
+    ).toBe("unattributable-at-launch");
+    expect(
+      classifyForegroundReading({ ownedForegroundSamples: 55, firstForegroundMs: win + 101, firstWindowMs: win }),
+    ).toBe("in-process-raise");
+  });
+
+  it("its resolution is the probe's ACTUAL sampling interval, not a number that drifted from it", () => {
+    // The whole classification hangs off this constant matching the PowerShell default. If someone
+    // retunes the probe and not this file, every reading is scored against the wrong resolution.
+    const ps1 = readFileSync(join(ROOT, "scripts", "lib", "foreground-probe.ps1"), "utf8");
+    const declared = /\[int\]\$IntervalMs\s*=\s*(\d+)/.exec(ps1);
+    expect(declared, "foreground-probe.ps1 no longer declares an IntervalMs default").toBeTruthy();
+    expect(Number(declared[1])).toBe(PROBE_INTERVAL_MS);
+  });
+
+  it("owning the foreground with no timing recorded is treated as the raise class", () => {
+    // Missing evidence never buys the app the benefit of the doubt.
+    expect(
+      classifyForegroundReading({ ownedForegroundSamples: 9, firstForegroundMs: -1, firstWindowMs: -1 }),
+    ).toBe("in-process-raise");
+  });
+});
+
 describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegroundWindow", () => {
   // DECLARATION ORDER IS LOAD-BEARING. The self-test runs FIRST because Windows holds a foreground
   // LOCK for a moment after the active window changes, and each measurement ends by killing the app
@@ -381,7 +494,9 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
       // relaunch case: a granted launch measures the OS, not Compy. Measured 2026-08-13 on an
       // input-idle desk: with the grant taken, Windows fronted the fresh launch at/before its first
       // window against a binary with no activation path left in it, so the granted configuration is
-      // unpassable by ANY correct app. Ungranted is also the condition production has -- npm,
+      // unpassable by ANY correct app. (That "at/before its first window" reading is the same
+      // comparison classifyForegroundReading now calls unattributable inside one poll -- the case
+      // for going ungranted does not rest on it: production launches ungranted either way.) Ungranted is also the condition production has -- npm,
       // vitest, and ship-reinstall all launch from background tooling. The steal class this guard
       // exists for (tao's set_focus, which raises through AttachThreadInput even where the OS would
       // not) needs no grant, so it still fails this test. The opt-in COMPY_PROVE_ACTIVATION
@@ -400,14 +515,30 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
       // occurrence has to explain itself.
       //
       // firstForegroundMs vs firstWindowMs is the discriminator the probe already returns and this
-      // assertion used to discard. Foreground BEFORE the window exists is Windows fronting a fresh
-      // launch (issue #121, system-level, outside this process). Foreground well AFTER the window
-      // exists is something in-process raising it, which is the steal this guard is for. Both fail
-      // -- the count stays `toBe(0)` and nothing here is softened -- but they have different owners.
+      // assertion used to discard. A foreground that arrives a full poll or more AFTER the window is
+      // something in-process raising it -- the steal this guard is for, and a hard zero. A
+      // foreground and a window first seen in the SAME poll are not separable at this resolution and
+      // are reported as unmeasurable; see classifyForegroundReading for why the sign of that
+      // difference proves nothing.
       const raise =
         result.firstForegroundMs >= 0 && result.firstWindowMs >= 0
           ? `${result.firstForegroundMs - result.firstWindowMs}ms after its window appeared`
           : "with no window timing recorded";
+      const verdict = classifyForegroundReading(result);
+      if (verdict === "unattributable-at-launch" && !process.env.COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF) {
+        // Reported by name, never silently. Reproduced 3/3 on 2026-08-18 against the 0.9.25 desk
+        // build with VS Code holding the foreground: first foreground 7ms, first window 12ms — one
+        // poll apart, so the order between them is the poll's, not the machine's.
+        console.log(
+          `[launch-focus-guard] quiet-launch reading UNMEASURABLE: the foreground (${result.firstForegroundMs}ms) ` +
+            `and the window (${result.firstWindowMs}ms) were first seen inside one ${PROBE_INTERVAL_MS}ms poll ` +
+            `(${result.ownedForegroundSamples}/${result.samples} samples), which cannot tell an in-process raise ` +
+            `apart from Windows fronting a fresh launch (issue #121). This run did not measure Compy either way. ` +
+            `Refuse the skip with COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF=1 — nothing in the repo sets it today, ` +
+            `it is the by-hand switch for a run that must not be allowed to skip.`,
+        );
+        return;
+      }
       expect(
         result.ownedForegroundSamples,
         `Compy held the foreground for ${result.ownedForegroundSamples}/${result.samples} samples ` +

@@ -17,6 +17,7 @@ import type {
 import { useIntelligenceFlag } from "../design/use-hud";
 import { useExpertView } from "../design/use-expert-view";
 import { SectionLabel, VerdictBand, COMPARABILITY_TONE } from "./measurement-chrome";
+import { Picker } from "../design/Picker";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../i18n";
@@ -599,6 +600,18 @@ export function SessionInvestigator({
   const [busy, setBusy] = useState(false);
 
   const active = groups.find((g) => g.game === game) ?? groups[0] ?? null;
+  // What each Picker SHOWS is derived from `active`, not read straight off the raw state. The
+  // effect below repairs the state, but it runs after paint: with the raw state a first render
+  // (and every render where a group set changed) draws an empty trigger for a frame. The native
+  // `<select>` this replaced never showed that, because a browser falls back to the first option
+  // when `value` matches none — the Picker deliberately shows its placeholder instead, so the
+  // fallback has to be written down here rather than inherited from the platform.
+  const starts = active?.sessions.map((s) => s.started_at) ?? [];
+  const shownGame = active?.game ?? "";
+  const shownBaseline = starts.includes(baselineAt) ? baselineAt : (starts[0] ?? "");
+  const shownCurrent = starts.includes(currentAt)
+    ? currentAt
+    : (starts[starts.length - 1] ?? "");
 
   // Keep the selections valid as the group set changes (game list, default picks).
   useEffect(() => {
@@ -609,20 +622,22 @@ export function SessionInvestigator({
       return;
     }
     if (game !== active.game) setGame(active.game);
-    const starts = active.sessions.map((s) => s.started_at);
-    if (!starts.includes(baselineAt)) setBaselineAt(starts[0]);
-    if (!starts.includes(currentAt)) setCurrentAt(starts[starts.length - 1]);
-  }, [active, game, baselineAt, currentAt]);
+    if (baselineAt !== shownBaseline) setBaselineAt(shownBaseline);
+    if (currentAt !== shownCurrent) setCurrentAt(shownCurrent);
+  }, [active, game, baselineAt, currentAt, shownBaseline, shownCurrent]);
 
   if (!on || !expert || groups.length === 0) return null;
 
+  // Compares what the user is LOOKING AT. The raw state is one render behind after a group switch,
+  // so reading it here would let the button's enabled-ness — and, in that window, the comparison
+  // itself — belong to the previous game while the pickers already show the new one.
   const run = () => {
-    if (!baselineAt || !currentAt) return;
+    if (!shownBaseline || !shownCurrent) return;
     setBusy(true);
     setOutcome(null);
     invoke<WhatChangedOutcome>("what_changed_between", {
-      baselineStartedAt: baselineAt,
-      currentStartedAt: currentAt,
+      baselineStartedAt: shownBaseline,
+      currentStartedAt: shownCurrent,
     })
       .then((o) => setOutcome(o))
       .catch(() => setOutcome(null)) // fetch failure → no report; never a fabricated one
@@ -636,7 +651,7 @@ export function SessionInvestigator({
       avg: s.avg_fps.toFixed(1),
     });
 
-  const sameSession = baselineAt === currentAt;
+  const sameSession = shownBaseline === shownCurrent;
 
   return (
     <div className={`wcp-investigate${arcV2 ? " arc-v2" : ""}`}>
@@ -648,43 +663,49 @@ export function SessionInvestigator({
       </div>
 
       <div className="wcp-inv-controls">
+        {/* C-10: three native <select>s became Pickers. `<label>` became a plain wrapper with an
+            explicit `labelledBy` — implicit label association only reaches real form controls, and
+            the Picker's trigger is a button. */}
         {groups.length > 1 && (
-          <label className="wcp-inv-field">
-            <span>{t("optimize.whatChangedPanel.gameLabel")}</span>
-            <select value={game} onChange={(e) => setGame(e.target.value)}>
-              {groups.map((g) => (
-                <option value={g.game} key={g.game}>
-                  {g.game} ({g.sessions.length})
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="wcp-inv-field">
+            <span id="wcp-inv-game">{t("optimize.whatChangedPanel.gameLabel")}</span>
+            <Picker
+              labelledBy="wcp-inv-game"
+              value={shownGame}
+              onChange={setGame}
+              options={groups.map((g) => ({ value: g.game, label: `${g.game} (${g.sessions.length})` }))}
+            />
+          </div>
         )}
-        <label className="wcp-inv-field">
-          <span>{t("optimize.whatChangedPanel.baselineGoodLabel")}</span>
-          <select value={baselineAt} onChange={(e) => setBaselineAt(e.target.value)}>
-            {active?.sessions.map((s) => (
-              <option value={s.started_at} key={s.started_at}>
-                {optLabel(s)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="wcp-inv-field">
-          <span>{t("optimize.whatChangedPanel.compareSuspectLabel")}</span>
-          <select value={currentAt} onChange={(e) => setCurrentAt(e.target.value)}>
-            {active?.sessions.map((s) => (
-              <option value={s.started_at} key={s.started_at}>
-                {optLabel(s)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="wcp-inv-field">
+          <span id="wcp-inv-baseline">{t("optimize.whatChangedPanel.baselineGoodLabel")}</span>
+          <Picker
+            labelledBy="wcp-inv-baseline"
+            value={shownBaseline}
+            onChange={setBaselineAt}
+            options={(active?.sessions ?? []).map((s) => ({
+              value: s.started_at,
+              label: optLabel(s),
+            }))}
+          />
+        </div>
+        <div className="wcp-inv-field">
+          <span id="wcp-inv-current">{t("optimize.whatChangedPanel.compareSuspectLabel")}</span>
+          <Picker
+            labelledBy="wcp-inv-current"
+            value={shownCurrent}
+            onChange={setCurrentAt}
+            options={(active?.sessions ?? []).map((s) => ({
+              value: s.started_at,
+              label: optLabel(s),
+            }))}
+          />
+        </div>
         <button
           type="button"
           className="wcp-inv-run"
           onClick={run}
-          disabled={busy || sameSession || !baselineAt || !currentAt}
+          disabled={busy || sameSession || !shownBaseline || !shownCurrent}
         >
           {busy
             ? t("optimize.whatChangedPanel.comparingEllipsis")

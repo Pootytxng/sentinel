@@ -95,7 +95,8 @@
       "stillOn": "still on",
       "rolledBack": "rolled back",
       "noLongerActive": "no longer active",
-      "restoresPre": "undo returns to "
+      "restoresPre": "undo returns to ",
+      "repeat": "applied {{times}} times since {{since}}"
     },
     "sessionBody": {
       "titlePre": "You played ",

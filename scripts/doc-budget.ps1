@@ -33,22 +33,26 @@ $budgets = @{
 #   20 KB = Anthropic's published "keep CLAUDE.md under ~200 lines" (code.claude.com/docs/en/costs)
 #           at this repo's ~110 bytes/line. CLAUDE.md is auto-loaded on EVERY session boot, so it is
 #           the most expensive file in the repo per byte.
-# Three docs are ABOVE their derived target today. They are seeded at a RATCHET - their size on
+# The two big ledgers sit at a RATCHET rather than at their derived target - the size they were on
 # 2026-08-18 - so any further growth fails immediately, rather than at the target, because shipping
 # a red gate is worse than shipping a working ratchet, and because bringing them down is a CONTENT
 # decision owned by whoever writes them, not a mechanical trim (bytes are content; re-wrapping a
 # long line does not remove any). The budget may only ever move DOWN. Lower each as its pass lands:
-#   docs/BACKLOG.md        122KB -> 120KB   RATCHETED DOWN 2026-08-18 from 142KB: the 2026-07-27a
-#                                           ... 2026-08-04a steering-log cycles moved to
-#                                           docs/archive/BACKLOG_STEERING_LOG_2026-07-27_TO_2026-08-04.md.
-#                                           Next blocks: the A4 advisory recount ~20KB and the
-#                                           conformance queue, both largely shipped.
-#   docs/RELEASE_STATE.md   57KB ->  48KB   the CURRENT STATE section alone is 31KB at 328 bytes/line;
-#                                           superseded snapshot prose belongs in docs/archive/
+#   docs/BACKLOG.md        114KB            RATCHETED DOWN TWICE on 2026-08-18: 142KB -> 122KB when the
+#                                           2026-07-27a ... 2026-08-04a steering-log cycles moved to
+#                                           docs/archive/, then 122KB -> 114KB when 2026-08-04b ...
+#                                           2026-08-04g followed them. It is now UNDER its 120KB
+#                                           derived target, so the ratchet is the live ceiling and
+#                                           the target no longer buys any room.
+#   docs/RELEASE_STATE.md   48KB            AT TARGET 2026-08-18 (was 57KB): the desk-build lineage
+#                                           back to 0.9.18 moved to RELEASE_STATE_HISTORY.md. The
+#                                           budget follows the file down the same day it shrinks -
+#                                           a budget padded to buy room in advance is the thing the
+#                                           slack guard in doc-budget-guard.test.mjs exists to catch.
 # (CLAUDE.md is handled by its own older guard - see the note under the table.)
 $byteBudgets = @{
-  "docs/BACKLOG.md" = 124928
-  "docs/RELEASE_STATE.md" = 58368
+  "docs/BACKLOG.md" = 116736
+  "docs/RELEASE_STATE.md" = 49152
   "docs/OWNER_ACTION_CHECKLIST.md" = 40960
   "src-tauri/CLAUDE.md" = 10240
 }

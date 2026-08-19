@@ -103,6 +103,7 @@
     "baselineSavedPrefix": "Baseline saved",
     "baselineSavedPre": "Change a setting (or use",
     "measureThisTweakButton": "Measure this tweak",
+    "tweakSelectAriaLabel": "Tweak to measure",
     "baselineSavedMid": "below), then hit",
     "baselineSavedPost": "to see the effect.",
     "clearBaselineButton": "Clear baseline",
