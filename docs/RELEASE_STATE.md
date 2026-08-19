@@ -26,7 +26,7 @@
      means "the version THIS TREE is configured to build" — NOT "the newest published release".
      Published truth is carried separately by published_release_* below. Do not conflate them. -->
 <!-- STATE:source_main_commit=5d21961a -->
-<!-- STATE:latest_release_version=0.9.25 -->
+<!-- STATE:latest_release_version=0.9.26 -->
 <!-- STATE:candidate_version=0.9.26 -->
 <!-- STATE:candidate_branch=main -->
 <!-- STATE:candidate_published=no-preparing -->
