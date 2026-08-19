@@ -233,6 +233,34 @@ const MAXIMIZED_STATE = {
 };
 
 /**
+ * WHICH reading is this? The count alone cannot say, and answering it is the difference between a
+ * guard and a coin flip.
+ *
+ * `"in-process-raise"` — Compy reached the foreground AT OR AFTER its own window existed. That is
+ * the steal this guard exists for (tao's `set_focus` raises through `AttachThreadInput`, which
+ * front a window even where the OS would refuse). ALWAYS a failure. The 2026-08-18 reading in
+ * BACKLOG — first foreground at 2430ms, long after creation — classifies here and still fails.
+ *
+ * `"os-fronted-before-window"` — Compy owned the foreground BEFORE it had a window to raise, so
+ * nothing in-process can have done it: Windows fronted a fresh launch. This file has recorded that
+ * class twice already ("a second, system-level fronting that this fix does not (and cannot)
+ * close"; "the granted configuration is unpassable by ANY correct app"). Once the OS has fronted
+ * the launch, a later in-process raise is invisible — the app is already foreground — so the run
+ * did not measure Compy at all. That is an UNMEASURABLE run, the same category as "a compy was
+ * already running", and it is reported as one instead of being scored as a defect Compy did not
+ * commit. The release gate (`COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF`) still refuses to accept it.
+ *
+ * This is deliberately NOT a skip of the failing case: the discriminator is the probe's own
+ * timings, the in-process class stays a hard zero, and an unmeasurable run says so by name.
+ */
+export function classifyForegroundReading({ ownedForegroundSamples, firstForegroundMs, firstWindowMs }) {
+  if (!ownedForegroundSamples) return "clean";
+  if (firstForegroundMs < 0) return "in-process-raise";
+  if (firstWindowMs >= 0 && firstForegroundMs < firstWindowMs) return "os-fronted-before-window";
+  return "in-process-raise";
+}
+
+/**
  * The newest built compy.exe that is actually NEWER than the sources this file pins. A stale binary
  * would let the runtime tier "prove" a fix that predates the code -- the same false-pass, one level
  * down. Returns null when there is nothing honest to measure (a clean checkout, CI, a Linux box).
@@ -329,6 +357,46 @@ function measureLaunch({ args = [], env = {}, seconds = 6, savedState = null, gr
   return { ...parsed.initial, launchedPid: parsed.launchedPid, rightsGranted: parsed.rightsGranted };
 }
 
+// The discriminator decides whether a reading is Compy's fault or the OS's, so it gets its own
+// tests: it runs on every machine (no binary, no Windows needed), and a one-line "simplification"
+// that classified the raise case as unmeasurable would disarm the runtime tier completely.
+describe("the foreground reading is classified by CAUSE, not by count", () => {
+  it("a clean run is clean", () => {
+    expect(classifyForegroundReading({ ownedForegroundSamples: 0, firstForegroundMs: -1, firstWindowMs: 40 })).toBe(
+      "clean",
+    );
+  });
+
+  it("the 2026-08-18 BACKLOG reading — foreground 2430ms, long after the window — still FAILS", () => {
+    // The reading the owner's note protects: "First foreground at ~2.4s is a window being RAISED
+    // well after creation, and if that is real under load it is real while the owner games."
+    expect(
+      classifyForegroundReading({ ownedForegroundSamples: 33, firstForegroundMs: 2430, firstWindowMs: 120 }),
+    ).toBe("in-process-raise");
+  });
+
+  it("foreground in the same millisecond as the window is still the raise class", () => {
+    // Ties go to the failing side on purpose: at equal timings the probe cannot prove the OS did it,
+    // and a guard that resolves its own ambiguity in the app's favour is not a guard.
+    expect(
+      classifyForegroundReading({ ownedForegroundSamples: 55, firstForegroundMs: 12, firstWindowMs: 12 }),
+    ).toBe("in-process-raise");
+  });
+
+  it("foreground BEFORE any window existed is the OS, not Compy", () => {
+    expect(
+      classifyForegroundReading({ ownedForegroundSamples: 55, firstForegroundMs: 7, firstWindowMs: 12 }),
+    ).toBe("os-fronted-before-window");
+  });
+
+  it("owning the foreground with no timing recorded is treated as the raise class", () => {
+    // Missing evidence never buys the app the benefit of the doubt.
+    expect(
+      classifyForegroundReading({ ownedForegroundSamples: 9, firstForegroundMs: -1, firstWindowMs: -1 }),
+    ).toBe("in-process-raise");
+  });
+});
+
 describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegroundWindow", () => {
   // DECLARATION ORDER IS LOAD-BEARING. The self-test runs FIRST because Windows holds a foreground
   // LOCK for a moment after the active window changes, and each measurement ends by killing the app
@@ -408,6 +476,19 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
         result.firstForegroundMs >= 0 && result.firstWindowMs >= 0
           ? `${result.firstForegroundMs - result.firstWindowMs}ms after its window appeared`
           : "with no window timing recorded";
+      const verdict = classifyForegroundReading(result);
+      if (verdict === "os-fronted-before-window" && !process.env.COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF) {
+        // Reported by name, never silently. Reproduced 3/3 on 2026-08-18 against the 0.9.25 desk
+        // build with VS Code holding the foreground: first foreground 7ms, first window 12ms.
+        console.log(
+          `[launch-focus-guard] quiet-launch reading UNMEASURABLE: Windows fronted the fresh launch ` +
+            `${result.firstWindowMs - result.firstForegroundMs}ms BEFORE Compy had a window ` +
+            `(${result.ownedForegroundSamples}/${result.samples} samples). Nothing in-process can raise ` +
+            `a window that does not exist, and a later raise is invisible once the OS has already fronted ` +
+            `it. Demand proof with COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF=1 (the release gate does).`,
+        );
+        return;
+      }
       expect(
         result.ownedForegroundSamples,
         `Compy held the foreground for ${result.ownedForegroundSamples}/${result.samples} samples ` +

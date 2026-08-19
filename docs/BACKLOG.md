@@ -141,6 +141,18 @@
   well after creation, and if that is real under load it is real while the owner games — the exact
   thing this guard exists to catch. Next step is instrumenting the probe to record WHAT raised the
   window, not silencing the reading.
+  **2026-08-18 (later, this lane): a DIFFERENT signature, and it is now split from the one above.**
+  Reproduced 3/3 against the 0.9.25 desk build with VS Code holding the foreground: `55/55 samples,
+  first foreground 7ms, first window 12ms` — the foreground was taken 5ms BEFORE Compy had a window
+  to raise, so nothing in-process can have done it. That is the system-level fronting the guard's own
+  comments already record twice ("a fix that does not (and cannot) close it"; "the granted
+  configuration is unpassable by ANY correct app"), and it had never been measured before because
+  every earlier run SKIPPED — a compy was running each time. `classifyForegroundReading` now splits
+  the two by the probe's own timings: an at-or-after-window raise (the 2430ms reading above) stays a
+  hard failure, a before-window fronting is reported UNMEASURABLE by name and still fails under
+  `COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF=1`. Five tests pin the classifier, including the 2430ms
+  reading. **Still not root-caused** — the open question is why Windows fronts the launch at all when
+  the probe refuses the foreground grant.
   Shipped: installed build `3155c7a0`, self-review **PASS** on round 3 (round 2 caught that P2 was
   only half-fixed — a hand-added cooler still occluded the CPU — and that is now fixed and guarded).
 - [x] **The "add a part" form is mounted nowhere** — CLOSED by Train 1 (2026-08-12): the form was
