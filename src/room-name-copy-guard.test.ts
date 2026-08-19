@@ -32,6 +32,7 @@ import { HOME_RAIL } from "./design/homeRail";
 /** Retired label → the rail id that inherited it. Renames are owner decisions, so they are named
  *  here explicitly rather than inferred; the assertion below keeps the right-hand side honest. */
 const RETIRED: Record<string, string> = {
+  Home: "home", // → "Health" (owner rename 2026-08-19, UX-1 ① third clause)
   Monitor: "play", // → "Live"   (owner rename 2026-08-12)
   Blackbook: "learn", // → "History" (owner rename 2026-08-12)
   Lab: "lab", // → "Test"    (owner rename 2026-08-12)
@@ -100,12 +101,22 @@ describe("the guard can still see (disarm proof)", () => {
     expect(stalePattern("Lab").test("back on or roll it back in the Lab — either one clears this.")).toBe(true);
     expect(stalePattern("Monitor").test("Watch one long session in Monitor — if temps climb…")).toBe(true);
     expect(stalePattern("Blackbook").test("Open Blackbook, pick the last good session")).toBe(true);
+    // Added with the 2026-08-19 Home → Health rename: the sentences that pointed at the front door.
+    expect(stalePattern("Home").test("Your memory headroom shows on the Home dashboard.")).toBe(true);
+    expect(stalePattern("Home").test("open Home and re-run the check")).toBe(true);
   });
 
   it("leaves hardware vocabulary alone — the false positives that would get it disabled", () => {
     expect(stalePattern("Monitor").test("Run HWiNFO or LibreHardwareMonitor to read live RPM")).toBe(false);
     expect(stalePattern("Monitor").test("plug the monitor into the GPU, not the motherboard")).toBe(false);
     expect(stalePattern("Monitor").test("FPS monitoring is on — you're set to measure.")).toBe(false);
+    // "Home" is also a Windows EDITION, and that shape is safely ignored (it is how the only
+    // "Home" left in the Rust tree reads — hardware.rs, the edition string).
+    expect(stalePattern("Home").test('edition: "Professional", "Home", "Enterprise"')).toBe(false);
+    // KNOWN LIMIT, recorded rather than engineered around: "the Home key" (the keyboard key) DOES
+    // trip the lead pattern. No copy in scope says it today; if some ever does, that line takes the
+    // greppable `room-name-allow` hatch. Narrowing the pattern per-word is how a guard goes blind.
+    expect(stalePattern("Home").test("press the Home key to jump to the first option")).toBe(true);
   });
 
   it("actually reaches the trees it claims to scan", () => {

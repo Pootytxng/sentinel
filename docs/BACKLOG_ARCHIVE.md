@@ -6,6 +6,70 @@
 > Current truth lives in docs/RELEASE_STATE.md — these are point-in-time records.
 
 ---
+## ARCHIVED 2026-08-19 — conformance queue: the SHIPPED rows (moved verbatim)
+
+> Moved out of `docs/BACKLOG.md` for the byte budget on 2026-08-19. The closed rows of the
+> 2026-08-18 conformance audit queue (C-05/C-19, C-06/C-08/C-09, C-10, C-11, C-17).
+> Verbatim, unedited; the queue's OPEN rows stay on the live ledger.
+
+- [x] **C-05 + C-19 · SHIPPED 2026-08-18** (`d76f753f`). First run lands on the diagnosis: the tour
+  no longer auto-opens, it is offered as a card on **all three** Home surfaces, and it has ONE name
+  ("Compy tour") instead of "Guided setup"/"Hardware tour". CPU temperature is on the default Live
+  face and on Home. Two durable corrections below (C-18, C-19) — **read them before trusting any
+  older reachability claim in this file.** Guards: `src/first-run-front-door-guard.test.ts`,
+  `src/cpu-temp-reachability-guard.test.ts`, both mutation-tested.
+- [x] **C-06 + C-08 + C-09 · SHIPPED 2026-08-18.** Plain-English copy pass and the guard that holds
+  it (`4c9e440e`); build identifiers out of consumer chrome (`6d047c2a`, `00d7020e`). Both carry a
+  self-review PASS. The durable half: `plain-language-guard` scanned 199 `.tsx?` files and NONE of
+  the 18 locale files holding the copy it exists to police — **when a decision silently reverts,
+  check the guard's FILE FILTER before its rules.** Full record: `docs/RELEASE_STATE.md` installed row.
+
+- [x] **C-10 · SHIPPED** (`3eca4a9f`). Seven raw `<select>`s, four of them measured live on one Lab
+  screen. Replaced by `src/design/Picker.tsx` — one portalled, token-drawn dropdown on the ARIA APG
+  select-only-combobox pattern (focus stays on the trigger, so nothing can drop focus to `<body>`),
+  with keyboard + typeahead parity (one deliberate divergence, named in the file: a closed native
+  `<select>` commits on an arrow key, this one opens instead). `no-raw-select-guard.test.ts` bans
+  `<select>` under `src/` with no escape hatch; mutation-tested. **Two defects an independent review
+  caught after the first push, both fixed in the same PR** (#139): the guard could not see a
+  `<select` that ENDED a line — Prettier's own output for a wrapped opening tag — because the scan
+  splits on newlines and the lookahead had no character left, and its mutation test proved a code
+  path the real sweep never ran (one scanner now serves both); and the port had turned the blank
+  `<option value="">` into a `placeholder`, which renders but cannot be chosen, silently removing the
+  only way to CLEAR a pick in the Experiment Bench. Every existing test picked forward, so nothing
+  noticed — the regression test goes backwards.
+- [x] **C-11 · SHIPPED** (`3eca4a9f`). The owner's ledger holds 64 applies, **37 of them the same
+  tweak** — the 30-row tape was one sentence printed over and over. `buildLogbook` folds by `rec_id`
+  into a row that sits at the latest apply and states "applied N times since <date>", and carries
+  the genuinely LIVE apply's id (a stale id from a superseded apply is the dangerous kind of wrong).
+  Live: 30 rows → 17.
+- [x] **C-17 · SHIPPED** (`3eca4a9f`). `mono-law-guard.test.ts` + `mono-census.baseline.json`:
+  resolves the mono **alias graph** as a fixed point (a two-token grep is dodged by the third alias),
+  then requires every one of the 224 mono rules to be declared `value` / `chrome-tag` / `violation`.
+  A **census with a ratchet, not a ban** — 61 of those rules pair mono with uppercase and are the
+  Instrument-HUD micro-label idiom the owner approved over two rounds; banning them would delete the
+  design language to enforce a comment. New mono rule ⇒ build fails until classified.
+
+---
+## ARCHIVED 2026-08-19 — Cycle 2026-08-19c (moved verbatim)
+
+> Moved out of `docs/BACKLOG.md` for the byte budget when Cycle 2026-08-19d was written
+> the same day. Verbatim, unedited.
+
+### Cycle 2026-08-19c — ✅ THE LAST IDLE FRAME LOOP (CC): issue #142 filed and fixed
+
+`ReticleCursor` started a rAF loop on `pointerenter` and only stopped it on `pointerleave`, so a
+pointer merely RESTING inside the window held the loop open for the whole visit. Measured on the
+shipped v0.9.26 binary (`q7-probe` port + rAF-call counter in the live page): pointer outside
+**0 calls/s**, pointer motionless inside **250 calls/s** (750 frames per 3s). After #127 that was
+the app's only remaining idle frame loop. The lerp converges asymptotically and never arrives, so
+there was no self-terminating condition; it now parks at sub-pixel distance and wakes on real input.
+
+- [x] **#142 — park the reticle frame loop when nothing is moving.** Guard
+  `src/design/console/reticle-idle-guard.test.tsx` drives the component's real effect through a fake
+  frame scheduler (parks · wakes · still repaints the corner-spread · still cancels on leave),
+  falsified against the pre-fix source. Pixel output unchanged, so no visual review was owed.
+
+---
 ## ARCHIVED 2026-08-19 — Cycle 2026-08-19b (moved verbatim)
 
 > Moved out of `docs/BACKLOG.md` for the byte budget the same day it landed — the live
