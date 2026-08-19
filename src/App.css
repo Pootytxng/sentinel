@@ -3589,21 +3589,10 @@ body::before {
   text-transform: uppercase;
   color: var(--faint);
 }
-.wcp-inv-field select {
+/* The three pickers here are `design/Picker.tsx` now (C-10); their look lives in Picker.css and the
+   field owns only the track width, so the trigger is not framed twice. */
+.wcp-inv-field .pk-root {
   max-width: 100%;
-  font: inherit;
-  font-size: var(--type-label);
-  color: var(--fg);
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 7px 9px;
-  cursor: pointer;
-}
-.wcp-inv-field select:hover { border-color: var(--border-strong, var(--border)); }
-.wcp-inv-field select:focus-visible {
-  outline: none;
-  border-color: var(--accent);
 }
 /* Filled accent CTA — dark ink on the bright accent fill (button-legibility guard); matches .btn. */
 .wcp-inv-run {

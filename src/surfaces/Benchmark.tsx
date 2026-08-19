@@ -7,6 +7,7 @@ import { Card, StatusPill, SectionHeader } from "../design";
 import "../i18n";
 import { Term } from "../design/Term";
 import { WhatsThis } from "../design/WhatsThis";
+import { Picker } from "../design/Picker";
 import { useLibrary } from "./library-context";
 import { useProfile } from "../hooks/use-profile";
 import { PROFILE_META, USE_PROFILES } from "../data/profile-store";
@@ -327,18 +328,17 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
         <SectionHeader title={t("gaming.benchmark.useCaseSectionTitle")} />
         <p className="bench-muted">{t("gaming.benchmark.useCaseBlurb")}</p>
         <div className="bench-tweak-pick">
-          <select
+          {/* C-10: was a native <select>. */}
+          <Picker
             className="bench-select"
             aria-label={t("gaming.benchmark.useCaseSelectAriaLabel")}
             value={profile}
-            onChange={(e) => setProfile(e.target.value as (typeof USE_PROFILES)[number])}
-          >
-            {USE_PROFILES.map((p) => (
-              <option key={p} value={p}>
-                {t(`gaming.benchmark.useCaseProfiles.${p}.label`, PROFILE_META[p].label)}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setProfile(v as (typeof USE_PROFILES)[number])}
+            options={USE_PROFILES.map((p) => ({
+              value: p,
+              label: t(`gaming.benchmark.useCaseProfiles.${p}.label`, PROFILE_META[p].label),
+            }))}
+          />
         </div>
         <p className="bench-fine">
           {t(`gaming.benchmark.useCaseProfiles.${profile}.blurb`, PROFILE_META[profile].blurb)}
@@ -476,17 +476,16 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
             </button>
             {tweaks.length > 0 && (
               <div className="bench-tweak-pick">
-                <select
+                {/* C-10: was a native <select>, and an UNNAMED one — it never carried an
+                    aria-label, so AT announced an anonymous combobox next to "Measure this tweak".
+                    The swap is where that gets fixed rather than carried forward. */}
+                <Picker
                   className="bench-select"
+                  aria-label={t("gaming.benchmark.tweakSelectAriaLabel")}
                   value={selectedTweak}
-                  onChange={(e) => setSelectedTweak(e.target.value)}
-                >
-                  {tweaks.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.title}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setSelectedTweak(v)}
+                  options={tweaks.map((tw) => ({ value: tw.id, label: tw.title }))}
+                />
                 <button
                   className="bench-btn"
                   onClick={measureTweak}

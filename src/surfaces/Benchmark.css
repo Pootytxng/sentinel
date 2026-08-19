@@ -367,15 +367,11 @@
   flex-wrap: wrap;
 }
 
+/* `.bench-select` is now a LAYOUT hook on the Picker's root (C-10); the control's own look lives in
+   design/Picker.css. Re-declaring border/background here would draw a box around the trigger's. */
 .bench-select {
-  font: inherit;
-  font-size: var(--type-label);
-  color: var(--fg);
-  background: var(--panel-2, var(--panel));
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
   max-width: 320px;
+  min-width: 200px;
 }
 
 .bench-steps {

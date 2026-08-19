@@ -53,6 +53,11 @@ const fmtWhen = (at: number): string => {
   return `${date} · ${time}`;
 };
 
+// Date only — for the "since <date>" half of a collapsed repeat row, where the clock time of the
+// FIRST of 37 applies is noise.
+const fmtDay = (at: number): string =>
+  new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
 const fmtDuration = (secs: number): string => {
   const s = Math.max(0, Math.round(secs));
   // Round to whole minutes FIRST, then split into h/m — otherwise a 59m50s session
@@ -87,6 +92,17 @@ function ChangeBody({ r }: { r: LogbookChange }) {
         ) : (
           <span className="bc-state">
             {t("blackbook.blackbookConsole.changeBody.noLongerActive")}
+          </span>
+        )}
+        {/* C-11: repeats collapsed by buildLogbook. The row states the count and when the
+            repeating started, so folding 37 rows into 1 hides nothing — it just stops the record
+            reading as a malfunction. */}
+        {r.count > 1 && (
+          <span className="bc-row-note bc-repeat">
+            {t("blackbook.blackbookConsole.changeBody.repeat", {
+              times: r.count,
+              since: fmtDay(r.firstAt),
+            })}
           </span>
         )}
         {r.payoffLabel && <span className="bc-chip">{r.payoffLabel}</span>}

@@ -1,0 +1,222 @@
+/* Picker — the app's ONE dropdown (conformance C-10). Replaces every native `<select>`, whose
+   popup Windows draws for us in a system font on a light-grey menu, out of every token's reach.
+
+   COMPY LAWS honored (same set the SegmentedControl header pins):
+   • TOKENS ONLY — every color/border/shadow resolves through the --ix-* layer via color-mix; ZERO
+     literal hex/rgb/rgba, so it recolors under Midnight/Violet/Crimson/Emerald/Hearth.
+   • TYPE — sizes come from --type-*; no literal font sizes (type-scale-guard).
+   • MONO — the trigger and the options are UI LABELS, so they are the sans face. The mono token is
+     for machine values, and this control shows neither (mono-usage-guard, C-17).
+   • MOTION — ON by default and OVERRIDES the OS; calmed ONLY inside :root[data-motion="reduced"].
+     No @media (prefers-reduced-motion) anywhere.
+   • SWEEP — no @keyframes named shimmer/sheen. The only name here is pk-list-in.
+   • BORDER HYGIENE — no side-stripe border-(left|right)-color, no border-(left|right)-width >= 2px.
+
+   The list is PORTALLED to <body> (see Picker.tsx), so its rules must not assume any ancestor —
+   it is positioned `fixed` from a measured trigger rect and inherits only from :root. */
+
+/* ── the closed control ─────────────────────────────────────────────────────── */
+.pk-root {
+  display: inline-flex;
+  min-width: 0; /* so a consumer's grid/flex track can shrink it instead of overflowing */
+}
+
+.pk-trigger {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--ix-glass-border);
+  border-radius: 10px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--ix-glass-fill) 88%, transparent) 0%,
+    var(--ix-glass-fill) 100%
+  );
+  color: var(--ix-text-1);
+  font: inherit;
+  font-size: var(--type-label);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 200ms ease,
+    background-color 200ms ease,
+    color 200ms ease;
+}
+
+.pk-trigger:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--ix-accent) 42%, var(--ix-glass-border));
+}
+
+.pk-trigger:focus-visible {
+  outline: 2px solid var(--ix-accent);
+  outline-offset: 2px;
+}
+
+/* Open reads as "this control owns the screen right now" — the same accent the list edge carries,
+   so the trigger and its list are visibly one object. */
+.pk-trigger[data-open="true"] {
+  border-color: color-mix(in srgb, var(--ix-accent) 60%, var(--ix-glass-border));
+}
+
+.pk-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Placeholder text is the "you have not chosen yet" state, and must read as quieter than a real
+   choice without dropping below the muted tier the contrast guard proves. */
+.pk-trigger[data-placeholder="true"] .pk-value {
+  color: var(--ix-text-3);
+}
+
+.pk-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A drawn chevron, not a glyph: a text arrow inherits the font stack and drew as a box under the
+   Arial fallthrough TYPE-1 removed. Two borders rotated 45deg cannot mis-render. */
+.pk-caret {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  margin-top: -3px;
+  /* Both edges take `currentColor`, so the state rules below recolor the chevron by setting ONE
+     property. `border-*-color` is also the side-stripe idiom `border-hygiene-guard` retires — a
+     chevron is a legitimate two-border shape, but there is no reason to spell it in the banned
+     dialect when `color` reads better and animates as one thing. */
+  color: var(--ix-text-2);
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition:
+    transform 220ms cubic-bezier(0.34, 1.2, 0.4, 1),
+    color 200ms ease;
+}
+
+.pk-trigger[data-open="true"] .pk-caret {
+  /* point at the list, wherever it opened */
+  transform: rotate(-135deg);
+  margin-top: 2px;
+  color: var(--ix-accent);
+}
+
+.pk-trigger:hover:not(:disabled) .pk-caret {
+  color: var(--ix-text-1);
+}
+
+/* ── the open list (portalled to <body>) ────────────────────────────────────── */
+.pk-list {
+  position: fixed;
+  /* Between the sheet scrim (1400, bento.css) and the confirm dialog (2000, ConfirmDialog.css): a
+     picker opened INSIDE a sheet must draw over it, and nothing may ever draw over the confirm —
+     that is the modal-stacking law this ladder exists for (src/modal-stacking-guard.test.ts). This
+     rule is not full-screen, so that guard does not enrol it; the ordering is deliberate anyway. */
+  z-index: 1500;
+  margin: 0;
+  padding: 5px;
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid color-mix(in srgb, var(--ix-accent) 34%, var(--ix-glass-border));
+  border-radius: 12px;
+  /* OPAQUE on purpose. The glass fill the trigger uses is translucent and relies on the room behind
+     it; this list floats over arbitrary content, and a see-through option list over a live gauge is
+     unreadable. A lifted charcoal derived from the theme's own canvas, so it still recolors. */
+  background: color-mix(in srgb, var(--ix-text-1) 7%, var(--ix-base));
+  box-shadow:
+    0 18px 48px color-mix(in srgb, var(--ix-base) 74%, transparent),
+    0 4px 14px color-mix(in srgb, var(--ix-base) 52%, transparent),
+    inset 0 1px 0 var(--ix-glass-top);
+  transform-origin: top center;
+  animation: pk-list-in 160ms cubic-bezier(0.34, 1.2, 0.4, 1);
+}
+
+.pk-list[data-above="true"] {
+  transform-origin: bottom center;
+}
+
+@keyframes pk-list-in {
+  from {
+    opacity: 0;
+    transform: scaleY(0.94) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.pk-option {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--ix-text-2);
+  font-size: var(--type-label);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.pk-option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The keyboard/pointer highlight. One highlight at a time — it follows arrow keys AND the pointer,
+   so the two input modes never show two different "this one" marks. */
+.pk-option[data-active="true"] {
+  background: color-mix(in srgb, var(--ix-accent) 16%, transparent);
+  color: var(--ix-text-1);
+}
+
+/* The CHOSEN option, which is a different fact from the highlighted one. Marked with a check
+   column rather than a fill, so a highlighted-but-not-chosen row stays distinguishable. */
+.pk-option[aria-selected="true"] {
+  color: var(--ix-text-1);
+  font-weight: 600;
+}
+
+.pk-option[aria-selected="true"]::after {
+  content: "";
+  flex: 0 0 auto;
+  width: 5px;
+  height: 9px;
+  margin-left: auto;
+  margin-right: 2px;
+  border-right: 2px solid var(--ix-accent);
+  border-bottom: 2px solid var(--ix-accent);
+  transform: rotate(45deg) translateY(-1px);
+}
+
+.pk-option[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* ── motion law: calm ambient motion ONLY when motion is reduced ──────────────
+   Motion is ON by default and OVERRIDES the OS; this block is the single opt-out (never an OS
+   reduce-motion media query). The list still APPEARS instantly — dropping the animation must not
+   drop the control. */
+:root[data-motion="reduced"] .pk-list {
+  animation: none;
+}
+:root[data-motion="reduced"] .pk-caret,
+:root[data-motion="reduced"] .pk-option,
+:root[data-motion="reduced"] .pk-trigger {
+  transition: none;
+}

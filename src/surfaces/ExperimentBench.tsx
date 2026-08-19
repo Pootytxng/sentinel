@@ -16,6 +16,7 @@ import { LEDGER_CHANGED_EVENT } from "../types";
 import { prettyGameName } from "./game-name";
 import { SectionLabel, VerdictBand, simulationTone } from "./measurement-chrome";
 import { BentoTile } from "../design/bento/BentoGrid";
+import { Picker } from "../design/Picker";
 import "./ExperimentBench.css";
 
 type ExperimentStatus = "running" | "kept" | "restored" | "aborted";
@@ -388,22 +389,23 @@ export default function ExperimentBench() {
       ) : (
         // ── Launcher: pick a change → honest simulator read → start against the real baseline ──
         <div className="exp-launch">
-          <label className="exp-field">
-            <span className="exp-field-label">{t("lab.experimentBench.pickLabel")}</span>
-            <select
+          {/* C-10: was a native <select>, whose OS-drawn menu ignored every token in the room.
+              `<label>` became a plain wrapper + an explicit `labelledBy` because the Picker's
+              trigger is a button, and implicit label association only works for form controls. */}
+          <div className="exp-field">
+            <span className="exp-field-label" id="exp-pick-label">
+              {t("lab.experimentBench.pickLabel")}
+            </span>
+            <Picker
               className="exp-select"
+              labelledBy="exp-pick-label"
               value={pickId}
               disabled={busy || simBusy}
-              onChange={(e) => runSim(e.target.value)}
-            >
-              <option value="">{t("lab.experimentBench.chooseChange")}</option>
-              {options.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.title}
-                </option>
-              ))}
-            </select>
-          </label>
+              placeholder={t("lab.experimentBench.chooseChange")}
+              onChange={(v) => runSim(v)}
+              options={options.map((r) => ({ value: r.id, label: r.title }))}
+            />
+          </div>
           {options.length === 0 && (
             <p className="exp-note">
               {t("lab.experimentBench.noChangesToTest")}

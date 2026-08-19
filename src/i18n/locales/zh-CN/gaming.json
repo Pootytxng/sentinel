@@ -101,6 +101,7 @@
     "baselineSavedPrefix": "基准已保存",
     "baselineSavedPre": "调整一项设置(或使用",
     "measureThisTweakButton": "测量这项优化",
+    "tweakSelectAriaLabel": "要测量的优化项",
     "baselineSavedMid": "见下方),然后点击",
     "baselineSavedPost": "查看效果。",
     "clearBaselineButton": "清除基准",

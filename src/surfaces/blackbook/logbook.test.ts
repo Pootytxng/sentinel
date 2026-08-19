@@ -163,6 +163,112 @@ describe("buildLogbook — undo flag rides only genuinely-active changes", () =>
   });
 });
 
+describe("buildLogbook — repeats collapse into one row (C-11)", () => {
+  // The evidence this exists for: the owner's own ledger holds 64 applies, 37 of them `game-mode`.
+  // The tape caps at 30 rows, so the record of his PC was one sentence printed over and over.
+  const DAY = 86_400_000;
+  const START = Date.parse("2026-05-28T10:00:00Z");
+  // One apply a day from 28 May, the last one left ON — the real shape of his `game-mode` history.
+  const toggled = (n: number, recId = "game-mode") =>
+    Array.from({ length: n }, (_, i) =>
+      change({
+        id: `c${i}`,
+        rec_id: recId,
+        rec_title: "Enable Windows Game Mode",
+        applied_at: new Date(START + i * DAY).toISOString(),
+        status: i === n - 1 ? "applied" : "rolled_back",
+        is_still_active: i === n - 1,
+      }),
+    );
+
+  it("folds N applies of one tweak into ONE row that keeps both ends of the story", () => {
+    const r = buildLogbook({ changes: toggled(37) });
+    expect(r).toHaveLength(1);
+    const c = r[0] as Extract<LogbookRecord, { kind: "change" }>;
+    expect(c.count).toBe(37);
+    expect(c.firstAt).toBe(START);
+    // The row sits at the LATEST apply — a fold must not drag recent activity back to 28 May.
+    expect(c.at).toBe(START + 36 * DAY);
+    expect(c.active).toBe(true);
+    expect(c.title).toBe("Enable Windows Game Mode");
+  });
+
+  it("does not touch a change applied once — count 1, firstAt === at", () => {
+    const r = buildLogbook({ changes: [change()] });
+    const c = r[0] as Extract<LogbookRecord, { kind: "change" }>;
+    expect(c.count).toBe(1);
+    expect(c.firstAt).toBe(c.at);
+    expect(c.id).toBe("c1");
+  });
+
+  it("groups by rec_id, not by title — two tweaks stay two rows", () => {
+    const r = buildLogbook({
+      changes: [
+        change({ id: "a1", rec_id: "game-mode", applied_at: "2026-06-01T10:00:00Z" }),
+        change({ id: "a2", rec_id: "game-mode", applied_at: "2026-06-02T10:00:00Z" }),
+        change({ id: "b1", rec_id: "hags", applied_at: "2026-06-03T10:00:00Z" }),
+      ],
+    });
+    expect(r).toHaveLength(2);
+    expect(r.map((x) => (x as Extract<LogbookRecord, { kind: "change" }>).count)).toEqual([1, 2]);
+  });
+
+  it("the collapsed row carries the LIVE apply's id — the one an undo would target", () => {
+    // The dangerous version of this bug: fold to the newest record blindly, and the row offers to
+    // undo an apply that was already superseded. Here the live apply is deliberately NOT the newest.
+    const r = buildLogbook({
+      changes: [
+        change({ id: "old", applied_at: "2026-06-01T10:00:00Z", status: "applied", is_still_active: true }),
+        change({ id: "new", applied_at: "2026-06-05T10:00:00Z", status: "rolled_back", is_still_active: false }),
+      ],
+    });
+    const c = r[0] as Extract<LogbookRecord, { kind: "change" }>;
+    expect(c.id).toBe("old");
+    expect(c.active).toBe(true);
+    expect(c.rolledBack).toBe(false);
+    // …but it still sits on the tape at the most recent thing that happened.
+    expect(c.at).toBe(Date.parse("2026-06-05T10:00:00Z"));
+  });
+
+  it("with nothing live, the newest apply represents the group", () => {
+    const r = buildLogbook({
+      changes: [
+        change({ id: "old", applied_at: "2026-06-01T10:00:00Z", status: "rolled_back", is_still_active: false }),
+        change({ id: "new", applied_at: "2026-06-05T10:00:00Z", status: "rolled_back", is_still_active: false }),
+      ],
+    });
+    const c = r[0] as Extract<LogbookRecord, { kind: "change" }>;
+    expect(c.id).toBe("new");
+    expect(c.active).toBe(false);
+    expect(c.rolledBack).toBe(true);
+    expect(c.count).toBe(2);
+  });
+
+  it("an apply with no honest timestamp is still DROPPED, not folded in as a count", () => {
+    // Collapsing must not become a back door for the fabrication the builder exists to prevent:
+    // a dropped row must not inflate someone else's count.
+    const r = buildLogbook({
+      changes: [
+        change({ id: "ok", applied_at: "2026-06-01T10:00:00Z" }),
+        change({ id: "bad", applied_at: "not-a-date" }),
+      ],
+    });
+    const c = r[0] as Extract<LogbookRecord, { kind: "change" }>;
+    expect(c.count).toBe(1);
+    expect(c.id).toBe("ok");
+  });
+
+  it("collapsing does not disturb the other record kinds or the ordering", () => {
+    const r = buildLogbook({
+      changes: toggled(3),
+      // toggled(3) = 28/29/30 May, so the folded row must land between these two.
+      sessions: [session({ started_at: "2026-06-04T10:00:00Z" })],
+      autopsy: [autopsy({ at: Date.parse("2026-05-29T09:00:00Z") })],
+    });
+    expect(r.map((x) => x.kind)).toEqual(["session", "change", "autopsy"]);
+  });
+});
+
 describe("buildLogbook — vs-previous delta is same-game only", () => {
   it("two same-game sessions ⇒ the newer carries the avg delta vs the older", () => {
     const r = buildLogbook({

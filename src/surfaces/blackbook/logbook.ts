@@ -19,10 +19,13 @@ import { knowledgeForLanguage, type KnowledgeEntry } from "../../data/knowledge"
 
 export type LogbookChange = {
   kind: "change";
-  /** ms epoch, from AppliedChange.applied_at (ISO). */
+  /** ms epoch of the MOST RECENT apply of this tweak — where the row sits on the tape. */
   at: number;
-  /** AppliedChange.id — the key the audited rollback_change path takes. */
+  /** AppliedChange.id — the key the audited rollback_change path takes. On a collapsed row this is
+   *  the LIVE apply's id (or the newest, when none is live): the one an undo would actually target. */
   id: string;
+  /** AppliedChange.rec_id — the tweak's identity, and the key repeats collapse on (C-11). */
+  recId: string;
   title: string;
   /** Genuinely on right now (status applied AND still active) — the only state that earns undo. */
   active: boolean;
@@ -34,6 +37,12 @@ export type LogbookChange = {
   appliedLabel: string | null;
   /** The KIND of gain the change targets ("Input latency" …) — never a fabricated number. */
   payoffLabel: string | null;
+  /** How many times this tweak was applied (C-11). 1 for a change applied once — the row then reads
+   *  exactly as it always did. */
+  count: number;
+  /** ms epoch of the FIRST apply. Equals `at` when `count` is 1; on a collapsed row it is what lets
+   *  the row say WHEN the repeating started instead of silently swallowing the older applies. */
+  firstAt: number;
 };
 
 export type LogbookSession = {
@@ -98,24 +107,68 @@ function ms(iso: string | null | undefined): number | null {
   return Number.isFinite(t) ? t : null;
 }
 
+// C-11 — repeats collapse into ONE row per tweak.
+//
+// WHY, with the owner's own ledger as the evidence: 64 recorded applies, 37 of them the SAME tweak
+// (`game-mode`, toggled between 28 May and 29 Jul). The tape shows 30 rows, so the record of this
+// PC was almost entirely one sentence printed over and over — which reads as a malfunction, not as
+// history, and buries every other thing Compy did underneath it.
+//
+// A tweak toggled 37 times is ONE fact about the machine ("Game Mode: on, applied 37 times since
+// 28 May"), not 37 facts. So the applies fold into a single row that keeps BOTH ends of the story:
+// `at` (and the row's position) is the LATEST apply, `firstAt` is the earliest, and `count` says how
+// many. Nothing is silently dropped — the row states the number and the date the repeating started.
+//
+// Which apply represents the group: the one that is genuinely LIVE, if any — its `id` is what an
+// undo has to target and its `restoresLabel` is the state undo would return to; a stale id from a
+// superseded apply would be the dangerous kind of wrong. With none live, the newest represents.
+function collapseRepeats(applies: LogbookChange[]): LogbookChange[] {
+  const groups = new Map<string, LogbookChange[]>();
+  for (const a of applies) {
+    const g = groups.get(a.recId);
+    if (g) g.push(a);
+    else groups.set(a.recId, [a]);
+  }
+  const out: LogbookChange[] = [];
+  for (const g of groups.values()) {
+    if (g.length === 1) {
+      out.push(g[0]);
+      continue;
+    }
+    const newest = g.reduce((x, y) => (y.at > x.at ? y : x));
+    const oldest = g.reduce((x, y) => (y.at < x.at ? y : x));
+    // Prefer the live apply; among several (which the ledger should never hold) the newest live one.
+    const live = g.filter((r) => r.active).reduce<LogbookChange | null>((x, y) => (x && x.at > y.at ? x : y), null);
+    const rep = live ?? newest;
+    out.push({ ...rep, at: newest.at, firstAt: oldest.at, count: g.length });
+  }
+  return out;
+}
+
 export function buildLogbook({ changes, sessions, autopsy, observed }: LogbookInput): LogbookRecord[] {
   const records: LogbookRecord[] = [];
 
+  // One record per apply first, then collapse repeats of the same tweak (C-11) — see below.
+  const applies: LogbookChange[] = [];
   for (const c of changes ?? []) {
     const at = ms(c.applied_at);
     if (at === null) continue; // no honest timestamp ⇒ no row
-    records.push({
+    applies.push({
       kind: "change",
       at,
       id: c.id,
+      recId: c.rec_id,
       title: c.rec_title,
       active: c.status === "applied" && c.is_still_active,
       rolledBack: c.status === "rolled_back",
       restoresLabel: c.restores_label ?? null,
       appliedLabel: c.applied_label ?? null,
       payoffLabel: c.payoff_label ?? null,
+      count: 1,
+      firstAt: at,
     });
   }
+  records.push(...collapseRepeats(applies));
 
   // Sessions need cross-item context (same-game vs-previous), so resolve their ms-epochs and sort
   // oldest-first ONCE, then look back for the nearest same-game prior.

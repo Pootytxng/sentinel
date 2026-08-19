@@ -17,6 +17,7 @@ import type {
 import { useIntelligenceFlag } from "../design/use-hud";
 import { useExpertView } from "../design/use-expert-view";
 import { SectionLabel, VerdictBand, COMPARABILITY_TONE } from "./measurement-chrome";
+import { Picker } from "../design/Picker";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../i18n";
@@ -648,38 +649,44 @@ export function SessionInvestigator({
       </div>
 
       <div className="wcp-inv-controls">
+        {/* C-10: three native <select>s became Pickers. `<label>` became a plain wrapper with an
+            explicit `labelledBy` — implicit label association only reaches real form controls, and
+            the Picker's trigger is a button. */}
         {groups.length > 1 && (
-          <label className="wcp-inv-field">
-            <span>{t("optimize.whatChangedPanel.gameLabel")}</span>
-            <select value={game} onChange={(e) => setGame(e.target.value)}>
-              {groups.map((g) => (
-                <option value={g.game} key={g.game}>
-                  {g.game} ({g.sessions.length})
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="wcp-inv-field">
+            <span id="wcp-inv-game">{t("optimize.whatChangedPanel.gameLabel")}</span>
+            <Picker
+              labelledBy="wcp-inv-game"
+              value={game}
+              onChange={setGame}
+              options={groups.map((g) => ({ value: g.game, label: `${g.game} (${g.sessions.length})` }))}
+            />
+          </div>
         )}
-        <label className="wcp-inv-field">
-          <span>{t("optimize.whatChangedPanel.baselineGoodLabel")}</span>
-          <select value={baselineAt} onChange={(e) => setBaselineAt(e.target.value)}>
-            {active?.sessions.map((s) => (
-              <option value={s.started_at} key={s.started_at}>
-                {optLabel(s)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="wcp-inv-field">
-          <span>{t("optimize.whatChangedPanel.compareSuspectLabel")}</span>
-          <select value={currentAt} onChange={(e) => setCurrentAt(e.target.value)}>
-            {active?.sessions.map((s) => (
-              <option value={s.started_at} key={s.started_at}>
-                {optLabel(s)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="wcp-inv-field">
+          <span id="wcp-inv-baseline">{t("optimize.whatChangedPanel.baselineGoodLabel")}</span>
+          <Picker
+            labelledBy="wcp-inv-baseline"
+            value={baselineAt}
+            onChange={setBaselineAt}
+            options={(active?.sessions ?? []).map((s) => ({
+              value: s.started_at,
+              label: optLabel(s),
+            }))}
+          />
+        </div>
+        <div className="wcp-inv-field">
+          <span id="wcp-inv-current">{t("optimize.whatChangedPanel.compareSuspectLabel")}</span>
+          <Picker
+            labelledBy="wcp-inv-current"
+            value={currentAt}
+            onChange={setCurrentAt}
+            options={(active?.sessions ?? []).map((s) => ({
+              value: s.started_at,
+              label: optLabel(s),
+            }))}
+          />
+        </div>
         <button
           type="button"
           className="wcp-inv-run"

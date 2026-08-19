@@ -62,7 +62,13 @@
   text-transform: uppercase;
   color: var(--ix-text-3);
 }
-.exp-select,
+/* `.exp-select` is now a LAYOUT hook on the Picker's root (C-10) — the control's own look lives in
+   design/Picker.css, and re-declaring border/background/padding here would draw a second box around
+   the trigger's. Sizing is all this surface still owns. */
+.exp-select {
+  width: 100%;
+  max-width: 460px;
+}
 .exp-input {
   font: inherit;
   font-size: var(--type-label);
@@ -74,12 +80,10 @@
   width: 100%;
   max-width: 460px;
 }
-.exp-select:focus-visible,
 .exp-input:focus-visible {
   outline: none;
   border-color: color-mix(in srgb, var(--ix-accent) 55%, var(--ix-glass-border));
 }
-.exp-select:disabled,
 .exp-input:disabled {
   opacity: 0.6;
 }

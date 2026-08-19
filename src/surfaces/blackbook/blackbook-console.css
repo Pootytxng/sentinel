@@ -85,6 +85,9 @@
   color: var(--ix-text-2); }
 :root[data-v2="on"] .bc-stat b { color: var(--ix-text-1); font-weight: 600; }
 :root[data-v2="on"] .bc-row-note { color: var(--ix-text-3); font-size: var(--type-label); }
+/* The collapsed-repeat count (C-11) is the row's payload, not an aside — it is the reason 37 rows
+   became 1, so it reads one step brighter than a plain note. Prose, so NOT mono (C-17). */
+:root[data-v2="on"] .bc-repeat { color: var(--ix-text-2); }
 
 /* State + chips — flat mono tags, semantic red only for a real warning (scam flags). */
 :root[data-v2="on"] .bc-state { font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .12em;
