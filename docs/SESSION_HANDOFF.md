@@ -52,21 +52,30 @@ Verified: `tsc --noEmit` clean; `vitest run --maxWorkers=4` 342 files / 5062 pas
 Disarm-probed: re-introduced both defects on disk, both guards failed with the right `file:line`,
 restored, green.
 
-## Exact next steps
+## Lane state — CLOSED, awaiting review/merge
 
-1. Check the build finished, then `powershell -NoProfile -Command "& 'C:\Users\Kuya\code\sentinel\scripts\ship-reinstall.ps1'"`.
-   (Both preflights were re-read as the driver required — `ship-reinstall.ps1:118` and
-   `release.ps1:100` now resolve the data root through `Get-CanonicalCompyDataRoot`, which halts on a
-   redirected/split root before reading it, so the fail-open path is closed.)
-2. Prove live == build via the embedded stamp, never an exe hash.
-3. Re-measure: `node scripts/q7-probe.mjs attribute --port 9455 --settle 45 --phase 60 --out docs/perf/raw/idle-attribution-2026-08-19-D-installed-fix.json`.
-   Acceptance is the probe, not a feeling: the CSS band must collapse vs `...-A-rig-on.json`.
-   **Never let a run overwrite `docs/perf/raw/idle-attribution.json`** — that is the preserved
-   2026-08-06 baseline; always pass `--out`.
-4. Self-review the live Home: the aurora no longer breathes, and the setup-card rings stop after
-   ~15s and leave no visible ring. Both need eyes, not just a number.
-5. Update `docs/RELEASE_STATE.md:65` (stamp + installer SHA-256), push, PR, and comment the real
-   attribution on #127.
+Everything in the previous "next steps" list is done. Nothing is half-finished; the tree is clean.
+
+- Shipped and installed: **`75880de1`** (installer SHA-256 `E4A1301F…FFBFFC2A`), live == build proven
+  via the embedded stamp with `-VerifyRuntime -ExpectedCommit <full sha>`, never an exe hash.
+  Both preflights were re-read first as the driver required — `ship-reinstall.ps1:118` and
+  `release.ps1:100` now resolve the data root through `Get-CanonicalCompyDataRoot`, which halts on a
+  redirected/split root before reading it, so the old fail-open path is closed.
+- Post-fix measurement against the INSTALLED binary: **19.632 → 10.483 percent of one core**
+  (`docs/perf/raw/idle-attribution-2026-08-19-D-installed-fix.json`, `stl-pulse` observed
+  `playState: "finished", iterations: 6`). Three post-fix runs agree: 9.448 / 9.421 / 10.483.
+  The preserved 2026-08-06 baseline `idle-attribution.json` was never overwritten.
+- self-reviewer **VERDICT: PASS** on the installed build — all four aurora corners captured natively
+  at 3× with no seam or band, rings measured `opacity 0.19/0.75` at t=1.47s and `opacity 0` at
+  t=27.3s, rail circuit 16.6–20.5ms. The update-pill LED is confirmed absent from the DOM (no update
+  available), so it is recorded as unreachable, not verified.
+- Owner has the before/after motion demo (`SendUserFile`, real CSS verbatim, replay + ×20 speed).
+- Commits `75880de1` (fix + guards + probe) and `aa6fe2f2` (RELEASE_STATE stamp, BACKLOG cycle
+  2026-08-19a, run D). Branch `perf/idle-127-ambient-raster` pushed → **PR #141**, and #127 carries
+  a comment with the real attribution.
+
+**What the next session picks up:** review/merge #141, then the owner's fleet decision. Nothing in
+this lane needs re-measuring.
 
 ## Known, not chased here
 
@@ -78,5 +87,5 @@ restored, green.
   outside), but it is a live idle cost whenever the mouse rests over the window. Not filed yet.
 - `wt-click` (Walkthrough) and `st-pulse` (SetupTour) are the same infinite-animation class but are
   bounded to a surface the user is actively looking at. Left alone deliberately.
-- #121 is still real and open. #140 (CPU temp / PawnIO) was not touched — one lane at a time.
+- #121 is still real and open — not closed, not skipped. #140 (CPU temp / PawnIO) was not touched.
 - The fleet is still three lanes behind the desk; moving it is the owner's GO and he has not given it.
