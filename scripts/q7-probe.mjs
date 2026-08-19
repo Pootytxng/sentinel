@@ -24,8 +24,12 @@
 //   node scripts/q7-probe.mjs latency   [--port 9455] [--out FILE]
 //   node scripts/q7-probe.mjs idle      [--port 9455] [--minutes 10] [--hidden] [--out FILE]
 //   node scripts/q7-probe.mjs idle-bare [--minutes 10] [--settle 45]   <- no CDP; the honest CPU number
-//   node scripts/q7-probe.mjs attribute [--port 9455] [--settle 45] [--phase 120]
+//   node scripts/q7-probe.mjs attribute [--port 9455] [--settle 45] [--phase 120] [--inject-css FILE]
 //                              <- WHY idle costs what it costs: freeze rAF, then animations, then timers
+//                              --inject-css appends FILE's CSS last in the cascade at document-start, so
+//                              a styling hypothesis is A/B-ed against the SHIPPED binary in ~6 minutes
+//                              instead of a rebuild. The run records the file, its bytes and its text,
+//                              so an overridden run can never be mistaken for a clean baseline.
 //   node scripts/q7-probe.mjs a11y      [--port 9455] [--w 1280] [--h 720] [--out FILE]
 //   node scripts/q7-probe.mjs eval      [--port 9455] --expr "<js>"
 //   node scripts/q7-probe.mjs restore   -- kill every port-bearing instance, relaunch clean
@@ -1492,8 +1496,36 @@ async function enrichSites(s, sites, limit = 6, radius = 160) {
  * The run is VOID for the rAF band, and says so rather than publishing it, if frames keep firing
  * after the freeze: that means something re-arms externally and the phase was never actually quiet.
  */
+/**
+ * Document-start CSS override. Appended to <head> as the LAST stylesheet and re-appended on load,
+ * because Vite injects the app's styles during module evaluation -- a sheet added earlier would lose
+ * to them. window.__q7css carries the applied length so the caller can PROVE it landed rather than
+ * assume it (a silently-missing override would read as "the hypothesis was wrong").
+ */
+function cssInjector(text) {
+  return `(() => {
+  var css = ${JSON.stringify(text)};
+  function add() {
+    var st = document.getElementById("q7-inject-css");
+    if (!st) { st = document.createElement("style"); st.id = "q7-inject-css"; st.textContent = css; }
+    (document.head || document.documentElement).appendChild(st);
+    window.__q7css = css.length;
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", add);
+  else add();
+  window.addEventListener("load", add);
+})()`;
+}
+
 async function taskAttribute() {
   const settle = Number(flags.settle ?? 45);
+  const injectedCss = flags["inject-css"]
+    ? (() => {
+        const file = String(flags["inject-css"]);
+        const text = readFileSync(file, "utf8");
+        return { file, bytes: Buffer.byteLength(text), text };
+      })()
+    : null;
   const phaseSeconds = Number(flags.phase ?? 120);
   // Anything smaller than this is scheduler noise between two separate CPU windows, not a finding.
   const NOISE_FLOOR = 0.5;
@@ -1508,9 +1540,24 @@ async function taskAttribute() {
   // Document-start, for the same reason session({fresh:true}) does it: a loop armed during boot is
   // invisible to a trap installed after boot, and the honest live count would be unknowable.
   await s.call("Page.addScriptToEvaluateOnNewDocument", { source: RAF_TRAP });
+  // Optional CSS override, appended LAST so it wins the cascade (keyframes resolve to the final
+  // definition of a name, which is the whole point: re-declare @keyframes X and the running
+  // animation keeps its name -- so the per-animation split below still attributes it by that name).
+  if (injectedCss) {
+    await s.call("Page.addScriptToEvaluateOnNewDocument", { source: cssInjector(injectedCss.text) });
+  }
   await s.call("Page.reload", { ignoreCache: false });
   await waitPainted(s);
   await s.call("Performance.enable").catch(() => {});
+  if (injectedCss) {
+    const live = await evaluate(s, "String(window.__q7css || 0)");
+    if (Number(live) !== injectedCss.text.length) {
+      throw new Error(
+        `--inject-css did not land (page reports ${live} chars, file has ${injectedCss.text.length}); ` +
+          "refusing to report a run whose override may not be applied",
+      );
+    }
+  }
 
   const pids = processTree(lock.pid);
   const cores = Number(ps(`[Environment]::ProcessorCount`)) || 1;
@@ -1655,6 +1702,9 @@ async function taskAttribute() {
       "separate CPU window over the same process group. Freezes are sticky (re-registration refused " +
       "and its stack recorded), so a band cannot be diluted by work that quietly re-arms itself.",
     baselineStability: stability,
+    // A run carrying a CSS override is NOT a baseline. Recorded in full so the two can never be
+    // confused, and so the exact override that produced a number is reproducible from the evidence.
+    injectedCss,
     rafBandValid: rafValid,
     validity: [
       rafValid

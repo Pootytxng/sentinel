@@ -40,7 +40,15 @@
   inset: 0;
   border-radius: inherit;
   box-shadow: 0 0 0 5px color-mix(in srgb, var(--v2-ok) 55%, transparent);
-  animation: v2-update-pulse 1.6s ease-in-out infinite;
+  /* Bounded, for the reason the stl-ring pair is (SetupLauncherCard.css, #127): moving the pulse
+     onto transform + opacity did NOT make it free -- an always-on surface that animates forever
+     costs about 4 points of a CPU core whatever property it animates, and this one runs in the shell
+     topbar in the AVAILABLE branch, i.e. permanently, for exactly the testers it exists to help.
+     UNMEASURED HERE: no update was available during the 2026-08-19 runs, so this is the same class
+     and the same fix, not a number of its own. Ten iterations catch the eye for ~16s; the base
+     opacity: 0 below is what it reverts to when it stops, so the resting LED is a plain LED. */
+  opacity: 0;
+  animation: v2-update-pulse 1.6s ease-in-out 10;
   pointer-events: none;
 }
 @keyframes v2-update-pulse {

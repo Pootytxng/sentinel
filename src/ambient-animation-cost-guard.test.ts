@@ -176,7 +176,95 @@ const ALWAYS_ON_AMBIENT: { file: string; selector: string; why: string }[] = [
     selector: ".v2-update-led",
     why: "the update pill lives in the shell topbar, so an available update pulses on every screen",
   },
+  {
+    // bug->guard, v0.9.25 (#127): the inventory's second blind spot. HomeConsole, HomeHud and
+    // HomeV2 all mount <SetupLauncherCard /> unconditionally, so its two pulse rings ran forever on
+    // the landing screen for every user. The subtraction waterfall measured them at 4.156% of a CPU
+    // core -- 21.2% of the whole idle cost -- and neither promoting them nor moving the motion onto
+    // opacity changed that. Only stopping did.
+    file: "surfaces/setup/SetupLauncherCard.css",
+    selector: ".stl-ring",
+    why: "all three Home surfaces mount SetupLauncherCard unconditionally, so its rings are always on",
+  },
 ];
+
+// ── The 2026-08-19 correction to this file's model ───────────────────────────────────────
+// Guards 1-3 above encode "compositor-safe properties are free". Measurement against the shipped
+// v0.9.25 binary falsified that in two separate ways, and these two guards pin what was actually
+// measured (docs/perf/raw/idle-attribution-2026-08-19-*.json, #127):
+//
+//   1. SCALE IS NOT FREE ON A FULL-WINDOW LAYER. `aurora` animated transform only, was promoted
+//      with will-change, and still cost 13.257% of a core -- 67.5% of all idle -- because a scale
+//      animation makes the compositor re-raster the layer at its new size. The same keyframes with
+//      the scale removed measured -0.105. Translating is free; resizing is not.
+//   2. ON A SMALL ALWAYS-ON SURFACE, RUNNING FOREVER IS ITSELF THE COST. `stl-pulse` measured
+//      4.156 as shipped, 4.001 promoted with will-change, and 4.721 rewritten to animate opacity
+//      alone. Three different mechanisms, one number. Nothing about HOW it animated mattered.
+//
+// So: full-window layers may drift but not breathe, and always-on badges get a bounded ping.
+
+// A keyframe body that changes the layer's raster geometry. Includes the individual `scale`
+// property, which is a transform written a different way and costs exactly the same.
+const RESIZES_THE_RASTER = ["scale(", "scale3d(", "scaleX(", "scaleY("];
+
+const resizesRaster = (kf: Rule): string[] => {
+  const hit = RESIZES_THE_RASTER.filter((t) => kf.body.includes(t));
+  if (declaredProps(kf.body).includes("scale")) hit.push("the scale property");
+  return hit;
+};
+
+/**
+ * GUARD 4 — a document-level ambient layer may drift, but may not resize.
+ * Takes its inputs so the falsification suite below can drive this exact function with synthetic
+ * CSS parsed by the same parser the disk test uses. A guard whose mutation test builds its own
+ * input string proves the matcher, not the guard (the no-raw-select lesson, 2026-08-18).
+ */
+const docLevelResizeOffenders = (rules: Rule[], keyframes: Map<string, Rule>): string[] => {
+  const offenders: string[] = [];
+  for (const rule of rules) {
+    const sels = rule.prelude.split(",").map((s) => s.trim());
+    if (!sels.some(isDocLevelPseudo)) continue;
+    if (rule.body.includes(ALLOW)) continue;
+    for (const name of infiniteAnimationNames(rule, keyframes)) {
+      const kf = keyframes.get(name);
+      if (!kf) continue;
+      const hit = resizesRaster(kf);
+      if (hit.length)
+        offenders.push(
+          `${rule.file}:${rule.line} (${sels.join(", ")}) runs @keyframes ${name} forever with ` +
+            `${hit.join(", ")} — a scale animation re-rasters the whole layer every frame.`,
+        );
+    }
+  }
+  return offenders;
+};
+
+/**
+ * GUARD 5 — an always-on surface from the inventory may not animate forever, full stop.
+ * `readRules` is injected for the same falsification reason as above.
+ */
+const foreverOnAlwaysOnOffenders = (
+  entries: { file: string; selector: string }[],
+  readRules: (file: string) => Rule[],
+  keyframes: Map<string, Rule>,
+): string[] => {
+  const offenders: string[] = [];
+  for (const entry of entries) {
+    for (const rule of readRules(entry.file)) {
+      const sels = rule.prelude.split(",").map((s) => s.trim());
+      if (!sels.some((s) => s.includes(entry.selector))) continue;
+      if (rule.body.includes(ALLOW)) continue;
+      const names = infiniteAnimationNames(rule, keyframes);
+      if (names.length)
+        offenders.push(
+          `${entry.file}:${rule.line} (${entry.selector}) runs @keyframes ${names.join(", ")} ` +
+            `with an infinite iteration count — measured at ~4 points of a CPU core regardless of ` +
+            `which property it animates.`,
+        );
+    }
+  }
+  return offenders;
+};
 
 describe("ambient animation cost guard: always-on animations stay on the compositor", () => {
   const rules = allRules();
@@ -290,5 +378,120 @@ describe("ambient animation cost guard: always-on animations stay on the composi
         `onto transform.\n` +
         offenders.join("\n"),
     ).toEqual([]);
+  });
+});
+
+// ── Guards 4 and 5 — what the 2026-08-19 re-teardown actually measured ────────────────────
+describe("ambient animation cost guard: always-on motion stays bounded and never resizes", () => {
+  const rules = allRules();
+  const keyframes = keyframeIndex(rules);
+
+  it("no document-level ambient layer animates scale forever", () => {
+    const offenders = docLevelResizeOffenders(rules, keyframes);
+    expect(
+      offenders,
+      `A full-window backdrop may drift, but it may not breathe.\n` +
+        `Fix: express the motion as translate3d alone, or drop the animation.\n` +
+        `Evidence: aurora measured 13.257 points of a CPU core with scale(1.09) and -0.105 without\n` +
+        `(docs/perf/raw/idle-attribution-2026-08-19-A-rig-on.json vs -B-h1-no-scale.json).\n` +
+        offenders.join("\n"),
+    ).toEqual([]);
+  });
+
+  it("no always-on surface in the inventory animates forever", () => {
+    const offenders = foreverOnAlwaysOnOffenders(
+      ALWAYS_ON_AMBIENT,
+      (file) => parseRules(file, readCssStripped(file)),
+      keyframes,
+    );
+    expect(
+      offenders,
+      `An always-on surface gets a bounded ping, not a permanent animation.\n` +
+        `Fix: give it a finite iteration count (add "forwards" if the resting frame matters), or\n` +
+        `drive it from :hover / :focus-visible so it only runs when someone is there.\n` +
+        `Evidence: stl-pulse measured ~4 points of a core as shipped, promoted, AND rewritten to\n` +
+        `animate opacity alone — running forever was the cost, not the property.\n` +
+        offenders.join("\n"),
+    ).toEqual([]);
+  });
+});
+
+// ── Falsification — drive the guards' OWN functions with CSS that should trip them ────────
+// A mutation test that hand-builds the string its matcher expects proves the matcher and nothing
+// else; the no-raw-select guard shipped green over a live blind spot that way (2026-08-18). These
+// parse synthetic CSS with parseRules — the same parser the disk tests use — and call the same two
+// functions, so a refactor that quietly stops detecting shows up here.
+describe("ambient animation cost guard: the guards themselves are armed", () => {
+  const index = (css: string, file = "synthetic.css") => {
+    const rules = parseRules(file, css);
+    return { rules, keyframes: keyframeIndex(rules) };
+  };
+
+  const DRIFTS = `@keyframes drift { from { transform: translate3d(0,0,0); } to { transform: translate3d(-3%,2.5%,0); } }`;
+  const BREATHES = `@keyframes breathe { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(-3%,2.5%,0) scale(1.09); } }`;
+  const BREATHES_LONGHAND = `@keyframes breathe { from { scale: 1; } to { scale: 1.09; } }`;
+
+  it("guard 4 fires on a body::before that scales forever", () => {
+    const { rules, keyframes } = index(
+      `${BREATHES} body::before { animation: breathe 20s ease-in-out infinite alternate; }`,
+    );
+    expect(docLevelResizeOffenders(rules, keyframes)).toHaveLength(1);
+  });
+
+  it("guard 4 fires on the longhand scale property too", () => {
+    const { rules, keyframes } = index(
+      `${BREATHES_LONGHAND} :root::after { animation: breathe 20s linear infinite; }`,
+    );
+    expect(docLevelResizeOffenders(rules, keyframes)).toHaveLength(1);
+  });
+
+  it("guard 4 stays silent on the shipped fix — a translate-only drift", () => {
+    const { rules, keyframes } = index(
+      `${DRIFTS} body::before { animation: drift 20s ease-in-out infinite alternate; }`,
+    );
+    expect(docLevelResizeOffenders(rules, keyframes)).toEqual([]);
+  });
+
+  it("guard 4 stays silent on a scale that plays a finite number of times", () => {
+    const { rules, keyframes } = index(
+      `${BREATHES} body::before { animation: breathe 20s ease-in-out 3; }`,
+    );
+    expect(docLevelResizeOffenders(rules, keyframes)).toEqual([]);
+  });
+
+  it("guard 5 fires on an inventoried surface animating forever", () => {
+    const css = `@keyframes ping { 0% { opacity: 0.9; } 100% { opacity: 0; } }
+      .stl-ring { animation: ping 2.4s ease-out infinite; }`;
+    const { keyframes } = index(css);
+    const offenders = foreverOnAlwaysOnOffenders(
+      [{ file: "synthetic.css", selector: ".stl-ring" }],
+      () => parseRules("synthetic.css", css),
+      keyframes,
+    );
+    expect(offenders).toHaveLength(1);
+  });
+
+  it("guard 5 stays silent on the shipped fix — a bounded ping", () => {
+    const css = `@keyframes ping { 0% { opacity: 0.9; } 100% { opacity: 0; } }
+      .stl-ring { animation: ping 2.4s ease-out 6 forwards; }`;
+    const { keyframes } = index(css);
+    const offenders = foreverOnAlwaysOnOffenders(
+      [{ file: "synthetic.css", selector: ".stl-ring" }],
+      () => parseRules("synthetic.css", css),
+      keyframes,
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("guard 5 respects the ambient-cost-allow escape hatch", () => {
+    const css = `@keyframes ping { 0% { opacity: 0.9; } 100% { opacity: 0; } }
+      .stl-ring { animation: ping 2.4s ease-out infinite; /* ambient-cost-allow */ }`;
+    const { keyframes } = index(css);
+    const offenders = foreverOnAlwaysOnOffenders(
+      [{ file: "synthetic.css", selector: ".stl-ring" }],
+      () => parseRules("synthetic.css", css),
+      keyframes,
+    );
+    expect(offenders).toEqual([]);
   });
 });
