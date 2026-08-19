@@ -603,30 +603,33 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
-### Cycle 2026-08-19a — ✅ THE SCALE WAS THE TRIGGER, NOT THE RIG (CC): `75880de1` on `perf/idle-127-ambient-raster` — issue [#127](https://github.com/Pootytxng/sentinel/issues/127)
+### Cycle 2026-08-19b — ✅ THE FLEET MOVED (CC): **v0.9.26 published**, source `5e64074c`, release id `372920800`
 
-**Whole-app idle on Home: 19.632 → 10.483 percent of one core**, measured against the INSTALLED
-binary before and after (`docs/perf/raw/idle-attribution-2026-08-19-{A-rig-on,D-installed-fix}.json`).
-**#127's own diagnosis did not reproduce:** the rAF band is 0.201 points and fired ZERO frames, so
-the 3D rig was never the cost, and the dependency-bump theory is dead (r3f/drei/three identical in
-the lockfile at the baseline commit, at `efde8310`, at HEAD and on disk). The rAF registration
-stacks were already sitting in the committed evidence, unread — they name GSAP's ticker and
-`ReticleCursor`, never the rig chunk.
+PR [#141](https://github.com/Pootytxng/sentinel/pull/141) merged (`85ed8065`), then the owner's
+fleet-move GO executed end to end: transaction **9 of 9**, alias attempt 1 in 3.7s, desk and fleet
+back on the same bytes after three lanes of deliberate divergence. Testers now get the #127 idle
+fix, the canonical data root, the CPU-temp offer and the C-10/C-11/C-17 conformance work.
 
-The cost was two decorative CSS animations that Cycle 2026-08-06a's guard treats as free because
-they animate `transform`. That cycle removed `aurora`'s blur and **left its `scale()`** — the
-multiplier went, the trigger stayed, and the layer still cost **13.257 points** (67.5% of idle) on
-`body::before`, i.e. in every room. The two `.stl-ring` pulses on every Home cost **4.156**, and
-that one is not about scale: 4.156 shipped / 4.001 promoted / 4.721 animating opacity alone —
-**running forever was the cost, not the property.** Fix: aurora drifts on pure `translate3d`; both
-always-on pings are now bounded. Two new guards, both falsified on purpose; `.stl-ring` joined the
-always-on inventory it should always have been in. `q7-probe` gained `--inject-css`, which A/B-ed
-each hypothesis against the shipped binary in ~6 min instead of a rebuild.
+**Four latent pipeline defects surfaced, each costing a ~13-minute cycle to find, each fixed with a
+falsified guard** — same class every time: *the release `.ps1` files are executed by nothing in the
+suite.* ① a stale staged receipt bound to an older commit read as FAIL, now PENDING (`5d21961a`).
+② `Set-StrictMode -Version Latest` at file scope in a DOT-SOURCED library made the whole pipeline
+strict and killed prove on an optional hook property (`b8e31e67`). ③ a powershell-spawning test
+needed `it.runIf(windows)` (`0e885823`). ④ two guards timed out only at full parallelism
+(`b3e82e9b`).
 
-**Stated scope:** the update-pill LED got the same bounded treatment but was **not separately
-measured** (no update available during the runs). Post-fix baselines are noisy, so the total is
-quotable and single-run per-animation splits are not. `ReticleCursor` writes a transform every
-frame while the pointer rests in the window — a live idle cost, not yet filed.
+- [x] **Release preflight — fail in SECONDS, not after a verify + build.** `release.ps1` now resolves
+  the version it is about to cut BEFORE the expensive gates and refuses on a leftover local/remote
+  tag or a `RELEASE_STATE.md` still naming the previous candidate, each with the exact command that
+  clears it. The doc rule stays in one implementation: `verify-release-state.mjs --stage-candidate`.
+  Guards: `release-pipeline-guard` (ordering) + `verify-release-state-guard` (detector), both
+  disarm-probed.
+
+### Cycle 2026-08-19a — ARCHIVED
+
+Moved verbatim to [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-19, byte budget) when
+Cycle 2026-08-19b shipped it to the fleet. The #127 idle-CPU teardown: 19.632 → 10.483 percent of
+one core, `aurora`'s `scale()` was the trigger and the 3D rig was never the cost.
 
 ### Cycle 2026-08-06a — ARCHIVED
 

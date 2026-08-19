@@ -8,6 +8,7 @@ import {
   extractCitations,
   ownerDecisionsSection,
   validateOwnerDecisionVersions,
+  validateStageCandidate,
   verifyRepo,
 } from "./verify-release-state.mjs";
 
@@ -44,6 +45,45 @@ describe("release-state owner-decision version guard", () => {
     expect(validateOwnerDecisionVersions(section, "0.9.10", "0.9.11")).toEqual([
       "STALE-DECISION: first live owner decision must name candidate v0.9.11",
     ]);
+  });
+});
+
+// bug->guard (2026-08-19): the v0.9.26 stage failed TWICE on the same knowable state - release.ps1
+// bumps STATE:latest_release_version as part of the cut but never touches STATE:candidate_version or
+// the owner decision, so the release-state gate only noticed at the END of a ~13-minute
+// verify + build. `--stage-candidate` moves that verdict to the front of the run; these tests hold
+// the detector to the version the run is ABOUT to cut, not the one the tree currently declares.
+describe("stage candidate preflight", () => {
+  const doc = (candidate, decisionVersion) => `<!-- STATE:candidate_version=${candidate} -->
+
+## Required owner decisions (live)
+
+1. **Candidate v${decisionVersion} publish GO/NO-GO - GO GIVEN.** body
+`;
+
+  it("passes when the anchor and the live decision both name the version being cut", () => {
+    expect(validateStageCandidate(doc("0.9.27", "0.9.27"), "0.9.27")).toEqual([]);
+  });
+
+  it("names the anchor edit when the doc still carries the previous candidate", () => {
+    const failures = validateStageCandidate(doc("0.9.26", "0.9.26"), "0.9.27");
+    expect(failures[0]).toContain("STATE:candidate_version is 0.9.26");
+    expect(failures[0]).toContain("<!-- STATE:candidate_version=0.9.27 -->");
+    expect(failures).toContain("STALE-DECISION: first live owner decision must name candidate v0.9.27");
+  });
+
+  it("still fails when only the decision is stale, so a hand-edited anchor cannot alone satisfy it", () => {
+    expect(validateStageCandidate(doc("0.9.27", "0.9.26"), "0.9.27")).toEqual([
+      "STALE-DECISION: first live owner decision must name candidate v0.9.27",
+    ]);
+  });
+
+  it("treats a missing anchor as a failure rather than a pass", () => {
+    const failures = validateStageCandidate(`## Required owner decisions (live)
+
+1. **v0.9.27**
+`, "0.9.27");
+    expect(failures[0]).toContain("STATE:candidate_version is missing");
   });
 });
 

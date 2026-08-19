@@ -208,6 +208,24 @@ function Assert-PublicVersionCanPublish([string]$CandidateVersion, [string]$Cand
   }
 }
 
+# FAIL IN SECONDS, NOT AFTER A 13-MINUTE VERIFY + BUILD (2026-08-19). The v0.9.26 stage burned two
+# full cycles on two states that are knowable before anything runs: a local tag left behind by an
+# abandoned attempt (stage dies at "fatal: tag already exists" AFTER the build), and a
+# docs/RELEASE_STATE.md still naming the previous candidate (the release-state gate dies with
+# STALE-DECISION at the END of verify-release.ps1). Both are checked here against the version this
+# run is ABOUT to cut, and both messages carry the exact command that clears them. The doc rule is
+# NOT restated in PowerShell - verify-release-state.mjs --stage-candidate owns it.
+function Assert-StageCandidateReady([string]$NextVersion) {
+  $tag = "v$NextVersion"
+  if (Get-GitLine @("tag", "--list", $tag)) {
+    throw "Release refused (stage preflight): local tag $tag already exists, so this stage would die at the tag step after a full verify + build. If it is debris from an abandoned attempt (confirm with: git ls-remote --tags origin refs/tags/$tag), clear it with: git tag -d $tag"
+  }
+  if (Get-GitLine @("ls-remote", "--tags", "origin", "refs/tags/$tag")) {
+    throw "Release refused (stage preflight): $tag already exists on origin. That version number is spent - cut the next one (-SetVersion) rather than reusing it."
+  }
+  Invoke-CheckedProcess "release-state candidate preflight" "node" @((Join-Path $repo "scripts/verify-release-state.mjs"), "--stage-candidate", $NextVersion) -ShowOutput | Out-Null
+}
+
 function Invoke-TauriSigned([string]$KeyPath, [string[]]$TauriArgs, [string]$Label) {
   # GRANDFATHERED FLEET ANCHOR (reconcile 2026-07-23, owner-approved): the pinned fleet key
   # (docs/UPDATER_TRUST_ROOT.md) is passwordless, and normal releases MUST use it. The tauri CLI
@@ -399,6 +417,26 @@ $lockPath = Join-Path $repo "package-lock.json"
 $cargoPath = Join-Path $repo "src-tauri\Cargo.toml"
 $statePath = Join-Path $repo "docs\RELEASE_STATE.md"
 
+# The version this run will cut is resolved BEFORE the expensive gates, so the cheap preflight can
+# name it. Nothing is written here; the version files are rewritten further down, unchanged.
+$conf = Get-Content -LiteralPath $confPath -Raw | ConvertFrom-Json
+$current = [version]$conf.version
+if ($SetVersion) {
+  $next = [version]$SetVersion
+} elseif ($BumpMinor) {
+  $next = [version]::new($current.Major, $current.Minor + 1, 0)
+} else {
+  $next = [version]::new($current.Major, $current.Minor, $current.Build + 1)
+}
+if ($next -le $current) {
+  throw "Release version must increase. Current=$current requested=$next"
+}
+$currentText = $current.ToString()
+$nextText = $next.ToString()
+$currentEscaped = [regex]::Escape($currentText)
+
+Assert-StageCandidateReady $nextText
+
 # Full project proof runs on the exact clean source that will be versioned. As a child PROCESS, not
 # `& script.ps1` + $LASTEXITCODE: with no native command left in this scope $LASTEXITCODE can be
 # $null, and `$null -ne 0` is TRUE. A child powershell.exe returns a real exit code.
@@ -425,22 +463,6 @@ try {
     Remove-Item -LiteralPath $resolvedProbeDir -Recurse -Force -ErrorAction SilentlyContinue
   }
 }
-
-$conf = Get-Content -LiteralPath $confPath -Raw | ConvertFrom-Json
-$current = [version]$conf.version
-if ($SetVersion) {
-  $next = [version]$SetVersion
-} elseif ($BumpMinor) {
-  $next = [version]::new($current.Major, $current.Minor + 1, 0)
-} else {
-  $next = [version]::new($current.Major, $current.Minor, $current.Build + 1)
-}
-if ($next -le $current) {
-  throw "Release version must increase. Current=$current requested=$next"
-}
-$currentText = $current.ToString()
-$nextText = $next.ToString()
-$currentEscaped = [regex]::Escape($currentText)
 
 Write-NoBom $confPath ((Read-Utf8 $confPath) -replace ('"version": "' + $currentEscaped + '"'), ('"version": "' + $nextText + '"'))
 Write-NoBom $pkgPath ((Read-Utf8 $pkgPath) -replace ('"version": "' + $currentEscaped + '"'), ('"version": "' + $nextText + '"'))

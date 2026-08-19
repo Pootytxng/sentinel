@@ -89,6 +89,26 @@ describe("release pipeline safety", () => {
     expect(fetch).toBeLessThan(versionWrite);
   });
 
+  // bug->guard (2026-08-19): the v0.9.26 stage spent two ~13-minute verify+build cycles discovering
+  // two states that were knowable in the first second - a leftover local tag from an abandoned
+  // attempt, and a RELEASE_STATE still naming the previous candidate. The preflight only pays for
+  // itself if it runs BEFORE the expensive gates, so the ordering is the assertion.
+  it("resolves the next version and clears the cheap blockers before the expensive gates", () => {
+    const preflight = position("Assert-StageCandidateReady $nextText");
+    const verify = position('Invoke-StreamedProcess "verify-release.ps1"');
+    const versionWrite = position("Write-NoBom $confPath");
+    expect(preflight).toBeGreaterThan(-1);
+    expect(preflight).toBeLessThan(verify);
+    expect(preflight).toBeLessThan(versionWrite);
+    // The version math must be hoisted above the preflight, or it has nothing to check against.
+    expect(position("$nextText = $next.ToString()")).toBeLessThan(preflight);
+    // Both blockers, and the doc rule kept in ONE implementation (the node checker owns it).
+    expect(executable).toContain('Get-GitLine @("tag", "--list", $tag)');
+    expect(executable).toContain('Get-GitLine @("ls-remote", "--tags", "origin", "refs/tags/$tag")');
+    expect(executable).toContain('"--stage-candidate", $NextVersion');
+    expect(executable).toContain("git tag -d $tag");
+  });
+
   it("runs the canonical verification gate before creating a release commit", () => {
     expect(position("verify-release.ps1")).toBeLessThan(position("commit staged release version"));
   });

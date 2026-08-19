@@ -48,6 +48,31 @@ export function ownerDecisionsSection(docText) {
   return m ? m[0] : "";
 }
 
+// STAGE PREFLIGHT (2026-08-19). The doc half of "fail in seconds, not after a 13-minute verify +
+// build". The v0.9.26 stage burned two full cycles on this exact state: release.ps1 bumps
+// STATE:latest_release_version as part of the cut, but nothing moves STATE:candidate_version or the
+// owner-decision heading, so the release-state gate at the END of verify-release.ps1 failed with
+// STALE-DECISION after the whole suite had already run. The rule is not restated here in PowerShell
+// - the stage calls this with the version it is ABOUT to cut, so there is one implementation.
+export function validateStageCandidate(docText, nextVersion) {
+  const anchor = (key) => {
+    const m = docText.match(new RegExp(`<!--\\s*STATE:${key}=([^\\s]+)\\s*-->`));
+    return m ? m[1] : null;
+  };
+  const failures = [];
+  const candidate = anchor("candidate_version");
+  if (candidate !== nextVersion) {
+    failures.push(
+      `STAGE-PREFLIGHT: STATE:candidate_version is ${candidate || "missing"}, but this run will cut v${nextVersion}. ` +
+        `Set <!-- STATE:candidate_version=${nextVersion} --> in docs/RELEASE_STATE.md, then retry.`,
+    );
+  }
+  for (const f of validateOwnerDecisionVersions(ownerDecisionsSection(docText), nextVersion, nextVersion)) {
+    if (!failures.includes(f)) failures.push(f);
+  }
+  return failures;
+}
+
 export function validateOwnerDecisionVersions(section, latestVersion, candidateVersion) {
   const failures = [];
   if (!section) return ["STALE-DECISION: Required owner decisions section is missing"];
@@ -394,6 +419,26 @@ const IS_MAIN =
 if (IS_MAIN) {
   const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const STRICT = process.argv.includes("--strict");
+
+  // `--stage-candidate <version>` is the seconds-long preflight release.ps1 calls before it spends a
+  // verify + build on a candidate the doc does not name. Doc-only: it reads nothing else.
+  const stageIdx = process.argv.indexOf("--stage-candidate");
+  if (stageIdx !== -1) {
+    const nextVersion = process.argv[stageIdx + 1];
+    if (!nextVersion || !/^\d+\.\d+\.\d+$/.test(String(nextVersion))) {
+      console.log("STAGE-PREFLIGHT: --stage-candidate needs the version this run will cut, e.g. --stage-candidate 0.9.27");
+      process.exit(1);
+    }
+    const failures = validateStageCandidate(readFileSync(join(ROOT, DOC_REL), "utf8"), nextVersion);
+    for (const f of failures) console.log(f);
+    if (failures.length) {
+      console.log(`FIX-FORWARD: reconcile docs/RELEASE_STATE.md for candidate v${nextVersion} (anchor + owner decision 1), then re-run the release.`);
+      process.exit(1);
+    }
+    console.log(`STAGE-PREFLIGHT OK: docs/RELEASE_STATE.md names candidate v${nextVersion}.`);
+    process.exit(0);
+  }
+
   const { results, citations, missingSections, stateFail, notes, bad, near } = verifyRepo(ROOT, { machine: true });
 
   for (const r of results) {

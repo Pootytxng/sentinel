@@ -6,6 +6,37 @@
 > Current truth lives in docs/RELEASE_STATE.md — these are point-in-time records.
 
 ---
+## ARCHIVED 2026-08-19 — Cycle 2026-08-19a (moved verbatim)
+
+> Moved out of `docs/BACKLOG.md` for the byte budget once v0.9.26 carried this fix to the fleet
+> (Cycle 2026-08-19b). Verbatim, unedited.
+
+### Cycle 2026-08-19a — ✅ THE SCALE WAS THE TRIGGER, NOT THE RIG (CC): `75880de1` on `perf/idle-127-ambient-raster` — issue [#127](https://github.com/Pootytxng/sentinel/issues/127)
+
+**Whole-app idle on Home: 19.632 → 10.483 percent of one core**, measured against the INSTALLED
+binary before and after (`docs/perf/raw/idle-attribution-2026-08-19-{A-rig-on,D-installed-fix}.json`).
+**#127's own diagnosis did not reproduce:** the rAF band is 0.201 points and fired ZERO frames, so
+the 3D rig was never the cost, and the dependency-bump theory is dead (r3f/drei/three identical in
+the lockfile at the baseline commit, at `efde8310`, at HEAD and on disk). The rAF registration
+stacks were already sitting in the committed evidence, unread — they name GSAP's ticker and
+`ReticleCursor`, never the rig chunk.
+
+The cost was two decorative CSS animations that Cycle 2026-08-06a's guard treats as free because
+they animate `transform`. That cycle removed `aurora`'s blur and **left its `scale()`** — the
+multiplier went, the trigger stayed, and the layer still cost **13.257 points** (67.5% of idle) on
+`body::before`, i.e. in every room. The two `.stl-ring` pulses on every Home cost **4.156**, and
+that one is not about scale: 4.156 shipped / 4.001 promoted / 4.721 animating opacity alone —
+**running forever was the cost, not the property.** Fix: aurora drifts on pure `translate3d`; both
+always-on pings are now bounded. Two new guards, both falsified on purpose; `.stl-ring` joined the
+always-on inventory it should always have been in. `q7-probe` gained `--inject-css`, which A/B-ed
+each hypothesis against the shipped binary in ~6 min instead of a rebuild.
+
+**Stated scope:** the update-pill LED got the same bounded treatment but was **not separately
+measured** (no update available during the runs). Post-fix baselines are noisy, so the total is
+quotable and single-run per-animation splits are not. `ReticleCursor` writes a transform every
+frame while the pointer rests in the window — a live idle cost, not yet filed.
+
+---
 ## ARCHIVED 2026-08-19 — Cycle 2026-08-06a (moved verbatim)
 
 > Moved out of `docs/BACKLOG.md` for the byte budget when Cycle 2026-08-19a landed. Verbatim, unedited.
