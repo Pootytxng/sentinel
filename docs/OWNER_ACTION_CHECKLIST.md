@@ -51,9 +51,9 @@
   public page and is not republishable. **v0.9.10 is likewise not sendable** — you authorized its
   cleanup, so its abandoned draft and releases-repo tag were deleted on 2026-07-28 (source tag
   `92c7608` and the local evidence stay preserved). **The send candidate is now
-  live: v0.9.11 (`7ba5fb6`) published 2026-07-28** — public release id `361056355`, installer
-  SHA-256 `bb2b85a4…5438384f`, manifest `0.9.11`, signature verified, and your own box runs those
-  exact bytes — and the canary above proves that path works on someone else's machine. Every
+  live: v0.9.26 (`5e64074c`) published 2026-08-19** — public release id `372920800`, installer
+  SHA-256 `4b72d681…9294e98`, manifest `0.9.26`, signature verified, and your own box runs those
+  exact bytes — and the canary (on v0.9.11) proves that path works on someone else's machine. Every
   precondition is met (full local gate set green; hosted Actions stay off by your standing decision
   — see B7 — so **local IS the gate**), so nothing blocks widening but your call on who and when.
   The release page is
