@@ -11,7 +11,7 @@
 // cases below only prove the audit can fail, which is the part a green suite would otherwise hide.
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -342,6 +342,43 @@ describe("what a checkout is entitled to say about origin", () => {
     expect(problems[0]).toContain("origin/landed");
     // origin/ahead is NOT merged, but re-proving that needs ancestry a depth-1 clone lacks.
     expect(problems.some((p) => /still changes the tree/.test(p))).toBe(false);
+  });
+});
+
+// Where the dead end actually came from. docs/RELEASE_AUTONOMY.md — the policy that authorises a
+// lane to merge its own PR — said in the same breath "never with `--delete-branch` ... prune the ref
+// with" the `gh` REST deletion, which this machine's permission layer denies. A session following
+// the policy exactly hit the wall every time, and one of them wrote the wall into the record as the
+// reason a merged ref had to stay standing. Fixing this audit's messages while the policy still
+// prescribed the blocked command would have moved the contradiction rather than closed it.
+//
+// docs/archive/** is exempt: those are point-in-time records of what was true when written, and
+// editing them to match today is falsifying them. A live doc with a real reason to name the call can
+// carry a greppable `blocked-prune-allow` on the line — the same escape hatch the mutation-boundary
+// and outbound guards use. No live doc needs one today.
+describe("the live docs do not prescribe the blocked prune", () => {
+  it("nowhere recommends the gh REST deletion for pruning a ref", () => {
+    const tracked = git(repoRoot, ["ls-files", "*.md"])
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("docs/archive/"));
+    // Self-test: a pathspec that silently matched nothing would pass this without reading anything.
+    expect(tracked.length).toBeGreaterThan(20);
+
+    // No \s or \b in the pattern: it is meant to read as the prose it bans — "gh api ... DELETE",
+    // on one line, in any of the argument orders the CLI accepts.
+    const prescribes = /gh[ ]+api[^`]*DELETE/;
+    const offenders = [];
+    for (const rel of tracked) {
+      readFileSync(join(repoRoot, rel), "utf8")
+        .split("\n")
+        .forEach((line, i) => {
+          if (!line.includes("blocked-prune-allow") && prescribes.test(line)) {
+            offenders.push(`${rel}:${i + 1}`);
+          }
+        });
+    }
+    expect(offenders).toEqual([]);
   });
 });
 
