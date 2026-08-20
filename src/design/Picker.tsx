@@ -44,7 +44,7 @@ export type PickerOption = {
   disabled?: boolean;
 };
 
-export type PickerProps = {
+type PickerBaseProps = {
   options: PickerOption[];
   /** The selected option's `value`. An empty string (or any value not in `options`) shows
    *  `placeholder` — the same state the native control's blank `<option>` used to carry. */
@@ -55,13 +55,28 @@ export type PickerProps = {
   disabled?: boolean;
   /** Layout hook for the consumer (width, grid placement). Never a re-skin: the look is this file's. */
   className?: string;
-  /** Accessible name. Required unless the control is wrapped in a `<label>`, in which case pass
-   *  `labelledBy` instead — one of the two must be present or AT reads an unnamed combobox. */
-  "aria-label"?: string;
-  labelledBy?: string;
-  /** Forwarded to the trigger so a `<label htmlFor>` can point at it. */
-  id?: string;
 };
+
+/** The accessible name, and why exactly one of these three is REQUIRED rather than optional.
+ *
+ *  The trigger is `role="combobox"`, and combobox is one of the roles ARIA does not permit to take
+ *  its name from content — so the visible "Alpha" inside the trigger names nothing, and a Picker
+ *  with none of these reads to assistive tech as an unnamed combobox. The native `<select>` this
+ *  control replaced got its name from the wrapping `<label>` for free; that free naming is exactly
+ *  what was dropped, and a doc-comment saying "one of the two must be present" is not a guard.
+ *
+ *  So the compiler holds it: omitting all three is a type error at the call site, which is the only
+ *  tier that reaches a NEW surface with no render test of its own. axe pins the same contract at
+ *  runtime for all three paths in `src/design/a11y-axe-guard.test.tsx` (C-13). */
+type PickerNameProps =
+  /** Name the control directly. */
+  | { "aria-label": string; labelledBy?: never; id?: string }
+  /** Point at a visible label element already on the surface. */
+  | { labelledBy: string; "aria-label"?: never; id?: string }
+  /** Forwarded to the trigger so an external `<label htmlFor>` can point at it. */
+  | { id: string; "aria-label"?: never; labelledBy?: never };
+
+export type PickerProps = PickerBaseProps & PickerNameProps;
 
 /** Vertical gap between the trigger and its list, and the margin the list keeps off the viewport. */
 const GAP = 6;

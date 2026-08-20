@@ -422,7 +422,7 @@ describe("room-accents: picker interaction (pick → persist → reset)", () => 
       "true",
     );
     // reset → cleared
-    fireEvent.click(screen.getByRole("button", { name: "Reset to default" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Reset to default" }));
     expect(readRoomAccents().play).toBeUndefined();
   });
 
@@ -473,7 +473,7 @@ describe("apply to all rooms", () => {
     window.addEventListener("compy:room-identity-changed", events);
     render(<RoomAccentPicker room="play" roomLabel="Monitor" />);
     fireEvent.click(screen.getByRole("button", { name: "Monitor accent color" }));
-    fireEvent.click(screen.getByRole("button", { name: "Apply to all rooms" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Apply to all rooms" }));
     const teal = ROOM_IDENTITY.play.toLowerCase();
     const stored = readRoomAccents();
     for (const room of PICKABLE_ROOMS) expect(stored[room]).toBe(teal);
@@ -493,7 +493,7 @@ describe("apply to all rooms", () => {
     localStorage.clear();
     render(<RoomAccentPicker room="home" roomLabel="Home" />);
     fireEvent.click(screen.getByRole("button", { name: "Home accent color" }));
-    fireEvent.click(screen.getByRole("button", { name: "Apply to all rooms" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Apply to all rooms" }));
     expect(screen.queryByRole("menu")).toBeNull();
     const stored = readRoomAccents();
     for (const room of PICKABLE_ROOMS) expect(stored[room]).toBe(HOME_ACCENT.toLowerCase());
