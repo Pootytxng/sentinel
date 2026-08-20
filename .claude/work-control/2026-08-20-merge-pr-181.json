@@ -1,0 +1,56 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "documentation",
+  "pr": 181,
+  "issue": 180,
+  "branch": "lane/comprehensibility-sweep",
+  "currentHead": "e6c5b188fce2b62168397f4d30fb9b2d2f6441bd",
+  "explicitHandoff": "Owner turn 2026-08-20. He tried the installed 1d5b3c4c build, answered the open compy_home_interview question, reported three UI observations, and issued a standing directive that re-ranks the NEXT UP queue. This PR records the answer, the directive, the evidence behind the observations, and the plan the execution lane runs from. No app code.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room, git dir shared with C:/Users/Kuya/code/sentinel.",
+    "remoteState": "origin/main = c13f6223, unmoved since this lane cut from it. Other open PRs are #160 (lane/usage-audit-disk-bloat) and #163 (lane/cleanup-train-2026-08-20), both dormant and owned by other lanes per WORK_CONTROL - neither touched, neither adjudicated. #163's diff includes docs/BRANCH_DISPOSITIONS.md, which this PR also touches; the change here is one ADDED row for this lane's own new ref, which cannot semantically conflict with anything a dormant lane wrote about a different ref.",
+    "worktree": "git worktree list re-checked in this turn: seven worktrees, this lane alone in sentinel-home-room. The primary worktree C:/Users/Kuya/code/sentinel is still on main at ffe85271, 22 commits behind origin/main and holding an untracked receipt - left untouched on purpose, as the queue's own trap note says.",
+    "branch": "lane/comprehensibility-sweep, cut from c13f6223 which was exactly origin/main. Three commits, no merge commits, no divergence, MERGEABLE/CLEAN per gh pr view.",
+    "dirtyState": "git status --porcelain empty at this head apart from this receipt, which by construction cannot ride inside the head it authorizes. It lands on the next lane that does real work, the same chain PR #176 and PR #179 used.",
+    "liveProcesses": "One claude.exe session advancing, this one. Compy is running from %LOCALAPPDATA%/Compy/compy.exe at the 1d5b3c4c build, untouched by this lane. Nothing was built or installed for this PR."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "e6c5b188fce2b62168397f4d30fb9b2d2f6441bd",
+      "detail": "Ran inside .githooks/pre-push at this exact head; push exit 0 and origin advanced 517a1bc9..e6c5b188, which the hook blocks when the gate fails. Final line LOCAL CHECK RESULT: PASS, whole sequence read rather than tailed. The gate also passed at the two earlier heads on this branch, 14fc9a4d and 517a1bc9."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "reason": "Markdown and one JSON receipt only. No build, no install, nothing shipped to any machine. The 1d5b3c4c desk install was performed, proved by embedded stamp and recorded under PR #178; this lane does not touch it."
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "No product code and no UI surface in this diff. The UI work the owner commented on is the ALREADY-SHIPPED 1d5b3c4c build, whose round-2 self-review PASS 10/10 is recorded in RELEASE_STATE's owner-installed row. His three observations become issue #180, where the self-review law applies in full to the fixes - the plan names a self-reviewer PASS verdict and a before/after in its definition of done."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; WORK_CONTROL makes that review advisory rather than a blocker. The diff is documentation plus one receipt - no product code, no scripts, no mutation surface - and the full pre-push gate passed at this exact head."
+  },
+  "docGates": [
+    "branch-disposition-audit: OK - origin/lane/comprehensibility-sweep carries a CLAIMED row added in 517a1bc9. The row must be DROPPED, not flipped, by the next lane once this merge prunes the ref, which is the same ordering the #178/#179 chain used.",
+    "verify-release-state.mjs: 31 citations / 31 ok / 0 drift after e6c5b188 re-stamped STATE:source_main_commit from 20f2e381 to c13f6223. It was thirteen commits stale, past the ten-commit tolerance - pre-existing drift, surfaced here because verify-release-state is NOT part of the pre-push gate.",
+    "doc-budget.ps1: ALL PASS. docs/BACKLOG.md is tight at 112.9KB/114KB - archive prose there before adding any."
+  ]
+}
