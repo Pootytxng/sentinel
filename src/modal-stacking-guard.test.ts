@@ -6,7 +6,7 @@ import { join } from "path";
 //
 // THE BUG (self-review round 6, 2026-07-29): the confirm dialog — the last thing between a user and
 // a real change to their machine — sat at `z-index: 200`, BELOW every full-screen overlay in the
-// app (FirstCheck 999, Onboarding / SetupTour / GamingMode 1000, Term / WhatsThis 1200).
+// app (FirstCheck 999, SetupTour / GamingMode 1000, Term / WhatsThis 1200).
 // `ConfirmProvider` renders its backdrop as a DOM sibling of the whole app tree (main.tsx), so from
 // inside any of those overlays the confirm was painted UNDER an opaque full-screen layer: invisible
 // and un-hit-testable by mouse, while its DOM and keyboard trap kept working perfectly. A mouse user

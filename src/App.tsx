@@ -10,9 +10,8 @@ import pkg from "../package.json";
 // when this module is imported directly (e.g. by ReportModal.test.tsx), not just via main.tsx's
 // own "./i18n" import — same convention main.tsx documents at its own import site.
 import "./i18n";
-import { ONBOARDED_KEY } from "./Onboarding";
 import FirstCheck, { FIRST_CHECK_KEY } from "./surfaces/FirstCheck";
-import { SetupTour } from "./surfaces/setup/SetupTour";
+import { SetupTour, ONBOARDED_KEY } from "./surfaces/setup/SetupTour";
 import { LibraryContext } from "./surfaces/library-context";
 import { Term } from "./design/Term";
 import { Wordmark } from "./design/Wordmark";
@@ -76,7 +75,6 @@ import "./design/doorknob.css";
 import { KonamiWhisper } from "./design/KonamiWhisper";
 import { useConfirm } from "./design/ConfirmDialog";
 import "./design/instrument.css"; // Instrument token layer — after App.css so the accent re-point wins
-import "./Onboarding.css";
 import "./arc-instrument.css"; // arc re-dress skin (scoped under .arc-v2; after the classics)
 import "./design/living-instrument.css"; // "Living Instrument" feel-refresh skin — scoped under [data-living], default ON
 import "./design/dashboard-skin.css"; // "dashboard-energy" premium skin — scoped under [data-dash-v2], default ON

@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
 
@@ -334,7 +334,7 @@ describe("Capability Exception policy coherence", () => {
 // and the corpus assertion below then fails on a file that IS being scanned.
 const COPY_ROOTS = [
   join("src", "i18n"), join("src", "data"), join("src", "surfaces"),
-  join("src", "Onboarding.tsx"), join("site-app", "src", "pages"),
+  join("site-app", "src", "pages"),
 ];
 const COPY_DOCS = [
   join("docs", "BETA_TESTER_README.md"), join("docs", "PRIVACY.md"), join("docs", "EULA.md"),
@@ -382,6 +382,14 @@ describe("shipped copy matches the capability exception gate", () => {
     expect(files).toContain(join("src", "i18n", "locales", "en", "home.json"));
     expect(files).toContain(join("docs", "BETA_TESTER_README.md"));
     expect(files.length).toBeGreaterThan(30);
+    // A root that no longer exists is walked past in silence, so the corpus shrinks and the guard
+    // still passes — which is how `src/Onboarding.tsx` sat in this list after C-18b deleted it.
+    // Coverage lost quietly is worse than coverage never claimed.
+    const missing = [...COPY_ROOTS, ...COPY_DOCS].filter((p) => !existsSync(p));
+    expect(
+      missing,
+      `these copy roots no longer exist, so nothing under them is scanned: ${missing.join(", ")}`,
+    ).toEqual([]);
   });
 
   it("catches both directions (positive controls)", () => {

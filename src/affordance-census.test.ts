@@ -88,7 +88,6 @@ const ENTRIES: Record<string, string> = {
   blackbook: "surfaces/BlackbookV2.tsx",
   lab: "surfaces/LabGround.tsx",
   settings: "surfaces/Settings.tsx",
-  onboarding: "Onboarding.tsx",
   firstCheck: "surfaces/FirstCheck.tsx",
   overlay: "Overlay.tsx",
   shell: "App.tsx",
@@ -164,8 +163,8 @@ describe("affordance census — the redesign may add, never silently subtract", 
     for (const [name, keys] of Object.entries(census)) {
       expect(keys.length, `${name}: the census found almost no i18n keys — the walker is broken`).toBeGreaterThan(2);
     }
-    // Per-entry floors are individually weak (Onboarding honestly owns five strings). The union is
-    // the real tripwire: a broken resolver cannot keep this number up.
+    // Per-entry floors are individually weak (the smallest rooms honestly own a handful of strings).
+    // The union is the real tripwire: a broken resolver cannot keep this number up.
     const union = new Set(Object.values(census).flat());
     expect(union.size, "the census as a whole collapsed — check resolveImport and the key regexes").toBeGreaterThan(600);
   });
