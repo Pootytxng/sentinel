@@ -3193,7 +3193,6 @@ body::before {
    set, so the law's only celebration had never once fired for a user. Same rules, live selector. */
 .cmp-improved .cmp-bar-after {
   position: relative;
-  overflow: hidden;
 }
 .cmp-improved .cmp-bar-after::after {
   content: "";
@@ -3205,17 +3204,23 @@ body::before {
     rgba(255, 255, 255, 0.5) 50%,
     transparent 75%
   );
-  transform: translateX(-130%);
+  background-size: 300% 100%;
+  background-position: 200% 0;
   animation: cmp-winshimmer 3.4s ease-in-out 0.35s infinite;
   pointer-events: none;
 }
+/* The glint travels by BACKGROUND-POSITION, not by translating the overlay out of a clipped box.
+   The first cut used `transform: translateX()` + `overflow: hidden` on the bar — and the bar is a
+   text box (`.cmp-bar` has `min-width: 24px` and a right-aligned number), so on a narrow after-bar
+   the clip that contained the glint truncated a real digit. Self-review 2026-08-20 caught "999"
+   rendering as "99". Nothing here clips, so nothing here can cut the number off. */
 @keyframes cmp-winshimmer {
   0% {
-    transform: translateX(-130%);
+    background-position: 200% 0;
   }
   30%,
   100% {
-    transform: translateX(130%);
+    background-position: -100% 0;
   }
 }
 /* Explicit opt-out. The global reduced-motion block above already clamps every animation, but a
