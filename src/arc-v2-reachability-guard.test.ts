@@ -124,23 +124,17 @@ describe("who actually turns the arc skin on", () => {
     ).toEqual(["src/App.tsx :: arcV2"]);
   });
 
-  it("keeps the dormant subtrees dormant (SessionDebrief / WhatChangedPanel default false)", () => {
-    for (const [file, line] of [
-      ["src/surfaces/SessionDebrief.tsx", "arcV2 = false"],
-      ["src/surfaces/WhatChangedPanel.tsx", "arcV2 = false"],
-    ] as const) {
-      expect(
-        readFileSync(file, "utf8").includes(line),
-        `${file} must default arcV2 to false — the M3/M4 skin has never been visually reviewed`,
-      ).toBe(true);
-    }
-    // `Play.tsx:488` is SessionDebrief's ONLY mount, and it passes no arcV2.
-    const play = readFileSync("src/surfaces/Play.tsx", "utf8");
-    const mount = /<SessionDebrief([\s\S]{0,900}?)\/>/.exec(play);
-    expect(mount, "SessionDebrief's mount in Play.tsx moved — re-trace before trusting this row").toBeTruthy();
+  it("lets the prop exist ONLY where a screen actually throws the switch", () => {
+    // M3/M4 were deleted (2026-08-20) precisely because the prop chain outlived its decision: the
+    // switch was threaded through two components that nothing ever turned on, so the CSS styled a
+    // look no user could reach. A prop that no caller sets is not "ready", it is a promise the tree
+    // cannot keep — so the census is on the DECLARATION too, not just the callers.
+    const declarers = tsxFiles().filter((f) => /\barcV2\b/.test(readFileSync(f, "utf8"))).sort();
     expect(
-      /\barcV2\b/.test(mount?.[1] ?? ""),
-      "Play.tsx now passes arcV2 — M3/M4 just became visible; review the skin and update docs/BACKLOG.md",
-    ).toBe(false);
+      declarers,
+      "arcV2 may only appear where it is live: FirstCheck declares it, App.tsx sets it. Threading it " +
+        "into a third component re-creates the exact debt deleted on 2026-08-20 — a skin with no way " +
+        "to be seen. Wire the caller in the same change, or don't add the prop.",
+    ).toEqual(["src/App.tsx", "src/surfaces/FirstCheck.tsx"]);
   });
 });

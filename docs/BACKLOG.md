@@ -84,60 +84,14 @@
   applies; C-19 moved to the archive with its row, and C-17b is paid off below.
 
 - [x] **C-18 · C-18 guard · C-18b — ALL SHIPPED 2026-08-19, moved verbatim to [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-20, byte budget). The classic `Monitor` room deleted after `TuningPresets` moved out of it verbatim (issue [#146](https://github.com/Pootytxng/sentinel/issues/146)) · `reachability-guard.test.ts`'s second tier, which catches a DEAD default export inside a LIVE file · both dead rooms decided, `Onboarding` deleted and vendored `Stepper` exempted by rule (issue [#148](https://github.com/Pootytxng/sentinel/issues/148)). **Read them there before re-litigating any of it** — the C-18 row is this repo's record of a subagent grep that was wrong three times, and the C-17b RESIDUAL row below leans on it.
-- [x] **C-17b · The 12 recorded mono-on-prose violations are PAID — ceiling 12 → 0.** The C-17 lane
-  seeded the buckets by a selector-name heuristic and restyled none of them. This lane closed them by
-  reading the CONTENT each selector renders — the i18n string, not its name — which is the evidence
-  the heuristic never had. **Eleven were confirmed prose and lost their mono face:** `.cmp-head` /
-  `.wcp-head` (both render a sentence), `.debrief-head` (which also put mono on the **Share button**),
-  `.arc-v2 .debrief-title`, `.arc-v2 .debrief-ctx-head`, `.arc-v2 .cmp-head`, `.arc-v2 .cmp-receipt-label`,
-  `.monitor-panel-sub`, `.strends-sub`, `.v2-update-title`, and `.fct-skip-hint` ("click to skip" —
-  its 0.1em uppercase-chrome tracking went with it). **One was RE-CLASSIFIED, not restyled:**
-  `.ss-pin-label` renders a bare clock time with `tabular-nums` beside siblings already filed `value`
-  — making it sans would have been a regression dressed as compliance. Also swept in the same block,
-  not one of the 12: `.v2-update-whatsnew` ("What's new") was mis-filed `value` and is plainly prose.
-  Reasoning per selector is in the `mono-law-guard.test.ts` header, **not** the census `note` — the
-  regenerator overwrites that field. **The ratchet now sits at 0, so there is no debt bucket left to
-  hide in.**
-- [x] **C-17b RESIDUAL · CLOSED 2026-08-20 on installed `402b0080` — VERDICT PASS, and the "6/12"
-  in this row's old header was itself wrong.** Re-measured fresh against the real installed binary
-  (`402b0080 · release · shell 0.9.26`), not a dev instance. **The prior count did not survive
-  contact with its own prose:** the row claimed 6 of 12 while naming only `.debrief-head`,
-  `.monitor-panel-sub`, `.strends-sub` plus the untouched control `.ss-pin-label` — 3 restyled
-  selectors, not 6. Corrected count on this pass: **4 of 12 measured**, and the remaining 8 are now
-  classified by the SHAPE of their wall, which is the thing that decides whether a row can ever
-  close.
-  **MEASURED (all four resolve to `Geist Sans`, none reads worse than the mono did, none breaks
-  alignment against a numeric sibling):** `.debrief-head` ("MortalShell2 · 13m 24s · 2:19 AM–2:33 AM",
-  sits clean above the stat row) · `.strends-sub` ("best 195 fps") · `.fct-skip-hint` ("click to
-  skip", letter-spacing measured 0.52px — the 0.1em uppercase-chrome tracking is confirmed gone;
-  **reached this time by arming a page-internal `setInterval` DOM poll before the "Re-run check"
-  click**, which beats the CDP-screenshot race the earlier pass lost under `prefers-reduced-motion`)
-  · `.monitor-panel-sub` ("pressure · ok") — **but read its wall below before quoting it as default
-  coverage.** Control `.ss-pin-label` still `Geist Mono` with `tabular-nums`: no regression.
-  **`.monitor-panel-sub` is only reachable on the FAILSAFE face, and that is a finding.**
-  Hand-traced, not taken from the subagent: `compy_monitor_console` is DEFAULT ON, so
-  `MonitorV2.tsx:206-236` routes basic AND advanced+live to `MonitorConsole`, which never uses the
-  class; the only branch left is `<Play view="sessions">` (`:240`), and `Play.tsx:264` sets
-  `showLive = view !== "sessions"` → `false`, so the `showLive && deepMonitoring` guard at
-  `Play.tsx:435` never fires. The whole `MonitoringTab` → `MonitorDomainCards` → `.monitor-panel-sub`
-  slot therefore renders **only** with `localStorage.compy_monitor_console="0"` — consistent with
-  C-18's "`monitor-panels.tsx` is the failsafe, not dead code", now extended to the domain cards.
-  The seam was set, measured, then removed and the app reloaded clean.
-  **UNREACHED — data-shaped (2). Will close organically, no code seam needed:** `.cmp-head` needs an
-  applied rec plus a SECOND session of the SAME game; `.wcp-head` never renders at all on this data
-  because `WhatChangedPanel.tsx:315-321` takes the `unavailable` branch, which emits only `.wcp-tag`
-  + reason ("First recorded MortalShell2 session — nothing earlier to compare against") — correct
-  wording, and it carries no mono either way. This machine has three sessions of three different
-  games; **writing fake sessions into the owner's real `%APPDATA%` was refused, not skipped.**
-  **UNREACHED — structural/permanent (6). These will NOT resolve by waiting; each needs a code
-  change to become reviewable:** `.v2-update-title` + `.v2-update-whatsnew` — `use-update.ts` has
-  zero localStorage/URL override seam and needs a real pending manifest above 0.9.26; and the four
-  `.arc-v2` variants (`.debrief-title`, `.debrief-ctx-head`, `.cmp-head`, `.cmp-receipt-label`) —
-  `SessionDebrief`'s only mount (`Play.tsx:488`) never passes `arcV2`, and the one live `arcV2=true`
-  call site (`FirstCheck`, `App.tsx:1228`) re-skins only its own `fc-backdrop` + `TrustSwitch`, never
-  the debrief/comparison subtree. **This is the row's real conclusion:** half the outstanding debt
-  was never reviewable UI at all, so it belongs to the `.arc-v2` part-dead row below, not to a
-  perpetual visual-review IOU. The guard already proves the rules left the mono set.
+- [x] **C-17b + C-17b RESIDUAL — the mono-on-prose ratchet is PAID (12 → 0), rows moved verbatim to
+  [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-20, byte budget). Twelve selectors that
+  wore a mono face on prose: eleven restyled, one re-classified (`.ss-pin-label` renders a clock and
+  keeps `tabular-nums`). The residual visual review closed PASS on installed `402b0080`, and
+  corrected its own header — **4 of 12 measured, not 6** — then classified the remaining 8 by the
+  SHAPE of their wall: 2 data-shaped (close organically), 6 structural, of which four were the
+  `.arc-v2` variants that turned out never to render at all and went out with the row below.
+  `src/design/mono-law-guard.test.ts` holds the ratchet at 0 and carries the per-selector reasoning.
 - [x] **Buttons rendered in Arial — FIXED, shipped and reviewed on installed `aac90cd7` (2026-08-20,
   #155). The finding was right and 3x too small.** `.btn-small` (`App.css:1388`) and
   `.debrief-ctx-head` (`App.css:3053`) declare `font-size`/`font-weight` and no `font-family`, so
@@ -165,33 +119,56 @@
   unchanged size/weight, hover state intact under real CDP mouse events, zero overflowing controls
   across Health/Live/History/Test/Settings. *Recorded:* the first `/S` install returned exit 0 and
   never replaced the exe — the stamp gate caught it, a re-run fixed it, filed as **#156**.
-- [ ] **`.arc-v2` — the per-section decision is MADE (2026-08-20), a THIRD dead stratum turned up,
-  and what is left is one owner fork.** Row was corrected once already (2026-08-19, C-18b lane);
-  both earlier findings were greps standing in for a trace, so this pass is hand-traced AND
-  mechanized: `src/arc-v2-reachability-guard.test.ts`. `src/arc-instrument.css` **458 → 274 lines;
-  nothing that renders changed.**
+- [x] **`.arc-v2` — CLOSED 2026-08-20. All three dead strata deleted, and the fourth (dormant M3/M4)
+  went with its prop chain. `src/arc-instrument.css` 458 → 127 lines; nothing that renders changed.**
+  Row had been corrected once already (2026-08-19, C-18b lane); both earlier findings were greps
+  standing in for a trace, so this pass was hand-traced AND mechanized:
+  `src/arc-v2-reachability-guard.test.ts`.
   **M1 Onboarding (was 6–123) — DELETED.** C-18b deleted the component (issue #148); no `onb-` token
   survives anywhere in `src/**`, so those 118 lines could not match on any input.
   **M2 First-check — LIVE, and it was carrying 66 lines of dead radar.** `4b5e8b49` ("retire the
   radar → light sweep") removed the component and left `.fc-radar*`, `.fc-scanzone`,
   `@keyframes fc-sweep`, their `@media` and the reduced-motion rule behind. This row never saw that
-  stratum — the guard's class-by-class orphan check found it. **Deleted too.**
-  **M3 Session debrief + M4/4b comparison cards — DORMANT, kept, and NOT the same thing as dead.**
-  Shorthand-aware trace: `arc-v2` reaches the DOM from 6 emitters, every one gated on an `arcV2`
-  prop; the only top-level caller that sets it is `App.tsx:1228` (`<FirstCheck arcV2 />` — the JSX
-  shorthand the first grep could not see), and `FirstCheck` imports neither `SessionDebrief` nor
-  `WhatChangedPanel`, so no `.debrief`/`.cmp`/`.wcp` element ever sits under an `.arc-v2` ancestor.
-  `SessionDebrief`'s only mount, `Play.tsx:488`, passes nothing. **Unlike M1 the prop chain is
-  complete end to end** — one prop there would light 156 lines of never-reviewed skin — so deleting
-  the CSS alone would leave a prop that lies, and turning it on is a visual change owing its own
-  build → install → self-review.
-  **OWNER FORK, with a recommendation: delete the M3/M4 CSS *and* the `arcV2` prop chain in
-  `SessionDebrief`/`WhatChangedPanel` together**, leaving the skin only where it lives (First-check)
-  — three skin generations have shipped since it was written. The other direction (wire it at
-  `Play.tsx:488`, then review it) is one train; say which.
-  Guard: the orphan test fails on any arc-skin class with no subject in the tree, and the caller
-  census fails the moment a second caller turns the skin on — so this row cannot go stale a third
-  time.
+  stratum — the guard's class-by-class orphan check found it on its first run. **Deleted too.**
+  **M3 Session debrief + M4/4b comparison cards — DELETED, with the `arcV2` prop chain.** Traced
+  shorthand-aware: `arc-v2` reached the DOM from 6 emitters, all gated on an `arcV2` prop, and the
+  only caller that ever set it is `App.tsx:1228` (`<FirstCheck arcV2 />` — the JSX shorthand the
+  first grep could not see). `FirstCheck` imports neither surface, so no `.debrief`/`.cmp`/`.wcp`
+  element could sit under an `.arc-v2` ancestor. **This was first filed as an owner fork; that was
+  over-escalation** — it is dead engineering, not a product call, and the owner said so plainly
+  ("I have no idea what that arc-v2 thing even is"). Deleting the CSS alone would have left a prop
+  that lies, so both went: 156 lines of skin and the prop threaded through `SessionDebrief` +
+  `WhatChangedPanel`. Three skin generations have shipped since it was written; a re-dress should
+  start from a decision, not from leftovers.
+  **No visual review dispatched, and the reason is mechanical, not a shortcut:** every removed rule
+  needed an `.arc-v2` ancestor no mount produced, and the removed JSX was `${arcV2 ? " arc-v2" : ""}`
+  where `arcV2` was `false` at every call site — proved by the caller census in the guard, which was
+  green before the deletion. The diff cannot change a pixel.
+  **Guard, rewritten with the deletion:** the orphan test still fails on any arc-skin class with no
+  subject in the tree, and the caller census now pins the DECLARATION as well — `arcV2` may exist
+  only in `App.tsx` and `FirstCheck.tsx`. Threading it into a third component fails the build, which
+  is exactly the debt this row was.
+  Verified: `tsc --noEmit` clean; mono census re-seeded (`MONO_CENSUS_UPDATE=1`) and the delta is
+  exactly the 5 deleted mono rules, nothing else.
+- [ ] **The kernel law's ONE earned celebration has never fired for a single user — decide whether to
+  build it. Found 2026-08-20 by the arc-v2 cleanup, not by anyone looking for it.** The owner's
+  2026-06-06 kernel law says the win card's shimmer is the only celebratory sweep in the app: when a
+  measured fix actually improves FPS, the improved after-bar sweeps once, and nothing else in Compy
+  ever does. It had exactly one implementation — `@keyframes cmp-winshimmer` on
+  `.cmp-improved.arc-v2 .cmp-bar-after` — and it lived in `src/arc-instrument.css`, **behind the
+  `arcV2` prop no screen ever set.** So the law's single celebration was unreachable from the day it
+  was written; it went out with the dead skin. `src/sweep-guard.test.ts` proved the law was upheld
+  the whole time, because "the only sweep is `cmp-winshimmer`" was true of a rule that could not run
+  — the guard was watching the keyframe, not the reachability.
+  **Recommendation: build it, in its own train.** Re-home the keyframe + the two `.cmp-bar-after`
+  rules into `src/App.css` on the live selector (`.cmp-improved .cmp-bar-after`, no `.arc-v2`), keep
+  the reduced-motion opt-out, and put it through build → install → **self-review** — it is a
+  user-visible animation that has never once been looked at on a real build. **Not folded into the
+  cleanup that found it:** deleting unreachable CSS must not be the commit that quietly introduces a
+  new moving thing on screen.
+  Guard already in place: `src/sweep-guard.test.ts` keeps the law's teeth (no second sweep may
+  appear anywhere in `src/`) and pins the current count at ZERO, so re-homing it fails the build
+  until this row and the visual review are updated in the same train.
 - [ ] **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it.** Owner fork, never resolved,
   still parked by exemption.
 - [x] **C-12 · DOC DRIFT CLOSED — the command palette was filed as abandoned while shipping DEFAULT ON.** <!-- shipped-status-history -->

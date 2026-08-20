@@ -7,6 +7,68 @@
 
 ---
 
+## 2026-08-20 — C-17b + C-17b RESIDUAL conformance rows, moved verbatim (BACKLOG byte budget)
+
+Moved out of `docs/BACKLOG.md` when the arc-v2 cleanup + the win-card-shimmer finding pushed it
+0.5KB past the 114KB wall. Byte-for-byte. The mono ratchet these two rows paid off now sits at 0;
+`src/design/mono-law-guard.test.ts` is the live proof, and its header carries the per-selector
+reasoning. Read here before re-litigating the count — the "6/12" correction is in the second row.
+
+- [x] **C-17b · The 12 recorded mono-on-prose violations are PAID — ceiling 12 → 0.** The C-17 lane
+  seeded the buckets by a selector-name heuristic and restyled none of them. This lane closed them by
+  reading the CONTENT each selector renders — the i18n string, not its name — which is the evidence
+  the heuristic never had. **Eleven were confirmed prose and lost their mono face:** `.cmp-head` /
+  `.wcp-head` (both render a sentence), `.debrief-head` (which also put mono on the **Share button**),
+  `.arc-v2 .debrief-title`, `.arc-v2 .debrief-ctx-head`, `.arc-v2 .cmp-head`, `.arc-v2 .cmp-receipt-label`,
+  `.monitor-panel-sub`, `.strends-sub`, `.v2-update-title`, and `.fct-skip-hint` ("click to skip" —
+  its 0.1em uppercase-chrome tracking went with it). **One was RE-CLASSIFIED, not restyled:**
+  `.ss-pin-label` renders a bare clock time with `tabular-nums` beside siblings already filed `value`
+  — making it sans would have been a regression dressed as compliance. Also swept in the same block,
+  not one of the 12: `.v2-update-whatsnew` ("What's new") was mis-filed `value` and is plainly prose.
+  Reasoning per selector is in the `mono-law-guard.test.ts` header, **not** the census `note` — the
+  regenerator overwrites that field. **The ratchet now sits at 0, so there is no debt bucket left to
+  hide in.**
+- [x] **C-17b RESIDUAL · CLOSED 2026-08-20 on installed `402b0080` — VERDICT PASS, and the "6/12"
+  in this row's old header was itself wrong.** Re-measured fresh against the real installed binary
+  (`402b0080 · release · shell 0.9.26`), not a dev instance. **The prior count did not survive
+  contact with its own prose:** the row claimed 6 of 12 while naming only `.debrief-head`,
+  `.monitor-panel-sub`, `.strends-sub` plus the untouched control `.ss-pin-label` — 3 restyled
+  selectors, not 6. Corrected count on this pass: **4 of 12 measured**, and the remaining 8 are now
+  classified by the SHAPE of their wall, which is the thing that decides whether a row can ever
+  close.
+  **MEASURED (all four resolve to `Geist Sans`, none reads worse than the mono did, none breaks
+  alignment against a numeric sibling):** `.debrief-head` ("MortalShell2 · 13m 24s · 2:19 AM–2:33 AM",
+  sits clean above the stat row) · `.strends-sub` ("best 195 fps") · `.fct-skip-hint` ("click to
+  skip", letter-spacing measured 0.52px — the 0.1em uppercase-chrome tracking is confirmed gone;
+  **reached this time by arming a page-internal `setInterval` DOM poll before the "Re-run check"
+  click**, which beats the CDP-screenshot race the earlier pass lost under `prefers-reduced-motion`)
+  · `.monitor-panel-sub` ("pressure · ok") — **but read its wall below before quoting it as default
+  coverage.** Control `.ss-pin-label` still `Geist Mono` with `tabular-nums`: no regression.
+  **`.monitor-panel-sub` is only reachable on the FAILSAFE face, and that is a finding.**
+  Hand-traced, not taken from the subagent: `compy_monitor_console` is DEFAULT ON, so
+  `MonitorV2.tsx:206-236` routes basic AND advanced+live to `MonitorConsole`, which never uses the
+  class; the only branch left is `<Play view="sessions">` (`:240`), and `Play.tsx:264` sets
+  `showLive = view !== "sessions"` → `false`, so the `showLive && deepMonitoring` guard at
+  `Play.tsx:435` never fires. The whole `MonitoringTab` → `MonitorDomainCards` → `.monitor-panel-sub`
+  slot therefore renders **only** with `localStorage.compy_monitor_console="0"` — consistent with
+  C-18's "`monitor-panels.tsx` is the failsafe, not dead code", now extended to the domain cards.
+  The seam was set, measured, then removed and the app reloaded clean.
+  **UNREACHED — data-shaped (2). Will close organically, no code seam needed:** `.cmp-head` needs an
+  applied rec plus a SECOND session of the SAME game; `.wcp-head` never renders at all on this data
+  because `WhatChangedPanel.tsx:315-321` takes the `unavailable` branch, which emits only `.wcp-tag`
+  + reason ("First recorded MortalShell2 session — nothing earlier to compare against") — correct
+  wording, and it carries no mono either way. This machine has three sessions of three different
+  games; **writing fake sessions into the owner's real `%APPDATA%` was refused, not skipped.**
+  **UNREACHED — structural/permanent (6). These will NOT resolve by waiting; each needs a code
+  change to become reviewable:** `.v2-update-title` + `.v2-update-whatsnew` — `use-update.ts` has
+  zero localStorage/URL override seam and needs a real pending manifest above 0.9.26; and the four
+  `.arc-v2` variants (`.debrief-title`, `.debrief-ctx-head`, `.cmp-head`, `.cmp-receipt-label`) —
+  `SessionDebrief`'s only mount (`Play.tsx:488`) never passes `arcV2`, and the one live `arcV2=true`
+  call site (`FirstCheck`, `App.tsx:1228`) re-skins only its own `fc-backdrop` + `TrustSwitch`, never
+  the debrief/comparison subtree. **This is the row's real conclusion:** half the outstanding debt
+  was never reviewable UI at all, so it belongs to the `.arc-v2` part-dead row below, not to a
+  perpetual visual-review IOU. The guard already proves the rules left the mono set.
+
 ## 2026-08-20 — C-18 / C-18 guard / C-18b conformance rows, moved verbatim (BACKLOG byte budget)
 
 Moved out of `docs/BACKLOG.md` when the C-17b review ship pushed it over the 114KB wall. Byte-for-byte.

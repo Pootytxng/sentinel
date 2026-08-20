@@ -53,7 +53,7 @@ $budgets = @{
 $byteBudgets = @{
   "docs/BACKLOG.md" = 116736
   "docs/RELEASE_STATE.md" = 49152
-  "docs/OWNER_ACTION_CHECKLIST.md" = 40960
+  "docs/OWNER_ACTION_CHECKLIST.md" = 33792
   "src-tauri/CLAUDE.md" = 10240
 }
 # CLAUDE.md is deliberately NOT in the table above. Its byte ceiling already exists and predates
