@@ -202,9 +202,8 @@
   position: absolute;
   right: 28px;
   bottom: 14px;
-  font-family: var(--font-mono);
   font-size: var(--type-label);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.04em;
   color: var(--faint);
 }
 

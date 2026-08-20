@@ -59,6 +59,35 @@ import { join } from "path";
 // anywhere renders in mono. Close either hole by widening the walk/regex, never by widening the
 // census.
 
+// ── C-17b: THE DEBT IS PAID, AND THE RATCHET IS NOW AT ZERO (2026-08-19) ─────────────────────
+// C-17 seeded 12 violations by heuristic and deliberately restyled none of them: none was reachable
+// on a screen that lane could verify live. C-17b closed them by reading the CONTENT each selector
+// actually renders — the i18n string, not the selector name — which is the evidence the heuristic
+// never had. Eleven were confirmed prose and lost their mono face:
+//
+//   .cmp-head / .arc-v2 .cmp-head           "COMPARISON · {rec} · two {game} sessions"
+//   .wcp-head                               "WHAT CHANGED? · vs your previous {game} session"
+//   .debrief-head / .arc-v2 .debrief-title  a game name — and it also wrapped the Share BUTTON
+//   .arc-v2 .debrief-ctx-head               "During this session: {n} Compy changes active"
+//   .arc-v2 .cmp-receipt-label              "Avg FPS" / "1% low"
+//   .monitor-panel-sub                      "{n} logical cores · 4.2 GHz", "pressure probe unavailable"
+//   .strends-sub                            "{n} sessions kept · trending up · best {n} fps"
+//   .v2-update-title                        "Compy v{version}" — a modal title, not a readout
+//   .fct-skip-hint                          "click to skip" (its 0.1em chrome tracking went with it)
+//
+// ONE was RE-CLASSIFIED, not restyled — `.ss-pin-label`. Its content is a bare clock time, it
+// carries `font-variant-numeric: tabular-nums`, and it sits in a strip whose siblings `.ss-chip`
+// and `.ss-detail` are already `value` under identical treatment. The heuristic caught it only
+// because the selector says "label". Making it sans would put a tabular timestamp in a proportional
+// face — a REGRESSION dressed as compliance. Recorded here and not in the census `note`, which the
+// regenerator overwrites.
+//
+// Bonus, same block, NOT one of the 12: `.v2-update-whatsnew` ("What's new") was filed `value` by
+// the heuristic and is plainly prose. It lost its mono face too, so it simply left the census.
+//
+// The ceiling is now 0, so there is no debt bucket left to hide in: a new mono-on-prose rule fails
+// the "UNCLASSIFIED" test, and classifying it `violation` fails the ratchet.
+
 const CENSUS_PATH = join("src", "design", "mono-census.baseline.json");
 
 type Bucket = "value" | "chrome-tag" | "violation" | "UNCLASSIFIED";

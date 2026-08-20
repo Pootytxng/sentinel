@@ -2486,3 +2486,59 @@ pre-existing >500 kB chunk advisory, not a regression). Agent (`Latency.tsx` / `
 
 Frozen beta refs (`16069fa`) untouched.
 
+### Conformance C-19 (archived 2026-08-19 from BACKLOG.md, byte budget)
+
+- [x] **C-19 · SHIPPED with C-05** (`d76f753f`). **The filed premise — "three clicks deep" — was
+  wrong, and the truth was worse: on default flags the offer had NO path at all** (see the C-18
+  correction above; `.mdc-root` and `.play-monitor` were both absent from the shipped build, checked
+  live, not inferred from a green suite). Home also *asserted* "no CPU temp — needs a sensor app"
+  with no probe behind it, so it printed that while HWiNFO was publishing — an unmeasured claim.
+  Now: a CPU TEMP gauge on the default Live face in **both** modes, a graded reading on Home's CPU
+  callout, and `CpuTempOffer` in a boxed Home tile that appears only while there is no reading. The
+  offer is deliberately NOT on the annotation plane — the owner's 2026-08-06 call is that planes are
+  labels, not controls, and `home-console-standard-readout-guard.test.tsx` caught the first cut that
+  broke it. `cpu_temp.rs` gained a 900ms/15s hit-miss cache first, so the new caller costs less than
+  the old one did.
+
+### Measurement Platform 2.0 — `next_test` structured rec-id (archived 2026-08-19 from BACKLOG.md, byte budget)
+
+- [x] **Measurement Platform 2.0 follow-up — `next_test` structured rec-id (additive).** The deferral's own
+  unlock condition is now met: the engine emits a real, OPTIONAL rec-id where a safe mapping provably exists.
+  `EventRecord.rec_id` carries the catalog id **copied verbatim off the Trust-Ledger row**, so
+  `Hypothesis.next_test_rec_id` / `WhatChangedReport.next_action_rec_id` are **READ, never matched from prose** —
+  nothing parses a summary or maps free text onto the catalog. Emitted under three read conditions, all inside
+  `compy-config-change` (the only hypothesis with a ledger row behind it): exactly ONE distinct rec in the
+  window · it has an apply event · that apply is not `since_rolled_back`. Every other hypothesis, the
+  confounded path, and the count-delta-only path emit `None` permanently. Deliberately NOT gated on
+  `is_appliable` — LOCKED rule 3 resolves rollback from `history.json` alone, so a rec that has since left the
+  apply allowlist is still undoable. **Routing correction (the deferral got the destination wrong):** the
+  destination is the **Trust Ledger / Applied Changes**, NOT a pre-loaded `ExperimentBench` pick — the bench
+  *applies* (`experiment.rs` `start_experiment` → `history::apply_recommendation`) while this next test
+  prescribes a *rollback*, and feeding it a still-active rec hits `already_active` in `simulate`'s precedence
+  chain and returns `already-configured` ("nothing left to change or test") — a dead end. Guard:
+  `next_test_rec_id_is_read_from_the_ledger_never_matched_from_prose` (6 cases, mutation-verified to fail on a
+  relaxed rule). Decision doc `docs/decisions/2026-07-18-prove-a-change-overlap.md` §5.
+  No mutation / network / gate change.
+  **Ledger half — ✅ LANDED, both halves now closed.** The "Next test" line in the What-changed report carries
+  an inline `Roll back "<change>"` button whenever the engine's rec id still resolves to a live applied row.
+  **Routing refinement of the line above** (the destination was right, the *location* wasn't): the affordance
+  brings the Ledger action TO the report rather than sending the user to the Ledger surface —
+  [[flags-name-it-and-fix-it-inline]] forbids a "go to another tab" dead-end and requires the flag to name the
+  specific thing it found (hence the change's title in the label, never a bare "Roll back"). Resolution is
+  against the **live** `changes` array (`App.tsx` `findActiveChangeForRec`), so the button self-hides the
+  instant the rollback lands — which is exactly why the engine's prose still names the Trust Ledger itself and
+  was left untouched: the sentence is the route, the button is only the shortcut. Props
+  (`activeChangeFor`/`onRollback`/`busy`) are optional together, so every pre-existing mount renders unchanged.
+  **Duplication caught by self-review and fixed in the same train:** in the primary flow (apply a fix from the
+  debrief → `arm_comparison` for that rec → the next same-game session resolves it) the `ComparisonCard`'s rec
+  and the engine's `next_action_rec_id` are the SAME still-active row, so an unguarded shortcut stacked TWO
+  differently-worded buttons for ONE action in one card. `SessionDebrief` now wraps the host resolver
+  (`rollbackShortcutFor`) and returns `undefined` for the card's own rec — for **every** verdict, not only the
+  ones showing "Revert it", because a `Roll back "X"` hanging under an *improved* card that just said "Keep it"
+  would contradict it outright. Wrapping the resolver rather than adding a prop leaves `WhatChangedPanel`'s
+  contract untouched and gives `SessionInvestigator` the same protection for free.
+  Guard: `src/surfaces/what-changed-rollback-guard.test.tsx` — 13 cases: 9 pinning the render condition, the
+  handed-over row, the busy face and all six stand-down paths, plus 4 that mount the *composition*
+  (`SessionDebrief`, not the isolated panel — which is exactly why the first 9 stayed green while the defect was
+  live) covering both suppression paths and both must-still-render paths. Mutation-verified: reverting the memo
+  to a bare `activeChangeFor(recId)` fails exactly the 2 suppression cases.
