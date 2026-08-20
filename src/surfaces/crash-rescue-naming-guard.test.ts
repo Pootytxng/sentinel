@@ -6,7 +6,7 @@
 // This guard holds the two properties that fix stands on, neither of which any type or render test
 // can see:
 //
-//   1. Every deep-linking intake row names a station that actually exists. A row pointing at a
+//   1. Every deep-linking affordance names a station that actually exists. Something pointing at a
 //      station key nothing renders is a click that silently does nothing — worse than the dock.
 //   2. The crash instrument is named after the PROBLEM, in the user's own words. "Black Box" is an
 //      aviation metaphor: correct, evocative, and invisible to someone searching for the word they
@@ -19,14 +19,34 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 import i18n from "../i18n";
-import { homeIntakeRows, homeCareEntry } from "./home-intake-data";
+import { homeCareEntry } from "./home-intake-data";
+import { INTERVIEW_FINDINGS, interviewFinding } from "./home-interview-data";
 import { labStations, labRouter, LAB_STATION_ORDER, type LabStationKey } from "./lab-guided-data";
 
-const ROWS = homeIntakeRows(i18n.t);
 // The crash deep-link moved OUT of the intake rows and into the always-visible Care entry
 // (issue #91 discovery contract, 2026-08-12). Both properties below still hold — they just read
-// the Care entry now. The station-set check keeps sweeping the rows in case one grows a station.
+// the Care entry now. The band itself was replaced by the interview (step 3, issue #177), so the
+// station-set sweep now walks every finding the interview can reach.
 const CARE = homeCareEntry(i18n.t);
+// Worst-case facts on purpose: nothing measured, every room present. A finding's DESTINATION must
+// be real no matter what the machine happens to be reading.
+const FINDINGS = INTERVIEW_FINDINGS.map((id) =>
+  interviewFinding(
+    id,
+    {
+      recsLoaded: false,
+      safeStackReady: 0,
+      fastPathWired: false,
+      activeChanges: 0,
+      sessionCount: 0,
+      lastSession: null,
+      readiness: null,
+      gpuTempC: null,
+      rooms: ["play", "learn", "lab"],
+    },
+    i18n.t,
+  ),
+);
 const STATIONS = labStations(i18n.t);
 // "optimize" is a ground-only prepend and deliberately absent from LAB_STATION_ORDER (see
 // lab-guided-data), so the set of real keys is the order plus it.
@@ -36,13 +56,14 @@ const REAL_KEYS: LabStationKey[] = ["optimize", ...LAB_STATION_ORDER];
 // it, because saying it is how the sweep below recognises a regression.
 const RETIRED = "Black Box";
 
-describe("intake deep-links point at real stations (§4)", () => {
-  it("every row that carries a station names one the Lab actually has", () => {
-    for (const row of ROWS.filter((r) => r.station)) {
+describe("deep-links point at real stations (§4)", () => {
+  it("every interview finding that carries a station names one the Lab actually has", () => {
+    for (const f of FINDINGS) {
+      if (f.action.kind !== "station") continue;
       expect(
         REAL_KEYS,
-        `intake row "${row.symptom}" deep-links to "${row.station}", which is not a Lab station — the click does nothing`,
-      ).toContain(row.station);
+        `interview finding "${f.id}" deep-links to "${f.action.station}", which is not a Lab station — the click does nothing`,
+      ).toContain(f.action.station);
     }
   });
 
@@ -61,15 +82,25 @@ describe("intake deep-links point at real stations (§4)", () => {
     expect(CARE.station, "Home's Care entry no longer deep-links the crash symptom").toBe("blackbox");
   });
 
-  it("keeps exactly ONE Home door to the crash station — the Care entry, not a duplicate row", () => {
-    // The entry was extracted from the intake band on 2026-08-12. Re-adding a crash row would put
-    // two doors to one station on one screen (rubric 3 duplication) AND put half of crash rescue
-    // back behind the band's flag, which is the whole defect the extraction fixed.
-    const rowDupes = ROWS.filter((r) => r.station === "blackbox");
+  it("keeps crash rescue OUT from behind the interview's flag", () => {
+    // The band's version of this case forbade a second crash row: two doors to one station on one
+    // screen. The band is gone, and the half of it that actually hurt someone is the half worth
+    // keeping — the Care entry must never inherit a flag. It did once (it was an intake row from
+    // 2026-08-09 to 2026-08-12), which meant a user who switched the band off in Settings lost
+    // crash rescue with it, and that is exactly the population most likely to switch a busy thing
+    // off. The interview is flagged; the Care entry sits outside it, and this reads the source to
+    // prove the render is not nested in the flag's branch.
+    const src = readFileSync(join("src", "surfaces", "HomeConsole.tsx"), "utf8");
+    const gate = src.match(/const careRenders = .*/)?.[0] ?? "";
+    expect(gate, "HomeConsole no longer computes careRenders").not.toBe("");
     expect(
-      rowDupes.map((r) => r.symptom),
-      "an intake row deep-links to the crash station again — the Care entry already owns that door",
-    ).toEqual([]);
+      gate.toLowerCase(),
+      `crash rescue is gated on the interview flag again — "${gate.trim()}"`,
+    ).not.toContain("interview");
+    expect(
+      src,
+      "the Care entry is no longer rendered on its own gate — check it has not been folded into the interview branch",
+    ).toContain("{careRenders && (");
   });
 });
 

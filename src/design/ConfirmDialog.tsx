@@ -39,8 +39,8 @@ export function useConfirm(): ConfirmFn {
   return fn;
 }
 
-// Non-throwing variant for OPTIONAL confirm consumers. A default-OFF feature (e.g. HomeConsole's
-// compy_home_intake fast path) must not hard-require the provider on every mount of its host
+// Non-throwing variant for OPTIONAL confirm consumers. A flagged feature (e.g. the Home interview's
+// one-tap fast path) must not hard-require the provider on every mount of its host
 // screen — the whole Home screen would crash in an isolated mount just because it *might* show a
 // confirm-gated button. Returns null when no <ConfirmProvider> is above; callers MUST guard on it
 // before awaiting (a null confirm = feature simply can't act, never a silent crash). In production

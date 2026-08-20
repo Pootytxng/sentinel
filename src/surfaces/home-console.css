@@ -146,6 +146,13 @@
 :root[data-v2="on"] .hc-front-door:active {
   transform: translateY(1px);
 }
+/* Its OWN focus mark, not the inherited default. The button's fill IS the accent, so a ring drawn
+   in the accent would vanish into it — the mark is the page ink, offset outward. Hover spends
+   brightness; focus must spend something hover does not (focus-ring-guard). */
+:root[data-v2="on"] .hc-front-door:focus-visible {
+  outline: 2px solid var(--v2-text);
+  outline-offset: 2px;
+}
 /* Open state reads as open — the panel below is the button's own disclosure, so the control
    stops shouting once it has been used (a pressed door is not still an invitation). */
 :root[data-v2="on"] .hc-front-door[aria-expanded="true"] {
@@ -659,90 +666,14 @@
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-limiter { animation-delay: 0.26s; }
 :root[data-v2="on"] .home-console[data-motion="full"] .dock { animation-delay: 0.3s; }
 
-/* ── THE INTAKE BAND (BACKLOG:916) — the Lab "What are you here to do?" symptom→station idiom
-   lifted one level up to Home, routing to ROOMS instead of in-Lab stations. Wears the same
-   cmp-glass grammar as the #1-limiter readout and the Lab router: token text only, no accent
-   fills. The one-tap fast path (option C) sits on top, the intent rows (option A) below. Renders
-   behind compy_home_intake (DEFAULT OFF again since 2026-08-12, owner on sight) — renders only on
-   an explicit "1". The Care entry above it is deliberately NOT behind this flag. ── */
-:root[data-v2="on"] .hc-intake {
-  display: flex;
-  flex-direction: column;
-  background: var(--ix-glass-fill);
-  border: 1px solid var(--ix-glass-border);
-  border-top-color: var(--ix-glass-top);
-  border-radius: var(--ix-radius);
-  padding: 4px 0 6px;
-}
-/* The section title — a TITLE, not a status line (owner header-slop law): the room's own
-   question, uppercase micro-label, never carrying a verdict. */
-:root[data-v2="on"] .hc-intake-head {
-  padding: 10px 20px 4px;
-  font: 600 var(--type-label) var(--v2-font-sans);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--ix-text-3);
-}
+/* ── THE INTAKE BAND — DELETED 2026-08-20 (design foundation step 3, issue #177).
+   The band asked "What are you here to do?" from a permanent panel on Home. The owner removed it
+   on sight ("the what are you here to do text box was ugly looks cleaner without it") and the
+   interview replaced it. Its rules went with it rather than staying as dead weight every session
+   pays to parse — the successor's styles are in home-interview.css, and the button that opens it
+   is .hc-front-door. The CARE ENTRY below was never part of the band and stays exactly where it
+   was: always visible, on nobody's flag (issue #91). ── */
 
-/* Option C — the always-available one-tap fast path. Two-tier: the felt-words symptom owns the
-   first line, the honest state (loading / all-clear / ready + apply + undo) flows below it. A
-   hairline separates it from the intent rows. */
-:root[data-v2="on"] .hc-intake-fast {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  padding: 8px 20px 12px;
-  border-bottom: 1px solid var(--ix-glass-border);
-}
-:root[data-v2="on"] .hc-intake-fast-symptom {
-  flex: 1 0 100%;
-  min-width: 0;
-  font-style: italic;
-  font-size: var(--type-label);
-  color: var(--ix-text-2);
-}
-:root[data-v2="on"] .hc-intake-fast-line {
-  font-size: var(--type-label);
-  color: var(--ix-text-3);
-}
-:root[data-v2="on"] .hc-intake-fast-btn {
-  flex: none;
-}
-/* J (2026-07-22): the skipped-tweak disclosure under the fast-path receipt. Subordinate to the
-   receipt line by design - it answers "which one?" on demand without competing with the verdict. */
-:root[data-v2="on"] .hc-intake-fast-skipped {
-  font-size: var(--type-label);
-  color: var(--ix-text-3);
-  width: 100%;
-}
-:root[data-v2="on"] .hc-intake-fast-skipped-summary {
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-:root[data-v2="on"] .hc-intake-fast-skipped-list {
-  margin: 6px 0 0;
-  padding-left: 18px;
-  display: grid;
-  gap: 3px;
-}
-:root[data-v2="on"] .hc-intake-fast-undo {
-  flex: none;
-  font-size: var(--type-label);
-  color: var(--ix-text-3);
-  opacity: 0.9;
-}
-
-/* Option A — the intent rows. Same door grammar as the Lab router (each row IS a door: click
-   routes to the room). Symptom (felt words, italic) · because (the room's action, muted) · room
-   label + arrow (accent, right). Token text only, no accent fills. A quiet hover/focus tint is
-   the door affordance the console's other controls carry. */
-:root[data-v2="on"] .hc-intake-rows {
-  list-style: none;
-  margin: 0;
-  padding: 2px 0 0;
-}
 /* THE CARE ENTRY (issue #91 Tier 1, visible half) — one compact always-present door to crash
    rescue. Deliberately quieter than the verdict above it and calmer than a fast-path button: it is
    a sign, not a call to action, and a user who is NOT in trouble should be able to ignore it
@@ -807,56 +738,4 @@
   flex: 0 1 auto;
   min-width: 0;
   color: var(--ix-text-3);
-}
-:root[data-v2="on"] .hc-intake-row {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  width: 100%;
-  padding: 7px 20px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font-family: inherit;
-  font-size: var(--type-label);
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-:root[data-v2="on"] .hc-intake-row:hover {
-  background: var(--v2-accent-dim);
-}
-/* Keyboard focus gets a mark of its own. These two states shared one rule that killed the default
-   outline and replaced it with background alone — but background is what hover already spends, so a
-   tabbing user got the faint wash a mouse hover gives and nothing more, while every other focusable
-   control in the app drew a real ring. jsdom applies no stylesheets, so tsc and vitest saw nothing.
-   Guarded by src/focus-ring-guard.test.ts. */
-:root[data-v2="on"] .hc-intake-row:focus-visible {
-  background: var(--v2-accent-dim);
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-:root[data-v2="on"] .hc-intake-row-symptom {
-  flex: 0 1 340px;
-  min-width: 0;
-  font-style: italic;
-  color: var(--ix-text-2);
-}
-:root[data-v2="on"] .hc-intake-row-because {
-  flex: 1 1 auto;
-  min-width: 0;
-  color: var(--ix-text-3);
-}
-:root[data-v2="on"] .hc-intake-row-room {
-  flex: none;
-  min-width: 84px;
-  text-align: right;
-  font-weight: 600;
-  color: var(--ix-accent-text);
-}
-
-/* The band rises with the rest of the console — just after the verdict, before the stage. */
-:root[data-v2="on"] .home-console[data-motion="full"] .hc-intake {
-  animation: v2-hc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
-  animation-delay: 0.04s;
 }

@@ -1,0 +1,56 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "documentation",
+  "pr": 176,
+  "issue": null,
+  "branch": "lane/receipt-175",
+  "currentHead": "b6595a26028f614b3bc30ed42518bfbb3a5ef5ed",
+  "explicitHandoff": "Same owner turn 2026-08-20 (consolidate the two handoffs, run a full audit, reorganize what remains into one priority list, get linear). PR #175 landed that work; this PR lands #175's merge receipt on real content rather than spending a PR on a receipt alone, plus the two health-check findings that belonged in no existing row.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room, git dir shared with C:/Users/Kuya/code/sentinel. Fetched --prune before the audit re-run.",
+    "remoteState": "origin/main = f46a3bc3 (the #175 merge) and unmoved since. This branch was cut from exactly that. Open PRs are #160 (MERGEABLE/CLEAN), #163 (CONFLICTING/DIRTY) and this one; both foreign lanes untouched, and none of the four files in their diffs appears here.",
+    "worktree": "git worktree list re-checked before writing and again before push: seven worktrees, this lane alone in sentinel-home-room, no other worktree on this branch. Noted for the next lane, not acted on: the primary worktree C:/Users/Kuya/code/sentinel has local main at ffe85271, 22 commits behind origin/main, so a branch cut there starts stale.",
+    "branch": "lane/receipt-175, cut from f46a3bc3 which was exactly origin/main. One commit, no merge commits, no divergence. PR #176 reports MERGEABLE / CLEAN.",
+    "dirtyState": "git status --porcelain empty at this head apart from this receipt, which by construction cannot ride inside the head it authorizes: scripts/work-control-gate.mjs:108 requires actualHead === currentHead, so the receipt chain can only be terminated by carrying each receipt on the NEXT lane that does real work - which is exactly what this PR does for #175.",
+    "liveProcesses": "Two claude.exe tabs alive; a sweep of every project dir found exactly one .jsonl advancing, this one. Compy is running from %LOCALAPPDATA%/Compy/compy.exe at the 75849be1 build installed earlier this session; the self-reviewer confirmed it left the machine on a normal launch with no CDP port open. Nothing was built or installed for this PR."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "b6595a26028f614b3bc30ed42518bfbb3a5ef5ed",
+      "detail": "Ran inside .githooks/pre-push against this exact tree; push exit 0 and the ref was created on origin, which the hook blocks when the gate fails - proved earlier in this same session, when a markdown-link-guard failure returned 'error: failed to push some refs' and no ref appeared. Final line LOCAL CHECK RESULT: PASS. The whole sequence ran, not a tail: verify-local.ps1 orders git diff check, frontend tests, frontend type-check and build, Rust tests, then Rust clippy, and the PASS line prints only after all of them."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "reason": "Documentation plus one JSON evidence file. No build, no install, nothing shipped to any machine. The 75849be1 desk install this session performed was proved and recorded in the PR #175 receipt, not here."
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "No product code and no UI surface in this diff - docs/BACKLOG.md and one work-control receipt. The C-13(b) self-review debt this session inherited is DISCHARGED (PASS 10/10 on installed build 75849be1, recorded in the #175 receipt and on the C-13 row); nothing here re-opens it or adds a new visual surface."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; docs/WORK_CONTROL.md makes that review advisory rather than a blocker. The diff is documentation plus one JSON evidence file - no product code, no scripts, no mutation surface - and the full pre-push gate passed at this exact head."
+  },
+  "docGates": [
+    "doc-budget.ps1 ALL PASS - BACKLOG 1071/1200 lines and 113.3KB of its 114KB ceiling. Tight but inside, and inside the 8KB slack doc-budget-guard allows, so no budget needed ratcheting. Recorded for the next lane: archive before appending here.",
+    "verify-release-state.mjs untouched by this diff and still 31 citations / 31 ok / 0 drift; markdown-link-guard PASS on 139 local links.",
+    "branch-disposition-audit: OK before this push, FAIL for the minutes this ref exists without a row, OK again after the prune. No row added on purpose - docs/BRANCH_DISPOSITIONS.md is in open PR #163's diff and writing one here would hand a dormant lane a conflict. The ordering race is queued as issue #126 in the new NEXT UP list."
+  ]
+}

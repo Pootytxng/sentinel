@@ -325,8 +325,10 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   - **Coverage ladder:** Train 1 crashes/hangs/restarts/BSOD; then measured performance regressions
     and slowdowns; thermals/noise; storage/startup/update trouble; network/peripheral/device trouble.
     Each later train needs its own evidence contract and must preserve honest unknown states.
-  - **Discovery contract:** a compact Care entry is always visible on Home even while the broad
-    `compy_home_intake` band stays default-OFF. A new local incident observer may persist one pending
+  - **Discovery contract:** a compact Care entry is always visible on Home independent of whatever
+    else Home gates. (Written when that meant the default-OFF `compy_home_intake` band; the band was
+    deleted 2026-08-20 and the word that carries the contract — *independent* — now binds against the
+    interview's `compy_home_interview` instead.) A new local incident observer may persist one pending
     Home card, but the first version uses launch/foreground and monitored-session-end scans only—no
     background service and no assumed notification-click callback.
   - **Tier 1 — approved to build DARK:** separately signed public known-issue catalog, Rust-side
@@ -892,28 +894,15 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] per-tweak audit trail — `Fix.tsx:423`
 - [x] ledger filter "this rig only" — History checkbox, rendered only when some entry is KNOWN to be from other hardware; hides exactly those (legacy unstamped rows never hidden); hidden count named — `2f5b675`
 - [x] measured-payoff linkage — per-tweak honest payoff meter: `payoff_label_from_action` (history.rs) names the KIND of gain (input latency / background CPU&RAM / network / power&thermal / …), never a fabricated number; rendered as a quiet advisory chip on active + history ledger rows (Fix.tsx)
-- [x] pre-room intent router — the Lab's symptom router ("What are you here to do?", shipped 2026-07-05;
-  its `compy_lab_guided` flag was retired in the 2026-08-06 generation prune — the router is now
-  unconditional, `LabConsole.tsx:17` ← `lab-guided-data.ts`) covers IN-Lab wayfinding; the remaining gap is the **pre-room-selection entry
-  point**: a first-class "what brought you here today?" entry on Home routing to Monitor / Blackbook / Lab by
-  intent, so a non-technical user never has to know which room owns their problem. Scope ONLY that entry
-  gap — don't rebuild the in-Lab router. Provenance: panel-review brief 2026-07-15 §4.2.
-  *(2026-07-17, intelligence directive §9: complementary to the intelligence surfaces — stays
-  queued, NOT demoted and NOT part of the intelligence trains.)*
-  **BUILT 2026-07-18 behind DEFAULT-OFF flag `compy_home_intake`** (reversible; classic Home byte-identical
-  when off). Owner greenlit A+C, declined B (2026-07-18): the intake band renders on HomeConsole as intent
-  ROWS *above* the room doors (option A — problem-first: symptom → the room that owns it), PLUS an
-  always-available one-tap "does-it-all" fast path (option C — applies every safe-and-ready fix through the
-  audited applyBatch path, honest singular/plural counts, confirm-gated). **Gate 1b (door-level hints)
-  DECLINED by me** — the intake band already carries the symptom→room mapping; duplicating it onto the doors
-  is the "annoyance" the owner warned against, so the dock stays clean room-name doors. Taxonomy in
-  `src/surfaces/home-intake-data.ts` (`HOME_INTAKE_ROWS`); one-owner stand-down so the play/"last session"
-  row yields to the LAST SESSION verdict block when it renders (self-reviewer rubric-3 catch → bug→guard
-  `home-intake.test.tsx`, 15/15). Self-reviewer **PASS** (both catches — session-question duplication +
-  disabled-button hover leak — verified fixed with live-DOM/computed-style proof; full pass, no regressions).
-  tsc clean. **The default-ON/ship call is MINE** (2026-08-07 taste decree) — was parked on the owner
-  under the slim-down-flag precedent; now: ship it and hand him a before/after to veto on sight, don't
-  wait. Symptom→ROOM map surfaced in the ship report.
+- [x] pre-room intent router (BACKLOG:916) — **DONE, then SUPERSEDED.** Built 2026-07-18 as the Home
+  intake band behind `compy_home_intake`; the owner removed it on sight 2026-08-12, and it was
+  **deleted** 2026-08-20 when the **interview** (issue #177, design foundation ③) took over the same
+  intent gap: one question per screen in a Sheet behind Home's single primary button
+  (`src/surfaces/HomeInterview.tsx` ← `home-interview-data.ts`, flag `compy_home_interview`, default
+  ON, `"0"` failsafe, Settings → Behavior toggle). Full band history — option A/C greenlight, the
+  declined door-level hints, the one-owner stand-down, the self-reviewer PASS — moved to
+  [BACKLOG_ARCHIVE.md](BACKLOG_ARCHIVE.md#2026-08-20--pre-room-intent-router-the-intake-band-superseded-by-the-interview).
+
 - [x] basic-mode simplification — SCOPE-CHECK FIRST, build only what's missing: FirstCheck's one-verdict
   flow + verdict cards + the answer-first Home already cover most of "one screen, one verdict, one
   action"; audit that flow against the panel's basic-mode ask and close only genuine gaps (no parallel

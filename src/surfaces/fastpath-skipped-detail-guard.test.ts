@@ -17,7 +17,14 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 
-const home = readFileSync(join("src", "surfaces", "HomeConsole.tsx"), "utf8");
+// The fast path moved from the intake band into the interview on 2026-08-20 (issue #177): the room
+// still OWNS the apply and the result, the interview RENDERS them. So the contract is read across
+// both files rather than pinned to the filename it happened to live in when the bug was found — a
+// guard that only knows one filename retires itself the first time the code is reorganised.
+const home = [
+  readFileSync(join("src", "surfaces", "HomeConsole.tsx"), "utf8"),
+  readFileSync(join("src", "surfaces", "HomeInterview.tsx"), "utf8"),
+].join("\n");
 const en = JSON.parse(
   readFileSync(join("src", "i18n", "locales", "en", "home.json"), "utf8"),
 );

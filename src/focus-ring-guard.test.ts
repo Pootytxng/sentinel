@@ -63,13 +63,26 @@ describe("focus-visible must stay visible", () => {
     ).toEqual([]);
   });
 
-  it("Home's intake rows draw a real ring, not just the hover tint", () => {
-    const css = readFileSync(join("src", "surfaces", "home-console.css"), "utf8");
-    const focus = rules(css).find(
-      (r) => /\.hc-intake-row:focus-visible/.test(r.sel) && !/:hover/.test(r.sel),
-    );
-    expect(focus, ".hc-intake-row needs its OWN :focus-visible rule, separate from :hover").toBeTruthy();
-    expect(focus!.body).toMatch(/outline\s*:\s*\d/);
-    expect(focus!.body).not.toMatch(KILLS_OUTLINE);
-  });
+  // The instance that produced this guard was `.hc-intake-row`, Home's intent rows. That band was
+  // deleted on 2026-08-20 (issue #177) and the interview replaced it — so the case follows the
+  // AFFORDANCE, not the dead class name. `.hi-answer` is the same thing wearing a new name: the
+  // full-width clickable row a keyboard user tabs through, in the one place on Home where tabbing
+  // is the whole interaction. Retiring the case with the class would have quietly dropped the
+  // guard at the exact moment the shape came back.
+  const rowLike: [string, string][] = [
+    [".hi-answer", join("src", "surfaces", "home-interview.css")],
+    [".hc-front-door", join("src", "surfaces", "home-console.css")],
+  ];
+  for (const [sel, file] of rowLike) {
+    it(`${sel} draws a real ring, not just the hover tint`, () => {
+      const css = readFileSync(file, "utf8");
+      const esc = sel.replace(".", "\.");
+      const focus = rules(css).find(
+        (r) => new RegExp(`${esc}[^,{]*:focus-visible`).test(r.sel) && !/:hover/.test(r.sel),
+      );
+      expect(focus, `${sel} needs its OWN :focus-visible rule, separate from :hover`).toBeTruthy();
+      expect(focus!.body).toMatch(/outline\s*:\s*\d/);
+      expect(focus!.body).not.toMatch(KILLS_OUTLINE);
+    });
+  }
 });

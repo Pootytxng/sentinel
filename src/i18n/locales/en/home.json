@@ -7,36 +7,13 @@
       "label": "Crash & Freeze Rescue"
     },
     "intake": {
-      "prompt": "What are you here to do?",
-      "panelTitle": "Pick what's closest",
-      "applying": "Applying…",
       "rows": {
-        "lastSession": {
-          "symptom": "How did my last gaming session actually go?",
-          "because": "reads back your session debrief — fps, stutters, and what changed"
-        },
-        "understandSetting": {
-          "symptom": "I want to understand a setting before I touch it",
-          "because": "explains what actually works, measured — before you change a thing"
-        },
-        "changeHelped": {
-          "symptom": "Did a change actually help — or did I imagine it?",
-          "because": "grades a real before/after against the noise floor — proof, not vibes"
-        },
-        "hotLoudBehind": {
-          "symptom": "It runs hot, loud, or a beat behind",
-          "because": "measures heat, noise, and mouse-to-screen delay on your actual rig"
-        },
         "crashedFroze": {
           "symptom": "It crashed or froze and I don't know why",
           "because": "reads Windows' own crash & freeze record in plain English"
         }
       },
       "fastpath": {
-        "symptom": "I just want my PC faster — safely, no fiddling",
-        "loading": "Checking what's safe to change…",
-        "allClear": "Every safe tweak is already on — your rig is set. Nothing to do here.",
-        "reversible": "Every apply captures its undo first — roll anything back from Applied.",
         "confirmBody": "Compy snapshots the prior state first, so you can roll every one back anytime from Applied.",
         "ready_one": "{{count}} safe tweak is ready — one tap does it.",
         "ready_other": "{{count}} safe tweaks are ready — one tap does them all.",
@@ -110,6 +87,108 @@
     },
     "cpuTemp": {
       "tileTitle": "CPU temperature"
+    }
+  },
+  "interview": {
+    "q": {
+      "start": {
+        "question": "What is your PC doing?",
+        "crash": "It crashed, froze, or restarted on its own",
+        "slow": "Games feel slow, laggy, or choppy",
+        "heat": "It runs hot, or the fans get loud",
+        "changed": "I changed something — did it help?",
+        "unsure": "I am not sure — just look it over"
+      },
+      "crash": {
+        "question": "When does it happen?",
+        "inGame": "While I am playing a game",
+        "anytime": "Any time — even when I am barely doing anything",
+        "boot": "Right after the PC starts up",
+        "unsure": "I am not sure — it just happens"
+      },
+      "slow": {
+        "question": "Is it slow all the time, or only sometimes?",
+        "always": "All the time, even on the desktop",
+        "sometimes": "Only in certain games",
+        "stutter": "Mostly fine, then it hitches",
+        "unsure": "I am not sure — it just feels off"
+      }
+    },
+    "f": {
+      "level": {
+        "measured": "Measured",
+        "likely": "Likely",
+        "unknown": "Not measured yet"
+      },
+      "ev": {
+        "readiness": "{{passed}} of {{total}} startup checks pass right now.",
+        "stackReady_one": "{{count}} safe change is ready to apply.",
+        "stackReady_other": "{{count}} safe changes are ready to apply.",
+        "stackClear": "Every safe change Compy knows about is already on.",
+        "changes_one": "Compy has made {{count}} change to this PC, and it is still undoable.",
+        "changes_other": "Compy has made {{count}} changes to this PC, and every one is still undoable.",
+        "lastSession": "Last recorded session — {{game}}: {{avg}} FPS average, {{low}} FPS at its worst.",
+        "sessionCount_one": "{{count}} recorded session to compare against.",
+        "sessionCount_other": "{{count}} recorded sessions to compare against.",
+        "gpuTemp": "Your graphics card is reading {{temp}}°C right now.",
+        "peakTemp": "It peaked at {{temp}}°C during your last recorded session."
+      },
+      "act": {
+        "check": "Run a fresh check",
+        "fastpath_one": "Apply {{count}} safe change — one tap",
+        "fastpath_other": "Apply {{count}} safe changes — one tap",
+        "crashRecord": "Read the crash record",
+        "diagnostics": "See what is holding it back",
+        "measure": "Measure it once",
+        "readSession": "Read back your last session",
+        "heat": "Check heat and fan headroom",
+        "beforeAfter": "Run a before-and-after",
+        "undo": "Compy saves the old setting first, so you can undo any of this later from Applied."
+      },
+      "sweep": {
+        "sentence": "Let us start with what Compy can already see about this PC."
+      },
+      "crashInGame": {
+        "sentence": "Windows writes down every crash and freeze. Compy reads that record back in plain English and tells you what it actually says."
+      },
+      "crashAnytime": {
+        "sentence": "Crashes that happen while you are barely using the PC point at the machine rather than a game. Windows keeps its own record of them."
+      },
+      "crashBoot": {
+        "sentence": "Trouble right after startup usually points at something loading with Windows. The record names what happened last."
+      },
+      "crashUnsure": {
+        "sentence": "That is fine — you do not have to know. Windows keeps the record either way, and Compy reads it for you."
+      },
+      "slowAlways": {
+        "sentence": "Slow everywhere, not just in games, usually means something is holding the whole machine back rather than one title."
+      },
+      "slowSometimes": {
+        "sentence": "Slow in some games and not others is normally a settings or headroom story. One measured session is what turns that into an answer."
+      },
+      "stutter": {
+        "sentence": "Hitching is a worst-frames problem, not an average-FPS one — the average can look perfectly fine while it is happening."
+      },
+      "slowUnsure": {
+        "sentence": "No problem. The quickest way to turn a feeling into an answer is to measure it once and look at the numbers."
+      },
+      "heat": {
+        "sentence": "Heat and fan noise track the same thing: how hard the parts are working, and how well the case moves air."
+      },
+      "didItHelp": {
+        "sentence": "The only honest answer is a before-and-after measured on this PC, graded against the noise floor."
+      }
+    },
+    "ui": {
+      "door": "Help me with my PC",
+      "title": "Let us figure it out",
+      "sub": "One question at a time, in plain words.",
+      "back": "Back",
+      "startOver": "Start over",
+      "evidenceTitle": "What Compy measured",
+      "noEvidence": "Compy has not measured this yet. That is what the button below is for.",
+      "applying": "Applying…",
+      "stepAria": "Interview progress"
     }
   },
   "homeHud": {

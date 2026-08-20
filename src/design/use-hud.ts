@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
   readHud,
   readHomeConsole,
-  readHomeIntake,
+  readHomeInterview,
   readMonitorConsole,
   readBlackbookConsole,
   readGamingConsole,
@@ -43,16 +43,15 @@ export function useHomeConsoleFlag(): boolean {
   return on;
 }
 
-// The Home intake band flag as live React state (BACKLOG:916 — the pre-room intent router; same
-// contract: the Settings toggle fires compy:home-intake-changed so HomeConsole shows/hides the
-// intake band without a reload). DEFAULT ON since 2026-08-11 (the graduation that shipped in #97) —
-// only an explicit "0" hides the band, per the graduated-flag convention.
-export function useHomeIntakeFlag(): boolean {
-  const [on, setOn] = useState(readHomeIntake);
+// The interview door flag as live React state (design foundation step 3, issue #177). Replaces
+// useHomeIntakeFlag, which read the retired band key. DEFAULT ON - only an explicit "0" removes the
+// front door's one action; the reasoning is written out in full at HOME_INTERVIEW_KEY in theme.ts.
+export function useHomeInterviewFlag(): boolean {
+  const [on, setOn] = useState(readHomeInterview);
   useEffect(() => {
-    const sync = () => setOn(readHomeIntake());
-    window.addEventListener("compy:home-intake-changed", sync);
-    return () => window.removeEventListener("compy:home-intake-changed", sync);
+    const sync = () => setOn(readHomeInterview());
+    window.addEventListener("compy:home-interview-changed", sync);
+    return () => window.removeEventListener("compy:home-interview-changed", sync);
   }, []);
   return on;
 }

@@ -22,7 +22,31 @@
 These are owner asks that are **never-built or parked**, not yet reflected as active work anywhere
 else. This is the list the owner meant.
 
-### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) 🟡 IN PROGRESS — **three of five are DONE**: ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **③ interview and ⑤ instruments behind a door remain OPEN**
+### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) 🟡 IN PROGRESS — **four of five are DONE**: ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED, but SHIPPED OFF BY DEFAULT: one owner word turns it on, see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door remains OPEN**
+
+> **③ BUILT, TESTED AND INSTALLED 2026-08-20 — and it is OFF until he says otherwise.** Turn it on
+> at **Settings → Behavior → "Ask me a question on Home"**. With it on, Home's primary button reads
+> *"Help me with my PC"* and opens a one-question-at-a-time interview in a Sheet
+> (`src/surfaces/HomeInterview.tsx` + `home-interview-data.ts` + `home-interview.css`), ending on a
+> finding card: level chip · one sentence · the measured evidence it is speaking from · one action ·
+> the undo promise when that action changes Windows. The intake band is **deleted**, not disabled —
+> rows, panel, flag, CSS and orphaned locale keys all removed, so his 2026-08-12 removal-on-sight
+> stands.
+>
+> **Why OFF and not ON.** The first draft shipped it default ON and the self-review failed it on
+> rubric item 10: `compy_home_intake` was his off-switch for that slot and he set it off twice —
+> on sight (`4d1afa92`), then again when he caught UX-1 bypassing it (`8db70795`, *"off means the
+> question is not asked"*). Retiring his key and defaulting the successor ON is the same bypass
+> under a new name. New flag `compy_home_interview`, **default OFF, `"1"` opts in**, with the real
+> Settings toggle the old key never had — undiscoverable was the defect, not off.
+>
+> **The cost of off, measured:** UX-1's "verdict + ONE action" front door has no action while the
+> interview is off. Not new damage (the old flag was off too, and unreachable), but it is the
+> argument for turning it on. Full fork + recommendation:
+> [`docs/decisions/2026-08-20-home-interview-default.md`](decisions/2026-08-20-home-interview-default.md).
+> Honesty is mechanised in `home-interview-data.test.ts` (four laws: no dead end · never claim
+> unmeasured · evidence quoted never synthesised · a mutating action states its undo); the default
+> is pinned by `home-interview-default-guard.test.ts`. **One word from him flips it.**
 
 Owner escalated 2026-08-11: non-technical testers, incl. close friends, "do not enjoy using the app
 — overwhelming, hard to navigate, completely unfamiliar." Asked for tooling + deep research on

@@ -391,47 +391,58 @@ export function applyHomeConsole(on: boolean): void {
   }
 }
 
-// Home intake band (BACKLOG:916 — the pre-room intent router). Lifts the proven Lab
-// "What are you here to do?" symptom-router idiom UP one level to Home: an always-available
-// one-click safe fast-path (option C) + intent rows that route to the right ROOM (option A),
-// sitting above the Dock room-doors. Shipped DEFAULT OFF → GRADUATED to DEFAULT ON 2026-08-11 →
-// **RETURNED to DEFAULT OFF 2026-08-12 by the owner, on sight.** ON only when the key is
-// literally "1".
+// THE INTERVIEW's door on Home (design foundation step ③, decision 2; issue #177).
 //
-// The graduation reasoning (kept, because it was not wrong): the band exists for a tester who could
-// not find things, and a discoverability surface that is off by default fixes nothing for the only
-// people it exists for. What settled it was the owner finally SEEING it on a real build — "the what
-// are you here to do text box was ugly looks cleaner without it" — comparing Home with the band
-// against Home without it. Taste on his own front door is his call, and a screenshot beat the
-// argument.
+// THIS FLAG REPLACES `compy_home_intake`, AND THE REPLACEMENT IS THE POINT — it is not a rename.
+// That key gated the flat intake BAND: a 9px strip carrying five choices and a fast-path row, which
+// the owner switched off on sight on 2026-08-12 ("the what are you here to do text box was ugly
+// looks cleaner without it"). The band is DELETED by ③, so its key retires with it rather than
+// being re-pointed at a different artifact — a flag that outlives the thing it named is how a
+// recorded decision quietly gets reversed.
 //
-// What leaving it off costs, stated so nobody has to rediscover it: the one-tap "just make it
-// faster, safely" fast path (option C) leaves Home with the band. It is NOT gone from the app — it
-// lives on in the Test room's Optimize station, which is the one door to the safe-tweak toggles.
-// What does NOT leave: crash rescue. The Care entry was extracted out of this band earlier the same
-// day precisely so this flag could never take it down (issue #91; `care-home-route-guard.test.ts`).
-// Turning the band off is now a layout choice, not a loss of the safety net.
+// WHY THE DEFAULT IS OFF, and why that is not the timid choice.
 //
-// Event mirrors the home-console idiom so Settings toggles + the useHomeIntakeFlag hook stay in sync.
-const HOME_INTAKE_KEY = "compy_home_intake";
+// The owner set this switch off. He did it twice: once on sight (4d1afa92, 2026-08-12) and again
+// when he caught UX-1 bypassing it (8db70795 — "intakeAvailable now leads with intakeOn: off means
+// the question is not asked"). The first draft of ③ shipped default ON under this new name, and the
+// self-review caught it: retiring a key and defaulting its successor ON is the SAME bypass 8db70795
+// was written to stop, just more thorough. A switch he set off does not turn itself on by changing
+// its name.
+//
+// What the audit actually found is still true and is fixed separately: `compy_home_intake` had NO
+// Settings toggle anywhere in src, so the only way to set it was devtools. That is the defect —
+// undiscoverable, not off. ③ ships a real Settings → Behavior toggle, so "off" now means "off and
+// one click from on" instead of "off and unreachable".
+//
+// FLIPPING THIS DEFAULT IS AN OWNER CALL, not an engineering one, and it needs a record in
+// docs/decisions/ — see 2026-08-20-home-interview-default.md, which states the fork and the
+// recommendation. Pinned by src/surfaces/home-interview-default-guard.test.ts so the next lane
+// cannot flip it in passing.
+//
+// Unset reads OFF; "1" opts in. This deliberately INVERTS the graduated-flag convention the live
+// room flags use ("0" is the failsafe), because that convention exists to keep a shipped surface
+// reachable when storage misbehaves — and here the failsafe direction is the owner's answer, not
+// the feature's availability. Event mirrors the home-console idiom so a Settings toggle and the
+// useHomeInterviewFlag hook stay in sync without a reload.
+const HOME_INTERVIEW_KEY = "compy_home_interview";
 
-export function readHomeIntake(): boolean {
+export function readHomeInterview(): boolean {
   try {
-    return localStorage.getItem(HOME_INTAKE_KEY) === "1";
+    return localStorage.getItem(HOME_INTERVIEW_KEY) === "1";
   } catch {
-    /* ignore — default OFF */
+    /* ignore — default OFF, which is the owner's last recorded answer */
   }
   return false;
 }
 
-export function applyHomeIntake(on: boolean): void {
+export function applyHomeInterview(on: boolean): void {
   try {
-    localStorage.setItem(HOME_INTAKE_KEY, on ? "1" : "0");
+    localStorage.setItem(HOME_INTERVIEW_KEY, on ? "1" : "0");
   } catch {
     /* ignore */
   }
   try {
-    window.dispatchEvent(new Event("compy:home-intake-changed"));
+    window.dispatchEvent(new Event("compy:home-interview-changed"));
   } catch {
     /* ignore */
   }

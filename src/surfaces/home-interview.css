@@ -1,0 +1,290 @@
+/* THE INTERVIEW (design foundation step ③, decision 2; issue #177).
+   Scoped to :root[data-v2="on"] like every other v2 surface, tokens only — no literal colour, no
+   literal font size (tokens-v2-guard, type-scale-guard). No coloured side stripe anywhere
+   (side-stripe-guard, 2026-08-18). Every interactive element declares a real focus-visible mark,
+   never background alone (focus-ring-guard).
+
+   THE ONE LAYOUT RULE THIS FILE EXISTS TO ENFORCE: a screen holds one question and its answers, and
+   nothing competes with them for the eye. That is why the answers are full-width rows at body size
+   rather than a grid of cards — a grid invites scanning, and scanning is the thing the shape is
+   built to remove. */
+
+:root[data-v2="on"] .hi {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 240px;
+}
+
+/* ── Progress ─────────────────────────────────────────────────────────────────────────────────
+   Dots, not "step N of M": the branch length is unknown at the first screen (see HomeInterview.tsx).
+   The finding dot is a different shape so the end of the conversation reads as an arrival. */
+:root[data-v2="on"] .hi-dots {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+:root[data-v2="on"] .hi-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--v2-line-strong);
+  transition: background 0.15s ease, width 0.15s ease;
+}
+:root[data-v2="on"] .hi-dot[data-state="current"] {
+  width: 22px;
+  border-radius: 4px;
+  background: var(--v2-accent);
+}
+:root[data-v2="on"] .hi-dot[data-kind="finding"] {
+  border-radius: 2px;
+}
+
+/* ── The question screen ──────────────────────────────────────────────────────────────────── */
+:root[data-v2="on"] .hi-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+:root[data-v2="on"] .hi-question {
+  margin: 0;
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-section);
+  font-weight: var(--type-section-weight);
+  letter-spacing: -0.015em;
+  color: var(--v2-text);
+  max-width: 26ch;
+}
+:root[data-v2="on"] .hi-answers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+/* An answer is a full-width row, in the user's own words, at BODY size — not label size. These are
+   the only things on the screen worth reading, so they get the reading step of the scale. */
+:root[data-v2="on"] .hi-answer {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-body);
+  font-weight: var(--type-body-weight);
+  line-height: 1.45;
+  color: var(--v2-text);
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-radius: var(--v2-r-sm);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+}
+:root[data-v2="on"] .hi-answer:hover {
+  background: var(--v2-accent-dim);
+  border-color: var(--v2-accent-line);
+}
+:root[data-v2="on"] .hi-answer:active {
+  transform: translateY(1px);
+}
+:root[data-v2="on"] .hi-answer:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: -2px;
+  border-color: var(--v2-accent-line);
+}
+/* THE NOT-SURE ANSWER IS QUIETER, NOT SMALLER AND NOT HIDDEN. It stays the same size and the same
+   width as every other answer — decision 2 calls it first-class, and a first-class option that
+   renders as fine print is not one. What changes is only the fill: it reads as the calm option
+   rather than a competing choice. */
+:root[data-v2="on"] .hi-answer[data-unsure="yes"] {
+  background: transparent;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .hi-answer[data-unsure="yes"]:hover {
+  color: var(--v2-text);
+  background: var(--v2-accent-dim);
+}
+
+/* ── The finding card ─────────────────────────────────────────────────────────────────────── */
+:root[data-v2="on"] .hi-level {
+  align-self: flex-start;
+  font-family: var(--v2-font-mono);
+  font-size: var(--type-label);
+  font-weight: var(--type-label-weight);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: var(--v2-r-sm);
+  border: 1px solid var(--v2-line-strong);
+  color: var(--v2-muted);
+}
+/* Hue is INFORMATION here, and the chip always prints its word beside it (COLOR-1). "measured" is
+   the only level that earns the confident ink; "likely" is the advisory blue; "unknown" stays
+   deliberately colourless, because a colour would dress up an absence of evidence. */
+:root[data-v2="on"] .hi-level[data-level="measured"] {
+  color: var(--v2-ok);
+  border-color: var(--v2-ok);
+  background: var(--v2-ok-dim);
+}
+:root[data-v2="on"] .hi-level[data-level="likely"] {
+  color: var(--v2-info);
+  border-color: var(--v2-info);
+  background: var(--v2-info-dim);
+}
+:root[data-v2="on"] .hi-sentence {
+  margin: 0;
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-card);
+  font-weight: var(--type-card-weight);
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  color: var(--v2-text);
+  max-width: 46ch;
+}
+:root[data-v2="on"] .hi-evidence {
+  border-top: 1px solid var(--v2-line);
+  padding-top: 12px;
+}
+:root[data-v2="on"] .hi-evidence-title {
+  margin: 0 0 8px;
+  font-family: var(--v2-font-mono);
+  font-size: var(--type-label);
+  font-weight: var(--type-label-weight);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--v2-faint);
+}
+:root[data-v2="on"] .hi-evidence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-body);
+  line-height: 1.45;
+  color: var(--v2-text);
+  max-width: 52ch;
+}
+:root[data-v2="on"] .hi-noevidence,
+:root[data-v2="on"] .hi-undo,
+:root[data-v2="on"] .hi-applied {
+  margin: 0;
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-label);
+  line-height: 1.5;
+  color: var(--v2-muted);
+  max-width: 52ch;
+}
+:root[data-v2="on"] .hi-applied {
+  color: var(--v2-ok);
+}
+
+/* THE RECEIPT'S DISCLOSURE (J, 2026-07-22). Folded by default because the common case is "all of
+   them landed" and a closed disclosure is quieter than a list of nothing — but it is a real
+   <details>, so the answer to "which one, and why?" is always one click away and never a dead end.
+   The summary is a focusable control, so it declares its own focus mark like everything else. */
+:root[data-v2="on"] .hi-receipt {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+:root[data-v2="on"] .hi-skipped-summary {
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-label);
+  color: var(--v2-muted);
+  cursor: pointer;
+  padding: 2px 0;
+  transition: color 0.12s ease;
+}
+:root[data-v2="on"] .hi-skipped-summary:hover {
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .hi-skipped-summary:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .hi-skipped-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0 0 0 12px;
+  border-left: 1px solid var(--v2-line);
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-label);
+  line-height: 1.5;
+  color: var(--v2-muted);
+  max-width: 52ch;
+}
+
+/* ── The one action (Sheet footer) ────────────────────────────────────────────────────────── */
+:root[data-v2="on"] .hi-action {
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-card);
+  font-weight: var(--type-card-weight);
+  letter-spacing: -0.005em;
+  color: var(--v2-bg);
+  background: var(--v2-accent);
+  border: 1px solid var(--v2-accent);
+  border-radius: var(--v2-r-sm);
+  padding: 12px 22px;
+  cursor: pointer;
+  transition: filter 0.12s ease, transform 0.12s ease;
+}
+:root[data-v2="on"] .hi-action:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+:root[data-v2="on"] .hi-action:active:not(:disabled) {
+  transform: translateY(1px);
+}
+:root[data-v2="on"] .hi-action:focus-visible {
+  outline: 2px solid var(--v2-text);
+  outline-offset: 2px;
+}
+:root[data-v2="on"] .hi-action:disabled {
+  cursor: default;
+  filter: saturate(0.5) brightness(0.85);
+}
+
+/* ── Back / start over ────────────────────────────────────────────────────────────────────── */
+:root[data-v2="on"] .hi-nav {
+  display: flex;
+  gap: 14px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+:root[data-v2="on"] .hi-back,
+:root[data-v2="on"] .hi-restart {
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-label);
+  font-weight: var(--type-label-weight);
+  color: var(--v2-muted);
+  background: transparent;
+  border: 0;
+  padding: 4px 2px;
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+:root[data-v2="on"] .hi-back:hover:not(:disabled),
+:root[data-v2="on"] .hi-restart:hover:not(:disabled) {
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .hi-back:focus-visible,
+:root[data-v2="on"] .hi-restart:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .hi-back:disabled,
+:root[data-v2="on"] .hi-restart:disabled {
+  cursor: default;
+  color: var(--v2-faint);
+}
