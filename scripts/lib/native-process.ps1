@@ -708,8 +708,28 @@ function Start-NativeProcess {
   $startInfo.Arguments = ConvertTo-NativeCommandLine $resolved $ArgumentList
   if ($WorkingDirectory) { $startInfo.WorkingDirectory = $WorkingDirectory }
   $startInfo.UseShellExecute = [bool]$Detached
-  # CreateNoWindow is meaningless under ShellExecute and .NET throws if both are set.
-  $startInfo.CreateNoWindow = (-not $Detached) -and $CreateNoWindow
+  # ONE SWITCH, TWO MECHANISMS (owner report 2026-08-20: a blank terminal window still flashing while
+  # a lane works). .NET throws if CreateNoWindow is set alongside UseShellExecute, so the detached
+  # path used to DROP -CreateNoWindow silently -- and a silently dropped window request is exactly how
+  # a console child launched to be invisible ends up opening a real Windows Terminal window in the
+  # owner's face. ShellExecute's equivalent knob is nCmdShow, reached through WindowStyle, so the
+  # caller's one switch now lands on whichever mechanism the launch path actually has instead of
+  # being discarded on one of them. This file already refuses -Detached with -Environment for the
+  # same reason: a silently-dropped override is not a contract.
+  #
+  # Without -CreateNoWindow the style stays Normal, and that is a decision rather than a default: the
+  # detached launch in production is Compy itself, a GUI app whose WinMain receives nCmdShow, so
+  # hiding every detached launch would risk starting the shipped app with no window after
+  # ship-reinstall -- the one launch the owner is supposed to see.
+  if ($Detached) {
+    $startInfo.WindowStyle = if ($CreateNoWindow) {
+      [System.Diagnostics.ProcessWindowStyle]::Hidden
+    } else {
+      [System.Diagnostics.ProcessWindowStyle]::Normal
+    }
+  } else {
+    $startInfo.CreateNoWindow = [bool]$CreateNoWindow
+  }
   Set-NativeEnvironment -StartInfo $startInfo -Environment $Environment
   $process = New-Object System.Diagnostics.Process
   $process.StartInfo = $startInfo
