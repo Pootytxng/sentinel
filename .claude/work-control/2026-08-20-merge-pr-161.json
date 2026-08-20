@@ -1,0 +1,48 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 161,
+  "branch": "lane/self-checkup",
+  "currentHead": "1db0195dfb32e8379341d85fc454e3ce54b51d18",
+  "explicitHandoff": "Same owner turn and same bounded scope as the receipt for PR #159 (the 2026-08-20 self-checkup). This PR carries that receipt into git plus the disposition row the pre-push gate demanded; no new scope.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "Pootytxng/sentinel; git rev-parse HEAD = f776e233; origin/main = 8a1450cd and contains the merged PR #157.",
+    "remoteState": "origin/main = 39d4c588. origin/lane/usage-audit-disk-bloat appeared mid-session from a CONCURRENT lane (PR #160) and is dispositioned in docs/BRANCH_DISPOSITIONS.md as CLAIMED, untouched.",
+    "worktree": "C:/Users/Kuya/code/sentinel-home-room (.git file -> C:/Users/Kuya/code/sentinel/.git/worktrees/sentinel-home-room). main is checked out by the sibling worktree C:/Users/Kuya/code/sentinel, which is why this one carries a lane branch.",
+    "branch": "lane/self-checkup, re-cut from origin/main (39d4c588, the #159 merge), one commit ahead: 1db0195d.",
+    "dirtyState": "clean at the time of the gate run; every edit is in f776e233.",
+    "liveProcesses": "A second writer is demonstrably active in this repository (it pushed lane/usage-audit-disk-bloat at 04:47 local and reinstalled node_modules from outside this worktree). Its scope does not overlap this one: it touches scripts/usage-audit.mjs, this PR touches .claude/work-control/ and docs/BRANCH_DISPOSITIONS.md."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "1db0195dfb32e8379341d85fc454e3ce54b51d18",
+      "evidence": "Run via .githooks/pre-push on the successful push of lane/self-checkup at this head: frontend tests 349/349 files, 4564 passed | 6 skipped; frontend type-check and build; Rust tests 963 passed 0 failed 24 ignored; clippy. LOCAL CHECK RESULT: PASS."
+    },
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "failed",
+      "head": "f154b4c4",
+      "evidence": "Preserved, not discarded: the first push of this change failed branch-disposition-audit because a concurrent lane had pushed origin/lane/usage-audit-disk-bloat with no row. Fixed by adding the row, not by weakening the audit."
+    }
+  ],
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex, the default independent reviewer under docs/WORK_CONTROL.md, is not running against this repository and cannot be started from this session; no non-writing model is available here. Substituting my own review would not be independent. Mitigation on this specific change: it adds an evidence file and one documentation row, touches no product code, and the row it adds was demanded by a mechanical audit rather than chosen."
+  }
+}

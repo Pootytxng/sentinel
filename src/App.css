@@ -3184,6 +3184,46 @@ body::before {
   background: var(--accent-soft);
   border: 1px solid var(--accent-line);
 }
+
+/* THE single earned shimmer (kernel law, owner 2026-06-06) — the win card's after-bars sweep once
+   per slow cycle, and NOTHING else in Compy sweeps. Guarded by src/sweep-guard.test.ts.
+
+   2026-08-20: re-homed here from src/arc-instrument.css, where it had lived on
+   `.cmp-improved.arc-v2 .cmp-bar-after` since the day it was written — behind a prop no screen ever
+   set, so the law's only celebration had never once fired for a user. Same rules, live selector. */
+.cmp-improved .cmp-bar-after {
+  position: relative;
+  overflow: hidden;
+}
+.cmp-improved .cmp-bar-after::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 25%,
+    rgba(255, 255, 255, 0.5) 50%,
+    transparent 75%
+  );
+  transform: translateX(-130%);
+  animation: cmp-winshimmer 3.4s ease-in-out 0.35s infinite;
+  pointer-events: none;
+}
+@keyframes cmp-winshimmer {
+  0% {
+    transform: translateX(-130%);
+  }
+  30%,
+  100% {
+    transform: translateX(130%);
+  }
+}
+/* Explicit opt-out. The global reduced-motion block above already clamps every animation, but a
+   celebration is exactly the thing that should be absent rather than merely instant. */
+:root[data-motion="reduced"] .cmp-improved .cmp-bar-after::after {
+  animation: none;
+  display: none;
+}
 .cmp-delta {
   font-family: var(--font-mono);
   font-size: var(--type-label);
