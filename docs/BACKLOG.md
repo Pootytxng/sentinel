@@ -180,8 +180,25 @@
   mounted, default-ON feature parked/dropped, with `<!-- shipped-status-history -->` as the
   paragraph-scoped escape hatch for deliberate past tense. Proven against the pre-fix tree: it
   reports both original sites. Source: `docs/CONFORMANCE_AUDIT_2026-08-18.md` §C-12.
-- [ ] **C-13 · Foundation tooling gap: axe-core in vitest (rank 3) and Figma MCP (rank 2) never
-  landed; only shadcn did.** axe-core is the one with a guard shape.
+- [ ] **C-13 · Foundation tooling gap — axe-core (rank 3, MINE) LANDED; Figma MCP (rank 2, OWNER)
+  still not wired.** The half that was ever mine to do is done and the row stays open only for the
+  owner's half. `axe-core` now runs in vitest: `src/test/axe.ts` is the harness,
+  `src/design/a11y-axe-guard.test.tsx` mounts 49 cases across the design system, console/bento and
+  the vendored primitives, `src/design/a11y-axe-shell.test.tsx` mounts the 6 Tauri-mocked chrome
+  cases (rail, room frame, palette, window chrome, update offer), and
+  `src/design/a11y-census-guard.test.ts` + `a11y-census.baseline.json` classify **all 46**
+  `src/design/**/*.tsx` so a NEW component fails the suite until it is rostered or given a named
+  reason — `unrosteredCeiling: 0`. **What it caught on day one:** `RoomAccentPicker`'s popover is
+  `role="menu"`, and its two action buttons were bare `<button>` children — an `aria-required-children`
+  violation, now `role="menuitem"`. **What it deliberately does NOT check, and must never be said to:**
+  colour contrast. jsdom has no canvas and `vitest.config.ts` sets `css: false`; measured against a
+  1.06:1 failure the rule returns *0 violations, 0 passes, 1 incomplete*, so leaving it enabled would
+  read as contrast coverage that does not exist. It is disabled by name, and contrast stays where it
+  is really measured (`src/theme-contrast.test.ts`, `src/design/type-scale-guard.test.ts`).
+  **Still open under this row:** (a) rank 2, the owner's Figma account + MCP server — his hands, see
+  `docs/OWNER_ACTION_CHECKLIST.md`; (b) `RoomAccentPicker` claims `role="menu"` without the roving
+  tabindex / arrow-key navigation the ARIA menu pattern requires — axe cannot see that, and the fix
+  above did not address it. Issue [#150](https://github.com/Pootytxng/sentinel/issues/150).
 - [x] **PR #90 recovery + the quiet launch, rebuilt** — PR [#102](https://github.com/Pootytxng/sentinel/pull/102),
   #90 MERGED (its four unverified Codex claims re-proven + repaired), #100 closed measured-inert and
   rebuilt via `WebviewWindowBuilder` + `SW_SHOWNOACTIVATE`. Detail: `docs/CHANGELOG.md`.

@@ -54,6 +54,7 @@ const ALLOWED: Record<string, string> = {
 
   // Test infrastructure, named in vitest.config.ts (setupFiles) rather than imported.
   "test/setup.ts": "vitest setupFiles entry — loaded by the runner, not by the app",
+  "test/axe.ts": "the C-13 axe harness — imported by the a11y guards, never by the shipped app",
 };
 
 function walk(dir: string, out: string[] = []): string[] {

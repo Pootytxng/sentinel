@@ -31,6 +31,28 @@ if (typeof window !== "undefined") {
     HTMLElement.prototype.scrollIntoView = () => {};
   }
 
+  // jsdom implements neither IntersectionObserver nor ResizeObserver, and a component that
+  // constructs one THROWS on mount — which reads as "this component is broken", not "the test
+  // environment is missing a browser API". Three test files were already hand-rolling this exact
+  // pair (blackbook-console, blackbook-console-flag, decrypted-text-decode-once-guard); this is
+  // that stub, in the one place the other jsdom gaps are already patched.
+  //
+  // Deliberately INERT — observe() never fires. A stub that reported everything as "in view" would
+  // silently turn every viewport-gated animation on in every test, which is a behaviour change
+  // dressed as a polyfill. A test that needs the callback to fire stubs its own (see
+  // decrypted-text-decode-once-guard.test.tsx, which does exactly that and says why).
+  class InertObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return [];
+    }
+  }
+  const g = globalThis as Record<string, unknown>;
+  g.IntersectionObserver ??= InertObserver;
+  g.ResizeObserver ??= InertObserver;
+
   // jsdom doesn't implement matchMedia; stub it (no match) so motion guards don't throw.
   if (!window.matchMedia) {
     window.matchMedia = (query: string) =>

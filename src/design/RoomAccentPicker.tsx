@@ -138,6 +138,11 @@ export function RoomAccentPicker({
               before, and there is no hidden state to remember. */}
           <button
             type="button"
+            // Inside role="menu" every actionable child must be a menuitem — a bare <button> is
+            // not one, so AT announced these two as loose controls with no place in the menu's
+            // item count. Caught by axe (aria-required-children) the day the C-13 guard landed;
+            // the swatches above already had it right.
+            role="menuitem"
             className="v2-accent-all"
             title={t("common.roomAccentPicker.applyToAllTitle")}
             onClick={() => {
@@ -150,6 +155,7 @@ export function RoomAccentPicker({
           </button>
           <button
             type="button"
+            role="menuitem"
             className="v2-accent-reset"
             onClick={() => choose(null)}
             disabled={pick == null}
