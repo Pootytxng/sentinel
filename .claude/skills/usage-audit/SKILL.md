@@ -35,6 +35,9 @@ skills, subagent model routing, boot-tax read paths, error classes — plus **he
   `settings.json`; pre-2026-07-05 runs explain historical hits).
 - 🟡 BACKLOG.md > 120 KB — boot tax; archive steering-log cycles to `docs/BACKLOG_ARCHIVE.md`
   per the retention rule at the top of its steering-log section.
+- 🟡 a worktree's `src-tauri/target` over ~20 GB — build-output bloat. REPORT-ONLY: name it and the
+  `cargo clean` line, never run it. A target directory may hold an in-flight build, and which idle
+  worktree is worth clearing is the owner's call.
 - 🟡 "file not read yet" Edit errors > 1/session — Read before Edit, even for files you knew
   in a prior session.
 

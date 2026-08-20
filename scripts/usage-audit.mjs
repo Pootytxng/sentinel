@@ -16,6 +16,7 @@
 //   - subagent runs on opus/fable (routing law: cheapest capable model, sonnet default)
 //   - docs/BACKLOG.md > 120 KB (boot tax — archive steering-log cycles per its retention rule)
 //   - "File has not been read yet" Edit errors (read-before-edit discipline)
+//   - any worktree's src-tauri/target over ~20 GB (build-output bloat, report-only, 2026-08-20)
 
 import { createReadStream, readdirSync, statSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
@@ -29,6 +30,7 @@ import {
   resolveCompactionWindow,
   usableHeadroom,
 } from "./lib/compaction-window.mjs";
+import { diskBloatFlags } from "./lib/disk-bloat.mjs";
 
 const ROOT = join(homedir(), ".claude", "projects");
 // USAGE_AUDIT_REPO exists so the audit can be exercised against the real repo from a scratch
@@ -254,6 +256,14 @@ for (const [rel, budget, advice] of DOC_BYTE_BUDGETS) {
     if (sz > budget) flags.push(`🟡 ${rel} is ${(sz / 1024).toFixed(1)} KB (> ${(budget / 1024).toFixed(0)} KB byte TARGET; the gate's current ratchet is in scripts/doc-budget.ps1) — ${advice}.`);
   } catch { /* absent is not a failure */ }
 }
+
+// BUILD-OUTPUT BLOAT (added 2026-08-20, owner-requested). The block above nags in kilobytes; this
+// one is the same report noticing that Rust build output on the same disk is measured in gigabytes.
+// Report-only by construction — see scripts/lib/disk-bloat.mjs, whose guard test pins that it never
+// deletes and that it reads worktree roots from .git rather than spawning git.exe (a spawn from the
+// Monday scheduled task would flash a console window, the defect console-window-guard.test.mjs
+// exists to prevent).
+flags.push(...diskBloatFlags(REPO));
 // FLOOR TREND (added 2026-08-18, bug→guard). The defect: the fixed per-turn floor stepped from a
 // 53k median to 83k in a single day (2026-08-04, a settings rewrite + a plugin update) and no
 // instrument said a word for eleven days — the absolute-breach flag only fires once headroom is
