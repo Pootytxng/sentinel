@@ -1,0 +1,65 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "feature",
+  "pr": 178,
+  "issue": 177,
+  "branch": "lane/interview-foundation-3",
+  "currentHead": "138715f23d9a778e96dfcababf46e72ee133e386",
+  "explicitHandoff": "Same owner turn 2026-08-20: review where Compy stands, pick and run the best next marathon from the EXISTING queue without inventing work, and leave the app itself visibly modified for him to review. The queue's top non-gated item was design-foundation step 3 (the interview), issue #177, owner-approved build order in docs/decisions/2026-08-11-design-foundation.md decision 2.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room, git dir shared with C:/Users/Kuya/code/sentinel. Fetched --prune immediately before the push and again before this receipt.",
+    "remoteState": "origin/main = 53d7eb20 (the #176 merge) and unmoved since this lane was cut from exactly that commit. Other open PRs are #160 (MERGEABLE/CLEAN) and #163 (CONFLICTING/DIRTY); neither touches any file in this diff. Ownership claim + the stated scope deviation posted on #177 (issue comment 5360422541).",
+    "worktree": "git worktree list re-checked before the push: seven worktrees, this lane alone in sentinel-home-room, no other worktree on lane/interview-foundation-3. The primary worktree C:/Users/Kuya/code/sentinel is on main at ffe85271, still behind origin/main - a branch cut there would start stale, so nothing was cut there.",
+    "branch": "lane/interview-foundation-3, cut from 53d7eb20 which was exactly origin/main. One commit, no merge commits, no divergence.",
+    "dirtyState": "git status --porcelain at this head shows ONLY this untracked receipt. It is deliberately untracked, not missing: scripts/work-control-gate.mjs requires actualHead === currentHead, so a receipt cannot ride inside the head it authorizes. It carries onto the next lane that does real work, the same way PR #176 carried #175's.",
+    "liveProcesses": "One claude.exe session advancing, this one. Compy is running from %LOCALAPPDATA%/Compy/compy.exe at the a422d836 build this lane installed; the pre-change 75849be1 build was captured for the owner's before/after and then closed."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "138715f23d9a778e96dfcababf46e72ee133e386",
+      "detail": "Ran inside .githooks/pre-push at this exact head; push exit 0 and the ref advanced on origin, which the hook blocks when the gate fails - proved twice in this same lane, once when branch-disposition-audit went red on this lane's own new ref and once when tsc rejected a node:fs import in a new guard, both returning 'error: failed to push some refs' with no ref movement. Final line LOCAL CHECK RESULT: PASS. The whole sequence ran, not a tail: deps, git diff check, frontend tests, frontend type-check and build, Rust tests, Rust clippy. Standalone run earlier in the lane at a422d836 read in full: 352 files / 4620 frontend tests, Rust 963 passed 0 failed 24 ignored."
+    }
+  ],
+  "shipProof": {
+    "applicable": true,
+    "installer": "src-tauri/target/release/bundle/nsis/Compy_0.9.26_x64-setup.exe",
+    "installerSha256": "A823DF09216C7B656CF8E15257E57ECD5B5F1781AE93DC91C6ACA83C5221C995",
+    "stamp": "1d5b3c4c . release . shell 0.9.26",
+    "detail": "npm run tauri build from this worktree at 1d5b3c4c (exit 0; the trailing TAURI_SIGNING_PRIVATE_KEY notice is expected - the key is owner territory and never in the repo, so a desk build is unsigned by design). Installed by scripts/ship-reinstall.ps1 -VerifyRuntime -ExpectedCommit 1d5b3c4c... -ExpectedInstallerPath/-ExpectedInstallerSha256; runtime proof returned the stamp on attempt 1 with 0 transient retries. Live == build is proved by the embedded stamp over CDP, NEVER an exe hash - NSIS packaging leaves the installed binary not byte-identical to target/release/compy.exe. Desktop swept: exactly one Compy installer present. An earlier build of this same lane (a422d836) was installed and then superseded by this one after the round-1 self-review FAIL; only the current build is on the desk.",
+    "headNote": "The desk binary is 1d5b3c4c. The only commit after it (138715f2) touches two paths - docs/RELEASE_STATE.md (the owner-installed row + its STATE:owner_installed_stamp marker) and the removal of this receipt from git tracking - so NOTHING under src/ or src-tauri/ differs between the binary that was built, installed, reviewed and proved, and the head being merged. Verified mechanically: git diff --stat 1d5b3c4c..138715f2 lists exactly those two paths."
+  },
+  "selfReview": {
+    "verdict": "PASS",
+    "round": 2,
+    "head": "1d5b3c4c2c6fdd561e2184ea013f73c645ea7766",
+    "detail": "Round 1 on a422d836 returned FAIL on rubric item 10 (prior owner decisions): the new flag compy_home_interview defaulted ON, which reversed the owner's off-switch for that slot under a new name - the same bypass 8db70795 was written to stop. The finding was accepted in full rather than argued: 25b76673 flipped the default to OFF, added the bug->guard, and recorded the fork in docs/decisions/2026-08-20-home-interview-default.md. Round 2 was a full fresh review from the top on the rebuilt, reinstalled binary and returned PASS 10/10, re-confirming the stamp with its own get_build_stamp probe before any capture and driving the keyboard path with real CDP input events. It recorded one thing for the owner rather than as a failure: with the flag OFF - the correct default - Home is byte-identical to before this lane, and the only artifact visible without opening Settings is the new toggle row. That is stated in the decision record, in UI_VISION_BACKLOG and in the owner report.",
+    "handedToOwner": "before/after PNGs sent with SendUserFile (shipped-default Home, interview-on Home, a finding card) so the taste call is ruled on by sight rather than prose."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; docs/WORK_CONTROL.md makes that review advisory rather than a blocker. The diff adds no Rust and no mutation path - every interview action calls a command HomeConsole already owned, and src/mutation-boundary-guard.test.ts passed unchanged - and the full gate passed at this exact head, twice."
+  },
+  "docGates": [
+    "doc-budget.ps1 ALL PASS - docs/BACKLOG.md was over its 114KB byte ceiling after the interview row landed, so the superseded intake-router history (3191 bytes) was moved to docs/BACKLOG_ARCHIVE.md with a pointer left behind. Archive, never delete.",
+    "verify-release-state.mjs PASS - the home-intake-data.ts:95 citation went out of bounds when homeCareEntry moved to line 63; repaired in the same commit.",
+    "markdown-link-guard PASS on all local links after the archive move (the archiving-breaks-relative-links failure mode was checked for explicitly).",
+    "verify-release-state.mjs re-run after the owner-installed row and the STATE:owner_installed_stamp marker were re-stamped to 1d5b3c4c: 31 citations / 31 ok / 0 near-drift / 0 broken / 0 state-drift.",
+    "branch-disposition-audit went red the moment this lane's ref existed on origin; a CLAIMED row for origin/lane/interview-foundation-3 was added to docs/BRANCH_DISPOSITIONS.md rather than left for another lane to trip over. Green at this head."
+  ]
+}
