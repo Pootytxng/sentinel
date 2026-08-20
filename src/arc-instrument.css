@@ -3,11 +3,13 @@
    render untouched. Token-only (--ix-*). PIXELS ONLY — no copy or choreography lives here.
    Imported once by App.tsx.
 
-   SECTION MAP (traced 2026-08-20, mechanized by src/arc-v2-reachability-guard.test.ts):
-   M2 First-check is LIVE — App.tsx passes bare `arcV2` to <FirstCheck/>. M3 + M4/4b are DORMANT:
-   their prop chain is complete but no top-level caller sets it, so nothing under `.debrief`/`.cmp`/
-   `.wcp` ever gets an `.arc-v2` ancestor. M1 Onboarding and the M2 radar rules were DELETED — both
-   components are gone (C-18b, and 4b5e8b49 "retire the radar"), so those rules had no subject. */
+   SECTION MAP (2026-08-20, mechanized by src/arc-v2-reachability-guard.test.ts):
+   M2 First-check is the ONLY section left, and it is live — App.tsx passes a bare `arcV2` to
+   <FirstCheck/>. Everything else that lived here is DELETED, not dormant: M1 Onboarding (component
+   gone with C-18b), the M2 radar (gone with 4b5e8b49 "retire the radar"), and M3 debrief + M4/4b
+   comparison cards — those two were built, wired and never switched on, so the rules styled a look
+   no user could reach and the `arcV2` prop promised a switch no screen threw. The prop chain went
+   with them; a re-dress should start from a decision, not from leftovers. */
 
 /* ══ M2 · First-check landing ══════════════════════════════════════════════ */
 .fc-backdrop.arc-v2 {
@@ -125,156 +127,3 @@
   color: var(--ix-accent-ink, #06231c);
 }
 
-/* ══ M3 · Session debrief ══════════════════════════════════════════════════ */
-.debrief.arc-v2 {
-  background: var(--ix-glass-fill);
-  border: 1px solid var(--ix-glass-border);
-  border-top-color: var(--ix-glass-top);
-  border-radius: var(--ix-radius);
-  backdrop-filter: blur(7px);
-}
-.arc-v2 .debrief-title {
-  color: var(--ix-text-2);
-}
-.arc-v2 .debrief-verdict {
-  color: var(--ix-text-1);
-}
-.arc-v2 .debrief-sub {
-  color: var(--ix-text-2);
-}
-.arc-v2 .debrief-tile {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--ix-glass-border);
-  border-radius: 11px;
-}
-.arc-v2 .debrief-tile-value {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  color: var(--ix-text-1);
-}
-.arc-v2 .debrief-tile-label {
-  color: var(--ix-text-2);
-}
-.arc-v2 .debrief-tile-note {
-  color: var(--ix-text-3);
-}
-.arc-v2 .debrief-insight {
-  background: rgba(251, 191, 60, 0.07);
-  border: 1px solid rgba(251, 191, 60, 0.28);
-  border-radius: 11px;
-}
-.arc-v2 .debrief-insight-tag {
-  color: var(--ix-amber);
-}
-.arc-v2 .debrief-ctx-head {
-  color: var(--ix-text-2);
-}
-.arc-v2 .debrief-ctx-body {
-  color: var(--ix-text-3);
-  font-family: var(--font-mono, ui-monospace, monospace);
-}
-.arc-v2 .debrief-cta {
-  background: var(--ix-accent);
-  border: 0;
-  color: var(--ix-accent-ink, #06231c);
-}
-.arc-v2 .debrief-clean {
-  color: var(--ix-text-2);
-}
-
-/* ══ M4/4b · Comparison verdict cards ══════════════════════════════════════ */
-.cmp.arc-v2 {
-  background: var(--ix-glass-fill);
-  border: 1px solid var(--ix-glass-border);
-  border-top-color: var(--ix-glass-top);
-  border-radius: var(--ix-radius);
-  backdrop-filter: blur(7px);
-}
-.arc-v2 .cmp-head {
-  color: var(--ix-text-3);
-}
-.arc-v2 .cmp-nf {
-  color: var(--ix-text-3);
-}
-.arc-v2 .cmp-headline {
-  color: var(--ix-text-1);
-}
-.arc-v2 .cmp-sub {
-  color: var(--ix-text-2);
-}
-/* Null verdict = frost/neutral (never red — the instrument working). */
-.cmp-no-change.arc-v2 {
-  border-color: color-mix(in srgb, var(--ix-text-3) 40%, var(--ix-glass-border));
-}
-.arc-v2 .cmp-win {
-  color: var(--ix-accent-text);
-}
-.cmp-improved.arc-v2 {
-  border-color: color-mix(in srgb, var(--ix-accent) 36%, var(--ix-glass-border));
-}
-.arc-v2 .cmp-bad {
-  color: var(--ix-danger);
-}
-.cmp-regressed.arc-v2 {
-  border-color: color-mix(in srgb, var(--ix-danger) 38%, var(--ix-glass-border));
-}
-.arc-v2 .cmp-receipt-label {
-  color: var(--ix-text-2);
-}
-.arc-v2 .cmp-bar {
-  font-family: var(--font-mono, ui-monospace, monospace);
-}
-.arc-v2 .cmp-bar-before {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--ix-text-1);
-}
-.arc-v2 .cmp-bar-after {
-  background: var(--accent-soft, rgba(46, 230, 192, 0.2));
-  color: var(--ix-text-1);
-}
-.arc-v2 .cmp-delta {
-  color: var(--ix-text-2);
-  font-family: var(--font-mono, ui-monospace, monospace);
-}
-.arc-v2 .cmp-means {
-  color: var(--ix-text-2);
-}
-.arc-v2 .cmp-tally {
-  color: var(--ix-text-3);
-  font-family: var(--font-mono, ui-monospace, monospace);
-}
-
-/* THE single earned shimmer (kernel law) — only on the WIN card's improved after-bar, nowhere else
-   in the app. One sweep per slow cycle; none under reduced motion. */
-.cmp-improved.arc-v2 .cmp-bar-after {
-  position: relative;
-  overflow: hidden;
-}
-.cmp-improved.arc-v2 .cmp-bar-after::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    100deg,
-    transparent 25%,
-    rgba(255, 255, 255, 0.5) 50%,
-    transparent 75%
-  );
-  transform: translateX(-130%);
-  animation: cmp-winshimmer 3.4s ease-in-out 0.35s infinite;
-}
-@keyframes cmp-winshimmer {
-  0% {
-    transform: translateX(-130%);
-  }
-  30%,
-  100% {
-    transform: translateX(130%);
-  }
-}
-
-:root[data-motion="reduced"] {
-  .cmp-improved.arc-v2 .cmp-bar-after::after {
-    animation: none;
-    display: none;
-  }
-}

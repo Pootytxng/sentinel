@@ -50,14 +50,12 @@ function ComparisonCard({
   onRevert,
   onDismiss,
   reverting,
-  arcV2 = false,
 }: {
   r: ComparisonResult;
   nextSuspect: string | null;
   onRevert: () => void;
   onDismiss: () => void;
   reverting: boolean;
-  arcV2?: boolean;
 }) {
   const { t } = useTranslation();
   const sign = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
@@ -83,7 +81,7 @@ function ComparisonCard({
   });
 
   return (
-    <div className={`cmp cmp-${r.verdict}${arcV2 ? " arc-v2" : ""}`}>
+    <div className={`cmp cmp-${r.verdict}`}>
       <div className="cmp-head">
         <span>{t("monitor.sessionDebrief.comparisonHeader", { title: r.rec_title, game: prettyGameName(r.game) })}</span>
         <span className="cmp-nf">{t("monitor.sessionDebrief.noiseFloor", { pct: r.noise_floor_pct })}</span>
@@ -215,7 +213,6 @@ export function SessionDebrief({
   changes,
   rollback,
   activeChangeFor,
-  arcV2 = false,
   vendor,
   sessions,
 }: {
@@ -230,7 +227,6 @@ export function SessionDebrief({
   /** BACKLOG:236 Ledger half (additive — absent = prose only): lets the "What changed?" next-test
    *  line carry a real rollback button when the engine named a still-active rec id. */
   activeChangeFor?: (recId: string) => AppliedChange | undefined;
-  arcV2?: boolean;
   /** Tuning before/after (spec 2026-06-08) — provided only where the full session list + GPU vendor
    *  are available (Play). Absent → the tuning cluster doesn't render (classic Sessions tab). */
   vendor?: GpuVendor;
@@ -326,7 +322,7 @@ export function SessionDebrief({
   };
 
   return (
-    <div className={`debrief${arcV2 ? " arc-v2" : ""}`}>
+    <div className="debrief">
       <div className="debrief-head">
         <span className="debrief-title">
           {prettyGameName(s.process_name) || t("monitor.sessionDebrief.lastSessionFallback")} · {fmtDur(s.duration_secs)} · {range}
@@ -370,7 +366,6 @@ export function SessionDebrief({
           onRevert={revertCmp}
           onDismiss={dismissCmp}
           reverting={reverting}
-          arcV2={arcV2}
         />
       ) : (
         shownInsight && (
@@ -385,7 +380,6 @@ export function SessionDebrief({
           ComparisonCard above keeps the rec-scoped A/B story; this answers "vs last time". */}
       <WhatChangedPanel
         startedAt={s.started_at}
-        arcV2={arcV2}
         activeChangeFor={rollbackShortcutFor}
         onRollback={rollback}
         busy={busyId !== null}
@@ -396,7 +390,6 @@ export function SessionDebrief({
       {sessions && (
         <SessionInvestigator
           sessions={sessions}
-          arcV2={arcV2}
           activeChangeFor={rollbackShortcutFor}
           onRollback={rollback}
           rollbackBusy={busyId !== null}

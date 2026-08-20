@@ -19,7 +19,7 @@ Line counts drift — treat as rough and verify against current code before asse
 
 **Hardware, sensors & detection (read-only probes)**
 - `hardware.rs` (~3350) — `HardwareInfo` probe (CPU/GPU/RAM/storage/network); Rust↔TS serde contract.
-- `cpu_temp.rs` (~520) — HWiNFO shared-memory CPU-temp/fan read (SEH-crash risk noted in audit). GPU temp via vendor SDK elsewhere.
+- `cpu_temp.rs` (~1137) — HWiNFO shared-memory CPU-temp/fan read (SEH-crash risk noted in audit). GPU temp via vendor SDK elsewhere.
 - `amd_freesync.rs` (~250), `overlay_tools.rs` (~230), `hwchange.rs` (~190) — FreeSync detection, overlay-tool detection, hardware-change tracking.
 
 **Monitoring, FPS & sessions**
