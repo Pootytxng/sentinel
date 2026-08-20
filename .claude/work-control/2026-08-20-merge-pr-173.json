@@ -1,0 +1,62 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "documentation",
+  "pr": 173,
+  "issue": null,
+  "branch": "lane/backlog-truth-and-receipt",
+  "currentHead": "c3ca6e73b42d337a47c19bc02fb6112eb7b697d3",
+  "explicitHandoff": "Same owner turn 2026-08-20 that produced PR #172. This PR carries what that one structurally could not: its own trailing receipt, a correction to the C-13(b) row's evidence count, the self-review debt written down, and one archived cycle to restore doc-budget headroom.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room, git dir shared with C:/Users/Kuya/code/sentinel.",
+    "remoteState": "Fetched --prune after the #172 merge. origin/main = 5fab9e79c901bb166a428fc339274130643f7ea1 (the #172 merge). origin/lane/backlog-truth-and-receipt = c3ca6e73, pushed through the pre-push gate. lane/accent-menu-keyboard was pruned immediately after #172 merged and branch-disposition-audit returned OK at that point. Concurrent lanes untouched: PR #160, PR #163.",
+    "worktree": "This lane alone in C:/Users/Kuya/code/sentinel-home-room; no other worktree is on this branch.",
+    "branch": "lane/backlog-truth-and-receipt, cut from origin/main 5fab9e79. One commit, no merge commits, no divergence.",
+    "dirtyState": "git status --porcelain empty at c3ca6e73 apart from this receipt, which by construction cannot ride inside the head it authorizes.",
+    "liveProcesses": "Compy running from %LOCALAPPDATA%/Compy/compy.exe (pid 9264), the pre-existing desk build. Nothing was built or installed this turn and nothing is claimed live. No dev server, no cargo build in flight."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1",
+    "powershell scripts/doc-budget.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "c3ca6e73b42d337a47c19bc02fb6112eb7b697d3",
+      "detail": "Ran inside .githooks/pre-push against this exact tree; push exit 0. 351/351 test files, 4599 passed / 4 skipped (4603). Rust green, cargo clippy clean. NOTE the count is 4599 here versus 4598 in the #172 post-push re-run: the difference is branch-disposition-audit's live-repo assertion, which fails only in the window where a lane's ref exists on origin without a row. Same known two-push ordering race, observed from the other side."
+    },
+    {
+      "command": "powershell scripts/doc-budget.ps1",
+      "status": "passed",
+      "head": "c3ca6e73b42d337a47c19bc02fb6112eb7b697d3",
+      "detail": "ALL PASS. docs/BACKLOG.md 111.5KB/114KB and 1043/1200 lines, restored from 113.3KB - 0.7KB of headroom - by archiving Cycle 2026-08-19d verbatim to docs/BACKLOG_ARCHIVE.md with the standard stub left behind."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "reason": "Documentation and one evidence file. No build, no install, nothing shipped to any machine."
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "No product code and no UI surface in this diff. Note this PR is the one that RECORDS the outstanding self-review debt from PR #172; it does not discharge it, and does not claim to."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; docs/WORK_CONTROL.md makes that review advisory rather than a blocker. The diff is documentation plus one JSON evidence file - no product code, no scripts, no mutation surface, nothing executable - and the full pre-push gate passed at this exact head."
+  },
+  "docGates": [
+    "doc-budget.ps1 ALL PASS, with headroom deliberately restored rather than consumed",
+    "branch-disposition-audit OK at the time this lane was cut; this lane's own ref is subject to the known ordering race until it is merged and pruned, and needs no row"
+  ]
+}
