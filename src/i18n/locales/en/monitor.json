@@ -1,13 +1,5 @@
 {
   "monitor": {
-    "segments": {
-      "live": "Live",
-      "sessions": "Sessions"
-    },
-    "modes": {
-      "basic": "Basic",
-      "advanced": "Advanced"
-    },
     "tuningPresetsTitle": "Tuning presets",
     "vendorHintAmd": " — FreeSync on your AMD card",
     "vendorHintNvidia": " — G-SYNC on your NVIDIA card",
@@ -27,9 +19,7 @@
         "label": "Lower Latency",
         "goal": "A more responsive PC — free up drive headroom, prioritize the game, and cut background drag."
       }
-    },
-    "monitorSectionsAria": "Live sections",
-    "detailLevelAria": "Detail level"
+    }
   },
   "monitorV2": {
     "segments": {

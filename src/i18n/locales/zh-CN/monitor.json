@@ -1,13 +1,5 @@
 {
   "monitor": {
-    "segments": {
-      "live": "实时",
-      "sessions": "会话"
-    },
-    "modes": {
-      "basic": "基础",
-      "advanced": "高级"
-    },
     "tuningPresetsTitle": "调优预设",
     "vendorHintAmd": "——你的 AMD 显卡支持 FreeSync",
     "vendorHintNvidia": "——你的 NVIDIA 显卡支持 G-SYNC",
@@ -27,9 +19,7 @@
         "label": "更低延迟",
         "goal": "让 PC 反应更灵敏——腾出硬盘空间、优先保障游戏进程、减少后台拖累。"
       }
-    },
-    "monitorSectionsAria": "实时分区",
-    "detailLevelAria": "详细程度"
+    }
   },
   "monitorV2": {
     "segments": {
