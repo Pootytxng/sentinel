@@ -19,8 +19,10 @@
 // 2026-08-20-home-interview-default.md), then change the default and this file in the same commit
 // citing that record. If you are reading this because the test went red, the question to answer is
 // "did he say yes", not "what number makes this pass".
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+// `fs`/`path`, not `node:fs`/`node:path` — the app tsconfig this file is compiled under has no
+// node: protocol types, and every sibling source-contract guard in src/surfaces uses the bare form.
+import { readFileSync } from "fs";
+import { join } from "path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { applyHomeInterview, readHomeInterview } from "../design/theme";
 
