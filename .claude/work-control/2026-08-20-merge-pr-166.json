@@ -1,0 +1,64 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 166,
+  "branch": "lane/win-shimmer",
+  "currentHead": "4bb2cd08359a7fb04f4e1b0a27839f970f57ca15",
+  "explicitHandoff": "Owner turn 2026-08-20: 'resolve all of this and if this lane is already too token heavy then give me a handoff to resolve literally everything mentioned here.' This is the docs half of that train: the ship record for the merged PR #165, and the two ~/.claude/settings.json asks filed on the owner's checklist because no session may edit that file.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room. main is checked out by the sibling worktree C:/Users/Kuya/code/sentinel, which is why this worktree holds a lane branch.",
+    "remoteState": "git fetch --prune run this turn. origin/main = 835d8868 (the PR #165 merge, landed by this lane). Concurrent lanes live and untouched: PR #160 (lane/usage-audit-disk-bloat) and PR #163 (lane/cleanup-train-2026-08-20); a correction comment was left on #160 rather than any change to it.",
+    "worktree": "One writer. The cleanup lane recorded a 2026-08-20 collision in which a second session wrote inside its worktree; it re-homed to sentinel-diskbloat, leaving this worktree to this lane alone.",
+    "branch": "lane/win-shimmer, re-cut from origin/main 835d8868 after the #165 merge pruned the previous ref. One docs commit on top.",
+    "dirtyState": "Clean apart from this receipt file itself, which trails by one commit by construction.",
+    "liveProcesses": "Compy running from %LOCALAPPDATA%/Compy/compy.exe, installed by scripts/ship-reinstall.ps1 this turn and stamp-proved at ae5ff500. No dev server, no cargo build in flight."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "failed",
+      "head": "05b4b735",
+      "detail": "PRESERVED, not discarded. First push attempt FAILED 2 of 4582 - tools/entry/doc-truth.test.mjs decision 7, on two sentences that paired 'merge' and 'worktree' without denying propagation (the RELEASE_STATE row's 'from worktree sentinel-home-room at the merge of PR #165', and the handoff's explanation of the --delete-branch cleanup failure). Neither claimed propagation, but the detector is deliberately dumb and the sentences were reworded rather than the guard loosened. The background wrapper reported exit 0 while the suite failed, which is why the whole log was read rather than tailed."
+    },
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "4bb2cd08359a7fb04f4e1b0a27839f970f57ca15",
+      "detail": "Re-run inside .githooks/pre-push after the rewording. 350/350 test files, 4578 passed / 4 skipped (4582), Rust 963 passed / 0 failed / 24 ignored, clippy clean, LOCAL CHECK RESULT: PASS. Full log read, not tailed."
+    }
+  ],
+  "shipProof": {
+    "installerSha256": "03DC72E02BF3CAD2EB283F8CA943010A35BEE0BFBB54F1E340BA22429DF36243",
+    "stamp": "835d8868",
+    "method": "byte-scan of the installed exe (STAMP FOUND 835d8868); NSIS packaging leaves the installed binary not byte-identical to target/release/compy.exe, so an exe hash is not proof.",
+    "desktop": "exactly one installer"
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "Docs and receipts only - no UI surface changed by this commit. The UI it records was reviewed PASS 10/10 on the installed build under PR #165."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session, so the non-writing model cannot give the final review. The self-reviewer subagent supplied the independent visual pass and was told to push back on this lane's sweep-law adjudication rather than rubber-stamp it; it verified all four non-celebration allowlist entries against source itself before agreeing."
+  },
+  "docGates": [
+    "doc-budget.ps1 PASS all files (RELEASE_STATE 47.3KB/48KB after archiving, 282/300 lines)",
+    "markdown-link-guard 137/137",
+    "verify-release-state 32 citations ok / 0 drift",
+    "branch-disposition-audit OK"
+  ]
+}
