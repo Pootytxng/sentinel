@@ -131,8 +131,8 @@ halt and involve the owner.
   Lead with what happened and what he must do; detail goes in the commit/PR, not the chat. He asked
   for this globally: mirror it into `~/.claude/CLAUDE.md` wherever reachable (a cloud container's
   copy is ephemeral and does NOT count). This line is the in-git backstop.
-- **End every session with a HANDOFF BLOCK** — a paste-ready prompt for the next session, plus one
-  line saying whether this session is done (archive / delete / leave open).
+- **End every session with a HANDOFF BLOCK** — a paste-ready next task, the lane it runs on, and
+  whether his VS Code tab is safe to close. Guarded: `scripts/handoff-block.test.mjs`.
 - **Terse reports** (chat is pasted into Cowork, so verbosity bills twice): commit hash(es) · 1–2 line
   what-changed · **one** verification line (cargo/npm/clippy/tsc) · flags / owner-decisions. Mechanism
   and design detail go in the commit message + spec. Cite `path#section`, don't restate docs.
