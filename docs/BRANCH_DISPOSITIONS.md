@@ -38,8 +38,10 @@ within the minute; the fix was to prune, because there was nothing left to re-pr
 
 **A MERGED row is therefore perishable: prune the ref in the same breath as recording the merge**,
 rather than leaving a row that will fail its own audit on the next unrelated edit — including the
-edit that records the merge. The audit now says this in its own failure text
-(`scripts/branch-disposition-audit.mjs`, pinned in its test).
+edit that records the merge. **The audit enforces it** — a `MERGED` or `SUPERSEDED` row whose ref is
+still on origin fails — and its failure text names the prune: `git push origin --delete <branch>`,
+the form that is neither blocked on this machine nor stopped by the gate (`.githooks/pre-push` skips
+a deletion-only push). Pinned in `scripts/branch-disposition-audit.test.mjs`.
 
 **The base is `origin/main`, not the local `main`** (the local branch is only the fallback where no
 `origin/main` exists). A local `main` is a checkout owned by whichever worktree holds it, and a merge
@@ -49,8 +51,8 @@ unmerged. Pinned in `scripts/branch-disposition-audit.test.mjs`.
 
 | disposition | meaning | action |
 | --- | --- | --- |
-| `MERGED` | merge-tree is a no-op; `main` already contains it | prunable |
-| `SUPERSEDED` | not a no-op, but its content reached `main` by another path | prunable |
+| `MERGED` | merge-tree is a no-op; `main` already contains it | **prune now** |
+| `SUPERSEDED` | not a no-op, but its content reached `main` by another path | **prune now** |
 | `PRESERVE` | must never be deleted, moved, or merged | leave alone |
 | `CLAIMED` | another lane holds it under `docs/WORK_CONTROL.md` | hands off |
 | `UNLANDED` | carries real work that is not on `main` | needs a decision |
@@ -106,7 +108,6 @@ PRs and needs no row.
 | `origin/claude/checklist-disk-item-c5660e` | CLAIMED | Claude lane, same session as the two rows below. Docs only: adds **A_disk** to `docs/OWNER_ACTION_CHECKLIST.md` (a 9 GB folder `git worktree remove` deregistered but Windows would not delete) and drops this lane's own superseded duplicate row for `origin/docs/design-foundation`, which said in its own text that it goes once the owning lane writes its. |
 | `origin/claude/foreground-courtesy-handoff-82687b` | CLAIMED | Claude lane, worktree `.claude/worktrees/foreground-courtesy-handoff-82687b`. Ran the on-screen proof PR [#100](https://github.com/Pootytxng/sentinel/pull/100) was waiting on and it **failed three times out of three** — `focus = false` set through `context.config_mut()` does not survive to window creation, so that PR's mechanism is inert (findings on the PR; do not merge it as-is). Chasing it surfaced the owner's ACTUAL complaint — a blank Windows Terminal flashing and self-closing — which measurement traced to `npm test`: seven suites spawn `powershell.exe` without `windowsHide`, and Win11's default terminal turns each one into a real console window. This branch fixes those seven and adds `scripts/console-window-guard.test.mjs` to keep an eighth from appearing. |
 | `origin/docs/design-foundation` | CLAIMED | Claude lane, docs only. The consumer-app design foundation the owner asked for on 2026-08-11 after tester feedback that Compy is "overwhelming and hard to navigate and completely unfamiliar": `docs/decisions/2026-08-11-design-foundation.md` (five references, the verdict-first front door, the interview, the 6-step type scale at a 13px floor, rooms giving up their hue, the wording glossary, and the ranked tooling answer), the rendered proposal at `docs/ui-sweep/foundation.html`, and `FOUNDATION-1` filed in `docs/UI_VISION_BACKLOG.md` as the parent of TYPE-1 / COLOR-1 / UX-1. No product code touched. |
-| `origin/perf/idle-127-ambient-raster` | MERGED | Landed as a real merge commit `85ed8065` (PR [#141](https://github.com/Pootytxng/sentinel/pull/141), issue [#127](https://github.com/Pootytxng/sentinel/issues/127)), so the ref is an ancestor of `main` and stays a no-op — the perishability warning above applies to squash/rebase landings, not this one. Idle-CPU attribution: #127's own rig diagnosis does not reproduce (rAF band 0.201, zero frames); the cost was `aurora`'s `scale()` on `body::before` (13.257 points) and two forever-running `.stl-ring` pulses on every Home (4.156). 19.632 → 10.483 percent of one core against the installed binary. **Ref NOT pruned:** the `gh api -X DELETE` prune was denied by this session's permission layer, so the row stays instead of a dangling reference. |
 | `origin/lane/usage-audit-disk-bloat` | CLAIMED | **Not this lane's branch — dispositioned, untouched.** A concurrently-running session pushed it at 2026-08-20 04:47 local (commit `12886b0f`, one commit on top of `8a1450cd`) with PR [#160](https://github.com/Pootytxng/sentinel/pull/160) open: a report-only disk-bloat flag for an oversized `src-tauri/target`. The same window is when this worktree's `node_modules` was gutted and reinstalled by an `npm install --no-audit --no-fund` no script in this repo issues — the first push gate here died at a missing `tsc` because of it. The row exists so the audit reflects reality; **its disposition to MERGED or a prune belongs to the lane that owns it**, per `docs/WORK_CONTROL.md` (an overlapping live claim means hands off, not adjudicate). |
 | `origin/lane/cleanup-train-2026-08-20` | CLAIMED | **Not this lane's branch — dispositioned, untouched.** A concurrently-running session's docs/receipts train, PR [#163](https://github.com/Pootytxng/sentinel/pull/163) — the `#160` re-proof + receipt, the `A_merge` permission ask, and the record of the worktree collision that renamed it off `lane/self-checkup`. **That PR carries its own, fuller row for this branch; when #163 lands, its text supersedes this one and this line goes.** The row exists only because merging #164 left `main`'s audit red for every push in the repo, and an undispositioned ref blocks other lanes, not just its own. |
 

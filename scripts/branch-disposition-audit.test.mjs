@@ -17,7 +17,15 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { audit, isNoop, listRemoteRefs, parseDispositions, refSetCoverage, resolveBase } from "./branch-disposition-audit.mjs";
+import {
+  audit,
+  isNoop,
+  listRemoteRefs,
+  parseDispositions,
+  pruneCommand,
+  refSetCoverage,
+  resolveBase,
+} from "./branch-disposition-audit.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -163,11 +171,11 @@ describe("git facts the audit rests on", () => {
 
 describe("what the audit refuses to pass", () => {
   it("passes when every ref has an accurate row", () => {
-    expect(run([["origin/landed", "MERGED"], ["origin/ahead", "UNLANDED"]])).toEqual([]);
+    expect(run([["origin/landed", "PRESERVE"], ["origin/ahead", "UNLANDED"]])).toEqual([]);
   });
 
   it("fails when a live ref has no row — the original defect", () => {
-    const problems = run([["origin/landed", "MERGED"]]);
+    const problems = run([["origin/landed", "PRESERVE"]]);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain("origin/ahead");
     expect(problems[0]).toMatch(/no row/);
@@ -175,7 +183,7 @@ describe("what the audit refuses to pass", () => {
 
   it("fails when a row names a ref that is gone", () => {
     const problems = run([
-      ["origin/landed", "MERGED"],
+      ["origin/landed", "PRESERVE"],
       ["origin/ahead", "UNLANDED"],
       ["origin/deleted-last-week", "MERGED"],
     ]);
@@ -185,7 +193,7 @@ describe("what the audit refuses to pass", () => {
 
   // The rot case: the row was true once. The audit re-proves it instead of believing it.
   it("fails when a MERGED row is no longer a no-op", () => {
-    const problems = run([["origin/landed", "MERGED"], ["origin/ahead", "MERGED"]]);
+    const problems = run([["origin/landed", "PRESERVE"], ["origin/ahead", "MERGED"]]);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toMatch(/origin\/ahead is recorded MERGED but merging it into main still changes/);
     // ...and it must say what to DO. On 2026-08-06 this exact failure fired against a row written
@@ -204,7 +212,7 @@ describe("what the audit refuses to pass", () => {
   });
 
   it("fails on a disposition word that is not in the vocabulary", () => {
-    const problems = run([["origin/landed", "MERGED"], ["origin/ahead", "PROBABLY FINE"]]);
+    const problems = run([["origin/landed", "PRESERVE"], ["origin/ahead", "PROBABLY FINE"]]);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain("PROBABLY FINE");
   });
@@ -221,9 +229,55 @@ describe("what the audit refuses to pass", () => {
   // PRESERVE and CLAIMED make no merge-tree claim, so neither shape may be flagged. beta/private-beta-001
   // is genuinely an ancestor of main and must not be nagged into MERGED — that row is what stops it
   // being pruned.
+  // The two-day row. `origin/perf/idle-127-ambient-raster` was recorded MERGED on 2026-08-18, its
+  // ref was left standing, and this audit stayed green for two days — nothing asked whether a row
+  // that means "prunable" had actually been pruned. The row explained itself in the record: the
+  // prune had been attempted as `gh api -X DELETE` and refused, so it read as a task for the owner.
+  // Two harms, one check: the record drifts from origin, and the MERGED proof rots the next time
+  // `main` moves (see the perishability case above), after which it can never be re-produced.
+  it("fails while a prunable row's ref is still on origin, and names the command that removes it", () => {
+    const problems = run([["origin/landed", "MERGED"], ["origin/ahead", "UNLANDED"]]);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("origin/landed is recorded MERGED, which means prunable");
+    expect(problems[0]).toContain("git push origin --delete landed");
+  });
+
+  it("says the same of SUPERSEDED, the other word that means prunable", () => {
+    const problems = run([["origin/landed", "PRESERVE"], ["origin/ahead", "SUPERSEDED"]]);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("git push origin --delete ahead");
+  });
+
   it("makes no merge-tree demand of PRESERVE or CLAIMED rows", () => {
     expect(run([["origin/landed", "PRESERVE"], ["origin/ahead", "CLAIMED"]])).toEqual([]);
     expect(run([["origin/landed", "CLAIMED"], ["origin/ahead", "PRESERVE"]])).toEqual([]);
+  });
+});
+
+// What this block pins is not a wrong answer — it is a right answer nobody could act on. Sessions
+// reached for `gh api -X DELETE .../git/refs/heads/<branch>`, this machine's permission layer denied
+// it, and the denial was read as "the ref cannot be pruned": once written into the record as the
+// reason a row had to stay, and once carried to the owner as if it were his to do. `git push origin
+// --delete` was never blocked. Naming it in the failure itself is the fix; this keeps it there.
+describe("every request for a ref to go carries the command that works", () => {
+  it("builds the command from the ref, with the remote prefix stripped", () => {
+    expect(pruneCommand("origin/lane/foo")).toBe("git push origin --delete lane/foo");
+    // Tolerant of a bare name, so a caller that already stripped it does not produce `--delete`
+    // against a branch called "origin/origin/...".
+    expect(pruneCommand("lane/foo")).toBe("git push origin --delete lane/foo");
+  });
+
+  it("names it in every failure that asks for a deletion, and never names `gh api`", () => {
+    const asksForDeletion = [
+      run([["origin/landed", "PRESERVE"]]), // a live ref with no row at all
+      run([["origin/landed", "MERGED"], ["origin/ahead", "UNLANDED"]]), // prunable, still standing
+      run([["origin/landed", "PRESERVE"], ["origin/ahead", "MERGED"]]), // a MERGED proof gone stale
+    ].flat();
+    expect(asksForDeletion).toHaveLength(3);
+    for (const problem of asksForDeletion) {
+      expect(problem).toContain("git push origin --delete");
+      expect(problem).not.toMatch(/gh api/);
+    }
   });
 });
 
