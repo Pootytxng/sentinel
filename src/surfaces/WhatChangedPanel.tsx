@@ -291,7 +291,6 @@ function ComparabilityDetail({ c, expert }: { c: SessionComparability; expert: b
 function WhatChangedReportView({
   outcome,
   expert,
-  arcV2,
   headline,
   activeChangeFor,
   onRollback,
@@ -299,7 +298,6 @@ function WhatChangedReportView({
 }: {
   outcome: WhatChangedOutcome;
   expert: boolean;
-  arcV2: boolean;
   /** Overrides the "vs your previous X session" head line — the investigator names both picks. */
   headline?: string;
   /** BACKLOG:236 — resolves `next_action_rec_id` against the LIVE ledger. All three below are
@@ -314,7 +312,7 @@ function WhatChangedReportView({
 
   if (outcome.kind === "unavailable") {
     return (
-      <div className={`wcp wcp-unavailable${arcV2 ? " arc-v2" : ""}`}>
+      <div className={`wcp wcp-unavailable`}>
         <span className="wcp-tag">{t("optimize.whatChangedPanel.whatChangedTag")}</span>{" "}
         {outcome.reason}
       </div>
@@ -347,7 +345,7 @@ function WhatChangedReportView({
       : undefined;
 
   return (
-    <div className={`wcp wcp-${r.verdict}${arcV2 ? " arc-v2" : ""}`}>
+    <div className={`wcp wcp-${r.verdict}`}>
       <div className="wcp-head">
         <span>
           {headline ?? t("optimize.whatChangedPanel.headlineDefault", { game: r.game })}
@@ -503,13 +501,11 @@ function WhatChangedReportView({
 
 export function WhatChangedPanel({
   startedAt,
-  arcV2 = false,
   activeChangeFor,
   onRollback,
   busy = false,
 }: {
   startedAt: string;
-  arcV2?: boolean;
   /** BACKLOG:236 — optional together; absent = the next-test sentence renders alone (unchanged). */
   activeChangeFor?: (recId: string) => AppliedChange | undefined;
   onRollback?: (c: AppliedChange) => Promise<void>;
@@ -538,7 +534,6 @@ export function WhatChangedPanel({
     <WhatChangedReportView
       outcome={outcome}
       expert={expert}
-      arcV2={arcV2}
       activeChangeFor={activeChangeFor}
       onRollback={onRollback}
       busy={busy}
@@ -556,13 +551,11 @@ type GameGroup = { game: string; sessions: SessionSummary[] };
 
 export function SessionInvestigator({
   sessions,
-  arcV2 = false,
   activeChangeFor,
   onRollback,
   rollbackBusy = false,
 }: {
   sessions: SessionSummary[];
-  arcV2?: boolean;
   /** BACKLOG:236 — optional together; absent = the next-test sentence renders alone (unchanged).
    *  Named `rollbackBusy` because this surface already owns a local `busy` for its OWN compare
    *  fetch; the two are unrelated and must never gate each other. */
@@ -654,7 +647,7 @@ export function SessionInvestigator({
   const sameSession = shownBaseline === shownCurrent;
 
   return (
-    <div className={`wcp-investigate${arcV2 ? " arc-v2" : ""}`}>
+    <div className="wcp-investigate">
       <div className="wcp-inv-head">
         <span className="wcp-tag">{t("optimize.whatChangedPanel.investigateTag")}</span>
         <span className="wcp-inv-sub">
@@ -722,7 +715,6 @@ export function SessionInvestigator({
           <WhatChangedReportView
             outcome={outcome}
             expert={expert}
-            arcV2={arcV2}
             headline={t("optimize.whatChangedPanel.headlineBetween")}
             activeChangeFor={activeChangeFor}
             onRollback={onRollback}

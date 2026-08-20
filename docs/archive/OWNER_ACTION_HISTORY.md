@@ -257,3 +257,95 @@ The PowerShell resolver (`scripts/lib/canonical-data-root.ps1`, the parity twin 
 `src-tauri/src/data_root.rs`) re-run afterward on the real desk returns
 `C:\Users\Kuya\AppData\Roaming\Compy`, Exists = True — **`Canonical`**, no longer `Conflict`. Applies
 and rollbacks are unblocked on this machine.
+
+## Items closed out of the live checklist 2026-08-20 (self-checkup)
+
+None of these needed the owner. A_ci was answered by GitHub itself, A_rig says "nothing for you to do
+today" in its own text, A_ref2 was already done, B1 was resolved verbally on 2026-07-08, B7 was
+cancelled by the owner (**do not resurface**), and B_arc was mine to decide and was executed.
+Byte-preserved below.
+
+### A_ci. Branch protection on `main` — **not available on this plan; no action needed from you**  ·  ⏳ NEW 2026-08-05, revised same day
+`main`'s CI sat **red for two days** and nobody noticed ([#68](https://github.com/Pootytxng/sentinel/issues/68)).
+The detection half is built and green — a daily watchdog that files an issue when the trunk goes red
+([#72](https://github.com/Pootytxng/sentinel/pull/72)). The prevention half would be a rule on `main`
+requiring the two CI jobs to pass, and requiring a branch to be up to date before it merges.
+
+**I tried to set it and GitHub refused.** Both `repos/…/branches/main/protection` and
+`repos/…/rulesets` return `403 — Upgrade to GitHub Pro or make this repository public`. This account
+is a free User plan and the repo is private, so **the checkboxes do not exist to be ticked** — by
+either of us. This item was first written as "two checkboxes only you can tick"; that was wrong, and
+this is the correction.
+
+That leaves three real options, and **my recommendation is the third**: (1) pay for GitHub Pro —
+a recurring spend for one guard, against the zero-budget law; (2) make the repo public now —
+that is the first-public-exposure decision, which CLAUDE.md already schedules alongside the
+`compy.gg` domain step, and it should not be forced early by a CI rule; (3) **accept the watchdog as
+the only guard until the repo goes public anyway**, at which point protection becomes available for
+free and this item closes itself.
+
+The concrete hole the rule would have closed, found 2026-08-05: `ci.yml` triggers on
+`pull_request: branches: [main]`, and that filter matches the **base**, so a stacked PR runs no CI
+at all. When its parent merges, GitHub auto-retargets it — and a base change fires `edited`, which
+is **not** one of the default trigger events. **So a stacked PR can land on `main` having never run
+CI once.** That was the default path for this very stack. Without the rule available, the standing
+mitigation is procedural and mine to keep: **after every merge into `main`, the next PR in a stack
+gets `origin/main` merged into it and must show a green run on that result before it lands** — done
+for #71 ([31022512767](https://github.com/Pootytxng/sentinel/actions/runs/31022512767)) and for #72.
+Widening the CI trigger to all branches would also fix it and was rejected — that is the unbounded
+spend that exhausted July's allowance and killed CI for 22 days in the first place.
+
+### A_rig. The performance budgets are proven on ONE machine — yours  ·  ⏳ NEW 2026-08-05
+Q7 recorded Compy's real numbers against the installed build and turned them into budgets a test
+re-checks on every run ([`docs/perf/q7-baseline.json`](../perf/q7-baseline.json), issue
+[#73](https://github.com/Pootytxng/sentinel/issues/73)). Every one of those 14 numbers came off your
+desk: Ryzen X3D, 16 cores, 29.4 GB, RX 9070 XT, 240 Hz. **In plain English: we now know Compy starts
+in 3.7 seconds and uses 575 MB on a fast gaming PC. We do not know what it does on a slow laptop,
+and nothing in the repo should be read as claiming we do.**
+
+Nothing for you to do today — this is logged so it does not silently become a claim. The moment a
+second, slower Windows machine is available (a spare laptop, a tester's PC, anything), the whole
+sweep is one command per leg and takes about twenty minutes:
+`node scripts/q7-probe.mjs coldstart|boot|rooms|latency|idle-bare|a11y`. Until then the budgets stay
+labelled *upper bound proven on fast hardware*, and the one bad finding below stays open regardless
+of rig: **idle Compy burns ~half a CPU core doing nothing**, which will be worse, not better, on a
+weaker machine.
+
+### A_ref2. One more dead branch — a single delete click  ·  ⏳ NEW 2026-08-11
+A sixth-and-final leftover appeared right after A_ref closed: `docs/untangle-dispositions`. A session
+fixed the branch-record duplicate there, but its push was blocked long enough that another lane fixed
+the exact same thing first (PRs #109 and #110). The branch now carries nothing `main` lacks, so it was
+abandoned rather than merged. Its row in `docs/BRANCH_DISPOSITIONS.md` is marked SUPERSEDED and goes
+when the ref does. Nothing is lost: nothing on it is unique.
+
+### B1. The Lab room — hand over your task list  ·  ✅ resolved (direction delivered verbally 2026-07-08)
+You delivered the Lab direction verbally 2026-07-08 (the proving-ground brief) and steered the redesign
+through three rounds to the approved **Ops Console** (see A3) — the parked train is long since moving.
+Still folded in and NOT yet built: the **Two Futures hologram** feedback — *"looks really good BUT the
+hologram has no visible purpose or information integrated"* (needs part-anchored, measured info) — it
+rides a later Lab phase, tracked in [`BACKLOG.md`](../BACKLOG.md).
+
+### B7. Site auto-deploy  ·  🛑 CANCELLED BY OWNER 2026-07-16 — do not resurface
+Dropped by owner decision, decreed via Cowork with the owner at the console. The real facts (read
+live from the owner's GitHub dashboard, correcting this entry's earlier guesses): **no failed
+payment, billed $0** — the block was the account-level $0 Actions budget (stop-usage on), and
+**$12 of ~$16 included free minutes were already burned by Jul 9**, so "should cost $0" was not
+guaranteed. That makes unblocking a zero-budget-law spend gate; the owner declined it.
+**Standing state:** the workflow file stays (it skips green, no error spam) · manual
+`wrangler pages deploy` under the standing B3 deploy GO is THE publishing path · never ask the
+owner for the Cloudflare token, a billing change, or a budget raise again. Revisit ONLY if the
+owner raises it himself — his accepted trigger: a multi-day absence where the site must update
+unattended. (Cross-ref: BACKLOG steering-log decree above Cycle 2026-07-16e.)
+
+### B_arc. Half the arc skin is built, wired, and switched off — delete it or turn it on  ·  ⏳ NEW 2026-08-20
+`src/arc-instrument.css` M3 (session debrief) + M4/4b (comparison cards) — 156 lines of finished
+skin whose prop chain runs end to end but that no caller ever turns on, so no user has seen it. The
+dead-by-deletion strata around it (M1 Onboarding, the M2 radar) are already gone; this half is
+**dormant, not dead**, which is why it wasn't touched. **My recommendation:** delete the CSS *and*
+the `arcV2` prop chain in `SessionDebrief`/`WhatChangedPanel` together — a prop that promises a
+re-skin and does nothing is worse than neither, and three skin generations have shipped since it was
+written. **The other direction:** one prop at `Play.tsx:488` lights it, and then it owes a build →
+install → self-review like any visual change. Either way it's one train. Row: [`BACKLOG.md`](../BACKLOG.md).
+
+---
+
