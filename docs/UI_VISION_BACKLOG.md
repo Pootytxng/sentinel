@@ -22,7 +22,7 @@
 These are owner asks that are **never-built or parked**, not yet reflected as active work anywhere
 else. This is the list the owner meant.
 
-### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) 🟡 IN PROGRESS — **four of five are DONE**: ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED, but SHIPPED OFF BY DEFAULT: one owner word turns it on, see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door remains OPEN**
+### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) 🟡 IN PROGRESS — **four of five are DONE**: ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED; owner tried it and said *"i like it"* 2026-08-20, so the default flips ON inside the comprehensibility sweep, which first fixes the button placement he objected to — see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door remains OPEN**
 
 > **③ BUILT, TESTED AND INSTALLED 2026-08-20 — and it is OFF until he says otherwise.** Turn it on
 > at **Settings → Behavior → "Ask me a question on Home"**. With it on, Home's primary button reads

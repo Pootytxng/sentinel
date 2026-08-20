@@ -72,3 +72,24 @@ default if the default flips.
 Not an edit to the guard's expectation. Owner's call → amend this file with his words and the date →
 flip the default and the guard in the same commit, citing this record. If the guard is red and this
 section has not changed, the answer to find is *"did he say yes"*, not *"what number makes it pass"*.
+
+---
+
+## OWNER ANSWERED — 2026-08-20: YES, turn it on
+
+He tried it on the installed `1d5b3c4c` build and said, verbatim:
+
+> "i like it i just dont like the placement for the help me with my pc"
+
+**Status changes from DECIDED-for-now (off) to DECIDED (on), with one condition of his own making:**
+the placement of the front-door button is wrong to him. So the flip does **not** ride alone — the
+default flips to ON **in the same lane that fixes the placement**, so the first Home a user meets by
+default is the version he approved, not the version he objected to.
+
+Sequencing, stated so it is not re-litigated: fix placement → self-review PASS → flip
+`readHomeInterview()` to default-true → update `home-interview-default-guard.test.ts` and the
+"default OFF: Home is a verdict with no filled primary" case in `home-console.test.tsx` (that test's
+premise is retired by his answer, not weakened) → cite this section in the commit.
+
+Tracked as part of the comprehensibility sweep — see
+[`2026-08-20-comprehensibility-sweep.md`](../superpowers/plans/2026-08-20-comprehensibility-sweep.md).
