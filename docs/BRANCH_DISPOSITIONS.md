@@ -61,16 +61,8 @@ trunk, and a worktree's `main` pointer can sit weeks behind without anyone notic
 
 ## The refs
 
-Swept 2026-08-04 against `main` @ `1a513cb`; the `origin/claude/*` rows added 2026-08-05 against
-`origin/main` @ `6712c14`, and re-proven the same day against `origin/main` @ `2e5365d` once the
-three-PR stack (#69 → #71 → #72) had landed. Twelve lane refs are **gone rather than listed MERGED**,
-pruned on landing per the rule above — `ci-entry-mainmodule-posix`, `ledger-honesty-optimize-station`,
-`ci-health-reporter`, and the `claude/*` lanes behind PRs
-[#74](https://github.com/Pootytxng/sentinel/pull/74) · [#78](https://github.com/Pootytxng/sentinel/pull/78) ·
-[#79](https://github.com/Pootytxng/sentinel/pull/79) · [#80](https://github.com/Pootytxng/sentinel/pull/80) ·
-[#81](https://github.com/Pootytxng/sentinel/pull/81) · [#82](https://github.com/Pootytxng/sentinel/pull/82) ·
-[#83](https://github.com/Pootytxng/sentinel/pull/83) · [#84](https://github.com/Pootytxng/sentinel/pull/84) ·
-[#85](https://github.com/Pootytxng/sentinel/pull/85).
+The 2026-08-04/05 sweep and the twelve refs it pruned are archived in
+[`archive/BRANCH_DISPOSITION_SWEEPS_2026-08.md`](archive/BRANCH_DISPOSITION_SWEEPS_2026-08.md).
 A landed ref's row is its own tombstone: prune the ref and the row in the same commit that records
 the merge, so this table only ever lists refs that still exist.
 
@@ -108,9 +100,17 @@ PRs and needs no row.
 | `origin/docs/design-foundation` | CLAIMED | Claude lane, docs only. The consumer-app design foundation the owner asked for on 2026-08-11 after tester feedback that Compy is "overwhelming and hard to navigate and completely unfamiliar": `docs/decisions/2026-08-11-design-foundation.md` (five references, the verdict-first front door, the interview, the 6-step type scale at a 13px floor, rooms giving up their hue, the wording glossary, and the ranked tooling answer), the rendered proposal at `docs/ui-sweep/foundation.html`, and `FOUNDATION-1` filed in `docs/UI_VISION_BACKLOG.md` as the parent of TYPE-1 / COLOR-1 / UX-1. No product code touched. |
 | `origin/perf/idle-127-ambient-raster` | MERGED | Landed as a real merge commit `85ed8065` (PR [#141](https://github.com/Pootytxng/sentinel/pull/141), issue [#127](https://github.com/Pootytxng/sentinel/issues/127)), so the ref is an ancestor of `main` and stays a no-op — the perishability warning above applies to squash/rebase landings, not this one. Idle-CPU attribution: #127's own rig diagnosis does not reproduce (rAF band 0.201, zero frames); the cost was `aurora`'s `scale()` on `body::before` (13.257 points) and two forever-running `.stl-ring` pulses on every Home (4.156). 19.632 → 10.483 percent of one core against the installed binary. **Ref NOT pruned:** the `gh api -X DELETE` prune was denied by this session's permission layer, so the row stays instead of a dangling reference. |
 | `origin/lane/usage-audit-disk-bloat` | UNLANDED | **Verified green; waiting on a permission, not on a gate.** The lane that built it (issue [#158](https://github.com/Pootytxng/sentinel/issues/158)) **released its claim in writing**, so this row's former `CLAIMED` / hands-off text stopped describing reality and was replaced rather than left to rot. PR [#160](https://github.com/Pootytxng/sentinel/pull/160) is OPEN and MERGEABLE at `e3c8b0c7` — the lane's `12886b0f` merged with `origin/main` `ffe85271`. This session re-ran the required gate instead of trusting the prior lane's reported PASS, and that was worth doing: at `12886b0f` it **FAILED** 1 test of 4582 — *this very audit*, because the branch predated its own row here — and at `e3c8b0c7` it passes whole (350/350 files, 4582 passed, Rust 963/0, clippy, `LOCAL CHECK RESULT: PASS`). The audit was satisfied by updating the branch, never weakened. Receipt `.claude/work-control/2026-08-20-merge-pr-160.json`, `scripts/work-control-gate.mjs` → PASS. **`gh pr merge` has now been refused by the session permission classifier in two separate sessions**, so what remains is an owner permission grant, not engineering. Prune the ref and drop this row in the commit that records the merge. |
+| `origin/lane/self-checkup` | CLAIMED | This lane, re-pushed 2026-08-20 after the #161 merge had pruned it. Carries the cleanup train the owner asked for: the `#160` re-proof and receipt above, the `A_merge` permission ask in [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md), and this row. Docs and receipts only — no product code. Prune it and drop this row in the commit that records its merge. |
 
 
 ## Standing rule
 
 A new remote ref is undispositioned until it has a row here. The audit is the enforcement; adding
 the row is part of the work that created the branch, not a later cleanup.
+
+**Rows are for branches only — never a tag or a wildcard**; the audit enumerates
+`refs/remotes/origin`, so anything else reads as a dangling ref and fails the build (an
+`origin/preserve/*` row did exactly that on 2026-08-20). A **tag** is therefore the shelter for work
+that must survive a machine without being queued to land — `preserve/local-collision-guard-707572f1`
+holds `707572f1`, the 1107-line release-collision train that had never left one worktree. **Landing
+it is an open decision, not a queued task.**
