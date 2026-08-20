@@ -1,0 +1,58 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "documentation",
+  "pr": 175,
+  "issue": null,
+  "branch": "lane/consolidation-2026-08-20",
+  "currentHead": "65fab8230d108dccc0748dedcbfe3148b093bc08",
+  "explicitHandoff": "Owner turn 2026-08-20: consolidate the last two handoffs into this lane, drop redundancy, run a full audit / maintenance health check, and reorganize what remains into one priority list so the program is linear again. This PR is that work plus the top item the audit produced - the C-13(b) self-review debt on PR #172, now discharged on an installed build.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room, git dir shared with C:/Users/Kuya/code/sentinel. Fetched --prune before the audit re-run.",
+    "remoteState": "origin/main = 20f2e381 at branch time and unmoved since. Open PRs are only #160 (lane/usage-audit-disk-bloat, MERGEABLE/CLEAN), #163 (lane/cleanup-train-2026-08-20, CONFLICTING/DIRTY) and this one. Both foreign lanes were left untouched, and the four files in their diffs - CLAUDE.md, docs/BRANCH_DISPOSITIONS.md, docs/OWNER_ACTION_CHECKLIST.md, scripts/usage-audit.mjs - were deliberately excluded from this diff so neither dormant lane inherits a conflict.",
+    "worktree": "git worktree list re-checked before writing and again before push: seven worktrees, this lane alone in sentinel-home-room, no other worktree on this branch. Noted for the next lane, not acted on: the primary worktree C:/Users/Kuya/code/sentinel has local main at ffe85271, 22 commits behind origin/main, so a branch cut there starts stale.",
+    "branch": "lane/consolidation-2026-08-20, cut from 20f2e381 which was exactly origin/main. Four commits, no merge commits, no divergence. PR #175 reports MERGEABLE / CLEAN.",
+    "dirtyState": "git status --porcelain empty at this head apart from this receipt, which by construction cannot ride inside the head it authorizes. The build was taken from a committed tree: scripts/ship-reinstall.ps1 refused the first attempt with DIRTY-STAMP because the untracked #174 receipt was still present, that receipt was committed, and the app was rebuilt so the embedded stamp matches the tree it was built from rather than reading +dirty.",
+    "liveProcesses": "Two claude.exe tabs alive, but only this session's transcript was advancing when checked at 09:01 - a sweep of every project dir found exactly one .jsonl touched in the preceding 20 minutes, this one. Compy is running from %LOCALAPPDATA%/Compy/compy.exe, relaunched by ship-reinstall.ps1 at the 75849be1 build; the self-reviewer confirmed it restored the machine to a normal launch with no CDP port open."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "65fab8230d108dccc0748dedcbfe3148b093bc08",
+      "detail": "Ran inside .githooks/pre-push against this exact tree; push exit 0, final line LOCAL CHECK RESULT: PASS. The whole sequence ran, not a tail: verify-local.ps1 orders git diff check, frontend tests, frontend type-check and build, Rust tests, then Rust clippy, and the PASS line prints only after all of them. The FIRST push of this branch was REFUSED by that same gate - scripts/markdown-link-guard.test.mjs failed 1 of 4600 because an archived row carried a docs/-relative link that broke once it moved into docs/archive/. That is recorded rather than hidden: it was fixed in its own commit, the move banner now states the one edited line instead of leaving a false byte-for-byte claim, and the re-run passed clean."
+    }
+  ],
+  "shipProof": {
+    "applicable": true,
+    "detail": "npm run tauri build from this worktree at 75849be1, then scripts/ship-reinstall.ps1 -VerifyRuntime -ExpectedCommit 75849be1... - ship-reinstall OK, runtime proof '75849be1 . release . shell 0.9.26' on attempt 1 with 0 expected transients, installer SHA-256 9C42985ADAA45C42F108F7EE498FBEA2E034708E76A9C03C3BACEF74C24BB312, one installer on the Desktop, live exe launched. Live == build proved by the embedded stamp, never an exe hash. The trailing tauri 'no private key' error is expected and not a defect: TAURI_SIGNING_PRIVATE_KEY is owner territory and absent from this environment by design, it affects only updater-manifest signing, and both bundles were produced before it. Nothing was published; this is a desk install only. Desk HEAD is now three commits ahead of the reviewed binary, all three docs-only.",
+    "reason": null
+  },
+  "selfReview": {
+    "verdict": "PASS",
+    "reason": "The whole point of this PR. self-reviewer subagent, 10/10 at 1500x980 on installed build 75849be1 - the first binary ever to carry 5fab9e79 (PR #172). It re-confirmed the stamp with its own get_build_stamp probe before capturing anything rather than trusting the ship report. It proved on screen what 16 mounted tests structurally cannot see: the roving-tabindex focus ring draws OUTSIDE the swatch fill (outline 2px solid rgb(179,102,255), outline-offset 2px) so it stays legible on a near-hue swatch as well as a contrasting one; disabled-skip and wrap driven with real CDP input events in both directions landed on 'Apply to all rooms' and never the disabled 'Reset to default'; Escape returned focus visibly to the trigger. It also recorded that synthetic DOM dispatch fails Chromium's :focus-visible heuristic and would have FALSE-FAILED the states item. This PR's own diff is documentation only and adds no UI surface of its own."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; docs/WORK_CONTROL.md makes that review advisory rather than a blocker. The diff is documentation plus one work-control receipt - no product code, no scripts, no mutation surface - and the full pre-push gate passed at this exact head, having already refused one earlier attempt."
+  },
+  "docGates": [
+    "verify-release-state.mjs: 31 citations, 31 ok, 0 near-drift, 0 broken, 0 missing sections, 0 state-drift. It was RED before this lane (SOURCE-COMMIT-STALE, 835d8868 trailing origin/main by 16 against a ceiling of 10) and the re-stamp to 20f2e381 is what cleared it. 31 not 32 because the archived Snapshot row carried one citation with it.",
+    "doc-budget.ps1: ALL PASS. Both budgeted files this diff touches moved the right way - RELEASE_STATE.md 48.5KB -> 44.9KB by moving the superseded Snapshot row to docs/archive/RELEASE_STATE_HISTORY.md, and BACKLOG.md absorbed a 48-line queue while staying under both ceilings because three CLOSED cutline records moved to docs/BACKLOG_ARCHIVE.md first. Both remain inside the 8KB slack the doc-budget-guard allows, so no budget needed ratcheting.",
+    "verify-module-map.mjs OK (46 .rs files, 13 starred) and markdown-link-guard PASS (139 local links) - the latter only after the moved-link fix described in gateResults.",
+    "branch-disposition-audit: OK at session start, FAIL between push and merge because this lane's own ref carries no row, and re-run to OK after the prune. No row was added on purpose - docs/BRANCH_DISPOSITIONS.md is in open PR #163's diff, so writing one here would hand a dormant lane a conflict to fix. This is the known two-push ordering race already recorded in the #172, #173 and #174 receipts, and it is queued as issue #126 in the new NEXT UP list."
+  ]
+}
