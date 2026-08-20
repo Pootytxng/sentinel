@@ -50,6 +50,12 @@
 6. **#128 · thin local release/install collision guard** — the governance half of #156 and #171.
 7. **#125 · `session-root-assert` only ADVISES where the handoff wanted a refusal**, with a test pinning
    it. *Why it matters:* an unlaunched session writing to the project runs with none of its laws loaded.
+   **⚠ Weigh the blast radius before flipping it — measured 2026-08-20, not guessed.** The session that
+   built this queue opened with `compy-entry: the launch token has expired — this session is unverified`
+   (`TOKEN_EXPIRED`, one of the four `ADVISORY_CODES`), and every write it then made — the queue, the
+   `75849be1` build, the C-13(b) discharge, PR #175 — would have been REFUSED under the flip. A refusal
+   that fires on the correct work is worse than the advisory it replaces, so the flip needs a way for a
+   legitimately-resumed session to re-verify, not just a harder `no`. That design call is the work here.
 8. **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it** (row below; owner fork B_gpu).
 9. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
    below). Delegated to the Codex lane — do not duplicate it here.
@@ -59,6 +65,11 @@ PR [#160](https://github.com/Pootytxng/sentinel/pull/160) (`lane/usage-audit-dis
 **MERGEABLE/CLEAN** and simply unmerged; PR [#163](https://github.com/Pootytxng/sentinel/pull/163)
 (`lane/cleanup-train-2026-08-20`) is **CONFLICTING/DIRTY** and needs its own lane to rebase. Neither
 session was advancing at 2026-08-20 09:01, but an idle claim is an alarm, not a takeover.
+
+**NOT A LANE, but a trap for the next one:** the PRIMARY worktree `C:/Users/Kuya/code/sentinel` has
+local `main` at `ffe85271`, **22 commits behind `origin/main`**, and holds an untracked receipt that a
+fast-forward would collide with. A branch cut there starts stale. Left untouched on purpose — another
+session left work in it — so whoever owns it next should `git -C ... merge --ff-only origin/main` first.
 
 **ALSO OPEN, not yet queued** (so none of it drops silently): #133 CARE capability rails tasks 4–7 ·
 #140 CPU temp (PawnIO/MSR — needs a Capability Exception record first) · #64 Q2b main-window caller
