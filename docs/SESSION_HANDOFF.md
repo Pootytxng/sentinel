@@ -1,8 +1,9 @@
 # Session handoff — 2026-08-19 (C-04: the front door is now **Health**)
 
-**Lane CLOSED.** Merged to `main` as `ad793f63` (PR #144, issue #143), disposition row updated in
-`c492c472`, tree clean. One thing carries forward and it is named at the bottom: the visual
-self-review, which cannot run until the next build.
+**Lane CLOSED, and the debt is now paid too.** Merged to `main` as `ad793f63` (PR #144, issue #143), disposition row updated in
+`c492c472`, tree clean. The one thing it carried forward — the visual self-review — was owed
+until a build existed to look at; that build now exists, is installed, and the review **PASSED**
+(see "The one debt" below). **Nothing carries forward from this lane.**
 
 ## What happened
 
@@ -56,12 +57,27 @@ colour, ② front door, ④ wording pass; ③ interview and ⑤ instruments behi
   `site-app/` were both needed before the suite could run. Three site tests fail with
   "site-app dependencies missing" until the second one is done — environmental, not a defect.
 
-## Owed, and it is the one thing that carries forward
+## The one debt — DISCHARGED 2026-08-19
 
-**A self-review on the installed binary.** This is a visible copy change on the app's primary
-navigation and the standing law says no done-claim on UI without a quoted PASS. It cannot run now:
-the change is not in any installed build. **Next build → `scripts/ship-reinstall.ps1` → run the
-`self-review` skill and look at the rail, the topbar title, the palette and the tour recap.**
+**The self-review on the installed binary is done and it PASSED.** `npm run tauri build` →
+`scripts/ship-reinstall.ps1` → `-ProofOnly -ExpectedCommit`: the owner's desk now runs the rename,
+proved live-equals-build by the **stamp** (`40682344 · release · shell 0.9.26`, attempt 1, 0 expected
+transient), installer SHA-256 `114B7FFDDC8031F24019152D4FA4B312853702D59F353292C4DB87BB0B93744B`,
+one installer on the Desktop.
+
+**VERDICT: PASS.** All four surfaces were looked at on that binary at 1484x971 — rail label, room
+breadcrumb, command palette, and the tour (reached live via Settings → "Take the tour", all 10 steps,
+recap rendered verbatim). Rail labels measured unclipped; the regression sweep found **zero
+user-visible "Home"** on Health/Live/History/Test, and a palette search for "home" returns Health
+plus one unrelated powerline-adapter line — no stale room entry, no duplicate row.
+
+*Recorded rather than engineered around:* the live rail on this build is **Health · Live · History ·
+Test** — four rooms, because `compy_lab_ground` defaults ON and drops the standalone Optimize room,
+so `JOURNEY_RECAP_BODY` (the five-room string) is not what this build renders; `GROUND_RECAP_BODY` is.
+Both were renamed, so nothing is wrong — but a five-room expectation is the wrong test of this build.
+
+**Desk is AHEAD of the fleet again:** same version number, different commit. The published v0.9.26 is
+source `5e64074c` and does NOT contain the rename; it ships with the next cut.
 
 ## Next session
 
