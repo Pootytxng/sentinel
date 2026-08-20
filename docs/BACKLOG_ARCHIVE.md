@@ -7,6 +7,52 @@
 
 ---
 
+## 2026-08-20 — cutline rows: conformance drift + audit, Home front door, C-12 (BACKLOG byte budget)
+
+Moved out of `docs/BACKLOG.md` byte-for-byte by the consolidation lane, to buy room for the rebuilt
+`▶ NEXT UP` linear queue at the top of the cutline. All three were CLOSED records; nothing open moved.
+
+- [x] **PRODUCT-CONFORMANCE DRIFT — the class the owner caught on his own desk (2026-08-18).** Three
+  defects in one screenshot: his removed "What are you here to do?" box back as the largest button
+  (`compy_home_intake` consulted about the panel, not the question), nine user-facing Rust strings
+  naming rooms retired 2026-08-12 (Monitor/Blackbook/Lab), and TWO tests actively defending both.
+  Fixed + guarded in `8db70795`: `src/room-name-copy-guard.test.ts` (driven off `HOME_RAIL`, carries
+  its own disarm proof) and self-review rubric item 10 (prior owner decisions; a git log -S is
+  required evidence). **Root cause, recorded because it generalises:** all 167 guards check safety,
+  release integrity or "nothing was deleted" — the affordance census CERTIFIED the regression
+  because it rewards KEEPING affordances and his decision was to remove one. No audit in the repo
+  asks "does the app still match what the owner decided". Codex's weekly automation is coordination-
+  only (branches/claims/worktrees) and writes to `$CODEX_HOME`, outside the repo, where no lane
+  reads it.
+- [x] **Product-conformance audit — DELIVERED by Cowork 2026-08-18**, read-only, 469 lines:
+  [`docs/CONFORMANCE_AUDIT_2026-08-18.md`](CONFORMANCE_AUDIT_2026-08-18.md). 26 recorded decisions
+  graded against `main@e6feb861`'s committed blobs. **9 HONORED · 1 SILENTLY REVERSED · 9 NEVER
+  BUILT · 4 PARTIAL · 1 DOC DRIFT · 1 never resolved · 1 not-yet-built-no-drift.** Its three top
+  findings (C-01 intake flag, C-02 room renames, C-03 topbar taglines) are the three this train
+  fixed, arrived at independently. **The unbuilt remainder is the queue below — that is what the
+  audit bought.**
+- [x] **Home front door restructure (UX-1 ② completion, owner-approved direction 2026-08-18).**
+  Verdict → one action → hero. Shipped: topbar taglines gone (audit C-03, decided 2026-08-11, six
+  days late) with a `ShellV2.test.tsx` case that fails if one grows back · the check strip stopped
+  being a bordered card with an uppercase `CHECKS` tag and is now one plain sentence, which also
+  closes audit §3's `16/16 clean` jargon finding · Home's Crash & Freeze row de-striped, with
+  `src/side-stripe-guard.test.ts` failing the build on any NEW >1px coloured side border (three
+  known offenders baselined and named, not fixed blind — they live on rooms this train did not open).
+  **Found while rewriting the line:** `measured/total` rendered identically for "two checks failed"
+  and "two checks were unreadable"; the sentence now distinguishes them and that is test-pinned.
+- [x] **C-12 · DOC DRIFT CLOSED — the command palette was filed as abandoned while shipping DEFAULT ON.** <!-- shipped-status-history -->
+  Two living docs said it was parked and dropped; it has been mounted in `ShellV2` behind
+  `compy_command_palette` (**default ON**) since `22fb15b2`. `UI_VISION_BACKLOG.md` §D is now the
+  SHIPPED record (what it is, where it mounts, the `"0"` failsafe, its guards), and
+  `OWNER_ACTION_CHECKLIST.md` no longer lists it as work the owner owes — it was sitting on his desk
+  as an open item for something already built. **This is the inverse of ordinary doc rot and the
+  expensive direction:** a stale TODO wastes a minute; a shipped feature filed as dropped gets
+  re-proposed and rebuilt beside the one that exists. Per bug→guard it did not close on an edit —
+  `src/design/shipped-feature-doc-truth.test.ts` now fails the suite when a living doc calls a
+  mounted, default-ON feature parked/dropped, with `<!-- shipped-status-history -->` as the
+  paragraph-scoped escape hatch for deliberate past tense. Proven against the pre-fix tree: it
+  reports both original sites. Source: `docs/CONFORMANCE_AUDIT_2026-08-18.md` §C-12.
+
 ## 2026-08-20 — C-17b + C-17b RESIDUAL conformance rows, moved verbatim (BACKLOG byte budget)
 
 Moved out of `docs/BACKLOG.md` when the arc-v2 cleanup + the win-card-shimmer finding pushed it

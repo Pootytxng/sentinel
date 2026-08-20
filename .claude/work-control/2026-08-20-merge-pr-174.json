@@ -1,0 +1,55 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "documentation",
+  "pr": 174,
+  "issue": null,
+  "branch": "lane/receipt-173",
+  "currentHead": "307af647ea0e9c33a02956d0ade322e5adcfc325",
+  "explicitHandoff": "Owner turn 2026-08-20 handed this session the #173 landing train: gate the drafted receipt, merge, prune, re-audit. The merge itself had already landed as 95304e4c before this session opened, and the remote ref was already pruned; the audit returns OK. The one item genuinely outstanding was #173's trailing receipt, untracked in an idle worktree. This PR lands it, and this receipt authorizes that merge.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room, git dir shared with C:/Users/Kuya/code/sentinel.",
+    "remoteState": "Fetched --prune at session start. origin/main = 95304e4c (the #173 merge). origin/lane/backlog-truth-and-receipt already gone, confirmed by git ls-remote --heads. origin/lane/receipt-173 = 307af647, pushed through the full pre-push gate. Concurrent lanes untouched and undisturbed: PR #160 (lane/usage-audit-disk-bloat) and PR #163 (lane/cleanup-train-2026-08-20), both still open, both CLAIMED rows in docs/BRANCH_DISPOSITIONS.md.",
+    "worktree": "This lane alone in C:/Users/Kuya/code/sentinel-home-room. git worktree list shows six other worktrees, none on this branch. node_modules here verified a REAL directory (LinkType empty, 378 entries), not a junction into a neighbour, before any gate was run.",
+    "branch": "lane/receipt-173, cut from 95304e4c which is exactly origin/main. One commit, no merge commits, no divergence. PR #174 reports MERGEABLE / CLEAN.",
+    "dirtyState": "git status --porcelain empty at 307af647 apart from this receipt, which by construction cannot ride inside the head it authorizes.",
+    "liveProcesses": "Three claude.exe tabs alive, but only this session's transcript is advancing: of four session files touched in the last 15 minutes in the home-room project dir, three were static at 08:24-08:32 while only 863e3efb advanced. Compy running from %LOCALAPPDATA%/Compy/compy.exe (pid 9264), the pre-existing desk build. Nothing was built or installed this turn and nothing is claimed live."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "307af647ea0e9c33a02956d0ade322e5adcfc325",
+      "detail": "Ran inside .githooks/pre-push against this exact tree; push exit 0, final line LOCAL CHECK RESULT: PASS. The whole sequence ran, not a tail: verify-local.ps1 orders git diff check, frontend tests, frontend type-check and build, Rust tests, Rust clippy, and the PASS line prints only after all five. Rust tests 963 passed / 0 failed / 24 ignored and clippy clean were observed directly, and they run LAST, so the frontend checks ahead of them necessarily passed."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "reason": "One JSON evidence file. No build, no install, nothing shipped to any machine."
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "No product code and no UI surface in this diff - the change is a single work-control receipt. Note the self-review debt PR #172 incurred remains OPEN and recorded in the C-13(b) row of docs/BACKLOG.md; this PR neither discharges it nor claims to, and it could not: discharging it needs the self-reviewer subagent, which this session was instructed not to dispatch."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; docs/WORK_CONTROL.md makes that review advisory rather than a blocker. The diff is one JSON evidence file - no product code, no scripts, no mutation surface, nothing executable - and the full pre-push gate passed at this exact head."
+  },
+  "docGates": [
+    "branch-disposition-audit OK at session start, re-run after the prune. This lane's own ref carries no row and needs none: the ledger is current-state-only, one row per LIVE ref on origin, and the ref exists only for the minutes between push and prune. That window is the known two-push ordering race already recorded in the #172 and #173 receipts.",
+    "doc-budget.ps1 not required: this diff adds no documentation line to any budgeted file, only .claude/work-control/."
+  ]
+}
