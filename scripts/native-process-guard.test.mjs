@@ -229,8 +229,13 @@ if ($modes.ContainsKey($Scenario)) {
   # then exits. The caller reads the inner script's stdout to EOF - exactly what a terminal, CI job
   # or scripting wrapper does. An INHERITED child holds that pipe for its whole life; a -Detached
   # child (ShellExecute) cannot, because it never receives the handle.
-  $detach = ""
-  if ($Scenario -eq "detached-frees-caller") { $detach = "-Detached" }
+  # BOTH arms carry -CreateNoWindow, for two reasons. The pair still differs ONLY by -Detached, so it
+  # keeps proving that the switch is what frees the pipe. And a 15-second console child launched
+  # through ShellExecute WITHOUT it opened a real Windows Terminal window every time this suite ran -
+  # measured 2026-08-20 at HWND level, and it is the residue the owner kept seeing after the seven
+  # windowsHide fixes (issue #162).
+  $detach = "-CreateNoWindow"
+  if ($Scenario -eq "detached-frees-caller") { $detach = "-CreateNoWindow -Detached" }
   $innerPath = Join-Path ([IO.Path]::GetTempPath()) ("compy-detach-" + [Guid]::NewGuid().ToString("N") + ".ps1")
   $innerBody = @(
     (". " + [char]34 + $LibPath + [char]34),

@@ -110,6 +110,7 @@ PRs and needs no row.
 | `origin/lane/usage-audit-disk-bloat` | CLAIMED | **Not this lane's branch — dispositioned, untouched.** A concurrently-running session pushed it at 2026-08-20 04:47 local (commit `12886b0f`, one commit on top of `8a1450cd`) with PR [#160](https://github.com/Pootytxng/sentinel/pull/160) open: a report-only disk-bloat flag for an oversized `src-tauri/target`. The same window is when this worktree's `node_modules` was gutted and reinstalled by an `npm install --no-audit --no-fund` no script in this repo issues — the first push gate here died at a missing `tsc` because of it. The row exists so the audit reflects reality; **its disposition to MERGED or a prune belongs to the lane that owns it**, per `docs/WORK_CONTROL.md` (an overlapping live claim means hands off, not adjudicate). |
 
 
+
 ## Standing rule
 
 A new remote ref is undispositioned until it has a row here. The audit is the enforcement; adding

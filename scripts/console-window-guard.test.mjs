@@ -107,3 +107,115 @@ describe("no test may flash a console window on the owner's desktop", () => {
     expect(/windowsHide\s*:\s*true/.test(calls[0])).toBe(true);
   });
 });
+
+// The eighth call site the header predicted — and it arrived through a mechanism the rule above
+// cannot read. `windowsHide` belongs to Node's spawn. A PowerShell launch through
+// `Start-NativeProcess -Detached` goes out via ShellExecute, where .NET refuses `CreateNoWindow`
+// outright, so the caller's request to stay invisible was being dropped rather than honoured. The
+// owner kept seeing the flash for nine days after the seven suites were fixed.
+//
+// Behaviour is proven in `detached-window-guard.test.mjs`, which launches a real child and counts
+// the visible top-level windows it owns. These are the static halves: the mapping cannot silently
+// disappear again, and a NEW detached launch has to say out loud whether its child may show a
+// window instead of inheriting the answer by accident.
+const NATIVE_PROCESS = join(SCRIPTS, "lib", "native-process.ps1");
+
+// `.ps1` ONLY, and that is the whole rule rather than an oversight. `Start-NativeProcess` is a
+// PowerShell function, so the name appearing in a `.mjs` file is always text ABOUT a launch — a
+// sample inside the release static guard, a pattern inside this file — and never a launch. Scanning
+// them made the rule report its own source and another guard's corpus, which is how a guard learns
+// to be ignored. The one `.mjs` file that really does BUILD such a launch is pinned by name below.
+//
+// Recursive because the defect lived one directory down, in lib/.
+const launchSources = (dir = SCRIPTS, found = []) => {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name !== "node_modules") launchSources(full, found);
+    } else if (entry.name.endsWith(".ps1")) {
+      found.push(full);
+    }
+  }
+  return found;
+};
+
+const isComment = (line) => /^\s*(#|\/\/|\*)/.test(line);
+
+describe("a detached launch must state whether its child may show a window", () => {
+  it("Start-NativeProcess carries -CreateNoWindow onto the ShellExecute path", () => {
+    const text = readFileSync(NATIVE_PROCESS, "utf8");
+    expect(
+      text,
+      "Start-NativeProcess no longer maps -CreateNoWindow to a WindowStyle under -Detached.\n" +
+        "ShellExecute has no CreateNoWindow, so without that mapping the switch is silently dropped\n" +
+        "and every detached console child opens a Windows Terminal window on the owner's desktop.",
+    ).toMatch(/WindowStyle\s*=\s*if\s*\(\$CreateNoWindow\)/);
+    expect(text).toMatch(/ProcessWindowStyle\]::Hidden/);
+  });
+
+  it("does not reinstate the silent drop that caused the flash", () => {
+    const text = readFileSync(NATIVE_PROCESS, "utf8");
+    expect(
+      text,
+      "`CreateNoWindow = (-not $Detached) -and $CreateNoWindow` is the exact line that discarded the\n" +
+        "caller's request on the only path where it mattered. It is a regression, not a simplification.",
+    ).not.toMatch(/CreateNoWindow\s*=\s*\(\s*-not\s+\$Detached\s*\)/);
+  });
+
+  it("every -Detached call site is either hidden or explicitly allowed to be seen", () => {
+    const offenders = [];
+    for (const file of launchSources()) {
+      // The definition itself names the switch in its contract, its throw message and its comments;
+      // the two assertions above are what hold it, not this text scan.
+      if (file === NATIVE_PROCESS) continue;
+      const lines = readFileSync(file, "utf8").split(/\r?\n/);
+      lines.forEach((line, index) => {
+        if (isComment(line)) return;
+        if (!line.includes("Start-NativeProcess") || !line.includes("-Detached")) return;
+        if (line.includes("-CreateNoWindow") || line.includes("detached-window-allow")) return;
+        offenders.push(`${file.slice(SCRIPTS.length + 1)}:${index + 1}: ${line.trim()}`);
+      });
+    }
+    expect(
+      offenders,
+      "These launch a child detached without saying whether it may show a window. Add\n" +
+        "-CreateNoWindow if the child is a console program (it will otherwise flash a Windows\n" +
+        "Terminal window every run), or the marker `detached-window-allow` with the reason if the\n" +
+        "child is a GUI app whose window the owner is meant to see:\n  " +
+        offenders.join("\n  "),
+    ).toEqual([]);
+  });
+
+  it("the harness that builds a detached launch keeps its child invisible", () => {
+    // native-process-guard.test.mjs assembles a real `Start-NativeProcess ... -Detached` inside a
+    // generated .ps1 to prove that a detached child frees the caller's pipe. Until 2026-08-20 that
+    // proof opened a Windows Terminal window on the owner's desktop every single time the suite ran,
+    // and it is the last measured source of the flash he reported.
+    const harness = readFileSync(join(SCRIPTS, "native-process-guard.test.mjs"), "utf8");
+    const detachAssignments = harness
+      .split(/\r?\n/)
+      .filter((line) => !isComment(line) && /\$detach\s*=/.test(line));
+    expect(detachAssignments.length).toBeGreaterThan(0);
+    for (const line of detachAssignments) {
+      expect(
+        line,
+        "The pipe-freeing proof builds its launch flags here. Every arm must carry -CreateNoWindow —\n" +
+          "including the inherited one, so the pair still differs only by -Detached and neither opens\n" +
+          `a console window while the suite runs:\n  ${line.trim()}`,
+      ).toMatch(/-CreateNoWindow/);
+    }
+  });
+
+  it("catches a detached launch that says nothing, and accepts both ways of saying it", () => {
+    // The rule has to reject the shape it exists to forbid, or it is decoration.
+    const bare = "$app = Start-NativeProcess -Command $exe -Detached -ArgumentList $launchArgs";
+    const hidden = `${bare} -CreateNoWindow`;
+    const allowed = `${bare}  # detached-window-allow: a GUI app the owner is meant to see.`;
+    const says = (line) =>
+      line.includes("-CreateNoWindow") || line.includes("detached-window-allow");
+    expect(says(bare)).toBe(false);
+    expect(says(hidden)).toBe(true);
+    expect(says(allowed)).toBe(true);
+    expect(isComment("  # a comment mentioning Start-NativeProcess -Detached")).toBe(true);
+  });
+});
