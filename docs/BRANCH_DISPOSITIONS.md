@@ -61,16 +61,8 @@ trunk, and a worktree's `main` pointer can sit weeks behind without anyone notic
 
 ## The refs
 
-Swept 2026-08-04 against `main` @ `1a513cb`; the `origin/claude/*` rows added 2026-08-05 against
-`origin/main` @ `6712c14`, and re-proven the same day against `origin/main` @ `2e5365d` once the
-three-PR stack (#69 → #71 → #72) had landed. Twelve lane refs are **gone rather than listed MERGED**,
-pruned on landing per the rule above — `ci-entry-mainmodule-posix`, `ledger-honesty-optimize-station`,
-`ci-health-reporter`, and the `claude/*` lanes behind PRs
-[#74](https://github.com/Pootytxng/sentinel/pull/74) · [#78](https://github.com/Pootytxng/sentinel/pull/78) ·
-[#79](https://github.com/Pootytxng/sentinel/pull/79) · [#80](https://github.com/Pootytxng/sentinel/pull/80) ·
-[#81](https://github.com/Pootytxng/sentinel/pull/81) · [#82](https://github.com/Pootytxng/sentinel/pull/82) ·
-[#83](https://github.com/Pootytxng/sentinel/pull/83) · [#84](https://github.com/Pootytxng/sentinel/pull/84) ·
-[#85](https://github.com/Pootytxng/sentinel/pull/85).
+The 2026-08-04/05 sweep and the twelve refs it pruned are archived in
+[`archive/BRANCH_DISPOSITION_SWEEPS_2026-08.md`](archive/BRANCH_DISPOSITION_SWEEPS_2026-08.md).
 A landed ref's row is its own tombstone: prune the ref and the row in the same commit that records
 the merge, so this table only ever lists refs that still exist.
 
@@ -114,3 +106,10 @@ PRs and needs no row.
 
 A new remote ref is undispositioned until it has a row here. The audit is the enforcement; adding
 the row is part of the work that created the branch, not a later cleanup.
+
+**Rows are for branches only — never a tag or a wildcard**; the audit enumerates
+`refs/remotes/origin`, so anything else reads as a dangling ref and fails the build (an
+`origin/preserve/*` row did exactly that on 2026-08-20). A **tag** is therefore the shelter for work
+that must survive a machine without being queued to land — `preserve/local-collision-guard-707572f1`
+holds `707572f1`, the 1107-line release-collision train that had never left one worktree. **Landing
+it is an open decision, not a queued task.**

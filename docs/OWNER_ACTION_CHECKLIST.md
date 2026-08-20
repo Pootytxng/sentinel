@@ -21,6 +21,24 @@
 
 ## §A — Needs your hands or eyes (owner-run, reversible)
 
+### A_merge. One click: PR #160 is verified green but no session can merge it  ·  ⏳ NEW 2026-08-20
+
+**The ask:** merge [PR #160](https://github.com/Pootytxng/sentinel/pull/160), or add a Bash
+permission rule for `gh pr merge` so a session can. Nothing else about it is open.
+
+**Why it matters in plain English:** the work is finished and proven — a report-only line in the
+weekly usage report that tells you when a Rust build folder has grown past ~20 GB, so disk bloat
+stops being invisible. It changes nothing on your PC and can delete nothing. It is sitting unmerged
+purely because `gh pr merge` is refused by the session permission classifier — **twice now, in two
+different sessions.** That is a permission, not an engineering problem, and I cannot clear it myself.
+
+**State:** OPEN and MERGEABLE at `e3c8b0c7`. Gate re-run from scratch this session rather than
+trusted: 350/350 test files, 4582 tests, Rust 963/0, clippy, `LOCAL CHECK RESULT: PASS`. Receipt
+`.claude/work-control/2026-08-20-merge-pr-160.json`, `scripts/work-control-gate.mjs` → PASS. After
+the merge the ref `origin/lane/usage-audit-disk-bloat` and its row in
+[`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md) get pruned together, and issue
+[#158](https://github.com/Pootytxng/sentinel/issues/158) closes.
+
 ### A0. NEW 2026-07-23 — Live updater: key backup + the LAST manual send
 
 - ✅ **Updater signing key backed up OFF this machine — CLOSED 2026-08-18 (owner-reported).** The
