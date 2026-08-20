@@ -1,0 +1,53 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 165,
+  "branch": "lane/win-shimmer",
+  "currentHead": "b24f7650d9ddd44edc2f35cb39080f8ef31e70c1",
+  "explicitHandoff": "Owner turn 2026-08-20: 'resolve all of this and if this lane is already too token heavy then give me a handoff to resolve literally everything mentioned here.' Item 1 of the five reported to him is the never-fired win-card celebration; this lane built it, shipped it, and reviewed it.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room. main is checked out by the sibling worktree C:/Users/Kuya/code/sentinel, which is why this worktree holds a lane branch.",
+    "remoteState": "git fetch --prune run this turn. origin/main = bcae0c0d (PR #164 merged since this lane branched at ffe85271). Concurrent lanes live: PR #160 (lane/usage-audit-disk-bloat, released by its owner, blocked on an owner permission — checklist A_merge) and PR #163 (lane/cleanup-train-2026-08-20). Neither touched by this lane beyond a deferring disposition row.",
+    "worktree": "One writer. The cleanup lane recorded a 2026-08-20 collision in which a second session wrote inside its worktree; it re-homed to sentinel-diskbloat, leaving this worktree to this lane alone.",
+    "branch": "lane/win-shimmer, cut fresh from origin/main bcae0c0d and cherry-picked from the reviewed tip ae5ff500 rather than merged, so the two superseded copies of the cleanup lane's commits do not ride along. Pre-restack tip preserved as tag preserve/win-shimmer-pre-restack-ae5ff500. git diff ae5ff500 HEAD -- src/ src-tauri/ is empty: the reviewed build and this branch are the same product tree.",
+    "dirtyState": "Clean at the time of this receipt apart from this file itself.",
+    "liveProcesses": "Compy running from %LOCALAPPDATA%/Compy/compy.exe, installed by scripts/ship-reinstall.ps1 this turn and stamp-proved at ae5ff500. No dev server, no cargo build in flight."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "b24f7650d9ddd44edc2f35cb39080f8ef31e70c1",
+      "detail": "Ran inside .githooks/pre-push on the push that created this branch. 350/350 test files, 4578 passed / 4 skipped (4582), Rust 963 passed / 0 failed / 24 ignored, clippy clean, LOCAL CHECK RESULT: PASS. Full log read, not tailed."
+    }
+  ],
+  "shipProof": {
+    "installerSha256": "A9AFAC36EF1C068AC3889A47E2B7942505C8C07DF644180C6020FEE16ED36D53",
+    "stamp": "ae5ff500 · release",
+    "method": "byte-scan of the installed exe; NSIS packaging means the installed binary is not byte-identical to target/release/compy.exe, so the stamp is the proof and an exe hash is not.",
+    "desktop": "exactly one installer"
+  },
+  "selfReview": {
+    "verdict": "PASS",
+    "resolution": "1500x980",
+    "detail": "10/10 on the installed build after an earlier FAIL on two findings (overflow:hidden clipping a 3-digit value at the 24px min-width floor; the sweep guard blind to v2-foil-pan and v2-hud-sweep). Both re-probed directly on the fixed build."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session, so the non-writing model cannot give the final review. The self-reviewer subagent supplied the independent visual pass and was told to push back on this lane's sweep-law adjudication rather than rubber-stamp it; it verified all four non-celebration allowlist entries against source itself before agreeing."
+  }
+}

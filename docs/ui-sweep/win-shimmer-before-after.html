@@ -1,0 +1,166 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Win-card celebration — before / after</title>
+<style>
+  :root{
+    --bg:#07080b; --panel:#12151d; --panel-2:#181c26;
+    --border:#242b39; --border-strong:#313b4e;
+    --fg:#eef1f7; --muted:#8b95a8;
+    --accent-soft:rgba(179,102,255,0.13); --accent-line:rgba(179,102,255,0.30);
+    --ready:#46d98a; --danger:#f3716f;
+    --r:10px; --type-label:13px; --type-card:17px;
+  }
+  html,body{background:var(--bg);color:var(--fg);margin:0;
+    font-family:"Inter","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;}
+  .page{max-width:1180px;margin:0 auto;padding:34px 26px 60px;}
+  h1{font-size:20px;margin:0 0 6px;font-weight:650;letter-spacing:-0.01em;}
+  .lede{color:var(--muted);font-size:14px;line-height:1.6;margin:0 0 26px;max-width:74ch;}
+  .lede b{color:var(--fg);font-weight:600;}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start;}
+  @media (max-width:900px){.cols{grid-template-columns:1fr;}}
+  .col > h2{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);
+    margin:0 0 4px;font-weight:600;}
+  .col > p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 12px;min-height:3.2em;}
+  .col.after > h2{color:var(--ready);}
+
+  /* ── copied VERBATIM from src/App.css (tokens resolved above) ────────────── */
+  .cmp{border:1px solid var(--border-strong,var(--border));border-radius:var(--r);
+    background:var(--panel-2);padding:14px 16px;margin-bottom:14px;}
+  .cmp-improved{border-color:color-mix(in srgb,var(--ready,#46d98a) 36%,var(--border-strong,var(--border)));}
+  .cmp-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+    font-size:var(--type-label);color:var(--muted);margin-bottom:10px;}
+  .cmp-nf{white-space:nowrap;}
+  .cmp-headline{font-size:var(--type-card);margin:0 0 5px;color:var(--fg);}
+  .cmp-win{color:var(--ready,#46d98a);}
+  .cmp-sub{color:var(--muted);font-size:var(--type-label);line-height:1.5;margin:0 0 12px;}
+  .cmp-receipts{display:flex;flex-direction:column;gap:8px;margin-bottom:8px;}
+  .cmp-receipt{display:flex;align-items:center;gap:10px;font-size:var(--type-label);}
+  .cmp-receipt-label{color:var(--muted);min-width:56px;flex-shrink:0;}
+  .cmp-receipt-bars{flex:1;display:flex;flex-direction:column;gap:3px;}
+  .cmp-bar{height:16px;border-radius:4px;display:flex;align-items:center;justify-content:flex-end;
+    padding-right:6px;font-size:var(--type-label);font-variant-numeric:tabular-nums;
+    color:var(--fg);min-width:24px;}
+  .cmp-bar-before{background:var(--border-strong,var(--border));}
+  .cmp-bar-after{background:var(--accent-soft);border:1px solid var(--accent-line);}
+  .cmp-delta{color:var(--muted);font-size:var(--type-label);margin:0;}
+
+  /* THE single earned shimmer — the new rule, verbatim */
+  .live .cmp-improved .cmp-bar-after{position:relative;}
+  .live .cmp-improved .cmp-bar-after::after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(100deg,transparent 25%,rgba(255,255,255,0.5) 50%,transparent 75%);
+    background-size:300% 100%;background-position:200% 0;
+    animation:cmp-winshimmer 3.4s ease-in-out 0.35s infinite;pointer-events:none;}
+  @keyframes cmp-winshimmer{0%{background-position:200% 0;}30%,100%{background-position:-100% 0;}}
+  /* ───────────────────────────────────────────────────────────────────────── */
+
+  /* the rejected first cut, kept only so the caught bug is visible */
+  .clipped .cmp-bar-after{position:relative;overflow:hidden;}
+  .clipped .cmp-bar-after::after{content:"";position:absolute;top:0;left:0;width:60%;height:100%;
+    background:linear-gradient(100deg,transparent,rgba(255,255,255,0.5),transparent);
+    animation:old-sweep 3.4s ease-in-out .35s infinite;pointer-events:none;}
+  @keyframes old-sweep{0%{transform:translateX(-120%);}30%,100%{transform:translateX(320%);}}
+
+  .fail{margin-top:34px;border-top:1px solid var(--border);padding-top:22px;}
+  .fail h2{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--danger);
+    margin:0 0 4px;font-weight:600;}
+  .fail p{color:var(--muted);font-size:13px;line-height:1.6;margin:0 0 14px;max-width:78ch;}
+  .narrow{display:flex;gap:26px;align-items:center;flex-wrap:wrap;}
+  .narrow figure{margin:0;}
+  .narrow figcaption{color:var(--muted);font-size:12px;margin-top:6px;}
+  .narrow .cmp-bar{width:24px;}
+  .foot{margin-top:34px;color:var(--muted);font-size:12.5px;line-height:1.65;max-width:78ch;}
+  code{font-family:"Cascadia Mono",Consolas,monospace;font-size:.92em;color:#c8b8ff;}
+  @media (prefers-reduced-motion:reduce){
+    .live .cmp-improved .cmp-bar-after::after,.clipped .cmp-bar-after::after{
+      animation:none;display:none;}
+  }
+</style>
+<div class="page">
+  <h1>The win card's celebration — before and after</h1>
+  <p class="lede">Your 2026&#8209;06&#8209;06 rule: when a change measurably improves FPS, the improved
+    bar sweeps once, and <b>nothing else in Compy ever sweeps.</b> It was built behind a switch no
+    screen ever turned on, so <b>it had never run — not once, for anybody.</b> Left is what shipped
+    for its whole life. Right is what your live build does now. Same card, same numbers.</p>
+
+  <div class="cols">
+    <div class="col">
+      <h2>Before — what everyone actually saw</h2>
+      <p>A correct card that never marks the win. Nothing moves.</p>
+      <div class="cmp cmp-improved">
+        <div class="cmp-head"><span>COMPARISON &middot; Nagle&rsquo;s algorithm off &middot; two Helldivers 2 sessions</span><span class="cmp-nf">noise floor &plusmn;2.4%</span></div>
+        <h2 class="cmp-headline cmp-win">Measured improvement — 7.8% on your <b>1% low</b></h2>
+        <p class="cmp-sub">Measured on this rig, in Helldivers 2, above its own noise across these two sessions — a real signal, not a guarantee for every game or session. You applied it; Compy measured it.</p>
+        <div class="cmp-receipts">
+          <div class="cmp-receipt"><span class="cmp-receipt-label">Avg FPS</span>
+            <div class="cmp-receipt-bars">
+              <div class="cmp-bar cmp-bar-before" style="width:78%">142</div>
+              <div class="cmp-bar cmp-bar-after" style="width:84%">153</div>
+            </div></div>
+          <div class="cmp-receipt"><span class="cmp-receipt-label">1% low</span>
+            <div class="cmp-receipt-bars">
+              <div class="cmp-bar cmp-bar-before" style="width:47%">86</div>
+              <div class="cmp-bar cmp-bar-after" style="width:51%">93</div>
+            </div></div>
+        </div>
+        <p class="cmp-delta">&Delta; avg +11 FPS (7.7%) &middot; 1% low +7 FPS (8.1%) — outside the &plusmn;2.4% noise floor</p>
+      </div>
+    </div>
+
+    <div class="col after live">
+      <h2>After — the rule, running</h2>
+      <p>Both purple &ldquo;after&rdquo; bars catch a slow light once every 3.4 seconds, together. Nothing else on the card moves.</p>
+      <div class="cmp cmp-improved">
+        <div class="cmp-head"><span>COMPARISON &middot; Nagle&rsquo;s algorithm off &middot; two Helldivers 2 sessions</span><span class="cmp-nf">noise floor &plusmn;2.4%</span></div>
+        <h2 class="cmp-headline cmp-win">Measured improvement — 7.8% on your <b>1% low</b></h2>
+        <p class="cmp-sub">Measured on this rig, in Helldivers 2, above its own noise across these two sessions — a real signal, not a guarantee for every game or session. You applied it; Compy measured it.</p>
+        <div class="cmp-receipts">
+          <div class="cmp-receipt"><span class="cmp-receipt-label">Avg FPS</span>
+            <div class="cmp-receipt-bars">
+              <div class="cmp-bar cmp-bar-before" style="width:78%">142</div>
+              <div class="cmp-bar cmp-bar-after" style="width:84%">153</div>
+            </div></div>
+          <div class="cmp-receipt"><span class="cmp-receipt-label">1% low</span>
+            <div class="cmp-receipt-bars">
+              <div class="cmp-bar cmp-bar-before" style="width:47%">86</div>
+              <div class="cmp-bar cmp-bar-after" style="width:51%">93</div>
+            </div></div>
+        </div>
+        <p class="cmp-delta">&Delta; avg +11 FPS (7.7%) &middot; 1% low +7 FPS (8.1%) — outside the &plusmn;2.4% noise floor</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="fail">
+    <h2>What the review caught before you saw it</h2>
+    <p>My first attempt slid a bright strip across the bar and hid the overflow so it couldn&rsquo;t
+      escape. But the bar is also the box the <em>number</em> sits in — so on a very short bar the
+      hiding cut the number in half. The review found <code>999</code> rendering as <code>99</code>.
+      The shipped version moves the light through the bar&rsquo;s background instead: nothing ever
+      leaves the box, so nothing needs hiding.</p>
+    <div class="narrow">
+      <figure class="clipped">
+        <div class="cmp cmp-improved" style="margin:0;padding:12px;width:200px">
+          <div class="cmp-receipt"><span class="cmp-receipt-label">1% low</span>
+            <div class="cmp-receipt-bars"><div class="cmp-bar cmp-bar-after">999</div></div></div>
+        </div>
+        <figcaption>rejected — the number is cut</figcaption>
+      </figure>
+      <figure class="live">
+        <div class="cmp cmp-improved" style="margin:0;padding:12px;width:200px">
+          <div class="cmp-receipt"><span class="cmp-receipt-label">1% low</span>
+            <div class="cmp-receipt-bars"><div class="cmp-bar cmp-bar-after">999</div></div></div>
+        </div>
+        <figcaption>shipped — whole number, same sweep</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <p class="foot">Reduced motion removes it completely — absent, not frozen mid-glow. If your system
+    is set to reduce motion, the bars above are already still and that is the correct behaviour.
+    Four other things in Compy move light: the title&rsquo;s arrival shine, the &ldquo;checking&hellip;&rdquo;
+    scan line, the setup-tour loading placeholder, and a dial filling up. I ruled none of them a
+    celebration — they say <em>arriving</em>, <em>working</em>, <em>loading</em> and
+    <em>progress</em>, not <em>you won</em>. Say the word if you read any of them as stealing the
+    moment and I&rsquo;ll take it out.</p>
+</div>
