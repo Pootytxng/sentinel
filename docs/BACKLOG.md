@@ -239,13 +239,18 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   INDEX — "reset to default", disabled whenever the room has no pick — so focus landed nowhere and
   the tab stop parked on an unfocusable item. Refs do not exist at open time, so the skip lives in
   the focus effect, stepping backward.
-  **Shipped `5fab9e79` (PR [#172](https://github.com/Pootytxng/sentinel/pull/172)); NOT in any built
-  or installed binary, and it OWES A SELF-REVIEW on the installed build before anyone calls it live.**
-  That debt is recorded rather than skipped: the session that shipped it was instructed not to
-  dispatch subagents, and the visual law requires the `self-reviewer` worker. Lower risk than the
-  usual UI debt — no CSS changed and no markup moved, only `tabIndex`, ref wiring and key handlers,
-  and the contract itself is pinned by 18 mounted tests asserting real `document.activeElement` —
-  but keyboard focus is exactly the thing a static test cannot see LOOK wrong, so it stays owed.
+  **Shipped `5fab9e79` (PR [#172](https://github.com/Pootytxng/sentinel/pull/172)); the self-review it
+  owed is PAID 2026-08-20** on installed desk build `75849be1` — the first binary ever to carry it.
+  **Self-review VERDICT: PASS** (10/10 at 1500x980; the reviewer re-confirmed the stamp with its own
+  `get_build_stamp` probe before capturing anything). **What 16 mounted tests could not see:** the
+  roving-tabindex focus ring draws OUTSIDE the swatch fill (`outline: 2px solid rgb(179,102,255)`,
+  `outline-offset: 2px`), so it stays legible on a near-hue swatch (Violet) as well as a contrasting
+  one (Emerald) instead of vanishing into the very colour it marks — an invisible focus ring on a
+  roving tabindex is a keyboard trap the user cannot see. Disabled-skip and wrap were driven with REAL
+  CDP input events in both directions and landed on "Apply to all rooms", never the disabled "Reset to
+  default"; `Escape` put focus visibly back on the trigger. **Recorded for the next keyboard review:**
+  synthetic DOM dispatch fails Chromium's `:focus-visible` heuristic and would have FALSE-FAILED the
+  states item — real input events are required, not `dispatchEvent`.
 - [x] **PR #90 recovery + the quiet launch, rebuilt** — PR [#102](https://github.com/Pootytxng/sentinel/pull/102),
   #90 MERGED (its four unverified Codex claims re-proven + repaired), #100 closed measured-inert and
   rebuilt via `WebviewWindowBuilder` + `SW_SHOWNOACTIVATE`. Detail: `docs/CHANGELOG.md`.
