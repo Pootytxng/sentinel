@@ -4,6 +4,21 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-08-20 - the v0.9.18 -> v0.9.11 published-release chain, moved verbatim (byte budget)
+
+Moved out of the "Latest PUBLISHED release + source commit" row on the same ship. Current state
+keeps only the latest published release and points here for the chain.
+
+It supersedes **v0.9.18**, source `cfc0c4b7`, release id **`369720195`**, published `2026-08-13T06:57:36Z` under owner GO (chat, 2026-08-12 ~23:45 PT). Installer SHA-256 `61acde41dce19554a93644177435c38ca89f9bf470f513c8fdb833ca32969183`; `latest.json` SHA-256 `a616c050834cbdb55b0b087c2f6df7b565b1fd28951a5f8b22d03b6338fa9924`; transaction 9 of 9. It carried the intake band default OFF (`4d1afa92`), the popout modal-contract guard (`b44ec358`), the three-popouts-onto-one-`Sheet` convergence (#119), and the #121 quiet-launch SW_MAXIMIZE fix — **visually reviewed on the installed binary before publish** (the mid-apply consent panel remains the one unseen surface, see the row below). It supersedes v0.9.17 (`a614744c`, id `369614201` — **marathon Trains 1–3** and the first published build LOOKED at before shipping), which superseded v0.9.15 (`1b437785`, id `369480816`, published the same day), which superseded v0.9.12 (`a1be896`) and v0.9.11 (`7ba5fb6`). No v0.9.8, v0.9.9, v0.9.10, v0.9.13, v0.9.14 or v0.9.16 release exists — those were desk-only or abandoned. **A stale alias read is not drift:** `/releases/latest/download/latest.json` served the previous body from an edge cache for minutes after the v0.9.15 publish; the versioned URL is correct immediately. Re-fetch with a cache-buster before calling the alias wrong. (For v0.9.17 and v0.9.18 the alias converged on the first check.)
+
+### 2026-08-20 - the 75880de1 / #127 idle-CPU desk-build detail, moved verbatim (byte budget)
+
+Moved out of the "Owner-installed version + embedded stamp" row when the C-17b review ship
+(`402b0080`) pushed the file back over its 48KB wall. Byte-for-byte; current state stays in
+docs/RELEASE_STATE.md, which keeps the headline number and points here.
+
+It supersedes desk build **`75880de1`** (0.9.25, branch `perf/idle-127-ambient-raster`, installer SHA-256 `E4A1301FD9F62FA38507ABD2320B20A1ECD7D4B67B26E538BDA1B078FFBFFC2A`), which is where the **#127 idle-CPU fix** was first proved and which is the first measured answer to the owner's standing "runs a lot slower than before" report. **Whole-app idle on Home: 19.632 -> 10.483 percent of one core**, measured with `scripts/q7-probe.mjs attribute` against the installed binary before and after (`docs/perf/raw/idle-attribution-2026-08-19-{A-rig-on,D-installed-fix}.json`). **#127's own diagnosis did NOT reproduce:** the rAF band is 0.201 points and fired ZERO frames, so the 3D rig was never the cost, and the dependency-bump hypothesis is dead (r3f/drei/three identical in the lockfile at the baseline commit, at `efde8310`, at HEAD and on disk). The real cost was two decorative CSS animations that the ambient-cost guard considered free because they animate `transform`: `aurora` on `body::before` at 13.257 points (a `scale()` animation re-rasters the whole layer every frame -- the 2026-08-06 teardown removed the blur and left the trigger) and the two `.stl-ring` pulses on every Home at 4.156 (measured 4.156 shipped, 4.001 promoted with `will-change`, 4.721 as opacity-only -- **running forever was the cost, not the property**). Both guards are new and both were **falsified on purpose** by re-introducing the defects on disk. **Scope stated:** the update-pill LED got the same bounded treatment but was **NOT separately measured** (no update was available during the runs), and the post-fix baseline is noisy (8s windows swing 4.8-15.2), so the total is quotable and the per-animation splits inside a single post-fix run are not.
+
 ### 2026-08-19 - owner-installed desk-build chain, moved verbatim from RELEASE_STATE.md (byte budget)
 
 Moved out of the "Owner-installed version + embedded stamp" row when the C-04 ship (`40682344`) pushed
