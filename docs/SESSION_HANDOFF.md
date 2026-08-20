@@ -1,65 +1,72 @@
-# Session handoff — 2026-08-20 (control-font LANDED; self-checkup LANDED)
+# Session handoff — 2026-08-20 (win-card celebration LANDED)
 
-**Worktree** `C:\Users\Kuya\code\sentinel-home-room`, branch `lane/self-checkup`. `main` is checked
+**Worktree** `C:\Users\Kuya\code\sentinel-home-room`, branch `lane/win-shimmer`. `main` is checked
 out by `C:\Users\Kuya\code\sentinel`, which is why this worktree keeps a lane branch.
 
 ## Landed and merged
 
-**PR [#157](https://github.com/Pootytxng/sentinel/pull/157) → merge `8a1450cd`**, closing issue
-[#155](https://github.com/Pootytxng/sentinel/issues/155).
+**PR [#165](https://github.com/Pootytxng/sentinel/pull/165) → merge `835d8868`.**
 
-- `aac90cd7` — **the control-font reset.** `.btn-small` + `.debrief-ctx-head` set font-size/weight
-  and no family, so Windows rendered them in Arial. Measured: **97 of 290 `<button>` sites across 28
-  files** had no family from any rule (the row claimed 26/11), and no stylesheet had a single
-  `button` element rule. Fix is ONE unscoped `button, input, select, textarea { font-family: inherit }`
-  in `src/App.css`; the 88 existing ad-hoc `font: inherit` declarations were deliberately left (some
-  are the shorthand and also reset size/weight). Guard written first: `src/control-font-guard.test.ts`.
-- `176d847c` — arc-v2 M1 + dead-radar CSS deleted, `src/arc-v2-reachability-guard.test.ts` added.
-- `f8ec8d81` + archive link repair — RELEASE_STATE owner-installed row, BACKLOG `.btn-small` row.
+The owner's 2026-06-06 kernel law — a measured FPS win makes the improved bar sweep once, and
+nothing else in Compy ever sweeps — **had never fired for any user.** `@keyframes cmp-winshimmer`
+lived on `.cmp-improved.arc-v2 .cmp-bar-after`, behind a prop no screen ever set. Found by the
+self-checkup, not by anyone looking for it.
 
-**Shipped and proved:** installed stamp `aac90cd7 · release · shell 0.9.26`, one installer on the
-Desktop, installer SHA-256 `9FEDF06E…FD92`. **Self-review VERDICT: PASS** (9/9 at 1500x980).
-Issue [#156](https://github.com/Pootytxng/sentinel/issues/156) filed: a silent `/S` install returned
-exit 0 and never replaced the exe — the stamp gate caught it. **Do not loosen that gate.**
+- `f3d503c7` — re-homed the keyframe + its two rules into `src/App.css` on the live selector
+  `.cmp-improved .cmp-bar-after`, reduced-motion opt-out intact (`display: none` — a celebration
+  should be *absent* under reduced motion, not frozen). `src/sweep-guard.test.ts` gained the tier it
+  was missing: **every compound in the sweep's selector must be producible UNCONDITIONALLY by one
+  `className` expression.** Falsified before it was trusted — re-scoping to `.cmp-improved.arc-v2`
+  makes the test name that exact compound as unreachable.
+- `fd7ea7c0` — the two self-review FAIL findings. `overflow: hidden` on a **text box** clipped a
+  3-digit value at the 24px `min-width` floor (`999` → `99`); the glint now travels by
+  `background-position` inside a stationary `inset: 0` overlay, so nothing needs clipping. And the
+  guard matched keyframe *names* against `/shimmer|sheen/`, so it was blind to `v2-foil-pan` and
+  `v2-hud-sweep` for its whole life. The detector now also catches any keyframe body animating a
+  `background`/`mask` position, which found two more (`st-shim`, `liv-dial-sweep`).
+- `b24f7650` — rowed `origin/lane/cleanup-train-2026-08-20`, which merging #164 left undispositioned
+  on `main`. `branch-disposition-audit` runs inside the pre-push gate, so a rowless ref blocks
+  **every** push in the repo, not just its own lane's.
 
-## The self-checkup (owner-requested), also landed
+**Adjudicated in-lane, not parked on the owner:** five moving-light keyframes now exist and the law
+bans a second *celebration*, not every moving pixel — an arrival foil, an activity scan line, a
+loading skeleton and a dial's fill are none of them. The allowlist in `src/sweep-guard.test.ts`
+carries the reasoning per entry; a sixth fails the build and has to be argued, not appended. The
+owner got a viewable before/after (`docs/ui-sweep/win-shimmer-before-after.html`) so he can overrule
+on sight.
 
-"Ensure this isn't happening anywhere else … resolve and optimize any other bad habits." Findings
-and fixes are in the PR body; the durable ones:
+**Verified:** pre-push gate at `b24f7650` — 350/350 test files, 4578 passed / 4 skipped, Rust 963/0,
+clippy, `LOCAL CHECK RESULT: PASS`. **Self-review VERDICT: PASS** (10/10 at 1500x980, on the
+installed build, after an earlier FAIL on both findings above). Shipped and stamp-proved; the
+`docs/RELEASE_STATE.md` Snapshot row carries the installer SHA-256.
 
-- **arc-v2 is fully dead now** — M3/M4 CSS deleted (274 → 127 lines), the whole `arcV2` prop chain
-  out of `SessionDebrief` / `WhatChangedPanel`. Provable no-op: every removed rule needed an
-  `.arc-v2` ancestor no mount produced. The guard now pins `arcV2` to `App.tsx` + `FirstCheck.tsx`.
-- **The kernel law's one earned celebration has never fired for any user.** `@keyframes
-  cmp-winshimmer` lived on `.cmp-improved.arc-v2 .cmp-bar-after` — behind the dead prop. Deliberately
-  NOT re-homed here (a deletion commit must not smuggle in a new moving thing). `src/sweep-guard.test.ts`
-  keeps the law's teeth and pins the count at zero; open row in `docs/BACKLOG.md`.
-- **Owner checklist is real asks only** — six non-asks archived; §A is down to one item.
-- **Doc drift + budget slack fixed** — `cpu_temp.rs` ~520 → ~1137, checklist budget 40KB → 33KB,
-  C-17b rows archived to keep BACKLOG under its 114KB wall.
+## Three things only the owner can apply
 
-### Three process defects found, and what was done
+None of these are engineering. All three are in `docs/OWNER_ACTION_CHECKLIST.md`.
 
-1. **HANDOFF BLOCK misuse.** Emitted mid-work on every reply, telling the owner to paste work back
-   into the same session. It is an END-of-work artifact. Memory: `handoff-block-is-end-of-work`.
-2. **Over-escalation to the owner's checklist.** `B_arc` was filed as an owner fork; he answered
-   *"i have no idea what that arv2 thing even is."* Memory: `owner-checklist-is-real-asks-only`.
-3. **PR #157 was merged with NO work-control receipt.** Guard written and proved both directions;
-   left unwired because the owner's settings reserve authority-gating hooks to his hand.
-   Memory: `proof-dependent-transitions-need-a-receipt`.
+1. **Delete `C:\Users\Kuya\Desktop\COMPY KEY\`** — key material; a session must not touch it.
+2. **The auto-mode CI rule that cannot be satisfied.** `~/.claude/settings.json` allows merging
+   "when required CI checks are passing" and asks for confirmation when they are "absent" — hosted
+   CI is OFF by his own decision, so checks are *always* absent and the rule reads as a permanent
+   soft-deny. Should be keyed to `scripts/verify-local.ps1`, the gate that actually runs.
+3. **The unwired receipt hook**, if he wants it on: the settings block to paste sits at the bottom
+   of `.claude/hooks/work-control-receipt-guard.mjs`. It is deliberately unwired because his
+   settings reserve authority-gating hooks to his own hand.
+
+## Correction worth carrying forward
+
+`A_merge` on the owner's checklist (from the concurrent cleanup lane) says PR #160 is stuck because
+**"`gh pr merge` is refused by the session permission classifier — twice now, in two sessions."**
+That premise no longer holds: **#164 and #165 both merged cleanly today.** What actually fails is
+`--delete-branch`'s local cleanup step, which tries to switch to `main` in a folder that does not
+hold it (`fatal: 'main' is already used by worktree at C:/Users/Kuya/code/sentinel`). By then the
+remote merge and the remote branch delete have both already happened; the non-zero-looking output is
+only that last local step. PR #160 needs its gate re-run at its current base and then a merge; it is
+not blocked on a permission.
 
 ## Next session — start here
 
-Nothing is in flight. Take the highest-priority non-gated `[ ]` from `docs/BACKLOG.md`; the newest
-row is the win-card shimmer (build it in its own train: re-home the keyframe onto `.cmp-improved
-.cmp-bar-after` in `src/App.css`, then build → install → **self-review**, then update
-`src/sweep-guard.test.ts` to expect `["cmp-winshimmer"]`).
-
-## Open for the owner
-
-- **§A is down to one item:** delete the redundant `Desktop\COMPY KEY\` copy.
-- **Auto-mode rule that cannot be satisfied:** merging is allowed "when required CI checks are
-  passing" and must be confirmed when checks are "absent" — hosted CI is OFF by his own decision, so
-  checks are ALWAYS absent. Proposed edit: key it to the local gate (`scripts/verify-local.ps1`).
-- **The unwired hook**, if he wants it on: settings block is at the bottom of
-  `.claude/hooks/work-control-receipt-guard.mjs`.
+Nothing is in flight. Take the highest-priority non-gated `[ ]` from `docs/BACKLOG.md`. Open lanes
+that are **not** this one's to touch: PR [#160](https://github.com/Pootytxng/sentinel/pull/160)
+(`lane/usage-audit-disk-bloat`) and PR [#163](https://github.com/Pootytxng/sentinel/pull/163)
+(`lane/cleanup-train-2026-08-20`).

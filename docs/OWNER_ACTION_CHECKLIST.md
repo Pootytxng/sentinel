@@ -66,13 +66,38 @@
   Authenticode enrollment, publication, distribution, and external timing are owner territory;
   protected use of the existing updater key inside an authorized local release train is engineering.
 
+### A_settings. Two lines in your Claude settings that I am not allowed to touch  ·  ⏳ NEW 2026-08-20
+
+**The ask:** two small edits in `~/.claude/settings.json`. Your own rule reserves that file — and any
+hook that gates what a session may do — to your hand, which is correct and I am not asking to change
+it. Both are copy-paste.
+
+**① A permission rule that can never be satisfied.** The `autoMode` block allows merging a PR "when
+required CI checks are passing" and tells me to confirm with you first when checks are "failing,
+pending, or **absent**". Hosted CI is OFF by your own 2026-07-16 zero-budget decision, so checks are
+**always absent** — the rule reads as a permanent stop on a condition that can never clear. The gate
+that actually runs on every push is `scripts/verify-local.ps1`. Replace, in `allow`:
+`"…allowed when the owner has asked for the merge and required CI checks are passing."` and in
+`soft_deny`: `"Merging a pull request whose required CI checks are failing, pending, or absent —
+confirm with the owner first."` with wording keyed to the local gate instead. **Why it matters:**
+right now the written rule and the working reality disagree, and a rule nobody can satisfy gets
+worked around rather than followed — which is exactly how PR #157 got merged with no receipt.
+
+**② The receipt hook, if you want it armed.** `.claude/hooks/work-control-receipt-guard.mjs` blocks
+`gh pr merge` / `gh issue close` / `gh pr ready` unless a proof receipt exists for the current
+commit. It is written, tested both directions, and deliberately **not wired**, because wiring it
+means editing the file above. The exact settings block to paste is in a comment at the bottom of the
+hook. **Why it matters:** it is the mechanical version of a rule that was already broken once by the
+session that had just re-read it.
+
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
 None of them is waiting on you. **A0's key backup is CLOSED (2026-08-18)** — the signing key is
-backed up off this machine and verified. **§A now holds TWO things, and only one is a chore:**
+backed up off this machine and verified. **§A now holds THREE things, and only one is a chore:**
 ① A0's small residual — delete the redundant `Desktop\COMPY KEY\` copy (one command, 10 seconds);
 ② A0's *"expand to the remaining invitees"* — not a chore but a **distribution call** that is yours
-by definition (who gets a build, and when). Corrected 2026-08-20: this paragraph said "exactly ONE"
+by definition (who gets a build, and when); ③ **A_settings**, two copy-paste edits in a file only you may
+edit. Corrected 2026-08-20: this paragraph said "exactly ONE"
 while ② sat three bullets above it, still marked ⏳ — a checklist that miscounts itself is the same
 defect as one that lists non-asks.
 Archived 2026-08-20 by a self-checkup, because none of them ever needed you and a checklist that
