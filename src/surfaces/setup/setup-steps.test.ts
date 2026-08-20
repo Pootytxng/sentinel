@@ -63,7 +63,7 @@ describe("buildSetupSteps", () => {
     expect(last.body).toBe(JOURNEY_RECAP_BODY);
     // The journey copy names every room in rail order (order is felt — the recap says it once).
     // Room labels renamed by owner decision 2026-08-12 (Monitor→Live, Blackbook→History, Lab→Test).
-    for (const label of ["Home", "Optimize", "Live", "History", "Test"]) {
+    for (const label of ["Health", "Optimize", "Live", "History", "Test"]) {
       expect(last.body).toContain(label);
     }
   });
@@ -184,7 +184,7 @@ describe("proving-ground tour alignment (ground=true)", () => {
     expect(last.kind).toBe("tabmap");
     expect(last.tabs?.map((t) => t.id)).toEqual(["home", "play", "learn", "lab"]);
     expect(last.body).toBe(GROUND_RECAP_BODY);
-    for (const label of ["Home", "Live", "History", "Test"]) {
+    for (const label of ["Health", "Live", "History", "Test"]) {
       expect(last.body).toContain(label);
     }
     // The dead room never appears in the recap copy.

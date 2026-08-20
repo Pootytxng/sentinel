@@ -22,7 +22,7 @@
 These are owner asks that are **never-built or parked**, not yet reflected as active work anywhere
 else. This is the list the owner meant.
 
-### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) 🟡 IN PROGRESS — **step ① of five is DONE** (TYPE-1 + COLOR-1 shipped to the desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed); ② front door (UX-1), ③ interview, ④ wording pass + banned-term guard, ⑤ instruments behind a door remain OPEN
+### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) 🟡 IN PROGRESS — **three of five are DONE**: ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **③ interview and ⑤ instruments behind a door remain OPEN**
 
 Owner escalated 2026-08-11: non-technical testers, incl. close friends, "do not enjoy using the app
 — overwhelming, hard to navigate, completely unfamiliar." Asked for tooling + deep research on
@@ -190,7 +190,7 @@ stay, move room accents off the status hues entirely (violet · indigo · slate 
 
 </details>
 
-### UX-1. The verdict is smaller than the word "Home", and the front door is a 10-step lecture 🔴 OPEN
+### UX-1. The verdict is smaller than the word "Home", and the front door is a 10-step lecture ✅ CLOSED 2026-08-19 (all three decisions shipped; the room is now "Health")
 
 **Measured 2026-08-11.** On the diagnostic screen `Home` renders at **32px** — the largest text in
 the app — while the actual verdict *"You're ready to play"* sits beneath it at **24px**.
@@ -227,10 +227,15 @@ identically for "two checks FAILED" and "two checks could not be read at all". A
 differently on each. The sentence now says which — `2 of 4 checks look good · 2 couldn't be measured`
 — and that is test-pinned in `RerunCheckBand.test.tsx`.
 
-**Still open from UX-1:** decision ① third clause (rename the Home room to something that answers a
-question — Health / Diagnosis) and decision ③ (first run lands on the diagnosis, not the 10-step
-hardware tour) — both **NEVER BUILT** per the conformance audit, C-04 and C-05. The intake question
-stays OFF Home until the step-③ interview behind it exists; note the navigation audit §5 rates that
+**✅ UX-1 IS NOW COMPLETE — decision ① third clause shipped 2026-08-19** (C-04, issue #143): the
+front door is **Health**, the owner's pick over Checkup and Diagnosis. Id stays `home`; the label the
+user reads lives in `common.rail.home` and is now pinned to the rail literal by
+`src/design/rail-label-locale-guard.test.ts` — the rename proved that renaming `homeRail.ts` alone
+ships the OLD word with the whole suite green. **Decision ③ shipped earlier, 2026-08-18** (C-05 +
+C-19, `d76f753f`): first run lands on the diagnosis and the tour is a card with one name. The line
+that used to sit here calling both "NEVER BUILT" was true when the conformance audit was written and
+was already stale for ③ — corrected in place rather than left to be re-read as current. The intake question
+stays OFF the Health room until the step-③ interview behind it exists; note the navigation audit §5 rates that
 band the best navigation idea in the product, so it is a *deferral*, not a retirement, and it is
 still reachable from Settings.
 

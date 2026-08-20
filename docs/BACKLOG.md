@@ -58,19 +58,28 @@
 
 ### Conformance queue — the audit's unbuilt decisions, in owner-value order
 
-- [ ] **C-04 · Rename the Home room to a question it answers** (Health / Diagnosis). UX-1 ① third
-  clause; never built. Owner territory only for the *word* — the restructure is mine.
-- [x] **C-05 + C-19 · SHIPPED 2026-08-18** (`d76f753f`). First run lands on the diagnosis: the tour
-  no longer auto-opens, it is offered as a card on **all three** Home surfaces, and it has ONE name
-  ("Compy tour") instead of "Guided setup"/"Hardware tour". CPU temperature is on the default Live
-  face and on Home. Two durable corrections below (C-18, C-19) — **read them before trusting any
-  older reachability claim in this file.** Guards: `src/first-run-front-door-guard.test.ts`,
-  `src/cpu-temp-reachability-guard.test.ts`, both mutation-tested.
-- [x] **C-06 + C-08 + C-09 · SHIPPED 2026-08-18.** Plain-English copy pass and the guard that holds
-  it (`4c9e440e`); build identifiers out of consumer chrome (`6d047c2a`, `00d7020e`). Both carry a
-  self-review PASS. The durable half: `plain-language-guard` scanned 199 `.tsx?` files and NONE of
-  the 18 locale files holding the copy it exists to police — **when a decision silently reverts,
-  check the guard's FILE FILTER before its rules.** Full record: `docs/RELEASE_STATE.md` installed row.
+- [x] **C-04 · SHIPPED 2026-08-19** (issue [#143](https://github.com/Pootytxng/sentinel/issues/143)).
+  The front door is **Health** — owner's pick from Health / Checkup / Diagnosis, recommended because
+  it answers "is my PC OK?" without the fear frame that retired "Fix" in 2026-06. Id stays `home`
+  (persisted nav key, same rule as every prior rename). Renamed everywhere the user reads it: the
+  rail/topbar/palette label, the tour's two rail-recap sentences, the CPU-temp honesty note and the
+  memory lesson's tie line; the tour blurb stopped saying "Your dashboard" (a shape, not an answer)
+  and now states the question the room answers. **The rename found a real hole with the fix half
+  applied:** `HOME_RAIL[0].label` is NOT what the app prints — `ShellV2.tsx:94` renders
+  `common.rail.<id>`, so renaming only `homeRail.ts` would have shipped "Home" with `homeRail.test.ts`
+  green. New guard `src/design/rail-label-locale-guard.test.ts` pins literal ↔ locale (falsified
+  against the half-applied rename), and `Home` joined the RETIRED map in `room-name-copy-guard.test.ts`
+  so the old word cannot return to copy. **Not in any published build** — ships with the next cut,
+  and owes a self-review on the installed binary before it is called live.
+- [x] **SHIPPED conformance rows, moved verbatim to
+  [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-19, byte budget): **C-05 + C-19**
+  (`d76f753f` — first run lands on the diagnosis, the tour is one named card, CPU temp reachable on
+  the default Live face and on the front door) · **C-06 + C-08 + C-09** (`4c9e440e`, `6d047c2a`,
+  `00d7020e` — plain-English copy pass + its guard, build identifiers out of consumer chrome) ·
+  **C-10** (`3eca4a9f` — no raw `<select>`, `src/design/Picker.tsx`) · **C-11** (`3eca4a9f` — the
+  ledger folds 37 repeats of one tweak into one row) · **C-17** (`3eca4a9f` — the mono census with a
+  ratchet). Read them there before re-litigating any of it; the C-18/C-19 corrections below still apply.
+
 - [ ] **C-18 · Retire the classic `Monitor.tsx` shell — and ONLY that.** **This item was WRONG when
   first written and is corrected here; do not act on the earlier version.** A self-review reported
   `Play.tsx`, `monitor-panels.tsx`, `MonitorDomainCards.tsx` and `SessionDebrief.tsx` as unmounted,
@@ -99,30 +108,6 @@
   labels, not controls, and `home-console-standard-readout-guard.test.tsx` caught the first cut that
   broke it. `cpu_temp.rs` gained a 900ms/15s hit-miss cache first, so the new caller costs less than
   the old one did.
-- [x] **C-10 · SHIPPED** (`3eca4a9f`). Seven raw `<select>`s, four of them measured live on one Lab
-  screen. Replaced by `src/design/Picker.tsx` — one portalled, token-drawn dropdown on the ARIA APG
-  select-only-combobox pattern (focus stays on the trigger, so nothing can drop focus to `<body>`),
-  with keyboard + typeahead parity (one deliberate divergence, named in the file: a closed native
-  `<select>` commits on an arrow key, this one opens instead). `no-raw-select-guard.test.ts` bans
-  `<select>` under `src/` with no escape hatch; mutation-tested. **Two defects an independent review
-  caught after the first push, both fixed in the same PR** (#139): the guard could not see a
-  `<select` that ENDED a line — Prettier's own output for a wrapped opening tag — because the scan
-  splits on newlines and the lookahead had no character left, and its mutation test proved a code
-  path the real sweep never ran (one scanner now serves both); and the port had turned the blank
-  `<option value="">` into a `placeholder`, which renders but cannot be chosen, silently removing the
-  only way to CLEAR a pick in the Experiment Bench. Every existing test picked forward, so nothing
-  noticed — the regression test goes backwards.
-- [x] **C-11 · SHIPPED** (`3eca4a9f`). The owner's ledger holds 64 applies, **37 of them the same
-  tweak** — the 30-row tape was one sentence printed over and over. `buildLogbook` folds by `rec_id`
-  into a row that sits at the latest apply and states "applied N times since <date>", and carries
-  the genuinely LIVE apply's id (a stale id from a superseded apply is the dangerous kind of wrong).
-  Live: 30 rows → 17.
-- [x] **C-17 · SHIPPED** (`3eca4a9f`). `mono-law-guard.test.ts` + `mono-census.baseline.json`:
-  resolves the mono **alias graph** as a fixed point (a two-token grep is dodged by the third alias),
-  then requires every one of the 224 mono rules to be declared `value` / `chrome-tag` / `violation`.
-  A **census with a ratchet, not a ban** — 61 of those rules pair mono with uppercase and are the
-  Instrument-HUD micro-label idiom the owner approved over two rounds; banning them would delete the
-  design language to enforce a comment. New mono rule ⇒ build fails until classified.
 - [ ] **C-17b · Pay off the 12 recorded mono-on-prose violations** (`mono-census.baseline.json`,
   `violationCeiling: 12`). `.debrief-title` · `.debrief-head`/`-ctx-head` · `.cmp-head`/`-receipt-label`
   · `.wcp-head` · `.monitor-panel-sub` · `.strends-sub` · `.v2-update-title` · `.fct-skip-hint` ·
@@ -603,19 +588,40 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
-### Cycle 2026-08-19c — ✅ THE LAST IDLE FRAME LOOP (CC): issue #142 filed and fixed
+### Cycle 2026-08-19d — ✅ THE FRONT DOOR ANSWERS A QUESTION (CC): Home → **Health**, issue [#143](https://github.com/Pootytxng/sentinel/issues/143)
 
-`ReticleCursor` started a rAF loop on `pointerenter` and only stopped it on `pointerleave`, so a
-pointer merely RESTING inside the window held the loop open for the whole visit. Measured on the
-shipped v0.9.26 binary (`q7-probe` port + rAF-call counter in the live page): pointer outside
-**0 calls/s**, pointer motionless inside **250 calls/s** (750 frames per 3s). After #127 that was
-the app's only remaining idle frame loop. The lerp converges asymptotically and never arrives, so
-there was no self-terminating condition; it now parks at sub-pixel distance and wakes on real input.
+C-04, the last unbuilt clause of UX-1 ① (decided 2026-08-11, never built). The owner picked
+**Health** from Health / Checkup / Diagnosis — "Diagnosis" was offered and declined for the same
+fear frame that retired "Fix" in 2026-06. Id stays `home`: it is the persisted nav key, the same
+rule every prior rename followed.
 
-- [x] **#142 — park the reticle frame loop when nothing is moving.** Guard
-  `src/design/console/reticle-idle-guard.test.tsx` drives the component's real effect through a fake
-  frame scheduler (parks · wakes · still repaints the corner-spread · still cancels on leave),
-  falsified against the pre-fix source. Pixel output unchanged, so no visual review was owed.
+- [x] **C-04 — the room is Health, everywhere the user reads it.** Rail/topbar/palette label
+  (`homeRail.ts` + `common.rail.home` in both locales), the tour's two rail-recap sentences, the
+  CPU-temp honesty note, the memory lesson's tie line, and the tour blurb that used to open "Your
+  dashboard" — a shape, not an answer — which now states the question the room answers.
+- [x] **The rename found a live drift hole with the fix half applied.** `HOME_RAIL[0].label` is NOT
+  what the app prints: `ShellV2.tsx:94` renders `t("common.rail." + id)` and `App.tsx:1447` derives
+  the Home dock's door names the same way. Renaming only `homeRail.ts` ships the OLD word with
+  `homeRail.test.ts` green, because that test asserts the literal the app does not use. New guard
+  `src/design/rail-label-locale-guard.test.ts` pins literal ↔ locale for every room (plus the merged
+  rail's `Optimize` relabel and locale key parity), **falsified against the half-applied rename** —
+  seed the old value and the first test goes red naming both words.
+- [x] **bug→guard, second half:** `Home` joined the RETIRED map in `room-name-copy-guard.test.ts`,
+  so the old word cannot return to English locale copy or Rust literals. Its disarm proof gained the
+  two real sentences this train rewrote, and records one KNOWN LIMIT honestly rather than narrowing
+  the pattern: "the Home key" (the keyboard key) trips the lead pattern; nothing in scope says it
+  today, and the `room-name-allow` hatch is the answer if something ever does.
+- [x] **Doc drift fixed in the same commit:** `DESIGN.md` still named the rail
+  "Home · Monitor · Blackbook · Lab" — two labels the owner retired on 2026-08-12 — and
+  `UI_VISION_BACKLOG.md` still called UX-1 ③ "NEVER BUILT" a day after C-05 shipped it.
+- **Not in any published build.** Ships with the next cut (fleet is on v0.9.26), and owes a
+  self-review on the installed binary before anyone calls it live.
+
+### Cycle 2026-08-19c — ARCHIVED
+
+Moved verbatim to [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-19, byte budget) when
+Cycle 2026-08-19d was written. The reticle's idle rAF loop: 250 calls/s with the pointer merely
+resting inside the window, parked and guarded (issue #142).
 
 ### Cycle 2026-08-19b — ARCHIVED
 

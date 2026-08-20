@@ -50,7 +50,7 @@ describe("mounting", () => {
     setup();
     expect(screen.getByRole("dialog")).toBeTruthy();
     expect(rows().length).toBeGreaterThan(0);
-    expect(rows()[0].textContent).toContain("Home");
+    expect(rows()[0].textContent).toContain("Health");
   });
 });
 

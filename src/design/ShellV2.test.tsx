@@ -28,10 +28,10 @@ afterEach(() => {
   health.value = null;
 });
 
-const ITEMS = railFor(true); // merged (the shipped default): Home · Optimize · Live · History · Test
+const ITEMS = railFor(true); // merged (the shipped default): Health · Optimize · Live · History · Test
 // Rendered rail text comes from i18n (common.rail.*), not HOME_RAIL's guard-pinned literals —
 // room renames (owner-approved 2026-08-12: Blackbook→History, Lab→Test, Monitor→Live) land here.
-const RAIL_TEXT: Record<string, string> = { home: "Home", check: "Check", fix: "Optimize", play: "Live", learn: "History", lab: "Test", optimize: "Optimize" };
+const RAIL_TEXT: Record<string, string> = { home: "Health", check: "Check", fix: "Optimize", play: "Live", learn: "History", lab: "Test", optimize: "Optimize" };
 
 const shell = (over: Partial<Parameters<typeof ShellV2>[0]> = {}) => (
   <ShellV2
@@ -58,7 +58,7 @@ describe("ShellV2 rail", () => {
   // bug→guard (UX audit 2026-08-11): the digit hint sat inside the tab's accessible name, so a
   // screen reader announced "Home 1" / "Blackbook 3" — the shortcut read as part of the room name,
   // and sighted users read the same pill as an unread count. The digit is now aria-hidden and the
-  // shortcut is declared where it means something. Exact-name matching is the assertion: a `/Home/`
+  // shortcut is declared where it means something. Exact-name matching is the assertion: a `/Health/`
   // regex would pass again the day the digit crept back in.
   it("a rail tab's accessible name is the room name ALONE — the digit is a keyboard hint", () => {
     render(shell());
@@ -74,7 +74,7 @@ describe("ShellV2 rail", () => {
   it("marks the active room and navigates on click", () => {
     const onNavigate = vi.fn();
     render(shell({ onNavigate }));
-    expect(screen.getByRole("tab", { name: /Home/ }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: /Health/ }).getAttribute("aria-selected")).toBe("true");
     fireEvent.click(screen.getByRole("tab", { name: /Live/ }));
     expect(onNavigate).toHaveBeenCalledWith("play");
   });

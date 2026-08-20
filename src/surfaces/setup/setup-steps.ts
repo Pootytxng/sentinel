@@ -19,7 +19,9 @@ export type SetupStepKind = "rig" | "seatbelt" | "rules" | "check" | "lesson" | 
 // One-line "what it's for" per Compy tab, keyed by the persisted nav id (labels come from HOME_RAIL,
 // so the rename surface and the tour can't disagree). Used by the lesson tab-chips + the recap.
 export const TAB_BLURB: Record<HomeRailId, string> = {
-  home: "Your dashboard — live CPU/GPU and what's limiting you, at a glance.",
+  // "Your dashboard" named a shape, not an answer — the same reason the room stopped being called
+  // "Home" (owner rename 2026-08-19). The blurb now states the question the room answers.
+  home: "Is your PC OK right now — the verdict, and what is holding you back.",
   check: "Scan game-readiness, then apply the safe fixes it finds for your rig.",
   play: "Watch live FPS, 1% lows and temps — with a debrief after each session.",
   fix: "Apply and undo reversible tweaks — every change logged in the ledger.",
@@ -166,7 +168,7 @@ export const HARDWARE_LESSONS: readonly HardwareLesson[] = [
     // published shared memory (HWiNFO) or WMI namespace (LibreHardwareMonitor) when one is running,
     // which is driver-free and is what cpu_temp.rs actually does. Stating the gap without stating
     // the working path taught the user a dead end.
-    note: "One honest gap: reading CPU temperature directly needs a kernel driver, and Compy ships none. If you run HWiNFO or LibreHardwareMonitor, Compy reads the temperature they already publish — Home shows you how.",
+    note: "One honest gap: reading CPU temperature directly needs a kernel driver, and Compy ships none. If you run HWiNFO or LibreHardwareMonitor, Compy reads the temperature they already publish — Health shows you how.",
   },
   {
     kind: "ram",
@@ -177,7 +179,7 @@ export const HARDWARE_LESSONS: readonly HardwareLesson[] = [
       "Compy watches memory headroom and flags heavy background apps",
       "More capacity is the real fix when a game wants more than you have (advisory)",
     ],
-    tab: { id: "home", tie: "Your memory headroom shows on the Home dashboard." },
+    tab: { id: "home", tie: "Your memory headroom shows on Health." },
   },
 ];
 
@@ -255,12 +257,12 @@ export function buildHardwareSteps(parts: RigPart[], merged = true, ground = fal
 // it): the rail reads top to bottom in story order. Only the merged five-room rail IS that
 // journey; the classic six-room escape hatch keeps its original copy.
 export const JOURNEY_RECAP_BODY =
-  "The rail reads top to bottom: Home for the glance, Optimize to check and fix, Live to watch the frames as they happen, History for what actually works, Test to go deeper.";
+  "The rail reads top to bottom: Health for the glance, Optimize to check and fix, Live to watch the frames as they happen, History for what actually works, Test to go deeper.";
 
 // The proving-ground recap (2026-07-10 flip) — the four-room rail in ITS order, the Lab as the
 // workshop at the end of the row.
 export const GROUND_RECAP_BODY =
-  "The rail reads top to bottom: Home for the glance, Live to watch the frames as they happen, History for what actually works, Test to check, fix and prove it.";
+  "The rail reads top to bottom: Health for the glance, Live to watch the frames as they happen, History for what actually works, Test to check, fix and prove it.";
 
 // The ordered flow: setup steps → a hardware lesson per present component → the rail recap.
 // 2026-07-23 (tester Matthew: "the last tab is the best for clarity" — orientation must not wait

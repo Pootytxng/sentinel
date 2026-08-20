@@ -8,7 +8,13 @@ export type HomeRailId = "home" | "check" | "play" | "fix" | "learn" | "lab";
 export type HomeRailItem = { id: HomeRailId; label: string; icon: string };
 
 export const HOME_RAIL: HomeRailItem[] = [
-  { id: "home", label: "Home", icon: "gauge" },
+  // Label "Health" (owner rename 2026-08-19; previously "Home"): UX-1 decision ① third clause —
+  // the front door must answer a question ("is my PC OK?"), and "Home" answered none. "Diagnosis"
+  // was offered and not chosen: it frames the machine as already broken, the same fear frame that
+  // retired "Fix" in 2026-06. Id stays "home" — the persisted nav key, same rule as every rename
+  // below. THE SHIPPED LABEL IS `common.rail.home`; this literal is its English source and
+  // `rail-label-locale-guard.test.ts` fails the build if the two ever disagree.
+  { id: "home", label: "Health", icon: "gauge" },
   { id: "check", label: "Check", icon: "check" },
   // Label "Live" (owner rename 2026-08-12; previously "Monitor" 2026-06-15): the room is live
   // monitoring + session debriefs. The id stays "play" — it's the persisted nav key (location
