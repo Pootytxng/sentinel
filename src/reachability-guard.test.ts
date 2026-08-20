@@ -159,3 +159,129 @@ describe("every module under src/ is reachable from main.tsx", () => {
     ).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// Second tier: a module can be REACHABLE while the room inside it is dead.
+//
+// WHY THIS EXISTS. src/surfaces/Monitor.tsx passed the tier above for weeks. MonitorV2 imported one
+// live symbol out of it (`TuningPresets`), so the FILE had an importer — while the classic Monitor
+// shell it also exported, the actual room, had had no production caller since MonitorV2 replaced it.
+// Backlog C-18 recorded it as "the one genuinely unreferenced surface"; it was not unreferenced, and
+// deleting the file on that reading would have broken the build. The room only became deletable once
+// the live symbol moved out (issue #146).
+//
+// WHAT IT PINS. The DEFAULT-EXPORTED symbol of a module must be imported by production code — under
+// either form: `import X from "./m"` (or a React.lazy edge, which takes the default), or
+// `import { X } from "./m"` where the same symbol is also exported by name. Default is the right
+// granularity: it is how this codebase exports a room/surface, so a retired face surfaces the moment
+// its last mount goes, even while named exports keep the file alive. A component whose only importer
+// is its own test is production-dead — the same rule as the tier above.
+//
+// The BOTH-FORMS rule is load-bearing, not leniency. Two dozen surfaces here export a component by
+// name AND re-export it as default, and App imports the named one; failing those would report 26
+// live rooms as dead on day one, and a guard that cries wolf gets deleted. The Monitor shell was
+// caught because NEITHER form was imported anywhere in production.
+//
+// Named exports other than the default one are deliberately out of scope: half are types and
+// internal helpers, and this is a room-reachability guard, not a general dead-symbol analyzer.
+const DEFAULT_ALLOWED: Record<string, string> = {
+  // The two the guard found on its first run — the SAME shape as the Monitor shell, named rather
+  // than swept, because each one is its own decision and neither belongs in C-18's diff.
+  //
+  // Onboarding: the live first-run surface is SetupTour (App.tsx mounts it; nothing mounts this).
+  // Its module stays reachable through `ONBOARDED_KEY` (App.tsx) and `type RigLine` (SetupTour), and
+  // four guards read this file as SOURCE TEXT (affordance-census, button-legibility, modal-stacking,
+  // capability-exception-policy), so retiring it is a real change, not a delete. Backlog C-18b.
+  "Onboarding.tsx": "backlog C-18b — superseded by SetupTour; ONBOARDED_KEY + RigLine keep the file live",
+  // Stepper: vendored. SetupTour imports { StepIndicator, StepConnector } and drives the stepping
+  // itself, so the vendored default component has never been mounted here. Deleting part of a
+  // vendored file is a judgement about future re-vendoring. Backlog C-18b.
+  "design/vendor/Stepper/Stepper.tsx": "backlog C-18b — vendored; only StepIndicator/StepConnector are used",
+};
+
+// `import X from "..."` / `import X, { y } from "..."`, type-only included: a type-only default
+// import is still a use. `import * as X` is not a default import and is deliberately not matched.
+const DEFAULT_IMPORT = /import\s+(?:type\s+)?([A-Za-z_$][\w$]*)\s*(?:,\s*\{[^}]*\})?\s*from\s*["']([^"']+)["']/g;
+// `import { a, b as c } from "..."` — the brace group, captured whole and split below.
+const NAMED_IMPORT = /import\s+(?:type\s+)?(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s*from\s*["']([^"']+)["']/g;
+// The shapes this codebase actually writes. An anonymous `export default () => ...` yields no
+// identifier, and then the default-import edge is the only signal — which is correct for it.
+const DEFAULT_EXPORT_NAME =
+  /^export default (?:function\s+([A-Za-z_$][\w$]*)|([A-Za-z_$][\w$]*)\s*;?\s*$)/m;
+const HAS_DEFAULT_EXPORT = /^export default\b/m;
+
+const defaultImported = new Set<string>();
+/** module → the names production code imports out of it with braces. */
+const namedImported = new Map<string, Set<string>>();
+for (const file of all) {
+  const src = readFileSync(file, "utf8");
+  for (const m of src.matchAll(DEFAULT_IMPORT)) {
+    const r = resolveImport(file, m[2]);
+    if (r) defaultImported.add(r);
+  }
+  for (const m of src.matchAll(LAZY_EDGE)) {
+    const r = resolveImport(file, m[1]);
+    if (r) defaultImported.add(r);
+  }
+  for (const m of src.matchAll(NAMED_IMPORT)) {
+    const r = resolveImport(file, m[2]);
+    if (!r) continue;
+    const set = namedImported.get(r) ?? new Set<string>();
+    for (const raw of m[1].split(",")) {
+      // `type Foo` / `Foo as Bar` → the exported name is the first identifier.
+      const name = raw.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0].trim();
+      if (name) set.add(name);
+    }
+    namedImported.set(r, set);
+  }
+}
+
+const deadDefaults = all
+  .filter((file) => {
+    const src = readFileSync(file, "utf8");
+    if (!HAS_DEFAULT_EXPORT.test(src)) return false;
+    if (defaultImported.has(file)) return false;
+    const named = DEFAULT_EXPORT_NAME.exec(src);
+    const symbol = named?.[1] ?? named?.[2];
+    if (symbol && namedImported.get(file)?.has(symbol)) return false;
+    return true;
+  })
+  .map(rel)
+  .sort();
+
+describe("a default-exported room must have a production importer — not only a test", () => {
+  it("has a real set to grade — never passes vacuously", () => {
+    expect(
+      defaultImported.size,
+      "no default-import edges matched at all; the regex is broken, not the tree",
+    ).toBeGreaterThan(0);
+    expect(
+      namedImported.size,
+      "no named-import edges matched at all; every dual-export surface would read as dead",
+    ).toBeGreaterThan(0);
+  });
+
+  it("has no dead room hiding inside a live file", () => {
+    const dead = deadDefaults.filter((f) => !(f in DEFAULT_ALLOWED));
+    expect(
+      dead,
+      dead.length
+        ? `Default-exported component with no production importer:\n${dead.map((f) => `  - ${f}`).join("\n")}\n\n` +
+            "Either delete it (with its test), mount it, or add it to DEFAULT_ALLOWED with a reason. " +
+            "If a NAMED export in the same file is still live, move that symbol out first — that is " +
+            "what made backlog C-18's Monitor shell deletable."
+        : "",
+    ).toEqual([]);
+  });
+
+  it("keeps DEFAULT_ALLOWED honest — no ghosts, no entries that are actually imported", () => {
+    const known = new Set(all.map(rel));
+    const ghosts = Object.keys(DEFAULT_ALLOWED).filter((f) => !known.has(f));
+    expect(ghosts, `DEFAULT_ALLOWED names files that no longer exist: ${ghosts.join(", ")}`).toEqual([]);
+    const nowLive = Object.keys(DEFAULT_ALLOWED).filter((f) => !deadDefaults.includes(f));
+    expect(
+      nowLive,
+      `DEFAULT_ALLOWED entries now have an importer — delete their exemption: ${nowLive.join(", ")}`,
+    ).toEqual([]);
+  });
+});

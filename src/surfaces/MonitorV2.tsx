@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import Play from "./Play";
 import { MonitorBasic } from "./MonitorBasic";
-import { TuningPresets } from "./Monitor";
+import { TuningPresets } from "./TuningPresets";
 import { RoomShell } from "../design/room-shell";
 import { SegmentedControl } from "../design/SegmentedControl";
 import { useReducedMotion } from "../design/use-motion";
