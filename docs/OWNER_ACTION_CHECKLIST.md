@@ -328,6 +328,20 @@ These gate **public** release only (not the local app you use daily). Full list:
 OVERRULE"). Claude decides the look, ships it, and hands you a before/after to veto on sight. Only
 brand — the product name, logo, price presentation — and reversals of a call you already made land
 here as decisions.
+- ⏳ **NEW 2026-08-20 — the interview is built and installed, and it is OFF. One word turns it on.**
+  · PR [#178](https://github.com/Pootytxng/sentinel/pull/178) · issue [#177](https://github.com/Pootytxng/sentinel/issues/177)
+  · [`decisions/2026-08-20-home-interview-default.md`](decisions/2026-08-20-home-interview-default.md)
+  **Try it:** Settings → Behavior → *"Ask me a question on Home"*. Home's big button becomes
+  *"Help me with my PC"* and asks you one plain question at a time, ending on a card that says what
+  it found, what it measured, and the one thing to do about it.
+  **Why it is off:** you turned this slot off twice — once on sight (*"the what are you here to do
+  text box was ugly looks cleaner without it"*), and again when you caught the last version coming
+  back anyway. Shipping the replacement on by default would be the same thing happening a third
+  time, so it waits for you.
+  **What off costs:** the big button on Home has nothing to open, which is how it has actually been
+  for every install since the front door shipped. That is the argument for turning it on.
+  **What I need:** *"turn it on"* or *"leave it off"*. On is a one-line change plus a line in that
+  decision file.
 - ✅ **The title foil sweep now stops instead of looping forever — APPROVED 2026-08-06**, on a
   side-by-side before/after he watched run.  ·  PR [#76](https://github.com/Pootytxng/sentinel/pull/76)
   The shine that travels across the big room titles used to repaint that text on every single frame,

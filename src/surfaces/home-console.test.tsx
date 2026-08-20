@@ -231,6 +231,9 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
   // interview took its place. What the door says now is what it DOES for the user, and what it
   // opens is a question asked one at a time, after they ask for it.
   it("one action: the front door is the single filled primary, and it opens something real", () => {
+    // Opted in, because `compy_home_interview` defaults OFF — the owner's switch, not a house
+    // convention (theme.ts; docs/decisions/2026-08-20-home-interview-default.md).
+    localStorage.setItem("compy_home_interview", "1");
     const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
     const door = c.querySelector<HTMLButtonElement>(".v2-verdict-action .hc-front-door")!;
     expect(door, "Home has no primary action").not.toBeNull();
@@ -260,11 +263,32 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
     expect(c.querySelector(".hc-intake"), "the intake band is back").toBeNull();
   });
 
-  it('the failsafe really is one: "0" leaves Home with no front door at all', () => {
+  it('the switch really is one: "0" leaves Home with no front door at all', () => {
     localStorage.setItem("compy_home_interview", "0");
     const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
     expect(c.querySelector(".hc-front-door")).toBeNull();
     expect(document.querySelector(".hi-question")).toBeNull();
+  });
+
+  // THE COST OF THE DEFAULT, PINNED SO IT CANNOT BE FORGOTTEN (2026-08-20).
+  //
+  // `compy_home_interview` defaults OFF because that is the answer the owner gave twice about the
+  // slot (4d1afa92, 8db70795), and honoring it has a price this test states out loud rather than
+  // leaving for someone to rediscover: with the interview off, UX-1 decision 1's "verdict + ONE
+  // action" front door has NO action. That is not new damage — `compy_home_intake` defaulted off
+  // and had no Settings toggle, so this is the state every real install has been in since UX-1
+  // shipped — but it IS the strongest argument for turning the interview on, and it belongs in
+  // front of him as a measured fact instead of an opinion. If the default flips, this test flips
+  // with it, and docs/decisions/2026-08-20-home-interview-default.md records why.
+  it("default OFF: Home is a verdict with no filled primary — the open cost of the owner's switch", () => {
+    expect(localStorage.getItem("compy_home_interview")).toBeNull();
+    const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
+    expect(c.querySelector(".hc-front-door"), "the switch is decorative").toBeNull();
+    expect(c.querySelectorAll(".v2-verdict-action")).toHaveLength(0);
+    // What DOES survive the switch, because neither was ever gated on it: the re-run band and the
+    // always-visible crash-rescue entry. Home is quieter, not empty.
+    expect(c.querySelector(".hc-rerun-band, .v2-measured")).not.toBeNull();
+    expect(c.querySelector(".hc-care-entry")).not.toBeNull();
   });
 
   it("attention state: verdict strip carries the warn tone class + the real headline", () => {

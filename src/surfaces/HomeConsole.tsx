@@ -582,9 +582,11 @@ export function HomeConsole({
   // THE INTERVIEW'S DOOR (step 3, issue #177). Availability is one question and one only: is there
   // anywhere for a finding to land? The answer is always yes - every branch of
   // home-interview-data.ts falls back onto "run a fresh check", which needs no room, no rail and no
-  // wiring. So the front door renders whenever the flag allows it, and UX-1's "verdict plus ONE
-  // action" finally has its action on every install rather than on the zero installs that had set a
-  // devtools-only key.
+  // wiring. So the ONLY gate is the owner's switch, exactly as 8db70795 required of the band it
+  // replaces: this expression leads with the flag and adds nothing to it, so "off" cannot be
+  // narrowed later into "off, but the door still renders". That narrowing is the defect 8db70795
+  // was written to fix, and the flag DEFAULTS OFF (theme.ts) because off is the owner's last
+  // recorded answer - see docs/decisions/2026-08-20-home-interview-default.md for the open fork.
   const interviewAvailable = interviewOn;
   // The Care entry (issue #91, discovery contract): ALWAYS visible, independent of the interview
   // flag - crash rescue is the one thing a user comes to Home in distress to find, and it must not

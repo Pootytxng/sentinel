@@ -193,7 +193,12 @@ const baseProps = {
   onSeeInFix: () => {},
 };
 
-function renderHome(extra: Partial<React.ComponentProps<typeof HomeRoom>> = {}) {
+/**
+ * Render Home with whatever flag state the test has already set — nothing is implied.
+ * The polarity cases below use THIS one, because a harness that quietly writes the key would make
+ * "what a fresh install gets" untestable.
+ */
+function renderHomeRaw(extra: Partial<React.ComponentProps<typeof HomeRoom>> = {}) {
   return render(
     <ConfirmProvider>
       <ShellV2 items={railFor(true, true)} activeId="home" onNavigate={() => {}} ledgerCount={1}>
@@ -201,6 +206,19 @@ function renderHome(extra: Partial<React.ComponentProps<typeof HomeRoom>> = {}) 
       </ShellV2>
     </ConfirmProvider>,
   );
+}
+
+/**
+ * Render Home with the interview OPTED IN, which is what every test about the interview's CONTENT
+ * needs. `compy_home_interview` defaults OFF (theme.ts — it stands in for an owner decision, see
+ * docs/decisions/2026-08-20-home-interview-default.md), so the door does not exist until something
+ * asks for it. A test that already set the key explicitly keeps its own value.
+ */
+function renderHome(extra: Partial<React.ComponentProps<typeof HomeRoom>> = {}) {
+  if (localStorage.getItem("compy_home_interview") === null) {
+    localStorage.setItem("compy_home_interview", "1");
+  }
+  return renderHomeRaw(extra);
 }
 
 /** The front door button on Home — the ONE primary action, and the interview's only opener. */
@@ -230,16 +248,16 @@ function openInterview() {
 // wording anywhere on Home, this fails before it reaches him.
 describe("the retired intake band stays retired (owner removed it on sight, 2026-08-12)", () => {
   const FLAG_STATES: [string, () => void][] = [
-    ["absent (what a fresh install gets)", () => localStorage.removeItem("compy_home_interview")],
+    ["absent (what a fresh install gets — reads OFF)", () => localStorage.removeItem("compy_home_interview")],
     ['"0" (the explicit off switch)', () => localStorage.setItem("compy_home_interview", "0")],
     ['"1" (explicitly on)', () => localStorage.setItem("compy_home_interview", "1")],
-    ["junk (fails ON)", () => localStorage.setItem("compy_home_interview", "true")],
+    ["junk (anything but \"1\" reads OFF)", () => localStorage.setItem("compy_home_interview", "true")],
   ];
 
   for (const [name, set] of FLAG_STATES) {
     it(`renders no intake band with the flag ${name}`, () => {
       set();
-      const c = renderHome({
+      const c = renderHomeRaw({
         rooms: liveRooms,
         recs: [rec({ id: "safe-ok" })],
         isAppliable: () => true,
@@ -268,29 +286,36 @@ describe("the retired intake band stays retired (owner removed it on sight, 2026
 });
 
 // The flag. `compy_home_interview` is a NEW key, deliberately not the band's — a flag that outlives
-// the thing it named is how a recorded owner decision quietly gets reversed. It follows the house
-// graduated-flag convention: default ON, `"0"` is the devtools/Settings failsafe. The polarity is
-// asserted from the state a fresh install is really in (nothing in localStorage), because a test
-// that always sets the key explicitly passes identically under either default and proves nothing.
-describe("the interview's flag (compy_home_interview — DEFAULT ON, \"0\" is the failsafe)", () => {
-  it("key ABSENT: the front door is there — this is what a first-run user actually gets", () => {
-    renderHome({ rooms: liveRooms });
+// the thing it named is how a recorded owner decision quietly gets reversed. It DEFAULTS OFF, which
+// is the answer the owner actually gave: he switched the band off on sight (4d1afa92) and switched
+// it off again when he caught UX-1 bypassing him (8db70795). Retiring his key and defaulting the
+// successor ON would have been the same bypass under a new name — the self-review caught exactly
+// that on the first draft of this file. Polarity, defaults and the storage-throws case are pinned
+// separately and in isolation by home-interview-default-guard.test.ts; what THIS block proves is the
+// rendered consequence on Home, from the state a fresh install is really in (nothing in
+// localStorage), because a test that always sets the key explicitly passes under either default and
+// proves nothing.
+describe("the interview's flag (compy_home_interview — DEFAULT OFF, \"1\" opts in)", () => {
+  it("key ABSENT: NO front door — a first-run user gets Home exactly as he left it", () => {
+    renderHomeRaw({ rooms: liveRooms });
     expect(localStorage.getItem("compy_home_interview")).toBeNull();
-    expect(door()).not.toBeNull();
-  });
-
-  it('key "0": no front door, and no way to open the interview', () => {
-    localStorage.setItem("compy_home_interview", "0");
-    renderHome({ rooms: liveRooms });
     expect(door()).toBeNull();
     expect(document.querySelector(".hi-question")).toBeNull();
   });
 
-  it('only the literal "0" turns it off, so a junk value fails ON', () => {
-    for (const junk of ["true", "", "yes", "OFF", "1"]) {
+  it('key "1": the front door is there and opens the interview', () => {
+    localStorage.setItem("compy_home_interview", "1");
+    renderHomeRaw({ rooms: liveRooms });
+    expect(door()).not.toBeNull();
+    openInterview();
+    expect(document.querySelector(".hi-question")).not.toBeNull();
+  });
+
+  it('only the literal "1" turns it on, so a junk value stays OFF', () => {
+    for (const junk of ["true", "", "yes", "ON", "0", "2"]) {
       localStorage.setItem("compy_home_interview", junk);
-      renderHome({ rooms: liveRooms });
-      expect(door(), `value ${JSON.stringify(junk)}`).not.toBeNull();
+      renderHomeRaw({ rooms: liveRooms });
+      expect(door(), `value ${JSON.stringify(junk)}`).toBeNull();
       cleanup();
     }
   });
@@ -390,16 +415,16 @@ describe("the interview's flag (compy_home_interview — DEFAULT ON, \"0\" is th
 describe("Care entry — visible in EVERY state of compy_home_interview (#91)", () => {
   const careEl = (c: HTMLElement) => c.querySelector(".hc-care-entry") as HTMLElement | null;
   const states: Array<[string, () => void]> = [
-    ["absent (what a fresh install really gets)", () => localStorage.removeItem("compy_home_interview")],
-    ['"0" (the failsafe — the case the extraction exists for)', () => localStorage.setItem("compy_home_interview", "0")],
+    ["absent (what a fresh install really gets — the door is OFF)", () => localStorage.removeItem("compy_home_interview")],
+    ['"0" (the explicit off switch — the case the extraction exists for)', () => localStorage.setItem("compy_home_interview", "0")],
     ['"1" (explicitly on)', () => localStorage.setItem("compy_home_interview", "1")],
-    ["junk (fails ON)", () => localStorage.setItem("compy_home_interview", "false")],
+    ["junk (anything but \"1\" is OFF)", () => localStorage.setItem("compy_home_interview", "false")],
   ];
 
   for (const [name, set] of states) {
     it(`renders with the flag ${name}`, () => {
       set();
-      const c = renderHome({ rooms: liveRooms }).container;
+      const c = renderHomeRaw({ rooms: liveRooms }).container;
       expect(
         careEl(c),
         `crash rescue vanished with compy_home_interview ${name} — it is gated on the interview again`,
