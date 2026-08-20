@@ -1,0 +1,56 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "documentation",
+  "pr": 179,
+  "issue": 177,
+  "branch": "lane/receipt-178",
+  "currentHead": "d33240d6196d1539a43bfdbb1624509d8e7e02c8",
+  "explicitHandoff": "Same owner turn 2026-08-20. PR #178 landed design-foundation step 3; this PR lands the two artifacts that could not ride inside it - #178's own merge receipt, and the removal of the disposition row for the branch #178's merge deleted.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room, git dir shared with C:/Users/Kuya/code/sentinel. Fetched --prune immediately after the #178 merge and before cutting this branch.",
+    "remoteState": "origin/main = 0d76322f, the #178 merge, and this branch was cut from exactly that. Other open PRs are #160 (MERGEABLE/CLEAN) and #163 (CONFLICTING/DIRTY). #163's diff includes docs/BRANCH_DISPOSITIONS.md, which this PR also touches - the change here is the removal of ONE row this session added hours ago for a branch that no longer exists, so it cannot conflict semantically with anything a dormant lane wrote, and leaving the row would keep the audit red for every lane's push, not just this one.",
+    "worktree": "git worktree list re-checked after the merge: seven worktrees, this lane alone in sentinel-home-room. The primary worktree C:/Users/Kuya/code/sentinel is still on main at ffe85271, behind origin/main - nothing was cut there.",
+    "branch": "lane/receipt-178, cut from 0d76322f which was exactly origin/main. One commit, no merge commits, no divergence.",
+    "dirtyState": "git status --porcelain empty at this head apart from this receipt, which by construction cannot ride inside the head it authorizes. The chain does not terminate; each receipt lands on the next lane that does real work.",
+    "liveProcesses": "One claude.exe session advancing, this one. Compy is running from %LOCALAPPDATA%/Compy/compy.exe at the 1d5b3c4c build; the self-reviewer closed the instance it launched and removed the compy_home_interview key, leaving the desk on the shipped default. Nothing was built or installed for THIS PR."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "d33240d6196d1539a43bfdbb1624509d8e7e02c8",
+      "detail": "Ran inside .githooks/pre-push at this exact head; push exit 0 and the ref was created on origin, which the hook blocks when the gate fails - proved twice earlier in this session, when branch-disposition-audit and then tsc each returned 'error: failed to push some refs' with no ref movement. Final line LOCAL CHECK RESULT: PASS, whole sequence run rather than tailed."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "reason": "One JSON evidence file and the removal of one markdown table row. No build, no install, nothing shipped to any machine. The 1d5b3c4c desk install was performed, proved and recorded under PR #178 and its receipt, not here."
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "No product code and no UI surface in this diff - one work-control receipt and one deleted docs row. The step-3 UI this session shipped was reviewed on the installed binary and carries a round-2 PASS 10/10 (recorded in the #178 receipt and in RELEASE_STATE's owner-installed row); nothing here re-opens it or adds a visual surface."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; docs/WORK_CONTROL.md makes that review advisory rather than a blocker. The diff is one evidence file plus one deleted row - no product code, no scripts, no mutation surface - and the full pre-push gate passed at this exact head."
+  },
+  "docGates": [
+    "branch-disposition-audit: RED before this commit (a row for origin/lane/interview-foundation-3, deleted by the #178 merge), GREEN after. It goes red again for the minutes origin/lane/receipt-178 exists without a row of its own - the known ordering race queued as issue #126 - and green again when this PR merges and the ref is pruned. No row added for this branch on purpose, for the same reason PR #176 added none: the row would have to be deleted by the very merge that prunes the ref.",
+    "verify-release-state.mjs untouched by this diff and green at the parent commit: 31 citations / 31 ok / 0 drift.",
+    "doc-budget.ps1 unaffected - this diff only REMOVES a line from BRANCH_DISPOSITIONS.md."
+  ]
+}

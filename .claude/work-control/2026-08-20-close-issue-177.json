@@ -1,0 +1,64 @@
+{
+  "transition": "close-issue",
+  "actor": "claude-code",
+  "kind": "feature",
+  "pr": 178,
+  "issue": 177,
+  "branch": "lane/close-177",
+  "currentHead": "c13f622337110e65c8659ee122b7aa0f8f1dfb72",
+  "explicitHandoff": "Same owner turn 2026-08-20: pick and run the best next marathon from the existing queue and leave the app reviewable. Issue #177 was that item - design foundation step 3, the interview.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room.",
+    "remoteState": "origin/main = c13f6223 after PR #179 merged; #177's work landed in PR #178 (merge 0d76322f) and its receipts in #179. Both branches pruned; branch-disposition-audit green.",
+    "worktree": "Seven worktrees, this lane alone in sentinel-home-room; no other worktree held either branch at any point.",
+    "branch": "Both lanes cut from exactly origin/main, single-commit or linear, merged CLEAN with no conflicts and no force-push anywhere.",
+    "dirtyState": "Working tree clean apart from the untracked receipts, which by construction cannot ride inside the heads they authorize.",
+    "liveProcesses": "One claude.exe session advancing. Compy running from %LOCALAPPDATA%/Compy/compy.exe at 1d5b3c4c, left on the shipped default with compy_home_interview absent."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "c13f622337110e65c8659ee122b7aa0f8f1dfb72",
+      "detail": "Run standalone at this exact head - the #179 merge commit, which is what origin/main now is - because a GitHub merge commit is a head no pre-push hook ever gated. Every stage present and read in full rather than tailed: deps, git diff check, frontend tests 353 files / 4628 passed 4 skipped, frontend type-check and build, Rust tests, Rust clippy, final line LOCAL CHECK RESULT: PASS, exit=0. The frontend count differs from the lane's own runs because the merged tree also carries the other lanes main picked up; the suite is green either way."
+    }
+  ],
+  "shipProof": {
+    "applicable": true,
+    "installer": "src-tauri/target/release/bundle/nsis/Compy_0.9.26_x64-setup.exe",
+    "installerSha256": "A823DF09216C7B656CF8E15257E57ECD5B5F1781AE93DC91C6ACA83C5221C995",
+    "stamp": "1d5b3c4c . release . shell 0.9.26",
+    "detail": "Built and silently installed by scripts/ship-reinstall.ps1 -VerifyRuntime; runtime proof on attempt 1, 0 transient retries. Live == build proved by the embedded stamp over CDP, never an exe hash. One installer on the Desktop."
+  },
+  "selfReview": {
+    "verdict": "PASS",
+    "round": 2,
+    "head": "1d5b3c4c2c6fdd561e2184ea013f73c645ea7766",
+    "detail": "Round 1 FAILED on rubric item 10 (prior owner decisions) - the new flag defaulted ON, reversing the owner's off-switch for that slot under a new name. Accepted in full: the default was flipped to OFF, a bug->guard was added, and the fork was recorded in docs/decisions/2026-08-20-home-interview-default.md. Round 2 was a full fresh review on the rebuilt binary: PASS 10/10."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; docs/WORK_CONTROL.md makes that review advisory rather than blocking. The strongest independent check available was used and it found a real defect: the self-reviewer failed round 1 and the finding was fixed rather than argued."
+  },
+  "closureNotes": [
+    "Issue #177's deliverable is built, gated, merged and installed. What remains is NOT engineering: whether the interview is ON by default is an owner call, recorded in docs/decisions/2026-08-20-home-interview-default.md with its cost and a recommendation, and filed in docs/OWNER_ACTION_CHECKLIST.md SectionD as a one-word decision. Closing the issue does not close that item, and the checklist is where it lives so it cannot silently drop."
+  ],
+  "docGates": [
+    "verify-release-state.mjs 31/31 ok, 0 drift, after the owner-installed row and STATE marker were re-stamped to 1d5b3c4c.",
+    "branch-disposition-audit green at origin/main after both lanes were pruned.",
+    "doc-budget.ps1 PASS - BACKLOG's superseded intake-router history was archived to BACKLOG_ARCHIVE.md before the row was rewritten."
+  ]
+}

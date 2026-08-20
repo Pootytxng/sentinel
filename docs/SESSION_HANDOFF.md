@@ -1,72 +1,66 @@
-# Session handoff — 2026-08-20 (win-card celebration LANDED)
+# Session handoff — 2026-08-20 (the comprehensibility sweep is queued; a fresh session runs it)
 
-**Worktree** `C:\Users\Kuya\code\sentinel-home-room`, branch `lane/win-shimmer`. `main` is checked
-out by `C:\Users\Kuya\code\sentinel`, which is why this worktree keeps a lane branch.
+**Worktree** `C:\Users\Kuya\code\sentinel-home-room`. `main` is checked out by
+`C:\Users\Kuya\code\sentinel`, which is why this worktree keeps a lane branch.
 
-## Landed and merged
+## Start here
 
-**PR [#165](https://github.com/Pootytxng/sentinel/pull/165) → merge `835d8868`.**
+Read [`superpowers/plans/2026-08-20-comprehensibility-sweep.md`](superpowers/plans/2026-08-20-comprehensibility-sweep.md)
+and execute it. Tracking issue [#180](https://github.com/Pootytxng/sentinel/issues/180).
+It is item zero of `BACKLOG.md`'s NEXT UP queue and outranks every numbered row there.
 
-The owner's 2026-06-06 kernel law — a measured FPS win makes the improved bar sweep once, and
-nothing else in Compy ever sweeps — **had never fired for any user.** `@keyframes cmp-winshimmer`
-lived on `.cmp-improved.arc-v2 .cmp-bar-after`, behind a prop no screen ever set. Found by the
-self-checkup, not by anyone looking for it.
+## Why it jumped the queue
 
-- `f3d503c7` — re-homed the keyframe + its two rules into `src/App.css` on the live selector
-  `.cmp-improved .cmp-bar-after`, reduced-motion opt-out intact (`display: none` — a celebration
-  should be *absent* under reduced motion, not frozen). `src/sweep-guard.test.ts` gained the tier it
-  was missing: **every compound in the sweep's selector must be producible UNCONDITIONALLY by one
-  `className` expression.** Falsified before it was trusted — re-scoping to `.cmp-improved.arc-v2`
-  makes the test name that exact compound as unreachable.
-- `fd7ea7c0` — the two self-review FAIL findings. `overflow: hidden` on a **text box** clipped a
-  3-digit value at the 24px `min-width` floor (`999` → `99`); the glint now travels by
-  `background-position` inside a stationary `inset: 0` overlay, so nothing needs clipping. And the
-  guard matched keyframe *names* against `/shimmer|sheen/`, so it was blind to `v2-foil-pan` and
-  `v2-hud-sweep` for its whole life. The detector now also catches any keyframe body animating a
-  `background`/`mask` position, which found two more (`st-shim`, `liv-dial-sweep`).
-- `b24f7650` — rowed `origin/lane/cleanup-train-2026-08-20`, which merging #164 left undispositioned
-  on `main`. `branch-disposition-audit` runs inside the pre-push gate, so a rowless ref blocks
-  **every** push in the repo, not just its own lane's.
+The owner tried the installed `1d5b3c4c` build and gave a standing directive:
 
-**Adjudicated in-lane, not parked on the owner:** five moving-light keyframes now exist and the law
-bans a second *celebration*, not every moving pixel — an arrival foil, an activity scan line, a
-loading skeleton and a dial's fill are none of them. The allowlist in `src/sweep-guard.test.ts`
-carries the reasoning per entry; a sixth fails the build and has to be argued, not appended. The
-owner got a viewable before/after (`docs/ui-sweep/win-shimmer-before-after.html`) so he can overrule
-on sight.
+> "the absolute number 1 priority ... familiarity, navigability, user intuitive and
+> comprehensibility throughout any function or text or tool etc.... in the app the goal is to make
+> the app universally valuable and easy to operate/interprate whilst appealing to a optimal mass
+> variety of consumer types."
 
-**Verified:** pre-push gate at `b24f7650` — 350/350 test files, 4578 passed / 4 skipped, Rust 963/0,
-clippy, `LOCAL CHECK RESULT: PASS`. **Self-review VERDICT: PASS** (10/10 at 1500x980, on the
-installed build, after an earlier FAIL on both findings above). Shipped and stamp-proved; the
-`docs/RELEASE_STATE.md` Snapshot row carries the installer SHA-256.
+The queue that preceded it was almost entirely gate/governance work (#171, #121, #126, #156, #128,
+#125) — none of it visible in the app. Those rows keep their order relative to each other, one rank
+lower. **#171 stays flagged:** `verify-local` invents failures under concurrent lane load, so a
+random red mid-sweep is that flake, never a licence to wave a real regression through.
 
-## Three things only the owner can apply
+## The four things he said, and what each turned out to be
 
-None of these are engineering. All three are in `docs/OWNER_ACTION_CHECKLIST.md`.
+1. **"i like it i just dont like the placement for the help me with my pc"** — the yes on
+   `compy_home_interview`. The default flips ON, bound to the lane that fixes the button placement
+   first, so the Home that ships on by default is the version he approved. Record:
+   [`decisions/2026-08-20-home-interview-default.md`](decisions/2026-08-20-home-interview-default.md).
+   `OWNER_ACTION_CHECKLIST.md` §D is closed.
+2. **The applied-changes block with the fine-print paragraph under it, on Home** — he called it
+   unappealing. Taste call, mine to make; it needs a before/after he can veto on sight.
+3. **"the jarvis toggle is back in the settings"** — **not drift.** `git log -S` over
+   `Settings.tsx` and `en/settings.json` puts `jarvisMotion`, `monitorConsole` and `expertView` in
+   exactly two commits each, the one that added them and the zh-CN i18n pass. None was ever removed.
+   The real finding his instinct pointed at: they are **rollout** switches that shipped DEFAULT OFF,
+   graduated to default-ON, and kept their switch, so Settings mixes developer-era forks with
+   genuine preferences and a normal user cannot tell which is which.
+4. **Live's Basic/Advanced tabs** — correct, and the fork is unconditional in `MonitorV2.tsx` today.
+   Same defect class as 3. Diff `MonitorBasic.tsx` against Advanced **before** deleting: the ask is
+   to remove the fork, not to lose content.
 
-1. **Delete `C:\Users\Kuya\Desktop\COMPY KEY\`** — key material; a session must not touch it.
-2. **The auto-mode CI rule that cannot be satisfied.** `~/.claude/settings.json` allows merging
-   "when required CI checks are passing" and asks for confirmation when they are "absent" — hosted
-   CI is OFF by his own decision, so checks are *always* absent and the rule reads as a permanent
-   soft-deny. Should be keyed to `scripts/verify-local.ps1`, the gate that actually runs.
-3. **The unwired receipt hook**, if he wants it on: the settings block to paste sits at the bottom
-   of `.claude/hooks/work-control-receipt-guard.mjs`. It is deliberately unwired because his
-   settings reserve authority-gating hooks to his own hand.
+## Landed in this lane (docs only)
 
-## Correction worth carrying forward
+`14fc9a4d` — the queue re-rank, the plan, the decision amendment, the checklist close, the
+`UI_VISION_BACKLOG` FOUNDATION-1 ③ update, plus the two `.claude/work-control/` receipts from the
+#178/#179 chain that by design could not ride the heads they authorize.
 
-`A_merge` on the owner's checklist (from the concurrent cleanup lane) says PR #160 is stuck because
-**"`gh pr merge` is refused by the session permission classifier — twice now, in two sessions."**
-That premise no longer holds: **#164 and #165 both merged cleanly today.** What actually fails is
-`--delete-branch`'s local cleanup step, which tries to switch to `main` in a folder that does not
-hold it (`fatal: 'main' is already used by worktree at C:/Users/Kuya/code/sentinel`). By then the
-remote merge and the remote branch delete have both already happened; the non-zero-looking output is
-only that last local step. PR #160 needs its gate re-run at its current base and then a merge; it is
-not blocked on a permission.
+**Verified:** pre-push gate at `14fc9a4d` — `LOCAL CHECK RESULT: PASS`, Rust 963/0, clippy clean.
+`doc-budget: ALL PASS` (`BACKLOG.md` is tight at 112.9KB/114KB — archive before adding prose there).
+`branch-disposition-audit: OK`.
 
-## Next session — start here
+## State
 
-Nothing is in flight. Take the highest-priority non-gated `[ ]` from `docs/BACKLOG.md`. Open lanes
-that are **not** this one's to touch: PR [#160](https://github.com/Pootytxng/sentinel/pull/160)
-(`lane/usage-audit-disk-bloat`) and PR [#163](https://github.com/Pootytxng/sentinel/pull/163)
-(`lane/cleanup-train-2026-08-20`).
+- `origin/main` was `c13f6223` when this lane cut.
+- Desk build **`1d5b3c4c`**, one installer on the Desktop, stamp-proved live == build.
+- **Nothing is waiting on the owner.** §D closed; the remaining `OWNER_ACTION_CHECKLIST` items are
+  the long-standing §A/§B/§C ones, none of which block this sweep.
+
+## Paste-ready prompt for the next session
+
+> Read `docs/superpowers/plans/2026-08-20-comprehensibility-sweep.md` and execute it end to end —
+> issue #180. Build it, gate it, self-review it, ship it to the desk with `ship-reinstall.ps1`, and
+> send me a before/after for the Home changes. Do not stop between sections A–D.
