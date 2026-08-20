@@ -38,8 +38,10 @@ within the minute; the fix was to prune, because there was nothing left to re-pr
 
 **A MERGED row is therefore perishable: prune the ref in the same breath as recording the merge**,
 rather than leaving a row that will fail its own audit on the next unrelated edit — including the
-edit that records the merge. The audit now says this in its own failure text
-(`scripts/branch-disposition-audit.mjs`, pinned in its test).
+edit that records the merge. **The audit enforces it** — a `MERGED` or `SUPERSEDED` row whose ref is
+still on origin fails — and its failure text names the prune: `git push origin --delete <branch>`,
+the form that is neither blocked on this machine nor stopped by the gate (`.githooks/pre-push` skips
+a deletion-only push). Pinned in `scripts/branch-disposition-audit.test.mjs`.
 
 **The base is `origin/main`, not the local `main`** (the local branch is only the fallback where no
 `origin/main` exists). A local `main` is a checkout owned by whichever worktree holds it, and a merge
@@ -49,8 +51,8 @@ unmerged. Pinned in `scripts/branch-disposition-audit.test.mjs`.
 
 | disposition | meaning | action |
 | --- | --- | --- |
-| `MERGED` | merge-tree is a no-op; `main` already contains it | prunable |
-| `SUPERSEDED` | not a no-op, but its content reached `main` by another path | prunable |
+| `MERGED` | merge-tree is a no-op; `main` already contains it | **prune now** |
+| `SUPERSEDED` | not a no-op, but its content reached `main` by another path | **prune now** |
 | `PRESERVE` | must never be deleted, moved, or merged | leave alone |
 | `CLAIMED` | another lane holds it under `docs/WORK_CONTROL.md` | hands off |
 | `UNLANDED` | carries real work that is not on `main` | needs a decision |
