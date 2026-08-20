@@ -104,17 +104,24 @@
   surfaces here export a component by name and re-export it as default, and failing those would
   report 26 live rooms as dead on day one. **Falsified against the pre-fix tree** — it names exactly
   `surfaces/Monitor.tsx` and nothing else.
-- [ ] **C-18b · Two more dead rooms, found by the new guard on its first run — named, not swept.**
-  Each is the same shape as the Monitor shell (a live file keeping a dead component reachable) and
-  each is its own decision, so both are allowlisted with a reason rather than deleted blind.
-  **`src/Onboarding.tsx`** — the live first-run surface is `SetupTour` (App.tsx mounts it; nothing
-  mounts `Onboarding`), and the module stays live through `ONBOARDED_KEY` + `type RigLine`. Four
-  guards read this file as SOURCE TEXT (affordance-census, button-legibility, modal-stacking,
-  capability-exception-policy), so retiring it changes those too — a real change, not a delete.
-  **`src/design/vendor/Stepper/Stepper.tsx`** — vendored; `SetupTour` uses only
-  `{ StepIndicator, StepConnector }` and drives the stepping itself, so the vendored default
-  component has never been mounted. Deleting part of a vendored file is a judgement about future
-  re-vendoring. Decide each, then drop its `DEFAULT_ALLOWED` entry.
+- [x] **C-18b · Both dead rooms DECIDED — issue [#148](https://github.com/Pootytxng/sentinel/issues/148).**
+  `DEFAULT_ALLOWED` is empty again, which is the point: an entry there is a promise to come back, not
+  a place to park a finding.
+  **`src/Onboarding.tsx` + `Onboarding.css` DELETED.** Not a fresh product call — C-05 retired the
+  modal in `docs/decisions/2026-08-11-design-navigation-audit.md` §4 and `App.tsx` said so in prose;
+  what kept the file alive was two exports that were never about the modal. `ONBOARDED_KEY` and
+  `type RigLine` now live beside `SETUP_TOUR_KEY` in `surfaces/setup/SetupTour.tsx`. The four
+  source-text guards moved WITH it rather than around it: affordance-census entry + baseline,
+  button-legibility's 2-button allowlist row, the capability-policy copy root, the modal-stacking
+  z-index comment; the mono census dropped its three `Onboarding.css` selectors.
+  **bug→guard:** `capability-exception-policy-guard` walked a copy root that no longer existed and
+  passed in silence — coverage lost quietly is worse than coverage never claimed — so it now fails on
+  any `COPY_ROOTS`/`COPY_DOCS` path that is missing from disk.
+  **`design/vendor/Stepper/Stepper.tsx` settled by POLICY, not an entry.** Vendored code is exempt by
+  rule (`VENDOR_PREFIX = "design/vendor/"`), because whether its default export is mounted here says
+  nothing about whether the file is right, and pruning part of a vendored module is a judgement about
+  the next re-vendor. Two tests keep the rule narrow: the prefix is pinned literally, and the
+  exemption must still cover a real unmounted default or it is inert and gets deleted.
 - [x] **C-17b · The 12 recorded mono-on-prose violations are PAID — ceiling 12 → 0.** The C-17 lane
   seeded the buckets by a selector-name heuristic and restyled none of them. This lane closed them by
   reading the CONTENT each selector renders — the i18n string, not its name — which is the evidence
@@ -142,16 +149,23 @@
   override it in WebView2). **The CSS itself is not in doubt — the guard proves the rules left the
   mono set — only the "does it read better" half is outstanding.** It rides with the same visual
   review the C-04 lane already owes on the next cut.
-- [ ] **NEW · The entire `.arc-v2` skin is DEAD CSS — `arc-instrument.css` never matches live DOM.**
+- [ ] **`.arc-v2` is PART dead, not all dead — the original finding was wrong, and the fix is a
+  section-by-section decision.** (Row corrected 2026-08-19 by the C-18b lane; the header used to read
+  "the entire `.arc-v2` skin is DEAD CSS".)
   Surfaced while closing C-17b and **verified by hand, not taken from the subagent** (the C-18 row
   above is this repo's record of exactly that mistake). `SessionDebrief` has one mount,
   `Play.tsx:488`, and it does not pass `arcV2`; the prop defaults `false` at `SessionDebrief.tsx:53`
   and `:218`. Every other `arcV2` in the tree (`Onboarding.tsx:38`, `FirstCheck.tsx:108`,
   `WhatChangedPanel.tsx:317/350/657`) is threaded from a prop that no top-level caller ever sets
-  true — `grep -rn "arcV2={" src --include=*.tsx` returns only internal re-threading. So the whole
-  `.arc-v2` re-dress imported at `App.tsx:80` is unreachable. **Do not delete it on this evidence
-  alone** — establish first whether the skin was parked deliberately or the wiring was lost, then
-  decide: wire it up, or archive it. Sizeable dead weight either way.
+  true. **That grep was the error.** `grep -rn "arcV2={" src` cannot see JSX shorthand, and
+  `App.tsx:1228` passes bare `arcV2` to `<FirstCheck/>` — so the skin IS live every time the user
+  re-runs the check from Home or Settings. Measured against `src/arc-instrument.css` (458 lines):
+  **M2 First-check (124–302, ~39%) is LIVE**; M3 Session debrief and M4/4b comparison cards
+  (303–458) are still unreached on the mounts checked by hand; **M1 Onboarding (6–123) now has no
+  subject at all** — C-18b deleted the component and its base stylesheet, so those rules style
+  nothing that can exist. **Still do not delete on this evidence** — the owner's standing call, and
+  the correction above is exactly why. Next step is per-section: M1 is a delete once someone confirms
+  no revival is planned, M3/M4 need the same shorthand-aware re-check this row just failed.
 - [ ] **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it.** Owner fork, never resolved,
   still parked by exemption.
 - [x] **C-12 · DOC DRIFT CLOSED — the command palette was filed as abandoned while shipping DEFAULT ON.** <!-- shipped-status-history -->

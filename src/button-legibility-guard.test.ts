@@ -96,7 +96,6 @@ describe("false-danger hover census (bare .btn-small)", () => {
   // progress; raising one needs a line in the fix column below.
   const BASELINE: Record<string, number> = {
     "src/App.tsx": 4, // overlay/gaming toasts — not reviewed
-    "src/Onboarding.tsx": 2, // demo reset — not reviewed
     "src/surfaces/CpuTempOffer.tsx": 2, // FIXED: scoped hover in CpuTempOffer.css
     "src/surfaces/GamingMode.tsx": 4, // FIXED for the toast subset by App.css:2941
     "src/surfaces/rig/RigViewer.tsx": 1, // rig nudge CTA — not reviewed

@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { IconCpuOff, IconShieldCheck, IconWifiOff } from "@tabler/icons-react";
 import type { HardwareInfo } from "../../App";
 import type { PriorityItem } from "../../types";
-import type { RigLine } from "../../Onboarding";
 import { Wordmark } from "../../design/Wordmark";
 import { NavGlyph } from "../../design/NavGlyph";
 import { HOME_RAIL, type HomeRailId } from "../../design/homeRail";
@@ -29,6 +28,15 @@ import "./SetupTour.css";
 // reduced-motion.
 
 export const SETUP_TOUR_KEY = "compy_setup_tour_v1";
+
+// The pre-tour first-run modal (`Onboarding`) was retired by C-05 and DELETED by C-18b; these two
+// exports were the only live things left in it, and neither was ever about the modal. `ONBOARDED_KEY`
+// is still WRITTEN on finish so the "have they seen it" signal survives an upgrade from the old
+// build — nothing reads it back (`src/first-run-front-door-guard.test.ts` fails the build if App does).
+export const ONBOARDED_KEY = "compy_onboarded_v1";
+
+/** One detected-hardware line for the rig step, built by App from the cached startup snapshot. */
+export type RigLine = { label: string; value: string };
 
 const TAB_ICON: Record<HomeRailId, string> = Object.fromEntries(
   HOME_RAIL.map((r) => [r.id, r.icon]),

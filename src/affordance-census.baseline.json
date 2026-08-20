@@ -2021,13 +2021,6 @@
     "settings.tagline",
     "settings.title"
   ],
-  "onboarding": [
-    "area.key",
-    "common.trustSwitch.previousSetting",
-    "common.trustSwitch.restoresCopy",
-    "common.trustSwitch.setTo",
-    "common.trustSwitch.working"
-  ],
   "firstCheck": [
     "area.key",
     "common.confirmDialog.cancel",

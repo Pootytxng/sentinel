@@ -185,19 +185,22 @@ describe("every module under src/ is reachable from main.tsx", () => {
 // Named exports other than the default one are deliberately out of scope: half are types and
 // internal helpers, and this is a room-reachability guard, not a general dead-symbol analyzer.
 const DEFAULT_ALLOWED: Record<string, string> = {
-  // The two the guard found on its first run — the SAME shape as the Monitor shell, named rather
-  // than swept, because each one is its own decision and neither belongs in C-18's diff.
+  // EMPTY, and that is the target state. The two entries this guard produced on its first run were
+  // filed as backlog C-18b and then DECIDED rather than left to rot (issue #148): `Onboarding.tsx`
+  // was the modal C-05 had already retired — its two live exports (`ONBOARDED_KEY`, `type RigLine`)
+  // moved next to `SETUP_TOUR_KEY` in `surfaces/setup/SetupTour.tsx` and the room was deleted; the
+  // vendored `Stepper` became a policy exemption below instead of a per-file entry.
   //
-  // Onboarding: the live first-run surface is SetupTour (App.tsx mounts it; nothing mounts this).
-  // Its module stays reachable through `ONBOARDED_KEY` (App.tsx) and `type RigLine` (SetupTour), and
-  // four guards read this file as SOURCE TEXT (affordance-census, button-legibility, modal-stacking,
-  // capability-exception-policy), so retiring it is a real change, not a delete. Backlog C-18b.
-  "Onboarding.tsx": "backlog C-18b — superseded by SetupTour; ONBOARDED_KEY + RigLine keep the file live",
-  // Stepper: vendored. SetupTour imports { StepIndicator, StepConnector } and drives the stepping
-  // itself, so the vendored default component has never been mounted here. Deleting part of a
-  // vendored file is a judgement about future re-vendoring. Backlog C-18b.
-  "design/vendor/Stepper/Stepper.tsx": "backlog C-18b — vendored; only StepIndicator/StepConnector are used",
+  // An entry here is a promise to come back, not a place to park a finding. Write the reason as the
+  // decision that is still owed, and open the row that owes it.
 };
+
+// Vendored third-party modules are exempt by RULE, not by allowlist entry. `design/vendor/` holds
+// code this repo did not write and re-vendors wholesale; whether its default export is mounted here
+// says nothing about whether the file is correct, and pruning part of a vendored module is a
+// judgement about the NEXT re-vendor, not about dead code. A per-file entry for it would be a
+// promise to come back that nobody can ever keep — the exemption is permanent, so it says so.
+const VENDOR_PREFIX = "design/vendor/";
 
 // `import X from "..."` / `import X, { y } from "..."`, type-only included: a type-only default
 // import is still a use. `import * as X` is not a default import and is deliberately not matched.
@@ -244,6 +247,7 @@ const deadDefaults = all
     const named = DEFAULT_EXPORT_NAME.exec(src);
     const symbol = named?.[1] ?? named?.[2];
     if (symbol && namedImported.get(file)?.has(symbol)) return false;
+    if (rel(file).startsWith(VENDOR_PREFIX)) return false;
     return true;
   })
   .map(rel)
@@ -272,6 +276,28 @@ describe("a default-exported room must have a production importer — not only a
             "what made backlog C-18's Monitor shell deletable."
         : "",
     ).toEqual([]);
+  });
+
+  it("exempts vendored code by rule, and nothing else", () => {
+    // The rule is only defensible while it stays this narrow. If `design/vendor/` ever grows a file
+    // this repo actually authors, or the prefix drifts to something broader like `design/`, the
+    // exemption stops meaning "not ours to prune" and becomes a hiding place.
+    expect(VENDOR_PREFIX).toBe("design/vendor/");
+    const vendored = all.map(rel).filter((f) => f.startsWith(VENDOR_PREFIX));
+    expect(vendored.length, "the vendor exemption covers no files at all — delete it").toBeGreaterThan(0);
+    // It has to be doing work, too: at least one vendored module must actually be a dead room here,
+    // or this is a rule with no subject and the next reader cannot tell what it bought.
+    expect(
+      vendored.some((f) => {
+        const src = readFileSync(join(SRC, f), "utf8");
+        if (!HAS_DEFAULT_EXPORT.test(src)) return false;
+        const named = DEFAULT_EXPORT_NAME.exec(src);
+        const symbol = named?.[1] ?? named?.[2];
+        const full = join(SRC, f);
+        return !defaultImported.has(norm(full)) && !(symbol && namedImported.get(norm(full))?.has(symbol));
+      }),
+      "no vendored module is currently an unmounted default export — the exemption is inert",
+    ).toBe(true);
   });
 
   it("keeps DEFAULT_ALLOWED honest — no ghosts, no entries that are actually imported", () => {
