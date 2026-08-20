@@ -101,6 +101,21 @@ html, body, #root {
   -webkit-font-smoothing: antialiased;
 }
 
+/* TYPE-1b: form controls do NOT inherit the page font — the UA sheet pins them to its own face
+   (Arial on Windows), so any button rule that sets font-size/font-weight and no font-family falls
+   through to it. That is how the session-debrief Share button shipped in Arial beside Geist
+   siblings (owner-caught 2026-08-20 on installed 402b0080), and it was never one selector: 97 of
+   290 <button> call sites across 28 files got a family from no rule at all. The old idiom was a
+   per-rule `font: inherit` applied ad hoc — forgettable by construction, which is exactly how they
+   got missed. One unscoped element reset ends the class; family-per-rule still wins (0-0-1).
+   Guard: src/control-font-guard.test.ts. */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
 .app {
   min-height: 100vh;
   /* Fluid page padding — tightens toward the floor, breathes on wide windows (elastic §6). */

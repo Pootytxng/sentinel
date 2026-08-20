@@ -1,125 +1,13 @@
 /* First-experience arc — Instrument re-dress skin. Every rule is scoped under `.arc-v2` and wins by
    specificity over the classic arc CSS, so it's purely additive: drop the class and the classics
    render untouched. Token-only (--ix-*). PIXELS ONLY — no copy or choreography lives here.
-   Imported once by App.tsx. */
+   Imported once by App.tsx.
 
-/* ══ M1 · Onboarding ═══════════════════════════════════════════════════════ */
-.onb-backdrop.arc-v2 {
-  /* Wash follows the active theme's accent (Hearth must glow warm, not teal) — same 6% intensity. */
-  background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--ix-accent, #2ee6c0) 6%, transparent), transparent 60%),
-    var(--ix-base, #07090e);
-}
-.arc-v2 .onb-card {
-  background: var(--ix-glass-fill);
-  border: 1px solid var(--ix-glass-border);
-  border-top-color: var(--ix-glass-top);
-  border-radius: var(--ix-radius);
-  box-shadow: 0 30px 80px -28px rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(7px);
-}
-.arc-v2 .onb-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--ix-text-1);
-}
-.arc-v2 .onb-tag {
-  color: var(--ix-accent-text);
-  letter-spacing: 0.08em;
-}
-.arc-v2 .onb-title {
-  color: var(--ix-text-1);
-}
-.arc-v2 .onb-body {
-  color: var(--ix-text-2);
-}
-.arc-v2 .onb-body strong {
-  color: var(--ix-text-1);
-}
-
-/* Detect rows — mono accent (the "machine read your rig" telemetry feel). */
-.arc-v2 .onb-detect-row {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  border-bottom: 1px solid var(--ix-glass-border);
-}
-.arc-v2 .onb-detect-check {
-  color: var(--ix-accent);
-}
-.arc-v2 .onb-detect-label {
-  color: var(--ix-text-2);
-}
-.arc-v2 .onb-detect-value {
-  color: var(--ix-text-1);
-}
-.arc-v2 .onb-detect-dash {
-  color: var(--ix-text-3);
-}
-.arc-v2 .onb-shimmer {
-  /* Static placeholder — the arc deliberately carries NO loading shimmer; the only celebratory
-     shimmer in the arc is the win card's improved bar (kernel law). */
-  background: rgba(255, 255, 255, 0.05);
-  animation: none;
-}
-
-/* Step-2 demo + ledger — glass. */
-.arc-v2 .onb-demo {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--ix-glass-border);
-  border-radius: var(--ix-radius);
-}
-.arc-v2 .onb-demo-name {
-  color: var(--ix-text-1);
-}
-.arc-v2 .onb-demo-sub {
-  color: var(--ix-text-2);
-}
-.arc-v2 .onb-demo-ledger {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  color: var(--ix-accent-text);
-  border-top: 1px solid var(--ix-glass-border);
-}
-
-/* House-rules rows — glass + accent icons. */
-.arc-v2 .onb-rule {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--ix-glass-border);
-  border-radius: 11px;
-}
-.arc-v2 .onb-rule-icon {
-  color: var(--ix-accent);
-}
-.arc-v2 .onb-rule-text {
-  color: var(--ix-text-1);
-}
-.arc-v2 .onb-kicker strong {
-  color: var(--ix-accent-text);
-}
-
-/* Step dots + skip. */
-.arc-v2 .onb-dot {
-  background: var(--ix-text-3);
-}
-.arc-v2 .onb-dot-on {
-  background: var(--ix-accent);
-  box-shadow: 0 0 7px var(--ix-accent);
-}
-.arc-v2 .onb-skip {
-  color: var(--ix-text-2);
-}
-.arc-v2 .onb-skip:hover {
-  color: var(--ix-text-1);
-}
-/* Onboarding nav buttons — instrument accent. */
-.arc-v2 .onb-actions .btn {
-  background: var(--ix-accent);
-  border: 0;
-  color: var(--ix-accent-ink, #06231c);
-}
-.arc-v2 .onb-actions .btn-small {
-  background: transparent;
-  border: 1px solid var(--ix-glass-border);
-  color: var(--ix-text-2);
-}
+   SECTION MAP (traced 2026-08-20, mechanized by src/arc-v2-reachability-guard.test.ts):
+   M2 First-check is LIVE — App.tsx passes bare `arcV2` to <FirstCheck/>. M3 + M4/4b are DORMANT:
+   their prop chain is complete but no top-level caller sets it, so nothing under `.debrief`/`.cmp`/
+   `.wcp` ever gets an `.arc-v2` ancestor. M1 Onboarding and the M2 radar rules were DELETED — both
+   components are gone (C-18b, and 4b5e8b49 "retire the radar"), so those rules had no subject. */
 
 /* ══ M2 · First-check landing ══════════════════════════════════════════════ */
 .fc-backdrop.arc-v2 {
@@ -164,62 +52,6 @@
 }
 .arc-v2 .fc-row-unknown .fc-row-mark {
   color: var(--ix-text-3);
-}
-
-/* Radar + rows side by side (radar augments the legible list). */
-.arc-v2 .fc-scanzone {
-  display: flex;
-  gap: 22px;
-  align-items: flex-start;
-}
-.arc-v2 .fc-scanzone .fc-scan {
-  flex: 1;
-  min-width: 0;
-}
-.fc-radar {
-  flex-shrink: 0;
-  width: 210px;
-  height: 210px;
-}
-.fc-radar-svg {
-  width: 100%;
-  height: 100%;
-}
-.fc-radar-ring {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.07);
-  stroke-width: 1;
-}
-.fc-radar-cross {
-  stroke: rgba(255, 255, 255, 0.05);
-  stroke-width: 1;
-}
-.fc-radar-wedge {
-  fill: var(--ix-accent);
-  opacity: 0.16;
-}
-.fc-radar-sweep {
-  transform-box: view-box;
-  transform-origin: 100px 100px;
-}
-.fc-radar-sweep-on {
-  animation: fc-sweep 2.4s linear infinite;
-}
-.fc-radar-blip {
-  fill: var(--ix-text-3);
-}
-.fc-radar-blip-ok {
-  fill: var(--ix-accent);
-  filter: drop-shadow(0 0 4px var(--ix-accent));
-}
-.fc-radar-blip-fix {
-  fill: var(--ix-amber);
-  filter: drop-shadow(0 0 4px var(--ix-amber));
-}
-@keyframes fc-sweep {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 /* Verdict block. */
@@ -291,13 +123,6 @@
   background: var(--ix-accent);
   border: 0;
   color: var(--ix-accent-ink, #06231c);
-}
-
-@media (max-width: 640px) {
-  .arc-v2 .fc-scanzone {
-    flex-direction: column;
-    align-items: center;
-  }
 }
 
 /* ══ M3 · Session debrief ══════════════════════════════════════════════════ */
@@ -448,9 +273,6 @@
 }
 
 :root[data-motion="reduced"] {
-  .fc-radar-sweep-on {
-    animation: none;
-  }
   .cmp-improved.arc-v2 .cmp-bar-after::after {
     animation: none;
     display: none;

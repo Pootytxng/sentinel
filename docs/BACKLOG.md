@@ -138,37 +138,60 @@
   the debrief/comparison subtree. **This is the row's real conclusion:** half the outstanding debt
   was never reviewable UI at all, so it belongs to the `.arc-v2` part-dead row below, not to a
   perpetual visual-review IOU. The guard already proves the rules left the mono set.
-- [ ] **`.btn-small` — 26 buttons across 11 files render in Arial, not the app's sans. Found by the
-  C-17b review, PRE-EXISTING, and bigger than it first looked.** `App.css:1388` declares
-  `font-size` and `font-weight` and **no `font-family`**, so every `.btn-small` falls through to the
-  UA default while its siblings are `Geist Sans`. Measured live on `402b0080`: the session-debrief
-  **Share** button computes to bare `"Arial"`. Same class, same cause, `.debrief-ctx-head`
-  (`App.css:3053`) — a `<button>` styled as a header row, also with no `font-family`. **Not caused by
-  C-17b:** buttons do not inherit `font-family` by default, so removing the mono face off
-  `.debrief-head` did not change the button; it only made the mismatch visible. The repo's existing
-  idiom is a per-rule `font: inherit` (40+ sites in `App.css`), applied ad hoc — which is exactly how
-  26 sites got missed. **Not fixed blind:** one line on `.btn-small` restyles 26 buttons in 11 files
-  and that is a visual change that owes its own build → install → self-review, not a drive-by edit at
-  the end of someone else's train. Per bug→guard the fix ships WITH a guard that fails when a rule
-  styling a `<button>` declares `font-size`/`font-weight` but no font family — the ad-hoc idiom is
-  the defect, so the guard has to cover the class, not this one selector.
-- [ ] **`.arc-v2` is PART dead, not all dead — the original finding was wrong, and the fix is a
-  section-by-section decision.** (Row corrected 2026-08-19 by the C-18b lane; the header used to read
-  "the entire `.arc-v2` skin is DEAD CSS".)
-  Surfaced while closing C-17b and **verified by hand, not taken from the subagent** (the C-18 row
-  above is this repo's record of exactly that mistake). `SessionDebrief` has one mount,
-  `Play.tsx:488`, and it does not pass `arcV2`; the prop defaults `false` at `SessionDebrief.tsx:53`
-  and `:218`. Every other `arcV2` in the tree (`Onboarding.tsx:38`, `FirstCheck.tsx:108`,
-  `WhatChangedPanel.tsx:317/350/657`) is threaded from a prop that no top-level caller ever sets
-  true. **That grep was the error.** `grep -rn "arcV2={" src` cannot see JSX shorthand, and
-  `App.tsx:1228` passes bare `arcV2` to `<FirstCheck/>` — so the skin IS live every time the user
-  re-runs the check from Home or Settings. Measured against `src/arc-instrument.css` (458 lines):
-  **M2 First-check (124–302, ~39%) is LIVE**; M3 Session debrief and M4/4b comparison cards
-  (303–458) are still unreached on the mounts checked by hand; **M1 Onboarding (6–123) now has no
-  subject at all** — C-18b deleted the component and its base stylesheet, so those rules style
-  nothing that can exist. **Still do not delete on this evidence** — the owner's standing call, and
-  the correction above is exactly why. Next step is per-section: M1 is a delete once someone confirms
-  no revival is planned, M3/M4 need the same shorthand-aware re-check this row just failed.
+- [x] **Buttons rendered in Arial — FIXED, shipped and reviewed on installed `aac90cd7` (2026-08-20,
+  #155). The finding was right and 3x too small.** `.btn-small` (`App.css:1388`) and
+  `.debrief-ctx-head` (`App.css:3053`) declare `font-size`/`font-weight` and no `font-family`, so
+  they fell through to the UA face — Windows Arial — beside `Geist Sans` siblings; the session-debrief
+  **Share** button measured live as bare `"Arial"` on `402b0080`. **Measured before fixing: 97 of 290
+  `<button>` call sites across 28 files** got a family from no rule at all (the row said 26 across 11),
+  and **no stylesheet had a single `button` element rule** — the repo's only defence was a per-rule
+  `font: inherit`, 88 of them, applied ad hoc. Ad hoc is the defect: forgettable by construction.
+  **Fix — one line, not 28:** an unscoped `button, input, select, textarea { font-family: inherit }`
+  next to the `html, body, #root` base in `App.css`. Family only; nothing else moved. A per-rule
+  family still wins (element selector is 0-0-1), and the 88 existing `font: inherit` declarations were
+  deliberately LEFT — some are the `font:` shorthand, which also resets size and weight, so deleting
+  them would change rendering.
+  **Guard first, and it covers the class:** `src/control-font-guard.test.ts` (4 tests) asserts the
+  reset exists, is **unscoped** (a `.v2-shell button` scope is the same bug one level up), is
+  **top-level** (parked in a `@media` it is conditional), lives in a sheet the app **actually loads**
+  (import closure from `main.tsx`), and that `inherit` has an app face to land on. Then the class-level
+  check is written on the real subject: **every `<button>` in the tree must get a family from
+  something** — delete the reset and it fails naming all 97 sites. Proved both ways (fails without the
+  fix, passes with it). Two ways it nearly lied, both fixed in-file: a combined import regex swallowed
+  `import "./App.css"` so the closure came back without the app's own stylesheet, and a flat CSS parser
+  cannot see `@media` nesting so the reset's depth is measured explicitly.
+  **Shipped:** built, silent-installed, stamp-proved `aac90cd7 · release · shell 0.9.26`.
+  **Self-review VERDICT: PASS** (9/9 at 1500x980) — both named selectors compute `Geist Sans` at
+  unchanged size/weight, hover state intact under real CDP mouse events, zero overflowing controls
+  across Health/Live/History/Test/Settings. *Recorded:* the first `/S` install returned exit 0 and
+  never replaced the exe — the stamp gate caught it, a re-run fixed it, filed as **#156**.
+- [ ] **`.arc-v2` — the per-section decision is MADE (2026-08-20), a THIRD dead stratum turned up,
+  and what is left is one owner fork.** Row was corrected once already (2026-08-19, C-18b lane);
+  both earlier findings were greps standing in for a trace, so this pass is hand-traced AND
+  mechanized: `src/arc-v2-reachability-guard.test.ts`. `src/arc-instrument.css` **458 → 274 lines;
+  nothing that renders changed.**
+  **M1 Onboarding (was 6–123) — DELETED.** C-18b deleted the component (issue #148); no `onb-` token
+  survives anywhere in `src/**`, so those 118 lines could not match on any input.
+  **M2 First-check — LIVE, and it was carrying 66 lines of dead radar.** `4b5e8b49` ("retire the
+  radar → light sweep") removed the component and left `.fc-radar*`, `.fc-scanzone`,
+  `@keyframes fc-sweep`, their `@media` and the reduced-motion rule behind. This row never saw that
+  stratum — the guard's class-by-class orphan check found it. **Deleted too.**
+  **M3 Session debrief + M4/4b comparison cards — DORMANT, kept, and NOT the same thing as dead.**
+  Shorthand-aware trace: `arc-v2` reaches the DOM from 6 emitters, every one gated on an `arcV2`
+  prop; the only top-level caller that sets it is `App.tsx:1228` (`<FirstCheck arcV2 />` — the JSX
+  shorthand the first grep could not see), and `FirstCheck` imports neither `SessionDebrief` nor
+  `WhatChangedPanel`, so no `.debrief`/`.cmp`/`.wcp` element ever sits under an `.arc-v2` ancestor.
+  `SessionDebrief`'s only mount, `Play.tsx:488`, passes nothing. **Unlike M1 the prop chain is
+  complete end to end** — one prop there would light 156 lines of never-reviewed skin — so deleting
+  the CSS alone would leave a prop that lies, and turning it on is a visual change owing its own
+  build → install → self-review.
+  **OWNER FORK, with a recommendation: delete the M3/M4 CSS *and* the `arcV2` prop chain in
+  `SessionDebrief`/`WhatChangedPanel` together**, leaving the skin only where it lives (First-check)
+  — three skin generations have shipped since it was written. The other direction (wire it at
+  `Play.tsx:488`, then review it) is one train; say which.
+  Guard: the orphan test fails on any arc-skin class with no subject in the tree, and the caller
+  census fails the moment a second caller turns the skin on — so this row cannot go stale a third
+  time.
 - [ ] **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it.** Owner fork, never resolved,
   still parked by exemption.
 - [x] **C-12 · DOC DRIFT CLOSED — the command palette was filed as abandoned while shipping DEFAULT ON.** <!-- shipped-status-history -->

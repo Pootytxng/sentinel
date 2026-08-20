@@ -307,6 +307,18 @@ nothing is deleted until you pick.
 
 ---
 
+### B_arc. Half the arc skin is built, wired, and switched off — delete it or turn it on  ·  ⏳ NEW 2026-08-20
+`src/arc-instrument.css` M3 (session debrief) + M4/4b (comparison cards) — 156 lines of finished
+skin whose prop chain runs end to end but that no caller ever turns on, so no user has seen it. The
+dead-by-deletion strata around it (M1 Onboarding, the M2 radar) are already gone; this half is
+**dormant, not dead**, which is why it wasn't touched. **My recommendation:** delete the CSS *and*
+the `arcV2` prop chain in `SessionDebrief`/`WhatChangedPanel` together — a prop that promises a
+re-skin and does nothing is worse than neither, and three skin generations have shipped since it was
+written. **The other direction:** one prop at `Play.tsx:488` lights it, and then it owes a build →
+install → self-review like any visual change. Either way it's one train. Row: [`BACKLOG.md`](BACKLOG.md).
+
+---
+
 ### B_land. Where feedback and analytics land — ✅ DECIDED 2026-08-18, no inbox, nothing for you to open
 You asked not to funnel this into your personal Gmail, and you were right to: an address printed
 inside a shipped app is a permanent target (scraping, phishing, attachments), and it ties your

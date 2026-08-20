@@ -47,8 +47,6 @@
     "src/arc-instrument.css: .arc-v2 .fc-rest-conf": "value",
     "src/arc-instrument.css: .arc-v2 .fc-row": "value",
     "src/arc-instrument.css: .arc-v2 .fc-status": "value",
-    "src/arc-instrument.css: .arc-v2 .onb-demo-ledger": "value",
-    "src/arc-instrument.css: .arc-v2 .onb-detect-row": "value",
     "src/design/Gauge.css: .ds-gauge .ds-dialval": "value",
     "src/design/Stat.css: .ds-stat .ds-v": "value",
     "src/design/TrustSwitch.css: .ts-snapshot": "value",
