@@ -160,6 +160,8 @@
     "src/surfaces/home-hud.css: :root[data-v2=\"on\"][data-hud=\"on\"] .hud-readout-seg .hud-mono": "value",
     "src/surfaces/home-hud.css: :root[data-v2=\"on\"][data-hud=\"on\"] .hud-ring-cap": "value",
     "src/surfaces/home-hud.css: :root[data-v2=\"on\"][data-hud=\"on\"] .hud-ring-pct": "value",
+    "src/surfaces/home-interview.css: :root[data-v2=\"on\"] .hi-evidence-title": "chrome-tag",
+    "src/surfaces/home-interview.css: :root[data-v2=\"on\"] .hi-level": "chrome-tag",
     "src/surfaces/home-v2.css: :root[data-v2=\"on\"] .hv2-mono": "value",
     "src/surfaces/hud-rooms.css: :root[data-v2=\"on\"][data-hud=\"on\"] .v2-room:not([data-room=\"home\"]):not([data-room=\"check\"]) .hud-masthead-eyebrow .hud-mono": "value",
     "src/surfaces/hud-rooms.css: :root[data-v2=\"on\"][data-hud=\"on\"] .v2-room:not([data-room=\"home\"]):not([data-room=\"check\"]) .v2-measured": "value",

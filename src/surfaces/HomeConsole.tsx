@@ -13,7 +13,7 @@ import type {
 import type { HardwareInfo } from "../App";
 import { RoomShell } from "../design/room-shell";
 import { useReducedMotion } from "../design/use-motion";
-import { useIntelligenceFlag, useHomeIntakeFlag } from "../design/use-hud";
+import { useIntelligenceFlag, useHomeInterviewFlag } from "../design/use-hud";
 import { readHologramV2 } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
 import { LedgerHealthNotice, useLedgerHealth } from "../design/LedgerHealthNotice";
@@ -35,14 +35,9 @@ import { SetupLauncherCard } from "./setup/SetupLauncherCard";
 import { CpuTempOffer } from "./CpuTempOffer";
 import { deriveReverted } from "./use-scan";
 import { BentoGrid, BentoTile, Sheet, useSheet } from "../design/bento";
-import {
-  homeIntakeRows,
-  homeCareEntry,
-  homeIntakeFastpath,
-  fastPathReadyHeadline,
-  fastPathApplyLabel,
-  fastPathAppliedNote,
-} from "./home-intake-data";
+import { homeCareEntry, fastPathReadyHeadline, fastPathApplyLabel } from "./home-intake-data";
+import { HomeInterview } from "./HomeInterview";
+import type { InterviewFacts } from "./home-interview-data";
 import "./home-console.css";
 
 // HomeConsole — Home as the console cold-open (plan 2026-07-10-console-hud-phase2-home,
@@ -265,7 +260,7 @@ export function HomeConsole({
   // The rig tile's popout. Depth goes BEHIND the sheet, never across the surface (bento law): the
   // stage keeps the live picture, the full detected parts list opens over the dimmed room.
   const partsSheet = useSheet<"parts">();
-  const intakeOn = useHomeIntakeFlag();
+  const interviewOn = useHomeInterviewFlag();
   // HOME IS UNGATED — STRUCTURE, NOT A SWITCH (owner 2026-08-06, reversing the calm-default pass
   // that shipped the day before): "the expert view doesnt seemingly even need to be an option the
   // information it displayed should be standard my only worry with that was only if it was
@@ -291,18 +286,21 @@ export function HomeConsole({
   // Fast-path (option C) transient state: a busy guard against double-submit, and a real receipt
   // built from the batch result (never a fabricated "done" — it names applied AND skipped).
   const [fastPathBusy, setFastPathBusy] = useState(false);
-  // UX-1 — the front door's one disclosure. The intent panel used to be a permanent band gated by
-  // compy_home_intake; it is now the destination of the screen's single primary button, opened in
-  // place. The flag survives with a NARROWER job: "1" pins the panel open on arrival (the legacy
-  // always-visible band, for anyone who wants it back), default keeps it folded behind the button.
-  // Nothing was deleted and nothing moved rooms — the affordance census still finds every row.
-  const [frontDoorOpen, setFrontDoorOpen] = useState(intakeOn);
+  // THE INTERVIEW (step 3, issue #177). The front door's one action no longer toggles a panel in
+  // place — it opens the interview sheet, which grows out of the button. Null means closed; the
+  // rect is the button's own, captured at click, so the panel expands from exactly where the user
+  // pressed rather than fading in from nowhere.
+  const [interviewOrigin, setInterviewOrigin] = useState<DOMRect | null>(null);
+  const [interviewOpen, setInterviewOpen] = useState(false);
+  // Whether the one-tap safe stack has already been applied in THIS visit. The finding card reads
+  // it to stop offering an apply that has landed, instead of re-offering work that is done.
+  // The receipt is a RESULT, not a boolean. J (2026-07-22): the fast path once reported only a
+  // count, so "1 safe tweak not applied" was unanswerable — the batch primitive returns title +
+  // reason per skip and it was discarded one line after arriving. The interview renders the whole
+  // thing; nothing here is synthesised, so a skip can only ever say what actually happened.
   const [fastPathReceipt, setFastPathReceipt] = useState<{
     applied: number;
     skipped: number;
-    // J (2026-07-22): the receipt used to keep only the COUNT, which is why "1 safe tweak not
-    // applied" was a dead end - the batch already returns title+reason per skip and it was thrown
-    // away one line after arriving. Retained so the verdict can name WHICH and WHY.
     skippedItems: { title: string; reason: string }[];
   } | null>(null);
 
@@ -581,42 +579,49 @@ export function HomeConsole({
   const eligibleStack =
     recs && isAppliable ? safeFixesReadyList(recs, isAppliable, revertedIds) : [];
   const stackReady = eligibleStack.length;
-  // Intent rows (option A) filtered to rooms the live rail actually renders — a row must never
-  // point at a room that isn't there (no dead ends). The room LABEL is resolved live from `rooms`.
-  // One-owner-per-screen (P5 voice law): the LAST SESSION block below (intelHeadline) already
-  // answers "how did my last session go" with the engine's own verdict line + its See-in-Monitor
-  // door. When it renders, the intake row asking that same question and routing to that same room
-  // stands down and lets the block own it — mirrors the verdictNamesLimiter/topLimiter and
-  // dek/ForwardDoor standdowns above (self-reviewer catch 2026-07-14, rubric 3 duplication).
-  const lastSessionRendered = !!intelHeadline;
-  const intakeRows = homeIntakeRows(t).filter(
-    (row) =>
-      rooms?.some((rm) => rm.key === row.room) && !(lastSessionRendered && row.room === "play"),
-  );
-  // UX-1 splits the old single boolean in two: AVAILABLE decides whether the front-door button
-  // exists at all (never offer a door onto an empty room), OPEN decides whether the panel is
-  // showing. The button is the screen's one primary action, so it must not render as a promise
-  // with nothing behind it.
-  //
-  // `intakeOn` is the FIRST term as of 2026-08-18, and the omission it repairs is the whole reason
-  // this line carries a comment. UX-1 narrowed compy_home_intake to "pins the panel open" and let
-  // the button render unconditionally — but the flag was never about the panel. The owner switched
-  // it off on sight on 2026-08-12 ("the what are you here to do text box was ugly looks cleaner
-  // without it"), and six days later his own front door was asking the question again, larger than
-  // before, because a flag that reads "off" was only being consulted about where the answer opens.
-  // Off means the question is not asked. Guarded by home-intake.test.tsx, "the QUESTION, not just
-  // the panel".
-  const intakeAvailable = intakeOn && (fastPathAvailable || intakeRows.length > 0);
-  const intakeRenders = intakeAvailable && frontDoorOpen;
-  // The Care entry (issue #91, discovery contract): ALWAYS visible, independent of `intakeOn` —
-  // crash rescue is the one thing a user comes to Home in distress to find, and it must not be
-  // behind the same switch as the optimization band. The single condition it does obey is the
+  // THE INTERVIEW'S DOOR (step 3, issue #177). Availability is one question and one only: is there
+  // anywhere for a finding to land? The answer is always yes - every branch of
+  // home-interview-data.ts falls back onto "run a fresh check", which needs no room, no rail and no
+  // wiring. So the front door renders whenever the flag allows it, and UX-1's "verdict plus ONE
+  // action" finally has its action on every install rather than on the zero installs that had set a
+  // devtools-only key.
+  const interviewAvailable = interviewOn;
+  // The Care entry (issue #91, discovery contract): ALWAYS visible, independent of the interview
+  // flag - crash rescue is the one thing a user comes to Home in distress to find, and it must not
+  // sit behind the same switch as anything else. The single condition it does obey is the
   // no-dead-end law every other affordance here obeys: if the rail does not render the room the
   // station lives in, there is nowhere to send the click.
   const care = homeCareEntry(t);
   const careRenders = !!rooms?.some((rm) => rm.key === care.room);
-  // Static fast-path copy (option C) — resolved once per render through the live `t`.
-  const fastpath = homeIntakeFastpath(t);
+  // The live readings the interview is allowed to speak from. Every field is something this room
+  // ALREADY holds and already renders somewhere else on screen - the interview opens no probe, adds
+  // no IPC, and quotes nothing it was not handed.
+  const interviewRooms = (["play", "learn", "lab"] as const).filter((k) =>
+    rooms?.some((rm) => rm.key === k),
+  );
+  const interviewFacts: InterviewFacts = {
+    recsLoaded: recs != null,
+    safeStackReady: stackReady,
+    fastPathWired: fastPathAvailable,
+    activeChanges: activeChangeCount(changes),
+    sessionCount: sessions.length,
+    lastSession:
+      strip.kind === "data"
+        ? { game: strip.game, avgFps: strip.avgFps, low1: strip.low1Est, peakTempC: strip.peakTempC }
+        : null,
+    readiness: readinessKnown
+      ? {
+          passed: Math.max(
+            0,
+            readiness!.checks.length - readiness!.attention_count - readiness!.unknown_count,
+          ),
+          total: readiness!.checks.length,
+          attention: readiness!.attention_count,
+        }
+      : null,
+    gpuTempC: gpuTemp,
+    rooms: [...interviewRooms],
+  };
 
   // Option C's apply — mirrors FirstCheck's honest inline-apply idiom: confirm names the rollback
   // guarantee, then the ONE audited batch primitive applies only the safe stack. On success the
@@ -679,24 +684,26 @@ export function HomeConsole({
       /* The because-line. It qualifies the verdict, so it sits directly beneath it in the
          header rather than starting the body — progressive disclosure reads top-down. */
       sub={dekRedundant ? undefined : <span className="hc-verdict-dek">{dek}</span>}
-      /* UX-1 decision 1 — ONE ACTION. "What are you here to do?" was already the strongest idea
-         in the product and was spending it inside a 9px band the owner switched off on sight
-         (theme.ts, 2026-08-12). Promoted here to the single filled primary button on the screen.
-         It opens IN PLACE rather than navigating: progressive disclosure, and there is nowhere
-         to navigate to until step ③ builds the interview. Every other control on Home — the
-         re-run outline button, the care entry, the dock doors, the view toggles — is quieter
-         than this one by construction, so the Duolingo rule (more than one primary = none)
-         holds without deleting anything. */
+      /* UX-1 decision 1 + step 3 - ONE ACTION, and now it leads somewhere. "What are you here to
+         do?" was the strongest idea in the product and was spending it inside a 9px band the owner
+         switched off on sight (2026-08-12). UX-1 promoted it to the single filled primary button;
+         this step gives that button its destination, so it stops toggling a panel in place and
+         opens the interview instead. Every other control on Home - the re-run outline button, the
+         care entry, the dock doors, the view toggles - is quieter than this one by construction, so
+         the Duolingo rule (more than one primary = none) holds without deleting anything. */
       primaryAction={
-        intakeAvailable ? (
+        interviewAvailable ? (
           <button
             type="button"
             className="hc-front-door"
-            aria-expanded={frontDoorOpen}
-            aria-controls="hc-front-door-panel"
-            onClick={() => setFrontDoorOpen((open) => !open)}
+            aria-haspopup="dialog"
+            aria-expanded={interviewOpen}
+            onClick={(e) => {
+              setInterviewOrigin(e.currentTarget.getBoundingClientRect());
+              setInterviewOpen(true);
+            }}
           >
-            {t("home.homeConsole.intake.prompt")}
+            {t("home.interview.ui.door")}
           </button>
         ) : undefined
       }
@@ -735,115 +742,7 @@ export function HomeConsole({
             </button>
           </section>
         )}
-        {/* THE INTAKE BAND (BACKLOG:916) — the proven Lab "What are you here to do?" idiom lifted
-            one level up to Home: an always-available one-tap fast path (option C) over intent rows
-            that route to the right ROOM (option A). The Dock below stays clean room-name doors
-            (option B door-hints declined — the band already carries the symptom→room map, so
-            duplicating symptoms onto the doors would be the annoyance the owner warned against). */}
         <BentoGrid>
-        {/* FULL WIDTH BECAUSE IT IS CONDITIONAL (`bento: no conditional partial tile`). The band
-            is hidden by the compy_home_intake setting, so a half-width version of this tile would
-            leave a hole beside the hero the moment the owner switched it off. A full-width tile
-            always starts its own row, so its absence just moves the rest of the grid up intact —
-            and the band was born full-width anyway (it reads as a strip, not a card). */}
-        {intakeRenders && (
-          /* UX-1: the tile no longer repeats the question — the primary button above just asked
-             it, and this is the answer space. `id` is what that button's aria-controls points at. */
-          <BentoTile title={t("home.homeConsole.intake.panelTitle")} span="full">
-          <section
-            id="hc-front-door-panel"
-            className="hc-intake"
-            aria-label={t("home.homeConsole.intake.prompt")}
-          >
-            {/* Option C — the always-available one-tap "just make it faster, safely" fast path.
-                Honest state machine: applied receipt › loading › all-clear › ready-with-apply. */}
-            {fastPathAvailable && (
-              <div className="hc-intake-fast">
-                <span className="hc-intake-fast-symptom">{fastpath.symptom}</span>
-                {fastPathReceipt ? (
-                  <>
-                    <span className="hc-intake-fast-line">
-                      {fastPathAppliedNote(fastPathReceipt.applied, fastPathReceipt.skipped, t)}
-                    </span>
-                    {/* J (2026-07-22): "1 safe tweak not applied" named a count and nothing else,
-                        so the verdict was a dead end. The reason comes from the batch primitive -
-                        never synthesised here, so a skip can only ever say what actually happened. */}
-                    {fastPathReceipt.skippedItems.length > 0 && (
-                      <details className="hc-intake-fast-skipped">
-                        <summary className="hc-intake-fast-skipped-summary">
-                          {t("home.homeConsole.intake.fastpath.skippedDisclosure", {
-                            count: fastPathReceipt.skippedItems.length,
-                          })}
-                        </summary>
-                        <ul className="hc-intake-fast-skipped-list">
-                          {fastPathReceipt.skippedItems.map((item) => (
-                            <li key={item.title}>
-                              {t("home.homeConsole.intake.fastpath.skippedItemReason", {
-                                title: item.title,
-                                reason: item.reason,
-                              })}
-                            </li>
-                          ))}
-                        </ul>
-                      </details>
-                    )}
-                  </>
-                ) : recs === null ? (
-                  <span className="hc-intake-fast-line hc-mono">{fastpath.loading}</span>
-                ) : stackReady === 0 ? (
-                  <span className="hc-intake-fast-line">{fastpath.allClear}</span>
-                ) : (
-                  <>
-                    <span className="hc-intake-fast-line">
-                      {fastPathReadyHeadline(stackReady, t)}
-                    </span>
-                    <button
-                      type="button"
-                      className="hc-btn hc-intake-fast-btn"
-                      onClick={runFastPath}
-                      disabled={fastPathBusy}
-                    >
-                      {fastPathBusy
-                        ? t("home.homeConsole.intake.applying")
-                        : fastPathApplyLabel(stackReady, t)}
-                    </button>
-                    <span className="hc-intake-fast-undo">↺ {fastpath.reversible}</span>
-                  </>
-                )}
-              </div>
-            )}
-            {/* Option A — the intent rows. Each routes to a ROOM; a row whose symptom has ONE
-                answering instrument (today: "it crashed or froze" → the Lab's crash-evidence
-                station) routes THROUGH the room to that instrument, so naming the symptom and
-                then making the user hunt the dock is not a thing this band does. The because-line
-                names the ROOM's action, the label resolves live from the rail. */}
-            {intakeRows.length > 0 && (
-              <ul className="hc-intake-rows">
-                {intakeRows.map((row) => {
-                  const roomName = rooms?.find((rm) => rm.key === row.room)?.name ?? row.room;
-                  return (
-                    <li key={row.symptom}>
-                      <button
-                        type="button"
-                        className="hc-intake-row"
-                        onClick={() =>
-                          row.station && onOpenLabStation
-                            ? onOpenLabStation(row.station)
-                            : onNavigate?.(row.room)
-                        }
-                      >
-                        <span className="hc-intake-row-symptom">{row.symptom}</span>
-                        <span className="hc-intake-row-because">{row.because}</span>
-                        <span className="hc-intake-row-room hc-mono">{roomName} →</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-          </BentoTile>
-        )}
         {/* CONSOLE STAGE — bracketed frame, the real 3D hologram center, four honest corner
             gauges. No lede (owner header-slop law 2026-07-10): the console opens straight on
             the stage.
@@ -1208,6 +1107,24 @@ export function HomeConsole({
           <Dock nodes={dockNodes} activeKey={null} onOpen={onNavigate} />
         )}
       </div>
+
+      {/* THE INTERVIEW (step 3, issue #177) - what the front door opens. It grows out of the button
+          and dims the room behind it, so the user can see they never left Home. */}
+      {interviewOpen && (
+        <HomeInterview
+          facts={interviewFacts}
+          origin={interviewOrigin}
+          onClose={() => setInterviewOpen(false)}
+          onRunCheck={onRunCheck}
+          onOpenStation={(station, room) =>
+            onOpenLabStation ? onOpenLabStation(station) : onNavigate?.(room)
+          }
+          onOpenRoom={(room) => onNavigate?.(room)}
+          onFastPath={runFastPath}
+          fastPathBusy={fastPathBusy}
+          fastPathReceipt={fastPathReceipt}
+        />
+      )}
 
       {/* The hero's popout — the full detected parts list, grown out of the rig tile. */}
       {partsSheet.is("parts") && (

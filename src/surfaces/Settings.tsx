@@ -9,6 +9,8 @@ import {
   applyMonitorConsole,
   readJarvisMotion,
   applyJarvisMotion,
+  applyHomeInterview,
+  readHomeInterview,
   readCloseToTray,
   persistCloseToTray,
   type OverlayDensity,
@@ -131,6 +133,7 @@ export default function Settings({
   const [backdrop, setBackdrop] = useState<OverlayBackdrop>(readOverlayBackdrop);
   const [motion, setMotion] = useState<MotionPref>(readMotionPref);
   const [expertView, setExpertViewState] = useState<boolean>(readExpertView);
+  const [homeInterview, setHomeInterviewState] = useState<boolean>(readHomeInterview);
   const [autoUpdates, setAutoUpdates] = useState<boolean>(autoUpdateChecks);
   // Language (2026-07-23): a genuine app-wide preference like Motion/Theme — persists via the same
   // guarded-localStorage convention and flips the live i18next instance immediately (no reload).
@@ -163,6 +166,15 @@ export default function Settings({
   const changeExpertView = (v: boolean) => {
     setExpertViewState(v);
     setExpertView(v); // persists + notifies mounted surfaces live
+  };
+
+  // THE HOME INTERVIEW (design foundation ③, issue #177) — Home's primary button and the question
+  // behind it. This switch exists because its predecessor did NOT: `compy_home_intake` shipped
+  // default-OFF with no toggle anywhere in `src`, so the band reached nobody and there was no way
+  // to ask for it. A flag with no switch is not a preference, it is a dead branch.
+  const changeHomeInterview = (v: boolean) => {
+    setHomeInterviewState(v);
+    applyHomeInterview(v); // persists + notifies mounted surfaces live
   };
 
   // Monitor console (Phase 3 of the Console HUD, DEFAULT ON since 2026-07-12) — the Monitor
@@ -358,6 +370,17 @@ export default function Settings({
                 </button>
               ))}
             </div>
+          </div>
+          <div className="set-row">
+            <div className="set-row-text">
+              <div className="set-row-title">{t("settings.behavior.homeInterview.title")}</div>
+              <div className="set-row-sub">{t("settings.behavior.homeInterview.sub")}</div>
+            </div>
+            <Toggle
+              on={homeInterview}
+              onChange={changeHomeInterview}
+              ariaLabel={t("settings.behavior.homeInterview.title")}
+            />
           </div>
           <div className="set-row">
             <div className="set-row-text">

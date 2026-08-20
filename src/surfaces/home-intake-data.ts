@@ -1,62 +1,30 @@
-// Home intake band — the pure taxonomy behind the pre-room intent router (BACKLOG:916). Lifts the
-// proven Lab "What are you here to do?" symptom→station idiom UP one level to Home: same shape, but
-// each row routes to a ROOM (Monitor / Blackbook / Lab) instead of an in-Lab station. Pure data +
-// copy only — no DOM, no state. HomeConsole filters these rows to the rooms the live rail actually
-// renders (a row must never point at a room that isn't there — no dead ends), and resolves the room
-// LABEL live from that rail rather than hardcoding it here (the because-line names the room's
-// ACTION, never its name, so this file can never drift against a rail relabel).
+// What is LEFT of the Home intake band (BACKLOG:916) after the interview replaced it on 2026-08-20
+// (design foundation step 3, issue #177). The band's rows, its panel, its fast-path state machine
+// and its flag are deleted; the successor is home-interview-data.ts + HomeInterview.tsx.
+//
+// Three things stayed behind because they were never really the band's:
+//   - `HomeIntakeRoom` — the room routing key, now the vocabulary the interview routes in too.
+//   - `homeCareEntry` — the always-visible crash-rescue door (issue #91). It was extracted from
+//     the band on 2026-08-12 precisely so it would outlive the band's flag, and it just did.
+//   - the fast-path copy helpers — still the wording of the one-tap safe stack, which the
+//     interview now offers from its sweep finding and the confirm dialog still quotes, including
+//     the honest applied/skipped receipt (J, 2026-07-22).
+//
+// The file keeps its name on purpose: renaming it would rewrite every import in a diff that is
+// already large, for no reader's benefit. The comment is the truth, not the filename.
 //
 // i18n note: this is a plain data module, not a component — it can't call useTranslation() itself.
 // Every export below takes `t: TFunction` as its LAST parameter (mirrors ago()/smoothness()
-// elsewhere in this codebase); HomeConsole passes its own `t` from useTranslation() at each call.
+// elsewhere in this codebase); the caller passes its own `t` from useTranslation().
 
 import type { TFunction } from "i18next";
 import type { LabStationKey } from "./lab-guided-data";
 
 // The room routing key = the persisted nav id the app-shell/Dock route through (homeRail.ts).
 // Under the live flags (labGround default ON) the rendered rooms are play=Monitor, learn=Blackbook,
-// lab=Lab; these three are the only intent-row targets.
+// lab=Lab; these three are the only routing targets the interview and the Care entry may name.
 export type HomeIntakeRoom = "play" | "learn" | "lab";
 
-export type HomeIntakeRow = {
-  symptom: string; // the user's own felt words — what they'd say out loud
-  room: HomeIntakeRoom; // where that intent lives
-  because: string; // plain-English why THAT room — names the action, never the room label
-  // Optional in-room destination. A room that answers the symptom with ONE instrument should hand
-  // the user that instrument, not the room's dock — landing on the dock after naming the symptom is
-  // the same dead end the check->fix hallway closed (post-check-lab-route-guard). When present,
-  // HomeConsole routes through App's single station-intent writer instead of a bare room nav.
-  station?: LabStationKey;
-};
-
-// The intent rows (option A). Symptom-first, one room each, honest because-line. Order: the two
-// single-room intents (Monitor, Blackbook) then the three Lab diagnostics — the user scans by their
-// own symptom, not by destination, so several routing to the Lab reads fine (that's where those
-// three distinct instruments genuinely live). Filtered live by the rendered rail before display.
-export function homeIntakeRows(t: TFunction): HomeIntakeRow[] {
-  return [
-    {
-      symptom: t("home.homeConsole.intake.rows.lastSession.symptom"),
-      room: "play",
-      because: t("home.homeConsole.intake.rows.lastSession.because"),
-    },
-    {
-      symptom: t("home.homeConsole.intake.rows.understandSetting.symptom"),
-      room: "learn",
-      because: t("home.homeConsole.intake.rows.understandSetting.because"),
-    },
-    {
-      symptom: t("home.homeConsole.intake.rows.changeHelped.symptom"),
-      room: "lab",
-      because: t("home.homeConsole.intake.rows.changeHelped.because"),
-    },
-    {
-      symptom: t("home.homeConsole.intake.rows.hotLoudBehind.symptom"),
-      room: "lab",
-      because: t("home.homeConsole.intake.rows.hotLoudBehind.because"),
-    },
-  ];
-}
 
 // ── The Care entry (Compy Care Tier 1, issue #91 — the VISIBLE half) ────────────────────────────
 // Discovery contract (docs/BACKLOG.md §Discovery contract, owner-approved 2026-08-09): a compact
@@ -102,44 +70,24 @@ export function homeCareEntry(t: TFunction): HomeCareEntry {
   };
 }
 
-// The one-click fast path (option C — the always-available hands-free "just make it faster, safely"
-// button). Static copy; the count-bearing lines are built with proper singular/plural in the
-// component (never "(s)" — the plain-language bar). Reuses the audited batch-apply primitive, so it
-// applies ONLY the safe-tier, one-tap, not-yet-applied, not-drifted stack (safeFixesReadyList) —
-// the SAME set the Optimize verdict counts, never a broader one.
-export function homeIntakeFastpath(t: TFunction): {
-  symptom: string;
-  loading: string;
-  allClear: string;
-  reversible: string;
-} {
-  return {
-    symptom: t("home.homeConsole.intake.fastpath.symptom"),
-    // Shown while the catalog hasn't resolved yet (recs === null) — no button on a placeholder.
-    loading: t("home.homeConsole.intake.fastpath.loading"),
-    // Shown when the safe stack is empty — honest, never invents work to look busy.
-    allClear: t("home.homeConsole.intake.fastpath.allClear"),
-    // The rollback-first law, stated plainly, standing under the button (not trapped in a dialog).
-    reversible: t("home.homeConsole.intake.fastpath.reversible"),
-  };
-}
-
 // The ready headline for the fast path — honest singular/plural, no "(s)".
 export function fastPathReadyHeadline(n: number, t: TFunction): string {
   return t("home.homeConsole.intake.fastpath.ready", { count: n });
 }
 
-// The apply-button label — honest singular/plural.
-export function fastPathApplyLabel(n: number, t: TFunction): string {
-  return t("home.homeConsole.intake.fastpath.apply", { count: n });
-}
-
-// The post-apply receipt line, from the REAL batch result (applied count + skipped count). Honest:
-// names what landed AND what didn't, never rounds a skip up into a win.
+// The receipt line. J (2026-07-22): a fast path that reports only a COUNT is a dead end — the
+// batch primitive returns title+reason per skip, and throwing that away is what made "1 safe tweak
+// not applied" unanswerable. This composes the honest sentence; the WHICH and WHY ride alongside it
+// in the disclosure the caller renders. Guarded by fastpath-skipped-detail-guard.test.ts.
 export function fastPathAppliedNote(applied: number, skipped: number, t: TFunction): string {
   const appliedPart = t("home.homeConsole.intake.fastpath.appliedPart", { count: applied });
   if (skipped === 0)
     return t("home.homeConsole.intake.fastpath.appliedAllReversible", { appliedPart });
   const skippedPart = t("home.homeConsole.intake.fastpath.skippedPart", { count: skipped });
   return t("home.homeConsole.intake.fastpath.appliedWithSkipped", { appliedPart, skippedPart });
+}
+
+// The apply-button label — honest singular/plural.
+export function fastPathApplyLabel(n: number, t: TFunction): string {
+  return t("home.homeConsole.intake.fastpath.apply", { count: n });
 }

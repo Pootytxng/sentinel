@@ -391,47 +391,45 @@ export function applyHomeConsole(on: boolean): void {
   }
 }
 
-// Home intake band (BACKLOG:916 — the pre-room intent router). Lifts the proven Lab
-// "What are you here to do?" symptom-router idiom UP one level to Home: an always-available
-// one-click safe fast-path (option C) + intent rows that route to the right ROOM (option A),
-// sitting above the Dock room-doors. Shipped DEFAULT OFF → GRADUATED to DEFAULT ON 2026-08-11 →
-// **RETURNED to DEFAULT OFF 2026-08-12 by the owner, on sight.** ON only when the key is
-// literally "1".
+// THE INTERVIEW's door on Home (design foundation step ③, decision 2; issue #177).
 //
-// The graduation reasoning (kept, because it was not wrong): the band exists for a tester who could
-// not find things, and a discoverability surface that is off by default fixes nothing for the only
-// people it exists for. What settled it was the owner finally SEEING it on a real build — "the what
-// are you here to do text box was ugly looks cleaner without it" — comparing Home with the band
-// against Home without it. Taste on his own front door is his call, and a screenshot beat the
-// argument.
+// THIS FLAG REPLACES `compy_home_intake`, AND THE REPLACEMENT IS THE POINT — it is not a rename.
+// That key gated the flat intake BAND: a 9px strip carrying five choices and a fast-path row, which
+// the owner switched off on sight on 2026-08-12 ("the what are you here to do text box was ugly
+// looks cleaner without it"). The band is DELETED by ③, so its key retires with it rather than
+// being re-pointed at a different artifact — a flag that outlives the thing it named is how a
+// recorded decision quietly gets reversed.
 //
-// What leaving it off costs, stated so nobody has to rediscover it: the one-tap "just make it
-// faster, safely" fast path (option C) leaves Home with the band. It is NOT gone from the app — it
-// lives on in the Test room's Optimize station, which is the one door to the safe-tweak toggles.
-// What does NOT leave: crash rescue. The Care entry was extracted out of this band earlier the same
-// day precisely so this flag could never take it down (issue #91; `care-home-route-guard.test.ts`).
-// Turning the band off is now a layout choice, not a loss of the safety net.
+// WHY THE DEFAULT IS ON, stated plainly because the old key's default was off. Two facts, both
+// measured on this tree before the flip: (1) `compy_home_intake` had NO Settings toggle anywhere in
+// src — the only way to set it was devtools, so UX-1's "verdict plus ONE action" front door shipped
+// its one action to nobody; Home rendered a verdict and no primary button at all. (2) Decisions 1
+// and 2 of the design foundation, owner-approved 2026-08-11, say the question leaves the band and
+// BECOMES the primary button precisely because the band was the wrong container for it. Shipping ③
+// behind an off-by-default key would rebuild the same nobody-sees-it state the audit found.
 //
-// Event mirrors the home-console idiom so Settings toggles + the useHomeIntakeFlag hook stay in sync.
-const HOME_INTAKE_KEY = "compy_home_intake";
+// "0" is the failsafe, per the graduated-flag convention every other live room flag uses. Event
+// mirrors the home-console idiom so a Settings toggle and the useHomeInterviewFlag hook stay in
+// sync without a reload.
+const HOME_INTERVIEW_KEY = "compy_home_interview";
 
-export function readHomeIntake(): boolean {
+export function readHomeInterview(): boolean {
   try {
-    return localStorage.getItem(HOME_INTAKE_KEY) === "1";
+    return localStorage.getItem(HOME_INTERVIEW_KEY) !== "0";
   } catch {
-    /* ignore — default OFF */
+    /* ignore — default ON */
   }
-  return false;
+  return true;
 }
 
-export function applyHomeIntake(on: boolean): void {
+export function applyHomeInterview(on: boolean): void {
   try {
-    localStorage.setItem(HOME_INTAKE_KEY, on ? "1" : "0");
+    localStorage.setItem(HOME_INTERVIEW_KEY, on ? "1" : "0");
   } catch {
     /* ignore */
   }
   try {
-    window.dispatchEvent(new Event("compy:home-intake-changed"));
+    window.dispatchEvent(new Event("compy:home-interview-changed"));
   } catch {
     /* ignore */
   }

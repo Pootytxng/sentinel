@@ -22,7 +22,20 @@
 These are owner asks that are **never-built or parked**, not yet reflected as active work anywhere
 else. This is the list the owner meant.
 
-### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) 🟡 IN PROGRESS — **three of five are DONE**: ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **③ interview and ⑤ instruments behind a door remain OPEN**
+### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) 🟡 IN PROGRESS — **four of five are DONE**: ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — NEEDS THE OWNER'S EYE, see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door remains OPEN**
+
+> **③ SHIPPED 2026-08-20 — and it is a TASTE CALL the owner may want to overrule on sight.** Home's
+> primary button now reads *"Help me with my PC"* and opens a one-question-at-a-time interview in a
+> Sheet (`src/surfaces/HomeInterview.tsx` + `home-interview-data.ts` + `home-interview.css`). The
+> intake band is **deleted**, not disabled — rows, panel, flag, CSS and orphaned locale keys all
+> removed, so his 2026-08-12 removal-on-sight stands. What is genuinely new is that a question now
+> lives *behind* that button where before Home asked nothing at all. Reasons it was built that way:
+> the design-foundation decision doc names ③ explicitly, UX-1's "ONE action" needed something real
+> to open, and the pre-existing `compy_home_intake` flag defaulted OFF with **no Settings toggle
+> anywhere in `src`** — so UX-1's one action had shipped to nobody. New flag `compy_home_interview`,
+> default ON, `"0"` is the failsafe. Honesty is mechanised in `home-interview-data.test.ts` (four
+> laws: no dead end · never claim unmeasured · evidence quoted never synthesised · a mutating action
+> states its undo). **If he does not want a question on Home at all, the revert is one flag.**
 
 Owner escalated 2026-08-11: non-technical testers, incl. close friends, "do not enjoy using the app
 — overwhelming, hard to navigate, completely unfamiliar." Asked for tooling + deep research on

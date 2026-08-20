@@ -7,36 +7,13 @@
       "label": "崩溃与卡死救援"
     },
     "intake": {
-      "panelTitle": "选择最接近的一项",
-      "prompt": "你想做什么?",
-      "applying": "正在应用…",
       "rows": {
-        "lastSession": {
-          "symptom": "我上一局游戏到底打得怎么样?",
-          "because": "回放你的场次总结——帧率、卡顿,以及发生了哪些变化"
-        },
-        "understandSetting": {
-          "symptom": "我想先搞懂一个设置,再决定要不要改",
-          "because": "先讲清楚实测有效的做法,再让你动手改"
-        },
-        "changeHelped": {
-          "symptom": "这次更改到底有没有用——还是我的错觉?",
-          "because": "用真实的前后对比打分,排除误差干扰——讲证据,不靠感觉"
-        },
-        "hotLoudBehind": {
-          "symptom": "主机发烫、风扇吵,或者操作有延迟感",
-          "because": "在你的这台主机上实测温度、噪音和鼠标到画面的延迟"
-        },
         "crashedFroze": {
           "symptom": "系统崩溃或卡死了,但我不知道为什么",
           "because": "用大白话读取 Windows 自身的崩溃与卡死记录"
         }
       },
       "fastpath": {
-        "symptom": "我只想让电脑更快——安全、不折腾",
-        "loading": "正在检查有哪些可以安全更改…",
-        "allClear": "所有安全优化项都已开启——你的主机已经调好了,这里没什么可做的。",
-        "reversible": "每次应用都会先保存撤销点——可随时在「已应用」中回滚。",
         "confirmBody": "Compy 会先保存更改前的状态,你可以随时从「已应用」中把它们全部回滚。",
         "ready_other": "{{count}} 项安全优化已就绪——一键搞定。",
         "apply_other": "应用 {{count}} 项安全优化 · 一键搞定",
@@ -106,6 +83,104 @@
     },
     "cpuTemp": {
       "tileTitle": "CPU 温度"
+    }
+  },
+  "interview": {
+    "q": {
+      "start": {
+        "question": "你的电脑现在怎么了？",
+        "crash": "它崩溃、卡死，或者自己重启了",
+        "slow": "游戏感觉慢、卡顿或不流畅",
+        "heat": "机器很烫，或者风扇很响",
+        "changed": "我改了一些设置——有用吗？",
+        "unsure": "我不确定——帮我整体看看"
+      },
+      "crash": {
+        "question": "它什么时候发生？",
+        "inGame": "在我玩游戏的时候",
+        "anytime": "任何时候——甚至我几乎没在用的时候",
+        "boot": "电脑刚开机之后",
+        "unsure": "我不确定——它就是会发生"
+      },
+      "slow": {
+        "question": "是一直都慢，还是只是偶尔？",
+        "always": "一直都慢，连桌面都是",
+        "sometimes": "只在某些游戏里",
+        "stutter": "大部分时候还好，然后会一顿",
+        "unsure": "我不确定——就是感觉不对"
+      }
+    },
+    "f": {
+      "level": {
+        "measured": "已实测",
+        "likely": "可能",
+        "unknown": "尚未实测"
+      },
+      "ev": {
+        "readiness": "当前 {{total}} 项启动检查中有 {{passed}} 项通过。",
+        "stackReady_other": "有 {{count}} 项安全改动可以应用。",
+        "stackClear": "Compy 知道的安全改动都已经开启了。",
+        "changes_other": "Compy 已对这台电脑做了 {{count}} 项改动，每一项都仍可撤销。",
+        "lastSession": "最近一次记录的会话——{{game}}：平均 {{avg}} FPS，最差 {{low}} FPS。",
+        "sessionCount_other": "有 {{count}} 次已记录的会话可供对比。",
+        "gpuTemp": "你的显卡当前读数为 {{temp}}°C。",
+        "peakTemp": "最近一次记录的会话中峰值为 {{temp}}°C。"
+      },
+      "act": {
+        "check": "重新检查一次",
+        "fastpath_other": "应用 {{count}} 项安全改动——一键完成",
+        "crashRecord": "读取崩溃记录",
+        "diagnostics": "看看是什么在拖后腿",
+        "measure": "实测一次",
+        "readSession": "回看你上一次的会话",
+        "heat": "检查散热与风扇余量",
+        "beforeAfter": "做一次前后对比",
+        "undo": "Compy 会先保存原设置，之后你可以在“已应用”里撤销其中任何一项。"
+      },
+      "sweep": {
+        "sentence": "先从 Compy 已经能看到的东西说起。"
+      },
+      "crashInGame": {
+        "sentence": "Windows 会记录每一次崩溃和卡死。Compy 用大白话把那份记录读给你听。"
+      },
+      "crashAnytime": {
+        "sentence": "在你几乎没使用时发生的崩溃，通常指向机器本身而不是某个游戏。Windows 自己有记录。"
+      },
+      "crashBoot": {
+        "sentence": "刚开机就出问题，通常指向随 Windows 一起加载的东西。记录会说明上一次发生了什么。"
+      },
+      "crashUnsure": {
+        "sentence": "没关系——你不需要知道。Windows 都会记录，Compy 替你读。"
+      },
+      "slowAlways": {
+        "sentence": "到处都慢而不只是游戏里慢，通常意味着有东西在拖住整台机器，而不是某一款游戏。"
+      },
+      "slowSometimes": {
+        "sentence": "有些游戏慢、有些不慢，通常是画质设置或性能余量的问题。实测一次会话就能给出答案。"
+      },
+      "stutter": {
+        "sentence": "一顿一顿是最差帧的问题，不是平均帧率的问题——发生时平均值可能看起来完全正常。"
+      },
+      "slowUnsure": {
+        "sentence": "没问题。把感觉变成答案最快的办法，就是实测一次再看数字。"
+      },
+      "heat": {
+        "sentence": "温度和风扇噪音反映的是同一件事：部件的负载有多重，以及机箱的风道有多顺畅。"
+      },
+      "didItHelp": {
+        "sentence": "唯一诚实的答案，是在这台电脑上做一次前后对比，并对照噪声基准来评级。"
+      }
+    },
+    "ui": {
+      "door": "帮我看看我的电脑",
+      "title": "我们一起找出原因",
+      "sub": "一次一个问题，都用大白话。",
+      "back": "上一步",
+      "startOver": "重新开始",
+      "evidenceTitle": "Compy 实测到的",
+      "noEvidence": "Compy 还没有实测过这一项。下面的按钮就是去测它的。",
+      "applying": "正在应用…",
+      "stepAria": "问答进度"
     }
   },
   "homeHud": {

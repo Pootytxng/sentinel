@@ -40,6 +40,10 @@
       "system": "Follow system",
       "reduced": "Reduced"
     },
+    "homeInterview": {
+      "title": "Ask me a question on Home",
+      "sub": "Home's main button opens a short interview — one plain question at a time — instead of just sitting there. Turn it off and Home shows the verdict and nothing else."
+    },
     "expertView": {
       "title": "Expert view",
       "sub": "For tinkerers: shows every tweak's technical name and the exact registry key, service, or setting it touches, opens the \"deliberately refused\" list with full reasoning, and swaps rounded stats for raw measured values. Same tweaks, same safety rails — nothing new becomes appliable."

@@ -1444,7 +1444,7 @@ function App() {
                   // directly, so this list localizes too.
                   name: t(`common.rail.${r.id}`),
                 }))}
-              // Console intake band only (compy_home_intake, BACKLOG:916): the one-tap fast path
+              // The interview's one-tap fast path only (issue #177, was the intake band's option C):
               // derives its safe stack from the SAME recs + allowlist Optimize uses, and applies
               // through the SAME audited one-UAC batch primitive — no new mutation boundary.
               recs={recs}
