@@ -69,8 +69,10 @@
   `common.rail.<id>`, so renaming only `homeRail.ts` would have shipped "Home" with `homeRail.test.ts`
   green. New guard `src/design/rail-label-locale-guard.test.ts` pins literal ↔ locale (falsified
   against the half-applied rename), and `Home` joined the RETIRED map in `room-name-copy-guard.test.ts`
-  so the old word cannot return to copy. **Not in any published build** — ships with the next cut,
-  and owes a self-review on the installed binary before it is called live.
+  so the old word cannot return to copy. **The self-review debt is DISCHARGED**: built, silently
+  installed and stamp-proved at `40682344 · release · shell 0.9.26`, then reviewed on that binary —
+  **VERDICT PASS**, all four surfaces (rail · breadcrumb · palette · tour recap) looked at, zero
+  user-visible "Home" left. **Still not in any published build** — it ships with the next cut.
 - [x] **SHIPPED conformance rows, moved verbatim to
   [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-19, byte budget): **C-05 + C-19**
   (`d76f753f` — first run lands on the diagnosis, the tour is one named card, CPU temp reachable on
