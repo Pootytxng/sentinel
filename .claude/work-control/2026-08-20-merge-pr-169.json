@@ -1,0 +1,49 @@
+{
+  "actor": "claude-code",
+  "transition": "merge-pr",
+  "issue": 167,
+  "pullRequest": 169,
+  "explicitHandoff": "Owner instruction 2026-08-20 on the dangling branch-disposition rows and the blocked `gh api -X DELETE` prune: 'ok and is there anyway you can just resolve whatever this is about for me.' Lane claimed on issue #167 at https://github.com/Pootytxng/sentinel/issues/167#issuecomment-5356881995.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "currentHead": "9a12fbf40cfdf7d30b9983cf9eed39aa0ea00ce9",
+  "worktree": "C:/Users/Kuya/code/sentinel-prune",
+  "branch": "lane/prune-dangling-refs",
+  "requiredGates": [
+    "powershell scripts/verify-local.ps1 (pre-push: npm test, npm run build, cargo test, cargo clippy)",
+    "npx vitest run scripts/branch-disposition-audit.test.mjs",
+    "negative control: the live-doc guard against the unfixed docs/RELEASE_AUTONOMY.md",
+    "npx vitest run scripts/branch-disposition-audit.test.mjs -t prunable (the prunable-ref rule, proven against a prunable-and-live ref)"
+  ],
+  "gateResults": [
+    {
+      "command": "powershell scripts/verify-local.ps1 (pre-push: npm test, npm run build, cargo test, cargo clippy)",
+      "status": "passed",
+      "head": "9a12fbf40cfdf7d30b9983cf9eed39aa0ea00ce9",
+      "detail": "LOCAL CHECK RESULT: PASS, run by the pre-push hook against this exact tree. 350/350 test files, 4580 tests passed / 6 skipped; cargo test 963 passed 0 failed; clippy -D warnings clean."
+    },
+    {
+      "command": "npx vitest run scripts/branch-disposition-audit.test.mjs",
+      "status": "passed",
+      "head": "9a12fbf40cfdf7d30b9983cf9eed39aa0ea00ce9",
+      "detail": "27/27 passed."
+    },
+    {
+      "command": "negative control: the live-doc guard against the unfixed docs/RELEASE_AUTONOMY.md",
+      "status": "passed",
+      "head": "9a12fbf40cfdf7d30b9983cf9eed39aa0ea00ce9",
+      "detail": "Pass condition for a negative control is that the guard FAILS without the fix. With the doc reverted it failed naming docs/RELEASE_AUTONOMY.md:27 — the exact offending line."
+    },
+    {
+      "command": "npx vitest run scripts/branch-disposition-audit.test.mjs -t prunable (the prunable-ref rule, proven against a prunable-and-live ref)",
+      "status": "passed",
+      "head": "9a12fbf40cfdf7d30b9983cf9eed39aa0ea00ce9",
+      "detail": "2 passed / 25 skipped at this head. The rule is proven by fixture rather than by anecdote: a MERGED row whose ref is still on origin produces exactly one problem naming `git push origin --delete landed`, and SUPERSEDED the same. Corroborated live before the prune, when the same rule listed exactly the refs needing cleanup with their commands appended — that observation was made at f66b68cf and is evidence, not the gate."
+    }
+  ],
+  "independentReview": {
+    "practical": false,
+    "reason": "No non-writing model is available in this session: Codex is not running, and docs/WORK_CONTROL.md makes independent review advisory, never a blocker. The change touches one guard script, its test, and two docs — no product code, no mutation surface, no IPC. Both new rules were proven to fail against the unfixed text, which is the check an independent reviewer would have been asked to perform."
+  },
+  "notes": "The prune of origin/perf/idle-127-ambient-raster was proven before it was performed: ancestor of origin/main, merge-tree no-op against origin/main's tree, landed as 85ed8065 via PR #141. Merging WITHOUT --delete-branch per docs/RELEASE_AUTONOMY.md (it has set core.bare=true repo-wide); the ref is pruned separately with git push origin --delete, which is the command this PR exists to make discoverable."
+}
