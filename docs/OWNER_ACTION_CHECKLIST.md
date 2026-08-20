@@ -87,8 +87,12 @@ the merge the ref `origin/lane/usage-audit-disk-bloat` and its row in
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
 None of them is waiting on you. **A0's key backup is CLOSED (2026-08-18)** — the signing key is
-backed up off this machine and verified. **§A now has exactly ONE thing left for your hands:** A0's
-small residual (delete the redundant `Desktop\COMPY KEY\` copy).
+backed up off this machine and verified. **§A now holds TWO things, and only one is a chore:**
+① A0's small residual — delete the redundant `Desktop\COMPY KEY\` copy (one command, 10 seconds);
+② A0's *"expand to the remaining invitees"* — not a chore but a **distribution call** that is yours
+by definition (who gets a build, and when). Corrected 2026-08-20: this paragraph said "exactly ONE"
+while ② sat three bullets above it, still marked ⏳ — a checklist that miscounts itself is the same
+defect as one that lists non-asks.
 Archived 2026-08-20 by a self-checkup, because none of them ever needed you and a checklist that
 lists non-asks makes the real ones harder to see: **A_ci** (GitHub refused branch protection on this
 plan — the answer came from GitHub, not from you) · **A_rig** (its own text says "nothing for you to

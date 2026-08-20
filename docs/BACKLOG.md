@@ -150,25 +150,26 @@
   is exactly the debt this row was.
   Verified: `tsc --noEmit` clean; mono census re-seeded (`MONO_CENSUS_UPDATE=1`) and the delta is
   exactly the 5 deleted mono rules, nothing else.
-- [ ] **The kernel law's ONE earned celebration has never fired for a single user — decide whether to
-  build it. Found 2026-08-20 by the arc-v2 cleanup, not by anyone looking for it.** The owner's
-  2026-06-06 kernel law says the win card's shimmer is the only celebratory sweep in the app: when a
-  measured fix actually improves FPS, the improved after-bar sweeps once, and nothing else in Compy
-  ever does. It had exactly one implementation — `@keyframes cmp-winshimmer` on
-  `.cmp-improved.arc-v2 .cmp-bar-after` — and it lived in `src/arc-instrument.css`, **behind the
-  `arcV2` prop no screen ever set.** So the law's single celebration was unreachable from the day it
-  was written; it went out with the dead skin. `src/sweep-guard.test.ts` proved the law was upheld
-  the whole time, because "the only sweep is `cmp-winshimmer`" was true of a rule that could not run
-  — the guard was watching the keyframe, not the reachability.
-  **Recommendation: build it, in its own train.** Re-home the keyframe + the two `.cmp-bar-after`
-  rules into `src/App.css` on the live selector (`.cmp-improved .cmp-bar-after`, no `.arc-v2`), keep
-  the reduced-motion opt-out, and put it through build → install → **self-review** — it is a
-  user-visible animation that has never once been looked at on a real build. **Not folded into the
-  cleanup that found it:** deleting unreachable CSS must not be the commit that quietly introduces a
-  new moving thing on screen.
-  Guard already in place: `src/sweep-guard.test.ts` keeps the law's teeth (no second sweep may
-  appear anywhere in `src/`) and pins the current count at ZERO, so re-homing it fails the build
-  until this row and the visual review are updated in the same train.
+- [x] **The kernel law's ONE earned celebration is BUILT — it had never fired for a single user.
+  Found 2026-08-20 by the arc-v2 cleanup, not by anyone looking for it; closed the same day in its
+  own train.** The owner's 2026-06-06 kernel law says the win card's shimmer is the only celebratory
+  sweep in the app: when a measured fix actually improves FPS, the improved after-bar sweeps once,
+  and nothing else in Compy ever does. It had exactly one implementation — `@keyframes
+  cmp-winshimmer` on `.cmp-improved.arc-v2 .cmp-bar-after` in `src/arc-instrument.css` — **behind the
+  `arcV2` prop no screen ever set.** The law's single celebration was unreachable from the day it was
+  written, and `src/sweep-guard.test.ts` was green the whole time because it watched the KEYFRAME,
+  not its reachability.
+  **Fixed:** re-homed verbatim into `src/App.css` on the live selector `.cmp-improved
+  .cmp-bar-after` (both after-bars, same 3.4s cycle, same 0.35s delay), `pointer-events: none` added
+  so the glint cannot eat a click, and the explicit reduced-motion opt-out kept on top of the global
+  clamp — a celebration should be ABSENT under reduced motion, not merely instant.
+  **bug→guard, and the guard is the real deliverable.** `src/sweep-guard.test.ts` gained a third
+  tier that asks the question the old one could not: every compound in the sweep's selector must be
+  producible UNCONDITIONALLY by one `className` expression. A class that only ever arrives through a
+  ternary is a SECOND gate, and the only thing allowed to gate an earned celebration is the earning.
+  Falsified against the exact original defect — re-scope the rule to `.cmp-improved.arc-v2` and tier
+  three goes red naming the compound. Tier one (no second sweep anywhere in `src/`) is unchanged and
+  still absolute.
 - [ ] **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it.** Owner fork, never resolved,
   still parked by exemption.
 - [x] **C-12 · DOC DRIFT CLOSED — the command palette was filed as abandoned while shipping DEFAULT ON.** <!-- shipped-status-history -->

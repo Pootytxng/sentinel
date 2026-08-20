@@ -296,7 +296,7 @@ if (-not $NoLaunch) {
     Wait-LoopbackPortClosed -Port $debugPort -TimeoutMs 10000
     # -Detached: this app outlives the script, so it must not inherit our stdout/stderr and strand
     # a caller's pipe (issue #60 defect 2). Port absence is proven by the assertion above.
-    $normalLaunch = Start-NativeProcess -Command $exe -Detached -ArgumentList $quietLaunchArgs
+    $normalLaunch = Start-NativeProcess -Command $exe -Detached -ArgumentList $quietLaunchArgs  # detached-window-allow: Compy is a GUI app, and this is the launch the owner is MEANT to see.
     Start-Sleep -Seconds 3
     if ($normalLaunch.HasExited) {
       throw "RUNTIME PROOF FAILED: normal relaunch exited during the health window (exit $($normalLaunch.ExitCode))."
@@ -304,7 +304,7 @@ if (-not $NoLaunch) {
     $normalLaunch.Dispose()
   } else {
     # Same reason as the VerifyRuntime relaunch (issue #60 defect 2).
-    $normalLaunch = Start-NativeProcess -Command $exe -Detached -ArgumentList $quietLaunchArgs
+    $normalLaunch = Start-NativeProcess -Command $exe -Detached -ArgumentList $quietLaunchArgs  # detached-window-allow: Compy is a GUI app, and this is the launch the owner is MEANT to see.
     $normalLaunch.Dispose()
   }
 }
