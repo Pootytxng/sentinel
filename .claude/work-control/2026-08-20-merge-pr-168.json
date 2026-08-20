@@ -1,0 +1,56 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 168,
+  "branch": "lane/win-shimmer",
+  "currentHead": "6a9bf6f7a775bfd58499d70d42706c56d07882dd",
+  "explicitHandoff": "Owner turn 2026-08-20: 'resolve all of this...'. Tail of that train: lands the #166 receipt (which trails its own merge by one commit by construction) and drops the now-dangling origin/perf/idle-127-ambient-raster row.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room. main is checked out by the sibling worktree C:/Users/Kuya/code/sentinel, which is why this worktree holds a lane branch.",
+    "remoteState": "git fetch --prune this turn. origin/main = 6fd1921e (the #166 merge). origin/perf/idle-127-ambient-raster has been pruned by another actor since its row was written, which is what made that row dangle. Concurrent lanes untouched: PR #160, PR #163.",
+    "worktree": "One writer. The cleanup lane recorded a 2026-08-20 collision in which a second session wrote inside its worktree; it re-homed to sentinel-diskbloat, leaving this worktree to this lane alone.",
+    "branch": "lane/receipt-prune, cut from origin/main 6fd1921e. One commit: the trailing receipt plus the dropped row.",
+    "dirtyState": "Clean apart from this receipt file, which trails by one commit by construction.",
+    "liveProcesses": "Compy running from %LOCALAPPDATA%/Compy/compy.exe, installed by scripts/ship-reinstall.ps1 this turn and stamp-proved at ae5ff500. No dev server, no cargo build in flight."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "6a9bf6f7a775bfd58499d70d42706c56d07882dd",
+      "detail": "Ran inside .githooks/pre-push. 350/350 test files, 4576 passed / 4 skipped (4580), Rust 963 passed / 0 failed / 24 ignored, clippy clean, LOCAL CHECK RESULT: PASS. Full log read, not tailed."
+    }
+  ],
+  "shipProof": {
+    "installerSha256": "03DC72E02BF3CAD2EB283F8CA943010A35BEE0BFBB54F1E340BA22429DF36243",
+    "stamp": "835d8868",
+    "method": "byte-scan of the installed exe (STAMP FOUND 835d8868); NSIS packaging leaves the installed binary not byte-identical to target/release/compy.exe, so an exe hash is not proof.",
+    "desktop": "exactly one installer"
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "Receipts and one disposition row - no product code, no UI surface."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session. This commit changes no product code; its correctness is fully mechanised by branch-disposition-audit and work-control-gate, both green."
+  },
+  "docGates": [
+    "branch-disposition-audit OK",
+    "work-control-gate PASS on the #166 receipt this commit lands"
+  ]
+}

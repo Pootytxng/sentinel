@@ -1,0 +1,33 @@
+{
+  "actor": "claude-code",
+  "transition": "merge-pr",
+  "pullRequest": 170,
+  "issue": null,
+  "explicitHandoff": "Owner instruction 2026-08-20: 'ok and is there anyway you can just resolve whatever this is about for me' — the blocked branch-prune command and the dangling BRANCH_DISPOSITIONS rows two earlier sessions left behind. PR #169 carried the fix and its guards; this PR carries only the receipt that authorized #169.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "currentHead": "05940b5db340c0f83d4bbf849cf3daffe38238d3",
+  "inspection": {
+    "repository": "Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-prune, git dir shared with C:/Users/Kuya/code/sentinel (core.bare=false, verified).",
+    "remoteState": "origin/main is 9d4ee28b75973d1e4ed99df05f6f216f306db91a (the PR #169 merge). origin/lane/prune-receipt is 05940b5d, pushed through the pre-push gate. Fetched with --prune immediately before this receipt.",
+    "worktree": "C:/Users/Kuya/code/sentinel-prune — created for this lane, not inherited; git worktree list shows seven other lanes, none on this branch.",
+    "branch": "lane/prune-receipt, one commit ahead of origin/main, no merge commits, no divergence.",
+    "dirtyState": "git status --porcelain is empty apart from this untracked receipt, which by design does not ride in the commit it authorizes."
+  },
+  "requiredGates": [
+    "powershell scripts/verify-local.ps1 (pre-push: npm test, npm run build, cargo test, cargo clippy)"
+  ],
+  "gateResults": [
+    {
+      "command": "powershell scripts/verify-local.ps1 (pre-push: npm test, npm run build, cargo test, cargo clippy)",
+      "status": "passed",
+      "head": "05940b5db340c0f83d4bbf849cf3daffe38238d3",
+      "detail": "LOCAL CHECK RESULT: PASS, run by the pre-push hook against this exact tree. 350/350 test files, 4578 tests passed / 6 skipped; cargo test 963 passed / 0 failed / 24 ignored; cargo clippy -D warnings clean. Push exit 0."
+    }
+  ],
+  "independentReview": {
+    "practical": false,
+    "reason": "No non-writing model is available in this session: Codex is not running, and docs/WORK_CONTROL.md makes that review advisory, never a blocker. The diff is a single JSON evidence file under .claude/work-control/ — no product code, no scripts, no mutation surface, nothing executable — and the full pre-push gate passed at this exact head."
+  },
+  "notes": "Scope check before merging: `node scripts/branch-disposition-audit.mjs` is currently RED in this worktree, on one row and one row only — origin/lane/prune-receipt has no disposition row. That is this lane's own ref and the known ordering race: the audit rejects a row for a ref not yet on origin and rejects a ref with no row, so the two only reconcile across two pushes, and the pre-push hook ran before the ref existed. Merging this PR and pruning the ref clears it, and a pruned ref needs no row — so no row is being added. The same red makes the suite's live-repo assertion ('this repository has a true branch-disposition record right now') fail in isolation right now; it passed inside the gate at this head and passes again once the ref is gone. Neither is cited above as a pass. Merge WITHOUT --delete-branch (docs/RELEASE_AUTONOMY.md: that flag has set core.bare=true repo-wide three times); prune with `git push origin --delete lane/prune-receipt`, which is what the guard shipped in #169 now prints. This receipt itself stays uncommitted and is handed to the next lane in C:/Users/Kuya/code/sentinel/.claude/work-control/ — committing it here would change the head it binds to, and opening a third PR for it would regress forever."
+}
