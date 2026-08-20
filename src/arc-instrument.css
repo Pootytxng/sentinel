@@ -309,7 +309,6 @@
   backdrop-filter: blur(7px);
 }
 .arc-v2 .debrief-title {
-  font-family: var(--font-mono, ui-monospace, monospace);
   color: var(--ix-text-2);
 }
 .arc-v2 .debrief-verdict {
@@ -343,7 +342,6 @@
 }
 .arc-v2 .debrief-ctx-head {
   color: var(--ix-text-2);
-  font-family: var(--font-mono, ui-monospace, monospace);
 }
 .arc-v2 .debrief-ctx-body {
   color: var(--ix-text-3);
@@ -368,7 +366,6 @@
 }
 .arc-v2 .cmp-head {
   color: var(--ix-text-3);
-  font-family: var(--font-mono, ui-monospace, monospace);
 }
 .arc-v2 .cmp-nf {
   color: var(--ix-text-3);
@@ -397,7 +394,6 @@
 }
 .arc-v2 .cmp-receipt-label {
   color: var(--ix-text-2);
-  font-family: var(--font-mono, ui-monospace, monospace);
 }
 .arc-v2 .cmp-bar {
   font-family: var(--font-mono, ui-monospace, monospace);

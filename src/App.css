@@ -1275,7 +1275,6 @@ html, body, #root {
 .monitor-panel-sub {
   font-size: var(--type-label);
   color: var(--muted);
-  font-family: var(--font-mono, ui-monospace, monospace);
 }
 
 .monitor-metrics {
@@ -2986,7 +2985,6 @@ body::before {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  font-family: var(--font-mono);
   font-size: var(--type-label);
   color: var(--muted);
   margin-bottom: 12px;
@@ -3113,7 +3111,6 @@ body::before {
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  font-family: var(--font-mono);
   font-size: var(--type-label);
   color: var(--muted);
   margin-bottom: 10px;
@@ -3246,7 +3243,6 @@ body::before {
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  font-family: var(--font-mono);
   font-size: var(--type-label);
   color: var(--muted);
   margin-bottom: 10px;

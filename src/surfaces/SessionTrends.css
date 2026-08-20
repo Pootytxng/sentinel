@@ -21,7 +21,6 @@
   color: var(--ix-text-1);
 }
 .strends-sub {
-  font-family: var(--ix-mono, ui-monospace, monospace);
   font-size: var(--type-label);
   color: var(--ix-text-2);
 }

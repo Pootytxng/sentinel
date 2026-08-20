@@ -321,9 +321,9 @@
   display: flex; flex-direction: column; gap: 8px;
   text-align: left;
 }
-:root[data-v2="on"] .v2-update-title { font: var(--type-label) var(--v2-font-mono); }
+:root[data-v2="on"] .v2-update-title { font: var(--type-label) var(--v2-font-sans); }
 :root[data-v2="on"] .v2-update-whatsnew {
-  font: var(--type-label) var(--v2-font-mono);
+  font: var(--type-label) var(--v2-font-sans);
   color: var(--v2-muted);
 }
 :root[data-v2="on"] .v2-update-notes {

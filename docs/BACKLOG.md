@@ -80,7 +80,8 @@
   `00d7020e` — plain-English copy pass + its guard, build identifiers out of consumer chrome) ·
   **C-10** (`3eca4a9f` — no raw `<select>`, `src/design/Picker.tsx`) · **C-11** (`3eca4a9f` — the
   ledger folds 37 repeats of one tweak into one row) · **C-17** (`3eca4a9f` — the mono census with a
-  ratchet). Read them there before re-litigating any of it; the C-18/C-19 corrections below still apply.
+  ratchet). Read them there before re-litigating any of it. The C-18 correction below still
+  applies; C-19 moved to the archive with its row, and C-17b is paid off below.
 
 - [ ] **C-18 · Retire the classic `Monitor.tsx` shell — and ONLY that.** **This item was WRONG when
   first written and is corrected here; do not act on the earlier version.** A self-review reported
@@ -99,28 +100,57 @@
   dead code. `MonitorConsole` replaced the BASIC face only. The one genuinely unreferenced surface is `src/surfaces/Monitor.tsx` (the classic
   shell), named only in comments. Precedent: [[audit-needs-completeness-critic-grep]] — grep the
   class yourself before believing a subagent's "nothing mounts this".
-- [x] **C-19 · SHIPPED with C-05** (`d76f753f`). **The filed premise — "three clicks deep" — was
-  wrong, and the truth was worse: on default flags the offer had NO path at all** (see the C-18
-  correction above; `.mdc-root` and `.play-monitor` were both absent from the shipped build, checked
-  live, not inferred from a green suite). Home also *asserted* "no CPU temp — needs a sensor app"
-  with no probe behind it, so it printed that while HWiNFO was publishing — an unmeasured claim.
-  Now: a CPU TEMP gauge on the default Live face in **both** modes, a graded reading on Home's CPU
-  callout, and `CpuTempOffer` in a boxed Home tile that appears only while there is no reading. The
-  offer is deliberately NOT on the annotation plane — the owner's 2026-08-06 call is that planes are
-  labels, not controls, and `home-console-standard-readout-guard.test.tsx` caught the first cut that
-  broke it. `cpu_temp.rs` gained a 900ms/15s hit-miss cache first, so the new caller costs less than
-  the old one did.
-- [ ] **C-17b · Pay off the 12 recorded mono-on-prose violations** (`mono-census.baseline.json`,
-  `violationCeiling: 12`). `.debrief-title` · `.debrief-head`/`-ctx-head` · `.cmp-head`/`-receipt-label`
-  · `.wcp-head` · `.monitor-panel-sub` · `.strends-sub` · `.v2-update-title` · `.fct-skip-hint` ·
-  `.ss-pin-label`. **Not restyled in the C-17 lane on purpose:** none of them was reachable on the
-  screens that lane could verify live, and an unseen type change across six surfaces is exactly the
-  kind of claim this repo's reachability law exists to stop. Each needs its screen reached, the mono
-  dropped, and the ceiling lowered in the same commit.
+- [x] **C-17b · The 12 recorded mono-on-prose violations are PAID — ceiling 12 → 0.** The C-17 lane
+  seeded the buckets by a selector-name heuristic and restyled none of them. This lane closed them by
+  reading the CONTENT each selector renders — the i18n string, not its name — which is the evidence
+  the heuristic never had. **Eleven were confirmed prose and lost their mono face:** `.cmp-head` /
+  `.wcp-head` (both render a sentence), `.debrief-head` (which also put mono on the **Share button**),
+  `.arc-v2 .debrief-title`, `.arc-v2 .debrief-ctx-head`, `.arc-v2 .cmp-head`, `.arc-v2 .cmp-receipt-label`,
+  `.monitor-panel-sub`, `.strends-sub`, `.v2-update-title`, and `.fct-skip-hint` ("click to skip" —
+  its 0.1em uppercase-chrome tracking went with it). **One was RE-CLASSIFIED, not restyled:**
+  `.ss-pin-label` renders a bare clock time with `tabular-nums` beside siblings already filed `value`
+  — making it sans would have been a regression dressed as compliance. Also swept in the same block,
+  not one of the 12: `.v2-update-whatsnew` ("What's new") was mis-filed `value` and is plainly prose.
+  Reasoning per selector is in the `mono-law-guard.test.ts` header, **not** the census `note` — the
+  regenerator overwrites that field. **The ratchet now sits at 0, so there is no debt bucket left to
+  hide in.**
+- [ ] **C-17b RESIDUAL · the visual half is 6/12, and the reason is a finding, not a shortcut.**
+  Self-review on a dev instance (the installed 0.9.26 build predates this change) measured the
+  computed face on **`.debrief-head`, `.monitor-panel-sub`, `.strends-sub`** and confirmed the
+  untouched control `.ss-pin-label` still renders mono. Baselines and the name/sub pairing were
+  checked and improved. **Unreached, reported as unreached rather than inferred:** `.cmp-head` and
+  `.wcp-head` need two sessions of the SAME game and this machine has three sessions of three
+  different games, so both resolve to their honest "nothing to compare" branch — reaching them means
+  writing fake sessions into the owner's real `%APPDATA%` data, which is not worth a type check.
+  `.v2-update-*` has no dev fixture seam for a pending update. `.fct-skip-hint`'s render window
+  collapses too fast to sample (OS `prefers-reduced-motion: true`; CDP media emulation did not
+  override it in WebView2). **The CSS itself is not in doubt — the guard proves the rules left the
+  mono set — only the "does it read better" half is outstanding.** It rides with the same visual
+  review the C-04 lane already owes on the next cut.
+- [ ] **NEW · The entire `.arc-v2` skin is DEAD CSS — `arc-instrument.css` never matches live DOM.**
+  Surfaced while closing C-17b and **verified by hand, not taken from the subagent** (the C-18 row
+  above is this repo's record of exactly that mistake). `SessionDebrief` has one mount,
+  `Play.tsx:488`, and it does not pass `arcV2`; the prop defaults `false` at `SessionDebrief.tsx:53`
+  and `:218`. Every other `arcV2` in the tree (`Onboarding.tsx:38`, `FirstCheck.tsx:108`,
+  `WhatChangedPanel.tsx:317/350/657`) is threaded from a prop that no top-level caller ever sets
+  true — `grep -rn "arcV2={" src --include=*.tsx` returns only internal re-threading. So the whole
+  `.arc-v2` re-dress imported at `App.tsx:80` is unreachable. **Do not delete it on this evidence
+  alone** — establish first whether the skin was parked deliberately or the wiring was lost, then
+  decide: wire it up, or archive it. Sizeable dead weight either way.
 - [ ] **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it.** Owner fork, never resolved,
   still parked by exemption.
-- [ ] **C-12 · DOC DRIFT: `CommandPalette` is recorded as parked-then-dropped in UI backlog §D, but
-  it is built and DEFAULT ON.** Doc-only fix; cheap.
+- [x] **C-12 · DOC DRIFT CLOSED — the command palette was filed as abandoned while shipping DEFAULT ON.** <!-- shipped-status-history -->
+  Two living docs said it was parked and dropped; it has been mounted in `ShellV2` behind
+  `compy_command_palette` (**default ON**) since `22fb15b2`. `UI_VISION_BACKLOG.md` §D is now the
+  SHIPPED record (what it is, where it mounts, the `"0"` failsafe, its guards), and
+  `OWNER_ACTION_CHECKLIST.md` no longer lists it as work the owner owes — it was sitting on his desk
+  as an open item for something already built. **This is the inverse of ordinary doc rot and the
+  expensive direction:** a stale TODO wastes a minute; a shipped feature filed as dropped gets
+  re-proposed and rebuilt beside the one that exists. Per bug→guard it did not close on an edit —
+  `src/design/shipped-feature-doc-truth.test.ts` now fails the suite when a living doc calls a
+  mounted, default-ON feature parked/dropped, with `<!-- shipped-status-history -->` as the
+  paragraph-scoped escape hatch for deliberate past tense. Proven against the pre-fix tree: it
+  reports both original sites. Source: `docs/CONFORMANCE_AUDIT_2026-08-18.md` §C-12.
 - [ ] **C-13 · Foundation tooling gap: axe-core in vitest (rank 3) and Figma MCP (rank 2) never
   landed; only shadcn did.** axe-core is the one with a guard shape.
 - [x] **PR #90 recovery + the quiet launch, rebuilt** — PR [#102](https://github.com/Pootytxng/sentinel/pull/102),
@@ -467,46 +497,6 @@ never be conflatable in any doc, commit message, or report).
   `not-comparable` added to `no_verdict_note_ever_carries_a_numeric_confidence` + an `ExperimentBench.test.tsx`
   render guard (the `not-comparable` verdict is unreachable in the live UI by design, so its label is vitest-proven).
   Decision doc `docs/decisions/2026-07-18-experiment-comparability.md` §3/§4 updated to CLOSED.
-- [x] **Measurement Platform 2.0 follow-up — `next_test` structured rec-id (additive).** The deferral's own
-  unlock condition is now met: the engine emits a real, OPTIONAL rec-id where a safe mapping provably exists.
-  `EventRecord.rec_id` carries the catalog id **copied verbatim off the Trust-Ledger row**, so
-  `Hypothesis.next_test_rec_id` / `WhatChangedReport.next_action_rec_id` are **READ, never matched from prose** —
-  nothing parses a summary or maps free text onto the catalog. Emitted under three read conditions, all inside
-  `compy-config-change` (the only hypothesis with a ledger row behind it): exactly ONE distinct rec in the
-  window · it has an apply event · that apply is not `since_rolled_back`. Every other hypothesis, the
-  confounded path, and the count-delta-only path emit `None` permanently. Deliberately NOT gated on
-  `is_appliable` — LOCKED rule 3 resolves rollback from `history.json` alone, so a rec that has since left the
-  apply allowlist is still undoable. **Routing correction (the deferral got the destination wrong):** the
-  destination is the **Trust Ledger / Applied Changes**, NOT a pre-loaded `ExperimentBench` pick — the bench
-  *applies* (`experiment.rs` `start_experiment` → `history::apply_recommendation`) while this next test
-  prescribes a *rollback*, and feeding it a still-active rec hits `already_active` in `simulate`'s precedence
-  chain and returns `already-configured` ("nothing left to change or test") — a dead end. Guard:
-  `next_test_rec_id_is_read_from_the_ledger_never_matched_from_prose` (6 cases, mutation-verified to fail on a
-  relaxed rule). Decision doc `docs/decisions/2026-07-18-prove-a-change-overlap.md` §5.
-  No mutation / network / gate change.
-  **Ledger half — ✅ LANDED, both halves now closed.** The "Next test" line in the What-changed report carries
-  an inline `Roll back "<change>"` button whenever the engine's rec id still resolves to a live applied row.
-  **Routing refinement of the line above** (the destination was right, the *location* wasn't): the affordance
-  brings the Ledger action TO the report rather than sending the user to the Ledger surface —
-  [[flags-name-it-and-fix-it-inline]] forbids a "go to another tab" dead-end and requires the flag to name the
-  specific thing it found (hence the change's title in the label, never a bare "Roll back"). Resolution is
-  against the **live** `changes` array (`App.tsx` `findActiveChangeForRec`), so the button self-hides the
-  instant the rollback lands — which is exactly why the engine's prose still names the Trust Ledger itself and
-  was left untouched: the sentence is the route, the button is only the shortcut. Props
-  (`activeChangeFor`/`onRollback`/`busy`) are optional together, so every pre-existing mount renders unchanged.
-  **Duplication caught by self-review and fixed in the same train:** in the primary flow (apply a fix from the
-  debrief → `arm_comparison` for that rec → the next same-game session resolves it) the `ComparisonCard`'s rec
-  and the engine's `next_action_rec_id` are the SAME still-active row, so an unguarded shortcut stacked TWO
-  differently-worded buttons for ONE action in one card. `SessionDebrief` now wraps the host resolver
-  (`rollbackShortcutFor`) and returns `undefined` for the card's own rec — for **every** verdict, not only the
-  ones showing "Revert it", because a `Roll back "X"` hanging under an *improved* card that just said "Keep it"
-  would contradict it outright. Wrapping the resolver rather than adding a prop leaves `WhatChangedPanel`'s
-  contract untouched and gives `SessionInvestigator` the same protection for free.
-  Guard: `src/surfaces/what-changed-rollback-guard.test.tsx` — 13 cases: 9 pinning the render condition, the
-  handed-over row, the busy face and all six stand-down paths, plus 4 that mount the *composition*
-  (`SessionDebrief`, not the isolated panel — which is exactly why the first 9 stayed green while the defect was
-  live) covering both suppression paths and both must-still-render paths. Mutation-verified: reverting the memo
-  to a bare `activeChangeFor(recId)` fails exactly the 2 suppression cases.
 - [x] **Measurement Platform 2.0 follow-up — comparability vocabulary chrome convergence (cosmetic).** ✅ LANDED
   `921f49e`. `src/surfaces/measurement-chrome.tsx` + `.css` are now the ONE vocabulary both rooms wear —
   `<VerdictBand>` / `<SectionLabel>` / `<ComparabilityNote>`, fed per-room by a `--mc-*` palette block declared

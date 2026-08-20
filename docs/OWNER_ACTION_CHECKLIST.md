@@ -271,9 +271,15 @@ count-up/ring-sweep plus a GSAP data-tick flash on real measured changes. The ro
 itself is **BUILT** (`1d310e1`, keyed remount on room change in `ShellV2.tsx`) — what's actually
 still partial is a *different*, narrower sub-piece: Monitor's "living oscilloscope trace" treatment
 for its meters (Home has one trace; Monitor's rollout is incomplete) — don't conflate the two.
-**Still genuinely open, unchanged:** CommandPalette (deliberately parked — `ShellV2.tsx`'s own
-comment: "a search box that does nothing would be a fake affordance — banned," owner call post-P6)
-and the site-glow/"full overhaul" gate.
+**Still genuinely open, unchanged:** the site-glow/"full overhaul" gate.
+
+<!-- shipped-status-history -->
+**Corrected 2026-08-19 (backlog C-12, same stale-paraphrase pattern as the two above).**
+CommandPalette was listed here as deliberately parked, quoting `ShellV2.tsx`'s "a search box that
+does nothing would be a fake affordance." The owner unparked it 2026-08-11 and it has shipped
+**DEFAULT ON** since `22fb15b2` — topbar box + Ctrl+K over every destination, `UI_VISION_BACKLOG.md`
+§D. **Nothing here is waiting on you for it.** `src/design/shipped-feature-doc-truth.test.ts` now
+fails the suite if this claim comes back.
 - **You said "there's more I'm missing" + "capture it first"** — done (this doc). **Next → tell me if
   the 🔴 list is complete or still short an item.** The first build target is **DECIDED** — the Instrument
   Bench Phase-1 build (the drag gallery is deleted, not a build option). Note: your original **"Feature Roadmap Checklist (CC Brief)"**
