@@ -6,6 +6,91 @@
 > Current truth lives in docs/RELEASE_STATE.md — these are point-in-time records.
 
 ---
+## ARCHIVED 2026-08-19 — LIVE UPDATER + the first field-QA wave (moved verbatim)
+
+> Moved out of `docs/BACKLOG.md` for the byte budget on 2026-08-19, with a pointer left in its
+> place. Every row here was closed — the in-app updater shipped and was proven end-to-end on the
+> owner's rig, and the 2026-07-22 tester reviews (J + Matthew) were triaged to completion. Current
+> updater/release truth is `docs/RELEASE_STATE.md`; this is the point-in-time record.
+
+## 🚚 LIVE UPDATER — SHIPPED (owner directive 2026-07-22) + FIRST FIELD-QA WAVE (reviews 2026-07-22)
+
+- [x] **Live in-app updater — SHIPPED + E2E-PROVEN** (`135d609` feat · `a6d1508` v0.9.2 · `90fc73e`
+  v0.9.3): endpoint `Pootytxng/compy-releases` `releases/latest/download/latest.json`; consent-first
+  topbar UpdatePill (offer → progress → passive NSIS → auto-relaunch; zero chrome when idle); footer
+  honesty copy "Outbound: signed update check only" (test-pinned); minisign key OUTSIDE repo;
+  `scripts/release.ps1` pipeline + `scripts/e2e-updater-probe.mjs` CDP probe. **Proven live on the
+  owner's rig: 0.9.2 self-updated to 0.9.3 through the updater.** Full state: RELEASE_STATE 23a
+  banner. Owner leftovers: key backup + first-link send (OWNER_ACTION_CHECKLIST §A0).
+
+**Tester reviews 2026-07-22 (J + Matthew, on the 0.9.0 build) — each item rides normal triage; fixes
+now SHIP through the updater.** J also praised: more organized, less overwhelming, loves controlled
+experiments + logbook. Matthew praised: guided-setup rail line, simple home, Optimize clarity,
+"What's this" on Telemetry Tasks.
+
+- [x] **Default window too small (multiple testers + owner 2026-07-23)** — ✅ SHIPPED v0.9.4
+  (`23ff847` feat · `419ec81` release), delivered to the owner's box THROUGH the updater: first-run
+  default 800×600 → 1280×720 centered, plus `tauri-plugin-window-state` so the size/position the
+  user sets persists (overlay denylisted). Restore path live-proven (state-file round-trip).
+- [x] **J: bigger 3D PC window** — ✅ SHIPPED v0.9.6 (`5c74ba2`/`29e5217`, through the updater):
+  Home stage 420→540, live canvas 362→482px; cards-band guard upgraded to DERIVE its bound from
+  the stage css (drift-proof).
+- [x] **J: cursor consistency** — ✅ FIX ALREADY SHIPPED (reticle.css `cursor: none !important` on
+  a universal descendant selector, which is required because an explicit same-element
+  `cursor: pointer` beats an inherited `cursor: none`). It had **no guard**; added
+  `src/design/console/reticle-cursor-contract.test.ts` (`e2f1322`) pinning the selector, the
+  `!important`, both escapes (text entry, `:disabled`) and the z-index band. Matthew's separate
+  "square crosshair is a little weird" is about the reticle's SHAPE and stays OPEN — a taste call,
+  which since 2026-08-07 is ours to make and show, not the owner's to adjudicate (CLAUDE.md, "TASTE
+  IS MINE TO EXERCISE, HIS TO OVERRULE"). It was never the same defect as the two-cursor bug.
+- [x] **J: "1 safe tweak not applied" is a dead end** — ✅ SHIPPED 2026-08-03 (`17d5f84`). The
+  detail was never missing: `apply_recommendations_batch` already returns `{ title, reason }` per
+  skip and HomeConsole discarded it one line after arrival, keeping only `.length`. The receipt now
+  retains the items and offers a subordinate disclosure naming each skipped tweak with the reason
+  the batch primitive gave (never synthesised here). Copy in en + zh-CN. bug→guard:
+  `src/surfaces/fastpath-skipped-detail-guard.test.ts`, proven both directions. **NOT taken:**
+  apply/ignore inline — a skip can come from a failed elevated step, so re-applying needs the
+  elevation flow rather than a button; larger than the dead end it would close.
+  **Visual self-review ✅ PASS 2026-08-04** (supersedes `17d5f84`'s "NOT RUN" note and the earlier
+  OUTSTANDING line here): captured natively via a live-fixture mount of the real HomeConsole with a
+  skip-bearing batch receipt — no machine mutation. 7/7 rubric PASS. One flag, not new to this diff:
+  the skip-reason line inherits the muted caption token at 3.44:1 on 12.5px — sub-AA for body text,
+  but it is the same token already shipping one line above and it clears the deliberate AA-large
+  floor `src/theme-contrast.test.ts:100` pins for `--ix-text-3`. Raising that floor is ours to call
+  (2026-08-07 taste decree) but it repaints every muted caption in the app — too wide for a T4
+  review to absorb, so it stays logged here as its own scoped change, not deferred to the owner.
+- [x] **J: post-check routing** — ✅ ALREADY SHIPPED (found 2026-08-03, stale entry). FirstCheck
+  renders "Take me to the Lab" beside "Open the dashboard" and deep-links the Optimize station via
+  the one-shot `compy_lab_open_station` handoff (App writes before `navHome("lab")`; LabConsole
+  reads + clears on mount). It had **no guard** — added `src/surfaces/post-check-lab-route-guard.test.ts`
+  (`06c047a`), which pins all three halves; the `removeItem` is load-bearing (without it every later
+  Lab visit force-opens Optimize). 🔻 **NEW, logged not fixed:** FirstCheck's CTA copy and verdict
+  prose are hardcoded English — that surface is un-i18n'd, so zh-CN users read English.
+- [x] **J: "Needs your call" cards not interactive** — ✅ SHIPPED v0.9.6+v0.9.7: whole card head is
+  a door (chevron, hover accent), opens the guided steps or an HONEST no-switch answer; What's-this
+  + bordered Not-for-me in a visible actions row. Live-verified via CDP (6 doors, no-guide case).
+  **Test-debt:** a DOM guard for the door behavior is NOT yet written (live-verified only) — add to
+  `optimize-v2-ia.test.tsx` next pass. Apply-from-card stays absent BY DESIGN (no safe switch).
+- [x] **J: per-room accents read as INCONSISTENCY** — ✅ RESOLVED per the owner's own 2026-07-23 pick
+  ("apply to all"): SHIPPED v0.9.5 (`67541e4` feat · `ac518f1` release) through the updater — one-tap
+  "Apply to all rooms" in the accent picker; per-room freedom intact. Live-proven + owner state
+  restored. UI_VISION_BACKLOG NAV-1 (a) has the record.
+- [x] **Matthew: Guided-Setup copy** — ✅ SHIPPED v0.9.6: the rail-orientation line now rides the
+  FIRST step (mode-aware, 3 new setup-steps guards; recap still closes with it), and every lesson's
+  tweak list reads "Settings Compy **can** tune here" + a nothing-changes-during-the-tour fine line.
+- [x] **Matthew: Field Guide explanation placement** — ✅ SHIPPED v0.9.6: the guide introduces
+  itself on its own tab (`bbv2-guide-lede`) and the intro's Blackbook blurb names it.
+- [x] **Matthew: non-admin old-tweaks check "Couldn't check" lines** — ✅ SHIPPED v0.9.6: grouped
+  in a calm bordered aside with an honest head ("N settings couldn't be read this pass — no guesses
+  made") + the design-philosophy note ("Compy doesn't ask for admin rights just to look"). The
+  guard-pinned per-item line format is preserved; the blanket run-as-admin recommendation was
+  deliberately NOT taken (conflicts with the consent-first elevation doctrine).
+- [x] **Matthew: bottom expandable rows too "quiet"** — ✅ SHIPPED v0.9.6: `.lab-optimize-more-summary`
+  restyled from inline mono-caps links to full-width bordered door rows (matching the group-head
+  grammar above); still subordinate to the enable-all hero. Deliberate revision of the earlier
+  demote-spec, owner-backed.
+
+---
 ## ARCHIVED 2026-08-19 — conformance queue: the SHIPPED rows (moved verbatim)
 
 > Moved out of `docs/BACKLOG.md` for the byte budget on 2026-08-19. The closed rows of the

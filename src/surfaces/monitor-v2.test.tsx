@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from "vite
 import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
 import { MonitorV2 } from "./MonitorV2";
-import Monitor from "./Monitor";
+import { TuningPresets } from "./TuningPresets";
 import { monitorVerdict as monitorVerdictRaw } from "./monitor-v2-data";
 import type { SessionSummary } from "../types";
 // i18n update (2026-07-23): monitorVerdict's headline/sub now come from t(...) (Simplified
@@ -19,8 +19,8 @@ const monitorVerdict = (sessions: SessionSummary[]) => monitorVerdictRaw(session
 // door to Blackbook), its verdict is a PURE derivation from the real session records (graded
 // by the SAME shortVerdict the debrief uses; honest empty state; branch-proper copy — never
 // "(s)"), Basic/Advanced + Live/Sessions semantics match the classic shell exactly, the quiet
-// slot carries the advisory Tuning presets in Advanced only, and the CLASSIC Monitor render
-// stays pinned unchanged (no RoomShell chrome, standalone presets title intact).
+// slot carries the advisory Tuning presets in Advanced only, and TuningPresets keeps both of
+// its faces: `bare` (the v2 quiet slot, head supplies the name) and un-`bare` (its own <h2>).
 
 // Play and MonitorBasic are the audited heavy surfaces — composed VERBATIM with the same
 // props, covered by their own suites. Stubs expose `view` and the onOpenSessions route so the
@@ -378,28 +378,14 @@ describe("MonitorV2 — quiet slot (advisory Tuning presets, Advanced only)", ()
   });
 });
 
-describe("classic Monitor — pinned unchanged (flag-off byte-identity at the render level)", () => {
-  it("renders no RoomShell chrome and keeps its standalone presets title", () => {
-    useAdvanced();
-    const { container } = render(
-      <Monitor
-        active
-        sessions={[session()]}
-        sessionsSeenAt=""
-        priorities={null}
-        recs={[]}
-        apply={vi.fn()}
-        busyId={null}
-        onExport={vi.fn()}
-        changes={[]}
-        rollback={vi.fn()}
-        vendor="amd"
-      />,
-    );
-    expect(container.querySelector(".v2-verdict")).toBeNull();
-    expect(container.querySelector(".v2-door")).toBeNull();
-    expect(container.querySelector(".v2-quiet")).toBeNull();
-    // TuningPresets without `bare` (the classic call) keeps its own <h2> title.
+describe("TuningPresets — the un-`bare` face, which the v2 quiet slot never renders", () => {
+  // The classic Monitor shell used to be the only caller that rendered TuningPresets without
+  // `bare`, and this case reached the component THROUGH it. That shell was deleted with backlog
+  // C-18 (issue #146) — it had no production importer — so the assertion that still means
+  // something is made against the component itself: absent `bare`, it supplies its own title.
+  // Deleting this instead would have let a dead shell take a live contract down with it.
+  it("keeps its own standalone <h2> title", () => {
+    render(<TuningPresets vendor="amd" />);
     expect(screen.getByRole("heading", { name: "Tuning presets" })).toBeTruthy();
   });
 });
