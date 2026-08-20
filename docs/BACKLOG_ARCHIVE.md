@@ -2735,3 +2735,35 @@ Frozen beta refs (`16069fa`) untouched.
   (`SessionDebrief`, not the isolated panel — which is exactly why the first 9 stayed green while the defect was
   live) covering both suppression paths and both must-still-render paths. Mutation-verified: reverting the memo
   to a bare `activeChangeFor(recId)` fails exactly the 2 suppression cases.
+
+---
+
+### Cycle 2026-08-19d — ✅ THE FRONT DOOR ANSWERS A QUESTION (CC): Home → **Health**, issue [#143](https://github.com/Pootytxng/sentinel/issues/143)
+
+C-04, the last unbuilt clause of UX-1 ① (decided 2026-08-11, never built). The owner picked
+**Health** from Health / Checkup / Diagnosis — "Diagnosis" was offered and declined for the same
+fear frame that retired "Fix" in 2026-06. Id stays `home`: it is the persisted nav key, the same
+rule every prior rename followed.
+
+- [x] **C-04 — the room is Health, everywhere the user reads it.** Rail/topbar/palette label
+  (`homeRail.ts` + `common.rail.home` in both locales), the tour's two rail-recap sentences, the
+  CPU-temp honesty note, the memory lesson's tie line, and the tour blurb that used to open "Your
+  dashboard" — a shape, not an answer — which now states the question the room answers.
+- [x] **The rename found a live drift hole with the fix half applied.** `HOME_RAIL[0].label` is NOT
+  what the app prints: `ShellV2.tsx:94` renders `t("common.rail." + id)` and `App.tsx:1447` derives
+  the Home dock's door names the same way. Renaming only `homeRail.ts` ships the OLD word with
+  `homeRail.test.ts` green, because that test asserts the literal the app does not use. New guard
+  `src/design/rail-label-locale-guard.test.ts` pins literal ↔ locale for every room (plus the merged
+  rail's `Optimize` relabel and locale key parity), **falsified against the half-applied rename** —
+  seed the old value and the first test goes red naming both words.
+- [x] **bug→guard, second half:** `Home` joined the RETIRED map in `room-name-copy-guard.test.ts`,
+  so the old word cannot return to English locale copy or Rust literals. Its disarm proof gained the
+  two real sentences this train rewrote, and records one KNOWN LIMIT honestly rather than narrowing
+  the pattern: "the Home key" (the keyboard key) trips the lead pattern; nothing in scope says it
+  today, and the `room-name-allow` hatch is the answer if something ever does.
+- [x] **Doc drift fixed in the same commit:** `DESIGN.md` still named the rail
+  "Home · Monitor · Blackbook · Lab" — two labels the owner retired on 2026-08-12 — and
+  `UI_VISION_BACKLOG.md` still called UX-1 ③ "NEVER BUILT" a day after C-05 shipped it.
+- **Not in any published build.** Ships with the next cut (fleet is on v0.9.26), and owes a
+  self-review on the installed binary before anyone calls it live.
+

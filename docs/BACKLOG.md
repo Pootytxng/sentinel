@@ -219,9 +219,21 @@
   driven to be measured.** Guard: `src/design/room-accent-menu-keyboard.test.tsx` (16 tests) drives
   real key events against a real mount and asserts real `document.activeElement`, and its last block
   is a CLASS ratchet — any NEW `role="menu"` under `src/` fails until it carries arrow handling, a
-  roving tabindex and a `.focus()` restore. Falsified four ways, each control failing exactly the
-  tests it should: the true pre-fix component (14/16 red), tabindex alone removed (3), the arrow
-  handler alone unwired (6), focus-restore alone dropped from Escape (1).
+  roving tabindex and a `.focus()` restore. Falsified FIVE ways (18 tests), each control failing
+  exactly the tests it should and no others: the true pre-fix component (14/18 red), tabindex alone
+  removed (3), the arrow handler alone unwired (6), focus-restore alone dropped from Escape (1), and
+  disabled-skip-on-open alone removed (2). That last one is a hole found in THIS lane's own change
+  during diff review, not in the original: `End`/`ArrowUp` from the trigger opened onto the last
+  INDEX — "reset to default", disabled whenever the room has no pick — so focus landed nowhere and
+  the tab stop parked on an unfocusable item. Refs do not exist at open time, so the skip lives in
+  the focus effect, stepping backward.
+  **Shipped `5fab9e79` (PR [#172](https://github.com/Pootytxng/sentinel/pull/172)); NOT in any built
+  or installed binary, and it OWES A SELF-REVIEW on the installed build before anyone calls it live.**
+  That debt is recorded rather than skipped: the session that shipped it was instructed not to
+  dispatch subagents, and the visual law requires the `self-reviewer` worker. Lower risk than the
+  usual UI debt — no CSS changed and no markup moved, only `tabIndex`, ref wiring and key handlers,
+  and the contract itself is pinned by 18 mounted tests asserting real `document.activeElement` —
+  but keyboard focus is exactly the thing a static test cannot see LOOK wrong, so it stays owed.
 - [x] **PR #90 recovery + the quiet launch, rebuilt** — PR [#102](https://github.com/Pootytxng/sentinel/pull/102),
   #90 MERGED (its four unverified Codex claims re-proven + repaired), #100 closed measured-inert and
   rebuilt via `WebviewWindowBuilder` + `SW_SHOWNOACTIVATE`. Detail: `docs/CHANGELOG.md`.
@@ -581,34 +593,14 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
-### Cycle 2026-08-19d — ✅ THE FRONT DOOR ANSWERS A QUESTION (CC): Home → **Health**, issue [#143](https://github.com/Pootytxng/sentinel/issues/143)
+### Cycle 2026-08-19d — ARCHIVED
 
-C-04, the last unbuilt clause of UX-1 ① (decided 2026-08-11, never built). The owner picked
-**Health** from Health / Checkup / Diagnosis — "Diagnosis" was offered and declined for the same
-fear frame that retired "Fix" in 2026-06. Id stays `home`: it is the persisted nav key, the same
-rule every prior rename followed.
-
-- [x] **C-04 — the room is Health, everywhere the user reads it.** Rail/topbar/palette label
-  (`homeRail.ts` + `common.rail.home` in both locales), the tour's two rail-recap sentences, the
-  CPU-temp honesty note, the memory lesson's tie line, and the tour blurb that used to open "Your
-  dashboard" — a shape, not an answer — which now states the question the room answers.
-- [x] **The rename found a live drift hole with the fix half applied.** `HOME_RAIL[0].label` is NOT
-  what the app prints: `ShellV2.tsx:94` renders `t("common.rail." + id)` and `App.tsx:1447` derives
-  the Home dock's door names the same way. Renaming only `homeRail.ts` ships the OLD word with
-  `homeRail.test.ts` green, because that test asserts the literal the app does not use. New guard
-  `src/design/rail-label-locale-guard.test.ts` pins literal ↔ locale for every room (plus the merged
-  rail's `Optimize` relabel and locale key parity), **falsified against the half-applied rename** —
-  seed the old value and the first test goes red naming both words.
-- [x] **bug→guard, second half:** `Home` joined the RETIRED map in `room-name-copy-guard.test.ts`,
-  so the old word cannot return to English locale copy or Rust literals. Its disarm proof gained the
-  two real sentences this train rewrote, and records one KNOWN LIMIT honestly rather than narrowing
-  the pattern: "the Home key" (the keyboard key) trips the lead pattern; nothing in scope says it
-  today, and the `room-name-allow` hatch is the answer if something ever does.
-- [x] **Doc drift fixed in the same commit:** `DESIGN.md` still named the rail
-  "Home · Monitor · Blackbook · Lab" — two labels the owner retired on 2026-08-12 — and
-  `UI_VISION_BACKLOG.md` still called UX-1 ③ "NEVER BUILT" a day after C-05 shipped it.
-- **Not in any published build.** Ships with the next cut (fleet is on v0.9.26), and owes a
-  self-review on the installed binary before anyone calls it live.
+Moved verbatim to [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-20, byte budget) when the
+C-13 (b) keyboard-contract row was written and this file reached 113.3KB of its 114KB ceiling. The
+front door became **Health** (C-04, issue [#143](https://github.com/Pootytxng/sentinel/issues/143)),
+and the rename found a live drift hole with the fix half applied: `HOME_RAIL[0].label` is NOT what
+the app prints, so renaming only `homeRail.ts` ships the old word with its own test green. The
+shipped C-04 row near the top of this file remains the current-state record.
 
 ### Cycle 2026-08-19c — ARCHIVED
 

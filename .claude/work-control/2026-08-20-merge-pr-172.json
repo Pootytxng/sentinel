@@ -1,0 +1,83 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 172,
+  "issue": null,
+  "branch": "lane/accent-menu-keyboard",
+  "currentHead": "4aecbaef897ab4face8d08842e88c8dbbe9d16a3",
+  "explicitHandoff": "Owner turn 2026-08-20: 'Read CLAUDE.md, then docs/RELEASE_STATE.md and docs/BACKLOG.md, and take the next non-gated item', plus an explicit instruction to commit the untracked PR #170 receipt as-is alongside the first commit. The next non-gated backlog item resolved to C-13 residual (b), the RoomAccentPicker role=menu keyboard contract; C-14 was SKIPPED as gated, being an unresolved owner fork by its own row.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room, git dir shared with C:/Users/Kuya/code/sentinel. main is checked out by that sibling worktree, which is why this worktree holds a lane branch.",
+    "remoteState": "git fetch --prune this turn. origin/main = 61ea26f901f67ae61bf03919e94a537bb1280f74 (the PR #170 merge). origin/lane/accent-menu-keyboard = 4aecbaef, pushed through the pre-push gate. Concurrent lanes untouched: PR #160 (lane/usage-audit-disk-bloat), PR #163 (lane/cleanup-train-2026-08-20).",
+    "worktree": "Seven worktrees live; git worktree list re-checked immediately before the rename and push, and no other lane is on this branch. The branch was renamed lane/win-shimmer -> lane/accent-menu-keyboard before its first push, so no ref was ever published under the old name by this lane.",
+    "branch": "lane/accent-menu-keyboard, cut from origin/main 61ea26f9. Two commits, zero merge commits, zero divergence: the trailing receipts for #168 and #170, then the a11y fix and its guard.",
+    "dirtyState": "git status --porcelain empty at 4aecbaef, apart from this receipt, which by construction cannot ride inside the head it authorizes.",
+    "liveProcesses": "Compy running from %LOCALAPPDATA%/Compy/compy.exe (pid 9264), not rebuilt or reinstalled this turn — this change is not in that binary and is not claimed to be. No dev server, no cargo build in flight."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1",
+    "npx tsc --noEmit",
+    "powershell scripts/doc-budget.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "4aecbaef897ab4face8d08842e88c8dbbe9d16a3",
+      "detail": "Ran inside .githooks/pre-push against this exact tree; push exit 0 and the gate printed LOCAL CHECK RESULT: PASS. Rust 963 passed / 0 failed / 24 ignored, cargo clippy clean."
+    },
+    {
+      "command": "npx vitest run (full frontend suite, re-run AFTER the push)",
+      "status": "passed-with-one-known-race",
+      "head": "4aecbaef897ab4face8d08842e88c8dbbe9d16a3",
+      "detail": "350/351 test files, 4598 passed / 4 skipped (4603). The single failure is branch-disposition-audit's live-repo assertion reporting that origin/lane/accent-menu-keyboard - this lane's OWN freshly-pushed ref - has no disposition row. That is the known two-push ordering race: the audit rejects a row for a ref not yet on origin and rejects a ref with no row, so the two only reconcile across two pushes, and the pre-push hook ran before the ref existed. It is NOT cited as a pass. Merging and pruning clears it, and a pruned ref needs no row, so no row is being added.",
+      "reRunAfterPrune": "node scripts/branch-disposition-audit.mjs must return OK once the ref is deleted"
+    },
+    {
+      "command": "npx tsc --noEmit",
+      "status": "passed",
+      "head": "4aecbaef897ab4face8d08842e88c8dbbe9d16a3",
+      "detail": "Exit 0, clean."
+    },
+    {
+      "command": "powershell scripts/doc-budget.ps1",
+      "status": "passed",
+      "head": "4aecbaef897ab4face8d08842e88c8dbbe9d16a3",
+      "detail": "ALL PASS. Recorded because it is close: docs/BACKLOG.md is 112.1KB against a 114KB ceiling and 1051 lines against 1200 after this edit."
+    }
+  ],
+  "guardProof": {
+    "file": "src/design/room-accent-menu-keyboard.test.tsx",
+    "tests": 18,
+    "falsification": "Five negative controls, each failing exactly the tests it should and no others: the true pre-fix component (14/18 red), roving tabindex alone removed (3), the arrow handler alone unwired (6), focus-restore alone dropped from the Escape path (1), disabled-skip-on-open alone removed (2). The last control covers a hole found in this lane's OWN change during diff review, not in the original: End/ArrowUp from the trigger opened onto the disabled reset item and focus landed nowhere.",
+    "classRatchet": "The final describe block scans every non-test .tsx under src/ and fails any file declaring role=\"menu\" that lacks arrow handling, a roving tabindex and a .focus() restore. RoomAccentPicker is currently the only such file, which is why the ratchet is cheap to install now."
+  },
+  "shipProof": {
+    "applicable": false,
+    "reason": "No build and no install this turn. The change is NOT in the installed binary (pid 9264 is the pre-existing desk build) and is not claimed to be live anywhere."
+  },
+  "selfReview": {
+    "verdict": "NOT RUN",
+    "blocking": false,
+    "reason": "The visual self-review law requires the .claude/agents/self-reviewer subagent and forbids inline capture in the orchestrator. This session was explicitly instructed not to dispatch subagents, so the visual pass could not be discharged and is NOT being claimed. Recorded as owed rather than skipped: the diff changes no CSS and moves no markup - only tabIndex attributes, ref wiring and keyboard handlers - and the keyboard contract itself is pinned by 18 mounted tests asserting real document.activeElement, which is stronger evidence for THIS change than a screenshot. The visual gate is still owed before the surface is called live in any build."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session, and docs/WORK_CONTROL.md makes that review advisory rather than a blocker. Mitigation: the change is confined to one presentational component plus its test, touches no mutation surface, no IPC, no elevation path and no gate function, and every behavioural claim in the PR carries a named negative control."
+  },
+  "docGates": [
+    "docs/BACKLOG.md C-13 residual (b) updated in the same commit as the fix",
+    "branch-disposition-audit: FAIL on this lane's own ref only, the known ordering race, cleared by the prune that follows the merge"
+  ]
+}
