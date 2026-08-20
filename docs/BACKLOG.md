@@ -22,39 +22,63 @@
 > in [RELEASE_STATE.md](RELEASE_STATE.md). Historical priority sections below remain evidence, not the
 > current pull order.
 
-- [x] **PRODUCT-CONFORMANCE DRIFT — the class the owner caught on his own desk (2026-08-18).** Three
-  defects in one screenshot: his removed "What are you here to do?" box back as the largest button
-  (`compy_home_intake` consulted about the panel, not the question), nine user-facing Rust strings
-  naming rooms retired 2026-08-12 (Monitor/Blackbook/Lab), and TWO tests actively defending both.
-  Fixed + guarded in `8db70795`: `src/room-name-copy-guard.test.ts` (driven off `HOME_RAIL`, carries
-  its own disarm proof) and self-review rubric item 10 (prior owner decisions; a git log -S is
-  required evidence). **Root cause, recorded because it generalises:** all 167 guards check safety,
-  release integrity or "nothing was deleted" — the affordance census CERTIFIED the regression
-  because it rewards KEEPING affordances and his decision was to remove one. No audit in the repo
-  asks "does the app still match what the owner decided". Codex's weekly automation is coordination-
-  only (branches/claims/worktrees) and writes to `$CODEX_HOME`, outside the repo, where no lane
-  reads it.
-- [x] **Product-conformance audit — DELIVERED by Cowork 2026-08-18**, read-only, 469 lines:
-  [`docs/CONFORMANCE_AUDIT_2026-08-18.md`](CONFORMANCE_AUDIT_2026-08-18.md). 26 recorded decisions
-  graded against `main@e6feb861`'s committed blobs. **9 HONORED · 1 SILENTLY REVERSED · 9 NEVER
-  BUILT · 4 PARTIAL · 1 DOC DRIFT · 1 never resolved · 1 not-yet-built-no-drift.** Its three top
-  findings (C-01 intake flag, C-02 room renames, C-03 topbar taglines) are the three this train
-  fixed, arrived at independently. **The unbuilt remainder is the queue below — that is what the
-  audit bought.**
+### ▶ NEXT UP — the ONE linear queue (rebuilt 2026-08-20)
+
+> Rebuilt from a live health check, not from the last handoff's memory: `branch-disposition-audit` OK ·
+> `verify-module-map` OK (46 files) · `verify-release-state` 32/32 after this lane re-stamped a
+> `source_main_commit` that had drifted 16 commits · `doc-budget` ALL PASS. **Take the top unblocked
+> item.** Owner items are named once, with a pointer — `OWNER_ACTION_CHECKLIST.md` stays their home.
+
+**MINE — in this order:**
+
+1. **C-13(b) self-review debt.** `5fab9e79` (the accent-menu keyboard contract) was in no built binary
+   and owed a `self-reviewer` pass on an installed build. *Why it matters:* a UI change is not done
+   until someone has LOOKED at it, and keyboard focus is exactly what a green test cannot see look
+   wrong. **Discharged by this lane — verdict recorded on the C-13 row below.**
+2. **#171 · `verify-local` invents failures under concurrent lane load** — two `0xC0000409` crashes in
+   three runs of the same tree. *Why it matters:* this is the gate every merge receipt rests on. A gate
+   that fails at random either blocks real work or teaches us to re-run until green, which is exactly
+   how a real regression gets waved through.
+3. **#121 · `launch-focus-guard` RUNTIME tier is intermittent, NOT root-caused** — the same class as
+   #171 and its likeliest single cause. Detail on the open row further down this file.
+4. **#126 · retire the 10 unmerged origin lanes + 2 fully-merged refs.** *Why it matters:* this IS the
+   "get back to linear" item — every stranded ref is one more thing each lane must disposition before
+   its own audit can go green.
+5. **#156 · a silent NSIS install exited 0 without replacing `compy.exe`.** The stamp gate caught it and
+   is pinned; the cause is still open. *Why it matters:* without that gate the owner would have been
+   handed a build that was not the build.
+6. **#128 · thin local release/install collision guard** — the governance half of #156 and #171.
+7. **#125 · `session-root-assert` only ADVISES where the handoff wanted a refusal**, with a test pinning
+   it. *Why it matters:* an unlaunched session writing to the project runs with none of its laws loaded.
+8. **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it** (row below; owner fork B_gpu).
+9. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
+   below). Delegated to the Codex lane — do not duplicate it here.
+
+**BLOCKED — another lane owns these; `WORK_CONTROL.md` says hands off, not adjudicate:**
+PR [#160](https://github.com/Pootytxng/sentinel/pull/160) (`lane/usage-audit-disk-bloat`) is
+**MERGEABLE/CLEAN** and simply unmerged; PR [#163](https://github.com/Pootytxng/sentinel/pull/163)
+(`lane/cleanup-train-2026-08-20`) is **CONFLICTING/DIRTY** and needs its own lane to rebase. Neither
+session was advancing at 2026-08-20 09:01, but an idle claim is an alarm, not a takeover.
+
+**ALSO OPEN, not yet queued** (so none of it drops silently): #133 CARE capability rails tasks 4–7 ·
+#140 CPU temp (PawnIO/MSR — needs a Capability Exception record first) · #64 Q2b main-window caller
+checks · #54/#55 Project Doctor (Codex-claimed) · #49 Quiet Pit Wall (needs a visual self-review) ·
+the PHASE A–D rows below.
+
+**OWNER-GATED — visible, never blocking:** 11 open items across `OWNER_ACTION_CHECKLIST.md` §A/§B/§C —
+the Desktop key copy, distribution widening (B2), the funnel + monetization inputs (B3/B6), the two
+substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-screen forks
+(B_startup/B_gpu), the analytics region question (B_eu), and the §C money/legal gates.
+
+- [x] **Cutline rows SHIPPED 2026-08-18 → 2026-08-19, moved verbatim to
+  [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-20, byte budget, to pay for the NEXT UP
+  queue above): the product-conformance drift class + Cowork's 469-line audit, the Home front-door
+  restructure (UX-1 ②), and C-12's command-palette doc drift. All three were closed records, not work.
 - [ ] **Extend the Codex weekly automation with product-conformance scope, and make it write INTO the
   repo.** Today it is coordination-only (branches/claims/worktrees) and writes to `$CODEX_HOME`,
   outside the repo, where no lane ever reads it — which is why six days of drift went unseen. The
   audit above is the template for what the weekly run should re-check. Still delegated; do not
   duplicate.
-- [x] **Home front door restructure (UX-1 ② completion, owner-approved direction 2026-08-18).**
-  Verdict → one action → hero. Shipped: topbar taglines gone (audit C-03, decided 2026-08-11, six
-  days late) with a `ShellV2.test.tsx` case that fails if one grows back · the check strip stopped
-  being a bordered card with an uppercase `CHECKS` tag and is now one plain sentence, which also
-  closes audit §3's `16/16 clean` jargon finding · Home's Crash & Freeze row de-striped, with
-  `src/side-stripe-guard.test.ts` failing the build on any NEW >1px coloured side border (three
-  known offenders baselined and named, not fixed blind — they live on rooms this train did not open).
-  **Found while rewriting the line:** `measured/total` rendered identically for "two checks failed"
-  and "two checks were unreadable"; the sentence now distinguishes them and that is test-pinned.
 
 ### Conformance queue — the audit's unbuilt decisions, in owner-value order
 
@@ -172,18 +196,6 @@
   still absolute.
 - [ ] **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it.** Owner fork, never resolved,
   still parked by exemption.
-- [x] **C-12 · DOC DRIFT CLOSED — the command palette was filed as abandoned while shipping DEFAULT ON.** <!-- shipped-status-history -->
-  Two living docs said it was parked and dropped; it has been mounted in `ShellV2` behind
-  `compy_command_palette` (**default ON**) since `22fb15b2`. `UI_VISION_BACKLOG.md` §D is now the
-  SHIPPED record (what it is, where it mounts, the `"0"` failsafe, its guards), and
-  `OWNER_ACTION_CHECKLIST.md` no longer lists it as work the owner owes — it was sitting on his desk
-  as an open item for something already built. **This is the inverse of ordinary doc rot and the
-  expensive direction:** a stale TODO wastes a minute; a shipped feature filed as dropped gets
-  re-proposed and rebuilt beside the one that exists. Per bug→guard it did not close on an edit —
-  `src/design/shipped-feature-doc-truth.test.ts` now fails the suite when a living doc calls a
-  mounted, default-ON feature parked/dropped, with `<!-- shipped-status-history -->` as the
-  paragraph-scoped escape hatch for deliberate past tense. Proven against the pre-fix tree: it
-  reports both original sites. Source: `docs/CONFORMANCE_AUDIT_2026-08-18.md` §C-12.
 - [ ] **C-13 · Foundation tooling gap — axe-core (rank 3, MINE) LANDED; Figma MCP (rank 2, OWNER)
   still not wired.** The half that was ever mine to do is done and the row stays open only for the
   owner's half. `axe-core` now runs in vitest: `src/test/axe.ts` is the harness,
