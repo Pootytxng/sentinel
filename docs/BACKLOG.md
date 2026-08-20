@@ -200,9 +200,28 @@
   read as contrast coverage that does not exist. It is disabled by name, and contrast stays where it
   is really measured (`src/theme-contrast.test.ts`, `src/design/type-scale-guard.test.ts`).
   **Still open under this row:** (a) rank 2, the owner's Figma account + MCP server — his hands, see
-  `docs/OWNER_ACTION_CHECKLIST.md`; (b) `RoomAccentPicker` claims `role="menu"` without the roving
-  tabindex / arrow-key navigation the ARIA menu pattern requires — axe cannot see that, and the fix
-  above did not address it. Issue [#150](https://github.com/Pootytxng/sentinel/issues/150).
+  `docs/OWNER_ACTION_CHECKLIST.md`. That is now the ONLY thing holding C-13 open.
+  **(b) CLOSED 2026-08-20 — the `role="menu"` keyboard contract is honoured.** `RoomAccentPicker`
+  declared the role from the day it shipped and carried none of its behaviour: **all 17 items sat in
+  the tab order**, so crossing the topbar by keyboard cost 17 stops instead of one; no arrow keys, so
+  the role's navigation contract was a claim the component did not honour; and no focus restoration,
+  so closing dropped focus onto `<body>` and lost the user's place. Now: roving tabindex (exactly one
+  tabbable item), one linear ring over all 17 items with Up/Left · Down/Right · Home/End and wrap,
+  disabled items skipped, and every close path — Escape, Tab, pick, apply-to-all — returning focus to
+  the trigger. An outside click deliberately does NOT restore focus, so it cannot fight whatever was
+  just clicked. **Kept as a menu rather than ported to `Picker`** (the select-only combobox from
+  C-10): the popover mixes 15 `menuitemradio` swatches with two COMMANDS, and a `listbox` may not
+  contain commands — so this completes the correct contract instead of re-architecting a shipped
+  surface. Picker's recorded warning about focus-on-close is paid explicitly rather than dodged.
+  **Why axe never saw it, and why that generalises:** axe reads the accessibility TREE — roles, names,
+  required children — and every one of those was already correct here, so the 49-case C-13 sweep
+  passed the day the defect was filed. **A role is a promise about behaviour, and behaviour has to be
+  driven to be measured.** Guard: `src/design/room-accent-menu-keyboard.test.tsx` (16 tests) drives
+  real key events against a real mount and asserts real `document.activeElement`, and its last block
+  is a CLASS ratchet — any NEW `role="menu"` under `src/` fails until it carries arrow handling, a
+  roving tabindex and a `.focus()` restore. Falsified four ways, each control failing exactly the
+  tests it should: the true pre-fix component (14/16 red), tabindex alone removed (3), the arrow
+  handler alone unwired (6), focus-restore alone dropped from Escape (1).
 - [x] **PR #90 recovery + the quiet launch, rebuilt** — PR [#102](https://github.com/Pootytxng/sentinel/pull/102),
   #90 MERGED (its four unverified Codex claims re-proven + repaired), #100 closed measured-inert and
   rebuilt via `WebviewWindowBuilder` + `SW_SHOWNOACTIVATE`. Detail: `docs/CHANGELOG.md`.
