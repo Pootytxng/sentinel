@@ -137,8 +137,18 @@
   decide: wire it up, or archive it. Sizeable dead weight either way.
 - [ ] **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it.** Owner fork, never resolved,
   still parked by exemption.
-- [ ] **C-12 · DOC DRIFT: `CommandPalette` is recorded as parked-then-dropped in UI backlog §D, but
-  it is built and DEFAULT ON.** Doc-only fix; cheap.
+- [x] **C-12 · DOC DRIFT CLOSED — the command palette was filed as abandoned while shipping DEFAULT ON.** <!-- shipped-status-history -->
+  Two living docs said it was parked and dropped; it has been mounted in `ShellV2` behind
+  `compy_command_palette` (**default ON**) since `22fb15b2`. `UI_VISION_BACKLOG.md` §D is now the
+  SHIPPED record (what it is, where it mounts, the `"0"` failsafe, its guards), and
+  `OWNER_ACTION_CHECKLIST.md` no longer lists it as work the owner owes — it was sitting on his desk
+  as an open item for something already built. **This is the inverse of ordinary doc rot and the
+  expensive direction:** a stale TODO wastes a minute; a shipped feature filed as dropped gets
+  re-proposed and rebuilt beside the one that exists. Per bug→guard it did not close on an edit —
+  `src/design/shipped-feature-doc-truth.test.ts` now fails the suite when a living doc calls a
+  mounted, default-ON feature parked/dropped, with `<!-- shipped-status-history -->` as the
+  paragraph-scoped escape hatch for deliberate past tense. Proven against the pre-fix tree: it
+  reports both original sites. Source: `docs/CONFORMANCE_AUDIT_2026-08-18.md` §C-12.
 - [ ] **C-13 · Foundation tooling gap: axe-core in vitest (rank 3) and Figma MCP (rank 2) never
   landed; only shadcn did.** axe-core is the one with a guard shape.
 - [x] **PR #90 recovery + the quiet launch, rebuilt** — PR [#102](https://github.com/Pootytxng/sentinel/pull/102),

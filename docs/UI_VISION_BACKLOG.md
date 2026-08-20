@@ -799,10 +799,27 @@ Records"** (reskin the library only). ✅ **Owner picked A** ("blackbook looks g
 pure `buildLogbook` tape over EXISTING data — zero new IPC/`src-tauri` · rollback reuses the audited path ·
 title-header law · honest-empty · reduced-motion still). **Builds in a FRESH session**, then eyeball → default-ON.
 
-### D. CommandPalette / keyboard-first command flow — parked, then dropped
-From the product-UI-system brief (Linear/Raycast discipline). Explicitly parked as "new feature,
-backlog candidate post-P6, owner call" — and then never mentioned again anywhere.
-Source: `docs/superpowers/specs/2026-07-02-design-direction-product-ui-system.md:36,54,83`.
+### D. CommandPalette / keyboard-first command flow — ✅ SHIPPED DEFAULT ON (2026-08-11, `22fb15b2`, PR [#99](https://github.com/Pootytxng/sentinel/pull/99))
+From the product-UI-system brief (Linear/Raycast discipline). **The owner unparked it 2026-08-11** —
+a tester could not navigate the app and he named that *"honestly my biggest gripe"* — and it shipped:
+`src/design/CommandPalette.tsx`, the topbar *"Search or jump anywhere · Ctrl K"* box plus a
+Ctrl+K / Cmd+K overlay that searches every destination at once (rooms, Lab instruments, Settings, and
+the whole Blackbook corpus). Mounted at `src/design/ShellV2.tsx:334` behind `compy_command_palette`,
+**DEFAULT ON** — a discoverability surface that is off by default fixes nothing for the only people it
+exists for. `"0"` is the devtools failsafe: no topbar box, no Ctrl+K, shell byte-identical to the
+pre-palette tree. **Navigation never teleports** (P6 law): every action calls the same writer the rest
+of the app already uses, so the palette adds a door, never a second hallway.
+Guards: `src/design/command-palette.test.tsx` · `command-palette-flag.test.tsx` ·
+`command-palette-data.test.ts` · `shipped-feature-doc-truth.test.ts` (which keeps this row honest).
+
+<!-- shipped-status-history -->
+**Why this row read the opposite for six weeks (closed 2026-08-19 as backlog C-12).** It was parked in
+2026-07 as *"new feature, backlog candidate post-P6, owner call"*
+(`docs/superpowers/specs/2026-07-02-design-direction-product-ui-system.md:36,54,83`) and this section
+said *"parked, then dropped — never mentioned again anywhere."* That was true when written and false
+from 2026-08-11 on, and nothing checked it; `docs/CONFORMANCE_AUDIT_2026-08-18.md` §C-12 caught it by
+hand. This is the inverse of the usual rot — a **shipped** feature recorded as **dropped**, which
+costs more than a stale TODO: the next reader re-proposes something that already exists.
 
 ### E. Trending design tooling (Figma / v0-Vercel MCPs) — substituted, awaiting owner's call
 De-slop directive point #6 asked for these applied wherever the UI reads as AI-slop-default. They
