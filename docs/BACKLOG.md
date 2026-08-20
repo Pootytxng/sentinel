@@ -83,45 +83,7 @@
   ratchet). Read them there before re-litigating any of it. The C-18 correction below still
   applies; C-19 moved to the archive with its row, and C-17b is paid off below.
 
-- [x] **C-18 · SHIPPED 2026-08-19 — the classic Monitor shell is gone** (issue
-  [#146](https://github.com/Pootytxng/sentinel/issues/146)). **The row was wrong THREE times and the
-  third correction is the one that mattered:** `src/surfaces/Monitor.tsx` was never "genuinely
-  unreferenced" — `MonitorV2.tsx:6` imported `TuningPresets` out of it and renders it live in the v2
-  quiet slot, so deleting the file as written would have broken the build. What was dead was the
-  ROOM inside the live file: `export default Monitor` had had no production importer since MonitorV2
-  replaced it, only its own test and one `monitor-v2.test.tsx` block. Fix: `TuningPresets` moved
-  verbatim to `src/surfaces/TuningPresets.tsx`, then the shell + `Monitor.css` + `Monitor.test.tsx`
-  deleted (213 + 17 + 123 lines); the one assertion still worth keeping (un-`bare` presets supply
-  their own `<h2>`) now runs against the component directly. No user-visible change — nothing
-  mounted it on any flag path. Earlier corrections (Play / SessionDebrief / MonitorDomainCards are
-  LIVE, `monitor-panels.tsx` is the `compy_monitor_console="0"` failsafe, not dead code) stand and
-  are why this lane grepped the class by hand: [[audit-needs-completeness-critic-grep]].
-- [x] **C-18 guard (bug→guard) — `src/reachability-guard.test.ts` grew a second tier.** The
-  file-level guard could not see this defect by construction: the FILE was reachable through one
-  live symbol while the ROOM inside it was dead. The new tier fails when a module's DEFAULT-EXPORTED
-  symbol has no production importer under EITHER form (`import X from` / lazy edge, or
-  `import { X }` where it is also named-exported). The both-forms rule is load-bearing: two dozen
-  surfaces here export a component by name and re-export it as default, and failing those would
-  report 26 live rooms as dead on day one. **Falsified against the pre-fix tree** — it names exactly
-  `surfaces/Monitor.tsx` and nothing else.
-- [x] **C-18b · Both dead rooms DECIDED — issue [#148](https://github.com/Pootytxng/sentinel/issues/148).**
-  `DEFAULT_ALLOWED` is empty again, which is the point: an entry there is a promise to come back, not
-  a place to park a finding.
-  **`src/Onboarding.tsx` + `Onboarding.css` DELETED.** Not a fresh product call — C-05 retired the
-  modal in `docs/decisions/2026-08-11-design-navigation-audit.md` §4 and `App.tsx` said so in prose;
-  what kept the file alive was two exports that were never about the modal. `ONBOARDED_KEY` and
-  `type RigLine` now live beside `SETUP_TOUR_KEY` in `surfaces/setup/SetupTour.tsx`. The four
-  source-text guards moved WITH it rather than around it: affordance-census entry + baseline,
-  button-legibility's 2-button allowlist row, the capability-policy copy root, the modal-stacking
-  z-index comment; the mono census dropped its three `Onboarding.css` selectors.
-  **bug→guard:** `capability-exception-policy-guard` walked a copy root that no longer existed and
-  passed in silence — coverage lost quietly is worse than coverage never claimed — so it now fails on
-  any `COPY_ROOTS`/`COPY_DOCS` path that is missing from disk.
-  **`design/vendor/Stepper/Stepper.tsx` settled by POLICY, not an entry.** Vendored code is exempt by
-  rule (`VENDOR_PREFIX = "design/vendor/"`), because whether its default export is mounted here says
-  nothing about whether the file is right, and pruning part of a vendored module is a judgement about
-  the next re-vendor. Two tests keep the rule narrow: the prefix is pinned literally, and the
-  exemption must still cover a real unmounted default or it is inert and gets deleted.
+- [x] **C-18 · C-18 guard · C-18b — ALL SHIPPED 2026-08-19, moved verbatim to [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-20, byte budget). The classic `Monitor` room deleted after `TuningPresets` moved out of it verbatim (issue [#146](https://github.com/Pootytxng/sentinel/issues/146)) · `reachability-guard.test.ts`'s second tier, which catches a DEAD default export inside a LIVE file · both dead rooms decided, `Onboarding` deleted and vendored `Stepper` exempted by rule (issue [#148](https://github.com/Pootytxng/sentinel/issues/148)). **Read them there before re-litigating any of it** — the C-18 row is this repo's record of a subagent grep that was wrong three times, and the C-17b RESIDUAL row below leans on it.
 - [x] **C-17b · The 12 recorded mono-on-prose violations are PAID — ceiling 12 → 0.** The C-17 lane
   seeded the buckets by a selector-name heuristic and restyled none of them. This lane closed them by
   reading the CONTENT each selector renders — the i18n string, not its name — which is the evidence
@@ -136,19 +98,60 @@
   Reasoning per selector is in the `mono-law-guard.test.ts` header, **not** the census `note` — the
   regenerator overwrites that field. **The ratchet now sits at 0, so there is no debt bucket left to
   hide in.**
-- [ ] **C-17b RESIDUAL · the visual half is 6/12, and the reason is a finding, not a shortcut.**
-  Self-review on a dev instance (the installed 0.9.26 build predates this change) measured the
-  computed face on **`.debrief-head`, `.monitor-panel-sub`, `.strends-sub`** and confirmed the
-  untouched control `.ss-pin-label` still renders mono. Baselines and the name/sub pairing were
-  checked and improved. **Unreached, reported as unreached rather than inferred:** `.cmp-head` and
-  `.wcp-head` need two sessions of the SAME game and this machine has three sessions of three
-  different games, so both resolve to their honest "nothing to compare" branch — reaching them means
-  writing fake sessions into the owner's real `%APPDATA%` data, which is not worth a type check.
-  `.v2-update-*` has no dev fixture seam for a pending update. `.fct-skip-hint`'s render window
-  collapses too fast to sample (OS `prefers-reduced-motion: true`; CDP media emulation did not
-  override it in WebView2). **The CSS itself is not in doubt — the guard proves the rules left the
-  mono set — only the "does it read better" half is outstanding.** It rides with the same visual
-  review the C-04 lane already owes on the next cut.
+- [x] **C-17b RESIDUAL · CLOSED 2026-08-20 on installed `402b0080` — VERDICT PASS, and the "6/12"
+  in this row's old header was itself wrong.** Re-measured fresh against the real installed binary
+  (`402b0080 · release · shell 0.9.26`), not a dev instance. **The prior count did not survive
+  contact with its own prose:** the row claimed 6 of 12 while naming only `.debrief-head`,
+  `.monitor-panel-sub`, `.strends-sub` plus the untouched control `.ss-pin-label` — 3 restyled
+  selectors, not 6. Corrected count on this pass: **4 of 12 measured**, and the remaining 8 are now
+  classified by the SHAPE of their wall, which is the thing that decides whether a row can ever
+  close.
+  **MEASURED (all four resolve to `Geist Sans`, none reads worse than the mono did, none breaks
+  alignment against a numeric sibling):** `.debrief-head` ("MortalShell2 · 13m 24s · 2:19 AM–2:33 AM",
+  sits clean above the stat row) · `.strends-sub` ("best 195 fps") · `.fct-skip-hint` ("click to
+  skip", letter-spacing measured 0.52px — the 0.1em uppercase-chrome tracking is confirmed gone;
+  **reached this time by arming a page-internal `setInterval` DOM poll before the "Re-run check"
+  click**, which beats the CDP-screenshot race the earlier pass lost under `prefers-reduced-motion`)
+  · `.monitor-panel-sub` ("pressure · ok") — **but read its wall below before quoting it as default
+  coverage.** Control `.ss-pin-label` still `Geist Mono` with `tabular-nums`: no regression.
+  **`.monitor-panel-sub` is only reachable on the FAILSAFE face, and that is a finding.**
+  Hand-traced, not taken from the subagent: `compy_monitor_console` is DEFAULT ON, so
+  `MonitorV2.tsx:206-236` routes basic AND advanced+live to `MonitorConsole`, which never uses the
+  class; the only branch left is `<Play view="sessions">` (`:240`), and `Play.tsx:264` sets
+  `showLive = view !== "sessions"` → `false`, so the `showLive && deepMonitoring` guard at
+  `Play.tsx:435` never fires. The whole `MonitoringTab` → `MonitorDomainCards` → `.monitor-panel-sub`
+  slot therefore renders **only** with `localStorage.compy_monitor_console="0"` — consistent with
+  C-18's "`monitor-panels.tsx` is the failsafe, not dead code", now extended to the domain cards.
+  The seam was set, measured, then removed and the app reloaded clean.
+  **UNREACHED — data-shaped (2). Will close organically, no code seam needed:** `.cmp-head` needs an
+  applied rec plus a SECOND session of the SAME game; `.wcp-head` never renders at all on this data
+  because `WhatChangedPanel.tsx:315-321` takes the `unavailable` branch, which emits only `.wcp-tag`
+  + reason ("First recorded MortalShell2 session — nothing earlier to compare against") — correct
+  wording, and it carries no mono either way. This machine has three sessions of three different
+  games; **writing fake sessions into the owner's real `%APPDATA%` was refused, not skipped.**
+  **UNREACHED — structural/permanent (6). These will NOT resolve by waiting; each needs a code
+  change to become reviewable:** `.v2-update-title` + `.v2-update-whatsnew` — `use-update.ts` has
+  zero localStorage/URL override seam and needs a real pending manifest above 0.9.26; and the four
+  `.arc-v2` variants (`.debrief-title`, `.debrief-ctx-head`, `.cmp-head`, `.cmp-receipt-label`) —
+  `SessionDebrief`'s only mount (`Play.tsx:488`) never passes `arcV2`, and the one live `arcV2=true`
+  call site (`FirstCheck`, `App.tsx:1228`) re-skins only its own `fc-backdrop` + `TrustSwitch`, never
+  the debrief/comparison subtree. **This is the row's real conclusion:** half the outstanding debt
+  was never reviewable UI at all, so it belongs to the `.arc-v2` part-dead row below, not to a
+  perpetual visual-review IOU. The guard already proves the rules left the mono set.
+- [ ] **`.btn-small` — 26 buttons across 11 files render in Arial, not the app's sans. Found by the
+  C-17b review, PRE-EXISTING, and bigger than it first looked.** `App.css:1388` declares
+  `font-size` and `font-weight` and **no `font-family`**, so every `.btn-small` falls through to the
+  UA default while its siblings are `Geist Sans`. Measured live on `402b0080`: the session-debrief
+  **Share** button computes to bare `"Arial"`. Same class, same cause, `.debrief-ctx-head`
+  (`App.css:3053`) — a `<button>` styled as a header row, also with no `font-family`. **Not caused by
+  C-17b:** buttons do not inherit `font-family` by default, so removing the mono face off
+  `.debrief-head` did not change the button; it only made the mismatch visible. The repo's existing
+  idiom is a per-rule `font: inherit` (40+ sites in `App.css`), applied ad hoc — which is exactly how
+  26 sites got missed. **Not fixed blind:** one line on `.btn-small` restyles 26 buttons in 11 files
+  and that is a visual change that owes its own build → install → self-review, not a drive-by edit at
+  the end of someone else's train. Per bug→guard the fix ships WITH a guard that fails when a rule
+  styling a `<button>` declares `font-size`/`font-weight` but no font family — the ad-hoc idiom is
+  the defect, so the guard has to cover the class, not this one selector.
 - [ ] **`.arc-v2` is PART dead, not all dead — the original finding was wrong, and the fix is a
   section-by-section decision.** (Row corrected 2026-08-19 by the C-18b lane; the header used to read
   "the entire `.arc-v2` skin is DEAD CSS".)

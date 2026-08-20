@@ -6,6 +6,52 @@
 > Current truth lives in docs/RELEASE_STATE.md — these are point-in-time records.
 
 ---
+
+## 2026-08-20 — C-18 / C-18 guard / C-18b conformance rows, moved verbatim (BACKLOG byte budget)
+
+Moved out of `docs/BACKLOG.md` when the C-17b review ship pushed it over the 114KB wall. Byte-for-byte.
+
+- [x] **C-18 · SHIPPED 2026-08-19 — the classic Monitor shell is gone** (issue
+  [#146](https://github.com/Pootytxng/sentinel/issues/146)). **The row was wrong THREE times and the
+  third correction is the one that mattered:** `src/surfaces/Monitor.tsx` was never "genuinely
+  unreferenced" — `MonitorV2.tsx:6` imported `TuningPresets` out of it and renders it live in the v2
+  quiet slot, so deleting the file as written would have broken the build. What was dead was the
+  ROOM inside the live file: `export default Monitor` had had no production importer since MonitorV2
+  replaced it, only its own test and one `monitor-v2.test.tsx` block. Fix: `TuningPresets` moved
+  verbatim to `src/surfaces/TuningPresets.tsx`, then the shell + `Monitor.css` + `Monitor.test.tsx`
+  deleted (213 + 17 + 123 lines); the one assertion still worth keeping (un-`bare` presets supply
+  their own `<h2>`) now runs against the component directly. No user-visible change — nothing
+  mounted it on any flag path. Earlier corrections (Play / SessionDebrief / MonitorDomainCards are
+  LIVE, `monitor-panels.tsx` is the `compy_monitor_console="0"` failsafe, not dead code) stand and
+  are why this lane grepped the class by hand: [[audit-needs-completeness-critic-grep]].
+- [x] **C-18 guard (bug→guard) — `src/reachability-guard.test.ts` grew a second tier.** The
+  file-level guard could not see this defect by construction: the FILE was reachable through one
+  live symbol while the ROOM inside it was dead. The new tier fails when a module's DEFAULT-EXPORTED
+  symbol has no production importer under EITHER form (`import X from` / lazy edge, or
+  `import { X }` where it is also named-exported). The both-forms rule is load-bearing: two dozen
+  surfaces here export a component by name and re-export it as default, and failing those would
+  report 26 live rooms as dead on day one. **Falsified against the pre-fix tree** — it names exactly
+  `surfaces/Monitor.tsx` and nothing else.
+- [x] **C-18b · Both dead rooms DECIDED — issue [#148](https://github.com/Pootytxng/sentinel/issues/148).**
+  `DEFAULT_ALLOWED` is empty again, which is the point: an entry there is a promise to come back, not
+  a place to park a finding.
+  **`src/Onboarding.tsx` + `Onboarding.css` DELETED.** Not a fresh product call — C-05 retired the
+  modal in `docs/decisions/2026-08-11-design-navigation-audit.md` §4 and `App.tsx` said so in prose;
+  what kept the file alive was two exports that were never about the modal. `ONBOARDED_KEY` and
+  `type RigLine` now live beside `SETUP_TOUR_KEY` in `surfaces/setup/SetupTour.tsx`. The four
+  source-text guards moved WITH it rather than around it: affordance-census entry + baseline,
+  button-legibility's 2-button allowlist row, the capability-policy copy root, the modal-stacking
+  z-index comment; the mono census dropped its three `Onboarding.css` selectors.
+  **bug→guard:** `capability-exception-policy-guard` walked a copy root that no longer existed and
+  passed in silence — coverage lost quietly is worse than coverage never claimed — so it now fails on
+  any `COPY_ROOTS`/`COPY_DOCS` path that is missing from disk.
+  **`design/vendor/Stepper/Stepper.tsx` settled by POLICY, not an entry.** Vendored code is exempt by
+  rule (`VENDOR_PREFIX = "design/vendor/"`), because whether its default export is mounted here says
+  nothing about whether the file is right, and pruning part of a vendored module is a judgement about
+  the next re-vendor. Two tests keep the rule narrow: the prefix is pinned literally, and the
+  exemption must still cover a real unmounted default or it is inert and gets deleted.
+
+---
 ## ARCHIVED 2026-08-19 — LIVE UPDATER + the first field-QA wave (moved verbatim)
 
 > Moved out of `docs/BACKLOG.md` for the byte budget on 2026-08-19, with a pointer left in its
