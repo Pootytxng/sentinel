@@ -42,3 +42,9 @@ settings reserve authority-gating hooks to his own hand, and the settings block 
 bottom of that file.
 
 Receipts are evidence, not scratch: keep them, don't prune them.
+
+**The receipt chain trails by one commit, by construction.** A receipt binds to the head it
+authorizes, so it cannot ride inside that same commit — writing it in would change the head and
+invalidate itself. Write the receipt, run the gate, do the transition, then commit the receipt on
+top. Receipt `2026-08-20-merge-pr-159.json` is the first one and lands one commit behind the merge
+it authorized, which is the steady state, not a lapse.
