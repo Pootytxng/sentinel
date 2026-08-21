@@ -279,6 +279,34 @@ describe("LabConsole", () => {
     expect(bl.querySelector(".ag-tag-ny")).toBeNull(); // NOT the NOT-YET tag
   });
 
+  // Intimidation pass 2026-08-21: with the whole safe stack applied the gauge used to read
+  // "0 ready" on an empty ring — the room's bottom-left alarm. Same recs, read as done.
+  it("the safe-stack gauge reads 'N on · = all N applied' on a full ring once nothing is left to apply", () => {
+    const applied = (recsFixture as Array<Record<string, unknown>>).map((r) => ({ ...r, currently_applied: true }));
+    renderConsole({ ...base, fast: { ...fast, recs: applied as never[] } });
+    const bl = document.querySelector(".lc-bl")!;
+    expect(bl.querySelector(".ag-v")!.textContent).toBe("2");
+    expect(bl.textContent).toContain("on");
+    expect(bl.textContent).not.toContain("ready");
+    expect(bl.querySelector(".ag-note")!.textContent).toBe("= all 2 applied");
+    expect(bl.querySelector(".ag-tag-ny")).toBeNull();
+    // The ring is full: dashoffset 0 (ArcGauge draws CIRC * (1 - frac)).
+    const fill = bl.querySelector<SVGCircleElement>(".ag-fill")!;
+    expect(Number.parseFloat(fill.style.strokeDashoffset || fill.getAttribute("stroke-dashoffset") || "1")).toBeCloseTo(0, 3);
+  });
+
+  it("the dock says where to start: 'Start here' on Optimize and a plain when-line under the row", () => {
+    renderConsole();
+    const dock = document.querySelector(".dock")!;
+    const eyebrow = dock.querySelector(".dock-eyebrow")!;
+    expect(eyebrow.textContent).toBe("Start here");
+    expect(eyebrow.closest(".dock-node")).toHaveClass("dock-node-primary");
+    // Nothing open on entry → the caption is Optimize's when-line, the plain sentence the router uses.
+    expect(dock.querySelector(".dock-caption")!.textContent).toBe(
+      "Optimize · You just want it faster and safe, without fiddling.",
+    );
+  });
+
   it("the safe-stack gauge is honest NOT-YET (never a fabricated 0) while recs are not loaded — bug→guard 2026-07-09", () => {
     // recs load independently of hw in App (App gates LabGround on hw only), so before
     // get_recommendations resolves — or permanently if it errors — fast.recs is null. The gauge must
