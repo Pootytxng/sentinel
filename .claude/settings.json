@@ -14,7 +14,9 @@
       "Bash(cargo publish*)",
       "PowerShell(cargo publish*)",
       "Bash(gh release create*)",
-      "PowerShell(gh release create*)"
+      "PowerShell(gh release create*)",
+      "Bash(gh pr merge*--delete-branch*)",
+      "PowerShell(gh pr merge*--delete-branch*)"
     ]
   },
   "hooks": {
