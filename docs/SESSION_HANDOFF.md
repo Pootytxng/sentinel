@@ -90,10 +90,14 @@ recorded as an `open finding` and is now item 1 of the queue. Do not guess a cau
    row is already written and says so: the audit fails a `MERGED` row whose ref still exists AND a
    row naming a ref that is gone, so the row leaves with the ref. ⚠ That file is at **120/120**;
    removing this row is also what un-blocks the next lane that needs to add one.
-2. **Chase the cold-start regression.** [`BACKLOG.md`](BACKLOG.md) ▶ NEXT UP item 1. Bisect the
-   bundle under `node scripts/q7-probe.mjs coldstart`; `documentReady` waits on the HTML, the
-   stylesheets and any blocking script, so bundle growth and the bundled Geist faces are both
-   suspects and neither is measured.
+2. **Cold start — the frontend is EXONERATED; do not re-bisect the bundle.** ([`BACKLOG.md`](BACKLOG.md)
+   ▶ NEXT UP item 1, rewritten from measurement in `388e8f3c`.) The blocking payload is 8.4 kB
+   *smaller* than at `dc4d55e`, the Geist faces ship in both builds, the page's own
+   `domContentLoaded` got faster (103 → 87 ms), and the WebView2 runtime never moved. All of the
+   growth is before the page exists — spawn → `timeOrigin` — plus the probe's own attach lag.
+   `coldstart` now records both parts. Next measurement: a decomposed `coldstart` against a
+   **built and installed** `dc4d55e`, on a **quiet desk** (`node scripts/q7-probe.mjs desk`
+   exits 3 if not). Leading suspect `795d8ff5` (#130), which added startup filesystem work.
 3. Then [`BACKLOG.md`](BACKLOG.md) ▶ NEXT UP items 2–5: the `site/llms.txt:5` price line (bring it
    as a PR, his part is yes/no), "Your rig", COLOR-1, #125 steps 1–3.
 
