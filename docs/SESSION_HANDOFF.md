@@ -1,4 +1,4 @@
-# Session handoff — 2026-08-20 (#171 verify-local flake: ROOT-CAUSED, FIXED, GUARDED — PR open)
+# Session handoff — 2026-08-20 (#171 verify-local flake: ROOT-CAUSED, FIXED, GUARDED, MERGED, CLOSED)
 
 **Worktree** `C:\Users\Kuya\code\sentinel-home-room`, branch **`lane/gate-171`** cut from
 origin/main `25e2b019`. Issue [#171](https://github.com/Pootytxng/sentinel/issues/171) claimed at
@@ -27,10 +27,16 @@ session start (ownership claim posted). No build, no install — the desk still 
 - **Not changed on purpose:** vitest's worker count (the issue's second suggestion) — no evidence
   it was the cause, and shrinking it blind is the mistake `nested-vite-server-guard` documents.
 
+- **`553d6911` (PR #185)** — bug→guard on my own miss: the #184 merge used `gh pr merge
+  --delete-branch`, which `RELEASE_AUTONOMY.md:26` bans (`core.bare` stayed false — checked; the
+  remote ref needed a manual prune). Now a permission-layer deny in `.claude/settings.json`; the
+  literal flag must appear, so plain merges are untouched. Carried the #184 receipt.
+
 ## For the NEXT lane's first commit
 
-The `merge-pr` receipt for this lane's PR will sit untracked here after the merge — it rides the
-next lane's first commit, same chain as #181/#182/#183.
+1. **`.claude/work-control/2026-08-20-merge-pr-185.json`** sits untracked here — it rides the next
+   lane's first commit, same chain as #181–#184.
+2. This file's refresh (uncommitted here) rides that same commit.
 
 ## Queue
 

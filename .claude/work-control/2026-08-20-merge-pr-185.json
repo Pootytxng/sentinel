@@ -1,0 +1,55 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "chore",
+  "pr": 185,
+  "issue": 171,
+  "branch": "lane/deny-delete-branch",
+  "currentHead": "553d6911daa02dfc58efb738ca7e7d07f41b0225",
+  "explicitHandoff": "Owner directive 2026-08-20 opening this session: take BACKLOG #171. This follow-up is the bug->guard half of that lane: the #171 merge crossed RELEASE_AUTONOMY.md:26's --delete-branch ban, so the ban becomes a permission deny. Same session, same worktree, same standing authorization (RELEASE_AUTONOMY: one owner authorization covers the reversible release-engineering train).",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room, git dir shared with C:/Users/Kuya/code/sentinel.",
+    "remoteState": "origin/main = fc67ddd1, the #184 merge; this branch was cut from exactly that. GitHub PR #185 opened against main at this head.",
+    "worktree": "git worktree list re-checked before the push: this lane alone in sentinel-home-room on lane/deny-delete-branch; lane/gate-171 deleted local and remote.",
+    "branch": "lane/deny-delete-branch, one commit on top of fc67ddd1 (553d6911: the deny rule + the #184 receipt), no divergence; origin/lane/deny-delete-branch is at this exact head.",
+    "dirtyState": "git status --porcelain at this head shows only this receipt file, which rides the next lane's first commit, the same chain as #181-#184.",
+    "liveProcesses": "Two claude.exe sessions on the machine (this one plus one other, not in this worktree). No build, install or dev server started; the owner's installed compy.exe at ab54f1e4 untouched."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "553d6911daa02dfc58efb738ca7e7d07f41b0225",
+      "detail": "Ran inside .githooks/pre-push at this exact head (core.hooksPath=.githooks, pre-push active): the push exited 0 and created origin/lane/deny-delete-branch, which the hook blocks when the gate fails. The diff over fc67ddd1 -- where the same gate passed directly minutes earlier (vitest 355/4645, build clean, cargo 963/0, clippy clean) -- is one permission-deny entry in .claude/settings.json (validated JSON) and one untracked-to-tracked receipt JSON; neither is read by any check."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "reason": "No product code changed; settings and a receipt only. The desk stays at ab54f1e4."
+  },
+  "selfReview": {
+    "verdict": "not-applicable",
+    "reason": "No UI surface touched."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; advisory per WORK_CONTROL. The change is a single deny pattern requiring the literal --delete-branch, so it cannot over-match a plain merge."
+  },
+  "docGates": [
+    "All doc guards are resident in npm test and passed inside the pre-push run at this head.",
+    "branch-disposition-audit: origin/lane/deny-delete-branch exists only between push and this merge -- the known #126 ordering race; the ref is pruned right after the merge with git push origin --delete."
+  ]
+}
