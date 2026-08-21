@@ -4,6 +4,17 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-08-20 - the 0808e33e rail-door desk-build Snapshot row, moved verbatim (byte budget)
+
+Moved out of docs/RELEASE_STATE.md when the 8ba6a6d1 build (the History intimidation pass) landed the same evening.
+Byte-for-byte except the three relative links that would break one directory deeper: the two
+`docs/`-relative paths now start with `../`, and the self-link to this file is a code span, the same
+exception the 835d8868 move below records. Nothing else in the row was touched.
+
+| Gate | State | Proof |
+|---|---|---|
+| **Owner-installed version + embedded stamp** | **0.9.26 desk build, embedded stamp `0808e33e`** — built 2026-08-20 by `npm run tauri build` from worktree `sentinel-home-room` at `lane/rail-door` (`0808e33e`; the product change is `05df064f`), installed silently by Claude via `scripts/ship-reinstall.ps1 -VerifyRuntime`, one installer on the Desktop, installer `Compy_0.9.26_x64-setup.exe` SHA-256 **`190B0996DA7911B2B739925D9DFFC8C01FA5491F3EA83C6D2F86CD3D8E8CAB67`**. **Live == build proved by runtime probe, never an exe hash** — runtime proof `0808e33e · release · shell 0.9.26` on the first attempt, 0 transient retries. **This binary carries design foundation ⑤ — instruments behind a door** ([UI_VISION_BACKLOG.md](../UI_VISION_BACKLOG.md) FOUNDATION-1; decision 6 of [decisions/2026-08-11-design-foundation.md](../decisions/2026-08-11-design-foundation.md)): the rail is no longer four equal tabs — **Health** stands alone as the front door at full weight and **Live · History · Test** sit under a "Look deeper" sign at the rail's base weight with quieter glyphs, separated by a rule. Grouped, never hidden (the 2026-08-06 no-toggle directive): every room stays rendered and clickable and keeps its global digit. `railGroups()` in `src/design/homeRail.ts`, two tablists in `ShellV2.tsx` (the second labelled by the sign via `aria-labelledby`), `.v2-nav-door` / `.v2-nav-instruments` in `shell-v2.css`; guards `homeRail.test.ts` §railGroups + `ShellV2.test.tsx` §"front door plus a signed group". **Self-review VERDICT: PASS** on this installed build (10/10 — native 1500×980 capture; instrument labels 6.04:1 and the sign 4.88:1 computed against the real rail background; all four rooms rendered, clickable, aria-selected moving, digits 1–4 live; 5-leg rail switch 16.7–22.9 ms; shots `ui-sweep/shots/rail-door/`). It supersedes desk build **`ab54f1e4`** (the comprehensibility sweep, #180), byte-preserved with **`1d5b3c4c`**, `75849be1`, `835d8868`, `aac90cd7`, `402b0080`, `40682344`, **`5e64074c`** (THE PUBLISHED BUILD), `75880de1`, `2f79febb` and `7f151d2c` in `archive/RELEASE_STATE_HISTORY.md` (this file). | `node scripts/verify-release-state.mjs` (check 7) · `Select-String -Path "$env:LOCALAPPDATACompycompy.exe" -Pattern 0808e33e` · HKCU uninstall `DisplayVersion` |
+
 ### 2026-08-20 - the ab54f1e4 comprehensibility-sweep desk-build Snapshot row, moved verbatim (byte budget)
 
 Moved out of docs/RELEASE_STATE.md when the 0808e33e build (design foundation ⑤, the rail door) landed.

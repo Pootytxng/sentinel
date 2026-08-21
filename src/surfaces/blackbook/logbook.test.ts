@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildLogbook, startHereEntries, type LogbookRecord } from "./logbook";
+import { buildLogbook, groupByMonth, startHereEntries, type LogbookRecord } from "./logbook";
 import type { AppliedChange, SessionSummary, IntelEvent } from "../../types";
 import type { AutopsyLedgerEntry } from "../../data/autopsy-ledger";
 import { KNOWLEDGE } from "../../data/knowledge";
@@ -427,5 +427,56 @@ describe("startHereEntries — real corpus, rig-fit, deterministic", () => {
 
   it("limit 0 ⇒ [] (never negative-slice surprises)", () => {
     expect(startHereEntries("amd", 0)).toEqual([]);
+  });
+});
+
+// Intimidation pass 2026-08-20 — the tape's month grouping is pure and order-preserving.
+describe("groupByMonth — consecutive calendar months, order kept, nothing invented", () => {
+  const rec = (iso: string, id: string): LogbookRecord => ({
+    kind: "change",
+    at: Date.parse(iso),
+    id,
+    title: id,
+    active: true,
+    rolledBack: false,
+    payoffLabel: null,
+    undoNote: null,
+    repeats: 0,
+    firstAt: Date.parse(iso),
+  } as unknown as LogbookRecord);
+
+  it("an empty tape is an empty list — never a fabricated month", () => {
+    expect(groupByMonth([], "en")).toEqual([]);
+  });
+
+  it("splits on calendar month (local time), newest first, labels in the given locale", () => {
+    const groups = groupByMonth(
+      [
+        rec("2026-08-20T16:24:00", "a"),
+        rec("2026-08-01T00:00:01", "b"),
+        rec("2026-07-31T23:59:59", "c"),
+        rec("2026-06-03T06:08:00", "d"),
+      ],
+      "en",
+    );
+    expect(groups.map((g) => [g.key, g.label, g.records.map((r) => (r as { id: string }).id)])).toEqual([
+      ["2026-08", "August 2026", ["a", "b"]],
+      ["2026-07", "July 2026", ["c"]],
+      ["2026-06", "June 2026", ["d"]],
+    ]);
+  });
+
+  it("the same month in a different year is a different group", () => {
+    const groups = groupByMonth([rec("2026-01-05T12:00:00", "x"), rec("2025-01-05T12:00:00", "y")], "en");
+    expect(groups.map((g) => g.key)).toEqual(["2026-01", "2025-01"]);
+  });
+
+  it("flattening the groups gives back the input, row for row", () => {
+    const input = [
+      rec("2026-08-20T16:24:00", "a"),
+      rec("2026-08-14T18:15:00", "b"),
+      rec("2026-06-15T17:51:00", "c"),
+    ];
+    expect(groupByMonth(input, "en").flatMap((g) => g.records)).toEqual(input);
   });
 });

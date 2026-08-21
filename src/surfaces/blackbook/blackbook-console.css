@@ -35,7 +35,8 @@
    strip below, so the room's two halves introduce themselves the same way. */
 /* Now the record tile's BADGE, not a section head: the bento tile header draws the title and the
    hairline, so the old flex-1 rule element is gone with it. */
-:root[data-v2="on"] .bc-sect { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+:root[data-v2="on"] .bc-sect { display: flex; align-items: baseline; justify-content: flex-end;
+  gap: 10px; min-width: 0; }
 :root[data-v2="on"] .bc-sect-t { font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .14em;
   text-transform: uppercase; color: var(--ix-text-3); white-space: nowrap; }
 :root[data-v2="on"] .bc-sect-s { font-size: var(--type-label); color: var(--ix-text-3);
@@ -49,11 +50,25 @@
 :root[data-v2="on"] .bc-empty-title { font-size: var(--type-label); letter-spacing: .02em; color: var(--ix-text-1); }
 :root[data-v2="on"] .bc-empty-sub { font-size: var(--type-label); color: var(--ix-text-3); }
 
-/* ── the tape ── */
-:root[data-v2="on"] .bc-tape { list-style: none; margin: 0; padding: 0; display: flex;
+/* ── the tape ── grouped by calendar month (intimidation pass 2026-08-20). The month head is
+   the same mono eyebrow grammar as every section scent in this room, with a hairline running out
+   to the right so the eye reads it as a divider, not another row. */
+:root[data-v2="on"] .bc-tape { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+:root[data-v2="on"] .bc-month { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* Sans, not mono: a month name is a label, and mono is for machine values (mono-law C-17) — the
+   row's kind tags keep the mono chrome idiom, which is what makes the head read as a divider. */
+:root[data-v2="on"] .bc-month-h { display: flex; align-items: center; gap: 12px; margin: 0;
+  font-size: var(--type-label); font-weight: 600; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ix-text-3); }
+:root[data-v2="on"] .bc-month-h::after { content: ""; flex: 1; height: 1px;
+  background: var(--ix-glass-border); }
+:root[data-v2="on"] .bc-month-rows { list-style: none; margin: 0; padding: 0; display: flex;
   flex-direction: column; gap: 6px; min-width: 0; }
+/* Two tracks, never three: the timestamp lives INSIDE the body's first line (see .bc-row-body),
+   so no fixed track can be overrun by a long date — the overlap the installed build showed on
+   every row when the time had its own 116px column. Guard: blackbook-console.test.tsx. */
 :root[data-v2="on"] .bc-row { display: grid;
-  grid-template-columns: 92px 116px minmax(0, 1fr); align-items: baseline; gap: 14px;
+  grid-template-columns: 100px minmax(0, 1fr); align-items: baseline; gap: 14px;
   padding: 10px 14px; border: 1px solid var(--ix-glass-border); min-width: 0; }
 :root[data-v2="on"] .bc-row-muted { opacity: .62; }
 
@@ -74,11 +89,16 @@
 :root[data-v2="on"] .bc-tag[data-kind="session"] { color: var(--ix-text-2); }
 
 :root[data-v2="on"] .bc-time { font-size: var(--type-label); letter-spacing: .06em; color: var(--ix-text-3);
-  white-space: nowrap; }
+  white-space: nowrap; grid-column: 2; grid-row: 1; justify-self: end; }
 
-:root[data-v2="on"] .bc-row-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-:root[data-v2="on"] .bc-row-title { font-size: var(--type-label); letter-spacing: .01em; color: var(--ix-text-1);
-  overflow-wrap: anywhere; }
+/* The body is a two-column grid: title (col 1) and timestamp (col 2) share the first line — the
+   title wraps, the time never does and never overlaps; everything the kind-specific body adds
+   after the title (meta, notes, chips) spans both columns at full width. */
+:root[data-v2="on"] .bc-row-body { display: grid; grid-template-columns: minmax(0, 1fr) max-content;
+  column-gap: 14px; row-gap: 4px; align-items: baseline; min-width: 0; }
+:root[data-v2="on"] .bc-row-body > :not(.bc-row-title):not(.bc-time) { grid-column: 1 / -1; }
+:root[data-v2="on"] .bc-row-title { grid-column: 1; grid-row: 1; font-size: var(--type-label);
+  letter-spacing: .01em; color: var(--ix-text-1); overflow-wrap: anywhere; }
 :root[data-v2="on"] .bc-row-meta { display: flex; align-items: baseline; flex-wrap: wrap;
   gap: 6px 12px; font-size: var(--type-label); letter-spacing: .02em; color: var(--ix-text-2); }
 :root[data-v2="on"] .bc-stat { font-family: var(--ix-mono); font-variant-numeric: tabular-nums;

@@ -114,7 +114,7 @@
       "noDetail": "在两次 Compy 读数之间发现的变化。"
     },
     "tapeMore_other": "显示 {{count}} 条更早的记录",
-    "manageJump_other": "{{count}} 项优化仍在生效——前往「测试」撤销",
+    "manageJump_other": "前往「测试」撤销这 {{count}} 项优化中的任意一项",
     "library": {
       "eyebrow": "指南库",
       "scent": "在网上看到什么优化技巧?先查一查再动手——每一条说法都经过评级。",
