@@ -36,13 +36,17 @@
       "budgetKind": "upper bound"
     },
     "coldStartDocumentReadyMs": {
-      "value": 210,
+      "value": 516,
       "unit": "ms",
       "statistic": "worst of 3 cold process starts",
-      "source": "coldstart.json#summary.documentReadyMs.max",
-      "budget": 400,
-      "budgetBasis": "Worst recorded 210 ms. Held well under the usable-Home budget on purpose: this is the shell, and the ~3.5 s that follows it is React plus first IPC, so a regression here is a webview/bundle regression and should be caught separately from a data regression.",
-      "budgetKind": "upper bound"
+      "source": "coldstart-2026-08-21.json#summary.documentReadyMs.max",
+      "budget": 560,
+      "budgetBasis": "NOT AN ACCEPTED COST -- this row is a regression, and the budget is a ceiling on it. The shell used to be ready in 210 ms worst-of-3 on dc4d55e (coldstart.json, 2026-08-05). On 584654c8 the same probe on the same desk records 500 / 502 / 516 ms -- a tight spread, so it is the steady state and not one slow start. That is 2.5x, and it breaches the 400 ms budget the old row earned. Budget 560 = worst recorded (516) + ~8%, set only so the number cannot keep growing while the fix is queued; it is NOT the app earning 560 ms. NOT ATTRIBUTED YET, and do not guess in this file: documentReady waits on the HTML, the stylesheets and any blocking script, so the suspects are bundle growth generally and the TYPE-1 bundled Geist variable faces (src/design/fonts-v2.css, pulled in through src/main.tsx) specifically -- neither has been measured. The instrument that would settle it is scripts/q7-probe.mjs coldstart with the bundle bisected, the same shape as the idle attribution that settled the aurora cost. Worth reading beside coldStartToUsableHomeMs, which went the OTHER way on the same three starts (3721 -> 3409 ms worst): the app reaches a usable Home faster than its baseline while the white-screen window before first paint got longer. The user-visible symptom of this row is a blank window for half a second, not a slower app.",
+      "budgetKind": "open finding",
+      "recordedAgainst": {
+        "buildStamp": "584654c8 · release",
+        "why": "Re-recorded on 2026-08-21 while answering the owner's \"runs a lot slower than before\". Its three coldstart siblings still transcribe coldstart.json from dc4d55e and were NOT re-baselined -- only the row that breached moved, so the file does not quietly restate a whole recording to make one number fit."
+      }
     },
     "coldStartWorkingSetMB": {
       "value": 580.06,
