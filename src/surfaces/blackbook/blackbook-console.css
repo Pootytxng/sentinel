@@ -35,7 +35,8 @@
    strip below, so the room's two halves introduce themselves the same way. */
 /* Now the record tile's BADGE, not a section head: the bento tile header draws the title and the
    hairline, so the old flex-1 rule element is gone with it. */
-:root[data-v2="on"] .bc-sect { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+:root[data-v2="on"] .bc-sect { display: flex; align-items: baseline; justify-content: flex-end;
+  gap: 10px; min-width: 0; }
 :root[data-v2="on"] .bc-sect-t { font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .14em;
   text-transform: uppercase; color: var(--ix-text-3); white-space: nowrap; }
 :root[data-v2="on"] .bc-sect-s { font-size: var(--type-label); color: var(--ix-text-3);

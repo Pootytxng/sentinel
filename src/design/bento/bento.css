@@ -102,8 +102,15 @@
   min-width: 0;
 }
 
+/* The title never wraps and never yields: a tile title is two or three words, and the badge is
+   the part that can be long. With the badge non-shrinking, a long badge ("SESSIONS ONLY everything
+   Compy has done on this PC · since Jun 3, 2026") squeezed "The record" onto two lines with the
+   badge wedged between them (self-review 2026-08-20, History's filter state). Guard:
+   bento-tile-head-guard.test.ts. */
 :root[data-v2="on"] .v2-tile-title {
   margin: 0;
+  flex: 0 0 auto;
+  white-space: nowrap;
   font-family: var(--v2-font-sans);
   font-size: var(--type-label);
   font-weight: 600;
@@ -111,8 +118,11 @@
   color: var(--v2-text);
 }
 
+/* The badge is the half that shrinks (min-width: 0 lets its content ellipsize or wrap); it does
+   not grow, so space-between keeps it on the right edge exactly as before. */
 :root[data-v2="on"] .v2-tile-badge {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   font-family: var(--v2-font-mono);
   font-size: var(--type-label);
   font-variant-numeric: tabular-nums;
