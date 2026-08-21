@@ -35,7 +35,8 @@ import { describe, expect, it } from "vitest";
  * never for borrowing the run's figures anyway.
  */
 
-const ROOT = join(__dirname, "..");
+// vitest and tsc both run from the repo root (scripts/run-vitest.mjs), so every path here is
+// repo-root-relative. ESM, so no __dirname -- same convention as claude-md-laws-guard.test.ts.
 const RAW = "docs/perf/raw";
 const ALLOW = "perf-unsettled-allow";
 
@@ -87,7 +88,9 @@ function citingFiles(): string[] {
   return execFileSync(
     "git",
     ["ls-files", "--", "*.ts", "*.tsx", "*.mjs", "*.js", "*.css", "*.md", "*.json"],
-    { encoding: "utf8", cwd: ROOT, maxBuffer: 32 * 1024 * 1024 },
+    // No maxBuffer: the repo's execFileSync typing accepts only { input, encoding }, and this
+    // listing is ~47 KB today against Node's 1 MB default. Revisit if that ever gets close.
+    { encoding: "utf8" },
   )
     .split("\n")
     .map((l) => l.trim())
@@ -97,7 +100,7 @@ function citingFiles(): string[] {
 
 /** false only when the run exists AND says outright that its baseline never converged. */
 function neverSettled(runFile: string): boolean {
-  const path = join(ROOT, RAW, runFile);
+  const path = join(RAW, runFile);
   if (!existsSync(path)) return false; // a dead path is a different defect; link guards own it
   try {
     const j = JSON.parse(readFileSync(path, "utf8"));
@@ -110,7 +113,7 @@ function neverSettled(runFile: string): boolean {
 /** Every raw run present, so a `*` citation can be expanded to what it really covers. */
 function runsOnDisk(): string[] {
   try {
-    return readdirSync(join(ROOT, RAW)).filter((f) => f.endsWith(".json"));
+    return readdirSync(RAW).filter((f) => f.endsWith(".json"));
   } catch {
     return [];
   }
@@ -151,7 +154,7 @@ export function unsettledCitations(
 describe("perf evidence integrity: a run that never settled may not be quoted as proof", () => {
   it("no live file cites an attribute run whose baseline never converged", () => {
     const offenders = unsettledCitations(citingFiles(), (f) =>
-      readFileSync(join(ROOT, f), "utf8"),
+      readFileSync(f, "utf8"),
     );
     expect(
       offenders,
@@ -168,7 +171,6 @@ describe("perf evidence integrity: a run that never settled may not be quoted as
   it("every attribute run on disk carries the flag at all, so the check can never silently pass", () => {
     const runs = execFileSync("git", ["ls-files", "--", `${RAW}/idle-attribution*.json`], {
       encoding: "utf8",
-      cwd: ROOT,
     })
       .split("\n")
       .map((l) => l.trim())
@@ -177,7 +179,7 @@ describe("perf evidence integrity: a run that never settled may not be quoted as
     expect(runs.length, "no attribute runs found — the glob or the directory moved").toBeGreaterThan(0);
 
     const missing = runs.filter((f) => {
-      const j = JSON.parse(readFileSync(join(ROOT, f), "utf8"));
+      const j = JSON.parse(readFileSync(f, "utf8"));
       return typeof j?.baselineStability?.settled !== "boolean";
     });
     expect(
