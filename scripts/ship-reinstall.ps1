@@ -162,6 +162,53 @@ $left = Get-Process compy -ErrorAction SilentlyContinue
 if ($left) { throw "compy process(es) still alive 20s after close+kill (PID $(($left.Id) -join ', ')) — a helper that won't self-exit is a real defect (and would hold the exe lock through the install); investigate before shipping." }
 Start-Sleep -Milliseconds 600
 
+# 1b) PAYLOAD-LOCK GATE (bug→guard 2026-08-21, issue #156). Every compy PROCESS being gone is not
+#     the same fact as the installed exe being WRITABLE: an antimalware scan, Explorer's icon
+#     reader, or a straggler handle can outlive process exit by seconds. NSIS in silent mode does
+#     not fail on a file it cannot overwrite — it SKIPS it and still exits 0, which is exactly how
+#     2026-08-20 produced an "installed" build whose compy.exe kept its previous mtime and its
+#     previous embedded stamp (402b0080). The stamp gate at step 4 caught that, but only after the
+#     fact and only as "a wrong/older build is installed". Prove writability BEFORE handing the
+#     installer a file it will silently decline to replace, so the failure is named at its cause.
+$exe = Join-Path $env:LOCALAPPDATA "Compy\compy.exe"
+function Test-CompyExeWritable {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  # A file that does not exist yet (first install) is trivially writable.
+  if (-not (Test-Path -LiteralPath $Path)) { return $true }
+  # FileShare::None is the point: it succeeds only when NOBODY else holds a handle, which is the
+  # precondition NSIS actually needs. A narrower probe would pass while the install still skips.
+  try {
+    $probe = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+    $probe.Dispose()
+    return $true
+  } catch {
+    # Deliberately swallowed: "locked" is the ANSWER this probe returns, not an error to raise. The
+    # caller decides whether a locked file is fatal, and does so with a named throw of its own.
+    return $false
+  }
+}
+function Wait-CompyExeWritable {
+  param([Parameter(Mandatory = $true)][string]$Path, [int]$TimeoutSeconds = 20)
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  while (-not (Test-CompyExeWritable -Path $Path) -and ((Get-Date) -lt $deadline)) {
+    Start-Sleep -Milliseconds 500
+  }
+  return (Test-CompyExeWritable -Path $Path)
+}
+$prePayload = $null
+if (-not $ProofOnly) {
+  if (-not (Wait-CompyExeWritable -Path $exe)) {
+    throw "PAYLOAD LOCKED (issue #156): $exe is still held by another process 20s after every compy process exited. A silent NSIS install would exit 0 and skip the payload rather than fail. Close whatever holds the file (an antimalware scan or Explorer usually releases within seconds) and re-run; do NOT loosen the stamp gate at step 4."
+  }
+  # Identity BEFORE the install, so step 3b can tell "payload not written" apart from "wrong build
+  # written". mtime alone is not proof — length is carried with it because a same-second rebuild of
+  # a same-size binary is the one case mtime could miss.
+  if (Test-Path -LiteralPath $exe) {
+    $preItem = Get-Item -LiteralPath $exe
+    $prePayload = [pscustomobject]@{ WriteTimeUtc = $preItem.LastWriteTimeUtc; Length = $preItem.Length }
+  }
+}
+
 # 2-3) A journal rerun uses ProofOnly: it re-proves the real installed payload and mounted shell
 # without reinstalling or changing Desktop artifacts. A first proof stages and installs the exact
 # receipt-bound NSIS through the recoverable replacement path.
@@ -189,17 +236,43 @@ if ($ProofOnly) {
 
   # Silent install (per-user -> no UAC). Leave a hung installer visible rather than killing it
   # mid-transaction and pretending rollback is safe.
-  $installResult = Invoke-NativeProcess -Command $dest -ArgumentList @("/S") -TimeoutMs 180000 -KillTreeOnTimeout $false
-  if ($installResult.TimedOut) {
-    throw "Silent install timed out after 180 seconds (PID $($installResult.ProcessId)). Publication remains blocked; inspect the installer before retrying. Prior Desktop installers remain preserved at $desktopBackup."
-  }
-  if ($installResult.ExitCode -ne 0) {
-    throw "Silent install failed: exit $($installResult.ExitCode). Prior Desktop installers remain preserved at $desktopBackup."
+  #
+  # 3b) PAYLOAD-REPLACEMENT GATE + exactly ONE loud retry (bug→guard 2026-08-21, issue #156).
+  #     Exit 0 from a silent NSIS is NOT proof the payload landed — on 2026-08-20 it rewrote the
+  #     Desktop shortcut, exited 0, and left compy.exe untouched. The retry mirrors the accepted
+  #     #171 precedent: bounded, loud, and keyed to EXACTLY that signature, never a blanket retry.
+  #     The step-4 stamp gate is untouched and still fails closed if a retry lands a wrong build —
+  #     this gate only makes "the installer skipped the file" say so at the moment it happens.
+  $installAttempts = 0
+  while ($true) {
+    $installAttempts++
+    $installResult = Invoke-NativeProcess -Command $dest -ArgumentList @("/S") -TimeoutMs 180000 -KillTreeOnTimeout $false
+    if ($installResult.TimedOut) {
+      throw "Silent install timed out after 180 seconds (PID $($installResult.ProcessId)). Publication remains blocked; inspect the installer before retrying. Prior Desktop installers remain preserved at $desktopBackup."
+    }
+    if ($installResult.ExitCode -ne 0) {
+      throw "Silent install failed: exit $($installResult.ExitCode). Prior Desktop installers remain preserved at $desktopBackup."
+    }
+    if (-not (Test-Path -LiteralPath $exe)) {
+      throw "Installed exe not found after a silent install that exited 0: $exe. Prior Desktop installers remain preserved at $desktopBackup."
+    }
+    $postItem = Get-Item -LiteralPath $exe
+    $payloadUntouched = ($null -ne $prePayload) -and
+      ($postItem.LastWriteTimeUtc -eq $prePayload.WriteTimeUtc) -and
+      ($postItem.Length -eq $prePayload.Length)
+    if (-not $payloadUntouched) { break }
+    if ($installAttempts -ge 2) {
+      throw "SILENT INSTALL SKIPPED THE PAYLOAD (issue #156): the installer exited 0 twice and compy.exe still carries its pre-install timestamp and size ($($prePayload.Length) bytes). This is NOT a gate to loosen — the build on disk is not the build that was staged. Prior Desktop installers remain preserved at $desktopBackup."
+    }
+    Write-Warning "WARN issue #156: silent install exited 0 but did not replace $exe (same mtime and size as before). Re-proving the file is unlocked and retrying the install ONCE, loudly."
+    if (-not (Wait-CompyExeWritable -Path $exe)) {
+      throw "PAYLOAD LOCKED (issue #156): $exe became locked again between the pre-install gate and the install, and is still held 20s later. Publication remains blocked. Prior Desktop installers remain preserved at $desktopBackup."
+    }
   }
 }
 
 # 4) Prove the installed payload and Windows app metadata both match the staged release.
-$exe = Join-Path $env:LOCALAPPDATA "Compy\compy.exe"
+# $exe was resolved at step 1b, where the payload-lock gate needs it first.
 if (-not (Test-Path $exe)) { throw "Installed exe not found after install: $exe" }
 # Correctness invariant is EMBEDDED COMMIT + version, NOT byte-identity. NSIS packaging is not
 # byte-preserving and Rust release links aren't reproducible (PE timestamp + debug GUID differ per

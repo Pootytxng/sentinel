@@ -68,9 +68,19 @@
    recovery · quiet-pit-wall half B) or a per-file landing (review-consolidation, tool-shed-hygiene,
    lab-49-parity-port). What remains is a decision queue, not a cleanup queue, so the row stays open
    rather than being closed on the easy two-thirds.
-5. **#156 · a silent NSIS install exited 0 without replacing `compy.exe`.** The stamp gate caught it and
-   is pinned; the cause is still open. *Why it matters:* without that gate the owner would have been
-   handed a build that was not the build.
+5. **#156 · a silent NSIS install exited 0 without replacing `compy.exe` — GATED 2026-08-21, cause
+   still unproven.** *Why it matters:* without that gate the owner would have been handed a build
+   that was not the build. **Done:** `ship-reinstall.ps1` grew two gates around the install — **1b**
+   proves `compy.exe` is exclusively openable (`FileShare::None`, 20s deadline) *before* the
+   installer runs, because "every compy process is gone" and "the exe is writable" are different
+   facts and NSIS silently SKIPS a file it cannot overwrite; **3b** compares the post-install mtime
+   *and* size against the pre-install identity and, on an exact match, retries the install **once,
+   loudly** (the accepted #171 precedent) before throwing. The step-4 stamp gate is untouched — the
+   issue forbids loosening it, and it still owns the verdict. Guard:
+   `scripts/release-pipeline-guard.test.mjs` §"#156", non-vacuous (every needle absent pre-fix).
+   **Left:** the flake was never reproduced, so the *holder* of the lock is still unnamed — the
+   gates close the suspected path and name the skip at its source, which is not the same as proving
+   the cause. Row stays open until a real ship either passes clean or trips gate 1b and names it.
 6. **#128 · thin local release/install collision guard** — the governance half of #156 and #171.
 7. **#125 · `session-root-assert` only ADVISES where the handoff wanted a refusal**, with a test pinning
    it. *Why it matters:* an unlaunched session writing to the project runs with none of its laws loaded.

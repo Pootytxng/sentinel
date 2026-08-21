@@ -326,6 +326,48 @@ describe("release pipeline safety", () => {
     expect(refusal).toBeLessThan(desktopTouch);
     expect(reinstallExecutable).not.toContain("Remove-Item $pendingGamingContracts");
   });
+
+  // bug->guard (2026-08-21, issue #156): a silent NSIS install exited 0, rewrote the Desktop
+  // shortcut, and left %LOCALAPPDATA%\Compy\compy.exe carrying its PREVIOUS mtime and its previous
+  // embedded stamp (402b0080). Only the step-4 Select-String stamp gate caught it, and only as "a
+  // wrong/older build is installed" -- after the fact, with no name for the cause. Every compy
+  // PROCESS being gone is not the same fact as the exe being WRITABLE, and NSIS in silent mode
+  // SKIPS a file it cannot overwrite rather than failing. These assertions pin the two gates that
+  // make the skip impossible to pass silently, and pin that the fix was NOT to loosen the stamp
+  // gate -- which the issue forbids in as many words.
+  it("proves compy.exe is unlocked before installing and proves the payload changed after (#156)", () => {
+    // The probe must demand EXCLUSIVE access. A narrower share mode succeeds against a file NSIS
+    // will still decline to replace, which would make the gate decorative.
+    expect(reinstallExecutable).toContain("[System.IO.FileShare]::None");
+    expect(reinstall).toContain("PAYLOAD LOCKED (issue #156)");
+
+    // Ordering: prove-unlocked BEFORE the installer runs, prove-replaced AFTER it.
+    const lockGate = reinstallPosition("Wait-CompyExeWritable -Path $exe");
+    const install = reinstallPosition('Invoke-NativeProcess -Command $dest -ArgumentList @("/S")');
+    const replacementGate = reinstallPosition("$payloadUntouched");
+    expect(lockGate).toBeLessThan(install);
+    expect(install).toBeLessThan(replacementGate);
+
+    // The replacement proof compares BOTH mtime and size against the pre-install identity: mtime
+    // alone would miss a same-second rebuild of a same-size binary.
+    expect(reinstallExecutable).toContain("LastWriteTimeUtc");
+    expect(reinstallExecutable).toContain("$prePayload.WriteTimeUtc");
+    expect(reinstallExecutable).toContain("$prePayload.Length");
+
+    // Exactly ONE retry, loud, and keyed to that exact signature -- never a blanket retry (the
+    // accepted #171 precedent), and it re-proves the lock cleared instead of hammering the installer.
+    expect(reinstallExecutable).toContain("if ($installAttempts -ge 2)");
+    expect(reinstallExecutable).toContain("Write-Warning");
+    expect(reinstall).toContain("WARN issue #156");
+    expect(reinstall).toContain("SILENT INSTALL SKIPPED THE PAYLOAD (issue #156)");
+    expect(reinstallExecutable.lastIndexOf("Wait-CompyExeWritable -Path $exe")).toBeGreaterThan(install);
+
+    // The issue's own instruction: do NOT fix this by loosening the stamp gate. It stays, and it
+    // stays LAST -- the payload gate diagnoses the cause, the stamp gate still owns the verdict.
+    const stampGate = reinstallPosition("Select-String -Path $exe -Pattern $expectedShortCommit -Quiet");
+    expect(replacementGate).toBeLessThan(stampGate);
+    expect(reinstall).toContain("INSTALLED-BINARY STALE");
+  });
 });
 
 // bug->guard (BOTH failed v0.9.9 publishes, 2026-07-27): release-critical PowerShell invoked tools
