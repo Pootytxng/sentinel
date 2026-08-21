@@ -1,37 +1,39 @@
-# Session handoff — 2026-08-20 (comprehensibility sweep #180: BUILT + SHIPPED, closing bookkeeping left)
+# Session handoff — 2026-08-20 (#171 verify-local flake: ROOT-CAUSED, FIXED, GUARDED — PR open)
 
-**Worktree** `C:\Users\Kuya\code\sentinel-home-room`, branch **`lane/sweep-180`**, issue
-[#180](https://github.com/Pootytxng/sentinel/issues/180).
-Plan: [`superpowers/plans/2026-08-20-comprehensibility-sweep.md`](superpowers/plans/2026-08-20-comprehensibility-sweep.md).
+**Worktree** `C:\Users\Kuya\code\sentinel-home-room`, branch **`lane/gate-171`** cut from
+origin/main `25e2b019`. Issue [#171](https://github.com/Pootytxng/sentinel/issues/171) claimed at
+session start (ownership claim posted). No build, no install — the desk still runs `ab54f1e4`.
 
-## Landed on the lane
+## What this lane did
 
-- **`c216d813`** — §A one Live face + §B one switch per real choice + §D guards
-  (`monitor-one-face-guard.test.tsx`, `settings-no-rollout-switch.test.tsx`), carrying the PR #182
-  merge receipt as required. Gates green at that head.
-- **`ab54f1e4`** — §C: front door on the verdict line (owner's "Clean header" AskUserQuestion pick),
-  attention fine print out of the header (bug→guard pin in `home-console.test.tsx`), and
-  `compy_home_interview` default ON per
-  [`decisions/2026-08-20-home-interview-default.md`](decisions/2026-08-20-home-interview-default.md)
-  §OWNER ANSWERED / §EXECUTED. Self-reviewer VERDICT: PASS (10/10). Gates at this head:
-  `verify-local.ps1` PASS (all five checks read in full — vitest 354 files/4624, tsc+vite, cargo
-  963/0, clippy clean).
-- **SHIPPED to the desk**: `npm run tauri build` (both bundles; the exit-1 was only the updater
-  signing step — no private key in the shell, by design) → `ship-reinstall.ps1 -VerifyRuntime`
-  → runtime proof **`ab54f1e4 · release · shell 0.9.26`**, attempt 1, one installer on the Desktop.
-- **Docs synced** (this commit): RELEASE_STATE stamp anchor + owner-installed row (old row
-  byte-preserved to `archive/RELEASE_STATE_HISTORY.md`), BACKLOG top banner, checklist §D closed,
-  decision record §EXECUTED.
+- **`cf77ea24`** — carried the untracked PR #183 merge receipt + the sweep-180 handoff refresh
+  (the chain #181/#182/#183 all used).
+- **`e52133b2`** — the fix. Root cause **reproduced on demand**: three site suites each rebuilt
+  `site-app/dist` from separate vitest workers; two `astro build`s in one `dist/` delete each
+  other's SSR intermediates, the loser dies with "Cannot find module dist/renderers.mjs", and
+  Node 24 on Windows turns that `process.exit(1)` into a `0xC0000409` abort (nodejs/node#56645,
+  open upstream). Before: 2/2 runs crash with the issue's exact exit code. After: 0/3.
+  - `scripts/stage-dist-site.mjs` — `withSiteBuildLock` (atomic mkdir, orphan/stale reclaim) +
+    `ensureSiteAppBuilt` (freshness check INSIDE the lock). The three suites use it.
+  - `scripts/verify-local.ps1` — a Node-hosted check that exits with exactly the abort code is
+    re-run ONCE, with a WARN naming the cause; never cargo, never any other code.
+  - Guards: `scripts/site-build-collision-guard.test.mjs` (real 4-process race),
+    `scripts/local-gate-guard.test.mjs` §"Node-runtime-abort re-run" (source pins + a PowerShell
+    5.1 behavioural probe of the real `Invoke-Check`). Both mutation-tested.
+- **Unverified, stated plainly:** the issue's single `npm run build` abort shares the death
+  signature; its trigger was not captured and cannot be now (`sentinel-prune` is gone, no
+  junctioned `node_modules` exist today). The once-only re-run covers it and a repeat now prints
+  `LOCAL CHECK WARN … see issue #171`.
+- **Not changed on purpose:** vitest's worker count (the issue's second suggestion) — no evidence
+  it was the cause, and shrinking it blind is the mistake `nested-vite-server-guard` documents.
 
-## Remaining (in flight when this file was written)
+## For the NEXT lane's first commit
 
-1. Push `lane/sweep-180`, open the PR (re-check branch immediately before push).
-2. Work-control receipt for the merge (`scripts/work-control-gate.mjs`, full 40-char SHA at the
-   exact head) → merge → handoff comment on #180.
-3. Before/after PNGs to the owner via SendUserFile (`before-*` already in the session scratchpad;
-   `after-*` captured from the shipped build by a background agent).
+The `merge-pr` receipt for this lane's PR will sit untracked here after the merge — it rides the
+next lane's first commit, same chain as #181/#182/#183.
 
-## Cautions
+## Queue
 
-- verify-release-state.mjs and doc-budget.ps1 must be green before pushing the doc commit.
-- #171 flake caveat stands for any re-run of verify-local under concurrent lane load.
+`docs/BACKLOG.md` top after this: **#121** (`launch-focus-guard` RUNTIME tier intermittent — no
+longer "the same cause as #171", whose cause was the site build race), then #126, #156, #128
+and #125. Nothing blocked on the owner.

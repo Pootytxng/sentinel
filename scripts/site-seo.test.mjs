@@ -9,7 +9,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildSiteApp } from "./stage-dist-site.mjs";
+import { ensureSiteAppBuilt } from "./stage-dist-site.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const siteDir = join(root, "site");
@@ -142,14 +142,10 @@ describe("404 page", () => {
 });
 
 describe("compare page + landing plumbing (dist)", () => {
-  // Same build-if-stale rule as site-landing.test.mjs: judge what would deploy.
-  const srcNewest = Math.max(
-    newestMtime(join(appDir, "src")),
-    newestMtime(join(appDir, "astro.config.mjs")),
-    newestMtime(join(appDir, "package.json")),
-  );
+  // Same build-if-stale rule as site-landing.test.mjs: judge what would deploy — through the
+  // one locked builder, so this suite and the others never race in site-app/dist (#171).
+  ensureSiteAppBuilt();
   const comparePath = join(distDir, "compare", "index.html");
-  if (!existsSync(comparePath) || statSync(comparePath).mtimeMs < srcNewest) buildSiteApp();
   const compare = readFileSync(comparePath, "utf8");
   const compareRendered = compare.replace(/<!--[\s\S]*?-->/g, "");
   const landing = readFileSync(join(distDir, "index.html"), "utf8");

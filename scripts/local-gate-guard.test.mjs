@@ -15,10 +15,12 @@
 // build must not be one `npm install` away from being unable to run.
 
 import { describe, expect, it } from "vitest";
-import { execFileSync } from "node:child_process";
-import { readFileSync, existsSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { readFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { windows, WINDOWS_ONLY } from "./lib/windows-only.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel) => readFileSync(join(ROOT, ...rel.split("/")), "utf8");
@@ -81,6 +83,106 @@ describe("the local gate proves everything the hosted gate proved", () => {
     // Without this, four checks run and only the exit code of the last is believed.
     expect(gateCode).toMatch(/\$LASTEXITCODE -ne 0/);
     expect(gateCode).toMatch(/throw/);
+  });
+
+  // #171 (2026-08-20): Node 24 on Windows can abort inside process.exit() (nodejs/node#56645) and
+  // report 0xC0000409 instead of the check's own verdict. The gate re-runs a Node-hosted check ONCE
+  // on exactly that code. These pins keep that from ever widening into retry-until-green.
+  describe("the Node-runtime-abort re-run stays narrow", () => {
+    const invokeCheck = gateCode.slice(gateCode.indexOf("function Invoke-Check"), gateCode.indexOf("function Resolve-RequiredCommand"));
+
+    it("re-runs only on the 0xC0000409 abort code, in both the Int32 and unsigned spellings", () => {
+      expect(gateCode).toMatch(/\$NodeRuntimeAbortCodes = @\(-1073740791, 3221226505\)/);
+      expect(invokeCheck).toMatch(/\$NodeRuntimeAbortCodes -contains \$LASTEXITCODE/);
+    });
+
+    it("re-runs at most once: exactly two invocations of the command exist, and the throw follows the second", () => {
+      const invocations = invokeCheck.match(/& \$Command @Arguments/g) ?? [];
+      expect(invocations).toHaveLength(2);
+      expect(invokeCheck.indexOf("throw")).toBeGreaterThan(invokeCheck.lastIndexOf("& $Command @Arguments"));
+      // No loop may wrap the re-run.
+      expect(invokeCheck).not.toMatch(/\b(while|for|do)\b/);
+    });
+
+    it("is opt-in per check and only the two npm checks opt in; cargo never does", () => {
+      expect(invokeCheck).toMatch(/\$NodeHosted -and/);
+      const calls = gateCode.split(/\r?\n/).filter((l) => l.trimStart().startsWith("Invoke-Check "));
+      const nodeHosted = calls.filter((l) => l.includes("-NodeHosted"));
+      expect(nodeHosted.map((l) => l.match(/-Name "([^"]+)"/)[1]).sort()).toEqual(["frontend tests", "frontend type-check and build"]);
+      for (const line of calls.filter((l) => l.includes("$cargo"))) expect(line).not.toContain("-NodeHosted");
+    });
+
+    it("says out loud that it happened, naming the upstream cause, so a repeat is never silent", () => {
+      expect(invokeCheck).toMatch(/LOCAL CHECK WARN: .*0xC0000409.*nodejs\/node#56645/);
+    });
+
+    // The source pins above say what the text looks like; this says what it DOES. The real
+    // Invoke-Check is lifted out of verify-local.ps1 by PowerShell's own parser (so the gate's
+    // top-level checks never run) and driven against a node child that exits with a scripted code
+    // per call. Windows PowerShell 5.1, because that is what .githooks/pre-push invokes.
+    it.runIf(windows)(`re-runs the abort exactly once, and nothing else, when actually executed ${WINDOWS_ONLY}`, () => {
+      const dir = mkdtempSync(join(tmpdir(), "compy-gate-rerun-"));
+      try {
+        const stub = join(dir, "stub.js");
+        writeFileSync(
+          stub,
+          [
+            'const fs = require("fs");',
+            "const [plan, counter] = process.argv.slice(2);",
+            'let n = 0; try { n = Number(fs.readFileSync(counter, "utf8")); } catch {}',
+            "fs.writeFileSync(counter, String(n + 1));",
+            "process.exitCode = plan.split(\",\").map(Number)[n] ?? 99;",
+          ].join("\n"),
+        );
+        const probe = join(dir, "probe.ps1");
+        writeFileSync(
+          probe,
+          [
+            '$ErrorActionPreference = "Stop"',
+            `$ast = [System.Management.Automation.Language.Parser]::ParseFile(${JSON.stringify(join(ROOT, "scripts", "verify-local.ps1"))}, [ref]$null, [ref]$null)`,
+            '$fn = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq "Invoke-Check" }, $true)[0]',
+            "$codes = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.AssignmentStatementAst] -and $args[0].Left.Extent.Text -eq '$NodeRuntimeAbortCodes' }, $true)[0]",
+            "Invoke-Expression $codes.Extent.Text",
+            "Invoke-Expression $fn.Extent.Text",
+            `$node = ${JSON.stringify(process.execPath)}`,
+            `$stub = ${JSON.stringify(stub)}`,
+            "function Run-Case($name, $plan, [switch]$NodeHosted) {",
+            `  $counter = Join-Path ${JSON.stringify(dir)} "calls-$name.txt"`,
+            "  $threw = ''",
+            "  try {",
+            "    if ($NodeHosted) { Invoke-Check -Name $name -Command $node -Arguments @($stub, $plan, $counter) -NodeHosted }",
+            "    else { Invoke-Check -Name $name -Command $node -Arguments @($stub, $plan, $counter) }",
+            "  } catch { $threw = $_.Exception.Message }",
+            '  Write-Output ("RESULT " + $name + " calls=" + [int](Get-Content $counter) + " threw=" + $threw)',
+            "}",
+            'Run-Case "abort-then-pass" "-1073740791,0" -NodeHosted',
+            'Run-Case "abort-then-abort" "-1073740791,-1073740791" -NodeHosted',
+            'Run-Case "real-failure" "1,0" -NodeHosted',
+            'Run-Case "abort-not-node-hosted" "-1073740791,0"',
+            'Run-Case "pass-first-time" "0,0" -NodeHosted',
+          ].join("\n"),
+        );
+        const run = spawnSync(
+          "powershell.exe",
+          ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", probe],
+          { cwd: ROOT, encoding: "utf8", shell: false, windowsHide: true },
+        );
+        const out = run.stdout || "";
+        expect(run.status, `probe failed: ${run.stderr}\n${out}`).toBe(0);
+        const results = Object.fromEntries(
+          [...out.matchAll(/^RESULT (\S+) calls=(\d+) threw=(.*)$/gm)].map((m) => [m[1], { calls: Number(m[2]), threw: m[3].trim() }]),
+        );
+        expect(results["abort-then-pass"]).toEqual({ calls: 2, threw: "" });
+        expect(results["abort-then-abort"]).toEqual({ calls: 2, threw: "abort-then-abort failed with exit code -1073740791." });
+        expect(results["real-failure"]).toEqual({ calls: 1, threw: "real-failure failed with exit code 1." });
+        expect(results["abort-not-node-hosted"]).toEqual({ calls: 1, threw: "abort-not-node-hosted failed with exit code -1073740791." });
+        expect(results["pass-first-time"]).toEqual({ calls: 1, threw: "" });
+        // The WARN is printed once per abort that was re-run, and names the cause.
+        expect(out.match(/LOCAL CHECK WARN: .*0xC0000409.*nodejs\/node#56645/g)).toHaveLength(2);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }, 60_000);
   });
 
   it("covers every verification step ci.yml runs — including ones added after this was written", () => {

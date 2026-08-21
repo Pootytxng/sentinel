@@ -6,30 +6,20 @@
 // The R4a guard CONTRACT carries over: real provenance-pinned numbers, zero third-party requests,
 // doorknob honesty, honest waitlist copy, legal links — the assertions target the new markup.
 import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildSiteApp } from "./stage-dist-site.mjs";
+import { ensureSiteAppBuilt } from "./stage-dist-site.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const appDir = join(root, "site-app");
 const distDir = join(appDir, "dist");
 
 // ---------- build-if-stale: test the real deploy artifact, never a stale one ----------
-function newestMtime(path) {
-  const st = statSync(path);
-  if (!st.isDirectory()) return st.mtimeMs;
-  let newest = 0;
-  for (const name of readdirSync(path)) newest = Math.max(newest, newestMtime(join(path, name)));
-  return newest;
-}
-const srcNewest = Math.max(
-  newestMtime(join(appDir, "src")),
-  newestMtime(join(appDir, "astro.config.mjs")),
-  newestMtime(join(appDir, "package.json")),
-);
+// One shared, locked, freshness-checked build for every suite that needs dist (#171) — never a
+// private rebuild here, which collided with the other site suites' builds in the worker pool.
+ensureSiteAppBuilt();
 const indexPath = join(distDir, "index.html");
-if (!existsSync(indexPath) || statSync(indexPath).mtimeMs < srcNewest) buildSiteApp();
 
 const html = readFileSync(indexPath, "utf8");
 const rendered = html.replace(/<!--[\s\S]*?-->/g, ""); // comments don't render — strip before copy checks
