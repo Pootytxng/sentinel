@@ -6,8 +6,12 @@
 
 ## Where this lane stands (2026-08-21)
 
-Worktree `sentinel-home-room`, branch `lane/rig-then-rails`, PR
-[#191](https://github.com/Pootytxng/sentinel/pull/191) OPEN + MERGEABLE against `main`.
+PR [#191](https://github.com/Pootytxng/sentinel/pull/191) is **MERGED** (`6516b646`), the
+`lane/rig-then-rails` ref is pruned from origin, and its row is out of
+[`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md) — a MERGED row whose ref still exists fails the
+audit, and so does a row whose ref is gone, so the row leaves with the ref. That also drops the file
+to **119/120**, which un-blocks the next lane that needs to add one. ⚠ **The worktree
+`sentinel-home-room` is now DETACHED at main** — cut a fresh branch before writing anything.
 
 **The owner's "runs a lot slower than before" is ANSWERED — measured, not guessed. Do not re-run it.**
 Numbers live in [`RELEASE_STATE.md`](RELEASE_STATE.md) §"Required owner decisions", the
@@ -70,10 +74,7 @@ Runs on disk: `docs/perf/raw/idle-attribution-2026-08-21-{E-baseline,F-type1-rev
    [`perf/q7-baseline.json`](perf/q7-baseline.json) down hard** — 26 is loose enough to hide the whole
    cost today. It is a look change: needs a `self-review` PASS on an installed build, and it ships
    with a before/after to the owner as a decision with a veto attached, not as a question.
-2. **Merge PR #191**, then flip the `lane/rig-then-rails` row in
-   [`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md) `UNLANDED` → `MERGED` and prune the ref **in
-   the same commit**. That row commits to it. ⚠ The file is at **120/120 lines**, so any lane pushing
-   a NEW branch to origin must archive its current sweep before it can add a row.
+2. ~~Merge PR #191 and prune the lane ref.~~ **Done** — see above.
 3. Then [`BACKLOG.md`](BACKLOG.md) ▶ NEXT UP items 2–5: the `site/llms.txt:5` price line (bring it as
    a PR, his part is yes/no), "Your rig", COLOR-1, #125 steps 1–3.
 

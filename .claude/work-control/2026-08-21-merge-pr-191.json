@@ -1,0 +1,56 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "feature",
+  "pr": 191,
+  "issue": null,
+  "branch": "lane/rig-then-rails",
+  "currentHead": "34e6ed17543fcec775b68b2e76d5c6293176919f",
+  "explicitHandoff": "The owner's driver prompt opening this session names it: 'Then merge PR #191, flip the lane/rig-then-rails row in docs/BRANCH_DISPOSITIONS.md UNLANDED -> MERGED and prune the ref in the same commit.' That row was written by this lane and commits to exactly that on landing. The same prompt queued the slowdown investigation ahead of it, which is what commits c7c4bd7c / deec6138 / 34e6ed17 on this head are.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room, git dir shared with C:/Users/Kuya/code/sentinel.",
+    "remoteState": "origin/main = f8969e5f085b4039568b6063e3f1f5e886e535f4, unmoved since this branch was cut from it (re-fetched immediately before this receipt). gh reports PR #191 OPEN / MERGEABLE / mergeStateStatus CLEAN, 17 commits, base main. No status checks exist on the repo (Actions budget decree), so the local gate below is the whole proof.",
+    "worktree": "git worktree list re-checked this session: seven worktrees. This lane is alone in sentinel-home-room on lane/rig-then-rails. The primary checkout C:/Users/Kuya/code/sentinel sits on main at ffe85271, 22 commits behind origin/main, and is not this lane's.",
+    "branch": "lane/rig-then-rails at 34e6ed17543fcec775b68b2e76d5c6293176919f; origin/lane/rig-then-rails is at this exact head (pushed, hook green). No merge commits, no divergence from origin/main.",
+    "dirtyState": "git status --porcelain at this head shows only this receipt file, which by construction cannot ride inside the head it authorizes -- it stays untracked for the next commit, the same chain #181-#189 used. Two pre-existing dirty edits from another lane were dispositioned rather than carried: .codex/config.toml is stashed as stash@{0} (ABANDONED -- it strips the read-only sandbox floor and re-adds shadcn@latest unpinned; stash@{1} is the same regression abandoned 2026-08-20 by a different lane), and CLAUDE.md's role sentence was restored to the text scripts/work-control-gate.test.mjs requires, keeping that file's other two copy edits.",
+    "liveProcesses": "The owner's installed compy.exe is running (pid 13484) after the q7 probe's restore; WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS is unset and nothing is listening on 9455, so no debug port was left open. No game in the foreground. This merge is a gh API call and touches neither the desk nor the installed build."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "34e6ed17543fcec775b68b2e76d5c6293176919f",
+      "detail": "Inside .githooks/pre-push at this exact head: LOCAL CHECK RESULT: PASS, push to origin/lane/rig-then-rails accepted (a4484a6f..34e6ed17), which is only reachable on a pass. Covers vitest (358 files), tsc + vite build, cargo test and clippy. Two earlier runs of this same gate FAILED and are the reason deec6138/34e6ed17 exist: run 1 red on src/claude-md-laws-guard.test.ts (CLAUDE.md 25,254 bytes over its 25,000 boot-tax ceiling), run 2 red on tsc (the new perf-evidence guard used __dirname under ESM and passed cwd/maxBuffer to this repo's narrowed execFileSync typing -- vitest transpiles without checking, so its own 6/6 green did not catch it). The third run is the green one."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "reason": "Nothing in this PR compiles into the binary. The diff against origin/main touches no .tsx, no non-test .ts and no .rs at all; the only src/ changes are three guard test files plus block-comment rewrites inside src/App.css and src/surfaces/setup/SetupLauncherCard.css, verified line by line to change no CSS rule. Everything else is docs/, specs, scripts/ and recorded perf traces. No desk ship, and by the same fact no visual change to review."
+  },
+  "selfReview": {
+    "verdict": "not applicable",
+    "detail": "The self-review law is triggered by a UI change. There is none here: the two .css files changed only inside /* */ comment blocks (the App.css aurora rationale and the SetupLauncherCard ring rationale), and no component, layout, token or rule moved. The measured idle-CPU finding this PR records POINTS AT a look change -- stopping the aurora animation -- and that change is deliberately NOT in this PR precisely because it would need a build, an install and a self-reviewer PASS. It is queued as docs/BACKLOG.md NEXT UP item 1."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "No non-writing model is reachable from this session: its harness forbids spawning review subagents, and Codex -- the independent reviewer named in docs/WORK_CONTROL.md -- is not running against this worktree (the .codex/config.toml sitting in it is the abandoned regression noted above). WORK_CONTROL makes that review advisory rather than blocking. The mutation boundary is untouched (no .rs diff at all), and every claim this PR records is backed by a raw trace committed alongside it, so the evidence can be re-derived rather than trusted."
+  },
+  "docGates": [
+    "doc-budget.ps1 PASS on every tracked doc after archiving the closed v0.9.25 + v0.9.24 GO records to docs/archive/RELEASE_STATE_HISTORY.md (RELEASE_STATE 293/300 lines, 45.2KB/48KB; BACKLOG 1106/1200, 104.7KB/106KB; SESSION_HANDOFF 88/120; CLAUDE.md 24,927 bytes after trimming the half of TOKEN LAW that ~/.claude/CLAUDE.md already carries).",
+    "verify-release-state 31 citations: 31 ok, 0 near-drift, 0 broken, 0 state-drift. markdown-link-guard 5/5. verify-module-map, branch-disposition-audit and gate-residency-guard are resident in the vitest run above and passed at this head.",
+    "branch-disposition-audit: docs/BRANCH_DISPOSITIONS.md carries this lane's own row as UNLANDED and commits in writing to flipping it MERGED and pruning the ref in the same commit once this PR lands -- that flip is the next action after this merge, not a later sweep. The file is at 120/120 lines, so the NEXT lane to push a new branch must archive its current sweep before it can add a row."
+  ]
+}
