@@ -1,32 +1,28 @@
-# Session handoff — 2026-08-20 (night): rail door merged, History pass shipped, Live + Test next
+# Session handoff — 2026-08-21 (early): rail door + History + Live shipped, Test is the last room
 
-**Worktree** `C:\Users\Kuya\code\sentinel-home-room`, branch `lane/rooms-intimidation`.
+**Worktree** `C:\Users\Kuya\code\sentinel-home-room`, branch `lane/rooms-live` (merging to `main` as the
+Live-pass PR; after the merge the next lane branches fresh from `origin/main`).
 
 ## Landed this session
 
-- **PR #186 merged (`aff85bd6`)** — `lane/focus-121`: the #121 WinEvent trace instrument + decision 2,
-  plus two things the gate caught: BACKLOG over its byte budget (A4's 42 shipped rows → `docs/archive/
-  BACKLOG_A4_SHIPPED_2026-08-20.md`, ratchet 114 → 106 KB) and the **site-build lock's reclaim race**
-  (`scripts/stage-dist-site.mjs` `reclaimLock`, five deterministic guards).
-- **PR #187 merged (`70a8ba0e`)** — `lane/rail-door`: design foundation ⑤, instruments behind a door
-  (Health the front door, Live · History · Test under "Look deeper"). Desk build `0808e33e`,
-  self-review PASS 10/10; superseded the same evening by the build below.
-- **Desk build `8ba6a6d1` — the History intimidation pass (room 1 of 3)** on `lane/rooms-intimidation`
-  (`fcc957b2` the pass, `8ba6a6d1` the BentoTile header fix its first self-review caught). Screenshots
-  of the installed build came first (`docs/ui-sweep/shots/rooms-before/`, gitignored): History measured
-  worst. Now: month-grouped record, 8-row screenful + honest "show N older", a row that cannot overlap,
-  plain undo door, HUD readout fades the scroll lane under itself, tile titles never wrap.
-  Self-review PASS 10/10 on the installed build. Before/after handed to the owner (`SendUserFile`).
+- **PR #187 merged (`70a8ba0e`)** — design foundation ⑤, the rail door (Health the front door; Live ·
+  History · Test under "Look deeper").
+- **PR #188 merged (`e99d8e77`)** — the History intimidation pass (room 1 of 3), desk build `8ba6a6d1`,
+  self-review PASS 10/10.
+- **Desk build `63db50d2` — the Live intimidation pass (room 2 of 3)** on `lane/rooms-live` (`0345f564`
+  the pass, `63db50d2` the word-budget trim its first review asked for). The deck's all-caps debrief
+  string is a template (sentence · three boxed cells · one caveat) at 19 words against the 21 it
+  replaced (guarded ≤ 21); both empty scopes say "Press Start capture, then play — the line draws
+  here." under the no-signal eyebrow (`Oscilloscope` `emptyHint`); the readouts are a fixed 2×2.
+  Self-review round 2 PASS 10/10 on the installed build. Before/after handed to the owner.
 
 ## Next action
 
-1. **Owner's eye** on the rail door and on History (both shipped; veto on sight).
-2. **⭐ STANDING DIRECTIVE — Live, then Test** (same loop: screenshots already in `rooms-before/`;
-   restructure as layout, never a switch; self-review; ship; before/after to the owner). Live's
-   targets: the all-caps mono delta string under the frametime deck (`.mc-delta` in
-   `MonitorConsole.tsx`) → a boxed template with three value cells and a sans label; the two "NO
-   SIGNAL" boxes need a one-line "start a capture and play — the trace draws here"; controls sit
-   before any orientation line. Test's targets: the "Controlled experiments" jargon opener, "Your rig"
-   repeating Health's numbers, six equal-weight station buttons with no "start here", "SAFE STACK
-   READY 0" reading as an alarm.
+1. **Owner's eye** on the rail door, History and Live (all shipped; veto on sight).
+2. **⭐ STANDING DIRECTIVE — Test (room 3 of 3)**, same loop: the before shots are already in
+   `docs/ui-sweep/shots/rooms-before/04-test*.png`; restructure as layout, never a switch; build;
+   `ship-reinstall.ps1 -VerifyRuntime -ExpectedCommit <sha>`; `self-reviewer` until PASS; ship docs;
+   before/after to the owner; push → PR → receipt → merge. Test's targets: the "Controlled
+   experiments" jargon opener, "Your rig" repeating Health's numbers, six equal-weight station
+   buttons with no "start here", "SAFE STACK READY 0" reading as an alarm.
 3. Then `docs/BACKLOG.md` ▶ NEXT UP: #126, #156, #128, #125. Nothing blocked on the owner.

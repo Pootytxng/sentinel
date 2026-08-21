@@ -138,9 +138,13 @@ Two things here are new and must not be flattened back into the 2026-07-23 wordi
    installed build first: History measured worst of the four rooms (652 words, 34 boxes, 3.1 viewports deep, a
    15-row wall beside an 80%-hollow column, the timestamp under the title on every row). Layout, not a switch:
    the record is grouped by month, shows an 8-row screenful with an honest "show N older" press, the row
-   cannot overlap, the undo door says what it does. **Live and Test have NOT had this pass yet** — they get
-   the same layout treatment next (Live: the all-caps delta string and two "NO SIGNAL" boxes; Test: the
-   jargon opener, the duplicated rig numbers, six equal-weight station buttons with no "start here").
+   cannot overlap, the undo door says what it does.
+   ✅ **LIVE RESTRUCTURED 2026-08-20** (desk build `63db50d2`, self-review PASS 10/10 in round 2) — the deck's
+   all-caps debrief string became a template (sentence · three boxed cells · one caveat) at 19 words against
+   the 21 it replaced, guarded ≤ 21; both empty scopes name the next press under "no signal"; the readouts
+   are a fixed 2×2. Layout, not a switch. **Test has NOT had this pass yet** — it gets the same layout
+   treatment next (the jargon opener, the duplicated rig numbers, six equal-weight station buttons with no
+   "start here", "SAFE STACK READY 0" reading as an alarm).
 
 **Read together with NAV-1 finding 2 below:** parallel UI generations coexist per room (Home 4+,
 Monitor 4, Lab 5) and the pruning pass has never run. That is the leading mechanical suspect for
