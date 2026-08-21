@@ -8,6 +8,7 @@ import { prettyGameName } from "../game-name";
 import type { LedgerHealth } from "../../types";
 import type { GpuVendor } from "../walkthroughs";
 import {
+  groupByMonth,
   startHereEntries,
   type LogbookRecord,
   type LogbookChange,
@@ -42,9 +43,12 @@ import "./blackbook-console.css";
 // kind, as a non-technical gamer reads it. Values resolved via t("blackbook.blackbookConsole.*")
 // at each call site (typeLabel / kindTag / filterNoun keys), keyed by the same record-kind strings.
 
-// How many tape rows mount before the "show older" press (the SessionStack MAX_STACK_ROWS pattern,
-// sized for a tape: ~a month of typical use above the fold, everything older one press away).
-const TAPE_CAP = 30;
+// How many tape rows mount before the "show older" press (the SessionStack MAX_STACK_ROWS pattern).
+// 30 → 8 in the intimidation pass (2026-08-20): the record is the room's hero, and a hero that runs
+// 30 rows deep stretches the bento's two left tiles into hollow columns three viewports tall while
+// the tape itself reads as a dump. Eight is a screenful — the latest happenings, grouped by month —
+// and everything older is one honest press away (the count is still stated, nothing hidden).
+const TAPE_CAP = 8;
 
 const fmtWhen = (at: number): string => {
   const d = new Date(at);
@@ -459,31 +463,53 @@ export function BlackbookConsole({
             </div>
           ) : (
             <>
-              <ol className="bc-tape">
-                {tape.map((r, i) => (
-                  <li
-                    key={`${r.kind}-${r.at}-${i}`}
-                    className={`bc-row bc-row-${r.kind}${r.kind === "change" && r.rolledBack ? " bc-row-muted" : ""}`}
-                    style={reduced ? undefined : { animationDelay: `${Math.min(i, 12) * 26}ms` }}
-                  >
-                    <span className="bc-tag" data-kind={r.kind}>
-                      {t(`blackbook.blackbookConsole.kindTag.${r.kind}`)}
-                    </span>
-                    <span className="bc-time bc-mono">{fmtWhen(r.at)}</span>
-                    <div className="bc-row-body">
-                      {r.kind === "change" ? (
-                        <ChangeBody r={r} />
-                      ) : r.kind === "session" ? (
-                        <SessionBody r={r} />
-                      ) : r.kind === "autopsy" ? (
-                        <AutopsyBody r={r} />
-                      ) : (
-                        <ObservedBody r={r} />
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ol>
+              {/* The tape, grouped by calendar month (intimidation pass 2026-08-20): the month head
+                  is the orientation a flat log lacks, and the row is two columns — kind tag, then a
+                  body whose FIRST line carries title + timestamp side by side. The timestamp used to
+                  be its own 116px grid track, which "Aug 20 · 4:24 PM" overran into the title
+                  (every row's AM/PM sat under the bold text on the installed build); a grid line
+                  with a max-content time track cannot overlap, and the body keeps its full width
+                  for the meta below. */}
+              <div className="bc-tape">
+                {groupByMonth(tape, i18n.language).map((m, gi, groups) => {
+                  const offset = groups.slice(0, gi).reduce((n, g) => n + g.records.length, 0);
+                  return (
+                    <section key={m.key} className="bc-month" aria-label={m.label}>
+                      <h4 className="bc-month-h">{m.label}</h4>
+                      <ol className="bc-month-rows">
+                        {m.records.map((r, ri) => {
+                          const i = offset + ri;
+                          return (
+                            <li
+                              key={`${r.kind}-${r.at}-${i}`}
+                              className={`bc-row bc-row-${r.kind}${r.kind === "change" && r.rolledBack ? " bc-row-muted" : ""}`}
+                              style={
+                                reduced ? undefined : { animationDelay: `${Math.min(i, 12) * 26}ms` }
+                              }
+                            >
+                              <span className="bc-tag" data-kind={r.kind}>
+                                {t(`blackbook.blackbookConsole.kindTag.${r.kind}`)}
+                              </span>
+                              <div className="bc-row-body">
+                                {r.kind === "change" ? (
+                                  <ChangeBody r={r} />
+                                ) : r.kind === "session" ? (
+                                  <SessionBody r={r} />
+                                ) : r.kind === "autopsy" ? (
+                                  <AutopsyBody r={r} />
+                                ) : (
+                                  <ObservedBody r={r} />
+                                )}
+                                <span className="bc-time bc-mono">{fmtWhen(r.at)}</span>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    </section>
+                  );
+                })}
+              </div>
               {older > 0 && (
                 <button type="button" className="bc-tape-more" onClick={() => setTapeAll(true)}>
                   {t("blackbook.blackbookConsole.tapeMore", { count: older })}

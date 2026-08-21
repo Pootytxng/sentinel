@@ -121,8 +121,8 @@
     },
     "tapeMore_one": "show {{count}} older record",
     "tapeMore_other": "show {{count}} older records",
-    "manageJump_one": "{{count}} change still active — roll back in Test",
-    "manageJump_other": "{{count}} changes still active — roll back in Test",
+    "manageJump_one": "Undo the {{count}} change in Test",
+    "manageJump_other": "Undo any of the {{count}} changes in Test",
     "library": {
       "eyebrow": "The field guide",
       "scent": "Heard a tweak online? Look it up before you try it — every claim graded.",

@@ -62,6 +62,13 @@
   color: var(--ix-text-3, var(--muted));
   white-space: nowrap;
   opacity: 0.85;
+  /* A ground of its own (intimidation pass 2026-08-20): the readout sits OVER the scroll lane,
+     and mid-scroll a tape row or a chart baseline passed straight through its letters on the
+     installed build (History rows, the Live FPS grid, Test's picker). The page colour fades in
+     from the left so the content underneath dissolves before the text starts instead of
+     colliding with it — still ambience, still pointer-inert, just no longer transparent. */
+  padding: 4px 0 4px 56px;
+  background: linear-gradient(90deg, transparent, var(--v2-bg, var(--ix-base)) 56px);
 }
 
 /* Clearance: the readout owns the viewport's bottom-right band, so while the frame is

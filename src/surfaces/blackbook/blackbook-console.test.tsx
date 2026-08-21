@@ -212,14 +212,15 @@ describe("BlackbookConsole — undo is NOT triggered in-room; active changes rou
     expect(screen.queryByRole("button", { name: /rolling back/i })).toBeNull();
   });
 
-  it("≥1 active change ⇒ a single 'roll back in the Lab' jump that calls onOpenLab", () => {
+  it("≥1 active change ⇒ a single 'undo in Test' jump that calls onOpenLab", () => {
     useReduced();
     const onOpenLab = vi.fn();
     mountConsole([change({ id: "c1", active: true }), change({ id: "c2", active: true })], {
       onOpenLab,
     });
-    const jump = screen.getByRole("button", { name: /roll back in Test/i });
-    expect(jump.textContent).toContain("2 changes still active");
+    // Action-first, plain words (intimidation pass 2026-08-20): "N changes still active — roll
+    // back" read as a warning above a room that had not yet explained itself.
+    const jump = screen.getByRole("button", { name: /undo any of the 2 changes in Test/i });
     fireEvent.click(jump);
     expect(onOpenLab).toHaveBeenCalledOnce();
   });
@@ -227,9 +228,7 @@ describe("BlackbookConsole — undo is NOT triggered in-room; active changes rou
   it("singular copy for one active change", () => {
     useReduced();
     mountConsole([change({ active: true })]);
-    expect(
-      screen.getByRole("button", { name: /roll back in Test/i }).textContent,
-    ).toContain("1 change still active");
+    expect(screen.getByRole("button", { name: /undo the 1 change in Test/i })).not.toBeNull();
   });
 
   it("no active changes ⇒ no jump (rolled-back / no-longer-active never summon it)", () => {
@@ -394,13 +393,15 @@ describe("BlackbookConsole — the tape caps its first render (nav-mount guard)"
       change({ at: Date.parse("2026-07-10T12:00:00Z") - i * 60_000, id: `c${i}`, title: `Tweak ${i}` }),
     );
 
-  it("renders at most 30 rows before the press, states the exact older count, unrolls on press", () => {
+  // 30 → 8 (intimidation pass 2026-08-20): the record is the bento's hero, and a 30-row hero
+  // stretched the two left tiles into hollow columns three viewports tall. Eight is a screenful.
+  it("renders at most 8 rows before the press, states the exact older count, unrolls on press", () => {
     useReduced();
     const { container } = mountConsole(many(35));
-    expect(container.querySelectorAll(".bc-tape .bc-row").length).toBe(30);
+    expect(container.querySelectorAll(".bc-tape .bc-row").length).toBe(8);
     const more = container.querySelector<HTMLButtonElement>(".bc-tape-more");
     expect(more).not.toBeNull();
-    expect(more!.textContent).toContain("5 older records");
+    expect(more!.textContent).toContain("27 older records");
     // the strip's count is derived from the FULL records — the cap never understates the ledger
     expect(
       container.querySelector('.bc-tile[data-kind="change"] .bc-tile-n')!.textContent,
@@ -412,8 +413,76 @@ describe("BlackbookConsole — the tape caps its first render (nav-mount guard)"
 
   it("a tape at or under the cap shows every row and no disclosure button", () => {
     useReduced();
-    const { container } = mountConsole(many(30));
-    expect(container.querySelectorAll(".bc-tape .bc-row").length).toBe(30);
+    const { container } = mountConsole(many(8));
+    expect(container.querySelectorAll(".bc-tape .bc-row").length).toBe(8);
     expect(container.querySelector(".bc-tape-more")).toBeNull();
+  });
+});
+
+// Intimidation pass 2026-08-20 (⭐ standing directive: grouping, boxed templates, fewer words —
+// never a switch). The flat log became a month-grouped timeline, and the row lost the fixed
+// timestamp track that the installed build showed overrunning into the title on every row.
+describe("BlackbookConsole — the tape is grouped by month and the row cannot overlap", () => {
+  const at = (iso: string) => Date.parse(iso);
+
+  it("rows sit under month heads, newest month first, every row in its own month, order kept", () => {
+    useReduced();
+    const { container } = mountConsole([
+      change({ id: "a", at: at("2026-08-20T16:24:00"), title: "August one" }),
+      session({ at: at("2026-08-14T18:15:00"), game: "Aug game" }),
+      change({ id: "b", at: at("2026-06-15T17:51:00"), title: "June one" }),
+      change({ id: "c", at: at("2026-06-03T06:08:00"), title: "June two" }),
+    ]);
+    const months = Array.from(container.querySelectorAll<HTMLElement>(".bc-tape .bc-month"));
+    expect(months.map((m) => m.querySelector(".bc-month-h")!.textContent)).toEqual([
+      "August 2026",
+      "June 2026",
+    ]);
+    expect(months[0].querySelectorAll(".bc-row").length).toBe(2);
+    expect(months[1].querySelectorAll(".bc-row").length).toBe(2);
+    // Grouping never reorders: the flat row order is still newest-first across the groups.
+    const titles = Array.from(container.querySelectorAll(".bc-tape .bc-row-title")).map(
+      (e) => e.textContent,
+    );
+    expect(titles.indexOf(titles.find((x) => x!.includes("August one"))!)).toBe(0);
+    expect(titles.findIndex((x) => x!.includes("June two"))).toBe(3);
+    // The month head is a real heading (AT users get the same orientation), below the tile's h3.
+    expect(months[0].querySelector("h4.bc-month-h")).not.toBeNull();
+  });
+
+  it("the cap applies to rows, not months: 8 rows across however many months they span", () => {
+    useReduced();
+    const rows = Array.from({ length: 12 }, (_, i) =>
+      change({ id: `m${i}`, at: at("2026-08-01T12:00:00") - i * 20 * 86_400_000, title: `T${i}` }),
+    );
+    const { container } = mountConsole(rows);
+    expect(container.querySelectorAll(".bc-tape .bc-row").length).toBe(8);
+    expect(container.querySelectorAll(".bc-tape .bc-month").length).toBeGreaterThan(1);
+  });
+
+  it("the timestamp lives inside the row body (shares the title line) — never its own row track", () => {
+    useReduced();
+    const { container } = mountConsole([change({ at: at("2026-08-20T16:24:00") })]);
+    const row = container.querySelector<HTMLElement>(".bc-row")!;
+    // DOM: tag, then body; the time is the body's child, not the row's.
+    expect(row.querySelector(":scope > .bc-time")).toBeNull();
+    expect(row.querySelector(":scope > .bc-row-body > .bc-time")).not.toBeNull();
+    expect(row.querySelector(":scope > .bc-row-body > .bc-row-title")).not.toBeNull();
+  });
+
+  it("CSS: .bc-row declares exactly two grid tracks; the body pins title and time to one line", () => {
+    const css = stripComments(consoleCss);
+    const row = css.match(/\.bc-row\s*\{[^}]*grid-template-columns:\s*([^;]+);/);
+    expect(row, ".bc-row must stay a grid").not.toBeNull();
+    // Count top-level tracks (minmax(...) is one track).
+    const tracks = row![1].replace(/\([^)]*\)/g, "()").trim().split(/\s+/);
+    expect(tracks.length).toBe(2);
+    expect(css).toMatch(/\.bc-row-body\s*\{[^}]*display:\s*grid/);
+    expect(css).toMatch(/\.bc-row-body\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+max-content/);
+    expect(css).toMatch(/\.bc-time\s*\{[^}]*white-space:\s*nowrap/);
+    expect(css).toMatch(/\.bc-time\s*\{[^}]*grid-column:\s*2/);
+    expect(css).toMatch(/\.bc-row-title\s*\{[^}]*grid-column:\s*1/);
+    // Everything else the body holds spans the full width.
+    expect(css).toMatch(/\.bc-row-body\s*>\s*:not\(\.bc-row-title\):not\(\.bc-time\)\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/);
   });
 });

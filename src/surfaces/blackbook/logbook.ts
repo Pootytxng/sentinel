@@ -246,6 +246,32 @@ export function buildLogbook({ changes, sessions, autopsy, observed }: LogbookIn
   return records;
 }
 
+/** One month of the tape: consecutive records sharing a calendar month (local time), newest
+ *  first, with the label the month header shows ("August 2026"). */
+export type LogbookMonth = { key: string; label: string; records: LogbookRecord[] };
+
+/** Group an already-sorted tape by calendar month, preserving order. The grouping is the
+ *  orientation the record was missing (intimidation pass 2026-08-20): fifteen near-identical rows
+ *  read as a dump; the same rows under "August · July · June" read as a timeline. Consecutive-only
+ *  on purpose — the input is newest-first, so a month never splits. Never invents a group: an
+ *  empty tape is an empty array. */
+export function groupByMonth(records: LogbookRecord[], locale?: string): LogbookMonth[] {
+  const out: LogbookMonth[] = [];
+  for (const r of records) {
+    const d = new Date(r.at);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const last = out[out.length - 1];
+    if (last && last.key === key) last.records.push(r);
+    else
+      out.push({
+        key,
+        label: d.toLocaleDateString(locale, { month: "long", year: "numeric" }),
+        records: [r],
+      });
+  }
+  return out;
+}
+
 // A few "start here" doors for the Logbook's library strip — rig-fit first (entries whose
 // applicability names this rig, or universal ones), guides before single tweaks/terms because a
 // guide is the better entry point. Only REAL corpus entries, deterministic corpus order — never
