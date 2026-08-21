@@ -31,14 +31,13 @@
 
 **MINE — in this order:**
 
-> **⚡ TOP OF THE QUEUE, 2026-08-20 — THE COMPREHENSIBILITY SWEEP outranks every numbered row
-> below.** Owner directive the same day: *"the absolute number 1 priority ... familiarity,
-> navigability, user intuitive and comprehensibility throughout any function or text or tool"*.
-> Plan + his verbatim words + the evidence that the Settings toggles are rollout debt rather than
-> drift: [`superpowers/plans/2026-08-20-comprehensibility-sweep.md`](superpowers/plans/2026-08-20-comprehensibility-sweep.md).
-> Live loses its Basic fork, Settings loses its graduated rollout switches, Home's front-door
-> placement and applied-changes block get fixed, then `compy_home_interview` flips default-ON
-> (he answered yes). The rows below keep their order relative to each other, one rank lower.
+> **✅ THE COMPREHENSIBILITY SWEEP LANDED AND SHIPPED 2026-08-20** (issue #180, plan
+> [`superpowers/plans/2026-08-20-comprehensibility-sweep.md`](superpowers/plans/2026-08-20-comprehensibility-sweep.md)).
+> All four sections: §A Live lost its Basic fork, §B Settings lost both graduated rollout switches
+> (`c216d813`), §C Home's front door rides the verdict line with the flagged check's fine print
+> routed to Test, and `compy_home_interview` flipped default-ON per his answer — placement fixed and
+> self-reviewed FIRST, his stated condition (`ab54f1e4`) — plus §D's guards. Desk runs `ab54f1e4`
+> (runtime-proved). The rows below regain the top of the queue in their existing order.
 
 1. **C-13(b) self-review debt.** `5fab9e79` (the accent-menu keyboard contract) was in no built binary
    and owed a `self-reviewer` pass on an installed build. *Why it matters:* a UI change is not done

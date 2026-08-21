@@ -93,3 +93,13 @@ premise is retired by his answer, not weakened) → cite this section in the com
 
 Tracked as part of the comprehensibility sweep — see
 [`2026-08-20-comprehensibility-sweep.md`](../superpowers/plans/2026-08-20-comprehensibility-sweep.md).
+
+## EXECUTED — 2026-08-20, same day
+
+The pinned sequence ran exactly as stated: placement fixed to his "Clean header" AskUserQuestion
+pick (front door on the verdict line's right end; the flagged check's fine-print paragraph out of
+the header, routed to Test by the band) → self-reviewer VERDICT: PASS (10/10, measured) →
+`readHomeInterview()` default-true (`!== "0"`, storage-throw → ON) → both guard files rewritten to
+pin the YES. Landed in `ab54f1e4` (lane/sweep-180, issue #180) and shipped to the desk the same day
+— runtime proof `ab54f1e4 · release`. Flipping the default again is a new owner call: record it
+here, in a dated section, before touching the guard.
