@@ -25,6 +25,11 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+. (Join-Path $PSScriptRoot "lib\process-mutex.ps1")
+$installedBinaryMutex = Enter-CompyProcessMutex `
+  -Name "Local\Compy.InstalledBinary.v1" `
+  -Resource "InstalledBinary"
+try {
 # Runtime proof mechanism (Invoke-NativeProcess / Invoke-CompyRuntimeProof). Lives in its own
 # dot-sourced file so the release-pipeline tests can drive it directly. See its header for the
 # 2026-07-27 NativeCommandError incident it exists to make impossible.
@@ -395,4 +400,7 @@ if ($runtimeProof) {
   Write-Output ("proof attempts    : " + $runtimeProof.Attempts + " (" + $runtimeProof.TransientFailures + " expected transient)")
 } else {
   Write-Output "Desktop now holds exactly one installer. Runtime proof was not requested."
+}
+} finally {
+  Exit-CompyProcessMutex $installedBinaryMutex
 }

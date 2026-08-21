@@ -82,6 +82,7 @@ default independent reviewer. Either may become the one active writer only by ex
 truth. Exact required gates cannot be substituted: extra checks are supplemental, and environment inability
 is a blocker, not a pass. Run `scripts/work-control-gate.mjs` before any proof-dependent GitHub state
 transition; when practical, the non-writing model gives the final independent review.
+One worktree per writer; shared checkouts read-only. Mutex law: `docs/WORK_CONTROL.md`.
 
 **Owner-bound in this repo** (on top of the universal floor in `~/.claude/CLAUDE.md` §3):
 1. **Secrets / signing** — the Ed25519 private key or any secret never enters the repo / `.env*` / CI.

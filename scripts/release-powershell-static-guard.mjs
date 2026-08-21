@@ -11,9 +11,11 @@ export const releaseCriticalPowerShell = [
   "scripts/release-publish.ps1",
   "scripts/release-prove.ps1",
   "scripts/ship-reinstall.ps1",
+  "scripts/inspect-process-mutex-recovery.ps1",
   "scripts/verify-release.ps1",
   "scripts/doc-budget.ps1",
   "scripts/lib/native-process.ps1",
+  "scripts/lib/process-mutex.ps1",
   "scripts/lib/release-artifacts.ps1",
   "scripts/lib/runtime-proof.ps1",
   "scripts/lib/release-transaction.ps1",
@@ -27,6 +29,7 @@ const entrypoints = new Set([
   "scripts/release-publish.ps1",
   "scripts/release-prove.ps1",
   "scripts/ship-reinstall.ps1",
+  "scripts/inspect-process-mutex-recovery.ps1",
   "scripts/verify-release.ps1",
   "scripts/doc-budget.ps1",
 ]);
@@ -176,6 +179,9 @@ const requiredTokens = new Map([
       "$releaseList = @($parsedReleaseList)",
       "Unexpected release entry shape.",
       "Invoke-ReleaseTransaction",
+      "Local\\Compy.ReleasePipeline.v1",
+      "Enter-CompyProcessMutex",
+      "Exit-CompyProcessMutex $releasePipelineMutex",
     ],
   ],
   [
@@ -194,6 +200,42 @@ const requiredTokens = new Map([
       "REFUSING TO RELAUNCH: WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS is set in this process",
       "Start-NativeProcess -Command $exe -Detached",
       "normal relaunch exited during the health window",
+      "Local\\Compy.InstalledBinary.v1",
+      "Enter-CompyProcessMutex",
+      "Exit-CompyProcessMutex $installedBinaryMutex",
+    ],
+  ],
+  [
+    "scripts/inspect-process-mutex-recovery.ps1",
+    [
+      'ValidateSet("ReleasePipeline", "InstalledBinary")',
+      "native-process.ps1",
+      "Get-CompyProcessMutexRecovery",
+      "Resolve-CompyProcessMutexRecovery",
+      "-IssueEvidenceUrl $IssueEvidenceUrl",
+      "Read-only inspection complete.",
+      "Recovery state SHA-256",
+      "Process/worktree/Git/receipts checked",
+    ],
+  ],
+  [
+    "scripts/lib/process-mutex.ps1",
+    [
+      "WaitOne(0)",
+      "AbandonedMutexException",
+      "owner.json",
+      "recovery-required.json",
+      "recovery inspection is still required",
+      "IssueEvidenceUrl",
+      "Get-CompyProcessMutexRecoveryStateSha256",
+      "Invoke-CompyProcessMutexIssueLookup",
+      "Assert-CompyProcessMutexIssueEvidence",
+      'ValidateSet("comment", "issue", "project")',
+      '@("project", "item-list", "1", "--owner", "Pootytxng", "--format", "json"',
+      "not Active in the authoritative Work Control Project",
+      "RecoveryStateSha256",
+      "completed recovery inspection evidence",
+      "Test issue lookup is restricted to temporary test resources.",
     ],
   ],
   [
@@ -413,6 +455,58 @@ export function scanReleasePowerShell({ overrides = {} } = {}) {
       `unsafe transaction stage order: ${stages.join(" -> ")}`,
     );
   }
+
+  // A token is not enough here: both Windows-session mutexes must wrap the complete entrypoint.
+  // Acquisition after a preflight read or release before the final proof recreates the race while
+  // still looking superficially guarded.
+  for (const envelope of [
+    {
+      file: "scripts/release.ps1",
+      name: "Local\\Compy.ReleasePipeline.v1",
+      enter: "Enter-CompyProcessMutex",
+      firstCritical: "Assert-UpdaterTrustRoot",
+      lastCritical: 'Write-Host "STAGED ONLY: v$nextText"',
+      exit: "Exit-CompyProcessMutex $releasePipelineMutex",
+    },
+    {
+      file: "scripts/ship-reinstall.ps1",
+      name: "Local\\Compy.InstalledBinary.v1",
+      enter: "Enter-CompyProcessMutex",
+      firstCritical: "$conf = Get-Content",
+      lastCritical: 'Write-Output "ship-reinstall OK"',
+      exit: "Exit-CompyProcessMutex $installedBinaryMutex",
+    },
+  ]) {
+    const source = sources.get(envelope.file)?.liveExecutable ?? "";
+    const nameIndex = source.indexOf(envelope.name);
+    const enterIndex = source.indexOf(envelope.enter);
+    const firstIndex = source.indexOf(envelope.firstCritical);
+    const lastIndex = source.lastIndexOf(envelope.lastCritical);
+    const wrapperTryIndex = source.indexOf("try {", enterIndex);
+    const finalizerIndex = source.lastIndexOf("} finally {");
+    const exitIndex = source.lastIndexOf(envelope.exit);
+    const enterCount = source.split(envelope.enter).length - 1;
+    const exitCount = source.split(envelope.exit).length - 1;
+    if (
+      nameIndex < 0 ||
+      enterCount !== 1 ||
+      exitCount !== 1 ||
+      !(
+        enterIndex < wrapperTryIndex &&
+        wrapperTryIndex < firstIndex &&
+        firstIndex <= lastIndex &&
+        lastIndex < finalizerIndex &&
+        finalizerIndex < exitIndex
+      )
+    ) {
+      report(
+        envelope.file,
+        "mutex-envelope",
+        "the named process mutex must be acquired once before the first critical read and released once after the final proof",
+      );
+    }
+  }
+
   const release = sources.get("scripts/release.ps1")?.liveExecutable ?? "";
   const receiptValidator =
     release.match(/\$validateReceipt\s*=\s*\{([\s\S]*?)\n\s*\}\s*\n\s*\$assertPublicVersion\s*=/)?.[1] ?? "";
