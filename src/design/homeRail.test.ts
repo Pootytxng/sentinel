@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { HOME_RAIL, railFor } from "./homeRail";
+import { HOME_RAIL, railFor, railGroups } from "./homeRail";
 
 // Rail-parity guard (one-rail §1, owner condition): the six-home rail is THE single navigation set,
 // and the app-shell rail must render from it — so a private second map can't drift. Fails on any
@@ -72,5 +72,26 @@ describe("railFor — proving ground drops the standalone Optimize room", () => 
   it("does not mutate HOME_RAIL", () => {
     railFor(true, true);
     expect(HOME_RAIL.map((r) => r.id)).toEqual(["home", "check", "play", "fix", "learn", "lab"]);
+  });
+});
+
+// Design foundation ⑤ — instruments behind a door (docs/decisions/2026-08-11-design-foundation.md
+// decision 6). Health is the one front door; everything else on the rail is an instrument under its
+// own sign. Grouping, not hiding: the two groups together are the rail, nothing dropped, rail order
+// kept — a "door" that removed a room from the rail would be the hide-behind-a-toggle the
+// 2026-08-06 directive bars.
+describe("railGroups — the front door and the instruments", () => {
+  it("the shipped rail: Health alone at the door, Live · History · Test under the sign, in rail order", () => {
+    const rail = railFor(true, true);
+    const g = railGroups(rail);
+    expect(g.door.map((r) => r.id)).toEqual(["home"]);
+    expect(g.instruments.map((r) => r.id)).toEqual(["play", "learn", "lab"]);
+  });
+
+  it("never drops or reorders a room: door + instruments is the rail itself, whatever the rail is", () => {
+    for (const rail of [HOME_RAIL, railFor(true), railFor(true, true)]) {
+      const g = railGroups(rail);
+      expect([...g.door, ...g.instruments]).toEqual(rail);
+    }
   });
 });

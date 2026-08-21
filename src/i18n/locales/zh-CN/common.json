@@ -10,6 +10,7 @@
   },
   "shellV2": {
     "navAriaLabel": "房间导航",
+    "deeperGroup": "深入查看",
     "crumb": {
       "home": "你的电脑现在怎么样",
       "check": "有什么在拖你后腿吗?",

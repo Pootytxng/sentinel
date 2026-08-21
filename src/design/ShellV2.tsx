@@ -24,7 +24,7 @@ import "../i18n";
 import { Wordmark } from "./Wordmark";
 import { NavGlyph } from "./NavGlyph";
 import { UpdatePill } from "./UpdatePill";
-import { HOME_RAIL, type HomeRailId, type HomeRailItem } from "./homeRail";
+import { HOME_RAIL, railGroups, type HomeRailId, type HomeRailItem } from "./homeRail";
 import { useJarvisActive } from "./jarvis/use-jarvis";
 import { useRoomIdentityFlag, useHudFrameFlag, useCommandPaletteFlag } from "./use-hud";
 import { CommandPalette } from "./CommandPalette";
@@ -203,27 +203,50 @@ export function ShellV2({
           <div className="v2-wordmark">
             <Wordmark size={16} />
           </div>
-          <div className="v2-nav" role="tablist">
-            {items.map((item, i) => (
-              <button
-                key={item.id}
-                role="tab"
-                aria-selected={activeId === item.id}
-                className="v2-nav-item"
-                onClick={() => onNavigate(item.id)}
-                title={railLabel(item)}
-                // The digit is a keyboard hint, not part of the room's name. Left in the accessible
-                // name it concatenated into "Home1"/"Blackbook3" — a screen reader announced the
-                // shortcut as if it were the label, and every nav test that matched on name had to
-                // know about it. aria-keyshortcuts is the field that actually means "press this".
-                aria-keyshortcuts={String(i + 1)}
-                {...(jarvis ? { "data-magnetic": "" } : {})}
-              >
-                <NavGlyph name={item.icon} />
-                <span>{railLabel(item)}</span>
-                <kbd aria-hidden="true">{i + 1}</kbd>
-              </button>
-            ))}
+          {/* Design foundation ⑤ — instruments behind a door. The rail is two groups, not four
+              equal tabs: Health (the front door, full weight) and, under its own sign, the three
+              instruments at a quieter weight. Every room stays rendered and digit-addressable —
+              the digit is the item's position in the WHOLE rail, so "2" still means Live. */}
+          <div className="v2-nav">
+            {(["door", "instruments"] as const).map((group) => {
+              const rooms = railGroups(items)[group];
+              if (rooms.length === 0) return null;
+              return (
+                <div key={group} className={`v2-nav-group v2-nav-${group}`}>
+                  {group === "instruments" && (
+                    <div className="v2-nav-eyebrow" id="v2-nav-deeper">
+                      {t("common.shellV2.deeperGroup")}
+                    </div>
+                  )}
+                  <div role="tablist" aria-labelledby={group === "instruments" ? "v2-nav-deeper" : undefined}>
+                    {rooms.map((item) => {
+                      const i = items.indexOf(item);
+                      return (
+                        <button
+                          key={item.id}
+                          role="tab"
+                          aria-selected={activeId === item.id}
+                          className="v2-nav-item"
+                          onClick={() => onNavigate(item.id)}
+                          title={railLabel(item)}
+                          // The digit is a keyboard hint, not part of the room's name. Left in the
+                          // accessible name it concatenated into "Home1"/"Blackbook3" — a screen
+                          // reader announced the shortcut as if it were the label, and every nav test
+                          // that matched on name had to know about it. aria-keyshortcuts is the
+                          // field that actually means "press this".
+                          aria-keyshortcuts={String(i + 1)}
+                          {...(jarvis ? { "data-magnetic": "" } : {})}
+                        >
+                          <NavGlyph name={item.icon} />
+                          <span>{railLabel(item)}</span>
+                          <kbd aria-hidden="true">{i + 1}</kbd>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           <div className="v2-foot">
             {/* Outbound honesty line (updater ARMED 2026-07-22): the signed update check is now

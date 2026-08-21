@@ -59,6 +59,14 @@ is promoted to a TurboTax-style interview; instruments move behind a door. Build
 colour app-wide (= TYPE-1 + COLOR-1) ② front door (= UX-1) ③ interview ④ wording pass with a banned-
 term guard ⑤ instruments behind a door. **Room renames APPROVED by owner 2026-08-12** (Blackbook →
 History, Lab → Test, Monitor → Live — all three; shipped as user-facing strings, Train 2 slice 1).
+**⑤ BUILT 2026-08-20 (`lane/rail-door`, awaiting desk for self-review + ship):** the rail is no
+longer four equal tabs — Health stands alone as the front door (full weight) and Live · History ·
+Test sit under a "Look deeper" sign at a quieter weight (`railGroups` in `homeRail.ts`, rendered by
+`ShellV2.tsx`, `.v2-nav-door` / `.v2-nav-instruments` in `shell-v2.css`). **Grouped, never hidden**
+— the 2026-08-06 directive bars a hide-behind-a-toggle, so nothing collapses; every room keeps its
+digit and its click. Guards: `homeRail.test.ts` §railGroups (door + instruments IS the rail, no
+room dropped or reordered) and `ShellV2.test.tsx` §"front door plus a signed group". Taste call
+mine per the 2026-08-07 decree; before/after handed over for veto on sight.
 
 ### FOUNDATION-1a. Bento grid + in-app popout, app-wide — ✅ SHIPPED (PR #117, 2026-08-12)
 
