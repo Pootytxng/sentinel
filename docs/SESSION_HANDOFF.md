@@ -1,7 +1,7 @@
 # Session handoff — 2026-08-21 (early): rail door + History + Live shipped, Test is the last room
 
-**Worktree** `C:\Users\Kuya\code\sentinel-home-room`, branch `lane/rooms-live` (merging to `main` as the
-Live-pass PR; after the merge the next lane branches fresh from `origin/main`).
+**Worktree** `C:\Users\Kuya\code\sentinel-home-room`, branch `lane/rooms-live` (the Live-pass PR). The
+next lane branches fresh from `origin/main` once that PR lands.
 
 ## Landed this session
 
