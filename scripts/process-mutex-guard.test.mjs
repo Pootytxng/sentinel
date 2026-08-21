@@ -300,4 +300,43 @@ describe.runIf(process.platform === "win32")("process-scoped Compy collision gua
     expect((await runHarness("exit", testCase)).code).toBe(0);
     expect((await runHarness("acquire", testCase)).code).toBe(0);
   });
+
+  // Every test above passes an explicit -StateRoot, so none of them ever executes the DEFAULT
+  // state-root path -- the one a real release and a real ship both take. That is the gap this
+  // closes. The root must come through the #130 resolver (scripts/lib/canonical-data-root.ps1):
+  // composing it from the $env:APPDATA string is how two lanes end up writing owner.json into two
+  // different roots, each seeing a clean slate, and both proceeding. data-root-guard.test.mjs bans
+  // the composition statically; only running it proves the dot-source actually wires up.
+  it("resolves its default state root through the canonical data-root resolver (#130)", async () => {
+    const probe = [
+      `. '${join(root, "scripts", "lib", "process-mutex.ps1").replace(/'/g, "''")}'`,
+      "$wired = [bool](Get-Command Get-CanonicalCompyDataRoot -ErrorAction SilentlyContinue)",
+      "Write-Output \"WIRED=$wired\"",
+      // try/catch must stay ONE element: joining on "; " between } and catch is a parse error.
+      "try { Write-Output \"ROOT=$(Get-CompyProcessMutexDefaultStateRoot)\" } catch { Write-Output \"REFUSED=$($_.Exception.Message)\" }",
+    ].join("; ");
+    const result = await collect(
+      spawn(powershell, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", probe], {
+        cwd: root,
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "pipe"],
+      }),
+    );
+
+    // The dot-source is the fragile half: if it ever stops landing, the resolver call below would
+    // fail at release time and nowhere earlier.
+    expect(result.stdout, result.stderr).toContain("WIRED=True");
+
+    // Either outcome proves the resolver owns the decision. A refusal is a PASS here -- on a
+    // redirected or packaged-host shell #130 says refuse, and a collision guard that cannot prove
+    // it is looking at the shared root must not start.
+    const resolved = /^ROOT=(.+)$/m.exec(result.stdout);
+    if (resolved) {
+      expect(resolved[1].trim().toLowerCase()).toMatch(
+        /\\compy\\work-control\\process-mutex$/,
+      );
+    } else {
+      expect(result.stdout).toMatch(/REFUSED=Refused \(process-mutex state root\):/);
+    }
+  });
 });

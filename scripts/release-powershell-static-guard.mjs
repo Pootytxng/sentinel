@@ -221,6 +221,9 @@ const requiredTokens = new Map([
   [
     "scripts/lib/process-mutex.ps1",
     [
+      // #130: the recovery state root is a Compy data path, so it is resolved, never composed from
+      // the $env:APPDATA string. data-root-guard.test.mjs bans the composition; this pins the cure.
+      "Get-CanonicalCompyDataRoot",
       "WaitOne(0)",
       "AbandonedMutexException",
       "owner.json",

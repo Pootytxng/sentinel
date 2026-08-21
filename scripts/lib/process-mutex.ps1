@@ -4,11 +4,21 @@
 # process exclusion. The sidecar owner record is a crash breadcrumb, never a lease: if a process
 # dies before normal cleanup, later acquisition fails closed until explicit issue-backed inspection.
 
+# The recovery state lives under Compy's data root, so it comes through the #130 resolver.
+. (Join-Path $PSScriptRoot "canonical-data-root.ps1")
+
 function Get-CompyProcessMutexDefaultStateRoot {
-  if ([string]::IsNullOrWhiteSpace($env:APPDATA)) {
-    throw "APPDATA is unavailable; process-mutex recovery state cannot be located safely."
-  }
-  return (Join-Path $env:APPDATA "Compy\work-control\process-mutex")
+  # NEVER compose this from the $env:APPDATA string (#130, 2026-08-18). During the packaged-host
+  # incident that string was CORRECT and the resolution was still redirected into a package
+  # overlay -- which is exactly the failure this file cannot survive: two lanes would each write
+  # owner.json into a DIFFERENT root, each see a clean slate, and both proceed. A collision guard
+  # that cannot prove it is looking at the shared root is not a guard. The resolver refuses rather
+  # than guesses, and refusing to start is the correct outcome here.
+  #
+  # Tests never reach this: the harness passes an explicit -StateRoot under the temp directory.
+  # Guarded by scripts/data-root-guard.test.mjs and by the static guard's required tokens.
+  $verified = Get-CanonicalCompyDataRoot -Phase "process-mutex state root"
+  return (Join-Path $verified.Path "work-control\process-mutex")
 }
 
 function Get-CompyProcessMutexPaths {
