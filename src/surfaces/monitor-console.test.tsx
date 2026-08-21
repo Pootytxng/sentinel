@@ -294,7 +294,7 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
     });
     await waitFor(() => expect(container.querySelector(".mc-delta")).not.toBeNull());
     const tag = container.querySelector(".mc-delta-tag")!;
-    expect(tag.textContent).toBe("11 Compy changes were on · their combined effect, not one change's");
+    expect(tag.textContent).toBe("11 Compy changes were on · combined effect");
     expect(tag.getAttribute("title")).toContain("one-change-at-a-time");
   });
 
@@ -324,7 +324,7 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
     await waitFor(() => expect(container.querySelector(".mc-delta")).not.toBeNull());
     const row = container.querySelector(".mc-delta")!;
     expect(row.querySelector(".mc-delta-k")!.textContent).toBe(
-      "Compared with your last Palworld session · a different game, so the gap may be the game",
+      "Compared with your last Palworld session · a different game",
     );
     expect(cell(row, "spikes")).toEqual(["Spikes", "—"]);
   });
@@ -371,6 +371,12 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
       expect(r, `${sel} must not shout`).not.toMatch(/text-transform:\s*uppercase/);
     }
     expect(rule(':root[data-v2="on"] .mc-delta-vv')).toMatch(/font-family:\s*var\(--ix-mono\)/);
+    // "Fewer words" is part of the directive, and the first review of this pass measured the
+    // template at +68% words over the string it replaced (the caveats had grown into clauses).
+    // The old string, same facts: "VS YOUR LAST VALORANT SESSION AVG FPS ▲7 1% LOW ▲4 SPIKES ±0
+    // 2 COMPY CHANGES ON · COMBINED EFFECT" = 21 words. The template may not exceed it.
+    const wordsAll = row.textContent!.trim().split(/\s+/).filter(Boolean);
+    expect(wordsAll.length, row.textContent!).toBeLessThanOrEqual(21);
   });
 
   it("the four readouts are a fixed 2×2 — auto-fit orphaned SPIKES under a two-line LOWEST LATENCY", () => {
