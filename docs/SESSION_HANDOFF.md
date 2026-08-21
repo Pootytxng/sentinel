@@ -45,7 +45,12 @@ The next lane branches fresh from `origin/main` once it lands.
 3. **Archive train, forced next push.** `docs/BRANCH_DISPOSITIONS.md` is at **120/120** against its
    `doc-budget` ceiling. The next branch pushed to origin fails the budget before it can add its row;
    move this sweep's narrative to `docs/archive/BRANCH_DISPOSITION_SWEEPS.md` when that happens.
-4. Then build what was specced: #125 steps 1–3, and the "Your rig" reading set.
+4. **The queue was re-ranked 2026-08-21** after a full-project overview — `docs/BACKLOG.md`
+   ▶ NEXT UP is now ordered by *who is waiting*, and five finished records were archived out of it.
+   Top of the new queue is **not** hygiene: the owner's unsettled "runs a lot slower than before"
+   report, which was in no queue at all and has a named tool that has never been run
+   (`node scripts/q7-probe.mjs attribute`), then the live `site/llms.txt:5` line telling the public
+   Compy is free. Then "Your rig", COLOR-1, and #125 steps 1–3.
 
 ## Standing note for the next session
 

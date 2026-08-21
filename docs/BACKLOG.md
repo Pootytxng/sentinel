@@ -22,89 +22,91 @@
 > in [RELEASE_STATE.md](RELEASE_STATE.md). Historical priority sections below remain evidence, not the
 > current pull order.
 
-### ▶ NEXT UP — the ONE linear queue (rebuilt 2026-08-20)
+### ▶ NEXT UP — the ONE linear queue (RE-RANKED 2026-08-21 from a full-project overview)
 
-> Rebuilt from a live health check, not from the last handoff's memory: `branch-disposition-audit` OK ·
-> `verify-module-map` OK (46 files) · `verify-release-state` 32/32 after this lane re-stamped a
-> `source_main_commit` that had drifted 16 commits · `doc-budget` ALL PASS. **Take the top unblocked
-> item.** Owner items are named once, with a pointer — `OWNER_ACTION_CHECKLIST.md` stays their home.
+> **Re-ranked, not re-listed.** The previous queue had nine numbered items of which **five were
+> finished records** — C-13(b) discharged, #171 fixed and landed via PR #184, #126's proof half,
+> #156's gates, #128's merge. Closed work reads as a full queue and hides how thin the live one is;
+> the five moved verbatim to [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md). What was left was six items
+> of **repo hygiene and not one thing a user of the app ever sees** — while the owner's own bug
+> report sat in no queue at all. Ranked below by **who is waiting**, not by what is nearest to hand.
+> **Take the top unblocked item.** Owner items are named once, with a pointer —
+> [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) stays their home.
 
-**MINE — in this order:**
+#### ① A PERSON REPORTED IT AND WE HAVE NOT ANSWERED — these outrank everything
 
-> **✅ THE COMPREHENSIBILITY SWEEP LANDED AND SHIPPED 2026-08-20** (issue #180, plan
-> [`superpowers/plans/2026-08-20-comprehensibility-sweep.md`](superpowers/plans/2026-08-20-comprehensibility-sweep.md)).
-> All four sections: §A Live lost its Basic fork, §B Settings lost both graduated rollout switches
-> (`c216d813`), §C Home's front door rides the verdict line with the flagged check's fine print
-> routed to Test, and `compy_home_interview` flipped default-ON per his answer — placement fixed and
-> self-reviewed FIRST, his stated condition (`ab54f1e4`) — plus §D's guards. Desk runs `ab54f1e4`
-> (runtime-proved). The rows below regain the top of the queue in their existing order.
+1. **The owner's "runs a lot slower than before" is UNSETTLED and was in no queue.** *Why it matters:*
+   he told us the app got slower, we shipped two releases since, and he has never been given an
+   answer — that is the one failure that costs trust with the only user we have.
+   [`RELEASE_STATE.md`](RELEASE_STATE.md) §"Required owner decisions" carries it with **"Do not
+   report it as fixed"** and it appears nowhere in any work queue; this row exists so it cannot vanish
+   again. It is **not** the update-pill LED fixed in v0.9.25 — he is always on the newest build, so
+   that animation never entered the AVAILABLE state on his machine and cannot be what he felt.
+   **Leading suspect, and it is uncomfortable: the TYPE-1 ship itself** (v0.9.22 `700cd565`) — the
+   app-wide switch to the bundled Geist variable font plus the 14px→15px base bump, i.e. the type
+   work he looked at and passed. **The tool already exists and has never been run:
+   `node scripts/q7-probe.mjs attribute`.** Run it, attribute the cost, bring him evidence. If Geist +
+   15px is the price, the fix trades looks for speed and **that fork is his** — but only with the
+   measurement in hand, never as a guess.
+2. **`compy.gg` tells the world Compy is free, and that is live right now.** *Why it matters:* the
+   site contradicts the owner's own 2026-07-21 monetization decree on the public internet, and every
+   day it stands is a pricing expectation being set that money later has to fight. `site/llms.txt:5`
+   reads *"Compy is a free desktop app"*; the corrected line already exists, unlanded, on
+   `claude/review-consolidation-structure-9d13f2`. **Owner-gated twice** (price *wording* is brand +
+   money; `site/**` auto-deploys to other people's machines) →
+   [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) §B6. **What is mine:** land the per-file
+   fix as a PR with the wording drafted, so his part is one word, yes or no.
 
-1. **C-13(b) self-review debt.** `5fab9e79` (the accent-menu keyboard contract) was in no built binary
-   and owed a `self-reviewer` pass on an installed build. *Why it matters:* a UI change is not done
-   until someone has LOOKED at it, and keyboard focus is exactly what a green test cannot see look
-   wrong. **Discharged by this lane — verdict recorded on the C-13 row below.**
-2. **#171 · `verify-local` invents failures under concurrent lane load** — **ROOT-CAUSED AND FIXED
-   by `lane/gate-171` (2026-08-20), closes at merge.** Three site suites each rebuilt `site-app/dist`
-   from separate vitest workers; two `astro build`s in one `dist/` delete each other's
-   intermediates, and Node 24 on Windows turns that exit into a `0xC0000409` abort
-   (nodejs/node#56645). Reproduced on demand (2/2 before, 0/3 after). Fix: one cross-process lock
-   around every site build with the freshness check inside it (`scripts/stage-dist-site.mjs`
-   `ensureSiteAppBuilt`), plus the gate re-runs a Node-hosted check ONCE on exactly that abort
-   code, loudly. Guards: `scripts/site-build-collision-guard.test.mjs`,
-   `scripts/local-gate-guard.test.mjs` §"Node-runtime-abort re-run". *Still unverified:* the one
-   `npm run build` abort in the issue shares the death signature but its trigger was not captured;
-   the re-run covers it, and a repeat now prints a WARN naming #171.
-3. **#121 · `launch-focus-guard` RUNTIME tier is intermittent, NOT root-caused** — the same class as
-   #171 was. Detail on the open row further down this file.
-4. **#126 · retire the 10 unmerged origin lanes + 2 fully-merged refs — PART-DISCHARGED 2026-08-21,
-   not done.** *Why it matters:* this IS the "get back to linear" item — every stranded ref is one
-   more thing each lane must disposition before its own audit can go green. **Done:** all fifteen
-   refs re-proven by merge-tree at `f8969e5f`, and the three that proof could retire are deleted from
-   `origin` (`claude/foreground-courtesy-handoff-82687b` + `docs/design-foundation` MERGED,
-   `claude/checklist-disk-item-c5660e` SUPERSEDED) — 15 refs → 12, evidence in
-   [`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md). **Left:** nine non-`PRESERVE` refs, and **not
-   one is retirable by proof** — two are open PRs another lane owns (#160/#163), one is a Codex
-   claim, and the rest need an owner product-scope call (bklit design system · user-feedback Lab
-   recovery · quiet-pit-wall half B) or a per-file landing (review-consolidation, tool-shed-hygiene,
-   lab-49-parity-port). What remains is a decision queue, not a cleanup queue, so the row stays open
-   rather than being closed on the easy two-thirds.
-5. **#156 · a silent NSIS install exited 0 without replacing `compy.exe` — GATED 2026-08-21, cause
-   still unproven.** *Why it matters:* without that gate the owner would have been handed a build
-   that was not the build. **Done:** `ship-reinstall.ps1` grew two gates around the install — **1b**
-   proves `compy.exe` is exclusively openable (`FileShare::None`, 20s deadline) *before* the
-   installer runs, because "every compy process is gone" and "the exe is writable" are different
-   facts and NSIS silently SKIPS a file it cannot overwrite; **3b** compares the post-install mtime
-   *and* size against the pre-install identity and, on an exact match, retries the install **once,
-   loudly** (the accepted #171 precedent) before throwing. The step-4 stamp gate is untouched — the
-   issue forbids loosening it, and it still owns the verdict. Guard:
-   `scripts/release-pipeline-guard.test.mjs` §"#156", non-vacuous (every needle absent pre-fix).
-   **Left:** the flake was never reproduced, so the *holder* of the lock is still unnamed — the
-   gates close the suspected path and name the skip at its source, which is not the same as proving
-   the cause. Row stays open until a real ship either passes clean or trips gate 1b and names it.
-6. **#128 · thin local release/install collision guard — LANDED 2026-08-21, never yet held during a real ship.** *Why it matters:* two agents can no longer race the same release or the same installed exe, and neither can quietly take the other's turn. It was written 2026-08-14 on `agent/local-collision-guard`, never left this disk, and is merged forward here. `release.ps1` holds `Local\Compy.ReleasePipeline.v1` and `ship-reinstall.ps1` holds `Local\Compy.InstalledBinary.v1`, each across the whole entrypoint, released on normal *and* error exit. A second process fails closed immediately; a **killed** holder fails closed *permanently* — no lease, no expiry, no takeover — until an operator runs `scripts/inspect-process-mutex-recovery.ps1` and supplies a live comment on the open `work-control` issue carrying the exact recovery-state SHA-256. **Fixed on the way in:** the state root composed itself from `$env:APPDATA`, which `data-root-guard.test.mjs` (#130) rejects — the branch predates that guard. It now resolves through `Get-CanonicalCompyDataRoot`, which matters here more than anywhere: a redirected shell would have put two lanes' `owner.json` in two different roots, each seeing a clean slate, and both proceeding. **Left:** the locks have never been held during an actual release or ship — #128 forbids running one, so that proof arrives with the next real ship.
-7. **#125 · `session-root-assert` only ADVISES where the handoff wanted a refusal — SPECCED 2026-08-21,
-   not built → [`superpowers/specs/2026-08-21-unverified-session-write-refusal.md`](superpowers/specs/2026-08-21-unverified-session-write-refusal.md).**
-   *Why it matters:* a session writing to the project with unverified folder, branch and claim is what
-   the whole entry system exists to stop. **Two measured findings changed the design.** (1) There is no
-   write gate to flip: the assert is a `SessionStart` hook only, and `PreToolUse` matches `Workflow`,
-   `Agent` and `Read` — no `Write`/`Edit` matcher exists, so this is a NEW hook. (2) A lapsed record
-   cannot re-verify by matching itself. This session read `launch.json` and fails it three ways —
-   branch (the owner instructed a rename), session id (a different conversation) and issue (#143 vs the
-   queue he gave it in chat) — so every commit in PR #191 would have been refused, as would the session
-   that built this queue. The honest sessions are precisely the ones whose fields have moved on.
-   **Recommendation: refuse, but ship the way back in the same commit** — a `compy-entry adopt` that
-   binds folder + branch + session id + a live `work-control` issue, with the refusal message printing
-   the command already filled in. Steps 1–3 of the rollout need no owner decision; **flipping it on is
-   his one line**, because a bug there costs him a window.
-8. **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it** (row below; owner fork B_gpu).
-9. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
+#### ② SPECCED OR DECIDED, READY TO BUILD — cheap, visible, no owner dependency
+
+3. **Merge PR [#191](https://github.com/Pootytxng/sentinel/pull/191)** (MERGEABLE), then flip the
+   `lane/rig-then-rails` row in [`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md) `UNLANDED` →
+   `MERGED` and prune the ref **in the same commit** — that row commits to it.
+4. **Build the Test room's "Your rig" reading set** →
+   [`superpowers/specs/2026-08-21-test-rig-reading-set.md`](superpowers/specs/2026-08-21-test-rig-reading-set.md).
+   *Why it matters:* the last open item from the three-room intimidation pass — "Your rig" currently
+   repeats Health's numbers, so the Test room's own panel tells the user nothing new. Data wiring,
+   not a layout move. Needs a `self-review` PASS on an installed build before it counts.
+5. **COLOR-1 · room accents collide with the status palette** —
+   [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) 🔴 OPEN. *Why it matters:* the Lab glows the
+   same green as "this is good", so green stops meaning good in the one room built to prove things;
+   Blackbook glows warning-amber while existing to reassure. **Decision already recorded — rooms
+   stop owning hue** (identity moves to glyph, eyebrow, one hairline). This is a taste call, which the
+   2026-08-07 decree makes **mine to ship and his to veto on sight** — build it, hand him a
+   before/after, do not park it on him.
+
+#### ③ REPO HYGIENE — real, but nobody is waiting on it
+
+6. **#125 steps 1–3** (split the code set as data · build `compy-entry adopt` · build the
+   write hook and test it as a module) →
+   [`superpowers/specs/2026-08-21-unverified-session-write-refusal.md`](superpowers/specs/2026-08-21-unverified-session-write-refusal.md).
+   None of the three needs an owner decision; **step 4, arming it, is his one line** and is
+   deliberately NOT in his checklist until 1–3 exist, because a non-ask there buries the real ones.
+7. **#121 · `launch-focus-guard` RUNTIME tier is intermittent, NOT root-caused** — the same
+   class as #171 was, and #171 proves the class is solvable. Detail on the open row further down.
+8. **#156's unnamed lock holder and #128's unheld locks both discharge on the NEXT REAL SHIP, not on
+   their own.** #156's gates close the suspected path but the flake was never reproduced, so the
+   *holder* is still unnamed; #128's two mutexes have never been held during an actual release or
+   ship. Neither is a task to schedule — both are **evidence to collect the next time a ship runs**,
+   so whoever runs that ship owes both issues a comment. Records archived; residuals live here.
+9. **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it** (row below; owner fork B_gpu).
+10. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
    below). Delegated to the Codex lane — do not duplicate it here.
 
 **BLOCKED — another lane owns these; `WORK_CONTROL.md` says hands off, not adjudicate:**
 PR [#160](https://github.com/Pootytxng/sentinel/pull/160) (`lane/usage-audit-disk-bloat`) is
 **MERGEABLE/CLEAN** and simply unmerged; PR [#163](https://github.com/Pootytxng/sentinel/pull/163)
 (`lane/cleanup-train-2026-08-20`) is **CONFLICTING/DIRTY** and needs its own lane to rebase. Neither
-session was advancing at 2026-08-20 09:01, but an idle claim is an alarm, not a takeover.
+has moved since 2026-08-20. An idle claim is an alarm, not a takeover — **but those two are also
+the reason #126 cannot finish**, so if they are still idle at the next check this becomes one
+question for the owner ("may I adopt these two?"), not an indefinite wait.
+
+**#126's remaining nine refs are a DECISION queue, not a cleanup queue** — two are the PRs above,
+one is a Codex claim, and the rest need an owner product-scope call (bklit design system ·
+user-feedback Lab recovery · quiet-pit-wall half B) or a per-file landing (review-consolidation —
+which is where item 2's price fix lives — tool-shed-hygiene, lab-49-parity-port). Evidence:
+[`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md), now at **120/120** against its doc-budget ceiling,
+so the next branch pushed to origin must archive that file's current sweep before it can add its row.
 
 **NOT A LANE, but a trap for the next one:** the PRIMARY worktree `C:/Users/Kuya/code/sentinel` has
 local `main` at `ffe85271`, **22 commits behind `origin/main`**, and holds an untracked receipt that a
@@ -114,7 +116,15 @@ session left work in it — so whoever owns it next should `git -C ... merge --f
 **ALSO OPEN, not yet queued** (so none of it drops silently): #133 CARE capability rails tasks 4–7 ·
 #140 CPU temp (PawnIO/MSR — needs a Capability Exception record first) · #64 Q2b main-window caller
 checks · #54/#55 Project Doctor (Codex-claimed) · #49 Quiet Pit Wall (needs a visual self-review) ·
-the PHASE A–D rows below.
+#158 disk-bloat flag (that IS PR #160) · NAV-1 (awaiting owner direction) · TYPE-1's residual
+(mono-for-machine-values-only is still a comment with no guard) · the PHASE A–D rows below.
+
+**THE MONEY STACK IS STALLED AT PHASE 2 AND NOTHING ABOVE MOVES IT.**
+[`RECEIPTS_DOCTRINE.md`](RECEIPTS_DOCTRINE.md) §4 puts the compy.gg one-pager + waitlist there,
+with **"waitlist signups in 14 days"** as the first real market signal, and every phase after it is
+funded by that one. Item 2 above is the only row in this queue that touches the site at all, and it
+is a correction, not a step forward. Named here so the gap is visible rather than implied: **the
+whole live queue is quality and hygiene, and the mission includes income.**
 
 **OWNER-GATED — visible, never blocking:** 12 open items across `OWNER_ACTION_CHECKLIST.md` §A/§B/§C —
 the Desktop key copy, the two Claude-settings edits (A_settings), distribution widening (B2), the
