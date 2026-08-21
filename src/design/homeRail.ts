@@ -60,3 +60,18 @@ export function railFor(merged: boolean, ground = false): HomeRailItem[] {
   }
   return out;
 }
+
+// railGroups — the rail's HIERARCHY (design foundation ⑤ "instruments behind a door",
+// docs/decisions/2026-08-11-design-foundation.md decision 6). Health is the front door: the room
+// that answers "is my PC OK?". Live · History · Test are instruments — they stay, one step away,
+// under their own sign, and stop being four equal doors a first-time user has to choose between.
+// Grouping, not hiding: every instrument stays rendered, clickable and digit-addressable (the
+// 2026-08-06 directive bars a hide-behind-a-toggle). Pure; order within each group is rail order.
+export type RailGroups = { door: HomeRailItem[]; instruments: HomeRailItem[] };
+
+export function railGroups(items: HomeRailItem[]): RailGroups {
+  return {
+    door: items.filter((r) => r.id === "home"),
+    instruments: items.filter((r) => r.id !== "home"),
+  };
+}

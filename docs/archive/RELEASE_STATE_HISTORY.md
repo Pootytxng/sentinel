@@ -4,6 +4,16 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-08-20 - the ab54f1e4 comprehensibility-sweep desk-build Snapshot row, moved verbatim (byte budget)
+
+Moved out of docs/RELEASE_STATE.md when the 0808e33e build (design foundation ⑤, the rail door) landed.
+Byte-for-byte except the three relative links that would break one directory deeper: the two
+`docs/`-relative paths now start with `../`, and the self-link to this file is a code span, the same
+exception the 835d8868 move below records. Nothing else in the row was touched.
+
+| **Owner-installed version + embedded stamp** | **0.9.26 desk build, embedded stamp `ab54f1e4`** — built 2026-08-20 by `npm run tauri build` from worktree `sentinel-home-room` at `lane/sweep-180` (`ab54f1e4`), installed silently by Claude via `scripts/ship-reinstall.ps1 -VerifyRuntime`, one installer on the Desktop, installer `Compy_0.9.26_x64-setup.exe` SHA-256 **`DAE0CC2FB3AFE566C09D78F0C75AE13E82A8D12235E8509E6CA1CF5EE09F8341`**. **Live == build proved by runtime probe, never an exe hash** — runtime proof `ab54f1e4 · release · shell 0.9.26` on the first attempt, 0 transient retries. **This binary carries the 2026-08-20 comprehensibility sweep** (issue [#180](https://github.com/Pootytxng/sentinel/issues/180), plan [superpowers/plans/2026-08-20-comprehensibility-sweep.md](../superpowers/plans/2026-08-20-comprehensibility-sweep.md)): **§A one Live face** (MonitorBasic deleted — the Live/Sessions segments are the one way over), **§B one switch per real choice** (the "Live console" and "JARVIS motion" rollout switches retired from Settings), **§C the Home header the owner asked for** — the front door rides the RIGHT END of the verdict line and the flagged check's fine-print paragraph leaves the header entirely (the headline still names the check; the band routes "Fix in Test →"), per his "Clean header" pick — and **`compy_home_interview` now DEFAULT ON** per his answer in [decisions/2026-08-20-home-interview-default.md](../decisions/2026-08-20-home-interview-default.md) §OWNER ANSWERED, flipped only AFTER the placement fix passed review (his stated condition), plus **§D guards** (`monitor-one-face-guard`, `settings-no-rollout-switch`, and the attention-fine-print pin in `home-console.test.tsx`). **Self-review VERDICT: PASS** (10/10 — button bottom-aligned to the 40px headline, measured via getBoundingClientRect at 1500×980 and 1100px; attention header carries no paragraph; the "0" opt-out leaves no stray gap). It supersedes desk build **`1d5b3c4c`** (design-foundation step ③ — the interview behind the then-DEFAULT-OFF flag, self-review PASS after the round-1 rubric-10 FAIL whose record its row preserves), byte-preserved with **`75849be1`**, `835d8868`, `aac90cd7`, `402b0080`, `40682344`, **`5e64074c`** (THE PUBLISHED BUILD), `75880de1`, `2f79febb` and `7f151d2c` in `archive/RELEASE_STATE_HISTORY.md`. | `node scripts/verify-release-state.mjs` (check 7) · `Select-String -Path "$env:LOCALAPPDATA\Compy\compy.exe" -Pattern ab54f1e4` · HKCU uninstall `DisplayVersion` |
+
+
 ### 2026-08-20 - the 835d8868 / aac90cd7 desk-build Snapshot row, moved verbatim (byte budget)
 
 Moved out of docs/RELEASE_STATE.md when the 75849be1 build landed and the file sat 670 bytes under

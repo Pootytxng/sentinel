@@ -57,6 +57,49 @@
   flex-direction: column;
   gap: 2px;
 }
+/* Design foundation ⑤ — the rail is a front door and a group of instruments, not four equal tabs.
+   Health keeps the full weight; the instruments sit under their own sign, a step quieter until
+   hovered or selected. Grouping, never hiding: nothing collapses, every room stays one click away. */
+:root[data-v2="on"] .v2-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+:root[data-v2="on"] .v2-nav-group [role="tablist"] {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+:root[data-v2="on"] .v2-nav-door .v2-nav-item {
+  color: var(--v2-text);
+  font-weight: 600;
+}
+:root[data-v2="on"] .v2-nav-door .v2-nav-item svg {
+  opacity: 1;
+}
+:root[data-v2="on"] .v2-nav-instruments {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--v2-line);
+}
+:root[data-v2="on"] .v2-nav-eyebrow {
+  padding: 0 10px 6px;
+  color: var(--v2-faint);
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-label);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+/* Instrument labels keep the rail's base --v2-muted (6.0:1 on the panel) — the step down from
+   Health is weight and glyph, not a dimmer colour; only the sign itself is --v2-faint (4.9:1). */
+:root[data-v2="on"] .v2-nav-instruments .v2-nav-item svg {
+  opacity: 0.75;
+}
+:root[data-v2="on"] .v2-nav-instruments .v2-nav-item:hover svg,
+:root[data-v2="on"] .v2-nav-instruments .v2-nav-item[aria-selected="true"] svg {
+  opacity: 0.95;
+}
 :root[data-v2="on"] .v2-nav-item {
   display: flex;
   align-items: center;

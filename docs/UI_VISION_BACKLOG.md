@@ -22,7 +22,7 @@
 These are owner asks that are **never-built or parked**, not yet reflected as active work anywhere
 else. This is the list the owner meant.
 
-### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) 🟡 IN PROGRESS — **four of five are DONE**: ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED; owner tried it and said *"i like it"* 2026-08-20, so the default flips ON inside the comprehensibility sweep, which first fixes the button placement he objected to — see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door remains OPEN**
+### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) ✅ ALL FIVE BUILT (⑤ shipped to the desk 2026-08-20, awaiting the owner's eye): ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED; owner tried it and said *"i like it"* 2026-08-20, so the default flips ON inside the comprehensibility sweep, which first fixes the button placement he objected to — see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door — SHIPPED 2026-08-20 (desk build `0808e33e`, self-review PASS 10/10); owner veto-on-sight still open**
 
 > **③ BUILT, TESTED AND INSTALLED 2026-08-20 — and it is OFF until he says otherwise.** Turn it on
 > at **Settings → Behavior → "Ask me a question on Home"**. With it on, Home's primary button reads
@@ -59,6 +59,14 @@ is promoted to a TurboTax-style interview; instruments move behind a door. Build
 colour app-wide (= TYPE-1 + COLOR-1) ② front door (= UX-1) ③ interview ④ wording pass with a banned-
 term guard ⑤ instruments behind a door. **Room renames APPROVED by owner 2026-08-12** (Blackbook →
 History, Lab → Test, Monitor → Live — all three; shipped as user-facing strings, Train 2 slice 1).
+**⑤ SHIPPED 2026-08-20 (`lane/rail-door` → desk build `0808e33e`, self-review PASS 10/10 on the installed build — contrast 6.04:1 / 4.88:1 computed, all four rooms clickable with digits live, rail switch 17–23 ms):** the rail is no
+longer four equal tabs — Health stands alone as the front door (full weight) and Live · History ·
+Test sit under a "Look deeper" sign at a quieter weight (`railGroups` in `homeRail.ts`, rendered by
+`ShellV2.tsx`, `.v2-nav-door` / `.v2-nav-instruments` in `shell-v2.css`). **Grouped, never hidden**
+— the 2026-08-06 directive bars a hide-behind-a-toggle, so nothing collapses; every room keeps its
+digit and its click. Guards: `homeRail.test.ts` §railGroups (door + instruments IS the rail, no
+room dropped or reordered) and `ShellV2.test.tsx` §"front door plus a signed group". Taste call
+mine per the 2026-08-07 decree; before/after handed over for veto on sight.
 
 ### FOUNDATION-1a. Bento grid + in-app popout, app-wide — ✅ SHIPPED (PR #117, 2026-08-12)
 

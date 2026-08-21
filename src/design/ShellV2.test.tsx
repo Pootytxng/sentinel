@@ -71,6 +71,32 @@ describe("ShellV2 rail", () => {
     }
   });
 
+  // Design foundation ⑤ — instruments behind a door. The rail reads as ONE front door (Health) and a
+  // signed group of instruments, not four equal tabs. Pinned structurally: Health is in the door
+  // group, every other room sits after the "Look deeper" sign in the instruments group, and nothing
+  // is hidden or collapsed — a door that hid Live would be the hide-behind-a-toggle the 2026-08-06
+  // directive bars, and exactly the "hard to navigate" the foundation was commissioned to cure.
+  it("the rail is a front door plus a signed group of instruments — grouped, never hidden", () => {
+    const { container } = render(shell({ items: railFor(true, true) }));
+    const door = container.querySelector(".v2-nav-door");
+    const instruments = container.querySelector(".v2-nav-instruments");
+    expect(door, "the door group is missing").toBeTruthy();
+    expect(instruments, "the instruments group is missing").toBeTruthy();
+    expect(Array.from(door!.querySelectorAll('[role="tab"]')).map((t) => t.getAttribute("title"))).toEqual(["Health"]);
+    expect(Array.from(instruments!.querySelectorAll('[role="tab"]')).map((t) => t.getAttribute("title"))).toEqual(["Live", "History", "Test"]);
+    // The sign names the group for sighted users AND the tablist (aria-labelledby) — one element, both jobs.
+    const sign = container.querySelector("#v2-nav-deeper");
+    expect(sign?.textContent).toBe("Look deeper");
+    expect(instruments!.querySelector('[role="tablist"]')?.getAttribute("aria-labelledby")).toBe("v2-nav-deeper");
+    // Door before sign, in DOM order.
+    expect(door!.compareDocumentPosition(sign!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Grouped, not hidden: every rail room is still a visible, focusable tab with its GLOBAL digit.
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs).toHaveLength(4);
+    expect(tabs.map((t) => t.getAttribute("aria-keyshortcuts"))).toEqual(["1", "2", "3", "4"]);
+    for (const t of tabs) expect(t.hasAttribute("hidden") || t.getAttribute("aria-hidden") === "true").toBe(false);
+  });
+
   it("marks the active room and navigates on click", () => {
     const onNavigate = vi.fn();
     render(shell({ onNavigate }));

@@ -10,6 +10,7 @@
   },
   "shellV2": {
     "navAriaLabel": "Rooms",
+    "deeperGroup": "Look deeper",
     "crumb": {
       "home": "how your PC is doing",
       "check": "is anything holding you back?",
