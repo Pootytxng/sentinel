@@ -108,6 +108,18 @@ The dev build runs two same-origin webviews + a small default window, so capture
    to remove one. **A guard passing is not evidence his decision held.** When a guard's invariant and
    an owner decision point opposite ways, the owner wins and the item FAILS.
 
+11. **Put the machine back — no debug port left open (mechanized, 2026-08-21).** Your capture
+    relaunches the owner's INSTALLED app with
+    `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port`. Nothing puts it back on its
+    own. Before your verdict: stop compy, clear that variable at every scope it is set on,
+    relaunch `%LOCALAPPDATA%\Compy\compy.exe` plainly, then run `node scripts/no-debug-port.mjs`
+    and **quote its output line**. A non-zero exit FAILS this item even when every other item
+    passed — the review is not done while the app is still open for inspection.
+    **Precedent (the defect that created this item):** the 2026-08-21 ambient-backdrop review
+    returned PASS and left the owner's Compy listening on `127.0.0.1:9333`, three WebView2
+    processes still carrying the flag. Localhost-only, and still an unattended debug surface on
+    his desk that nobody chose; it survives until he reboots or someone notices.
+
 Any item FAILS → still complete the remaining items (report everything found in one pass), then
 return the FAIL verdict. Do not fix anything yourself — you are read-only on verdicts; the
 orchestrator fixes and re-dispatches.
@@ -128,6 +140,8 @@ SELF-REVIEW — <one-line scope>
 7 Ask: "<quoted part>" → <met?> (× each part)      PASS|FAIL
 8 Canvas idle: <0-draw rest + orbit-grows numbers, or n/a>  PASS|FAIL
 9 Earn its place: <flourish → meaning mapping, or n/a>      PASS|FAIL
+10 Prior decisions: <search terms + newest owner decision, or "none found">  PASS|FAIL
+11 Teardown: <quoted no-debug-port.mjs line>       PASS|FAIL
 VERDICT: PASS | FAIL — <if FAIL: minimal precise fix list, element + property + expected value>
 ```
 
