@@ -32,9 +32,15 @@
 :root[data-v2="on"] .osc-budget { stroke: var(--ix-text-3); stroke-width: .75; stroke-dasharray: 4 3; opacity: .6; }
 :root[data-v2="on"] .osc-spike { stroke: var(--v2-warn); stroke-width: 1; opacity: .8; }
 :root[data-v2="on"] .osc-spike-worst { stroke-width: 1.75; opacity: 1; }
-:root[data-v2="on"] .osc-nosignal { position: absolute; inset: 0; display: grid; place-items: center;
-  font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .14em; text-transform: uppercase;
+/* The empty state: the "no signal" eyebrow, and under it the caller's plain one-liner naming the
+   next press (intimidation pass 2026-08-20 — the eyebrow alone read as a fault). */
+:root[data-v2="on"] .osc-nosignal { position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px; padding: 0 16px; text-align: center;
   color: var(--ix-text-3); }
+:root[data-v2="on"] .osc-nosignal-k { font-family: var(--ix-mono); font-size: var(--type-label);
+  letter-spacing: .14em; text-transform: uppercase; }
+:root[data-v2="on"] .osc-nosignal-hint { font-size: var(--type-label); color: var(--ix-text-2);
+  max-width: 44ch; }
 /* Interactive chrome (the Monitor deck's scrub + drag-zoom) — drawn only when the caller
    passes scrub/sel; the component itself stays a pure render. */
 :root[data-v2="on"] .osc-sel { fill: var(--ix-accent); opacity: .14; }

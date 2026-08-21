@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Oscilloscope, spikeIndices, niceCap } from "../../design/console/Oscilloscope";
 import type { ArcTone } from "../../design/console/ArcGauge";
@@ -25,6 +25,7 @@ export function DeckScope({
   tone = "accent",
   reduced,
   cap = 240,
+  emptyHint,
 }: {
   /** The backend's real per-frame window (content-stable reference — the caller's idle guard). */
   ftWin: number[];
@@ -36,6 +37,8 @@ export function DeckScope({
   reduced: boolean;
   /** The backend window cap (MAX_FRAMETIME_POINTS) — passed through to the scope. */
   cap?: number;
+  /** Plain one-liner under the scope's "no signal" — passed through (see Oscilloscope). */
+  emptyHint?: ReactNode;
 }) {
   const { t } = useTranslation();
   const [zoom, setZoom] = useState<ZoomSel | null>(null);
@@ -124,6 +127,7 @@ export function DeckScope({
         scrub={!drag ? hover : null}
         sel={drag}
         stageProps={stageProps}
+        emptyHint={emptyHint}
       />
       <div className="deck-bar">
         {scrubText ? (

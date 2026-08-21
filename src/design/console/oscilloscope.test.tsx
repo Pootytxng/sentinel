@@ -25,6 +25,26 @@ describe("Oscilloscope — honest no-signal state", () => {
     const { container } = render(<Oscilloscope samples={[]} label="fps" reduced />);
     expect(container.querySelectorAll("polyline").length).toBe(0);
   });
+
+  // Intimidation pass 2026-08-20: an optional plain hint under "no signal" — the caller names
+  // the next press. Without it the empty state is byte-for-byte the old one.
+  it("emptyHint renders under the no-signal eyebrow; omitted ⇒ no hint node at all", () => {
+    const a = render(<Oscilloscope samples={[]} label="fps" reduced emptyHint="Press Start capture." />);
+    const box = a.container.querySelector(".osc-nosignal")!;
+    expect(Array.from(box.children).map((e) => e.className)).toEqual(["osc-nosignal-k", "osc-nosignal-hint"]);
+    expect(box.querySelector(".osc-nosignal-hint")!.textContent).toBe("Press Start capture.");
+    a.unmount();
+    const b = render(<Oscilloscope samples={[]} label="fps" reduced />);
+    expect(b.container.querySelector(".osc-nosignal-hint")).toBeNull();
+    expect(b.container.querySelector(".osc-nosignal-k")!.textContent).toBe("no signal");
+  });
+
+  it("a drawn trace never shows the hint — the hint is the empty state's, not a caption", () => {
+    const { container } = render(
+      <Oscilloscope samples={[60, 61]} label="fps" reduced emptyHint="Press Start capture." />,
+    );
+    expect(container.querySelector(".osc-nosignal")).toBeNull();
+  });
 });
 
 describe("Oscilloscope — real samples only, one point per buffered sample", () => {

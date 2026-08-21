@@ -71,6 +71,7 @@ export function Oscilloscope({
   scrub = null,
   sel = null,
   stageProps,
+  emptyHint,
 }: {
   /** Already-real values, newest last — the caller buffers from its existing poll. */
   samples: number[];
@@ -98,6 +99,11 @@ export function Oscilloscope({
   /** Escape hatch for interactive callers (the Monitor deck): spread onto the stage div so
    *  pointer math shares the exact drawn geometry. The component itself stays stateless. */
   stageProps?: React.HTMLAttributes<HTMLDivElement>;
+  /** Plain one-liner rendered UNDER "no signal" while the window is empty — the caller says what
+   *  the next press is ("Press Start capture, then play — the line draws here."). The bare
+   *  "NO SIGNAL" read as a fault to a first-time user (intimidation pass 2026-08-20). Omit it and
+   *  the empty state is unchanged. */
+  emptyHint?: ReactNode;
 }) {
   const { t } = useTranslation();
   const win = samples.length > cap ? samples.slice(-cap) : samples;
@@ -230,7 +236,12 @@ export function Oscilloscope({
             {v.toFixed(v < 10 ? 1 : 0)}
           </span>
         ))}
-        {empty && <span className="osc-nosignal">{t("common.oscilloscope.noSignal")}</span>}
+        {empty && (
+          <span className="osc-nosignal">
+            <span className="osc-nosignal-k">{t("common.oscilloscope.noSignal")}</span>
+            {emptyHint != null && <span className="osc-nosignal-hint">{emptyHint}</span>}
+          </span>
+        )}
       </div>
     </figure>
   );

@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, waitFor } from "@testing-library/react";
+import { readFileSync } from "fs";
+import { join } from "path";
 import { MonitorConsole } from "./MonitorConsole";
+
+/** [label, value] of one boxed delta cell (`data-k` = avg | low1 | spikes). */
+const cell = (row: Element, k: string): [string, string] => {
+  const c = row.querySelector(`.mc-delta-v[data-k="${k}"]`)!;
+  return [c.querySelector(".mc-delta-vk")!.textContent!, c.querySelector(".mc-delta-vv")!.textContent!];
+};
 import type { SessionSummary } from "../types";
 
 // MonitorConsole guards (plan 2026-07-10-console-hud-phase3-monitor Task 3; v5 rewire per plan
@@ -225,6 +233,12 @@ describe("MonitorConsole — helper stopped ⇒ honest stillness (b)", () => {
     expect(container.querySelectorAll(".osc-read").length).toBe(0); // no readout invented
     expect(screen.getByRole("button", { name: "Start capture" })).toBeTruthy();
     expect(screen.getByText("start capture, then play")).toBeTruthy();
+    // The empty scope says what the next press is, in a sentence, under the eyebrow
+    // (intimidation pass 2026-08-20 — "NO SIGNAL" alone read as a fault).
+    expect(container.querySelector(".osc-nosignal .osc-nosignal-k")!.textContent).toBe("no signal");
+    expect(container.querySelector(".osc-nosignal .osc-nosignal-hint")!.textContent).toBe(
+      "Press Start capture, then play — the line draws here.",
+    );
     // v3 readouts show honest em-dashes, never fabricated zeros.
     const values = [...container.querySelectorAll(".mc-readout-v")].map((n) => n.textContent);
     expect(values).toEqual(["—", "—", "—", "—"]);
@@ -260,12 +274,14 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
     });
     await waitFor(() => expect(container.querySelector(".mc-delta")).not.toBeNull());
     const row = container.querySelector(".mc-delta")!;
-    expect(row.textContent).toContain("VS YOUR LAST VALORANT SESSION");
-    expect(row.textContent).not.toContain("DIFFERENT GAME");
-    expect(row.textContent).toContain("AVG FPS ▲7");
-    expect(row.textContent).toContain("1% LOW ▲4");
-    expect(row.textContent).toContain("SPIKES ±0");
-    expect(row.textContent).toContain("2 COMPY CHANGES ON");
+    // Intimidation pass 2026-08-20: the sentence is plain and the game name keeps its case —
+    // no more "VS YOUR LAST VALORANT SESSION".
+    expect(row.querySelector(".mc-delta-k")!.textContent).toBe("Compared with your last Valorant session");
+    expect(row.textContent).not.toMatch(/different game/i);
+    expect(cell(row, "avg")).toEqual(["Avg FPS", "▲7"]);
+    expect(cell(row, "low1")).toEqual(["1% low", "▲4"]);
+    expect(cell(row, "spikes")).toEqual(["Spikes", "±0"]);
+    expect(row.querySelector(".mc-delta-tag")!.textContent).toContain("2 Compy changes were on");
   });
 
   it("multiple changes on → the tag says COMBINED EFFECT (no per-change attribution implied); a single change doesn't", async () => {
@@ -278,7 +294,7 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
     });
     await waitFor(() => expect(container.querySelector(".mc-delta")).not.toBeNull());
     const tag = container.querySelector(".mc-delta-tag")!;
-    expect(tag.textContent).toContain("11 COMPY CHANGES ON · COMBINED EFFECT");
+    expect(tag.textContent).toBe("11 Compy changes were on · their combined effect, not one change's");
     expect(tag.getAttribute("title")).toContain("one-change-at-a-time");
   });
 
@@ -292,8 +308,8 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
     });
     await waitFor(() => expect(container.querySelector(".mc-delta")).not.toBeNull());
     const tag = container.querySelector(".mc-delta-tag")!;
-    expect(tag.textContent).toContain("1 COMPY CHANGE ON");
-    expect(tag.textContent).not.toContain("COMBINED");
+    expect(tag.textContent).toBe("1 Compy change was on");
+    expect(tag.textContent).not.toMatch(/combined/i);
     expect(tag.getAttribute("title")).toBeNull();
   });
 
@@ -307,9 +323,60 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
     });
     await waitFor(() => expect(container.querySelector(".mc-delta")).not.toBeNull());
     const row = container.querySelector(".mc-delta")!;
-    expect(row.textContent).toContain("VS YOUR LAST PALWORLD SESSION");
-    expect(row.textContent).toContain("(DIFFERENT GAME)");
-    expect(row.textContent).toContain("SPIKES —");
+    expect(row.querySelector(".mc-delta-k")!.textContent).toBe(
+      "Compared with your last Palworld session · a different game, so the gap may be the game",
+    );
+    expect(cell(row, "spikes")).toEqual(["Spikes", "—"]);
+  });
+
+  // Intimidation pass 2026-08-20 (⭐ standing directive: grouping, boxed templates, fewer words —
+  // never a switch). The installed build showed the debrief as one all-caps mono string that
+  // wrapped mid-thought; the template below is the contract that keeps it a template.
+  it("the deck delta is a boxed template: one sentence, three labeled cells, one caveat — no caps-lock", async () => {
+    mockPolls(() => stoppedFps);
+    const { container } = mount({
+      sessions: [
+        sess({ avg_fps: 247, low1_fps_est: 194, compy_changes_active: 2 }),
+        sess({ avg_fps: 240, low1_fps_est: 190 }),
+      ],
+    });
+    await waitFor(() => expect(container.querySelector(".mc-delta")).not.toBeNull());
+    const row = container.querySelector<HTMLElement>(".mc-delta")!;
+    // DOM shape: sentence → cells → tag, in that order; exactly three cells, each label-over-value.
+    const kids = Array.from(row.children).map((e) => e.className);
+    expect(kids).toEqual(["mc-delta-k", "mc-delta-cells", "mc-delta-tag"]);
+    const cells = Array.from(row.querySelectorAll(".mc-delta-cells > .mc-delta-v"));
+    expect(cells.length).toBe(3);
+    for (const c of cells) {
+      expect(Array.from(c.children).map((e) => e.className)).toEqual(["mc-delta-vk", "mc-delta-vv"]);
+    }
+    // No shouting anywhere in the row: every word of label copy is sentence case.
+    const words = row.textContent!.match(/[A-Za-z]{3,}/g) ?? [];
+    expect(words.filter((w) => w === w.toUpperCase() && w !== "FPS")).toEqual([]);
+    // CSS contract: the row is a column, the cells a 3-up grid, the labels sans (no mono, no
+    // uppercase), the value mono.
+    const css = readFileSync(join("src", "surfaces", "monitor-console.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const rule = (sel: string) => {
+      const m = css.match(new RegExp(`${sel.replace(/[.[\]"=]/g, (ch) => `\\${ch}`)}\\s*\\{([^}]*)\\}`));
+      if (!m) throw new Error(`no rule for ${sel}`);
+      return m[1];
+    };
+    expect(rule(':root[data-v2="on"] .mc-delta')).toMatch(/flex-direction:\s*column/);
+    expect(rule(':root[data-v2="on"] .mc-delta')).not.toMatch(/font-family/);
+    expect(rule(':root[data-v2="on"] .mc-delta-cells')).toMatch(/grid-template-columns:\s*repeat\(3,/);
+    expect(rule(':root[data-v2="on"] .mc-delta-v')).toMatch(/border:/);
+    for (const sel of [".mc-delta-k", ".mc-delta-vk", ".mc-delta-tag"]) {
+      const r = rule(`:root[data-v2="on"] ${sel}`);
+      expect(r, `${sel} must not be mono`).not.toMatch(/font-family/);
+      expect(r, `${sel} must not shout`).not.toMatch(/text-transform:\s*uppercase/);
+    }
+    expect(rule(':root[data-v2="on"] .mc-delta-vv')).toMatch(/font-family:\s*var\(--ix-mono\)/);
+  });
+
+  it("the four readouts are a fixed 2×2 — auto-fit orphaned SPIKES under a two-line LOWEST LATENCY", () => {
+    const css = readFileSync(join("src", "surfaces", "monitor-console.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(css).toMatch(/\.mc-readouts\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+    expect(css).not.toMatch(/\.mc-readouts\s*\{[^}]*auto-fit/);
   });
 
   it("no prior session → the row renders NOTHING (honest empty)", async () => {

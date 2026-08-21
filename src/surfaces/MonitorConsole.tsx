@@ -326,6 +326,15 @@ export function MonitorConsole({
     return c ? { color: c } : undefined;
   };
 
+  const capFirst = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+  // What an empty scope says under "no signal" (intimidation pass 2026-08-20): the bare words
+  // read as a fault on a room that had not yet explained itself. One plain line names the next
+  // press — and, once capture is on, what is being waited for. Same line in both scopes.
+  const scopeHint = fpsActive
+    ? t("monitor.monitorConsole.scopeCapturingHint")
+    : t("monitor.monitorConsole.scopeIdleHint");
+
   return (
     <div className="monitor-console" data-motion={reduced ? "reduced" : "full"}>
       {/* The room's real capture control — same audited toggle the classic tiles carry. */}
@@ -427,22 +436,39 @@ export function MonitorConsole({
               tone={live ? arcTone(gradeFrametimeMs(sample.avg_frametime_ms, rig)) : "accent"}
               reduced={reduced}
               cap={FT_CAP}
+              emptyHint={scopeHint}
             />
 
-            {/* The deck's plain-number delta row — recorded facts only; renders NOTHING without a
-                prior session, and a cross-game prior is labeled so a genre gap never reads as a
-                regression (the v4 law, carried). */}
+            {/* The deck's debrief — recorded facts only; renders NOTHING without a prior session,
+                and a cross-game prior is labeled so a genre gap never reads as a regression (the
+                v4 law, carried). Intimidation pass 2026-08-20: this was ONE all-caps mono string
+                ("VS YOUR LAST LLL SESSION (DIFFERENT GAME) AVG FPS ▲52 1% LOW ▲56 SPIKES ▲17 12
+                COMPY CHANGES ON · COMBINED EFFECT") that wrapped mid-thought under the scope. Same
+                facts, now a template: a plain sentence, three boxed value cells, one caveat line. */}
             {deck && (
               <div className="mc-delta">
                 <span className="mc-delta-k">
+                  {/* Process names arrive lowercase ("valorant"); a sentence wants "Valorant".
+                      The old row sidestepped this by upper-casing everything. */}
                   {t("monitor.monitorConsole.vsLastSession", {
-                    game: (prettyGameName(deck.prev.process_name) || t("monitor.monitorConsole.unknownGame")).toUpperCase(),
+                    game: capFirst(prettyGameName(deck.prev.process_name) || t("monitor.monitorConsole.unknownGame")),
                   })}
                   {!deck.sameGame && t("monitor.monitorConsole.differentGameTag")}
                 </span>
-                <span className="mc-delta-v">{t("monitor.monitorConsole.avgFpsLabel")} {fmtDeltaGlyph(deck.avgFps)}</span>
-                <span className="mc-delta-v">{t("monitor.monitorConsole.oneLowCapsLabel")} {fmtDeltaGlyph(deck.low1)}</span>
-                <span className="mc-delta-v">{t("monitor.monitorConsole.spikesLabel")} {fmtDeltaGlyph(deck.spikes)}</span>
+                <div className="mc-delta-cells">
+                  {(
+                    [
+                      ["avg", t("monitor.monitorConsole.deltaAvgFps"), fmtDeltaGlyph(deck.avgFps)],
+                      ["low1", t("monitor.monitorConsole.deltaOneLow"), fmtDeltaGlyph(deck.low1)],
+                      ["spikes", t("monitor.monitorConsole.deltaSpikes"), fmtDeltaGlyph(deck.spikes)],
+                    ] as const
+                  ).map(([key, k, v]) => (
+                    <span key={key} className="mc-delta-v" data-k={key}>
+                      <span className="mc-delta-vk">{k}</span>
+                      <span className="mc-delta-vv">{v}</span>
+                    </span>
+                  ))}
+                </div>
                 {deck.changesOn > 0 && (
                   // Honesty caveat (consumer panel 2026-07-14): with >1 change on, these deltas are
                   // the COMBINED effect — never imply per-change attribution. The one-change-at-a-time
@@ -561,6 +587,7 @@ export function MonitorConsole({
                 unit="fps"
                 tone={live ? arcTone(gradeFps(sample.fps, rig)) : "accent"}
                 reduced={reduced}
+                emptyHint={scopeHint}
               />
             </div>
           </BentoTile>
