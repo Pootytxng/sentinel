@@ -311,6 +311,9 @@ export function LabConsole({
   const avgFps = latest?.avg_fps ?? null;
   const lowFps = latest?.low1_fps_est ?? null;
 
+  // Each node carries its station's whenLine (the same sentence the router and the guided face
+  // use), so the dock can say in plain words when you come to the hovered / open / primary station
+  // — the "start here" six equal buttons lacked (intimidation pass 2026-08-21).
   const dockNodes: DockNode[] = [
     {
       key: "optimize",
@@ -318,14 +321,21 @@ export function LabConsole({
       icon: STATION_ICON.optimize,
       primary: true,
       measured: stackApplied || safeReady > 0,
+      hint: stations.optimize.whenLine,
     },
     ...measureKeys.map((k) => ({
       key: k,
       name: stations[k].name,
       icon: STATION_ICON[k],
       measured: stationHasReading(k, facts),
+      hint: stations[k].whenLine,
     })),
   ];
+
+  // The safe stack's "on" count — the complement of safeReady over the same recs, so the gauge can
+  // read "12 on · all applied" once the stack is in, instead of "0 ready" on an empty ring, which
+  // the installed build showed as the room's bottom-left alarm (intimidation pass 2026-08-21).
+  const safeOn = (fast.recs ?? []).filter((r) => r.severity === "safe" && r.currently_applied).length;
 
   return (
     <div className="lab-console" data-motion={reduced ? "reduced" : "full"}>
@@ -437,13 +447,23 @@ export function LabConsole({
               <ArcGauge label={t("lab.labConsole.avgFpsLabel")} value={avgFps} max={240} unit={t("lab.labConsole.unitFps")} measured={avgFps != null} />
             </div>
             <div className="lc-corner lc-bl">
+              {/* Two honest states over the same recs: work left → "N ready" (as before); nothing
+                  left → "N on" with a full ring and an "= all N applied" note. recs not loaded →
+                  NOT-YET, never a fabricated 0 (bug→guard 2026-07-09, unchanged). */}
               <ArcGauge
                 label={t("lab.labConsole.safeStackLabel")}
-                value={fast.recs != null ? safeReady : null}
-                max={Math.max(1, safeReady)}
-                unit={t("lab.labConsole.unitReady")}
+                value={fast.recs != null ? (safeReady > 0 ? safeReady : safeOn) : null}
+                max={Math.max(1, safeReady > 0 ? safeReady : safeOn)}
+                unit={safeReady > 0 ? t("lab.labConsole.unitReady") : t("lab.labConsole.unitOn")}
                 tone="accent"
                 measured={fast.recs != null}
+                note={
+                  fast.recs != null && safeReady === 0
+                    ? safeOn > 0
+                      ? t("lab.labConsole.safeStackAllOn", { count: safeOn })
+                      : t("lab.labConsole.safeStackNone")
+                    : undefined
+                }
               />
             </div>
             <div className="lc-corner lc-br">
@@ -484,7 +504,12 @@ export function LabConsole({
 
       {/* DOCK — Optimize primary + the measure stations. Outside the grid, like Home's: the dock is
           the room's exit row, not one of its answers. */}
-      <Dock nodes={dockNodes} activeKey={openStation} onOpen={onDockOpen} />
+      <Dock
+        nodes={dockNodes}
+        activeKey={openStation}
+        onOpen={onDockOpen}
+        primaryEyebrow={t("lab.labConsole.startHere")}
+      />
 
       {/* ONE open panel: Optimize (inline OptimizeStation) OR a measure body. A full-width tile
           BELOW the dock, deliberately outside the grid — inside it, opening a station would push

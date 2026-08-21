@@ -201,8 +201,16 @@ describe("ExperimentBench (armed)", () => {
     state.experiments = [KEPT_EXPERIMENT];
     render(<ExperimentBench />);
     expect(await screen.findByTestId("experiment-bench")).toBeInTheDocument();
-    // Measurement framing, never a promise of gain.
-    expect(screen.getByText(/It measures — it never promises a gain\./)).toBeInTheDocument();
+    // Measurement framing (intimidation pass 2026-08-21: the opener is one sentence of what Compy
+    // DOES — baseline, one change, measure, put it back — not a paragraph; the retired "it never
+    // promises a gain" vow-of-silence line is gone, per the reframed honest-measurement law).
+    expect(screen.getByRole("heading", { name: "Test one change" })).toBeInTheDocument();
+    const hint = screen.getByText(/measures a baseline/);
+    expect(hint.textContent).toBe(
+      "Compy measures a baseline, applies one reversible change, measures a real session, and puts the change back unless the numbers clearly beat the noise.",
+    );
+    expect(hint.textContent!.split(/\s+/).length).toBeLessThanOrEqual(30);
+    expect(hint.textContent).not.toMatch(/never promises/);
     // The kept experiment renders its plain-English honest verdict, not a raw enum string.
     expect(await screen.findByText("Measurably faster — kept")).toBeInTheDocument();
     expect(screen.getByText("Hardware-accelerated GPU scheduling")).toBeInTheDocument();

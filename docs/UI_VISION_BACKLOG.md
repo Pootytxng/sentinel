@@ -142,9 +142,13 @@ Two things here are new and must not be flattened back into the 2026-07-23 wordi
    ✅ **LIVE RESTRUCTURED 2026-08-20** (desk build `63db50d2`, self-review PASS 10/10 in round 2) — the deck's
    all-caps debrief string became a template (sentence · three boxed cells · one caveat) at 19 words against
    the 21 it replaced, guarded ≤ 21; both empty scopes name the next press under "no signal"; the readouts
-   are a fixed 2×2. Layout, not a switch. **Test has NOT had this pass yet** — it gets the same layout
-   treatment next (the jargon opener, the duplicated rig numbers, six equal-weight station buttons with no
-   "start here", "SAFE STACK READY 0" reading as an alarm).
+   are a fixed 2×2. Layout, not a switch.
+   ✅ **TEST RESTRUCTURED 2026-08-21** (desk build `584654c8`, self-review PASS) — the station dock says where to
+   start ("Start here" over Optimize, one plain when-line under the row; opt-in `Dock` props, Home untouched);
+   the safe-stack gauge reads "N on · = all N applied" on a full ring instead of "0 ready" on an empty one; the
+   bench opener is "Test one change" + one sentence (25 words, was 44, guarded ≤ 30). Layout, not a switch.
+   **All three rooms have had the pass.** 🔴 One Test item stays open: "Your rig" still repeats Health's
+   numbers — folding it needs a Test-specific reading set (new data wiring), not a layout move.
 
 **Read together with NAV-1 finding 2 below:** parallel UI generations coexist per room (Home 4+,
 Monitor 4, Lab 5) and the pruning pass has never run. That is the leading mechanical suspect for
