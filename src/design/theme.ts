@@ -479,35 +479,10 @@ export function applyCommandPalette(on: boolean): void {
   }
 }
 
-// Monitor console (plan 2026-07-10-console-hud-phase3-monitor, Phase 3 of the Console HUD) —
-// the Monitor room's LIVE face as the console instrument cluster: rolling fps/frametime
-// oscilloscope traces + honest arc gauges over the SAME polls the existing tiles run (zero new
-// IPC). DEFAULT ON since 2026-07-12 (owner "flip it default on" after the v5 flight-deck +
-// session-stack eyeball) per ship-approved-work-as-the-build: ON unless the key is literally
-// "0" — the classic live tiles stay reachable as the Settings "0" failsafe (test-pinned).
-const MONITOR_CONSOLE_KEY = "compy_monitor_console";
-
-export function readMonitorConsole(): boolean {
-  try {
-    return localStorage.getItem(MONITOR_CONSOLE_KEY) !== "0";
-  } catch {
-    /* ignore — default ON */
-  }
-  return true;
-}
-
-export function applyMonitorConsole(on: boolean): void {
-  try {
-    localStorage.setItem(MONITOR_CONSOLE_KEY, on ? "1" : "0");
-  } catch {
-    /* ignore */
-  }
-  try {
-    window.dispatchEvent(new Event("compy:monitor-console-changed"));
-  } catch {
-    /* ignore */
-  }
-}
+// The Monitor console flag (compy_monitor_console) was RETIRED in the 2026-08-20
+// comprehensibility sweep (issue #180): the console cluster graduated from rollout switch to
+// the room's one Live face, and the classic-tiles path it preserved (MonitorBasic) is deleted
+// (pinned by monitor-one-face-guard.test.tsx).
 
 // Blackbook console (plan 2026-07-12-console-hud-phase4-blackbook, Phase 4 of the Console HUD,
 // direction A "The Logbook") — the Blackbook room gains its own flight-recorder face: a single
@@ -790,39 +765,14 @@ export function setAccentForAllRooms(hex: string): void {
   }
 }
 
-// JARVIS motion layer (UI_VISION_BACKLOG §A.2/A.3/A.5/A.6; rails: the de-slop directive
-// 2026-07-05 §"Interaction / motion layer" :111-176) — the interactive layer the reskin left
-// unbuilt: Lenis glide scrolling on the content lane, a room-change "retune" sweep, magnetic
-// rail items, stage-chrome tilt, and GSAP data-ticks on measured gauges. DEFAULT ON (owner
-// eyeball approved 2026-07-12, Cycle 2026-07-12c → default-ON flip): the static shell stays
-// reachable via the "0" failsafe (Settings → Appearance / localStorage). Presentation only —
-// zero IPC, no measurement path changes; every effect is ALSO reduced-motion-gated on top of
-// this flag (the resolved data-motion attribute wins, mid-session flips included).
-const JARVIS_MOTION_KEY = "compy_jarvis_motion";
-
-export function readJarvisMotion(): boolean {
-  try {
-    return localStorage.getItem(JARVIS_MOTION_KEY) !== "0";
-  } catch {
-    /* ignore — default ON */
-  }
-  return true;
-}
-
-export function applyJarvisMotion(on: boolean): void {
-  if (on) document.documentElement.dataset.jarvis = "on";
-  else delete document.documentElement.dataset.jarvis;
-  try {
-    localStorage.setItem(JARVIS_MOTION_KEY, on ? "1" : "0");
-  } catch {
-    /* ignore */
-  }
-  try {
-    window.dispatchEvent(new Event("compy:jarvis-changed"));
-  } catch {
-    /* ignore */
-  }
-}
+// JARVIS motion layer (UI_VISION_BACKLOG §A.2/A.3/A.5/A.6): Lenis glide scrolling, the
+// room-change "retune" sweep, magnetic rail items, stage-chrome tilt, GSAP data-ticks.
+// FOLDED INTO THE MOTION PREFERENCE (comprehensibility sweep 2026-08-20, issue #180): the
+// separate compy_jarvis_motion rollout flag is retired — two motion controls on one Settings
+// screen was the comprehensibility failure, and its own sub-text already conceded "The Motion
+// setting below still wins." Motion=Full IS the layer on; Reduced (or system-reduced) stands it
+// down. The <html data-jarvis> attribute survives as CSS plumbing, derived from the resolved
+// motion pref in use-motion.ts (applyMotionAttribute).
 
 // Dashboard v2 (owner "evolve toward the ui-spec" 2026-06-15) — the premium telemetry-dashboard
 // prototype (health hero + monospace metric cards + gradient area charts), Compy's identity + data.
@@ -862,34 +812,9 @@ export function applyDashV2(on: boolean): void {
 // <html data-v2="on"> unconditionally; tokens-v2.css stays scoped under [data-v2="on"] purely as
 // namespacing. Guard: tokens-v2-guard.test.ts.
 
-// The chosen Basic/Advanced mode. Default BASIC (answer first); Advanced is the opt-in depth.
-// Mirrored onto <html data-view-mode> so CSS (and later phases) can react without prop-drilling.
-export type ViewMode = "basic" | "advanced";
-const VIEW_MODE_KEY = "compy_view_mode";
-
-export function readViewMode(): ViewMode {
-  try {
-    if (localStorage.getItem(VIEW_MODE_KEY) === "advanced") return "advanced";
-  } catch {
-    /* ignore — default basic */
-  }
-  return "basic";
-}
-
-export function applyViewMode(m: ViewMode): void {
-  document.documentElement.dataset.viewMode = m;
-  try {
-    localStorage.setItem(VIEW_MODE_KEY, m);
-  } catch {
-    /* ignore */
-  }
-  try {
-    window.dispatchEvent(new Event("compy:viewmode-changed"));
-  } catch {
-    /* ignore */
-  }
-}
-
+// The Basic/Advanced ViewMode (compy_view_mode + <html data-view-mode>) was RETIRED in the
+// 2026-08-20 comprehensibility sweep (issue #180): the Monitor room keeps one face, so the
+// mode had nothing left to choose (pinned by monitor-one-face-guard.test.tsx).
 
 // In-game overlay backdrop (owner request 2026-06-11): "on" = the near-opaque pill plate; "off" =
 // fully transparent — text only, carrying its own readability via the RTSS-style outline (the same

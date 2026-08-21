@@ -37,9 +37,14 @@ export function resolveReduced(pref: MotionPref = readMotionPref()): boolean {
 }
 
 // Mirror the resolved state onto <html> so CSS keys off it (:root[data-motion="reduced"]).
+// data-jarvis rides along since the 2026-08-20 fold (issue #180): the JARVIS layer's separate
+// flag is retired — Motion=Full IS the layer on, so its CSS scope derives from the same resolve.
 export function applyMotionAttribute(): void {
   try {
-    document.documentElement.dataset.motion = resolveReduced() ? "reduced" : "full";
+    const reduced = resolveReduced();
+    document.documentElement.dataset.motion = reduced ? "reduced" : "full";
+    if (reduced) delete document.documentElement.dataset.jarvis;
+    else document.documentElement.dataset.jarvis = "on";
   } catch {
     /* no document */
   }

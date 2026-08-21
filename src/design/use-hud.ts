@@ -3,7 +3,6 @@ import {
   readHud,
   readHomeConsole,
   readHomeInterview,
-  readMonitorConsole,
   readBlackbookConsole,
   readGamingConsole,
   readRoomIdentity,
@@ -56,19 +55,8 @@ export function useHomeInterviewFlag(): boolean {
   return on;
 }
 
-// The Monitor console flag as live React state (plan 2026-07-10-console-hud-phase3-monitor,
-// same contract: the Settings toggle fires compy:monitor-console-changed so MonitorV2
-// re-branches without a reload). DEFAULT ON since 2026-07-12 — the "0" failsafe renders
-// exactly today's classic tree (pinned by monitor-console-flag.test.tsx).
-export function useMonitorConsoleFlag(): boolean {
-  const [on, setOn] = useState(readMonitorConsole);
-  useEffect(() => {
-    const sync = () => setOn(readMonitorConsole());
-    window.addEventListener("compy:monitor-console-changed", sync);
-    return () => window.removeEventListener("compy:monitor-console-changed", sync);
-  }, []);
-  return on;
-}
+// (useMonitorConsoleFlag was RETIRED in the 2026-08-20 comprehensibility sweep, issue #180:
+// the console cluster is the Monitor room's one Live face, unconditionally.)
 
 // The Blackbook console flag as live React state (plan 2026-07-12-console-hud-phase4-blackbook,
 // same contract: a flag change fires compy:blackbook-console-changed so BlackbookV2 re-branches

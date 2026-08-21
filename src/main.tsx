@@ -91,17 +91,9 @@ try {
   document.documentElement.dataset.hud = "on"; // default ON even if localStorage is unavailable
 }
 
-// JARVIS motion layer (UI_VISION_BACKLOG §A) — DEFAULT ON (owner-approved 2026-07-12): the
-// attribute appears unless the key is explicitly "0" (Settings → Appearance failsafe). All jarvis
-// CSS is scoped :root[data-jarvis="on"], so the "0" state is byte-identical; the JS effects
-// additionally gate on the resolved motion pref.
-try {
-  if (localStorage.getItem("compy_jarvis_motion") !== "0") {
-    document.documentElement.dataset.jarvis = "on";
-  }
-} catch {
-  document.documentElement.dataset.jarvis = "on"; // default ON even if localStorage is unavailable
-}
+// (The JARVIS motion layer's separate flag was folded into the Motion preference in the
+// 2026-08-20 comprehensibility sweep (issue #180): <html data-jarvis> is now derived from the
+// resolved motion pref by applyMotionAttribute() below — one switch, one source of truth.)
 
 // Per-room identity accents (owner 2026-07-12; DEFAULT ON since 2026-07-13, owner-approved): the
 // attribute appears unless the key is explicitly "0" (devtools/localStorage failsafe). room-identity.css
@@ -120,18 +112,13 @@ try {
 // [data-room-identity="on"], so with the flag off they're inert; no picks ⇒ no <style> at all.
 applyRoomAccents();
 
-// Basic/Advanced view mode — mirrored onto <html data-view-mode> before first paint so CSS and
-// components read one source of truth. Default BASIC (the answer face).
-try {
-  document.documentElement.dataset.viewMode =
-    localStorage.getItem("compy_view_mode") === "advanced" ? "advanced" : "basic";
-} catch {
-  document.documentElement.dataset.viewMode = "basic";
-}
+// (The Basic/Advanced view mode mirror was retired with the Monitor mode fork in the
+// 2026-08-20 comprehensibility sweep, issue #180 — one face, nothing left to mirror.)
 
 // Motion preference (2026-06-19, owner decision) — Compy's living motion is ON BY DEFAULT and
 // overrides the OS "reduce motion" setting (opt-out in Settings → Motion). Resolved onto
-// <html data-motion="full|reduced"> before first paint so CSS + JS read one source of truth.
+// <html data-motion="full|reduced"> (and its derived data-jarvis) before first paint so CSS +
+// JS read one source of truth.
 applyMotionAttribute();
 
 // App language (2026-07-23): the i18next instance above already initialized in this language

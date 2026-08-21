@@ -28,7 +28,7 @@ vi.mock("./Play", async (importOriginal) => {
   const orig = (await importOriginal()) as Record<string, unknown>;
   return { ...orig, default: () => <div data-testid="play-stub" /> };
 });
-vi.mock("./MonitorBasic", () => ({ MonitorBasic: () => <div data-testid="basic-stub" /> }));
+vi.mock("./MonitorConsole", () => ({ MonitorConsole: () => <div data-testid="console-stub" /> }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn().mockResolvedValue(null) }));
 
 beforeAll(() => {
@@ -52,7 +52,6 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   localStorage.clear();
-  delete document.documentElement.dataset.viewMode;
 });
 
 const session = {

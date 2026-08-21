@@ -30,27 +30,32 @@ function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
 }
 
-/** Surfaces a default-flag user actually lands on. HomeRoom: compy_home_console ON unless "0";
- *  MonitorV2: compy_monitor_console ON unless "0". Both are read in src/design/theme.ts. */
+/** Surfaces a default-flag user actually lands on. HomeRoom: compy_home_console ON unless "0"
+ *  (read in src/design/theme.ts); MonitorV2's Live face is MonitorConsole UNCONDITIONALLY since
+ *  the 2026-08-20 comprehensibility sweep retired compy_monitor_console (issue #180). */
 const DEFAULT_SURFACES = {
   home: join("src", "surfaces", "HomeConsole.tsx"),
   live: join("src", "surfaces", "MonitorConsole.tsx"),
 } as const;
 
 describe("CPU temperature reachability (C-19)", () => {
-  it("the flags that pick those surfaces still default ON", () => {
-    // If either default flips, the surfaces this guard checks stop being the ones users see, and
+  it("the routes to those surfaces still hold (flag default / unconditional mount)", () => {
+    // If the Home default flips, the surface this guard checks stops being the one users see, and
     // every case below would pass while the reading went dark again.
     const theme = stripComments(read("src", "design", "theme.ts"));
-    for (const key of ["compy_home_console", "compy_monitor_console"]) {
-      const fn = new RegExp(
-        `const\\s+\\w+\\s*=\\s*"${key}"[\\s\\S]{0,400}?localStorage\\.getItem\\(\\s*\\w+\\s*\\)\\s*!==\\s*"0"`,
-      );
-      expect(
-        fn.test(theme),
-        `${key} no longer resolves ON-unless-"0" — this guard is checking the wrong surfaces`,
-      ).toBe(true);
-    }
+    const fn = new RegExp(
+      `const\\s+\\w+\\s*=\\s*"compy_home_console"[\\s\\S]{0,400}?localStorage\\.getItem\\(\\s*\\w+\\s*\\)\\s*!==\\s*"0"`,
+    );
+    expect(
+      fn.test(theme),
+      `compy_home_console no longer resolves ON-unless-"0" — this guard is checking the wrong surface`,
+    ).toBe(true);
+    // MonitorConsole has no flag anymore — MonitorV2 must mount it as the Live face directly.
+    const mv2 = stripComments(read("src", "surfaces", "MonitorV2.tsx"));
+    expect(
+      /<MonitorConsole\b/.test(mv2),
+      "MonitorV2 no longer mounts MonitorConsole — this guard is checking the wrong Live surface",
+    ).toBe(true);
   });
 
   it("the default Live face shows CPU temperature without the Advanced toggle", () => {
@@ -66,11 +71,14 @@ describe("CPU temperature reachability (C-19)", () => {
       "MonitorConsole must render a labelled CPU-temperature gauge",
     ).toBe(true);
 
-    // ...and it must be an UNCONDITIONAL sibling of the GPU-temperature gauge, not something the
-    // Advanced toggle reveals. Read off indentation: a conditionally-wrapped gauge sits one level
-    // deeper than a plain sibling — exactly the difference between the GPU TEMP gauge and the
-    // `mode === "advanced" &&` GPU LOAD gauge. That premise is checked, not assumed: the last
-    // assertion fails loudly if the file's shape ever stops making it true.
+    // ...and it must be an UNCONDITIONAL sibling of the GPU-temperature gauge. Since the
+    // 2026-08-20 sweep removed the mode fork there is no Advanced toggle left to hide behind —
+    // so the strongest form of C-19 is now: NOTHING in this file branches on a view mode at all,
+    // and the CPU gauge sits at the same nesting depth as the GPU gauge.
+    expect(
+      /mode\s*===/.test(src),
+      "MonitorConsole gained a mode condition again — the one-face rule (issue #180) forbids it",
+    ).toBe(false);
     const indentOf = (labelKey: string) => {
       const at = src.indexOf(labelKey);
       expect(at, `${labelKey} not found in MonitorConsole`).toBeGreaterThan(-1);
@@ -81,13 +89,8 @@ describe("CPU temperature reachability (C-19)", () => {
     expect(
       indentOf("cpuTempLabel"),
       "the CPU-temperature gauge is nested deeper than the GPU-temperature gauge, which means a " +
-        "condition wraps it — C-19 is exactly that it must not be behind the Advanced toggle",
+        "condition wraps it — C-19 is exactly that it must not sit behind a reveal",
     ).toBe(indentOf("gpuTempLabel"));
-    expect(
-      indentOf("gpuLoadLabel") > indentOf("gpuTempLabel"),
-      "the advanced-only gauge is no longer nested deeper than the plain ones — this check's " +
-        "indentation premise no longer holds, so rewrite it rather than trusting it",
-    ).toBe(true);
   });
 
   it("Home measures the CPU temperature instead of asserting it is missing", () => {

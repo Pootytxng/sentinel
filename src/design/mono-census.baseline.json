@@ -104,7 +104,6 @@
     "src/surfaces/Learn.css: .lx-grade": "value",
     "src/surfaces/Learn.css: .lx-hitcount": "value",
     "src/surfaces/Learn.css: .lx-paste": "value",
-    "src/surfaces/MonitorBasic.css: .mb-tile-v": "value",
     "src/surfaces/MonitorDomainCards.css: .mdc-k": "chrome-tag",
     "src/surfaces/MonitorDomainCards.css: .mdc-value": "value",
     "src/surfaces/Play.css: .play-hero-value": "value",

@@ -44,8 +44,9 @@ import "./monitor-console.css";
 // scope hero with scrub + drag-zoom · the plain-number session delta row) and the SESSION STACK
 // below (every recent session a flat row on ONE shared 1%-low axis — the stack IS the session
 // shelf). Chain law from v3→v4: no depth/perspective over data ink on this face, ever again.
-// Behind compy_monitor_console, DEFAULT ON; flag off ("0" failsafe), MonitorV2 renders the classic faces
-// (pinned by monitor-console-flag.test.tsx).
+// THE room's only Live face since the 2026-08-20 comprehensibility sweep (issue #180): the
+// Basic/Advanced fork and the compy_monitor_console rollout flag are retired — one face, always
+// the full cluster (pinned by monitor-one-face-guard.test.tsx).
 //
 // Honesty contract: presentation only over the SAME audited read-only polls MonitorBasic /
 // Play's live card run — the identical three 1 Hz commands, cadence, cancellation, and
@@ -114,22 +115,15 @@ const FT_CAP = 240;
 export function MonitorConsole({
   active,
   vendor = "any",
-  mode,
   sessions = [],
   onFpsActive,
-  onOpenSessions,
 }: {
   active: boolean;
   vendor?: GpuVendor;
-  /** Basic shows the core instrument set; Advanced the full cluster (the existing faces' split). */
-  mode: "basic" | "advanced";
-  /** Session history (newest-first): the waterfall's SESSIONS layers in both modes, plus
-   *  Basic's last-session door content (Advanced reaches the list via its own tab). */
+  /** Session history (newest-first): the stack's rows + the deck's delta row prior. */
   sessions?: SessionSummary[];
   /** Mirrors the room's live capture state up to MonitorV2 (the V2-8 forward-door rule). */
   onFpsActive?: (active: boolean) => void;
-  /** Basic's route into Advanced → Sessions (never a dead end) — same door MonitorBasic has. */
-  onOpenSessions?: () => void;
 }) {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
@@ -333,7 +327,7 @@ export function MonitorConsole({
   };
 
   return (
-    <div className={`monitor-console mc-${mode}`} data-motion={reduced ? "reduced" : "full"}>
+    <div className="monitor-console" data-motion={reduced ? "reduced" : "full"}>
       {/* The room's real capture control — same audited toggle the classic tiles carry. */}
       <div className="mc-capture">
         <button
@@ -519,21 +513,18 @@ export function MonitorConsole({
                 tone={arcTone(gpuGrade)}
                 measured={gpu?.temperature_c != null}
               />
-              {mode === "advanced" && (
-                <ArcGauge
-                  label={t("monitor.monitorConsole.gpuLoadLabel")}
-                  value={gpu?.utilization_gpu_pct ?? null}
-                  max={100}
-                  unit="%"
-                  tone="neutral"
-                  measured={gpu?.utilization_gpu_pct != null}
-                />
-              )}
+              <ArcGauge
+                label={t("monitor.monitorConsole.gpuLoadLabel")}
+                value={gpu?.utilization_gpu_pct ?? null}
+                max={100}
+                unit="%"
+                tone="neutral"
+                measured={gpu?.utilization_gpu_pct != null}
+              />
               {/* Beside the GPU's temperature, because "is it running hot" is ONE question with
-                  two answers — and in BOTH modes, because the whole point of C-19 is that it must
-                  not sit behind the Advanced toggle. Null renders ArcGauge's honest NOT-YET; the
-                  ladder that turns that into a fix (CpuTempOffer) lives on Home's CPU callout, so
-                  the same offer is not printed twice (one-mention law). */}
+                  two answers. Null renders ArcGauge's honest NOT-YET; the ladder that turns that
+                  into a fix (CpuTempOffer) lives on Home's CPU callout, so the same offer is not
+                  printed twice (one-mention law). */}
               <ArcGauge
                 label={t("monitor.monitorConsole.cpuTempLabel")}
                 value={cpuTemp ? Math.round(cpuTemp.temp_c) : null}
@@ -586,19 +577,8 @@ export function MonitorConsole({
       </p>
 
       {/* THE SESSION STACK — the face's second half (the stack IS the session shelf): every
-          recent session a flat row on ONE shared axis, in BOTH modes. */}
+          recent session a flat row on ONE shared axis. */}
       <SessionStack sessions={sessions} reduced={reduced} />
-
-      {/* Basic collapses the Sessions tab away, so it keeps a door into the full face (never
-          a dead end); Advanced reaches it via its own tab. */}
-      {mode === "basic" && sessions.length > 0 && (
-        <button type="button" className="mc-last cmp-door" onClick={onOpenSessions}>
-          <span className="mc-last-k">{t("monitor.monitorConsole.sessionHistory")}</span>
-          <span className="cmp-door-chevron cmp-door-chevron-end" aria-hidden="true">
-            ▸
-          </span>
-        </button>
-      )}
     </div>
   );
 }
