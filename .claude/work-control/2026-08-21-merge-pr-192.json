@@ -1,0 +1,57 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "feature",
+  "pr": 192,
+  "issue": null,
+  "branch": "lane/aurora-idle-cost",
+  "currentHead": "b7956b33d432e8deb8c24161503b2bdf1a708e9f",
+  "explicitHandoff": "The owner's driver prompt for this session ends 'Queue after that: docs/BACKLOG.md NEXT UP items 2-5', and the re-ranked item 1 it points at is this work verbatim: 'STOP THE AMBIENT BACKDROP ANIMATING -- it is ~88% of Compy's idle CPU ... Do it, re-measure with node scripts/q7-probe.mjs idle-bare, then ratchet idleCpuPercentOfOneCore in perf/q7-baseline.json down hard -- 26 is loose enough to hide the entire cost. It is a look change, so it needs a self-review PASS on an installed build and a before/after to the owner; under the 2026-08-07 taste decree it ships as a decision with a veto attached, not as a question.' Every clause of that is discharged on this head.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room, git dir shared with C:/Users/Kuya/code/sentinel.",
+    "remoteState": "origin re-fetched immediately before this receipt. origin/main = 581a0b6d4e461798208c731ad41094165da6ca07, unmoved since this branch was cut from it. gh reports PR #192 OPEN / MERGEABLE / mergeStateStatus CLEAN, base main, 3 commits. statusCheckRollup is empty -- no status checks exist on this repo by the Actions-budget decree -- so the local gate below is the whole proof.",
+    "worktree": "git worktree list re-checked this session: seven worktrees. This lane is alone in sentinel-home-room on lane/aurora-idle-cost. The primary checkout C:/Users/Kuya/code/sentinel sits on main at ffe85271 and is not this lane's; sentinel-diskbloat, sentinel-feedback, sentinel-local-collision-guard and sentinel-quietpitwall are other lanes' branches, untouched.",
+    "branch": "lane/aurora-idle-cost at b7956b33d432e8deb8c24161503b2bdf1a708e9f; origin/lane/aurora-idle-cost is at this exact head (pushed, hook green). No merge commits, no divergence from origin/main. Note for the record: the first push attempt was REJECTED by the gate because docs/BRANCH_DISPOSITIONS.md carried this lane's own row before the ref existed on origin -- scripts/branch-disposition-audit.mjs rejects a row naming a ref that is not there yet, and rejects a ref with no row, so a lane cannot pre-write its own disposition. The row was parked, the commit amended, pushed, and the row landed in the next commit with the PR link. Recorded in the row itself so the next lane does not repeat it.",
+    "dirtyState": "git status --porcelain at this head shows only this receipt file, which by construction cannot ride inside the head it authorizes -- it stays untracked for the next commit, the same chain #181-#191 used. The two pre-existing dirty edits inherited from another lane are still dispositioned rather than carried: .codex/config.toml remains stash@{0} (ABANDONED; stash@{1} is the same regression from 2026-08-20) and CLAUDE.md's role sentence stays restored to the text scripts/work-control-gate.test.mjs requires. Both stashes are now covered by scripts/codex-config-guard.test.mjs, added on this head and verified to trip on each of them.",
+    "liveProcesses": "The owner's installed compy.exe is running (pid 4632 at the time of writing) and was relaunched PLAINLY by this session after the self-review left it open for inspection: node scripts/no-debug-port.mjs reports CLEAN -- 14 compy/WebView2 processes live, none carrying --remote-debugging, none listening, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS unset at Process, User and Machine scope. No game in the foreground. This merge is a gh API call and touches neither the desk nor the installed build."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "b7956b33d432e8deb8c24161503b2bdf1a708e9f",
+      "detail": "Inside .githooks/pre-push at this exact head: LOCAL CHECK RESULT: PASS, push to origin/lane/aurora-idle-cost accepted (5a9e2e13..b7956b33), which is only reachable on a pass. Covers vitest (361 files), tsc + vite build, cargo test and clippy. Two earlier runs of this same gate FAILED and are the reason this head differs from its first draft: run 1 red on scripts/branch-disposition-audit.test.mjs (the premature row described above); run 2 red on TWO guards catching the new scripts/no-debug-port.mjs -- gate-residency-guard.test.mjs ('a new script is red until someone says where it runs', now declared kind: manual with its reason) and console-window-guard.test.mjs (its execFileSync spawned powershell.exe without windowsHide: true, which would have flashed a console window at the owner on every run). Both were repo guards doing exactly their job on brand-new code."
+    }
+  ],
+  "shipProof": {
+    "applicable": true,
+    "detail": "The only code in this PR that compiles into the binary is the src/App.css change, and it is ALREADY on the owner's desk: commit 1f2ba660 was built with npm run tauri build and installed silently by scripts/ship-reinstall.ps1 -VerifyRuntime, one installer on the Desktop, installer Compy_0.9.26_x64-setup.exe SHA-256 751A5F01A54194FE59664350661B984C93BD7E21DC9960F1405581DDB9174AF5, live == build proved by runtime probe (build STAMP '1f2ba660 · release · shell 0.9.26'), never an exe hash. Everything on this head ABOVE 1f2ba660 is docs/, recorded perf traces, scripts/ guards and two agent prompt files -- nothing that reaches the binary -- so the installed build remains a faithful proof of this PR's product change. docs/RELEASE_STATE.md's Owner-installed Snapshot row and its STATE:owner_installed_stamp marker both name 1f2ba660, and verify-release-state.mjs reports 31 citations / 0 state-drift against the stamp embedded in the live exe."
+  },
+  "selfReview": {
+    "verdict": "PASS",
+    "detail": "Run via the self-review skill dispatching the self-reviewer subagent (never inline), against the INSTALLED build with the stamp verified over CDP as '1f2ba660 · release', at the owner's real resolution, on Home AND Health. All 9 standing rubric items plus item 10 (prior owner decisions) plus four extra falsifiable proofs written into the brief. The load-bearing evidence: getComputedStyle(body, '::before') reads animation-name: none, animation-iteration-count: 1, animation-duration: 0s, will-change: auto and transform: none -- not a matrix -- identical across two samples 6s apart; all four radial gradients still resolve to real color(srgb ...) values at 0.18/0.13/0.12/0.1 alpha; html, body, html::before, html::after and body::after all read animation-name: none and a full-DOM sweep for animation-iteration-count: infinite returned []; and six background-only sample points are BYTE-IDENTICAL across BEFORE x2 and AFTER x2 (e.g. gutter (940,500) = (14,16,20) in all four), so the resting frame is provably the same picture and every visible pixel delta traces to live sensor text. Item 10 surfaced a real tension rather than burying it: de13e5d0 added this drift under an owner direction to 'go bold'. The review judged that direction to be about visual weight -- which the byte-identical resting composition preserves -- against a newer and more specific owner signal, his 'feels slower' report, which is what opened this lane. That tension is named to the owner in the before/after rather than resolved behind him. Captures at docs/ui-sweep/shots/ambient-{before,after}/ (gitignored). The review also EXPOSED a defect in itself: it left the owner's app running with 127.0.0.1:9333 open. Restored by hand, then guarded -- scripts/no-debug-port.mjs plus rubric item 11 in both the .claude/ and .codex/ copies, on this head."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "No independent non-writing reviewer is reachable from this session: its harness forbids spawning review subagents except the self-reviewer the visual law compels, and Codex -- the independent reviewer named in docs/WORK_CONTROL.md -- is not running against this worktree. docs/WORK_CONTROL.md makes that review advisory rather than blocking. Mitigations specific to this PR: the mutation boundary is untouched (zero .rs diff), every quantitative claim is backed by a raw trace committed alongside it so the numbers can be re-derived rather than trusted, the three idle rows in docs/perf/q7-baseline.json were written FROM the trace by script rather than transcribed, and scripts/perf-budget-guard.test.mjs re-opens each trace and requires exact equality."
+  },
+  "docGates": [
+    "doc-budget.ps1 ALL PASS (RELEASE_STATE 299/300 lines, 45.9KB/48KB; BACKLOG 1098/1200, 104KB/106KB; BRANCH_DISPOSITIONS 120/120; SESSION_HANDOFF 106/120). BRANCH_DISPOSITIONS is AT its ceiling: the next lane to push a new ref must archive the current sweep before it can add a row, and this lane's own row leaves with its ref on merge.",
+    "verify-release-state.mjs 31 citations: 31 ok, 0 near-drift, 0 broken, 0 missing sections, 0 state-drift -- including the INSTALLED-STAMP check, which now agrees with the stamp embedded in the live exe. markdown-link-guard 183 local links. branch-disposition-audit OK.",
+    "docs/BRANCH_DISPOSITIONS.md carries this lane's row as UNLANDED and commits in writing that the row and the ref leave TOGETHER the moment it lands -- the audit fails a MERGED row whose ref still exists and also fails a row naming a ref that is gone. That removal is the next action after this merge, not a later sweep.",
+    "docs/BACKLOG.md item 1 retired and the queue renumbered; the newly recorded coldStartDocumentReadyMs regression (210 -> 516 ms, an open finding, deliberately NOT attributed) is now item 1. docs/SESSION_HANDOFF.md rewritten for this lane. docs/perf/README.md trap 1 closed -- 'idle Compy really does burn half a core doing nothing' was true when written and is not now."
+  ]
+}

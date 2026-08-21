@@ -80,12 +80,16 @@ recorded as an `open finding` and is now item 1 of the queue. Do not guess a cau
 
 ## Do next, in this order
 
-1. **Land PR [#192](https://github.com/Pootytxng/sentinel/pull/192)** (the aurora fix + the
-   re-derived baseline + the new `.codex/config.toml` guard), then add its
-   [`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md) row and prune the ref **in the same
-   commit** — a `MERGED` row whose ref still exists fails the audit, and so does a row naming a
-   ref that is gone, so the row leaves with the ref. ⚠ That file is at **120/120**; archive its
-   current sweep before adding any further row.
+1. **Land PR [#192](https://github.com/Pootytxng/sentinel/pull/192) — the merge is the ONE thing
+   the 2026-08-21 session could not do.** `gh pr merge` was refused by this machine's permission
+   policy, not by a gate. The PR is OPEN / MERGEABLE / CLEAN, the local gate passed on its head,
+   and the receipt `.claude/work-control/2026-08-21-merge-pr-192.json` already returns
+   `"decision": "PASS"` with zero blockers from `node scripts/work-control-gate.mjs`. Re-run that
+   gate, then merge. **On landing, DELETE this lane's row from
+   [`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md) and prune the ref in the same commit** — the
+   row is already written and says so: the audit fails a `MERGED` row whose ref still exists AND a
+   row naming a ref that is gone, so the row leaves with the ref. ⚠ That file is at **120/120**;
+   removing this row is also what un-blocks the next lane that needs to add one.
 2. **Chase the cold-start regression.** [`BACKLOG.md`](BACKLOG.md) ▶ NEXT UP item 1. Bisect the
    bundle under `node scripts/q7-probe.mjs coldstart`; `documentReady` waits on the HTML, the
    stylesheets and any blocking script, so bundle growth and the bundled Geist faces are both
