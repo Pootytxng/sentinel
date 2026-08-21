@@ -1,0 +1,55 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "test",
+  "pr": 186,
+  "issue": 121,
+  "branch": "lane/focus-121",
+  "currentHead": "8f55497c56ecf394202da8408325128fa747b931",
+  "explicitHandoff": "Owner directive 2026-08-20 (evening) opening this session: read docs/SESSION_HANDOFF.md; with no compy running and no game in front, push lane/rail-door -> PR -> build+install -> self-review -> ship -> merge green, then push + PR + merge lane/focus-121 (test-only), then begin the Live/History/Test intimidation pass. Order swapped by the lane: rail-door's first gate run failed on the #121 RUNTIME flake that focus-121 exists to classify, so the test lane landed first. Owner re-confirmed the desk free mid-session ('ok everything closed do whatever you need to').",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room, git dir shared with C:/Users/Kuya/code/sentinel.",
+    "remoteState": "origin/main = 616c6fe2 (the #185 merge) at session start and re-fetched before the first push; it had not moved. Both local branches were cut from exactly that. GitHub reports PR #186 MERGEABLE / CLEAN with headRefOid equal to this receipt's currentHead; no status checks exist on the repo (Actions budget decree).",
+    "worktree": "git worktree list re-checked at session start and again before this receipt: seven worktrees, this lane alone in sentinel-home-room. The branch here was switched from lane/rail-door (clean, 570a5c1d) to lane/focus-121 by this lane itself.",
+    "branch": "lane/focus-121, seven commits on top of 616c6fe2 (9f4e8eca receipt carry, adaa9a86 + 95e24fbc trace instrument, 4dd57269 handoff, a370ed42 decision 2, afe5cfbe BACKLOG archive, 8f55497c site-lock reclaim fix), no merge commits, no divergence; origin/lane/focus-121 is at this exact head.",
+    "dirtyState": "git status --porcelain at this head shows only this receipt file, which by construction cannot ride inside the head it authorizes. It stays untracked for the next commit on lane/rail-door, the same chain #181-#185 used.",
+    "liveProcesses": "Two claude.exe sessions on the machine (this one plus one other, not in this worktree), no cargo, no compy.exe, no game. The owner's installed compy.exe (tray-minimised, PID 18088) was stopped by this lane before the first gate run; METAL GEAR RISING had been closed by the owner, and the Marvel Rivals he opened by accident mid-session had exited before the green run (foreground at the check: Discord)."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "8f55497c56ecf394202da8408325128fa747b931",
+      "detail": "Inside .githooks/pre-push at this exact head (core.hooksPath=.githooks), fourth gate run of the lane: exit 0, LOCAL CHECK RESULT: PASS, 1090-line log read by its LOCAL CHECK markers -- vitest 355 files / 4668 passed / 4 skipped, tsc + vite build clean, cargo 963 passed / 0 failed / 24 ignored, clippy clean, zero WARN lines. The push created origin/lane/focus-121, which the hook blocks when the gate fails. Earlier runs at earlier heads: #1 (a370ed42) failed doc-budget-guard (BACKLOG 116.3KB/114KB -> fixed in afe5cfbe); #2 (afe5cfbe) failed site-build-collision-guard (real race -> fixed in 8f55497c); #3 (afe5cfbe) failed the same race plus a 15s release-transaction-e2e timeout under load (#171 family, untouched)."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "reason": "No product code changed: test tooling (scripts/launch-focus-guard.test.mjs, scripts/lib/foreground-events.cs, scripts/lib/foreground-probe.ps1, scripts/site-build-collision-guard.test.mjs), the site staging helper's lock (scripts/stage-dist-site.mjs, gate-only), doc budget + archive, and docs. Nothing here is in the installed binary."
+  },
+  "selfReview": {
+    "verdict": "not-applicable",
+    "reason": "No src/**/*.tsx or *.css touched; no visual surface. The lock fix was proven behaviourally: the race reproduced in isolation (~1 in 6) and by round 7 in an instrumented 4-process harness on the old code; 80 + 160 harness rounds (4 then 8 contenders) clean after the fix; five deterministic guards added, the old-semantics mutant fails them."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; WORK_CONTROL makes that review advisory rather than a blocker. The mutation boundary is untouched (no src-tauri changes), the full pre-push gate passed at the exact head, and the one logic change (the lock reclaim) carries a reproduced before/after plus mutation-tested guards."
+  },
+  "docGates": [
+    "doc-budget.ps1, markdown-link-guard, verify-release-state, verify-module-map and branch-disposition-audit are resident in npm test (gate-residency-guard) and passed inside the vitest run above at this head. BACKLOG's byte ratchet moved 114KB -> 106KB in the same commit as the archive it followed.",
+    "branch-disposition-audit: origin/lane/focus-121 exists only for the minutes between push and this merge -- the known #126 ordering race; no row added on purpose, the same reason PRs #176-#185 added none. The ref is deleted right after the merge."
+  ]
+}
