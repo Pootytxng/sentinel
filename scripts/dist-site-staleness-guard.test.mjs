@@ -13,7 +13,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, dirname, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadLibrary, importFromRepo } from "./lib/library-render.mjs";
-import { STAGING_EXCLUDE, buildSiteApp } from "./stage-dist-site.mjs";
+import { STAGING_EXCLUDE, ensureSiteAppBuilt } from "./stage-dist-site.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const siteDir = join(root, "site");
@@ -67,9 +67,9 @@ describe.skipIf(!existsSync(distDir))(
     // index.html + assets-app/, Mission Control makeover 2026-07-14), plus repo-root functions/.
     // Overlay entries are set AFTER site/ entries so on any name collision the Astro file wins,
     // matching stageDistSite's cpSync order. site-app/dist is gitignored — rebuild it with the
-    // same command staging uses if it's absent, so the comparison is never against thin air.
-    const siteAppDist = join(root, "site-app", "dist");
-    if (!existsSync(siteAppDist)) buildSiteApp();
+    // same command staging uses if it's absent or stale, so the comparison is never against thin
+    // air — through the one locked builder, never a private rebuild racing another suite's (#171).
+    const siteAppDist = ensureSiteAppBuilt();
     const expected = new Map();
     for (const f of walk(siteDir)) {
       if (!STAGING_EXCLUDE.has(f.split("/")[0])) expected.set(f, join(siteDir, f));

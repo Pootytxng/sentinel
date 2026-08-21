@@ -17,27 +17,172 @@
 // Usage: node scripts/stage-dist-site.mjs   (npm run stage:site)
 
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const siteApp = join(root, "site-app");
 
 // site/ files that are build tooling, not deploy artifacts. The staleness guard imports this set —
 // keep it the single source of truth for what stays out of the published tree.
 export const STAGING_EXCLUDE = new Set(["README.md", "debunks.config.json", "generate.mjs", "src"]);
 
-/** Build the Astro landing (site-app/) and return its dist dir. Exported so the landing
- *  contract test can rebuild-if-stale against the same command staging uses. */
-export function buildSiteApp() {
-  const siteApp = join(root, "site-app");
+// ---------------------------------------------------------------------------------------------
+// ONE astro build at a time, per checkout. bug→guard #171 (2026-08-20).
+//
+// Three test files rebuild site-app/dist when it is stale, and vitest runs them in separate
+// worker processes at the same moment. Two `astro build`s in the SAME dist/ collide: astro
+// writes its SSR bundle (renderers.mjs, manifest_*.mjs) into dist/, renders the static pages,
+// then deletes the bundle — so the first build to finish deletes the second build's
+// intermediates out from under it. The second dies with "Cannot find module dist/renderers.mjs"
+// and, because Node 24 on Windows aborts inside process.exit() while an async handle is still
+// closing (nodejs/node#56645, unfixed upstream), the exit code is not 1 but 0xC0000409 /
+// 3221226505 — STATUS_STACK_BUFFER_OVERRUN, a crash that looks like memory corruption and has
+// nothing to do with the code under test. Reproduced on demand: three concurrent builds → two
+// crash; the leftover manifest_*.mjs files in dist/ after a "green" run are the same collision
+// seen from the side that won.
+//
+// The fix is a cross-process lock (an atomic mkdir, the oldest lock there is) around every
+// build, with the freshness check INSIDE the lock: the worker that wins builds, the workers
+// that waited find a fresh dist and skip. Pinned by scripts/site-build-collision-guard.test.mjs.
+// ---------------------------------------------------------------------------------------------
+
+const SITE_APP_DIST = join(siteApp, "dist");
+// Inside node_modules so it is never a tracked file and cannot survive an `npm ci` that
+// replaced the tree; node_modules/ must exist anyway for astro to.
+const SITE_BUILD_LOCK_DIR = join(siteApp, "node_modules", ".compy-site-build.lock");
+
+/** Outputs that prove a complete static build, and the inputs that make one stale. */
+const SITE_APP_OUTPUTS = [join("index.html"), join("compare", "index.html")];
+const SITE_APP_INPUTS = ["src", "public", "astro.config.mjs", "package.json"];
+
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function pidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    // EPERM means it exists but is not ours to signal — still alive.
+    return e.code === "EPERM";
+  }
+}
+
+function readLockOwner(lockDir) {
+  try {
+    return JSON.parse(readFileSync(join(lockDir, "owner.json"), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Run `fn` while holding the per-checkout site build lock. Serialises across PROCESSES (vitest
+ * workers, a parallel `npm run stage:site`, anything), not just within one. A lock whose owner
+ * pid is gone, or that is older than `staleMs`, is a crashed holder and gets reclaimed — the
+ * astro build this protects takes ~2s, so a minutes-old lock is never a live one. Options exist
+ * for the guard test only.
+ */
+export function withSiteBuildLock(
+  fn,
+  { lockDir = SITE_BUILD_LOCK_DIR, timeoutMs = 180_000, staleMs = 300_000, pollMs = 50 } = {},
+) {
+  const started = Date.now();
+  mkdirSync(dirname(lockDir), { recursive: true });
+  for (;;) {
+    try {
+      mkdirSync(lockDir);
+      break;
+    } catch (e) {
+      if (e.code !== "EEXIST") throw e;
+    }
+    const owner = readLockOwner(lockDir);
+    let ageMs;
+    try {
+      ageMs = Date.now() - statSync(lockDir).mtimeMs;
+    } catch {
+      continue; // vanished between our mkdir and stat — try again
+    }
+    const orphaned = owner !== null && !pidAlive(owner.pid);
+    if (orphaned || ageMs > staleMs) {
+      rmSync(lockDir, { recursive: true, force: true });
+      continue;
+    }
+    if (Date.now() - started > timeoutMs) {
+      throw new Error(
+        `site build lock held for over ${timeoutMs}ms by pid ${owner?.pid ?? "unknown"} (${lockDir}) — ` +
+          "a live astro build takes seconds; if nothing is building, delete the lock dir",
+      );
+    }
+    sleepSync(pollMs);
+  }
+  try {
+    writeFileSync(
+      join(lockDir, "owner.json"),
+      JSON.stringify({ pid: process.pid, at: new Date().toISOString() }),
+    );
+    return fn();
+  } finally {
+    rmSync(lockDir, { recursive: true, force: true });
+  }
+}
+
+function newestMtime(path) {
+  if (!existsSync(path)) return 0;
+  const st = statSync(path);
+  if (!st.isDirectory()) return st.mtimeMs;
+  let newest = 0;
+  for (const name of readdirSync(path)) newest = Math.max(newest, newestMtime(join(path, name)));
+  return newest;
+}
+
+/** True when every expected output exists and none is older than the newest input. `appDir`
+ *  is a parameter for the guard test; production always asks about site-app/. */
+export function siteAppDistIsFresh(appDir = siteApp) {
+  const dist = join(appDir, "dist");
+  let oldestOutput = Number.POSITIVE_INFINITY;
+  for (const rel of SITE_APP_OUTPUTS) {
+    const p = join(dist, rel);
+    if (!existsSync(p)) return false;
+    oldestOutput = Math.min(oldestOutput, statSync(p).mtimeMs);
+  }
+  const newestInput = Math.max(...SITE_APP_INPUTS.map((rel) => newestMtime(join(appDir, rel))));
+  return oldestOutput >= newestInput;
+}
+
+function runAstroBuild() {
   const astroBin = join(siteApp, "node_modules", "astro", "astro.js");
   if (!existsSync(astroBin)) {
     throw new Error("site-app dependencies missing — run `npm ci` inside site-app/ first");
   }
   const build = spawnSync(process.execPath, [astroBin, "build"], { cwd: siteApp, stdio: "inherit" });
   if (build.status !== 0) throw new Error(`astro build failed (exit ${build.status})`);
-  return join(siteApp, "dist");
+  return SITE_APP_DIST;
+}
+
+/** Build the Astro landing (site-app/) unconditionally and return its dist dir. Staging uses
+ *  this; TESTS must use ensureSiteAppBuilt so a fresh dist is reused instead of rebuilt. */
+export function buildSiteApp() {
+  return withSiteBuildLock(runAstroBuild);
+}
+
+/** The test-side entry: rebuild site-app/dist only if it is stale, under the lock, so any number
+ *  of vitest workers asking at once produce exactly one build. Returns the dist dir. */
+export function ensureSiteAppBuilt() {
+  return withSiteBuildLock(() => (siteAppDistIsFresh() ? SITE_APP_DIST : runAstroBuild()));
 }
 
 export function stageDistSite() {

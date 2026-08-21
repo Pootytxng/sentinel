@@ -43,12 +43,19 @@
    and owed a `self-reviewer` pass on an installed build. *Why it matters:* a UI change is not done
    until someone has LOOKED at it, and keyboard focus is exactly what a green test cannot see look
    wrong. **Discharged by this lane — verdict recorded on the C-13 row below.**
-2. **#171 · `verify-local` invents failures under concurrent lane load** — two `0xC0000409` crashes in
-   three runs of the same tree. *Why it matters:* this is the gate every merge receipt rests on. A gate
-   that fails at random either blocks real work or teaches us to re-run until green, which is exactly
-   how a real regression gets waved through.
+2. **#171 · `verify-local` invents failures under concurrent lane load** — **ROOT-CAUSED AND FIXED
+   by `lane/gate-171` (2026-08-20), closes at merge.** Three site suites each rebuilt `site-app/dist`
+   from separate vitest workers; two `astro build`s in one `dist/` delete each other's
+   intermediates, and Node 24 on Windows turns that exit into a `0xC0000409` abort
+   (nodejs/node#56645). Reproduced on demand (2/2 before, 0/3 after). Fix: one cross-process lock
+   around every site build with the freshness check inside it (`scripts/stage-dist-site.mjs`
+   `ensureSiteAppBuilt`), plus the gate re-runs a Node-hosted check ONCE on exactly that abort
+   code, loudly. Guards: `scripts/site-build-collision-guard.test.mjs`,
+   `scripts/local-gate-guard.test.mjs` §"Node-runtime-abort re-run". *Still unverified:* the one
+   `npm run build` abort in the issue shares the death signature but its trigger was not captured;
+   the re-run covers it, and a repeat now prints a WARN naming #171.
 3. **#121 · `launch-focus-guard` RUNTIME tier is intermittent, NOT root-caused** — the same class as
-   #171 and its likeliest single cause. Detail on the open row further down this file.
+   #171 was. Detail on the open row further down this file.
 4. **#126 · retire the 10 unmerged origin lanes + 2 fully-merged refs.** *Why it matters:* this IS the
    "get back to linear" item — every stranded ref is one more thing each lane must disposition before
    its own audit can go green.

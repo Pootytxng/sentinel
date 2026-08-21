@@ -36,16 +36,36 @@ param(
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 
+# Node 24 on Windows can abort INSIDE process.exit() when an async handle is still closing
+# (nodejs/node#56645, open upstream). The process then dies with STATUS_STACK_BUFFER_OVERRUN,
+# 0xC0000409 -- 3221226505 unsigned, -1073740791 as PowerShell's Int32 -- instead of the code it
+# meant to return. That number is the runtime's, never the tree's: tsc reports 2, vite and vitest
+# report 1, and nothing this gate runs reports 0xC0000409 on purpose. Seen twice on 2026-08-20
+# under concurrent lane load (#171); each false red cost four minutes and is exactly how a gate
+# teaches people --no-verify. So a Node-hosted check that dies with precisely that code is run
+# ONCE more, with a WARN that names the cause, and a real failure still fails: any other exit
+# code is final, and a second abort is final. This is NOT a retry-until-green and NOT a wider
+# timeout. Pinned by scripts/local-gate-guard.test.mjs.
+$NodeRuntimeAbortCodes = @(-1073740791, 3221226505)
+
 function Invoke-Check {
   param(
     [Parameter(Mandatory = $true)][string]$Name,
     [Parameter(Mandatory = $true)][string]$Command,
-    [string[]]$Arguments = @()
+    [string[]]$Arguments = @(),
+    # Set only for checks whose top-level process is Node (npm scripts). cargo is never retried.
+    [switch]$NodeHosted
   )
 
   Write-Host ""
   Write-Host "LOCAL CHECK: $Name"
   & $Command @Arguments
+  if ($NodeHosted -and ($NodeRuntimeAbortCodes -contains $LASTEXITCODE)) {
+    Write-Host ""
+    Write-Host "LOCAL CHECK WARN: $Name died with 0xC0000409 -- a Node runtime abort at exit (nodejs/node#56645), not a verdict on this tree. Running it once more. If this repeats, it is real: see issue #171."
+    Write-Host "LOCAL CHECK: $Name (re-run after Node runtime abort)"
+    & $Command @Arguments
+  }
   if ($LASTEXITCODE -ne 0) {
     throw "$Name failed with exit code $LASTEXITCODE."
   }
@@ -120,8 +140,8 @@ try {
   }
 
   Invoke-Check -Name "git diff check" -Command $git -Arguments @("-c", "safe.directory=$repo", "-C", $repo, "diff", "--check")
-  Invoke-Check -Name "frontend tests" -Command $npm -Arguments @("test")
-  Invoke-Check -Name "frontend type-check and build" -Command $npm -Arguments @("run", "build")
+  Invoke-Check -Name "frontend tests" -Command $npm -Arguments @("test") -NodeHosted
+  Invoke-Check -Name "frontend type-check and build" -Command $npm -Arguments @("run", "build") -NodeHosted
   Invoke-Check -Name "Rust tests" -Command $cargo -Arguments @("test", "--manifest-path", "src-tauri/Cargo.toml")
   # `--all-features` is a superset of ci.yml's flags, never weaker. The crate declares no [features]
   # and no optional dependencies today, so it resolves identically -- it is here so that adding one
