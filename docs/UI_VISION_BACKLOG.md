@@ -149,6 +149,11 @@ Two things here are new and must not be flattened back into the 2026-07-23 wordi
    bench opener is "Test one change" + one sentence (25 words, was 44, guarded ≤ 30). Layout, not a switch.
    **All three rooms have had the pass.** 🔴 One Test item stays open: "Your rig" still repeats Health's
    numbers — folding it needs a Test-specific reading set (new data wiring), not a layout move.
+   **SPECCED 2026-08-21 → [`superpowers/specs/2026-08-21-test-rig-reading-set.md`](superpowers/specs/2026-08-21-test-rig-reading-set.md)**
+   (not built). Measured the duplication: 3 of Test's 4 corner gauges are the same call as Health's
+   (Readiness · Avg FPS · 1% low), and both tiles are titled "Your rig". The set becomes Proven ·
+   Noise floor · Safe stack (unchanged) · Instruments read — bench facts, not machine facts — on two
+   already-registered read-only commands, zero new backend, five guards named.
 
 **Read together with NAV-1 finding 2 below:** parallel UI generations coexist per room (Home 4+,
 Monitor 4, Lab 5) and the pruning pass has never run. That is the leading mechanical suspect for
