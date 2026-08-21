@@ -1,0 +1,55 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "fix",
+  "pr": 184,
+  "issue": 171,
+  "branch": "lane/gate-171",
+  "currentHead": "6716a07ee814a60b1e74bc7f83b17983a320e0fb",
+  "explicitHandoff": "Owner directive 2026-08-20 opening this session: read docs/SESSION_HANDOFF.md, then take BACKLOG #171 (the verify-local flake under concurrent lane load); first commit must carry the untracked merge-pr-183 receipt and the handoff refresh. Ownership claim posted on issue #171 at session start.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room, git dir shared with C:/Users/Kuya/code/sentinel.",
+    "remoteState": "origin/main = 25e2b019, the #183 merge; this branch was cut from exactly that and origin/main has not moved since (re-fetched before this receipt). GitHub reports PR #184 MERGEABLE against main with headRefOid equal to this receipt's currentHead.",
+    "worktree": "git worktree list re-checked immediately before the push: seven worktrees, this lane alone in sentinel-home-room on lane/gate-171. sentinel-prune (where #171 was observed) no longer exists; no worktree's node_modules is a junction today (all real dirs or absent).",
+    "branch": "lane/gate-171, three commits on top of 25e2b019 (cf77ea24 receipt+handoff carry, e52133b2 the fix + guards, 6716a07e handoff), no merge commits, no divergence; origin/lane/gate-171 is at this exact head.",
+    "dirtyState": "git status --porcelain at this head shows only this receipt file, which by construction cannot ride inside the head it authorizes. It stays untracked for the next lane's first commit, the same chain #181, #182 and #183 used.",
+    "liveProcesses": "Two claude.exe sessions on the machine (this one plus one other, not in this worktree), four node.exe helpers, no cargo. No build, install or dev server was started by this lane; the owner's installed compy.exe at ab54f1e4 was not touched."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "6716a07ee814a60b1e74bc7f83b17983a320e0fb",
+      "detail": "Direct run at this exact head BEFORE the push: exit 0, LOCAL CHECK RESULT: PASS, full 1083-line log read section by section -- vitest 355 files / 4645 passed / 4 skipped (the new site-build-collision-guard is the 355th file and passed inside the full-parallel pool), tsc + vite build clean, cargo 963 passed / 0 failed / 24 ignored, clippy clean, zero LOCAL CHECK WARN lines (the new once-only re-run was never exercised). Then ran again inside .githooks/pre-push at this same head (core.hooksPath=.githooks): the push exited 0 and created origin/lane/gate-171, which the hook blocks when the gate fails."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "reason": "No product code changed: the diff is test tooling (scripts/stage-dist-site.mjs, four test files), the pre-push gate script, and docs. Nothing here is in the installed binary; the desk stays at ab54f1e4."
+  },
+  "selfReview": {
+    "verdict": "not-applicable",
+    "reason": "No src/**/*.tsx or *.css touched; there is no visual surface to review. The fix was proven behaviourally instead: the race reproduced on demand at the parent head (2 of 2 runs crash with exit 3221226505) and did not reproduce after the fix (0 of 3); both new guards were mutation-tested (lock disabled -> 2/11 fail; re-run disabled -> 3/27 fail)."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; WORK_CONTROL makes that review advisory rather than a blocker. The mutation boundary is untouched (no src-tauri changes), the full pre-push gate passed at the exact head twice, and the change carries a reproduced before/after plus mutation-tested guards."
+  },
+  "docGates": [
+    "doc-budget.ps1, markdown-link-guard, verify-release-state, verify-module-map and branch-disposition-audit are resident in npm test (gate-residency-guard) and passed inside the vitest run above at this head.",
+    "branch-disposition-audit: origin/lane/gate-171 exists only for the minutes between push and this merge -- the known #126 ordering race; no row added on purpose, the same reason PRs #176/#179/#182/#183 added none. The ref is deleted at merge."
+  ]
+}
