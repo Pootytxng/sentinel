@@ -1,0 +1,57 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "feature",
+  "pr": 189,
+  "issue": null,
+  "branch": "lane/rooms-live",
+  "currentHead": "c26b0f246eb7f8de3a5ae50ee825267189ef16f3",
+  "explicitHandoff": "Owner directive 2026-08-20 (evening) opening this session: after the two lanes land, 'begin the Live/History/Test intimidation pass per the STANDING DIRECTIVE, with screenshots first'. This receipt is room 2 of 3 (Live). Owner re-confirmed the desk free mid-session ('ok everything closed do whatever you need to'); every build / ship / reviewer launch / gated push checked the foreground first and found no game. At this merge (a GitHub-side transition that touches nothing on the desk) the foreground is MortalShell2 -- so the next lane's build, install and review wait for it to close.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room, git dir shared with C:/Users/Kuya/code/sentinel.",
+    "remoteState": "origin/main = e99d8e77 (the #188 merge, this lane's own) -- this branch was cut from it and origin/main has not moved (re-fetched after the push). GitHub reports PR #189 MERGEABLE / CLEAN with headRefOid equal to this receipt's currentHead; no status checks exist on the repo (Actions budget decree).",
+    "worktree": "git worktree list re-checked after the push: seven worktrees, this lane alone in sentinel-home-room on lane/rooms-live; the main checkout (C:/Users/Kuya/code/sentinel) sits on main at ffe85271 and is not this lane's.",
+    "branch": "lane/rooms-live, five commits on top of e99d8e77 (14987ed4 the #188 receipt carry, 0345f564 the Live pass, 63db50d2 the word-budget trim + guard, 054a9656 ship docs, c26b0f24 handoff reword for the doc-truth guard), no merge commits, no divergence; origin/lane/rooms-live is at this exact head.",
+    "dirtyState": "git status --porcelain at this head shows only this receipt file, which by construction cannot ride inside the head it authorizes; it stays untracked for the next lane's first commit, the same chain #181-#188 used. Sweep captures under docs/ui-sweep/shots/ are gitignored.",
+    "liveProcesses": "At the merge check: foreground MortalShell2-Win64-Shipping (owner gaming); the owner's installed compy.exe 63db50d2 running. The merge is a gh API call and touches neither; the push that carried this head ran earlier with no game in front."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "c26b0f246eb7f8de3a5ae50ee825267189ef16f3",
+      "detail": "Inside .githooks/pre-push at this exact head (core.hooksPath=.githooks): exit 0, LOCAL CHECK RESULT: PASS, log read by its LOCAL CHECK markers (scratchpad push-rooms-live-3.log, 1090 lines) -- vitest 356 files / 4687 passed / 4 skipped, tsc + vite build clean, cargo 963 passed / 0 failed / 24 ignored, clippy clean, no FAIL lines. Third gate run of the lane: runs 1 and 2 failed only tools/entry/doc-truth.test.mjs on the handoff's worktree sentence (a heredoc ate the fix's backslashes the first time); c26b0f24 is that reword, and the third run is the green one."
+    }
+  ],
+  "shipProof": {
+    "applicable": true,
+    "stamp": "63db50d2 · release · shell 0.9.26",
+    "installerSha256": "2C000748934FEE4EE883636D5495D5F057B3EB3D90A0D26B447AFEBC7D0B935E",
+    "detail": "Two builds this lane: 0345f564 shipped (runtime proof first attempt), self-review round 1 returned item 7 PARTIAL (the new template ran +68% words over the string it replaced); 63db50d2 trims the caveats back to clauses and adds the <= 21-word guard, rebuilt, shipped via scripts/ship-reinstall.ps1 -VerifyRuntime -ExpectedCommit 63db50d2... (stale-build gate, Desktop hygiene, silent /S, CDP get_build_stamp `63db50d2 · release`, relaunch). 054a9656 + c26b0f24 on top are docs-only and do not compile into the binary, so the desk runs this PR's product code exactly."
+  },
+  "selfReview": {
+    "verdict": "PASS",
+    "detail": "Round 1 (0345f564): item 7 PARTIAL -- word budget. Round 2 (63db50d2, full rubric from the top, dispatched to the self-reviewer subagent): PASS 10/10 on the installed build -- the deck debrief renders sentence / three boxed cells / caveat at 19 words, values mono on the tile ground, the no-signal hint under both scopes at idle and absent while a trace draws, readouts a fixed 2x2 at 1100px and full width, History and Health unmoved. The round-2 block came back with 9 items the first time; the agent was resumed and returned item 10 PASS. Captures docs/ui-sweep/shots/live-after/ (local)."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; WORK_CONTROL makes that review advisory rather than a blocker. No src-tauri change (mutation boundary untouched); the change is layout + copy with guards that the old shape fails, plus two self-review rounds on the installed build."
+  },
+  "docGates": [
+    "doc-budget.ps1 (RELEASE_STATE 45.7KB/48KB), markdown-link-guard, verify-release-state (owner_installed_stamp=63db50d2, source_main_commit=e99d8e77), tools/entry/doc-truth.test.mjs 10/10, verify-module-map and branch-disposition-audit are resident in npm test (gate-residency-guard) and passed inside the vitest run above at this head. The 8ba6a6d1 row moved to docs/archive/RELEASE_STATE_HISTORY.md.",
+    "branch-disposition-audit: origin/lane/rooms-live exists only for the minutes between push and this merge -- the known #126 ordering race; no row added on purpose, the same reason PRs #176-#188 added none. The ref is deleted right after the merge."
+  ]
+}
