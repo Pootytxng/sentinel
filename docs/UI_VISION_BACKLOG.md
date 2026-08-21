@@ -133,8 +133,14 @@ Two things here are new and must not be flattened back into the 2026-07-23 wordi
    four boxed templates below the stage (Graphics · Processor · Memory · Storage, label+value rows,
    zero prose). No number is owned twice; a record the machine did not report drops its whole box.
    Guarded by `home-console-standard-readout-guard.test.tsx` — which pins that flipping
-   `compy_expert_view` changes NOTHING on Home, in both directions. **Home only — the other rooms'
-   default faces have not had this pass, and they get the layout treatment, not the switch.**
+   `compy_expert_view` changes NOTHING on Home, in both directions.
+   ✅ **HISTORY RESTRUCTURED 2026-08-20** (desk build `8ba6a6d1`, self-review PASS 10/10) — screenshots of the
+   installed build first: History measured worst of the four rooms (652 words, 34 boxes, 3.1 viewports deep, a
+   15-row wall beside an 80%-hollow column, the timestamp under the title on every row). Layout, not a switch:
+   the record is grouped by month, shows an 8-row screenful with an honest "show N older" press, the row
+   cannot overlap, the undo door says what it does. **Live and Test have NOT had this pass yet** — they get
+   the same layout treatment next (Live: the all-caps delta string and two "NO SIGNAL" boxes; Test: the
+   jargon opener, the duplicated rig numbers, six equal-weight station buttons with no "start here").
 
 **Read together with NAV-1 finding 2 below:** parallel UI generations coexist per room (Home 4+,
 Monitor 4, Lab 5) and the pruning pass has never run. That is the leading mechanical suspect for
