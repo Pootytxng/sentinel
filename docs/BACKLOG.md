@@ -82,14 +82,20 @@
    gates close the suspected path and name the skip at its source, which is not the same as proving
    the cause. Row stays open until a real ship either passes clean or trips gate 1b and names it.
 6. **#128 · thin local release/install collision guard — LANDED 2026-08-21, never yet held during a real ship.** *Why it matters:* two agents can no longer race the same release or the same installed exe, and neither can quietly take the other's turn. It was written 2026-08-14 on `agent/local-collision-guard`, never left this disk, and is merged forward here. `release.ps1` holds `Local\Compy.ReleasePipeline.v1` and `ship-reinstall.ps1` holds `Local\Compy.InstalledBinary.v1`, each across the whole entrypoint, released on normal *and* error exit. A second process fails closed immediately; a **killed** holder fails closed *permanently* — no lease, no expiry, no takeover — until an operator runs `scripts/inspect-process-mutex-recovery.ps1` and supplies a live comment on the open `work-control` issue carrying the exact recovery-state SHA-256. **Fixed on the way in:** the state root composed itself from `$env:APPDATA`, which `data-root-guard.test.mjs` (#130) rejects — the branch predates that guard. It now resolves through `Get-CanonicalCompyDataRoot`, which matters here more than anywhere: a redirected shell would have put two lanes' `owner.json` in two different roots, each seeing a clean slate, and both proceeding. **Left:** the locks have never been held during an actual release or ship — #128 forbids running one, so that proof arrives with the next real ship.
-7. **#125 · `session-root-assert` only ADVISES where the handoff wanted a refusal**, with a test pinning
-   it. *Why it matters:* an unlaunched session writing to the project runs with none of its laws loaded.
-   **⚠ Weigh the blast radius before flipping it — measured 2026-08-20, not guessed.** The session that
-   built this queue opened with `compy-entry: the launch token has expired — this session is unverified`
-   (`TOKEN_EXPIRED`, one of the four `ADVISORY_CODES`), and every write it then made — the queue, the
-   `75849be1` build, the C-13(b) discharge, PR #175 — would have been REFUSED under the flip. A refusal
-   that fires on the correct work is worse than the advisory it replaces, so the flip needs a way for a
-   legitimately-resumed session to re-verify, not just a harder `no`. That design call is the work here.
+7. **#125 · `session-root-assert` only ADVISES where the handoff wanted a refusal — SPECCED 2026-08-21,
+   not built → [`superpowers/specs/2026-08-21-unverified-session-write-refusal.md`](superpowers/specs/2026-08-21-unverified-session-write-refusal.md).**
+   *Why it matters:* a session writing to the project with unverified folder, branch and claim is what
+   the whole entry system exists to stop. **Two measured findings changed the design.** (1) There is no
+   write gate to flip: the assert is a `SessionStart` hook only, and `PreToolUse` matches `Workflow`,
+   `Agent` and `Read` — no `Write`/`Edit` matcher exists, so this is a NEW hook. (2) A lapsed record
+   cannot re-verify by matching itself. This session read `launch.json` and fails it three ways —
+   branch (the owner instructed a rename), session id (a different conversation) and issue (#143 vs the
+   queue he gave it in chat) — so every commit in PR #191 would have been refused, as would the session
+   that built this queue. The honest sessions are precisely the ones whose fields have moved on.
+   **Recommendation: refuse, but ship the way back in the same commit** — a `compy-entry adopt` that
+   binds folder + branch + session id + a live `work-control` issue, with the refusal message printing
+   the command already filled in. Steps 1–3 of the rollout need no owner decision; **flipping it on is
+   his one line**, because a bug there costs him a window.
 8. **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it** (row below; owner fork B_gpu).
 9. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
    below). Delegated to the Codex lane — do not duplicate it here.
