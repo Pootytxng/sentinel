@@ -455,6 +455,13 @@ function measureLaunch({ args = [], env = {}, seconds = 6, savedState = null, gr
   // The probe can also measure a second, single-instance-absorbed launch (-RelaunchWith); this guard
   // only ever asks for the first one, so flatten that block up and keep the launch-level fields.
   const parsed = JSON.parse(json);
+  // Keep the raw reading when asked (COMPY_FOREGROUND_TRACE_DIR=<dir>): a trace that only lives in
+  // a vitest message is lost the moment the run is green, and the green runs are the baseline.
+  if (process.env.COMPY_FOREGROUND_TRACE_DIR) {
+    mkdirSync(process.env.COMPY_FOREGROUND_TRACE_DIR, { recursive: true });
+    const name = `${new Date().toISOString().replace(/[:.]/g, "-")}-${args.join("_") || "plain"}-${parsed.launchedPid}.json`;
+    writeFileSync(join(process.env.COMPY_FOREGROUND_TRACE_DIR, name), JSON.stringify({ args, env: Object.keys(env), grant, ...parsed }, null, 2));
+  }
   return {
     ...parsed.initial,
     launchedPid: parsed.launchedPid,
