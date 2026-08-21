@@ -30,6 +30,7 @@ Needs the **installed** build (`%LOCALAPPDATA%\Compy\compy.exe`), not `tauri dev
 HMR is not a performance test. Close Compy first; the probe relaunches it with a debug port.
 
 ```
+node scripts/q7-probe.mjs desk        # is the desk quiet enough to measure? (exits 3 if not)
 node scripts/q7-probe.mjs selftest    # prove the IPC counter still counts (run this first)
 node scripts/q7-probe.mjs coldstart   # 3 cold process starts
 node scripts/q7-probe.mjs boot        # document-start IPC census + settle window
@@ -47,7 +48,7 @@ Then update `q7-baseline.json` and the spec table, and run:
 npx vitest run scripts/perf-budget-guard.test.mjs
 ```
 
-## Two traps worth writing down
+## Four traps worth writing down
 
 **"The instrument must be inflating it" is a hypothesis, not an excuse — measure it.** The
 instrumented idle trace reported **50.95% of one core**, and the obvious reading was that the probe's
@@ -68,3 +69,21 @@ the comfortable reading was that half a core is just what a Chromium shell costs
 same app after the room sweep, because the keepalive rooms stay mounted behind `display:none`.
 `idle-bare.json` records a `state` field saying which it was; `idle-visible.json` predates that field
 and was taken *after* a full room sweep. Compare like with like or not at all.
+
+**A milestone the probe OBSERVES is not a milestone the app REACHED.** `coldStartDocumentReadyMs`
+read 207/210/201 ms on `dc4d55e` and 516/502/500 ms on `584654c8`, and that 2.5x was carried in
+the backlog for two weeks as the app's only measured regression. It was not the app. The probe
+cannot see `readyState` change until the debug port opens, a CDP session attaches and one
+`evaluate` returns, so **all** of its own startup latency lands on the FIRST milestone it can
+observe and none on the later ones — and the in-page cross-check recorded in the same two traces
+said the page had got *faster* (103/104/102 → 102/88/87 ms). `coldstart` now records
+`navigationStart`, `documentReadyInPageMs` and `observationLag`, which sum exactly to the
+headline. **Budget the parts, never the total.**
+
+**A trace from a busy desk is incomparable, not merely noisy.** A coldstart recorded while the
+owner had a game in the foreground read 633–707 ms documentReady and 6319–8921 ms usableHome
+against the *same installed build* that had read 500–516 / 3103–3409 that morning. Roughly double,
+everywhere, with nothing changed in the app — and the artifact said nothing about it. Every
+coldstart now stamps `machineState` (CPU + the biggest non-Compy processes), says so loudly, and
+exits **3**, so no script can consume a contaminated trace by accident. `node scripts/q7-probe.mjs
+desk` is the same check on its own, before you commit to a run.

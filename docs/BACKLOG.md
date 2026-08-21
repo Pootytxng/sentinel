@@ -35,20 +35,24 @@
 
 #### ① A PERSON REPORTED IT AND WE HAVE NOT ANSWERED — these outrank everything
 
-1. **The shell takes half a second to paint where it used to take a fifth — the ONE metric that
-   got worse.** *Why it matters:* it is a blank window every single launch, it is the only
-   measured regression in the app, and "slow to open" is exactly the shape of what the owner
-   reported. `coldStartDocumentReadyMs` was 210 ms worst-of-3 on `dc4d55e` (2026-08-05); the same
-   probe on `584654c8` reads **500 / 502 / 516 ms** — 2.5x, past its own 400 ms budget, and the
-   spread is tight enough that it is the steady state, not one slow start. Recorded as an **open
-   finding** in [`perf/q7-baseline.json`](perf/q7-baseline.json) so it cannot grow quietly.
-   **NOT attributed — do not guess it in a doc.** `documentReady` waits on the HTML, the
-   stylesheets and any blocking script, so bundle growth generally and the TYPE-1 bundled Geist
-   variable faces ([`../src/design/fonts-v2.css`](../src/design/fonts-v2.css)) are both suspects
-   and neither is measured. Settle it the way the aurora cost was settled: bisect the bundle under
-   `node scripts/q7-probe.mjs coldstart`. Read it beside `coldStartToUsableHomeMs`, which went the
-   OTHER way on the same three starts (3721 → 3409 ms worst) — the app reaches a usable Home
-   FASTER than baseline while the white-screen window before first paint got longer.
+1. **Cold start: the frontend is exonerated, and the cost lives before the page exists.**
+   *Why it matters:* the "half a second blank window" was the only measured regression in the
+   app, and the two things everyone blamed for it turn out to be innocent — so the search moves
+   to the Rust/WebView2 start, which nobody has instrumented. Measured 2026-08-21: the blocking
+   payload is **8.4 kB SMALLER** than at `dc4d55e` (JS 1,536.51 → 1,538.10 kB, CSS 370.76 →
+   360.76 kB, building `dc4d55e`'s `src/` with today's toolchain); the Geist faces
+   ([`../src/design/fonts-v2.css`](../src/design/fonts-v2.css)) ship in **both** builds; and the
+   page's own `domContentLoaded` got **faster**, 103/104/102 → 102/88/87 ms. The WebView2 runtime
+   did not move either (148.0.3967.83, installed 2026-05-22). So all of the growth is in *spawn →
+   the page's `timeOrigin`* plus the probe's own attach lag, neither of which was ever recorded
+   separately — [`../scripts/q7-probe.mjs`](../scripts/q7-probe.mjs) `coldstart` now records both
+   and they sum exactly to the headline number. **Still NOT attributed — do not guess it in a
+   doc.** What is left is the four commits that touched the startup path in that window, of which
+   `795d8ff5` (#130) is the one that added startup filesystem work
+   ([`../src-tauri/src/data_root.rs`](../src-tauri/src/data_root.rs)). Settling it needs a
+   decomposed `coldstart` against a **built and installed** `dc4d55e` — and a **quiet desk**: run
+   `node scripts/q7-probe.mjs desk` first, it exits 3 if anything else is using the machine.
+   Full record in [`perf/q7-baseline.json`](perf/q7-baseline.json), still an **open finding**.
 2. **`compy.gg` tells the world Compy is free, and that is live right now.** *Why it matters:* the
    site contradicts the owner's own 2026-07-21 monetization decree on the public internet, and every
    day it stands is a pricing expectation being set that money later has to fight. `site/llms.txt:5`
