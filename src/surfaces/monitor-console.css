@@ -45,15 +45,19 @@
   background: transparent; color: var(--ix-text-2); border: 1px solid var(--ix-glass-border); }
 :root[data-v2="on"] .deck-zoomreset:hover { border-color: var(--ix-accent); color: var(--ix-text-1); }
 
-/* The deck's plain-number delta row — session-scoped debrief facts, never live claims. */
-:root[data-v2="on"] .mc-delta { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
-  font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .04em; color: var(--ix-text-2);
-  font-variant-numeric: tabular-nums; }
-:root[data-v2="on"] .mc-delta-k { font-size: var(--type-label); letter-spacing: .12em; text-transform: uppercase;
-  color: var(--ix-text-3); }
-:root[data-v2="on"] .mc-delta-v { color: var(--ix-text-1); }
-:root[data-v2="on"] .mc-delta-tag { color: var(--ix-accent-text); opacity: .85; font-size: var(--type-label);
-  letter-spacing: .08em; }
+/* The deck's debrief — session-scoped recorded facts, never live claims. Intimidation pass
+   2026-08-20: one all-caps mono string that wrapped mid-thought became a template — a plain
+   sentence (sans, text-3), three boxed value cells (sans label over a mono number), one caveat
+   line. Guard: monitor-console.test.tsx "the deck delta is a boxed template". */
+:root[data-v2="on"] .mc-delta { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+:root[data-v2="on"] .mc-delta-k { font-size: var(--type-label); color: var(--ix-text-3); }
+:root[data-v2="on"] .mc-delta-cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+:root[data-v2="on"] .mc-delta-v { display: flex; flex-direction: column; gap: 4px; min-width: 0;
+  padding: 10px 12px; border: 1px solid var(--ix-glass-border); }
+:root[data-v2="on"] .mc-delta-vk { font-size: var(--type-label); color: var(--ix-text-3); white-space: nowrap; }
+:root[data-v2="on"] .mc-delta-vv { font-family: var(--ix-mono); font-size: var(--type-card); font-weight: 600;
+  color: var(--ix-text-1); font-variant-numeric: tabular-nums; line-height: 1.1; }
+:root[data-v2="on"] .mc-delta-tag { font-size: var(--type-label); color: var(--ix-accent-text); opacity: .85; }
 
 /* ── Session Stack (v5 sessions half) — flat small multiples on ONE shared 1%-low axis.
    Dead flat by chain law (v3→v4): no depth, no perspective, no text over chart ink — the pin's
@@ -114,8 +118,10 @@
    which now stacks .mc-capture → the bento grid. */
 :root[data-v2="on"] .mc-stage { position: relative; display: flex; flex-direction: column; gap: 16px; }
 
-:root[data-v2="on"] .mc-readouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 12px 20px; }
+/* Four readouts, always 2×2 (intimidation pass 2026-08-20): auto-fit put three on the first line and
+   orphaned SPIKES under a two-line LOWEST LATENCY. A fixed template cannot orphan. */
+:root[data-v2="on"] .mc-readouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 20px; }
 :root[data-v2="on"] .mc-readout { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 :root[data-v2="on"] .mc-readout-v { font-family: var(--ix-mono); font-size: var(--type-section); font-weight: 600;
   color: var(--ix-text-1); font-variant-numeric: tabular-nums; line-height: 1; }

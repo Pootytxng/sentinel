@@ -4,6 +4,17 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-08-20 - the 8ba6a6d1 History-pass desk-build Snapshot row, moved verbatim (byte budget)
+
+Moved out of docs/RELEASE_STATE.md when the 63db50d2 build (the Live intimidation pass) landed the same night.
+Byte-for-byte except the two relative links that would break one directory deeper: the `docs/`-relative
+path now starts with `../`, and the self-link to this file is a code span, the same exception the
+835d8868 move below records. Nothing else in the row was touched.
+
+| Gate | State | Proof |
+|---|---|---|
+| **Owner-installed version + embedded stamp** | **0.9.26 desk build, embedded stamp `8ba6a6d1`** — built 2026-08-20 by `npm run tauri build` from worktree `sentinel-home-room` at `lane/rooms-intimidation` (`8ba6a6d1`; the product changes are `fcc957b2` + `8ba6a6d1`), installed silently by Claude via `scripts/ship-reinstall.ps1 -VerifyRuntime`, one installer on the Desktop, installer `Compy_0.9.26_x64-setup.exe` SHA-256 **`19B8171703F6F02BE49DF841C115BD25F3827D9515A8DA5813D6A3F145D880FE`**. **Live == build proved by runtime probe, never an exe hash** — runtime proof `8ba6a6d1 · release · shell 0.9.26` on the first attempt, 0 transient retries. **This binary carries the first instrument-room intimidation pass — History** ([UI_VISION_BACKLOG.md](../UI_VISION_BACKLOG.md) ⭐ STANDING DIRECTIVE; Home had the pass 2026-08-06, Live and Test are next): the record is grouped by calendar month (`groupByMonth` in `src/surfaces/blackbook/logbook.ts`), mounts an 8-row screenful with an honest "show N older records" press (was 30, which stretched the two left tiles into hollow columns three viewports tall — measured 0 px hollow now), the row is two grid tracks with the timestamp on the title's line so it can no longer overrun the title (it did on every row of the previous build), the undo door says "Undo any of the 12 changes in Test", and the shell-wide HUD readout fades the scroll lane out under itself instead of colliding with it. `8ba6a6d1` on top fixes what the first self-review caught: a BentoTile title now never wraps and the badge shrinks (`bento-tile-head-guard.test.ts`). **Self-review VERDICT: PASS** on this installed build (10/10 — native 1484×971 capture; month heads 4.9:1 on the real tile ground; 0 title×timestamp intersections across 19 rows; hero vs left-column hollow 0 px; both filter states one-line headers flush right; Health and Test tile headers unmoved; shots `ui-sweep/shots/history-after/`, before in `ui-sweep/shots/rooms-before/`). It supersedes desk build **`0808e33e`** (design foundation ⑤, the rail door, #187), byte-preserved with **`ab54f1e4`**, **`1d5b3c4c`**, `75849be1`, `835d8868`, `aac90cd7`, `402b0080`, `40682344`, **`5e64074c`** (THE PUBLISHED BUILD), `75880de1`, `2f79febb` and `7f151d2c` in `archive/RELEASE_STATE_HISTORY.md` (this file). | `node scripts/verify-release-state.mjs` (check 7) · `Select-String -Path "$env:LOCALAPPDATA\Compy\compy.exe" -Pattern 8ba6a6d1` · HKCU uninstall `DisplayVersion` |
+
 ### 2026-08-20 - the 0808e33e rail-door desk-build Snapshot row, moved verbatim (byte budget)
 
 Moved out of docs/RELEASE_STATE.md when the 8ba6a6d1 build (the History intimidation pass) landed the same evening.

@@ -1,0 +1,57 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "feature",
+  "pr": 188,
+  "issue": null,
+  "branch": "lane/rooms-intimidation",
+  "currentHead": "bf801f62d461cb1bef27ef0834ca14e88d6fc515",
+  "explicitHandoff": "Owner directive 2026-08-20 (evening) opening this session: after the two lanes land, 'begin the Live/History/Test intimidation pass per the STANDING DIRECTIVE, with screenshots first'. This receipt is room 1 of 3 (History). Owner re-confirmed the desk free mid-session ('ok everything closed do whatever you need to'); no game was in front at any launch (checked before every build/ship/push).",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room, git dir shared with C:/Users/Kuya/code/sentinel.",
+    "remoteState": "origin/main = 70a8ba0e (the #187 merge, this lane's own) -- this branch was cut from it and origin/main has not moved (re-fetched before the push). GitHub reports PR #188 MERGEABLE / CLEAN with headRefOid equal to this receipt's currentHead; no status checks exist on the repo (Actions budget decree).",
+    "worktree": "git worktree list re-checked before the push: seven worktrees, this lane alone in sentinel-home-room on lane/rail-door; the main checkout (C:/Users/Kuya/code/sentinel) sits on main at ffe85271 and is not this lane's.",
+    "branch": "lane/rooms-intimidation, six commits on top of 70a8ba0e (6e482b7b the #187 receipt carry, fcc957b2 the History pass, 8ba6a6d1 the BentoTile header fix, eaef13c5 ship docs, bf801f62 handoff), no merge commits, no divergence; origin/lane/rooms-intimidation is at this exact head.",
+    "dirtyState": "git status --porcelain at this head shows only this receipt file, which by construction cannot ride inside the head it authorizes; it stays untracked for the next lane's first commit, the same chain #181-#187 used. Sweep captures under docs/ui-sweep/shots/ are gitignored.",
+    "liveProcesses": "Foreground at the push check: Discord; no game; the owner's installed compy.exe 8ba6a6d1 running (relaunched by the reviewer with the CDP port, left open per brief) -- the gate does not touch it."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "bf801f62d461cb1bef27ef0834ca14e88d6fc515",
+      "detail": "Inside .githooks/pre-push at this exact head (core.hooksPath=.githooks): exit 0, LOCAL CHECK RESULT: PASS, log read by its LOCAL CHECK markers -- vitest 356 files / 4683 passed / 4 skipped, tsc + vite build clean, cargo 963 passed / 0 failed / 24 ignored, clippy clean, no FAIL lines. First gate run of the lane, green."
+    }
+  ],
+  "shipProof": {
+    "applicable": true,
+    "stamp": "8ba6a6d1 · release · shell 0.9.26",
+    "installerSha256": "19B8171703F6F02BE49DF841C115BD25F3827D9515A8DA5813D6A3F145D880FE",
+    "detail": "Two builds this lane: fcc957b2 shipped (runtime proof first attempt), self-review FAILED on a BentoTile header wrap under the session filter; fixed in 8ba6a6d1, rebuilt, shipped via scripts/ship-reinstall.ps1 -VerifyRuntime -ExpectedCommit 8ba6a6d1... (stale-build gate, Desktop hygiene, silent /S, CDP get_build_stamp `8ba6a6d1 · release`, first attempt, relaunch). eaef13c5 + bf801f62 on top are docs-only and do not compile into the binary, so the desk runs this PR's product code exactly."
+  },
+  "selfReview": {
+    "verdict": "PASS",
+    "detail": "Round 1 (fcc957b2): FAIL -- items 4/5: 'The record' tile title wrapped to two lines around the ~580px filter badge when the Gaming-sessions tile was pressed (title 39px = 2 lines). Row-level fix and hollow already measured good (0 intersections, 0 px hollow). Round 2 (8ba6a6d1, full rubric from the top): PASS 10/10 -- title 19.5px one line under both the session and change filters, badge right edge == head right edge (1387.98), intersect false; unfiltered scent has no ellipsis; Health 'Your PC'/'Findings' and Test 'Your rig' headers unmoved; month heads 4.9:1; 0 title x timestamp intersections across 19 rows; all rows opacity 1 after the reveal; readout no longer collides with rows or the Live FPS grid. Captures docs/ui-sweep/shots/history-after/ (local)."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; WORK_CONTROL makes that review advisory rather than a blocker. No src-tauri change (mutation boundary untouched); the change is layout + a pure grouping function with guards that the old shape fails, plus two self-review rounds on the installed build."
+  },
+  "docGates": [
+    "doc-budget.ps1 (RELEASE_STATE 44.8KB/48KB), markdown-link-guard (154/154), verify-release-state (31 ok / 0 drift: owner_installed_stamp=8ba6a6d1, source_main_commit=70a8ba0e), verify-module-map and branch-disposition-audit are resident in npm test (gate-residency-guard) and passed inside the vitest run above at this head. The 0808e33e row moved to docs/archive/RELEASE_STATE_HISTORY.md.",
+    "branch-disposition-audit: origin/lane/rooms-intimidation exists only for the minutes between push and this merge -- the known #126 ordering race; no row added on purpose, the same reason PRs #176-#187 added none. The ref is deleted right after the merge."
+  ]
+}
