@@ -5,10 +5,6 @@ import {
   type InstrumentTheme,
   readInstrumentTheme,
   applyInstrumentTheme,
-  readMonitorConsole,
-  applyMonitorConsole,
-  readJarvisMotion,
-  applyJarvisMotion,
   applyHomeInterview,
   readHomeInterview,
   readCloseToTray,
@@ -126,8 +122,6 @@ export default function Settings({
 }) {
   const { t } = useTranslation();
   const [itheme, setITheme] = useState<InstrumentTheme>(readInstrumentTheme);
-  const [monitorConsole, setMonitorConsole] = useState<boolean>(readMonitorConsole);
-  const [jarvisMotion, setJarvisMotion] = useState<boolean>(readJarvisMotion);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
   const [backdrop, setBackdrop] = useState<OverlayBackdrop>(readOverlayBackdrop);
@@ -177,20 +171,9 @@ export default function Settings({
     applyHomeInterview(v); // persists + notifies mounted surfaces live
   };
 
-  // Monitor console (Phase 3 of the Console HUD, DEFAULT ON since 2026-07-12) — the Monitor
-  // Live face as the instrument cluster: fps/frametime traces + honest gauges.
-  // Presentation only: same sensors, same polls; the "0" failsafe renders today's Monitor byte-identical.
-  const changeMonitorConsole = (v: boolean) => {
-    setMonitorConsole(v);
-    applyMonitorConsole(v);
-  };
-  // JARVIS motion layer preview (UI_VISION_BACKLOG §A, DEFAULT OFF) — the interactive motion
-  // layer: glide scrolling, room-change sweep, magnetic rail, stage tilt, measured data-ticks.
-  // Presentation only; the Motion preference below still wins (reduced ⇒ the layer stands down).
-  const changeJarvisMotion = (v: boolean) => {
-    setJarvisMotion(v);
-    applyJarvisMotion(v);
-  };
+  // (The "Live console" and "JARVIS motion" rollout toggles were retired in the 2026-08-20
+  // comprehensibility sweep, issue #180: the console cluster is the Monitor room's one face,
+  // and the JARVIS layer folded into the Motion preference — one switch per real choice.)
   // Automatic update checks. Default ON; persisted to localStorage and broadcast so the live
   // update hook arms/disarms its 4h interval without a relaunch.
   const changeAutoUpdates = (v: boolean) => {
@@ -271,39 +254,12 @@ export default function Settings({
                 ))}
               </div>
 
-              {/* Flag-debt sweep (consumer-panel Q2, owner answer A, 2026-07-11): the toggle rows
-                  for features already graduated to permanent default-ON (Living Instrument, Lab
-                  proving ground + the two classic-Lab-only toggles it stranded, Instrument HUD,
-                  Home console, Setup stepper, First-check theater, Monitor summary cards, Hologram
-                  bay v2, Two futures split) are REMOVED — three of five panel personas read the
-                  wall of "(preview)" switches as an internal QA panel. The features are unchanged
-                  and their flags still respect localStorage if set via devtools (same convention
-                  as the removed "New look" hub below). The remaining toggle rows — Monitor
-                  console and the JARVIS motion layer — are owner-approved DEFAULT-ON failsafes
-                  (the "0" setting restores the classic look). */}
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">{t("settings.appearance.monitorConsole.title")}</div>
-                  <div className="set-row-sub">{t("settings.appearance.monitorConsole.sub")}</div>
-                </div>
-                <Toggle
-                  on={monitorConsole}
-                  onChange={changeMonitorConsole}
-                  ariaLabel={t("settings.appearance.monitorConsole.title")}
-                />
-              </div>
-
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">{t("settings.appearance.jarvisMotion.title")}</div>
-                  <div className="set-row-sub">{t("settings.appearance.jarvisMotion.sub")}</div>
-                </div>
-                <Toggle
-                  on={jarvisMotion}
-                  onChange={changeJarvisMotion}
-                  ariaLabel={t("settings.appearance.jarvisMotion.title")}
-                />
-              </div>
+              {/* Flag-debt sweep (consumer-panel Q2, owner answer A, 2026-07-11; completed by the
+                  comprehensibility sweep 2026-08-20, issue #180): every rollout-switch row is now
+                  REMOVED — the toggle rows here are genuine preferences only. The last two rollout
+                  rows ("Live console", "JARVIS motion") retired with their flags: the console
+                  cluster is the Monitor room's one face, and the JARVIS layer folded into the
+                  Motion preference below (guarded by settings-no-rollout-switch.test.tsx). */}
 
               {/* Blackbook console + Room accent colors: GRADUATED default-ON 2026-07-13 (owner
                   eyeballed both + directed approved work default-ON, "avoid the QA toggle

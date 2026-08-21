@@ -2,17 +2,16 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup, fireEvent, act } from "@testing-library/react";
 import { ShellV2 } from "../ShellV2";
 import { railFor } from "../homeRail";
-import { readJarvisMotion, applyJarvisMotion } from "../theme";
 import { setMotionPref } from "../use-motion";
 import { ArcGauge } from "../console/ArcGauge";
 
-// JARVIS motion layer guards (UI_VISION_BACKLOG §A.2/A.3/A.5/A.6, train 2026-07-12).
-// The three contracts every effect in the layer must keep:
-//   1. FLAG-OFF BYTE-IDENTITY — compy_jarvis_motion "0" (the failsafe; DEFAULT is now ON after the
-//      2026-07-12 owner-approved flip) renders the shell and gauges exactly as before the train:
-//      no jv-* nodes, no data-magnetic attributes.
-//   2. REDUCED-MOTION WINS — flag "1" + resolved reduced motion ⇒ the layer stands down
-//      entirely (Compy's own Motion pref, mid-session flips included).
+// JARVIS motion layer guards (UI_VISION_BACKLOG §A.2/A.3/A.5/A.6, train 2026-07-12; the
+// separate compy_jarvis_motion flag FOLDED into the Motion preference 2026-08-20, issue #180).
+// The contracts every effect in the layer must keep:
+//   1. REDUCED ⇒ BYTE-IDENTITY — Motion=Reduced (the one remaining off-switch) renders the
+//      shell and gauges exactly as the static tree: no jv-* nodes, no data-magnetic attributes.
+//   2. FULL ⇒ LIVE — the default Motion=Full mounts the layer; mid-session flips are honored
+//      both directions without a reload.
 //   3. HONEST DATA-TICK — the gauge tick fires ONLY on a real→real value CHANGE. Arrival
 //      (null→value) is the count-up's moment; loss (value→null) is NOT-YET; absence never
 //      renders a tick node. Motion may never imply a measurement that didn't happen.
@@ -37,32 +36,29 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe("compy_jarvis_motion flag", () => {
-  it("defaults ON (key absent); only an explicit '0' is the failsafe off", () => {
-    expect(readJarvisMotion()).toBe(true);
-    localStorage.setItem("compy_jarvis_motion", "0");
-    expect(readJarvisMotion()).toBe(false);
-    localStorage.setItem("compy_jarvis_motion", "1");
-    expect(readJarvisMotion()).toBe(true);
-  });
-
-  it("renders the live layer by default (key absent) — data-magnetic on the rail", () => {
+describe("motion pref drives the layer (the 2026-08-20 fold)", () => {
+  it("renders the live layer by default — data-magnetic on the rail", () => {
     const { container } = render(shell("home"));
     expect(container.querySelectorAll(".v2-nav-item[data-magnetic]").length).toBe(ITEMS.length);
   });
 
-  it("applyJarvisMotion persists and mirrors onto <html data-jarvis>", () => {
-    applyJarvisMotion(true);
-    expect(localStorage.getItem("compy_jarvis_motion")).toBe("1");
+  it("setMotionPref mirrors the derived <html data-jarvis> attribute both ways", () => {
+    setMotionPref("full");
     expect(document.documentElement.dataset.jarvis).toBe("on");
-    applyJarvisMotion(false);
-    expect(localStorage.getItem("compy_jarvis_motion")).toBe("0");
+    setMotionPref("reduced");
     expect(document.documentElement.dataset.jarvis).toBeUndefined();
+  });
+
+  it("the retired compy_jarvis_motion key is inert — an old '0' cannot stand the layer down", () => {
+    localStorage.setItem("compy_jarvis_motion", "0");
+    setMotionPref("full");
+    const { container } = render(shell("home"));
+    expect(container.querySelectorAll(".v2-nav-item[data-magnetic]").length).toBe(ITEMS.length);
   });
 });
 
-describe("flag-off byte-identity (the '0' failsafe)", () => {
-  beforeEach(() => localStorage.setItem("compy_jarvis_motion", "0"));
+describe("reduced ⇒ byte-identity (the one off-switch)", () => {
+  beforeEach(() => setMotionPref("reduced"));
 
   it("renders no jv-* nodes and no data-magnetic attributes", () => {
     const { container, rerender } = render(shell("home"));
@@ -82,9 +78,7 @@ describe("flag-off byte-identity (the '0' failsafe)", () => {
   });
 });
 
-describe("flag on + motion full", () => {
-  beforeEach(() => localStorage.setItem("compy_jarvis_motion", "1"));
-
+describe("motion full — the layer is live", () => {
   it("rail tabs carry data-magnetic", () => {
     const { container } = render(shell("home"));
     const tabs = container.querySelectorAll(".v2-nav-item[data-magnetic]");
@@ -103,24 +97,12 @@ describe("flag on + motion full", () => {
     expect(container.querySelector(".jv-retune")).toBeNull();
   });
 
-  it("a bare flag flip is not a navigation — no wipe without a room change", () => {
-    localStorage.setItem("compy_jarvis_motion", "0");
-    const { container, rerender } = render(shell("home"));
-    rerender(shell("play")); // room change while OFF — tracked, but must not wipe
-    expect(container.querySelector(".jv-retune")).toBeNull();
-    act(() => applyJarvisMotion(true)); // flip ON — still not a navigation
-    expect(container.querySelector(".jv-retune")).toBeNull();
-  });
-});
-
-describe("reduced motion wins over the flag (mid-session flips included)", () => {
-  beforeEach(() => localStorage.setItem("compy_jarvis_motion", "1"));
-
-  it("flag on + reduced ⇒ no magnetic attributes, no wipe", () => {
+  it("a bare motion flip is not a navigation — no wipe without a room change", () => {
     setMotionPref("reduced");
     const { container, rerender } = render(shell("home"));
-    expect(container.querySelector("[data-magnetic]")).toBeNull();
-    rerender(shell("play"));
+    rerender(shell("play")); // room change while reduced — tracked, but must not wipe
+    expect(container.querySelector(".jv-retune")).toBeNull();
+    act(() => setMotionPref("full")); // flip to full — still not a navigation
     expect(container.querySelector(".jv-retune")).toBeNull();
   });
 
@@ -132,9 +114,7 @@ describe("reduced motion wins over the flag (mid-session flips included)", () =>
   });
 });
 
-describe("honest data-tick (ArcGauge, flag on)", () => {
-  beforeEach(() => localStorage.setItem("compy_jarvis_motion", "1"));
-
+describe("honest data-tick (ArcGauge, motion full)", () => {
   const gauge = (value: number | null) => (
     <ArcGauge label="Avg FPS" value={value} max={240} unit="fps" />
   );

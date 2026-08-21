@@ -333,8 +333,9 @@ here as decisions.
   · [`superpowers/plans/2026-08-20-comprehensibility-sweep.md`](superpowers/plans/2026-08-20-comprehensibility-sweep.md)
   His words: *"i like it i just dont like the placement for the help me with my pc"*. So the default
   flips ON, but **not on its own** — it flips in the lane that first fixes where that button sits,
-  so the Home that ships on by default is the one he approved. Nothing left on him here; the
-  placement itself is a taste call I make and hand him on sight.
+  so the Home that ships on by default is the one he approved. **CLOSED 2026-08-20 the same day:**
+  his "Clean header" pick shipped in desk build `ab54f1e4` (button on the verdict line, fine print
+  routed to Test, default ON), self-review PASS, before/after handed to him. Nothing left on him here.
 
 - ✅ **The title foil sweep now stops instead of looping forever — APPROVED 2026-08-06**, on a
   side-by-side before/after he watched run.  ·  PR [#76](https://github.com/Pootytxng/sentinel/pull/76)

@@ -12,15 +12,7 @@
       "emerald": "Emerald",
       "hearth": "Hearth"
     },
-    "livePreview": "Live preview",
-    "monitorConsole": {
-      "title": "Live console",
-      "sub": "The Live room's face as an instrument cluster: rolling fps and frametime traces with honest gauges. Same sensors, same measurements — turn off for the classic live tiles."
-    },
-    "jarvisMotion": {
-      "title": "JARVIS motion",
-      "sub": "Turns interface animation on or off: smooth scrolling, a short transition when you change rooms, buttons that shift toward the cursor, and a tick on gauges when a reading updates. It changes how things move, never what Compy measures. The Motion setting below still wins."
-    }
+    "livePreview": "Live preview"
   },
   "language": {
     "sectionTitle": "Language",

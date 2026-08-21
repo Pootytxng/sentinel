@@ -1,15 +1,9 @@
 import { describe, it, expect, afterEach } from "vitest";
-import {
-  readInstrumentTheme,
-  applyInstrumentTheme,
-  readViewMode,
-  applyViewMode,
-} from "./theme";
+import { readInstrumentTheme, applyInstrumentTheme } from "./theme";
 
 afterEach(() => {
   localStorage.clear();
   delete document.documentElement.dataset.itheme;
-  delete document.documentElement.dataset.viewMode;
 });
 
 describe("instrument theme", () => {
@@ -30,15 +24,5 @@ describe("instrument theme", () => {
   });
 });
 
-describe("basic/advanced view mode", () => {
-  it("view mode defaults to basic (answer first), persists, and mirrors onto <html>", () => {
-    expect(readViewMode()).toBe("basic");
-    localStorage.setItem("compy_view_mode", "ludicrous"); // junk → basic
-    expect(readViewMode()).toBe("basic");
-    applyViewMode("advanced");
-    expect(readViewMode()).toBe("advanced");
-    expect(document.documentElement.dataset.viewMode).toBe("advanced");
-    applyViewMode("basic");
-    expect(document.documentElement.dataset.viewMode).toBe("basic");
-  });
-});
+// (The basic/advanced ViewMode cases were retired with the mode itself in the 2026-08-20
+// comprehensibility sweep, issue #180 — see monitor-one-face-guard.test.tsx.)

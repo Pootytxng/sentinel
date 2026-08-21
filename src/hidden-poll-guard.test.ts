@@ -84,8 +84,9 @@ function pollingSurfaces(): { file: string; commands: string[]; text: string }[]
 describe("hidden-poll guard", () => {
   it("finds the sensor-polling surfaces at all (the corpus is the weak part)", () => {
     // A refactor that renames the commands or the timer call would silently empty the corpus and
-    // turn every assertion below into a no-op. Pin the floor: the census found 13 on 2026-08-04.
-    expect(pollingSurfaces().length).toBeGreaterThanOrEqual(13);
+    // turn every assertion below into a no-op. Pin the floor: the census found 13 on 2026-08-04;
+    // the 2026-08-20 sweep (issue #180) deleted MonitorBasic.tsx, one of the 13.
+    expect(pollingSurfaces().length).toBeGreaterThanOrEqual(12);
   });
 
   it("every sensor-polling surface gates on document visibility", () => {

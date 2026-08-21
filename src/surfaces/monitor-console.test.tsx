@@ -10,7 +10,9 @@ import type { SessionSummary } from "../types";
 // trace, never a fabricated number; (c) capture state keeps mirroring up via onFpsActive (the
 // V2-8 door); (d) NVIDIA GPU temp stays ungraded (LOCKED rule 5); (e) header-slop pin — no
 // headings/ledes in the subtree; (f) the v5 face contract — deck delta row (session-scoped,
-// cross-game labeled) + SessionStack in BOTH modes, no mode toggle, the stack IS the shelf.
+// cross-game labeled) + SessionStack always mounted, the stack IS the shelf. The Basic/Advanced
+// mode fork was retired 2026-08-20 (issue #180 — see monitor-one-face-guard.test.tsx): ONE face,
+// and the full gauge cluster (incl. GPU load) is unconditional.
 
 const { invokeMock, deckProps, stackProps } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
@@ -89,10 +91,8 @@ function mount(over: Partial<Parameters<typeof MonitorConsole>[0]> = {}) {
   const props = {
     active: true,
     vendor: "amd" as const,
-    mode: "basic" as const,
     sessions: [session],
     onFpsActive: vi.fn(),
-    onOpenSessions: vi.fn(),
     ...over,
   };
   const utils = render(<MonitorConsole {...props} />);
@@ -321,28 +321,18 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
 });
 
 describe("MonitorConsole — the stack IS the shelf (f)", () => {
-  it("SessionStack mounts in BOTH modes with the app's own sessions array; no mode toggle anywhere", async () => {
+  it("SessionStack mounts with the app's own sessions array; no mode toggle anywhere", async () => {
     mockPolls(() => liveFps);
-    mount({ mode: "basic", sessions: [session, sess({ avg_fps: 200 })] });
+    mount({ sessions: [session, sess({ avg_fps: 200 })] });
     await waitFor(() => expect(screen.getByTestId("session-stack")).toBeTruthy());
     expect(screen.getByTestId("session-stack").getAttribute("data-count")).toBe("2");
     expect(screen.queryByRole("button", { name: "Now" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Compare" })).toBeNull();
-    cleanup();
-    mockPolls(() => liveFps);
-    mount({ mode: "advanced" });
-    await waitFor(() => expect(screen.getByTestId("session-stack")).toBeTruthy());
   });
 
-  it("Basic keeps a door into the full Sessions face (never a dead end); Advanced has its own tab", async () => {
+  it("no in-console session-history door — the Live/Sessions segments in MonitorV2 are the ONE way over (issue #180)", async () => {
     mockPolls(() => liveFps);
-    const { props } = mount({ mode: "basic" });
-    await waitFor(() => expect(screen.getByText("Session history")).toBeTruthy());
-    screen.getByText("Session history").closest("button")!.click();
-    expect(props.onOpenSessions).toHaveBeenCalled();
-    cleanup();
-    mockPolls(() => liveFps);
-    mount({ mode: "advanced" });
+    mount();
     await waitFor(() => expect(screen.getByText("GPU load")).toBeTruthy());
     expect(screen.queryByText("Session history")).toBeNull();
   });
@@ -394,7 +384,7 @@ describe("MonitorConsole — motion contract (Task 4)", () => {
   });
 });
 
-describe("MonitorConsole — laws (e) + the mode split", () => {
+describe("MonitorConsole — laws (e) + the one face", () => {
   // SHARPENED for the bento conversion (2026-08-12). The old form counted h1/h2/h3 and required 0,
   // which was a PROXY for the title-header law ("a header is a name, never a status sentence") back
   // when the console had no headings of any kind. BentoTile labels its boxes with an <h3
@@ -418,15 +408,10 @@ describe("MonitorConsole — laws (e) + the mode split", () => {
     }
   });
 
-  it("Advanced shows the fuller cluster (GPU load gauge); Basic the core set", async () => {
+  it("the full gauge cluster is unconditional — GPU load renders on the one face (issue #180)", async () => {
     mockPolls(() => liveFps);
-    const basic = mount({ mode: "basic" });
+    mount();
     await waitFor(() => expect(screen.getByText("GPU temp")).toBeTruthy());
-    expect(screen.queryByText("GPU load")).toBeNull();
-    cleanup();
-    mockPolls(() => liveFps);
-    mount({ mode: "advanced" });
-    await waitFor(() => expect(screen.getByText("GPU load")).toBeTruthy());
-    void basic;
+    expect(screen.getByText("GPU load")).toBeTruthy();
   });
 });

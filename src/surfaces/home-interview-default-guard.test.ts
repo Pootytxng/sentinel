@@ -1,24 +1,23 @@
-// THE OWNER'S OFF-SWITCH SURVIVES A RENAME (bug -> guard, 2026-08-20).
+// THE FLAG KEEPS THE OWNER'S ANSWER (bug -> guard, 2026-08-20 — answer updated same day).
 //
 // This guard exists because the FIRST draft of the interview (design foundation step 3, issue #177)
-// shipped its flag DEFAULT ON. That looked like a fresh decision and was not: `compy_home_intake`
-// was the owner's off-switch for the band the interview replaces, he set it off on sight
-// (4d1afa92, 2026-08-12 - "the what are you here to do text box was ugly looks cleaner without it"),
-// and he set it off a SECOND time when he caught UX-1 bypassing it (8db70795 - "intakeAvailable now
-// leads with intakeOn: off means the question is not asked").
+// shipped its flag DEFAULT ON while the owner's recorded answer was still OFF: `compy_home_intake`
+// was his off-switch for the band the interview replaces (4d1afa92 on sight, 8db70795 when he
+// caught UX-1 bypassing it), and retiring his key while defaulting the successor ON was that same
+// bypass under a new name. The self-review's rubric item 10 caught it; no automated guard did. So
+// the mechanism became a test: a flag that stands in for an owner decision has to keep answering
+// the way he answered.
 //
-// Retiring that key and defaulting its successor ON is the same bypass 8db70795 was written to
-// stop, just more thorough - the switch survives under a new name and answers the opposite way.
-// The self-review's rubric item 10 caught it; no automated guard did, because every existing guard
-// checks safety, release integrity, or that nothing was DELETED, and this defect deletes nothing.
-// So the mechanism becomes a test: a flag that stands in for an owner decision has to keep
-// answering the way he answered.
+// THE ANSWER CHANGED LEGITIMATELY on 2026-08-20: the fork was put in front of the owner with the
+// cost of OFF stated as a measured fact, and he said YES — see
+// docs/decisions/2026-08-20-home-interview-default.md §OWNER ANSWERED. Default is now ON, "0" (the
+// Settings toggle's off) is the one literal that closes the door, and storage-throw fails ON (the
+// graduated-flag convention — a shipped surface stays reachable, and ON is his answer now).
 //
-// HOW TO CHANGE THIS LEGITIMATELY. Not by editing the expectation. Get the owner's call, record it
-// in docs/decisions/ (the fork and the recommendation are already written up in
-// 2026-08-20-home-interview-default.md), then change the default and this file in the same commit
-// citing that record. If you are reading this because the test went red, the question to answer is
-// "did he say yes", not "what number makes this pass".
+// HOW TO CHANGE THIS AGAIN. Exactly the way it changed this time, and never by editing the
+// expectation: get the owner's call, record it in docs/decisions/, then change the default and this
+// file in the same commit citing that record. If you are reading this because the test went red,
+// the question to answer is "did he say so", not "what number makes this pass".
 // `fs`/`path`, not `node:fs`/`node:path` — the app tsconfig this file is compiled under has no
 // node: protocol types, and every sibling source-contract guard in src/surfaces uses the bare form.
 import { readFileSync } from "fs";
@@ -33,18 +32,18 @@ describe("the interview's flag keeps the owner's answer (bug -> guard 2026-08-20
     localStorage.clear();
   });
 
-  it("a machine that has never been told reads OFF", () => {
+  it("a machine that has never been told reads ON (the owner's 2026-08-20 answer)", () => {
     expect(localStorage.getItem(KEY)).toBeNull();
-    expect(readHomeInterview()).toBe(false);
+    expect(readHomeInterview()).toBe(true);
   });
 
-  it('only an explicit "1" turns it on - not truthiness, not any-non-zero', () => {
-    for (const stored of ["0", "", "true", "yes", "on", "2", "null"]) {
+  it('only an explicit "0" turns it off - junk fails toward the shipped surface', () => {
+    for (const stored of ["1", "", "true", "yes", "on", "2", "null"]) {
       localStorage.setItem(KEY, stored);
-      expect(readHomeInterview(), `stored ${JSON.stringify(stored)} must read OFF`).toBe(false);
+      expect(readHomeInterview(), `stored ${JSON.stringify(stored)} must read ON`).toBe(true);
     }
-    localStorage.setItem(KEY, "1");
-    expect(readHomeInterview()).toBe(true);
+    localStorage.setItem(KEY, "0");
+    expect(readHomeInterview()).toBe(false);
   });
 
   it("the toggle round-trips both ways and persists the literal the reader expects", () => {
@@ -56,17 +55,17 @@ describe("the interview's flag keeps the owner's answer (bug -> guard 2026-08-20
     expect(readHomeInterview()).toBe(false);
   });
 
-  it("storage throwing does not turn the door on", () => {
-    // The graduated-flag convention on the live ROOM flags fails ON, so a broken storage layer can
-    // never hide a shipped room. That convention is deliberately inverted here: this flag stands in
-    // for an answer the owner gave, and a failsafe that flips his answer is not a failsafe.
+  it("storage throwing does not close the door", () => {
+    // The graduated-flag convention: a broken storage layer can never hide a shipped surface.
+    // While the owner's answer was OFF this was deliberately inverted (a failsafe that flips his
+    // answer is not a failsafe); his answer is ON now, so the failsafe and the answer agree.
     const proto = Object.getPrototypeOf(localStorage) as Storage;
     const real = proto.getItem;
     proto.getItem = () => {
       throw new Error("storage is unavailable");
     };
     try {
-      expect(readHomeInterview()).toBe(false);
+      expect(readHomeInterview()).toBe(true);
     } finally {
       proto.getItem = real;
     }
@@ -99,6 +98,8 @@ describe("the interview's flag keeps the owner's answer (bug -> guard 2026-08-20
     );
     expect(doc).toContain("compy_home_interview");
     expect(doc).toContain("8db70795");
-    expect(doc.toLowerCase()).toContain("owner");
+    // The default is ON because he ANSWERED, not because a lane preferred it — the record must
+    // carry the answer, not just the fork.
+    expect(doc).toContain("OWNER ANSWERED");
   });
 });

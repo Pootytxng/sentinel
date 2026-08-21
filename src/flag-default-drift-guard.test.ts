@@ -186,8 +186,10 @@ describe("state-drift law: no comment may contradict a flag's real shipped defau
     expect(flags.get("compy_editorial")).toBe("ON"); // theme.ts, two-hop
     // Floor was 20 with nav-flags.ts contributing two; the 2026-08-06 generation prune retired
     // compy_optimize + compy_monitor with their file, three Lab face flags out of theme.ts, and
-    // compy_committed with the unreachable CompyHero it gated.
-    expect(flags.size).toBeGreaterThanOrEqual(18);
+    // compy_committed with the unreachable CompyHero it gated. The 2026-08-20 comprehensibility
+    // sweep (issue #180) retired compy_monitor_console + compy_jarvis_motion — one Live face,
+    // one motion switch.
+    expect(flags.size).toBeGreaterThanOrEqual(17);
   });
 
   it("derives each shipped face's attribute from main.tsx, not from a hand-kept table", () => {

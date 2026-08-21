@@ -1,0 +1,56 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "documentation",
+  "pr": 182,
+  "issue": 180,
+  "branch": "lane/receipt-181",
+  "currentHead": "35c9efb2a7cfaaba0f84099b493b55eb4b114137",
+  "explicitHandoff": "Same owner turn 2026-08-20, immediately after PR #181 merged as ee975b02. This PR lands the two artifacts that could not ride inside the head they describe: #181's merge receipt, and the removal of the CLAIMED row for the branch #181's merge deleted.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room, git dir shared with C:/Users/Kuya/code/sentinel.",
+    "remoteState": "origin/main = ee975b02, the #181 merge, and this branch was cut from exactly that. Other open PRs are #160 and #163, both dormant and owned by other lanes per WORK_CONTROL - neither touched, neither adjudicated. #163's diff includes docs/BRANCH_DISPOSITIONS.md, which this PR also touches; the change here is the REMOVAL of one row this session added minutes ago for a ref that no longer exists, so it cannot conflict semantically with anything a dormant lane wrote.",
+    "worktree": "git worktree list re-checked in this turn: seven worktrees, this lane alone in sentinel-home-room. The primary worktree C:/Users/Kuya/code/sentinel is still on main at ffe85271, 22 commits behind origin/main and holding an untracked receipt - left untouched on purpose, as the queue's own trap note says.",
+    "branch": "lane/receipt-181, cut from ee975b02 which was exactly origin/main. One commit, no merge commits, no divergence.",
+    "dirtyState": "git status --porcelain empty at this head apart from this receipt, which by construction cannot ride inside the head it authorizes. It lands on the sweep execution lane - the same chain #176, #179 and #181 used.",
+    "liveProcesses": "One claude.exe session advancing, this one. Compy is running from %LOCALAPPDATA%/Compy/compy.exe at the 1d5b3c4c build, untouched by this lane. Nothing was built or installed for this PR."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "35c9efb2a7cfaaba0f84099b493b55eb4b114137",
+      "detail": "Ran inside .githooks/pre-push at this exact head; push exit 0 and the ref was created on origin, which the hook blocks when the gate fails. Final line LOCAL CHECK RESULT: PASS, whole sequence read rather than tailed."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "reason": "One work-control receipt and one deleted markdown table row. No build, no install, nothing shipped to any machine."
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "No product code and no UI surface in this diff - one receipt file and one deleted row. The owner's three UI observations are issue #180, where the self-review law applies in full to the fixes."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; WORK_CONTROL makes that review advisory rather than a blocker. The diff is documentation plus one receipt - no product code, no scripts, no mutation surface - and the full pre-push gate passed at this exact head."
+  },
+  "docGates": [
+    "branch-disposition-audit: RED before this commit (a row for origin/lane/comprehensibility-sweep, deleted by the #181 merge), GREEN after. It goes red again for the minutes origin/lane/receipt-181 exists without a row of its own - the known #126 ordering race - and green again when this PR merges and the ref is pruned. No row added for this branch on purpose, for the same reason PR #176 and PR #179 added none.",
+    "verify-release-state.mjs: 31 citations / 31 ok / 0 drift, re-stamped in e6c5b188 and untouched by this diff.",
+    "doc-budget.ps1: ALL PASS - this diff only REMOVES a line from BRANCH_DISPOSITIONS.md."
+  ]
+}

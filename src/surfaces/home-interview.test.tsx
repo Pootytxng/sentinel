@@ -209,10 +209,10 @@ function renderHomeRaw(extra: Partial<React.ComponentProps<typeof HomeRoom>> = {
 }
 
 /**
- * Render Home with the interview OPTED IN, which is what every test about the interview's CONTENT
- * needs. `compy_home_interview` defaults OFF (theme.ts — it stands in for an owner decision, see
- * docs/decisions/2026-08-20-home-interview-default.md), so the door does not exist until something
- * asks for it. A test that already set the key explicitly keeps its own value.
+ * Render Home with the interview EXPLICITLY on, which is what every test about the interview's
+ * CONTENT needs. `compy_home_interview` defaults ON since the owner's 2026-08-20 answer (theme.ts;
+ * docs/decisions/2026-08-20-home-interview-default.md §OWNER ANSWERED) — the explicit set stays so
+ * content tests hold under either default, and a test that already set the key keeps its value.
  */
 function renderHome(extra: Partial<React.ComponentProps<typeof HomeRoom>> = {}) {
   if (localStorage.getItem("compy_home_interview") === null) {
@@ -248,10 +248,10 @@ function openInterview() {
 // wording anywhere on Home, this fails before it reaches him.
 describe("the retired intake band stays retired (owner removed it on sight, 2026-08-12)", () => {
   const FLAG_STATES: [string, () => void][] = [
-    ["absent (what a fresh install gets — reads OFF)", () => localStorage.removeItem("compy_home_interview")],
+    ["absent (what a fresh install gets — reads ON)", () => localStorage.removeItem("compy_home_interview")],
     ['"0" (the explicit off switch)', () => localStorage.setItem("compy_home_interview", "0")],
     ['"1" (explicitly on)', () => localStorage.setItem("compy_home_interview", "1")],
-    ["junk (anything but \"1\" reads OFF)", () => localStorage.setItem("compy_home_interview", "true")],
+    ["junk (anything but \"0\" reads ON)", () => localStorage.setItem("compy_home_interview", "true")],
   ];
 
   for (const [name, set] of FLAG_STATES) {
@@ -286,20 +286,20 @@ describe("the retired intake band stays retired (owner removed it on sight, 2026
 });
 
 // The flag. `compy_home_interview` is a NEW key, deliberately not the band's — a flag that outlives
-// the thing it named is how a recorded owner decision quietly gets reversed. It DEFAULTS OFF, which
-// is the answer the owner actually gave: he switched the band off on sight (4d1afa92) and switched
-// it off again when he caught UX-1 bypassing him (8db70795). Retiring his key and defaulting the
-// successor ON would have been the same bypass under a new name — the self-review caught exactly
-// that on the first draft of this file. Polarity, defaults and the storage-throws case are pinned
-// separately and in isolation by home-interview-default-guard.test.ts; what THIS block proves is the
-// rendered consequence on Home, from the state a fresh install is really in (nothing in
-// localStorage), because a test that always sets the key explicitly passes under either default and
-// proves nothing.
-describe("the interview's flag (compy_home_interview — DEFAULT OFF, \"1\" opts in)", () => {
-  it("key ABSENT: NO front door — a first-run user gets Home exactly as he left it", () => {
+// the thing it named is how a recorded owner decision quietly gets reversed. It shipped DEFAULT OFF
+// (the answer the owner had given twice about the slot: 4d1afa92, 8db70795) and flipped to DEFAULT
+// ON on 2026-08-20 when the fork was put in front of him and he said YES —
+// docs/decisions/2026-08-20-home-interview-default.md §OWNER ANSWERED. Polarity, defaults and the
+// storage-throws case are pinned separately and in isolation by home-interview-default-guard.test.ts;
+// what THIS block proves is the rendered consequence on Home, from the state a fresh install is
+// really in (nothing in localStorage), because a test that always sets the key explicitly passes
+// under either default and proves nothing.
+describe("the interview's flag (compy_home_interview — DEFAULT ON, \"0\" opts out)", () => {
+  it("key ABSENT: the front door leads Home — what a fresh install gets", () => {
     renderHomeRaw({ rooms: liveRooms });
     expect(localStorage.getItem("compy_home_interview")).toBeNull();
-    expect(door()).toBeNull();
+    expect(door()).not.toBeNull();
+    // Still closed on arrival: the default opens the DOOR, never the question itself.
     expect(document.querySelector(".hi-question")).toBeNull();
   });
 
@@ -311,13 +311,16 @@ describe("the interview's flag (compy_home_interview — DEFAULT OFF, \"1\" opts
     expect(document.querySelector(".hi-question")).not.toBeNull();
   });
 
-  it('only the literal "1" turns it on, so a junk value stays OFF', () => {
-    for (const junk of ["true", "", "yes", "ON", "0", "2"]) {
+  it('only the literal "0" closes the door — junk fails toward the shipped surface', () => {
+    for (const junk of ["true", "", "yes", "ON", "1", "2"]) {
       localStorage.setItem("compy_home_interview", junk);
       renderHomeRaw({ rooms: liveRooms });
-      expect(door(), `value ${JSON.stringify(junk)}`).toBeNull();
+      expect(door(), `value ${JSON.stringify(junk)}`).not.toBeNull();
       cleanup();
     }
+    localStorage.setItem("compy_home_interview", "0");
+    renderHomeRaw({ rooms: liveRooms });
+    expect(door(), 'the "0" off switch must still work').toBeNull();
   });
 
   it("opens on click and asks ONE question, with no way to get stuck", () => {

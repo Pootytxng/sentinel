@@ -18,14 +18,14 @@ const monitorVerdict = (sessions: SessionSummary[]) => monitorVerdictRaw(session
 // V2-5 guards (bug→guard tier 1): the V2 Monitor room composes RoomShell (one verdict, one
 // door to Blackbook), its verdict is a PURE derivation from the real session records (graded
 // by the SAME shortVerdict the debrief uses; honest empty state; branch-proper copy — never
-// "(s)"), Basic/Advanced + Live/Sessions semantics match the classic shell exactly, the quiet
-// slot carries the advisory Tuning presets in Advanced only, and TuningPresets keeps both of
-// its faces: `bare` (the v2 quiet slot, head supplies the name) and un-`bare` (its own <h2>).
+// "(s)"), Live/Sessions are the room's ONE pair of faces (the Basic/Advanced mode fork was
+// retired in the 2026-08-20 comprehensibility sweep, issue #180 — see
+// monitor-one-face-guard.test.tsx), and the quiet slot carries the advisory Tuning presets.
 
-// Play and MonitorBasic are the audited heavy surfaces — composed VERBATIM with the same
-// props, covered by their own suites. Stubs expose `view` and the onOpenSessions route so the
-// shell contracts are testable. monitor-v2-data imports the REAL shortVerdict/fmtDur from
-// ./Play, so the mock must pass the original named exports through.
+// Play and MonitorConsole are the audited heavy surfaces — composed VERBATIM with the same
+// props, covered by their own suites. Stubs expose `view` and onFpsActive so the shell
+// contracts are testable. monitor-v2-data imports the REAL shortVerdict/fmtDur from ./Play,
+// so the mock must pass the original named exports through.
 vi.mock("./Play", async (importOriginal) => {
   const orig = (await importOriginal()) as Record<string, unknown>;
   return {
@@ -39,12 +39,9 @@ vi.mock("./Play", async (importOriginal) => {
     ),
   };
 });
-vi.mock("./MonitorBasic", () => ({
-  MonitorBasic: (props: { onOpenSessions: () => void; onFpsActive?: (a: boolean) => void }) => (
-    <div data-testid="monitor-basic">
-      <button type="button" onClick={props.onOpenSessions}>
-        stub-open-sessions
-      </button>
+vi.mock("./MonitorConsole", () => ({
+  MonitorConsole: (props: { onFpsActive?: (a: boolean) => void }) => (
+    <div data-testid="monitor-console">
       <button type="button" onClick={() => props.onFpsActive?.(true)}>
         stub-capture-on
       </button>
@@ -54,8 +51,8 @@ vi.mock("./MonitorBasic", () => ({
     </div>
   ),
 }));
-// MonitorV2's one-shot sensor pre-warm (read-only) — jsdom has no Tauri IPC. `get_fps_status` is
-// driven by `ipc.fpsActive` so the self-correcting off-Live capture poll (below) is testable.
+// jsdom has no Tauri IPC. `get_fps_status` is driven by `ipc.fpsActive` so the self-correcting
+// off-Live capture poll (below) is testable.
 const ipc = vi.hoisted(() => ({ fpsActive: true }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) =>
@@ -85,16 +82,13 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   localStorage.clear();
-  delete document.documentElement.dataset.viewMode;
 });
 
-// This suite pins the CLASSIC room composition — the Instrument HUD is default-ON since the
-// 2026-07-06 owner approval, and the Monitor console is default-ON since 2026-07-12, so the
-// classic tree lives behind BOTH "0" failsafes; the HUD masthead's own contract is pinned in
-// hud-rooms-flag.test.tsx, the console flag's in monitor-console-flag.test.tsx.
+// This suite pins the room's composition with the HUD masthead off — the verdict sentence as the
+// h1 (the Instrument HUD is default-ON since 2026-07-06; its masthead contract is pinned in
+// hud-rooms-flag.test.tsx).
 beforeEach(() => {
   localStorage.setItem("compy_editorial", "0");
-  localStorage.setItem("compy_monitor_console", "0");
 });
 
 const session = (over: Partial<SessionSummary> = {}): SessionSummary =>
@@ -134,7 +128,6 @@ function mount(over: Partial<Parameters<typeof MonitorV2>[0]> = {}) {
 }
 
 const useReduced = () => localStorage.setItem("compy_motion", "reduced");
-const useAdvanced = () => localStorage.setItem("compy_view_mode", "advanced");
 
 describe("monitorVerdict — pure, measured, branch-proper copy", () => {
   it("no sessions → honest empty state, nothing fabricated", () => {
@@ -195,8 +188,8 @@ describe("MonitorV2 — RoomShell composition", () => {
   });
 
   // V2-8 (P6 §2 placement): the door belongs to the session-end state — ABSENT while a capture
-  // session is live, back when it ends. The faces mirror their already-polled get_fps_status up
-  // via onFpsActive (no second IPC).
+  // session is live, back when it ends. The Live face mirrors its already-polled get_fps_status
+  // up via onFpsActive (no second IPC).
   it("closes the forward door during a live capture session, reopens when it ends", () => {
     useReduced();
     const { container } = mount();
@@ -207,15 +200,6 @@ describe("MonitorV2 — RoomShell composition", () => {
     expect(container.querySelectorAll(".v2-door").length).toBe(1);
   });
 
-  it("the Advanced live face reports capture state through the same door signal", () => {
-    useReduced();
-    useAdvanced();
-    const { container } = mount();
-    expect(container.querySelectorAll(".v2-door").length).toBe(1);
-    fireEvent.click(screen.getByText("stub-play-capture-on"));
-    expect(container.querySelectorAll(".v2-door").length).toBe(0);
-  });
-
   // bug→guard (MonitorV2.tsx capture poll): only the Live face polls get_fps_status and mirrors it
   // up via onFpsActive. Leaving Live mid-capture unmounts that poller, so if nothing else re-read the
   // backend the door would stay closed FOREVER once the session actually ended off-screen. The
@@ -223,10 +207,9 @@ describe("MonitorV2 — RoomShell composition", () => {
   // must reopen without the user returning to Live.
   it("reopens the door when a capture ends while the user is off the Live segment", async () => {
     useReduced();
-    useAdvanced();
     ipc.fpsActive = true;
     const { container } = mount();
-    fireEvent.click(screen.getByText("stub-play-capture-on")); // capture live → door closed
+    fireEvent.click(screen.getByText("stub-capture-on")); // capture live → door closed
     expect(container.querySelectorAll(".v2-door").length).toBe(0);
     fireEvent.click(screen.getByRole("tab", { name: "Sessions" })); // leave Live → poller unmounts
     ipc.fpsActive = false; // the session ends off-screen (picked up by the 2s poll)
@@ -238,13 +221,10 @@ describe("MonitorV2 — RoomShell composition", () => {
 
 // bug→guard (Q7 acceptance §398 "one owner supplies each sensor stream to all consumers that need
 // it", + §397 idle cost). The test above proves the shell's fallback poll EXISTS; these prove it
-// stays a fallback. §398 is a RUNTIME-ownership rule, so the original guard (`segment === "live"`)
-// was too narrow: in Basic mode a face is mounted at EVERY segment value and already polls
-// get_fps_status at 1 Hz, and that composition is reachable on all-default flags (Basic's
-// last-session door sets Advanced+Sessions; switching back to Basic leaves segment "sessions").
-// Own timers are the measurement here — invoke is only ever called by MonitorV2 itself in this
-// suite (Play/MonitorBasic are stubs, the console flag is off), so a get_fps_status call count IS
-// the shell's ownership of the stream.
+// stays a fallback. On Live, MonitorConsole owns the 1 Hz poll; Sessions is the one composition
+// where no face polls, so the shell owns it there. Own timers are the measurement here — invoke is
+// only ever called by MonitorV2 itself in this suite (Play/MonitorConsole are stubs), so a
+// get_fps_status call count IS the shell's ownership of the stream.
 describe("MonitorV2 — the shell owns get_fps_status only where no face does", () => {
   const fpsCalls = () =>
     vi.mocked(invoke).mock.calls.filter((c) => c[0] === "get_fps_status").length;
@@ -278,11 +258,10 @@ describe("MonitorV2 — the shell owns get_fps_status only where no face does", 
     });
   };
 
-  it("polls in Advanced+Sessions — the one composition where no face is mounted to own it", async () => {
+  it("polls on Sessions — the one composition where no face is mounted to own it", async () => {
     useReduced();
-    useAdvanced();
     const { container } = mount();
-    fireEvent.click(screen.getByText("stub-play-capture-on"));
+    fireEvent.click(screen.getByText("stub-capture-on"));
     fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
     expect(container.querySelectorAll(".v2-door").length).toBe(0); // capture live, door closed
     expect(fpsCalls()).toBe(1); // immediate re-read on mount of the effect
@@ -290,34 +269,19 @@ describe("MonitorV2 — the shell owns get_fps_status only where no face does", 
     expect(fpsCalls()).toBe(2); // …then the 2s interval
   });
 
-  it("stands down on Advanced+Live — the live face owns the stream there", async () => {
+  it("stands down on Live — the live face owns the stream there", async () => {
     useReduced();
-    useAdvanced();
     mount();
-    fireEvent.click(screen.getByText("stub-play-capture-on"));
+    fireEvent.click(screen.getByText("stub-capture-on"));
     vi.mocked(invoke).mockClear();
     await settle(6000);
     expect(fpsCalls()).toBe(0);
   });
 
-  it("stands down in Basic at any segment — a face is mounted there and already polls it", async () => {
-    useReduced();
-    const { container } = mount();
-    fireEvent.click(screen.getByText("stub-open-sessions")); // → Advanced + Sessions
-    fireEvent.click(screen.getByRole("tab", { name: "Basic" })); // → Basic, segment stays "sessions"
-    fireEvent.click(screen.getByText("stub-capture-on"));
-    expect(screen.getByTestId("monitor-basic")).toBeTruthy(); // the face IS mounted…
-    expect(container.querySelectorAll(".v2-door").length).toBe(0); // …and a capture IS live
-    vi.mocked(invoke).mockClear();
-    await settle(6000);
-    expect(fpsCalls()).toBe(0); // …so the shell must not be a second poller
-  });
-
   it("stands down while the window is hidden, and re-reads the instant it comes back", async () => {
     useReduced();
-    useAdvanced();
     const { container } = mount();
-    fireEvent.click(screen.getByText("stub-play-capture-on"));
+    fireEvent.click(screen.getByText("stub-capture-on"));
     fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
 
     act(() => setHidden(true)); // alt-tab into the fullscreen game
@@ -333,37 +297,33 @@ describe("MonitorV2 — the shell owns get_fps_status only where no face does", 
   });
 });
 
-describe("MonitorV2 — Basic/Advanced + Live/Sessions (classic semantics preserved)", () => {
-  it("defaults to Basic: the glanceable face, no section segments, no quiet slot", () => {
+describe("MonitorV2 — one face per segment (comprehensibility sweep, issue #180)", () => {
+  it("lands on Live first (owner ruling) with the console face and both segments visible", () => {
     useReduced();
-    const { container } = mount();
-    expect(screen.getByTestId("monitor-basic")).toBeTruthy();
-    expect(screen.queryByRole("tablist", { name: "Monitor sections" })).toBeNull();
-    expect(container.querySelector(".v2-quiet-slot")).toBeNull();
+    mount();
+    expect(screen.getByTestId("monitor-console")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Live" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Sessions" })).toBeTruthy();
   });
 
-  it("Advanced lands on Live first (owner ruling) and Sessions is one tab away", () => {
+  it("Sessions is one tab away and renders the full debrief", () => {
     useReduced();
-    useAdvanced();
     mount();
-    expect(screen.getByTestId("play-live")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
     expect(screen.getByTestId("play-sessions")).toBeTruthy();
   });
 
-  it("Basic's last-session door routes to Advanced → Sessions (never a dead end)", () => {
+  it("renders NO Basic/Advanced detail-level control — the mode fork is retired", () => {
     useReduced();
     mount();
-    fireEvent.click(screen.getByText("stub-open-sessions"));
-    expect(screen.getByTestId("play-sessions")).toBeTruthy();
-    expect(localStorage.getItem("compy_view_mode")).toBe("advanced");
+    expect(screen.queryByRole("tab", { name: "Basic" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Advanced" })).toBeNull();
   });
 });
 
-describe("MonitorV2 — quiet slot (advisory Tuning presets, Advanced only)", () => {
+describe("MonitorV2 — quiet slot (advisory Tuning presets)", () => {
   it("the expander names what's inside, opens/closes, and the presets render bare (no stacked title)", () => {
     useReduced();
-    useAdvanced();
     const { container } = mount();
     const head = screen.getByRole("button", { name: /Tuning presets/ });
     expect(head.textContent).toContain("Compy never changes these for you");

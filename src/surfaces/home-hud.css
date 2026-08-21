@@ -81,9 +81,6 @@
   max-width: 64ch;
   margin-top: 2px;
 }
-:root[data-v2="on"][data-hud="on"] .v2-room[data-room="home"] .v2-verdict-action {
-  margin: 12px 0 0;
-}
 /* The readout strip — measured provenance as segmented instrument fields. */
 :root[data-v2="on"][data-hud="on"] .v2-room[data-room="home"] .v2-measured {
   display: flex;

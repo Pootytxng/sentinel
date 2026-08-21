@@ -1,66 +1,37 @@
-# Session handoff — 2026-08-20 (the comprehensibility sweep is queued; a fresh session runs it)
+# Session handoff — 2026-08-20 (comprehensibility sweep #180: BUILT + SHIPPED, closing bookkeeping left)
 
-**Worktree** `C:\Users\Kuya\code\sentinel-home-room`. `main` is checked out by
-`C:\Users\Kuya\code\sentinel`, which is why this worktree keeps a lane branch.
+**Worktree** `C:\Users\Kuya\code\sentinel-home-room`, branch **`lane/sweep-180`**, issue
+[#180](https://github.com/Pootytxng/sentinel/issues/180).
+Plan: [`superpowers/plans/2026-08-20-comprehensibility-sweep.md`](superpowers/plans/2026-08-20-comprehensibility-sweep.md).
 
-## Start here
+## Landed on the lane
 
-Read [`superpowers/plans/2026-08-20-comprehensibility-sweep.md`](superpowers/plans/2026-08-20-comprehensibility-sweep.md)
-and execute it. Tracking issue [#180](https://github.com/Pootytxng/sentinel/issues/180).
-It is item zero of `BACKLOG.md`'s NEXT UP queue and outranks every numbered row there.
+- **`c216d813`** — §A one Live face + §B one switch per real choice + §D guards
+  (`monitor-one-face-guard.test.tsx`, `settings-no-rollout-switch.test.tsx`), carrying the PR #182
+  merge receipt as required. Gates green at that head.
+- **`ab54f1e4`** — §C: front door on the verdict line (owner's "Clean header" AskUserQuestion pick),
+  attention fine print out of the header (bug→guard pin in `home-console.test.tsx`), and
+  `compy_home_interview` default ON per
+  [`decisions/2026-08-20-home-interview-default.md`](decisions/2026-08-20-home-interview-default.md)
+  §OWNER ANSWERED / §EXECUTED. Self-reviewer VERDICT: PASS (10/10). Gates at this head:
+  `verify-local.ps1` PASS (all five checks read in full — vitest 354 files/4624, tsc+vite, cargo
+  963/0, clippy clean).
+- **SHIPPED to the desk**: `npm run tauri build` (both bundles; the exit-1 was only the updater
+  signing step — no private key in the shell, by design) → `ship-reinstall.ps1 -VerifyRuntime`
+  → runtime proof **`ab54f1e4 · release · shell 0.9.26`**, attempt 1, one installer on the Desktop.
+- **Docs synced** (this commit): RELEASE_STATE stamp anchor + owner-installed row (old row
+  byte-preserved to `archive/RELEASE_STATE_HISTORY.md`), BACKLOG top banner, checklist §D closed,
+  decision record §EXECUTED.
 
-## Why it jumped the queue
+## Remaining (in flight when this file was written)
 
-The owner tried the installed `1d5b3c4c` build and gave a standing directive:
+1. Push `lane/sweep-180`, open the PR (re-check branch immediately before push).
+2. Work-control receipt for the merge (`scripts/work-control-gate.mjs`, full 40-char SHA at the
+   exact head) → merge → handoff comment on #180.
+3. Before/after PNGs to the owner via SendUserFile (`before-*` already in the session scratchpad;
+   `after-*` captured from the shipped build by a background agent).
 
-> "the absolute number 1 priority ... familiarity, navigability, user intuitive and
-> comprehensibility throughout any function or text or tool etc.... in the app the goal is to make
-> the app universally valuable and easy to operate/interprate whilst appealing to a optimal mass
-> variety of consumer types."
+## Cautions
 
-The queue that preceded it was almost entirely gate/governance work (#171, #121, #126, #156, #128,
-#125) — none of it visible in the app. Those rows keep their order relative to each other, one rank
-lower. **#171 stays flagged:** `verify-local` invents failures under concurrent lane load, so a
-random red mid-sweep is that flake, never a licence to wave a real regression through.
-
-## The four things he said, and what each turned out to be
-
-1. **"i like it i just dont like the placement for the help me with my pc"** — the yes on
-   `compy_home_interview`. The default flips ON, bound to the lane that fixes the button placement
-   first, so the Home that ships on by default is the version he approved. Record:
-   [`decisions/2026-08-20-home-interview-default.md`](decisions/2026-08-20-home-interview-default.md).
-   `OWNER_ACTION_CHECKLIST.md` §D is closed.
-2. **The applied-changes block with the fine-print paragraph under it, on Home** — he called it
-   unappealing. Taste call, mine to make; it needs a before/after he can veto on sight.
-3. **"the jarvis toggle is back in the settings"** — **not drift.** `git log -S` over
-   `Settings.tsx` and `en/settings.json` puts `jarvisMotion`, `monitorConsole` and `expertView` in
-   exactly two commits each, the one that added them and the zh-CN i18n pass. None was ever removed.
-   The real finding his instinct pointed at: they are **rollout** switches that shipped DEFAULT OFF,
-   graduated to default-ON, and kept their switch, so Settings mixes developer-era forks with
-   genuine preferences and a normal user cannot tell which is which.
-4. **Live's Basic/Advanced tabs** — correct, and the fork is unconditional in `MonitorV2.tsx` today.
-   Same defect class as 3. Diff `MonitorBasic.tsx` against Advanced **before** deleting: the ask is
-   to remove the fork, not to lose content.
-
-## Landed in this lane (docs only)
-
-`14fc9a4d` — the queue re-rank, the plan, the decision amendment, the checklist close, the
-`UI_VISION_BACKLOG` FOUNDATION-1 ③ update, plus the two `.claude/work-control/` receipts from the
-#178/#179 chain that by design could not ride the heads they authorize.
-
-**Verified:** pre-push gate at `14fc9a4d` — `LOCAL CHECK RESULT: PASS`, Rust 963/0, clippy clean.
-`doc-budget: ALL PASS` (`BACKLOG.md` is tight at 112.9KB/114KB — archive before adding prose there).
-`branch-disposition-audit: OK`.
-
-## State
-
-- `origin/main` was `c13f6223` when this lane cut.
-- Desk build **`1d5b3c4c`**, one installer on the Desktop, stamp-proved live == build.
-- **Nothing is waiting on the owner.** §D closed; the remaining `OWNER_ACTION_CHECKLIST` items are
-  the long-standing §A/§B/§C ones, none of which block this sweep.
-
-## Paste-ready prompt for the next session
-
-> Read `docs/superpowers/plans/2026-08-20-comprehensibility-sweep.md` and execute it end to end —
-> issue #180. Build it, gate it, self-review it, ship it to the desk with `ship-reinstall.ps1`, and
-> send me a before/after for the Home changes. Do not stop between sections A–D.
+- verify-release-state.mjs and doc-budget.ps1 must be green before pushing the doc commit.
+- #171 flake caveat stands for any re-run of verify-local under concurrent lane load.

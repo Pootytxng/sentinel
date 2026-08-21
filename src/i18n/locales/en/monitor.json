@@ -26,15 +26,10 @@
       "live": "Live",
       "sessions": "Sessions"
     },
-    "modes": {
-      "basic": "Basic",
-      "advanced": "Advanced"
-    },
     "liveTelemetryLabel": "Live telemetry",
     "tuningPresetsLabel": "Tuning presets",
     "tuningPresetsHint": "by-hand checklists · advisory — Compy never changes these for you",
     "monitorSectionsAria": "Live sections",
-    "detailLevelAria": "Detail level",
     "verdict": {
       "noSessionsHeadline": "No game sessions measured yet.",
       "noSessionsSub": "Start capture and play — the debrief lands here when the session ends.",
@@ -44,26 +39,6 @@
       "roughHeadline": "Last session ran rough — {{game}}'s 1% lows fell to {{low}} fps against a {{fps}} fps average.",
       "sub": "Measured over {{duration}} · {{samples}} samples · a live estimate, not a benchmark."
     }
-  },
-  "monitorBasic": {
-    "fpsTermLabel": "FPS",
-    "stopCapture": "Stop capture",
-    "startCapture": "Start capture",
-    "oneLowTermLabel": "1% low",
-    "estSuffix": " · est",
-    "declinedStatus": "admin permission declined — tap Start capture to allow it",
-    "capturingStatus": "capturing — focus a DX11/DX12 game",
-    "idleStatus": "start capture, then play",
-    "gpuTempLabel": "GPU temp",
-    "busySuffix": "{{pct}}% busy",
-    "waitingForSensors": "waiting for sensors",
-    "cpuLabel": "CPU",
-    "ramLabel": "RAM",
-    "etwEmph": "Watched from outside your game",
-    "etwHonestyPost": " — nothing added to it, and no driver installed deep in Windows. Safe with anti-cheat.",
-    "lastSessionLabel": "Last session",
-    "unknownGameFallback": "Unknown game",
-    "lastSessionSummary": "{{game}} · {{verdict}} · {{duration}} · {{avg}} avg"
   },
   "monitorConsole": {
     "startCapture": "Start capture",
@@ -106,7 +81,6 @@
     "ramLabel": "RAM",
     "etwEmph": "Watched from outside your game",
     "etwHonestyPost": " — nothing added to it, and no driver installed deep in Windows. Safe with anti-cheat.",
-    "sessionHistory": "Session history",
     "bento": {
       "deck": "Frame time",
       "readouts": "This session",
