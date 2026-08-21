@@ -1,0 +1,57 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "feature",
+  "pr": 190,
+  "issue": null,
+  "branch": "lane/rooms-test",
+  "currentHead": "60d1cd519e6a55a872546f52022df070c4a255e9",
+  "explicitHandoff": "Owner directive 2026-08-20 (evening) opening this session: after the two lanes land, 'begin the Live/History/Test intimidation pass per the STANDING DIRECTIVE, with screenshots first'. This receipt is room 3 of 3 (Test) -- the directive's last room. Owner re-confirmed the desk free mid-session ('ok everything closed do whatever you need to'); the build, install, reviewer launch and gated push all waited for MortalShell2 to exit (a watcher fired on process exit) and checked the foreground first.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room, git dir shared with C:/Users/Kuya/code/sentinel.",
+    "remoteState": "origin/main = bf8f1164 (the #189 merge, this lane's own) -- this branch was cut from it and origin/main has not moved (re-fetched after the push). GitHub reports PR #190 MERGEABLE / CLEAN with headRefOid equal to this receipt's currentHead; no status checks exist on the repo (Actions budget decree).",
+    "worktree": "git worktree list re-checked after the push: seven worktrees, this lane alone in sentinel-home-room on lane/rooms-test; the main checkout (C:/Users/Kuya/code/sentinel) sits on main at ffe85271 and is not this lane's.",
+    "branch": "lane/rooms-test, three commits on top of bf8f1164 (ae1823ff the #189 receipt carry, 584654c8 the Test pass, 60d1cd51 ship docs + handoff), no merge commits, no divergence; origin/lane/rooms-test is at this exact head.",
+    "dirtyState": "git status --porcelain at this head shows only this receipt file, which by construction cannot ride inside the head it authorizes; it stays untracked for the next lane's first commit, the same chain #181-#189 used. Sweep captures under docs/ui-sweep/shots/ are gitignored.",
+    "liveProcesses": "At the merge check: foreground Firefox (Twitch), no game process; the owner's installed compy.exe 584654c8 running (relaunched by the reviewer with the CDP port, left open per brief) -- the merge touches neither."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "60d1cd519e6a55a872546f52022df070c4a255e9",
+      "detail": "Inside .githooks/pre-push at this exact head (core.hooksPath=.githooks): exit 0, LOCAL CHECK RESULT: PASS, log read by its LOCAL CHECK markers (scratchpad push-rooms-test-1.log, 1091 lines) -- vitest 356 files / 4692 passed / 4 skipped, tsc + vite build clean, cargo 963 passed / 0 failed / 24 ignored, clippy clean, no FAIL lines. First gate run of the lane, green."
+    }
+  ],
+  "shipProof": {
+    "applicable": true,
+    "stamp": "584654c8 · release · shell 0.9.26",
+    "installerSha256": "7CE9812568522D4D52B449C8AA439C1368E59DE1B0991CFE304EAE1D808226D9",
+    "detail": "One build this lane: 584654c8 shipped via scripts/ship-reinstall.ps1 -VerifyRuntime -ExpectedCommit 584654c8... (stale-build gate, Desktop hygiene, silent /S, CDP get_build_stamp `584654c8 · release`, first attempt, 0 transient retries, relaunch). 60d1cd51 on top is docs-only and does not compile into the binary, so the desk runs this PR's product code exactly."
+  },
+  "selfReview": {
+    "verdict": "PASS",
+    "detail": "Round 1 (584654c8, dispatched to the self-reviewer subagent, full 10-item rubric): PASS 10/10 on the installed build -- native 1484x971 capture, build stamp read live; eyebrow 6.8:1, caption 6.1:1, note 4.9:1 on the tile ground; caption one line 11 px under the node row and 54 px above the bench, no overlap, no clipping; hover -> open -> close cycle follows the station with 0 console errors; Safe stack reads '8 on · = all 8 applied' on a full ring (8 of the 12 applied changes are severity safe -- live data, not a defect); Home's dock has 0 eyebrow / 0 caption; Health / Live / History regression shots unmoved. Captures docs/ui-sweep/shots/test-after/ (local)."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; WORK_CONTROL makes that review advisory rather than a blocker. No src-tauri change (mutation boundary untouched); the change is layout + copy behind opt-in props with guards that the old shape fails, plus a self-review round on the installed build."
+  },
+  "docGates": [
+    "doc-budget.ps1 (RELEASE_STATE 44.9KB/48KB, 282/300 lines), markdown-link-guard 156/156, verify-release-state 31 ok / 0 drift (owner_installed_stamp=584654c8, source_main_commit=bf8f1164), tools/entry/doc-truth.test.mjs 7/7, verify-module-map and branch-disposition-audit are resident in npm test (gate-residency-guard) and passed inside the vitest run above at this head. The 63db50d2 row moved to docs/archive/RELEASE_STATE_HISTORY.md.",
+    "branch-disposition-audit: origin/lane/rooms-test exists only for the minutes between push and this merge -- the known #126 ordering race; no row added on purpose, the same reason PRs #176-#189 added none. The ref is deleted right after the merge."
+  ]
+}
