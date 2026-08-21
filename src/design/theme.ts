@@ -402,37 +402,29 @@ export function applyHomeConsole(on: boolean): void {
 //
 // WHY THE DEFAULT IS OFF, and why that is not the timid choice.
 //
-// The owner set this switch off. He did it twice: once on sight (4d1afa92, 2026-08-12) and again
-// when he caught UX-1 bypassing it (8db70795 — "intakeAvailable now leads with intakeOn: off means
-// the question is not asked"). The first draft of ③ shipped default ON under this new name, and the
-// self-review caught it: retiring a key and defaulting its successor ON is the SAME bypass 8db70795
-// was written to stop, just more thorough. A switch he set off does not turn itself on by changing
-// its name.
+// DEFAULT ON — the owner's answer, 2026-08-20 (docs/decisions/2026-08-20-home-interview-default.md
+// §OWNER ANSWERED). The history is the reason this line was ever OFF: the predecessor band was HIS
+// off-switch twice (4d1afa92 on sight, 8db70795 when UX-1 bypassed it), so the interview shipped
+// default-OFF until he was asked directly, with the cost stated as a measured fact — with the door
+// off, UX-1's "verdict + ONE action" Home had no action on every real install. He said yes.
 //
-// What the audit actually found is still true and is fixed separately: `compy_home_intake` had NO
-// Settings toggle anywhere in src, so the only way to set it was devtools. That is the defect —
-// undiscoverable, not off. ③ ships a real Settings → Behavior toggle, so "off" now means "off and
-// one click from on" instead of "off and unreachable".
+// So the flag now follows the graduated-flag convention the room flags use: only the literal "0"
+// (what the Settings → Behavior toggle writes) keeps the door closed, and storage misbehaving fails
+// ON — a shipped surface stays reachable, and ON is his recorded answer. Event mirrors the
+// home-console idiom so the Settings toggle and useHomeInterviewFlag stay in sync without a reload.
 //
-// FLIPPING THIS DEFAULT IS AN OWNER CALL, not an engineering one, and it needs a record in
-// docs/decisions/ — see 2026-08-20-home-interview-default.md, which states the fork and the
-// recommendation. Pinned by src/surfaces/home-interview-default-guard.test.ts so the next lane
-// cannot flip it in passing.
-//
-// Unset reads OFF; "1" opts in. This deliberately INVERTS the graduated-flag convention the live
-// room flags use ("0" is the failsafe), because that convention exists to keep a shipped surface
-// reachable when storage misbehaves — and here the failsafe direction is the owner's answer, not
-// the feature's availability. Event mirrors the home-console idiom so a Settings toggle and the
-// useHomeInterviewFlag hook stay in sync without a reload.
+// FLIPPING THIS AGAIN IS AN OWNER CALL, not an engineering one: record it in docs/decisions/ and
+// change src/surfaces/home-interview-default-guard.test.ts in the same commit citing that record —
+// that guard exists so no lane can flip a recorded owner answer in passing.
 const HOME_INTERVIEW_KEY = "compy_home_interview";
 
 export function readHomeInterview(): boolean {
   try {
-    return localStorage.getItem(HOME_INTERVIEW_KEY) === "1";
+    return localStorage.getItem(HOME_INTERVIEW_KEY) !== "0";
   } catch {
-    /* ignore — default OFF, which is the owner's last recorded answer */
+    /* ignore — default ON, the owner's recorded answer (2026-08-20) */
   }
-  return false;
+  return true;
 }
 
 export function applyHomeInterview(on: boolean): void {

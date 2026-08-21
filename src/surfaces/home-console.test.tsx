@@ -231,9 +231,8 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
   // interview took its place. What the door says now is what it DOES for the user, and what it
   // opens is a question asked one at a time, after they ask for it.
   it("one action: the front door is the single filled primary, and it opens something real", () => {
-    // Opted in, because `compy_home_interview` defaults OFF — the owner's switch, not a house
-    // convention (theme.ts; docs/decisions/2026-08-20-home-interview-default.md).
-    localStorage.setItem("compy_home_interview", "1");
+    // No opt-in needed: `compy_home_interview` defaults ON since the owner's 2026-08-20 answer
+    // (theme.ts; docs/decisions/2026-08-20-home-interview-default.md §OWNER ANSWERED).
     const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
     const door = c.querySelector<HTMLButtonElement>(".v2-verdict-action .hc-front-door")!;
     expect(door, "Home has no primary action").not.toBeNull();
@@ -270,23 +269,18 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
     expect(document.querySelector(".hi-question")).toBeNull();
   });
 
-  // THE COST OF THE DEFAULT, PINNED SO IT CANNOT BE FORGOTTEN (2026-08-20).
-  //
-  // `compy_home_interview` defaults OFF because that is the answer the owner gave twice about the
-  // slot (4d1afa92, 8db70795), and honoring it has a price this test states out loud rather than
-  // leaving for someone to rediscover: with the interview off, UX-1 decision 1's "verdict + ONE
-  // action" front door has NO action. That is not new damage — `compy_home_intake` defaulted off
-  // and had no Settings toggle, so this is the state every real install has been in since UX-1
-  // shipped — but it IS the strongest argument for turning the interview on, and it belongs in
-  // front of him as a measured fact instead of an opinion. If the default flips, this test flips
-  // with it, and docs/decisions/2026-08-20-home-interview-default.md records why.
-  it("default OFF: Home is a verdict with no filled primary — the open cost of the owner's switch", () => {
+  // THE DEFAULT, FLIPPED BY THE OWNER (2026-08-20). The version of this test before the flip
+  // pinned the COST of default-OFF out loud: with the interview off, UX-1 decision 1's "verdict +
+  // ONE action" front door had NO action — the state every real install was in. That measured fact
+  // went in front of the owner and he said YES (docs/decisions/2026-08-20-home-interview-default.md
+  // §OWNER ANSWERED), so this test now pins the rendered consequence from the exact state a fresh
+  // install is really in: nothing in localStorage, and Home leads with the door.
+  it("default ON: a fresh install's Home leads with the front door as its one filled primary", () => {
     expect(localStorage.getItem("compy_home_interview")).toBeNull();
     const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
-    expect(c.querySelector(".hc-front-door"), "the switch is decorative").toBeNull();
-    expect(c.querySelectorAll(".v2-verdict-action")).toHaveLength(0);
-    // What DOES survive the switch, because neither was ever gated on it: the re-run band and the
-    // always-visible crash-rescue entry. Home is quieter, not empty.
+    expect(c.querySelector(".hc-front-door"), "the fresh-install front door is missing").not.toBeNull();
+    expect(c.querySelectorAll(".hc-front-door")).toHaveLength(1);
+    // Neither of these was ever gated on the flag; they ride along in every state.
     expect(c.querySelector(".hc-rerun-band, .v2-measured")).not.toBeNull();
     expect(c.querySelector(".hc-care-entry")).not.toBeNull();
   });
@@ -311,6 +305,35 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
     expect(line.className).toContain("hc-verdict-attention");
     expect(line.textContent).toBe(posture.headline);
     expect(c.querySelector(".v2-verdict h1")!.textContent).toContain(posture.headline);
+  });
+
+  // BUG→GUARD (owner catch 2026-08-20, issue #180 §C — the second catch of this defect class,
+  // after the 2026-07-10 title-header law): the attention posture's sentence is the flagged
+  // CHECK's full detail paragraph. That copy belongs to the check row in Test, and it used to
+  // render verbatim as Home's header dek — fine print under a 40px verdict, pushing the one
+  // primary button 90px down the page. The owner's pick: the headline NAMES the check (the
+  // 2026-07-17 named-headline guard), the paragraph stays in Test, and the measured band routes
+  // there ("Fix in Test →"). This pins the paragraph OUT of Home's header for good.
+  it("attention state: the check's fine-print detail never renders in the header — the dek stands down", () => {
+    const detail =
+      "'Hardware GPU scheduling' — you turned it on with Compy and it's currently off, changed " +
+      "outside Compy (by Windows, another app, or you). Not an error: turn it back on or roll " +
+      "it back in Test — either one clears this.";
+    const attn: GameReadiness = {
+      ...readiness,
+      checks: [
+        { id: "applied-changes", label: "Applied Compy changes", status: "attention", detail, value: null },
+        { id: "b", label: "B", status: "ready", detail: "", value: null },
+      ],
+      ready_count: 1,
+      attention_count: 1,
+    };
+    const c = mount({ ...props, readiness: attn }).container;
+    // No because-line node at all in the attention state…
+    expect(c.querySelector(".v2-verdict-sub"), "attention dek must stand down").toBeNull();
+    // …so the paragraph is nowhere in the header. The named headline stays.
+    expect(c.querySelector(".v2-verdict")!.textContent).not.toContain("turn it back on");
+    expect(c.querySelector(".hc-verdict-line")!.textContent).toContain("Applied Compy changes");
   });
 
   it("header-slop pin: no lede/explainer node anywhere in the console header", () => {

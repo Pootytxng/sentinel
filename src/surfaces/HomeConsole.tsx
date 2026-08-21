@@ -684,8 +684,17 @@ export function HomeConsole({
         </>
       }
       /* The because-line. It qualifies the verdict, so it sits directly beneath it in the
-         header rather than starting the body — progressive disclosure reads top-down. */
-      sub={dekRedundant ? undefined : <span className="hc-verdict-dek">{dek}</span>}
+         header rather than starting the body — progressive disclosure reads top-down.
+         ATTENTION stands it down entirely (owner pick 2026-08-20, issue #180 §C): in that state
+         the sentence is the flagged CHECK's full detail paragraph — check-row copy, not a dek —
+         and printing it under the verdict re-creates the title-header defect the owner caught
+         twice. The headline already NAMES the check (2026-07-17 guard) and the measured band
+         directly below routes to the fix in Test, which keeps the full story. */
+      sub={
+        dekRedundant || posture.tone === "attention" ? undefined : (
+          <span className="hc-verdict-dek">{dek}</span>
+        )
+      }
       /* UX-1 decision 1 + step 3 - ONE ACTION, and now it leads somewhere. "What are you here to
          do?" was the strongest idea in the product and was spending it inside a 9px band the owner
          switched off on sight (2026-08-12). UX-1 promoted it to the single filled primary button;
