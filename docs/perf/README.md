@@ -58,6 +58,12 @@ port, no CDP, no injected script, sampled through Windows' per-process counters.
 burn half a core doing nothing. The comfortable explanation was wrong, and only the bare run could
 say so — which is the whole reason it stays in the suite.
 
+That last sentence was true when it was written and is not true now: the bare run reads
+**3.403%** on `1f2ba660` (2026-08-21). The half-core had a single cause — a full-window ambient
+backdrop that animated forever, ~88% of the whole idle draw — and the same trap caught it twice:
+the comfortable reading was that half a core is just what a Chromium shell costs. It was not.
+`src/ambient-animation-cost-guard.test.ts` guard 6 keeps the next one out.
+
 **Memory is only comparable at equal state.** A fresh boot parked on Home holds ~80 MB less than the
 same app after the room sweep, because the keepalive rooms stay mounted behind `display:none`.
 `idle-bare.json` records a `state` field saying which it was; `idle-visible.json` predates that field

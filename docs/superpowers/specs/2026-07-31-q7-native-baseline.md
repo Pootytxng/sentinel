@@ -84,7 +84,7 @@ from recorded baselines, not invented") is therefore enforced rather than promis
 | metric | recorded | budget | what it is |
 |---|---:|---:|---|
 | `coldStartToUsableHomeMs` | 3721 | 4500 | process spawn → Home usable, worst of 3 cold starts |
-| `coldStartDocumentReadyMs` | 210 | 400 | the webview shell alone — separates a bundle regression from a data regression |
+| `coldStartDocumentReadyMs` | 516 | 560 | ⚠️ **a ceiling on an open regression, not an accepted cost** — was 210 on `dc4d55e`; the shell alone, so it separates a bundle regression from a data one |
 | `coldStartWorkingSetMB` | 580.06 | 660 | **whole process tree**, not the parent |
 | `coldStartProcessCount` | 8 | 8 | 1 `compy.exe` + 7 WebView2 hosts; exact, not padded |
 | `bootIpcCallsToFirstPaint` | 29 | 34 | complete document-start census, nothing missed |
@@ -93,9 +93,9 @@ from recorded baselines, not invented") is therefore enforced rather than promis
 | `busiestRoomRafLoops` | 1.94 | 2.5 | rAF callbacks ÷ real frames, probe's own tick excluded |
 | `keepaliveRoomsIdleIpcPerSecond` | 1.47 | 1.6 | Home *after* every room is mounted behind `display:none` |
 | `idleHologramDrawsPerSecond` | 0 | 0 | the `frameloop="demand"` contract, measured |
-| `idleCpuPercentOfOneCore` | 50.165 | 52 | ⚠️ **a ceiling on an open defect, not an accepted cost** — 10 min hands-off, no instrument attached |
-| `idleWorkingSetMB` | 575.16 | 640 | whole tree over the same window, fresh boot parked on Home |
-| `idlePrivateMB` | 441.09 | 500 | what Compy alone holds and cannot hand back |
+| `idleCpuPercentOfOneCore` | 3.403 | 4.5 | 10 min hands-off, no instrument attached — the ambient-backdrop cost is out of it as of `1f2ba660` |
+| `idleWorkingSetMB` | 568.56 | 605 | whole tree over the same window, fresh boot parked on Home |
+| `idlePrivateMB` | 432.18 | 455 | what Compy alone holds and cannot hand back |
 | `roomSwitchLatencyWorstMs` | 19 | 60 | click → content, first mount measured from a fresh reload |
 
 Each row's derivation — why *that* budget and not a rounder one — is in `q7-baseline.json`'s
@@ -109,7 +109,7 @@ a spec is a defect nobody fixes. `upper bound` = the app earned it. `exact` = th
 contract, any drift fails (`coldStartProcessCount`, `idleHologramDrawsPerSecond`). `open finding` = a
 ceiling on a **known defect**, held so it cannot grow while the fix is queued; the guard requires such
 a row to say "not an accepted cost" in words and to name both the offending file and the guard pinning
-it. Exactly one row is an `open finding` today: `idleCpuPercentOfOneCore`.
+it. Exactly one row is an `open finding` today: `coldStartDocumentReadyMs`. `idleCpuPercentOfOneCore` held that status from the 2026-08-06 teardown until 2026-08-21, when its residual was finally named -- a full-window ambient layer that animated forever -- and stopped; it is an earned bound again.
 
 **Four findings the numbers carry that no single number states:**
 

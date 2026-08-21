@@ -121,44 +121,44 @@
       "budgetKind": "exact"
     },
     "idleCpuPercentOfOneCore": {
-      "value": 23.348,
+      "value": 3.403,
       "unit": "% of one core",
-      "statistic": "consumed processor-seconds over a 10-minute hands-off window, whole process tree, worst of two bare runs against the post-fix build",
+      "statistic": "consumed processor-seconds over a 10-minute hands-off window, whole process tree, no CDP attached",
       "source": "idle-bare.json#cpu.percentOfOneCore",
-      "budget": 26,
-      "budgetKind": "open finding",
+      "budget": 4.5,
+      "budgetKind": "upper bound",
       "recordedAgainst": {
-        "buildStamp": "ff0ce65f · release",
-        "why": "The three idle rows were re-recorded after the idle-cost fixes landed; the other eleven metrics still describe dc4d55e. Traces carry no stamp of their own yet, so this row-level override is the only thing keeping one file from silently describing two builds -- see the trace-stamping item in $comment."
+        "buildStamp": "1f2ba660 · release",
+        "why": "Re-recorded after the ambient backdrop stopped animating; the eleven non-idle metrics still describe dc4d55e."
       },
-      "budgetBasis": "NOT AN ACCEPTED COST, and no longer the same finding. The rAF/animation teardown cut this from 50.165 to 23.348 -- a 54% reduction, reproducible across two 10-minute bare runs (23.095 and 23.348, spread 0.253) and flat across every 30-second window. What is NOT settled is the residual. The subtraction attribution predicted roughly 5% after the fixes and can no longer be used to check that: attaching the instrument to the post-fix build HALVES the number it reports (11.694% over an equivalent window) and its per-animation split has gone incoherent -- one band measured -2.294%, which is a validity tell, not a saving. Independent 3-minute bare runs of the same build then read 16.686 / 12.233 / 10.508, and the occlusion probe found a foreign application owning the foreground for its entire window, so the 2x spread most likely tracks whether Compy's window is visible or covered (WebView2 throttling compositing) rather than anything Compy executes -- LIKELY, not proven, because the desk was not exclusive. Budget = worst post-fix reading (23.348) + ~11%, deliberately set from the WORST so it cannot understate the cost while the spread is unexplained. Owed before this row becomes an upper bound: a controlled re-measure on an exclusive desk with window state as an explicit variable. The fixes themselves are held by src/shell-idle-guard.test.ts; the instrument that can no longer attribute the residual is scripts/q7-probe.mjs."
+      "budgetBasis": "THE OPEN FINDING IS CLOSED, and this row is an earned bound again. The residual that the 2026-08-19 basis called unsettled has a name: `body::before` drifted forever, and two settled attribution runs on 2026-08-21 measured it at ~88% of everything the app burned sitting idle (22.392% of a core -> 2.067% with that one animation frozen; 21.178 -> 1.681 on the run beside it). Stopping it took the honest whole-app number from 20.853% on 584654c8 to 3.403% here -- same desk, same instrument, same 10-minute hands-off window, no CDP attached. The old 26 was loose enough to hide the entire cost, which is why it is not being left where it was. Budget 4.5 = recorded + 20% rounded up to the next half point, which in practice is +32% -- wider in relative terms than its siblings on purpose: at a number this small the same absolute jitter is a much larger fraction, and the measurement is still ONE rig with window state unproven as a variable (the 2026-08-19 basis named a 2x spread on 3-minute runs that most likely tracked occlusion). What it will no longer do is absorb another always-on animation. The shape rule is held by src/ambient-animation-cost-guard.test.ts guard 6 -- a document-level layer gets a bounded run or none -- and the evidence rule by src/perf-evidence-integrity-guard.test.ts."
     },
     "idleWorkingSetMB": {
-      "value": 605.76,
+      "value": 568.56,
       "unit": "MB",
       "statistic": "max of 20 samples over 10 minutes, whole process tree, fresh boot parked on Home",
       "source": "idle-bare.json#memory.workingSetMB.max",
-      "budget": 640,
+      "budget": 605,
       "budgetKind": "upper bound",
       "recordedAgainst": {
-        "buildStamp": "ff0ce65f · release",
-        "why": "Re-recorded with its sibling idle rows against the post-fix build; the other eleven metrics still describe dc4d55e."
+        "buildStamp": "1f2ba660 · release",
+        "why": "Re-recorded with its sibling idle rows after the ambient backdrop stopped animating; the eleven non-idle metrics still describe dc4d55e."
       },
-      "budgetBasis": "Worst sample of the bare run (605.76 MB) plus ~6%. Up 30 MB from the pre-fix 575.16, which is the expected shape of the trade that was made: standing the animations down moves work off the CPU and onto retained compositor layers. State is part of the number and two runs are not comparable without it -- this is a FRESH boot that never left Home, whereas the instrumented idle trace ran after the room sweep with every keepalive room still mounted behind display:none, roughly 80 MB more of the same app alive. Observed and deliberately not called a leak: working set drifted 570.65 -> 601.35 MB across the window (median 600.49), which one 10-minute run cannot distinguish from allocator behaviour; proving it either way needs max-at-10/30/60-minutes from one continuous run.",
+      "budgetBasis": "Worst sample of the bare run (568.56 MB) plus ~6%, same derivation as before. The previous basis recorded 605.76 MB and called the +30 MB over the pre-fix 575.16 the price of the 2026-08-06 trade -- work moved off the CPU and onto a retained compositor layer. Stopping the animation drops `will-change: transform` with it, the promoted full-window texture goes away, and the number lands at 568.56 MB: the 30 MB came back and then some. Same statistic, same fresh-boot-parked-on-Home state, same 10-minute window, so those two runs are comparable; a run taken after a room sweep is not. The 570.65 -> 601.35 MB in-window drift the last basis flagged and declined to call a leak did not repeat at this size, which is consistent with allocator behaviour around the promoted layer rather than with a leak; it still takes max-at-10/30/60-minutes from one continuous run to settle that question.",
       "headroomNote": "34 MB of headroom left against a budget that was set at 640 pre-fix and is deliberately NOT being raised to restore comfort -- if the next change spends the rest of it, that is the signal to look, not to edit this line."
     },
     "idlePrivateMB": {
-      "value": 535.14,
+      "value": 432.18,
       "unit": "MB",
       "statistic": "max of 20 samples over 10 minutes, whole process tree, fresh boot parked on Home",
       "source": "idle-bare.json#memory.privateMB.max",
-      "budget": 560,
+      "budget": 455,
       "budgetKind": "upper bound",
       "recordedAgainst": {
-        "buildStamp": "ff0ce65f · release",
-        "why": "Re-recorded with its sibling idle rows against the post-fix build; the other eleven metrics still describe dc4d55e."
+        "buildStamp": "1f2ba660 · release",
+        "why": "Re-recorded with its sibling idle rows after the ambient backdrop stopped animating; the eleven non-idle metrics still describe dc4d55e."
       },
-      "budgetBasis": "Worst sample (535.14 MB) plus ~5%. This one breached its old 500 MB budget and the per-sample series is why it was NOT quietly re-stated as a median to make it fit: private bytes read 414, then 535 at t+60s, then 433, and then hold within 4 MB of 434 for the remaining nine minutes. The max is a single allocation spike just past the settle window, not a steady state and not a leak -- but max is still the statistic that catches a leak, so the row keeps it and the budget moves once, with the transient named. A second spike, or a median that climbs toward the max, means something different and should fail. Recorded alongside working set because the two answer different questions: working set includes shared and mapped pages the OS can reclaim, private bytes is what Compy alone is holding and cannot give back -- a working set that grows while private bytes hold flat is the OS, not the app."
+      "budgetBasis": "Worst sample (432.18 MB) plus ~5%. The previous basis had to explain a max: private bytes spiked to 535.14 MB just past the settle window and then held within 4 MB of 434 for the remaining nine minutes, so the row kept max and named the transient. This run has no such gap -- max 432.18 against a median of 426.32 MB -- so max and steady state now agree, and the budget is set against a number that is actually the shape of the app at rest. Max stays the statistic because it is the one that catches a leak. A spike returning, or a median that climbs toward the max, means something different and should fail. Recorded beside working set because they answer different questions -- working set includes shared and mapped pages the OS can reclaim, private bytes is what Compy alone is holding and cannot give back."
     },
     "roomSwitchLatencyWorstMs": {
       "value": 19,
