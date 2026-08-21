@@ -6,6 +6,7 @@ import { describe, it, expect, vi } from "vitest";
 // machine load, not about the copy being scanned. Raising it changes nothing this guard asserts.
 vi.setConfig({ testTimeout: 60_000 });
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
+import { execFileSync } from "child_process";
 import { join } from "path";
 
 // OUTBOUND-CLAIM GUARD (2026-08-03). Replaces the receipts-only copy guard.
@@ -57,6 +58,15 @@ const EXT = /\.(ts|tsx|js|jsx|mjs|json|html|astro|md|css|rs)$/;
 const EXCLUDE_DIRS = new Set([
   "node_modules", ".git", ".github", "dist", "dist-web", "dist-site", "target",
   "coverage", "__snapshots__", ".vite", ".astro", ".claude",
+  // .agents is the Codex lane's GITIGNORED mirror of .claude/skills — same content class as
+  // .claude, which is already excluded above, and it is not in git at all, so nothing in it can
+  // ship to anyone. It broke a push on 2026-08-21: a Codex run wrote 108 files into this worktree
+  // mid-session and gate-drift-audit/SKILL.md:42 says "no updater" while auditing whether that row
+  // is still true. The guard flagged it, the full suite went red, and NOTHING PUBLISHABLE HAD
+  // CHANGED. Worse, the failure is machine-dependent: the directory only exists where Codex has
+  // run, so the same commit is green on one desk and red on another. That is the #171 class.
+  // The exclusion is asserted safe below — see "the .agents mirror is gitignored".
+  ".agents",
   // src-tauri/gen is Tauri's generated schema mirror of capabilities/ — authored copy lives in the
   // source it is generated FROM, and flagging both reports one defect twice.
   "gen",
@@ -545,5 +555,45 @@ describe("outbound tier separation", () => {
       text: "Nothing is uploaded unless you pick a case and approve the exact file we send.",
     });
     expect(auditOutboundTiers(snap)).toEqual([]);
+  });
+});
+
+// bug→guard (2026-08-21): an excluded directory is only safe to exclude while it CANNOT ship.
+//
+// .agents was added to EXCLUDE_DIRS because it is the Codex lane's gitignored mirror of
+// .claude/skills. That reasoning has one load-bearing premise -- it is not in git -- and premises
+// rot silently. If someone commits .agents/ later, it becomes publishable text that this guard has
+// been told to look away from, which is precisely the corpus hole the header above says killed the
+// FIRST version of this guard ("The logic was never the weak part. The CORPUS was.").
+//
+// So the exclusion asserts its own premise instead of trusting a comment.
+describe("corpus exclusions that rest on 'it cannot ship' must prove it", () => {
+  const tracked = (path: string): string[] =>
+    execFileSync("git", ["ls-files", "--", path], { encoding: "utf8" })
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+  it("the .agents mirror is gitignored, which is the only reason skipping it is safe", () => {
+    expect(
+      tracked(".agents"),
+      "EXCLUDE_DIRS skips .agents because it is a gitignored local mirror that cannot reach " +
+        "anyone. These files are now TRACKED, so that reasoning no longer holds: either drop " +
+        '".agents" from EXCLUDE_DIRS so its copy is scanned like every other shipped surface, or ' +
+        "stop tracking it. Do not widen the exclusion.",
+    ).toEqual([]);
+  });
+
+  it(".claude rests on the same premise and is checked the same way", () => {
+    // .claude IS partially tracked (settings, hooks, skills) -- but it is agent tooling that runs
+    // on a developer machine, never copy shipped to a user, so its exclusion rests on a different
+    // premise than .agents'. This test pins the distinction so the two are not merged by someone
+    // tidying the list: if .claude ever lands in the built app, that is the thing to catch.
+    const shipped = tracked("src-tauri/resources/.claude").concat(tracked("site/.claude"));
+    expect(
+      shipped,
+      ".claude copy is now bundled into a shipped surface, so excluding it from this guard hides " +
+        "live claims from the scan. Scan it, or stop shipping it.",
+    ).toEqual([]);
   });
 });
