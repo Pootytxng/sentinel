@@ -4,6 +4,17 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-08-21 - the 63db50d2 Live-pass desk-build Snapshot row, moved verbatim (byte budget)
+
+Moved out of docs/RELEASE_STATE.md when the 584654c8 build (the Test intimidation pass) landed the next morning.
+Byte-for-byte except the two relative links that would break one directory deeper: the `docs/`-relative
+path now starts with `../`, and the self-link to this file is a code span, the same exception the
+835d8868 move below records. Nothing else in the row was touched.
+
+| Gate | State | Proof |
+|---|---|---|
+| **Owner-installed version + embedded stamp** | **0.9.26 desk build, embedded stamp `63db50d2`** — built 2026-08-20 by `npm run tauri build` from worktree `sentinel-home-room` at `lane/rooms-live` (`63db50d2`; the product changes are `0345f564` + `63db50d2`), installed silently by Claude via `scripts/ship-reinstall.ps1 -VerifyRuntime`, one installer on the Desktop, installer `Compy_0.9.26_x64-setup.exe` SHA-256 **`2C000748934FEE4EE883636D5495D5F057B3EB3D90A0D26B447AFEBC7D0B935E`**. **Live == build proved by runtime probe, never an exe hash** — runtime proof `63db50d2 · release · shell 0.9.26` on the first attempt, 0 transient retries. **This binary carries the second instrument-room intimidation pass — Live** ([UI_VISION_BACKLOG.md](../UI_VISION_BACKLOG.md) ⭐ STANDING DIRECTIVE; Home 2026-08-06, History `8ba6a6d1`, Test is next): the deck's debrief under the frametime scope was one all-caps mono string that wrapped mid-thought and is now a template — a plain sentence, three boxed value cells (Avg FPS / 1% low / Spikes), one caveat line — at 19 words against the 21 it replaced (guarded ≤ 21); both empty scopes say "Press Start capture, then play — the line draws here." under the no-signal eyebrow (`Oscilloscope` `emptyHint`, omitted = unchanged for every other caller); the four readouts are a fixed 2×2 instead of an auto-fit that orphaned SPIKES. `63db50d2` on top trims the two caveats the first review measured at +68% words. **Self-review VERDICT: PASS** on this installed build (round 2, 10/10 — native 1500×980 capture; hint 6.04:1 and caveat 6.83:1 on the real tile ground; three cells one row at 1500 and 1100 px; hero hollow 119 px, was ~200; Health / History / Test unchanged; shots `ui-sweep/shots/live-after/`, before in `ui-sweep/shots/rooms-before/`). It supersedes desk build **`8ba6a6d1`** (the History pass, #188), byte-preserved with **`0808e33e`**, **`ab54f1e4`**, **`1d5b3c4c`**, `75849be1`, `835d8868`, `aac90cd7`, `402b0080`, `40682344`, **`5e64074c`** (THE PUBLISHED BUILD), `75880de1`, `2f79febb` and `7f151d2c` in `archive/RELEASE_STATE_HISTORY.md` (this file). | `node scripts/verify-release-state.mjs` (check 7) · `Select-String -Path "$env:LOCALAPPDATA\Compy\compy.exe" -Pattern 63db50d2` · HKCU uninstall `DisplayVersion` |
+
 ### 2026-08-20 - the 8ba6a6d1 History-pass desk-build Snapshot row, moved verbatim (byte budget)
 
 Moved out of docs/RELEASE_STATE.md when the 63db50d2 build (the Live intimidation pass) landed the same night.
