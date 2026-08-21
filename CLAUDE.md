@@ -25,7 +25,7 @@
 
 Compy is the **PC doctor for everyday, non-technical Windows gamers**: the first place a user goes
 after a crash, freeze, slowdown, or unexplained hiccup. It gathers local evidence, explains what is
-known versus only suspected, and guides the safest next test or recovery. Optimization remains a
+known versus only suspected, and guides the safest next test or recovery. Optimization/Performance remains a
 major specialty, but it is secondary to diagnosis and recovery. The durable engineering identity is
 still *"a rollback-first Windows configuration safety layer that happens to optimize."* UX stays
 plain-English, hardware-aware, safe + reversible by default. **Never invent or assume hardware
@@ -77,11 +77,12 @@ failed candidate before reset or abandonment. `AskUserQuestion` is for genuine f
 territory** only; engineering forks you resolve yourself and record the reasoning.
 
 **Role specialization + proof order:** Claude Code is the default implementation owner; Codex is the
-default independent reviewer. Either may become the one active writer only by explicit handoff under
-`docs/WORK_CONTROL.md`, after inspecting inherited repo, remote, worktree, dirty-state, and process
-truth. Exact required gates cannot be substituted: extra checks are supplemental, and environment inability
-is a blocker, not a pass. Run `scripts/work-control-gate.mjs` before any proof-dependent GitHub state
-transition; when practical, the non-writing model gives the final independent review.
+default independent reviewer. Either becomes the one active writer only by explicit handoff under
+`docs/WORK_CONTROL.md`, after inspecting inherited repo, remote, worktree, dirty-state and process
+truth. Exact required gates cannot be substituted; environment inability is a blocker, not a pass.
+Run `scripts/work-control-gate.mjs` before any proof-dependent GitHub state transition. **One
+worktree per writer**, shared checkouts read-only; the release/install mutexes enforce exclusion,
+they never grant ownership.
 
 **Owner-bound in this repo** (on top of the universal floor in `~/.claude/CLAUDE.md` §3):
 1. **Secrets / signing** — the Ed25519 private key or any secret never enters the repo / `.env*` / CI.
@@ -101,7 +102,7 @@ ship-to-others boundary. Rigor is unchanged — verification is never skipped.
 ### TASTE IS MINE TO EXERCISE, HIS TO OVERRULE (owner decree 2026-08-07)
 
 Aesthetic calls are **not** owner-gated and must never be parked on him by default — his words:
-*"i do not want taste calls to exclusively fall on me id like to see youre ideas and consider your
+*"i do not want taste calls to exclusively fall on me id like to see your ideas and consider your
 taste calls as well."* Make the call, ship it, and hand him a **viewable before/after**
 (`SendUserFile`, per `.claude/skills/self-review`) so he can veto on sight — deciding is mine,
 seeing is his, and prose describing a look is neither. Ask first only where taste stops being taste:
@@ -251,11 +252,8 @@ returns false, so the real `runas` branch is live (not the direct-spawn fallback
 **Full policy: `claude/TOKEN_ECONOMY_LAW.md` (HQ); it wins over this and
 `.claude/USAGE_ECONOMICS.md`.** Carried context is **85% of measured spend**, output 15%.
 
+The universal half is `~/.claude/CLAUDE.md` §6–7; it loads every session and is not repeated here.
+
 1. **Current state only** — history to `docs/archive/*`: move, never delete, leave a pointer.
    `scripts/doc-budget.ps1` enforces LINE and BYTE budgets; a FAIL means archive first.
-2. **Read big docs by section** (`big-read-guard` DENIES unbounded reads); **minimal edit anchors**.
-3. **Delegate anything VERBOSE to a subagent**, hard or not: fresh context window, only the summary
-   returns, so what it reads never enters this prefix.
-4. **`/clear` between unrelated tasks · one lane, one directory · never change model, effort, plugin
-   or MCP server mid-session** — each rebuilds the cached prefix.
-5. **`scripts/usage-audit.mjs` is the authority.** Extend that audit; never build a parallel monitor.
+2. **`scripts/usage-audit.mjs` is the authority.** Extend that audit; never build a parallel monitor.

@@ -48,6 +48,9 @@ flowchart LR
 | Conversation context | Chat only; never authoritative |
 
 Do not maintain a second status board in Markdown, chat, a VS Code note, or another tool.
+The forbidden second-board shapes include `LANES.md`, `JOURNAL.md`, inbox Markdown files, and
+per-tool task ledgers. Session-local mutex recovery state may record only the active process and
+crash condition; it is never an assignment, heartbeat lease, or source of takeover authority.
 
 ## Roles
 
@@ -142,6 +145,10 @@ The minimum Project fields are `Lane`, `Worktree / branch`, `Next action`, `Clai
 
 ## Collision rules
 
+**A separate worktree or clone is mandatory for every active writer.** A shared checkout is
+read-only, even when writers claim different files or branches; the exact exclusive folder and
+branch belong in the issue claim. Read-only reviewers may inspect a writer worktree.
+
 1. **One issue, one active write owner.** Reviewers may work read-only in parallel.
 2. **One folder, one writer.** A different branch does not make concurrent writes in the same
    working folder safe.
@@ -156,6 +163,37 @@ The minimum Project fields are `Lane`, `Worktree / branch`, `Next action`, `Clai
    session merely to clear a claim.
 7. **No chat-only handoff.** A session is not handed off until the issue records evidence, remaining
    work, and the exact next action.
+
+## Windows-session collision guards
+
+The Project claim and linked issue remain authoritative. The Windows named mutexes below enforce
+only one process in the current Windows logon/Terminal Services session inside each critical
+section; acquiring one never creates a claim, renews a claim, or permits takeover. The `Local\`
+namespace deliberately does not promise host-wide exclusion across a separate console or RDP
+session. Those sessions must still serialize through the Project claim and linked issue.
+
+- `Local\Compy.ReleasePipeline.v1` is acquired by `scripts/release.ps1` before its first
+  clean/sync/version read and is held through exit for prepare, prove, and publish.
+- `Local\Compy.InstalledBinary.v1` is acquired by `scripts/ship-reinstall.ps1` before any installed
+  binary or app lifecycle work and is held through replacement, proof, and final relaunch/exit.
+- A second process in the same Windows session fails immediately. It does not wait, steal, expire,
+  or reclaim either mutex.
+
+Normal exit removes the process owner breadcrumb while still holding the mutex. A crashed process
+leaves that breadcrumb; kernel-reported abandonment also creates a persistent recovery-required
+marker under `%APPDATA%\Compy\work-control\process-mutex`. Either condition blocks every retry.
+These files are safety interlocks only, not a local board or lease.
+
+Recovery is read-only first: run `scripts/inspect-process-mutex-recovery.ps1 -Resource <name>`,
+inspect the named process, worktree, Git state, release receipts/transaction state, and
+installed-build state, then post the generated evidence shape with concrete checked evidence on
+the linked Active Work Control issue. Clearing requires `-Clear` plus that issue-comment URL. The
+clear path reads GitHub and fails closed unless the URL is a live comment on the linked open
+`work-control` issue and records the exact resource, mutex name, recovery-state SHA-256, concrete
+inspection evidence, and `Decision: safe to clear`. It rechecks the state hash while holding the
+mutex before removing anything. Time, claim expiry, process death, a free mutex, an unreachable
+GitHub API, or a plausible-looking URL never clears recovery state automatically; the
+verified-takeover rules below still apply.
 
 ## Status meanings
 

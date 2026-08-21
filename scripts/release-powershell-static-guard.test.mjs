@@ -19,6 +19,28 @@ describe("permanent release PowerShell static guard", () => {
     expect(result.files).toContain("scripts/lib/release-publish-adapter.ps1");
   });
 
+  it.each([
+    ["release pipeline", "scripts/release.ps1", "releasePipelineMutex"],
+    ["installed-binary path", "scripts/ship-reinstall.ps1", "installedBinaryMutex"],
+  ])("rejects deleting the full-process %s mutex acquisition", (_label, file, variable) => {
+    const original = read(file);
+    const acquisition = new RegExp(
+      String.raw`\$${variable}\s*=\s*Enter-CompyProcessMutex[\s\S]*?try\s*\{`,
+    );
+    const bypassed = original.replace(acquisition, "try {");
+    expect(bypassed).not.toBe(original);
+    const result = scanReleasePowerShell({ overrides: { [file]: bypassed } });
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          file,
+          rule: "mutex-envelope",
+        }),
+      ]),
+    );
+  });
+
   it("rejects the exact historical CDP NativeCommandError pattern", () => {
     const file = "scripts/lib/runtime-proof.ps1";
     const mutated =

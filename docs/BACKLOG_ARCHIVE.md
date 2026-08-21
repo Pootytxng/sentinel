@@ -2854,3 +2854,53 @@ rule every prior rename followed.
 - **Not in any published build.** Ships with the next cut (fleet is on v0.9.26), and owes a
   self-review on the installed binary before anyone calls it live.
 
+## ▶ NEXT UP rows that were FINISHED RECORDS, moved here 2026-08-21
+
+Moved verbatim out of `docs/BACKLOG.md`'s ▶ NEXT UP queue during the full-project overview of
+2026-08-21. Every row below is closed work. They were archived because a queue whose items are
+mostly *records of completed work* reads as full when the real queue is thin, which is exactly how
+the owner's own unqueued bug report stayed unqueued. Nothing here is outstanding; the residual
+clauses that WERE outstanding (#156's unnamed lock holder, #128's never-held-during-a-real-ship
+proof) stayed behind in the live queue rather than travelling here.
+
+1. **C-13(b) self-review debt.** `5fab9e79` (the accent-menu keyboard contract) was in no built binary
+   and owed a `self-reviewer` pass on an installed build. *Why it matters:* a UI change is not done
+   until someone has LOOKED at it, and keyboard focus is exactly what a green test cannot see look
+   wrong. **Discharged by this lane — verdict recorded on the C-13 row below.**
+2. **#171 · `verify-local` invents failures under concurrent lane load** — **ROOT-CAUSED AND FIXED
+   by `lane/gate-171` (2026-08-20), closes at merge.** Three site suites each rebuilt `site-app/dist`
+   from separate vitest workers; two `astro build`s in one `dist/` delete each other's
+   intermediates, and Node 24 on Windows turns that exit into a `0xC0000409` abort
+   (nodejs/node#56645). Reproduced on demand (2/2 before, 0/3 after). Fix: one cross-process lock
+   around every site build with the freshness check inside it (`scripts/stage-dist-site.mjs`
+   `ensureSiteAppBuilt`), plus the gate re-runs a Node-hosted check ONCE on exactly that abort
+   code, loudly. Guards: `scripts/site-build-collision-guard.test.mjs`,
+   `scripts/local-gate-guard.test.mjs` §"Node-runtime-abort re-run". *Still unverified:* the one
+   `npm run build` abort in the issue shares the death signature but its trigger was not captured;
+   the re-run covers it, and a repeat now prints a WARN naming #171.
+4. **#126 · retire the 10 unmerged origin lanes + 2 fully-merged refs — PART-DISCHARGED 2026-08-21,
+   not done.** *Why it matters:* this IS the "get back to linear" item — every stranded ref is one
+   more thing each lane must disposition before its own audit can go green. **Done:** all fifteen
+   refs re-proven by merge-tree at `f8969e5f`, and the three that proof could retire are deleted from
+   `origin` (`claude/foreground-courtesy-handoff-82687b` + `docs/design-foundation` MERGED,
+   `claude/checklist-disk-item-c5660e` SUPERSEDED) — 15 refs → 12, evidence in
+   [`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md). **Left:** nine non-`PRESERVE` refs, and **not
+   one is retirable by proof** — two are open PRs another lane owns (#160/#163), one is a Codex
+   claim, and the rest need an owner product-scope call (bklit design system · user-feedback Lab
+   recovery · quiet-pit-wall half B) or a per-file landing (review-consolidation, tool-shed-hygiene,
+   lab-49-parity-port). What remains is a decision queue, not a cleanup queue, so the row stays open
+   rather than being closed on the easy two-thirds.
+5. **#156 · a silent NSIS install exited 0 without replacing `compy.exe` — GATED 2026-08-21, cause
+   still unproven.** *Why it matters:* without that gate the owner would have been handed a build
+   that was not the build. **Done:** `ship-reinstall.ps1` grew two gates around the install — **1b**
+   proves `compy.exe` is exclusively openable (`FileShare::None`, 20s deadline) *before* the
+   installer runs, because "every compy process is gone" and "the exe is writable" are different
+   facts and NSIS silently SKIPS a file it cannot overwrite; **3b** compares the post-install mtime
+   *and* size against the pre-install identity and, on an exact match, retries the install **once,
+   loudly** (the accepted #171 precedent) before throwing. The step-4 stamp gate is untouched — the
+   issue forbids loosening it, and it still owns the verdict. Guard:
+   `scripts/release-pipeline-guard.test.mjs` §"#156", non-vacuous (every needle absent pre-fix).
+   **Left:** the flake was never reproduced, so the *holder* of the lock is still unnamed — the
+   gates close the suspected path and name the skip at its source, which is not the same as proving
+   the cause. Row stays open until a real ship either passes clean or trips gate 1b and names it.
+6. **#128 · thin local release/install collision guard — LANDED 2026-08-21, never yet held during a real ship.** *Why it matters:* two agents can no longer race the same release or the same installed exe, and neither can quietly take the other's turn. It was written 2026-08-14 on `agent/local-collision-guard`, never left this disk, and is merged forward here. `release.ps1` holds `Local\Compy.ReleasePipeline.v1` and `ship-reinstall.ps1` holds `Local\Compy.InstalledBinary.v1`, each across the whole entrypoint, released on normal *and* error exit. A second process fails closed immediately; a **killed** holder fails closed *permanently* — no lease, no expiry, no takeover — until an operator runs `scripts/inspect-process-mutex-recovery.ps1` and supplies a live comment on the open `work-control` issue carrying the exact recovery-state SHA-256. **Fixed on the way in:** the state root composed itself from `$env:APPDATA`, which `data-root-guard.test.mjs` (#130) rejects — the branch predates that guard. It now resolves through `Get-CanonicalCompyDataRoot`, which matters here more than anywhere: a redirected shell would have put two lanes' `owner.json` in two different roots, each seeing a clean slate, and both proceeding. **Left:** the locks have never been held during an actual release or ship — #128 forbids running one, so that proof arrives with the next real ship.

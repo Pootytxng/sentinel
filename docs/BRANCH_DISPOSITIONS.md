@@ -63,35 +63,38 @@ trunk, and a worktree's `main` pointer can sit weeks behind without anyone notic
 
 ## The refs
 
-Swept 2026-08-04 against `main` @ `1a513cb`; the `origin/claude/*` rows added 2026-08-05 against
-`origin/main` @ `6712c14`, and re-proven the same day against `origin/main` @ `2e5365d` once the
-three-PR stack (#69 → #71 → #72) had landed. Twelve lane refs are **gone rather than listed MERGED**,
-pruned on landing per the rule above — `ci-entry-mainmodule-posix`, `ledger-honesty-optimize-station`,
-`ci-health-reporter`, and the `claude/*` lanes behind PRs
-[#74](https://github.com/Pootytxng/sentinel/pull/74) · [#78](https://github.com/Pootytxng/sentinel/pull/78) ·
-[#79](https://github.com/Pootytxng/sentinel/pull/79) · [#80](https://github.com/Pootytxng/sentinel/pull/80) ·
-[#81](https://github.com/Pootytxng/sentinel/pull/81) · [#82](https://github.com/Pootytxng/sentinel/pull/82) ·
-[#83](https://github.com/Pootytxng/sentinel/pull/83) · [#84](https://github.com/Pootytxng/sentinel/pull/84) ·
-[#85](https://github.com/Pootytxng/sentinel/pull/85).
-A landed ref's row is its own tombstone: prune the ref and the row in the same commit that records
-the merge, so this table only ever lists refs that still exist.
+Earlier sweeps (2026-08-04 · 2026-08-05 · 2026-08-12) moved to
+[`archive/BRANCH_DISPOSITION_SWEEPS.md`](archive/BRANCH_DISPOSITION_SWEEPS.md) on 2026-08-21 under
+TOKEN LAW §1 — every ref they dispositioned is long gone; this file keeps the CURRENT sweep only.
 
-**Swept again 2026-08-12 against `origin/main` @ `4de1cba4` (tree `9e5a790`)** — the sweep the rule
-above had been asking for, since a `MERGED` row is perishable and fourteen of them had been sitting
-here through several trunk moves. Each of the seven `MERGED` refs was re-proven a no-op with
-`git merge-tree --write-tree origin/main origin/<ref>` at that tree before deletion; the seven
-`SUPERSEDED` refs kept the file-level evidence recorded when they were dispositioned, which is what
-`SUPERSEDED` means and what re-proving cannot add. All fourteen were deleted from `origin` and their
-rows dropped in this commit: `claude/harness-context-cleanup-700535`, `fix/fps-pid-identity`,
-`recovery/codex-019fb092`, `integration/v0.9.8-hardened`, `release/v0.9.9-candidate`,
-`recovery/local-v0.9.8-d9ced24`, `release/0.9.1`, `codex/fix-main-ci-site-stage`,
-`codex/work-control`, `chore/ci-encoding-and-state-truth`, `i18n/zh-CN`, `latency-capture`,
-`docs/claude-md-split`, `claude/nodejs-background-execution-fd4def`. Fourteen refs remained at that
-sweep and none of them is `MERGED` or `SUPERSEDED`. A fifteenth, `origin/claude/bento-conversion`,
-appeared later the same day, landed as PRs [#117](https://github.com/Pootytxng/sentinel/pull/117) /
-[#120](https://github.com/Pootytxng/sentinel/pull/120) (merged 2026-08-13), and was deleted from
-`origin` with its row dropped in this commit — a merged-and-deleted ref carries its evidence in the
-PRs and needs no row.
+**Swept again 2026-08-21 against `origin/main` @ `f8969e5f` (tree `37d1907`)** — issue
+[#126](https://github.com/Pootytxng/sentinel/issues/126)'s re-proof, run on all fifteen refs, not
+remembered from the rows. `git merge-tree --write-tree origin/main origin/<ref>` at that tree: three
+are no-ops (one of them the `PRESERVE` beta ref, which stays), twelve carry work. **Three retired —
+two `MERGED`, one `SUPERSEDED` on file-level evidence** — deleted from `origin` with their rows
+dropped in this commit:
+
+- `claude/foreground-courtesy-handoff-82687b` — **MERGED**, no-op at this tree; landed as PR
+  [#101](https://github.com/Pootytxng/sentinel/pull/101) (2026-08-11). Its row still read CLAIMED.
+- `docs/design-foundation` — **MERGED**, no-op at this tree; landed as PR
+  [#107](https://github.com/Pootytxng/sentinel/pull/107) (2026-08-12). Its row still read CLAIMED.
+- `claude/checklist-disk-item-c5660e` — **SUPERSEDED** (not a no-op; content reached `main` by
+  another path, which is exactly what that disposition means). Both of its contributions are on the
+  trunk: **A_disk** is in `docs/OWNER_ACTION_CHECKLIST.md` and has since been *closed* (2026-08-11/12)
+  and archived (2026-08-18), and the duplicate `origin/docs/design-foundation` row it existed to drop
+  is dropped by this same commit. Nothing of it is left to land, and no worktree held it.
+
+Neither open PR was touched: [#160](https://github.com/Pootytxng/sentinel/pull/160)
+(`lane/usage-audit-disk-bloat`) and [#163](https://github.com/Pootytxng/sentinel/pull/163)
+(`lane/cleanup-train-2026-08-20`) belong to other lanes — hands off, not adjudicate. **Nine
+non-`PRESERVE` refs remain, and not one of them is retirable by proof**: each needs either an owner
+product-scope call or the lane that owns it. #126 is therefore part-discharged, not done — the
+proof-retirable refs are gone, and what is left is a decision queue, not a cleanup queue.
+
+**One live finding surfaced by the re-proof, filed rather than fixed** — `main`'s `site/llms.txt:5`
+prices the product wrongly and is live on `compy.gg`; the corrected line sits unlanded on
+`claude/review-consolidation-structure-9d13f2`. Owner-gated (price wording + `site/**` auto-deploys):
+[`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) §B6.
 
 | ref | disposition | evidence |
 | --- | --- | --- |
@@ -105,11 +108,9 @@ PRs and needs no row.
 | `origin/claude/review-consolidation-structure-9d13f2` | UNLANDED | A sibling Claude Code worktree branch, 7 commits ahead / 27 behind `main`. Carries four things `main` does not have: `docs/decisions/2026-08-04-startup-term-analysis-review.md` (absent from `main`), the `CLAUDE_CODE_AUTO_COMPACT_WINDOW` 150k→300k bump, Rust test-only coverage in `stutter.rs` / `capture.rs` / `benchmark_trial.rs`, and **a one-line `site/llms.txt` fix — `main` still says "free desktop app", which contradicts the owner's 2026-07-21 monetization decree and is currently live on `compy.gg`.** Predates `support_evidence.rs`, so merging it whole would delete 1,074 lines; the landing path is per-file, not a merge. Not this lane's branch — dispositioned, untouched. |
 | `origin/design/quiet-pit-wall` | UNLANDED | **Partially landed.** 22 files / 5147 insertions vs merge-base `36bdf6b`, issue [#49](https://github.com/Pootytxng/sentinel/issues/49). **Half A landed** — the inert `[data-qpw="on"]` token + component-contract layer, its two guard suites, the four prototypes + inventory docs, the `vitest.config.ts` `NODE_ENV` pin, and the `ExperimentBench.css` motion-gate fix. Applied in this commit by `git checkout <branch> -- <paths>`. Not a merge — the branch is ~100 files behind `main`, and merging would drag stale copies. **Half B held — owner territory:** the branch flips `use-motion.ts`'s default from `"full"` to `"system"`, reversing the owner's explicit 2026-06-19 decision; on his own WebView2 (`prefers-reduced-motion: reduce`) that makes the whole app static. Welfare check filed in `OWNER_ACTION_CHECKLIST.md` §D. Held with it: `use-motion.test.ts`, the two `settings.json` locales, `Settings.test.tsx`, the `Walkthrough.tsx` comment. The branch's own guard asserted the flipped default; that assertion was re-pinned to the owner's decision rather than landed. |
 | `origin/feat/lab-49-parity-port` | UNLANDED | PR [#89](https://github.com/Pootytxng/sentinel/pull/89) closed unmerged 2026-08-08; `93c931a3` sits one commit past the local worktree tip `7e6cd4d7`, no force-push (ancestry intact). The rig half was re-cut into #90, but **three files here exist on neither `main` nor #90** — `scripts/verify-like-ci.mjs`, `scripts/lib/ci-steps.mjs`, `scripts/verify-like-ci.test.mjs`, the local CI runner built when hosted Actions hit exhausted free minutes. **That runner is DECIDED: it dies with its PR** (2026-08-11). `main` reached the same goal by a different road and is now a superset — `scripts/verify-local.ps1` runs the same checks, is actually wired to `.githooks/pre-push` and `npm run verify:local`, probes whether `node_modules` satisfies the manifest (`scripts/deps-satisfied.ps1`), and `scripts/local-gate-guard.test.mjs` already carries the drift catcher that was the runner's real value: every `run:` step in `ci.yml` that is not declared setup must be covered locally, and the one deliberate difference (`stage:site`) is written down with its reason rather than silently missing. Landing a second runner in Node beside the PowerShell one would mean keeping two things in step with `ci.yml` instead of one. Also the parent of the uncommitted `ConfirmDialog` z-index + focus-ring fixes in `C:\Users\Kuya\code\sentinel-quietpitwall` (see `docs/SESSION_HANDOFF.md` §2). |
-| `origin/claude/checklist-disk-item-c5660e` | CLAIMED | Claude lane, same session as the two rows below. Docs only: adds **A_disk** to `docs/OWNER_ACTION_CHECKLIST.md` (a 9 GB folder `git worktree remove` deregistered but Windows would not delete) and drops this lane's own superseded duplicate row for `origin/docs/design-foundation`, which said in its own text that it goes once the owning lane writes its. |
-| `origin/claude/foreground-courtesy-handoff-82687b` | CLAIMED | Claude lane, worktree `.claude/worktrees/foreground-courtesy-handoff-82687b`. Ran the on-screen proof PR [#100](https://github.com/Pootytxng/sentinel/pull/100) was waiting on and it **failed three times out of three** — `focus = false` set through `context.config_mut()` does not survive to window creation, so that PR's mechanism is inert (findings on the PR; do not merge it as-is). Chasing it surfaced the owner's ACTUAL complaint — a blank Windows Terminal flashing and self-closing — which measurement traced to `npm test`: seven suites spawn `powershell.exe` without `windowsHide`, and Win11's default terminal turns each one into a real console window. This branch fixes those seven and adds `scripts/console-window-guard.test.mjs` to keep an eighth from appearing. |
-| `origin/docs/design-foundation` | CLAIMED | Claude lane, docs only. The consumer-app design foundation the owner asked for on 2026-08-11 after tester feedback that Compy is "overwhelming and hard to navigate and completely unfamiliar": `docs/decisions/2026-08-11-design-foundation.md` (five references, the verdict-first front door, the interview, the 6-step type scale at a 13px floor, rooms giving up their hue, the wording glossary, and the ranked tooling answer), the rendered proposal at `docs/ui-sweep/foundation.html`, and `FOUNDATION-1` filed in `docs/UI_VISION_BACKLOG.md` as the parent of TYPE-1 / COLOR-1 / UX-1. No product code touched. |
 | `origin/lane/usage-audit-disk-bloat` | CLAIMED | **Not this lane's branch — dispositioned, untouched.** A concurrently-running session pushed it at 2026-08-20 04:47 local (commit `12886b0f`, one commit on top of `8a1450cd`) with PR [#160](https://github.com/Pootytxng/sentinel/pull/160) open: a report-only disk-bloat flag for an oversized `src-tauri/target`. The same window is when this worktree's `node_modules` was gutted and reinstalled by an `npm install --no-audit --no-fund` no script in this repo issues — the first push gate here died at a missing `tsc` because of it. The row exists so the audit reflects reality; **its disposition to MERGED or a prune belongs to the lane that owns it**, per `docs/WORK_CONTROL.md` (an overlapping live claim means hands off, not adjudicate). |
 | `origin/lane/cleanup-train-2026-08-20` | CLAIMED | **Not this lane's branch — dispositioned, untouched.** A concurrently-running session's docs/receipts train, PR [#163](https://github.com/Pootytxng/sentinel/pull/163) — the `#160` re-proof + receipt, the `A_merge` permission ask, and the record of the worktree collision that renamed it off `lane/self-checkup`. **That PR carries its own, fuller row for this branch; when #163 lands, its text supersedes this one and this line goes.** The row exists only because merging #164 left `main`'s audit red for every push in the repo, and an undispositioned ref blocks other lanes, not just its own. |
+| `origin/lane/rig-then-rails` | UNLANDED | **This lane's own branch, dispositioned by the rule below rather than left for a later sweep.** Renamed from `lane/next` this session on the owner's instruction, carrying its receipt commit; PR [#191](https://github.com/Pootytxng/sentinel/pull/191) open against `main` with the #126 re-proof, the #156 install-payload gates, the #128 process-mutex merge and its #130 fix, and the #125 + "Your rig" specs. Merging it into `main` is not a no-op and must not be — the work is the PR. **When #191 lands, this row flips MERGED and the ref is pruned in the same commit**; until then it is UNLANDED because that is what it is. |
 
 
 

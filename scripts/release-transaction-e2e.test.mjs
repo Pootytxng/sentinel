@@ -1,10 +1,22 @@
 // @vitest-environment node
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { windows, WINDOWS_ONLY } from "./lib/windows-only.mjs";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+
+// TIMEOUT: this file drives release-transaction-harness.ps1 through spawnSync on powershell.exe,
+// once per scenario, with no timeout of its own. The global 15s in vitest.config.ts was calibrated for heavy React RENDER
+// tests, never for process spawn under a 357-file pool. Measured 2026-08-21: with this file in the
+// pool the full suite failed 7 tests across three files, all with "Test timed out in 15000ms", and
+// every one of them passed when the same files were run alone. Excluding this file alone took the
+// failures from 7 to 1. That is spawn latency, not a defect in what these tests assert -- the
+// assertions are about exit codes and ordering, which do not become truer at 15s than at 60s.
+// vitest.config.ts deliberately sets no `retry`, so a starved test here is a red FAIL, not a
+// silent second attempt; this is the per-file timeout that its PowerShell-driving siblings
+// (deps-bootstrap-guard, production-adapter-lookup, public-version-gate) already carry.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
 const root = join(import.meta.dirname, "..");
 const sandboxes = [];

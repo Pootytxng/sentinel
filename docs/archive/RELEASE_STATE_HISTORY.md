@@ -4,6 +4,53 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-08-21 - the v0.9.25 and v0.9.24 GO/NO-GO records, moved verbatim (byte budget)
+
+Moved out of docs/RELEASE_STATE.md when the ANSWERED 2026-08-21 slowdown record landed and pushed the
+file over both its line and byte budgets. Byte-for-byte: the block contained no markdown links, so
+nothing needed re-rooting one directory deeper. Both transactions were closed 9 of 9 on 2026-08-13.
+The half of the v0.9.25 entry that stayed live is its slowdown report, which RELEASE_STATE.md now
+answers with measurement instead of carrying forward as an open warning.
+
+2. **Candidate v0.9.25 publish GO/NO-GO - CLOSED 2026-08-13, published 22:34Z, transaction 9 of 9.**
+   (Date-first, no zulu suffix, per #123.) Two defects neither the suite nor a reviewer caught, both
+   found by people: the owner reported v0.9.24 "runs a lot slower than before", and tester Jaikaran
+   reported on v0.9.12 that written feedback vanishes when he leaves Settings - still reproducible in
+   v0.9.24 source. `36d3a0c7` fixes both. The update-pill LED animated `box-shadow` forever in the
+   shell topbar, in the update-AVAILABLE branch that is every out-of-date tester's resting state, so
+   the main thread repainted every frame on every screen; it now rides an `::after` layer on
+   transform+opacity. The feedback draft now persists through safe-storage and survives the Settings
+   unmount. Both guards were proven able to FAIL by reintroducing each defect before the fix landed.
+   The owner's GO for this lane was "lets get as much of the important stuff done that we can and
+   the update sent to the testers", and both look captures went to him before the publish ran.
+   Release id `370249321`, alias attempt 1; `published_*` above carries the artifact truth.
+   **What this release does NOT close: the owner's own slowdown report.** He is on the newest build,
+   so his update pill never enters the AVAILABLE state and never pulsed - the fix cannot be the
+   cause of what he felt. That remains open with ranked candidates (the app-wide switch to the
+   bundled Geist variable font plus the 14px->15px base bump is the best fit) and a named tool to
+   settle it: `node scripts/q7-probe.mjs attribute`. Do not report it as fixed.
+2. **Candidate v0.9.24 publish GO/NO-GO - CLOSED 2026-08-13, published 21:29Z, transaction 9 of 9.**
+   (Date-first, no zulu suffix, per #123.) The owner's GO was "send out the most current working
+   version of the app to the tester"; both look captures, the runtime proof and the note that the
+   FIRST look had failed went to him before the publish ran, and the alias verified on attempt 1.
+   `published_*` above carries the artifact truth. This also closed **v0.9.22's** GO, which was
+   still open when UX-1 superseded it. Kept here for the record — it was
+   the cumulative front-door candidate. It carries design-foundation **step ②, UX-1** (the Home h1 is
+   now the verdict at 40px, the room title "Home" is deleted, the because-line moved directly
+   beneath it, and "What are you here to do?" became the screen's single primary button opening the
+   intent panel in place) **on top of everything v0.9.22 already held**: step ① TYPE-1 (six-step
+   type scale, 13px floor) + COLOR-1 (rooms give up their hue), the update-pill attention state,
+   the in-app What's-new list, and the arc-gauge ring-overflow fix the v0.9.19 desk look caught
+   (`64fe3579`). **v0.9.22 was never published** — it was installed, proved and visually reviewed
+   PASS on the desk, and its GO was still open when UX-1 landed, so this candidate supersedes it
+   and one GO now covers both. **v0.9.23 is desk-only and spent: it shipped UX-1 and the look
+   FAILED on the verdict's type step** (a `home-hud.css` selector outranked the console's own h1 —
+   see the owner-installed row); the fix plus its static guard ride v0.9.24, and v0.9.23 is never
+   published. v0.9.19 is desk-only and spent; **0.9.20 and 0.9.21 were burned by failed
+   re-prepares** (each prepare mints configured+1 — a re-prepare after a failure must pre-declare
+   the NEXT number, not reuse one; nothing of 0.9.20/21 was installed or published). Desk ship +
+   visual review first; publish only on an explicit owner GO given to exactly ONE lane.
+
 ### 2026-08-21 - the 63db50d2 Live-pass desk-build Snapshot row, moved verbatim (byte budget)
 
 Moved out of docs/RELEASE_STATE.md when the 584654c8 build (the Test intimidation pass) landed the next morning.

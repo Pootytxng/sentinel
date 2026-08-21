@@ -74,7 +74,7 @@ asked for:
 
 Build `dc4d55e · release`, the installed `%LOCALAPPDATA%\Compy\compy.exe`, read back over CDP from the
 app's own `get_build_stamp` rather than trusted from a filename. Probe: `scripts/q7-probe.mjs`.
-Traces: `docs/perf/raw/*.json`. Transcription + budget derivations: `docs/perf/q7-baseline.json`.
+Traces: everything under `docs/perf/raw/`. Transcription + budget derivations: `docs/perf/q7-baseline.json`.
 
 **The budget table is mechanical.** `scripts/perf-budget-guard.test.mjs` re-opens each raw trace,
 re-derives every value, and fails the build if this table, the baseline file, and the recordings ever
