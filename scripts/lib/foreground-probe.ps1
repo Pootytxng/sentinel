@@ -48,6 +48,28 @@ Add-Type -Namespace CompyProbe -Name Win -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool AllowSetForegroundWindow(int dwProcessId);
 '@
 
+# ISSUE #121 — the EVENT TRACE. The 100ms poll below can say THAT the launch came forward, never WHAT
+# raised it: inside one iteration it reads the foreground first and the window second, so a fresh
+# launch fronted by Windows and an in-process raise that beat the first sample read identically
+# (the 2026-08-18 split). This hook is the finer instrument that split asked for. On the same clock
+# as the poll (0 = the poll's first sample) it records:
+#   EVENT_SYSTEM_FOREGROUND  — every foreground change on the desk, whoever owns the window;
+#   EVENT_OBJECT_FOCUS       — every keyboard-focus change, with the CLASS and OWNING PROCESS of the
+#                              window that took it. That is the attribution: a focus landing on a
+#                              `Chrome_WidgetWin_*` window owned by msedgewebview2.exe is the WebView2
+#                              runtime, a focus on the tao top-level owned by compy.exe is in-process,
+#                              a foreground change with no focus from the launched family at all is
+#                              the launcher/OS fronting it;
+#   EVENT_OBJECT_CREATE/SHOW/DESTROY — window-level (OBJID_WINDOW) lifecycle for the launched process
+#                              and its children, so "the window existed" is an event rather than a
+#                              Process.MainWindowHandle heuristic, and its distance to the first
+#                              foreground is a measurement;
+#   EVENT_SYSTEM_MINIMIZESTART/END — the owner's game being minimised IS the harm, so it is named.
+# Out-of-context hooks deliver through the hooking thread's message queue, which is why the poll
+# loop below pumps messages instead of sleeping. Events are recorded for EVERY process and filtered
+# afterwards: the WebView2 child processes' PIDs do not exist until the launch creates them.
+Add-Type -TypeDefinition (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot "foreground-events.cs"))
+
 function Get-ForegroundOwner {
   $hwnd = [CompyProbe.Win]::GetForegroundWindow()
   if ($hwnd -eq [IntPtr]::Zero) { return $null }
@@ -60,10 +82,15 @@ function Get-ForegroundOwner {
 # whether the target has a real visible window: "never took the foreground" is equally true of an app
 # that crashed on launch, and that would be a far worse bug passing as a fix.
 function Measure-Foreground {
-  param([System.Diagnostics.Process]$Target, [double]$Seconds)
+  param([System.Diagnostics.Process]$Target, [double]$Seconds, [CompyProbe.EventHook]$Hook)
   $samples = 0; $owned = 0; $present = 0; $firstMs = -1; $firstWindowMs = -1
   $sawWindow = $false; $sawVisibleWindow = $false
   $before = Get-ForegroundOwner
+  # One clock for both instruments: event stamps are relative to this loop's first sample, so an
+  # event's `ms` compares directly with firstForegroundMs / firstWindowMs below. Events recorded
+  # before this point (during Start-Process) carry negative stamps and are kept.
+  $eventsFrom = $Hook.Events.Count
+  $Hook.ZeroMs = $Hook.Clock.ElapsedMilliseconds
   $sw = [System.Diagnostics.Stopwatch]::StartNew()
   while ($sw.Elapsed.TotalSeconds -lt $Seconds) {
     $samples++
@@ -85,10 +112,16 @@ function Measure-Foreground {
         }
       }
     }
-    Start-Sleep -Milliseconds $IntervalMs
+    # Pump instead of sleep: out-of-context WinEvents are delivered through this thread's message
+    # queue, and pumping stamps each one when it ARRIVES rather than at the next 100ms boundary.
+    $Hook.Pump($IntervalMs)
   }
   $after = Get-ForegroundOwner
   return [ordered]@{
+    # Half-open index range into the hook's event list for THIS measurement; resolved to names and
+    # filtered to the launched family once the process tree is known (see Resolve-Trace).
+    eventsFrom             = $eventsFrom
+    eventsTo               = $Hook.Events.Count
     samples                = $samples
     foregroundSamples      = $present
     ownedForegroundSamples = $owned
@@ -127,6 +160,66 @@ function Start-Target {
   return [pscustomobject]@{ Process = (Start-Process @launch); RightsGranted = $granted }
 }
 
+# The launched process and everything it spawned (WebView2's browser/GPU/renderer processes are
+# children of compy.exe). Snapshotted BEFORE the kill, while the tree still exists.
+function Get-ProcessFamily {
+  param([int]$RootPid)
+  $byParent = @{}
+  foreach ($p in Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId) {
+    if (-not $byParent.ContainsKey([int]$p.ParentProcessId)) { $byParent[[int]$p.ParentProcessId] = New-Object System.Collections.ArrayList }
+    [void]$byParent[[int]$p.ParentProcessId].Add([int]$p.ProcessId)
+  }
+  $family = New-Object System.Collections.ArrayList
+  $queue = New-Object System.Collections.Queue
+  $queue.Enqueue($RootPid)
+  while ($queue.Count -gt 0) {
+    $cur = $queue.Dequeue()
+    if ($family.Contains($cur)) { continue }
+    [void]$family.Add($cur)
+    if ($byParent.ContainsKey($cur)) { foreach ($c in $byParent[$cur]) { $queue.Enqueue($c) } }
+  }
+  return @($family)
+}
+
+# Turn one measurement's slice of the raw event list into the trace the caller sees: process names
+# resolved, every foreground/focus/minimise event kept (whoever owns it -- the window that LOST the
+# foreground matters as much as the one that took it), and window lifecycle kept only for the
+# launched family. Raw events are unfiltered by PID on purpose (the children do not exist when the
+# hook starts), so this is where the noise goes.
+function Resolve-Trace {
+  param([CompyProbe.EventHook]$Hook, [System.Collections.IDictionary]$Measurement, [int[]]$Family, [hashtable]$Names, [int]$Limit = 400)
+  $familySet = @{}; foreach ($f in $Family) { $familySet[$f] = $true }
+  $out = New-Object System.Collections.ArrayList
+  $kept = 0; $total = 0
+  for ($i = $Measurement.eventsFrom; $i -lt $Measurement.eventsTo; $i++) {
+    $e = $Hook.Events[$i]
+    $inFamily = $familySet.ContainsKey($e.pid) -or $familySet.ContainsKey($e.rootPid)
+    $lifecycle = ($e.kind -eq "CREATE" -or $e.kind -eq "SHOW" -or $e.kind -eq "0x8001")
+    if ($lifecycle -and -not $inFamily) { continue }
+    $total++
+    if ($kept -ge $Limit) { continue }
+    $kept++
+    [void]$out.Add([ordered]@{
+      ms      = $e.ms
+      kind    = $(if ($e.kind -eq "0x8001") { "DESTROY" } else { $e.kind })
+      hwnd    = ("0x{0:X}" -f $e.hwnd)
+      pid     = $e.pid
+      proc    = $(if ($Names.ContainsKey($e.pid)) { $Names[$e.pid] } else { $null })
+      family  = $inFamily
+      cls     = $e.cls
+      title   = $e.title
+      root    = ("0x{0:X}" -f $e.root)
+      rootPid = $e.rootPid
+      fgPid   = $(if ($e.kind -eq "FOREGROUND") { $e.fgPid } else { $null })
+    })
+  }
+  $Measurement.Remove("eventsFrom"); $Measurement.Remove("eventsTo")
+  $Measurement.events = @($out)
+  $Measurement.eventsKept = $kept
+  $Measurement.eventsTotal = $total
+  $Measurement.eventsDroppedAtCap = $Hook.Dropped
+}
+
 $processName = [System.IO.Path]::GetFileNameWithoutExtension($FilePath)
 
 # A launch cannot be measured against a lock holder: the single-instance plugin makes the second
@@ -143,11 +236,16 @@ if ($existing.Count -gt 0) {
 # explicitly asked to — which reads as "the fix works" when nothing was proven at all.
 Start-Sleep -Milliseconds $SettleMs
 
+# The hook goes up BEFORE the launch so the very first CREATE of the launched process is on record.
+$hook = New-Object CompyProbe.EventHook
+$hook.Start()
+$hook.ZeroMs = $hook.Clock.ElapsedMilliseconds
+
 $started = Start-Target -Args $ArgumentList -Grant:(-not $NoGrant)
 $proc = $started.Process
 $relaunchProc = $null
 try {
-  $initial = Measure-Foreground -Target $proc -Seconds $DurationSeconds
+  $initial = Measure-Foreground -Target $proc -Seconds $DurationSeconds -Hook $hook
 
   $relaunch = $null
   if ($RelaunchWith -ne "none") {
@@ -156,21 +254,33 @@ try {
     $relaunchProc = $relaunchStart.Process
     # The measurement target stays the FIRST process: the second one exits almost immediately after
     # handing over its argv, and the window that may or may not come forward belongs to the first.
-    $relaunch = Measure-Foreground -Target $proc -Seconds $DurationSeconds
+    $relaunch = Measure-Foreground -Target $proc -Seconds $DurationSeconds -Hook $hook
     $relaunch.relaunchWith = $RelaunchWith
     $relaunch.relaunchArguments = ($relaunchArgs -join " ")
     $relaunch.relaunchRightsGranted = $relaunchStart.RightsGranted
   }
 
+  # Resolve the trace while the launched tree is still alive: names and the parent chain vanish
+  # with the kill in `finally`.
+  $hook.Dispose()
+  $family = @(Get-ProcessFamily -RootPid $proc.Id)
+  if ($relaunchProc) { $family += @(Get-ProcessFamily -RootPid $relaunchProc.Id) }
+  $names = @{}
+  foreach ($p in Get-Process) { $names[[int]$p.Id] = $p.ProcessName }
+  Resolve-Trace -Hook $hook -Measurement $initial -Family $family -Names $names
+  if ($relaunch) { Resolve-Trace -Hook $hook -Measurement $relaunch -Family $family -Names $names }
+
   [ordered]@{
     filePath        = $FilePath
     arguments       = ($ArgumentList -join " ")
     launchedPid     = $proc.Id
+    familyPids      = $family
     rightsGranted   = $started.RightsGranted
     initial         = $initial
     relaunch        = $relaunch
-  } | ConvertTo-Json -Compress -Depth 6
+  } | ConvertTo-Json -Compress -Depth 8
 } finally {
+  $hook.Dispose()
   # Only ever the processes this script started. Killing anything else would be taking over another
   # lane, which docs/WORK_CONTROL.md forbids outright.
   foreach ($p in @($relaunchProc, $proc)) {

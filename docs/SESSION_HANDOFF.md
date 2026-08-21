@@ -1,39 +1,63 @@
-# Session handoff — 2026-08-20 (#171 verify-local flake: ROOT-CAUSED, FIXED, GUARDED — PR open)
+# Session handoff — 2026-08-20 (#121 launch-focus runtime tier: INSTRUMENT BUILT, cause NOT yet measured)
 
-**Worktree** `C:\Users\Kuya\code\sentinel-home-room`, branch **`lane/gate-171`** cut from
-origin/main `25e2b019`. Issue [#171](https://github.com/Pootytxng/sentinel/issues/171) claimed at
-session start (ownership claim posted). No build, no install — the desk still runs `ab54f1e4`.
+**Worktree** `C:\Users\Kuya\code\sentinel-home-room`, branch **`lane/focus-121`** cut from
+origin/main `616c6fe2`. Issue [#121](https://github.com/Pootytxng/sentinel/issues/121) claimed
+(ownership claim posted 2026-08-20). No build, no install — the desk still runs `ab54f1e4`.
+**Branch is LOCAL ONLY, not pushed** (see "Why not pushed").
 
 ## What this lane did
 
-- **`cf77ea24`** — carried the untracked PR #183 merge receipt + the sweep-180 handoff refresh
-  (the chain #181/#182/#183 all used).
-- **`e52133b2`** — the fix. Root cause **reproduced on demand**: three site suites each rebuilt
-  `site-app/dist` from separate vitest workers; two `astro build`s in one `dist/` delete each
-  other's SSR intermediates, the loser dies with "Cannot find module dist/renderers.mjs", and
-  Node 24 on Windows turns that `process.exit(1)` into a `0xC0000409` abort (nodejs/node#56645,
-  open upstream). Before: 2/2 runs crash with the issue's exact exit code. After: 0/3.
-  - `scripts/stage-dist-site.mjs` — `withSiteBuildLock` (atomic mkdir, orphan/stale reclaim) +
-    `ensureSiteAppBuilt` (freshness check INSIDE the lock). The three suites use it.
-  - `scripts/verify-local.ps1` — a Node-hosted check that exits with exactly the abort code is
-    re-run ONCE, with a WARN naming the cause; never cargo, never any other code.
-  - Guards: `scripts/site-build-collision-guard.test.mjs` (real 4-process race),
-    `scripts/local-gate-guard.test.mjs` §"Node-runtime-abort re-run" (source pins + a PowerShell
-    5.1 behavioural probe of the real `Invoke-Check`). Both mutation-tested.
-- **Unverified, stated plainly:** the issue's single `npm run build` abort shares the death
-  signature; its trigger was not captured and cannot be now (`sentinel-prune` is gone, no
-  junctioned `node_modules` exist today). The once-only re-run covers it and a repeat now prints
-  `LOCAL CHECK WARN … see issue #171`.
-- **Not changed on purpose:** vitest's worker count (the issue's second suggestion) — no evidence
-  it was the cause, and shrinking it blind is the mistake `nested-vite-server-guard` documents.
+- **`9f4e8eca`** — carried the untracked PR #185 merge receipt + the #171 handoff refresh (the
+  #181–#185 chain).
+- **`adaa9a86`** — the instrument the 2026-08-18 split asked for. `scripts/lib/foreground-events.cs`
+  is a WinEvent hook (FOREGROUND, FOCUS, window CREATE/SHOW/DESTROY for the launched tree,
+  MINIMIZESTART/END); `scripts/lib/foreground-probe.ps1` runs it around every launch, pumping
+  instead of sleeping, and emits a per-measurement `events` trace with class names + owning
+  process. `scripts/launch-focus-guard.test.mjs` gains `summarizeTrace`/`formatTrace` — the focus
+  taker's class + process attributes a raise to `webview2-runtime` / `in-process` /
+  `outside-family`, and a non-family window minimising/dying ≤500ms before Compy got the
+  foreground is `inherited-after-another-window-left`. Every runtime message (fail / unmeasurable
+  / clean) carries it. 37/37 in the file; four new guards mutation-tested. **Pass/fail policy is
+  unchanged** — `classifyForegroundReading` still decides until a real failure has been read.
+- **`95e24fbc`** — `COMPY_FOREGROUND_TRACE_DIR=<dir>` keeps each raw probe JSON.
 
-## For the NEXT lane's first commit
+## The lead (recorded, NOT confirmed — BACKLOG #121 row has the full text)
 
-The `merge-pr` receipt for this lane's PR will sit untracked here after the merge — it rides the
-next lane's first commit, same chain as #181/#182/#183.
+The hook's smoke test launched a hidden `powershell.exe` (`Start-Process -WindowStyle Hidden`)
+and recorded **Windows Terminal fronted at +59ms, minimised at +307ms, foreground falling to the
+next Z-order window**. Sibling suites do that launch during the full gate
+(`runtime-proof-guard.test.mjs:122-125`, `detached-window-guard`'s Minimized control child, every
+`Start-NativeProcess -Detached` console child), a fresh never-activated window is top of Z-order,
+and the terminal can only be fronted while the foreground lock is open (input-idle desk). That
+explains full-suite-only, idle-only, ~120ms-after-the-window and "not ours" in one mechanism. If
+true, the fix is in how the siblings launch console children + a guard that no suite opens a
+console host — Compy itself is already quiet.
 
-## Queue
+**My miss this session (so it is on record):** that smoke test ran while the owner was in-game;
+the trace says Windows Terminal took his foreground for ~250ms. From then on: no launches of any
+kind while a game is in front.
 
-`docs/BACKLOG.md` top after this: **#121** (`launch-focus-guard` RUNTIME tier intermittent — no
-longer "the same cause as #171", whose cause was the site build race), then #126, #156, #128
-and #125. Nothing blocked on the owner.
+## Why not pushed
+
+The pre-push gate is the full suite: heavy CPU and it opens console hosts (the very mechanism
+above) — not while the owner is gaming with Compy open. Push when the desk is free:
+`git push -u origin lane/focus-121`, then `gh pr create` against main and merge green.
+
+## Next action — the deciding measurement (needs: no compy running, no game in front)
+
+1. Standalone baseline: `COMPY_FOREGROUND_TRACE_DIR=<dir> npx vitest run scripts/launch-focus-guard.test.mjs`
+   — expect clean; read the first-line trace summary.
+2. Targeted repro: the same with `scripts/runtime-proof-guard.test.mjs scripts/detached-window-guard.test.mjs`
+   added to the invocation (parallel workers) — look for `inherited-after-another-window-left`
+   with `WindowsTerminal` as the handoff. Then the full `npm test` once, ideally on a desk idle
+   ≥90s (the failing condition in the issue).
+3. If confirmed: move the sibling console launches to CreateNoWindow (no ShellExecute-Hidden
+   console), add a suite-wide guard, then re-run #2 and let the trace show zero handoffs. If
+   refuted: the trace names the real taker — follow it.
+4. Close #121 with the trace quoted in the issue; update the BACKLOG row + RELEASE_STATE if a gate
+   flips.
+
+## Queue after this
+
+`docs/BACKLOG.md`: #126 (retire stranded origin lanes), #156, #128, #125. Nothing blocked on the
+owner.

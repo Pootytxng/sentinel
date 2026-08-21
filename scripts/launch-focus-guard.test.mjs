@@ -278,6 +278,116 @@ export function classifyForegroundReading({
 }
 
 /**
+ * WHAT raised it — read off the probe's WinEvent trace (issue #121, the instrument the 2026-08-18
+ * split asked for). The poll above sees the foreground at 100ms grain and cannot order two events
+ * inside one iteration; the trace is stamped as each event arrives and carries the CLASS and OWNING
+ * PROCESS of every window that took focus, so the question "who did this" has an answer:
+ *
+ *   focus lands on `Chrome_WidgetWin_*` / `Chrome_RenderWidgetHostHWND` owned by msedgewebview2.exe
+ *     → the WebView2 runtime raised the window (its process is a child of compy.exe: `family`);
+ *   focus lands on the tao top-level / `WRY_WEBVIEW` owned by compy.exe itself
+ *     → in-process (tao's set_focus, an activating ShowWindow, the window-state plugin);
+ *   the family takes the foreground with NO family focus event near it
+ *     → something outside the launched tree fronted it (the launcher, the shell);
+ *   a MINIMIZESTART on a window OUTSIDE the family is the owner's window going down: the harm itself.
+ *
+ * Pure, so it runs on every machine against recorded traces. It summarises; the gate's verdict is
+ * still `classifyForegroundReading` until a measured trace has been read — a summary is not a law.
+ */
+export function summarizeTrace({ events = [], launchedPid, familyPids = [] } = {}) {
+  const family = new Set([launchedPid, ...familyPids].filter((p) => Number.isInteger(p)));
+  const inFamily = (e) => e.family === true || family.has(e.pid) || family.has(e.rootPid);
+  const show =
+    events.find((e) => e.kind === "SHOW" && e.pid === launchedPid && e.root === e.hwnd) ??
+    events.find((e) => e.kind === "SHOW" && inFamily(e)) ??
+    null;
+  const foreground = events.find((e) => e.kind === "FOREGROUND" && inFamily(e)) ?? null;
+  const focusEvents = events.filter((e) => e.kind === "FOCUS" && inFamily(e));
+  const window = 250; // ms either side of the foreground change that still counts as "this raise"
+  const focusBefore = foreground
+    ? (focusEvents.filter((e) => e.ms <= foreground.ms && e.ms >= foreground.ms - window).pop() ?? null)
+    : null;
+  const focusAfter = foreground
+    ? (focusEvents.find((e) => e.ms >= foreground.ms && e.ms <= foreground.ms + window) ?? null)
+    : null;
+  const taker = focusBefore ?? focusAfter;
+  // A window OUTSIDE the launch leaving the foreground just before the family got it: Windows hands
+  // the foreground to the next window in Z-order when the active one minimises or dies, and a
+  // freshly created window sits at the top of that order even when it was shown without
+  // activation. Recorded 2026-08-20 with a sibling's "hidden" console child: Windows Terminal fronted
+  // at +59ms, minimised at +307ms, and the foreground fell to whatever was next. Checked BEFORE the
+  // focus taker, because focus lands on the inheriting window afterwards whichever way it got there.
+  const handoffWindow = 500;
+  const handoff = foreground
+    ? (events
+        .filter((e) => (e.kind === "MINIMIZESTART" || e.kind === "DESTROY") && !inFamily(e) && e.ms <= foreground.ms && e.ms >= foreground.ms - handoffWindow)
+        .pop() ?? null)
+    : null;
+  const priorForeground = foreground
+    ? (events.filter((e) => e.kind === "FOREGROUND" && !inFamily(e) && e.ms <= foreground.ms).pop() ?? null)
+    : null;
+  let raisedBy = "none";
+  if (foreground) {
+    if (handoff) raisedBy = "inherited-after-another-window-left";
+    else if (!taker) raisedBy = "outside-family";
+    else if (/^Chrome_/i.test(taker.cls ?? "") || /msedgewebview2/i.test(taker.proc ?? "")) raisedBy = "webview2-runtime";
+    else if (taker.pid === launchedPid) raisedBy = "in-process";
+    else raisedBy = "family-child";
+  }
+  const minimized = events
+    .filter((e) => e.kind === "MINIMIZESTART" && !inFamily(e))
+    .map((e) => ({ ms: e.ms, proc: e.proc ?? null, title: e.title ?? "" }));
+  return {
+    firstShowMs: show ? show.ms : -1,
+    firstForegroundMs: foreground ? foreground.ms : -1,
+    raisedBy,
+    taker: taker ? { ms: taker.ms, cls: taker.cls ?? "", proc: taker.proc ?? null, pid: taker.pid } : null,
+    handoff: handoff ? { ms: handoff.ms, kind: handoff.kind, proc: handoff.proc ?? null, title: handoff.title ?? "" } : null,
+    priorForeground: priorForeground ? { ms: priorForeground.ms, proc: priorForeground.proc ?? null, title: priorForeground.title ?? "" } : null,
+    minimized,
+  };
+}
+
+/** The trace as lines a failure message can carry. Family events and every foreground/focus/minimise
+ *  change, in order; capped so a message stays a message. */
+export function formatTrace(events = [], { limit = 40 } = {}) {
+  const lines = events.slice(0, limit).map((e) => {
+    const who = e.proc ? `${e.proc}(${e.pid})` : `pid ${e.pid}`;
+    const fam = e.family ? " [family]" : "";
+    const title = e.title ? ` "${String(e.title).slice(0, 40)}"` : "";
+    return `  ${String(e.ms).padStart(6)}ms ${e.kind.padEnd(13)} ${who} ${e.cls ?? ""}${title}${fam}`;
+  });
+  if (events.length > limit) lines.push(`  … ${events.length - limit} more`);
+  return lines.length ? lines.join("\n") : "  (no events recorded)";
+}
+
+/**
+ * The gate's verdict on a quiet launch: the poll's reading, corrected by the ONE thing the trace can
+ * prove that the poll cannot (issue #121, its "decision 2"). A window OUTSIDE the launched tree
+ * minimising or dying ≤500ms before Compy got the foreground is Windows handing the foreground to the
+ * next window in Z-order — a fresh never-activated window sits at the top of that order. Recorded
+ * 2026-08-20 (a sibling suite's "hidden" console child: Windows Terminal fronted at +59ms, minimised
+ * at +307ms). To the poll that is a foreground arriving a few polls AFTER the window: its hard-zero
+ * in-process-raise shape. It is not Compy's code, so it is reported UNMEASURABLE by name — the same
+ * category as "a compy was already running" — never scored against the app, and never hidden.
+ *
+ * What this deliberately does NOT do: use the focus taker to resolve the poll's one-sample ambiguity.
+ * Windows fronting a fresh launch ALSO lands focus on Compy's own top-level afterwards, so an
+ * `in-process` taker at launch is not evidence either way; `unattributable-at-launch` stays
+ * unmeasurable on the poll's terms alone. And `outside-family` (a foreground with no focus event
+ * near it) is an ABSENCE of evidence, so it stays the hard zero. Under
+ * COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF every unmeasurable verdict is a failure again.
+ */
+export function runtimeVerdict(result) {
+  const reading = classifyForegroundReading(result);
+  const { raisedBy } = summarizeTrace(result);
+  if (reading === "clean") return { verdict: "clean", reading, raisedBy };
+  if (raisedBy === "inherited-after-another-window-left") return { verdict: "unmeasurable", reading, raisedBy };
+  if (reading === "unattributable-at-launch") return { verdict: "unmeasurable", reading, raisedBy };
+  return { verdict: "fail", reading, raisedBy };
+}
+
+/**
  * The newest built compy.exe that is actually NEWER than the sources this file pins. A stale binary
  * would let the runtime tier "prove" a fix that predates the code -- the same false-pass, one level
  * down. Returns null when there is nothing honest to measure (a clean checkout, CI, a Linux box).
@@ -371,7 +481,36 @@ function measureLaunch({ args = [], env = {}, seconds = 6, savedState = null, gr
   // The probe can also measure a second, single-instance-absorbed launch (-RelaunchWith); this guard
   // only ever asks for the first one, so flatten that block up and keep the launch-level fields.
   const parsed = JSON.parse(json);
-  return { ...parsed.initial, launchedPid: parsed.launchedPid, rightsGranted: parsed.rightsGranted };
+  // Keep the raw reading when asked (COMPY_FOREGROUND_TRACE_DIR=<dir>): a trace that only lives in
+  // a vitest message is lost the moment the run is green, and the green runs are the baseline.
+  if (process.env.COMPY_FOREGROUND_TRACE_DIR) {
+    mkdirSync(process.env.COMPY_FOREGROUND_TRACE_DIR, { recursive: true });
+    const name = `${new Date().toISOString().replace(/[:.]/g, "-")}-${args.join("_") || "plain"}-${parsed.launchedPid}.json`;
+    writeFileSync(join(process.env.COMPY_FOREGROUND_TRACE_DIR, name), JSON.stringify({ args, env: Object.keys(env), grant, ...parsed }, null, 2));
+  }
+  return {
+    ...parsed.initial,
+    launchedPid: parsed.launchedPid,
+    familyPids: parsed.familyPids ?? [],
+    rightsGranted: parsed.rightsGranted,
+  };
+}
+
+/** The #121 attribution block every runtime message now carries — who raised it, per the trace. */
+function describeTrace(result) {
+  const s = summarizeTrace(result);
+  const taker = s.taker ? `${s.taker.cls} owned by ${s.taker.proc ?? `pid ${s.taker.pid}`} at ${s.taker.ms}ms` : "no focus event in the launched family";
+  const handoff = s.handoff ? `; ${s.handoff.proc ?? "?"} "${s.handoff.title}" ${s.handoff.kind} at ${s.handoff.ms}ms just before` : "";
+  const prior = s.priorForeground ? `; foreground before that: ${s.priorForeground.proc ?? "?"} "${s.priorForeground.title}" at ${s.priorForeground.ms}ms` : "";
+  const minimized = s.minimized.length
+    ? s.minimized.map((m) => `${m.proc ?? "?"} "${m.title}" at ${m.ms}ms`).join(", ")
+    : "none";
+  return (
+    `trace: first SHOW ${s.firstShowMs}ms, first FOREGROUND ${s.firstForegroundMs}ms, raised by ${s.raisedBy} (${taker}${handoff}${prior}); ` +
+    `windows outside the launch minimised: ${minimized}; ` +
+    `${result.eventsKept ?? 0}/${result.eventsTotal ?? 0} events kept${result.eventsDroppedAtCap ? `, ${result.eventsDroppedAtCap} dropped at the hook cap` : ""}\n` +
+    formatTrace(result.events ?? [])
+  );
 }
 
 // The discriminator decides whether a reading is Compy's fault or the OS's, so it gets its own
@@ -440,6 +579,226 @@ describe("the foreground reading is classified by CAUSE, not by count", () => {
       classifyForegroundReading({ ownedForegroundSamples: 9, firstForegroundMs: -1, firstWindowMs: -1 }),
     ).toBe("in-process-raise");
   });
+});
+
+// ── THE TRACE (#121) ────────────────────────────────────────────────────────────────────────────
+// The attribution runs on recorded traces here, on every machine, because its whole value is that a
+// failure explains itself — and an attribution that silently drifted (say, a WebView2 focus scored
+// as in-process) would send the fix to the wrong component.
+const ev = (ms, kind, extra = {}) => ({ ms, kind, pid: 100, proc: "compy", family: true, cls: "Window Class", title: "Compy", hwnd: "0x1", root: "0x1", rootPid: 100, ...extra });
+
+describe("the trace names WHAT raised the window (#121)", () => {
+  it("a launch that never reaches the foreground is clean, and still reports when its window appeared", () => {
+    const s = summarizeTrace({
+      launchedPid: 100,
+      familyPids: [100, 101],
+      events: [ev(5, "CREATE"), ev(12, "SHOW"), ev(140, "CREATE", { pid: 101, proc: "msedgewebview2", cls: "Chrome_WidgetWin_0", hwnd: "0x2" })],
+    });
+    expect(s).toMatchObject({ firstShowMs: 12, firstForegroundMs: -1, raisedBy: "none", taker: null, minimized: [] });
+  });
+
+  it("focus landing on a Chrome_WidgetWin window owned by msedgewebview2 is the WebView2 runtime, not Compy", () => {
+    const s = summarizeTrace({
+      launchedPid: 100,
+      familyPids: [100, 101],
+      events: [
+        ev(12, "SHOW"),
+        ev(131, "FOREGROUND", { fgPid: 100 }),
+        ev(133, "FOCUS", { pid: 101, proc: "msedgewebview2", cls: "Chrome_WidgetWin_0", hwnd: "0x2", rootPid: 100 }),
+      ],
+    });
+    expect(s.raisedBy).toBe("webview2-runtime");
+    expect(s.taker).toMatchObject({ cls: "Chrome_WidgetWin_0", proc: "msedgewebview2", ms: 133 });
+    expect(s.firstForegroundMs - s.firstShowMs).toBe(119);
+  });
+
+  it("focus landing on the tao top-level owned by the launched process itself is in-process", () => {
+    const s = summarizeTrace({
+      launchedPid: 100,
+      familyPids: [100],
+      events: [ev(12, "SHOW"), ev(2430, "FOREGROUND", { fgPid: 100 }), ev(2431, "FOCUS")],
+    });
+    expect(s.raisedBy).toBe("in-process");
+    expect(s.taker).toMatchObject({ cls: "Window Class", pid: 100 });
+  });
+
+  it("a focus that preceded the foreground change by a moment is the same raise", () => {
+    const s = summarizeTrace({
+      launchedPid: 100,
+      familyPids: [100],
+      events: [ev(12, "SHOW"), ev(40, "FOCUS", { cls: "WRY_WEBVIEW" }), ev(41, "FOREGROUND", { fgPid: 100 })],
+    });
+    expect(s.raisedBy).toBe("in-process");
+    expect(s.taker.cls).toBe("WRY_WEBVIEW");
+  });
+
+  it("the family taking the foreground with no family focus event near it is something OUTSIDE the launch", () => {
+    const s = summarizeTrace({
+      launchedPid: 100,
+      familyPids: [100],
+      events: [ev(-3, "CREATE"), ev(7, "FOREGROUND", { fgPid: 100 }), ev(12, "SHOW"), ev(900, "FOCUS")],
+    });
+    expect(s.raisedBy).toBe("outside-family");
+    expect(s.taker).toBeNull();
+  });
+
+  it("a window OUTSIDE the launch minimising just before the family got the foreground is an INHERITED foreground, whoever focus lands on", () => {
+    const s = summarizeTrace({
+      launchedPid: 100,
+      familyPids: [100, 101],
+      events: [
+        ev(12, "SHOW"),
+        ev(59, "FOREGROUND", { pid: 14724, proc: "WindowsTerminal", family: false, cls: "CASCADIA_HOSTING_WINDOW_CLASS", title: "Windows Terminal", rootPid: 14724, fgPid: 14724 }),
+        ev(307, "MINIMIZESTART", { pid: 14724, proc: "WindowsTerminal", family: false, cls: "CASCADIA_HOSTING_WINDOW_CLASS", title: "Windows PowerShell", rootPid: 14724 }),
+        ev(308, "FOREGROUND", { fgPid: 100 }),
+        ev(310, "FOCUS", { pid: 101, proc: "msedgewebview2", cls: "Chrome_WidgetWin_0", hwnd: "0x2", rootPid: 100 }),
+      ],
+    });
+    expect(s.raisedBy).toBe("inherited-after-another-window-left");
+    expect(s.handoff).toMatchObject({ kind: "MINIMIZESTART", proc: "WindowsTerminal", ms: 307 });
+    expect(s.priorForeground).toMatchObject({ proc: "WindowsTerminal", ms: 59 });
+    // The same focus taker WITHOUT the handoff is the WebView2 runtime: the order of checks is the point.
+    const noHandoff = summarizeTrace({ launchedPid: 100, familyPids: [100, 101], events: [ev(12, "SHOW"), ev(308, "FOREGROUND", { fgPid: 100 }), ev(310, "FOCUS", { pid: 101, proc: "msedgewebview2", cls: "Chrome_WidgetWin_0", hwnd: "0x2", rootPid: 100 })] });
+    expect(noHandoff.raisedBy).toBe("webview2-runtime");
+  });
+
+  it("a window OUTSIDE the launch being minimised is reported by name — that is the harm", () => {
+    const s = summarizeTrace({
+      launchedPid: 100,
+      familyPids: [100],
+      events: [
+        ev(12, "SHOW"),
+        ev(130, "MINIMIZESTART", { pid: 7, proc: "game", family: false, cls: "UnrealWindow", title: "The Game", rootPid: 7 }),
+        ev(131, "FOREGROUND", { fgPid: 100 }),
+        ev(132, "FOCUS"),
+      ],
+    });
+    expect(s.minimized).toEqual([{ ms: 130, proc: "game", title: "The Game" }]);
+  });
+
+  it("RECORDED 2026-08-20: a launch the POLL would call clean, because the window that came forward was not the launched one", () => {
+    // Recorded by this instrument's first smoke test, launching a HIDDEN powershell.exe from a
+    // background shell while the owner was in a game. The launched process (14968) never owned the
+    // foreground — the poll reads 0/N, a pass — yet Windows Terminal (14724), hosting the "hidden"
+    // console, took the foreground at +59ms, was minimised at +307ms, and the foreground fell to VS
+    // Code. Whatever was in front before is now behind. The trace sees it; the poll cannot.
+    const recorded = [
+      { ms: 59, kind: "FOREGROUND", pid: 14724, proc: "WindowsTerminal", family: false, cls: "CASCADIA_HOSTING_WINDOW_CLASS", title: "Windows Terminal", rootPid: 14724, fgPid: 14724 },
+      { ms: 61, kind: "FOCUS", pid: 14724, proc: "WindowsTerminal", family: false, cls: "CASCADIA_HOSTING_WINDOW_CLASS", title: "Windows Terminal", rootPid: 14724 },
+      { ms: 99, kind: "SHOW", pid: 14968, proc: "powershell", family: true, cls: "PseudoConsoleWindow", title: "", rootPid: 14968 },
+      { ms: 105, kind: "CREATE", pid: 14968, proc: "powershell", family: true, cls: "OleMainThreadWndClass", title: "OleMainThreadWndName", rootPid: 14968 },
+      { ms: 307, kind: "MINIMIZESTART", pid: 14724, proc: "WindowsTerminal", family: false, cls: "CASCADIA_HOSTING_WINDOW_CLASS", title: "Windows PowerShell", rootPid: 14724 },
+      { ms: 307, kind: "FOREGROUND", pid: 14704, proc: "Code", family: false, cls: "Chrome_WidgetWin_1", title: "Visual Studio Code", rootPid: 14704, fgPid: 14704 },
+      { ms: 311, kind: "FOCUS", pid: 14704, proc: "Code", family: false, cls: "Chrome_WidgetWin_1", title: "Visual Studio Code", rootPid: 14704 },
+    ];
+    const s = summarizeTrace({ launchedPid: 14968, familyPids: [14968], events: recorded });
+    expect(s.raisedBy).toBe("none");
+    expect(s.minimized).toEqual([{ ms: 307, proc: "WindowsTerminal", title: "Windows PowerShell" }]);
+    const text = formatTrace(recorded);
+    expect(text).toContain("FOREGROUND");
+    expect(text).toContain("WindowsTerminal(14724)");
+    expect(text).toContain("[family]");
+  });
+
+  // The verdict the runtime tier acts on, on recorded readings: a change here is a change to what the
+  // gate lets through, so each branch is pinned and the mutation that would disarm it is pinned too.
+  describe("the verdict combines the poll and the trace (#121 decision 2)", () => {
+    const poll = (firstForegroundMs, firstWindowMs, owned = 50) => ({ ownedForegroundSamples: owned, firstForegroundMs, firstWindowMs, samples: 55 });
+    const handoffTrace = [
+      ev(59, "FOREGROUND", { pid: 14724, proc: "WindowsTerminal", family: false, cls: "CASCADIA_HOSTING_WINDOW_CLASS", title: "Windows Terminal", rootPid: 14724, fgPid: 14724 }),
+      ev(99, "SHOW"),
+      ev(307, "MINIMIZESTART", { pid: 14724, proc: "WindowsTerminal", family: false, cls: "CASCADIA_HOSTING_WINDOW_CLASS", title: "Windows PowerShell", rootPid: 14724 }),
+      ev(308, "FOREGROUND", { fgPid: 100 }),
+      ev(310, "FOCUS"),
+    ];
+
+    it("a poll that never saw Compy own the foreground is clean, whatever the trace holds", () => {
+      expect(runtimeVerdict({ ...poll(-1, 12, 0), launchedPid: 100, familyPids: [100], events: handoffTrace }).verdict).toBe("clean");
+    });
+
+    it("a foreground the poll calls an in-process raise, that the trace shows was HANDED over, is unmeasurable by name", () => {
+      const v = runtimeVerdict({ ...poll(308, 99), launchedPid: 100, familyPids: [100], events: handoffTrace });
+      expect(v).toEqual({ verdict: "unmeasurable", reading: "in-process-raise", raisedBy: "inherited-after-another-window-left" });
+    });
+
+    it("the same poll reading with NO hand-off in the trace stays the hard zero", () => {
+      const inProcess = [ev(99, "SHOW"), ev(308, "FOREGROUND", { fgPid: 100 }), ev(310, "FOCUS")];
+      expect(runtimeVerdict({ ...poll(308, 99), launchedPid: 100, familyPids: [100], events: inProcess })).toEqual({ verdict: "fail", reading: "in-process-raise", raisedBy: "in-process" });
+      // A hand-off OUTSIDE the 500ms window is not this raise: the mutation that would widen the
+      // window into "anything minimised earlier excuses it" fails here.
+      const stale = handoffTrace.map((e) => (e.kind === "MINIMIZESTART" ? { ...e, ms: -300 } : e));
+      expect(runtimeVerdict({ ...poll(308, 99), launchedPid: 100, familyPids: [100], events: stale }).verdict).toBe("fail");
+    });
+
+    it("a foreground with no focus event near it is an absence of evidence, and still fails", () => {
+      const bare = [ev(99, "SHOW"), ev(308, "FOREGROUND", { fgPid: 100 })];
+      expect(runtimeVerdict({ ...poll(308, 99), launchedPid: 100, familyPids: [100], events: bare })).toEqual({ verdict: "fail", reading: "in-process-raise", raisedBy: "outside-family" });
+    });
+
+    it("inside one poll stays unmeasurable on the poll's terms — an in-process focus taker at launch proves nothing", () => {
+      const atLaunch = [ev(7, "FOREGROUND", { fgPid: 100 }), ev(9, "FOCUS"), ev(12, "SHOW")];
+      expect(runtimeVerdict({ ...poll(7, 12), launchedPid: 100, familyPids: [100], events: atLaunch })).toEqual({ verdict: "unmeasurable", reading: "unattributable-at-launch", raisedBy: "in-process" });
+      expect(runtimeVerdict({ ...poll(7, 12), launchedPid: 100, familyPids: [100], events: [] }).verdict).toBe("unmeasurable");
+    });
+  });
+
+  it("formatTrace caps long traces and says so", () => {
+    const many = Array.from({ length: 60 }, (_, i) => ev(i, "FOCUS"));
+    const text = formatTrace(many, { limit: 10 });
+    expect(text.split("\n")).toHaveLength(11);
+    expect(text).toContain("… 50 more");
+    expect(formatTrace([])).toBe("  (no events recorded)");
+  });
+});
+
+describe("the probe carries the event hook (#121)", () => {
+  const PROBE_SRC = read("scripts", "lib", "foreground-probe.ps1");
+  const HOOK_SRC = read("scripts", "lib", "foreground-events.cs");
+
+  it("hooks every event the attribution reads: foreground, focus, window lifecycle, minimise", () => {
+    for (const name of ["EVENT_SYSTEM_FOREGROUND", "EVENT_OBJECT_FOCUS", "EVENT_OBJECT_CREATE", "EVENT_OBJECT_SHOW", "EVENT_SYSTEM_MINIMIZESTART", "EVENT_SYSTEM_MINIMIZEEND"]) {
+      expect(HOOK_SRC, `foreground-events.cs must hook ${name}`).toContain(name);
+    }
+    expect(HOOK_SRC, "the delegate must be held in a field or the GC collects it under the hook").toMatch(/WinEventProc _proc;/);
+  });
+
+  it("the poll PUMPS instead of sleeping, or out-of-context events never arrive", () => {
+    expect(PROBE_SRC).toMatch(/\$Hook\.Pump\(\$IntervalMs\)/);
+    expect(PROBE_SRC, "a Start-Sleep in the poll loop would stall event delivery for the whole interval").not.toMatch(/Start-Sleep -Milliseconds \$IntervalMs/);
+  });
+
+  it("the hook is up BEFORE the launch and the trace is resolved BEFORE the kill", () => {
+    const hookStart = PROBE_SRC.indexOf("$hook.Start()");
+    const launch = PROBE_SRC.indexOf("$started = Start-Target");
+    const resolve = PROBE_SRC.indexOf("Resolve-Trace -Hook $hook -Measurement $initial");
+    const kill = PROBE_SRC.indexOf("Stop-Process -Id $p.Id -Force");
+    expect(hookStart).toBeGreaterThan(-1);
+    expect(launch, "the hook must start before Start-Target, or the first CREATE is lost").toBeGreaterThan(hookStart);
+    expect(resolve).toBeGreaterThan(launch);
+    expect(kill, "names and the parent chain vanish with the kill; resolve first").toBeGreaterThan(resolve);
+  });
+
+  it.runIf(windows)(
+    "the hook compiles and installs on this machine (no launch, no window)",
+    () => {
+      const run = spawnSync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          `Add-Type -TypeDefinition (Get-Content -Raw -LiteralPath '${join(ROOT, "scripts", "lib", "foreground-events.cs")}'); ` +
+            "$h = New-Object CompyProbe.EventHook; $h.Start(); $h.Pump(50); $n = $h.HookCount; $h.Dispose(); " +
+            "Write-Output \"hooks=$n events=$($h.Events.Count)\"",
+        ],
+        { encoding: "utf8", windowsHide: true, timeout: 60_000 },
+      );
+      expect(run.status, `stderr: ${run.stderr}`).toBe(0);
+      expect(run.stdout).toMatch(/hooks=4 events=\d+/);
+    },
+    60_000,
+  );
 });
 
 describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegroundWindow", () => {
@@ -524,8 +883,21 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
         result.firstForegroundMs >= 0 && result.firstWindowMs >= 0
           ? `${result.firstForegroundMs - result.firstWindowMs}ms after its window appeared`
           : "with no window timing recorded";
-      const verdict = classifyForegroundReading(result);
-      if (verdict === "unattributable-at-launch" && !process.env.COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF) {
+      const { verdict, reading, raisedBy } = runtimeVerdict(result);
+      if (verdict === "unmeasurable" && raisedBy === "inherited-after-another-window-left" && !process.env.COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF) {
+        // The trace names a window outside the launch leaving the foreground just before Compy got
+        // it — Windows' hand-off to the next window in Z-order, not an in-process raise, whatever the
+        // poll's timing looked like. Said by name so the sibling that opened that window can be found.
+        console.log(
+          `[launch-focus-guard] quiet-launch reading UNMEASURABLE: the foreground (${result.firstForegroundMs}ms, ` +
+            `${result.ownedForegroundSamples}/${result.samples} samples; poll reading "${reading}") was HANDED to Compy ` +
+            `by a window outside the launch leaving the foreground (issue #121). This run did not measure Compy either way. ` +
+            `Refuse the skip with COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF=1.\n` +
+            describeTrace(result),
+        );
+        return;
+      }
+      if (verdict === "unmeasurable" && !process.env.COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF) {
         // Reported by name, never silently. Reproduced 3/3 on 2026-08-18 against the 0.9.25 desk
         // build with VS Code holding the foreground: first foreground 7ms, first window 12ms — one
         // poll apart, so the order between them is the poll's, not the machine's.
@@ -535,7 +907,10 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
             `(${result.ownedForegroundSamples}/${result.samples} samples), which cannot tell an in-process raise ` +
             `apart from Windows fronting a fresh launch (issue #121). This run did not measure Compy either way. ` +
             `Refuse the skip with COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF=1 — nothing in the repo sets it today, ` +
-            `it is the by-hand switch for a run that must not be allowed to skip.`,
+            `it is the by-hand switch for a run that must not be allowed to skip.\n` +
+            // The poll could not tell the two causes apart; the event trace can. Printed every time so
+            // the reading that finally closes #121 is on record wherever this run happened.
+            describeTrace(result),
         );
         return;
       }
@@ -544,8 +919,12 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
         `Compy held the foreground for ${result.ownedForegroundSamples}/${result.samples} samples ` +
           `(first at ${result.firstForegroundMs}ms, ${raise}; window at ${result.firstWindowMs}ms, ` +
           `visible=${result.sawVisibleWindow}; foreground pid before=${result.foregroundPidBefore}, ` +
-          `after=${result.foregroundPidAfter}). This is the owner's game being minimised.`,
+          `after=${result.foregroundPidAfter}). This is the owner's game being minimised.\n` +
+          describeTrace(result),
       ).toBe(0);
+      // A clean run leaves its trace too: the day the gate fails, the last green reading is the
+      // baseline the red one is compared against.
+      console.log(`[launch-focus-guard] quiet launch clean. ${describeTrace(result).split("\n")[0]}`);
     },
     120_000,
   );

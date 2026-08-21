@@ -23,6 +23,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -81,12 +82,92 @@ function pidAlive(pid) {
   }
 }
 
-function readLockOwner(lockDir) {
+/** The owner file's exact bytes, or null when there is none (yet) — the identity of one incarnation
+ *  of the lock dir, compared byte-for-byte by `reclaimLock`. */
+function readLockOwnerText(lockDir) {
   try {
-    return JSON.parse(readFileSync(join(lockDir, "owner.json"), "utf8"));
+    return readFileSync(join(lockDir, "owner.json"), "utf8");
   } catch {
     return null;
   }
+}
+function parseLockOwner(text) {
+  if (text === null) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reclaim a lock dir that a contender has judged dead or stale — but ONLY if it is still the
+ * incarnation the contender judged. Caught live 2026-08-20 (site-build-collision-guard, 1 run in
+ * ~6, twice in a row inside the pre-push gate): a contender read owner.json of holder A; A released
+ * and EXITED (holders exit right after releasing, so this is the common case, not a corner); holder
+ * B created a fresh lock dir and wrote its own owner.json; only then did the contender's
+ * `process.kill(A, 0)` return ESRCH — the call took ~5 ms under load — so it concluded "orphaned"
+ * and `rmSync`'d the dir. That deleted B's live lock; the contender took the name and two holders
+ * ran at once — two astro builds in one dist/, the exact collision this lock exists to prevent.
+ *
+ * Three layers close it, in order:
+ *  1. a FINAL re-read with no work between it and the take — the judgement is milliseconds old;
+ *     the dir must still carry the judged bytes (dead path) or still be older than staleMs
+ *     (stale path) at the last instant;
+ *  2. the take is a `renameSync`, atomic, so two contenders that judged the same dead lock can
+ *     never both delete — the loser's rename fails and it goes back to polling;
+ *  3. the moved dir is inspected before deletion and, if it is not the judged incarnation after
+ *     all, renamed straight back untouched.
+ * Returns true when the dead lock is gone and the caller may try the name again; false means
+ * "not yours to reclaim, keep polling".
+ */
+export function reclaimLock(lockDir, judgedOwnerText, { staleMs = Infinity } = {}) {
+  const judgedDead = judgedOwnerText !== null;
+  // Layer 1 — last-instant identity. Nothing runs between these reads and the rename.
+  if (judgedDead) {
+    if (readLockOwnerText(lockDir) !== judgedOwnerText) return false;
+  } else {
+    try {
+      if (!(Date.now() - statSync(lockDir).mtimeMs > staleMs)) return false;
+    } catch {
+      return false;
+    }
+  }
+  // Layer 2 — atomic take.
+  const taken = `${lockDir}.reclaim-${process.pid}-${Date.now()}`;
+  try {
+    renameSync(lockDir, taken);
+  } catch {
+    return false; // vanished, or another contender took it first — either way, re-poll
+  }
+  // Layer 3 — it is ours to look at now; delete only the incarnation that was judged.
+  const insideText = readLockOwnerText(taken);
+  let stillStale = false;
+  try {
+    stillStale = Date.now() - statSync(taken).mtimeMs > staleMs;
+  } catch {
+    stillStale = false;
+  }
+  const owner = parseLockOwner(insideText);
+  const deadOwner = owner !== null && !pidAlive(owner.pid);
+  const sameIncarnation = judgedDead ? insideText === judgedOwnerText : insideText === null;
+  if (sameIncarnation && (deadOwner || stillStale)) {
+    rmSync(taken, { recursive: true, force: true });
+    return true;
+  }
+  // Not the lock that was judged after all: a live holder published in between. Give it back.
+  try {
+    renameSync(taken, lockDir);
+  } catch (e) {
+    // A third party took the name while the live lock was out of place. Nothing here can be
+    // undone safely; leave the moved dir for its holder to find and say so loudly.
+    process.stderr.write(
+      `site build lock: could not restore ${lockDir} after a mistaken reclaim (${e.code}); ` +
+        `its holder's lock now lives at ${taken}
+`,
+    );
+  }
+  return false;
 }
 
 /**
@@ -109,7 +190,8 @@ export function withSiteBuildLock(
     } catch (e) {
       if (e.code !== "EEXIST") throw e;
     }
-    const owner = readLockOwner(lockDir);
+    const ownerText = readLockOwnerText(lockDir);
+    const owner = parseLockOwner(ownerText);
     let ageMs;
     try {
       ageMs = Date.now() - statSync(lockDir).mtimeMs;
@@ -118,7 +200,9 @@ export function withSiteBuildLock(
     }
     const orphaned = owner !== null && !pidAlive(owner.pid);
     if (orphaned || ageMs > staleMs) {
-      rmSync(lockDir, { recursive: true, force: true });
+      // The judgement above is about the bytes in ownerText; reclaimLock deletes only that exact
+      // incarnation (see its comment for the live collision this closed).
+      reclaimLock(lockDir, ownerText, { staleMs });
       continue;
     }
     if (Date.now() - started > timeoutMs) {

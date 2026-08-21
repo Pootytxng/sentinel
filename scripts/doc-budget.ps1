@@ -38,10 +38,12 @@ $budgets = @{
 # a red gate is worse than shipping a working ratchet, and because bringing them down is a CONTENT
 # decision owned by whoever writes them, not a mechanical trim (bytes are content; re-wrapping a
 # long line does not remove any). The budget may only ever move DOWN. Lower each as its pass lands:
-#   docs/BACKLOG.md        114KB            RATCHETED DOWN TWICE on 2026-08-18: 142KB -> 122KB when the
+#   docs/BACKLOG.md        106KB            RATCHETED DOWN THREE TIMES: 142KB -> 122KB on 2026-08-18 when the
 #                                           2026-07-27a ... 2026-08-04a steering-log cycles moved to
 #                                           docs/archive/, then 122KB -> 114KB when 2026-08-04b ...
-#                                           2026-08-04g followed them. It is now UNDER its 120KB
+#                                           2026-08-04g followed them, then 114KB -> 106KB on 2026-08-20
+#                                           when A4's 42 shipped entries moved to
+#                                           docs/archive/BACKLOG_A4_SHIPPED_2026-08-20.md. It is UNDER its 120KB
 #                                           derived target, so the ratchet is the live ceiling and
 #                                           the target no longer buys any room.
 #   docs/RELEASE_STATE.md   48KB            AT TARGET 2026-08-18 (was 57KB): the desk-build lineage
@@ -51,7 +53,7 @@ $budgets = @{
 #                                           slack guard in doc-budget-guard.test.mjs exists to catch.
 # (CLAUDE.md is handled by its own older guard - see the note under the table.)
 $byteBudgets = @{
-  "docs/BACKLOG.md" = 116736
+  "docs/BACKLOG.md" = 108544
   "docs/RELEASE_STATE.md" = 49152
   "docs/OWNER_ACTION_CHECKLIST.md" = 33792
   "src-tauri/CLAUDE.md" = 10240

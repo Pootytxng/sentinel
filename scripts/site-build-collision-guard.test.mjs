@@ -15,11 +15,11 @@
 // half mechanically, with a real multi-process race, not a source grep alone.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { spawn } from "node:child_process";
-import { globSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, globSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { siteAppDistIsFresh, withSiteBuildLock } from "./stage-dist-site.mjs";
+import { reclaimLock, siteAppDistIsFresh, withSiteBuildLock } from "./stage-dist-site.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const helperUrl = pathToFileURL(join(root, "scripts", "stage-dist-site.mjs")).href;
@@ -106,6 +106,65 @@ describe("the site build lock serialises across processes", () => {
       new RegExp(`held for over 200ms by pid ${process.pid}`),
     );
     rmSync(lockDir, { recursive: true, force: true });
+  });
+});
+
+// bug→guard 2026-08-20: the four-process race above caught this about one run in six — a contender
+// judged holder A dead from an owner.json it had read BEFORE A released and exited, and by the time
+// it deleted "A's" dir, holder B had already taken the name and written its own owner.json. The
+// race test can only catch that by luck; these pin the exact interleaving deterministically by
+// handing reclaimLock a judgement made against an earlier incarnation.
+describe("a reclaim deletes only the incarnation that was judged dead", () => {
+  const dead = { pid: 2_147_483_000, at: "2026-08-20T00:00:00Z" }; // no such pid on any Windows box
+  const deadText = JSON.stringify(dead);
+
+  it("never deletes a live lock that replaced the dead one it judged (the caught collision)", () => {
+    const lockDir = join(scratch, "replaced", ".lock");
+    mkdirSync(lockDir, { recursive: true });
+    const live = JSON.stringify({ pid: process.pid, at: new Date().toISOString() });
+    writeFileSync(join(lockDir, "owner.json"), live);
+    // The contender's judgement was about `deadText`; the dir now belongs to a live holder.
+    expect(reclaimLock(lockDir, deadText, { staleMs: 300_000 })).toBe(false);
+    expect(existsSync(lockDir), "the live holder's lock dir must still be there").toBe(true);
+    expect(readFileSync(join(lockDir, "owner.json"), "utf8"), "…with its owner untouched").toBe(live);
+    expect(readdirSync(dirname(lockDir)).filter((n) => n.includes(".reclaim-")), "nothing moved aside").toEqual([]);
+    rmSync(lockDir, { recursive: true, force: true });
+  });
+
+  it("does reclaim the judged dead incarnation itself", () => {
+    const lockDir = join(scratch, "dead", ".lock");
+    mkdirSync(lockDir, { recursive: true });
+    writeFileSync(join(lockDir, "owner.json"), deadText);
+    expect(reclaimLock(lockDir, deadText, { staleMs: 300_000 })).toBe(true);
+    expect(existsSync(lockDir)).toBe(false);
+    expect(readdirSync(dirname(lockDir)).filter((n) => n.includes(".reclaim-"))).toEqual([]);
+  });
+
+  it("a stale judgement about an ownerless dir does not touch a fresh ownerless dir (a holder mid-publish)", () => {
+    const lockDir = join(scratch, "fresh-empty", ".lock");
+    mkdirSync(lockDir, { recursive: true }); // mkdir done, owner.json not written yet
+    expect(reclaimLock(lockDir, null, { staleMs: 300_000 })).toBe(false);
+    expect(existsSync(lockDir)).toBe(true);
+    rmSync(lockDir, { recursive: true, force: true });
+  });
+
+  it("a stale ownerless dir is reclaimed", () => {
+    const lockDir = join(scratch, "old-empty", ".lock");
+    mkdirSync(lockDir, { recursive: true });
+    const old = new Date(Date.now() - 600_000);
+    utimesSync(lockDir, old, old);
+    expect(reclaimLock(lockDir, null, { staleMs: 300_000 })).toBe(true);
+    expect(existsSync(lockDir)).toBe(false);
+  });
+
+  it("two contenders judging the same dead lock cannot both take it", () => {
+    // Atomic take: once one rename has moved the dir, the other's must fail and report "not yours".
+    const lockDir = join(scratch, "double", ".lock");
+    mkdirSync(lockDir, { recursive: true });
+    writeFileSync(join(lockDir, "owner.json"), deadText);
+    const first = reclaimLock(lockDir, deadText, { staleMs: 300_000 });
+    const second = reclaimLock(lockDir, deadText, { staleMs: 300_000 });
+    expect([first, second]).toEqual([true, false]);
   });
 });
 
