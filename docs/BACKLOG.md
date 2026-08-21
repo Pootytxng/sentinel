@@ -336,6 +336,16 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   which the lane that built this did not have (owner in-game the whole session). If confirmed, the
   fix lives in how the siblings launch their console children (CreateNoWindow, never a ShellExecute
   Hidden console) plus a guard that no suite opens a console host — not in Compy.
+  **2026-08-20 (later, same lane): the issue's "decision 2" is taken.** `runtimeVerdict` combines the
+  poll with the trace: a reading the trace shows was HANDED to Compy (`inherited-after-another-
+  window-left`) is reported UNMEASURABLE by name instead of failing the push; everything else keeps
+  the poll's verdict (an in-process raise with no hand-off, or a foreground with no focus event near
+  it, is still the hard zero; inside-one-poll stays unmeasurable on the poll's terms because a focus
+  taker at launch proves nothing). Five pure tests pin it, two mutants caught. *Why:* the flake
+  blocked unattended pushes — the marathons' landing step — and the trace now names the sibling that
+  opened the console, so the fix has an address. Still open: the deciding measured run, then the
+  sibling console-launch fix + guard. `COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF=1` still refuses every
+  unmeasurable.
   Shipped: installed build `3155c7a0`, self-review **PASS** on round 3 (round 2 caught that P2 was
   only half-fixed — a hand-added cooler still occluded the CPU — and that is now fixed and guarded).
 - [x] **The "add a part" form is mounted nowhere** — CLOSED by Train 1 (2026-08-12): the form was

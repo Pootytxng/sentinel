@@ -362,6 +362,32 @@ export function formatTrace(events = [], { limit = 40 } = {}) {
 }
 
 /**
+ * The gate's verdict on a quiet launch: the poll's reading, corrected by the ONE thing the trace can
+ * prove that the poll cannot (issue #121, its "decision 2"). A window OUTSIDE the launched tree
+ * minimising or dying ≤500ms before Compy got the foreground is Windows handing the foreground to the
+ * next window in Z-order — a fresh never-activated window sits at the top of that order. Recorded
+ * 2026-08-20 (a sibling suite's "hidden" console child: Windows Terminal fronted at +59ms, minimised
+ * at +307ms). To the poll that is a foreground arriving a few polls AFTER the window: its hard-zero
+ * in-process-raise shape. It is not Compy's code, so it is reported UNMEASURABLE by name — the same
+ * category as "a compy was already running" — never scored against the app, and never hidden.
+ *
+ * What this deliberately does NOT do: use the focus taker to resolve the poll's one-sample ambiguity.
+ * Windows fronting a fresh launch ALSO lands focus on Compy's own top-level afterwards, so an
+ * `in-process` taker at launch is not evidence either way; `unattributable-at-launch` stays
+ * unmeasurable on the poll's terms alone. And `outside-family` (a foreground with no focus event
+ * near it) is an ABSENCE of evidence, so it stays the hard zero. Under
+ * COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF every unmeasurable verdict is a failure again.
+ */
+export function runtimeVerdict(result) {
+  const reading = classifyForegroundReading(result);
+  const { raisedBy } = summarizeTrace(result);
+  if (reading === "clean") return { verdict: "clean", reading, raisedBy };
+  if (raisedBy === "inherited-after-another-window-left") return { verdict: "unmeasurable", reading, raisedBy };
+  if (reading === "unattributable-at-launch") return { verdict: "unmeasurable", reading, raisedBy };
+  return { verdict: "fail", reading, raisedBy };
+}
+
+/**
  * The newest built compy.exe that is actually NEWER than the sources this file pins. A stale binary
  * would let the runtime tier "prove" a fix that predates the code -- the same false-pass, one level
  * down. Returns null when there is nothing honest to measure (a clean checkout, CI, a Linux box).
@@ -674,6 +700,48 @@ describe("the trace names WHAT raised the window (#121)", () => {
     expect(text).toContain("[family]");
   });
 
+  // The verdict the runtime tier acts on, on recorded readings: a change here is a change to what the
+  // gate lets through, so each branch is pinned and the mutation that would disarm it is pinned too.
+  describe("the verdict combines the poll and the trace (#121 decision 2)", () => {
+    const poll = (firstForegroundMs, firstWindowMs, owned = 50) => ({ ownedForegroundSamples: owned, firstForegroundMs, firstWindowMs, samples: 55 });
+    const handoffTrace = [
+      ev(59, "FOREGROUND", { pid: 14724, proc: "WindowsTerminal", family: false, cls: "CASCADIA_HOSTING_WINDOW_CLASS", title: "Windows Terminal", rootPid: 14724, fgPid: 14724 }),
+      ev(99, "SHOW"),
+      ev(307, "MINIMIZESTART", { pid: 14724, proc: "WindowsTerminal", family: false, cls: "CASCADIA_HOSTING_WINDOW_CLASS", title: "Windows PowerShell", rootPid: 14724 }),
+      ev(308, "FOREGROUND", { fgPid: 100 }),
+      ev(310, "FOCUS"),
+    ];
+
+    it("a poll that never saw Compy own the foreground is clean, whatever the trace holds", () => {
+      expect(runtimeVerdict({ ...poll(-1, 12, 0), launchedPid: 100, familyPids: [100], events: handoffTrace }).verdict).toBe("clean");
+    });
+
+    it("a foreground the poll calls an in-process raise, that the trace shows was HANDED over, is unmeasurable by name", () => {
+      const v = runtimeVerdict({ ...poll(308, 99), launchedPid: 100, familyPids: [100], events: handoffTrace });
+      expect(v).toEqual({ verdict: "unmeasurable", reading: "in-process-raise", raisedBy: "inherited-after-another-window-left" });
+    });
+
+    it("the same poll reading with NO hand-off in the trace stays the hard zero", () => {
+      const inProcess = [ev(99, "SHOW"), ev(308, "FOREGROUND", { fgPid: 100 }), ev(310, "FOCUS")];
+      expect(runtimeVerdict({ ...poll(308, 99), launchedPid: 100, familyPids: [100], events: inProcess })).toEqual({ verdict: "fail", reading: "in-process-raise", raisedBy: "in-process" });
+      // A hand-off OUTSIDE the 500ms window is not this raise: the mutation that would widen the
+      // window into "anything minimised earlier excuses it" fails here.
+      const stale = handoffTrace.map((e) => (e.kind === "MINIMIZESTART" ? { ...e, ms: -300 } : e));
+      expect(runtimeVerdict({ ...poll(308, 99), launchedPid: 100, familyPids: [100], events: stale }).verdict).toBe("fail");
+    });
+
+    it("a foreground with no focus event near it is an absence of evidence, and still fails", () => {
+      const bare = [ev(99, "SHOW"), ev(308, "FOREGROUND", { fgPid: 100 })];
+      expect(runtimeVerdict({ ...poll(308, 99), launchedPid: 100, familyPids: [100], events: bare })).toEqual({ verdict: "fail", reading: "in-process-raise", raisedBy: "outside-family" });
+    });
+
+    it("inside one poll stays unmeasurable on the poll's terms — an in-process focus taker at launch proves nothing", () => {
+      const atLaunch = [ev(7, "FOREGROUND", { fgPid: 100 }), ev(9, "FOCUS"), ev(12, "SHOW")];
+      expect(runtimeVerdict({ ...poll(7, 12), launchedPid: 100, familyPids: [100], events: atLaunch })).toEqual({ verdict: "unmeasurable", reading: "unattributable-at-launch", raisedBy: "in-process" });
+      expect(runtimeVerdict({ ...poll(7, 12), launchedPid: 100, familyPids: [100], events: [] }).verdict).toBe("unmeasurable");
+    });
+  });
+
   it("formatTrace caps long traces and says so", () => {
     const many = Array.from({ length: 60 }, (_, i) => ev(i, "FOCUS"));
     const text = formatTrace(many, { limit: 10 });
@@ -815,8 +883,21 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
         result.firstForegroundMs >= 0 && result.firstWindowMs >= 0
           ? `${result.firstForegroundMs - result.firstWindowMs}ms after its window appeared`
           : "with no window timing recorded";
-      const verdict = classifyForegroundReading(result);
-      if (verdict === "unattributable-at-launch" && !process.env.COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF) {
+      const { verdict, reading, raisedBy } = runtimeVerdict(result);
+      if (verdict === "unmeasurable" && raisedBy === "inherited-after-another-window-left" && !process.env.COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF) {
+        // The trace names a window outside the launch leaving the foreground just before Compy got
+        // it — Windows' hand-off to the next window in Z-order, not an in-process raise, whatever the
+        // poll's timing looked like. Said by name so the sibling that opened that window can be found.
+        console.log(
+          `[launch-focus-guard] quiet-launch reading UNMEASURABLE: the foreground (${result.firstForegroundMs}ms, ` +
+            `${result.ownedForegroundSamples}/${result.samples} samples; poll reading "${reading}") was HANDED to Compy ` +
+            `by a window outside the launch leaving the foreground (issue #121). This run did not measure Compy either way. ` +
+            `Refuse the skip with COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF=1.\n` +
+            describeTrace(result),
+        );
+        return;
+      }
+      if (verdict === "unmeasurable" && !process.env.COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF) {
         // Reported by name, never silently. Reproduced 3/3 on 2026-08-18 against the 0.9.25 desk
         // build with VS Code holding the foreground: first foreground 7ms, first window 12ms — one
         // poll apart, so the order between them is the poll's, not the machine's.
