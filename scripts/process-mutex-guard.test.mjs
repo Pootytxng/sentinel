@@ -1,9 +1,21 @@
 // @vitest-environment node
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
+
+// TIMEOUT: this file SPAWNS Windows PowerShell, repeatedly, and holds some of those processes for
+// the length of a test. The global 15s in vitest.config.ts was calibrated for heavy React RENDER
+// tests, never for process spawn under a 357-file pool. Measured 2026-08-21: with this file in the
+// pool the full suite failed 7 tests across three files, all with "Test timed out in 15000ms", and
+// every one of them passed when the same files were run alone. Excluding this file alone took the
+// failures from 7 to 1. That is spawn latency, not a defect in what these tests assert -- the
+// assertions are about exit codes and ordering, which do not become truer at 15s than at 60s.
+// vitest.config.ts deliberately sets no `retry`, so a starved test here is a red FAIL, not a
+// silent second attempt; this is the per-file timeout that its PowerShell-driving siblings
+// (deps-bootstrap-guard, production-adapter-lookup, public-version-gate) already carry.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
 const root = join(import.meta.dirname, "..");
 const harness = join(root, "scripts", "process-mutex-harness.ps1");
@@ -112,7 +124,9 @@ const collect = (child) =>
 const runHarness = (action, testCase, extra = []) =>
   collect(startHarness(action, testCase, extra));
 
-const waitFor = async (predicate, timeoutMs = 10_000) => {
+// Same reason as the timeout above: 10s is not enough for powershell.exe to reach its ready
+// file when 357 test files are competing for the machine.
+const waitFor = async (predicate, timeoutMs = 45_000) => {
   const deadline = Date.now() + timeoutMs;
   while (!predicate()) {
     if (Date.now() >= deadline) throw new Error("timed out waiting for harness state");
@@ -229,11 +243,18 @@ describe.runIf(process.platform === "win32")("process-scoped Compy collision gua
     const evidenceFile = writeEvidenceFixture(testCase, inspectionState);
 
     rmSync(testCase.readyFile, { force: true });
+    // The holder must still be holding when the clear below reaches the mutex. Signalling it to let
+    // go beats timing it: a fixed hold races powershell.exe start-up, which is unbounded under a
+    // full-suite pool, and losing that race made this assertion fail as though recovery had cleared
+    // while a holder was live. HoldMs is now only the hang stop.
+    const releaseFile = join(testCase.stateRoot, "release-raw-holder.txt");
     const rawHolder = startHarness("raw-hold", testCase, [
       "-ReadyFile",
       testCase.readyFile,
+      "-ReleaseFile",
+      releaseFile,
       "-HoldMs",
-      "1500",
+      "60000",
     ]);
     const rawHolderResult = collect(rawHolder);
     await waitFor(() => existsSync(testCase.readyFile));
@@ -245,6 +266,7 @@ describe.runIf(process.platform === "win32")("process-scoped Compy collision gua
     ]);
     expect(activeClear.code).not.toBe(0);
     expect(activeClear.stderr).toContain("MUTEX COLLISION");
+    writeFileSync(releaseFile, "release", "utf8");
     expect((await rawHolderResult).code).toBe(0);
 
     const cleared = await runHarness("clear", testCase, [

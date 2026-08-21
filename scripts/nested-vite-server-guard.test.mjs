@@ -112,3 +112,57 @@ describe("the injected loader still resolves the real modules", () => {
     expect(typeof lib.site.SITE_URL).toBe("string");
   });
 });
+
+// bug→guard (2026-08-21): the two test files that hold a Windows PowerShell process open must
+// declare their own timeout, because the global one is not theirs.
+//
+// vitest.config.ts sets testTimeout: 15000 and says why — "heavier RENDER tests can take 5-7s
+// under full-suite CPU contention". Nothing in that number is about spawning powershell.exe. When
+// #128 added process-mutex-guard.test.mjs (which starts holder processes and waits on a ready
+// file) to a 357-file pool, the full suite failed SEVEN tests across THREE files, every one of
+// them "Test timed out in 15000ms", and every one of them green when the same file ran alone.
+// Excluding that one file took the count from 7 to 1.
+//
+// This is the same disguise the guard above this one exists for: a starved test that reads as an
+// unrelated file being flaky. vitest.config.ts deliberately refuses `retry` — "anything flaky here
+// is a defect to find" — so the fix is the per-file timeout that the other PowerShell-driving
+// suites (deps-bootstrap-guard, production-adapter-lookup, public-version-gate) already carry, and
+// this guard is what stops it being quietly deleted the next time someone tidies imports.
+//
+// Add a file here when it starts SPAWNING powershell.exe, not merely reading a .ps1.
+const POWERSHELL_HOLDERS = [
+  "scripts/process-mutex-guard.test.mjs",
+  "scripts/release-transaction-e2e.test.mjs",
+];
+
+describe("test files that spawn Windows PowerShell own their timeout", () => {
+  for (const rel of POWERSHELL_HOLDERS) {
+    it(`${rel} declares a file-level timeout well above the render-calibrated default`, () => {
+      const src = read(rel);
+      const match = /vi\.setConfig\(\{[^}]*testTimeout:\s*([0-9_]+)/.exec(src);
+      expect(
+        match,
+        `${rel} spawns powershell.exe and has no vi.setConfig({ testTimeout }). It will inherit ` +
+          `the 15s default from vitest.config.ts, which was calibrated for React render tests, and ` +
+          `it will fail under full-suite load while passing when run alone.`,
+      ).not.toBeNull();
+      expect(
+        Number(match[1].replace(/_/g, "")),
+        `${rel} sets testTimeout below 60s, which is not enough headroom for process spawn under ` +
+          `a full-suite pool on this machine.`,
+      ).toBeGreaterThanOrEqual(60_000);
+    });
+  }
+
+  it("the listed files still actually spawn powershell (otherwise this guard is dead weight)", () => {
+    const notSpawning = POWERSHELL_HOLDERS.filter((rel) => {
+      const src = read(rel);
+      return !/powershell/i.test(src) || !/\bspawn(Sync)?\(/.test(src);
+    });
+    expect(
+      notSpawning,
+      "These no longer spawn powershell.exe. Either the guard entry is stale and should be " +
+        "removed, or the spawn moved somewhere this guard cannot see it.",
+    ).toEqual([]);
+  });
+});

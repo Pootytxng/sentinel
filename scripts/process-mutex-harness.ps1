@@ -8,6 +8,7 @@ param(
   [Parameter(Mandatory = $true)][string]$Resource,
   [Parameter(Mandatory = $true)][string]$StateRoot,
   [string]$ReadyFile,
+  [string]$ReleaseFile,
   [int]$HoldMs = 0,
   [string]$IssueEvidenceUrl,
   [string]$IssueEvidenceFile
@@ -29,7 +30,19 @@ try {
       $ownsRaw = $raw.WaitOne(0)
       if (-not $ownsRaw) { throw "raw test holder could not acquire $MutexName" }
       Write-Ready
-      [System.Threading.Thread]::Sleep($HoldMs)
+      if ($ReleaseFile) {
+        # Holding for a FIXED number of milliseconds races the caller's next powershell.exe spawn,
+        # which measured >15s under the full 357-file pool on 2026-08-21. The holder released before
+        # the collision it exists to cause, and the test then failed asserting that recovery refused
+        # to clear while a holder was active -- a security-shaped red flag with no defect behind it.
+        # Hold until the caller says it is done; HoldMs survives only as a hang stop.
+        $deadline = (Get-Date).AddMilliseconds($HoldMs)
+        while (-not (Test-Path -LiteralPath $ReleaseFile) -and ((Get-Date) -lt $deadline)) {
+          [System.Threading.Thread]::Sleep(50)
+        }
+      } else {
+        [System.Threading.Thread]::Sleep($HoldMs)
+      }
     } finally {
       if ($ownsRaw) { $raw.ReleaseMutex() }
       $raw.Dispose()

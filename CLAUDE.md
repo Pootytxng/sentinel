@@ -76,12 +76,13 @@ batching questions to the end. A failed gate triggers repair, not owner escalati
 failed candidate before reset or abandonment. `AskUserQuestion` is for genuine forks in **owner
 territory** only; engineering forks you resolve yourself and record the reasoning.
 
-**Role specialization + proof order:** Claude Code implements, Codex independently reviews. Either
-becomes the one active writer only by explicit handoff under `docs/WORK_CONTROL.md`, after inspecting
-inherited repo, remote, worktree, dirty-state and process truth. Required gates cannot be substituted;
-environment inability is a blocker, not a pass. Run `scripts/work-control-gate.mjs` before any
-proof-dependent GitHub state transition. **One worktree per writer**, shared checkouts read-only —
-the release/install mutexes enforce exclusion, they never grant ownership (`docs/WORK_CONTROL.md`).
+**Role specialization + proof order:** Claude Code is the default implementation owner; Codex is the
+default independent reviewer. Either becomes the one active writer only by explicit handoff under
+`docs/WORK_CONTROL.md`, after inspecting inherited repo, remote, worktree, dirty-state and process
+truth. Exact required gates cannot be substituted; environment inability is a blocker, not a pass.
+Run `scripts/work-control-gate.mjs` before any proof-dependent GitHub state transition. **One
+worktree per writer**, shared checkouts read-only; the release/install mutexes enforce exclusion,
+they never grant ownership.
 
 **Owner-bound in this repo** (on top of the universal floor in `~/.claude/CLAUDE.md` §3):
 1. **Secrets / signing** — the Ed25519 private key or any secret never enters the repo / `.env*` / CI.
