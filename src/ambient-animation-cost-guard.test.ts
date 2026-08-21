@@ -191,17 +191,42 @@ const ALWAYS_ON_AMBIENT: { file: string; selector: string; why: string }[] = [
 // ── The 2026-08-19 correction to this file's model ───────────────────────────────────────
 // Guards 1-3 above encode "compositor-safe properties are free". Measurement against the shipped
 // v0.9.25 binary falsified that in two separate ways, and these two guards pin what was actually
-// measured (docs/perf/raw/idle-attribution-2026-08-19-*.json, #127):
+// measured (docs/perf/raw/idle-attribution-2026-08-19-A-rig-on.json and
+// -2026-08-19-C-no-scale-anywhere.json, #127 -- both SETTLED runs; see the 2026-08-21 correction
+// below for why that qualifier is now load-bearing):
 //
 //   1. SCALE IS NOT FREE ON A FULL-WINDOW LAYER. `aurora` animated transform only, was promoted
 //      with will-change, and still cost 13.257% of a core -- 67.5% of all idle -- because a scale
-//      animation makes the compositor re-raster the layer at its new size. The same keyframes with
-//      the scale removed measured -0.105. Translating is free; resizing is not.
+//      animation makes the compositor re-raster the layer at its new size. With the scale removed
+//      everywhere, total idle fell 19.632 -> 9.421. Translating costs less; resizing is worse.
 //   2. ON A SMALL ALWAYS-ON SURFACE, RUNNING FOREVER IS ITSELF THE COST. `stl-pulse` measured
-//      4.156 as shipped, 4.001 promoted with will-change, and 4.721 rewritten to animate opacity
-//      alone. Three different mechanisms, one number. Nothing about HOW it animated mattered.
+//      4.156 as shipped and 4.721 rewritten to animate opacity alone. Two different mechanisms,
+//      one number. Nothing about HOW it animated mattered.
 //
 // So: full-window layers may drift but not breathe, and always-on badges get a bounded ping.
+
+// ── The 2026-08-21 correction to the correction: DRIFT IS NOT FREE EITHER ────────────────
+// The half of the sentence above that reads "translating is free" was never measured. It came from
+// run B, whose own file records "baselineStability": { "settled": false } -- the probe's way of
+// saying the baseline never held still, so no band measured against it means anything. Two SETTLED
+// runs on 2026-08-21 against the installed build measured what the surviving pure-translate3d
+// `aurora` actually costs, and it is not nothing:
+//
+//     E (as shipped)     total idle 22.392% of a core -> 2.067% with aurora alone frozen
+//     F (type reverted)  total idle 21.178% of a core -> 1.681% with aurora alone frozen
+//     (docs/perf/raw/idle-attribution-2026-08-21-E-baseline.json and -F-type1-reverted.json)
+//
+// ~88% of everything Compy burns sitting idle is the ambient backdrop drifting behind a window
+// nobody is looking at. The #127 fix removed a scale that was genuinely expensive; it did not make
+// the layer cheap, and the number that said it had was noise.
+//
+// THIS FILE CANNOT CATCH THAT, AND SHOULD NOT PRETEND TO. It is a static CSS analyser: it reads
+// selectors and keyframe bodies, so it can see `scale(` in a keyframe but it can never see what a
+// layer costs on a machine. The guard that owns cost is the recorded budget --
+// docs/perf/q7-baseline.json's idleCpuPercentOfOneCore, enforced by
+// scripts/perf-budget-guard.test.mjs -- and the guard that stops a bad measurement from becoming a
+// rule in the first place is src/perf-evidence-integrity-guard.test.ts, written the same day for
+// exactly this failure. Do not add a cost assertion here; ratchet the budget there.
 
 // A keyframe body that changes the layer's raster geometry. Includes the individual `scale`
 // property, which is a transform written a different way and costs exactly the same.

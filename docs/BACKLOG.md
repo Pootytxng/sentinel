@@ -35,19 +35,25 @@
 
 #### ① A PERSON REPORTED IT AND WE HAVE NOT ANSWERED — these outrank everything
 
-1. **The owner's "runs a lot slower than before" is UNSETTLED and was in no queue.** *Why it matters:*
-   he told us the app got slower, we shipped two releases since, and he has never been given an
-   answer — that is the one failure that costs trust with the only user we have.
-   [`RELEASE_STATE.md`](RELEASE_STATE.md) §"Required owner decisions" carries it with **"Do not
-   report it as fixed"** and it appears nowhere in any work queue; this row exists so it cannot vanish
-   again. It is **not** the update-pill LED fixed in v0.9.25 — he is always on the newest build, so
-   that animation never entered the AVAILABLE state on his machine and cannot be what he felt.
-   **Leading suspect, and it is uncomfortable: the TYPE-1 ship itself** (v0.9.22 `700cd565`) — the
-   app-wide switch to the bundled Geist variable font plus the 14px→15px base bump, i.e. the type
-   work he looked at and passed. **The tool already exists and has never been run:
-   `node scripts/q7-probe.mjs attribute`.** Run it, attribute the cost, bring him evidence. If Geist +
-   15px is the price, the fix trades looks for speed and **that fork is his** — but only with the
-   measurement in hand, never as a guess.
+1. **STOP THE AMBIENT BACKDROP ANIMATING — it is ~88% of Compy's idle CPU.** *Why it matters:* the
+   app burns about a fifth of a CPU core doing nothing, forever, to slide a background gradient 3%
+   sideways behind a window nobody is looking at; that is the single biggest cheap win in the app and
+   it never stops, focused or not. `body::before`'s `aurora` keyframe in [`../src/App.css`](../src/App.css):
+   freezing that one animation and nothing else took idle 22.392% → **2.067%** of a core on the
+   installed build. Do it, re-measure with `node scripts/q7-probe.mjs idle-bare`, then **ratchet
+   `idleCpuPercentOfOneCore` in [`perf/q7-baseline.json`](perf/q7-baseline.json) down hard** — 26 is
+   loose enough to hide the entire cost. It is a look change, so it needs a `self-review` PASS on an
+   installed build and a before/after to the owner; under the 2026-08-07 taste decree it ships as a
+   decision with a veto attached, not as a question.
+   **The owner's "runs a lot slower than before" is ANSWERED as of 2026-08-21 — do not re-run it.**
+   [`RELEASE_STATE.md`](RELEASE_STATE.md) §"Required owner decisions" carries the numbers. Short
+   version: there is **no regression** — idle CPU 20.853% of a core vs 23.348% recorded, cold start
+   3112 ms vs 3721 ms, working set 579 MB vs 606 MB, all better than baseline and inside budget. The
+   **Geist font + 14→15px bump is NOT the cause** (two settled runs, same binary, same room, 1.21
+   points apart against baselines that spread 1.352 and 0.932 — noise). The aurora cost above is real
+   but is not new; it was believed fixed by #127 on two runs whose baselines never settled, which is
+   why [`../src/perf-evidence-integrity-guard.test.ts`](../src/perf-evidence-integrity-guard.test.ts)
+   now exists.
 2. **`compy.gg` tells the world Compy is free, and that is live right now.** *Why it matters:* the
    site contradicts the owner's own 2026-07-21 monetization decree on the public internet, and every
    day it stands is a pricing expectation being set that money later has to fight. `site/llms.txt:5`

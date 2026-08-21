@@ -50,9 +50,11 @@
 /* A BOUNDED ping, not a forever animation (idle-cost re-teardown, 2026-08-19, #127). These two
    rings sit on Home unconditionally, in every one of the three Home surfaces, so "infinite" meant
    every user paid them from the moment the app opened. Measured on the shipped v0.9.25: 4.156% of a
-   CPU core, 21.2% of the whole idle cost. It is NOT the scale -- the same rings measured 4.001 with
-   will-change: transform, opacity promoting them, and 4.721 rewritten to animate opacity alone
-   (docs/perf/raw/idle-attribution-2026-08-19-{A-rig-on,B-h1-no-scale,C-no-scale-anywhere}.json).
+   CPU core, 21.2% of the whole idle cost. It is NOT the scale -- the same rings measured 4.721
+   rewritten to animate opacity alone
+   (docs/perf/raw/idle-attribution-2026-08-19-A-rig-on.json vs -C-no-scale-anywhere.json; a third
+   promoted-layer figure used to stand here and was withdrawn 2026-08-21 -- it came from a run whose
+   baseline never settled, see src/perf-evidence-integrity-guard.test.ts).
    Nothing about HOW it animates was the cost; running forever was. Six iterations still ping the
    arriving eye for ~15s, then `forwards` parks the ring on its final frame (opacity 0), so the
    resting card costs exactly nothing and looks the way it always did at rest. */

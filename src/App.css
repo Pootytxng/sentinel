@@ -2146,11 +2146,29 @@ body {
    left `scale(1) -> scale(1.09)` in place, and a scale animation makes the compositor re-raster the
    layer at its new size -- promoted or not, blurred or not. On v0.9.25 this ONE keyframe measured
    13.257% of a CPU core, 67.5% of everything the app burned sitting idle, and it hangs off
-   body::before so every room paid it. Re-measured against the shipped binary with the same keyframes
-   minus the scale: -0.105 points, i.e. gone; total idle 19.632 -> 9.448
-   (docs/perf/raw/idle-attribution-2026-08-19-{A-rig-on,B-h1-no-scale}.json). The drift survives as a
-   pure translate3d, which the compositor moves without touching the texture.
-   Guarded by src/ambient-animation-cost-guard.test.ts. */
+   body::before so every room paid it. Removing the scale everywhere took total idle 19.632 -> 9.421
+   (docs/perf/raw/idle-attribution-2026-08-19-A-rig-on.json vs -C-no-scale-anywhere.json).
+
+   AND THE DRIFT THAT SURVIVED IT IS NOT FREE (2026-08-21). What used to stand here was "-0.105
+   points, i.e. gone ... the compositor moves it without touching the texture." That came from a run
+   whose own file says "baselineStability": { "settled": false } -- the probe's way of recording that
+   its baseline never held still, so nothing measured against it means anything. Nothing in the repo
+   read that flag, so the number was quoted as proof for two months. Two SETTLED runs against the
+   installed build, taken to answer the owner's "runs a lot slower than before":
+
+       E (as shipped)     idle 22.392% of a core -> 2.067% with THIS animation alone frozen
+       F (type reverted)  idle 21.178% of a core -> 1.681% with THIS animation alone frozen
+       (docs/perf/raw/idle-attribution-2026-08-21-E-baseline.json, -F-type1-reverted.json)
+
+   ~88% of everything Compy burns sitting idle is this gradient sliding 3% sideways over 20 seconds
+   behind a window nobody is looking at. It is not a regression -- the honest whole-app number
+   (idle-bare, no CDP attached) is 20.853% today against 23.348% recorded on 2026-08-19, so the app
+   is slightly CHEAPER than its own baseline -- it is a standing cost that was believed fixed and
+   was not. Nothing here pauses when the window loses focus, either.
+
+   Guarded by src/ambient-animation-cost-guard.test.ts (shape: what a keyframe may animate) and
+   src/perf-evidence-integrity-guard.test.ts (evidence: an unsettled run may not be cited as proof).
+   Cost itself is owned by docs/perf/q7-baseline.json + scripts/perf-budget-guard.test.mjs. */
 body::before {
   content: "";
   position: fixed;

@@ -25,7 +25,7 @@
 
 Compy is the **PC doctor for everyday, non-technical Windows gamers**: the first place a user goes
 after a crash, freeze, slowdown, or unexplained hiccup. It gathers local evidence, explains what is
-known versus only suspected, and guides the safest next test or recovery. Optimization remains a
+known versus only suspected, and guides the safest next test or recovery. Optimization/Performance remains a
 major specialty, but it is secondary to diagnosis and recovery. The durable engineering identity is
 still *"a rollback-first Windows configuration safety layer that happens to optimize."* UX stays
 plain-English, hardware-aware, safe + reversible by default. **Never invent or assume hardware
@@ -102,7 +102,7 @@ ship-to-others boundary. Rigor is unchanged — verification is never skipped.
 ### TASTE IS MINE TO EXERCISE, HIS TO OVERRULE (owner decree 2026-08-07)
 
 Aesthetic calls are **not** owner-gated and must never be parked on him by default — his words:
-*"i do not want taste calls to exclusively fall on me id like to see youre ideas and consider your
+*"i do not want taste calls to exclusively fall on me id like to see your ideas and consider your
 taste calls as well."* Make the call, ship it, and hand him a **viewable before/after**
 (`SendUserFile`, per `.claude/skills/self-review`) so he can veto on sight — deciding is mine,
 seeing is his, and prose describing a look is neither. Ask first only where taste stops being taste:
