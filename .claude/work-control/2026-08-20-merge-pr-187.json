@@ -1,0 +1,57 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "feature",
+  "pr": 187,
+  "issue": null,
+  "branch": "lane/rail-door",
+  "currentHead": "f83b762b8547ff157e1b505307d321d14ebc4317",
+  "explicitHandoff": "Owner directive 2026-08-20 (evening) opening this session: read docs/SESSION_HANDOFF.md; with no compy running and no game in front, push lane/rail-door -> PR -> build+install -> self-review on the rail door (foundation 5) -> ship -> merge green, then push + PR + merge lane/focus-121, then begin the Live/History/Test intimidation pass. The lane swapped the two (focus-121 landed first as #186 because rail-door's first gate run tripped the #121 RUNTIME flake); this receipt is the second half. Owner re-confirmed the desk free mid-session ('ok everything closed do whatever you need to').",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room, git dir shared with C:/Users/Kuya/code/sentinel.",
+    "remoteState": "origin/main = aff85bd6 (the #186 merge, this lane's own) -- fetched and rebased onto before the build, not moved since. GitHub reports PR #187 MERGEABLE / CLEAN with headRefOid equal to this receipt's currentHead; no status checks exist on the repo (Actions budget decree).",
+    "worktree": "git worktree list re-checked before the push: seven worktrees, this lane alone in sentinel-home-room on lane/rail-door; the main checkout (C:/Users/Kuya/code/sentinel) sits on main at ffe85271 and is not this lane's.",
+    "branch": "lane/rail-door, four commits on top of aff85bd6 after the rebase (05df064f the rail door, 95af8932 handoff, 0808e33e the #186 receipt carry, f83b762b ship docs), no merge commits, no divergence; origin/lane/rail-door is at this exact head.",
+    "dirtyState": "git status --porcelain at this head shows only this receipt file, which by construction cannot ride inside the head it authorizes; it stays untracked for the next lane's first commit, the same chain #181-#186 used. The reviewer's captures in docs/ui-sweep/shots/rail-door/ are gitignored, as every sweep's are.",
+    "liveProcesses": "Foreground at the push check: Discord; Steam idle (steamwebhelper only); no game; the owner's installed compy.exe 0808e33e running tray-side as relaunched by the ship script -- the gate does not touch it. The Marvel Rivals the owner opened by accident earlier had exited before any launch."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "f83b762b8547ff157e1b505307d321d14ebc4317",
+      "detail": "Inside .githooks/pre-push at this exact head (core.hooksPath=.githooks): exit 0, LOCAL CHECK RESULT: PASS, 1090-line log read by its LOCAL CHECK markers -- vitest 355 files / 4672 passed / 4 skipped, tsc + vite build clean, cargo 963 passed / 0 failed / 24 ignored, clippy clean, no FAIL or error lines. The push created origin/lane/rail-door, which the hook blocks when the gate fails. The lane's first gate run (at the pre-rebase head bcb1c690) failed only on the #121 RUNTIME foreground flake that #186 classifies."
+    }
+  ],
+  "shipProof": {
+    "applicable": true,
+    "stamp": "0808e33e · release · shell 0.9.26",
+    "installerSha256": "190B0996DA7911B2B739925D9DFFC8C01FA5491F3EA83C6D2F86CD3D8E8CAB67",
+    "detail": "scripts/ship-reinstall.ps1 -VerifyRuntime -ExpectedCommit 0808e33e... from the 0808e33e build (npm run tauri build at that head, stamp clean -- the first attempt had refused on a DIRTY stamp from the untracked #186 receipt, which was committed and the build redone). Stale-build gate, Desktop hygiene (one installer), silent /S install, CDP get_build_stamp proved `0808e33e · release` on the first attempt (0 retries), relaunch. The ship docs commit f83b762b on top is docs-only (RELEASE_STATE row + anchors, archive move, UI_VISION_BACKLOG, SESSION_HANDOFF) and does not compile into the binary, so the desk runs this PR's product code exactly."
+  },
+  "selfReview": {
+    "verdict": "PASS",
+    "detail": "self-reviewer subagent on the installed 0808e33e exe (CDP 9333, native 1500x980), all 10 rubric items PASS: instrument labels 6.04:1 and the 'Look deeper' sign 4.88:1 computed against the real rail background; no duplicated UI; all four rooms rendered and clickable, aria-selected moving, digits 1-4 live (2 is still Live); no clipping or overflow; hover/focus states; copy matches i18n; 5-leg rail switch 16.7-22.9 ms; item 10 prior-owner-decisions clean (2026-08-06 no-toggle directive and 2026-08-12 renames honoured). Item 10 was initially missing from the block and was obtained by a follow-up to the same agent before the verdict was accepted. Captures: docs/ui-sweep/shots/rail-door/01-health-default.png, 02-live-selected.png (local)."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; WORK_CONTROL makes that review advisory rather than a blocker. No src-tauri change (mutation boundary untouched); the change is a pure rail regrouping with tests (homeRail.test.ts railGroups, ShellV2.test.tsx front-door group) that the mutant fails, plus the self-review above on the installed build."
+  },
+  "docGates": [
+    "doc-budget.ps1, markdown-link-guard (153/153), verify-release-state (31 ok / 0 drift: owner_installed_stamp=0808e33e, source_main_commit=aff85bd6), verify-module-map and branch-disposition-audit are resident in npm test (gate-residency-guard) and passed inside the vitest run above at this head. RELEASE_STATE stayed under its 48KB budget by moving the ab54f1e4 row to docs/archive/RELEASE_STATE_HISTORY.md.",
+    "branch-disposition-audit: origin/lane/rail-door exists only for the minutes between push and this merge -- the known #126 ordering race; no row added on purpose, the same reason PRs #176-#186 added none. The ref is deleted right after the merge."
+  ]
+}
