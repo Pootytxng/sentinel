@@ -315,6 +315,27 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   raises the window ~120ms after creation (ours, intermittent, reproduces only under full
   parallelism — 3/3 green standalone). The next step is unchanged and now better aimed: instrument
   WHAT raises the window at ~120ms, with the suite running.
+  **2026-08-20 (lane/focus-121): the instrument exists; the policy is unchanged until it has read a
+  real failure.** `scripts/lib/foreground-events.cs` is a WinEvent hook (`EVENT_SYSTEM_FOREGROUND`,
+  `EVENT_OBJECT_FOCUS`, window `CREATE/SHOW/DESTROY` for the launched process tree,
+  `MINIMIZESTART/END`) that the probe now runs around every launch, pumping instead of sleeping so
+  each event is stamped on arrival; every runtime message (fail, unmeasurable, and clean) carries
+  the trace plus `summarizeTrace`'s attribution — focus taker's window class + owning process
+  (`webview2-runtime` / `in-process` / `outside-family`), and `inherited-after-another-window-left`
+  when a non-family window minimised or died ≤500ms before Compy got the foreground. **Unverified
+  lead, recorded not guessed:** the hook's own smoke test launched a *hidden* powershell.exe
+  (`Start-Process -WindowStyle Hidden`) from a background shell and recorded Windows Terminal — the
+  default console host on this desk — FRONTED at +59ms, MINIMISED at +307ms, foreground falling to
+  the next window in Z-order. Sibling suites do exactly that launch during the full gate
+  (`runtime-proof-guard.test.mjs:122-125`, `detached-window-guard`'s Minimized control child), a
+  fresh never-activated window sits at the top of the Z-order, and the terminal can only be fronted
+  while the foreground lock is open — i.e. on an input-idle desk. That would explain every recorded
+  property at once (full-suite only, idle-desk only, ~120ms+ after the window, "not ours"), and it
+  is exactly what the `inherited-…` category is shaped to show. **It is not confirmed:** the
+  deciding run is the full suite with the trace, on a desk with no compy open and no game in front,
+  which the lane that built this did not have (owner in-game the whole session). If confirmed, the
+  fix lives in how the siblings launch their console children (CreateNoWindow, never a ShellExecute
+  Hidden console) plus a guard that no suite opens a console host — not in Compy.
   Shipped: installed build `3155c7a0`, self-review **PASS** on round 3 (round 2 caught that P2 was
   only half-fixed — a hand-added cooler still occluded the CPU — and that is now fixed and guarded).
 - [x] **The "add a part" form is mounted nowhere** — CLOSED by Train 1 (2026-08-12): the form was
