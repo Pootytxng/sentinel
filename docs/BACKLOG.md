@@ -56,9 +56,18 @@
    the re-run covers it, and a repeat now prints a WARN naming #171.
 3. **#121 · `launch-focus-guard` RUNTIME tier is intermittent, NOT root-caused** — the same class as
    #171 was. Detail on the open row further down this file.
-4. **#126 · retire the 10 unmerged origin lanes + 2 fully-merged refs.** *Why it matters:* this IS the
-   "get back to linear" item — every stranded ref is one more thing each lane must disposition before
-   its own audit can go green.
+4. **#126 · retire the 10 unmerged origin lanes + 2 fully-merged refs — PART-DISCHARGED 2026-08-21,
+   not done.** *Why it matters:* this IS the "get back to linear" item — every stranded ref is one
+   more thing each lane must disposition before its own audit can go green. **Done:** all fifteen
+   refs re-proven by merge-tree at `f8969e5f`, and the three that proof could retire are deleted from
+   `origin` (`claude/foreground-courtesy-handoff-82687b` + `docs/design-foundation` MERGED,
+   `claude/checklist-disk-item-c5660e` SUPERSEDED) — 15 refs → 12, evidence in
+   [`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md). **Left:** nine non-`PRESERVE` refs, and **not
+   one is retirable by proof** — two are open PRs another lane owns (#160/#163), one is a Codex
+   claim, and the rest need an owner product-scope call (bklit design system · user-feedback Lab
+   recovery · quiet-pit-wall half B) or a per-file landing (review-consolidation, tool-shed-hygiene,
+   lab-49-parity-port). What remains is a decision queue, not a cleanup queue, so the row stays open
+   rather than being closed on the easy two-thirds.
 5. **#156 · a silent NSIS install exited 0 without replacing `compy.exe`.** The stamp gate caught it and
    is pinned; the cause is still open. *Why it matters:* without that gate the owner would have been
    handed a build that was not the build.
@@ -91,8 +100,9 @@ session left work in it — so whoever owns it next should `git -C ... merge --f
 checks · #54/#55 Project Doctor (Codex-claimed) · #49 Quiet Pit Wall (needs a visual self-review) ·
 the PHASE A–D rows below.
 
-**OWNER-GATED — visible, never blocking:** 11 open items across `OWNER_ACTION_CHECKLIST.md` §A/§B/§C —
-the Desktop key copy, distribution widening (B2), the funnel + monetization inputs (B3/B6), the two
+**OWNER-GATED — visible, never blocking:** 12 open items across `OWNER_ACTION_CHECKLIST.md` §A/§B/§C —
+the Desktop key copy, the two Claude-settings edits (A_settings), distribution widening (B2), the
+funnel + monetization inputs (B3/B6, now including the live `llms.txt` price line), the two
 substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-screen forks
 (B_startup/B_gpu), the analytics region question (B_eu), and the §C money/legal gates.
 

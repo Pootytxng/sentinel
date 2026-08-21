@@ -349,3 +349,14 @@ install → self-review like any visual change. Either way it's one train. Row: 
 
 ---
 
+## B6 — Wordmark taste fork (resolved 2026-07-15)
+
+Moved out of `docs/OWNER_ACTION_CHECKLIST.md` §B6 on 2026-08-21 under TOKEN LAW §1 to pay for a new
+B6 item. Verbatim:
+
+- ~~**Wordmark taste fork** (surfaced by the web-design-director): the home page renders "COMPY" as
+  all-caps mono; the generated library/debunk pages use a pulsing-"o" wordmark. Director recommends
+  unifying to the all-caps mono. **It's your brand taste call** — say unify / keep-both / your own.~~
+  → **✅ RESOLVED 2026-07-15** ("completely follow the design directors taste calls"): unified to
+  the all-caps tracked mono COMPY site-wide (landing, footer, /compare, all generated Blackbook
+  pages); the pulsing-"o" variant is removed.

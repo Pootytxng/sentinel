@@ -197,12 +197,14 @@ one waits on:
   (Paddle route) + a price you set + shipped Pro value.** The site's "in the works / no price yet"
   card is exactly right until then.
 - **B2B licensing (Layer 4)** — parked, post-traction. No page until you ask.
-- ~~**Wordmark taste fork** (surfaced by the web-design-director): the home page renders "COMPY" as
-  all-caps mono; the generated library/debunk pages use a pulsing-"o" wordmark. Director recommends
-  unifying to the all-caps mono. **It's your brand taste call** — say unify / keep-both / your own.~~
-  → **✅ RESOLVED 2026-07-15** ("completely follow the design directors taste calls"): unified to
-  the all-caps tracked mono COMPY site-wide (landing, footer, /compare, all generated Blackbook
-  pages); the pulsing-"o" variant is removed.
+- **⏳ NEW 2026-08-21 — one line on the live site prices the product wrong, and I can't change it.**
+  `compy.gg`'s `llms.txt` (what other AIs read to describe Compy) says **"Compy is a free desktop
+  app"** — flat contradiction of the Pro tier above. The replacement is written and sitting on an
+  unlanded branch: **"Compy's core is free forever, with a Pro tier in the works."** *Why it's
+  yours:* it's price wording (your call), and any site edit auto-publishes to compy.gg the moment it
+  lands. **Say go and it ships in one commit** — source is `site/generate.mjs:441`.
+- **Wordmark taste fork** — ✅ RESOLVED 2026-07-15, moved to
+  [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md).
 
 ### B4. Two substituted asks — confirm or redirect  ·  ⏳
 Both were real asks that got quietly *substituted* rather than done — flagging so you can close or
