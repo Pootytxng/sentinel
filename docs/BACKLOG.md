@@ -35,25 +35,24 @@
 
 #### ① A PERSON REPORTED IT AND WE HAVE NOT ANSWERED — these outrank everything
 
-1. **STOP THE AMBIENT BACKDROP ANIMATING — it is ~88% of Compy's idle CPU.** *Why it matters:* the
-   app burns about a fifth of a CPU core doing nothing, forever, to slide a background gradient 3%
-   sideways behind a window nobody is looking at; that is the single biggest cheap win in the app and
-   it never stops, focused or not. `body::before`'s `aurora` keyframe in [`../src/App.css`](../src/App.css):
-   freezing that one animation and nothing else took idle 22.392% → **2.067%** of a core on the
-   installed build. Do it, re-measure with `node scripts/q7-probe.mjs idle-bare`, then **ratchet
-   `idleCpuPercentOfOneCore` in [`perf/q7-baseline.json`](perf/q7-baseline.json) down hard** — 26 is
-   loose enough to hide the entire cost. It is a look change, so it needs a `self-review` PASS on an
-   installed build and a before/after to the owner; under the 2026-08-07 taste decree it ships as a
-   decision with a veto attached, not as a question.
-   **The owner's "runs a lot slower than before" is ANSWERED as of 2026-08-21 — do not re-run it.**
-   [`RELEASE_STATE.md`](RELEASE_STATE.md) §"Required owner decisions" carries the numbers. Short
-   version: there is **no regression** — idle CPU 20.853% of a core vs 23.348% recorded, cold start
-   3112 ms vs 3721 ms, working set 579 MB vs 606 MB, all better than baseline and inside budget. The
-   **Geist font + 14→15px bump is NOT the cause** (two settled runs, same binary, same room, 1.21
-   points apart against baselines that spread 1.352 and 0.932 — noise). The aurora cost above is real
-   but is not new; it was believed fixed by #127 on two runs whose baselines never settled, which is
-   why [`../src/perf-evidence-integrity-guard.test.ts`](../src/perf-evidence-integrity-guard.test.ts)
-   now exists.
+1. **Cold start: the frontend is exonerated, and the cost lives before the page exists.**
+   *Why it matters:* the "half a second blank window" was the only measured regression in the
+   app, and the two things everyone blamed for it turn out to be innocent — so the search moves
+   to the Rust/WebView2 start, which nobody has instrumented. Measured 2026-08-21: the blocking
+   payload is **8.4 kB SMALLER** than at `dc4d55e` (JS 1,536.51 → 1,538.10 kB, CSS 370.76 →
+   360.76 kB, building `dc4d55e`'s `src/` with today's toolchain); the Geist faces
+   ([`../src/design/fonts-v2.css`](../src/design/fonts-v2.css)) ship in **both** builds; and the
+   page's own `domContentLoaded` got **faster**, 103/104/102 → 102/88/87 ms. The WebView2 runtime
+   did not move either (148.0.3967.83, installed 2026-05-22). So all of the growth is in *spawn →
+   the page's `timeOrigin`* plus the probe's own attach lag, neither of which was ever recorded
+   separately — [`../scripts/q7-probe.mjs`](../scripts/q7-probe.mjs) `coldstart` now records both
+   and they sum exactly to the headline number. **Still NOT attributed — do not guess it in a
+   doc.** What is left is the four commits that touched the startup path in that window, of which
+   `795d8ff5` (#130) is the one that added startup filesystem work
+   ([`../src-tauri/src/data_root.rs`](../src-tauri/src/data_root.rs)). Settling it needs a
+   decomposed `coldstart` against a **built and installed** `dc4d55e` — and a **quiet desk**: run
+   `node scripts/q7-probe.mjs desk` first, it exits 3 if anything else is using the machine.
+   Full record in [`perf/q7-baseline.json`](perf/q7-baseline.json), still an **open finding**.
 2. **`compy.gg` tells the world Compy is free, and that is live right now.** *Why it matters:* the
    site contradicts the owner's own 2026-07-21 monetization decree on the public internet, and every
    day it stands is a pricing expectation being set that money later has to fight. `site/llms.txt:5`
@@ -65,15 +64,12 @@
 
 #### ② SPECCED OR DECIDED, READY TO BUILD — cheap, visible, no owner dependency
 
-3. **Merge PR [#191](https://github.com/Pootytxng/sentinel/pull/191)** (MERGEABLE), then flip the
-   `lane/rig-then-rails` row in [`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md) `UNLANDED` →
-   `MERGED` and prune the ref **in the same commit** — that row commits to it.
-4. **Build the Test room's "Your rig" reading set** →
+3. **Build the Test room's "Your rig" reading set** →
    [`superpowers/specs/2026-08-21-test-rig-reading-set.md`](superpowers/specs/2026-08-21-test-rig-reading-set.md).
    *Why it matters:* the last open item from the three-room intimidation pass — "Your rig" currently
    repeats Health's numbers, so the Test room's own panel tells the user nothing new. Data wiring,
    not a layout move. Needs a `self-review` PASS on an installed build before it counts.
-5. **COLOR-1 · room accents collide with the status palette** —
+4. **COLOR-1 · room accents collide with the status palette** —
    [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) 🔴 OPEN. *Why it matters:* the Lab glows the
    same green as "this is good", so green stops meaning good in the one room built to prove things;
    Blackbook glows warning-amber while existing to reassure. **Decision already recorded — rooms
@@ -83,20 +79,20 @@
 
 #### ③ REPO HYGIENE — real, but nobody is waiting on it
 
-6. **#125 steps 1–3** (split the code set as data · build `compy-entry adopt` · build the
+5. **#125 steps 1–3** (split the code set as data · build `compy-entry adopt` · build the
    write hook and test it as a module) →
    [`superpowers/specs/2026-08-21-unverified-session-write-refusal.md`](superpowers/specs/2026-08-21-unverified-session-write-refusal.md).
    None of the three needs an owner decision; **step 4, arming it, is his one line** and is
    deliberately NOT in his checklist until 1–3 exist, because a non-ask there buries the real ones.
-7. **#121 · `launch-focus-guard` RUNTIME tier is intermittent, NOT root-caused** — the same
+6. **#121 · `launch-focus-guard` RUNTIME tier is intermittent, NOT root-caused** — the same
    class as #171 was, and #171 proves the class is solvable. Detail on the open row further down.
-8. **#156's unnamed lock holder and #128's unheld locks both discharge on the NEXT REAL SHIP, not on
+7. **#156's unnamed lock holder and #128's unheld locks both discharge on the NEXT REAL SHIP, not on
    their own.** #156's gates close the suspected path but the flake was never reproduced, so the
    *holder* is still unnamed; #128's two mutexes have never been held during an actual release or
    ship. Neither is a task to schedule — both are **evidence to collect the next time a ship runs**,
    so whoever runs that ship owes both issues a comment. Records archived; residuals live here.
-9. **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it** (row below; owner fork B_gpu).
-10. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
+8. **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it** (row below; owner fork B_gpu).
+9. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
    below). Delegated to the Codex lane — do not duplicate it here.
 
 **BLOCKED — another lane owns these; `WORK_CONTROL.md` says hands off, not adjudicate:**

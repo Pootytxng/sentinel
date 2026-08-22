@@ -1,0 +1,483 @@
+{
+  "task": "coldstart",
+  "recordedAt": "2026-08-21T22:05:37.338Z",
+  "exe": "C:\\Users\\Kuya\\AppData\\Local\\Compy\\compy.exe",
+  "sampleCount": 3,
+  "summary": {
+    "usableHomeMs": {
+      "min": 6319,
+      "median": 7148,
+      "max": 8921,
+      "samples": [
+        8921,
+        6319,
+        7148
+      ]
+    },
+    "railPaintedMs": {
+      "min": 6319,
+      "median": 7148,
+      "max": 8921,
+      "samples": [
+        8921,
+        6319,
+        7148
+      ]
+    },
+    "documentReadyMs": {
+      "min": 633,
+      "median": 687,
+      "max": 707,
+      "samples": [
+        707,
+        687,
+        633
+      ]
+    },
+    "navigationStartMs": {
+      "min": 365,
+      "median": 383,
+      "max": 435,
+      "samples": [
+        435,
+        383,
+        365
+      ]
+    },
+    "documentReadyInPageMs": {
+      "min": 164,
+      "median": 171,
+      "max": 176,
+      "samples": [
+        171,
+        176,
+        164
+      ]
+    },
+    "observationLagMs": {
+      "min": 101,
+      "median": 104,
+      "max": 128,
+      "samples": [
+        101,
+        128,
+        104
+      ]
+    },
+    "portOpenMs": {
+      "min": 262,
+      "median": 281,
+      "max": 331,
+      "samples": [
+        331,
+        281,
+        262
+      ]
+    },
+    "workingSetMB": {
+      "min": 575.89,
+      "median": 580,
+      "max": 621.73,
+      "samples": [
+        580,
+        575.89,
+        621.73
+      ]
+    },
+    "processCount": {
+      "min": 8,
+      "median": 8,
+      "max": 10,
+      "samples": [
+        8,
+        8,
+        10
+      ]
+    }
+  },
+  "samples": [
+    {
+      "recordedAt": "2026-08-21T22:04:56.756Z",
+      "msFromSpawn": {
+        "portOpen": 331,
+        "documentReady": 707,
+        "railPainted": 8921,
+        "usableHome": 8921
+      },
+      "inPageNavigation": {
+        "domContentLoaded": 171,
+        "load": 172
+      },
+      "navigationStart": 435,
+      "observationLag": 101,
+      "firstRoom": "Health",
+      "restAfterUsable": {
+        "windowSeconds": 17,
+        "ipcTotal": 13,
+        "ipcByCommand": {
+          "get_fps_status": 6,
+          "get_fan_sensors": 4,
+          "get_gpu_sensors": 1,
+          "get_memory_pressure": 1,
+          "get_cpu_temp": 1
+        },
+        "intervalsStartedSince": 2,
+        "intervalDelays": {
+          "1500": 1,
+          "2500": 1
+        },
+        "canvases": 1,
+        "documentAnimations": 3
+      },
+      "processes": [
+        {
+          "id": 19224,
+          "name": "compy",
+          "cpu": 1.3125,
+          "ws": 66215936,
+          "priv": 20336640,
+          "threads": 59,
+          "handles": 924
+        },
+        {
+          "id": 984,
+          "name": "msedgewebview2",
+          "cpu": 0.0625,
+          "ws": 23597056,
+          "priv": 9785344,
+          "threads": 9,
+          "handles": 171
+        },
+        {
+          "id": 8868,
+          "name": "msedgewebview2",
+          "cpu": 0,
+          "ws": 13438976,
+          "priv": 2592768,
+          "threads": 11,
+          "handles": 157
+        },
+        {
+          "id": 18972,
+          "name": "msedgewebview2",
+          "cpu": 0.828125,
+          "ws": 109756416,
+          "priv": 239108096,
+          "threads": 36,
+          "handles": 1297
+        },
+        {
+          "id": 24476,
+          "name": "msedgewebview2",
+          "cpu": 0.125,
+          "ws": 44298240,
+          "priv": 15388672,
+          "threads": 30,
+          "handles": 374
+        },
+        {
+          "id": 24912,
+          "name": "msedgewebview2",
+          "cpu": 2.03125,
+          "ws": 141770752,
+          "priv": 92217344,
+          "threads": 28,
+          "handles": 367
+        },
+        {
+          "id": 25232,
+          "name": "msedgewebview2",
+          "cpu": 1,
+          "ws": 127352832,
+          "priv": 48852992,
+          "threads": 58,
+          "handles": 1314
+        },
+        {
+          "id": 25356,
+          "name": "msedgewebview2",
+          "cpu": 0.3125,
+          "ws": 81739776,
+          "priv": 42782720,
+          "threads": 17,
+          "handles": 316
+        }
+      ],
+      "processTotals": {
+        "processCount": 8,
+        "workingSetMB": 580,
+        "privateMB": 449.24,
+        "threads": 248,
+        "handles": 4920,
+        "cpuSeconds": 5.67
+      }
+    },
+    {
+      "recordedAt": "2026-08-21T22:05:16.551Z",
+      "msFromSpawn": {
+        "portOpen": 281,
+        "documentReady": 687,
+        "railPainted": 6319,
+        "usableHome": 6319
+      },
+      "inPageNavigation": {
+        "domContentLoaded": 176,
+        "load": 178
+      },
+      "navigationStart": 383,
+      "observationLag": 128,
+      "firstRoom": "Health",
+      "restAfterUsable": {
+        "windowSeconds": 14.3,
+        "ipcTotal": 13,
+        "ipcByCommand": {
+          "get_fps_status": 6,
+          "get_fan_sensors": 4,
+          "get_gpu_sensors": 1,
+          "get_memory_pressure": 1,
+          "get_cpu_temp": 1
+        },
+        "intervalsStartedSince": 2,
+        "intervalDelays": {
+          "1500": 1,
+          "2500": 1
+        },
+        "canvases": 1,
+        "documentAnimations": 3
+      },
+      "processes": [
+        {
+          "id": 304,
+          "name": "compy",
+          "cpu": 1.046875,
+          "ws": 64258048,
+          "priv": 20439040,
+          "threads": 56,
+          "handles": 876
+        },
+        {
+          "id": 4744,
+          "name": "msedgewebview2",
+          "cpu": 1,
+          "ws": 127651840,
+          "priv": 49307648,
+          "threads": 58,
+          "handles": 1302
+        },
+        {
+          "id": 9528,
+          "name": "msedgewebview2",
+          "cpu": 0.015625,
+          "ws": 13438976,
+          "priv": 2584576,
+          "threads": 11,
+          "handles": 157
+        },
+        {
+          "id": 11852,
+          "name": "msedgewebview2",
+          "cpu": 1.765625,
+          "ws": 137568256,
+          "priv": 89808896,
+          "threads": 28,
+          "handles": 367
+        },
+        {
+          "id": 14136,
+          "name": "msedgewebview2",
+          "cpu": 0.265625,
+          "ws": 83443712,
+          "priv": 47013888,
+          "threads": 18,
+          "handles": 319
+        },
+        {
+          "id": 19316,
+          "name": "msedgewebview2",
+          "cpu": 1.09375,
+          "ws": 109453312,
+          "priv": 246439936,
+          "threads": 36,
+          "handles": 1297
+        },
+        {
+          "id": 21412,
+          "name": "msedgewebview2",
+          "cpu": 0.03125,
+          "ws": 23629824,
+          "priv": 9797632,
+          "threads": 9,
+          "handles": 171
+        },
+        {
+          "id": 21448,
+          "name": "msedgewebview2",
+          "cpu": 0.1875,
+          "ws": 44417024,
+          "priv": 15499264,
+          "threads": 29,
+          "handles": 365
+        }
+      ],
+      "processTotals": {
+        "processCount": 8,
+        "workingSetMB": 575.89,
+        "privateMB": 458.61,
+        "threads": 245,
+        "handles": 4854,
+        "cpuSeconds": 5.41
+      }
+    },
+    {
+      "recordedAt": "2026-08-21T22:05:37.337Z",
+      "msFromSpawn": {
+        "portOpen": 262,
+        "documentReady": 633,
+        "railPainted": 7148,
+        "usableHome": 7148
+      },
+      "inPageNavigation": {
+        "domContentLoaded": 164,
+        "load": 165
+      },
+      "navigationStart": 365,
+      "observationLag": 104,
+      "firstRoom": "Health",
+      "restAfterUsable": {
+        "windowSeconds": 15.2,
+        "ipcTotal": 13,
+        "ipcByCommand": {
+          "get_fps_status": 6,
+          "get_fan_sensors": 4,
+          "get_gpu_sensors": 1,
+          "get_memory_pressure": 1,
+          "get_cpu_temp": 1
+        },
+        "intervalsStartedSince": 2,
+        "intervalDelays": {
+          "1500": 1,
+          "2500": 1
+        },
+        "canvases": 1,
+        "documentAnimations": 3
+      },
+      "processes": [
+        {
+          "id": 5948,
+          "name": "cncmd",
+          "cpu": 0,
+          "ws": 561152,
+          "priv": 1982464,
+          "threads": 1,
+          "handles": 164
+        },
+        {
+          "id": 5528,
+          "name": "compy",
+          "cpu": 1.203125,
+          "ws": 64507904,
+          "priv": 21102592,
+          "threads": 56,
+          "handles": 876
+        },
+        {
+          "id": 748,
+          "name": "msedgewebview2",
+          "cpu": 0.015625,
+          "ws": 13443072,
+          "priv": 2588672,
+          "threads": 11,
+          "handles": 157
+        },
+        {
+          "id": 9024,
+          "name": "msedgewebview2",
+          "cpu": 1.046875,
+          "ws": 109436928,
+          "priv": 241524736,
+          "threads": 36,
+          "handles": 1297
+        },
+        {
+          "id": 9652,
+          "name": "msedgewebview2",
+          "cpu": 0.34375,
+          "ws": 83312640,
+          "priv": 43991040,
+          "threads": 18,
+          "handles": 320
+        },
+        {
+          "id": 13932,
+          "name": "msedgewebview2",
+          "cpu": 0.75,
+          "ws": 127811584,
+          "priv": 49627136,
+          "threads": 58,
+          "handles": 1304
+        },
+        {
+          "id": 17716,
+          "name": "msedgewebview2",
+          "cpu": 0.078125,
+          "ws": 23592960,
+          "priv": 9773056,
+          "threads": 9,
+          "handles": 171
+        },
+        {
+          "id": 21500,
+          "name": "msedgewebview2",
+          "cpu": 0.234375,
+          "ws": 44515328,
+          "priv": 15478784,
+          "threads": 27,
+          "handles": 357
+        },
+        {
+          "id": 23944,
+          "name": "msedgewebview2",
+          "cpu": 1.859375,
+          "ws": 142110720,
+          "priv": 94158848,
+          "threads": 28,
+          "handles": 367
+        },
+        {
+          "id": 11724,
+          "name": "RadeonSoftware",
+          "cpu": 114.4375,
+          "ws": 42635264,
+          "priv": 607322112,
+          "threads": 87,
+          "handles": 3984
+        }
+      ],
+      "processTotals": {
+        "processCount": 10,
+        "workingSetMB": 621.73,
+        "privateMB": 1037.17,
+        "threads": 331,
+        "handles": 8997,
+        "cpuSeconds": 119.97
+      }
+    }
+  ],
+  "$comment": "TAKEN ON A BUSY DESK -- the ABSOLUTE numbers here are NOT comparable to any other coldstart trace and no budget row may be derived from them. The owner had a game in the foreground (WardogsClient-Win64-Shipping, ~13.5 GB working set, machine at 60-68%) for the whole run, which is why every milestone reads roughly double the same build's quiet reading that morning (documentReady 633-707 vs 500-516 ms; usableHome 6319-8921 vs 3103-3409 ms). What IS valid here is the STRUCTURE, which is load-independent: navigationStart + inPageNavigation.domContentLoaded + observationLag sums to documentReady exactly, in all three samples. That identity is the whole point of the run. This stamp was written by hand; scripts/q7-probe.mjs now records machineState on every coldstart and exits 3 on a busy desk, so the next one cannot be silent about it.",
+  "machineState": {
+    "quiet": false,
+    "stampedByHand": true,
+    "note": "Observed during the run, before the probe could record it itself.",
+    "cpuPercent": 68,
+    "top": [
+      {
+        "name": "WardogsClient-Win64-Shipping",
+        "wsMB": 13438.0
+      },
+      {
+        "name": "Discord",
+        "wsMB": 1041.4
+      }
+    ]
+  }
+}

@@ -86,6 +86,15 @@ const RESIDENCY = {
     kind: "manual",
     why: "Restarts the dev app on the owner's desk. Resident execution would seize his screen mid-session.",
   },
+  // Not resident on purpose. It asks the LIVE machine what is running, so a resident copy would
+  // fail every time a q7 probe or a self-review legitimately holds a debug port open -- i.e. it
+  // would go red exactly while the tool that opens the port is doing its job. Its residency is
+  // rubric item 11 in .claude/agents/self-reviewer.md, which requires the reviewer to run it and
+  // QUOTE its output line before any verdict, and mirrors that into .codex/agents/self-reviewer.toml.
+  "no-debug-port.mjs": {
+    kind: "manual",
+    why: "A teardown check for whatever opened a debug port, not a gate. Run by the self-reviewer at the end of a review (rubric item 11) and by hand after a probe; a resident copy would fail during every legitimate measurement, which is the opposite of what it is for.",
+  },
   "doc-budget.ps1": {
     kind: "npm-test",
     runner: "scripts/doc-budget-guard.test.mjs",
