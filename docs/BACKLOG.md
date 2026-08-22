@@ -77,7 +77,15 @@
    complaint — *"it minimises my primary monitor"* — is in the trace on all 15 runs, and
    `scripts/launch-focus-guard.test.mjs` now asserts an empty `summarizeTrace().minimized` **above**
    both unmeasurable skips. All 15 recorded none. Detail on the open row further down.
-3. **#156's unnamed lock holder and #128's unheld locks both discharge on the NEXT REAL SHIP, not on
+3. **#128's install mutex is now HALF discharged — a real ship ran it 2026-08-22.** The desk ship of
+   `701c2113` went through `scripts/ship-reinstall.ps1`, which takes `Local\Compy.InstalledBinary.v1`
+   at entry (`scripts/ship-reinstall.ps1:30`) and held it across a genuine kill → stage → silent
+   install → launch. It completed clean. **Do not read that as the mutex being proven** — nothing
+   contended for it, so what ran is the acquire/release path, not the exclusion. The **release**
+   mutex (`scripts/release.ps1:34`) is still unheld during any real run, because a release is the
+   owner's to publish. #156's flake stayed absent through the same ship, so its holder is still
+   unnamed. Remaining text below stands:
+   **#156's unnamed lock holder and #128's release-side lock both discharge on the NEXT REAL SHIP, not on
    their own.** #156's gates close the suspected path but the flake was never reproduced, so the
    *holder* is still unnamed; #128's two mutexes have never been held during an actual release or
    ship. Neither is a task to schedule — both are **evidence to collect the next time a ship runs**,
