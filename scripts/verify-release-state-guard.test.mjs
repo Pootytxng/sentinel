@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  LINEAGE_ROW_CAPS,
   embeddedStampTokens,
   extractCitations,
   ownerDecisionsSection,
@@ -298,6 +299,60 @@ describe("verifyRepo against a repo on disk (resolution and anchoring, not the s
         expect(notes.filter((n) => n.includes("repo-only run"))).toHaveLength(2);
       },
     );
+  });
+});
+
+// The lineage cap (check 5b). The two build-identity rows are append-only: every ship prepends the
+// new build and pushes the old one down inside the same table cell. On 2026-08-22 those two cells
+// were 8.9 KB - 18% of the whole file - and RELEASE_STATE.md blew its byte budget four days after a
+// 57 KB -> 48 KB diet, because archiving the oldest link BY HAND each ship is a judgement call made
+// under time pressure mid-ship, and it converges on nothing. This is the mechanical replacement, so
+// it needs a test that it can still FAIL: a cap that never fires is decoration.
+describe("append-only build-identity rows (check 5b)", () => {
+  const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  const docLines = () =>
+    readFileSync(join(repo, "docs", "RELEASE_STATE.md"), "utf8")
+      .split("\n")
+      .map((l) => l.replace(/\r$/, ""));
+
+  it("names both rows that grow on every ship, and nothing else", () => {
+    expect(Object.keys(LINEAGE_ROW_CAPS).sort()).toEqual([
+      "Latest PUBLISHED release + source commit",
+      "Owner-installed version + embedded stamp",
+    ]);
+  });
+
+  it("both rows are inside their cap now, with the headroom a cap is supposed to leave", () => {
+    const doc = docLines();
+    for (const [label, cap] of Object.entries(LINEAGE_ROW_CAPS)) {
+      const row = doc.find((l) => l.startsWith(`| **${label}**`));
+      expect(row, `no "${label}" row`).toBeTruthy();
+      const bytes = Buffer.byteLength(row, "utf8");
+      expect(bytes, `"${label}" is ${bytes} bytes, cap ${cap}`).toBeLessThanOrEqual(cap);
+      // Anti-slack, mirroring doc-budget-guard: a cap far above the real size has stopped capping,
+      // and this one is derived from the real size on purpose, not padded to buy room in advance.
+      expect(cap - bytes, `"${label}" cap has ${cap - bytes} bytes of slack - lower it`).toBeLessThan(2048);
+    }
+  });
+
+  it("FIRES: a row carrying one predecessor too many is reported, with the cure in the message", () => {
+    const dir = mkdtempSync(join(tmpdir(), "lineage-cap-"));
+    try {
+      mkdirSync(join(dir, "docs"), { recursive: true });
+      const label = "Owner-installed version + embedded stamp";
+      const bloated = docLines()
+        .map((l) => (l.startsWith(`| **${label}**`) ? l + " It supersedes ".padEnd(4000, "x") : l))
+        .join("\n");
+      writeFileSync(join(dir, "docs", "RELEASE_STATE.md"), bloated);
+      const { stateFail } = verifyRepo(dir);
+      const hit = stateFail.find((f) => f.startsWith("LINEAGE-BLOAT:"));
+      expect(hit, `no LINEAGE-BLOAT in: ${stateFail.join(" | ")}`).toBeTruthy();
+      expect(hit).toContain(label);
+      // A failure that does not say what to do next gets muted rather than fixed.
+      expect(hit).toContain("RELEASE_STATE_HISTORY.md");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

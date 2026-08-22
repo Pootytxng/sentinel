@@ -37,6 +37,13 @@ export const NEAR_WINDOW = 40; // lines of tolerated drift before it's a failure
 export const EXACT_WINDOW = 3; // lines still considered "anchored"
 export const REQUIRED_SECTIONS = ["CURRENT STATE", "Gate matrix", "Release blockers"];
 const MAX_ANCHOR_LAG = 10; // commits the marker may trail the mainline before it stops being current
+// Byte caps for the two append-only build-identity rows (check 5b). Like the doc budgets these may
+// only ever move DOWN: they were set 2026-08-22 just above the real size after the lineage trim
+// (2472 and 2480 bytes), so the headroom is one ship's churn, not room bought in advance.
+export const LINEAGE_ROW_CAPS = {
+  "Owner-installed version + embedded stamp": 3000,
+  "Latest PUBLISHED release + source commit": 3000,
+};
 const DOC_REL = "docs/RELEASE_STATE.md";
 
 // #123: JavaScript RegExp has no \Z anchor - the old lookahead's `\Z` parsed as a literal letter,
@@ -275,6 +282,29 @@ function checkCurrentState(root, docLines, { machine }) {
   // (5) exactly one 'Bottom line' section.
   const bottomLines = (docText.match(/^\*\*Bottom line/gim) || []).length;
   if (bottomLines > 1) stateFail.push(`MULTI-BOTTOM-LINE: ${bottomLines} "Bottom line" sections — collapse to one current bottom line`);
+
+  // (5b) LINEAGE-BLOAT: the two rows that carry a build identity are APPEND-ONLY by nature - every
+  // ship prepends the new build and pushes the old one down inside the same table cell, so nothing
+  // ever leaves on its own. Measured 2026-08-22: those two cells were 8.9 KB, 18% of the whole file,
+  // and the file blew its 48 KB byte budget four days after a 57 KB -> 48 KB diet. Archiving the
+  // oldest link by hand each ship is what failed - it is a judgement call made under time pressure
+  // mid-ship, and it converges on nothing. So the cap is mechanical: each row may name the CURRENT
+  // build plus at most ONE predecessor inline; everything older is a pointer into
+  // archive/RELEASE_STATE_HISTORY.md. A byte cap (not a "count the supersedes" cap) because the
+  // disease is size, and a phrase count is reworded away in one edit while the cell keeps growing.
+  for (const [label, cap] of Object.entries(LINEAGE_ROW_CAPS)) {
+    const row = docText.split("\n").map((l) => l.replace(/\r$/, "")).find((l) => l.startsWith(`| **${label}**`));
+    if (!row) { stateFail.push(`LINEAGE-ROW-MISSING: no "${label}" row in ${DOC_REL}`); continue; }
+    const bytes = Buffer.byteLength(row, "utf8");
+    if (bytes > cap) {
+      stateFail.push(
+        `LINEAGE-BLOAT: the "${label}" row is ${bytes} bytes (cap ${cap}) - it is carrying more than the ` +
+        `current build plus one predecessor. Move the OLDEST inline predecessor byte-for-byte to ` +
+        `docs/archive/RELEASE_STATE_HISTORY.md, leave a one-line pointer, and rewrite that segment's ` +
+        `relative links for the extra directory level.`,
+      );
+    }
+  }
 
   // (6) source_main_commit must name a real commit on the mainline, and must not be badly stale.
   // Why this exists: on 2026-07-27 the anchor read `cff77ab` while origin/main had moved 16 commits

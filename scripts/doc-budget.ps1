@@ -4,7 +4,11 @@
 # surface. Nothing here invokes a native program; the budget check is pure cmdlets.
 $ErrorActionPreference = "Stop"
 $budgets = @{
-  "docs/RELEASE_STATE.md" = 300
+  # 300 -> 270 on 2026-08-22: the "Required owner decisions (live)" section was 98 lines of which
+  # ~57 were already CLOSED/ANSWERED/DONE - a closed decision under a heading that says (live) is
+  # drift by definition. They moved to archive/RELEASE_STATE_HISTORY.md. Banking the headroom is
+  # the point: without the tightening the section just refills and the archive move bought nothing.
+  "docs/RELEASE_STATE.md" = 270
   "docs/BACKLOG.md" = 1200
   "docs/OWNER_ACTION_CHECKLIST.md" = 450
   "docs/BETA_DISTRIBUTION_RECORD.md" = 250
@@ -49,15 +53,21 @@ $budgets = @{
 #                                           docs/archive/BACKLOG_A4_SHIPPED_2026-08-20.md. It is UNDER its 120KB
 #                                           derived target, so the ratchet is the live ceiling and
 #                                           the target no longer buys any room.
-#   docs/RELEASE_STATE.md   48KB            AT TARGET 2026-08-18 (was 57KB): the desk-build lineage
-#                                           back to 0.9.18 moved to RELEASE_STATE_HISTORY.md. The
-#                                           budget follows the file down the same day it shrinks -
-#                                           a budget padded to buy room in advance is the thing the
-#                                           slack guard in doc-budget-guard.test.mjs exists to catch.
+#   docs/RELEASE_STATE.md   42KB            RATCHETED 57KB -> 48KB (2026-08-18, desk-build lineage back
+#                                           to 0.9.18 archived) -> 42KB (2026-08-22). The 2026-08-18
+#                                           diet lasted four days, because hauling old prose out by
+#                                           hand treats the symptom: the two build-identity rows are
+#                                           APPEND-ONLY, so they refill on every ship. This ratchet is
+#                                           DERIVED, not guessed - verify-release-state.mjs check (5b)
+#                                           now caps each of those two rows (LINEAGE_ROW_CAPS), and the
+#                                           budget is the real 40.3KB plus exactly the growth those caps
+#                                           still permit. Do not raise it to buy room for a ship; a
+#                                           ship that needs room needs an archive move, which is what
+#                                           check (5b)'s failure text tells whoever hits it.
 # (CLAUDE.md is handled by its own older guard - see the note under the table.)
 $byteBudgets = @{
   "docs/BACKLOG.md" = 102400
-  "docs/RELEASE_STATE.md" = 49152
+  "docs/RELEASE_STATE.md" = 43008
   "docs/OWNER_ACTION_CHECKLIST.md" = 33792
   "src-tauri/CLAUDE.md" = 10240
 }

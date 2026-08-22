@@ -1674,3 +1674,78 @@ Superseded by `701c2113`, then by `d5a6a630`. Text below is byte-for-byte as it 
 owner-installed row.
 
 It supersedes desk build **`36011078`** — built 2026-08-21 by `npm run tauri build` from worktree `sentinel-testrig` at `feat/test-rig-reading-set` (`36011078`), installed silently by Claude via `scripts/ship-reinstall.ps1`, one installer on the Desktop, installer `Compy_0.9.26_x64-setup.exe` SHA-256 **`4A25CFF39B10E83854C53BA579794A9B20D2589CA5B4782AB947F27E8A8876CE`**. **Live == build proved by the embedded stamp, never an exe hash** — `36011078` found byte-scanning the installed exe at `%LOCALAPPDATA%\Compy\compy.exe`. **This binary closes the last of the three-room intimidation pass — Test's remaining open item** ([UI_VISION_BACKLOG.md](../UI_VISION_BACKLOG.md), spec `superpowers/specs/2026-08-21-test-rig-reading-set.md`): 3 of Test's 4 corner gauges no longer repeat Health's numbers (Readiness/Avg FPS/1% low). The set is now Proven (get_scoreboard award count) · Noise floor (get_trial_state noise_floor_pct) · Safe stack (unchanged) · Instruments read (stations with a live reading vs total) — bench facts, not machine facts, on two already-registered read-only commands, zero new backend. Stage tile retitled "Your rig" → "Your rig on the bench". **Self-review VERDICT: PASS** on this installed build (10/10 — corner gauges render correctly and are visually consistent with the prior style; Proven/Noise floor honesty-rail states verified via DOM+computed styles, no fabricated 0; no overflow/clipping on any `.lc-corner` node despite longer labels; Health/History/Live spot-checked unmoved). Chronologically later (18:21) than the `lane/aurora-idle-cost` install below (04:33) on the same date, so it is this row, not that one, that describes what is actually on the owner's desk now.
+
+## Desk build `701c2113` — moved out of RELEASE_STATE.md 2026-08-22 (row cap)
+
+Superseded by `d5a6a630`. Text below is byte-for-byte as it stood in the owner-installed row.
+
+It supersedes desk build **`701c2113`** — built 2026-08-22 by `npm run tauri build` from the primary worktree `sentinel-home-room` at `lane/train-2026-08-22` (`701c2113`), installed silently by Claude via `scripts/ship-reinstall.ps1`, one installer on the Desktop, installer `Compy_0.9.26_x64-setup.exe` SHA-256 **`2451AA19634FD769AB675F2F9970771B095D88430061405FD4FE14A402640BDB`**. **Live == build proved by the embedded stamp, never an exe hash** — `701c2113` found byte-scanning the installed exe at `%LOCALAPPDATA%\Compy\compy.exe`, and `36011078` is confirmed ABSENT from it. **What this build finally puts on the owner's desk is the ambient-idle-CPU fix** (`1f2ba660`, PR [#192](https://github.com/Pootytxng/sentinel/pull/192)): `body::before` lost `animation: aurora` and `will-change: transform`, idle CPU **20.853% → 3.403% of one core** on the honest `idle-bare` instrument. That fix landed on `main` on 2026-08-21 but the desk build made LATER the same day (`36011078`, from a different worktree) did not contain it, so his live app kept paying the cost for a day. It is a strict superset of what it replaces: `36011078`'s Test-room reading set is an ancestor of this commit, verified by `git merge-base --is-ancestor`. **Self-review VERDICT: PASS** on this installed build (10/10, stamp confirmed live via `get_build_stamp` = `"701c2113 · release"`): the backdrop still paints (gradient intact, `animation-name: none`, `will-change: auto`, layer still `pointer-events: none` at `z-index: -1`), no banding or seam, Health/Live/History/Test unchanged, and the Test room's four corner gauges (Proven · Noise floor · Safe stack · Instruments read) render exactly as shipped. **The updater signing key was NOT needed and was not touched** — `npm run tauri build` produces the NSIS installer and only then fails on the updater artifact, which a desk install does not use; that is now a recorded fact rather than an assumed owner gate.
+
+
+## Published release `v0.9.24` — moved out of RELEASE_STATE.md 2026-08-22 (row cap)
+
+Superseded by v0.9.25, then v0.9.26. Text below is byte-for-byte as it stood in the published-release row.
+
+It superseded **v0.9.24**, source `289c658d`, published tag `v0.9.24` on `Pootytxng/compy-releases`, release id **`370225167`**, published `2026-08-13T21:29:49Z` under owner GO (chat, 2026-08-13 — "send out the most current working version of the app to the tester"), `draft: false`, `prerelease: false`. Installer `Compy_0.9.24_x64-setup.exe` SHA-256 **`c0d3b7511941c9aefdb5e5caedafcdbb275d6ebb573724fb7fa2708adf5bbbec`**; public `latest.json` SHA-256 `fc23172530abb784d66b3014688009dc1005d8080596e17e4ba1311d6837d224` — both byte-match the signed receipt, updater signature verifies against the pinned key, transaction **complete 9 of 9**, and the `/releases/latest/download/` alias converged on **attempt 1 in 3.5s** (no edge-cache wait this time). **This is the biggest jump the fleet has ever been offered: six candidate numbers in one release.** It carries design-foundation **step ② UX-1** — the Home front door is now a verdict at 40px with one primary action, and the room title is gone — **visually reviewed on the installed binary, twice, because the first review FAILED** (v0.9.23's verdict rendered a step small; see the owner-installed row) — on top of step ① **TYPE-1 + COLOR-1** (six-step type scale, 13px floor, rooms give up their hue), the update-pill attention state, the in-app What's-new list, and the arc-gauge ring-overflow fix. **v0.9.19 through v0.9.23 were never published** (desk-only or burned by failed re-prepares); v0.9.22's open GO was folded into this one.
+
+## Owner decisions that had already closed — moved out of RELEASE_STATE.md 2026-08-22
+
+They were still sitting under the heading *Required owner decisions (live)*. Byte-for-byte below.
+
+**Closed 2026-08-13 (UTC):** candidate v0.9.18's publish GO/NO-GO. The owner said "go" with the
+desk-ship evidence in front of him (screenshots of the look, the #121 record, the runtime proof) and
+v0.9.18 published at 06:57 UTC on 2026-08-13, transaction closed - `published_*` anchors above carry
+the truth. (Written date-first with no ISO zulu suffix on purpose: the checker's decisions-section
+regex ends the section at the first zulu letter it meets - issue #123 has the fix-forward.) The one
+deferred look (the mid-apply consent panel, unreachable at 9/9-applied) transfers to the first real
+apply, not to a decision.
+
+**ANSWERED 2026-08-21 - the owner's "runs a lot slower than before". Measured, not guessed; no
+owner decision falls out of it.** (Date-first, no zulu suffix, per #123.) Measured against the
+INSTALLED build at `%LOCALAPPDATA%\Compy\compy.exe`, written 2026-08-21 00:32, driven by
+`node scripts/q7-probe.mjs` with no instrumented build. Every figure below is from a run whose
+baseline SETTLED; the runs are in `docs/perf/raw/`.
+
+| what | recorded baseline | 2026-08-21 | budget then |
+|---|---|---|---|
+| idle CPU, honest instrument (`idle-bare`, no CDP) | 23.348% of one core | **20.853%** | 26 |
+| cold start to usable Home (median of 3) | 3721 ms | **3112 ms** | 4500 |
+| working set at idle | 605.76 MB | **579.01 MB** | 660 |
+
+**Compy is not measurably slower than the build its baseline was recorded against - it is the same
+or slightly better on every recorded metric.** So there is no regression to roll back and nothing
+here for the owner to choose between.
+
+**The Geist font + 14->15px bump from TYPE-1 is NOT the cause.** Two settled attribution runs on the
+same binary, same room, back to back, differing only by injected CSS that reverts the font stack and
+the whole type scale: `E-baseline` total 22.392% vs `F-type1-reverted` total 21.178%. A 1.21-point
+difference against runs whose own baselines spread 1.352 and 0.932 - inside the noise. The type work
+he looked at and passed is not what he felt. `docs/perf/raw/idle-attribution-2026-08-21-{E-baseline,F-type1-reverted}.json`.
+
+**What IS the cost, and it is not new: the ambient backdrop.** `body::before`'s `aurora` keyframe -
+a gradient sliding 3% sideways over 20s behind every room - is ~88% of everything the app burns
+sitting idle. Freezing that one animation and nothing else: 22.392% -> **2.067%** (E), 21.178% ->
+**1.681%** (F). Nothing pauses it when the window loses focus. It has been this way the whole time.
+
+**Why it was believed fixed: two of #127's measurements never settled.** The probe records
+`"baselineStability": { "settled": false }` when its baseline never converged, and prints "NEVER
+SETTLED" - and until 2026-08-21 nothing in the repo ever read that field. Run B produced "-0.105
+points, i.e. gone", which became the evidence line in `src/App.css` and the rationale in
+`src/ambient-animation-cost-guard.test.ts` for letting a full-window layer drift forever; run D
+produced the 10.483% reported as the fix landing, and v0.9.26's GO was given partly on "about half as
+much CPU sitting idle". Both figures are withdrawn. `src/perf-evidence-integrity-guard.test.ts` now
+fails the build on any live file that cites an unsettled run, with a greppable line-level
+`perf-unsettled-allow` hatch for text whose subject IS the unsettledness.
+
+**DONE the same day, and it was mine, not his: the backdrop no longer animates.** Desk build
+`1f2ba660` (row above) drops `animation: aurora` and `will-change: transform` from `body::before`
+and keeps every gradient, position and token, so the resting frame is the same picture. Measured on
+that binary with the honest instrument, 10 minutes hands-off, no CDP: idle CPU **3.403% of one
+core**, against 20.853% on `584654c8` and the 23.348% this file used to carry. All three idle rows
+in `docs/perf/q7-baseline.json` are re-derived from that run and the CPU row is an **earned upper
+bound again at 4.5** - it was an `open finding` from the 2026-08-06 teardown until its residual
+was finally named. The look loss is real (~115 px of drift over 20s on a 1440p desk) and it shipped
+as a taste call under the 2026-08-07 decree, with a before/after for him to veto on sight, not as a
+question. `src/ambient-animation-cost-guard.test.ts` guard 6 now fails the build on any
+document-level layer that animates forever, whatever property it animates.
+
