@@ -197,12 +197,15 @@ one waits on:
   (Paddle route) + a price you set + shipped Pro value.** The site's "in the works / no price yet"
   card is exactly right until then.
 - **B2B licensing (Layer 4)** — parked, post-traction. No page until you ask.
-- **⏳ NEW 2026-08-21 — one line on the live site prices the product wrong, and I can't change it.**
+- **⏳ NEW 2026-08-21 — one line on the live site prices the product wrong. Now fixed; needs one word.**
   `compy.gg`'s `llms.txt` (what other AIs read to describe Compy) says **"Compy is a free desktop
-  app"** — flat contradiction of the Pro tier above. The replacement is written and sitting on an
-  unlanded branch: **"Compy's core is free forever, with a Pro tier in the works."** *Why it's
-  yours:* it's price wording (your call), and any site edit auto-publishes to compy.gg the moment it
-  lands. **Say go and it ships in one commit** — source is `site/generate.mjs:441`.
+  app"** — flat contradiction of the Pro tier above. **Draft PR
+  [#193](https://github.com/Pootytxng/sentinel/pull/193)** makes it **"Compy is a Windows desktop app
+  with a free tier"** — your own decree's words, and it says nothing about Pro's price, contents or
+  timing. The older draft on an unlanded branch said *"free forever"*, which that same decree
+  supersedes, so it was rejected rather than landed. *Why it's yours:* price wording is your call,
+  and any site edit auto-publishes to compy.gg the moment it lands. **Say go and I merge it** — both
+  `site/llms.txt` and its real source `site/generate.mjs:441` are already changed and gate-green.
 - **Wordmark taste fork** — ✅ RESOLVED 2026-07-15, moved to
   [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md).
 
