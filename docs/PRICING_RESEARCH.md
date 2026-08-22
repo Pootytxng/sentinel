@@ -3,7 +3,10 @@
 > **Owner ask, 2026-08-22:** *"do some research to truly figure out the monetary value and
 > justification … so it's to be determined as of now."* This doc is that research.
 >
-> **This doc does not set a price.** Price presentation is owner/brand/money territory
+> **Status: the owner ruled on §5 the same day — see §7.** The band is $4.99/mo · $39/yr · $89
+> lifetime. The research below is left intact as the reasoning behind it.
+>
+> **This doc does not set a price by itself.** Price presentation is owner/brand/money territory
 > (`CLAUDE.md` → taste decree; `OWNER_ACTION_CHECKLIST.md` §B6, §C). It gathers the evidence,
 > names a recommendation, and states plainly what is still unmeasured.
 >
@@ -95,15 +98,22 @@ Stated plainly, because the honest-measurement law applies to money claims too:
 - **Nothing here changes what Pro must contain.** A price is only defensible once there is enough
   shipped Pro value to be worth it (`MONETIZATION_PLAN.md` Layer 3, gate ③).
 
-## 7. Owner decisions this leaves open
+## 7. Owner decisions — ✅ RULED 2026-08-22
 
-1. **Accept $39/yr + $89 lifetime as the working band?** (Or set your own — this is a
-   recommendation, not a fait accompli.)
-2. **Is a lifetime SKU acceptable at all?** It caps revenue per user and it is hard to withdraw once
-   offered. I judge the trust it buys in *this* category is worth that, but it is a money call.
-3. **Publish a price on the site, or keep the Pro card price-free until Pro exists?** Current site
-   state is deliberately price-free (`MONETIZATION_PLAN.md`, Director HOLD) and I would keep it that
-   way until §6's experiment has run.
+The owner accepted the recommendation the same day it was written: *"i like the 4.99/39yr/89
+lifetime."*
+
+| Question | Ruling |
+|---|---|
+| Working band for Compy Pro | **$4.99/mo · $39/yr · $89 one-time lifetime.** Written into [`RECEIPTS_DOCTRINE.md`](RECEIPTS_DOCTRINE.md) §Money stack 3 and [`MONETIZATION_PLAN.md`](MONETIZATION_PLAN.md) Layer 3; the old $3–4/mo · ~$25/yr placeholder is superseded. |
+| Is a lifetime SKU acceptable | **Yes** — named explicitly in the ruling. It caps revenue per user and is hard to withdraw once offered; that cost was accepted for the trust it buys in this category. |
+| Publish the price on the site | **No — not yet.** Not addressed in the ruling, so decided here and recorded as reversible: the site's Pro card stays price-free until Pro exists, per `MONETIZATION_PLAN.md`'s Director HOLD. A price on a page that cannot sell anything is the one move this doc's own §4 argues against. Flip it the day Pro is purchasable. |
+
+**Still unmeasured, and still the next step:** nothing above is demand evidence (§6). Put the band in
+front of the waitlist and measure who still signs up before a payment processor is ever wired.
+
+**B2B is not covered by this ruling.** The $10–30/seat/mo band remains unevidenced and needs its own
+pass, starting with one real repair-shop conversation.
 
 ## Sources
 

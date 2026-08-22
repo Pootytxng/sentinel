@@ -188,19 +188,16 @@ one waits on:
   Associates / Newegg — your signup, a money call) **② enough Receipts data** to make a web
   bottleneck-report say something true. Until accounts exist, verdicts use plain retailer links (no
   revenue, still honest).
-- **Compy Pro (Layer 3)** — built dark, correct posture. Needs **a legal entity + merchant-of-record
-  (Paddle route) + a price you set + shipped Pro value.** The site's "in the works / no price yet"
-  card is exactly right until then.
+- **Compy Pro (Layer 3)** — built dark, correct posture. **Price ✅ SET 2026-08-22: $4.99/mo ·
+  $39/yr · $89 one-time lifetime** ([`PRICING_RESEARCH.md`](PRICING_RESEARCH.md) — every comparable
+  charges more than the old $25/yr guess, and a shop charges $45–95 just to *look* at a PC). Still
+  needs **a legal entity + merchant-of-record (Paddle route) + shipped Pro value.** The site's "in
+  the works / no price yet" card stays until Pro is purchasable.
 - **B2B licensing (Layer 4)** — parked, post-traction. No page until you ask.
-- **⏳ NEW 2026-08-21 — one line on the live site prices the product wrong. Now fixed; needs one word.**
-  `compy.gg`'s `llms.txt` (what other AIs read to describe Compy) says **"Compy is a free desktop
-  app"** — flat contradiction of the Pro tier above. **Draft PR
-  [#193](https://github.com/Pootytxng/sentinel/pull/193)** makes it **"Compy is a Windows desktop app
-  with a free tier"** — your own decree's words, and it says nothing about Pro's price, contents or
-  timing. The older draft on an unlanded branch said *"free forever"*, which that same decree
-  supersedes, so it was rejected rather than landed. *Why it's yours:* price wording is your call,
-  and any site edit auto-publishes to compy.gg the moment it lands. **Say go and I merge it** — both
-  `site/llms.txt` and its real source `site/generate.mjs:441` are already changed and gate-green.
+- **✅ CLOSED 2026-08-22 — the live site no longer calls Compy free.** You said *"land 193 dude"*;
+  PR [#193](https://github.com/Pootytxng/sentinel/pull/193) merged as `d5571766`. `site/llms.txt` and
+  its real source `site/generate.mjs:441` now read **"a Windows desktop app with a free tier"** — your
+  own decree's words, saying nothing about Pro's price, contents or timing.
 - **Wordmark taste fork** — ✅ RESOLVED 2026-07-15, moved to
   [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md).
 

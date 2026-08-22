@@ -78,9 +78,13 @@ This is the grand re-opening. We were never open; now we are, and the door says 
    affiliate accounts; tags swap in later. Most passive once built.
 2. **Content engine** — the 130+-entry (and growing) Blackbook corpus published to compy.gg as debunk/SEO
    pages + share-card virality + build-in-public. 6–12 mo ramp, near-passive after; feeds #1.
-3. **Compy Pro** ($3–4/mo or ~$25/yr — **unevidenced placeholder; the researched band is $4.99/mo ·
-   $39/yr · $89 lifetime, see [`PRICING_RESEARCH.md`](PRICING_RESEARCH.md), owner has not ruled**) —
-   sell the RECURRING surfaces already built: session history
+3. **Compy Pro — $4.99/mo · $39/yr · $89 one-time lifetime** (owner decision 2026-08-22, on the
+   evidence in [`PRICING_RESEARCH.md`](PRICING_RESEARCH.md); supersedes the unevidenced $3–4/mo ·
+   ~$25/yr placeholder, which sat below the floor of every comparable). The lifetime SKU is
+   deliberate: the category's loudest complaint is the auto-renew trap, and a permanent licence is a
+   trust signal the scam tier cannot copy. **No price is published anywhere until Pro exists** — the
+   site's "in the works / no price yet" card stands. Sell the RECURRING surfaces already built:
+   session history
    depth, comparisons, multi-rig, overlay customization, deep monitoring. Built dark behind a flag
    (gaming_mode gate pattern) until entity + payments exist.
 4. **B2B licensing** (repair shops / boutique builders, $10–30/seat/mo) — rollback + receipts =
