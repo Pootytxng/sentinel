@@ -25,16 +25,11 @@ git merge-tree --write-tree origin/main origin/<branch>
 Equal to `git rev-parse origin/main^{tree}` → merging changes nothing → the branch is **MERGED**.
 Otherwise the branch is compared file-by-file against the trunk and dispositioned on that evidence.
 
-**A branch that landed without a fast-forward stops being a no-op the moment `main` moves.** Neither
-`--squash` nor `--rebase` leaves an ancestry link back to the branch — squash writes one new commit,
-rebase copies each commit under a new hash — so a later three-way merge reintroduces the branch's own
-stale copies of any file `main` has since changed. On 2026-08-05 that was this very file, twice.
-
-**Rebase is not the safe half of that sentence.** On 2026-08-06 a lane rebase-merged cleanly, was
-proven a no-op at that instant, and its row was flipped CLAIMED → MERGED in the next commit — a row
-the *branch itself* had added. Both sides had then touched the same new line differently, so the
-merge became a conflict and the proof could never be produced again. The audit caught it on `main`
-within the minute; the fix was to prune, because there was nothing left to re-prove.
+**A branch that landed without a fast-forward stops being a no-op the moment `main` moves**, and
+rebase is not the safe half of that sentence: neither `--squash` nor `--rebase` leaves an ancestry
+link, so a later three-way merge reintroduces the branch's own stale copies. It hit this very file
+twice on 2026-08-05, and on 2026-08-06 it destroyed a proof that could never be produced again. Both
+narratives: [`archive/BRANCH_DISPOSITION_SWEEPS.md`](archive/BRANCH_DISPOSITION_SWEEPS.md).
 
 **A MERGED row is therefore perishable: prune the ref in the same breath as recording the merge**,
 rather than leaving a row that will fail its own audit on the next unrelated edit — including the
@@ -91,9 +86,12 @@ non-`PRESERVE` refs remain, and not one of them is retirable by proof**: each ne
 product-scope call or the lane that owns it. #126 is therefore part-discharged, not done — the
 proof-retirable refs are gone, and what is left is a decision queue, not a cleanup queue.
 
-**One live finding surfaced by the re-proof, filed rather than fixed** — `main`'s `site/llms.txt:5`
-prices the product wrongly and is live on `compy.gg`; the corrected line sits unlanded on
-`claude/review-consolidation-structure-9d13f2`. Owner-gated (price wording + `site/**` auto-deploys):
+**One live finding surfaced by the re-proof, now fixed but NOT yet landed** — `main`'s
+`site/llms.txt:5` prices the product wrongly and is still live on `compy.gg`. Corrected in PR
+[#193](https://github.com/Pootytxng/sentinel/pull/193), which is deliberately a **draft**: price
+wording is owner-gated twice (brand + money, and `site/**` auto-deploys). The unlanded line on
+`claude/review-consolidation-structure-9d13f2` was **not** used — it says "free forever", the exact
+phrasing the same decree supersedes. Owner-gated:
 [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) §B6.
 
 | ref | disposition | evidence |
@@ -110,7 +108,8 @@ prices the product wrongly and is live on `compy.gg`; the corrected line sits un
 | `origin/feat/lab-49-parity-port` | UNLANDED | PR [#89](https://github.com/Pootytxng/sentinel/pull/89) closed unmerged 2026-08-08; `93c931a3` sits one commit past the local worktree tip `7e6cd4d7`, no force-push (ancestry intact). The rig half was re-cut into #90, but **three files here exist on neither `main` nor #90** — `scripts/verify-like-ci.mjs`, `scripts/lib/ci-steps.mjs`, `scripts/verify-like-ci.test.mjs`, the local CI runner built when hosted Actions hit exhausted free minutes. **That runner is DECIDED: it dies with its PR** (2026-08-11). `main` reached the same goal by a different road and is now a superset — `scripts/verify-local.ps1` runs the same checks, is actually wired to `.githooks/pre-push` and `npm run verify:local`, probes whether `node_modules` satisfies the manifest (`scripts/deps-satisfied.ps1`), and `scripts/local-gate-guard.test.mjs` already carries the drift catcher that was the runner's real value: every `run:` step in `ci.yml` that is not declared setup must be covered locally, and the one deliberate difference (`stage:site`) is written down with its reason rather than silently missing. Landing a second runner in Node beside the PowerShell one would mean keeping two things in step with `ci.yml` instead of one. Also the parent of the uncommitted `ConfirmDialog` z-index + focus-ring fixes in `C:\Users\Kuya\code\sentinel-quietpitwall` (see `docs/SESSION_HANDOFF.md` §2). |
 | `origin/lane/usage-audit-disk-bloat` | CLAIMED | **Not this lane's branch — dispositioned, untouched.** A concurrently-running session pushed it at 2026-08-20 04:47 local (commit `12886b0f`, one commit on top of `8a1450cd`) with PR [#160](https://github.com/Pootytxng/sentinel/pull/160) open: a report-only disk-bloat flag for an oversized `src-tauri/target`. The same window is when this worktree's `node_modules` was gutted and reinstalled by an `npm install --no-audit --no-fund` no script in this repo issues — the first push gate here died at a missing `tsc` because of it. The row exists so the audit reflects reality; **its disposition to MERGED or a prune belongs to the lane that owns it**, per `docs/WORK_CONTROL.md` (an overlapping live claim means hands off, not adjudicate). |
 | `origin/lane/cleanup-train-2026-08-20` | CLAIMED | **Not this lane's branch — dispositioned, untouched.** A concurrently-running session's docs/receipts train, PR [#163](https://github.com/Pootytxng/sentinel/pull/163) — the `#160` re-proof + receipt, the `A_merge` permission ask, and the record of the worktree collision that renamed it off `lane/self-checkup`. **That PR carries its own, fuller row for this branch; when #163 lands, its text supersedes this one and this line goes.** The row exists only because merging #164 left `main`'s audit red for every push in the repo, and an undispositioned ref blocks other lanes, not just its own. |
-| `origin/fix/site-pricing-language` | UNLANDED | PR [#193](https://github.com/Pootytxng/sentinel/pull/193), OPEN, draft — the `compy.gg` "free" copy fix. Not a clean merge against current `main` (both sides have since touched `docs/BACKLOG.md`). **Owner-gated twice** (price wording + `site/**` auto-deploys): [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) §B6. This row goes when #193 lands or closes. |
+| `origin/lane/train-2026-08-22` | UNLANDED | The active Claude Code lane, worktree `C:\Users\Kuya\code\sentinel-home-room`. Pushed 2026-08-22 carrying `55ecb642` — `docs/PRICING_RESEARCH.md`, the evidence pass the owner asked for after being told the `$25/yr` in `docs/RECEIPTS_DOCTRINE.md` had no source behind it, plus unevidenced-placeholder labels on both money docs. Docs only; nothing reaches the binary. Lands by PR once the lane's remaining owner-authorized work (C-14 `GpuProfile` wire-in, the accepted price band) is on it. |
+| `origin/fix/site-pricing-language` | UNLANDED | **This lane's own branch.** Draft PR [#193](https://github.com/Pootytxng/sentinel/pull/193) — `5748b646` corrects `site/llms.txt:5` **and its real source `site/generate.mjs:441`, because the file is GENERATED and an output-only fix is reverted by the next run**, to "a Windows desktop app with a free tier" — the vocabulary the 2026-07-21 decree at `docs/RECEIPTS_DOCTRINE.md:23` requires. The line drafted on `claude/review-consolidation-structure-9d13f2` was **rejected, not landed**: it says "free forever", which that decree supersedes. Merged up to `main` 2026-08-22, so it is a clean merge again. **Deliberately a DRAFT until the owner answers** — price wording is brand + money and `site/**` auto-deploys to other people's machines, so `docs/WORK_CONTROL.md` allows only a blocked draft, which claims no readiness. Nothing in it reaches the binary. **This row and the ref leave together the moment it lands.** |
 
 ## Standing rule
 

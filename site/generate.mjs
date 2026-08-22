@@ -438,7 +438,7 @@ const llmsTxt = [
   ``,
   `> A rollback-first Windows configuration safety layer for everyday gamers that happens to optimize. Compy reads your actual PC and tailors safe, reversible settings to your hardware — plain-English, no jargon, undo attached to everything.`,
   ``,
-  `Compy is a free desktop app (Windows, AMD verified; NVIDIA detection verified, sensors pending). Its public site is a measurement brand: every number shown was read on a real PC, including the ones that show no gain. No fabricated benchmarks, no third-party runtime requests, no account.`,
+  `Compy is a Windows desktop app with a free tier (AMD verified; NVIDIA detection verified, sensors pending). Its public site is a measurement brand: every number shown was read on a real PC, including the ones that show no gain. No fabricated benchmarks, no third-party runtime requests, no account.`,
   ``,
   `## Start here`,
   `- [Home](${SITE_ORIGIN}/): what Compy is, real-session replay, and the launch waitlist.`,
