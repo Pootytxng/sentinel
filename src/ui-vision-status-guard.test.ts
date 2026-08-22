@@ -160,6 +160,7 @@ describe("UI vision status guard: the guard itself is armed", () => {
         "",
         "</details>",
       ].join("\n"),
+      "utf8",
     );
     const tagged = readTagged(tmp);
     const live = tagged.find((l) => l.text.includes("✅ SHIPPED"))!;
@@ -176,6 +177,7 @@ describe("UI vision status guard: the guard itself is armed", () => {
       ["4. **COLOR-9 · room accents collide** —", "   UI_VISION_BACKLOG.md 🔴 OPEN. Build it."].join(
         "\n",
       ),
+      "utf8",
     );
     const entries = backlogEntries(tmp);
     expect(entries).toHaveLength(1);
