@@ -1,212 +1,212 @@
 {
   "task": "idle-bare",
-  "recordedAt": "2026-08-06T08:17:51.214Z",
-  "note": "No debug port, no CDP, no injected script -- the shipped exe alone, sampled through Windows' per-process processor-time counters. This run measured 23.348% of one core. It is the one idle-CPU figure that owes nothing to the observer, and it holds: the instrumented trace measured 50.95%, and the two bare runs of 2026-08-05 measured 50.71% and 50.17%. The probe is NOT what makes idle Compy expensive -- that cost is the app's own.",
+  "recordedAt": "2026-08-21T11:50:35.058Z",
+  "note": "No debug port, no CDP, no injected script -- the shipped exe alone, sampled through Windows' per-process processor-time counters. This run measured 3.403% of one core. It is the one idle-CPU figure that owes nothing to the observer, and it holds: the instrumented trace measured 50.95%, and the two bare runs of 2026-08-05 measured 50.71% and 50.17%. The probe is NOT what makes idle Compy expensive -- that cost is the app's own.",
   "state": "fresh boot, Home only, window visible",
   "minutes": 10,
   "settleSeconds": 45,
-  "windowSeconds": 606.6,
+  "windowSeconds": 604.8,
   "processCount": 8,
   "cpu": {
-    "processorSeconds": 141.641,
-    "percentOfOneCore": 23.348,
-    "percentOfMachine": 1.4593,
+    "processorSeconds": 20.578,
+    "percentOfOneCore": 3.403,
+    "percentOfMachine": 0.2127,
     "cores": 16
   },
   "memory": {
     "workingSetMB": {
-      "first": 570.65,
-      "last": 601.35,
-      "median": 600.49,
-      "max": 605.76
+      "first": 549.7,
+      "last": 566.61,
+      "median": 561.61,
+      "max": 568.56
     },
     "privateMB": {
-      "median": 434,
-      "max": 535.14
+      "median": 426.32,
+      "max": 432.18
     },
-    "threads": 237,
-    "handles": 4878
+    "threads": 230.5,
+    "handles": 4716
   },
   "samples": [
     {
-      "t": 1786003694847,
+      "t": 1787312460514,
       "processCount": 8,
-      "workingSetMB": 570.65,
-      "privateMB": 413.68,
+      "workingSetMB": 549.7,
+      "privateMB": 418.32,
+      "threads": 239,
+      "handles": 4759,
+      "cpuSeconds": 5.61
+    },
+    {
+      "t": 1787312490736,
+      "processCount": 8,
+      "workingSetMB": 554.55,
+      "privateMB": 421.63,
+      "threads": 239,
+      "handles": 4752,
+      "cpuSeconds": 5.95
+    },
+    {
+      "t": 1787312520952,
+      "processCount": 8,
+      "workingSetMB": 555.32,
+      "privateMB": 421.36,
+      "threads": 232,
+      "handles": 4742,
+      "cpuSeconds": 6.19
+    },
+    {
+      "t": 1787312551171,
+      "processCount": 8,
+      "workingSetMB": 557.5,
+      "privateMB": 423.33,
+      "threads": 231,
+      "handles": 4738,
+      "cpuSeconds": 6.38
+    },
+    {
+      "t": 1787312581401,
+      "processCount": 8,
+      "workingSetMB": 556.73,
+      "privateMB": 422.3,
+      "threads": 231,
+      "handles": 4733,
+      "cpuSeconds": 6.63
+    },
+    {
+      "t": 1787312611614,
+      "processCount": 8,
+      "workingSetMB": 558.74,
+      "privateMB": 424.28,
+      "threads": 230,
+      "handles": 4716,
+      "cpuSeconds": 7.14
+    },
+    {
+      "t": 1787312641827,
+      "processCount": 8,
+      "workingSetMB": 561.22,
+      "privateMB": 427.23,
+      "threads": 230,
+      "handles": 4718,
+      "cpuSeconds": 7.58
+    },
+    {
+      "t": 1787312672046,
+      "processCount": 8,
+      "workingSetMB": 558.39,
+      "privateMB": 423.46,
+      "threads": 230,
+      "handles": 4718,
+      "cpuSeconds": 8.08
+    },
+    {
+      "t": 1787312702263,
+      "processCount": 8,
+      "workingSetMB": 561.48,
+      "privateMB": 425.39,
+      "threads": 245,
+      "handles": 4714,
+      "cpuSeconds": 8.8
+    },
+    {
+      "t": 1787312732472,
+      "processCount": 8,
+      "workingSetMB": 561.13,
+      "privateMB": 425.05,
+      "threads": 245,
+      "handles": 4708,
+      "cpuSeconds": 9.89
+    },
+    {
+      "t": 1787312762693,
+      "processCount": 8,
+      "workingSetMB": 561.73,
+      "privateMB": 425.41,
+      "threads": 244,
+      "handles": 4723,
+      "cpuSeconds": 11.05
+    },
+    {
+      "t": 1787312792920,
+      "processCount": 8,
+      "workingSetMB": 567.62,
+      "privateMB": 432.18,
+      "threads": 229,
+      "handles": 4710,
+      "cpuSeconds": 13.55
+    },
+    {
+      "t": 1787312823133,
+      "processCount": 8,
+      "workingSetMB": 567.71,
+      "privateMB": 431.97,
+      "threads": 229,
+      "handles": 4716,
+      "cpuSeconds": 15.06
+    },
+    {
+      "t": 1787312853354,
+      "processCount": 8,
+      "workingSetMB": 567.58,
+      "privateMB": 431.79,
+      "threads": 228,
+      "handles": 4716,
+      "cpuSeconds": 16.94
+    },
+    {
+      "t": 1787312883565,
+      "processCount": 8,
+      "workingSetMB": 568.56,
+      "privateMB": 431.95,
+      "threads": 225,
+      "handles": 4708,
+      "cpuSeconds": 19.94
+    },
+    {
+      "t": 1787312913789,
+      "processCount": 8,
+      "workingSetMB": 566.06,
+      "privateMB": 429.07,
+      "threads": 225,
+      "handles": 4708,
+      "cpuSeconds": 20.61
+    },
+    {
+      "t": 1787312944007,
+      "processCount": 8,
+      "workingSetMB": 567.45,
+      "privateMB": 431.03,
+      "threads": 225,
+      "handles": 4708,
+      "cpuSeconds": 22.52
+    },
+    {
+      "t": 1787312974211,
+      "processCount": 8,
+      "workingSetMB": 567.68,
+      "privateMB": 431.46,
+      "threads": 225,
+      "handles": 4708,
+      "cpuSeconds": 24.08
+    },
+    {
+      "t": 1787313004429,
+      "processCount": 8,
+      "workingSetMB": 566.75,
+      "privateMB": 430.07,
       "threads": 242,
-      "handles": 4904,
-      "cpuSeconds": 21.55
+      "handles": 4702,
+      "cpuSeconds": 24.73
     },
     {
-      "t": 1786003725194,
+      "t": 1787313034648,
       "processCount": 8,
-      "workingSetMB": 605.76,
-      "privateMB": 535.14,
+      "workingSetMB": 566.61,
+      "privateMB": 429.73,
       "threads": 242,
-      "handles": 4901,
-      "cpuSeconds": 29.92
-    },
-    {
-      "t": 1786003755507,
-      "processCount": 8,
-      "workingSetMB": 595.18,
-      "privateMB": 433.16,
-      "threads": 234,
-      "handles": 4886,
-      "cpuSeconds": 37.84
-    },
-    {
-      "t": 1786003785784,
-      "processCount": 8,
-      "workingSetMB": 593.45,
-      "privateMB": 430.93,
-      "threads": 234,
-      "handles": 4884,
-      "cpuSeconds": 44.7
-    },
-    {
-      "t": 1786003816046,
-      "processCount": 8,
-      "workingSetMB": 595.82,
-      "privateMB": 434.73,
-      "threads": 234,
-      "handles": 4880,
-      "cpuSeconds": 51.39
-    },
-    {
-      "t": 1786003846347,
-      "processCount": 8,
-      "workingSetMB": 597.59,
-      "privateMB": 434.41,
-      "threads": 237,
-      "handles": 4887,
-      "cpuSeconds": 58.28
-    },
-    {
-      "t": 1786003876649,
-      "processCount": 8,
-      "workingSetMB": 597.61,
-      "privateMB": 433.03,
-      "threads": 237,
-      "handles": 4887,
-      "cpuSeconds": 65.48
-    },
-    {
-      "t": 1786003906967,
-      "processCount": 8,
-      "workingSetMB": 599.06,
-      "privateMB": 435.69,
-      "threads": 235,
-      "handles": 4870,
-      "cpuSeconds": 72.63
-    },
-    {
-      "t": 1786003937270,
-      "processCount": 8,
-      "workingSetMB": 601.07,
-      "privateMB": 436.09,
-      "threads": 249,
-      "handles": 4876,
-      "cpuSeconds": 79.55
-    },
-    {
-      "t": 1786003967560,
-      "processCount": 8,
-      "workingSetMB": 603.94,
-      "privateMB": 438.13,
-      "threads": 249,
-      "handles": 4871,
-      "cpuSeconds": 86.63
-    },
-    {
-      "t": 1786003997867,
-      "processCount": 8,
-      "workingSetMB": 599.99,
-      "privateMB": 434.33,
-      "threads": 250,
-      "handles": 4888,
-      "cpuSeconds": 94.19
-    },
-    {
-      "t": 1786004028163,
-      "processCount": 8,
-      "workingSetMB": 599.9,
-      "privateMB": 433.63,
-      "threads": 238,
-      "handles": 4887,
-      "cpuSeconds": 101.45
-    },
-    {
-      "t": 1786004058464,
-      "processCount": 8,
-      "workingSetMB": 601.22,
-      "privateMB": 433.97,
-      "threads": 238,
-      "handles": 4887,
-      "cpuSeconds": 108.08
-    },
-    {
-      "t": 1786004088782,
-      "processCount": 8,
-      "workingSetMB": 600.19,
-      "privateMB": 433.56,
-      "threads": 230,
-      "handles": 4862,
-      "cpuSeconds": 115.11
-    },
-    {
-      "t": 1786004119084,
-      "processCount": 8,
-      "workingSetMB": 601.68,
-      "privateMB": 433.6,
-      "threads": 230,
-      "handles": 4862,
-      "cpuSeconds": 122.31
-    },
-    {
-      "t": 1786004149389,
-      "processCount": 8,
-      "workingSetMB": 602.2,
-      "privateMB": 434.03,
-      "threads": 230,
-      "handles": 4864,
-      "cpuSeconds": 128.59
-    },
-    {
-      "t": 1786004179704,
-      "processCount": 8,
-      "workingSetMB": 600.78,
-      "privateMB": 433.37,
-      "threads": 230,
-      "handles": 4862,
-      "cpuSeconds": 134.58
-    },
-    {
-      "t": 1786004210011,
-      "processCount": 8,
-      "workingSetMB": 602.86,
-      "privateMB": 435.32,
-      "threads": 230,
-      "handles": 4868,
-      "cpuSeconds": 141.92
-    },
-    {
-      "t": 1786004240330,
-      "processCount": 8,
-      "workingSetMB": 605.06,
-      "privateMB": 436.66,
-      "threads": 246,
-      "handles": 4864,
-      "cpuSeconds": 148.41
-    },
-    {
-      "t": 1786004270626,
-      "processCount": 8,
-      "workingSetMB": 601.35,
-      "privateMB": 432.39,
-      "threads": 246,
-      "handles": 4864,
-      "cpuSeconds": 155.03
+      "handles": 4708,
+      "cpuSeconds": 25.31
     }
   ]
 }

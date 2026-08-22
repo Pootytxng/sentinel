@@ -113,6 +113,42 @@ function runningCompyPids() {
   return out ? out.split(",").map(Number).filter(Boolean) : [];
 }
 
+/** Above this, the desk is doing something else and a wall-clock trace is not comparable. */
+const BUSY_CPU_PERCENT = 25;
+
+/**
+ * Is anything ELSE using this machine right now?
+ *
+ * Added 2026-08-21 by committing the bug. A coldstart run recorded 633-707 ms documentReady and
+ * 6319-8921 ms usableHome against the SAME installed build that had read 500-516 / 3103-3409 the
+ * same morning -- roughly double, everywhere, with nothing changed in the app. The owner had a game
+ * in the foreground (14 GB working set, machine at 68%), and the artifact recorded no trace of that.
+ * A reader coming to it later would have had a 2x regression with evidence attached.
+ *
+ * A trace from a busy machine is not WRONG, it is INCOMPARABLE. So: measure the desk, stamp it into
+ * the artifact, say so loudly, and exit non-zero -- the file still gets written, because a marked
+ * trace is useful for diagnosis and only a budget row must never be derived from one.
+ */
+function machineState() {
+  const out = ps(
+    `$cpu = (Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor | ` +
+      `Where-Object Name -eq '_Total').PercentProcessorTime; ` +
+      `$top = Get-Process | Where-Object { $_.ProcessName -ne 'compy' } | ` +
+      `Sort-Object WorkingSet64 -Descending | Select-Object -First 3 | ForEach-Object { ` +
+      `[pscustomobject]@{ name=$_.ProcessName; wsMB=[math]::Round($_.WorkingSet64/1MB,1) } }; ` +
+      `@{ cpuPercent = $cpu; top = @($top) } | ConvertTo-Json -Depth 3 -Compress`,
+  );
+  try {
+    const v = JSON.parse(out || "{}");
+    const cpuPercent = Number(v.cpuPercent ?? 0);
+    const top = Array.isArray(v.top) ? v.top : v.top ? [v.top] : [];
+    return { cpuPercent, top, quiet: cpuPercent <= BUSY_CPU_PERCENT };
+  } catch {
+    // Unknown is not quiet. A trace whose desk could not be measured stays suspect.
+    return { cpuPercent: null, top: [], quiet: false };
+  }
+}
+
 /**
  * Kill every compy.exe and WAIT for the kernel to agree.
  *
@@ -618,6 +654,21 @@ async function coldstartSample() {
       usableHome: rel("homeContent"),
     },
     inPageNavigation: last?.nav ?? null,
+    // `documentReady` above is what the PROBE could SEE, and it can see nothing before the port
+    // is open, a CDP session is attached and one evaluate has returned -- so ALL of the
+    // instrument's own startup latency lands on the FIRST milestone, and none of it on the later
+    // ones. Decomposed here so that can never again be read as an app cost (it was, 2026-08-21:
+    // documentReadyMs 207 -> 516 ms across two builds whose in-page domContentLoaded went
+    // 103 -> 87 ms -- the page got faster while the headline number went up 2.5x).
+    //   navigationStart  spawn -> the page's timeOrigin: Rust init + WebView2 init + navigate.
+    //   inPageNavigation.domContentLoaded  timeOrigin -> DOMContentLoaded: HTML + the bundle.
+    //   observationLag   the remainder: port wait + attach + first evaluate + 50 ms poll grain.
+    // The first two are the app. The third is this file. Budget only the first two.
+    navigationStart: last?.origin ? last.origin - marks.spawnedAt : null,
+    observationLag:
+      last?.origin && last?.nav && marks.documentReady
+        ? marks.documentReady - last.origin - last.nav.domContentLoaded
+        : null,
     firstRoom: last?.selected ?? null,
     // NOT boot IPC: the instrument is installed once the page is already usable, so this is what the
     // app costs at REST on its first room. Boot's own IPC census is the `boot` task, which installs
@@ -649,6 +700,7 @@ async function coldstartSample() {
  */
 async function taskColdstart() {
   const n = Math.max(1, Number(flags.n ?? 3));
+  const deskBefore = machineState();
   const samples = [];
   for (let i = 0; i < n; i++) {
     console.error(`coldstart sample ${i + 1}/${n} ...`);
@@ -666,15 +718,23 @@ async function taskColdstart() {
       samples: vals,
     };
   };
+  const deskAfter = machineState();
+  const quiet = deskBefore.quiet === true && deskAfter.quiet === true;
   const result = {
     task: "coldstart",
     recordedAt: new Date().toISOString(),
     exe: EXE,
     sampleCount: samples.length,
+    // Whether this trace is comparable to any other trace at all. See machineState().
+    machineState: { quiet, before: deskBefore, after: deskAfter },
     summary: {
       usableHomeMs: stat((s) => s.msFromSpawn.usableHome),
       railPaintedMs: stat((s) => s.msFromSpawn.railPainted),
       documentReadyMs: stat((s) => s.msFromSpawn.documentReady),
+      // What that total is made of. A budget belongs on these, never on the total above.
+      navigationStartMs: stat((s) => s.navigationStart),
+      documentReadyInPageMs: stat((s) => s.inPageNavigation?.domContentLoaded ?? null),
+      observationLagMs: stat((s) => s.observationLag),
       portOpenMs: stat((s) => s.msFromSpawn.portOpen),
       workingSetMB: stat((s) => s.processTotals.workingSetMB),
       processCount: stat((s) => s.processTotals.processCount),
@@ -683,6 +743,20 @@ async function taskColdstart() {
   };
   console.log(JSON.stringify(result.summary, null, 2));
   console.log("written:", writeOut("coldstart", result));
+  if (!quiet) {
+    const busiest = [...deskBefore.top, ...deskAfter.top]
+      .sort((a, b) => b.wsMB - a.wsMB)
+      .slice(0, 3)
+      .map((t) => `${t.name} ${t.wsMB} MB`)
+      .join(", ");
+    console.error("");
+    console.error("COLD START RECORDED ON A BUSY MACHINE - these numbers are NOT comparable.");
+    console.error(`  CPU ${deskBefore.cpuPercent}% before, ${deskAfter.cpuPercent}% after ` +
+      `(quiet means <= ${BUSY_CPU_PERCENT}%). Biggest non-Compy processes: ${busiest}.`);
+    console.error("  The trace is written and marked. Do NOT derive a baseline row from it -");
+    console.error("  re-run when the desk is idle. Exit code 3 so nothing consumes it silently.");
+    process.exitCode = 3;
+  }
 }
 
 /**
@@ -2196,9 +2270,27 @@ async function taskRestore() {
   }
 }
 
+/**
+ * Is this desk quiet enough to measure on? One second, touches nothing, launches nothing.
+ *
+ * Run it BEFORE a coldstart or an idle run rather than discovering afterwards that the numbers
+ * are twice what they should be. Exits 3 on a busy desk, the same code coldstart uses.
+ */
+async function taskDesk() {
+  const desk = machineState();
+  console.log(JSON.stringify(desk, null, 2));
+  if (!desk.quiet) {
+    const busiest = desk.top.map((t) => `${t.name} ${t.wsMB} MB`).join(", ");
+    console.error(`BUSY DESK: CPU ${desk.cpuPercent}% (quiet means <= ${BUSY_CPU_PERCENT}%). ` +
+      `Biggest non-Compy processes: ${busiest}. Wall-clock numbers taken now are not comparable.`);
+    process.exitCode = 3;
+  }
+}
+
 // ---------------------------------------------------------------------------- main
 
 const TASKS = {
+  desk: taskDesk,
   coldstart: taskColdstart,
   boot: taskBoot,
   rooms: taskRooms,
@@ -2223,7 +2315,10 @@ try {
   // handle teardown on Windows and aborts the process ("UV_HANDLE_CLOSING") after the artifact is
   // already written, which reads like a failed run when the measurement was fine.
   await sleep(120);
-  process.exit(0);
+  // NOT process.exit(0): a task may set process.exitCode to report that its artifact is usable
+  // but not comparable (coldstart on a busy desk sets 3). Forcing 0 here would print the warning
+  // and then tell every caller the run was fine.
+  process.exit(process.exitCode ?? 0);
 } catch (err) {
   console.error(`q7-probe ${cmd} FAILED:`, err.message);
   process.exit(1);
