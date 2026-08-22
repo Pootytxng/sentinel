@@ -394,7 +394,12 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   full suite in parallel and did not appear in 15 standalone runs. **The console-host lead is
   neither confirmed nor refuted — no window outside the launched family was minimised in ANY of the
   15 runs**, which is also why the new assertion passes 15/15. Traces kept, but `logs/` is gitignored —
-  they are 27 files on THIS desk only, not evidence another machine can re-read. Still open: the load-dependent in-process class, under the full suite.
+  they are 27 files on THIS desk only, not evidence another machine can re-read. **The load-dependent class did not reproduce either:** 3 full-suite runs
+  (364 files / 4840 tests, all green) right after, and all three runtime measurements are clean --
+  `own=0`, the foreground never leaves the host, `minOut=none`. So the ~120ms in-process raise
+  recorded on 2026-08-20 has not been seen again on this desk. It stays open as an unreproduced
+  historical reading, not as a live flake; the honest next step is to leave the trace armed (it is,
+  by default) and read the NEXT one that fires rather than hunt it.
   Shipped: installed build `3155c7a0`, self-review **PASS** on round 3 (round 2 caught that P2 was
   only half-fixed — a hand-added cooler still occluded the CPU — and that is now fixed and guarded).
 - [x] **The "add a part" form is mounted nowhere** — CLOSED by Train 1 (2026-08-12): the form was
