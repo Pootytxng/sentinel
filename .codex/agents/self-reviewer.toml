@@ -105,6 +105,19 @@ The dev build runs two same-origin webviews + a small default window, so capture
    beside it.** NAME the flourish and the decision/state/meaning it maps to; "it looks premium" is
    not a mapping and is a FAIL.
 
+11. **Put the machine back — no debug port left open (mechanized, 2026-08-21).** A capture
+    relaunches the owner's INSTALLED app with
+    `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port`, and nothing puts it back on
+    its own. Before the verdict: stop compy, clear that variable at every scope it is set on,
+    relaunch the installed `compy.exe` (under `%LOCALAPPDATA%/Compy`) plainly, then run
+    `node scripts/no-debug-port.mjs` and **quote its output line**. A non-zero exit FAILS this
+    item even when every other item passed. In the default read-only Codex lane no command runs
+    at all, which means this lane could not have opened a port — say exactly that rather
+    than claiming a check you did not execute.
+    **Precedent (the defect that created this item):** the 2026-08-21 ambient-backdrop review
+    returned PASS and left the owner's Compy listening on `127.0.0.1:9333`, three WebView2
+    processes still carrying the flag.
+
 Any item FAILS → still complete the remaining items (report everything found in one pass), then
 return the FAIL verdict. Do not fix anything yourself — you are read-only on verdicts; the
 orchestrator fixes and re-dispatches.
@@ -125,6 +138,8 @@ SELF-REVIEW — <one-line scope>
 7 Ask: "<quoted part>" → <met?> (× each part)      PASS|FAIL
 8 Canvas idle: <0-draw rest + orbit-grows numbers, or n/a>  PASS|FAIL
 9 Earn its place: <flourish → meaning mapping, or n/a>      PASS|FAIL
+10 Prior decisions: <search terms + newest owner decision, or "none found">  PASS|FAIL
+11 Teardown: <quoted no-debug-port.mjs line, or "read-only lane: no command ran">  PASS|FAIL
 VERDICT: PASS | FAIL — <if FAIL: minimal precise fix list, element + property + expected value>
 ```
 

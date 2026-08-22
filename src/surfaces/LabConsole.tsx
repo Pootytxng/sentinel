@@ -4,7 +4,6 @@ import "../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { useReducedMotion } from "../design/use-motion";
 import { ArcGauge } from "../design/console/ArcGauge";
-import { Term } from "../design/Term";
 import { Dock, type DockNode } from "../design/console/Dock";
 import { BentoGrid, BentoTile } from "../design/bento/BentoGrid";
 import { ReticleCursor } from "../design/console/ReticleCursor";
@@ -26,7 +25,6 @@ import { deriveReverted } from "./use-scan";
 import { peekProbe, cachedProbe } from "../data/probe-cache";
 import { measureTuning, tuningEvidence } from "../data/tuning-measure";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
-import { latestSession } from "./dashboard-data";
 import { BenchmarkTab } from "./Benchmark";
 import { LatencyTab } from "./Latency";
 import { BlackBox } from "./BlackBox";
@@ -38,7 +36,8 @@ import type {
   SessionSummary,
   ArmedComparison,
   ComparisonResult,
-  GameReadiness,
+  ScoreboardView,
+  TrialState,
 } from "../types";
 import type { GpuVendor } from "./walkthroughs";
 import type { HardwareInfo } from "../App";
@@ -74,7 +73,6 @@ export function LabConsole({
   diagnosticsCaptured = false,
   vendor = "any",
   hw,
-  readiness = null,
 }: {
   // The fast-path prop bundle — the SAME audited apply handlers the OptimizeV2 room gets (zero new
   // IPC, zero new mutation primitive). Threaded straight into the Optimize panel.
@@ -86,9 +84,6 @@ export function LabConsole({
   vendor?: GpuVendor;
   // The real hardware read, for the center hologram.
   hw: HardwareInfo;
-  // Optional — LabGround already computes this for the room verdict. Absent (e.g. in isolated
-  // tests) means the honesty rail renders the Readiness gauge as NOT-YET, never a guess.
-  readiness?: GameReadiness | null;
 }) {
   const { t, i18n } = useTranslation();
   const reduced = useReducedMotion();
@@ -136,6 +131,11 @@ export function LabConsole({
   const [latestCmp, setLatestCmp] = useState<ComparisonResult | null>(null);
   // Black Box is on-demand — null until the user scans this visit (honest "Not yet").
   const [bbReport, setBbReport] = useState<BlackBoxReport | null>(null);
+  // Test's own reading set (spec 2026-08-21-test-rig-reading-set) — the bench's evidence, not the
+  // machine's verdict. Both commands are already registered/invoked elsewhere (Benchmark.tsx); zero
+  // new backend surface.
+  const [scoreboard, setScoreboard] = useState<ScoreboardView | null>(null);
+  const [trial, setTrial] = useState<TrialState | null>(null);
 
   useEffect(() => {
     cachedProbe("benchmark-state", () => invoke<BenchmarkState>("get_benchmark_state"), 30_000)
@@ -144,6 +144,8 @@ export function LabConsole({
     cachedProbe("latency-diag", () => invoke<LatencyReport>("get_latency_diagnostics"), 60_000)
       .then(setLatency)
       .catch(() => {});
+    invoke<ScoreboardView>("get_scoreboard").then(setScoreboard).catch(() => {});
+    invoke<TrialState>("get_trial_state").then(setTrial).catch(() => {});
     if (tuningGuide) {
       invoke<SessionSummary[]>("get_session_summaries").then(setSessions).catch(() => {});
       invoke<ArmedComparison | null>("get_armed_comparison").then(setArmed).catch(() => {});
@@ -296,20 +298,26 @@ export function LabConsole({
   };
 
   // HONESTY RAIL (corner gauges) — every value traces to a real measured source; an absent one is
-  // `null` (ArcGauge's NOT-YET), never a fabricated 0. Readiness reuses the same ready/total ratio
-  // the Command Center's signal ring derives (no invented 0–100 "score"); avg/1%-low FPS come from
-  // the most recent session this rig actually ran (BenchmarkState carries no fps fields — that's
-  // CPU/RAM/GPU/disk synthetic scoring, a different measurement).
-  const readinessKnown = !!readiness && readiness.checks.length > 0;
-  const readinessScore = readinessKnown
-    ? Math.round(
-        (100 * Math.max(0, readiness!.checks.length - readiness!.attention_count - readiness!.unknown_count)) /
-          readiness!.checks.length,
-      )
-    : null;
-  const latest = latestSession(fast.sessions ?? []);
-  const avgFps = latest?.avg_fps ?? null;
-  const lowFps = latest?.low1_fps_est ?? null;
+  // `null` (ArcGauge's NOT-YET), never a fabricated 0. Test answers "what can this bench prove, and
+  // what has it proved?" — a verdict about the EVIDENCE, not the machine (spec
+  // 2026-08-21-test-rig-reading-set §2). Readiness/avg-FPS/1%-low are Health's verdict numbers and
+  // stay there; nothing here should ever be readable on Health.
+
+  // TL — Proven: the awards ledger only records Keep verdicts (types.ts AwardEntry), so this is
+  // literally "changes this bench has verified". scoreboard === null → unread, NOT-YET.
+  const provenCount = scoreboard ? scoreboard.awards.length : null;
+
+  // TR — Noise floor: the bench's own instrument constant — how big an effect this rig can even
+  // resolve. get_trial_state's noise floor (game-frametime spread) once a calibration has produced
+  // one, else the fallback already fetched for Tuning (get_latest_comparison, same field, same
+  // measurement kind). Deliberately NEVER bench.efficacy.noise_floor_pct — that is the synthetic
+  // bench's run-to-run spread, a different measurement wearing the same field name.
+  const noiseFloorPct = trial && trial.noise_floor_pct != null ? trial.noise_floor_pct : (latestCmp?.noise_floor_pct ?? null);
+
+  // BR — Instruments read: how far through the bench this rig has gone. Same `stationHasReading`
+  // the dock already uses to mark nodes measured, so the gauge and the dock can never disagree.
+  const instrumentsRead = measureKeys.filter((k) => stationHasReading(k, facts)).length;
+  const instrumentsTotal = measureKeys.length;
 
   // Each node carries its station's whenLine (the same sentence the router and the guided face
   // use), so the dock can say in plain words when you come to the hovered / open / primary station
@@ -426,25 +434,34 @@ export function LabConsole({
             <span className="lc-brk lc-brk-bl" />
             <span className="lc-brk lc-brk-br" />
             <div className="lc-corner lc-tl">
-              {/* Same "how we calculate this" line the Home console carries (consumer-panel Phase 2). */}
+              {/* Proven — the room's entire payoff: how many changes this bench has verified
+                  before/after (awards ledger, Keep verdicts only). Full ring once N > 0. */}
               <ArcGauge
-                label={t("lab.labConsole.readinessLabel")}
-                value={readinessScore}
-                max={100}
-                unit={t("lab.labConsole.unitScore")}
+                label={t("lab.labConsole.provenLabel")}
+                value={provenCount}
+                max={Math.max(1, provenCount ?? 1)}
+                unit={t("lab.labConsole.unitKept")}
                 tone="accent"
+                measured={provenCount != null}
                 note={
-                  readinessKnown
-                    ? t("lab.labConsole.readinessNote", {
-                        passed: Math.max(0, readiness!.checks.length - readiness!.attention_count - readiness!.unknown_count),
-                        total: readiness!.checks.length,
-                      })
+                  provenCount != null
+                    ? t(provenCount > 0 ? "lab.labConsole.provenNoteSome" : "lab.labConsole.provenNoteNone")
                     : undefined
                 }
               />
             </div>
             <div className="lc-corner lc-tr">
-              <ArcGauge label={t("lab.labConsole.avgFpsLabel")} value={avgFps} max={240} unit={t("lab.labConsole.unitFps")} measured={avgFps != null} />
+              {/* Noise floor — the bench's own instrument constant: how big an effect this rig can
+                  even resolve. Fixed 10% display ceiling (a typical noise floor is a few percent;
+                  this is a reading, not a graded score, so a rare spike just fills the ring). */}
+              <ArcGauge
+                label={t("lab.labConsole.noiseFloorLabel")}
+                value={noiseFloorPct}
+                max={10}
+                unit={t("lab.labConsole.unitPct")}
+                measured={noiseFloorPct != null}
+                note={noiseFloorPct != null ? t("lab.labConsole.noiseFloorNote") : undefined}
+              />
             </div>
             <div className="lc-corner lc-bl">
               {/* Two honest states over the same recs: work left → "N ready" (as before); nothing
@@ -467,17 +484,15 @@ export function LabConsole({
               />
             </div>
             <div className="lc-corner lc-br">
+              {/* Instruments read — how far through the bench this rig has gone. Same
+                  stationHasReading the dock uses to mark nodes measured, so this and the dock can
+                  never disagree. Always defined (no probe to await), never NOT-YET. */}
               <ArcGauge
-                label={
-                  /* align="end": this gauge sits at the stage's right edge — a left-anchored tooltip
-                     rendered 126px past the window (self-review catch 2026-07-11). */
-                  <Term id="one-percent-lows" align="end">{t("lab.labConsole.oneLowLabel")}</Term>
-                }
-                value={lowFps}
-                max={240}
-                unit={t("lab.labConsole.unitFrames")}
-                tone="warn"
-                measured={lowFps != null}
+                label={t("lab.labConsole.instrumentsReadLabel")}
+                value={instrumentsRead}
+                max={Math.max(1, instrumentsTotal)}
+                unit={t("lab.labConsole.unitRead")}
+                note={t("lab.labConsole.instrumentsReadNote", { read: instrumentsRead, total: instrumentsTotal })}
               />
             </div>
             <div className="lc-rig">

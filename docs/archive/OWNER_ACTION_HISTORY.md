@@ -360,3 +360,26 @@ B6 item. Verbatim:
   → **✅ RESOLVED 2026-07-15** ("completely follow the design directors taste calls"): unified to
   the all-caps tracked mono COMPY site-wide (landing, footer, /compare, all generated Blackbook
   pages); the pulsing-"o" variant is removed.
+
+---
+
+## §B items closed by an owner verdict
+
+> Moved out of the live checklist on **2026-08-22** under TOKEN LAW §1. The live doc keeps a two-line pointer plus the one residual.
+
+### B_land. Where feedback and analytics land — ✅ DECIDED 2026-08-18, no inbox, nothing for you to open
+You asked not to funnel this into your personal Gmail, and you were right to: an address printed
+inside a shipped app is a permanent target (scraping, phishing, attachments), and it ties your
+personal identity to the product forever. **So no email is involved at all.** Both features post to
+your own site the same way the waitlist already does — `functions/api/waitlist.ts` → Cloudflare D1,
+same-origin, IP hashed, rate-limited, honeypotted. That pattern is live and verified today.
+
+**Destination:** D1 database **`compy_reports`** (`73f5e8a3-1827-42e3-8543-9fedc3750532`, WNAM),
+created 2026-08-18 on your existing Cloudflare account — $0, no new service, no new login. The
+consent screen can name it truthfully: *"sent to Compy's own store on compy.gg."* Storage is
+write-only from the app; the only way to read it is your Cloudflare account, and Claude reads the
+reports for you through the connected Cloudflare tools — **you never check an inbox.**
+
+**Your one residual:** when the endpoints are built (Q9b), the site has to be deployed once —
+`npx wrangler pages deploy` — because you cancelled site auto-deploy (B7) and deploys reach the
+public. One command, or one word to let me run it. Nothing else.

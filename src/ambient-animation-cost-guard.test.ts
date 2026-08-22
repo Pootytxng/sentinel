@@ -265,6 +265,44 @@ const docLevelResizeOffenders = (rules: Rule[], keyframes: Map<string, Rule>): s
 };
 
 /**
+ * GUARD 6 — a document-level ambient layer may not animate FOREVER AT ALL, whatever it animates.
+ *
+ * bug→guard (2026-08-21). Guard 4 forbids the mechanism that was understood in August: a scale
+ * re-rasters the layer. What replaced it -- a pure translate3d drift, promoted with will-change,
+ * the textbook free animation -- then measured at ~88% of everything Compy burned sitting idle
+ * (22.392% of a core -> 2.067% with that one animation frozen, and 21.178 -> 1.681 on the run
+ * beside it). Two settled runs, same binary, same room, back to back.
+ *
+ * So the rule this file was built on -- "compositor-safe properties are free" -- is false for this
+ * one class of layer, and no property list can rescue it. A full-window layer is composited into a
+ * window carrying ~25 backdrop-filter surfaces at 240 Hz; moving it at all invalidates them. That
+ * mechanism is a HYPOTHESIS (see src/App.css). The cost is not: it was measured twice.
+ *
+ * Hence the blunt rule. Document-level pseudo layers are always-on by construction, exactly like
+ * the inventory guard 5 protects, so they get the same verdict guard 5 gives: a bounded run or
+ * nothing. Guard 4 stays because a scale is worse still and deserves its own message.
+ *
+ * Escape hatch is the same line-level, greppable `ambient-cost-allow` -- and it is for a layer
+ * whose cost has been MEASURED and accepted, not for one assumed cheap. That assumption is the
+ * defect this guard exists to stop repeating.
+ */
+const docLevelForeverOffenders = (rules: Rule[], keyframes: Map<string, Rule>): string[] => {
+  const offenders: string[] = [];
+  for (const rule of rules) {
+    const sels = rule.prelude.split(",").map((s) => s.trim());
+    if (!sels.some(isDocLevelPseudo)) continue;
+    if (rule.body.includes(ALLOW)) continue;
+    const names = infiniteAnimationNames(rule, keyframes);
+    if (names.length)
+      offenders.push(
+        `${rule.file}:${rule.line} (${sels.join(", ")}) runs @keyframes ${names.join(", ")} ` +
+          `forever on a layer that is on screen in every room.`,
+      );
+  }
+  return offenders;
+};
+
+/**
  * GUARD 5 — an always-on surface from the inventory may not animate forever, full stop.
  * `readRules` is injected for the same falsification reason as above.
  */
@@ -417,8 +455,27 @@ describe("ambient animation cost guard: always-on motion stays bounded and never
       offenders,
       `A full-window backdrop may drift, but it may not breathe.\n` +
         `Fix: express the motion as translate3d alone, or drop the animation.\n` +
-        `Evidence: aurora measured 13.257 points of a CPU core with scale(1.09) and -0.105 without\n` +
-        `(docs/perf/raw/idle-attribution-2026-08-19-A-rig-on.json vs -B-h1-no-scale.json).\n` +
+        `Evidence: with scale(1.09) aurora measured 13.257 points of a CPU core; removing the\n` +
+        `scale everywhere took total idle 19.632 -> 9.421 (docs/perf/raw/idle-attribution-2026-08-19-A-rig-on.json\n` +
+        `vs -C-no-scale-anywhere.json). The "and -0.105 without" that stood here came from run B,\n` +
+        `which never settled, and is withdrawn -- see guard 6.\n` +
+        offenders.join("\n"),
+    ).toEqual([]);
+  });
+
+  it("no document-level ambient layer animates forever, whatever it animates", () => {
+    const offenders = docLevelForeverOffenders(rules, keyframes);
+    expect(
+      offenders,
+      `A layer that is on screen in every room gets a bounded run, or none.\n` +
+        `Fix: drop the animation (the resting frame is the picture), give it a finite iteration\n` +
+        `count, or drive it from :hover / a real user action.\n` +
+        `Evidence: the pure-translate3d drift that replaced the scale still measured ~88% of all\n` +
+        `idle CPU -- 22.392% of a core -> 2.067% with it alone frozen, and 21.178 -> 1.681 on the\n` +
+        `run beside it (docs/perf/raw/idle-attribution-2026-08-21-E-baseline.json and\n` +
+        `-F-type1-reverted.json). "Compositor-safe" did not mean free here.\n` +
+        `If you have MEASURED a new layer and accepted its cost, say so with ${ALLOW} on the line\n` +
+        `and cite the run. Do not use it on a layer you assume is cheap.\n` +
         offenders.join("\n"),
     ).toEqual([]);
   });
@@ -482,6 +539,29 @@ describe("ambient animation cost guard: the guards themselves are armed", () => 
       `${BREATHES} body::before { animation: breathe 20s ease-in-out 3; }`,
     );
     expect(docLevelResizeOffenders(rules, keyframes)).toEqual([]);
+  });
+
+  it("guard 6 fires on the translate-only drift guard 4 was built to permit", () => {
+    const { rules, keyframes } = index(
+      `${DRIFTS} body::before { animation: drift 20s ease-in-out infinite alternate; }`,
+    );
+    // The exact CSS the "guard 4 stays silent" case above calls the shipped fix. It was not free.
+    expect(docLevelResizeOffenders(rules, keyframes)).toEqual([]);
+    expect(docLevelForeverOffenders(rules, keyframes)).toHaveLength(1);
+  });
+
+  it("guard 6 stays silent on a bounded run and on a layer with no animation", () => {
+    const bounded = index(`${DRIFTS} body::before { animation: drift 20s ease-in-out 3 forwards; }`);
+    expect(docLevelForeverOffenders(bounded.rules, bounded.keyframes)).toEqual([]);
+    const still = index(`${DRIFTS} body::before { inset: -25%; z-index: -1; }`);
+    expect(docLevelForeverOffenders(still.rules, still.keyframes)).toEqual([]);
+  });
+
+  it("guard 6 respects the ambient-cost-allow escape hatch", () => {
+    const { rules, keyframes } = index(
+      `${DRIFTS} body::before { animation: drift 20s linear infinite; /* ambient-cost-allow */ }`,
+    );
+    expect(docLevelForeverOffenders(rules, keyframes)).toEqual([]);
   });
 
   it("guard 5 fires on an inventoried surface animating forever", () => {

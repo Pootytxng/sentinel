@@ -2128,9 +2128,9 @@ body {
    Still pure presentation; still offline (no remote resources).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Living atmosphere — a slow drifting aurora behind everything. Theme-aware (streak tokens) and
+/* Ambient atmosphere — a STILL aurora mesh behind everything. Theme-aware (streak tokens) and
    spread to cover the canvas (top-right, mid-left, bottom-right, bottom-mid) so no corner reads as
-   dead black; it drifts as one cohesive mesh.
+   dead black. It used to drift. The drift is gone; the last section says what it cost.
 
    COMPOSITOR-ONLY BY CONSTRUCTION (idle-cost teardown, 2026-08-06). This layer used to carry
    filter: blur(26px) while its keyframes scaled it 1 → 1.09. A blurred layer is rasterized at its
@@ -2160,11 +2160,25 @@ body {
        F (type reverted)  idle 21.178% of a core -> 1.681% with THIS animation alone frozen
        (docs/perf/raw/idle-attribution-2026-08-21-E-baseline.json, -F-type1-reverted.json)
 
-   ~88% of everything Compy burns sitting idle is this gradient sliding 3% sideways over 20 seconds
-   behind a window nobody is looking at. It is not a regression -- the honest whole-app number
-   (idle-bare, no CDP attached) is 20.853% today against 23.348% recorded on 2026-08-19, so the app
-   is slightly CHEAPER than its own baseline -- it is a standing cost that was believed fixed and
-   was not. Nothing here pauses when the window loses focus, either.
+   ~88% of everything Compy burned sitting idle was this gradient sliding sideways behind a window
+   nobody was looking at. It was not a regression -- the honest whole-app number (idle-bare, no CDP
+   attached) read 20.853% against 23.348% recorded on 2026-08-19, so the app was slightly CHEAPER
+   than its own baseline -- it was a standing cost that was believed fixed and was not.
+
+   SO THE DRIFT IS GONE (2026-08-21). The animation and its @keyframes are deleted and the layer is
+   painted once; will-change went with it, because promoting a layer that never moves buys a
+   compositor texture and nothing else. The gradients, their positions, the theme tokens and the
+   -25% overhang are all untouched, so the resting frame is the same picture it always was.
+   The motion itself was real -- 3% of a 150%-wide layer is ~115 px of travel on a 1440p desktop
+   over 20 s -- and it is a genuine loss. It is not worth a fifth of a CPU core on every screen,
+   forever, on a machine whose owner opened Compy because his PC felt slow. Taste call under the
+   2026-08-07 decree: mine to make, his to overrule on sight.
+
+   WHY A COMPOSITOR TRANSFORM COST ANYTHING AT ALL is still a HYPOTHESIS, not a finding: ~25
+   backdrop-filter surfaces sit above this layer, and a backdrop that moves invalidates every one
+   of them every frame (240 Hz desk). That would also explain why no amount of promoting the layer
+   ever helped. Unproven -- do not quote it as measured. What IS measured is the cost and its
+   removal; the mechanism only matters if someone wants the drift back.
 
    Guarded by src/ambient-animation-cost-guard.test.ts (shape: what a keyframe may animate) and
    src/perf-evidence-integrity-guard.test.ts (evidence: an unsettled run may not be cited as proof).
@@ -2180,12 +2194,6 @@ body::before {
     radial-gradient(38% 34% at 14% 34%, color-mix(in srgb, var(--ix-streak-2) 13%, transparent), transparent 64%),
     radial-gradient(44% 40% at 90% 86%, color-mix(in srgb, var(--ix-streak-1) 12%, transparent), transparent 62%),
     radial-gradient(46% 42% at 34% 105%, color-mix(in srgb, var(--ix-streak-3, var(--ix-streak-2)) 10%, transparent), transparent 60%);
-  will-change: transform;
-  animation: aurora 20s ease-in-out infinite alternate;
-}
-@keyframes aurora {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(-3%, 2.5%, 0); }
 }
 
 /* Wordmark with real presence. */

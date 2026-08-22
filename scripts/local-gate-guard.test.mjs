@@ -97,11 +97,18 @@ describe("the local gate proves everything the hosted gate proved", () => {
     });
 
     it("re-runs at most once: exactly two invocations of the command exist, and the throw follows the second", () => {
-      const invocations = invokeCheck.match(/& \$Command @Arguments/g) ?? [];
+      // The command is spawned through Invoke-Teed since 2026-08-22 (the log the gate keeps), so the
+      // count follows it there. Invoke-Teed itself is pinned to ONE spawn per branch below.
+      const invocations = invokeCheck.match(/Invoke-Teed -Command \$Command -Arguments \$Arguments/g) ?? [];
       expect(invocations).toHaveLength(2);
-      expect(invokeCheck.indexOf("throw")).toBeGreaterThan(invokeCheck.lastIndexOf("& $Command @Arguments"));
+      expect(invokeCheck.indexOf("throw")).toBeGreaterThan(invokeCheck.lastIndexOf("Invoke-Teed -Command"));
       // No loop may wrap the re-run.
       expect(invokeCheck).not.toMatch(/\b(while|for|do)\b/);
+      // And the helper runs the command exactly once whichever branch it takes: two spawns, two
+      // branches, no loop. A helper that retried internally would multiply every check silently.
+      const teed = gateCode.slice(gateCode.indexOf("function Invoke-Teed"), gateCode.indexOf("function Invoke-Check"));
+      expect(teed.match(/& \$Command @Arguments/g) ?? []).toHaveLength(2);
+      expect(teed).not.toMatch(/\b(while|for|do)\b/);
     });
 
     it("is opt-in per check and only the two npm checks opt in; cargo never does", () => {
@@ -131,6 +138,10 @@ describe("the local gate proves everything the hosted gate proved", () => {
             "const [plan, counter] = process.argv.slice(2);",
             'let n = 0; try { n = Number(fs.readFileSync(counter, "utf8")); } catch {}',
             "fs.writeFileSync(counter, String(n + 1));",
+            'console.log("STUB-STDOUT-" + n);',
+            // A tool that WARNS to stderr and still succeeds: if the gate mishandles the merge, the
+            // exit-0 case below throws instead of passing, and this stub is what makes it throw.
+            'console.error("STUB-STDERR-" + n);',
             "process.exitCode = plan.split(\",\").map(Number)[n] ?? 99;",
           ].join("\n"),
         );
@@ -140,10 +151,17 @@ describe("the local gate proves everything the hosted gate proved", () => {
           [
             '$ErrorActionPreference = "Stop"',
             `$ast = [System.Management.Automation.Language.Parser]::ParseFile(${JSON.stringify(join(ROOT, "scripts", "verify-local.ps1"))}, [ref]$null, [ref]$null)`,
-            '$fn = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq "Invoke-Check" }, $true)[0]',
+            // Invoke-Check now calls Invoke-Teed, and Invoke-Teed calls Write-Gate's sibling state, so
+            // all three definitions are lifted. Lifting by NAME rather than by slice keeps this
+            // honest if the file is reordered.
+            '$defs = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and @("Invoke-Check","Invoke-Teed","Write-Gate") -contains $args[0].Name }, $true)',
             "$codes = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.AssignmentStatementAst] -and $args[0].Left.Extent.Text -eq '$NodeRuntimeAbortCodes' }, $true)[0]",
             "Invoke-Expression $codes.Extent.Text",
-            "Invoke-Expression $fn.Extent.Text",
+            "foreach ($d in $defs) { Invoke-Expression $d.Extent.Text }",
+            // Drive the LOGGED branch: everything below runs with a real log file, so the probe
+            // exercises exactly what a push exercises.
+            `$script:GateLog = ${JSON.stringify(join(dir, "gate.log"))}`,
+            'Set-Content -Path $script:GateLog -Value "probe" -Encoding UTF8',
             `$node = ${JSON.stringify(process.execPath)}`,
             `$stub = ${JSON.stringify(stub)}`,
             "function Run-Case($name, $plan, [switch]$NodeHosted) {",
@@ -160,6 +178,11 @@ describe("the local gate proves everything the hosted gate proved", () => {
             'Run-Case "real-failure" "1,0" -NodeHosted',
             'Run-Case "abort-not-node-hosted" "-1073740791,0"',
             'Run-Case "pass-first-time" "0,0" -NodeHosted',
+            // THE POINT OF THE LOG. Start-Transcript records none of a native command's stdout under
+            // 5.1 with stdout redirected (measured 2026-08-22, 0 occurrences of a marker printed by
+            // node). This asserts the replacement actually captures it.
+            'Write-Output ("LOGGED " + [bool]((Get-Content $script:GateLog -Raw) -match "STUB-STDOUT"))',
+            'Write-Output ("LOGGEDERR " + [bool]((Get-Content $script:GateLog -Raw) -match "STUB-STDERR"))',
           ].join("\n"),
         );
         const run = spawnSync(
@@ -179,6 +202,11 @@ describe("the local gate proves everything the hosted gate proved", () => {
         expect(results["pass-first-time"]).toEqual({ calls: 1, threw: "" });
         // The WARN is printed once per abort that was re-run, and names the cause.
         expect(out.match(/LOCAL CHECK WARN: .*0xC0000409.*nodejs\/node#56645/g)).toHaveLength(2);
+        // And the log really holds the child's stdout, not just the gate's own Write-Host lines.
+        expect(out, "the gate log did not capture the command's stdout").toMatch(/^LOGGED True$/m);
+        // The half that carries the reason. `pass-first-time` above also proves a stderr write on a
+        // SUCCEEDING check does not fail it.
+        expect(out, "the gate log did not capture the command's stderr").toMatch(/^LOGGEDERR True$/m);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
@@ -192,6 +220,69 @@ describe("the local gate proves everything the hosted gate proved", () => {
     const SETUP = [/^rustc --version/, /^npm ci/, /^git config/, /^git fetch/, /^npm run stage:site/];
     const uncovered = runs.filter((c) => !SETUP.some((re) => re.test(c))).filter((c) => !gateRuns(c));
     expect(uncovered).toEqual([]);
+  });
+});
+
+describe("the gate keeps its own output (issue #121)", () => {
+  // An intermittent failure gives you ONE reading. On 2026-08-22 this gate rejected a push on
+  // launch-focus-guard's runtime tier, the attribution block was lost to a tailed log, and the next
+  // six full-suite runs were green. A gate whose evidence survives only when it agrees with you
+  // teaches --no-verify, the same defect the retry-narrowing block above exists to avoid.
+  it("tees every check's stdout into a log file", () => {
+    expect(gateCode).toMatch(/Add-Content -Path \$script:GateLog -Value \$line -Encoding UTF8/);
+    // Both call sites -- the first run and the Node-abort re-run -- go through the same helper, so a
+    // re-run's output cannot be the half that is lost.
+    expect(gateCode.match(/Invoke-Teed -Command/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+  });
+
+  it("writes the log in ONE encoding, and that encoding is UTF-8", () => {
+    // Tee-Object under 5.1 takes no -Encoding and emits UTF-16LE. Teed into a UTF8 log it produced a
+    // file that read back as interleaved nulls -- measured 2026-08-22 by the executable probe below,
+    // which is the guard that actually catches a regression here. This pins the cause out.
+    expect(gateCode).not.toMatch(/Tee-Object/);
+    const encodings = gateCode.match(/-Encoding \w+/g) ?? [];
+    expect(encodings.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(encodings)).toEqual(new Set(["-Encoding UTF8"]));
+  });
+
+  it("does NOT use Start-Transcript — measured 2026-08-22, it captures no native stdout here", () => {
+    // Under Windows PowerShell 5.1 with stdout redirected (how .githooks/pre-push invokes this), a
+    // transcript records the host's own lines and none of `node`'s or `cargo`'s. A probe printing a
+    // marker from node recorded 0 occurrences. Pinned so the "simpler" version cannot come back.
+    expect(gateCode).not.toMatch(/Start-Transcript/);
+  });
+
+  it("keeps stderr too — that is where the attribution is — without letting it abort the gate", () => {
+    // vitest puts "Test Files 1 failed" on stdout and the assertion detail on stderr. Logging only
+    // stdout keeps the word "failed" and loses the answer, which is exactly how #121 stayed
+    // un-root-caused. Merged with 2>&1, and under 5.1 that turns stderr into ErrorRecords, so the
+    // Stop preference MUST be dropped around the invocation or any tool that warns kills the gate.
+    expect(gateCode).toMatch(/& \$Command @Arguments 2>&1/);
+    const teed = gateCode.slice(gateCode.indexOf("function Invoke-Teed"), gateCode.indexOf("function Invoke-Check"));
+    expect(teed).toMatch(/\$ErrorActionPreference = "Continue"/);
+    // ...and restored, so the rest of the gate keeps failing fast.
+    expect(teed).toMatch(/finally \{\s*\$ErrorActionPreference = \$previousPreference/);
+    expect(teed).toMatch(/ErrorRecord\]\) \{ \$_\.ToString\(\)/);
+  });
+
+  it("writes where git already ignores it — a gate log must never become a commit", () => {
+    expect(gateCode).toMatch(/Join-Path \$repo "logs"/);
+    expect(read(".gitignore").split(/\r?\n/)).toContain("logs");
+  });
+
+  it("prunes, so the gate cannot fill the disk it runs on", () => {
+    expect(gateCode).toMatch(/verify-local-\*\.log/);
+    expect(gateCode).toMatch(/Select-Object -Skip \d+/);
+  });
+
+  it("prints the path whether it passed or failed — a lost log helps nobody", () => {
+    const tail = gateCode.slice(gateCode.indexOf("finally {"));
+    expect(tail).toMatch(/LOCAL CHECK LOG/);
+  });
+
+  it("never lets a logging failure stop the tree from being checked", () => {
+    const start = gateCode.indexOf("$script:GateLog = Join-Path");
+    expect(gateCode.slice(0, start).slice(-400)).toMatch(/try \{/);
   });
 });
 

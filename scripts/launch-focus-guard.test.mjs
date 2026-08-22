@@ -31,7 +31,7 @@
 //              the only tier that can tell a working fix from a well-worded one.
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -439,6 +439,68 @@ function unmeasurableBecauseRunning() {
   return true;
 }
 
+/**
+ * WHERE A RUNTIME READING IS KEPT — and why it is kept by DEFAULT (issue #121, 2026-08-22).
+ *
+ * Until today the probe wrote its raw trace only when `COMPY_FOREGROUND_TRACE_DIR` was set by hand.
+ * That is exactly backwards for an intermittent failure: the runs that need explaining are the ones
+ * nobody was expecting, so the variable is never set when it would have mattered. #121 has been
+ * "not root-caused" through at least three occurrences for that reason — on 2026-08-22 this gate
+ * rejected a push inside `verify-local.ps1`, and the entire reading (which cause, which taker,
+ * which window handed over the foreground) was lost to the wrapper truncating the message, then the
+ * suite went green on the next four runs. A guard whose evidence survives only when it is green is
+ * not an instrument.
+ *
+ * So every runtime reading is now written to `logs/foreground-traces/` (gitignored, `logs` is
+ * already in `.gitignore`), newest 40 kept. `COMPY_FOREGROUND_TRACE_DIR=<dir>` still redirects it,
+ * and `COMPY_FOREGROUND_TRACE_DIR=off` is the opt-out for a machine that must write nothing.
+ */
+export const DEFAULT_TRACE_DIR = join(ROOT, "logs", "foreground-traces");
+export const TRACE_KEEP = 40;
+
+export function traceDirFor(env = process.env) {
+  const raw = String(env?.COMPY_FOREGROUND_TRACE_DIR ?? "").trim();
+  if (raw.toLowerCase() === "off") return null;
+  return raw === "" ? DEFAULT_TRACE_DIR : raw;
+}
+
+/**
+ * Keep the newest `keep` traces and delete the rest. Names start with an ISO timestamp with `:` and
+ * `.` replaced, so a lexicographic sort IS chronological — no stat call per file, and no clock.
+ */
+export function pruneTraces(dir, { keep = TRACE_KEEP, list = readdirSync, remove = rmSync } = {}) {
+  let names = [];
+  try {
+    names = list(dir).filter((n) => n.endsWith(".json")).sort();
+  } catch {
+    return [];
+  }
+  const doomed = names.slice(0, Math.max(0, names.length - keep));
+  for (const name of doomed) {
+    try {
+      remove(join(dir, name));
+    } catch {
+      /* a locked file must never fail a measurement */
+    }
+  }
+  return doomed;
+}
+
+/** Write one reading beside its siblings. Never throws: losing a trace must not fail the gate. */
+function keepTrace(parsed, { args = [], env = {}, grant = true, dir = traceDirFor() } = {}) {
+  if (!dir) return null;
+  try {
+    mkdirSync(dir, { recursive: true });
+    const name = `${new Date().toISOString().replace(/[:.]/g, "-")}-${args.join("_") || "plain"}-${parsed.launchedPid}.json`;
+    const file = join(dir, name);
+    writeFileSync(file, JSON.stringify({ args, env: Object.keys(env), grant, ...parsed }, null, 2));
+    pruneTraces(dir);
+    return file;
+  } catch {
+    return null;
+  }
+}
+
 /** Run the probe and return its parsed result. Throws with the probe's own words on failure. */
 function measureLaunch({ args = [], env = {}, seconds = 6, savedState = null, grant = true }) {
   // A throwaway APPDATA so a measurement never writes to the owner's Trust Ledger, and so the
@@ -481,13 +543,7 @@ function measureLaunch({ args = [], env = {}, seconds = 6, savedState = null, gr
   // The probe can also measure a second, single-instance-absorbed launch (-RelaunchWith); this guard
   // only ever asks for the first one, so flatten that block up and keep the launch-level fields.
   const parsed = JSON.parse(json);
-  // Keep the raw reading when asked (COMPY_FOREGROUND_TRACE_DIR=<dir>): a trace that only lives in
-  // a vitest message is lost the moment the run is green, and the green runs are the baseline.
-  if (process.env.COMPY_FOREGROUND_TRACE_DIR) {
-    mkdirSync(process.env.COMPY_FOREGROUND_TRACE_DIR, { recursive: true });
-    const name = `${new Date().toISOString().replace(/[:.]/g, "-")}-${args.join("_") || "plain"}-${parsed.launchedPid}.json`;
-    writeFileSync(join(process.env.COMPY_FOREGROUND_TRACE_DIR, name), JSON.stringify({ args, env: Object.keys(env), grant, ...parsed }, null, 2));
-  }
+  keepTrace(parsed, { args, env, grant });
   return {
     ...parsed.initial,
     launchedPid: parsed.launchedPid,
@@ -509,9 +565,62 @@ function describeTrace(result) {
     `trace: first SHOW ${s.firstShowMs}ms, first FOREGROUND ${s.firstForegroundMs}ms, raised by ${s.raisedBy} (${taker}${handoff}${prior}); ` +
     `windows outside the launch minimised: ${minimized}; ` +
     `${result.eventsKept ?? 0}/${result.eventsTotal ?? 0} events kept${result.eventsDroppedAtCap ? `, ${result.eventsDroppedAtCap} dropped at the hook cap` : ""}\n` +
-    formatTrace(result.events ?? [])
+    formatTrace(result.events ?? []) +
+    // Where the RAW reading is, so a message truncated by a wrapper (verify-local.ps1 did
+    // exactly that on 2026-08-22) is no longer the only copy of the evidence.
+    (traceDirFor() ? `\n  raw traces kept in ${traceDirFor()} (newest ${TRACE_KEEP})` : "")
   );
 }
+
+describe("the reading survives the run that produced it (issue #121)", () => {
+  it("keeps traces by DEFAULT — the intermittent run is exactly the one nobody armed a flag for", () => {
+    expect(traceDirFor({})).toBe(DEFAULT_TRACE_DIR);
+    expect(traceDirFor({ COMPY_FOREGROUND_TRACE_DIR: "" })).toBe(DEFAULT_TRACE_DIR);
+  });
+
+  it("still honours an explicit directory, and has one opt-out word", () => {
+    expect(traceDirFor({ COMPY_FOREGROUND_TRACE_DIR: "D:\\traces" })).toBe("D:\\traces");
+    expect(traceDirFor({ COMPY_FOREGROUND_TRACE_DIR: "off" })).toBeNull();
+    expect(traceDirFor({ COMPY_FOREGROUND_TRACE_DIR: "OFF" })).toBeNull();
+  });
+
+  it("writes where git already ignores — a kept trace must never become a commit", () => {
+    expect(DEFAULT_TRACE_DIR.startsWith(join(ROOT, "logs"))).toBe(true);
+    expect(readFileSync(join(ROOT, ".gitignore"), "utf8").split(/\r?\n/)).toContain("logs");
+  });
+
+  it("keeps the NEWEST n and deletes the rest, by name — the names sort chronologically", () => {
+    const names = [
+      "2026-08-20T01-00-00-000Z-plain-1.json",
+      "2026-08-22T01-00-00-000Z-plain-3.json",
+      "2026-08-21T01-00-00-000Z-plain-2.json",
+      "notes.txt",
+    ];
+    const removed = [];
+    const doomed = pruneTraces("D:\\traces", { keep: 2, list: () => names, remove: (f) => removed.push(f) });
+    expect(doomed).toEqual(["2026-08-20T01-00-00-000Z-plain-1.json"]);
+    expect(removed).toEqual([join("D:\\traces", "2026-08-20T01-00-00-000Z-plain-1.json")]);
+  });
+
+  it("never throws when the directory is missing or a file is locked", () => {
+    expect(
+      pruneTraces("D:\\nope", {
+        list: () => {
+          throw new Error("ENOENT");
+        },
+      }),
+    ).toEqual([]);
+    expect(() =>
+      pruneTraces("D:\\traces", {
+        keep: 0,
+        list: () => ["2026-08-20T01-00-00-000Z-plain-1.json"],
+        remove: () => {
+          throw new Error("EBUSY");
+        },
+      }),
+    ).not.toThrow();
+  });
+});
 
 // The discriminator decides whether a reading is Compy's fault or the OS's, so it gets its own
 // tests: it runs on every machine (no binary, no Windows needed), and a one-line "simplification"

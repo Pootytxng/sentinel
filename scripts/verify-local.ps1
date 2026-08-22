@@ -36,6 +36,55 @@ param(
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 
+# THE GATE KEEPS ITS OWN OUTPUT (2026-08-22, issue #121).
+#
+# A failing check printed its verdict to the console and nowhere else, so whatever the caller's
+# terminal did not keep was gone. That is survivable for a deterministic failure -- run it again. It
+# is fatal for an INTERMITTENT one, which is exactly the kind you get one reading of: on 2026-08-22
+# launch-focus-guard's runtime tier rejected a push here, the whole attribution block (which cause,
+# which window handed the foreground over, the event trace) was lost to a tailed log, and the next
+# six full-suite runs were green. An instrument whose output survives only when it agrees with you
+# is not an instrument.
+#
+# WHY Tee-Object AND NOT Start-Transcript. Measured on this machine, 2026-08-22: under Windows
+# PowerShell 5.1 with stdout redirected -- which is exactly how the pre-push hook invokes this file
+# -- a transcript captures the host's own Write-Host lines and NOT one byte of a native command's
+# stdout. A probe that printed a marker from `node` recorded 0 occurrences in the transcript. So a
+# transcript would have logged the gate's headers and lost every vitest and cargo line, which is the
+# only part worth keeping. The check's stdout is teed explicitly instead.
+#
+# BOTH STREAMS ARE KEPT. vitest reports the verdict on stdout and the attribution -- which assertion,
+# which values -- on stderr, so a stdout-only log keeps the word "failed" and loses the reason. The
+# ErrorRecord hazard that argues against merging is handled inside Invoke-Teed, at the invocation.
+#
+# Newest 20 kept. Pinned by scripts/local-gate-guard.test.mjs.
+$script:GateLog = $null
+try {
+  $logDir = Join-Path $repo "logs"
+  if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
+  $stamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH-mm-ssZ")
+  $script:GateLog = Join-Path $logDir "verify-local-$stamp.log"
+  Set-Content -Path $script:GateLog -Value "LOCAL GATE $stamp  repo=$repo" -Encoding UTF8
+  # Names sort chronologically, so keeping the newest needs no timestamps and no clock.
+  Get-ChildItem -Path $logDir -Filter "verify-local-*.log" |
+    Sort-Object Name -Descending |
+    Select-Object -Skip 20 |
+    ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
+}
+catch {
+  # A directory that cannot be written must cost the log, never the check.
+  $script:GateLog = $null
+}
+
+# Say it on the console AND in the log, so the log reads like the run.
+function Write-Gate {
+  param([string]$Text = "")
+  Write-Host $Text
+  if ($script:GateLog) {
+    try { Add-Content -Path $script:GateLog -Value $Text -Encoding UTF8 } catch { }
+  }
+}
+
 # Node 24 on Windows can abort INSIDE process.exit() when an async handle is still closing
 # (nodejs/node#56645, open upstream). The process then dies with STATUS_STACK_BUFFER_OVERRUN,
 # 0xC0000409 -- 3221226505 unsigned, -1073740791 as PowerShell's Int32 -- instead of the code it
@@ -48,6 +97,46 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 # timeout. Pinned by scripts/local-gate-guard.test.mjs.
 $NodeRuntimeAbortCodes = @(-1073740791, 3221226505)
 
+# Run a check so its stdout reaches BOTH the console and the log.
+#
+# WHY NOT Tee-Object. Measured 2026-08-22: under Windows PowerShell 5.1 Tee-Object has no -Encoding
+# parameter and writes UTF-16LE, so teeing into a UTF8 log produced a file that reads back as
+# "S T U B" -- interleaved nulls -- and nothing could grep it. A log nobody can search is the same
+# lost evidence this whole block exists to stop. Writing each line explicitly keeps ONE encoding.
+# The pipeline is transparent to $LASTEXITCODE: it is set from the native command either way.
+# Both streams are kept -- see the note on the merge inside.
+function Invoke-Teed {
+  param(
+    [Parameter(Mandatory = $true)][string]$Command,
+    [string[]]$Arguments = @()
+  )
+  if (-not $script:GateLog) {
+    & $Command @Arguments
+    return
+  }
+  # STDERR IS MERGED IN ON PURPOSE, and this is the whole reason the log is worth keeping. vitest
+  # puts "Test Files 1 failed" on stdout and the ATTRIBUTION -- which assertion, which values, the
+  # trace -- on stderr. Logging stdout alone would have kept the sentence "something failed" and
+  # thrown away the answer, which is what happened by hand on 2026-08-22 (issue #121).
+  #
+  # $ErrorActionPreference is Stop for this script, and under 5.1 a native command's stderr merged
+  # with 2>&1 arrives as ErrorRecords -- so with Stop in force, any tool that merely WARNS to stderr
+  # would terminate the gate. It is dropped to Continue around the invocation only, and restored in
+  # finally. A check still fails on its EXIT CODE, never on having written to stderr.
+  $previousPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    & $Command @Arguments 2>&1 | ForEach-Object {
+      $line = if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.ToString() } else { [string]$_ }
+      Write-Host $line
+      try { Add-Content -Path $script:GateLog -Value $line -Encoding UTF8 } catch { }
+    }
+  }
+  finally {
+    $ErrorActionPreference = $previousPreference
+  }
+}
+
 function Invoke-Check {
   param(
     [Parameter(Mandatory = $true)][string]$Name,
@@ -57,14 +146,14 @@ function Invoke-Check {
     [switch]$NodeHosted
   )
 
-  Write-Host ""
-  Write-Host "LOCAL CHECK: $Name"
-  & $Command @Arguments
+  Write-Gate ""
+  Write-Gate "LOCAL CHECK: $Name"
+  Invoke-Teed -Command $Command -Arguments $Arguments
   if ($NodeHosted -and ($NodeRuntimeAbortCodes -contains $LASTEXITCODE)) {
-    Write-Host ""
-    Write-Host "LOCAL CHECK WARN: $Name died with 0xC0000409 -- a Node runtime abort at exit (nodejs/node#56645), not a verdict on this tree. Running it once more. If this repeats, it is real: see issue #171."
-    Write-Host "LOCAL CHECK: $Name (re-run after Node runtime abort)"
-    & $Command @Arguments
+    Write-Gate ""
+    Write-Gate "LOCAL CHECK WARN: $Name died with 0xC0000409 -- a Node runtime abort at exit (nodejs/node#56645), not a verdict on this tree. Running it once more. If this repeats, it is real: see issue #171."
+    Write-Gate "LOCAL CHECK: $Name (re-run after Node runtime abort)"
+    Invoke-Teed -Command $Command -Arguments $Arguments
   }
   if ($LASTEXITCODE -ne 0) {
     throw "$Name failed with exit code $LASTEXITCODE."
@@ -150,6 +239,10 @@ try {
 }
 finally {
   Pop-Location
+  if ($script:GateLog) {
+    Write-Host ""
+    Write-Host "LOCAL CHECK LOG: $script:GateLog"
+  }
 }
 
 Write-Host ""
