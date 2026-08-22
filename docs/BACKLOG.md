@@ -33,6 +33,13 @@
 > **Take the top unblocked item.** Owner items are named once, with a pointer —
 > [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) stays their home.
 
+> **Closed 2026-08-22, and section ② with them.** The Test room's "Your rig" reading set
+> landed (PR [#194](https://github.com/Pootytxng/sentinel/pull/194), merged), and **COLOR-1 was never
+> open** — it shipped 2026-08-13 (`700cd565`), and the queue was reading the 🔴 marker on the
+> ARCHIVED original inside that row's collapsed `<details>` block. bug → guard:
+> [`../src/ui-vision-status-guard.test.ts`](../src/ui-vision-status-guard.test.ts) now fails the build
+> on a status marker inside an archive block, and on any queue item calling a shipped vision row open.
+
 #### ① A PERSON REPORTED IT AND WE HAVE NOT ANSWERED — these outrank everything
 
 1. **Cold start: the frontend is exonerated, and the cost lives before the page exists.**
@@ -62,39 +69,22 @@
    [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) §B6. **What is mine:** land the per-file
    fix as a PR with the wording drafted, so his part is one word, yes or no.
 
-#### ② SPECCED OR DECIDED, READY TO BUILD — cheap, visible, no owner dependency
-
-3. **Build the Test room's "Your rig" reading set** →
-   [`superpowers/specs/2026-08-21-test-rig-reading-set.md`](superpowers/specs/2026-08-21-test-rig-reading-set.md).
-   *Why it matters:* the last open item from the three-room intimidation pass — "Your rig" currently
-   repeats Health's numbers, so the Test room's own panel tells the user nothing new. Data wiring,
-   not a layout move. **Built on `feat/test-rig-reading-set` (PR #194), embedded stamp `36011078`,
-   `self-review` PASS on the installed build** — see the owner-installed row in RELEASE_STATE.md.
-   Landing this PR closes this item.
-4. **COLOR-1 · room accents collide with the status palette** —
-   [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) 🔴 OPEN. *Why it matters:* the Lab glows the
-   same green as "this is good", so green stops meaning good in the one room built to prove things;
-   Blackbook glows warning-amber while existing to reassure. **Decision already recorded — rooms
-   stop owning hue** (identity moves to glyph, eyebrow, one hairline). This is a taste call, which the
-   2026-08-07 decree makes **mine to ship and his to veto on sight** — build it, hand him a
-   before/after, do not park it on him.
-
 #### ③ REPO HYGIENE — real, but nobody is waiting on it
 
-5. **#125 steps 1–3** (split the code set as data · build `compy-entry adopt` · build the
+3. **#125 steps 1–3** (split the code set as data · build `compy-entry adopt` · build the
    write hook and test it as a module) →
    [`superpowers/specs/2026-08-21-unverified-session-write-refusal.md`](superpowers/specs/2026-08-21-unverified-session-write-refusal.md).
    None of the three needs an owner decision; **step 4, arming it, is his one line** and is
    deliberately NOT in his checklist until 1–3 exist, because a non-ask there buries the real ones.
-6. **#121 · `launch-focus-guard` RUNTIME tier is intermittent, NOT root-caused** — the same
+4. **#121 · `launch-focus-guard` RUNTIME tier is intermittent, NOT root-caused** — the same
    class as #171 was, and #171 proves the class is solvable. Detail on the open row further down.
-7. **#156's unnamed lock holder and #128's unheld locks both discharge on the NEXT REAL SHIP, not on
+5. **#156's unnamed lock holder and #128's unheld locks both discharge on the NEXT REAL SHIP, not on
    their own.** #156's gates close the suspected path but the flake was never reproduced, so the
    *holder* is still unnamed; #128's two mutexes have never been held during an actual release or
    ship. Neither is a task to schedule — both are **evidence to collect the next time a ship runs**,
    so whoever runs that ship owes both issues a comment. Records archived; residuals live here.
-8. **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it** (row below; owner fork B_gpu).
-9. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
+6. **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it** (row below; owner fork B_gpu).
+7. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
    below). Delegated to the Codex lane — do not duplicate it here.
 
 **BLOCKED — another lane owns these; `WORK_CONTROL.md` says hands off, not adjudicate:**

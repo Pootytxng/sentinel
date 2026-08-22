@@ -226,7 +226,7 @@ not the emerald that read as "this is good" — `compy-visual-review/v0922-test.
 
 <details><summary>Original measurement (2026-08-11) — kept for the record</summary>
 
-### COLOR-1. Room accents collide with the status palette 🔴 OPEN
+### COLOR-1. Room accents collide with the status palette
 
 **Measured 2026-08-11.** `tokens-v2.css` states *"Status — color is information, never decoration"*,
 and `src/surfaces/room-identity.css` breaks it: Lab `#27e08a` vs `--v2-ok: #3ddc97` (near-identical
