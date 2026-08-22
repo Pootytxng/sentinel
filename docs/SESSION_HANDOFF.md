@@ -62,10 +62,14 @@ has still never been held during a real publish.
 
 1. **`.codex/config.toml` regresses every few days** — a red `codex-config-guard` in the push gate
    IS that abandoned regression: stash it, do not debug it.
-2. **A lane branch pushed to `origin` without a `BRANCH_DISPOSITIONS.md` row on `main` turns `main`
-   red for every other lane.** It bit this train once already. That file sits at 115/120 lines.
-3. **`docs/RELEASE_STATE.md` is at 47.7KB/48KB and 299/300 lines.** The next desk-build row needs an
-   archive move first — the `36011078` prose was already moved out to make room for this one.
+2. **There is no "active but merged" lane state.** `branch-disposition-audit` treats `MERGED` as
+   *prunable* and fails until the ref is deleted, while `UNLANDED` fails the moment a fast-forward
+   makes the ref a no-op against `main`. A long train therefore cannot keep a lane ref alive: land
+   fast-forward straight to `main` and carry no lane branch, which is what this train ended up doing.
+3. **`docs/RELEASE_STATE.md`'s two build-identity rows are byte-capped** (`LINEAGE_ROW_CAPS`,
+   `verify-release-state.mjs` check 5b). A ship that overflows one must move the OLDEST inline
+   predecessor to `archive/RELEASE_STATE_HISTORY.md` — the failure text says so. Do not raise the
+   budget to make room; it is derived from those caps. File is 251/270 lines, 40.3KB/42KB.
 4. **Python patches with backslashes must be written to a FILE**, never piped through a Bash heredoc
    — the heredoc and the string literal each eat one layer.
 5. **The primary worktree `C:/Users/Kuya/code/sentinel` may be stale.** `git -C ... merge --ff-only
