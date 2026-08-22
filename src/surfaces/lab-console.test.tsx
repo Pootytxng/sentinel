@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import { readFileSync } from "fs";
+import { resolve } from "path";
 
 // LabConsole — the Ops Console that replaces the Instrument Bench bento (spec
 // 2026-07-09-lab-redesign-direction-proposal, Phase 1, Task 4). A real 3D hologram sits center-stage
@@ -396,5 +398,103 @@ describe("LabConsole — add a part (manual parts in the Lab's own chrome)", () 
 
     expect(screen.queryByText("Noctua NH-D15")).toBeNull();
     expect(JSON.parse(localStorage.getItem("compy_rig_manual_parts") ?? "[]")).toHaveLength(0);
+  });
+});
+
+// TEST'S OWN READING SET (spec 2026-08-21-test-rig-reading-set) — Test used to repeat three of
+// Health's four verdict numbers (Readiness, Avg FPS, 1% low) under the identical "Your rig" title,
+// so a user who walked Health → Test saw the same instrument twice. The reading set below answers a
+// different question — what has this BENCH proved, not what is the machine's verdict — and these
+// guards are what makes the duplication unable to return.
+describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-reading-set)", () => {
+  afterEach(async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
+  });
+
+  it("guard 1 — the four corners are exactly Proven · Noise floor · Safe stack · Instruments read, never Health's numbers", () => {
+    renderConsole();
+    const stage = document.querySelector(".lc-stage")!;
+    expect(stage.textContent).not.toContain("Readiness");
+    expect(stage.textContent).not.toContain("Avg FPS");
+    expect(stage.textContent).not.toContain("1% low");
+    const cornerLabel = (corner: string) => document.querySelector(`${corner} .ag-label span`)!.textContent;
+    expect(cornerLabel(".lc-tl")).toBe("Proven");
+    expect(cornerLabel(".lc-tr")).toBe("Noise floor");
+    expect(cornerLabel(".lc-bl")).toBe("Safe stack");
+    expect(cornerLabel(".lc-br")).toBe("Instruments read");
+  });
+
+  it("guard 2 — cross-room duplication: Test's corner labels and Health's corner labels are disjoint (read from the i18n bundles)", () => {
+    const labEn = JSON.parse(readFileSync(resolve("src/i18n/locales/en/lab.json"), "utf8"));
+    const homeEn = JSON.parse(readFileSync(resolve("src/i18n/locales/en/home.json"), "utf8"));
+    const testLabels: string[] = [
+      labEn.labConsole.provenLabel,
+      labEn.labConsole.noiseFloorLabel,
+      labEn.labConsole.safeStackLabel,
+      labEn.labConsole.instrumentsReadLabel,
+    ];
+    const healthLabels = new Set<string>([
+      homeEn.homeConsole.stage.readinessLabel,
+      homeEn.homeConsole.stage.avgFps,
+      homeEn.homeConsole.stage.onePercentLow,
+      homeEn.homeConsole.stage.gpuTemp,
+    ]);
+    expect(testLabels.filter((l) => healthLabels.has(l))).toEqual([]);
+  });
+
+  it("guard 3 — noise-floor source: the TR gauge must never read bench.efficacy.noise_floor_pct (a different measurement wearing the same field name)", () => {
+    const src = readFileSync(resolve("src/surfaces/LabConsole.tsx"), "utf8");
+    const line = src.split("\n").find((l) => l.includes("const noiseFloorPct ="));
+    expect(line).toBeDefined();
+    expect(line).not.toMatch(/bench(\?)?\.efficacy/);
+    expect(line).toMatch(/trial/);
+  });
+
+  it("guard 4 — Proven and Noise floor are honest NOT-YET (never a fabricated 0) while the scoreboard/trial probes are unread", () => {
+    renderConsole();
+    expect(document.querySelector(".lc-tl .ag-tag-ny")).not.toBeNull();
+    expect(document.querySelector(".lc-tr .ag-tag-ny")).not.toBeNull();
+  });
+
+  it("Proven reads the scoreboard's award count once loaded", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockImplementation((cmd: string) =>
+      cmd === "get_scoreboard"
+        ? Promise.resolve({ total_points: 30, awards: [{}, {}, {}], local_percentiles: [null, null, null] })
+        : cmd === "get_session_summaries"
+          ? Promise.resolve([])
+          : Promise.resolve(null),
+    );
+    renderConsole();
+    const tl = document.querySelector(".lc-tl")!;
+    await waitFor(() => expect(tl.querySelector(".ag-v")!.textContent).toBe("3"));
+    expect(tl.querySelector(".ag-tag-ny")).toBeNull();
+    expect(tl.querySelector(".ag-note")!.textContent).toBe("= verified before and after");
+  });
+
+  it("Noise floor reads get_trial_state's noise_floor_pct once a calibration has produced one", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockImplementation((cmd: string) =>
+      cmd === "get_trial_state"
+        ? Promise.resolve({
+            running: false,
+            kind: "calibration",
+            status: "done",
+            collected: 20,
+            target: 20,
+            verdict: null,
+            noise_floor_pct: 4,
+            rolled_back: false,
+            error: null,
+          })
+        : cmd === "get_session_summaries"
+          ? Promise.resolve([])
+          : Promise.resolve(null),
+    );
+    renderConsole();
+    const tr = document.querySelector(".lc-tr")!;
+    await waitFor(() => expect(tr.querySelector(".ag-v")!.textContent).toBe("4"));
+    expect(tr.querySelector(".ag-tag-ny")).toBeNull();
   });
 });

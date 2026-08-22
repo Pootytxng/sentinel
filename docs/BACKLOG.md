@@ -65,15 +65,12 @@
 
 #### ② SPECCED OR DECIDED, READY TO BUILD — cheap, visible, no owner dependency
 
-3. **Merge PR [#191](https://github.com/Pootytxng/sentinel/pull/191)** (MERGEABLE), then flip the
-   `lane/rig-then-rails` row in [`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md) `UNLANDED` →
-   `MERGED` and prune the ref **in the same commit** — that row commits to it.
-4. **Build the Test room's "Your rig" reading set** →
+3. **Build the Test room's "Your rig" reading set** →
    [`superpowers/specs/2026-08-21-test-rig-reading-set.md`](superpowers/specs/2026-08-21-test-rig-reading-set.md).
    *Why it matters:* the last open item from the three-room intimidation pass — "Your rig" currently
    repeats Health's numbers, so the Test room's own panel tells the user nothing new. Data wiring,
    not a layout move. Needs a `self-review` PASS on an installed build before it counts.
-5. **COLOR-1 · room accents collide with the status palette** —
+4. **COLOR-1 · room accents collide with the status palette** —
    [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) 🔴 OPEN. *Why it matters:* the Lab glows the
    same green as "this is good", so green stops meaning good in the one room built to prove things;
    Blackbook glows warning-amber while existing to reassure. **Decision already recorded — rooms
@@ -83,20 +80,20 @@
 
 #### ③ REPO HYGIENE — real, but nobody is waiting on it
 
-6. **#125 steps 1–3** (split the code set as data · build `compy-entry adopt` · build the
+5. **#125 steps 1–3** (split the code set as data · build `compy-entry adopt` · build the
    write hook and test it as a module) →
    [`superpowers/specs/2026-08-21-unverified-session-write-refusal.md`](superpowers/specs/2026-08-21-unverified-session-write-refusal.md).
    None of the three needs an owner decision; **step 4, arming it, is his one line** and is
    deliberately NOT in his checklist until 1–3 exist, because a non-ask there buries the real ones.
-7. **#121 · `launch-focus-guard` RUNTIME tier is intermittent, NOT root-caused** — the same
+6. **#121 · `launch-focus-guard` RUNTIME tier is intermittent, NOT root-caused** — the same
    class as #171 was, and #171 proves the class is solvable. Detail on the open row further down.
-8. **#156's unnamed lock holder and #128's unheld locks both discharge on the NEXT REAL SHIP, not on
+7. **#156's unnamed lock holder and #128's unheld locks both discharge on the NEXT REAL SHIP, not on
    their own.** #156's gates close the suspected path but the flake was never reproduced, so the
    *holder* is still unnamed; #128's two mutexes have never been held during an actual release or
    ship. Neither is a task to schedule — both are **evidence to collect the next time a ship runs**,
    so whoever runs that ship owes both issues a comment. Records archived; residuals live here.
-9. **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it** (row below; owner fork B_gpu).
-10. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
+8. **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it** (row below; owner fork B_gpu).
+9. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
    below). Delegated to the Codex lane — do not duplicate it here.
 
 **BLOCKED — another lane owns these; `WORK_CONTROL.md` says hands off, not adjudicate:**

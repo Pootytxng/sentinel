@@ -11,7 +11,6 @@ import { deriveReverted } from "./use-scan";
 import { optimizeVerdict } from "./optimize-v2-data";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import type { LabFastPathProps } from "./lab/OptimizeStation";
-import type { GameReadiness } from "../types";
 import type { HardwareInfo } from "../App";
 import "./lab-v2.css";
 
@@ -32,7 +31,6 @@ import "./lab-v2.css";
 // LabV2 + OptimizeV2 rooms, byte-identical (test-pinned).
 
 export function LabGround(props: LabFastPathProps & {
-  readiness: GameReadiness | null;
   activeCount: number;
   diagnostics?: ReactNode;
   diagnosticsCaptured?: boolean;
@@ -43,7 +41,6 @@ export function LabGround(props: LabFastPathProps & {
     recs,
     changes,
     isAppliable,
-    readiness,
     activeCount,
     diagnostics,
     diagnosticsCaptured = false,
@@ -105,7 +102,6 @@ export function LabGround(props: LabFastPathProps & {
         diagnosticsCaptured={diagnosticsCaptured}
         vendor={vendor}
         hw={hw}
-        readiness={readiness}
       />
       {/* Intelligence Phase 3 — the controlled-experiment engine + optimization simulator. ARMED
           2026-07-17 (owner-signed): renders the bench when experiment_gate() is true; still
