@@ -83,7 +83,6 @@ describe("LabGround OPS CONSOLE — LabConsole replaces the Instrument Bench ben
         onRollback={() => {}}
         onApplyBatch={async () => ({ applied: 0, skipped: [] })}
         gamingEnabled={gamingEnabled}
-        readiness={null}
         activeCount={0}
         diagnostics={<div data-testid="diag" />}
         diagnosticsCaptured

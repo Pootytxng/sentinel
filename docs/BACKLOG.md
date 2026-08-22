@@ -68,7 +68,9 @@
    [`superpowers/specs/2026-08-21-test-rig-reading-set.md`](superpowers/specs/2026-08-21-test-rig-reading-set.md).
    *Why it matters:* the last open item from the three-room intimidation pass — "Your rig" currently
    repeats Health's numbers, so the Test room's own panel tells the user nothing new. Data wiring,
-   not a layout move. Needs a `self-review` PASS on an installed build before it counts.
+   not a layout move. **Built on `feat/test-rig-reading-set` (PR #194), embedded stamp `36011078`,
+   `self-review` PASS on the installed build** — see the owner-installed row in RELEASE_STATE.md.
+   Landing this PR closes this item.
 4. **COLOR-1 · room accents collide with the status palette** —
    [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) 🔴 OPEN. *Why it matters:* the Lab glows the
    same green as "this is good", so green stops meaning good in the one room built to prove things;
