@@ -66,7 +66,7 @@ $budgets = @{
 #                                           check (5b)'s failure text tells whoever hits it.
 # (CLAUDE.md is handled by its own older guard - see the note under the table.)
 $byteBudgets = @{
-  "docs/BACKLOG.md" = 102400
+  "docs/BACKLOG.md" = 100352
   "docs/RELEASE_STATE.md" = 43008
   "docs/OWNER_ACTION_CHECKLIST.md" = 33792
   "src-tauri/CLAUDE.md" = 10240
@@ -75,6 +75,38 @@ $byteBudgets = @{
 # this one: src/claude-md-laws-guard.test.ts, "is under 25000 bytes (re-bloat guard)". Restating it
 # here would be a second source of truth for the same number - the exact drift bomb this repo
 # already disarmed for MAX_CONTINUES. One ceiling, one owner; that guard keeps it.
+
+# SECTION byte budgets, added 2026-08-22 - the row-cap pattern from verify-release-state.mjs check
+# (5b), applied to the other ledger that refills.
+#
+# The caught defect: docs/BACKLOG.md sat at 99KB of a 100KB ceiling four days after a 106KB -> 100KB
+# archive pass, for the same structural reason RELEASE_STATE.md refilled - its three working queues
+# are APPEND-ONLY, so every train adds a row and no rule takes one out. The FILE budget above sees
+# the total but cannot say WHICH queue grew, so whoever hits it goes hunting. A per-section cap fails
+# earlier and names the section. The HQ STEERING LOG even had a retention rule already - "keeps only
+# the newest ~12 cycles", written in prose in the doc, enforced by nothing. That is the tier this
+# repo demotes: a rule that gets broken becomes a guard, not another paragraph.
+#
+# Key is "<path>::<substring of the heading line>", and it must match exactly ONE heading or this
+# fails - a section renamed away is a MISSING cap, never a silent pass. ASCII-only on purpose: these
+# headings carry emoji and a date that moves on every re-rank.
+#
+# The numbers are DERIVED - each is the section's size the day the caps landed plus one typical row
+# (~1KB) of room, so a train may add one entry and the next has to archive a closed row first. They
+# may only ever move DOWN, same law as the tables above. The file budget above is then the real
+# 96.4KB plus exactly the 3348 bytes these caps still permit, which is why it moved 102400 -> 100352
+# in the same commit; doc-budget-guard.test.mjs pins that arithmetic so neither can move alone.
+#
+# Measured LF-normalized (the section's lines joined with LF), NOT as the bytes sit on disk: this
+# repo checks out CRLF on Windows and LF elsewhere, so an on-disk measure would give two different
+# answers for one unchanged file. Get-Content already drops the line endings, so the PowerShell and
+# the JS mirror agree by construction.
+$sectionByteBudgets = @{
+  "docs/BACKLOG.md::NEXT UP" = 12544
+  "docs/BACKLOG.md::Conformance queue" = 28160
+  "docs/BACKLOG.md::HQ STEERING LOG" = 4608
+}
+
 $root = Split-Path $PSScriptRoot -Parent
 $fail = 0
 foreach ($f in ($budgets.Keys | Sort-Object)) {
@@ -94,4 +126,36 @@ foreach ($f in ($byteBudgets.Keys | Sort-Object)) {
   if ($n -le $b) { Write-Host "PASS  $f  ${nk}KB/${bk}KB" }
   else { Write-Host "FAIL  $f  ${nk}KB/${bk}KB  -> over the BYTE budget; archive prose, never delete"; $fail = 1 }
 }
+
+foreach ($k in ($sectionByteBudgets.Keys | Sort-Object)) {
+  $parts = $k -split "::", 2
+  $rel = $parts[0]; $needle = $parts[1]
+  $p = Join-Path $root $rel
+  if (-not (Test-Path $p)) { Write-Host "SKIP  $k (missing)"; continue }
+  $lines = @(Get-Content $p)
+  $starts = @()
+  for ($i = 0; $i -lt $lines.Count; $i++) {
+    if ($lines[$i] -match '^#{1,6}\s' -and $lines[$i].Contains($needle)) { $starts += $i }
+  }
+  if ($starts.Count -ne 1) {
+    Write-Host "FAIL  $k  -> matched $($starts.Count) headings, expected exactly 1; the section was renamed or split, so re-point the cap"
+    $fail = 1; continue
+  }
+  $s = $starts[0]
+  $level = ([regex]::Match($lines[$s], '^#{1,6}')).Value.Length
+  $e = $lines.Count
+  for ($i = $s + 1; $i -lt $lines.Count; $i++) {
+    if ($lines[$i] -match "^#{1,$level}\s") { $e = $i; break }
+  }
+  $text = (($lines[$s..($e - 1)]) -join "`n") + "`n"
+  $n = [System.Text.Encoding]::UTF8.GetByteCount($text)
+  $b = $sectionByteBudgets[$k]
+  $nk = [math]::Round($n / 1KB, 1); $bk = [math]::Round($b / 1KB, 1)
+  if ($n -le $b) { Write-Host "PASS  $k  ${nk}KB/${bk}KB" }
+  else {
+    Write-Host "FAIL  $k  ${nk}KB/${bk}KB  -> this queue is append-only and has refilled. Move its OLDEST CLOSED row byte-for-byte to docs/BACKLOG_ARCHIVE.md, leave the one collapsed pointer, then re-run. Never raise the cap."
+    $fail = 1
+  }
+}
+
 if ($fail) { exit 1 } else { Write-Host "doc-budget: ALL PASS" }

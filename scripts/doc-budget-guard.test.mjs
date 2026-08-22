@@ -169,3 +169,122 @@ describe("byte budgets (the line budget cannot see a long line)", () => {
     expect(over).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// SECTION byte budgets, added 2026-08-22 — the row-cap pattern from verify-release-state.mjs check
+// (5b), applied to docs/BACKLOG.md's three append-only queues.
+//
+// The caught defect: the ledger was back at 99KB of its 100KB ceiling four days after an archive
+// pass took it from 106KB, because its working queues only ever gain rows. The FILE budget can see
+// the total but not WHICH queue grew, so its failure text sends whoever hits it hunting. These caps
+// fail earlier and name the section.
+//
+// Same discipline as both tables above: the numbers are PARSED from doc-budget.ps1, never restated.
+// sectionBytes() is the JS half of one rule — it must agree with the PowerShell character for
+// character, which is what the shared-fixture test below pins.
+
+/** The lines of the section a "<path>::<heading substring>" key names, or null when it isn't unique. */
+export function sectionLines(text, needle) {
+  const lines = text.split(/\r?\n/);
+  const starts = lines.map((l, i) => (/^#{1,6}\s/.test(l) && l.includes(needle) ? i : -1)).filter((i) => i >= 0);
+  if (starts.length !== 1) return null;
+  const start = starts[0];
+  const level = /^#{1,6}/.exec(lines[start])[0].length;
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    if (new RegExp(`^#{1,${level}}\\s`).test(lines[i])) { end = i; break; }
+  }
+  return lines.slice(start, end);
+}
+
+/** PowerShell's `(($lines[$s..($e-1)]) -join "`n") + "`n"`, measured as UTF-8. LF-normalized on
+ *  purpose: this repo checks out CRLF on Windows and LF elsewhere, and one file must not measure two
+ *  different sizes. */
+export function sectionBytes(text, needle) {
+  const lines = sectionLines(text, needle);
+  return lines === null ? null : Buffer.byteLength(lines.join("\n") + "\n", "utf8");
+}
+
+describe("section byte caps (the file budget cannot say WHICH queue refilled)", () => {
+  const script = readFileSync(BUDGET_SCRIPT, "utf8");
+  const sectionBudgets = parseBudgets(script, "sectionByteBudgets");
+
+  it("declares a cap for every append-only queue the ledger carries", () => {
+    expect(Object.keys(sectionBudgets).length).toBeGreaterThanOrEqual(3);
+    for (const key of Object.keys(sectionBudgets)) expect(key).toContain("::");
+  });
+
+  it("finds exactly one heading per key — a renamed section is a MISSING cap, not a pass", () => {
+    const unmatched = [];
+    for (const key of Object.keys(sectionBudgets)) {
+      const [rel, needle] = key.split("::");
+      const path = join(ROOT, ...rel.split("/"));
+      if (!existsSync(path)) continue;
+      if (sectionLines(readFileSync(path, "utf8"), needle) === null) unmatched.push(key);
+    }
+    expect(unmatched).toEqual([]);
+  });
+
+  it("stops a section at the next heading of its own level or higher, never at a sub-heading", () => {
+    const doc = ["## Keep", "body", "### Sub", "more", "## Next", "no"].join("\n");
+    expect(sectionLines(doc, "Keep")).toEqual(["## Keep", "body", "### Sub", "more"]);
+    // A deeper heading that merely CONTAINS the needle must not be the match target.
+    expect(sectionBytes(doc, "Keep")).toBe(Buffer.byteLength("## Keep\nbody\n### Sub\nmore\n", "utf8"));
+  });
+
+  it("measures the same number whatever the checkout's line endings are", () => {
+    const lf = "## Q\nrow\n## After\n";
+    expect(sectionBytes(lf, "Q")).toBe(sectionBytes(lf.replace(/\n/g, "\r\n"), "Q"));
+  });
+
+  it("parses nothing rather than inventing an empty pass when the table is gone", () => {
+    expect(parseBudgets("# no tables here\n", "sectionByteBudgets")).toEqual({});
+  });
+
+  it("no cap is slack — a cap far above the real section has stopped forcing the archive move", () => {
+    // The caps exist to make ONE more row fit and the one after that fail. A cap padded beyond that
+    // is a cap that never fires, which is how the prose retention rule failed in the first place.
+    const slack = [];
+    for (const [key, cap] of Object.entries(sectionBudgets)) {
+      const [rel, needle] = key.split("::");
+      const path = join(ROOT, ...rel.split("/"));
+      if (!existsSync(path)) continue;
+      const bytes = sectionBytes(readFileSync(path, "utf8"), needle);
+      if (bytes !== null && cap - bytes > 2048) slack.push(`${key} cap ${cap} vs actual ${bytes} — lower it`);
+    }
+    expect(slack).toEqual([]);
+  });
+
+  it("leaves the file budget covering exactly what the caps still permit", () => {
+    // The arithmetic that ties the two tables together: raising a cap without raising the file
+    // budget makes the section cap unreachable, and raising the file budget on its own re-opens the
+    // drift the caps closed. Either edit alone fails here.
+    const byteBudgets = parseBudgets(script, "byteBudgets");
+    const ledger = join(ROOT, "docs", "BACKLOG.md");
+    if (!existsSync(ledger)) return;
+    const text = readFileSync(ledger, "utf8");
+    let permitted = 0;
+    for (const [key, cap] of Object.entries(sectionBudgets)) {
+      const [rel, needle] = key.split("::");
+      if (rel !== "docs/BACKLOG.md") continue;
+      const bytes = sectionBytes(text, needle);
+      if (bytes !== null) permitted += cap - bytes;
+    }
+    const onDisk = Buffer.byteLength(readFileSync(ledger));
+    expect(byteBudgets["docs/BACKLOG.md"]).toBeGreaterThanOrEqual(onDisk + permitted);
+  });
+
+  it("are every one of them inside cap", () => {
+    const over = [];
+    for (const [key, cap] of Object.entries(sectionBudgets)) {
+      const [rel, needle] = key.split("::");
+      const path = join(ROOT, ...rel.split("/"));
+      if (!existsSync(path)) continue; // the gate SKIPs a missing file; so do we.
+      const bytes = sectionBytes(readFileSync(path, "utf8"), needle);
+      if (bytes !== null && bytes > cap) over.push(`${key} ${bytes}/${cap}`);
+    }
+    // FAIL = move that queue's OLDEST CLOSED row to docs/BACKLOG_ARCHIVE.md, verbatim, and leave the
+    // one collapsed pointer. Never delete, and never raise the cap to make this green.
+    expect(over).toEqual([]);
+  });
+});

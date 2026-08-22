@@ -104,8 +104,6 @@
    *holder* is still unnamed; #128's two mutexes have never been held during an actual release or
    ship. Neither is a task to schedule — both are **evidence to collect the next time a ship runs**,
    so whoever runs that ship owes both issues a comment. Records archived; residuals live here.
-4. ~~**C-14 · `GpuProfile.tsx`**~~ → ✅ **DONE 2026-08-22** — wired into `LabGround` as an advisory
-   panel with a live snapshot built from already-measured data (zero new IPC). Owner fork B_gpu closed.
 5. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
    below). Delegated to the Codex lane — do not duplicate it here.
 
@@ -163,42 +161,15 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
 
 ### Conformance queue — the audit's unbuilt decisions, in owner-value order
 
-- [x] **SHIPPED conformance rows, moved verbatim to
-  [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-19, byte budget): **C-05 + C-19**
-  (`d76f753f` — first run lands on the diagnosis, the tour is one named card, CPU temp reachable on
-  the default Live face and on the front door) · **C-06 + C-08 + C-09** (`4c9e440e`, `6d047c2a`,
-  `00d7020e` — plain-English copy pass + its guard, build identifiers out of consumer chrome) ·
-  **C-10** (`3eca4a9f` — no raw `<select>`, `src/design/Picker.tsx`) · **C-11** (`3eca4a9f` — the
-  ledger folds 37 repeats of one tweak into one row) · **C-17** (`3eca4a9f` — the mono census with a
-  ratchet). Read them there before re-litigating any of it. The C-18 correction below still
-  applies; C-19 moved to the archive with its row, and C-17b is paid off below.
-
-- [x] **Five more SHIPPED/CLOSED conformance rows, moved verbatim to
-  [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-22, byte budget -- this ledger had 400
-  bytes of headroom left): **C-04** (`40682344` -- the front door became **Health**, issue
-  [#143](https://github.com/Pootytxng/sentinel/issues/143); the rename found that `HOME_RAIL[0].label`
-  is NOT what the app prints, now pinned by `src/design/rail-label-locale-guard.test.ts`) ·
-  **buttons rendered in Arial** (shipped + reviewed on installed `aac90cd7`) · **`.arc-v2`** (all
-  dead strata deleted, 2026-08-20) · **the kernel law's one earned celebration** (built; it had never
-  fired for a single user) · **the ledger-completeness honesty class** (last known open instance
-  closed 2026-08-05). Read them there before re-litigating any of it.
-
-- [x] **C-18 · C-18 guard · C-18b — ALL SHIPPED 2026-08-19, moved verbatim to [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-20, byte budget). The classic `Monitor` room deleted after `TuningPresets` moved out of it verbatim (issue [#146](https://github.com/Pootytxng/sentinel/issues/146)) · `reachability-guard.test.ts`'s second tier, which catches a DEAD default export inside a LIVE file · both dead rooms decided, `Onboarding` deleted and vendored `Stepper` exempted by rule (issue [#148](https://github.com/Pootytxng/sentinel/issues/148)). **Read them there before re-litigating any of it** — the C-18 row is this repo's record of a subagent grep that was wrong three times, and the C-17b RESIDUAL row below leans on it.
-- [x] **C-17b + C-17b RESIDUAL — the mono-on-prose ratchet is PAID (12 → 0), rows moved verbatim to
-  [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-20, byte budget). Twelve selectors that
-  wore a mono face on prose: eleven restyled, one re-classified (`.ss-pin-label` renders a clock and
-  keeps `tabular-nums`). The residual visual review closed PASS on installed `402b0080`, and
-  corrected its own header — **4 of 12 measured, not 6** — then classified the remaining 8 by the
-  SHAPE of their wall: 2 data-shaped (close organically), 6 structural, of which four were the
-  `.arc-v2` variants that turned out never to render at all and went out with the row below.
-  `src/design/mono-law-guard.test.ts` holds the ratchet at 0 and carries the per-selector reasoning.
-- [x] **C-14 · `GpuProfile.tsx` — WIRED IN 2026-08-22** as an advisory panel in `LabGround`, the
-  same out-of-grid tile idiom `ExperimentBench` uses (a sixth `LabStationKey` would have rippled
-  through the palette, the routers and every test pinning the five-station spine). `liveGpuProfileSnapshot`
-  builds its read from the detected GPU plus the `hags-enable` rec's real `HwSchMode` read — zero new
-  IPC — and hard-nulls what is not readable (`powerModeLabel`, `peakTempC`), with eight tests pinning
-  that an unread field never becomes a fabricated one. reachability-guard's three B_gpu exemptions are
-  gone. Stays advisory permanently per LOCKED rule 6.
+- [x] **Every SHIPPED/CLOSED conformance row now lives in
+  [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** — one pointer instead of nine stubs (collapsed
+  2026-08-22 for the section byte cap; nothing was deleted, every row left this file verbatim).
+  **C-04** · **C-05** · **C-06** · **C-08** · **C-09** · **C-10** · **C-11** · **C-14** · **C-17** ·
+  **C-17b** (+ RESIDUAL) · **C-18** (+ guard, + C-18b) · **C-19** · **Q0** · **P0** · **PR #90
+  recovery** · buttons-in-Arial · `.arc-v2` · the kernel law's one earned celebration · the
+  ledger-completeness honesty class · the "add a part" form. Read them there before re-litigating
+  any of it. The C-18 correction still applies; C-17b's ratchet is PAID (12 → 0) and held at 0 by
+  [`../src/design/mono-law-guard.test.ts`](../src/design/mono-law-guard.test.ts).
 - [ ] **C-13 · Foundation tooling gap — axe-core (rank 3, MINE) LANDED; Figma MCP (rank 2, OWNER)
   still not wired.** The half that was ever mine to do is done and the row stays open only for the
   owner's half. `axe-core` now runs in vitest: `src/test/axe.ts` is the harness,
@@ -254,9 +225,6 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   default"; `Escape` put focus visibly back on the trigger. **Recorded for the next keyboard review:**
   synthetic DOM dispatch fails Chromium's `:focus-visible` heuristic and would have FALSE-FAILED the
   states item — real input events are required, not `dispatchEvent`.
-- [x] **PR #90 recovery + the quiet launch, rebuilt** — PR [#102](https://github.com/Pootytxng/sentinel/pull/102),
-  #90 MERGED (its four unverified Codex claims re-proven + repaired), #100 closed measured-inert and
-  rebuilt via `WebviewWindowBuilder` + `SW_SHOWNOACTIVATE`. Detail: `docs/CHANGELOG.md`.
 - [ ] **`launch-focus-guard` RUNTIME tier is intermittent under the pre-push gate — NOT root-caused.**
   2026-08-18: the quiet-launch case rejected three consecutive pushes of the same tree
   (`Compy held the foreground for 33/55 samples (first at 2430ms)`), then PASSED the fourth with that
@@ -347,11 +315,6 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   by default) and read the NEXT one that fires rather than hunt it.
   Shipped: installed build `3155c7a0`, self-review **PASS** on round 3 (round 2 caught that P2 was
   only half-fixed — a hand-added cooler still occluded the CPU — and that is now fixed and guarded).
-- [x] **The "add a part" form is mounted nowhere** — CLOSED by Train 1 (2026-08-12): the form was
-  extracted verbatim into `RigManualParts` and mounted in the Lab's own chrome
-  (`LabConsole.tsx:480`), while the chromeless hologram keeps rendering; a guard block fails the
-  build if it ever unmounts again (`lab-console.test.tsx:339`). Shipped desk v0.9.14, published
-  v0.9.15 → v0.9.17. This row had sat un-ticked through the fix — closed on code evidence 2026-08-12.
 - [ ] **Q8 / issue #91 — COMPY CARE: primary PC-doctor directive + Capability Exception Gate
   (OWNER-APPROVED 2026-08-09).** PR #102 merged 2026-08-12; #91 closed as a directive.
   **Policy rails are LANDED (issue #133, 2026-08-18):** tier-aware outbound guard, support-evidence
@@ -431,17 +394,6 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
     `VulnerableDriver:WinNT/Winring0` — our installer would trip Windows Security itself. A Compy-signed driver stays
     policy-possible but costs an EV certificate, so ZERO-BUDGET LAW parks it until revenue exists.
 
-- [x] **Q0 — LabDeck glance-first presentation pilot: CLOSED, redirected 2026-08-02.** Issue
-  [#14](https://github.com/Pootytxng/sentinel/issues/14) is not canonical and was never merged
-  wholesale — closing verdict redirects into issue [#49](https://github.com/Pootytxng/sentinel/issues/49)'s
-  Quiet Pit Wall Lab step (production order step 6). `feat/user-feedback-lab-recovery` @ `0599013`
-  is preserved as selectively-portable source only: the real rig evidence map, measured gauges,
-  comparison evidence, honest unavailable states, rollback, denial semantics, decision-journey
-  behavior, and a11y/layout guards + tests port into #49's Lab surface only "when they earn parity,"
-  never wholesale.
-- [x] **P0 before the next release or wider beta — ALL THREE LANDED 2026-08-03** (Q1 privacy/
-  storage/trust-copy truth as v0.9.12 · the other two with it). Full record archived:
-  `docs/archive/BACKLOG_SHIPPED_P0_2026-08-03.md`.
 - [ ] **P1 stabilization:** ~~reproducible local supply-chain/release gate~~ **Q4 DELIVERED** (issue
   [#35](https://github.com/Pootytxng/sentinel/issues/35)) — one command `powershell -NoProfile -File
   scripts/verify-release.ps1`, 14 checks, PASS/FAIL/BLOCKED/PENDING, reachability-classified npm +
@@ -1029,3 +981,4 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 > **✅ Phase-A closure (verified 2026-07-01):** no unchecked, non-gated, cleanly-buildable Phase-A `[ ]` item remains — the 5 open rows are all gated/walled: safe-to-suspend data (owner-curated) · peripheral debounce/Snap-Tap/Rapid-Trigger *detection* + sensor-ID DB (user-mode firmware-read wall, same class as DPI/line 355) · ISP-speed + DNS probes (📡 outbound-gated). Remaining VALUE is Phase B/C/D (gated). Supersedes the stale "Bottom line" below.
 
 > **Bottom line (2026-06-23)** — superseded by the Phase-A closure note above; moved verbatim to `BACKLOG_ARCHIVE.md` (2026-07-22).
+

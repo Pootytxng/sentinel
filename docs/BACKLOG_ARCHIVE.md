@@ -7,6 +7,51 @@
 
 ---
 
+## 2026-08-22b — the last closed rows in the conformance + NEXT UP queues, moved out for the section caps
+
+Moved out of `docs/BACKLOG.md` byte-for-byte when `scripts/doc-budget.ps1` grew per-SECTION byte
+caps for its three append-only queues. Nothing was edited: each row is exactly as it stood the day
+it closed, and each is a point-in-time record. Current truth is `docs/RELEASE_STATE.md`.
+
+4. ~~**C-14 · `GpuProfile.tsx`**~~ → ✅ **DONE 2026-08-22** — wired into `LabGround` as an advisory
+   panel with a live snapshot built from already-measured data (zero new IPC). Owner fork B_gpu closed.
+- [x] **C-17b + C-17b RESIDUAL — the mono-on-prose ratchet is PAID (12 → 0), rows moved verbatim to
+  [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-20, byte budget). Twelve selectors that
+  wore a mono face on prose: eleven restyled, one re-classified (`.ss-pin-label` renders a clock and
+  keeps `tabular-nums`). The residual visual review closed PASS on installed `402b0080`, and
+  corrected its own header — **4 of 12 measured, not 6** — then classified the remaining 8 by the
+  SHAPE of their wall: 2 data-shaped (close organically), 6 structural, of which four were the
+  `.arc-v2` variants that turned out never to render at all and went out with the row below.
+  `src/design/mono-law-guard.test.ts` holds the ratchet at 0 and carries the per-selector reasoning.
+- [x] **C-14 · `GpuProfile.tsx` — WIRED IN 2026-08-22** as an advisory panel in `LabGround`, the
+  same out-of-grid tile idiom `ExperimentBench` uses (a sixth `LabStationKey` would have rippled
+  through the palette, the routers and every test pinning the five-station spine). `liveGpuProfileSnapshot`
+  builds its read from the detected GPU plus the `hags-enable` rec's real `HwSchMode` read — zero new
+  IPC — and hard-nulls what is not readable (`powerModeLabel`, `peakTempC`), with eight tests pinning
+  that an unread field never becomes a fabricated one. reachability-guard's three B_gpu exemptions are
+  gone. Stays advisory permanently per LOCKED rule 6.
+- [x] **PR #90 recovery + the quiet launch, rebuilt** — PR [#102](https://github.com/Pootytxng/sentinel/pull/102),
+  #90 MERGED (its four unverified Codex claims re-proven + repaired), #100 closed measured-inert and
+  rebuilt via `WebviewWindowBuilder` + `SW_SHOWNOACTIVATE`. Detail: `docs/CHANGELOG.md`.
+- [x] **The "add a part" form is mounted nowhere** — CLOSED by Train 1 (2026-08-12): the form was
+  extracted verbatim into `RigManualParts` and mounted in the Lab's own chrome
+  (`LabConsole.tsx:480`), while the chromeless hologram keeps rendering; a guard block fails the
+  build if it ever unmounts again (`lab-console.test.tsx:339`). Shipped desk v0.9.14, published
+  v0.9.15 → v0.9.17. This row had sat un-ticked through the fix — closed on code evidence 2026-08-12.
+- [x] **Q0 — LabDeck glance-first presentation pilot: CLOSED, redirected 2026-08-02.** Issue
+  [#14](https://github.com/Pootytxng/sentinel/issues/14) is not canonical and was never merged
+  wholesale — closing verdict redirects into issue [#49](https://github.com/Pootytxng/sentinel/issues/49)'s
+  Quiet Pit Wall Lab step (production order step 6). `feat/user-feedback-lab-recovery` @ `0599013`
+  is preserved as selectively-portable source only: the real rig evidence map, measured gauges,
+  comparison evidence, honest unavailable states, rollback, denial semantics, decision-journey
+  behavior, and a11y/layout guards + tests port into #49's Lab surface only "when they earn parity,"
+  never wholesale.
+- [x] **P0 before the next release or wider beta — ALL THREE LANDED 2026-08-03** (Q1 privacy/
+  storage/trust-copy truth as v0.9.12 · the other two with it). Full record archived:
+  `docs/archive/BACKLOG_SHIPPED_P0_2026-08-03.md`.
+
+---
+
 ## 2026-08-22 — five shipped/closed conformance rows, moved out of the live ledger
 
 Moved out of `docs/BACKLOG.md` byte-for-byte when it reached 105.6KB of its 106KB ceiling. Nothing

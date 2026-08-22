@@ -4,6 +4,30 @@
 > [`BACKLOG.md`](BACKLOG.md) ▶ NEXT UP. Owner asks: [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md).
 > Budget 120 lines — trim from the bottom, never grow past it.
 
+## Cycle note — 2026-08-22, third pass — BACKLOG section caps
+
+The row-cap pattern `0af86044` gave `RELEASE_STATE.md` now covers the other ledger that refills.
+`docs/BACKLOG.md` was back at 99KB of a 100KB ceiling **four days** after a 106KB archive pass, for
+the same structural reason: its three working queues are append-only, so every train adds a row and
+no rule takes one out. The file budget could see the total but never WHICH queue grew, so its
+failure text sent whoever hit it hunting.
+
+- **`scripts/doc-budget.ps1`** — new `$sectionByteBudgets` table + check loop: NEXT UP 12544,
+  Conformance queue 28160, HQ STEERING LOG 4608. Each is the section's post-archive size plus one
+  row of room, measured **LF-normalized** (CRLF on Windows, LF on CI — one file must not measure two
+  sizes). File byte budget ratcheted 102400 → 100352, which is the real size plus exactly the 3348
+  bytes those caps still permit; a new test pins that arithmetic so neither number moves alone.
+- **`scripts/doc-budget-guard.test.mjs`** — the JS mirror, caps PARSED from the `.ps1`, never
+  restated. Falsified: one extra ~1.2KB steering-log cycle makes the section cap FAIL and the script
+  exit 1 while the FILE budget still passes at 94.4KB/98KB. That gap is the whole point.
+- **Archive pass** — 7 closed rows moved byte-for-byte to `BACKLOG_ARCHIVE.md` (`## 2026-08-22b`),
+  nine "moved to archive" stubs collapsed into one pointer. 99KB → 93.2KB, 1031 → 984 lines. The
+  seven phrases `capability-exception-policy-guard.test.ts` requires all survive the move.
+- **The handoff's "next task" was stale.** `src-tauri/src/license.rs` is 380 finished lines of
+  offline Ed25519 verify behind an all-zeros key, wired at `lib.rs:1195`, already recorded built-dark
+  at `RELEASE_STATE.md:125`. What is left on Pro is the owner's entity + merchant-of-record errands
+  and his call on which features sit behind it — not code.
+
 ## Cycle note — 2026-08-22, `lane/train-2026-08-22` (persistent train) — CLOSED, second pass
 
 The train reopened on the owner's word: *"just do everything i trust you can make some executive
@@ -72,7 +96,13 @@ has still never been held during a real publish.
    budget to make room; it is derived from those caps. File is 251/270 lines, 40.3KB/42KB.
 4. **Python patches with backslashes must be written to a FILE**, never piped through a Bash heredoc
    — the heredoc and the string literal each eat one layer.
-5. **The primary worktree `C:/Users/Kuya/code/sentinel` may be stale.** `git -C ... merge --ff-only
+5. **A `SESSION_FOREIGN` refusal cannot be adopted away.** `project-write-assert.mjs` routes
+   unverified/lapsed sessions to `cli.mjs adopt`, but a lineage record that ACTIVELY disagrees
+   falls to a third branch whose own comment says adoption would refuse too. Its first listed cure
+   is the cheap one: **reopen the right folder** — a fresh worktree has no record, so it is not
+   contended (`writer-contention.test.mjs`: "a Claude session in ANOTHER root is somebody else's
+   business"). That is how this cycle got written. Do NOT route the write through Bash to dodge it.
+6. **The primary worktree `C:/Users/Kuya/code/sentinel` may be stale.** `git -C ... merge --ff-only
    origin/main` before cutting anything there.
 
 ## Waiting on the owner
