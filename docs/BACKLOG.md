@@ -40,6 +40,17 @@
 > [`../src/ui-vision-status-guard.test.ts`](../src/ui-vision-status-guard.test.ts) now fails the build
 > on a status marker inside an archive block, and on any queue item calling a shipped vision row open.
 
+> **STATE OF THIS QUEUE, 2026-08-22 (end of the persistent train).** Every item on it that an agent
+> can finish alone is finished. What is left is **three items, and not one of them is mine to move**:
+> item 1 (site pricing) needs one word from the owner on a drafted PR; item 4 (C-14 `GpuProfile`) is
+> an owner fork on the checklist as **B_gpu**; item 5 (the Codex weekly-automation scope) belongs to
+> the Codex lane and duplicating it is the failure mode, not the fix. Items 2 and 3 are recorded as
+> closed *to the limit of what can be measured on this desk*, which is not the same as solved — read
+> their rows for exactly what is still unproven (#121's cause is unattributable at this resolution;
+> #128's release-side mutex has still never been held during a real publish). **Do not read an empty
+> non-gated queue as an empty project** — the conformance queue below, the UI vision backlog and
+> `PHASE B`/`C`/`D` all hold real work that is gated, delegated, or waiting on a product decision.
+
 #### ① A PERSON REPORTED IT AND WE HAVE NOT ANSWERED — these outrank everything
 
 > **Item 1 CLOSED 2026-08-22 — there is no cold-start regression, and `795d8ff5` (#130,
