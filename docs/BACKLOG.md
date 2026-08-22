@@ -67,14 +67,17 @@
 > never painted, and [`../src/perf-evidence-integrity-guard.test.ts`](../src/perf-evidence-integrity-guard.test.ts)
 > fails the build if a doc cites one.
 
-1. **`compy.gg` tells the world Compy is free, and that is live right now.** *Why it matters:* the
-   site contradicts the owner's own 2026-07-21 monetization decree on the public internet, and every
-   day it stands is a pricing expectation being set that money later has to fight. `site/llms.txt:5`
-   reads *"Compy is a free desktop app"*; the corrected line already exists, unlanded, on
-   `claude/review-consolidation-structure-9d13f2`. **Owner-gated twice** (price *wording* is brand +
-   money; `site/**` auto-deploys to other people's machines) →
-   [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) §B6. **What is mine:** land the per-file
-   fix as a PR with the wording drafted, so his part is one word, yes or no.
+1. **DELIVERED — waiting on one word. `compy.gg` tells the world Compy is free, and that is live
+   right now.** *Why it matters:* the site contradicts the owner's own 2026-07-21 monetization
+   decree on the public internet, and every day it stands is a pricing expectation being set that
+   money later has to fight. Draft PR [#193](https://github.com/Pootytxng/sentinel/pull/193) changes
+   `site/llms.txt:5` — **and its real source `site/generate.mjs:441`, because that file is GENERATED
+   and an output-only fix is reverted by the next run** — to *"Compy is a Windows desktop app with a
+   free tier."* The line drafted on `claude/review-consolidation-structure-9d13f2` was **rejected,
+   not landed**: it reads *"free forever"*, the exact phrasing that same decree supersedes. **Owner-
+   gated twice** (price *wording* is brand + money; `site/**` auto-deploys to other people's
+   machines) → [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) §B6. Stays a **draft** until
+   he answers; `docs/WORK_CONTROL.md` allows a blocked draft precisely because it claims nothing.
 
 #### ③ REPO HYGIENE — real, but nobody is waiting on it
 
