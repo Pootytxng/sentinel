@@ -101,13 +101,16 @@ session left work in it — so whoever owns it next should `git -C ... merge --f
 **ALSO OPEN, not yet queued** (so none of it drops silently): #133 CARE capability rails tasks 4–7 ·
 #140 CPU temp (PawnIO/MSR — needs a Capability Exception record first) · #64 Q2b main-window caller
 checks · #54/#55 Project Doctor (Codex-claimed) · #49 Quiet Pit Wall (needs a visual self-review) ·
-#158 disk-bloat flag (that IS PR #160) · NAV-1 (awaiting owner direction) · TYPE-1's residual
-(mono-for-machine-values-only is still a comment with no guard) · the PHASE A–D rows below.
+#158 disk-bloat flag (that IS PR #160) · NAV-1 (awaiting owner direction) · the PHASE A–D rows
+below. **TYPE-1's mono residual is NOT among them — it was closed 2026-08-18/19** (`3eca4a9f` +
+`be4c81ec`): [`../src/design/mono-law-guard.test.ts`](../src/design/mono-law-guard.test.ts) censuses
+every mono rule behind a down-only ratchet, 0 violations. It sat listed as open here for four days
+after it shipped, which is the same false reading that the archived-marker guard was written for.
 
 **THE MONEY STACK IS STALLED AT PHASE 2 AND NOTHING ABOVE MOVES IT.**
 [`RECEIPTS_DOCTRINE.md`](RECEIPTS_DOCTRINE.md) §4 puts the compy.gg one-pager + waitlist there,
 with **"waitlist signups in 14 days"** as the first real market signal, and every phase after it is
-funded by that one. Item 2 above is the only row in this queue that touches the site at all, and it
+funded by that one. Item 1 above is the only row in this queue that touches the site at all, and it
 is a correction, not a step forward. Named here so the gap is visible rather than implied: **the
 whole live queue is quality and hygiene, and the mission includes income.**
 

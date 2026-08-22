@@ -45,7 +45,7 @@ out, no branch was merged. The only file this train writes is this one.
 | C-14 | `GpuProfile.tsx` — wire it in as advisory, or archive it (owner fork) | UI backlog NAV-1 (c) | **NEVER RESOLVED** (still parked by exemption) |
 | C-15 | §E trending design tooling (Figma / v0) — owner's call | UI backlog §E | **STILL OPEN** (unchanged, correctly) |
 | C-16 | §G site: mini playable demo · `/pricing` · `llms.txt` · `/compare` | UI backlog §G / G.2 | **PARTIAL** |
-| C-17 | TYPE-1 residual: mechanize the mono-for-machine-values-only law | UI backlog TYPE-1 | **NEVER BUILT** (self-declared) |
+| C-17 | TYPE-1 residual: mechanize the mono-for-machine-values-only law | UI backlog TYPE-1 | **NEVER BUILT** (self-declared) — **built later the same day, see the C-17 section** |
 | C-18 | TYPE-1 — six-step scale, 13px floor, Arial killed, guarded | foundation ③ | **HONORED** |
 | C-19 | COLOR-1 — rooms give up their hue; picker survives | foundation ④ | **HONORED** |
 | C-20 | UX-1 decision ① — the verdict is the H1 | foundation ①; UX-1 ① | **HONORED** |
@@ -385,6 +385,14 @@ still a comment with no guard."* Still true. The law appears only as prose —
 `src/design/vendor/THIRD_PARTY.md:101` — and no test under `src/design/` references
 `--v2-font-mono` usage. The backlog states this accurately; recorded here only so the item is
 counted, not as a discrepancy.
+
+> **CLOSED after this audit was written, and this row is left standing rather than rewritten** — the
+> audit is a point-in-time record and editing its findings later would make it useless as one.
+> `3eca4a9f` (2026-08-18, hours after this line) built
+> [`../src/design/mono-law-guard.test.ts`](../src/design/mono-law-guard.test.ts): a census with a
+> down-only ratchet over a fixed-point resolution of the mono alias graph. `be4c81ec` (2026-08-19)
+> paid the debt it found — 12 violations to 0, ceiling 0.
+
 
 ---
 

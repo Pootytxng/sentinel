@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync, readdirSync, statSync } from "fs";
+import { join } from "path";
 
 // UI-VISION STATUS GUARD (bug → guard, 2026-08-22).
 //
@@ -29,9 +30,18 @@ import { readFileSync, writeFileSync } from "fs";
 //      This is the cross-doc half — rule A alone keeps the vision file honest, and a queue item that
 //      simply went stale on its own would still slip through.
 //
-// SCOPE, honestly: this is a Markdown text check, not a semantic one. It proves the two files agree
-// about WHICH rows are open; it cannot prove a row that says OPEN is genuinely unbuilt. That failure
-// mode is the false-done protocol's business, and it needs a human or a code check, not a regex.
+// SCOPE, honestly: rules A and B are Markdown text checks, not semantic ones. They prove the two
+// files agree about WHICH rows are open; they cannot prove a row that says OPEN is genuinely
+// unbuilt. That is the false-done protocol's business and it needs a human or a code check.
+//
+//   C. ONE SHAPE OF THAT IS A CODE CHECK (added 2026-08-22, after it happened again). A live line
+//      may not say a law has NO GUARD while a guard test names the same CSS custom property. That is
+//      exactly how TYPE-1's mono residual read: `mono-law-guard.test.ts` shipped 2026-08-18
+//      (`3eca4a9f`) and paid its debt to zero on 2026-08-19 (`be4c81ec`), while BACKLOG's open list
+//      and UI_VISION both went on saying "still a comment with no guard" for four more days -- long
+//      enough for a session to be pointed at finished work for the second time in one week. The
+//      first time cost the owner a request; this class does not get a third chance at prose.
+//      Archived `<details>` text is exempt by construction: it records what was true then.
 //
 // Paths are repo-root-relative; vitest runs from the repo root (scripts/run-vitest.mjs).
 
@@ -92,6 +102,85 @@ const backlogEntries = (path: string): { n: number; text: string }[] => {
       else if (entries.length) entries[entries.length - 1].text += `\n${line}`;
     });
   return entries;
+};
+
+// -- Rule C's inputs --------------------------------------------------------------------------
+// A claim is only checked against a token that is REALLY a CSS custom property declared in this
+// repo. Without that intersection every `--release` and `--no-bundle` in a doc would be a candidate
+// token, and a guard test that happens to mention one would fail the build for no reason.
+
+const CODE_ROOTS = ["src", "scripts"];
+const SKIP_DIRS = new Set(["node_modules", "target", "dist", ".git", "coverage"]);
+
+const walk = (dir: string, out: string[] = []): string[] => {
+  for (const name of readdirSync(dir)) {
+    if (SKIP_DIRS.has(name)) continue;
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) walk(full, out);
+    else out.push(full.replace(/\\/g, "/"));
+  }
+  return out;
+};
+
+const codeFiles = (): string[] => CODE_ROOTS.flatMap((r) => walk(r));
+
+/** Every custom property this repo DECLARES in a stylesheet. */
+const declaredProperties = (files: string[]): Set<string> => {
+  const props = new Set<string>();
+  for (const f of files.filter((x) => x.endsWith(".css"))) {
+    for (const m of readFileSync(f, "utf8").matchAll(/(--[a-z][a-z0-9-]*)\s*:/g)) props.add(m[1]);
+  }
+  return props;
+};
+
+/**
+ * Custom property -> the guard tests that name it more than once. Once can be an aside in a
+ * comment; twice is the file working with it.
+ */
+const guardedProperties = (files: string[]): Map<string, string[]> => {
+  const index = new Map<string, string[]>();
+  for (const f of files.filter((x) => /guard[\w.-]*\.test\.(?:tsx?|mjs)$/.test(x))) {
+    const text = readFileSync(f, "utf8");
+    const counts = new Map<string, number>();
+    for (const m of text.matchAll(/--[a-z][a-z0-9-]*/g)) counts.set(m[0], (counts.get(m[0]) ?? 0) + 1);
+    for (const [prop, n] of counts) {
+      if (n < 2) continue;
+      index.set(prop, [...(index.get(prop) ?? []), f]);
+    }
+  }
+  return index;
+};
+
+/** The vocabulary a doc uses to say "this law is written down and nothing checks it". */
+const UNGUARDED_CLAIM = /\bno guard\b|\bnothing enforces\b|\bstill (?:just )?a comment\b|\bunguarded\b/i;
+/** Greppable escape hatch, same idiom as `mutation-boundary-allow`: the line is ABOUT the gap. */
+const CLAIM_ALLOW = "unguarded-claim-allow";
+
+type Claim = { line: number; property: string; guards: string[] };
+
+/**
+ * Live lines claiming a property is unguarded while a guard test works with it. A claim routinely
+ * wraps ("the mono-for-machine-values-only law is still / a comment with no guard"), so each line is
+ * read together with the next one -- the same reason rule B reads whole entries rather than lines.
+ */
+const unguardedClaims = (
+  lines: Line[],
+  declared: Set<string>,
+  guards: Map<string, string[]>,
+): Claim[] => {
+  const found: Claim[] = [];
+  lines.forEach((line, i) => {
+    if (line.inDetails) return;
+    const next = lines[i + 1];
+    const context = `${line.text} ${next && !next.inDetails ? next.text : ""}`;
+    if (!UNGUARDED_CLAIM.test(context) || context.includes(CLAIM_ALLOW)) return;
+    for (const property of new Set(context.match(/--[a-z][a-z0-9-]*/g) ?? [])) {
+      if (!declared.has(property)) continue;
+      const hits = guards.get(property);
+      if (hits?.length) found.push({ line: line.n, property, guards: hits });
+    }
+  });
+  return found;
 };
 
 describe("UI vision status guard: an archived row cannot advertise itself as live work", () => {
@@ -184,5 +273,56 @@ describe("UI vision status guard: the guard itself is armed", () => {
     expect(entries[0].text).toContain("COLOR-9");
     expect(entries[0].text).toContain("UI_VISION_BACKLOG.md");
     expect(OPEN_MARKER.test(entries[0].text)).toBe(true);
+  });
+});
+
+describe("UI vision status guard: a live doc cannot call a guarded law unguarded (rule C)", () => {
+  const files = codeFiles();
+  const declared = declaredProperties(files);
+  const guards = guardedProperties(files);
+
+  it("the index it reasons over is real", () => {
+    // Without this, a broken walk would silently make rule C pass on everything.
+    expect(declared.size, "no custom properties found in src/ -- the CSS walk is broken").toBeGreaterThan(50);
+    expect(guards.size, "no guard test names any custom property -- the guard walk is broken").toBeGreaterThan(5);
+    expect(guards.get("--v2-font-mono") ?? [], "the mono law's guard should be in the index")
+      .toContain("src/design/mono-law-guard.test.ts");
+  });
+
+  it.each([VISION, BACKLOG])("%s calls no law unguarded that a guard test works with", (doc) => {
+    const claims = unguardedClaims(readTagged(doc), declared, guards);
+    expect(
+      claims.map((c) => `${doc}:${c.line} says ${c.property} is unguarded -- ${c.guards.join(", ")}`),
+      `A live line calls a law unguarded while a guard test works with the same custom property.\n` +
+        `That is how TYPE-1's mono residual stayed in the open list for four days after\n` +
+        `mono-law-guard.test.ts shipped, pointing a session at finished work.\n\n` +
+        `Fix: correct the line (say what the guard does and what it still cannot see), or -- if the\n` +
+        `line is deliberately about a REMAINING hole in that guard -- put ${CLAIM_ALLOW} on it.`,
+    ).toEqual([]);
+  });
+
+  it("is armed: it catches the exact sentence that shipped, and honours the escape hatch", () => {
+    const claimed = (text: string, inDetails = false): Claim[] =>
+      unguardedClaims([{ n: 1, text, inDetails }], declared, guards);
+
+    const real =
+      "**Still open from this row:** the `--v2-font-mono` machine-values law is still a comment with no guard.";
+    expect(claimed(real).map((c) => c.property)).toEqual(["--v2-font-mono"]);
+    // Archived record of what was once true: exempt, or every <details> block becomes a liability.
+    expect(claimed(real, true)).toEqual([]);
+    // Deliberate statement about a real remaining hole: allowed, and greppable.
+    expect(claimed(`${real} <!-- ${CLAIM_ALLOW} -->`)).toEqual([]);
+    // A property nothing declares, and a CLI flag that is not a property at all: both ignored.
+    expect(claimed("`--v2-nonexistent-token` has no guard and `--no-bundle` has no guard either")).toEqual([]);
+  });
+
+  it("is armed across a line wrap, which is how the sentence was actually written", () => {
+    const lines: Line[] = [
+      // Neither line carries the whole claim: 41 names the property, 42 says "no guard", and the
+      // phrase "still a comment" is itself cut in half. Only the joined context sees it.
+      { n: 41, text: "**Still open:** the `--v2-font-mono` machine-values law is still", inDetails: false },
+      { n: 42, text: "a comment, and nothing enforces it.", inDetails: false },
+    ];
+    expect(unguardedClaims(lines, declared, guards).map((c) => c.line)).toEqual([41]);
   });
 });
