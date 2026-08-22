@@ -4,61 +4,54 @@
 > [`BACKLOG.md`](BACKLOG.md) ▶ NEXT UP. Owner asks: [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md).
 > Budget 120 lines — trim from the bottom, never grow past it.
 
-## Where this lane stands (2026-08-21)
+## Cycle note — 2026-08-22, lane/train-2026-08-22 (persistent train, mid-flight)
 
-**The owner's "runs a lot slower than before" is ANSWERED *and* FIXED.** The cost had a single
-name: `body::before` ran an `aurora` keyframe forever, behind every room, focused or not. It is
-deleted. Measured on the installed build with the honest instrument (`idle-bare`, no CDP, 10
-minutes hands-off, fresh boot parked on Home both times):
+**Committed, NOT yet pushed:** `583c9452` — #125 steps 1-3.
+`.claude/hooks/project-write-assert.mjs` (new PreToolUse Write|Edit|NotebookEdit refusal),
+`tools/entry/adopt.mjs` + `cli.mjs adopt` (the cure), the UNVERIFIABLE/LAPSED split in
+`.claude/hooks/session-root-assert.mjs`. Guards: `tools/entry/project-write-assert.test.mjs` (21),
+`tools/entry/adopt.test.mjs` (14), 3 added to `tools/entry/session-root-assert.test.mjs`.
+`node scripts/run-vitest.mjs run tools/entry/` -> 47 files, 719 passed. `.claude/settings.json`
+deliberately untouched: step 4 is the owner's line, now checklist item **B_write**. Spec section 7
+records three measured deviations.
 
-| | before (`584654c8`) | after (`1f2ba660`) |
-|---|---|---|
-| idle CPU | 20.853% of one core | **3.403%** |
-| working set (max) | 605.76 MB | **568.56 MB** |
-| private bytes (max) | 535.14 MB | **432.18 MB** |
+**Uncommitted working tree (issue #121, the intermittent runtime tier):**
+`scripts/launch-focus-guard.test.mjs` now keeps every probe trace by DEFAULT in
+`logs/foreground-traces/` (gitignored, newest 40) with `traceDirFor` / `pruneTraces` + 5 new tests
+(47 pass). WHY: the push gate rejected `583c9452` on that tier and the whole attribution block was
+lost to a truncated message; the trace flag was opt-in, so it is never armed when it would matter.
+Three full-suite `npm test` repro runs were in flight when this note was written -- their exit codes
+are in `%TEMP%/claude/c--Users-Kuya-code-sentinel-home-room/feda48a6-5699-490f-8066-e31ce8ad76fa/tasks/baz3e7c8k.output`,
+their traces in `logs/foreground-traces/`.
 
-All three rows in [`perf/q7-baseline.json`](perf/q7-baseline.json) are re-derived from that run,
-and `idleCpuPercentOfOneCore` is an **earned upper bound at 4.5** — it had been an `open finding`
-since the 2026-08-06 teardown. The old budget was 26, loose enough to hide the entire cost.
+**Prepared but NOT applied** (scratchpad `.../scratchpad/*.py`, run from repo root):
+`patch_gate_log.py` (verify-local.ps1 transcribes each run to `logs/verify-local-*.log`, keeps 20,
+prints the path in its `finally`), `patch_gate_guard.py` (the matching pins in
+`scripts/local-gate-guard.test.mjs`), `patch_q7_exe.py` (`q7-probe coldstart --exe PATH
+--appdata DIR`, recorded with `isDefaultTarget`). The last one unblocks BACKLOG item 1 WITHOUT
+installing a 17-day-old build over the owner's live app: build `dc4d55e` and today's HEAD to
+`src-tauri/target/release/compy.exe` and compare exe-vs-exe on a quiet desk
+(`node scripts/q7-probe.mjs desk` first, exit 3 = busy).
 
-- **Not the font.** Two settled attribution runs, same binary, same room, back to back, differing
-  only by injected CSS reverting the Geist stack and the whole type scale: 22.392% vs 21.178% —
-  a 1.21-point gap against baselines that spread 1.352 and 0.932. Noise. **The looks-vs-speed
-  fork never reached the owner's desk, and should not be re-opened.**
-- **Not a regression either.** The app was already slightly cheaper than its own recorded
-  baseline (20.853% vs 23.348%). This was a standing cost believed fixed since 2026-08-06 and
-  never actually fixed — see the withdrawn-evidence entry below.
-- **The drift was a real look and it is really gone** (~115 px over 20 s on a 1440p desk). Shipped
-  as a taste call under the 2026-08-07 decree, with a moving before/after sent to the owner. If he
-  vetoes, restoring it is one `animation:` line — but then the budget has to move back with it.
+**Also open:** PR #193 (`fix/site-pricing-language`, the owner-gated pricing wording) has gone
+CONFLICTING against `origin/main` -- doc conflicts only (`BACKLOG`, `OWNER_ACTION_CHECKLIST`,
+`BRANCH_DISPOSITIONS`), payload `site/llms.txt` + `site/generate.mjs` intact. No worktree holds that
+branch, so it is safe to resolve from here. Note the heredoc trap: python patches with backslashes
+must be WRITTEN TO A FILE, not piped through a Bash heredoc.
 
-Full record: [`RELEASE_STATE.md`](RELEASE_STATE.md) §"Required owner decisions", the
-`ANSWERED 2026-08-21` block. Runs on disk: `docs/perf/raw/idle-bare.json` (this one),
-`idle-bare-2026-08-21.json` (the before), `idle-attribution-2026-08-21-{E-baseline,F-type1-reverted}.json`,
-`coldstart-2026-08-21.json`. The probe's `restore` completed —
-`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` is unset and no debug port is listening.
+## Where this lane stands (2026-08-21) -- CLOSED
 
-⚠ **One metric got WORSE and is NOT attributed:** `coldStartDocumentReadyMs` 210 → 516 ms. It is
-recorded as an `open finding` and is now item 1 of the queue. Do not guess a cause in a doc.
+The owner's "runs a lot slower than before" was answered and fixed: `body::before` ran an
+`aurora` keyframe forever behind every room. Deleted, measured on the installed build with
+`idle-bare`, and shipped. Full record in [`perf/q7-baseline.json`](perf/q7-baseline.json)
+(the idle-CPU budget is now an upper bound, 4.5% of one core, measured 3.403%).
 
 ## What landed this session
 
-- `a4484a6f` — outbound-claim guard skipped a gitignored local mirror; two tests now assert the
-  exclusion's own premise, so it cannot rot into a corpus hole.
-- **`src/perf-evidence-integrity-guard.test.ts` (new).** `scripts/q7-probe.mjs` records
-  `"baselineStability": { "settled": false }` when its baseline never converged, and until now
-  **nothing in the repo ever read that field.** Two of #127's load-bearing figures came from such
-  runs: run B's "-0.105 points, i.e. gone" (which became the evidence line in `src/App.css` and the
-  rationale in `src/ambient-animation-cost-guard.test.ts` for letting a full-window layer drift
-  forever) and run D's 10.483% (reported as the fix landing, and part of v0.9.26's owner GO). Both
-  are withdrawn. The guard fails the build on any live file citing an unsettled run; the escape hatch
-  is a line-level, greppable `perf-unsettled-allow`, for text whose subject IS the unsettledness.
-  It understands the repo's three citation idioms — literal, `{a,b}.json`, and `*.json` — because a
-  literal-only matcher passed green on its first run while the real offender sat in `App.css`.
-- Corrected every live citation it caught: `src/App.css`, `src/ambient-animation-cost-guard.test.ts`,
-  `src/surfaces/setup/SetupLauncherCard.css`, `docs/superpowers/specs/2026-07-31-q7-native-baseline.md`.
-- `RELEASE_STATE.md` back under budget: the closed v0.9.25 + v0.9.24 GO records moved verbatim to
-  [`archive/RELEASE_STATE_HISTORY.md`](archive/RELEASE_STATE_HISTORY.md) with a pointer left behind.
+History pruned 2026-08-22 to stay inside the 120-line budget. The full record of the
+2026-08-21 cycle (`a4484a6f`, the perf-evidence-integrity guard and the four citations it
+corrected, the RELEASE_STATE archive move) is in `git log` and
+[`CHANGELOG.md`](CHANGELOG.md) -- this file carries only what is still live.
 
 ## Two things another lane left dirty
 

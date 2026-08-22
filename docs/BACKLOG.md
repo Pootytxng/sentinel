@@ -67,8 +67,16 @@
 
 #### ③ REPO HYGIENE — real, but nobody is waiting on it
 
-2. **#121 · `launch-focus-guard` RUNTIME tier is intermittent, NOT root-caused** — the same
-   class as #171 was, and #171 proves the class is solvable. Detail on the open row further down.
+2. **#121 · `launch-focus-guard` RUNTIME tier is intermittent — REPRODUCED 2026-08-22, and the
+   harm it exists for is now asserted on every run.** 15 consecutive standalone runs: 11 clean, 4
+   UNMEASURABLE (27%), 0 failures. What separates them is one field, not the poll's timing — in the
+   4, the hook's FOREGROUND event carries `fgPid == launchedPid`; in the 11 the same event fires at
+   the same millisecond with `fgPid` still the terminal's. **Naming the cause stays out of reach**
+   (with no activation path left in the binary, Windows fronting a fresh launch and the app raising
+   itself are identical from outside), so the guard stopped waiting for it: the owner's actual
+   complaint — *"it minimises my primary monitor"* — is in the trace on all 15 runs, and
+   `scripts/launch-focus-guard.test.mjs` now asserts an empty `summarizeTrace().minimized` **above**
+   both unmeasurable skips. All 15 recorded none. Detail on the open row further down.
 3. **#156's unnamed lock holder and #128's unheld locks both discharge on the NEXT REAL SHIP, not on
    their own.** #156's gates close the suspected path but the flake was never reproduced, so the
    *holder* is still unnamed; #128's two mutexes have never been held during an actual release or
@@ -370,6 +378,23 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   opened the console, so the fix has an address. Still open: the deciding measured run, then the
   sibling console-launch fix + guard. `COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF=1` still refuses every
   unmeasurable.
+  **2026-08-22 (lane/train-2026-08-22): reproduced with traces, and the guard re-aimed at the harm.**
+  Two defects had to be cleared first, both now guarded: `q7-probe coldstart` left its last sample's
+  app running (it killed compys only at sample *start*), and a running compy makes this tier decline
+  to measure — so twelve consecutive "reproduction" runs measured nothing and printed *"47 passed"*.
+  The skip was announced on stdout, which vitest's default reporter hides for a passing test.
+  Fixed by `scripts/lib/probe-cleanup.mjs` (kill what this run LAUNCHED, never what it attached to;
+  `--keep-open` opts out) + `scripts/probe-cleanup-guard.test.mjs`, and by turning every declining
+  path into `return ctx.skip()` so the summary line reads *"45 passed | 2 skipped"* — pinned against
+  a bare `return;` ever coming back.
+  **The measurement, on a real desk:** 15 runs, 11 clean (`own=0`, `firstForegroundMs=-1`), 4
+  UNMEASURABLE (`own=55/55`, foreground at 6–7ms, window at 13–15ms, `foregroundPidBefore !=
+  After`) — all four in the opening streak, 0 hard failures. The 4 are the *idle-desk* class (the OS
+  fronts the launch before Compy has a window), NOT the ~120ms in-process raise; that one needs the
+  full suite in parallel and did not appear in 15 standalone runs. **The console-host lead is
+  neither confirmed nor refuted — no window outside the launched family was minimised in ANY of the
+  15 runs**, which is also why the new assertion passes 15/15. Traces kept, but `logs/` is gitignored —
+  they are 27 files on THIS desk only, not evidence another machine can re-read. Still open: the load-dependent in-process class, under the full suite.
   Shipped: installed build `3155c7a0`, self-review **PASS** on round 3 (round 2 caught that P2 was
   only half-fixed — a hand-added cooler still occluded the CPU — and that is now fixed and guarded).
 - [x] **The "add a part" form is mounted nowhere** — CLOSED by Train 1 (2026-08-12): the form was
