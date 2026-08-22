@@ -19,7 +19,11 @@
 // is this script's half of that contract.
 //
 // Usage (Node >= 21 for global WebSocket/fetch; ASCII only, per the encoding guard):
-//   node scripts/q7-probe.mjs coldstart [--port 9455] [--out FILE]
+//   node scripts/q7-probe.mjs coldstart [--port 9455] [--out FILE] [--n 3]
+//                              [--exe PATH] [--appdata DIR]
+//                              <- --exe measures a binary that is not the installed build (an old
+//                                 commit, a candidate); --appdata runs it against a throwaway data
+//                                 dir. Both are recorded, and isDefaultTarget goes false.
 //   node scripts/q7-probe.mjs rooms     [--port 9455] [--dwell 15000] [--out FILE]
 //   node scripts/q7-probe.mjs latency   [--port 9455] [--out FILE]
 //   node scripts/q7-probe.mjs idle      [--port 9455] [--minutes 10] [--hidden] [--out FILE]
@@ -39,13 +43,13 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { WINDOW_PROBE_EXPRESSION, pickMainTarget } from "./lib/tauri-window-pick.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const EXE = join(process.env.LOCALAPPDATA ?? "", "Compy", "compy.exe");
+const DEFAULT_EXE = join(process.env.LOCALAPPDATA ?? "", "Compy", "compy.exe");
 const LOCK = join(tmpdir(), "q7-probe.lock.json");
 const DEFAULT_PORT = 9455;
 
@@ -63,6 +67,28 @@ for (let i = 0; i < rest.length; i++) {
     i++;
   }
 }
+
+/**
+ * WHICH BINARY, AND WHOSE DATA (added 2026-08-22 for BACKLOG item 1, the cold-start attribution).
+ *
+ * The open finding needs a decomposed `coldstart` against an OLD build (`dc4d55e`) compared with
+ * today's. The obvious way to get one -- install the old build -- is the wrong way twice over: it
+ * puts a 17-day-old app on the owner's machine as his live Compy, and it runs that old build against
+ * his real Trust Ledger. So the probe can be pointed at a binary instead:
+ *
+ *   --exe <path>      measure THAT compy.exe rather than the installed one. The pair of readings is
+ *                     exe-vs-exe, so whatever NSIS packaging costs cancels out of the comparison.
+ *   --appdata <dir>   run it against a throwaway %APPDATA% rather than the owner's. An old build
+ *                     touching his real history.json is a data risk with no measurement upside;
+ *                     seed the directory identically for both readings when the hypothesis is about
+ *                     startup filesystem work (it is -- #130 / data_root.rs).
+ *
+ * Both are RECORDED in the artifact, and `isDefaultTarget` is written next to them, so a reading
+ * taken against a sandbox can never be mistaken later for a baseline of the shipped app.
+ */
+const EXE = typeof flags.exe === "string" ? resolve(flags.exe) : DEFAULT_EXE;
+const DATA_HOME = typeof flags.appdata === "string" ? resolve(flags.appdata) : null;
+const IS_DEFAULT_TARGET = EXE === DEFAULT_EXE && DATA_HOME === null;
 const PORT = Number(flags.port ?? DEFAULT_PORT);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -499,7 +525,13 @@ async function launch(port) {
     detached: true,
     stdio: "ignore",
     windowsHide: false,
-    env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}` },
+    env: {
+      ...process.env,
+      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
+      // Only when asked. Unset, the probe measures the owner's real data dir, which is
+      // what every existing baseline row was recorded against.
+      ...(DATA_HOME ? { APPDATA: DATA_HOME } : {}),
+    },
   });
   child.unref();
   const lock = { pid: child.pid, port, spawnedAt, exe: EXE };
@@ -724,6 +756,11 @@ async function taskColdstart() {
     task: "coldstart",
     recordedAt: new Date().toISOString(),
     exe: EXE,
+    // A reading against a chosen binary or a throwaway data dir is a COMPARISON reading,
+    // never a baseline of the shipped app. Said in the artifact so the distinction
+    // survives the session that made it.
+    appdata: DATA_HOME,
+    isDefaultTarget: IS_DEFAULT_TARGET,
     sampleCount: samples.length,
     // Whether this trace is comparable to any other trace at all. See machineState().
     machineState: { quiet, before: deskBefore, after: deskAfter },
