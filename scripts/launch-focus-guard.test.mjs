@@ -910,6 +910,18 @@ describe("the probe carries the event hook (#121)", () => {
   );
 });
 
+// ── A MEASUREMENT THAT DID NOT HAPPEN MUST NOT READ AS A PASS (issue #121, 2026-08-22) ──────────
+// Measured this session: the runtime tier was run TWELVE times in a row to try to reproduce #121's
+// intermittent reading. All twelve printed "Tests 47 passed" and not one of them launched anything
+// -- a compy left running by an unrelated measurement held the single-instance lock, so the tier
+// skipped itself every time. The skip WAS announced, on stdout, which the default vitest reporter
+// does not show for a passing test; only `--reporter=verbose` revealed it. Twelve green runs were
+// read as twelve clean measurements.
+//
+// So every path that declines to measure now ends in `ctx.skip()`. The summary line then reads
+// "Tests 45 passed | 2 skipped", which is visible in the DEFAULT reporter and cannot be mistaken for
+// proof. The console lines stay -- they carry the reason -- but nothing depends on them being seen.
+// COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF still turns every one of these into a hard failure.
 describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegroundWindow", () => {
   // DECLARATION ORDER IS LOAD-BEARING. The self-test runs FIRST because Windows holds a foreground
   // LOCK for a moment after the active window changes, and each measurement ends by killing the app
@@ -918,7 +930,7 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
   // The probe's own settle wait covers the same hazard; the ordering is the belt to its braces.
   it(
     "the probe is not blind: an explicit COMPY_ACTIVATE launch DOES take the foreground",
-    () => {
+    (ctx) => {
       // Without this, a probe that could never see Compy in the foreground -- a broken P/Invoke, a
       // wrong PID, a window owned by a child process, a machine whose foreground is locked -- would
       // report a perfect pass below forever. That is precisely how the inert fix survived a lane.
@@ -931,9 +943,9 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
         console.log(
           "[launch-focus-guard] activation self-test SKIPPED (set COMPY_PROVE_ACTIVATION=1 to run it; it will steal the foreground once, by design)",
         );
-        return;
+        return ctx.skip();
       }
-      if (unmeasurableBecauseRunning()) return;
+      if (unmeasurableBecauseRunning()) return ctx.skip();
       const result = measureLaunch({ env: { COMPY_ACTIVATE: "1" } });
       expect(result.exited, `the app exited during the measurement (code ${result.exitCode})`).toBe(false);
       // Whether ANY launch can reach the foreground is decided before Compy runs. Windows only lets a
@@ -956,8 +968,8 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
 
   it(
     "a quiet launch opens a real visible window and never takes the foreground",
-    () => {
-      if (unmeasurableBecauseRunning()) return;
+    (ctx) => {
+      if (unmeasurableBecauseRunning()) return ctx.skip();
       // UNGRANTED BY DESIGN (issue #121) -- the same principle the probe already applies to the
       // relaunch case: a granted launch measures the OS, not Compy. Measured 2026-08-13 on an
       // input-idle desk: with the grant taken, Windows fronted the fresh launch at/before its first
@@ -988,6 +1000,29 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
       // foreground and a window first seen in the SAME poll are not separable at this resolution and
       // are reported as unmeasurable; see classifyForegroundReading for why the sign of that
       // difference proves nothing.
+      // ── THE HARM IS MEASURABLE EVEN WHEN THE CAUSE IS NOT (issue #121, 2026-08-22) ────────────
+      // Reproduced this day, 4 times in 15 consecutive runs (27%), traces kept. In all four the
+      // launched Compy really did hold the foreground -- 55/55 poll samples, and the hook's own
+      // FOREGROUND event carries fgPid == launchedPid, so the foreground genuinely moved. In the
+      // eleven clean runs the SAME event fires at the same millisecond with fgPid still 8268: the
+      // window announces itself and the foreground never leaves the terminal. That field, not the
+      // poll's millisecond ordering, is what tells the two apart.
+      //
+      // Attributing the four to a CAUSE stays out of reach at this resolution: with --no-activate
+      // and no activation path left in the binary, Windows fronting a fresh launch and the app
+      // raising itself look identical from outside. But the owner's ask was never about causes --
+      // it was "it minimises my primary monitor". THAT is in the trace, on every run, measurable or
+      // not: a MINIMIZESTART on a window outside the launched family is his window going down.
+      // Asserted here, above every skip below, so the 27% of runs that cannot name a cause still
+      // prove the harm did not happen. All 15 runs recorded none.
+      const { minimized } = summarizeTrace(result);
+      expect(
+        minimized.map((m) => `${m.proc ?? "?"} "${m.title}" at ${m.ms}ms`),
+        `a window OUTSIDE the launched app was MINIMISED during the launch. This is the owner's ` +
+          `game going down -- the harm this guard exists for -- and it is asserted whether or not ` +
+          `the cause of the foreground change can be attributed.\n` + describeTrace(result),
+      ).toEqual([]);
+
       const raise =
         result.firstForegroundMs >= 0 && result.firstWindowMs >= 0
           ? `${result.firstForegroundMs - result.firstWindowMs}ms after its window appeared`
@@ -1004,7 +1039,7 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
             `Refuse the skip with COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF=1.\n` +
             describeTrace(result),
         );
-        return;
+        return ctx.skip();
       }
       if (verdict === "unmeasurable" && !process.env.COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF) {
         // Reported by name, never silently. Reproduced 3/3 on 2026-08-18 against the 0.9.25 desk
@@ -1014,14 +1049,15 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
           `[launch-focus-guard] quiet-launch reading UNMEASURABLE: the foreground (${result.firstForegroundMs}ms) ` +
             `and the window (${result.firstWindowMs}ms) were first seen inside one ${PROBE_INTERVAL_MS}ms poll ` +
             `(${result.ownedForegroundSamples}/${result.samples} samples), which cannot tell an in-process raise ` +
-            `apart from Windows fronting a fresh launch (issue #121). This run did not measure Compy either way. ` +
+            `apart from Windows fronting a fresh launch (issue #121). This run did not measure Compy either way, `
+            + `but no window outside the launch was minimised, which is asserted above on every run. ` +
             `Refuse the skip with COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF=1 — nothing in the repo sets it today, ` +
             `it is the by-hand switch for a run that must not be allowed to skip.\n` +
             // The poll could not tell the two causes apart; the event trace can. Printed every time so
             // the reading that finally closes #121 is on record wherever this run happened.
             describeTrace(result),
         );
-        return;
+        return ctx.skip();
       }
       expect(
         result.ownedForegroundSamples,
@@ -1037,6 +1073,60 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
     },
     120_000,
   );
+});
+
+describe("a run that measured nothing cannot report itself as a pass (issue #121)", () => {
+  const SELF = read("scripts", "launch-focus-guard.test.mjs");
+  /** The runtime describe block, from its opening line to the end of the file's runtime section. */
+  const runtimeBlock = () => {
+    const start = SELF.indexOf('describe.runIf(windows && BINARY)("RUNTIME:');
+    expect(start, "the RUNTIME describe block must still exist").toBeGreaterThan(-1);
+    const end = SELF.indexOf("\ndescribe(", start);
+    return SELF.slice(start, end === -1 ? SELF.length : end);
+  };
+
+  it("every declined measurement in the runtime tier skips, and none of them just returns", () => {
+    const block = runtimeBlock();
+    // A bare `return;` here is the defect itself: it ends the test with no assertion run, which
+    // vitest scores as a pass. Every exit that means "did not measure" must say so to the reporter.
+    const bare = [...block.matchAll(/^\s*return;\s*$/gm)];
+    expect(
+      bare.length,
+      "a bare `return;` inside the runtime tier reports a measurement that never happened as a " +
+        "PASS. Use `return ctx.skip()` so the summary line counts it as skipped.",
+    ).toBe(0);
+    expect(
+      (block.match(/return ctx\.skip\(\)/g) ?? []).length,
+      "the runtime tier has four ways to decline a measurement (already running, activation opt-out, " +
+        "and two unmeasurable readings); each one must skip",
+    ).toBeGreaterThanOrEqual(4);
+  });
+
+  it("the minimise check is asserted BEFORE any skip can decline the measurement", () => {
+    // The ordering IS the guarantee. A run that cannot attribute the foreground change still knows
+    // whether a window outside the launch went down -- that is the owner's actual complaint -- so
+    // the assertion has to sit above the two unmeasurable `return ctx.skip()` branches. Move it
+    // below them and 27% of runs (measured 2026-08-22: 4 of 15) stop checking for the harm at all.
+    // Scoped to the quiet-launch test, which is the one that measures #121; the activation
+    // self-test above it declines for its own reasons and has no trace to check.
+    const tier = runtimeBlock();
+    const block = tier.slice(tier.indexOf('"a quiet launch opens a real visible window'));
+    const check = block.indexOf("summarizeTrace(result)");
+    const firstDecline = block.indexOf("return ctx.skip()", block.indexOf("const result = measureLaunch"));
+    expect(check, "the runtime tier must read the trace's minimised windows").toBeGreaterThan(-1);
+    expect(
+      check < firstDecline || firstDecline === -1,
+      "the `minimized` assertion must run before the first unmeasurable skip, or the runs that " +
+        "cannot name a cause stop proving the harm did not happen",
+    ).toBe(true);
+    expect(block, "and it must assert, not merely compute").toMatch(/minimized[\s\S]{0,600}toEqual\(\[\]\)/);
+  });
+
+  it("the skip is still refusable, so a release cannot ship on skips", () => {
+    // The escape valve only exists because a skip is honest. If this env var stopped being read,
+    // every unmeasurable run would become unrefusable and the tier would be decorative.
+    expect(runtimeBlock()).toContain("COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF");
+  });
 });
 
 describe("the runtime tier states plainly when it did not run", () => {

@@ -24,6 +24,10 @@
 //                              <- --exe measures a binary that is not the installed build (an old
 //                                 commit, a candidate); --appdata runs it against a throwaway data
 //                                 dir. Both are recorded, and isDefaultTarget goes false.
+//                              [--keep-open]
+//                                 <- by default the probe kills the app it launched before it
+//                                 exits; a leftover holds the single-instance lock and makes
+//                                 launch-focus-guard's runtime tier skip itself in silence.
 //   node scripts/q7-probe.mjs rooms     [--port 9455] [--dwell 15000] [--out FILE]
 //   node scripts/q7-probe.mjs latency   [--port 9455] [--out FILE]
 //   node scripts/q7-probe.mjs idle      [--port 9455] [--minutes 10] [--hidden] [--out FILE]
@@ -47,6 +51,7 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { WINDOW_PROBE_EXPRESSION, pickMainTarget } from "./lib/tauri-window-pick.mjs";
+import { shouldCleanUp, cleanUpReason } from "./lib/probe-cleanup.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_EXE = join(process.env.LOCALAPPDATA ?? "", "Compy", "compy.exe");
@@ -510,6 +515,12 @@ async function portAlive(port) {
   }
 }
 
+/**
+ * Set the moment this process starts an app of its own. It is what tells the exit path
+ * whether there is anything of OURS to clean up -- see scripts/lib/probe-cleanup.mjs.
+ */
+let launchedByProbe = false;
+
 /** Launch the INSTALLED release exe with the debug port open. Returns { pid, port, spawnedAt }. */
 async function launch(port) {
   if (!existsSync(EXE)) throw new Error(`installed build not found: ${EXE}`);
@@ -521,6 +532,7 @@ async function launch(port) {
     );
   }
   const spawnedAt = Date.now();
+  launchedByProbe = true;
   const child = spawn(EXE, [], {
     detached: true,
     stdio: "ignore",
@@ -646,6 +658,7 @@ async function coldstartSample() {
       nav: (() => { const n = performance.getEntriesByType("navigation")[0];
         return n ? { domContentLoaded: Math.round(n.domContentLoadedEventEnd), load: Math.round(n.loadEventEnd) } : null; })(),
       origin: Math.round(performance.timeOrigin),
+      href: location.href,
     };
   })()`;
 
@@ -667,6 +680,30 @@ async function coldstartSample() {
     }
     await sleep(50);
   }
+  // A SAMPLE WHERE THE APP NEVER RENDERED IS NOT A COLD-START MEASUREMENT (bug -> guard 2026-08-22).
+  // Measured that day: a binary produced by a bare `cargo build --release` loads the DEV URL --
+  // http://localhost:1420, from tauri.conf.json's `build.devUrl` -- because the frontend is only
+  // embedded when the Tauri CLI drives the build. Nothing crashes. The window opens, the port
+  // answers, `documentReady` and `navigationStart` are recorded, and the artifact looks complete;
+  // only `railPainted`, `usableHome` and `firstRoom` come back null, which is easy to skim past. Two
+  // builds were compared that way and agreed to within 5 ms -- a clean-looking null result, produced
+  // by measuring the same connection timeout twice. It fails loudly here instead.
+  if (!marks.railPainted) {
+    const href = String(last?.href ?? "");
+    const dev = /^https?:\/\/(localhost|127\.0\.0\.1)[:/]/.test(href);
+    s?.close();
+    throw new Error(
+      `the app never painted its rail within 60s, so this is not a cold-start sample.\n` +
+        `  exe:  ${EXE}\n` +
+        `  page: ${href || "(unknown)"}\n` +
+        (dev
+          ? `  CAUSE: that is the DEV URL. This binary was built by cargo directly, so it has no\n` +
+            `  embedded frontend and is waiting on a dev server that is not running. Rebuild it with\n` +
+            `  \`npm run tauri build -- --no-bundle\` (no installer, no signing key needed) and measure that.`
+          : `  The page loaded but never rendered .v2-nav-item. Open it by hand before trusting anything here.`),
+    );
+  }
+
   if (!s) s = await attachMain(PORT);
   await evaluate(s, INSTRUMENT);
 
@@ -2125,7 +2162,8 @@ async function taskA11y() {
   for (let i = 0; i < 12; i++) {
     await s.call("Input.dispatchKeyEvent", { type: "rawKeyDown", windowsVirtualKeyCode: 9, key: "Tab", code: "Tab" });
     await s.call("Input.dispatchKeyEvent", { type: "keyUp", windowsVirtualKeyCode: 9, key: "Tab", code: "Tab" });
-    await sleep(120);
+    cleanUpLaunchedApp();
+  await sleep(120);
     const at = await evaluate(
       s,
       `(() => { const e = document.activeElement; if (!e || e === document.body) return null;
@@ -2346,6 +2384,21 @@ if (!task) {
   console.error(`usage: node scripts/q7-probe.mjs <${Object.keys(TASKS).join("|")}> [flags]`);
   process.exit(2);
 }
+/**
+ * Leave the desk as this run found it. WHY THIS IS NOT OPTIONAL (2026-08-22): coldstart kills every
+ * compy at the START of a sample and never at the end, so the last sample's app stayed up. It sat
+ * there holding the single-instance lock, and launch-focus-guard's runtime tier -- which refuses to
+ * measure while a compy is running -- skipped itself through twelve consecutive attempts to
+ * reproduce issue #121, reporting "47 passed" every time. A stray process from one instrument
+ * silently disabled another.
+ */
+function cleanUpLaunchedApp() {
+  const state = { launchedByProbe, keepOpen: Boolean(flags["keep-open"]) };
+  if (!shouldCleanUp(state)) return;
+  console.error(`q7-probe cleanup: ${cleanUpReason(state)}`);
+  killAllCompy();
+}
+
 try {
   await task();
   // Let the debugger sockets finish closing. Exiting the instant after ws.close() races libuv's
@@ -2358,5 +2411,6 @@ try {
   process.exit(process.exitCode ?? 0);
 } catch (err) {
   console.error(`q7-probe ${cmd} FAILED:`, err.message);
+  cleanUpLaunchedApp();
   process.exit(1);
 }

@@ -1,4 +1,4 @@
-# doc-budget.ps1 - line budgets for hot docs (owner token-efficiency decree 2026-07-22)
+﻿# doc-budget.ps1 - line budgets for hot docs (owner token-efficiency decree 2026-07-22)
 # FAIL = MOVE history/log sections to docs/archive/ (append at top, leave a pointer), never delete. Re-run after.
 # Release-critical: verify-release.ps1 runs this as a gate, so it fails closed like the rest of the
 # surface. Nothing here invokes a native program; the budget check is pure cmdlets.
@@ -41,7 +41,10 @@ $budgets = @{
 #   docs/BACKLOG.md        106KB            RATCHETED DOWN THREE TIMES: 142KB -> 122KB on 2026-08-18 when the
 #                                           2026-07-27a ... 2026-08-04a steering-log cycles moved to
 #                                           docs/archive/, then 122KB -> 114KB when 2026-08-04b ...
-#                                           2026-08-04g followed them, then 114KB -> 106KB on 2026-08-20
+#                                           2026-08-04g followed them, then 106KB -> 100KB on 2026-08-22
+#                                           when five shipped conformance rows (C-04, Arial buttons,
+#                                           .arc-v2, the kernel celebration, the ledger-honesty class)
+#                                           moved to docs/BACKLOG_ARCHIVE.md, and 114KB -> 106KB on 2026-08-20
 #                                           when A4's 42 shipped entries moved to
 #                                           docs/archive/BACKLOG_A4_SHIPPED_2026-08-20.md. It is UNDER its 120KB
 #                                           derived target, so the ratchet is the live ceiling and
@@ -53,7 +56,7 @@ $budgets = @{
 #                                           slack guard in doc-budget-guard.test.mjs exists to catch.
 # (CLAUDE.md is handled by its own older guard - see the note under the table.)
 $byteBudgets = @{
-  "docs/BACKLOG.md" = 108544
+  "docs/BACKLOG.md" = 102400
   "docs/RELEASE_STATE.md" = 49152
   "docs/OWNER_ACTION_CHECKLIST.md" = 33792
   "src-tauri/CLAUDE.md" = 10240

@@ -40,27 +40,34 @@
 > [`../src/ui-vision-status-guard.test.ts`](../src/ui-vision-status-guard.test.ts) now fails the build
 > on a status marker inside an archive block, and on any queue item calling a shipped vision row open.
 
+> **STATE OF THIS QUEUE, 2026-08-22 (end of the persistent train).** Every item on it that an agent
+> can finish alone is finished. What is left is **three items, and not one of them is mine to move**:
+> item 1 (site pricing) needs one word from the owner on a drafted PR; item 4 (C-14 `GpuProfile`) is
+> an owner fork on the checklist as **B_gpu**; item 5 (the Codex weekly-automation scope) belongs to
+> the Codex lane and duplicating it is the failure mode, not the fix. Items 2 and 3 are recorded as
+> closed *to the limit of what can be measured on this desk*, which is not the same as solved — read
+> their rows for exactly what is still unproven (#121's cause is unattributable at this resolution;
+> #128's release-side mutex has still never been held during a real publish). **Do not read an empty
+> non-gated queue as an empty project** — the conformance queue below, the UI vision backlog and
+> `PHASE B`/`C`/`D` all hold real work that is gated, delegated, or waiting on a product decision.
+
 #### ① A PERSON REPORTED IT AND WE HAVE NOT ANSWERED — these outrank everything
 
-1. **Cold start: the frontend is exonerated, and the cost lives before the page exists.**
-   *Why it matters:* the "half a second blank window" was the only measured regression in the
-   app, and the two things everyone blamed for it turn out to be innocent — so the search moves
-   to the Rust/WebView2 start, which nobody has instrumented. Measured 2026-08-21: the blocking
-   payload is **8.4 kB SMALLER** than at `dc4d55e` (JS 1,536.51 → 1,538.10 kB, CSS 370.76 →
-   360.76 kB, building `dc4d55e`'s `src/` with today's toolchain); the Geist faces
-   ([`../src/design/fonts-v2.css`](../src/design/fonts-v2.css)) ship in **both** builds; and the
-   page's own `domContentLoaded` got **faster**, 103/104/102 → 102/88/87 ms. The WebView2 runtime
-   did not move either (148.0.3967.83, installed 2026-05-22). So all of the growth is in *spawn →
-   the page's `timeOrigin`* plus the probe's own attach lag, neither of which was ever recorded
-   separately — [`../scripts/q7-probe.mjs`](../scripts/q7-probe.mjs) `coldstart` now records both
-   and they sum exactly to the headline number. **Still NOT attributed — do not guess it in a
-   doc.** What is left is the four commits that touched the startup path in that window, of which
-   `795d8ff5` (#130) is the one that added startup filesystem work
-   ([`../src-tauri/src/data_root.rs`](../src-tauri/src/data_root.rs)). Settling it needs a
-   decomposed `coldstart` against a **built and installed** `dc4d55e` — and a **quiet desk**: run
-   `node scripts/q7-probe.mjs desk` first, it exits 3 if anything else is using the machine.
-   Full record in [`perf/q7-baseline.json`](perf/q7-baseline.json), still an **open finding**.
-2. **DELIVERED — waiting on one word. `compy.gg` tells the world Compy is free, and that is live
+> **Item 1 CLOSED 2026-08-22 — there is no cold-start regression, and `795d8ff5` (#130,
+> [`../src-tauri/src/data_root.rs`](../src-tauri/src/data_root.rs)) is exonerated.** `dc4d55e` was
+> built as a *product* in its own worktree and run against HEAD back to back, 3 cold starts each,
+> twice. On a quiet desk the old code measures **519 ms** documentReady to HEAD's **506 ms** — the
+> old build reproduces today's number, so nothing in the diff added the time, and what moved
+> between the 2026-08-05 and 2026-08-21 readings is the machine, not a commit. Full method,
+> numbers and the busy-desk caveat: [`perf/q7-baseline.json`](perf/q7-baseline.json)
+> `coldStartDocumentReadyMs`, now an **upper bound** rather than an open finding; traces in
+> [`perf/raw/`](perf/raw/) (`coldstart-{dc4d55e,head}-{B,C}.json`). bug → guard: a `cargo
+> build --release` binary loads the **dev URL** and measures a connection timeout that looks like
+> a start — [`../scripts/q7-probe.mjs`](../scripts/q7-probe.mjs) now refuses a sample whose rail
+> never painted, and [`../src/perf-evidence-integrity-guard.test.ts`](../src/perf-evidence-integrity-guard.test.ts)
+> fails the build if a doc cites one.
+
+1. **DELIVERED — waiting on one word. `compy.gg` tells the world Compy is free, and that is live
    right now.** *Why it matters:* the site contradicts the owner's own 2026-07-21 monetization
    decree on the public internet, and every day it stands is a pricing expectation being set that
    money later has to fight. Draft PR [#193](https://github.com/Pootytxng/sentinel/pull/193) changes
@@ -74,15 +81,31 @@
 
 #### ③ REPO HYGIENE — real, but nobody is waiting on it
 
-3. **#121 · `launch-focus-guard` RUNTIME tier is intermittent, NOT root-caused** — the same
-   class as #171 was, and #171 proves the class is solvable. Detail on the open row further down.
-4. **#156's unnamed lock holder and #128's unheld locks both discharge on the NEXT REAL SHIP, not on
+2. **#121 · `launch-focus-guard` RUNTIME tier is intermittent — REPRODUCED 2026-08-22, and the
+   harm it exists for is now asserted on every run.** 15 consecutive standalone runs: 11 clean, 4
+   UNMEASURABLE (27%), 0 failures. What separates them is one field, not the poll's timing — in the
+   4, the hook's FOREGROUND event carries `fgPid == launchedPid`; in the 11 the same event fires at
+   the same millisecond with `fgPid` still the terminal's. **Naming the cause stays out of reach**
+   (with no activation path left in the binary, Windows fronting a fresh launch and the app raising
+   itself are identical from outside), so the guard stopped waiting for it: the owner's actual
+   complaint — *"it minimises my primary monitor"* — is in the trace on all 15 runs, and
+   `scripts/launch-focus-guard.test.mjs` now asserts an empty `summarizeTrace().minimized` **above**
+   both unmeasurable skips. All 15 recorded none. Detail on the open row further down.
+3. **#128's install mutex is now HALF discharged — a real ship ran it 2026-08-22.** The desk ship of
+   `701c2113` went through `scripts/ship-reinstall.ps1`, which takes `Local\Compy.InstalledBinary.v1`
+   at entry (`scripts/ship-reinstall.ps1:30`) and held it across a genuine kill → stage → silent
+   install → launch. It completed clean. **Do not read that as the mutex being proven** — nothing
+   contended for it, so what ran is the acquire/release path, not the exclusion. The **release**
+   mutex (`scripts/release.ps1:34`) is still unheld during any real run, because a release is the
+   owner's to publish. #156's flake stayed absent through the same ship, so its holder is still
+   unnamed. Remaining text below stands:
+   **#156's unnamed lock holder and #128's release-side lock both discharge on the NEXT REAL SHIP, not on
    their own.** #156's gates close the suspected path but the flake was never reproduced, so the
    *holder* is still unnamed; #128's two mutexes have never been held during an actual release or
    ship. Neither is a task to schedule — both are **evidence to collect the next time a ship runs**,
    so whoever runs that ship owes both issues a comment. Records archived; residuals live here.
-5. **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it** (row below; owner fork B_gpu).
-6. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
+4. **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it** (row below; owner fork B_gpu).
+5. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
    below). Delegated to the Codex lane — do not duplicate it here.
 
 **BLOCKED — another lane owns these; `WORK_CONTROL.md` says hands off, not adjudicate:**
@@ -96,7 +119,7 @@ question for the owner ("may I adopt these two?"), not an indefinite wait.
 **#126's remaining nine refs are a DECISION queue, not a cleanup queue** — two are the PRs above,
 one is a Codex claim, and the rest need an owner product-scope call (bklit design system ·
 user-feedback Lab recovery · quiet-pit-wall half B) or a per-file landing (review-consolidation —
-which is where item 2's price fix lives — tool-shed-hygiene, lab-49-parity-port). Evidence:
+which is where item 1's price fix lives — tool-shed-hygiene, lab-49-parity-port). Evidence:
 [`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md), now at **120/120** against its doc-budget ceiling,
 so the next branch pushed to origin must archive that file's current sweep before it can add its row.
 
@@ -108,13 +131,16 @@ session left work in it — so whoever owns it next should `git -C ... merge --f
 **ALSO OPEN, not yet queued** (so none of it drops silently): #133 CARE capability rails tasks 4–7 ·
 #140 CPU temp (PawnIO/MSR — needs a Capability Exception record first) · #64 Q2b main-window caller
 checks · #54/#55 Project Doctor (Codex-claimed) · #49 Quiet Pit Wall (needs a visual self-review) ·
-#158 disk-bloat flag (that IS PR #160) · NAV-1 (awaiting owner direction) · TYPE-1's residual
-(mono-for-machine-values-only is still a comment with no guard) · the PHASE A–D rows below.
+#158 disk-bloat flag (that IS PR #160) · NAV-1 (awaiting owner direction) · the PHASE A–D rows
+below. **TYPE-1's mono residual is NOT among them — it was closed 2026-08-18/19** (`3eca4a9f` +
+`be4c81ec`): [`../src/design/mono-law-guard.test.ts`](../src/design/mono-law-guard.test.ts) censuses
+every mono rule behind a down-only ratchet, 0 violations. It sat listed as open here for four days
+after it shipped, which is the same false reading that the archived-marker guard was written for.
 
 **THE MONEY STACK IS STALLED AT PHASE 2 AND NOTHING ABOVE MOVES IT.**
 [`RECEIPTS_DOCTRINE.md`](RECEIPTS_DOCTRINE.md) §4 puts the compy.gg one-pager + waitlist there,
 with **"waitlist signups in 14 days"** as the first real market signal, and every phase after it is
-funded by that one. Item 2 above is the only row in this queue that touches the site at all, and it
+funded by that one. Item 1 above is the only row in this queue that touches the site at all, and it
 is a correction, not a step forward. Named here so the gap is visible rather than implied: **the
 whole live queue is quality and hygiene, and the mission includes income.**
 
@@ -136,21 +162,6 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
 
 ### Conformance queue — the audit's unbuilt decisions, in owner-value order
 
-- [x] **C-04 · SHIPPED 2026-08-19** (issue [#143](https://github.com/Pootytxng/sentinel/issues/143)).
-  The front door is **Health** — owner's pick from Health / Checkup / Diagnosis, recommended because
-  it answers "is my PC OK?" without the fear frame that retired "Fix" in 2026-06. Id stays `home`
-  (persisted nav key, same rule as every prior rename). Renamed everywhere the user reads it: the
-  rail/topbar/palette label, the tour's two rail-recap sentences, the CPU-temp honesty note and the
-  memory lesson's tie line; the tour blurb stopped saying "Your dashboard" (a shape, not an answer)
-  and now states the question the room answers. **The rename found a real hole with the fix half
-  applied:** `HOME_RAIL[0].label` is NOT what the app prints — `ShellV2.tsx:94` renders
-  `common.rail.<id>`, so renaming only `homeRail.ts` would have shipped "Home" with `homeRail.test.ts`
-  green. New guard `src/design/rail-label-locale-guard.test.ts` pins literal ↔ locale (falsified
-  against the half-applied rename), and `Home` joined the RETIRED map in `room-name-copy-guard.test.ts`
-  so the old word cannot return to copy. **The self-review debt is DISCHARGED**: built, silently
-  installed and stamp-proved at `40682344 · release · shell 0.9.26`, then reviewed on that binary —
-  **VERDICT PASS**, all four surfaces (rail · breadcrumb · palette · tour recap) looked at, zero
-  user-visible "Home" left. **Still not in any published build** — it ships with the next cut.
 - [x] **SHIPPED conformance rows, moved verbatim to
   [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-19, byte budget): **C-05 + C-19**
   (`d76f753f` — first run lands on the diagnosis, the tour is one named card, CPU temp reachable on
@@ -161,6 +172,16 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   ratchet). Read them there before re-litigating any of it. The C-18 correction below still
   applies; C-19 moved to the archive with its row, and C-17b is paid off below.
 
+- [x] **Five more SHIPPED/CLOSED conformance rows, moved verbatim to
+  [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-22, byte budget -- this ledger had 400
+  bytes of headroom left): **C-04** (`40682344` -- the front door became **Health**, issue
+  [#143](https://github.com/Pootytxng/sentinel/issues/143); the rename found that `HOME_RAIL[0].label`
+  is NOT what the app prints, now pinned by `src/design/rail-label-locale-guard.test.ts`) ·
+  **buttons rendered in Arial** (shipped + reviewed on installed `aac90cd7`) · **`.arc-v2`** (all
+  dead strata deleted, 2026-08-20) · **the kernel law's one earned celebration** (built; it had never
+  fired for a single user) · **the ledger-completeness honesty class** (last known open instance
+  closed 2026-08-05). Read them there before re-litigating any of it.
+
 - [x] **C-18 · C-18 guard · C-18b — ALL SHIPPED 2026-08-19, moved verbatim to [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-20, byte budget). The classic `Monitor` room deleted after `TuningPresets` moved out of it verbatim (issue [#146](https://github.com/Pootytxng/sentinel/issues/146)) · `reachability-guard.test.ts`'s second tier, which catches a DEAD default export inside a LIVE file · both dead rooms decided, `Onboarding` deleted and vendored `Stepper` exempted by rule (issue [#148](https://github.com/Pootytxng/sentinel/issues/148)). **Read them there before re-litigating any of it** — the C-18 row is this repo's record of a subagent grep that was wrong three times, and the C-17b RESIDUAL row below leans on it.
 - [x] **C-17b + C-17b RESIDUAL — the mono-on-prose ratchet is PAID (12 → 0), rows moved verbatim to
   [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-20, byte budget). Twelve selectors that
@@ -170,84 +191,6 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   SHAPE of their wall: 2 data-shaped (close organically), 6 structural, of which four were the
   `.arc-v2` variants that turned out never to render at all and went out with the row below.
   `src/design/mono-law-guard.test.ts` holds the ratchet at 0 and carries the per-selector reasoning.
-- [x] **Buttons rendered in Arial — FIXED, shipped and reviewed on installed `aac90cd7` (2026-08-20,
-  #155). The finding was right and 3x too small.** `.btn-small` (`App.css:1388`) and
-  `.debrief-ctx-head` (`App.css:3053`) declare `font-size`/`font-weight` and no `font-family`, so
-  they fell through to the UA face — Windows Arial — beside `Geist Sans` siblings; the session-debrief
-  **Share** button measured live as bare `"Arial"` on `402b0080`. **Measured before fixing: 97 of 290
-  `<button>` call sites across 28 files** got a family from no rule at all (the row said 26 across 11),
-  and **no stylesheet had a single `button` element rule** — the repo's only defence was a per-rule
-  `font: inherit`, 88 of them, applied ad hoc. Ad hoc is the defect: forgettable by construction.
-  **Fix — one line, not 28:** an unscoped `button, input, select, textarea { font-family: inherit }`
-  next to the `html, body, #root` base in `App.css`. Family only; nothing else moved. A per-rule
-  family still wins (element selector is 0-0-1), and the 88 existing `font: inherit` declarations were
-  deliberately LEFT — some are the `font:` shorthand, which also resets size and weight, so deleting
-  them would change rendering.
-  **Guard first, and it covers the class:** `src/control-font-guard.test.ts` (4 tests) asserts the
-  reset exists, is **unscoped** (a `.v2-shell button` scope is the same bug one level up), is
-  **top-level** (parked in a `@media` it is conditional), lives in a sheet the app **actually loads**
-  (import closure from `main.tsx`), and that `inherit` has an app face to land on. Then the class-level
-  check is written on the real subject: **every `<button>` in the tree must get a family from
-  something** — delete the reset and it fails naming all 97 sites. Proved both ways (fails without the
-  fix, passes with it). Two ways it nearly lied, both fixed in-file: a combined import regex swallowed
-  `import "./App.css"` so the closure came back without the app's own stylesheet, and a flat CSS parser
-  cannot see `@media` nesting so the reset's depth is measured explicitly.
-  **Shipped:** built, silent-installed, stamp-proved `aac90cd7 · release · shell 0.9.26`.
-  **Self-review VERDICT: PASS** (9/9 at 1500x980) — both named selectors compute `Geist Sans` at
-  unchanged size/weight, hover state intact under real CDP mouse events, zero overflowing controls
-  across Health/Live/History/Test/Settings. *Recorded:* the first `/S` install returned exit 0 and
-  never replaced the exe — the stamp gate caught it, a re-run fixed it, filed as **#156**.
-- [x] **`.arc-v2` — CLOSED 2026-08-20. All three dead strata deleted, and the fourth (dormant M3/M4)
-  went with its prop chain. `src/arc-instrument.css` 458 → 127 lines; nothing that renders changed.**
-  Row had been corrected once already (2026-08-19, C-18b lane); both earlier findings were greps
-  standing in for a trace, so this pass was hand-traced AND mechanized:
-  `src/arc-v2-reachability-guard.test.ts`.
-  **M1 Onboarding (was 6–123) — DELETED.** C-18b deleted the component (issue #148); no `onb-` token
-  survives anywhere in `src/**`, so those 118 lines could not match on any input.
-  **M2 First-check — LIVE, and it was carrying 66 lines of dead radar.** `4b5e8b49` ("retire the
-  radar → light sweep") removed the component and left `.fc-radar*`, `.fc-scanzone`,
-  `@keyframes fc-sweep`, their `@media` and the reduced-motion rule behind. This row never saw that
-  stratum — the guard's class-by-class orphan check found it on its first run. **Deleted too.**
-  **M3 Session debrief + M4/4b comparison cards — DELETED, with the `arcV2` prop chain.** Traced
-  shorthand-aware: `arc-v2` reached the DOM from 6 emitters, all gated on an `arcV2` prop, and the
-  only caller that ever set it is `App.tsx:1228` (`<FirstCheck arcV2 />` — the JSX shorthand the
-  first grep could not see). `FirstCheck` imports neither surface, so no `.debrief`/`.cmp`/`.wcp`
-  element could sit under an `.arc-v2` ancestor. **This was first filed as an owner fork; that was
-  over-escalation** — it is dead engineering, not a product call, and the owner said so plainly
-  ("I have no idea what that arc-v2 thing even is"). Deleting the CSS alone would have left a prop
-  that lies, so both went: 156 lines of skin and the prop threaded through `SessionDebrief` +
-  `WhatChangedPanel`. Three skin generations have shipped since it was written; a re-dress should
-  start from a decision, not from leftovers.
-  **No visual review dispatched, and the reason is mechanical, not a shortcut:** every removed rule
-  needed an `.arc-v2` ancestor no mount produced, and the removed JSX was `${arcV2 ? " arc-v2" : ""}`
-  where `arcV2` was `false` at every call site — proved by the caller census in the guard, which was
-  green before the deletion. The diff cannot change a pixel.
-  **Guard, rewritten with the deletion:** the orphan test still fails on any arc-skin class with no
-  subject in the tree, and the caller census now pins the DECLARATION as well — `arcV2` may exist
-  only in `App.tsx` and `FirstCheck.tsx`. Threading it into a third component fails the build, which
-  is exactly the debt this row was.
-  Verified: `tsc --noEmit` clean; mono census re-seeded (`MONO_CENSUS_UPDATE=1`) and the delta is
-  exactly the 5 deleted mono rules, nothing else.
-- [x] **The kernel law's ONE earned celebration is BUILT — it had never fired for a single user.
-  Found 2026-08-20 by the arc-v2 cleanup, not by anyone looking for it; closed the same day in its
-  own train.** The owner's 2026-06-06 kernel law says the win card's shimmer is the only celebratory
-  sweep in the app: when a measured fix actually improves FPS, the improved after-bar sweeps once,
-  and nothing else in Compy ever does. It had exactly one implementation — `@keyframes
-  cmp-winshimmer` on `.cmp-improved.arc-v2 .cmp-bar-after` in `src/arc-instrument.css` — **behind the
-  `arcV2` prop no screen ever set.** The law's single celebration was unreachable from the day it was
-  written, and `src/sweep-guard.test.ts` was green the whole time because it watched the KEYFRAME,
-  not its reachability.
-  **Fixed:** re-homed verbatim into `src/App.css` on the live selector `.cmp-improved
-  .cmp-bar-after` (both after-bars, same 3.4s cycle, same 0.35s delay), `pointer-events: none` added
-  so the glint cannot eat a click, and the explicit reduced-motion opt-out kept on top of the global
-  clamp — a celebration should be ABSENT under reduced motion, not merely instant.
-  **bug→guard, and the guard is the real deliverable.** `src/sweep-guard.test.ts` gained a third
-  tier that asks the question the old one could not: every compound in the sweep's selector must be
-  producible UNCONDITIONALLY by one `className` expression. A class that only ever arrives through a
-  ternary is a SECOND gate, and the only thing allowed to gate an earned celebration is the earning.
-  Falsified against the exact original defect — re-scope the rule to `.cmp-improved.arc-v2` and tier
-  three goes red naming the compound. Tier one (no second sweep anywhere in `src/`) is unchanged and
-  still absolute.
 - [ ] **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it.** Owner fork, never resolved,
   still parked by exemption.
 - [ ] **C-13 · Foundation tooling gap — axe-core (rank 3, MINE) LANDED; Figma MCP (rank 2, OWNER)
@@ -374,6 +317,28 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   opened the console, so the fix has an address. Still open: the deciding measured run, then the
   sibling console-launch fix + guard. `COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF=1` still refuses every
   unmeasurable.
+  **2026-08-22 (lane/train-2026-08-22): reproduced with traces, and the guard re-aimed at the harm.**
+  Two defects had to be cleared first, both now guarded: `q7-probe coldstart` left its last sample's
+  app running (it killed compys only at sample *start*), and a running compy makes this tier decline
+  to measure — so twelve consecutive "reproduction" runs measured nothing and printed *"47 passed"*.
+  The skip was announced on stdout, which vitest's default reporter hides for a passing test.
+  Fixed by `scripts/lib/probe-cleanup.mjs` (kill what this run LAUNCHED, never what it attached to;
+  `--keep-open` opts out) + `scripts/probe-cleanup-guard.test.mjs`, and by turning every declining
+  path into `return ctx.skip()` so the summary line reads *"45 passed | 2 skipped"* — pinned against
+  a bare `return;` ever coming back.
+  **The measurement, on a real desk:** 15 runs, 11 clean (`own=0`, `firstForegroundMs=-1`), 4
+  UNMEASURABLE (`own=55/55`, foreground at 6–7ms, window at 13–15ms, `foregroundPidBefore !=
+  After`) — all four in the opening streak, 0 hard failures. The 4 are the *idle-desk* class (the OS
+  fronts the launch before Compy has a window), NOT the ~120ms in-process raise; that one needs the
+  full suite in parallel and did not appear in 15 standalone runs. **The console-host lead is
+  neither confirmed nor refuted — no window outside the launched family was minimised in ANY of the
+  15 runs**, which is also why the new assertion passes 15/15. Traces kept, but `logs/` is gitignored —
+  they are 27 files on THIS desk only, not evidence another machine can re-read. **The load-dependent class did not reproduce either:** 3 full-suite runs
+  (364 files / 4840 tests, all green) right after, and all three runtime measurements are clean --
+  `own=0`, the foreground never leaves the host, `minOut=none`. So the ~120ms in-process raise
+  recorded on 2026-08-20 has not been seen again on this desk. It stays open as an unreproduced
+  historical reading, not as a live flake; the honest next step is to leave the trace armed (it is,
+  by default) and read the NEXT one that fires rather than hunt it.
   Shipped: installed build `3155c7a0`, self-review **PASS** on round 3 (round 2 caught that P2 was
   only half-fixed — a hand-added cooler still occluded the CPU — and that is now fixed and guarded).
 - [x] **The "add a part" form is mounted nowhere** — CLOSED by Train 1 (2026-08-12): the form was
@@ -515,20 +480,6 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   `Sparkline`, vendored `MagicBento`); recurrence mechanised by `src/reachability-guard.test.ts`.
   Remaining under P2: the first-win journey and the evidence exports — the first-win journey is
   issue #49's Lab production-order step (see Q0 above for the #14-verdict porting checklist).
-- [x] **Ledger-completeness honesty class — last known open instance CLOSED (found 2026-08-05 during
-  the Home train's completeness-critic sweep, fixed the same day, issue #70).** The Lab Optimize
-  station's "Applied & history — **every change, undoable**" summary vouched for a set Compy may
-  never have enumerated: `get_applied_changes` degrades an unreadable `history.json` to `[]`.
-  **One correction to how this was first written up:** the disclosure was *not* ungated — `Fix`
-  already mounts `LedgerHealthNotice` for `view="ledger"` and already withholds its `.fix-empty`
-  claim when the ledger is known-incomplete. The residual defect was narrower and worse: the vouch
-  sat on the `<summary>`, *outside* the `<details>` holding its own caveat, and that `<details>` is
-  collapsed unless expert view is on — so the caveat was sealed **behind** the claim it qualifies,
-  one step past the "printed under it" failure `ledger-health-disclosure-guard.test.tsx` pins. Fix:
-  under KNOWN-INCOMPLETE the summary swaps to `appliedHistorySummaryUnvouched` **and** the section
-  opens itself; UNKNOWN (`null`) stays byte-identical to healthy. Guarded by
-  `src/surfaces/lab/ledger-health-optimize-station-guard.test.tsx` (11 pins, falsified by reverting
-  the fix: exactly the 6 defect pins go red, the 5 controls stay green).
 - [ ] **LATER:** Intelligence Phase 4/5, vendor-awareness expansion, Receipts/crowd intelligence,
   remote rules, Pro/affiliate/B2B, and model-assisted explanation remain behind the blueprint's gates.
 
@@ -697,51 +648,33 @@ queued).
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
-### Cycle 2026-08-19d — ARCHIVED
+### Already archived — one pointer instead of six stubs (collapsed 2026-08-22, byte budget)
 
-Moved verbatim to [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-20, byte budget) when the
-C-13 (b) keyboard-contract row was written and this file reached 113.3KB of its 114KB ceiling. The
-front door became **Health** (C-04, issue [#143](https://github.com/Pootytxng/sentinel/issues/143)),
-and the rename found a live drift hole with the fix half applied: `HOME_RAIL[0].label` is NOT what
-the app prints, so renaming only `homeRail.ts` ships the old word with its own test green. The
-shipped C-04 row near the top of this file remains the current-state record.
+Every cycle below left this file verbatim; nothing was deleted. Six near-identical "moved to…"
+stubs were costing ~3.5KB of a ledger with 400 bytes of headroom, so they are one list now. Grep the
+destination for the full entry.
 
-### Cycle 2026-08-19c — ARCHIVED
+To [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md):
+- **2026-08-19d** — the front door became **Health** (C-04, issue
+  [#143](https://github.com/Pootytxng/sentinel/issues/143)); the rename found a live drift hole,
+  `HOME_RAIL[0].label` is NOT what the app prints, so renaming only `homeRail.ts` ships the old word
+  with its own test green. The shipped C-04 row near the top of this file is the current-state record.
+- **2026-08-19c** — the reticle's idle rAF loop: 250 calls/s with the pointer merely resting inside
+  the window, parked and guarded (issue #142).
+- **2026-08-19b** — the v0.9.26 fleet move and the four release-pipeline defects it surfaced.
+- **2026-08-19a** — the #127 idle-CPU teardown: 19.632 → 10.483 percent of one core; `aurora`'s
+  `scale()` was the trigger and the 3D rig was never the cost.
+- **2026-08-06a** — the idle-cost teardown that halved decorative CPU, and took out `aurora`'s blur
+  while leaving its `scale()` — the part actually costing 13.257 points.
 
-Moved verbatim to [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-19, byte budget) when
-Cycle 2026-08-19d was written. The reticle's idle rAF loop: 250 calls/s with the pointer merely
-resting inside the window, parked and guarded (issue #142).
+To [`archive/BACKLOG_STEERING_LOG_2026-08-04b_TO_2026-08-04g.md`](archive/BACKLOG_STEERING_LOG_2026-08-04b_TO_2026-08-04g.md):
+**2026-08-04b … 2026-08-04g** — the unreadable-ledger honesty run (Q7/Q9 acceptance, the sibling
+room, the rec-id read), all on `claude/harness-context-cleanup-700535`, all awaiting the owner's
+merge decision.
 
-### Cycle 2026-08-19b — ARCHIVED
-
-Moved verbatim to [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-19, byte budget — the
-ledger was 0.5KB from its wall). The v0.9.26 fleet move and the four release-pipeline defects it
-surfaced.
-
-### Cycle 2026-08-19a — ARCHIVED
-
-Moved verbatim to [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-19, byte budget) when
-Cycle 2026-08-19b shipped it to the fleet. The #127 idle-CPU teardown: 19.632 → 10.483 percent of
-one core, `aurora`'s `scale()` was the trigger and the 3D rig was never the cost.
-
-### Cycle 2026-08-06a — ARCHIVED
-
-Moved verbatim to [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-19, byte budget). The
-idle-cost teardown that halved decorative CPU — and, per Cycle 2026-08-19a above, took out
-`aurora`'s blur while leaving its `scale()`, the part that was actually costing 13.257 points.
-
-
-### Cycles 2026-08-04b … 2026-08-04g — ARCHIVED
-
-Moved verbatim to [`docs/archive/BACKLOG_STEERING_LOG_2026-08-04b_TO_2026-08-04g.md`](archive/BACKLOG_STEERING_LOG_2026-08-04b_TO_2026-08-04g.md). Covers the
-unreadable-ledger honesty run (Q7/Q9 acceptance, the sibling room, the rec-id read), all on
-`claude/harness-context-cleanup-700535` and all awaiting the owner's merge decision.
-
-### Cycles 2026-07-27a … 2026-08-04a — ARCHIVED
-
-Moved verbatim to [`docs/archive/BACKLOG_STEERING_LOG_2026-07-27_TO_2026-08-04.md`](archive/BACKLOG_STEERING_LOG_2026-07-27_TO_2026-08-04.md) (TOKEN LAW: history leaves the
-living ledger, nothing is deleted). Covers Q5/Q6 completion, the standing autonomy grant,
-release autonomy → v0.9.11, and the forensic reconciliation.
+To [`archive/BACKLOG_STEERING_LOG_2026-07-27_TO_2026-08-04.md`](archive/BACKLOG_STEERING_LOG_2026-07-27_TO_2026-08-04.md):
+**2026-07-27a … 2026-08-04a** — Q5/Q6 completion, the standing autonomy grant, release autonomy →
+v0.9.11, and the forensic reconciliation.
 
 ## ⛔ Persistent-workflow protocol (read before declaring "done")
 
@@ -750,7 +683,7 @@ When running a `/loop` or scheduled session against "the checklist":
 1. **Open THIS file. Pick the highest-priority `[ ]` item that is not owner-gated.** Do it (spec → TDD →
    build in an isolated worktree off `main` → `/check` + `/security` → `self-review` if visual →
    cargo/npm green → commit after branch+status check). Tick it `[x]` with the commit hash. Repeat.
-2. **Never declare "done" without enumerating.** A valid stop is one of:
+1. **Never declare "done" without enumerating.** A valid stop is one of:
    - *"All `[ ]` items remaining are owner-gated — here they are: …"* (list them), OR
    - *"Phase A `[ ]` count is now 0; remaining work is Phase B/C/D which is gated — confirm before I cross a gate."*
    - A bare "I'm finished, standing by" with un-ticked `[ ]` items above is a **false finish** — keep going.

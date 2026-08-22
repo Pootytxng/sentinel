@@ -1,0 +1,486 @@
+{
+  "task": "coldstart",
+  "recordedAt": "2026-08-22T12:10:43.386Z",
+  "exe": "C:\\Users\\Kuya\\code\\sentinel-coldstart-old\\src-tauri\\target\\release\\compy.exe",
+  "appdata": "C:\\Users\\Kuya\\AppData\\Local\\Temp\\claude\\c--Users-Kuya-code-sentinel-home-room\\feda48a6-5699-490f-8066-e31ce8ad76fa\\scratchpad\\appdata-old",
+  "isDefaultTarget": false,
+  "sampleCount": 3,
+  "machineState": {
+    "quiet": false,
+    "before": {
+      "cpuPercent": 28,
+      "top": [
+        {
+          "name": "rust-analyzer",
+          "wsMB": 2886.1
+        },
+        {
+          "name": "MortalShell2-Win64-Shipping",
+          "wsMB": 2650.2
+        },
+        {
+          "name": "firefox",
+          "wsMB": 950.3
+        }
+      ],
+      "quiet": false
+    },
+    "after": {
+      "cpuPercent": 19,
+      "top": [
+        {
+          "name": "rust-analyzer",
+          "wsMB": 2886.1
+        },
+        {
+          "name": "MortalShell2-Win64-Shipping",
+          "wsMB": 2649.7
+        },
+        {
+          "name": "firefox",
+          "wsMB": 928.1
+        }
+      ],
+      "quiet": true
+    }
+  },
+  "summary": {
+    "usableHomeMs": {
+      "min": 3524,
+      "median": 3571,
+      "max": 4041,
+      "samples": [
+        4041,
+        3524,
+        3571
+      ]
+    },
+    "railPaintedMs": {
+      "min": 3524,
+      "median": 3571,
+      "max": 4041,
+      "samples": [
+        4041,
+        3524,
+        3571
+      ]
+    },
+    "documentReadyMs": {
+      "min": 495,
+      "median": 530,
+      "max": 818,
+      "samples": [
+        818,
+        530,
+        495
+      ]
+    },
+    "navigationStartMs": {
+      "min": 235,
+      "median": 244,
+      "max": 549,
+      "samples": [
+        549,
+        244,
+        235
+      ]
+    },
+    "documentReadyInPageMs": {
+      "min": 108,
+      "median": 119,
+      "max": 155,
+      "samples": [
+        108,
+        155,
+        119
+      ]
+    },
+    "observationLagMs": {
+      "min": 131,
+      "median": 141,
+      "max": 161,
+      "samples": [
+        161,
+        131,
+        141
+      ]
+    },
+    "portOpenMs": {
+      "min": 190,
+      "median": 192,
+      "max": 493,
+      "samples": [
+        493,
+        190,
+        192
+      ]
+    },
+    "workingSetMB": {
+      "min": 562.66,
+      "median": 569.28,
+      "max": 590.36,
+      "samples": [
+        590.36,
+        569.28,
+        562.66
+      ]
+    },
+    "processCount": {
+      "min": 8,
+      "median": 8,
+      "max": 8,
+      "samples": [
+        8,
+        8,
+        8
+      ]
+    }
+  },
+  "samples": [
+    {
+      "recordedAt": "2026-08-22T12:10:09.979Z",
+      "msFromSpawn": {
+        "portOpen": 493,
+        "documentReady": 818,
+        "railPainted": 4041,
+        "usableHome": 4041
+      },
+      "inPageNavigation": {
+        "domContentLoaded": 108,
+        "load": 109
+      },
+      "navigationStart": 549,
+      "observationLag": 161,
+      "firstRoom": "Home",
+      "restAfterUsable": {
+        "windowSeconds": 12.1,
+        "ipcTotal": 12,
+        "ipcByCommand": {
+          "get_fps_status": 6,
+          "get_fan_sensors": 4,
+          "get_gpu_sensors": 1,
+          "get_memory_pressure": 1
+        },
+        "intervalsStartedSince": 2,
+        "intervalDelays": {
+          "1500": 1,
+          "2500": 1
+        },
+        "canvases": 1,
+        "documentAnimations": 2
+      },
+      "processes": [
+        {
+          "id": 6940,
+          "name": "compy",
+          "cpu": 0.578125,
+          "ws": 55328768,
+          "priv": 19959808,
+          "threads": 56,
+          "handles": 742
+        },
+        {
+          "id": 3076,
+          "name": "msedgewebview2",
+          "cpu": 0.09375,
+          "ws": 41336832,
+          "priv": 15052800,
+          "threads": 28,
+          "handles": 364
+        },
+        {
+          "id": 11068,
+          "name": "msedgewebview2",
+          "cpu": 0.703125,
+          "ws": 130220032,
+          "priv": 49381376,
+          "threads": 57,
+          "handles": 1303
+        },
+        {
+          "id": 16784,
+          "name": "msedgewebview2",
+          "cpu": 0.046875,
+          "ws": 21004288,
+          "priv": 9809920,
+          "threads": 9,
+          "handles": 171
+        },
+        {
+          "id": 16872,
+          "name": "msedgewebview2",
+          "cpu": 1.828125,
+          "ws": 149843968,
+          "priv": 102109184,
+          "threads": 29,
+          "handles": 384
+        },
+        {
+          "id": 18608,
+          "name": "msedgewebview2",
+          "cpu": 0.15625,
+          "ws": 77316096,
+          "priv": 41000960,
+          "threads": 16,
+          "handles": 282
+        },
+        {
+          "id": 20812,
+          "name": "msedgewebview2",
+          "cpu": 0,
+          "ws": 10899456,
+          "priv": 2600960,
+          "threads": 11,
+          "handles": 157
+        },
+        {
+          "id": 21716,
+          "name": "msedgewebview2",
+          "cpu": 3.671875,
+          "ws": 133087232,
+          "priv": 306864128,
+          "threads": 37,
+          "handles": 1302
+        }
+      ],
+      "processTotals": {
+        "processCount": 8,
+        "workingSetMB": 590.36,
+        "privateMB": 521.45,
+        "threads": 243,
+        "handles": 4705,
+        "cpuSeconds": 7.08
+      }
+    },
+    {
+      "recordedAt": "2026-08-22T12:10:26.367Z",
+      "msFromSpawn": {
+        "portOpen": 190,
+        "documentReady": 530,
+        "railPainted": 3524,
+        "usableHome": 3524
+      },
+      "inPageNavigation": {
+        "domContentLoaded": 155,
+        "load": 156
+      },
+      "navigationStart": 244,
+      "observationLag": 131,
+      "firstRoom": "Home",
+      "restAfterUsable": {
+        "windowSeconds": 11.5,
+        "ipcTotal": 12,
+        "ipcByCommand": {
+          "get_fps_status": 6,
+          "get_fan_sensors": 4,
+          "get_gpu_sensors": 1,
+          "get_memory_pressure": 1
+        },
+        "intervalsStartedSince": 2,
+        "intervalDelays": {
+          "1500": 1,
+          "2500": 1
+        },
+        "canvases": 1,
+        "documentAnimations": 2
+      },
+      "processes": [
+        {
+          "id": 19184,
+          "name": "compy",
+          "cpu": 0.484375,
+          "ws": 55193600,
+          "priv": 20393984,
+          "threads": 56,
+          "handles": 742
+        },
+        {
+          "id": 5104,
+          "name": "msedgewebview2",
+          "cpu": 0.15625,
+          "ws": 78581760,
+          "priv": 42078208,
+          "threads": 16,
+          "handles": 282
+        },
+        {
+          "id": 14512,
+          "name": "msedgewebview2",
+          "cpu": 0.046875,
+          "ws": 21037056,
+          "priv": 9814016,
+          "threads": 9,
+          "handles": 171
+        },
+        {
+          "id": 17264,
+          "name": "msedgewebview2",
+          "cpu": 0.734375,
+          "ws": 127815680,
+          "priv": 49229824,
+          "threads": 57,
+          "handles": 1299
+        },
+        {
+          "id": 17808,
+          "name": "msedgewebview2",
+          "cpu": 0,
+          "ws": 10903552,
+          "priv": 2600960,
+          "threads": 11,
+          "handles": 157
+        },
+        {
+          "id": 20052,
+          "name": "msedgewebview2",
+          "cpu": 2.046875,
+          "ws": 152915968,
+          "priv": 103530496,
+          "threads": 28,
+          "handles": 381
+        },
+        {
+          "id": 20168,
+          "name": "msedgewebview2",
+          "cpu": 0.15625,
+          "ws": 41320448,
+          "priv": 15024128,
+          "threads": 26,
+          "handles": 358
+        },
+        {
+          "id": 21104,
+          "name": "msedgewebview2",
+          "cpu": 3.25,
+          "ws": 109162496,
+          "priv": 291241984,
+          "threads": 36,
+          "handles": 1300
+        }
+      ],
+      "processTotals": {
+        "processCount": 8,
+        "workingSetMB": 569.28,
+        "privateMB": 509.18,
+        "threads": 239,
+        "handles": 4690,
+        "cpuSeconds": 6.88
+      }
+    },
+    {
+      "recordedAt": "2026-08-22T12:10:42.816Z",
+      "msFromSpawn": {
+        "portOpen": 192,
+        "documentReady": 495,
+        "railPainted": 3571,
+        "usableHome": 3571
+      },
+      "inPageNavigation": {
+        "domContentLoaded": 119,
+        "load": 121
+      },
+      "navigationStart": 235,
+      "observationLag": 141,
+      "firstRoom": "Home",
+      "restAfterUsable": {
+        "windowSeconds": 11.6,
+        "ipcTotal": 12,
+        "ipcByCommand": {
+          "get_fps_status": 6,
+          "get_fan_sensors": 4,
+          "get_gpu_sensors": 1,
+          "get_memory_pressure": 1
+        },
+        "intervalsStartedSince": 2,
+        "intervalDelays": {
+          "1500": 1,
+          "2500": 1
+        },
+        "canvases": 1,
+        "documentAnimations": 2
+      },
+      "processes": [
+        {
+          "id": 15916,
+          "name": "compy",
+          "cpu": 0.484375,
+          "ws": 52936704,
+          "priv": 20402176,
+          "threads": 56,
+          "handles": 719
+        },
+        {
+          "id": 7480,
+          "name": "msedgewebview2",
+          "cpu": 0.03125,
+          "ws": 21024768,
+          "priv": 9814016,
+          "threads": 9,
+          "handles": 171
+        },
+        {
+          "id": 16260,
+          "name": "msedgewebview2",
+          "cpu": 2.296875,
+          "ws": 150556672,
+          "priv": 101072896,
+          "threads": 28,
+          "handles": 384
+        },
+        {
+          "id": 17192,
+          "name": "msedgewebview2",
+          "cpu": 3.203125,
+          "ws": 109047808,
+          "priv": 293924864,
+          "threads": 36,
+          "handles": 1296
+        },
+        {
+          "id": 17640,
+          "name": "msedgewebview2",
+          "cpu": 0.828125,
+          "ws": 127217664,
+          "priv": 48603136,
+          "threads": 55,
+          "handles": 1293
+        },
+        {
+          "id": 19168,
+          "name": "msedgewebview2",
+          "cpu": 0.140625,
+          "ws": 41385984,
+          "priv": 15077376,
+          "threads": 26,
+          "handles": 356
+        },
+        {
+          "id": 20912,
+          "name": "msedgewebview2",
+          "cpu": 0.21875,
+          "ws": 76914688,
+          "priv": 40194048,
+          "threads": 15,
+          "handles": 277
+        },
+        {
+          "id": 22280,
+          "name": "msedgewebview2",
+          "cpu": 0,
+          "ws": 10903552,
+          "priv": 2609152,
+          "threads": 11,
+          "handles": 157
+        }
+      ],
+      "processTotals": {
+        "processCount": 8,
+        "workingSetMB": 562.66,
+        "privateMB": 507.07,
+        "threads": 236,
+        "handles": 4653,
+        "cpuSeconds": 7.2
+      }
+    }
+  ]
+}

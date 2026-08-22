@@ -188,7 +188,14 @@ font size, any `font:` shorthand smuggling one, any numeric inline `fontSize`, a
 floor, and on Arial's return. **The look caught what the tests could not:** at 13px a long unit word
 overflowed the 56px arc-gauge ring ("100 SCORE", "246 FRAMES") — fixed in `64fe3579` with its own
 guard in `arc-gauge.test.tsx`. Evidence: `compy-visual-review/v0922-{home,test}.png`.
-**Still open from this row:** the mono-for-machine-values-only law is still a comment with no guard.
+**Nothing open from this row.** The mono-for-machine-values-only law stopped being a comment on
+2026-08-18 (`3eca4a9f`, conformance C-17): [`../src/design/mono-law-guard.test.ts`](../src/design/mono-law-guard.test.ts)
+resolves the whole `var()` alias graph to a fixed point, so `--font-mono` / `--ix-mono` / `--mc-mono`
+cannot dodge it, and censuses every mono rule into `mono-census.baseline.json` with a **down-only**
+violation ratchet. The debt was paid the next day (`be4c81ec`, C-17b): **203 rules, 140 machine
+values, 63 accepted HUD chrome-tags, 0 violations, ceiling 0.** A new mono rule now fails the build
+until someone classifies it. What it still cannot see is written in that file's own header, not
+implied: it walks `.css` only, so an inline `style={{ fontFamily }}` is invisible to it.
 
 <details><summary>Original measurement (2026-08-11) — kept for the record</summary>
 
