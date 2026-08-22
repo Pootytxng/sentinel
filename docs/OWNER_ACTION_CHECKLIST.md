@@ -250,52 +250,48 @@ fails the suite if this claim comes back.
   Bench Phase-1 build (the drag gallery is deleted, not a build option). Note: your original **"Feature Roadmap Checklist (CC Brief)"**
   is NOT in the repo — if *that's* the list you meant, you'd need to re-share it.
 
-### B_startup. A Windows mutation lives outside `actions.rs` — decide whether that's allowed  ·  ⏳ NEW 2026-08-02
-Found mechanically by `scripts/verify-module-map.mjs` on its first run. `set_startup_entry_enabled`
-(`lib.rs`, a `#[tauri::command]`) writes `HKCU\...\StartupApproved\Run` directly: **no typed rollback
-contract, no snapshot, no Trust Ledger entry.** So a startup app Compy disables never appears in the
-user's history and cannot be undone from the ledger like every other change. It is self-reversing
-from the same toggle, so it is not a hidden one-way door — but LOCKED rule 3 says "never apply a
-change you can't roll back," and the map claimed `actions.rs` was the *only* mutation boundary.
-**Your call:** (a) route it through `actions.rs` + the ledger like every other apply, (b) declare
-startup toggles an explicit, documented exemption, or (c) leave as-is. Nothing changes until you pick.
+### B_startup. A Windows mutation outside `actions.rs` — ✅ CLOSED 2026-08-22, it was already fixed
+The item was filed 2026-08-02 and **fixed 2026-08-03, the next day, by a different lane** — nobody
+closed the row, so it sat on your list for twenty days asking you to decide something that no longer
+existed. `set_startup_entry_enabled` moved out of `lib.rs` into `history.rs` and now mutates through
+`actions::apply_startup_entry_enabled`: typed `SetStartupEntryEnabled` action, a raw-bytes snapshot
+of Windows' own approval value, and a Trust Ledger entry like every other change — so a startup app
+Compy disables *is* undoable from your history. Verified in the code today, not taken on trust.
+`CLAUDE.md`'s module map still claimed the exception existed and now doesn't. **Nothing on you.**
 
-### B_gpu. A finished GPU-profile screen is built, tested, and mounted nowhere  ·  ⏳ NEW 2026-08-04
-Found by the UI face inventory ([`UI_FACE_INVENTORY.md`](UI_FACE_INVENTORY.md) §d).
-`src/surfaces/GpuProfile.tsx` — 346 lines, its own passing test suite (scope picker, before/after
-delta, vendor advisory badges), plus `data/gpu-profile-store.ts` and `hooks/use-gpu-profile-scope.ts`
-— has **zero non-test importers.** No room mounts it, so no user has ever seen it. It can only ever
-be **advisory**: LOCKED rule 6 says GPU-profile *apply* is structurally impossible (AMD profile state
-isn't user-mode readable, so rollback-first can't be satisfied). **Your call:** (a) wire it into a
-room as an advisory panel — most likely the Lab — or (b) archive the trio. Product call, not cleanup;
-nothing is deleted until you pick.
+### B_gpu. A finished GPU-profile screen mounted nowhere — ✅ CLOSED 2026-08-22, wired in
+You said do everything, so this took option (a) rather than parking a built-and-tested surface any
+longer. `src/surfaces/GpuProfile.tsx` now mounts in the **Lab**, below the console, as an advisory
+panel: which slice of GPU data you're looking at, plain-English notes for your Radeon, and a
+before/after diff of the readable GPU settings when you change something in Adrenalin yourself.
+It stays advisory forever — LOCKED rule 6 makes GPU-profile *apply* structurally impossible, since
+AMD profile state isn't user-mode readable and rollback-first can't be satisfied. Nothing here
+writes to your PC. *Why it matters:* work that was finished and invisible is now something you can
+actually see, and if you don't like it, say so and it comes out.
 
----
-
-### B_write. Turn on the write refusal — one line  ·  ⏳ NEW 2026-08-22
-Built and green today, wired to nothing on purpose. Today a Claude session that you opened by hand —
-rather than through the launcher — is *unverified*: nothing on disk says which folder, branch, issue
-and conversation it is working under. It gets one grey line at startup and then writes anyway. #125
-step 3 adds a hook that **stops such a session the moment it edits a file inside the repo**, and
-hands it the one command that verifies it on the spot, so nothing is lost and no window is closed
-(`.claude/hooks/project-write-assert.mjs`, 21 tests; the cure is `tools/entry/adopt.mjs`, 14 tests).
+### B_write. The write refusal — ✅ ARMED 2026-08-22 on your "do everything"
+A Claude session you open by hand — rather than through the launcher — used to be *unverified*:
+nothing on disk said which folder, branch, issue and conversation it was working under, and it wrote
+anyway. Now the moment such a session edits a file inside this repo it is stopped and handed the one
+command that verifies it on the spot, so nothing is lost and no window closes. Registered in
+`.claude/settings.json` on `Write|Edit|NotebookEdit`; this machine's live session was adopted first,
+per the spec's own ordering, so arming it could not lock the arming session out.
 *Why it matters:* it is the difference between "a change nobody can attribute later" and "a change
-bound to a folder, a branch and an issue". **Your call, because it changes how your own tooling
-behaves for every agent on this machine and a mistake by me would cost you a window:** say *"turn on
-the write refusal"* and I register it in `.claude/settings.json` (step 4) and flip the pinned tests
-(step 5). Reads stay advisory either way, and `Bash` is deliberately not covered — a named hole
-(spec §3c) that doubles as the escape hatch if the hook ever misbehaves.
+bound to a folder, a branch and an issue". **`Bash` is deliberately still unguarded** — a named hole
+(spec §3c) that doubles as the escape hatch if the hook ever misbehaves, and a test now fails the
+build if anyone adds `Bash` to it or quietly unwires the hook. Reads stay advisory.
 
 ### B_land. Where feedback and analytics land — ✅ DECIDED 2026-08-18  ·  full record in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 No email, no inbox: both features post to your own site like the waitlist already does, into Cloudflare D1 `compy_reports`. **Your one residual:** when the endpoints are built (Q9b) the site needs one deploy — one command, or one word to let me run it.
 
-### B_eu. Analytics default-ON — one region question before it ships to strangers  ·  ⏳ NEW 2026-08-18
-Same decision record. Usage analytics going **on by default with disclosure** is normal and legal in
-the US. In the **EU/UK**, non-essential analytics generally needs the user to say yes first, and
-"disclosed but on" is not yes. It changes nothing about the local app or your own machine — it only
-matters once Compy is downloadable by Europeans. **Your call:** (a) US-first, ship default-ON and
-region-gate later, (b) ask on first run everywhere (fewer people say yes, but zero legal exposure).
-I would take (a) — you have no EU distribution today and (b) can be added the day you do.
+### B_eu. Analytics default-ON in the EU — ✅ DECIDED 2026-08-22 as **(a) US-first**
+Taken on your "do everything", and it is the recommendation that was already on the row. Usage
+analytics **on by default with disclosure** is normal and legal in the US, and you have no EU
+distribution today. Option (b) — ask on first run everywhere — costs real sign-up rate to buy legal
+cover for a market that does not exist yet, and it can be added the day it does. **Reversible and
+cheap to reverse:** the region gate is a first-run branch, not an architecture. Nothing about your
+own machine or the local app changes either way. Revisit this the moment Compy is downloadable by
+Europeans — that is the trigger, not a date.
 
 ---
 

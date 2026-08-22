@@ -42,7 +42,7 @@ out, no branch was merged. The only file this train writes is this one.
 | C-11 | Group repeated ledger events ("applied 3×, currently on") | audit §4 | **NEVER BUILT** |
 | C-12 | `CommandPalette` was parked, then dropped | UI backlog §D | **DOC DRIFT** — it is built and DEFAULT ON |
 | C-13 | Foundation tooling: Figma MCP (rank 2), axe-core in vitest (rank 3), shadcn MCP (rank 4) | foundation §Tooling | **PARTIAL** (only shadcn) |
-| C-14 | `GpuProfile.tsx` — wire it in as advisory, or archive it (owner fork) | UI backlog NAV-1 (c) | **NEVER RESOLVED** (still parked by exemption) |
+| C-14 | `GpuProfile.tsx` — wire it in as advisory, or archive it (owner fork) | UI backlog NAV-1 (c) | ✅ **RESOLVED 2026-08-22** — wired into `LabGround` as an advisory panel; exemptions dropped |
 | C-15 | §E trending design tooling (Figma / v0) — owner's call | UI backlog §E | **STILL OPEN** (unchanged, correctly) |
 | C-16 | §G site: mini playable demo · `/pricing` · `llms.txt` · `/compare` | UI backlog §G / G.2 | **PARTIAL** |
 | C-17 | TYPE-1 residual: mechanize the mono-for-machine-values-only law | UI backlog TYPE-1 | **NEVER BUILT** (self-declared) — **built later the same day, see the C-17 section** |

@@ -189,10 +189,10 @@ intelligence/measurement) lives in **`src-tauri/CLAUDE.md`**, which auto-loads o
 
 **Core wiring & entry**
 - `main.rs` — argv router: `--fps-capture` → headless ETW helper (`run_fps_capture`); `--run-elevated <hex>` → elevated-PowerShell child (elevation boundary, owner territory); else `run()`. Runs BEFORE any window.
-- ★ `lib.rs` (~1585) — `run()` wiring + command registration, state probes, `compy_data_dir`, startup-apps, `gaming_mode_gate` (`lib.rs:520`), `safety_tests`. **★ because `set_startup_entry_enabled` writes `HKCU\...\StartupApproved\Run` directly — a Windows mutation OUTSIDE `actions.rs`, with no typed rollback contract and no Trust Ledger entry. Open owner decision, see `docs/OWNER_ACTION_CHECKLIST.md` §B.**
+- ★ `lib.rs` (~1585) — `run()` wiring + command registration, state probes, `compy_data_dir`, startup-apps, `gaming_mode_gate` (`lib.rs:520`), `safety_tests`. ★ for the command surface only: the `set_startup_entry_enabled` exception was **closed 2026-08-03** — it moved to `history.rs` and mutates through `actions::apply_startup_entry_enabled`, with a typed `SetStartupEntryEnabled` action, a raw-bytes snapshot and a Trust Ledger entry like every other apply. `actions.rs` is the only Windows-mutation boundary, with no exceptions.
 
 **★ Mutation, rollback & gates (the safety boundary)**
-- ★ `actions.rs` (~5404) — the Windows-mutation + rollback boundary (one exception today: `lib.rs`'s `set_startup_entry_enabled`, above): typed `AppliedAction`/`RollbackAction`/`Snapshot`, all `apply_*`/`rollback_*_typed`, `dispatch_rollback`, `resolve_rollback`, `synthesize_legacy_rollback`, `run_elevated_powershell`.
+- ★ `actions.rs` (~5404) — THE Windows-mutation + rollback boundary, no exceptions: typed `AppliedAction`/`RollbackAction`/`Snapshot`, all `apply_*`/`rollback_*_typed`, `dispatch_rollback`, `resolve_rollback`, `synthesize_legacy_rollback`, `run_elevated_powershell`.
 - ★ `history.rs` (~2416) — Trust Ledger: `AppliedChange`, persistence (`load/save_history`), `apply_recommendation`/`rollback_change`/`get_applied_changes`. Rollback resolves from local history ALONE.
 - ★ `gaming_orchestrator.rs` (~1660) — Gaming Mode session lifecycle: start/stop/keeper, orphan detection + recovery, staged-change commit. Mutation-boundary.
 - ★ `gaming_session.rs` (~513) — Gaming Mode session model + atomic persistence (`gaming-session.json`, `SESSION_SCHEMA_VERSION`).

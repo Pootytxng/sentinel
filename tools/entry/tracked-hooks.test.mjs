@@ -54,6 +54,9 @@ const EXPECTED_HOOKS = [
   "subagent-model-guard.mjs",
   "subagent-throttle.mjs",
   "workflow-usage-guard.mjs",
+  // #125 step 4 — armed 2026-08-22 on the owner's word ("do everything"); see the write-refusal
+  // describe block below for what "armed" is asserted to mean.
+  "project-write-assert.mjs",
 ];
 
 let scratch = null;
@@ -93,6 +96,41 @@ describe("decision 2 — one canonical hook source, and it travels with the bran
 
     const { CANONICAL_HOOKS } = await import("./repair.mjs");
     expect(CANONICAL_HOOKS).toBe(join(ROOT, ".claude", "hooks"));
+  });
+});
+
+describe("#125 step 4 — the write refusal is ARMED, and stays armed", () => {
+  // The hook was built, tested and left INERT on purpose: arming it changes how the owner's own
+  // tooling behaves for every agent on this machine. He armed it 2026-08-22. This block is the
+  // guard that keeps it armed — an unwired hook is byte-identical to a deleted one from the user's
+  // side, and #125's whole failure mode is a change nobody can attribute later.
+  const pre = SETTINGS.hooks?.PreToolUse ?? [];
+
+  it("registers it on every write tool the hook itself claims to guard", () => {
+    const entry = pre.find((e) => String(e.matcher ?? "").includes("Write"));
+    expect(entry, "no PreToolUse entry matches Write").toBeTruthy();
+    // The matcher and the hook's own GUARDED_TOOLS must not drift apart: a tool guarded in code but
+    // absent from the matcher never runs the hook at all.
+    for (const tool of ["Write", "Edit", "NotebookEdit"]) {
+      expect(String(entry.matcher).split("|")).toContain(tool);
+    }
+  });
+
+  it("points it at the tracked hook file, resolved from the project dir", () => {
+    const cmds = hookCommandsOf(SETTINGS, { dir: ROOT })
+      .filter((c) => c.event === "PreToolUse")
+      .filter((c) => c.file.endsWith("project-write-assert.mjs"));
+    expect(cmds).toHaveLength(1);
+    expect(cmds[0].file).toBe(join(ROOT, ".claude", "hooks", "project-write-assert.mjs"));
+  });
+
+  it("leaves Bash deliberately unguarded — the named hole IS the escape hatch", async () => {
+    // Spec §3c: a hook that can refuse its own repair is how a machine locks itself out. If Bash
+    // ever joins the matcher, that escape hatch is gone and this test is the thing that says so.
+    const entry = pre.find((e) => String(e.matcher ?? "").includes("Write"));
+    expect(String(entry.matcher).split("|")).not.toContain("Bash");
+    const { GUARDED_TOOLS } = await import("../../.claude/hooks/project-write-assert.mjs");
+    expect(GUARDED_TOOLS.has("Bash")).toBe(false);
   });
 });
 

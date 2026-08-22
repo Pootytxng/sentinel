@@ -40,11 +40,11 @@
 > [`../src/ui-vision-status-guard.test.ts`](../src/ui-vision-status-guard.test.ts) now fails the build
 > on a status marker inside an archive block, and on any queue item calling a shipped vision row open.
 
-> **STATE OF THIS QUEUE, 2026-08-22 (end of the persistent train).** Every item on it that an agent
-> can finish alone is finished. What is left is **three items, and not one of them is mine to move**:
-> item 1 (site pricing) needs one word from the owner on a drafted PR; item 4 (C-14 `GpuProfile`) is
-> an owner fork on the checklist as **B_gpu**; item 5 (the Codex weekly-automation scope) belongs to
-> the Codex lane and duplicating it is the failure mode, not the fix. Items 2 and 3 are recorded as
+> **STATE OF THIS QUEUE, 2026-08-22 (updated after the owner's "do everything" turn).** Items 1 and
+> 4 are DONE: the owner said *"land 193 dude"* and site pricing merged as `d5571766`; C-14
+> `GpuProfile` was wired into the Lab as an advisory panel, closing owner fork **B_gpu**. **One item
+> is left and it is not mine**: item 5 (the Codex weekly-automation scope) belongs to the Codex lane
+> and duplicating it is the failure mode, not the fix. Items 2 and 3 are recorded as
 > closed *to the limit of what can be measured on this desk*, which is not the same as solved — read
 > their rows for exactly what is still unproven (#121's cause is unattributable at this resolution;
 > #128's release-side mutex has still never been held during a real publish). **Do not read an empty
@@ -104,7 +104,8 @@
    *holder* is still unnamed; #128's two mutexes have never been held during an actual release or
    ship. Neither is a task to schedule — both are **evidence to collect the next time a ship runs**,
    so whoever runs that ship owes both issues a comment. Records archived; residuals live here.
-4. **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it** (row below; owner fork B_gpu).
+4. ~~**C-14 · `GpuProfile.tsx`**~~ → ✅ **DONE 2026-08-22** — wired into `LabGround` as an advisory
+   panel with a live snapshot built from already-measured data (zero new IPC). Owner fork B_gpu closed.
 5. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
    below). Delegated to the Codex lane — do not duplicate it here.
 
@@ -191,8 +192,13 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   SHAPE of their wall: 2 data-shaped (close organically), 6 structural, of which four were the
   `.arc-v2` variants that turned out never to render at all and went out with the row below.
   `src/design/mono-law-guard.test.ts` holds the ratchet at 0 and carries the per-selector reasoning.
-- [ ] **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it.** Owner fork, never resolved,
-  still parked by exemption.
+- [x] **C-14 · `GpuProfile.tsx` — WIRED IN 2026-08-22** as an advisory panel in `LabGround`, the
+  same out-of-grid tile idiom `ExperimentBench` uses (a sixth `LabStationKey` would have rippled
+  through the palette, the routers and every test pinning the five-station spine). `liveGpuProfileSnapshot`
+  builds its read from the detected GPU plus the `hags-enable` rec's real `HwSchMode` read — zero new
+  IPC — and hard-nulls what is not readable (`powerModeLabel`, `peakTempC`), with eight tests pinning
+  that an unread field never becomes a fabricated one. reachability-guard's three B_gpu exemptions are
+  gone. Stays advisory permanently per LOCKED rule 6.
 - [ ] **C-13 · Foundation tooling gap — axe-core (rank 3, MINE) LANDED; Figma MCP (rank 2, OWNER)
   still not wired.** The half that was ever mine to do is done and the row stays open only for the
   owner's half. `axe-core` now runs in vitest: `src/test/axe.ts` is the harness,

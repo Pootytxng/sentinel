@@ -185,10 +185,48 @@ describe("the assert itself still fails closed on a real disagreement", () => {
     expect(verdictOf(r).exit).toBe(2);
   });
 
+  // #125 step 5 (2026-08-22, the owner armed the write refusal). These two are a PAIR and must stay
+  // one: session START still advises, because a session that only reads is not broken and making it
+  // fatal would close windows for nothing; the WRITE path is the half that refuses. Deleting the
+  // advisory assertion is how the next change silently makes session start fatal, which is exactly
+  // what the spec's rollout order (§4 step 5) says not to let happen.
   it("only advises in a session that was never launched through the entrypoint", () => {
     const r = tracked.assertSessionRoot({ token: null, env: { CLAUDE_PROJECT_DIR: OTHER }, cwd: OTHER });
     expect(r.code).toBe("NO_TOKEN");
     expect(verdictOf(r).exit).toBe(0);
+  });
+
+  it("but REFUSES the project write that same unverified session tries to make", async () => {
+    const { decide } = await import("../../.claude/hooks/project-write-assert.mjs");
+    // A root that EXISTS on disk: isInsideRoot canonicalizes both sides, so a fabricated folder
+    // resolves to nothing and would make this pass for the wrong reason.
+    const here = join(HERE, "..", "..");
+    const r = tracked.assertSessionRoot({ token: null, env: { CLAUDE_PROJECT_DIR: here }, cwd: here });
+    const d = decide({
+      toolName: "Write",
+      toolInput: { file_path: join(here, "src", "App.tsx") },
+      verdict: r,
+      root: here,
+      sessionId: "11111111-2222-3333-4444-555555555555",
+    });
+    expect(d.allow).toBe(false);
+    // The refusal ships with its own cure, or it is just a closed window (spec §3a).
+    expect(d.reason).toMatch(/adopt/);
+  });
+
+  it("and still lets that same session write OUTSIDE the project — the gate is scoped, not total", async () => {
+    const { decide } = await import("../../.claude/hooks/project-write-assert.mjs");
+    const here = join(HERE, "..", "..");
+    const r = tracked.assertSessionRoot({ token: null, env: { CLAUDE_PROJECT_DIR: here }, cwd: here });
+    const d = decide({
+      toolName: "Write",
+      toolInput: { file_path: join(tmpdir(), "compy-scratch.txt") },
+      verdict: r,
+      root: here,
+      sessionId: "11111111-2222-3333-4444-555555555555",
+    });
+    expect(d.allow).toBe(true);
+    expect(d.why).toBe("outside the project root");
   });
 
   it("claims the launch once, so the token alone cannot verify a later session", () => {

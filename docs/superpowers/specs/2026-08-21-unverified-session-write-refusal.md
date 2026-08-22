@@ -1,8 +1,12 @@
 # Spec — refusing project writes from an unverified session (#125)
 
-**Status:** steps 1-3 BUILT 2026-08-22 and green; step 4 (arming it) is the owner's line, step 5 waits
-on step 4. Written 2026-08-21 from measured state, not from the issue's wording. **§7 records what the
-build changed about this design.**
+**Status:** ✅ **COMPLETE 2026-08-22 — all five steps.** Steps 1–3 built; **step 4 armed** on the
+owner's word (the hook is registered in `.claude/settings.json` on `Write|Edit|NotebookEdit`, and
+this machine's live session was adopted first per §4's ordering); **step 5 flipped** — the advisory
+`SessionStart` assertion is kept and now sits beside its paired write-refusal assertions in
+`tools/entry/session-root-assert.test.mjs`, with the armed registration itself guarded in
+`tools/entry/tracked-hooks.test.mjs`. Written 2026-08-21 from measured state, not from the issue's
+wording. **§7 records what the build changed about this design.**
 **Issue:** [#125](https://github.com/Pootytxng/sentinel/issues/125) · **Files:**
 `.claude/hooks/session-root-assert.mjs`, `.claude/hooks/project-write-assert.mjs`, `tools/entry/adopt.mjs`,
 `tools/entry/session-root-assert.test.mjs`, `tools/entry/adopt.test.mjs`,
@@ -203,5 +207,7 @@ It fires on every write, so it is a checkpoint, not the thing that establishes i
 `SessionStart` owns the record. Persisting would additionally delete the lapsed record whose issue
 number the refusal wants to offer.
 
-`.claude/settings.json` is deliberately UNTOUCHED: the hook exists, is tested, and is inert until it
-is registered. That registration is step 4, and it is the owner's one line.
+`.claude/settings.json` was deliberately UNTOUCHED while the hook was inert. **Registered
+2026-08-22** — step 4 is done. `Bash` stays out of the matcher on purpose (§3c): it is the escape
+hatch if this hook ever misbehaves, and `tracked-hooks.test.mjs` fails the build if it is ever
+added.
