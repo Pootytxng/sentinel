@@ -147,13 +147,14 @@ Two things here are new and must not be flattened back into the 2026-07-23 wordi
    start ("Start here" over Optimize, one plain when-line under the row; opt-in `Dock` props, Home untouched);
    the safe-stack gauge reads "N on · = all N applied" on a full ring instead of "0 ready" on an empty one; the
    bench opener is "Test one change" + one sentence (25 words, was 44, guarded ≤ 30). Layout, not a switch.
-   **All three rooms have had the pass.** 🔴 One Test item stays open: "Your rig" still repeats Health's
-   numbers — folding it needs a Test-specific reading set (new data wiring), not a layout move.
-   **SPECCED 2026-08-21 → [`superpowers/specs/2026-08-21-test-rig-reading-set.md`](superpowers/specs/2026-08-21-test-rig-reading-set.md)**
-   (not built). Measured the duplication: 3 of Test's 4 corner gauges are the same call as Health's
-   (Readiness · Avg FPS · 1% low), and both tiles are titled "Your rig". The set becomes Proven ·
-   Noise floor · Safe stack (unchanged) · Instruments read — bench facts, not machine facts — on two
-   already-registered read-only commands, zero new backend, five guards named.
+   **All three rooms have had the pass.**
+   ✅ **TEST READING SET BUILT 2026-08-21** (desk build `36011078`, self-review PASS) — the corner-gauge
+   duplication is closed per [`superpowers/specs/2026-08-21-test-rig-reading-set.md`](superpowers/specs/2026-08-21-test-rig-reading-set.md):
+   3 of Test's 4 corner gauges no longer repeat Health's (Readiness · Avg FPS · 1% low). The set is now
+   Proven (get_scoreboard award count) · Noise floor (get_trial_state's noise_floor_pct) · Safe stack
+   (unchanged) · Instruments read (stations with a live reading vs total) — bench facts, not machine
+   facts, on two already-registered read-only commands, zero new backend. Stage tile retitled "Your rig"
+   → "Your rig on the bench". PR pending against `main`.
 
 **Read together with NAV-1 finding 2 below:** parallel UI generations coexist per room (Home 4+,
 Monitor 4, Lab 5) and the pruning pass has never run. That is the leading mechanical suspect for
