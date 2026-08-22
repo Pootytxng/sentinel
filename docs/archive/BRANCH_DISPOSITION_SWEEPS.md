@@ -36,3 +36,21 @@ appeared later the same day, landed as PRs [#117](https://github.com/Pootytxng/s
 [#120](https://github.com/Pootytxng/sentinel/pull/120) (merged 2026-08-13), and was deleted from
 `origin` with its row dropped in this commit — a merged-and-deleted ref carries its evidence in the
 PRs and needs no row.
+
+## Why a MERGED row is perishable — the two 2026-08 incidents (moved 2026-08-21)
+
+Moved verbatim out of `docs/BRANCH_DISPOSITIONS.md` "How a disposition is proven", which is under a
+hard 120-line budget and had reached it. The operative rules stayed behind; only these two
+narratives moved. They are the evidence for the rule that a `MERGED` row must be pruned in the same
+breath as it is recorded.
+
+**A branch that landed without a fast-forward stops being a no-op the moment `main` moves.** Neither
+`--squash` nor `--rebase` leaves an ancestry link back to the branch — squash writes one new commit,
+rebase copies each commit under a new hash — so a later three-way merge reintroduces the branch's own
+stale copies of any file `main` has since changed. On 2026-08-05 that was this very file, twice.
+
+**Rebase is not the safe half of that sentence.** On 2026-08-06 a lane rebase-merged cleanly, was
+proven a no-op at that instant, and its row was flipped CLAIMED → MERGED in the next commit — a row
+the *branch itself* had added. Both sides had then touched the same new line differently, so the
+merge became a conflict and the proof could never be produced again. The audit caught it on `main`
+within the minute; the fix was to prune, because there was nothing left to re-prove.
