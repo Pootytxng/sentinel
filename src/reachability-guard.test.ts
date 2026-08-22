@@ -36,13 +36,12 @@ const SRC = norm(resolve("src"));
  * decision. "It might be useful later" is not a reason — that is what git history is for.
  */
 const ALLOWED: Record<string, string> = {
-  // The GPU-profile surface is built but not wired into any room: applying a GPU profile cannot
-  // satisfy rollback-first (AMD profile state is not user-mode readable), so it sits behind owner
-  // decision B_gpu in docs/OWNER_ACTION_CHECKLIST.md. Deleting it is an owner call, not a sweep.
-  "surfaces/GpuProfile.tsx": "owner decision B_gpu — GPU profile surface parked, not retired",
-  "data/gpu-profile-store.ts": "owner decision B_gpu — store for the parked GPU profile surface",
-  "hooks/use-gpu-profile-scope.ts": "owner decision B_gpu — hook for the parked GPU profile surface",
-  "data/entitlements.ts": "owner decision B_gpu — entitlement tiers the parked surface reads",
+  // Compy Pro's dark tier scaffold. Deliberately importer-less: proGate() is HARD-FALSE until the
+  // owner errands exist (entity + merchant-of-record + a license design), and gating a real surface
+  // on it is a future commit, not a side effect. See the file's own header.
+  // (The three GPU-profile entries that used to sit here were retired 2026-08-22 when C-14 / owner
+  // fork B_gpu was closed by wiring the surface into LabGround as an advisory panel.)
+  "data/entitlements.ts": "Compy Pro dark scaffold — proGate() hard-false, nothing may gate on it yet",
 
   // Loaded outside the app graph entirely: the static-site generator pulls this through Vite's
   // ssrLoadModule at build time (scripts/lib/library-render.mjs), so no src/ file imports it.

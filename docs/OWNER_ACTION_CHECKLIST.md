@@ -324,55 +324,9 @@ These gate **public** release only (not the local app you use daily). Full list:
 **Nothing aesthetic is parked on you by default** (CLAUDE.md, "TASTE IS MINE TO EXERCISE, HIS TO
 OVERRULE"). Claude decides the look, ships it, and hands you a before/after to veto on sight. Only
 brand — the product name, logo, price presentation — and reversals of a call you already made land
-here as decisions.
-- ✅ **ANSWERED 2026-08-20 — the interview: he said turn it on, with one objection.**
-  · [`decisions/2026-08-20-home-interview-default.md`](decisions/2026-08-20-home-interview-default.md)
-  · [`superpowers/plans/2026-08-20-comprehensibility-sweep.md`](superpowers/plans/2026-08-20-comprehensibility-sweep.md)
-  His words: *"i like it i just dont like the placement for the help me with my pc"*. So the default
-  flips ON, but **not on its own** — it flips in the lane that first fixes where that button sits,
-  so the Home that ships on by default is the one he approved. **CLOSED 2026-08-20 the same day:**
-  his "Clean header" pick shipped in desk build `ab54f1e4` (button on the verdict line, fine print
-  routed to Test, default ON), self-review PASS, before/after handed to him. Nothing left on him here.
-
-- ✅ **The title foil sweep now stops instead of looping forever — APPROVED 2026-08-06**, on a
-  side-by-side before/after he watched run.  ·  PR [#76](https://github.com/Pootytxng/sentinel/pull/76)
-  The shine that travels across the big room titles used to repaint that text on every single frame,
-  forever, in every room — on its own it was **29.8% of one CPU core** while he did nothing. It now
-  sweeps once when a room opens and settles. His verdict, verbatim: *"keep the more efficient shine
-  change youre right compy isnt suppose to be a resource hog whatsoever matter of fact it should be
-  the most optomized thing oin someons pc altoether."* That second sentence is a **standing product
-  bar**, not a note about this one animation — recorded in [`perf/README.md`](perf/README.md).
-  Nothing further on him here; the `infinite` revert is not being held open.
-  Two things rode along and remain open: the 3D "two futures" scene could not be visually checked
-  (it only mounts once he has a measured before/after pair, which this desk lacks — its diff is a
-  screen-reader label only), and `src/surfaces/Optimize.css:175` still has a pre-existing bounce ease
-  this lane deliberately did not touch.
-- ✅ **Version numbering call — DECIDED 2026-07-16: "0.9.0 now, 1.0.0 at Claude's bar."** Applied same
-  day (manifests + Cargo.lock at `0.9.0`, ship-reinstall derives the filename, drift-guard test added);
-  spec flipped to DECIDED:
-  [`superpowers/specs/2026-07-16-version-policy-proposal.md`](superpowers/specs/2026-07-16-version-policy-proposal.md).
-  Nothing further on you until the 1.0.0 confirmation moment.
-- 🔨 **Site hero verdict: REJECTED → full compy.gg makeover commissioned (2026-07-14).** You saw the
-  PART B two-strip hero (`2eda4eb`) and rejected it outright ("needs a complete makeover"). New
-  directive logged in `docs/UI_VISION_BACKLOG.md` §G: research-first, spitball directions, decide
-  together before build. Your open call here = **pick the direction from the spitball options** when
-  presented. The two-strip's honesty guardrails (real-provenance receipts, no gain claims,
-  `scripts/site-landing.test.mjs`) survive into any redesign. Site stays PRE-PUBLISH; deploy GO
-  unchanged (§B3).
-- ✅ **Motion default — RESOLVED 2026-08-05 as "keep `full`", on your standing 2026-06-19 decision.**
-  The `design/quiet-pit-wall` branch (#49) wanted `src/design/use-motion.ts` to follow the Windows
-  "reduce motion" setting by default. Your WebView2 reports `prefers-reduced-motion: reduce`, so that
-  flip would have made the whole app static on your own desk — the exact failure your 2026-06-19
-  decision was written after. Held, not landed; the guard still pins `"full"`, and anyone who *wants*
-  Windows to decide already has it one click away in Settings → Motion (all three choices ship).
-  Nothing changed in the app; this entry only ever existed to tell you a branch disagreed with you.
-  Re-open it if you ever want the flip.
-- ✅ **Sibling slop sweep — DONE + SHIPPED `f13d10a` (2026-07-08).** The `#1 BIGGEST LIMITER` uppercase
-  tags in **FirstCheck** and the **Setup Tour** spotlight are now quiet lowercase "#1 biggest limiter"
-  mono tags matching Home's fix (SetupTour de-ambered too); self-reviewer PASS 8/8, guard-pinned, live.
-  Your eyeball is optional — you'll only see these on a first run / tour re-trigger; the main app's live
-  look is unchanged.
-
+here as decisions. **Closed §D sign-offs (the interview default, the title-foil sweep, version
+numbering, the motion default, the sibling-slop sweep) moved 2026-08-22 to
+[`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md) §D — nothing in them is on you.**
 - 🔨 **Home front door — the clutter you flagged 2026-08-18.** You saw Home on `555e2996` and called
   the stacked wording, the "What are you here to do?" question, the drop-down and the
   "16/16 measured · 1 flagged · Re-run check" band the exact opposite of the neat bento we agreed on.

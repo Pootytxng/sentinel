@@ -195,3 +195,57 @@ export function deltaSummary(deltas: FieldDelta[]): string {
   }
   return `${parts.join(" · ")}.`;
 }
+
+// ── The live snapshot builder (C-14, 2026-08-22) ─────────────────────────────────────────────
+
+/** The only two GPU identity fields any surface reads today (structural, so this module keeps no
+ *  dependency on App's `GpuInfo`). */
+export type LiveGpuIdentity = { name?: string | null; driver_version?: string | null };
+
+/** The only three recommendation fields this builder reads (structural, mirrors `Recommendation`). */
+export type LiveRecState = { id: string; currently_applied: boolean; eligible?: boolean };
+
+/** Vendor from a GPU model string. Mirrors `gpuVendor` in surfaces/walkthroughs.ts, but returns the
+ *  DISPLAY casing the snapshot/advisory layer expects ("AMD"/"NVIDIA"/"Intel"), or null when the
+ *  name resolves to nothing recognisable — never a guess. */
+export function gpuVendorLabel(name: string | null | undefined): string | null {
+  const n = (name ?? "").toLowerCase();
+  if (!n) return null;
+  if (n.includes("nvidia") || n.includes("geforce") || n.includes("rtx") || n.includes("gtx")) return "NVIDIA";
+  if (n.includes("amd") || n.includes("radeon")) return "AMD";
+  if (n.includes("intel") || n.includes("arc")) return "Intel";
+  return null;
+}
+
+/**
+ * Build the LIVE snapshot the GPU profile surface reads from, using ONLY values this rig has already
+ * measured — zero new IPC.
+ *
+ * - `vendor` / `model` / `driverVersion` come from the detected GPU.
+ * - `hagsEnabled` is the `hags-enable` recommendation's `currently_applied`, which the backend
+ *   derives from a real `HwSchMode` registry read (`lib.rs` `hags_state`). When that rec is absent
+ *   from this rig's catalog, or is marked ineligible, the field stays **null** — unread, not false.
+ * - `powerModeLabel` is ALWAYS null: vendor power/performance state is not user-mode readable
+ *   (LOCKED rule 6, the same reason GPU-profile apply is structurally impossible).
+ * - `peakTempC` is ALWAYS null here: it belongs to a monitored session, which this room does not
+ *   hold. The delta engine already reports an unread field as "unknown", never as a change.
+ *
+ * Honesty law: an unavailable read stays absent. Nothing in here fabricates or infers a value.
+ */
+export function liveGpuProfileSnapshot(
+  gpu: LiveGpuIdentity | null | undefined,
+  recs: readonly LiveRecState[] | null | undefined,
+  capturedAt: string,
+): GpuProfileSnapshot {
+  const name = str(gpu?.name);
+  const hags = (recs ?? []).find((r) => r.id === "hags-enable");
+  return {
+    capturedAt,
+    vendor: gpuVendorLabel(name),
+    model: name,
+    driverVersion: str(gpu?.driver_version),
+    hagsEnabled: hags && hags.eligible !== false ? hags.currently_applied : null,
+    powerModeLabel: null,
+    peakTempC: null,
+  };
+}

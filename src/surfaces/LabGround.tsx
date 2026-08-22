@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import "../i18n";
 import { LabConsole } from "./LabConsole";
 import ExperimentBench from "./ExperimentBench";
+import { GpuProfile } from "./GpuProfile";
+import { liveGpuProfileSnapshot } from "../data/gpu-profile-store";
 import { RoomShell } from "../design/room-shell";
 import { useReducedMotion } from "../design/use-motion";
 import { useHudFlag } from "../design/use-hud";
@@ -62,6 +64,15 @@ export function LabGround(props: LabFastPathProps & {
   // The whole fast-path bundle threaded to Lab's ground mode (station 1's body).
   const fast: LabFastPathProps = { recs, changes, isAppliable, vendor, ...rest };
 
+  // C-14 (2026-08-22) — the GPU profile surface's live read. Built from what this rig ALREADY
+  // measured (detected GPU identity + the hags-enable rec's real HwSchMode read), so mounting it
+  // adds zero IPC. Fields that are not user-mode readable stay null and render as "unknown"; see
+  // liveGpuProfileSnapshot for why power mode and peak temp are permanently absent here.
+  const gpuSnapshot = useMemo(
+    () => liveGpuProfileSnapshot(hw?.gpus?.[0], recs, new Date().toISOString()),
+    [hw, recs],
+  );
+
   return (
     <RoomShell
       room="lab"
@@ -106,6 +117,13 @@ export function LabGround(props: LabFastPathProps & {
       {/* Intelligence Phase 3 — the controlled-experiment engine + optimization simulator. ARMED
           2026-07-17 (owner-signed): renders the bench when experiment_gate() is true; still
           fails-dark (renders NOTHING) if the gate ever reads false. */}
+      {/* C-14 — the GPU profile surface, ADVISORY ONLY. Built, tested and mounted nowhere since
+          2026-08-04 (owner fork B_gpu, closed 2026-08-22 in favour of wiring it in). It can never be
+          anything but advisory: LOCKED rule 6 makes GPU-profile APPLY structurally impossible,
+          because AMD profile state is not user-mode readable and so rollback-first cannot be
+          satisfied. Nothing here writes to the machine. Sibling of the console, the same out-of-grid
+          tile idiom ExperimentBench already uses. */}
+      <GpuProfile currentSnapshot={gpuSnapshot} />
       <ExperimentBench />
     </RoomShell>
   );
