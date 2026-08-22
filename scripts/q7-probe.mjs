@@ -24,6 +24,10 @@
 //                              <- --exe measures a binary that is not the installed build (an old
 //                                 commit, a candidate); --appdata runs it against a throwaway data
 //                                 dir. Both are recorded, and isDefaultTarget goes false.
+//                              [--keep-open]
+//                                 <- by default the probe kills the app it launched before it
+//                                 exits; a leftover holds the single-instance lock and makes
+//                                 launch-focus-guard's runtime tier skip itself in silence.
 //   node scripts/q7-probe.mjs rooms     [--port 9455] [--dwell 15000] [--out FILE]
 //   node scripts/q7-probe.mjs latency   [--port 9455] [--out FILE]
 //   node scripts/q7-probe.mjs idle      [--port 9455] [--minutes 10] [--hidden] [--out FILE]
@@ -47,6 +51,7 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { WINDOW_PROBE_EXPRESSION, pickMainTarget } from "./lib/tauri-window-pick.mjs";
+import { shouldCleanUp, cleanUpReason } from "./lib/probe-cleanup.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_EXE = join(process.env.LOCALAPPDATA ?? "", "Compy", "compy.exe");
@@ -510,6 +515,12 @@ async function portAlive(port) {
   }
 }
 
+/**
+ * Set the moment this process starts an app of its own. It is what tells the exit path
+ * whether there is anything of OURS to clean up -- see scripts/lib/probe-cleanup.mjs.
+ */
+let launchedByProbe = false;
+
 /** Launch the INSTALLED release exe with the debug port open. Returns { pid, port, spawnedAt }. */
 async function launch(port) {
   if (!existsSync(EXE)) throw new Error(`installed build not found: ${EXE}`);
@@ -521,6 +532,7 @@ async function launch(port) {
     );
   }
   const spawnedAt = Date.now();
+  launchedByProbe = true;
   const child = spawn(EXE, [], {
     detached: true,
     stdio: "ignore",
@@ -2150,7 +2162,8 @@ async function taskA11y() {
   for (let i = 0; i < 12; i++) {
     await s.call("Input.dispatchKeyEvent", { type: "rawKeyDown", windowsVirtualKeyCode: 9, key: "Tab", code: "Tab" });
     await s.call("Input.dispatchKeyEvent", { type: "keyUp", windowsVirtualKeyCode: 9, key: "Tab", code: "Tab" });
-    await sleep(120);
+    cleanUpLaunchedApp();
+  await sleep(120);
     const at = await evaluate(
       s,
       `(() => { const e = document.activeElement; if (!e || e === document.body) return null;
@@ -2371,6 +2384,21 @@ if (!task) {
   console.error(`usage: node scripts/q7-probe.mjs <${Object.keys(TASKS).join("|")}> [flags]`);
   process.exit(2);
 }
+/**
+ * Leave the desk as this run found it. WHY THIS IS NOT OPTIONAL (2026-08-22): coldstart kills every
+ * compy at the START of a sample and never at the end, so the last sample's app stayed up. It sat
+ * there holding the single-instance lock, and launch-focus-guard's runtime tier -- which refuses to
+ * measure while a compy is running -- skipped itself through twelve consecutive attempts to
+ * reproduce issue #121, reporting "47 passed" every time. A stray process from one instrument
+ * silently disabled another.
+ */
+function cleanUpLaunchedApp() {
+  const state = { launchedByProbe, keepOpen: Boolean(flags["keep-open"]) };
+  if (!shouldCleanUp(state)) return;
+  console.error(`q7-probe cleanup: ${cleanUpReason(state)}`);
+  killAllCompy();
+}
+
 try {
   await task();
   // Let the debugger sockets finish closing. Exiting the instant after ws.close() races libuv's
@@ -2383,5 +2411,6 @@ try {
   process.exit(process.exitCode ?? 0);
 } catch (err) {
   console.error(`q7-probe ${cmd} FAILED:`, err.message);
+  cleanUpLaunchedApp();
   process.exit(1);
 }
