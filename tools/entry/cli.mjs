@@ -3,6 +3,7 @@
 //   node tools/entry/cli.mjs preflight [--issue N] [--json]
 //   node tools/entry/cli.mjs choose                        (asks which task, prints the answer)
 //   node tools/entry/cli.mjs assert                        (runs inside the session)
+//   node tools/entry/cli.mjs adopt --issue N --session <id> (verifies a session nobody launched)
 //   node tools/entry/cli.mjs bridge  --folder <path>       (waits for a LIVE editor on that folder)
 //   node tools/entry/cli.mjs handoff --folder <path>       (waits for the session to take the launch)
 //
@@ -27,6 +28,7 @@ import { BRIDGE_TIMEOUT_MS, HANDOFF_TIMEOUT_MS, waitForBridge, waitForHandoff } 
 import { reconcile, selectTask } from "./preflight.mjs";
 import { verdictLines } from "./render.mjs";
 import { buildMenu, chooseInteractively, renderMenu } from "./select.mjs";
+import { adopt } from "./adopt.mjs";
 import { assertSessionRoot, readToken } from "./session-assert.mjs";
 
 const C = { dim: "\x1b[2m", red: "\x1b[31m", green: "\x1b[32m", yellow: "\x1b[33m", bold: "\x1b[1m", off: "\x1b[0m" };
@@ -141,6 +143,30 @@ function cmdAssert(argv) {
 
 const argOf = (argv, name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : null);
 
+/**
+ * Verify a session nobody launched (#125 step 2). The write refusal prints this exact command with
+ * the session id already filled in, so a stopped session is told how to verify itself at the moment
+ * it is stopped — that pairing is the whole design, see adopt.mjs.
+ */
+export function cmdAdopt(argv, { run = adopt, log = console.log, err = console.error } = {}) {
+  const asJson = argv.includes("--json");
+  const result = run({
+    folder: argOf(argv, "--folder") ?? process.cwd(),
+    issue: argOf(argv, "--issue"),
+    sessionId: argOf(argv, "--session"),
+  });
+  if (asJson) {
+    log(JSON.stringify(result, null, 2));
+  } else if (result.ok) {
+    const { record } = result;
+    log(`  ${C.green}session adopted${C.off}  ${record.folder}  ${C.dim}(#${record.issue}, ${record.branch})${C.off}`);
+    for (const note of result.notes ?? []) log(`  ${C.dim}note: ${note}${C.off}`);
+  } else {
+    err(`\n  ${C.red}REFUSE — ${result.code}${C.off}\n  ${result.reason}\n`);
+  }
+  return result.ok ? 0 : 1;
+}
+
 /** Both waits take the same arguments and report the same way; only the question differs. */
 async function waitCommand(argv, { wait, ready, waiting, gaveUp, timeout }) {
   const folder = argOf(argv, "--folder");
@@ -201,9 +227,9 @@ const invokedDirectly = (() => {
 if (invokedDirectly) {
   const argv = process.argv.slice(2);
   const cmd = argv[0] ?? "preflight";
-  const run = { preflight: cmdPreflight, choose: () => cmdChoose(), assert: cmdAssert, bridge: cmdBridge, handoff: cmdHandoff }[cmd];
+  const run = { preflight: cmdPreflight, choose: () => cmdChoose(), assert: cmdAssert, adopt: cmdAdopt, bridge: cmdBridge, handoff: cmdHandoff }[cmd];
   if (!run) {
-    console.error(`unknown command "${cmd}" — expected preflight | choose | assert | bridge | handoff`);
+    console.error(`unknown command "${cmd}" — expected preflight | choose | assert | adopt | bridge | handoff`);
     process.exit(2);
   }
   process.exit(await run(argv.slice(1)));

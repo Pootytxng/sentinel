@@ -277,22 +277,22 @@ nothing is deleted until you pick.
 
 ---
 
-### B_land. Where feedback and analytics land — ✅ DECIDED 2026-08-18, no inbox, nothing for you to open
-You asked not to funnel this into your personal Gmail, and you were right to: an address printed
-inside a shipped app is a permanent target (scraping, phishing, attachments), and it ties your
-personal identity to the product forever. **So no email is involved at all.** Both features post to
-your own site the same way the waitlist already does — `functions/api/waitlist.ts` → Cloudflare D1,
-same-origin, IP hashed, rate-limited, honeypotted. That pattern is live and verified today.
+### B_write. Turn on the write refusal — one line  ·  ⏳ NEW 2026-08-22
+Built and green today, wired to nothing on purpose. Today a Claude session that you opened by hand —
+rather than through the launcher — is *unverified*: nothing on disk says which folder, branch, issue
+and conversation it is working under. It gets one grey line at startup and then writes anyway. #125
+step 3 adds a hook that **stops such a session the moment it edits a file inside the repo**, and
+hands it the one command that verifies it on the spot, so nothing is lost and no window is closed
+(`.claude/hooks/project-write-assert.mjs`, 21 tests; the cure is `tools/entry/adopt.mjs`, 14 tests).
+*Why it matters:* it is the difference between "a change nobody can attribute later" and "a change
+bound to a folder, a branch and an issue". **Your call, because it changes how your own tooling
+behaves for every agent on this machine and a mistake by me would cost you a window:** say *"turn on
+the write refusal"* and I register it in `.claude/settings.json` (step 4) and flip the pinned tests
+(step 5). Reads stay advisory either way, and `Bash` is deliberately not covered — a named hole
+(spec §3c) that doubles as the escape hatch if the hook ever misbehaves.
 
-**Destination:** D1 database **`compy_reports`** (`73f5e8a3-1827-42e3-8543-9fedc3750532`, WNAM),
-created 2026-08-18 on your existing Cloudflare account — $0, no new service, no new login. The
-consent screen can name it truthfully: *"sent to Compy's own store on compy.gg."* Storage is
-write-only from the app; the only way to read it is your Cloudflare account, and Claude reads the
-reports for you through the connected Cloudflare tools — **you never check an inbox.**
-
-**Your one residual:** when the endpoints are built (Q9b), the site has to be deployed once —
-`npx wrangler pages deploy` — because you cancelled site auto-deploy (B7) and deploys reach the
-public. One command, or one word to let me run it. Nothing else.
+### B_land. Where feedback and analytics land — ✅ DECIDED 2026-08-18  ·  full record in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
+No email, no inbox: both features post to your own site like the waitlist already does, into Cloudflare D1 `compy_reports`. **Your one residual:** when the endpoints are built (Q9b) the site needs one deploy — one command, or one word to let me run it.
 
 ### B_eu. Analytics default-ON — one region question before it ships to strangers  ·  ⏳ NEW 2026-08-18
 Same decision record. Usage analytics going **on by default with disclosure** is normal and legal in

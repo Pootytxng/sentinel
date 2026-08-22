@@ -573,8 +573,29 @@ export function verifySession({
 /**
  * Refusals that mean "there is nothing live to disagree with" rather than "something is wrong".
  * A session that was never launched through the entrypoint is a normal session, not a broken one.
+ *
+ * The set is stored SPLIT (#125 step 1, spec docs/superpowers/specs/
+ * 2026-08-21-unverified-session-write-refusal.md §1b) because the two halves are not one case, and a
+ * consumer that cannot tell them apart writes the wrong rule:
+ *
+ *   UNVERIFIABLE — nothing was ever verified for this folder. There is no branch, no issue, no
+ *                  session id on disk to check anything against; the session is not wrong, it is
+ *                  unknown.
+ *   LAPSED       — a launch DID happen and its clock ran out. Folder, branch, issue and session id
+ *                  survive on disk, which makes "just re-verify against what is there" look safe.
+ *                  It is not: §2 measured the live token against the session doing the work and it
+ *                  disagreed on branch, session id AND issue, because the honest sessions are
+ *                  exactly the ones whose branch and issue legitimately moved on. A rule that only
+ *                  passes sessions that changed nothing does not pass the sessions doing the work.
+ *
+ * `SessionStart` treats both alike and always has — this is data, not a behaviour change. The
+ * consumer that needs the distinction is the project-write refusal (step 3), whose cure differs:
+ * an UNVERIFIABLE session adopts with an issue it must supply, a LAPSED one can be offered the
+ * issue already on disk.
  */
-export const ADVISORY_CODES = new Set(["NO_TOKEN", "TOKEN_EXPIRED", "LINEAGE_EXPIRED", "LAUNCH_SPENT"]);
+export const UNVERIFIABLE_CODES = new Set(["NO_TOKEN"]);
+export const LAPSED_CODES = new Set(["TOKEN_EXPIRED", "LINEAGE_EXPIRED", "LAUNCH_SPENT"]);
+export const ADVISORY_CODES = new Set([...UNVERIFIABLE_CODES, ...LAPSED_CODES]);
 
 /** One line each — this prints on every session that has no token, so it must not be a wall of text. */
 const ADVISORY_LINES = {

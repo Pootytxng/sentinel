@@ -84,6 +84,34 @@ describe("severity — a tracked hook must block on disagreement and only advise
     }
   });
 
+  // ── #125 step 1: the advisory half is stored split, and the split is data ────────────────────
+  // UNVERIFIABLE ("nothing was ever verified for this folder") and LAPSED ("a launch happened and
+  // its clock ran out") are one severity at SessionStart and two different cures at a write
+  // refusal — see the hook's comment and the spec's §1b. Exported as data so the write hook reads
+  // the classification instead of re-listing the codes, which is how the two copies drift apart.
+  it("every advisory code lands in exactly one of UNVERIFIABLE / LAPSED", () => {
+    for (const code of ADVISE) {
+      const inU = tracked.UNVERIFIABLE_CODES.has(code);
+      const inL = tracked.LAPSED_CODES.has(code);
+      expect(Number(inU) + Number(inL), `${code} is in ${inU && inL ? "both" : "neither"} set`).toBe(1);
+    }
+  });
+
+  it("ADVISORY_CODES is exactly the union — no code advises without a classification", () => {
+    expect([...tracked.ADVISORY_CODES].sort()).toEqual(
+      [...tracked.UNVERIFIABLE_CODES, ...tracked.LAPSED_CODES].sort(),
+    );
+    // And the split still describes reality: only NO_TOKEN has nothing on disk to check against.
+    expect([...tracked.UNVERIFIABLE_CODES]).toEqual(["NO_TOKEN"]);
+  });
+
+  it("no STOP code leaks into either advisory classification", () => {
+    for (const code of STOP) {
+      expect(tracked.UNVERIFIABLE_CODES.has(code), `${code} must stop, not advise`).toBe(false);
+      expect(tracked.LAPSED_CODES.has(code), `${code} must stop, not advise`).toBe(false);
+    }
+  });
+
   for (const code of STOP) {
     it(`stops on ${code} — a live token disagrees with this session`, () => {
       const v = verdictOf({ ok: false, code, reason: "…" });

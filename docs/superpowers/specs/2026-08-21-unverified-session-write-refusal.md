@@ -1,9 +1,12 @@
 # Spec — refusing project writes from an unverified session (#125)
 
-**Status:** design call, not built. Written 2026-08-21 from measured state, not from the issue's wording.
+**Status:** steps 1-3 BUILT 2026-08-22 and green; step 4 (arming it) is the owner's line, step 5 waits
+on step 4. Written 2026-08-21 from measured state, not from the issue's wording. **§7 records what the
+build changed about this design.**
 **Issue:** [#125](https://github.com/Pootytxng/sentinel/issues/125) · **Files:**
-`.claude/hooks/session-root-assert.mjs`, `tools/entry/session-root-assert.test.mjs`, `tools/entry/cli.mjs`,
-`.claude/settings.json`.
+`.claude/hooks/session-root-assert.mjs`, `.claude/hooks/project-write-assert.mjs`, `tools/entry/adopt.mjs`,
+`tools/entry/session-root-assert.test.mjs`, `tools/entry/adopt.test.mjs`,
+`tools/entry/project-write-assert.test.mjs`, `tools/entry/cli.mjs`, `.claude/settings.json`.
 
 ---
 
@@ -172,3 +175,33 @@ them.
 - A test that the refusal message contains a runnable `adopt` command including the session id — a
   refusal without its cure is the failure mode this whole spec exists to avoid.
 - A test that a path outside the project root is never refused.
+
+---
+
+## 7. What the build changed about this design (2026-08-22)
+
+Steps 1-3 are built and green (`tools/entry/` — 47 files, 719 tests). Three things the design could
+not know until the facts were measured:
+
+1. **The `work-control` label is a NOTE, not a gate** (§3a assertion 3). Measured: 6 of the 13 open
+   issues carry it, and #125 itself is one of the 7 that do not. A gate that refuses more than half
+   the real queue, including its own issue, is an outage rather than a safety property. OPEN is the
+   gate; the missing label is reported in the record and in the output. Pinned in `adopt.test.mjs`.
+2. **An adopted record claims a context window only when this process can see one.** `checkIdentity`
+   treats a claimed window as a hard check, so a record claiming a tier the session cannot prove
+   would refuse that session at its very next `SessionStart` — the cure would cause the disease.
+   Unobserved stays unknown. Pinned in `adopt.test.mjs`.
+3. **A STOP code is refused WITHOUT offering adoption.** §3b lists the blocking codes alongside the
+   advisory ones, but the cure is not the same: a folder another live conversation holds is refused
+   by `adopt` as well (`ADOPT_FOLDER_CLAIMED`), so printing the command there would be advice that
+   cannot work. Advisory codes (UNVERIFIABLE + LAPSED) get the runnable `adopt` line; contradicted
+   sessions get the assert's own reason and are told to resolve the disagreement. Pinned in
+   `project-write-assert.test.mjs`.
+
+Also decided during the build: **the write hook never persists** (`verifySession({persist: false})`).
+It fires on every write, so it is a checkpoint, not the thing that establishes identity —
+`SessionStart` owns the record. Persisting would additionally delete the lapsed record whose issue
+number the refusal wants to offer.
+
+`.claude/settings.json` is deliberately UNTOUCHED: the hook exists, is tested, and is inert until it
+is registered. That registration is step 4, and it is the owner's one line.
