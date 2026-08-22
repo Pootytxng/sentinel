@@ -94,7 +94,9 @@ rides · the owner-gated unlock that turns it on.**
 
 - **What it is:** a real paid tier for value the free app deliberately doesn't include — long-term
   monitoring **history**, multi-rig **fleet** dashboards, deeper session analytics, overlay.
-  $3–4/mo or ~$25/yr (doctrine). **Pro will never be required to optimize or roll back** — that's the
+  $3–4/mo or ~$25/yr (doctrine) — **below every comparable on the market; the researched band is
+  $4.99/mo · $39/yr · $89 lifetime, [`PRICING_RESEARCH.md`](PRICING_RESEARCH.md), owner has not
+  ruled.** **Pro will never be required to optimize or roll back** — that's the
   untouchable line; Pro sells *new* value, never gates the free promise.
 - **On the site today — the scaffolding is built and honest about being early:**
   - `index.astro` **#pricing "THE MANIFEST"** section: a free-forever manifest (TUNE / UNDO /
