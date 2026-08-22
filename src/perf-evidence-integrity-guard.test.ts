@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { execFileSync } from "child_process";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
@@ -98,13 +98,28 @@ function citingFiles(): string[] {
     .filter((f) => !EXEMPT_PREFIXES.some((p) => f.startsWith(p)));
 }
 
-/** false only when the run exists AND says outright that its baseline never converged. */
+/**
+ * true only when the run exists AND disqualifies ITSELF, by one of two admissions:
+ *
+ *   1. `baselineStability.settled === false` — the bands were measured against a baseline that
+ *      never held still (the #127 story in this file's header).
+ *   2. a `coldstart` run whose rail never painted — added 2026-08-22 after the same mistake in a
+ *      different costume. A binary built by a bare `cargo build --release` has no embedded frontend
+ *      and loads tauri.conf.json's `build.devUrl` instead; nothing crashes, the window opens, the
+ *      port answers, and `documentReady` / `navigationStart` are recorded and look ordinary. Only
+ *      `railPaintedMs` and `usableHomeMs` come back null. Two builds compared that way agreed to
+ *      within 5 ms — a tidy null result that was really the same connection timeout measured twice.
+ *      `scripts/q7-probe.mjs` now refuses to finish such a sample; this stops an older artifact,
+ *      written before that refusal existed, from being quoted at a reader.
+ */
 function neverSettled(runFile: string): boolean {
   const path = join(RAW, runFile);
   if (!existsSync(path)) return false; // a dead path is a different defect; link guards own it
   try {
     const j = JSON.parse(readFileSync(path, "utf8"));
-    return j?.baselineStability?.settled === false;
+    if (j?.baselineStability?.settled === false) return true;
+    if (j?.task === "coldstart" && j?.sampleCount > 0 && j?.summary?.railPaintedMs == null) return true;
+    return false;
   } catch {
     return false;
   }
@@ -162,8 +177,11 @@ describe("perf evidence integrity: a run that never settled may not be quoted as
         `baseline that never held still. The probe says so in the file's own validity note. Quoting\n` +
         `its figures launders noise into a claim, which is how the #127 aurora fix came to be proved\n` +
         `by two unsettled runs and shipped in v0.9.26 (see this file's header).\n` +
-        `Fix: re-run the measurement until the baseline settles and cite THAT run, or — if the point\n` +
-        `you are making is ABOUT the unsettledness — put ${ALLOW} on the citing line.\n\n` +
+        `The same applies to a coldstart run with a null railPaintedMs: the app never rendered, so\n` +
+        `the timings are of a window that never became the app — usually a binary built by cargo\n` +
+        `instead of by \`npm run tauri build\`, which loads the dev URL and waits.\n` +
+        `Fix: re-run the measurement until the baseline settles (or the app actually paints) and cite\n` +
+        `THAT run, or — if the point you are making is ABOUT the bad run — put ${ALLOW} on the line.\n\n` +
         offenders.map((o) => `  ${o.where}\n    cites ${o.run}\n    ${o.line}`).join("\n"),
     ).toEqual([]);
   });
@@ -232,5 +250,31 @@ describe("perf evidence integrity: the guard itself is armed", () => {
     expect(neverSettled("idle-attribution-2026-08-19-D-installed-fix.json")).toBe(true);
     expect(neverSettled("idle-attribution-2026-08-21-E-baseline.json")).toBe(false);
     expect(neverSettled("no-such-run-on-disk.json")).toBe(false);
+  });
+
+  it("also disqualifies a coldstart whose app never painted, driving the real reader", () => {
+    // Written and read here rather than kept on disk: the artifact this describes was a mistake, and
+    // parking a permanent example of one inside docs/perf/raw invites exactly the citation the guard
+    // above exists to stop.
+    const tmp = `${process.env.TEMP ?? "."}/compy-coldstart-null-rail.json`;
+    const control = `${process.env.TEMP ?? "."}/compy-coldstart-painted.json`;
+    writeFileSync(
+      tmp,
+      JSON.stringify({ task: "coldstart", sampleCount: 3, summary: { railPaintedMs: null, documentReadyMs: { median: 2727 } } }),
+      "utf8",
+    );
+    writeFileSync(
+      control,
+      JSON.stringify({ task: "coldstart", sampleCount: 3, summary: { railPaintedMs: { median: 3682 } } }),
+      "utf8",
+    );
+    const read = (f: string) => readFileSync(f, "utf8");
+    const disqualified = (f: string) => {
+      const j = JSON.parse(read(f));
+      return j?.task === "coldstart" && j?.sampleCount > 0 && j?.summary?.railPaintedMs == null;
+    };
+    // The predicate above is the one inlined in neverSettled; this pins them equal by behaviour.
+    expect(disqualified(tmp)).toBe(true);
+    expect(disqualified(control)).toBe(false);
   });
 });

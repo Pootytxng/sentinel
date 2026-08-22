@@ -42,25 +42,21 @@
 
 #### ① A PERSON REPORTED IT AND WE HAVE NOT ANSWERED — these outrank everything
 
-1. **Cold start: the frontend is exonerated, and the cost lives before the page exists.**
-   *Why it matters:* the "half a second blank window" was the only measured regression in the
-   app, and the two things everyone blamed for it turn out to be innocent — so the search moves
-   to the Rust/WebView2 start, which nobody has instrumented. Measured 2026-08-21: the blocking
-   payload is **8.4 kB SMALLER** than at `dc4d55e` (JS 1,536.51 → 1,538.10 kB, CSS 370.76 →
-   360.76 kB, building `dc4d55e`'s `src/` with today's toolchain); the Geist faces
-   ([`../src/design/fonts-v2.css`](../src/design/fonts-v2.css)) ship in **both** builds; and the
-   page's own `domContentLoaded` got **faster**, 103/104/102 → 102/88/87 ms. The WebView2 runtime
-   did not move either (148.0.3967.83, installed 2026-05-22). So all of the growth is in *spawn →
-   the page's `timeOrigin`* plus the probe's own attach lag, neither of which was ever recorded
-   separately — [`../scripts/q7-probe.mjs`](../scripts/q7-probe.mjs) `coldstart` now records both
-   and they sum exactly to the headline number. **Still NOT attributed — do not guess it in a
-   doc.** What is left is the four commits that touched the startup path in that window, of which
-   `795d8ff5` (#130) is the one that added startup filesystem work
-   ([`../src-tauri/src/data_root.rs`](../src-tauri/src/data_root.rs)). Settling it needs a
-   decomposed `coldstart` against a **built and installed** `dc4d55e` — and a **quiet desk**: run
-   `node scripts/q7-probe.mjs desk` first, it exits 3 if anything else is using the machine.
-   Full record in [`perf/q7-baseline.json`](perf/q7-baseline.json), still an **open finding**.
-2. **`compy.gg` tells the world Compy is free, and that is live right now.** *Why it matters:* the
+> **Item 1 CLOSED 2026-08-22 — there is no cold-start regression, and `795d8ff5` (#130,
+> [`../src-tauri/src/data_root.rs`](../src-tauri/src/data_root.rs)) is exonerated.** `dc4d55e` was
+> built as a *product* in its own worktree and run against HEAD back to back, 3 cold starts each,
+> twice. On a quiet desk the old code measures **519 ms** documentReady to HEAD's **506 ms** — the
+> old build reproduces today's number, so nothing in the diff added the time, and what moved
+> between the 2026-08-05 and 2026-08-21 readings is the machine, not a commit. Full method,
+> numbers and the busy-desk caveat: [`perf/q7-baseline.json`](perf/q7-baseline.json)
+> `coldStartDocumentReadyMs`, now an **upper bound** rather than an open finding; traces in
+> [`perf/raw/`](perf/raw/) (`coldstart-{dc4d55e,head}-{B,C}.json`). bug → guard: a `cargo
+> build --release` binary loads the **dev URL** and measures a connection timeout that looks like
+> a start — [`../scripts/q7-probe.mjs`](../scripts/q7-probe.mjs) now refuses a sample whose rail
+> never painted, and [`../src/perf-evidence-integrity-guard.test.ts`](../src/perf-evidence-integrity-guard.test.ts)
+> fails the build if a doc cites one.
+
+1. **`compy.gg` tells the world Compy is free, and that is live right now.** *Why it matters:* the
    site contradicts the owner's own 2026-07-21 monetization decree on the public internet, and every
    day it stands is a pricing expectation being set that money later has to fight. `site/llms.txt:5`
    reads *"Compy is a free desktop app"*; the corrected line already exists, unlanded, on
@@ -71,15 +67,15 @@
 
 #### ③ REPO HYGIENE — real, but nobody is waiting on it
 
-3. **#121 · `launch-focus-guard` RUNTIME tier is intermittent, NOT root-caused** — the same
+2. **#121 · `launch-focus-guard` RUNTIME tier is intermittent, NOT root-caused** — the same
    class as #171 was, and #171 proves the class is solvable. Detail on the open row further down.
-4. **#156's unnamed lock holder and #128's unheld locks both discharge on the NEXT REAL SHIP, not on
+3. **#156's unnamed lock holder and #128's unheld locks both discharge on the NEXT REAL SHIP, not on
    their own.** #156's gates close the suspected path but the flake was never reproduced, so the
    *holder* is still unnamed; #128's two mutexes have never been held during an actual release or
    ship. Neither is a task to schedule — both are **evidence to collect the next time a ship runs**,
    so whoever runs that ship owes both issues a comment. Records archived; residuals live here.
-5. **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it** (row below; owner fork B_gpu).
-6. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
+4. **C-14 · `GpuProfile.tsx` — wire in as advisory, or archive it** (row below; owner fork B_gpu).
+5. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
    below). Delegated to the Codex lane — do not duplicate it here.
 
 **BLOCKED — another lane owns these; `WORK_CONTROL.md` says hands off, not adjudicate:**
@@ -93,7 +89,7 @@ question for the owner ("may I adopt these two?"), not an indefinite wait.
 **#126's remaining nine refs are a DECISION queue, not a cleanup queue** — two are the PRs above,
 one is a Codex claim, and the rest need an owner product-scope call (bklit design system ·
 user-feedback Lab recovery · quiet-pit-wall half B) or a per-file landing (review-consolidation —
-which is where item 2's price fix lives — tool-shed-hygiene, lab-49-parity-port). Evidence:
+which is where item 1's price fix lives — tool-shed-hygiene, lab-49-parity-port). Evidence:
 [`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md), now at **120/120** against its doc-budget ceiling,
 so the next branch pushed to origin must archive that file's current sweep before it can add its row.
 
@@ -747,7 +743,7 @@ When running a `/loop` or scheduled session against "the checklist":
 1. **Open THIS file. Pick the highest-priority `[ ]` item that is not owner-gated.** Do it (spec → TDD →
    build in an isolated worktree off `main` → `/check` + `/security` → `self-review` if visual →
    cargo/npm green → commit after branch+status check). Tick it `[x]` with the commit hash. Repeat.
-2. **Never declare "done" without enumerating.** A valid stop is one of:
+1. **Never declare "done" without enumerating.** A valid stop is one of:
    - *"All `[ ]` items remaining are owner-gated — here they are: …"* (list them), OR
    - *"Phase A `[ ]` count is now 0; remaining work is Phase B/C/D which is gated — confirm before I cross a gate."*
    - A bare "I'm finished, standing by" with un-ticked `[ ]` items above is a **false finish** — keep going.

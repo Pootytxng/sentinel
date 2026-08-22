@@ -646,6 +646,7 @@ async function coldstartSample() {
       nav: (() => { const n = performance.getEntriesByType("navigation")[0];
         return n ? { domContentLoaded: Math.round(n.domContentLoadedEventEnd), load: Math.round(n.loadEventEnd) } : null; })(),
       origin: Math.round(performance.timeOrigin),
+      href: location.href,
     };
   })()`;
 
@@ -667,6 +668,30 @@ async function coldstartSample() {
     }
     await sleep(50);
   }
+  // A SAMPLE WHERE THE APP NEVER RENDERED IS NOT A COLD-START MEASUREMENT (bug -> guard 2026-08-22).
+  // Measured that day: a binary produced by a bare `cargo build --release` loads the DEV URL --
+  // http://localhost:1420, from tauri.conf.json's `build.devUrl` -- because the frontend is only
+  // embedded when the Tauri CLI drives the build. Nothing crashes. The window opens, the port
+  // answers, `documentReady` and `navigationStart` are recorded, and the artifact looks complete;
+  // only `railPainted`, `usableHome` and `firstRoom` come back null, which is easy to skim past. Two
+  // builds were compared that way and agreed to within 5 ms -- a clean-looking null result, produced
+  // by measuring the same connection timeout twice. It fails loudly here instead.
+  if (!marks.railPainted) {
+    const href = String(last?.href ?? "");
+    const dev = /^https?:\/\/(localhost|127\.0\.0\.1)[:/]/.test(href);
+    s?.close();
+    throw new Error(
+      `the app never painted its rail within 60s, so this is not a cold-start sample.\n` +
+        `  exe:  ${EXE}\n` +
+        `  page: ${href || "(unknown)"}\n` +
+        (dev
+          ? `  CAUSE: that is the DEV URL. This binary was built by cargo directly, so it has no\n` +
+            `  embedded frontend and is waiting on a dev server that is not running. Rebuild it with\n` +
+            `  \`npm run tauri build -- --no-bundle\` (no installer, no signing key needed) and measure that.`
+          : `  The page loaded but never rendered .v2-nav-item. Open it by hand before trusting anything here.`),
+    );
+  }
+
   if (!s) s = await attachMain(PORT);
   await evaluate(s, INSTRUMENT);
 
