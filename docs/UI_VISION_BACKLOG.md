@@ -33,8 +33,8 @@ once, not as four bespoke grids. Build order is the handoff's: shell → Health 
 | Slice | State |
 | --- | --- |
 | 1. Shell alignment | ✅ `34bd33e7` — `aside`/`below` slots, `--v2-aside`, grid-areas (no wrapper divs) |
-| 2. Health | ✅ `e6e35dfb` + verdict-label fix — installed, self-review round 2 |
-| 3. Shared instrument kit | □ |
+| 2. Health | ✅ `40aca1ca` — installed; self-review round **11** PASS, after ten FAILs that left eleven permanent guards |
+| 3. Shared instrument kit | ✅ `acdb93c2` — `Reading` → `src/design/console/`; installed; round **12** PASS, re-measured pixel-identical to R11 |
 | 4. Live | □ |
 | 5. History | □ |
 | 6. Test | □ |
@@ -244,6 +244,21 @@ ends 12px above it — the lane scrolls, so that is a short border, not a lost r
 translated-content constant rounds 3/5/8/9 were spent removing, so it stays. The round-9 guard that
 asserted the panel starts at 72px was asserting something untrue and has been corrected to say what
 the cap really is: a ceiling against the lane's visible height, not a promise of fit.
+
+**✅ SELF-REVIEW ROUND 12 — PASS. The shared instrument kit (slice 3) is done.** Health's readout
+cell moved to `src/design/console/Reading.tsx` + `reading.css` so Live/History/Test can PLACE the
+instrument instead of re-deriving it — and the claim under review was that nothing a user sees
+changed. The reviewer was briefed to **disprove** that, not confirm it, and re-measured Health from
+scratch at all three sizes: every number lands on round 11's baseline to the sub-pixel — four
+`.rd-v` rect tops identical (588.875 ×4 / 698.15625 ×4), `gridTemplateRows` reporting live
+`subgrid`, `.hc-panel` 596/596 and 694/694, rig canvas 534×344 / 578×460, `.hc-read-arc` 166.52 /
+187.33px — with the honest `— —` + "no CPU temp — see below" state still carrying no MEASURED
+pill. **The round is also a lesson in its own methodology:** its first pass reported a 9px shrink
+everywhere — a naive `Get-Process` pick had resized the WebView2 host child while the real window
+stayed minimized. The reviewer caught it, re-measured through the true `Tauri Window` HWND with
+`GetClientRect == innerWidth/innerHeight`, and the "regression" evaporated. **A capture whose
+target window was never verified is not evidence** — that check is now part of how this room gets
+reviewed, not a one-off.
 
 ### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) ✅ ALL FIVE BUILT (⑤ shipped to the desk 2026-08-20, awaiting the owner's eye): ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED; owner tried it and said *"i like it"* 2026-08-20, so the default flips ON inside the comprehensibility sweep, which first fixes the button placement he objected to — see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door — SHIPPED 2026-08-20 (desk build `0808e33e`, self-review PASS 10/10); owner veto-on-sight still open**
 

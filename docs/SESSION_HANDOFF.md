@@ -4,10 +4,10 @@
 > [`BACKLOG.md`](BACKLOG.md) ▶ NEXT UP. Owner asks: [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md).
 > Budget 120 lines — trim from the bottom, never grow past it.
 
-## Cycle note — 2026-08-23, four-room visual direction (issue #49) — MID-TRAIN, slice 3 of 7
+## Cycle note — 2026-08-23, four-room visual direction (issue #49) — MID-TRAIN, slice 4 of 7
 
-**Worktree `C:/Users/Kuya/code/sentinel-fourroom`, branch `feat/four-room-visual-direction`, head
-`acdb93c2`, not pushed.** Owner brief: implement
+**Worktree `C:/Users/Kuya/code/sentinel-fourroom`, branch `feat/four-room-visual-direction`,
+nothing pushed.** Owner brief: implement
 the approved comps in `~/.codex/visualizations/2026/08/23/01a02bee-.../compy-four-room-handoff/`
 (`HANDOFF.md` + four PNGs), in the handoff's order: shell → Health → shared instruments → Live →
 History → Test → convergence. **Local implementation only — the brief does NOT authorize release or
@@ -58,18 +58,18 @@ and R2 are landed and written up in `docs/UI_VISION_BACKLOG.md` §FOUR-ROOM.
    R11 PASSED. Residual ACCEPTED: at 720p the panel's bottom PADDING lands ~18px under the lane's
    clip (last text 12px above it, lane scrolls). Do NOT grow `--hc-chrome-top` to close it.
 
-**EXACT NEXT STEP — self-review round 12, then slice 4.** Health closed at `40aca1ca` (R11 PASS);
-`7a3366d5` recorded it, corrected a guard that asserted an untrue panel top, and moved
-`RELEASE_STATE.md` to `40aca1ca` with `d5a6a630`'s row byte-preserved in the archive. **Slice 3 is
-committed at `acdb93c2` and INSTALLED + PROVEN** (`acdb93c2 · release · shell 0.9.26`, installer
-SHA-256 `9FBF4535…F294752`, one on the Desktop): HomeConsole's local `Reading` is now
-`src/design/console/Reading.tsx` + `reading.css` — behaviour byte-identical, selectors renamed off
-`hc-`, row contract exported as `READING_ROWS`. Gate green: build 0, vitest 368 files / 4894 passed;
-three guards each proven to fail first; a11y + C-17 mono censuses answered. **Round 12 must prove
-Health is PIXEL-IDENTICAL to R11** (class names changed), not merely that tests pass. On PASS →
-`RELEASE_STATE.md` line 45 + desk row → `acdb93c2` (move `40aca1ca`'s row verbatim to the archive;
-row cap 3000 bytes) → **slice 4, Live**: rebuild `.mc-readout` in `src/surfaces/MonitorConsole.tsx`
-onto the kit `Reading` (today: value-above-label, single `—`, no attestation) vs `02-live-approved.png`.
+**EXACT NEXT STEP — slice 4, Live.** Slices 1–3 are DONE: shell (`34bd33e7`), Health
+(`40aca1ca`, R11 PASS), shared kit (`acdb93c2`, R12 PASS — re-measured pixel-identical to
+R11 at all three sizes). His live app is `acdb93c2`; RELEASE_STATE now says so, with
+`40aca1ca`'s row byte-preserved in the archive. **Now: rebuild `.mc-readout` in
+`src/surfaces/MonitorConsole.tsx` onto the kit `Reading`** — that room states the same kind
+of fact in a different shape today (value ABOVE label, a single `—` where Health says
+`— —`, no MEASURED attestation), and the target is `02-live-approved.png`. THE PARENT
+CONTRACT TRAVELS: the placing strip must be `display: grid` with exactly `READING_ROWS` row
+tracks, and every non-Reading sibling must span the same rows — stated in `Reading.tsx` and
+guarded from both sides. Preserve every Live fact, control, honest-unavailable state and the
+FPS/session wiring; add no IPC. Then build + full vitest → commit → tauri build →
+`ship-reinstall.ps1` → prove the stamp → **self-review round 13 against the Live PNG**.
 
 ## Live traps for whoever is next
 
@@ -108,8 +108,8 @@ onto the kit `Reading` (today: value-above-label, single `—`, no attestation) 
 room — his veto on sight always stands, and the violet-vs-green call above is still open. The
 checklist's remaining items are money/legal calls that cannot move until Pro exists.
 
-**This session: LEAVE OPEN — slice 3 of 7 is mid-flight in `sentinel-fourroom`.** His live app
-is `40aca1ca` (R11 PASS); `acdb93c2` is built but not yet proven installed.
+**This session: LEAVE OPEN — slice 4 of 7 is next in `sentinel-fourroom`.** His live app is
+`acdb93c2` (R12 PASS, installed and proven); slices 1–3 done, nothing pushed.
 
 ## Cycle notes before this train — archived
 

@@ -4,6 +4,16 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-08-23 - the 40aca1ca Health-slice desk-build Snapshot row, moved verbatim (byte budget)
+
+Moved out of docs/RELEASE_STATE.md when the four-room shared-instrument slice (`acdb93c2`) reached
+the desk and became the owner-installed build. Byte-for-byte below; its one relative link was
+rewritten from `archive/RELEASE_STATE_HISTORY.md` to `RELEASE_STATE_HISTORY.md` for this file's own
+directory level, which is the only edit. 40aca1ca was never published — it was a desk candidate,
+as `acdb93c2` still is.
+
+| **Owner-installed version + embedded stamp** | **0.9.26 desk build, embedded stamp `40aca1ca`** — built 2026-08-23 by `npm run tauri build` from the isolated worktree `sentinel-fourroom` at `feat/four-room-visual-direction` (`40aca1ca`), installed silently by Claude via `scripts/ship-reinstall.ps1`, one installer on the Desktop, installer `Compy_0.9.26_x64-setup.exe` SHA-256 **`0BF57CD0770791114D2C5444DA14447F78CF6B06F8BAFA3C5A50DCDFA097C79B`**. **Live == build proved by the embedded stamp, never an exe hash** — `get_build_stamp()` returned `"40aca1ca · release"` on attempt 1. **This commit is UNPUSHED and UNDISTRIBUTED**: issue #49 authorized local implementation and its verification, explicitly not release. **What it puts on the desk is slice 2 of the approved four-room direction — the Health room's instrument panel**: the real 3D rig over a five-cell readout (readiness ring · AVG FPS · 1% LOW · GPU TEMP · CPU TEMP), rebuilt as ONE fluid composition with **no breakpoint** — the panel caps itself against the viewport, only the stage shrinks, no readout track is sized by its content, and the five readings subgrid onto one shared set of rows so a label that wraps in any language cannot move its own value. Absent readings still render `— —` plus "no CPU temp — see below", never a zero. **Self-review VERDICT: PASS** on this installed build at 1280×720, the owner's 1500×980 and 1920×1080 — round **11**, after ten consecutive FAILs that left eleven permanent guards. Headline proof: all four `.hc-read-v` rect tops identical at every size (588.875 ×4 / 698.15625 ×4), `gridTemplateRows` reporting live `subgrid`, `.hc-panel` never clipping (`scrollHeight == clientHeight`). Its predecessor **`d5a6a630`** (C-14's Lab GPU advisory panel + the armed entry write-refusal, 2026-08-22, installer SHA-256 `AABCED03…D2417`, its own 11/11 PASS) and the whole desk lineage behind it — `701c2113`, `36011078`, `1f2ba660`, `584654c8`, `63db50d2`, `8ba6a6d1`, `0808e33e`, `ab54f1e4`, `1d5b3c4c`, `75849be1`, `835d8868`, `aac90cd7`, `402b0080`, `40682344`, **`5e64074c`** (THE PUBLISHED BUILD), `75880de1`, `2f79febb` and `7f151d2c` — are byte-preserved in [archive/RELEASE_STATE_HISTORY.md](RELEASE_STATE_HISTORY.md). | `node scripts/verify-release-state.mjs` (check 7) · `Select-String -Path "$env:LOCALAPPDATA\Compy\compy.exe" -Pattern 40aca1ca` · HKCU uninstall `DisplayVersion` |
+
 ### 2026-08-23 - the d5a6a630 C-14 desk-build Snapshot row, moved verbatim (byte budget)
 
 Moved out of docs/RELEASE_STATE.md when the four-room Health slice (`40aca1ca`) reached the desk
