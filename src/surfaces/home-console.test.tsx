@@ -914,7 +914,9 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
       return Number(hit![1]);
     };
 
-    const gap = len(/(?:^|[^-])gap:\s*([^;]+);/.exec(readout)?.[1], ".hc-readout gap");
+    // COLUMN gap specifically: round 10 gave the strip a row gap too, and only the column one
+    // is spent on width. A bare `gap:` would silently read whichever came first.
+    const gap = len(/column-gap:\s*([^;]+);/.exec(readout)?.[1], ".hc-readout column-gap");
     const pad = len(/padding:\s*([^;]+);/.exec(readout)?.[1], ".hc-readout padding");
     const sep = len(
       /padding-left:\s*([^;]+);/.exec(divider![1])?.[1],
@@ -974,6 +976,55 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
         "difference back from gap/padding (they carry no reading) -- never from the 13px type " +
         "floor, and never by wrapping the strip to a second row.",
     ).toBeLessThanOrEqual(content);
+  });
+
+  it("CSS: the five readings share ONE set of rows, so a wrapped label cannot move its value", () => {
+    // bug->guard, self-review round 10 (issue #49, 2026-08-23). Every reading is label · value ·
+    // attestation, and each cell used to be a flex column sizing those three rows FOR ITSELF. At
+    // 1280x720 "GPU TEMP" and "CPU TEMP" wrap to two lines where "AVG FPS" and "1% LOW" do not, so
+    // their values sat 17px lower than their neighbours' and the row of numbers stopped being a
+    // row. The approved comp reads across; a staggered row does not.
+    // Width cannot fix this. There is no width to give at 720p, and the next translation wraps a
+    // different label anyway -- which is the same "a number nobody re-measured" failure class as
+    // rounds 3, 5, 8 and 9, one axis over. Sharing the rows removes the dependency instead: row 1
+    // is as tall as the tallest label, row 2 as the tallest value, row 3 as the tallest
+    // attestation, in every language, however many lines any one label takes.
+    const css = readFileSync(join("src", "surfaces", "home-console.css"), "utf8");
+    const readout = block(css, ':root[data-v2="on"] .hc-readout');
+    // EVERY rule that touches the class, not just the first one: .hc-read-arc is styled by a shared
+    // rule AND by its own, and block() would only ever see whichever came first.
+    const rulesFor = (cls: string) =>
+      Array.from(stripComments(css).matchAll(/([^{}]+)\{([^}]*)\}/g))
+        .filter(([, sel]) => new RegExp("\\" + cls + "(?![\\w-])").test(sel))
+        .map(([, , body]) => body)
+        .join("\n");
+    const read = rulesFor(".hc-read");
+    const arc = rulesFor(".hc-read-arc");
+
+    const rows = /grid-template-rows:\s*([^;]+);/.exec(readout);
+    expect(rows, ".hc-readout must own the rows the readings are laid onto").not.toBeNull();
+    const trackCount = rows![1].trim().split(/\s+/).length;
+    expect(trackCount, "label, value and attestation -- the three parts of every reading").toBe(3);
+
+    expect(
+      read,
+      "a reading may not size its own rows: a flex column (or any independent grid) lets a label " +
+        "that wraps push ONLY its own value down, which is exactly how the row broke",
+    ).toMatch(/grid-template-rows:\s*subgrid/);
+    expect(read, "...and it has to be a grid for that to mean anything").toMatch(/display:\s*grid/);
+    expect(read, "a subgrid item must cover the tracks it borrows").toMatch(/align-self:\s*stretch/);
+
+    // The span and the track count are the same fact stated twice, so DERIVE one from the other --
+    // a cell that spans 2 of 3 rows silently stops sharing the third.
+    for (const [what, blk] of [[".hc-read", read], [".hc-read-arc", arc]] as const) {
+      const span = /grid-row:\s*span\s*(\d+)/.exec(blk);
+      expect(span, what + " must span the strip's rows explicitly").not.toBeNull();
+      expect(
+        Number(span![1]),
+        what + " spans " + span![1] + " of .hc-readout's " + trackCount + " rows. Add a row to the " +
+          "strip without adding it here and the cells quietly stop sharing it.",
+      ).toBe(trackCount);
+    }
   });
 
   it("CSS: Health is ONE fluid composition — no breakpoint, and no constant that can go stale", () => {

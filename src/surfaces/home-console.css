@@ -700,19 +700,36 @@
    string. Long strings wrap, and wrapping is free because the panel's geometry measures itself
    (see --hc-stage-max above); it is no longer paid for out of a hand-written constant.
      readiness 150px = 56px ring + 10px .arc-gauge gap + 84px "Readiness" (one word, cannot wrap)
-     readings   85px = 76px value (mono + its MEASURED pill, never wraps) + 1px hairline + 8px pad
+     readings   88px = 76px value (mono + its MEASURED pill, never wraps) + 1px hairline + 6px pad
    Sentence-length strings — the gauge's note, and the CPU cell's "no CPU temp — see below" offer
    line (#134/Q9c) — are NOT in these floors. They wrap, and a wrapped line simply makes the strip
    taller, which the panel now absorbs by shrinking the stage instead of by clipping anything.
-   Budget at 1280×720 (533px content box): 150 + 4×85 + 4×8px gap = 522 ≤ 533. At that size the
-   four readings take their floors and the readiness cell is guaranteed the 161px left over, which
-   still clears its own 150. Guarded in home-console.test.tsx. */
+   Budget at 1280×720 (533px content box): 150 + 4×88 + 4×6px gap = 526 ≤ 533. At that size the
+   four readings take their floors and the readiness cell is guaranteed the 157px left over, which
+   still clears its own 150. Guarded in home-console.test.tsx.
+   Round 10 spent the 4px it could find (separator 8 → 6px, floor 85 → 88px) on the two longest
+   labels, "GPU TEMP" and "CPU TEMP", which were wrapping by a hair at 720p. That is COSMETIC only —
+   it is not what keeps the strip correct, because the next translation will wrap something anyway.
+   What keeps it correct is the shared row grid below. */
 :root[data-v2="on"] .hc-readout {
-  --hc-readout-sep: 8px;
+  --hc-readout-sep: 6px;
   display: grid;
-  grid-template-columns: minmax(150px, 2fr) repeat(4, minmax(85px, 1fr));
+  grid-template-columns: minmax(150px, 2fr) repeat(4, minmax(88px, 1fr));
+  /* THE FIVE CELLS SHARE THESE THREE ROWS (self-review round 10). Every reading is label · value ·
+     attestation, and each cell used to size those three rows for ITSELF. At 1280×720 "GPU TEMP" and
+     "CPU TEMP" wrap to two lines where "AVG FPS" and "1% LOW" do not, so their values sat 17px
+     lower than their neighbours' and the row of numbers stopped being a row — the approved comp
+     reads across, and a staggered row does not. Widening the columns cannot fix that: there is no
+     width to give at 720p, and the next translation would wrap a different label anyway. So the
+     cells subgrid onto these rows instead. Row 1 is as tall as the tallest LABEL, row 2 as the
+     tallest VALUE, row 3 as the tallest ATTESTATION, and every value therefore starts on the same
+     line in every language, however many lines any one label takes. If subgrid is ever unavailable
+     the declaration is simply ignored and each cell falls back to its own three auto rows — the old
+     behaviour, not a broken one. */
+  grid-template-rows: auto auto auto;
   align-items: start;
-  gap: var(--hc-readout-sep);
+  row-gap: 7px;
+  column-gap: var(--hc-readout-sep);
   padding: var(--v2-pad);
   border-top: 1px solid var(--v2-line);
 }
@@ -727,10 +744,18 @@
   min-width: 0;
 }
 :root[data-v2="on"] .hc-read {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 7px;
+  /* `span 3` MUST match .hc-readout's grid-template-rows track count — guarded in
+     home-console.test.tsx, which derives one from the other rather than trusting both. */
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  align-self: stretch;
+  align-items: start;
+  justify-items: start;
+}
+/* The instrument spans the same three rows rather than sitting in the label's one. */
+:root[data-v2="on"] .hc-read-arc {
+  grid-row: span 3;
 }
 /* SANS, not mono — the handoff's content rule is explicit that mono is for timestamps and counts
    while headings and labels stay sans, and this is a label. It is the one place this strip differs

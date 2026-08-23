@@ -211,8 +211,23 @@ derived from what CANNOT break (ring + gap + the one word "Readiness" = 150px; t
 hairline + pad = 85px); sentence-length strings wrap, which is now free. A never-clip net
 (`overflow-y: auto` on the panel) turns the worst case into a scrollbar rather than round 3's silent
 clip. Three guards rewritten and each proven to FAIL on round 8's stylesheet — *"expected
-'minmax(0,2fr)repeat(4,minmax(max-cont…' not to contain 'max-content'"*. **Round 10 is next**, and it
-is the first round with nothing left to re-measure.
+'minmax(0,2fr)repeat(4,minmax(max-cont…' not to contain 'max-content'"*.
+
+**🔧 SELF-REVIEW ROUND 10 — FAIL, fixed, guarded.** Round 9's two structural bets came back
+**clean**: the panel is not scrolling at any size (`scrollHeight == clientHeight`, 694/694), the rig
+canvas is correctly sized at 578×460 by grid stretch alone, no readout cell overflows, and the strip
+sits inside the lane's clip at all three sizes. 1500×980 and 1920×1080 match the comp. **1280×720
+does not**: at an 85px column "GPU TEMP" and "CPU TEMP" wrap to two lines where "AVG FPS" and "1%
+LOW" stay on one, so those two values sat **17px lower** than their neighbours' and the row of
+numbers stopped being a row. Width cannot fix it — there is no width to give at 720p, and the next
+translation wraps a different label — so this is the same "a number nobody re-measured" failure class
+as rounds 3/5/8/9, one axis over. **The fix removes the dependency: the five cells now subgrid onto
+ONE set of three rows** (label · value · attestation) owned by `.hc-readout`, so row 1 is as tall as
+the tallest label and every value starts on the same line in any language, however many lines any one
+label takes. A cosmetic 4px was also found for the two long labels (separator 8 → 6px, floor
+85 → 88px); it is explicitly *not* what keeps the strip correct. Two guards — one deriving each
+cell's row span from the strip's own track count so they cannot drift, one pinning the width budget
+to `column-gap` — both proven to FAIL on round 9's stylesheet. **Round 11 is next.**
 
 ### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) ✅ ALL FIVE BUILT (⑤ shipped to the desk 2026-08-20, awaiting the owner's eye): ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED; owner tried it and said *"i like it"* 2026-08-20, so the default flips ON inside the comprehensibility sweep, which first fixes the button placement he objected to — see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door — SHIPPED 2026-08-20 (desk build `0808e33e`, self-review PASS 10/10); owner veto-on-sight still open**
 
