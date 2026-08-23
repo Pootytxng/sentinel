@@ -6,8 +6,9 @@
    - EVERY selector is scoped under [data-v2="on"] — the flag-off byte-identity mechanism.
    - NO color literals (hex/rgb/hsl) — every color comes from a --v2-* token.
    - Font declarations reference only var(--v2-font-*) (families live in the token layer only).
-   - No @media / @keyframes here (the scoping guard parses depth-0 headers; V2-2 chrome
-     needs neither — hover transitions only, which reduced-motion users are fine with). */
+   - No @media / @keyframes here — V2-2 chrome needs neither (hover transitions only, which
+     reduced-motion users are fine with). The scoping guard now descends into @media rather
+     than banning it (issue #49), so this line is a choice about this sheet, not a limit. */
 
 /* The <main> container flips from the padded classic frame to a full-window app shell.
    Height is bounded so the shell owns scrolling (content scrolls, chrome stays put). */

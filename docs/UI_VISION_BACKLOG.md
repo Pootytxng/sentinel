@@ -98,6 +98,24 @@ room that does not show the rig, so it cannot pass by the frame vanishing). Both
 the pre-fix source. **Round 3 is required before slice 2 can be called done** — the owner's rule is
 that any visual correction earns another complete self-review.
 
+**🔧 SELF-REVIEW ROUND 3 — FAIL, fixed, guarded.** Round 2's margin reserve worked (zero
+intersection at 1500×980 and 1920×1080, and the Health readout now carries only the clock while the
+Detected record still names both parts). The fresh review found the neighbouring half of the same
+problem at **1280×720**: the comfortable-viewport stage box — `min-height: 500px` + 40px padding —
+costs 540px of a scroll lane that is only ~595px tall, so `.hc-readout` started at content-offset
+~568 and `.v2-content`'s own overflow **sliced the strip in half: five labels on screen, none of
+their values.** Five labelled readings showing no numbers do not read as *scroll down*, they read as
+five readings that came back empty — honest measurement again, not layout taste. Round 2's reserve
+could not have fixed it: it stops scrolled content entering the readout's band, it cannot create
+height a 720px window does not have. **The stage floor now compresses below 860px of viewport
+height** (320px stage / 280px rig / 280px card ceiling) — the rig is the one genuinely elastic
+element on Health, since a shorter box is simply a smaller rendered canvas while every other block
+is text at a fixed size. The threshold sits well below the owner's real 980px window, so his
+viewport and the comp's proportions are untouched. Guard: the new short-viewport case in
+`src/surfaces/home-console.test.tsx` pins the threshold band, re-checks the card-viewport derivation
+inside the override, and caps the compressed stage box at the measured 397px that keeps the strip
+above the fold. Proven to fail on the pre-fix CSS. Round 4 is next.
+
 ### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) ✅ ALL FIVE BUILT (⑤ shipped to the desk 2026-08-20, awaiting the owner's eye): ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED; owner tried it and said *"i like it"* 2026-08-20, so the default flips ON inside the comprehensibility sweep, which first fixes the button placement he objected to — see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door — SHIPPED 2026-08-20 (desk build `0808e33e`, self-review PASS 10/10); owner veto-on-sight still open**
 
 > **③ BUILT, TESTED AND INSTALLED 2026-08-20 — and it is OFF until he says otherwise.** Turn it on

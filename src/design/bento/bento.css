@@ -7,11 +7,11 @@
      · NO color literals — no #hex, no rgb()/rgba(), no hsl(). Every colour is a --v2-* token,
        and every translucency is the `opacity` property or a token that already carries alpha.
      · font / font-family reference only var(--v2-font-*).
-     · No @media at depth 0 — the scoping parser reads top-level headers and sanctions exactly
-       one unscoped form, `@keyframes v2-*`. So the grid does NOT collapse responsively; the
-       app is a fixed-min-width desktop window, so this costs nothing today. If a room ever
-       genuinely needs a breakpoint, the honest fix is to teach the guard to accept an @media
-       whose inner selectors are all scoped — not to hide the file from the guard.
+     · No @media in THIS sheet — by choice, not by limitation. The grid does not collapse
+       responsively because the app is a fixed-min-width desktop window, so it costs nothing
+       today. The guard no longer forbids a breakpoint: as of issue #49 it DESCENDS into an
+       @media and holds every rule inside to the same scoping law, which is exactly the fix
+       this comment used to ask for. home-console.css was the first sheet that needed it.
 
    WHY NO BLUR, ANYWHERE. The obvious sheet treatment is `backdrop-filter: blur()` on the
    scrim (or `filter: blur()` on the room behind it), and both are rejected on purpose: the

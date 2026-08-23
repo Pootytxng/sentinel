@@ -29,47 +29,49 @@ for veto on sight — his silence is not approval).
   the `below` hero and is UNCONDITIONAL (one-hero-guard forbids a conditional hero). Seven guards
   that selected the CORNER a gauge sat in were re-anchored to `data-read="…"`, never deleted.
 
-### Round 1 FAIL → `7cb43840` (committed + installed; superseded by round 2)
+### Three self-review rounds, three FAILs, five guards — slice 2 is NOT done
 
-The h1 read **"Applied Compy changes"** at 40px. The name-it-and-fix-it-inline law makes the verdict
-BE the flagged check's label and `system-posture.test.ts` pins `headline === label` — but it was
-guarded with a SYNTHETIC fixture while every `ReadinessStatus::Attention` branch in `readiness.rs`
-emitted a category noun. **All ten Attention labels now name the finding**; calm branches keep their
-category label on purpose. Guard `src/surfaces/readiness-attention-label-guard.test.ts` scans the
-Rust catalog (both the `check()` helper and the struct-literal form) and fails if any check reuses
-its calm label for its attention state; its first assertion pins the parsed row count so a refactor
-cannot make it pass vacuously. **Proven to fail on the pre-fix source.**
+Every round was a complete fresh review against `01-health-approved.png` on the INSTALLED build, and
+every fix below was observed to FAIL on the pre-fix source before it was trusted (`git stash push
+-- <file>` → run → `stash pop`). All three findings were honest-measurement failures wearing layout
+clothes, which is why none of them could be waved through as taste.
 
-### Round 2 FAIL → UNCOMMITTED, in progress
+1. **R1 → `7cb43840`. The 40px verdict read "Applied Compy changes"** — a filing-cabinet tab. The
+   name-it-and-fix-it-inline law makes the verdict BE the flagged check's label and
+   `system-posture.test.ts` pins `headline === label`, but it was guarded with a SYNTHETIC fixture
+   while every `ReadinessStatus::Attention` branch in `readiness.rs` emitted a category noun. **All
+   ten Attention labels now name the finding** (calm branches keep their category label on purpose).
+   Guard `src/surfaces/readiness-attention-label-guard.test.ts` scans the Rust catalog in both its
+   construction forms and pins the parsed row count so it cannot pass vacuously.
+2. **R2 → `d5bff77e`. The viewport-fixed `.hud-frame-readout` was a curtain over live readings** —
+   READINESS / AVG FPS at 1280×720, the Detected record's Processor row at 1500×980. Its clearance
+   was `padding-bottom`, which only clears the END of a document; `margin-bottom` shortens the scroll
+   viewport itself, so nothing can render in the band at any offset in any room. Same commit: on
+   Health the readout printed the CPU/GPU model a THIRD time (Detected record + rig annotations), so
+   the rig segment stands down there and it collapses to the clock. Guards
+   `hud-frame-clearance-guard.test.ts` (parses the stylesheet's declared geometry) and
+   `hud-readout-no-duplicate-guard.test.tsx` (its second case renders a room that DOESN'T show the
+   rig, so it cannot pass by the frame vanishing).
+3. **R3 → UNCOMMITTED. At 1280×720 the readout STRIP was sliced in half by `.v2-content`'s own
+   overflow — five labels on screen, none of their values.** The comfortable-viewport stage box
+   (`min-height: 500px` + 40px padding) costs 540px of a lane only ~595px tall. R2's reserve could
+   not fix this; it cannot create height a 720px window lacks. **The stage floor now compresses below
+   860px of viewport height** (320 stage / 280 rig / 280 card ceiling) — the rig is the one elastic
+   element on Health, and 860 sits well below the owner's real 980px window, so his viewport and the
+   comp's proportions are untouched. Guard: the short-viewport case in
+   `src/surfaces/home-console.test.tsx` pins the threshold band, re-checks the card-viewport
+   derivation inside the override, and caps the compressed box at the measured 397px.
 
-`.hud-frame-readout` (viewport-fixed bottom-right chrome) **covered real readings at rest** — at
-1280×720 the READINESS / AVG FPS numbers, at **1500×980, the owner's real viewport**, the Detected
-record's Processor row. Its clearance was `padding-bottom: 52px`, and padding only clears the END of
-a document, never the band a viewport-fixed element occupies at an arbitrary scroll offset; the
-2026-08-20 intimidation pass had given the readout an OPAQUE ground, which is what turned it from a
-smudge into a curtain. A covered reading reads as an absent one — honest-measurement, not cosmetics.
-
-- **DONE, uncommitted:** `src/design/console/hud-frame.css` reserves the band with
-  `margin-bottom: 36px` (+ non-load-bearing `padding-bottom: 16px`), shortening the scroll viewport
-  so nothing renders under the readout in any room at any offset. New
-  `src/design/console/hud-frame-clearance-guard.test.ts` parses the stylesheet's own geometry and
-  fails if the reserve is a padding or is smaller than the band. **Proven to fail on the old CSS.**
-- **DONE, uncommitted:** [ShellV2.tsx:360](../src/design/ShellV2.tsx#L360) stands the rig segment
-  down on Health — the readout was printing the CPU/GPU model a THIRD time (Detected record +
-  the 3D rig's annotations), against `HudFrame.tsx`'s own doctrine. `HudFrame` omits a null
-  segment, so there it collapses to the clock. Guard
-  `src/design/console/hud-readout-no-duplicate-guard.test.tsx`; its second case renders a room
-  that DOESN'T show the rig, so the guard cannot pass by the frame vanishing. **Proven to fail.**
-
-**EXACT NEXT STEP.** Both fixes are in the tree and both guards are green. Re-run the full gate
-(`npm run build` + `npx vitest run` + `cargo test`) → commit → `npm run tauri build` → `scripts/ship-reinstall.ps1` → the same script
-`-ProofOnly -ExpectedCommit <full 40-char HEAD>` → **self-review round 3, a complete fresh review**,
-including the reviewer's own re-verification: `getBoundingClientRect` on `.hud-frame-readout` vs
-`.hc-readout` vs `.hc-spec-row` at 1280×720 / 1500×980 / 1920×1080 must show ZERO intersection. On
-PASS → `docs/RELEASE_STATE.md` (line 45 `STATE:owner_installed_stamp`; the desk row at line 65 moved
-VERBATIM into `archive/RELEASE_STATE_HISTORY.md` under that file's existing
-`### <date> - the <hash> … moved verbatim (byte budget)` convention; plus the `d5a6a630` mentions at
-lines 77, 176, 191) → THEN slice 3.
+**EXACT NEXT STEP.** R3's fix is in the tree, gated and guarded but NOT committed. Commit it →
+`npm run tauri build` (`cargo clean -p compy --release` FIRST or the stale-build gate rejects it) →
+`scripts/ship-reinstall.ps1` → the same script `-ProofOnly -ExpectedCommit <full 40-char HEAD>` →
+**self-review round 4, a complete fresh review**, natively at 1280×720 / 1500×980 / 1920×1080. Its
+own re-verification: at 1280×720, scrollTop 0, all five `.hc-readout` values (readiness, AVG FPS,
+1% LOW, GPU TEMP, CPU TEMP) must be visible without scrolling, and `getBoundingClientRect` on
+`.hc-readout` vs `.hud-frame-readout` must not intersect. On PASS → `docs/RELEASE_STATE.md` (line 45
+`STATE:owner_installed_stamp`; the desk row at line 65 moved VERBATIM into
+`archive/RELEASE_STATE_HISTORY.md` under that file's existing `### <date> - the <hash> … moved
+verbatim (byte budget)` convention; plus the `d5a6a630` mentions at lines 77, 176, 191) → slice 3.
 
 ## Live traps for whoever is next
 
@@ -108,12 +110,11 @@ lines 77, 176, 191) → THEN slice 3.
 room — his veto on sight always stands, and the violet-vs-green call above is still open. The
 checklist's remaining items are money/legal calls that cannot move until Pro exists.
 
-**This session: LEAVE OPEN — slice 2 of 7 is mid-flight with uncommitted work in
-`sentinel-fourroom`.** His live app is `7cb43840`, one installer on the Desktop.
+**This session: LEAVE OPEN — slice 2 of 7 is mid-flight in `sentinel-fourroom`.** His live app
+is `d5bff77e`, one installer on the Desktop.
 
 ## Cycle notes before this train — archived
 
-Moved verbatim to [archive/SESSION_HANDOFF_HISTORY.md](archive/SESSION_HANDOFF_HISTORY.md) to stay
-inside the 120-line budget: the 2026-08-22 BACKLOG section-caps pass, and the closed
-`lane/train-2026-08-22` persistent train (pricing ruling, PR #193, C-14 GPU screen, #125 write
-refusal — all landed on `main`).
+Moved verbatim to [archive/SESSION_HANDOFF_HISTORY.md](archive/SESSION_HANDOFF_HISTORY.md): the
+2026-08-22 BACKLOG section-caps pass, and the closed `lane/train-2026-08-22` train (pricing ruling,
+PR #193, C-14 GPU screen, #125 write refusal — all landed on `main`).

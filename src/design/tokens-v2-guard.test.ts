@@ -96,61 +96,112 @@ const V2_CSS: [string, string][] = [
   ["bento/bento.css", bentoCss],
 ];
 
+/**
+ * Every rule header in `css` whose selector does not carry the v2 scope.
+ *
+ * Extracted from the loop below so the parser itself can be fed a synthetic stylesheet — the
+ * @media descent (issue #49) is a change to the GUARD, and a guard change that is only exercised
+ * by the real sheets can loosen silently the moment those sheets happen to comply.
+ */
+export function unscopedSelectors(css: string): string[] {
+  // Rule headers are the text before each `{` at the level selectors live on. That is depth 0
+  // normally, and one level deeper inside an @media block, so `checkDepth` tracks it rather than
+  // the loop hard-coding 0.
+  const offenders: string[] = [];
+  let depth = 0;
+  let checkDepth = 0;
+  let buf = "";
+  for (const ch of css) {
+    if (ch === "{") {
+      if (depth === checkDepth) {
+        const sel = buf.trim();
+        // @keyframes are the one sanctioned unscoped header, and ONLY with the v2- prefix: a
+        // keyframes block is inert unless a rule references it, and every referencing rule is
+        // itself scoped — so flag-off byte-identity holds. (Inner 0%/100% headers sit deeper and
+        // are never selector-checked.)
+        if (/^@keyframes\s+v2-/.test(sel)) {
+          depth++;
+          buf = "";
+          continue;
+        }
+        // @media: DESCEND INTO IT rather than treating the query as a selector, and hold every
+        // rule inside to the same scoping law. bento.css named this fix in advance ("the honest
+        // fix is to teach the guard to accept an @media whose inner selectors are all scoped —
+        // not to hide the file from the guard"); home-console.css is the first v2 sheet that
+        // genuinely needed a breakpoint (issue #49: the stage floor compresses on a short viewport
+        // so Health's readings clear the fold at 1280x720). Flag-off byte-identity still holds,
+        // because the inner selectors are checked exactly as depth-0 ones are.
+        if (/^@media\b/.test(sel)) {
+          depth++;
+          checkDepth++;
+          buf = "";
+          continue;
+        }
+        // Every comma-separated selector in the header must carry the scope. Split on TOP-LEVEL
+        // commas only — a comma inside :is()/:where()/:not() is not a selector-list separator
+        // (hud-rooms.css scopes the fix-room instrument skin to also match the merged Lab
+        // proving-ground fast path via `:is(.v2-room[data-room="fix"], .v2-room[data-room="lab"]
+        // :where(.lg-fast))`; that whole rule is still under the leading :root[data-v2="on"]).
+        const parts: string[] = [];
+        let cur = "";
+        let paren = 0;
+        for (const c of sel) {
+          if (c === "(") paren++;
+          else if (c === ")") paren--;
+          if (c === "," && paren === 0) {
+            parts.push(cur);
+            cur = "";
+          } else {
+            cur += c;
+          }
+        }
+        parts.push(cur);
+        for (const part of parts) {
+          if (!part.includes('[data-v2="on"]')) offenders.push(part.trim());
+        }
+      }
+      depth++;
+      buf = "";
+    } else if (ch === "}") {
+      depth--;
+      if (checkDepth > depth) checkDepth = depth; // leaving an @media restores the outer level
+      buf = "";
+    } else if (depth === checkDepth) {
+      buf += ch;
+    }
+  }
+  return offenders;
+}
+
 describe("v2 CSS scoping (flag-off byte-identity mechanism)", () => {
   for (const [name, css] of V2_CSS) {
     it(`${name}: every selector is scoped under [data-v2="on"]`, () => {
-      // Split into rule headers: text before each '{' at nesting depth 0.
-      const offenders: string[] = [];
-      let depth = 0;
-      let buf = "";
-      for (const ch of css) {
-        if (ch === "{") {
-          if (depth === 0) {
-            const sel = buf.trim();
-            // @keyframes are the one sanctioned unscoped header, and ONLY with the v2- prefix:
-            // a keyframes block is inert unless a rule references it, and every referencing rule
-            // is itself scoped — so flag-off byte-identity holds. (Inner 0%/100% headers sit at
-            // depth ≥ 1 and are never selector-checked.)
-            if (/^@keyframes\s+v2-/.test(sel)) {
-              depth++;
-              buf = "";
-              continue;
-            }
-            // every comma-separated selector in the header must carry the scope. Split on
-            // TOP-LEVEL commas only — a comma inside :is()/:where()/:not() is not a selector-list
-            // separator (hud-rooms.css scopes the fix-room instrument skin to also match the merged
-            // Lab proving-ground fast path via `:is(.v2-room[data-room="fix"], .v2-room[data-room="lab"]
-            // :where(.lg-fast))`; that whole rule is still under the leading :root[data-v2="on"]).
-            const parts: string[] = [];
-            let cur = "";
-            let paren = 0;
-            for (const c of sel) {
-              if (c === "(") paren++;
-              else if (c === ")") paren--;
-              if (c === "," && paren === 0) {
-                parts.push(cur);
-                cur = "";
-              } else {
-                cur += c;
-              }
-            }
-            parts.push(cur);
-            for (const part of parts) {
-              if (!part.includes('[data-v2="on"]')) offenders.push(part.trim());
-            }
-          }
-          depth++;
-          buf = "";
-        } else if (ch === "}") {
-          depth--;
-          buf = "";
-        } else if (depth === 0) {
-          buf += ch;
-        }
-      }
-      expect(offenders).toEqual([]);
+      expect(unscopedSelectors(css)).toEqual([]);
     });
   }
+
+  // bug→guard (issue #49, 2026-08-23): the parser used to treat a depth-0 `@media` header as a
+  // selector, so home-console.css's short-viewport override was reported as an offender while the
+  // rules INSIDE it were never checked at all. Teaching it to descend is the fix bento.css asked
+  // for; these cases are what stop that descent from becoming a hole, since the real sheets pass
+  // either way and would never notice.
+  it("the parser descends into @media instead of trusting it", () => {
+    const scoped = `@media (max-height: 860px) {\n  :root[data-v2="on"] .a { color: red; }\n}\n`;
+    expect(unscopedSelectors(scoped)).toEqual([]);
+
+    const leaky = `@media (max-height: 860px) {\n  .a { color: red; }\n}\n`;
+    expect(unscopedSelectors(leaky), "an unscoped rule inside @media must still be caught").toEqual([
+      ".a",
+    ]);
+
+    // ...and the level must be RESTORED on the way out, or the first rule after the block escapes.
+    const after = `@media (max-height: 860px) {\n  :root[data-v2="on"] .a { color: red; }\n}\n.b { color: red; }\n`;
+    expect(unscopedSelectors(after)).toEqual([".b"]);
+
+    // The @keyframes carve-out is unchanged: its inner percentage headers are not selectors.
+    const kf = `@keyframes v2-x {\n  0% { opacity: 0; }\n  100% { opacity: 1; }\n}\n`;
+    expect(unscopedSelectors(kf)).toEqual([]);
+  });
 });
 
 describe("v2 surface CSS consumes the token layer only (no-slop law)", () => {

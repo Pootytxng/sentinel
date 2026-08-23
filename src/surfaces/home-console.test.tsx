@@ -845,4 +845,46 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     expect(maxH).toBeLessThanOrEqual(content);
     expect(maxH).toBeGreaterThan(0);
   });
+
+  it("CSS: the stage floor compresses on a short viewport, so the readings clear the fold", () => {
+    // bug→guard (self-review round 3, issue #49, 2026-08-23). At 1280×720 the scroll lane is only
+    // ~595px tall. The comfortable-viewport stage box (min-height 500 + 2×20 padding = 540) pushed
+    // .hc-readout to content-offset ~568, so .v2-content's own overflow sliced the strip in half —
+    // the five LABELS were on screen with none of their VALUES. Five labelled readings showing no
+    // numbers do not read as "scroll down", they read as five readings that came back empty, which
+    // is an honest-measurement failure. Round 2's HUD margin reserve could not fix this: it stops
+    // scrolled content entering the readout's band, it cannot create height a 720px window lacks.
+    const css = readFileSync(join("src", "surfaces", "home-console.css"), "utf8");
+
+    const mq = /@media\s*\(max-height:\s*(\d+)px\)\s*\{([\s\S]*?)\n\}/.exec(css);
+    expect(mq, "Health must carry a short-viewport override for the stage floor").not.toBeNull();
+    const threshold = Number(mq![1]);
+    const inside = mq![2];
+
+    // Below the owner's real 980px-tall window, so his viewport keeps the approved comp's
+    // proportions; at or above 720, so the size this defect was measured at is actually covered.
+    expect(threshold).toBeLessThan(980);
+    expect(threshold).toBeGreaterThanOrEqual(720);
+
+    const stageMin = Number(/\.hc-stage\s*\{[^}]*min-height:\s*(\d+)px/.exec(inside)?.[1]);
+    const cardsMax = Number(/\.hc-stage-cards\s*\{[^}]*max-height:\s*(\d+)px/.exec(inside)?.[1]);
+    expect(Number.isFinite(stageMin), "the override must set an explicit stage min-height").toBe(true);
+    expect(Number.isFinite(cardsMax), "the override must re-bound the card viewport too").toBe(true);
+
+    // MEASURED at 1280×720 on the installed build (self-review round 3): the scroll lane is 595px,
+    // the furniture above the stage costs 28px, and .hc-readout is 170px tall. The whole strip has
+    // to fit above the fold, so the stage BOX (min-height + its 2×20px padding) can be at most
+    // 595 − 28 − 170 = 397px, i.e. a min-height of 357px. Anything taller slices the values off.
+    const pad = Number(/:root\[data-v2="on"\] \.hc-stage \{[^}]*padding:\s*(\d+)px/.exec(css)?.[1]);
+    expect(Number.isFinite(pad)).toBe(true);
+    expect(
+      stageMin + 2 * pad,
+      "the compressed stage box must leave the readout strip fully above the fold at 1280×720",
+    ).toBeLessThanOrEqual(397);
+
+    // The base derivation still has to hold inside the override, or a tall HardwareGrid stretches
+    // the stage instead of scrolling inside it — the exact thing the base bound exists to stop.
+    expect(cardsMax).toBeLessThanOrEqual(stageMin - 2 * pad);
+    expect(cardsMax).toBeGreaterThan(0);
+  });
 });

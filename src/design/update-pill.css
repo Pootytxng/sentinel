@@ -3,8 +3,8 @@
    is AVAILABLE (a decision is being asked for), the pill fills with the ok tint at full contrast
    and its LED pulses; every other phase keeps shell-v2.css's quiet outline.
 
-   Separate sheet on purpose: shell-v2.css bans @media/@keyframes (its scoping guard parses depth-0
-   headers), the same reason room-accent-picker.css owns its own pop-in. Laws kept anyway: every
+   Separate sheet on purpose: shell-v2.css keeps itself free of @media/@keyframes, the same reason
+   room-accent-picker.css owns its own pop-in. Laws kept anyway: every
    selector scoped under [data-v2="on"], no color literals (color-mix composes --v2-* tokens with
    the `transparent` keyword only), fonts untouched.
 

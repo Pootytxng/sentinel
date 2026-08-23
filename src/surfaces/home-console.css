@@ -322,6 +322,38 @@
      retired with the corner gauges, issue #49). */
   max-height: 460px;
 }
+
+/* ── SHORT VIEWPORTS: the stage floor compresses so the readings stay above the fold. ──
+   bug→guard (self-review round 3, issue #49, 2026-08-23). The three numbers above are a comfortable
+   viewport's budget: stage 500 + 40 padding = 540px of the scroll lane before .hc-readout even
+   begins. At 1280×720 the lane is only ~595px tall, so the readout strip started at y≈648 and was
+   sliced by .v2-content's own overflow at y≈675 — the five LABELS (READINESS / AVG FPS / 1% LOW /
+   GPU TEMP / CPU TEMP) were on screen with none of their VALUES. A row of labels with no numbers
+   does not read as "scroll down", it reads as five readings that came back empty, which is the
+   honest-measurement law's problem and not a cosmetic one. (Round 2's margin reserve stopped
+   scrolled content entering the HUD readout's band; it could not create vertical room that a 720px
+   window does not have.)
+
+   The floor drops instead of the strip moving, because the rig is the one element here that is
+   genuinely elastic — it is a rendered canvas, so a shorter box is a smaller rig and nothing else;
+   every other block on Health is text or numbers at a fixed type size and would have to be cut.
+   The threshold is 860px, comfortably below the owner's real 980px-tall window, so his viewport and
+   the approved comp's proportions are untouched.
+
+   The base rules keep their explicit `min-height: 500px` / `max-height: 460px` so the derivation
+   guard in home-console.test.tsx still reads them. The same derivation is re-satisfied here:
+   cards 280 <= stage content (320 - 2*20) = 280. Guard: home-console.test.tsx pins BOTH. */
+@media (max-height: 860px) {
+  :root[data-v2="on"] .hc-stage {
+    min-height: 320px;
+  }
+  :root[data-v2="on"] .hc-rig {
+    min-height: 280px;
+  }
+  :root[data-v2="on"] .hc-stage-cards {
+    max-height: 280px;
+  }
+}
 :root[data-v2="on"] .hc-stage-loading {
   display: grid;
   place-items: center;
