@@ -7,7 +7,7 @@
 ## Cycle note — 2026-08-23, four-room visual direction (issue #49) — MID-TRAIN, slice 2 of 7
 
 **Worktree `C:/Users/Kuya/code/sentinel-fourroom`, branch `feat/four-room-visual-direction`, head
-`fc6c72f6` + this R8 commit, not pushed.** Owner brief: implement
+`7e2e7003` + this R9 commit, not pushed.** Owner brief: implement
 the approved comps in `~/.codex/visualizations/2026/08/23/01a02bee-.../compy-four-room-handoff/`
 (`HANDOFF.md` + four PNGs), in the handoff's order: shell → Health → shared instruments → Live →
 History → Test → convergence. **Local implementation only — the brief does NOT authorize release or
@@ -29,7 +29,7 @@ for veto on sight — his silence is not approval).
   the `below` hero and is UNCONDITIONAL (one-hero-guard forbids a conditional hero). Seven guards
   that selected the CORNER a gauge sat in were re-anchored to `data-read="…"`, never deleted.
 
-### Eight self-review rounds, eight FAILs, eight guards — slice 2 is NOT done
+### Nine self-review rounds, nine FAILs, nine guards — slice 2 is NOT done
 
 Every round was a complete fresh review against `01-health-approved.png` on the INSTALLED build, and
 every fix was proven to FAIL on the pre-fix source first. All four findings were honest-measurement
@@ -51,26 +51,26 @@ and R2 are landed and written up in `docs/UI_VISION_BACKLOG.md` §FOUR-ROOM.
    responsive media queries. Do not add breakpoints as a shortcut."* Health's geometry is now ONE
    continuous derivation — `clamp(320px, calc(100vh − named chrome), 500px)` on `.hc-panel`, every
    subtrahend named. **Verified in R6, R7 and R8** at viewports 971/711/1071. Guard bans `@media`.
-5. **R6 `976cfd0b` → R7 `fc6c72f6` → R8 this commit: ONE collision in the readout strip, three
-   mechanisms, because each fix opened the other side.** All three are honest-measurement failures —
-   two readings that touch are not two readings. R6: a bare `1.4fr`'s automatic minimum is
-   min-content, so the track overflowed the CONTAINER — clamped it. R7: a 1.4/5.4 share is 126px
-   where the instrument needs ~151, so the overflow moved INSIDE the cell — made it `auto`. R8:
-   `auto` IS max-content, and the gauge's **translated** note runs 187px unwrapped, so the track took
-   **253px, not 151**, and starved the four readings — up to 20px of overflow at ALL three sizes.
-   **A scrollWidth measured inside a clamped box is not max-content** — that is the 102px miss, and
-   no hardcoded content width is safe in a translated UI. R8 pins both directions: readings floored
-   at their own content, readiness track flex-sized so nothing inside the gauge can widen it.
+5. **R6 `976cfd0b` → R7 `fc6c72f6` → R8 `7e2e7003` → R9 this commit: ONE collision in the readout
+   strip, FOUR mechanisms — each fix released the side the last one had clamped.** R6 clamped a bare
+   `1.4fr` (automatic minimum = min-content); R7 made the track `auto` when a 1.4/5.4 share came 25px
+   short; R8 found `auto` IS max-content and the **translated** note runs 187px, so it floored the
+   readings at `max-content`; R9 found that released THEIRS — the CPU cell's *“no CPU temp — see
+   below”* (161px, #134/Q9c) starved the instrument to **26.4px**. **Every one of those numbers was a
+   `scrollWidth` read inside a box an earlier round had clamped, which is not max-content.** So R9
+   deletes the class, not the fifth constant: the panel MEASURES ITSELF (cap = `100vh − fixed
+   chrome`, only the stage shrinks) and every track is `minmax(<px floor>, <n>fr)`.
 
-**EXACT NEXT STEP.** R8's fix is committed, guarded and gated. `cargo clean -p compy --release` →
+**EXACT NEXT STEP.** R9's fix is committed, guarded and gated. `cargo clean -p compy --release` →
 `npm run tauri build` → `scripts/ship-reinstall.ps1` → the same script `-ProofOnly -ExpectedCommit
-<full 40-char HEAD>` → **self-review round 9, complete and fresh**. Arrive at every size by RESIZING,
-never by launching there. Quote, at all three handoff heights: `.hc-stage` box + `.hc-stage canvas`
-inline height, EVERY readout cell rect with its label/value `scrollWidth`, **and the real distance
-from the stage's bottom to `.hc-panel`'s bottom** — `--hc-panel-below` is a conservative 256px
-reserve (238 measured + one wrapped note line) and must become a measured number. On PASS →
-`docs/RELEASE_STATE.md` (line 45 `STATE:owner_installed_stamp`; the desk row at 65 moved VERBATIM
-into `archive/RELEASE_STATE_HISTORY.md` under its `### <date> - the <hash> …` convention; plus the
+<full 40-char HEAD>` → **self-review round 10, complete and fresh**. Arrive at every size by RESIZING,
+never by launching there. Quote, at all three handoff heights: `.hc-panel` rect, `.hc-stage` rect +
+the `.hc-stage canvas` INLINE height (**the rig is now sized by grid stretch, not by a variable — the
+one R9 change that could regress silently**), and every readout cell rect with its label/value
+`scrollWidth`. Nothing is left to re-measure: a collision now means a wrong FLOOR, not a wrong
+reserve. On PASS → `docs/RELEASE_STATE.md` (line 45
+`STATE:owner_installed_stamp`; the desk row at 65 moved VERBATIM into
+`archive/RELEASE_STATE_HISTORY.md` under its `### <date> - the <hash> …` convention; plus the
 `d5a6a630` mentions at 77, 176, 191) → slice 3.
 
 ## Live traps for whoever is next
@@ -111,7 +111,7 @@ room — his veto on sight always stands, and the violet-vs-green call above is 
 checklist's remaining items are money/legal calls that cannot move until Pro exists.
 
 **This session: LEAVE OPEN — slice 2 of 7 is mid-flight in `sentinel-fourroom`.** His live app
-is `fc6c72f6`; R8's fix ships on top of it in this commit.
+is `7e2e7003`; R9's fix ships on top of it in this commit.
 
 ## Cycle notes before this train — archived
 

@@ -288,45 +288,42 @@
      size and would have to be cut. So the stage absorbs the whole viewport difference, between a
      floor and the approved comp's ceiling, continuously:
 
-       stage = clamp(320px, viewport − everything that is NOT the stage, 500px)
+       stage → the comp's 500px when the room allows it, never below 320px, and the whole
+                difference in between — with nothing else on the panel giving up a pixel.
 
-     Every subtrahend is a real number someone can check, which is why each is named:
+     ROUND 9 DELETED THE CONSTANT THAT KEPT BEING WRONG. The stage used to be
+     `clamp(320px, 100vh − chrome − PANEL-BELOW, 500px)`, where PANEL-BELOW was a hand-measured
+     height for the control row + readout strip below it. That number was wrong in rounds 3, 5, 8
+     AND 9, every time for the same reason: the strip's height is however many lines its TRANSLATED
+     strings wrap to, which depends on the width they are given, which depends on the stage — so no
+     measurement taken before a fix survives the fix. Over-reserving costs rig height;
+     under-reserving clips a reading, which is an honest-measurement failure.
+     So nothing here measures content any more. The PANEL is capped at the space the room actually
+     has; the control row and the readout take exactly what they need (`flex: none` below); and the
+     stage is the only shrinkable child — it asks for the comp's 500px and gives ground, never below
+     320px, when the panel runs out of room. The browser does the measuring, so it cannot go stale.
        --hc-chrome-top    72px  = 46px shell topbar + 26px .v2-content padding-top
        --hc-hud-reserve   36px  = .v2-content's margin-bottom in the HUD shell (self-review round 2;
                                   hud-frame.css owns it, and hud-frame-clearance-guard.test.ts
                                   pins it — this must never be smaller than that value)
-       --hc-panel-below  256px  = the control row + the readout strip under the stage. 238px was
-                                  MEASURED on the installed build at 1280×720 (rounds 3 and 5);
-                                  round 8 makes the readiness note wrap, which adds at most ONE line
-                                  — 13px × 1.35 line-height, rounded up to 18px. Deliberately the
-                                  conservative direction: over-reserving costs rig height, while
-                                  under-reserving clips a reading, which is the honest-measurement
-                                  failure. Round 9 replaces it with the measured figure.
-       --hc-stage-slack   14px  = margin, so a wrapped label cannot re-slice the strip
-
-     At the three proof heights (inner viewport, measured — the window chrome is ~9px):
-       1280×720  → 711 − 360 = 351px stage, panel ends at 661 vs the lane's 675 clip. Clears.
-       1500×980  → 971 − 360 = 611 → clamped to 500. The owner's viewport keeps the comp exactly.
-       1920×1080 → 1071 − 360 = 711 → clamped to 500. Same.
-     Guard: home-console.test.tsx re-runs that arithmetic and rejects any `@media` in this file. */
+       --hc-stage-slack   14px  = margin, so the panel never sits flush against the lane's clip
+     All three are FIXED chrome. None of them is content whose height can change under a
+     translation, which is the whole point. Guard: home-console.test.tsx rejects any content-derived
+     height constant here, and any `@media` in this file. */
   --hc-stage-min: 320px;
   --hc-stage-max: 500px;
   --hc-chrome-top: 72px;
   --hc-hud-reserve: 36px;
-  --hc-panel-below: 256px;
   --hc-stage-slack: 14px;
-  --hc-stage-h: clamp(
-    var(--hc-stage-min),
-    calc(
-      100vh - var(--hc-chrome-top) - var(--hc-hud-reserve) - var(--hc-panel-below) -
-        var(--hc-stage-slack)
-    ),
-    var(--hc-stage-max)
+
+  max-height: calc(
+    100vh - var(--hc-chrome-top) - var(--hc-hud-reserve) - var(--hc-stage-slack)
   );
-  /* The rig gets the stage's CONTENT box: box-sizing is border-box globally (App.css), so the
-     stage's height already includes its 2×20px padding. 500 − 40 = 460 and 320 − 40 = 280, the two
-     numbers rounds 3 and 4 arrived at by hand. */
-  --hc-rig-h: calc(var(--hc-stage-h) - 40px);
+  /* The net, not the plan. The stage gives ground first — it is the only shrinkable child — and
+     only if it reaches its 320px floor and the panel STILL cannot fit does the leftover become a
+     scroll. Round 3's failure was five labels on screen with none of their five values, silently
+     eaten by the lane's clip. A scrollbar is ugly; a reading nobody can reach is dishonest. */
+  overflow-y: auto;
 
   position: relative;
   display: flex;
@@ -335,6 +332,13 @@
   border: 1px solid var(--ix-glass-border);
   border-top-color: var(--ix-glass-top);
   border-radius: var(--ix-radius);
+}
+
+/* Only the stage gives ground. The control row and the readout are text at a fixed type size, so
+   shrinking either is how rounds 3 and 4 sliced the readings off the bottom of the room. */
+:root[data-v2="on"] .hc-panel > .hc-controls,
+:root[data-v2="on"] .hc-panel > .hc-readout {
+  flex: none;
 }
 
 /* ── The console stage — bracketed frame, hologram centered. The four corner ArcGauges that used
@@ -346,30 +350,34 @@
      the box shrank: the old 540px box lost ~100px of usable height to the top and bottom gauge
      reserve and another ~40px at the bottom to the floating control row, so the rig's real
      clearance went from ~400px to the full 460px content box. Measured off the approved Health
-     comp, whose canvas is ~500 tall in a ~620 column. The .hc-stage-cards ceiling below DERIVES
-     from this value — its comment + the bug→guard test in home-console.test.tsx (which READS this
-     min-height) must move together with it. */
-  /* `height`, not only `min-height` — round 4's lesson, and it is load-bearing. The rig is an r3f
+     comp, whose canvas is ~500 tall in a ~620 column. The .hc-stage-cards ceiling below is now
+     simply 100% of the box it is laid into, so it follows this value without restating it. */
+  /* `height`, not only `min-height` — round 4's lesson, still load-bearing. The rig is an r3f
      <Canvas> that measures its PARENT and writes its own inline pixel size; a parent with only a
      floor is in turn sized by that canvas, and that circle has no bottom. Round 4 set a lower floor
-     here and `getComputedStyle` faithfully reported it while the box on screen stayed 500px, because
-     lowering a floor under a box already taller than the floor changes nothing and nothing
-     re-measures. An authoritative height breaks the circle from the outside. */
-  min-height: var(--hc-stage-h);
-  height: var(--hc-stage-h);
+     here and `getComputedStyle` faithfully reported it while the box on screen stayed 500px,
+     because lowering a floor under a box already taller than the floor changes nothing and nothing
+     re-measures. An authoritative height breaks the circle from the outside — here it is the flex
+     BASE, which flex-shrink resolves to a definite used height without ever asking the canvas. */
+  flex: 0 1 auto;
+  height: var(--hc-stage-max);
+  min-height: var(--hc-stage-min);
   display: grid;
-  place-items: center;
+  /* stretch, not center: the rig must INHERIT the stage's resolved height instead of asking for one
+     of its own. The four corner brackets are absolutely positioned, so the rig is the only in-flow
+     item here, and it centres its own content anyway. */
+  place-items: stretch;
   padding: 20px;
 }
 
 :root[data-v2="on"] .hc-rig {
   width: 100%;
-  /* An explicit height, not `height: 100%` — a percentage needs a definite parent, and "definite"
-     is the exact property the canvas circularity above takes away. --hc-rig-h is the stage's own
-     content box, so this is the same number by construction, stated in a way that cannot depend on
-     what the canvas decided first. */
-  height: var(--hc-rig-h);
-  min-height: var(--hc-rig-h);
+  /* No height of its own, and no percentage either — a percentage needs a definite parent, which
+     is the exact property the canvas circularity takes away. Grid STRETCH does not: the rig is laid
+     into the stage's content box, so its height is resolved by the stage (definite) and never by
+     the canvas inside it. Same guarantee round 5's explicit --hc-rig-h bought, without a number
+     that has to be kept in step with anything. */
+  min-height: 0;
   display: grid;
   place-items: center;
 }
@@ -383,12 +391,12 @@
      cannot help — a scroll container only protects its extremes). Those gauges are no longer on the
      canvas, and the control row left with them, so nothing overlays this viewport any more except
      the decorative corner brackets, which are 22px, pointer-events:none and outside the padding.
-     Ceiling = stage content = 500 − 2·20 = 460. bug→guard: the "2D card viewport" block in
-     home-console.test.tsx still DERIVES this bound from .hc-stage's min-height and padding, so the
-     two values cannot drift apart (self-reviewer 2026-07-18; derivation 2026-07-23; reserve
-     retired with the corner gauges, issue #49). The literal 460 became --hc-rig-h in round 5, so
-     the derivation is now stated in the stylesheet itself rather than only in the guard. */
-  max-height: var(--hc-rig-h);
+     The bound used to be restated as a number — 460, then --hc-rig-h — and a restated number is a
+     number that can drift. It is now simply the box this viewport is laid into, which the stage
+     sizes; there is nothing left to keep in step (self-reviewer 2026-07-18; derivation 2026-07-23;
+     reserve retired with the corner gauges, issue #49; round 9 retired the constant). bug→guard:
+     the "2D card viewport" block in home-console.test.tsx still pins the scroll + the ceiling. */
+  max-height: 100%;
 }
 
 :root[data-v2="on"] .hc-stage-loading {
@@ -673,33 +681,36 @@
    used to be a value on the annotation plane, in one row under the rig. It is a HIERARCHY, not five
    equal instruments: readiness keeps its ring (a 0–100 out of a formula is what a ring is for) and
    the four raw readings beside it are numbers, rendered as numbers. Five rings would be the "twelve
-   equal tiles" failure the bento exists to prevent, in miniature. The 1.4fr first track is measured
-   off the approved comp, where the readiness cell is about a third wider than its neighbours
-   because it carries the ring, the grade word and the "= n of m checks passed" line. ── */
-/* THE STRIP'S WIDTH BUDGET — the same collision three rounds running, each fix opening the other
-   side. R6: the readiness track was a bare 1.4fr, whose automatic minimum is min-content, so it
-   overflowed the CONTAINER — clamped to minmax(0, 1.4fr). R7: a 1.4/5.4 share is 126px where the
-   instrument needs ~151, so the overflow moved INSIDE the cell and "READINESS" spilled into AVG FPS
-   — track made `auto`. R8: `auto` IS max-content, and the gauge's note line ("= 15 of 16 checks
-   passed", a TRANSLATED string) runs ~187px unwrapped, so the track took 253px and starved the four
-   readings instead — their values overflowed by 6.9–20.1px at every size, smashing the MEASURED
-   pills together. Two readings that touch are not two readings, so this is the honest-measurement
-   law's problem, not a spacing nit.
-   The lesson is that NO hardcoded content width is trustworthy here: the note and every label are
-   translated, and a scrollWidth measured inside a clamped box is not max-content — which is exactly
-   how R7's 151px estimate was 102px wrong. So the rule is structural and holds in BOTH directions at
-   once: the four readings are FLOORED at their own content, so nothing can ever starve a reading;
-   the readiness track is FLEX-sized and never content-sized, so no child of the gauge, in any
-   language, can widen it; and the leftover the gauge is guaranteed must still clear the instrument.
-   The note wraps instead of pushing — which costs one line of height, paid in --hc-panel-below.
-   MEASURED at 1280×720 (533px content box): readings 73 | 73 | 76 | 76, each plus its 1px hairline
-   and 8px pad = 334; gaps 4×8 = 32; leftover for the gauge = 167 ≥ the 150 it needs (56px ring +
-   10px gap + 84px "Readiness", one unbreakable word at the 13px type floor). The arithmetic is
-   guarded in home-console.test.tsx. */
+   equal tiles" failure the bento exists to prevent, in miniature. The readiness track is the widest
+   of the five, measured off the approved comp, where that cell is about a third wider than its
+   neighbours because it carries the ring, the grade word and the "= n of m checks passed" line. ── */
+/* THE STRIP'S WIDTH BUDGET — four rounds, four mechanisms, one root cause: a track sized by its
+   CONTENT, in a strip whose content is translated and wraps. R6: a bare `1.4fr`'s automatic minimum
+   is min-content, so the readiness track overflowed the CONTAINER — clamped it. R7: a 1.4/5.4 share
+   is 126px where the instrument needs ~151, so the overflow moved INSIDE the cell — made the track
+   `auto`. R8: `auto` IS max-content, and the gauge's translated note runs ~187px unwrapped, so the
+   track took 253px and starved the four readings — floored the readings at `max-content` instead.
+   R9: that released THEIR content, and the CPU cell carries `.hc-read-none` ("no CPU temp — see
+   below", 161px, an owner-decided offer line, #134/Q9c) — which starved the readiness cell to 26px
+   and printed its label on top of AVG FPS at all three sizes.
+   Every one of those measurements was taken inside a box some earlier round had clamped, and a
+   scrollWidth measured inside a clamped box is not max-content. So the rule is now absolute: NO
+   track in this strip is sized by its content. Every track is flex, with an explicit px floor
+   derived from what cannot break — the ring plus the longest unbreakable WORD, not the longest
+   string. Long strings wrap, and wrapping is free because the panel's geometry measures itself
+   (see --hc-stage-max above); it is no longer paid for out of a hand-written constant.
+     readiness 150px = 56px ring + 10px .arc-gauge gap + 84px "Readiness" (one word, cannot wrap)
+     readings   85px = 76px value (mono + its MEASURED pill, never wraps) + 1px hairline + 8px pad
+   Sentence-length strings — the gauge's note, and the CPU cell's "no CPU temp — see below" offer
+   line (#134/Q9c) — are NOT in these floors. They wrap, and a wrapped line simply makes the strip
+   taller, which the panel now absorbs by shrinking the stage instead of by clipping anything.
+   Budget at 1280×720 (533px content box): 150 + 4×85 + 4×8px gap = 522 ≤ 533. At that size the
+   four readings take their floors and the readiness cell is guaranteed the 161px left over, which
+   still clears its own 150. Guarded in home-console.test.tsx. */
 :root[data-v2="on"] .hc-readout {
   --hc-readout-sep: 8px;
   display: grid;
-  grid-template-columns: minmax(0, 2fr) repeat(4, minmax(max-content, 1fr));
+  grid-template-columns: minmax(150px, 2fr) repeat(4, minmax(85px, 1fr));
   align-items: start;
   gap: var(--hc-readout-sep);
   padding: var(--v2-pad);

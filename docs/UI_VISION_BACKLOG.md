@@ -191,8 +191,28 @@ track is FLEX-sized (`minmax(0, 2fr)`) so no child of the gauge — note, unit o
 — can widen it. The note wraps instead of pushing, which costs one line of height, reserved
 conservatively in `--hc-panel-below` (238 → 256px) because over-reserving costs rig height while
 under-reserving clips a reading. Guard rewritten again, now leftover-based and pinning both track
-directions; it fails on round 7's stylesheet. **Round 9 is next**, and it must measure
-`--hc-panel-below` so that reserve stops being a ceiling and becomes a number.
+directions; it fails on round 7's stylesheet.
+
+**🔧 SELF-REVIEW ROUND 9 — FAIL, fixed, guarded.** Fourth round on the same strip, and round
+8's fix caused it: flooring the four readings at `max-content` released THEIR content, and the CPU
+cell carries `.hc-read-none` — *"no CPU temp — see below"*, 161px, the owner-decided offer line
+(#134/Q9c). That starved the readiness instrument to **26.4px at 1280×720** and 79.2px at the two
+larger sizes, printing its label on top of AVG FPS at all three. The same round also measured the
+strip below the stage at **264.78px against a 256px reserve** — `--hc-panel-below` wrong for the
+fourth time (rounds 3, 5, 8, 9). **So round 9 stops patching the constant and deletes the class of
+bug.** Two structural changes, no new number to keep in step: ① **the panel measures itself** —
+`--hc-panel-below`, `--hc-stage-h` and `--hc-rig-h` are gone, `.hc-panel` is capped at
+`calc(100vh − chrome − HUD band − slack)` (three FIXED-chrome terms, none of them text), the control
+row and readout are `flex: none`, and the stage is the ONE shrinkable child, asking for the comp's
+500px and giving ground to its 320px floor. A wrapped translation now just makes the strip taller and
+the rig slightly shorter, which is the correct trade and needs no measurement. ② **no readout track
+is content-sized in either direction** — every track is `minmax(<px floor>, <n>fr)` with the floor
+derived from what CANNOT break (ring + gap + the one word "Readiness" = 150px; the mono value + its
+hairline + pad = 85px); sentence-length strings wrap, which is now free. A never-clip net
+(`overflow-y: auto` on the panel) turns the worst case into a scrollbar rather than round 3's silent
+clip. Three guards rewritten and each proven to FAIL on round 8's stylesheet — *"expected
+'minmax(0,2fr)repeat(4,minmax(max-cont…' not to contain 'max-content'"*. **Round 10 is next**, and it
+is the first round with nothing left to re-measure.
 
 ### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) ✅ ALL FIVE BUILT (⑤ shipped to the desk 2026-08-20, awaiting the owner's eye): ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED; owner tried it and said *"i like it"* 2026-08-20, so the default flips ON inside the comprehensibility sweep, which first fixes the button placement he objected to — see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door — SHIPPED 2026-08-20 (desk build `0808e33e`, self-review PASS 10/10); owner veto-on-sight still open**
 

@@ -831,53 +831,72 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     const cards = block(css, ':root[data-v2="on"] .hc-stage-cards');
     expect(cards).toMatch(/overflow-y:\s*auto/); // a scroll viewport (clips, then scrolls), not clip
 
-    // The bound is no longer a literal that could drift from the stage: it IS the stage's content
-    // box, named once on .hc-panel and read here (round 5). With the overlays gone the viewport may
-    // use the whole content box — but never more than it, which is what keeps a tall HardwareGrid a
-    // scroller instead of a stage-stretching column.
-    expect(cards, "the card viewport rides the stage's own content box").toMatch(
-      /max-height:\s*var\(--hc-rig-h\)/,
-    );
-
-    const panel = block(css, ':root[data-v2="on"] .hc-panel');
-    const rigCalc = /--hc-rig-h:\s*calc\(var\(--hc-stage-h\)\s*-\s*(\d+)px\)/.exec(panel);
-    expect(rigCalc, "--hc-rig-h must be DERIVED from --hc-stage-h, never restated").not.toBeNull();
+    // The bound was a literal (460), then a variable (--hc-rig-h). Both had to be kept in step with
+    // the stage BY HAND, and round 9 retired that whole habit: the ceiling is now the box this
+    // viewport is actually laid into, which cannot drift from itself. A percentage only resolves
+    // against a DEFINITE parent, though, so the two rules that make it definite are part of this
+    // guard -- without them the bound silently computes to `none` and a tall HardwareGrid goes back
+    // to stretching the stage instead of scrolling inside it.
+    expect(cards, "the card viewport rides the box it is laid into").toMatch(/max-height:\s*100%/);
 
     const stage = block(css, ':root[data-v2="on"] .hc-stage');
-    const padM = stage.match(/padding:\s*(\d+)px/);
-    expect(padM, ".hc-stage must declare an explicit px padding").not.toBeNull();
+    expect(stage, "the stage must resolve a definite height for that percentage").toMatch(
+      /(^|[^-])height:\s*var\(--hc-stage-max\)/m,
+    );
+    expect(stage, "...and STRETCH it into the rig, not centre an auto-sized box inside it").toMatch(
+      /place-items:\s*stretch/,
+    );
+    const rig = block(css, ':root[data-v2="on"] .hc-rig');
     expect(
-      Number(rigCalc![1]),
-      "box-sizing is border-box, so the rig's box is the stage minus BOTH paddings",
-    ).toBe(2 * Number(padM![1]));
+      rig,
+      "a height on the rig is a restated number again -- and a percentage there needs a definite " +
+        "parent, the exact property the r3f canvas circularity takes away",
+    ).not.toMatch(/(^|[^-])height:/m);
   });
 
-  it("CSS: readings are content-floored, the gauge is flex-capped (measured width budget)", () => {
-    // bug->guard, self-review rounds 6, 7 AND 8 (issue #49, 2026-08-23). The same collision three
-    // times, each round fixing one side and opening the other:
-    //   R6 -- the readiness track was a bare 1.4fr, whose AUTOMATIC minimum is min-content, so it
-    //         overflowed the CONTAINER and "READINESS" touched "AVG FPS". Clamped to minmax(0, ...).
-    //   R7 -- a 1.4/5.4 share is 126px where the instrument needs ~151, so the overflow simply moved
-    //         INSIDE the cell. Track made `auto`.
+  it("CSS: no readout track is sized by its content (measured width budget)", () => {
+    // bug->guard, self-review rounds 6, 7, 8 AND 9 (issue #49, 2026-08-23). ONE collision, four
+    // mechanisms, one root cause -- a track sized by its CONTENT, in a strip whose content is
+    // translated and wraps:
+    //   R6 -- a bare 1.4fr's AUTOMATIC minimum is min-content, so the readiness track overflowed
+    //         the CONTAINER and "READINESS" touched "AVG FPS".
+    //   R7 -- a 1.4/5.4 share is 126px where the instrument needs ~151, so the overflow simply
+    //         moved INSIDE the cell. Track made `auto`.
     //   R8 -- `auto` IS max-content, and the gauge's note ("= 15 of 16 checks passed", a TRANSLATED
-    //         string) runs ~187px unwrapped, so the track took 253px and starved the four readings
-    //         instead: their values overflowed by 6.9-20.1px at every size.
-    // NO hardcoded content width is trustworthy here -- the note and every label are translated, and
-    // a scrollWidth measured inside a clamped box is NOT max-content, which is how R7's 151px
-    // estimate came out 102px wrong. So the invariant is structural and holds both directions at
-    // once: the readings are FLOORED at their own content so nothing can starve them, the readiness
-    // track is FLEX-sized and never content-sized so no child of the gauge can widen it, and the
-    // leftover the gauge is guaranteed must still clear the instrument.
+    //         string) runs ~187px unwrapped, so the track took 253px and starved the four readings.
+    //   R9 -- flooring the readings at max-content released THEIRS: the CPU cell carries "no CPU
+    //         temp -- see below" (161px, the owner-decided offer line, #134/Q9c), which starved the
+    //         readiness cell to 26px and printed its label on top of AVG FPS at every size.
+    // Every one of those numbers was a scrollWidth read inside a box an earlier round had clamped,
+    // and a scrollWidth measured inside a clamped box is NOT max-content. So the rule is absolute
+    // and it holds in BOTH directions: no track here is content-sized. Every track is flex with an
+    // explicit px floor derived from what CANNOT break -- the ring plus the longest unbreakable
+    // WORD, never the longest string. Sentence-length strings wrap, and a wrapped line only makes
+    // the strip taller, which the panel now absorbs by shrinking the stage (see the fluid-
+    // composition guard) instead of by clipping anything.
     const CLIENT = 565; // .hc-readout clientWidth at 1280x720, the narrowest supported size
-    const READS = [73, 73, 76, 76]; // widest child of each reading cell, MEASURED at that size
+    const READS = [73, 73, 76, 76]; // widest UNBREAKABLE child of each reading cell, measured there
     const HAIRLINE = 1;
-    const GAUGE_MIN = 150; // 56px ring + 10px .arc-gauge gap + 84px "Readiness" (one unbreakable word)
+    const LABEL = 84; // "Readiness" at the 13px type floor -- one word, so it cannot wrap
 
     const css = readFileSync(join("src", "surfaces", "home-console.css"), "utf8");
     const tokens = readFileSync(join("src", "design", "tokens-v2.css"), "utf8");
     const readout = block(css, ':root[data-v2="on"] .hc-readout');
     const divider = /\.hc-readout\s*>\s*\*\s*\+\s*\*\s*\{([^}]*)\}/.exec(stripComments(css));
     expect(divider, "the readout must still draw a hairline between readings").not.toBeNull();
+
+    // The instrument's own floor comes from the shared kit, not from a number retyped here: if the
+    // ring grows, this guard tightens on its own.
+    const kit = stripComments(
+      readFileSync(join("src", "design", "console", "arc-gauge.css"), "utf8"),
+    );
+    const ring = Number(/\.arc-gauge > svg\s*\{[^}]*width:\s*(\d+)px/.exec(kit)?.[1]);
+    const kitGap = Number(/\.arc-gauge\s*\{[^}]*gap:\s*(\d+)px/.exec(kit)?.[1]);
+    expect(
+      Number.isFinite(ring) && Number.isFinite(kitGap),
+      "arc-gauge.css must still declare the ring width and its label gap",
+    ).toBe(true);
+    const GAUGE_MIN = ring + kitGap + LABEL;
 
     // A length here may be a px literal, a v2 token, or the strip's own local variable. Resolve it,
     // so the budget is checked against what the browser will actually use.
@@ -889,8 +908,7 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
       const ref = /^var\(\s*(--[\w-]+)\s*\)$/.exec(v);
       expect(ref, where + ' must be a px literal or one var(), got "' + v + '"').not.toBeNull();
       const name = ref![1];
-      const find = (hay: string) =>
-        new RegExp(name + ":\\s*(\\d+(?:\\.\\d+)?)px").exec(hay);
+      const find = (hay: string) => new RegExp(name + ":\\s*(\\d+(?:\\.\\d+)?)px").exec(hay);
       const hit = find(readout) ?? find(tokens);
       expect(hit, name + " must resolve to a px value (locally or in tokens-v2.css)").not.toBeNull();
       return Number(hit![1]);
@@ -903,112 +921,197 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
       ".hc-readout > * + * padding-left",
     );
 
-    // The readings take their own width off the top; whatever is left is what the gauge is
-    // GUARANTEED, and it has to be enough to draw the instrument and set its label on one line.
-    const content = CLIENT - 2 * pad;
-    const readsWidth = READS.reduce((a, w) => a + w + HAIRLINE + sep, 0);
-    const leftover = content - 4 * gap - readsWidth;
-    expect(
-      leftover,
-      "at 1280x720 the four readings leave the gauge " + leftover + "px and it needs " + GAUGE_MIN +
-        "px: the readout strip is over-subscribed, so either the gauge is crushed or a reading is " +
-        "clipped. Buy the width back from gap/padding (they carry no reading) -- never from the " +
-        "type floor, and never by wrapping the strip to a second row (--hc-panel-below reserves one).",
-    ).toBeGreaterThanOrEqual(GAUGE_MIN);
-
-    // …and the declaration has to keep matching that arithmetic, in BOTH directions.
     const cols = /grid-template-columns:\s*([^;]+);/.exec(readout);
     expect(cols, ".hc-readout must declare its tracks explicitly").not.toBeNull();
     const norm = cols![1].replace(/\s+/g, "");
+
+    // (1) NOTHING content-sized may appear in the template at all. Each of the four rounds above
+    //     shipped one of these words, and each one starved a different cell.
+    for (const banned of ["auto", "max-content", "min-content", "fit-content"]) {
+      expect(
+        norm,
+        "`" + banned + "` sizes a track by its CONTENT, and this strip's content is translated: " +
+          "rounds 6-9 each shipped one of these, and each time a reading or the instrument was " +
+          "printed on top of its neighbour",
+      ).not.toContain(banned);
+    }
+
+    // (2) Every track is minmax(<px floor>, <n>fr) -- an explicit floor so nothing can starve it,
+    //     a flex share so nothing INSIDE it can widen it. Anything else in the template fails here.
+    const expanded = norm.replace(
+      /repeat\((\d+),(minmax\(\d+px,\d+fr\))\)/g,
+      (_m, n: string, track: string) => track.repeat(Number(n)),
+    );
+    const parts = expanded.match(/minmax\(\d+px,\d+fr\)/g) ?? [];
     expect(
-      norm,
-      "the readiness track must be FLEX-sized, never content-sized: `auto`/`max-content` lets any " +
-        "child of the gauge -- a translated note, a unit, a tag -- widen the track and starve the " +
-        "readings, which is exactly how round 8 failed",
-    ).toMatch(/^minmax\(0,\d+fr\)/);
+      parts.join(""),
+      "every readout track must be minmax(<px floor>, <n>fr); got " + norm,
+    ).toBe(expanded);
+    expect(parts.length, "the strip is the readiness instrument plus four readings").toBe(5);
+    const floors = parts.map((p) => Number(/(\d+)px/.exec(p)![1]));
+
+    // (3) Each floor clears its own unbreakable content...
     expect(
-      norm,
-      "the four reading tracks must be FLOORED at their own content (minmax(max-content, 1fr)): a " +
-        "zero minimum lets the gauge starve them, and a reading clipped by its neighbour is a " +
-        "reading nobody can read",
-    ).toMatch(/repeat\(4,minmax\(max-content,1fr\)\)$/);
+      floors[0],
+      "the readiness track must fit the ring, its gap and the word \"Readiness\" (" + GAUGE_MIN +
+        "px) -- a starved instrument prints its label over the reading beside it",
+    ).toBeGreaterThanOrEqual(GAUGE_MIN);
+    READS.forEach((w, i) => {
+      expect(
+        floors[i + 1],
+        "reading " + (i + 1) + " must fit its value (" + w + "px, mono, never wraps) plus the " +
+          "hairline and its padding: a value clipped by its neighbour is a reading nobody can read",
+      ).toBeGreaterThanOrEqual(w + HAIRLINE + sep);
+    });
+
+    // (4) ...and all five together still fit the narrowest supported strip, or the browser
+    //     over-subscribes the row and puts one cell on top of another exactly as before.
+    const content = CLIENT - 2 * pad;
+    const needed = floors.reduce((a, b) => a + b, 0) + 4 * gap;
+    expect(
+      needed,
+      "at 1280x720 the five floors need " + needed + "px of a " + content + "px strip. Buy the " +
+        "difference back from gap/padding (they carry no reading) -- never from the 13px type " +
+        "floor, and never by wrapping the strip to a second row.",
+    ).toBeLessThanOrEqual(content);
   });
 
-  it("CSS: Health is ONE fluid composition — no breakpoint, and the readings still clear the fold", () => {
-    // bug->guard (self-review rounds 3, 4 and 5, issue #49, 2026-08-23). Three findings, one rule.
+  it("CSS: Health is ONE fluid composition — no breakpoint, and no constant that can go stale", () => {
+    // bug->guard, self-review rounds 3, 4, 5 AND 9 (issue #49, 2026-08-23). Four findings, one rule.
     //
-    // R3: at 1280x720 the 540px stage box pushed .hc-readout past .v2-content's clip -- five LABELS
-    //     on screen with none of their five VALUES. Labelled readings showing no numbers do not
-    //     read as "scroll down", they read as five readings that came back empty, which is an
-    //     honest-measurement failure and not a cosmetic one.
+    // R3: at 1280x720 the 540px stage pushed .hc-readout past .v2-content's clip -- five LABELS on
+    //     screen with none of their five VALUES. That does not read as "scroll down", it reads as
+    //     five readings that came back empty: an honest-measurement failure, not a cosmetic one.
     // R4: a lower min-height ALONE did nothing. The rig is an r3f <Canvas> that measures its parent
-    //     and writes its own inline pixel size, and a parent with only a floor is then sized by that
-    //     canvas; lowering a floor under a box already taller than it changes nothing and nothing
-    //     re-measures. An authoritative `height` is what breaks the circle.
-    // R5: both fixes were delivered as an @media block, which the owner-approved handoff rules out
-    //     in as many words -- "The current desktop shell intentionally has no responsive media
-    //     queries. Do not add breakpoints as a shortcut. The finished composition must still be
-    //     proven at 1280x720, the owner's real 1500x980 viewport, and 1920x1080." The same fix now
-    //     rides one continuous derivation, and this guard re-runs it at all three of those heights.
+    //     and writes its own inline pixel size, so a parent carrying only a floor is in turn sized
+    //     by that canvas. An authoritative height is what breaks the circle from the outside.
+    // R5: both fixes shipped as an @media block, which the approved handoff rules out in as many
+    //     words -- "no responsive media queries. Do not add breakpoints as a shortcut."
+    // R9: their replacement was a clamp() that subtracted --hc-panel-below, a HAND-MEASURED height
+    //     for the control row + readout strip. That number was wrong in rounds 3, 5, 8 and 9,
+    //     always the same way: the strip's height is however many lines its TRANSLATED strings wrap
+    //     to, which depends on the width they are given, which depends on the stage. No measurement
+    //     taken before a fix survives the fix. So .hc-panel may name FIXED CHROME and nothing else,
+    //     and the browser does the measuring -- which is the one measurement that cannot go stale.
     const css = readFileSync(join("src", "surfaces", "home-console.css"), "utf8");
+    const bare = stripComments(css);
 
     // A comment NAMING the retired block is not a breakpoint, so compare against the rules alone.
     expect(
-      stripComments(css),
+      bare,
       "no @media in Health: the approved handoff forbids breakpoints as a shortcut",
     ).not.toMatch(/@media/);
 
+    for (const dead of ["--hc-panel-below", "--hc-rig-h", "--hc-stage-h"]) {
+      expect(
+        bare,
+        dead + " was a height derived from content that wraps under translation. Round 9 deleted " +
+          "it; bringing it back re-opens a defect that took four rounds to kill.",
+      ).not.toContain(dead);
+    }
+
     const panel = block(css, ':root[data-v2="on"] .hc-panel');
-    const px = (name: string) => {
-      const m = new RegExp(`--${name}:\\s*(\\d+)px`).exec(panel);
-      expect(m, `--${name} must be an explicit px value on .hc-panel`).not.toBeNull();
-      return Number(m![1]);
+
+    // Nothing on the panel may be a number someone had to measure off the screen. Two of these are
+    // the approved comp's stage bounds; the other three are FIXED chrome -- a shell bar, a HUD
+    // band, a margin -- none of them text whose height can change in another language.
+    const ALLOWED: Record<string, string> = {
+      "hc-stage-min": "the rig's usable floor",
+      "hc-stage-max": "the approved comp's stage height",
+      "hc-chrome-top": "46px shell topbar + 26px .v2-content padding-top",
+      "hc-hud-reserve": "hud-frame.css's own band height",
+      "hc-stage-slack": "margin above the lane's clip",
     };
-    const min = px("hc-stage-min");
-    const max = px("hc-stage-max");
-    const subtrahends = ["hc-chrome-top", "hc-hud-reserve", "hc-panel-below", "hc-stage-slack"];
-    const offset = subtrahends.reduce((n, k) => n + px(k), 0);
+    const px: Record<string, number> = {};
+    for (const [, name, raw] of Array.from(panel.matchAll(/(--[\w-]+):\s*([^;]+);/g))) {
+      const key = name.slice(2);
+      expect(
+        Object.keys(ALLOWED),
+        name + " is a new constant on .hc-panel. Only FIXED chrome may live here -- anything " +
+          "measured off content goes stale the moment a string is translated (round 9).",
+      ).toContain(key);
+      const lit = /^(\d+)px$/.exec(raw.trim());
+      expect(
+        lit,
+        name + " must be a plain px literal (" + ALLOWED[key] + "), never a calc() or clamp(): a " +
+          "derivation here is how the stale constant got in.",
+      ).not.toBeNull();
+      px[key] = Number(lit![1]);
+    }
+    for (const key of Object.keys(ALLOWED)) {
+      expect(px, "--" + key + " must still be declared on .hc-panel").toHaveProperty(key);
+    }
 
-    // The stage absorbs the whole viewport difference, continuously, between a floor and the
-    // approved comp's ceiling. Every term is named so the arithmetic below is auditable.
-    const decl = /--hc-stage-h:\s*clamp\(([\s\S]*?)\);/.exec(panel);
-    expect(decl, "--hc-stage-h must be a clamp()").not.toBeNull();
-    const body = decl![1];
-    expect(body).toContain("var(--hc-stage-min)");
-    expect(body).toContain("var(--hc-stage-max)");
-    expect(body, "the middle term must track the VIEWPORT, not a breakpoint").toContain("100vh");
-    for (const k of subtrahends) expect(body, `${k} must be part of the derivation`).toContain(`var(--${k})`);
-
-    const stageAt = (viewport: number) => Math.min(max, Math.max(min, viewport - offset));
-
-    // MEASURED on the installed build (self-review round 5): the window chrome costs ~9px, so an
-    // outer 1280x720 gives a 711px viewport whose .v2-content clips at 675, with .hc-panel starting
-    // at 72 and carrying 238px of control row + readout strip below the stage. Round 8 makes the
-    // readiness note wrap, which adds at most one 13px x 1.35 line -- reserved as 18px, the
-    // conservative direction, until round 9 measures it.
-    const SHORT = { viewport: 711, panelTop: 72, clip: 675, below: 256 };
+    // The panel is capped at the room the lane actually has, and every subtrahend is named.
+    const cap = /max-height:\s*calc\(([\s\S]*?)\)\s*;/.exec(panel);
+    expect(cap, ".hc-panel must cap itself at the viewport minus its chrome").not.toBeNull();
+    expect(cap![1], "the cap must track the VIEWPORT, not a breakpoint").toContain("100vh");
+    for (const key of ["hc-chrome-top", "hc-hud-reserve", "hc-stage-slack"]) {
+      expect(cap![1], "--" + key + " must be part of the cap").toContain("var(--" + key + ")");
+    }
     expect(
-      SHORT.panelTop + stageAt(SHORT.viewport) + SHORT.below,
-      "at 1280x720 the whole readout strip must end above the lane's clip",
+      cap![1],
+      "the cap may not subtract the stage's own bounds -- the stage is INSIDE the panel, and " +
+        "subtracting a child from its parent is how the arithmetic drifted in the first place",
+    ).not.toContain("hc-stage-m");
+
+    // MEASURED on the installed build (self-review rounds 5 and 9): window chrome costs ~9px, so an
+    // outer 1280x720 gives a 711px viewport, .v2-content clips at 675, and .hc-panel starts at 72.
+    // All three are the SHELL, not Health's content, which is why they are still safe to state.
+    const SHORT = { viewport: 711, panelTop: 72, clip: 675 };
+    expect(px["hc-chrome-top"], "the named top chrome must be the panel's real top").toBe(SHORT.panelTop);
+    const capAt = (viewport: number) =>
+      viewport - px["hc-chrome-top"] - px["hc-hud-reserve"] - px["hc-stage-slack"];
+    expect(
+      SHORT.panelTop + capAt(SHORT.viewport),
+      "at 1280x720 the whole panel -- readout strip included -- must end above the lane's clip",
     ).toBeLessThanOrEqual(SHORT.clip);
+    // ...and the owner's real window and 1080p must still be able to give the comp its full stage.
+    for (const v of [971, 1071]) {
+      expect(
+        capAt(v),
+        v + "px of viewport must still fit the approved comp's stage",
+      ).toBeGreaterThan(px["hc-stage-max"]);
+    }
 
-    // ...and the owner's real window and 1080p keep the approved comp's proportions exactly.
-    expect(stageAt(971), "1500x980 must still get the comp's full stage").toBe(max);
-    expect(stageAt(1071), "1920x1080 must still get the comp's full stage").toBe(max);
+    // WHICH child gives ground is now the entire mechanism, so pin it. The control row and the
+    // readout are text at a fixed type size; shrinking either is how rounds 3 and 4 sliced the
+    // readings off the bottom of the room.
+    const fixed = /\.hc-panel\s*>\s*\.hc-controls,[\s\S]{0,160}?\.hc-panel\s*>\s*\.hc-readout\s*\{([^}]*)\}/.exec(bare);
+    expect(fixed, "the control row and the readout must be pinned flex: none").not.toBeNull();
+    expect(fixed![1], "a shrinkable readout is a clipped reading waiting to happen").toMatch(/flex:\s*none/);
 
-    // R4's lesson, pinned: the stage and the rig are sized by CSS, never by the canvas inside them.
     const stage = block(css, ':root[data-v2="on"] .hc-stage');
-    expect(
-      stage,
-      "the stage needs an authoritative height, not only a floor: a floor cannot shrink a box " +
-        "whose rendered height comes from the canvas inside it",
-    ).toMatch(/(^|[^-])height:\s*var\(--hc-stage-h\)/m);
-    expect(stage).toMatch(/min-height:\s*var\(--hc-stage-h\)/);
-    const rig = block(css, ':root[data-v2="on"] .hc-rig');
-    expect(rig, "the rig needs a stated height for the same reason -- a percentage of an " +
-      "indefinite parent is exactly what the canvas circularity takes away").toMatch(
-      /(^|[^-])height:\s*var\(--hc-rig-h\)/m,
+    // R4's lesson, still load-bearing -- only now the authoritative height is the flex BASE, which
+    // flex-shrink resolves to a definite used height without ever asking the canvas.
+    expect(stage, "the stage asks for the approved comp's height").toMatch(
+      /(^|[^-])height:\s*var\(--hc-stage-max\)/m,
     );
+    expect(stage, "...and never goes below the rig's usable floor").toMatch(
+      /min-height:\s*var\(--hc-stage-min\)/,
+    );
+    const flex = /(^|[^-])flex:\s*([^;]+);/m.exec(stage);
+    expect(flex, "the stage must declare the flex that lets it give ground").not.toBeNull();
+    expect(
+      flex![2].trim().split(/\s+/)[1],
+      "the stage is the ONE shrinkable child: a rendered canvas is smaller, while every other " +
+        "block on this panel is text that would have to be cut",
+    ).toBe("1");
+
+    const rig = block(css, ':root[data-v2="on"] .hc-rig');
+    expect(
+      rig,
+      "the rig may not state a height of its own: a restated number drifts, and a percentage needs " +
+        "a definite parent -- the exact property the canvas circularity takes away. Grid stretch " +
+        "hands it the stage's resolved box instead.",
+    ).not.toMatch(/(^|[^-])height:/m);
+
+    // The net, for the case where the stage is already at its floor and the panel still cannot fit.
+    expect(
+      panel,
+      "the leftover must become a SCROLL, never a clip. Round 3 lost five values to the lane's " +
+        "clip silently; a scrollbar is ugly, but a reading nobody can reach is dishonest.",
+    ).toMatch(/overflow-y:\s*auto/);
 
     // The HUD reserve is hud-frame.css's number (self-review round 2 owns the 36px). If that band
     // grows and Health's reserve does not, the strip is back underneath it.
@@ -1020,7 +1123,7 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     );
     expect(Number.isFinite(hudMargin), "hud-frame.css must still declare the band's reserve").toBe(true);
     expect(
-      px("hc-hud-reserve"),
+      px["hc-hud-reserve"],
       "Health must reserve at least the HUD readout band's own height",
     ).toBeGreaterThanOrEqual(hudMargin);
   });
