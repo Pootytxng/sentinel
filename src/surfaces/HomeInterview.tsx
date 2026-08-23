@@ -33,6 +33,10 @@ type Props = {
   /** Live readings, gathered by the room. This component never measures anything itself. */
   facts: InterviewFacts;
   /** The rect of the door that opened us, so the panel grows out of it. */
+  /** Which step to OPEN on (issue #49) — a full path, so the breadcrumb and Back read as usual.
+      Defaults to the root question, which is what every caller before this one wanted. The sheet is
+      conditionally mounted, so a new value applies on the next open, exactly like `origin`. */
+  initialPath?: InterviewStep[];
   origin: DOMRect | null;
   onClose: () => void;
   /** Re-run the readiness check — the one action that needs no room and no wiring. */
@@ -59,6 +63,7 @@ type Props = {
 
 export function HomeInterview({
   facts,
+  initialPath,
   origin,
   onClose,
   onRunCheck,
@@ -73,7 +78,9 @@ export function HomeInterview({
 
   // The stack, not a cursor: back pops, and the trail is what draws the progress dots. Starting
   // value is the root question, so `path` is never empty and `current` is never undefined.
-  const [path, setPath] = useState<InterviewStep[]>([{ kind: "question", id: INTERVIEW_ROOT }]);
+  const [path, setPath] = useState<InterviewStep[]>(
+    initialPath && initialPath.length > 0 ? initialPath : [{ kind: "question", id: INTERVIEW_ROOT }],
+  );
   const current = path[path.length - 1];
 
   const answer = useCallback((next: InterviewStep) => setPath((p) => [...p, next]), []);

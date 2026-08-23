@@ -26,9 +26,13 @@
 //
 // WHY NO WRAPPER DIVS. The split is done with grid areas in shell-v2.css over the SAME children
 // this shell has always rendered, so a non-split room's DOM is byte-identical to before and every
-// existing room selector, query and slot-order guard keeps resolving. Reading order stays
-// narrative-first (verdict → body → quiet → aside → below → door): the story is what a screen
-// reader should hear before the instrument panel.
+// existing room selector, query and slot-order guard keeps resolving.
+//
+// READING ORDER is the handoff's accessibility acceptance line verbatim: verdict → primary action
+// → focal evidence → supporting evidence → deeper tools. So `aside` — the focal evidence — comes
+// out of the DOM directly after the verdict block and BEFORE the room body, which carries the
+// supporting routes. Grid areas place it visually regardless, so the two orders are set
+// independently and neither has to compromise for the other.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { HomeRailId } from "./homeRail";
@@ -119,9 +123,9 @@ export function RoomShell({
         {primaryAction != null && <div className="v2-verdict-action">{primaryAction}</div>}
       </header>
       {measured != null && <div className="v2-measured">{measured}</div>}
+      {aside != null && <aside className="v2-room-aside">{aside}</aside>}
       <div className="v2-room-body">{children}</div>
       {quiet != null && <div className="v2-quiet-slot">{quiet}</div>}
-      {aside != null && <aside className="v2-room-aside">{aside}</aside>}
       {below != null && <div className="v2-room-below">{below}</div>}
       {door && <ForwardDoor to={door.to} label={doorLabel!} />}
     </section>

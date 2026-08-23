@@ -348,10 +348,29 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
   });
 });
 
-describe("HomeConsole — the console stage (hologram center + honest corner gauges)", () => {
-  // All four gauges are STANDARD — no expert flag, no scaffold (owner 2026-08-06: "the information
-  // it displayed should be standard"). The congestion answer is layout, not a switch; the readout
-  // stays whole for everyone. Pinned in home-console-standard-readout-guard.test.tsx.
+describe("HomeConsole — the console stage (the real rig + its honest readout)", () => {
+  // All five readings are STANDARD — no expert flag, no scaffold (owner 2026-08-06: "the
+  // information it displayed should be standard"). The congestion answer is layout, not a switch;
+  // the readout stays whole for everyone. Pinned in home-console-standard-readout-guard.test.tsx.
+  //
+  // They are anchored by `data-read`, NOT by where they sit. Issue #49 moved them off the canvas
+  // corners into the readout strip under the rig, and every selector here that named a corner
+  // (.hc-tl/.hc-tr/.hc-bl/.hc-br) would have gone quietly green-then-null on a layout change while
+  // the honesty contract it guards was untouched. A reading is identified by the fact it states.
+
+  /** The visible reading, whichever instrument renders it — the ring keeps ArcGauge, the four raw
+      numbers are readout cells. Both print "— —" and say why when there is nothing measured. */
+  const readout = (c: HTMLElement, id: string) => {
+    const el = c.querySelector<HTMLElement>(`[data-read="${id}"]`);
+    if (!el) throw new Error(`no reading named ${id}`);
+    const v = el.querySelector(".ag-v") ?? el.querySelector(".hc-read-n");
+    return {
+      el,
+      value: v!.textContent,
+      /** Honest-unmeasured: NOT YET on the ring, the reason line in a readout cell. */
+      unmeasured: el.querySelector(".ag-tag-ny") ?? el.querySelector(".hc-read-none"),
+    };
+  };
 
   it("renders the recognizable rig hologram at center-stage", async () => {
     mount();
@@ -359,37 +378,50 @@ describe("HomeConsole — the console stage (hologram center + honest corner gau
     expect(rig.closest(".hc-stage")).not.toBeNull();
   });
 
-  it("honest NOT-YET: no sessions + no GPU reading → FPS/1%-low/GPU gauges carry the tag, no numbers", () => {
+  it("honest NOT-YET: no sessions + no GPU reading → FPS/1%-low/GPU readings say so, no numbers", () => {
     state.gpuSensors = null;
     const c = mount({ ...props, sessions: [] }).container;
-    for (const corner of [".hc-tr", ".hc-bl", ".hc-br"]) {
-      const el = c.querySelector(corner)!;
-      expect(el.querySelector(".ag-tag-ny"), `${corner} NOT-YET tag`).not.toBeNull();
-      expect(el.querySelector(".ag-v")!.textContent, `${corner} readout`).toBe("— —");
+    for (const id of ["avgFps", "low1", "gpuTemp"]) {
+      const r = readout(c, id);
+      expect(r.unmeasured, `${id} must say why there is no reading`).not.toBeNull();
+      expect(r.value, `${id} readout`).toBe("— —");
     }
   });
 
   it("measured session → Avg FPS and 1% low render the real numbers", () => {
     const c = mount().container;
-    expect(c.querySelector(".hc-tr .ag-v")!.textContent).toBe("142");
-    expect(c.querySelector(".hc-tr .ag-tag-ny")).toBeNull();
-    expect(c.querySelector(".hc-bl .ag-v")!.textContent).toBe("98");
-    expect(c.querySelector(".hc-bl .ag-tag-ny")).toBeNull();
+    expect(readout(c, "avgFps").value).toBe("142");
+    expect(readout(c, "avgFps").unmeasured).toBeNull();
+    expect(readout(c, "low1").value).toBe("98");
+    expect(readout(c, "low1").unmeasured).toBeNull();
   });
 
   it("Readiness = the real ready/total ratio; NOT-YET while checks are running", () => {
     const c = mount().container;
-    expect(c.querySelector(".hc-tl .ag-v")!.textContent).toBe("100");
+    expect(readout(c, "readiness").value).toBe("100");
     cleanup();
     const checking = mount({ ...props, readiness: null, priorities: null }).container;
-    expect(checking.querySelector(".hc-tl .ag-tag-ny")).not.toBeNull();
+    expect(readout(checking, "readiness").unmeasured).not.toBeNull();
     expect(checking.querySelector(".v2-measured")!.textContent).toContain("Checking your PC now");
   });
 
-  it("GPU temp gauge shows the polled reading once it lands", async () => {
+  it("GPU temp reading shows the polled value once it lands", async () => {
     const c = mount().container;
-    await waitFor(() => expect(c.querySelector(".hc-br .ag-v")!.textContent).toBe("62"));
-    expect(c.querySelector(".hc-br .ag-tag-ny")).toBeNull();
+    await waitFor(() => expect(readout(c, "gpuTemp").value).toBe("62"));
+    expect(readout(c, "gpuTemp").unmeasured).toBeNull();
+  });
+
+  // issue #49 — the CPU temperature moved off the annotation plane into the readout beside the
+  // other four. It is the one reading this dev machine cannot take, so it is also the one that
+  // proves the unmeasured path end to end: a dash, and the SPECIFIC reason, not a generic one.
+  it("CPU temp: unreadable stays unreadable, and still points at the fix", () => {
+    const c = mount().container;
+    const r = readout(c, "cpuTemp");
+    expect(r.value).toBe("— —");
+    expect(r.unmeasured!.textContent).toBe("no CPU temp — see below");
+    // …and it is stated exactly once. It used to print on the annotation plane; printing it in
+    // both places would be the same number twice on one screen.
+    expect(c.querySelectorAll(".hc-ann .hc-callout-v").length).toBeLessThanOrEqual(3);
   });
 });
 
@@ -733,14 +765,20 @@ describe("HomeConsole — the last-session intelligence line (Intelligence Phase
 });
 
 // bug→guard (self-reviewer 2026-07-18, flagged intermittently while reviewing §4H in 2D):
-// the four .hc-corner ArcGauges are ALWAYS present (z-index:2, pinned 22px from each stage edge,
-// ~56px tall) regardless of rig view mode. In 2D card mode (compy_home_rig_3d="0") .hc-stage-cards
-// renders the full HardwareGrid; a full-height viewport (was max-height:420px) let a tall grid
-// scroll its rows UNDER the top/bottom gauges — padding can't help a scroll container mid-scroll.
-// The fix confines .hc-stage-cards to the gauge-free MIDDLE band via a bounded max-height. jsdom
-// has no layout engine, so the mechanized guard is (1) a DOM check that the 2D card path and all
-// four corner gauges coexist in one stage (the collision precondition), and (2) a CSS-contract
-// bound proving the viewport can never span the full stage again.
+// the four .hc-corner ArcGauges used to be ALWAYS present inside .hc-stage (z-index:2, pinned 22px
+// from each stage edge, ~56px tall) regardless of rig view mode. In 2D card mode
+// (compy_home_rig_3d="0") .hc-stage-cards renders the full HardwareGrid; a full-height viewport
+// (was max-height:420px) let a tall grid scroll its rows UNDER the top/bottom gauges — padding
+// can't help a scroll container mid-scroll. The original fix confined the viewport to the
+// gauge-free MIDDLE band.
+//
+// ISSUE #49 KILLED THE COLLISION AT THE ROOT rather than working around it: the approved direction
+// is that nothing may cover rig content, so the gauges AND the floating control row left the canvas
+// for the panel below it. The guard follows the defect instead of the workaround — the old
+// "confined to the middle band" bound is no longer the property that keeps the bug dead, and
+// asserting it would now be asserting a reserve for overlays that must never come back. What keeps
+// it dead is: (1) nothing is positioned over the canvas at all, and (2) the card viewport is still
+// a bounded scroller that cannot exceed the stage's own content box.
 const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 const block = (css: string, selector: string) => {
   const m = stripComments(css).match(
@@ -750,36 +788,61 @@ const block = (css: string, selector: string) => {
   return m[1];
 };
 
-describe("HomeConsole — 2D card viewport clears the always-present corner gauges (bug→guard)", () => {
-  it("2D mode: the card path and all four corner gauges coexist in one stage (collision precondition)", () => {
+describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)", () => {
+  it("2D mode: the card path renders, and NOTHING is layered over it", () => {
     localStorage.setItem("compy_home_rig_3d", "0");
-    const stage = mount().container.querySelector(".hc-stage")!;
+    const c = mount().container;
+    const stage = c.querySelector(".hc-stage")!;
     // The 2D fallback renders the real HardwareGrid, not the 3D hologram…
     expect(stage.querySelector(".hc-stage-cards .grid")).not.toBeNull();
     expect(stage.querySelector('[data-testid="rig-hologram"]')).toBeNull();
-    // …while all four corner gauges are still pinned in the same stage box (they overlap the cards).
-    for (const corner of [".hc-tl", ".hc-tr", ".hc-bl", ".hc-br"]) {
-      expect(stage.querySelector(corner), `${corner} gauge present`).not.toBeNull();
+    // …and the things that used to sit on top of it are OUT of the canvas box entirely. Not hidden,
+    // not z-ordered under — out. Each one is still on screen, one level up on the panel.
+    expect(stage.querySelector(".hc-readout"), "the readout is back over the canvas").toBeNull();
+    expect(stage.querySelector(".hc-controls"), "the control row is back over the canvas").toBeNull();
+    expect(stage.querySelector(".hc-corner"), "a corner gauge is pinned to the canvas again").toBeNull();
+    const panel = c.querySelector(".hc-panel")!;
+    expect(panel.querySelector(".hc-readout"), "the readout left the panel").not.toBeNull();
+    expect(panel.querySelector(".hc-controls"), "the controls left the panel").not.toBeNull();
+    // Every reading survived the move. This is the half that matters: the fix must not have been
+    // "we removed the things that were in the way".
+    for (const id of ["readiness", "avgFps", "low1", "gpuTemp", "cpuTemp"]) {
+      expect(c.querySelector(`[data-read="${id}"]`), `${id} was lost in the move`).not.toBeNull();
     }
   });
 
-  it("CSS: .hc-stage-cards is a scroll viewport confined to the gauge-free band (never full-stage)", () => {
+  it("3D mode: the annotation plane is the ONE thing over the canvas, and it cannot be clicked", () => {
+    const c = mount().container;
+    const stage = c.querySelector(".hc-stage")!;
+    // The labels are allowed over the glass — they are the hologram's own captions. What is not
+    // allowed is for them to take a click away from drag-orbit, which is why the plane is
+    // pointer-events:none in CSS and carries no buttons in the DOM.
+    expect(stage.querySelectorAll(".hc-ann").length).toBe(2);
+    const css = readFileSync(join("src", "surfaces", "home-console.css"), "utf8");
+    expect(block(css, ':root[data-v2="on"] .hc-ann')).toMatch(/pointer-events:\s*none/);
+    expect(
+      Array.from(stage.querySelectorAll(".hc-ann")).reduce((n, p) => n + p.querySelectorAll("button").length, 0),
+      "an annotation plane grew a control over the canvas",
+    ).toBe(0);
+  });
+
+  it("CSS: .hc-stage-cards is still a bounded scroll viewport, and it may not exceed the stage box", () => {
     const css = readFileSync(join("src", "surfaces", "home-console.css"), "utf8");
     const cards = block(css, ':root[data-v2="on"] .hc-stage-cards');
     expect(cards).toMatch(/overflow-y:\s*auto/); // a scroll viewport (clips, then scrolls), not clip
     const m = cards.match(/max-height:\s*(\d+)px/);
     expect(m, "max-height must be an explicit px bound").not.toBeNull();
     const maxH = Number(m![1]);
-    // DERIVED bound (2026-07-23, stage grew 420→540 for tester J's bigger-hologram ask): read the
-    // stage's own min-height so the two values can never drift apart again. Stage content =
-    // minH − 2·28 padding; each corner gauge intrudes ~(22 inset + 56 tall − 28 padding) = 50px
-    // from the top AND the bottom, so the gauge-free band is (minH − 56) − 100. The regression
-    // this guards was a full-stage viewport scrolling rows UNDER the gauges.
+    // DERIVED bound: read the stage's own min-height AND padding so the two can never drift apart.
+    // With the overlays gone the viewport may use the whole content box — but never more than it,
+    // which is what keeps a tall HardwareGrid a scroller instead of a stage-stretching column.
     const stage = block(css, ':root[data-v2="on"] .hc-stage');
     const minM = stage.match(/min-height:\s*(\d+)px/);
+    const padM = stage.match(/padding:\s*(\d+)px/);
     expect(minM, ".hc-stage must declare an explicit min-height").not.toBeNull();
-    const band = Number(minM![1]) - 56 - 100;
-    expect(maxH).toBeLessThanOrEqual(band);
+    expect(padM, ".hc-stage must declare an explicit px padding").not.toBeNull();
+    const content = Number(minM![1]) - 2 * Number(padM![1]);
+    expect(maxH).toBeLessThanOrEqual(content);
     expect(maxH).toBeGreaterThan(0);
   });
 });

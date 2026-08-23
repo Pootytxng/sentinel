@@ -267,27 +267,42 @@
   color: var(--v2-text);
 }
 
-/* ── The console stage — bracketed frame, hologram centered, gauges pinned to the corners ── */
-:root[data-v2="on"] .hc-stage {
+/* ── THE INSTRUMENT PANEL (issue #49) — one surface holding the canvas, its controls and the
+   readout strip. The chrome that used to be on .hc-stage lives here now, because the instrument is
+   all three parts, not just the glass: a border around the canvas alone would have drawn a box
+   around the rig and left the numbers floating beside it. ── */
+:root[data-v2="on"] .hc-panel {
   position: relative;
-  /* 420 → 540 (tester J, 2026-07-22 review: "make the window of the 3d pc bigger"; owner-directed
-     wave 2026-07-23). The canvas fills stage-minus-padding, so this IS the hologram's size lever.
-     The .hc-stage-cards ceiling below derives from this value — its comment + the bug→guard test
-     in home-console.test.tsx (which now READS this min-height) must move together with it. */
-  min-height: 540px;
-  display: grid;
-  place-items: center;
-  padding: 28px;
+  display: flex;
+  flex-direction: column;
   background: var(--ix-glass-fill);
   border: 1px solid var(--ix-glass-border);
   border-top-color: var(--ix-glass-top);
   border-radius: var(--ix-radius);
 }
 
+/* ── The console stage — bracketed frame, hologram centered. The four corner ArcGauges that used
+   to be pinned inside it are gone from the canvas (the approved direction: nothing may cover rig
+   content); they are in .hc-readout below, and NOT ONE of them was dropped. ── */
+:root[data-v2="on"] .hc-stage {
+  position: relative;
+  /* 540 → 500 with the gauges and the control row off the glass. The VISIBLE rig grew even though
+     the box shrank: the old 540px box lost ~100px of usable height to the top and bottom gauge
+     reserve and another ~40px at the bottom to the floating control row, so the rig's real
+     clearance went from ~400px to the full 460px content box. Measured off the approved Health
+     comp, whose canvas is ~500 tall in a ~620 column. The .hc-stage-cards ceiling below DERIVES
+     from this value — its comment + the bug→guard test in home-console.test.tsx (which READS this
+     min-height) must move together with it. */
+  min-height: 500px;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
 :root[data-v2="on"] .hc-rig {
   width: 100%;
   height: 100%;
-  min-height: 480px; /* rides the 540px stage (was 360 at 420) */
+  min-height: 460px; /* rides the 500px stage (was 480 at 540) */
   display: grid;
   place-items: center;
 }
@@ -295,17 +310,17 @@
   padding: var(--v2-pad);
   overflow-y: auto;
   width: 100%;
-  /* Confine the 2D card viewport to the gauge-free MIDDLE band. The four corner ArcGauges are
-     always-present, z-index:2, pinned 22px from the stage edge and ~56px tall, so they intrude
-     ~50px into the 28px-padded content box from the top AND the bottom. A full-height viewport
-     (was 420px) let a tall HardwareGrid scroll its rows UNDER them — padding can't help because a
-     scroll container only protects its extremes, not mid-scroll. .hc-rig's place-items:center
-     splits the reserved band symmetrically, so a bounded max-height keeps every row clear.
-     Ceiling = stage content (540 − 2·28 = 484) − 2·(22 + 56 − 28 ≈ 50) reserve = 384. bug→guard:
-     the "2D card viewport clears the corner gauges" block in home-console.test.tsx now DERIVES
-     the bound from .hc-stage's min-height, so the two values can't drift apart again
-     (self-reviewer 2026-07-18; derivation upgrade 2026-07-23). */
-  max-height: 380px;
+  /* The 2D card viewport may now use the WHOLE stage content box. The reserve this bound used to
+     carry existed for one reason: four always-present, z-index:2 corner ArcGauges pinned 22px from
+     the stage edge, which a tall HardwareGrid could scroll its rows under mid-scroll (padding
+     cannot help — a scroll container only protects its extremes). Those gauges are no longer on the
+     canvas, and the control row left with them, so nothing overlays this viewport any more except
+     the decorative corner brackets, which are 22px, pointer-events:none and outside the padding.
+     Ceiling = stage content = 500 − 2·20 = 460. bug→guard: the "2D card viewport" block in
+     home-console.test.tsx still DERIVES this bound from .hc-stage's min-height and padding, so the
+     two values cannot drift apart (self-reviewer 2026-07-18; derivation 2026-07-23; reserve
+     retired with the corner gauges, issue #49). */
+  max-height: 460px;
 }
 :root[data-v2="on"] .hc-stage-loading {
   display: grid;
@@ -349,26 +364,10 @@
   border-right: 2px solid;
 }
 
-:root[data-v2="on"] .hc-corner {
-  position: absolute;
-  z-index: 2;
-}
-:root[data-v2="on"] .hc-tl {
-  top: 22px;
-  left: 22px;
-}
-:root[data-v2="on"] .hc-tr {
-  top: 22px;
-  right: 22px;
-}
-:root[data-v2="on"] .hc-bl {
-  bottom: 22px;
-  left: 22px;
-}
-:root[data-v2="on"] .hc-br {
-  bottom: 22px;
-  right: 22px;
-}
+/* .hc-corner / .hc-tl / .hc-tr / .hc-bl / .hc-br — DELETED (issue #49). They pinned the four
+   ArcGauges to the canvas corners. The approved direction says gauges may not cover rig content,
+   so the gauges moved into .hc-readout and their anchors went with them rather than staying as
+   dead rules every session pays to parse. The readings themselves all survive — see .hc-read. */
 
 /* ── Instrument annotations — vertically centered on the stage edges, between the corner
    gauges; the parallax plane (Task 4). Never intercept drag-orbit. ── */
@@ -565,15 +564,16 @@
   color: var(--v2-faint);
 }
 
-/* ── Quiet view controls — bottom-center, between the two lower gauges ── */
+/* ── Quiet view controls — OFF the glass (issue #49). They used to float bottom-center over the
+   canvas, between the two lower gauges; now they are a real row under it, on the panel, where they
+   cover nothing. Same controls, same order, same persisted state. ── */
 :root[data-v2="on"] .hc-controls {
-  position: absolute;
-  bottom: 14px;
-  inset-inline: 0;
   display: flex;
   justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
-  z-index: 2;
+  padding: 0 var(--v2-pad) var(--v2-pad-sm);
 }
 :root[data-v2="on"] .hc-seg-group {
   display: flex;
@@ -600,19 +600,179 @@
   color: var(--v2-text);
 }
 
+/* ── THE READOUT STRIP (issue #49) — the four canvas-corner gauges plus the CPU temperature that
+   used to be a value on the annotation plane, in one row under the rig. It is a HIERARCHY, not five
+   equal instruments: readiness keeps its ring (a 0–100 out of a formula is what a ring is for) and
+   the four raw readings beside it are numbers, rendered as numbers. Five rings would be the "twelve
+   equal tiles" failure the bento exists to prevent, in miniature. The 1.4fr first track is measured
+   off the approved comp, where the readiness cell is about a third wider than its neighbours
+   because it carries the ring, the grade word and the "= n of m checks passed" line. ── */
+:root[data-v2="on"] .hc-readout {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(4, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--v2-pad-sm);
+  padding: var(--v2-pad);
+  border-top: 1px solid var(--v2-line);
+}
+/* Hairline between cells — the divider is the only thing separating five readings that must never
+   be read as one sentence. */
+:root[data-v2="on"] .hc-readout > * + * {
+  border-left: 1px solid var(--v2-line);
+  padding-left: var(--v2-pad-sm);
+}
+:root[data-v2="on"] .hc-read,
+:root[data-v2="on"] .hc-read-arc {
+  min-width: 0;
+}
+:root[data-v2="on"] .hc-read {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+}
+/* SANS, not mono — the handoff's content rule is explicit that mono is for timestamps and counts
+   while headings and labels stay sans, and this is a label. It is the one place this strip differs
+   from ArcGauge's own .ag-label, which predates the rule. */
+:root[data-v2="on"] .hc-read-label {
+  font: var(--type-label) var(--v2-font-sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--v2-muted);
+}
+/* The measured value. Mono + tabular figures so a changing reading does not reflow its neighbours
+   (mono law: measured values only). --type-section is the scale step above the card title, which is
+   what makes these read as the instrument's numbers rather than as tile copy. */
+:root[data-v2="on"] .hc-read-v {
+  font-family: var(--v2-font-mono);
+  font-size: var(--type-section);
+  font-weight: var(--type-section-weight);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--v2-text);
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+:root[data-v2="on"] .hc-read-u {
+  font-size: var(--type-label);
+  color: var(--v2-faint);
+}
+/* Tone rides the SAME arcTone() map the corner gauges used, so no reading changed its meaning by
+   changing its shape. "good" deliberately stays text-coloured — the green in this strip belongs to
+   the MEASURED attestation, not to the number, exactly as the approved comp shows it. */
+:root[data-v2="on"] .hc-read-accent .hc-read-v {
+  color: var(--v2-accent-text, var(--v2-accent));
+}
+:root[data-v2="on"] .hc-read-warn .hc-read-v {
+  color: var(--v2-warn);
+}
+:root[data-v2="on"] .hc-read-empty .hc-read-v {
+  color: var(--v2-faint);
+}
+/* MEASURED — the attestation, not a grade. Same words and same green in every cell that has a real
+   reading, because "we measured this" is one claim with one appearance. */
+:root[data-v2="on"] .hc-read-tag {
+  font: var(--type-label) var(--v2-font-sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border: 1px solid var(--v2-ok);
+  color: var(--v2-ok);
+}
+/* ...and its only alternative: why there is no reading. Quiet, sentence case, never a pill — a
+   missing measurement must not look like a badge that was earned. */
+:root[data-v2="on"] .hc-read-none {
+  font-size: var(--type-label);
+  color: var(--v2-faint);
+  line-height: 1.35;
+}
+
+/* ── WHAT HAS BEEN HAPPENING (issue #49) — the three shortcuts into the interview. Row buttons, not
+   cards: they are one list of answers to one question, and a grid of boxes here would compete with
+   the primary button directly above them. ── */
+:root[data-v2="on"] .hc-happening {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v2-pad-sm);
+  padding-top: var(--v2-pad);
+  border-top: 1px solid var(--v2-line);
+}
+:root[data-v2="on"] .hc-happening-q {
+  margin: 0;
+  font: 600 var(--type-label) var(--v2-font-sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--v2-faint);
+}
+/* The instruction, in the user's register. It is the reason the three rows are not a demand: the
+   heading names the subject, this line says what to do with it and what happens next. */
+:root[data-v2="on"] .hc-happening-hint {
+  margin: -4px 0 0;
+  font-size: var(--type-body);
+  color: var(--v2-muted);
+  line-height: 1.5;
+  max-width: 52ch;
+}
+:root[data-v2="on"] .hc-happening-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+:root[data-v2="on"] .hc-happening-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--v2-pad-sm);
+  text-align: left;
+  padding: 14px var(--v2-pad);
+  background: var(--v2-panel);
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-r-sm);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+:root[data-v2="on"] .hc-happening-row:hover {
+  background: var(--v2-panel-2);
+  border-color: var(--v2-accent-line);
+}
+:root[data-v2="on"] .hc-happening-row:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
+}
+:root[data-v2="on"] .hc-happening-label {
+  font: 600 var(--type-card) var(--v2-font-sans);
+  color: var(--v2-text);
+  min-width: 0;
+}
+:root[data-v2="on"] .hc-happening-go {
+  color: var(--v2-faint);
+  font-size: var(--type-card);
+  line-height: 1;
+}
+:root[data-v2="on"] .hc-happening-row:hover .hc-happening-go {
+  color: var(--v2-accent-text, var(--v2-accent));
+}
+
 /* ── Task 4: the console comes ALIVE — cursor-follow spotlight · staggered reveal · parallax ──
    ALL gated under .home-console[data-motion="full"]; the reduced branch (data-motion="reduced")
    simply never matches, so it stays a flat still page (no explicit disable needed). The reticle
    Target Cursor is a separate component (reticle.css), null under reduced motion. */
 
 /* Cursor-follow spotlight — a border-masked accent glow whose opacity tracks pointer proximity
-   via --glow-intensity (set by HomeConsole's pointer handler; LabConsole's exact mechanism). */
-:root[data-v2="on"] .home-console[data-motion="full"] .hc-stage {
+   via --glow-intensity (set by HomeConsole's pointer handler; LabConsole's exact mechanism).
+   It masks the BORDER, so it moved to .hc-panel with the border (issue #49) — on .hc-stage it
+   would now mask an edge that no longer exists and paint nothing. */
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-panel {
   --glow-x: 50%;
   --glow-y: 50%;
   --glow-intensity: 0;
 }
-:root[data-v2="on"] .home-console[data-motion="full"] .hc-stage::after {
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-panel::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -660,18 +820,27 @@
   }
 }
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-verdict,
-:root[data-v2="on"] .home-console[data-motion="full"] .hc-stage,
-:root[data-v2="on"] .home-console[data-motion="full"] .hc-corner,
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-panel,
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-read,
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-happening-row,
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-limiter,
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-specs,
 :root[data-v2="on"] .home-console[data-motion="full"] .dock {
   animation: v2-hc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
-:root[data-v2="on"] .home-console[data-motion="full"] .hc-stage { animation-delay: 0.06s; }
-:root[data-v2="on"] .home-console[data-motion="full"] .hc-tl { animation-delay: 0.12s; }
-:root[data-v2="on"] .home-console[data-motion="full"] .hc-tr { animation-delay: 0.19s; }
-:root[data-v2="on"] .home-console[data-motion="full"] .hc-bl { animation-delay: 0.26s; }
-:root[data-v2="on"] .home-console[data-motion="full"] .hc-br { animation-delay: 0.33s; }
+/* The stagger reads the composition left-to-right and then down, the way the room does: the panel
+   arrives, its five readings count in under it, and the three answers land in the narrative column
+   beside them. The four per-corner delays this replaces addressed .hc-tl/.hc-tr/.hc-bl/.hc-br,
+   which no longer exist — nth-child keeps the same rhythm without naming positions that moved. */
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-panel { animation-delay: 0.06s; }
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-readout > *:nth-child(1) { animation-delay: 0.12s; }
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-readout > *:nth-child(2) { animation-delay: 0.16s; }
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-readout > *:nth-child(3) { animation-delay: 0.2s; }
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-readout > *:nth-child(4) { animation-delay: 0.24s; }
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-readout > *:nth-child(5) { animation-delay: 0.28s; }
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-happening-row:nth-child(1) { animation-delay: 0.14s; }
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-happening-row:nth-child(2) { animation-delay: 0.2s; }
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-happening-row:nth-child(3) { animation-delay: 0.26s; }
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-specs { animation-delay: 0.24s; }
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-limiter { animation-delay: 0.26s; }
 :root[data-v2="on"] .home-console[data-motion="full"] .dock { animation-delay: 0.3s; }

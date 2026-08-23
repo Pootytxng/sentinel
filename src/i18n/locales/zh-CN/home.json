@@ -34,6 +34,10 @@
       "cpu": "CPU",
       "cpuNoTemp": "无 CPU 温度——见下方"
     },
+    "happening": {
+      "eyebrow": "最近发生了什么？",
+      "hint": "选一个最贴切的描述，我们就能为你指明方向。"
+    },
     "dense": {
       "model": "型号",
       "vram": "VRAM",
@@ -54,7 +58,8 @@
       "gpu": "显卡",
       "cpu": "处理器",
       "ram": "内存",
-      "storage": "存储"
+      "storage": "存储",
+      "none": "尚未检测到硬件——请重新检查。"
     },
     "stage": {
       "readinessLabel": "就绪度",
@@ -62,6 +67,7 @@
       "avgFps": "平均 FPS",
       "onePercentLow": "1% 低帧",
       "gpuTemp": "GPU 温度",
+      "cpuTemp": "CPU 温度",
       "loading3d": "正在以 3D 方式加载你的主机…",
       "rigViewAria": "主机视图",
       "view3d": "3D",

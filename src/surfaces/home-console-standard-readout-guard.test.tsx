@@ -227,7 +227,12 @@ const setExpert = (on: boolean) =>
 /** Everything Home puts on screen, as one comparable string. Used to prove the preference is inert. */
 const faceOf = (c: HTMLElement) =>
   [
-    ["tl", "tr", "bl", "br"].map((q) => `${q}:${c.querySelector(`.hc-${q}`) ? 1 : 0}`).join(","),
+    // By FACT, not by position (issue #49): these five used to be four corner anchors on the
+    // canvas plus a value on the annotation plane, and a selector naming a corner stops guarding
+    // anything the moment the room is re-laid-out. `data-read` moves with the reading.
+    ["readiness", "avgFps", "low1", "gpuTemp", "cpuTemp"]
+      .map((q) => `${q}:${c.querySelector(`[data-read="${q}"]`) ? 1 : 0}`)
+      .join(","),
     `seg:${c.querySelectorAll(".hc-seg-group").length}`,
     `ann:${c.querySelectorAll(".hc-ann").length}`,
     `rig:${c.querySelector('[data-testid="rig-hologram"]') ? 1 : 0}`,
@@ -247,11 +252,14 @@ describe("Home's standard readout (owner 2026-08-06 — structure it, do not hid
   it("puts the WHOLE readout on the default face — empty localStorage, nothing gated", async () => {
     const r = mount();
     const c = r.container;
-    // The four gauges. The lower two were briefly expert-only; the owner put them back.
-    expect(c.querySelector(".hc-tl"), "the readiness gauge left the default face").toBeTruthy();
-    expect(c.querySelector(".hc-tr"), "the avg-fps gauge left the default face").toBeTruthy();
-    expect(c.querySelector(".hc-bl"), "the 1% low is gated again — it must be standard").toBeTruthy();
-    expect(c.querySelector(".hc-br"), "the GPU temp is gated again — it must be standard").toBeTruthy();
+    // The readings. The 1% low and GPU temp were briefly expert-only; the owner put them back.
+    // CPU temp joined them on the face in issue #49, when it moved off the annotation plane.
+    const read = (id: string) => c.querySelector(`[data-read="${id}"]`);
+    expect(read("readiness"), "the readiness gauge left the default face").toBeTruthy();
+    expect(read("avgFps"), "the avg-fps reading left the default face").toBeTruthy();
+    expect(read("low1"), "the 1% low is gated again — it must be standard").toBeTruthy();
+    expect(read("gpuTemp"), "the GPU temp is gated again — it must be standard").toBeTruthy();
+    expect(read("cpuTemp"), "the CPU temp left the default face").toBeTruthy();
     // The bay is lazy() — await it rather than reading the Suspense fallback and calling it gone.
     expect(await r.findByTestId("rig-hologram"), "the rig left the default face").toBeTruthy();
     expect(c.querySelectorAll(".hc-ann").length, "the annotation planes left the default face").toBe(2);

@@ -62,11 +62,13 @@
   --v2-pad: 16px;
   --v2-pad-sm: 12px;
 
-  /* The evidence column of the approved four-room split (issue #49). One fixed step, not a
-     percentage: the narrative column takes the remainder, so the rig/session/tape panel is the
-     same width in every room and at every window size the app supports — which is what makes
-     the four rooms read as one instrument instead of four layouts. 480px of the 1120px content
-     cap leaves ~610px for the narrative; at the 1280-wide floor it still leaves ~494px, wider
-     than the 40px verdict's 20ch measure. No media query is involved, and none may be added. */
-  --v2-aside: 480px;
+  /* The evidence column of the approved four-room split (issue #49). Measured off the approved
+     comps, not invented: at the 1120px content cap the evidence column is 620px and the narrative
+     column is the remaining 452px, which is why this is the WIDER of the two — on Health the rig
+     is "the dominant evidence surface" and it may not be squeezed to make room for prose.
+     `min(620px, 58%)` so the column yields first when the window is narrower than the cap: at the
+     1280-wide floor (1004px of content) the evidence column takes 582px and the narrative still
+     gets 374px, instead of a fixed 620 crushing the 40px verdict into a column it cannot hold.
+     One rule, no media query, and none may be added. */
+  --v2-aside: min(620px, 58%);
 }

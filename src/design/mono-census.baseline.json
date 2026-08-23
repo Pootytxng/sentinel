@@ -151,6 +151,7 @@
     "src/surfaces/gaming-console.css: :root[data-v2=\"on\"] .gc-what summary": "chrome-tag",
     "src/surfaces/home-console.css: :root[data-v2=\"on\"] .hc-masthead-eyebrow .hc-mono": "value",
     "src/surfaces/home-console.css: :root[data-v2=\"on\"] .hc-mono": "value",
+    "src/surfaces/home-console.css: :root[data-v2=\"on\"] .hc-read-v": "value",
     "src/surfaces/home-console.css: :root[data-v2=\"on\"] .hc-readout-seg .hc-mono": "value",
     "src/surfaces/home-hud.css: :root[data-v2=\"on\"][data-hud=\"on\"] .hud-masthead-eyebrow .hud-mono": "value",
     "src/surfaces/home-hud.css: :root[data-v2=\"on\"][data-hud=\"on\"] .hud-mono": "value",

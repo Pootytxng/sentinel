@@ -205,7 +205,7 @@ describe("RoomShell split layout — the evidence column (issue #49)", () => {
     expect(container.querySelector(".v2-room-below")!.textContent).toBe("under");
   });
 
-  it("every slot present → fixed document order, narrative BEFORE the instrument panel", () => {
+  it("every slot present → fixed document order: verdict, focal evidence, then supporting", () => {
     const { container } = render(
       <RoomShell
         room="home"
@@ -226,9 +226,9 @@ describe("RoomShell split layout — the evidence column (issue #49)", () => {
       "v2-notice-slot",
       "v2-verdict",
       "v2-measured",
+      "v2-room-aside",
       "v2-room-body",
       "v2-quiet-slot",
-      "v2-room-aside",
       "v2-room-below",
       "v2-door",
     ]);

@@ -291,7 +291,10 @@
     "quiet    aside"
     "below    below"
     "door     door";
-  column-gap: calc(var(--v2-gap) * 2);
+  /* 48px — three grid gaps. Measured off the approved comps, which set the two columns a full
+     step further apart than tiles inside a grid, so the split reads as two surfaces rather than
+     one wide row of cards. */
+  column-gap: calc(var(--v2-gap) * 3);
   align-content: start;
 }
 :root[data-v2="on"] .v2-room[data-layout="split"] > .v2-notice-slot {

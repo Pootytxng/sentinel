@@ -38,6 +38,10 @@
       "cpu": "CPU",
       "cpuNoTemp": "no CPU temp — see below"
     },
+    "happening": {
+      "eyebrow": "What's been happening?",
+      "hint": "Pick what best describes it so we can point you in the right direction."
+    },
     "dense": {
       "model": "model",
       "vram": "VRAM",
@@ -58,7 +62,8 @@
       "gpu": "Graphics",
       "cpu": "Processor",
       "ram": "Memory",
-      "storage": "Storage"
+      "storage": "Storage",
+      "none": "Nothing detected yet — run a fresh check."
     },
     "stage": {
       "readinessLabel": "Readiness",
@@ -66,6 +71,7 @@
       "avgFps": "Avg FPS",
       "onePercentLow": "1% low",
       "gpuTemp": "GPU temp",
+      "cpuTemp": "CPU temp",
       "loading3d": "Loading your rig in 3D…",
       "rigViewAria": "Rig view",
       "view3d": "3D",

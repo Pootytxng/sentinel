@@ -37,7 +37,12 @@ import { deriveReverted } from "./use-scan";
 import { BentoGrid, BentoTile, Sheet, useSheet } from "../design/bento";
 import { homeCareEntry, fastPathReadyHeadline, fastPathApplyLabel } from "./home-intake-data";
 import { HomeInterview } from "./HomeInterview";
-import type { InterviewFacts } from "./home-interview-data";
+import {
+  INTERVIEW_ROOT,
+  interviewQuestions,
+  type InterviewFacts,
+  type InterviewStep,
+} from "./home-interview-data";
 import "./home-console.css";
 
 // HomeConsole — Home as the console cold-open (plan 2026-07-10-console-hud-phase2-home,
@@ -234,6 +239,67 @@ function SpecBox({ title, rows }: { title: string; rows: [string, string][] }) {
   );
 }
 
+// ONE CELL OF THE EVIDENCE PANEL'S READOUT STRIP (four-room direction, issue #49).
+//
+// WHY IT IS NOT AN ArcGauge. The four corner gauges came off the canvas in this slice — the
+// approved direction says plainly that gauges and controls may not cover rig content — and the
+// strip they landed in is a HIERARCHY, not five equal instruments: the composite readiness score
+// keeps its ring because a 0–100 out of a formula is what a ring is for, and the four raw
+// readings beside it are just numbers. Five rings in a row would be the "twelve equal tiles"
+// failure the bento exists to prevent, in miniature.
+//
+// It is deliberately Health-local for now, the same as Callout and SpecBox above. If Live and
+// Test prove they want the same cell — and their approved comps say they will — slice 3 (the
+// shared instrument kit) is where it gets promoted, with two more callers as the evidence.
+//
+// HONESTY: `value == null` is a real state, not a zero, and it never renders as one. A measured
+// cell prints its number and the MEASURED attestation; an unmeasured cell prints the em-dash pair
+// and, in that same slot, why there is no reading — the caller's own plain-English line where it
+// has one (CPU temp keeps its "see below", which is the C-19 dead-end fix travelling with the
+// fact), otherwise ArcGauge's own "no reading". Two shapes, never a third, and never a zero.
+function Reading({
+  id,
+  label,
+  value,
+  unit,
+  tone = "neutral",
+  note,
+}: {
+  /** Stable name for this reading, on `data-read`. It is what the honesty guards anchor to, and it
+      is the reason they survived the move off the canvas: they used to select the CORNER a gauge
+      was pinned to (.hc-tl/.hc-tr/.hc-bl/.hc-br), so re-laying-out the room silently unhooked
+      them. A reading's identity is which fact it states, never where it sits. */
+  id: string;
+  /** ReactNode so a caller can gloss jargon inline (the <Term> on "1% low"). */
+  label: React.ReactNode;
+  value: number | null;
+  /** Short only (°C, fps) — the same rail as ArcGauge's unit.length <= 3. */
+  unit?: string;
+  /** The corner gauges' own ArcTone, through the same arcTone() map — not a second scale. */
+  tone?: ArcTone;
+  /** This reading's specific reason for having no reading, when it has one to give. */
+  note?: string;
+}) {
+  const { t } = useTranslation();
+  const empty = value == null;
+  return (
+    <div className={`hc-read hc-read-${tone} ${empty ? "hc-read-empty" : ""}`} data-read={id}>
+      <span className="hc-read-label">{label}</span>
+      <span className="hc-read-v hc-mono">
+        {/* The number is its own node so the unit never rides along in its text — the honesty
+            guards read this span and compare it to the reading they expect. */}
+        <span className="hc-read-n">{empty ? "— —" : Math.round(value)}</span>
+        {!empty && unit && <span className="hc-read-u">{unit}</span>}
+      </span>
+      {empty ? (
+        <span className="hc-read-none">{note ?? t("common.arcGauge.noReading")}</span>
+      ) : (
+        <span className="hc-read-tag">{t("common.arcGauge.measured")}</span>
+      )}
+    </div>
+  );
+}
+
 export function HomeConsole({
   hw,
   readiness,
@@ -292,6 +358,11 @@ export function HomeConsole({
   // pressed rather than fading in from nowhere.
   const [interviewOrigin, setInterviewOrigin] = useState<DOMRect | null>(null);
   const [interviewOpen, setInterviewOpen] = useState(false);
+  // Which step the interview opens ON (issue #49). The primary button opens it at the root, exactly
+  // as before; a quick-symptom row opens it one answer in. It is a full path, not a cursor, so the
+  // interview's own breadcrumb and Back button keep working with no change to how they read state.
+  const INTERVIEW_START: InterviewStep[] = [{ kind: "question", id: INTERVIEW_ROOT }];
+  const [interviewPath, setInterviewPath] = useState<InterviewStep[]>(INTERVIEW_START);
   // Whether the one-tap safe stack has already been applied in THIS visit. The finding card reads
   // it to stop offering an apply that has landed, instead of re-offering work that is done.
   // The receipt is a RESULT, not a boolean. J (2026-07-22): the fast path once reported only a
@@ -307,8 +378,13 @@ export function HomeConsole({
   // Cursor-follow accent spotlight on the stage — a border-masked glow that tracks the pointer
   // (LabConsole's exact mechanism). Custom props only; skipped entirely under reduced motion.
   const stageRef = useRef<HTMLDivElement>(null);
+  // The chrome (and so the border-masked glow) moved from .hc-stage to the .hc-panel that now
+  // holds the rig AND the readout strip, so the glow's custom properties have to be written on
+  // the panel. stageRef stays on the canvas box: it is what the reticle is scoped to, and the
+  // reticle still belongs to the rig, not to the numbers under it.
+  const panelRef = useRef<HTMLElement>(null);
   useEffect(() => {
-    const stage = stageRef.current;
+    const stage = panelRef.current;
     if (!stage) return;
     // Reduced motion (incl. a mid-session flip): clear any stale glow the pointer handler left
     // set, and attach nothing.
@@ -337,7 +413,7 @@ export function HomeConsole({
   // consumes them, so the canvas (drag-orbit's home) never moves under the cursor.
   const onStageMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (reduced || e.pointerType !== "mouse") return;
-    const el = stageRef.current;
+    const el = panelRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
     const px = ((e.clientX - r.left) / r.width) * 2 - 1;
@@ -346,7 +422,7 @@ export function HomeConsole({
     el.style.setProperty("--hc-py", py.toFixed(3));
   };
   const onStageLeave = () => {
-    const el = stageRef.current;
+    const el = panelRef.current;
     if (!el) return;
     el.style.setProperty("--hc-px", "0");
     el.style.setProperty("--hc-py", "0");
@@ -588,6 +664,17 @@ export function HomeConsole({
   // was written to fix, and the flag DEFAULTS OFF (theme.ts) because off is the owner's last
   // recorded answer - see docs/decisions/2026-08-20-home-interview-default.md for the open fork.
   const interviewAvailable = interviewOn;
+  // WHAT HAS BEEN HAPPENING (issue #49) — the rows under the verdict are shortcuts INTO the
+  // interview the primary button opens, never a second intake. The heading and every label are read
+  // straight out of `interviewQuestions(t)`, so this renders the interview's own wording verbatim
+  // and cannot drift from it: not one user-facing string is authored here. Three of the root's five
+  // answers are surfaced — the two people actually arrive with, plus the one for the person who
+  // cannot name it — and all five stay one click away behind the button, so nothing is removed. Any
+  // id that stopped existing simply drops out rather than rendering a row that leads nowhere.
+  const interviewRoot = interviewQuestions(t)[INTERVIEW_ROOT];
+  const quickSymptoms = ["crash", "slow", "unsure"]
+    .map((id) => interviewRoot.choices.find((c) => c.id === id))
+    .filter((c): c is (typeof interviewRoot.choices)[number] => c != null);
   // The Care entry (issue #91, discovery contract): ALWAYS visible, independent of the interview
   // flag - crash rescue is the one thing a user comes to Home in distress to find, and it must not
   // sit behind the same switch as anything else. The single condition it does obey is the
@@ -711,6 +798,7 @@ export function HomeConsole({
             aria-expanded={interviewOpen}
             onClick={(e) => {
               setInterviewOrigin(e.currentTarget.getBoundingClientRect());
+              setInterviewPath(INTERVIEW_START);
               setInterviewOpen(true);
             }}
           >
@@ -727,48 +815,173 @@ export function HomeConsole({
           fixRoomLabel={fixRoomLabel}
         />
       }
-    >
-      <div className="home-console" data-motion={reduced ? "reduced" : "full"}>
-        {/* UX-1: the cold-open verdict and its because-line no longer start the body — they ARE
-            the header now (RoomShell verdict/sub above), and the ledger caveat that qualifies
-            them moved to the shell's notice slot so it still prints ABOVE its subject. What
-            starts the body instead is what the one primary button opens. */}
-        {/* THE CARE ENTRY (issue #91 Tier 1, visible half) — one compact door to crash rescue,
-            rendered OUTSIDE the intake band's gate on purpose. A user whose PC just crashed is the
-            least likely person to go turn a Settings band back on to find help, and the tester who
-            walked to Event Viewer (SESSION_HANDOFF §4) is the evidence for what happens when this
-            sign is not in front of them. It lands ON the evidence station, never the Lab dock. */}
-        {careRenders && (
-          <section className="hc-care" aria-label={care.label}>
-            <button
-              type="button"
-              className="hc-care-entry"
-              onClick={() =>
-                onOpenLabStation ? onOpenLabStation(care.station) : onNavigate?.(care.room)
-              }
-            >
-              <span className="hc-care-label hc-mono">{care.label}</span>
-              <span className="hc-care-symptom">{care.symptom}</span>
-              <span className="hc-care-because">{care.because}</span>
-            </button>
-          </section>
-        )}
-        <BentoGrid>
-        {/* CONSOLE STAGE — bracketed frame, the real 3D hologram center, four honest corner
-            gauges. No lede (owner header-slop law 2026-07-10): the console opens straight on
-            the stage.
+      /* THE EVIDENCE COLUMN (approved four-room direction, issue #49). Every approved comp is the
+         same composition — a narrative column beside a column of evidence — and on Health the
+         evidence is the rig. One panel holds it: the real hologram, then its view controls, then
+         the readout strip. The four ArcGauges used to float at the CANVAS corners and the controls
+         used to sit on the glass; the approved direction says plainly that neither may cover rig
+         content, so both came off it. Nothing was dropped — every gauge is in the strip, every
+         knob is in the control row, and the parts popout is a button in that same row. */
+      aside={
+        <div className="home-console" data-motion={reduced ? "reduced" : "full"}>
+          <section
+            className="hc-panel"
+            ref={panelRef}
+            onPointerMove={onStageMove}
+            onPointerLeave={onStageLeave}
+            aria-label={t("home.homeConsole.bento.rig")}
+          >
+            {/* The pointer glow and the annotation parallax are written on the PANEL now, not the
+                canvas: the chrome (and so the border-masked glow) belongs to the whole instrument.
+                `stageRef` stays on the canvas, because the reticle is the rig's, not the strip's. */}
+            <div className="hc-stage" ref={stageRef}>
+              <span className="hc-brk hc-brk-tl" aria-hidden="true" />
+              <span className="hc-brk hc-brk-tr" aria-hidden="true" />
+              <span className="hc-brk hc-brk-bl" aria-hidden="true" />
+              <span className="hc-brk hc-brk-br" aria-hidden="true" />
+              <div className="hc-rig">
+                {rig3d ? (
+                  <Suspense
+                    fallback={<div className="hc-stage-loading">{t("home.homeConsole.stage.loading3d")}</div>}
+                  >
+                    <RigHologram
+                      hw={hw}
+                      exploded={exploded}
+                      autoRotate={autoRotate}
+                      selectedId={selectedId}
+                      hoveredId={hoveredId}
+                      onSelect={onRigSelect}
+                      onHover={setHoveredId}
+                      manualParts={manualParts}
+                      cameraDist={6.9}
+                    />
+                  </Suspense>
+                ) : (
+                  <div className="hc-stage-cards">
+                    <HardwareGrid hw={hw} />
+                  </div>
+                )}
+              </div>
+              {rig3d && (
+                <>
+                  {/* Instrument annotations — the parallax plane (Task 4). The whole plane is
+                      pointer-events:none so drag-orbit under it never fights: nothing here is
+                      interactive any more, which is the point. These are the hologram's LABELS —
+                      "Memory · 14.2 / 29.4 GB" is the plain-English "here is your PC" moment a
+                      non-technical user opened Home for — and they carry LIVE state only.
 
-            THE HERO TILE, AND WHY IT HAS NO `open` PROP. BentoTile's open affordance stretches a
-            button across the whole tile; over the stage that layer would swallow RigHologram's
-            drag-orbit pointer events, so the rig would stop turning. The popout is opened from the
-            badge slot instead — a real button, no stretched layer, orbit untouched. */}
-        <BentoTile
-          title={t("home.homeConsole.bento.rig")}
-          span="hero"
-          badge={
-            // Cards mode already prints the same grid on the stage, so the popout would be a
-            // second copy of what is on screen. It earns its place only in 3D mode.
-            rig3d ? (
+                      The detected RECORD each label used to hide behind a hover/click expander
+                      (module timings, disk models, driver builds) now lives in the boxed .hc-specs
+                      templates below the stage. One owner per fact: GPU temp is the BR gauge, the
+                      GPU's model is its label, and its driver build is its box. */}
+                  <div className="hc-ann hc-ann-left">
+                    <Callout
+                      tone={mem ? gradeTone(mem.level === "ok" ? "good" : "bad") : null}
+                      name={t("home.homeConsole.callout.ram")}
+                      detail={ramSpeedNote(hw.memory_modules, t)}
+                      value={
+                        mem
+                          ? `${fmtGB1(mem.used)} / ${fmtGB1(mem.total)} GB`
+                          : `${fmtGB1(hw.ram_total_bytes)} GB`
+                      }
+                      valueTone={mem && mem.level !== "ok" ? "warn" : mem ? "ok" : null}
+                    />
+                    {diskPct != null && (
+                      <Callout
+                        tone={diskPct >= 90 ? "warn" : "ok"}
+                        name={t("home.homeConsole.callout.storage")}
+                        value={t("home.homeConsole.stage.diskFull", { pct: diskPct })}
+                        valueTone={diskPct >= 90 ? "warn" : "ok"}
+                      />
+                    )}
+                  </div>
+                  <div className="hc-ann hc-ann-right">
+                    <Callout
+                      tone={null}
+                      name={t("home.homeConsole.callout.gpu")}
+                      detail={shortModel(hw.gpus[0]?.name)}
+                    />
+                    {/* C-19 — the CPU callout answers "is it running hot", or hands over the ONE
+                        next step that would let it. Measured ⇒ the number, graded and attributed to
+                        the monitor it came from. Unmeasured ⇒ still honestly unknown (never a
+                        fabricated 0), but no longer a DEAD END: it opens the CpuTempOffer, which was
+                        built for exactly this and had become unreachable — its only mount was inside
+                        CpuMonitorPanel, which hangs off Play's `deepMonitoring` slot, and that slot
+                        only renders when `showLive` is true while Play itself only mounts at
+                        advanced+Sessions (MonitorV2.tsx), where `showLive` is false. */}
+                    {/* ONE OWNER PER FACT (issue #49). The CPU TEMPERATURE moved down to the
+                        readout strip, where it stands beside the other four readings and carries its
+                        own measured / not-yet state and its own "see below" line verbatim. Printing
+                        it here as well would be the same number twice on one screen. The plane keeps
+                        what only it can say: which CPU this is. Nothing was lost — the fact, its
+                        grade, its honest empty case and its route to the CpuTempOffer all travelled
+                        together. */}
+                    <Callout
+                      tone={null}
+                      name={t("home.homeConsole.callout.cpu")}
+                      detail={hw.cpu_arch?.family_label || undefined}
+                    />
+                  </div>
+                </>
+              )}
+              {/* The game-HUD Target Cursor, canvas-scoped (kit handles reduced/coarse-pointer
+                  null + the rAF pointerleave stop — Phase-1's review fix). */}
+              <ReticleCursor scopeRef={stageRef} />
+            </div>
+            {/* Quiet view controls, off the glass now (issue #49) — the same persisted choices
+                HomeHud offers, in the same order: 2D/3D, then explode/orbit whenever the 3D rig is
+                up. Orbit still DEFAULTS off (T4d contract — the resting bay costs ~0 GPU); showing
+                the knob is not the same as spinning the rig. */}
+            <div className="hc-controls">
+              <div className="hc-seg-group" role="tablist" aria-label={t("home.homeConsole.stage.rigViewAria")}>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={rig3d}
+                  className={`hc-seg ${rig3d ? "hc-seg-on" : ""}`}
+                  onClick={() => chooseRig3d(true)}
+                >
+                  {t("home.homeConsole.stage.view3d")}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={!rig3d}
+                  className={`hc-seg ${!rig3d ? "hc-seg-on" : ""}`}
+                  onClick={() => chooseRig3d(false)}
+                >
+                  {t("home.homeConsole.stage.viewCards")}
+                </button>
+              </div>
+              {rig3d && (
+                <div className="hc-seg-group">
+                  <button
+                    type="button"
+                    className={`hc-seg ${exploded ? "hc-seg-on" : ""}`}
+                    onClick={() => setExploded((v) => !v)}
+                  >
+                    {exploded
+                      ? t("home.homeConsole.stage.reassemble")
+                      : t("home.homeConsole.stage.exploded")}
+                  </button>
+                  <button
+                    type="button"
+                    className={`hc-seg ${autoRotate ? "hc-seg-on" : ""}`}
+                    onClick={() => setAutoRotate((v) => !v)}
+                    aria-pressed={autoRotate}
+                  >
+                    {t("home.homeConsole.stage.orbit")}
+                  </button>
+                </div>
+              )}
+            {/* The full detected parts list. It was the hero tile's `badge`; the hero tile is
+                gone (the rig is the evidence column now), so its one control lands in the row that
+                already holds the rig's other knobs. Same sheet, same 3D-only rule — cards mode
+                already prints this grid on the stage, so there the popout would be a second copy of
+                what is on screen. `closest(".v2-tile")` still resolves the origin rect when a tile
+                is an ancestor and falls back to the button itself here, which is what the grow-out
+                animation needs. */}
+            {rig3d && (
               <button
                 type="button"
                 className="hc-btn hc-btn-ghost"
@@ -780,232 +993,112 @@ export function HomeConsole({
               >
                 {t("home.homeConsole.bento.parts")}
               </button>
-            ) : null
-          }
-        >
-        <div
-          className="hc-stage"
-          ref={stageRef}
-          onPointerMove={onStageMove}
-          onPointerLeave={onStageLeave}
-        >
-          <span className="hc-brk hc-brk-tl" aria-hidden="true" />
-          <span className="hc-brk hc-brk-tr" aria-hidden="true" />
-          <span className="hc-brk hc-brk-bl" aria-hidden="true" />
-          <span className="hc-brk hc-brk-br" aria-hidden="true" />
-          <div className="hc-corner hc-tl">
-            {/* The score's whole formula, stated where the number is (consumer-panel Phase 2:
-                a bare 0–100 read as a made-up number). */}
-            <ArcGauge
-              label={t("home.homeConsole.stage.readinessLabel")}
-              value={readinessScore}
-              max={100}
-              unit="score"
-              tone="accent"
-              note={
-                readinessKnown
-                  ? t("home.homeConsole.stage.readinessNote", {
-                      passed: Math.max(
-                        0,
-                        readiness!.checks.length - readiness!.attention_count - readiness!.unknown_count,
-                      ),
-                      total: readiness!.checks.length,
-                    })
-                  : undefined
-              }
-            />
-          </div>
-          <div className="hc-corner hc-tr">
-            <ArcGauge
-              label={t("home.homeConsole.stage.avgFps")}
-              value={avgFps}
-              max={240}
-              unit="fps"
-              tone={arcTone(fpsGrade)}
-              measured={avgFps != null}
-            />
-          </div>
-          <div className="hc-corner hc-bl">
-            {/* First exposure of "1% low" in the app (the cold-open) — glossed inline via <Term>,
-                plan 2026-07-11 Phase 1 (the no-jargon promise). The gloss is exactly why this
-                gauge does NOT need to be gated: a term that carries its own definition is
-                legible to everyone, and the fourth corner is what makes the frame read as an
-                instrument rather than a lopsided one. */}
-            <ArcGauge
-              label={<Term id="one-percent-lows">{t("home.homeConsole.stage.onePercentLow")}</Term>}
-              value={lowFps}
-              max={240}
-              unit="fps"
-              tone={arcTone(low1Grade)}
-              measured={lowFps != null}
-            />
-          </div>
-          <div className="hc-corner hc-br">
-            {/* NVIDIA renders neutral tone (LOCKED rule 5 — sensor not hardware-verified). */}
-            <ArcGauge
-              label={t("home.homeConsole.stage.gpuTemp")}
-              value={gpuTemp}
-              max={100}
-              unit="°C"
-              tone={arcTone(gpuGrade)}
-              measured={gpuTemp != null}
-            />
-          </div>
-          <div className="hc-rig">
-            {rig3d ? (
-              <Suspense
-                fallback={<div className="hc-stage-loading">{t("home.homeConsole.stage.loading3d")}</div>}
-              >
-                <RigHologram
-                  hw={hw}
-                  exploded={exploded}
-                  autoRotate={autoRotate}
-                  selectedId={selectedId}
-                  hoveredId={hoveredId}
-                  onSelect={onRigSelect}
-                  onHover={setHoveredId}
-                  manualParts={manualParts}
-                  cameraDist={6.9}
-                />
-              </Suspense>
-            ) : (
-              <div className="hc-stage-cards">
-                <HardwareGrid hw={hw} />
-              </div>
             )}
-          </div>
-          {rig3d && (
-            <>
-              {/* Instrument annotations — the parallax plane (Task 4). The whole plane is
-                  pointer-events:none so drag-orbit under it never fights: nothing here is
-                  interactive any more, which is the point. These are the hologram's LABELS —
-                  "Memory · 14.2 / 29.4 GB" is the plain-English "here is your PC" moment a
-                  non-technical user opened Home for — and they carry LIVE state only.
-
-                  The detected RECORD each label used to hide behind a hover/click expander
-                  (module timings, disk models, driver builds) now lives in the boxed .hc-specs
-                  templates below the stage. One owner per fact: GPU temp is the BR gauge, the
-                  GPU's model is its label, and its driver build is its box. */}
-              <div className="hc-ann hc-ann-left">
-                <Callout
-                  tone={mem ? gradeTone(mem.level === "ok" ? "good" : "bad") : null}
-                  name={t("home.homeConsole.callout.ram")}
-                  detail={ramSpeedNote(hw.memory_modules, t)}
-                  value={
-                    mem
-                      ? `${fmtGB1(mem.used)} / ${fmtGB1(mem.total)} GB`
-                      : `${fmtGB1(hw.ram_total_bytes)} GB`
-                  }
-                  valueTone={mem && mem.level !== "ok" ? "warn" : mem ? "ok" : null}
-                />
-                {diskPct != null && (
-                  <Callout
-                    tone={diskPct >= 90 ? "warn" : "ok"}
-                    name={t("home.homeConsole.callout.storage")}
-                    value={t("home.homeConsole.stage.diskFull", { pct: diskPct })}
-                    valueTone={diskPct >= 90 ? "warn" : "ok"}
-                  />
-                )}
-              </div>
-              <div className="hc-ann hc-ann-right">
-                <Callout
-                  tone={null}
-                  name={t("home.homeConsole.callout.gpu")}
-                  detail={shortModel(hw.gpus[0]?.name)}
-                />
-                {/* C-19 — the CPU callout answers "is it running hot", or hands over the ONE
-                    next step that would let it. Measured ⇒ the number, graded and attributed to
-                    the monitor it came from. Unmeasured ⇒ still honestly unknown (never a
-                    fabricated 0), but no longer a DEAD END: it opens the CpuTempOffer, which was
-                    built for exactly this and had become unreachable — its only mount was inside
-                    CpuMonitorPanel, which hangs off Play's `deepMonitoring` slot, and that slot
-                    only renders when `showLive` is true while Play itself only mounts at
-                    advanced+Sessions (MonitorV2.tsx), where `showLive` is false. */}
-                <Callout
-                  tone={cpuTemp ? gradeTone(cpuTempGrade) : null}
-                  name={t("home.homeConsole.callout.cpu")}
-                  detail={hw.cpu_arch?.family_label || undefined}
-                  value={
-                    cpuTemp
-                      ? `${Math.round(cpuTemp.temp_c)}°C`
-                      : t("home.homeConsole.callout.cpuNoTemp")
-                  }
-                  valueTone={cpuTemp ? gradeTone(cpuTempGrade) : null}
-                  mono={!!cpuTemp}
-                />
-              </div>
-            </>
-          )}
-          {/* Quiet view controls — the same persisted choices HomeHud offers, console chrome.
-              Both groups are standard: 2D/3D, then explode/orbit whenever the 3D rig is up.
-              Orbit still DEFAULTS off (T4d contract — the resting bay costs ~0 GPU); showing
-              the knob is not the same as spinning the rig. */}
-          <div className="hc-controls">
-            <div className="hc-seg-group" role="tablist" aria-label={t("home.homeConsole.stage.rigViewAria")}>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={rig3d}
-                className={`hc-seg ${rig3d ? "hc-seg-on" : ""}`}
-                onClick={() => chooseRig3d(true)}
-              >
-                {t("home.homeConsole.stage.view3d")}
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={!rig3d}
-                className={`hc-seg ${!rig3d ? "hc-seg-on" : ""}`}
-                onClick={() => chooseRig3d(false)}
-              >
-                {t("home.homeConsole.stage.viewCards")}
-              </button>
             </div>
-            {rig3d && (
-              <div className="hc-seg-group">
-                <button
-                  type="button"
-                  className={`hc-seg ${exploded ? "hc-seg-on" : ""}`}
-                  onClick={() => setExploded((v) => !v)}
-                >
-                  {exploded
-                    ? t("home.homeConsole.stage.reassemble")
-                    : t("home.homeConsole.stage.exploded")}
-                </button>
-                <button
-                  type="button"
-                  className={`hc-seg ${autoRotate ? "hc-seg-on" : ""}`}
-                  onClick={() => setAutoRotate((v) => !v)}
-                  aria-pressed={autoRotate}
-                >
-                  {t("home.homeConsole.stage.orbit")}
-                </button>
+            {/* THE READOUT STRIP — the four gauges that used to sit on the canvas corners, plus
+                the CPU temperature that used to be a value on the annotation plane. It is a
+                HIERARCHY, not five equal instruments: readiness keeps its ring because a 0–100 out
+                of a formula is what a ring is for, and the four raw readings beside it are numbers,
+                so they render as numbers. Five rings in a row would be the "twelve equal tiles"
+                failure the bento exists to prevent, in miniature. */}
+            <div className="hc-readout">
+              <div className="hc-read-arc" data-read="readiness">
+                {/* The score's whole formula, stated where the number is (consumer-panel Phase 2:
+                    a bare 0–100 read as a made-up number). */}
+                <ArcGauge
+                  label={t("home.homeConsole.stage.readinessLabel")}
+                  value={readinessScore}
+                  max={100}
+                  unit="score"
+                  tone="accent"
+                  note={
+                    readinessKnown
+                      ? t("home.homeConsole.stage.readinessNote", {
+                          passed: Math.max(
+                            0,
+                            readiness!.checks.length - readiness!.attention_count - readiness!.unknown_count,
+                          ),
+                          total: readiness!.checks.length,
+                        })
+                      : undefined
+                  }
+                />
               </div>
-            )}
-          </div>
-          {/* The game-HUD Target Cursor, stage-scoped (kit handles reduced/coarse-pointer null
-              + the rAF pointerleave stop — Phase-1's review fix). */}
-          <ReticleCursor scopeRef={stageRef} />
+              <Reading
+                id="avgFps"
+                label={t("home.homeConsole.stage.avgFps")}
+                value={avgFps}
+                unit="fps"
+                tone={arcTone(fpsGrade)}
+              />
+              {/* First exposure of "1% low" in the app (the cold-open) — glossed inline via <Term>,
+                  plan 2026-07-11 Phase 1 (the no-jargon promise). The gloss is exactly why this
+                  reading does NOT need to be gated: a term that carries its own definition is
+                  legible to everyone. */}
+              <Reading
+                id="low1"
+                label={<Term id="one-percent-lows">{t("home.homeConsole.stage.onePercentLow")}</Term>}
+                value={lowFps}
+                unit="fps"
+                tone={arcTone(low1Grade)}
+              />
+              {/* NVIDIA renders neutral tone (LOCKED rule 5 — sensor not hardware-verified). */}
+              <Reading
+                id="gpuTemp"
+                label={t("home.homeConsole.stage.gpuTemp")}
+                value={gpuTemp}
+                unit="°C"
+                tone={arcTone(gpuGrade)}
+              />
+              {/* C-19, relocated intact — measured ⇒ the graded number; unmeasured ⇒ still honestly
+                  unknown (never a fabricated 0) and still NOT a dead end: the same "see below" line
+                  points at the CpuTempOffer tile, which is now literally below this strip. */}
+              <Reading
+                id="cpuTemp"
+                label={t("home.homeConsole.stage.cpuTemp")}
+                value={cpuTemp ? cpuTemp.temp_c : null}
+                unit="°C"
+                tone={arcTone(cpuTempGrade)}
+                note={t("home.homeConsole.callout.cpuNoTemp")}
+              />
+            </div>
+          </section>
         </div>
+      }
+      /* EVERYTHING THE ROOM STILL OWES, BENEATH BOTH COLUMNS (issue #49). The approved comp is one
+         viewport, and the direction is explicit that hierarchy — not deletion — is what stops the
+         room being intimidating. So the detected record, the findings, the last-session verdict,
+         the CPU-temp offer, the tour and the Dock all still render, in full, right where a reader
+         who wants more arrives. Nothing here is new and nothing here was cut. */
+      below={
+        <div className="home-console" data-motion={reduced ? "reduced" : "full"}>
+        <BentoGrid>
+        {/* THE DETECTED RECORD — boxed templates, always open (owner 2026-08-06: "better grouping
+            and boxed templates"). Static facts only; everything that MOVES is in the evidence
+            column, so no number is owned twice. Label/value rows, zero prose. No `open` prop and no
+            expander: the owner made the detected record standard and always-open.
+
+            IT IS THIS GRID'S HERO NOW, AND IT RENDERS UNCONDITIONALLY — both halves of that changed
+            together. The rig was the hero and has left the grid for the evidence column, so the
+            grid needed a new focal tile, and a hero may not be conditional: whether a room has a
+            focal point must not depend on runtime state (one-hero-guard). The empty case is
+            therefore an honest line inside a tile that always renders, which is what "no
+            conditional partial tile" asks for anyway. It also closes its own rows — hero is 7
+            columns × 2 rows, and the two 5-column tiles after it fill exactly those two rows. */}
+        <BentoTile title={t("home.homeConsole.specs.eyebrow")} span="hero">
+          {specs.length > 0 ? (
+            <section className="hc-specs" aria-label={t("home.homeConsole.specs.eyebrow")}>
+              <div className="hc-specs-grid">
+                {specs.map((s) => (
+                  <SpecBox key={s.title} title={s.title} rows={s.rows} />
+                ))}
+              </div>
+            </section>
+          ) : (
+            <p className="hc-none">{t("home.homeConsole.specs.none")}</p>
+          )}
         </BentoTile>
 
-        {/* THE TWO HALF TILES BESIDE THE HERO — the #1 limiter, then the last-session verdict: the
-            two measured sentences Home is allowed to state, each in its own box. No `open` prop on
-            either: each row already carries its own door button, and a stretched tile button would
-            put a second, competing target over it.
-
-            WHY THEY ARE TWO TILES, AND WHY BOTH ALWAYS RENDER (self-review 2026-08-12, item 5). The
-            hero spans 7 columns × 2 rows, so the grid needs exactly TWO always-present 5-column
-            tiles to close those rows — strict row-major with no dense flow is deliberate, so any
-            slot that can go empty shows as a hole. They used to be one conditional tile, and on a
-            clean PC Home opened with a ~180px dark rectangle at every width. Splitting them is also
-            the honest shape: a limiter and a session comparison are different claims with different
-            empty states, and a shared "nothing here" line could only be vague about which was which.
-
-            NEITHER EMPTY LINE SAYS "NOTHING IS WRONG" — neither may. `topLimiter` goes null when the
-            verdict above already names the limiter (see `verdictNamesLimiter`) and while priorities
-            are still loading, so an all-clear claim here would be fabricated. Each line states only
-            what is true in its own null case. */}
         <BentoTile title={t("home.homeConsole.bento.findings")} span="half">
           <>
             {/* THE #1 LIMITER — micro-label · the measured title · quiet confidence tag · jump. */}
@@ -1068,21 +1161,6 @@ export function HomeConsole({
           </div>
         </BentoTile>
 
-        {/* THE DETECTED RECORD — boxed templates, always open (owner 2026-08-06: "better grouping
-            and boxed templates"). Static facts only; everything that MOVES is on the stage above,
-            so no number is owned twice. Label/value rows, zero prose. No `open` prop and no
-            expander: the owner made the detected record standard and always-open. */}
-        {specs.length > 0 && (
-          <BentoTile title={t("home.homeConsole.specs.eyebrow")} span="full">
-          <section className="hc-specs" aria-label={t("home.homeConsole.specs.eyebrow")}>
-            <div className="hc-specs-grid">
-              {specs.map((s) => (
-                <SpecBox key={s.title} title={s.title} rows={s.rows} />
-              ))}
-            </div>
-          </section>
-          </BentoTile>
-        )}
         {/* THE TOUR, AS AN OFFER (C-05). The tour used to auto-open over a fresh install and BE
             the front door; the diagnosis above is the front door now, and this is the card the
             decision asked for instead ("offer the tour as a card the user can choose",
@@ -1117,6 +1195,77 @@ export function HomeConsole({
         {dockNodes.length > 0 && onNavigate && (
           <Dock nodes={dockNodes} activeKey={null} onOpen={onNavigate} />
         )}
+        </div>
+      }
+    >
+      <div className="home-console" data-motion={reduced ? "reduced" : "full"}>
+        {/* UX-1: the cold-open verdict and its because-line no longer start the body — they ARE
+            the header now (RoomShell verdict/sub above), and the ledger caveat that qualifies
+            them moved to the shell's notice slot so it still prints ABOVE its subject. What
+            starts the body instead is what the one primary button opens.
+
+            WHAT HAS BEEN HAPPENING (issue #49) — shortcuts INTO that same interview, never a second
+            copy of it. The primary button above still opens it at its first question with all five
+            answers; these rows jump straight past that question for the two things people actually
+            arrive with (it crashed / it feels slow) and the answer for the person who cannot name
+            it. Every label is the interview's own wording, read from its own data — no mockup copy
+            became product copy here — and nothing is removed, because the full set stays one click
+            away behind the button. */}
+        {interviewAvailable && quickSymptoms.length > 0 && (
+          <section className="hc-happening" aria-label={t("home.homeConsole.happening.eyebrow")}>
+            {/* NOT the interview's root question, deliberately. The owner deleted a permanent panel
+                on Home that asked "What are you here to do?" on sight, and the guard that keeps it
+                deleted also pins that the interview's own question does not print on Home until the
+                user asks for it (home-interview.test.tsx). The approved comp does not print it
+                either — it frames these as what has been HAPPENING, which is the user's own words
+                about their PC rather than a demand for a decision, and the ANSWERS below are still
+                the interview's verbatim. */}
+            <h2 className="hc-happening-q">{t("home.homeConsole.happening.eyebrow")}</h2>
+            <p className="hc-happening-hint">{t("home.homeConsole.happening.hint")}</p>
+            <ul className="hc-happening-rows">
+              {quickSymptoms.map((c) => (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    className="hc-happening-row"
+                    aria-haspopup="dialog"
+                    aria-expanded={interviewOpen}
+                    onClick={(e) => {
+                      setInterviewOrigin(e.currentTarget.getBoundingClientRect());
+                      setInterviewPath([{ kind: "question", id: INTERVIEW_ROOT }, c.next]);
+                      setInterviewOpen(true);
+                    }}
+                  >
+                    <span className="hc-happening-label">{c.label}</span>
+                    <span className="hc-happening-go" aria-hidden="true">
+                      &rsaquo;
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {/* THE CARE ENTRY (issue #91 Tier 1, visible half) — one compact door to crash rescue,
+            rendered OUTSIDE the intake band's gate on purpose. A user whose PC just crashed is the
+            least likely person to go turn a Settings band back on to find help, and the tester who
+            walked to Event Viewer (SESSION_HANDOFF §4) is the evidence for what happens when this
+            sign is not in front of them. It lands ON the evidence station, never the Lab dock. */}
+        {careRenders && (
+          <section className="hc-care" aria-label={care.label}>
+            <button
+              type="button"
+              className="hc-care-entry"
+              onClick={() =>
+                onOpenLabStation ? onOpenLabStation(care.station) : onNavigate?.(care.room)
+              }
+            >
+              <span className="hc-care-label hc-mono">{care.label}</span>
+              <span className="hc-care-symptom">{care.symptom}</span>
+              <span className="hc-care-because">{care.because}</span>
+            </button>
+          </section>
+        )}
       </div>
 
       {/* THE INTERVIEW (step 3, issue #177) - what the front door opens. It grows out of the button
@@ -1124,6 +1273,7 @@ export function HomeConsole({
       {interviewOpen && (
         <HomeInterview
           facts={interviewFacts}
+          initialPath={interviewPath}
           origin={interviewOrigin}
           onClose={() => setInterviewOpen(false)}
           onRunCheck={onRunCheck}
