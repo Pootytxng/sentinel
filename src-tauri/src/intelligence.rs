@@ -630,6 +630,24 @@ fn dedup_observed(mut candidates: Vec<ObservedCandidate>) -> Vec<EventRecord> {
     kept.into_iter().map(|c| c.ev).collect()
 }
 
+/// The Drift Watch summary line, as ONE composer both the timeline and its tests read.
+///
+/// It exists because the obvious `format!("{label} drifted out of its ready state")` was WRONG and
+/// shipped that way (found by self-review 2026-08-23 reading the installed build's History tape).
+/// Readiness labels are not all noun phrases -- `readiness.rs` writes several of them as complete
+/// clauses, because a check that has already found something says so in its own name: "Compy
+/// changes were turned back off", "Memory below its rated speed", "Monitor below max refresh",
+/// "Memory running single-channel". Used as the SUBJECT of a verb phrase, each of those produced a
+/// run-on -- "Compy changes were turned back off drifted out of its ready state" -- in two rooms
+/// at once.
+///
+/// So the label goes LAST, where nothing can follow it, and the sentence works for either shape:
+/// "No longer ready: Monitor refresh rate" and "No longer ready: Compy changes were turned back
+/// off" both read. Guard: `drift_summary_never_makes_the_label_a_subject`.
+fn drift_summary(label: &str) -> String {
+    format!("No longer ready: {label}")
+}
+
 /// Assemble the full local timeline from persisted stores. Deterministic: same inputs →
 /// same events in the same total order (pinned by guard test).
 pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
@@ -707,7 +725,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             source: "drift-watch".into(),
             scope: EventScope::Observed,
             game: None,
-            summary: format!("{} drifted out of its ready state", n.label),
+            summary: drift_summary(&n.label),
             detail: Some(
                 "Noticed on a readiness scan — the change itself was not witnessed, and who or what changed it is not recorded.".into(),
             ),
@@ -3092,11 +3110,42 @@ mod tests {
             source: "drift-watch".into(),
             scope: EventScope::Observed,
             game: None,
-            summary: format!("{label} drifted out of its ready state"),
+            // THE SAME COMPOSER production uses -- a test helper with its own copy of the
+            // sentence is how a copy bug passes its own suite.
+            summary: drift_summary(label),
             detail: None,
             observed_between: None,
             since_rolled_back: false,
             rec_id: None,
+        }
+    }
+
+    #[test]
+    fn drift_summary_never_makes_the_label_a_subject() {
+        // bug -> guard (self-review 2026-08-23). The defect was not one bad label; it was a
+        // TEMPLATE that assumed every readiness label is a noun phrase. Several are complete
+        // clauses on purpose -- a check that has already found something says so in its own name
+        // -- and each of those turned into a run-on the moment a predicate was appended.
+        //
+        // The invariant is structural, not a spelling: the label must TERMINATE the sentence, so
+        // there is no position for a predicate to be appended in. That holds for any label anyone
+        // writes later, which a pinned string would not.
+        for label in [
+            "Monitor refresh rate",                 // noun phrase
+            "Compy changes were turned back off",   // readiness.rs:856 -- the one that shipped broken
+            "Memory below its rated speed",         // ...and it was never alone
+            "Monitor below max refresh",
+            "Memory running single-channel",
+        ] {
+            let summary = drift_event("2026-08-23T00:00:00Z", label).summary;
+            assert!(
+                summary.ends_with(label),
+                "the label must end the sentence, or a predicate can follow it: {summary:?}"
+            );
+            assert!(
+                !summary.contains(&format!("{label} ")),
+                "nothing may follow the label: {summary:?}"
+            );
         }
     }
 

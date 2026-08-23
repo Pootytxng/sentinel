@@ -383,6 +383,18 @@
 :root[data-v2="on"] .v2-room[data-layout="split"] > .v2-verdict {
   display: flex;
   flex-direction: column;
+  /* `nowrap` IS THE FIX, not a tidy-up (self-review 2026-08-23, item 5, severe). The base
+     `.v2-verdict` rule above sets `flex-wrap: wrap` for the LINEAR rooms, where the verdict is a
+     baseline ROW and wrapping is what stops a long headline shoving the action off the edge. That
+     declaration survived the flip to `column` here, and in a column direction it means something
+     else entirely: the container's intrinsic HEIGHT contribution collapses from the sum of its
+     children to the tallest single child, so the auto grid row was sized to fit the h1 alone and
+     everything after it wrapped into a phantom second COLUMN -- off the story column, under the
+     evidence panel, where the reader cannot see it. Measured on the installed build: Health's sub
+     rendered at x=749.6 w=158.6, outside .v2-verdict's own box (x=265..721) and behind the rig.
+     It only surfaced once a headline grew past two lines, which is why every earlier capture
+     missed it. Guard: comp-fidelity-guard.test.ts, "a column verdict may never wrap". */
+  flex-wrap: nowrap;
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 0;

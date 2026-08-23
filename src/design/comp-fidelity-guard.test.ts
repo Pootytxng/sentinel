@@ -306,6 +306,69 @@ describe("comp fidelity — the shell geometry all four comps share", () => {
     );
   });
 
+  it("a column verdict may never wrap — the wrap that hid Health's subhead", () => {
+    // bug→guard (self-review 2026-08-23, item 5 — the most severe finding of that round, and one
+    // no green test could have caught: it is a LAYOUT fact, and jsdom has no layout engine).
+    //
+    // THE DEFECT. `.v2-verdict` is a baseline ROW in the linear rooms and carries `flex-wrap: wrap`
+    // so a long headline cannot shove the action off the edge. The split rooms flip it to a COLUMN
+    // and inherited that wrap, where it means something completely different: a wrapping column
+    // flex container contributes the height of its TALLEST CHILD, not the sum of its children, so
+    // the auto grid row sized itself to the h1 alone and every later child wrapped into a phantom
+    // second COLUMN — off the story column, occluded behind the evidence panel. Health's subhead
+    // measured x=749.6 w=158.6 on the installed build, outside its own parent's box of x=265..721.
+    // It stayed invisible for four slices because it only bites once a headline passes two lines.
+    //
+    // THE GUARD IS THE CLASS, NOT THE INSTANCE. Any future rule that turns a wrap-carrying flex
+    // element into a column has the same bug waiting in it, so this scans for the shape rather
+    // than the one selector: collect every class this sheet declares `flex-wrap: wrap` on, then
+    // require an explicit `nowrap` from every later rule that puts one of them in a column.
+    const clean = shell.replace(/\/\*[\s\S]*?\*\//g, "");
+    const blocks = clean
+      .split("}")
+      .map((b) => b.split("{"))
+      .filter((p): p is [string, string] => p.length === 2)
+      .map(([sel, decls]) => [sel.trim().replace(/\s+/g, " "), decls] as const);
+
+    const wrapping = new Set<string>();
+    for (const [sel, decls] of blocks) {
+      if (!/flex-wrap:\s*wrap/.test(decls)) continue;
+      for (const cls of sel.match(/\.[a-zA-Z0-9_-]+(?![^ ,>+~]*[({])/g) ?? []) wrapping.add(cls);
+    }
+    expect(wrapping.size, "the sheet stopped wrapping anything — re-read this guard").toBeGreaterThan(0);
+
+    const unguarded = blocks
+      .filter(([sel, decls]) => {
+        if (!/flex-direction:\s*column/.test(decls)) return false;
+        if (/flex-wrap:/.test(decls)) return false;
+        // (index arithmetic, not `.at(-1)` — this repo's lib target predates it, and vitest
+        // transpiles per file so only `npm run build` ever says so.)
+        const classes = sel.match(/\.[a-zA-Z0-9_-]+/g) ?? [];
+        const last = classes.length > 0 ? classes[classes.length - 1] : undefined;
+        return last != null && wrapping.has(last);
+      })
+      .map(([sel]) => sel);
+
+    expect(
+      unguarded,
+      "a column flex container inheriting `flex-wrap: wrap` contributes only its tallest child's " +
+        "height, so the rest of its children wrap out of the layout. Declare `flex-wrap: nowrap`.",
+    ).toEqual([]);
+
+    // ...and the one it actually bit, named, so a rewrite of the scan above can never quietly
+    // stop covering the case it was written for.
+    // (`body()` cannot be used here: this selector is declared TWICE — once for its grid area and
+    // once for its flex composition — and that helper returns the first match, which is the wrong
+    // one. Read the column block specifically.)
+    const columnVerdict = blocks.find(
+      ([sel, decls]) =>
+        sel === ':root[data-v2="on"] .v2-room[data-layout="split"] > .v2-verdict' &&
+        /flex-direction:\s*column/.test(decls),
+    );
+    expect(columnVerdict, "the split verdict stopped being a column — re-read this guard").toBeDefined();
+    expect(columnVerdict![1]).toMatch(/flex-wrap:\s*nowrap/);
+  });
+
   it("the primary action stands off the sentence it answers", () => {
     // 29 app px of air under Health's sub before its button, 41 under History's. The flex gap
     // alone was 12, which is why the installed build had the button crowding its own sentence.
