@@ -378,6 +378,65 @@ describe("comp fidelity — the shell geometry all four comps share", () => {
   });
 });
 
+describe("comp fidelity — Test, matched against 04-test-approved.png", () => {
+  const lab = read("src", "surfaces", "lab-console.css");
+  const dock = read("src", "design", "console", "dock.css");
+  const en = JSON.parse(read("src", "i18n", "locales", "en", "lab.json"));
+
+  it("the bench is a PANEL, because Test is one of the two panelled rooms", () => {
+    // Measured: the bench runs x=765.5..1439.4 of the 277..1439 content box -- 58% of it, against
+    // Health's 55%, which is why --v2-aside is one token for the panelled pair and a second for
+    // the wide pair rather than one number that is wrong twice. The panel's own edge is what tells
+    // the eye where the story stops; Live and History get a hairline in the gutter instead.
+    const bench = body(lab, ':root[data-v2="on"] .lc-bench');
+    expect(bench).toMatch(/background: var\(--v2-panel\)/);
+    expect(bench).toMatch(/border: 1px solid var\(--v2-line\)/);
+    expect(bench).toMatch(/border-radius: var\(--v2-r\)/);
+  });
+
+  it("the readings are RULED apart, not spaced apart", () => {
+    // The comp draws a dotted hairline between each pair of cells and no gutter at all. It is the
+    // difference between four loose numbers and one instrument with four faces. A `gap` here would
+    // also push every rule half a gutter off its own centre line, so the cells carry the padding.
+    expect(body(lab, ':root[data-v2="on"] .lc-reading + .lc-reading')).toMatch(
+      /border-left: 1px dotted var\(--v2-line\)/,
+    );
+    expect(body(lab, ':root[data-v2="on"] .lc-readings'), "a gutter would decentre the rules").toMatch(
+      /gap: 0/,
+    );
+  });
+
+  it("the primary action is shrink-to-fit at the comp's 44px, never a column-wide bar", () => {
+    // 262 x 44 app px, measured. Fill, ink and focus ring all come from the shared `.v2-primary`
+    // (the owner overruled the violet these buttons used to wear); only the box is local.
+    expect(body(lab, ':root[data-v2="on"] .lc-start')).toMatch(/min-height: 44px/);
+    expect(body(lab, ':root[data-v2="on"] .lc-start'), "shrink-to-fit means no width").not.toMatch(
+      /(^|[^-])width:/,
+    );
+  });
+
+  it("the stations are a ruled LIST here and a grid everywhere else", () => {
+    // Six equal tiles read as "six things you have to choose between" -- the room's standing
+    // intimidation complaint. Ruled rows read as a list you can scan, with one row marked as the
+    // way in. Home passes no layout prop and must never enter this block.
+    const list = body(dock, ':root[data-v2="on"] .dock[data-layout="list"] .dock-node');
+    expect(list).toMatch(/border: 0/);
+    expect(list).toMatch(/border-bottom: 1px solid/);
+    expect(body(dock, ':root[data-v2="on"] .dock[data-layout="list"]')).toMatch(/display: block/);
+  });
+
+  it("the room's own copy is the comp's, and the safety line is the comp's padlocked sentence", () => {
+    const n = en.labConsole.narrative;
+    expect(n.eyebrow).toBe("Proving ground");
+    expect(n.headline).toBe("Test one change at a time");
+    expect(n.action).toBe("Start with Optimize");
+    expect(n.safety).toContain("One reversible change");
+    // ...and the room's h1 still carries no count, which is the half of the retired title-header
+    // law that was protecting something real.
+    expect(n.headline).not.toMatch(/\d/);
+  });
+});
+
 describe("comp fidelity — History, matched against 03-history-approved.png", () => {
   const shell = read("src", "design", "shell-v2.css");
   const tape = read("src", "surfaces", "blackbook", "blackbook-console.css");

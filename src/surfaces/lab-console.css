@@ -402,7 +402,9 @@
 :root[data-v2="on"] .lc-readings {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--v2-gap);
+  /* No gap: the cells are RULED apart instead (below), and a gap would push every rule
+     half a gutter off its own centre line. */
+  gap: 0;
   padding-top: var(--v2-gap);
   border-top: 1px solid var(--v2-line);
 }
@@ -411,6 +413,13 @@
   justify-items: center;
   text-align: center;
   min-width: 0;
+  padding: 0 var(--v2-gap);
+}
+/* 04-test-approved.png rules the readings apart with a DOTTED hairline rather than spacing them.
+   It is the difference between four numbers and one instrument with four faces -- the same reason
+   the bench has an edge at all. First cell has nothing to its left to divide it from. */
+:root[data-v2="on"] .lc-reading + .lc-reading {
+  border-left: 1px dotted var(--v2-line);
 }
 /* The rig's answer sits under the readings, still one click from the hologram that fills it. */
 :root[data-v2="on"] .lc-bench .lc-evidence {
