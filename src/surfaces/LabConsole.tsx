@@ -6,6 +6,7 @@ import { useReducedMotion } from "../design/use-motion";
 import { ArcGauge } from "../design/console/ArcGauge";
 import { Dock, type DockNode } from "../design/console/Dock";
 import { BentoGrid, BentoTile } from "../design/bento/BentoGrid";
+import { RoomShell } from "../design/room-shell";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { RigViewer } from "./rig/RigViewer";
 import { RigManualParts } from "./rig/RigManualParts";
@@ -73,6 +74,10 @@ export function LabConsole({
   diagnosticsCaptured = false,
   vendor = "any",
   hw,
+  hud,
+  ledState,
+  classicVerdict,
+  below,
 }: {
   // The fast-path prop bundle — the SAME audited apply handlers the OptimizeV2 room gets (zero new
   // IPC, zero new mutation primitive). Threaded straight into the Optimize panel.
@@ -84,6 +89,25 @@ export function LabConsole({
   vendor?: GpuVendor;
   // The real hardware read, for the center hologram.
   hw: HardwareInfo;
+  /* THE ROOM COMPOSES ITSELF NOW (issue #49 slice 6). The console used to be a child of a RoomShell
+     LabGround owned; the approved direction gives Test a narrative column and an evidence column,
+     and every piece of both is state THIS component holds (which station is open, what the rig has
+     selected, what the bench has measured). Lifting that state up to write the shell above it would
+     have meant threading six setters through a wrapper for no gain, so the shell came down here
+     instead — the same move Live made in slice 4.
+
+     `hud` is `compy_editorial`, and it chooses the SHELL, exactly as it does on History. False is
+     the devtools failsafe and must keep rendering the whole room the classic way; the failsafe
+     breaking because a new branch quietly became the only branch is a bug this repo has already
+     shipped once. */
+  hud: boolean;
+  // The room verdict's LED state, computed by LabGround from the SAME optimizeVerdict the classic
+  // headline speaks — so the dot and the sentence can never disagree about the room.
+  ledState: "ok" | "warn" | "scan";
+  // The classic (flag-off) h1: the verdict sentence, with its DecryptedText treatment intact.
+  classicVerdict: ReactNode;
+  // Full-width content under both columns — the GPU profile surface and the experiments bench.
+  below?: ReactNode;
 }) {
   const { t, i18n } = useTranslation();
   const reduced = useReducedMotion();
@@ -237,6 +261,16 @@ export function LabConsole({
   // Detail view — exactly ONE station open at a time (the dock IS the menu). Clicking a node opens
   // it, clicking again closes, clicking another swaps. Optimize is included — it is NOT always-on.
   const [openStation, setOpenStation] = useState<LabStationKey | null>(null);
+  // "Add a part Compy can't detect" is a disclosure in the station list now (04-test-approved.png
+  // draws it as the list's last row). Closed by default; the form stays mounted either way.
+  const [manualOpen, setManualOpen] = useState(false);
+  // The eyebrow's dateline — the date this bench is being read (today), never fabricated. Same
+  // rule, same helper shape as Health's masthead dateline.
+  const dateline = new Date().toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
   const onDockOpen = (key: string) => {
     const k = key as LabStationKey;
     setOpenStation((cur) => (cur === k ? null : k));
@@ -346,190 +380,411 @@ export function LabConsole({
   const safeOn = (fast.recs ?? []).filter((r) => r.severity === "safe" && r.currently_applied).length;
 
   return (
-    <div className="lab-console" data-motion={reduced ? "reduced" : "full"}>
-      {/* No lede (owner header-slop law 2026-07-10): the console opens straight on the stage —
-          header space above carries header-format text only; the reversibility reassurance lives in
-          the Optimize panel, next to the one control it qualifies. */}
+    <RoomShell
+      room="lab"
+      /* THE NARRATIVE COLUMN (04-test-approved.png). Same grammar Health and Live already speak:
+         a dotted eyebrow, one human sentence, one short explanation, one dominant action. The
+         Instrument-HUD masthead is gone from this room as it went from Live and History -- the
+         rail that navigated here already said "Test", and a masthead repeating it pushed the
+         room's own sentence a third smaller than the label above it. */
+      verdict={
+        hud ? (
+          <>
+            <span className="lc-eyebrow">
+              <span className={`lc-led lc-led-${ledState}`} aria-hidden="true" />
+              {t("lab.labConsole.narrative.eyebrow")} <span className="lc-eyebrow-sep">·</span>{" "}
+              <span className="lc-mono">{dateline}</span>
+            </span>
+            <span className="lc-headline">{t("lab.labConsole.narrative.headline")}</span>
+          </>
+        ) : (
+          classicVerdict
+        )
+      }
+      sub={hud ? t("lab.labConsole.narrative.sub") : undefined}
+      /* THE ONE DOMINANT ACTION. It opens the SAME Optimize station the list row below opens, by
+         the same setter -- one door, two handles, never two code paths. The line under it is the
+         comp's, and it is a positioning sentence, not a claim: it says when to pick this, and
+         promises no result. */
+      primaryAction={
+        hud ? (
+          <>
+            <button
+              type="button"
+              className="lc-start v2-primary"
+              aria-controls="lab-console-detail"
+              aria-expanded={openStation === "optimize"}
+              onClick={() => onDockOpen("optimize")}
+            >
+              {t("lab.labConsole.narrative.action")}
+            </button>
+            <p className="lc-action-note">{t("lab.labConsole.narrative.actionNote")}</p>
+          </>
+        ) : undefined
+      }
+      /* THE SAFETY PROMISE, kept visible exactly as the handoff requires: one reversible change,
+         one measured result, restore by default. It is the room's standing contract, so it sits at
+         the foot of the story column rather than inside the one station it would otherwise look
+         like it only qualified. */
+      footnote={hud ? t("lab.labConsole.narrative.safety") : undefined}
+      /* THE EVIDENCE COLUMN — the real rig on the bench, and under it the four readings this bench
+         can actually vouch for. The corner gauges LEFT the canvas: the handoff says not to cover it
+         with click targets or diagrams, and four rings floating over the hologram were doing
+         exactly that. Strip form also lets each reading keep its label, its value and its honest
+         note at full size instead of shrunk into a corner.
 
-      {/* THE ROOM'S BENTO — reading (half) · stage (hero, 2 rows) · parts you added (half). Strict
-          row-major with no dense flow, so this DOM order is the layout: the reading fills row 1
-          cols 1–5 beside the hero, and the manual-parts tile takes row 2 cols 1–5 under it. */}
-      <BentoGrid>
-        {/* RIG READING — one tile for every selection case. It used to be two panels that each
-            rendered only when something was selected; in a strict row-major grid a half tile that
-            sometimes vanishes leaves a hole in its row (one-hero-guard), so the tile is now
-            unconditional and carries an honest idle line instead. The idle line is navigation
-            ("pick a part"), never a fabricated reading. */}
-        <BentoTile span="half" title={t("lab.labConsole.tiles.reading")}>
-          <div className="lc-evidence" aria-live="polite">
-            {evidenceSubsystem ? (
-              <>
-                <div className="lc-evidence-head">
-                  <span className="lc-evidence-name">
-                    {t(`lab.labConsole.evidence.subsystem.${evidenceSubsystem}`)}
-                  </span>
-                  <span className="lc-evidence-part">{selectedPart?.name}</span>
-                </div>
-                {evidenceReadings.length > 0 ? (
-                  <dl className="lc-evidence-list">
-                    {evidenceReadings.map((r) => (
-                      <div className="lc-evidence-row" key={r.key}>
-                        <dt>{t(`lab.labConsole.evidence.reading.${r.key satisfies LabReadingKey}`)}</dt>
-                        <dd>
-                          <span className="lc-evidence-value">{r.value}</span>
-                          {r.kind === "gauge" && (
-                            <>
-                              <span className="lc-evidence-den">{r.den}</span>
-                              {/* Proportion only — no colour-by-threshold. None of the app's audited
-                                  thresholds apply to these fields, so a reading is stated, not graded. */}
-                              <span className="lc-evidence-bar" aria-hidden="true">
-                                <span style={{ width: `${Math.round(r.pct * 100)}%` }} />
-                              </span>
-                            </>
-                          )}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                ) : (
-                  <p className="lc-evidence-empty">{t("lab.labConsole.evidence.empty")}</p>
-                )}
-              </>
-            ) : evidenceFallback ? (
-              /* The two things that are NOT in the parts list — a fan, or a part the user added
-                 himself. Same shape and same rails: a real rpm reading when a monitor is publishing
-                 one, and otherwise a sentence saying why there is nothing to read. */
-              <>
-                <div className="lc-evidence-head">
-                  <span className="lc-evidence-name">{evidenceFallback.subsystemLabel}</span>
-                  <span className="lc-evidence-part">{evidenceFallback.name}</span>
-                </div>
-                {evidenceFallback.reading ? (
-                  <dl className="lc-evidence-list">
-                    <div className="lc-evidence-row">
-                      <dt>{t("lab.labConsole.evidence.reading.fanSpeed")}</dt>
-                      <dd>
-                        <span className="lc-evidence-value">{evidenceFallback.reading}</span>
-                      </dd>
+         The reading set is deliberately Proven / Noise floor / Safe stack / Instruments read.
+         04-test-approved.png draws READINESS, AVG FPS and 1% LOW here, and those are NOT adopted:
+         the handoff names them as "the older duplicated Health metrics shown in an early generated
+         draft", and the comp itself carries the caveat that its values are examples, not a licence.
+         Those three numbers are Health's verdict and stay there; this room answers what the BENCH
+         can prove, not what the machine scores. */
+      aside={
+        hud ? (
+          <section className="lc-bench" aria-label={t("lab.labConsole.bench.aria")}>
+            <div className="lc-stage" data-motion={reduced ? "reduced" : "full"} ref={stageRef}>
+              <span className="lc-brk lc-brk-tl" />
+              <span className="lc-brk lc-brk-tr" />
+              <span className="lc-brk lc-brk-bl" />
+              <span className="lc-brk lc-brk-br" />
+              <div className="lc-rig">
+                {/* chromeless — just the recognizable 3D hologram; the bench frames it, so the
+                    viewer's own control bar / caption / "add a part" form stay hidden (that form
+                    lives in the station list now, where the comp puts it). */}
+                <RigViewer hw={hw} chromeless onSelectedIdChange={(_id, what) => setSelectedRig(what)} />
+              </div>
+              <ReticleCursor scopeRef={stageRef} />
+            </div>
+            <div className="lc-readings">
+              <div className="lc-reading">
+                {/* Proven — the room's entire payoff: how many changes this bench has verified
+                    before/after (awards ledger, Keep verdicts only). Full ring once N > 0. */}
+                <ArcGauge
+                  label={t("lab.labConsole.provenLabel")}
+                  value={provenCount}
+                  max={Math.max(1, provenCount ?? 1)}
+                  unit={t("lab.labConsole.unitKept")}
+                  tone="accent"
+                  measured={provenCount != null}
+                  note={
+                    provenCount != null
+                      ? t(provenCount > 0 ? "lab.labConsole.provenNoteSome" : "lab.labConsole.provenNoteNone")
+                      : undefined
+                  }
+                />
+              </div>
+              <div className="lc-reading">
+                {/* Noise floor — the bench's own instrument constant: how big an effect this rig can
+                    even resolve. Fixed 10% display ceiling (a typical noise floor is a few percent;
+                    this is a reading, not a graded score, so a rare spike just fills the ring). */}
+                <ArcGauge
+                  label={t("lab.labConsole.noiseFloorLabel")}
+                  value={noiseFloorPct}
+                  max={10}
+                  unit={t("lab.labConsole.unitPct")}
+                  measured={noiseFloorPct != null}
+                  note={noiseFloorPct != null ? t("lab.labConsole.noiseFloorNote") : undefined}
+                />
+              </div>
+              <div className="lc-reading">
+                {/* Two honest states over the same recs: work left → "N ready" (as before); nothing
+                    left → "N on" with a full ring and an "= all N applied" note. recs not loaded →
+                    NOT-YET, never a fabricated 0 (bug→guard 2026-07-09, unchanged). */}
+                <ArcGauge
+                  label={t("lab.labConsole.safeStackLabel")}
+                  value={fast.recs != null ? (safeReady > 0 ? safeReady : safeOn) : null}
+                  max={Math.max(1, safeReady > 0 ? safeReady : safeOn)}
+                  unit={safeReady > 0 ? t("lab.labConsole.unitReady") : t("lab.labConsole.unitOn")}
+                  tone="accent"
+                  measured={fast.recs != null}
+                  note={
+                    fast.recs != null && safeReady === 0
+                      ? safeOn > 0
+                        ? t("lab.labConsole.safeStackAllOn", { count: safeOn })
+                        : t("lab.labConsole.safeStackNone")
+                      : undefined
+                  }
+                />
+              </div>
+              <div className="lc-reading">
+                {/* Instruments read — how far through the bench this rig has gone. Same
+                    stationHasReading the dock uses to mark nodes measured, so this and the dock can
+                    never disagree. Always defined (no probe to await), never NOT-YET. */}
+                <ArcGauge
+                  label={t("lab.labConsole.instrumentsReadLabel")}
+                  value={instrumentsRead}
+                  max={Math.max(1, instrumentsTotal)}
+                  unit={t("lab.labConsole.unitRead")}
+                  note={t("lab.labConsole.instrumentsReadNote", { read: instrumentsRead, total: instrumentsTotal })}
+                />
+              </div>
+            </div>
+            {/* THE RIG'S ANSWER — what the selected part reads right now. It left the bento with
+                the grid but not the bench: it sits directly under the hologram that fills it, and
+                it still carries an honest idle line rather than a fabricated reading. */}
+
+              <div className="lc-evidence" aria-live="polite">
+                {evidenceSubsystem ? (
+                  <>
+                    <div className="lc-evidence-head">
+                      <span className="lc-evidence-name">
+                        {t(`lab.labConsole.evidence.subsystem.${evidenceSubsystem}`)}
+                      </span>
+                      <span className="lc-evidence-part">{selectedPart?.name}</span>
                     </div>
-                  </dl>
+                    {evidenceReadings.length > 0 ? (
+                      <dl className="lc-evidence-list">
+                        {evidenceReadings.map((r) => (
+                          <div className="lc-evidence-row" key={r.key}>
+                            <dt>{t(`lab.labConsole.evidence.reading.${r.key satisfies LabReadingKey}`)}</dt>
+                            <dd>
+                              <span className="lc-evidence-value">{r.value}</span>
+                              {r.kind === "gauge" && (
+                                <>
+                                  <span className="lc-evidence-den">{r.den}</span>
+                                  {/* Proportion only — no colour-by-threshold. None of the app's audited
+                                      thresholds apply to these fields, so a reading is stated, not graded. */}
+                                  <span className="lc-evidence-bar" aria-hidden="true">
+                                    <span style={{ width: `${Math.round(r.pct * 100)}%` }} />
+                                  </span>
+                                </>
+                              )}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : (
+                      <p className="lc-evidence-empty">{t("lab.labConsole.evidence.empty")}</p>
+                    )}
+                  </>
+                ) : evidenceFallback ? (
+                  /* The two things that are NOT in the parts list — a fan, or a part the user added
+                     himself. Same shape and same rails: a real rpm reading when a monitor is publishing
+                     one, and otherwise a sentence saying why there is nothing to read. */
+                  <>
+                    <div className="lc-evidence-head">
+                      <span className="lc-evidence-name">{evidenceFallback.subsystemLabel}</span>
+                      <span className="lc-evidence-part">{evidenceFallback.name}</span>
+                    </div>
+                    {evidenceFallback.reading ? (
+                      <dl className="lc-evidence-list">
+                        <div className="lc-evidence-row">
+                          <dt>{t("lab.labConsole.evidence.reading.fanSpeed")}</dt>
+                          <dd>
+                            <span className="lc-evidence-value">{evidenceFallback.reading}</span>
+                          </dd>
+                        </div>
+                      </dl>
+                    ) : (
+                      <p className="lc-evidence-empty">{evidenceFallback.note}</p>
+                    )}
+                  </>
                 ) : (
-                  <p className="lc-evidence-empty">{evidenceFallback.note}</p>
+                  <p className="lc-evidence-empty">{t("lab.labConsole.evidence.idle")}</p>
                 )}
-              </>
-            ) : (
-              <p className="lc-evidence-empty">{t("lab.labConsole.evidence.idle")}</p>
-            )}
-          </div>
-        </BentoTile>
-
-        {/* CONSOLE STAGE — bracketed frame, real 3D hologram center, four corner arc gauges. The
-            hero: the rig itself is the answer this room opens on. .lc-stage keeps its own box (it
-            is the positioning context for the corner gauges, the reticle and the glow ring) but no
-            longer draws a frame — the tile draws that. */}
-        <BentoTile span="hero" title={t("lab.labConsole.tiles.stage")}>
-          <div className="lc-stage" ref={stageRef}>
-            <span className="lc-brk lc-brk-tl" />
-            <span className="lc-brk lc-brk-tr" />
-            <span className="lc-brk lc-brk-bl" />
-            <span className="lc-brk lc-brk-br" />
-            <div className="lc-corner lc-tl">
-              {/* Proven — the room's entire payoff: how many changes this bench has verified
-                  before/after (awards ledger, Keep verdicts only). Full ring once N > 0. */}
-              <ArcGauge
-                label={t("lab.labConsole.provenLabel")}
-                value={provenCount}
-                max={Math.max(1, provenCount ?? 1)}
-                unit={t("lab.labConsole.unitKept")}
-                tone="accent"
-                measured={provenCount != null}
-                note={
-                  provenCount != null
-                    ? t(provenCount > 0 ? "lab.labConsole.provenNoteSome" : "lab.labConsole.provenNoteNone")
-                    : undefined
-                }
-              />
-            </div>
-            <div className="lc-corner lc-tr">
-              {/* Noise floor — the bench's own instrument constant: how big an effect this rig can
-                  even resolve. Fixed 10% display ceiling (a typical noise floor is a few percent;
-                  this is a reading, not a graded score, so a rare spike just fills the ring). */}
-              <ArcGauge
-                label={t("lab.labConsole.noiseFloorLabel")}
-                value={noiseFloorPct}
-                max={10}
-                unit={t("lab.labConsole.unitPct")}
-                measured={noiseFloorPct != null}
-                note={noiseFloorPct != null ? t("lab.labConsole.noiseFloorNote") : undefined}
-              />
-            </div>
-            <div className="lc-corner lc-bl">
-              {/* Two honest states over the same recs: work left → "N ready" (as before); nothing
-                  left → "N on" with a full ring and an "= all N applied" note. recs not loaded →
-                  NOT-YET, never a fabricated 0 (bug→guard 2026-07-09, unchanged). */}
-              <ArcGauge
-                label={t("lab.labConsole.safeStackLabel")}
-                value={fast.recs != null ? (safeReady > 0 ? safeReady : safeOn) : null}
-                max={Math.max(1, safeReady > 0 ? safeReady : safeOn)}
-                unit={safeReady > 0 ? t("lab.labConsole.unitReady") : t("lab.labConsole.unitOn")}
-                tone="accent"
-                measured={fast.recs != null}
-                note={
-                  fast.recs != null && safeReady === 0
-                    ? safeOn > 0
-                      ? t("lab.labConsole.safeStackAllOn", { count: safeOn })
-                      : t("lab.labConsole.safeStackNone")
-                    : undefined
-                }
-              />
-            </div>
-            <div className="lc-corner lc-br">
-              {/* Instruments read — how far through the bench this rig has gone. Same
-                  stationHasReading the dock uses to mark nodes measured, so this and the dock can
-                  never disagree. Always defined (no probe to await), never NOT-YET. */}
-              <ArcGauge
-                label={t("lab.labConsole.instrumentsReadLabel")}
-                value={instrumentsRead}
-                max={Math.max(1, instrumentsTotal)}
-                unit={t("lab.labConsole.unitRead")}
-                note={t("lab.labConsole.instrumentsReadNote", { read: instrumentsRead, total: instrumentsTotal })}
-              />
-            </div>
-            <div className="lc-rig">
-              {/* chromeless — just the recognizable 3D hologram; the console frames it (brackets +
-                  corner gauges), so the viewer's own control bar / caption / "add a part" form are
-                  hidden (they collided with the corner gauges). */}
-              <RigViewer hw={hw} chromeless onSelectedIdChange={(_id, what) => setSelectedRig(what)} />
-            </div>
-            <ReticleCursor scopeRef={stageRef} />
-          </div>
-        </BentoTile>
-
-        {/* PARTS YOU ADDED — the manual fallback for hardware Compy can't read (PSU, cooler, a
-            spare drive). Titled for the collection, not the action: the form inside already says
-            "Add a part Compy can't detect", and a tile that repeats its own body is the
-            duplication the self-review rubric rejects. Same synced hook state as the hologram
-            beside it — adding a part here draws it in the model immediately. */}
-        <BentoTile span="half" title={t("lab.labConsole.tiles.manual")}>
-          <div className="lc-manual">
+              </div>
+          </section>
+        ) : undefined
+      }
+      below={below}
+    >
+      {hud ? (
+        <>
+          {/* THE STATION LIST — every current station, in one grouped list, as the comp draws it:
+              ruled document rows, not six equal buttons. Same <Dock>, same nodes, same
+              aria-pressed, same click/focus handlers and the same tab order; `layout="list"` is a
+              restyle of the node, because the handoff requires existing Dock keyboard behaviour to
+              survive this room. */}
+          <Dock
+            nodes={dockNodes}
+            activeKey={openStation}
+            onOpen={onDockOpen}
+            primaryEyebrow={t("lab.labConsole.startHere")}
+            layout="list"
+          />
+          {/* ADD A PART COMPY CAN'T DETECT — the comp's last row in the list. A disclosure, never a
+              removal: the form is the SAME <RigManualParts/> with the same synced hook state as the
+              hologram beside it, and it stays MOUNTED when closed (`hidden`), so a part added here
+              still draws in the model immediately and nothing about manual-parts behaviour moved. */}
+          <button
+            type="button"
+            className="lc-route"
+            aria-expanded={manualOpen}
+            aria-controls="lab-manual-parts"
+            onClick={() => setManualOpen((v) => !v)}
+          >
+            <span className="lc-route-ic" aria-hidden="true">
+              +
+            </span>
+            <span className="lc-route-nm">{t("lab.labConsole.addPartRoute")}</span>
+            <span className="lc-route-go" aria-hidden="true">
+              &rsaquo;
+            </span>
+          </button>
+          <div className="lc-manual" id="lab-manual-parts" hidden={!manualOpen}>
             <RigManualParts />
           </div>
-        </BentoTile>
-      </BentoGrid>
-
-      {/* DOCK — Optimize primary + the measure stations. Outside the grid, like Home's: the dock is
-          the room's exit row, not one of its answers. */}
-      <Dock
-        nodes={dockNodes}
-        activeKey={openStation}
-        onOpen={onDockOpen}
-        primaryEyebrow={t("lab.labConsole.startHere")}
-      />
-
-      {/* ONE open panel: Optimize (inline OptimizeStation) OR a measure body. A full-width tile
-          BELOW the dock, deliberately outside the grid — inside it, opening a station would push
-          the dock down the screen on every click. The station's name is the tile title and the
-          close control is its badge, so the hand-rolled panel head is gone. */}
+        </>
+      ) : (
+        /* THE CLASSIC COMPOSITION — `compy_editorial` off, the devtools failsafe, unchanged from
+           what it always was: the bento (reading · stage with its four CORNER gauges · parts you
+           added) and the grid dock under it. This branch exists to still work when the new one does
+           not, so it is never gated on anything the new one needs. */
+        <div className="lab-console" data-motion={reduced ? "reduced" : "full"}>
+          <BentoGrid>
+          <BentoTile span="half" title={t("lab.labConsole.tiles.reading")}>
+            <div className="lc-evidence" aria-live="polite">
+              {evidenceSubsystem ? (
+                <>
+                  <div className="lc-evidence-head">
+                    <span className="lc-evidence-name">
+                      {t(`lab.labConsole.evidence.subsystem.${evidenceSubsystem}`)}
+                    </span>
+                    <span className="lc-evidence-part">{selectedPart?.name}</span>
+                  </div>
+                  {evidenceReadings.length > 0 ? (
+                    <dl className="lc-evidence-list">
+                      {evidenceReadings.map((r) => (
+                        <div className="lc-evidence-row" key={r.key}>
+                          <dt>{t(`lab.labConsole.evidence.reading.${r.key satisfies LabReadingKey}`)}</dt>
+                          <dd>
+                            <span className="lc-evidence-value">{r.value}</span>
+                            {r.kind === "gauge" && (
+                              <>
+                                <span className="lc-evidence-den">{r.den}</span>
+                                {/* Proportion only — no colour-by-threshold. None of the app's audited
+                                    thresholds apply to these fields, so a reading is stated, not graded. */}
+                                <span className="lc-evidence-bar" aria-hidden="true">
+                                  <span style={{ width: `${Math.round(r.pct * 100)}%` }} />
+                                </span>
+                              </>
+                            )}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : (
+                    <p className="lc-evidence-empty">{t("lab.labConsole.evidence.empty")}</p>
+                  )}
+                </>
+              ) : evidenceFallback ? (
+                /* The two things that are NOT in the parts list — a fan, or a part the user added
+                   himself. Same shape and same rails: a real rpm reading when a monitor is publishing
+                   one, and otherwise a sentence saying why there is nothing to read. */
+                <>
+                  <div className="lc-evidence-head">
+                    <span className="lc-evidence-name">{evidenceFallback.subsystemLabel}</span>
+                    <span className="lc-evidence-part">{evidenceFallback.name}</span>
+                  </div>
+                  {evidenceFallback.reading ? (
+                    <dl className="lc-evidence-list">
+                      <div className="lc-evidence-row">
+                        <dt>{t("lab.labConsole.evidence.reading.fanSpeed")}</dt>
+                        <dd>
+                          <span className="lc-evidence-value">{evidenceFallback.reading}</span>
+                        </dd>
+                      </div>
+                    </dl>
+                  ) : (
+                    <p className="lc-evidence-empty">{evidenceFallback.note}</p>
+                  )}
+                </>
+              ) : (
+                <p className="lc-evidence-empty">{t("lab.labConsole.evidence.idle")}</p>
+              )}
+            </div>
+          </BentoTile>
+          <BentoTile span="hero" title={t("lab.labConsole.tiles.stage")}>
+            <div className="lc-stage" data-motion={reduced ? "reduced" : "full"} ref={stageRef}>
+              <span className="lc-brk lc-brk-tl" />
+              <span className="lc-brk lc-brk-tr" />
+              <span className="lc-brk lc-brk-bl" />
+              <span className="lc-brk lc-brk-br" />
+              <div className="lc-corner lc-tl">
+                {/* Proven — the room's entire payoff: how many changes this bench has verified
+                    before/after (awards ledger, Keep verdicts only). Full ring once N > 0. */}
+                <ArcGauge
+                  label={t("lab.labConsole.provenLabel")}
+                  value={provenCount}
+                  max={Math.max(1, provenCount ?? 1)}
+                  unit={t("lab.labConsole.unitKept")}
+                  tone="accent"
+                  measured={provenCount != null}
+                  note={
+                    provenCount != null
+                      ? t(provenCount > 0 ? "lab.labConsole.provenNoteSome" : "lab.labConsole.provenNoteNone")
+                      : undefined
+                  }
+                />
+              </div>
+              <div className="lc-corner lc-tr">
+                {/* Noise floor — the bench's own instrument constant: how big an effect this rig can
+                    even resolve. Fixed 10% display ceiling (a typical noise floor is a few percent;
+                    this is a reading, not a graded score, so a rare spike just fills the ring). */}
+                <ArcGauge
+                  label={t("lab.labConsole.noiseFloorLabel")}
+                  value={noiseFloorPct}
+                  max={10}
+                  unit={t("lab.labConsole.unitPct")}
+                  measured={noiseFloorPct != null}
+                  note={noiseFloorPct != null ? t("lab.labConsole.noiseFloorNote") : undefined}
+                />
+              </div>
+              <div className="lc-corner lc-bl">
+                {/* Two honest states over the same recs: work left → "N ready" (as before); nothing
+                    left → "N on" with a full ring and an "= all N applied" note. recs not loaded →
+                    NOT-YET, never a fabricated 0 (bug→guard 2026-07-09, unchanged). */}
+                <ArcGauge
+                  label={t("lab.labConsole.safeStackLabel")}
+                  value={fast.recs != null ? (safeReady > 0 ? safeReady : safeOn) : null}
+                  max={Math.max(1, safeReady > 0 ? safeReady : safeOn)}
+                  unit={safeReady > 0 ? t("lab.labConsole.unitReady") : t("lab.labConsole.unitOn")}
+                  tone="accent"
+                  measured={fast.recs != null}
+                  note={
+                    fast.recs != null && safeReady === 0
+                      ? safeOn > 0
+                        ? t("lab.labConsole.safeStackAllOn", { count: safeOn })
+                        : t("lab.labConsole.safeStackNone")
+                      : undefined
+                  }
+                />
+              </div>
+              <div className="lc-corner lc-br">
+                {/* Instruments read — how far through the bench this rig has gone. Same
+                    stationHasReading the dock uses to mark nodes measured, so this and the dock can
+                    never disagree. Always defined (no probe to await), never NOT-YET. */}
+                <ArcGauge
+                  label={t("lab.labConsole.instrumentsReadLabel")}
+                  value={instrumentsRead}
+                  max={Math.max(1, instrumentsTotal)}
+                  unit={t("lab.labConsole.unitRead")}
+                  note={t("lab.labConsole.instrumentsReadNote", { read: instrumentsRead, total: instrumentsTotal })}
+                />
+              </div>
+              <div className="lc-rig">
+                {/* chromeless — just the recognizable 3D hologram; the console frames it (brackets +
+                    corner gauges), so the viewer's own control bar / caption / "add a part" form are
+                    hidden (they collided with the corner gauges). */}
+                <RigViewer hw={hw} chromeless onSelectedIdChange={(_id, what) => setSelectedRig(what)} />
+              </div>
+              <ReticleCursor scopeRef={stageRef} />
+            </div>
+          </BentoTile>
+          <BentoTile span="half" title={t("lab.labConsole.tiles.manual")}>
+            <div className="lc-manual">
+              <RigManualParts />
+            </div>
+          </BentoTile>
+          </BentoGrid>
+          <Dock
+            nodes={dockNodes}
+            activeKey={openStation}
+            onOpen={onDockOpen}
+            primaryEyebrow={t("lab.labConsole.startHere")}
+          />
+        </div>
+      )}
       {openStation && (
         <BentoTile
           span="full"
@@ -560,7 +815,7 @@ export function LabConsole({
           </div>
         </BentoTile>
       )}
-    </div>
+    </RoomShell>
   );
 }
 

@@ -137,8 +137,11 @@ describe("HUD room rollout: the rollout is over — no room wears the masthead",
   // that used to live here had nothing left to iterate, so it is replaced by the assertion that
   // actually protects the user now: NEITHER room may grow a masthead back, in EITHER flag state.
   //
-  // HudMasthead itself is not dead code — LabGround still mounts it, and has its own suite. When
-  // that one converts too, this file retires with the rollout it pins.
+  // THE ROLLOUT IS OVER. Test converted in slice 6 and `surfaces/hud-masthead.tsx` — which by then
+  // had no mounting room left — was deleted with it (the reachability guard failed the moment its
+  // last importer went, which is exactly what that guard is for). Its STYLESHEET survives: it
+  // skins far more than the masthead, so `hud-rooms.css` moved to App.tsx beside the other two HUD
+  // sheets. This file now pins the one thing still worth pinning: no room grows a masthead back.
   it("the rollout list has no HUD room left", () => {
     expect(ROOMS.filter((r) => r.hud)).toEqual([]);
   });

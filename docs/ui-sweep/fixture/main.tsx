@@ -35,6 +35,7 @@ import "../../../src/surfaces/room-identity.css";
 import "../../../src/design/tokens-qpw.css";
 import "../../../src/design/tokens-hud.css";
 import "../../../src/surfaces/ambient-hud.css";
+import "../../../src/surfaces/hud-rooms.css";
 
 // ── One sheet BEYOND App.tsx's chain, and it is not optional ──────────────────────────────────
 // lab-v2.css is imported by LabGround.tsx:16, not by App.tsx, so the chain above does not carry

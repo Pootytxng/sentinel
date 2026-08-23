@@ -25,8 +25,14 @@
     "vendorInsightsTitle": "针对你的 Radeon 显卡",
     "vendorInsightsIntro": "根据 Compy 已读取到的设置,为你的显卡量身定制的直白说明。仅供参考——Compy 不会更改这里的任何设置。",
     "scope": {
-      "global": { "label": "全局", "blurb": "展示你所有使用场景下的 GPU 情况——不针对任何单一游戏。" },
-      "per-game": { "label": "按游戏", "blurb": "围绕你当前所玩的游戏，呈现 GPU 视图。" }
+      "global": {
+        "label": "全局",
+        "blurb": "展示你所有使用场景下的 GPU 情况——不针对任何单一游戏。"
+      },
+      "per-game": {
+        "label": "按游戏",
+        "blurb": "围绕你当前所玩的游戏，呈现 GPU 视图。"
+      }
     },
     "insights": {
       "hagsOnTitle": "GPU 调度已开启",
@@ -105,9 +111,6 @@
       "undoStacked": "撤销它们,或者重新测一次以确认。"
     }
   },
-  "labGround": {
-    "masthead": "试炼场"
-  },
   "labConsole": {
     "provenLabel": "已验证",
     "provenNoteSome": "= 前后对比已验证",
@@ -162,7 +165,19 @@
       "fanUnread": "当前没有监控软件在发布这个风扇的转速，因此没有可读数据——Compy 不会猜测数值。",
       "userAddedSubsystem": "你添加的部件",
       "userAddedNote": "这个部件是你自己添加的，Compy 没有它的实测数据——它只是让你的整机图更完整。"
-    }
+    },
+    "narrative": {
+      "eyebrow": "实测台",
+      "headline": "一次只测一项改动",
+      "sub": "Compy 会在改动前后各测一次；除非结果明显超过噪声基线，否则会把这项改动还原。",
+      "action": "从「优化」开始",
+      "actionNote": "想让电脑更快、又稳妥、又不想自己折腾时，选这个。",
+      "safety": "一次一项可还原的改动 · 一次实测结果 · 默认还原。"
+    },
+    "bench": {
+      "aria": "工作台上的你的整机"
+    },
+    "addPartRoute": "添加 Compy 无法检测到的部件"
   },
   "optimizeStation": {
     "gaugeAriaLabel": "{{total}} 项安全优化项中已开启 {{applied}} 项",

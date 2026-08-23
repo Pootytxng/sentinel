@@ -121,11 +121,26 @@ describe("LabGround OPS CONSOLE — LabConsole replaces the Instrument Bench ben
     expect(c.querySelector(".v2-room[data-room='lab']")).not.toBeNull();
   });
 
-  it("title-header law (owner 2026-07-10 round 2): the HUD h1 is exactly 'Lab' — never a status sentence; classic '0' keeps the verdict sentence", () => {
-    // hud flag absent = default ON → the header is the room title, no sub.
+  it("the h1 is the room's own sentence now, and it still carries no count", () => {
+    // SUPERSEDED, deliberately: the owner title-header law of 2026-07-10 made this h1 the bare word
+    // "Test", and 04-test-approved.png overrules it the same way UX-1 overruled it on Health and
+    // slices 4-5 did on Live and History. The rail that navigated here already said "Test"; a
+    // masthead repeating it pushed the room's own sentence a third smaller than the label above it.
+    //
+    // What the old law was PROTECTING is untouched and still pinned below: no status sentence, and
+    // above all NO COUNT in a heading. "3 fixes ready" as an h1 is the room shouting a number at
+    // someone who has not been told what it means yet.
     const c = renderMerged([SAFE_REC]);
-    expect(c.querySelector(".v2-verdict .hud-headline")!.textContent).toBe("Test");
-    expect(c.querySelector(".v2-verdict-sub")).toBeNull();
+    expect(c.querySelector(".hud-headline"), "the Instrument-HUD masthead left this room").toBeNull();
+    const h1 = c.querySelector(".v2-verdict h1")!;
+    expect(h1.textContent).toContain("Test one change at a time");
+    // The dateline lives in the eyebrow INSIDE the h1 (RoomShell composes it that way on every
+    // room), so the no-count rule is read off the headline itself — which is where a fixes count
+    // would land if this ever regressed.
+    expect(c.querySelector(".lc-headline")!.textContent, "no count may reach the headline").not.toMatch(/\d/);
+    expect(c.querySelector(".lc-eyebrow")!.textContent).toContain("Proving ground");
+    // ...and the room now explains itself in one sentence under it, as every other room does.
+    expect(c.querySelector(".v2-verdict-sub")!.textContent).toContain("measures before and after");
     cleanup();
     // The classic "0" failsafe keeps the pre-rollout contract: the verdict sentence as the h1.
     localStorage.setItem("compy_editorial", "0");

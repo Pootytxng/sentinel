@@ -20,6 +20,7 @@ export function Dock({
   activeKey,
   onOpen,
   primaryEyebrow,
+  layout = "grid",
 }: {
   nodes: DockNode[];
   activeKey: string | null;
@@ -27,16 +28,27 @@ export function Dock({
   /** A short sans label drawn above the primary node's icon ("Start here"). Optional: Home's dock
    *  passes nothing and renders exactly as before. */
   primaryEyebrow?: string;
+  /** "grid" (default) is the game-style action bar Home has always drawn -- omit the prop and the
+   *  DOM is byte-identical to what it was. "list" is the ruled document row 04-test-approved.png
+   *  draws: icon, name, the primary's eyebrow inline beside it, the station's own when-line under
+   *  it, a chevron at the end. SAME <button> per station, same aria-pressed, same click and focus
+   *  handlers -- the handoff requires the existing Dock keyboard behaviour survive this room, so
+   *  the row is a restyle of the node, never a replacement for it. */
+  layout?: "grid" | "list";
 }) {
   const reduced = useReducedMotion();
   const [hoverKey, setHoverKey] = useState<string | null>(null);
-  const captionNode =
+  const list = layout === "list";
+  // In LIST layout every node prints its own when-line, so the shared caption would say a second
+  // time what the hovered row already says an inch away -- the duplication the self-review rubric
+  // rejects, and an aria-live region announcing text that is already on screen besides.
+  const captionNode = list ? null :
     nodes.find((n) => n.key === hoverKey && n.hint) ??
     nodes.find((n) => n.key === activeKey && n.hint) ??
     nodes.find((n) => n.primary && n.hint) ??
     null;
   return (
-    <div className="dock" data-motion={reduced ? "reduced" : "full"}>
+    <div className="dock" data-layout={list ? "list" : undefined} data-motion={reduced ? "reduced" : "full"}>
       {nodes.map((n) => (
         <button
           key={n.key}
@@ -59,6 +71,12 @@ export function Dock({
           )}
           <span className="dock-nm">{n.name}</span>
           <span className={`dock-led ${n.measured ? "dock-led-on" : ""}`} aria-hidden="true" />
+          {list && n.hint && <span className="dock-hint">{n.hint}</span>}
+          {list && (
+            <span className="dock-go" aria-hidden="true">
+              &rsaquo;
+            </span>
+          )}
         </button>
       ))}
       {captionNode && (

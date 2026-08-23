@@ -210,12 +210,12 @@
 
 /* Cursor-follow spotlight — a border-masked accent glow whose opacity tracks pointer proximity via
    --glow-intensity (set by LabConsole's pointer handler). Masked to the stage border ring only. */
-:root[data-v2="on"] .lab-console[data-motion="full"] .lc-stage {
+:root[data-v2="on"] .lc-stage[data-motion="full"] {
   --glow-x: 50%;
   --glow-y: 50%;
   --glow-intensity: 0;
 }
-:root[data-v2="on"] .lab-console[data-motion="full"] .lc-stage::after {
+:root[data-v2="on"] .lc-stage[data-motion="full"]::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -264,3 +264,156 @@
 /* ADD A PART (Train 1, 2026-08-12) — the manual-parts form, now the content of the "Parts you added"
    half tile (bento conversion, same day): the tile is the card, so this element keeps no frame and no
    padding of its own. RigViewer.css still owns the form's internals (.rig-manual…). */
+
+/* ===========================================================================================
+   THE APPROVED TEST ROOM (issue #49 slice 6, matched against 04-test-approved.png).
+
+   Two columns: a narrative story column and a bordered bench panel. Test is one of the two
+   PANELLED rooms (with Health) -- its evidence has its own edge, so the eye knows where the story
+   stops without a rule being drawn in the gutter. Live and History are the WIDE pair and get the
+   hairline instead; that split is a room family, not a viewport width, so nothing here is keyed
+   off a breakpoint (the handoff forbids breakpoints outright).
+   =========================================================================================== */
+
+/* ---- the story column --------------------------------------------------------------------- */
+/* The eyebrow speaks Health's grammar, because 01 and 04 draw the same thing: a grey mono label
+   with a DOT that carries the state. Colour is information here and nowhere else on this line. */
+:root[data-v2="on"] .lc-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--v2-font-mono);
+  font-size: var(--type-label);
+  font-weight: var(--type-label-weight);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--v2-faint);
+}
+:root[data-v2="on"] .lc-led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--v2-faint);
+}
+:root[data-v2="on"] .lc-led-ok {
+  background: var(--v2-ok);
+}
+:root[data-v2="on"] .lc-led-warn {
+  background: var(--v2-warn);
+}
+:root[data-v2="on"] .lc-led-scan {
+  background: var(--v2-info);
+}
+:root[data-v2="on"] .lc-eyebrow-sep {
+  color: var(--v2-line);
+}
+:root[data-v2="on"] .lc-mono {
+  font-family: var(--v2-font-mono);
+}
+:root[data-v2="on"] .lc-headline {
+  display: block;
+}
+/* The button is the shared green primary (`.v2-primary` carries fill, border and focus ring --
+   the owner overruled the violet it used to wear). Only its box is local: the comp measures it at
+   262 x 44 app px, i.e. shrink-to-fit, never a column-wide bar. */
+:root[data-v2="on"] .lc-start {
+  min-height: 44px;
+  padding: 0 26px;
+}
+:root[data-v2="on"] .lc-action-note {
+  margin: 12px 0 0;
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-body);
+  color: var(--v2-muted);
+}
+/* The list of stations opens under a rule, the way the comp separates the pitch from the menu. */
+:root[data-v2="on"] .v2-room[data-room="lab"] .dock[data-layout="list"] {
+  border-top: 1px solid var(--v2-line);
+  margin-top: var(--v2-gap);
+}
+
+/* ---- "Add a part Compy can't detect" — the list's last row ---------------------------------- */
+:root[data-v2="on"] .lc-route {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  column-gap: 10px;
+  width: 100%;
+  padding: 14px 2px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--v2-line);
+  text-align: left;
+  cursor: pointer;
+}
+:root[data-v2="on"] .lc-route:hover {
+  background: var(--ix-glass-fill);
+}
+:root[data-v2="on"] .lc-route:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
+}
+:root[data-v2="on"] .lc-route-ic {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--v2-accent);
+  border-radius: 50%;
+  font-size: var(--type-card);
+  line-height: 1;
+  color: var(--v2-accent-text, var(--v2-accent));
+}
+:root[data-v2="on"] .lc-route-nm {
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-card);
+  font-weight: var(--type-card-weight);
+  color: var(--v2-accent-text, var(--v2-accent));
+}
+:root[data-v2="on"] .lc-route-go {
+  font-size: var(--type-section);
+  line-height: 1;
+  color: var(--v2-faint);
+}
+:root[data-v2="on"] .lc-manual {
+  padding: 4px 2px 12px;
+}
+
+/* ---- the bench panel ------------------------------------------------------------------------ */
+:root[data-v2="on"] .lc-bench {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v2-gap);
+  padding: var(--v2-pad);
+  background: var(--v2-panel);
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-r);
+}
+/* The hologram gets the room's largest surface -- the comp gives it 560 of the panel's 777 app px,
+   and the handoff forbids covering that canvas with click targets or diagrams, which is why the
+   four gauges left its corners. */
+:root[data-v2="on"] .lc-bench .lc-stage {
+  min-height: 520px;
+}
+/* THE BENCH READING SET — four cells, one row, under a rule. Proven · Noise floor · Safe stack ·
+   Instruments read: what this bench can VOUCH for. (The comp prints Readiness / Avg FPS / 1% Low
+   here; the handoff names those as the older duplicated Health metrics from an early draft and
+   they are deliberately not adopted -- they are Health's verdict and they stay there.) */
+:root[data-v2="on"] .lc-readings {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--v2-gap);
+  padding-top: var(--v2-gap);
+  border-top: 1px solid var(--v2-line);
+}
+:root[data-v2="on"] .lc-reading {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  min-width: 0;
+}
+/* The rig's answer sits under the readings, still one click from the hologram that fills it. */
+:root[data-v2="on"] .lc-bench .lc-evidence {
+  padding-top: var(--v2-gap);
+  border-top: 1px solid var(--v2-line);
+}

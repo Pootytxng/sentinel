@@ -87,6 +87,14 @@ import "./design/tokens-qpw.css"; // Quiet Pit Wall redesign tokens - scoped [da
 // TOKEN layer above stays — tokens-qpw-guard.test.ts is cited as the one source of truth for motion.
 import "./design/tokens-hud.css"; // Instrument-HUD tokens — scoped under [data-hud="on"], DEFAULT ON
 import "./surfaces/ambient-hud.css"; // T4c ambient skin (grain · glass · holo-foil) — scoped [data-v2][data-hud]
+/* The Instrument-HUD ROOM skin. It used to ride into the bundle on `surfaces/hud-masthead.tsx`,
+   which was the only module that imported it; that component died in issue #49 slice 6 when Test —
+   its last mounting room — took the approved four-room header, and the stylesheet would have died
+   with it. It must not: it is far more than the masthead it was filed under. It skins every room
+   except Home and Check (panel ground, scanline, verdict type, the mono `.v2-measured` readouts,
+   and the whole Fix/Lab instrument chip set). It lives with the other two HUD stylesheets now,
+   where losing its owner cannot silently take it out of the build. */
+import "./surfaces/hud-rooms.css"; // Instrument-HUD room skin — scoped [data-v2][data-hud], DEFAULT ON
 
 type DiskInfo = {
   mount_point: string;

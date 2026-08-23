@@ -193,6 +193,13 @@ const base = {
   diagnosticsCaptured: true,
   vendor: "amd" as const,
   hw: hwFixture,
+  // The console composes its own RoomShell since issue #49 slice 6, so the harness has to hand it
+  // what the room used to wrap it in. `hud: true` is the DEFAULT composition (compy_editorial is
+  // on by default and "0" is only the devtools failsafe), so this suite keeps testing the room
+  // people actually see; the failsafe branch has its own coverage in lab-ground.test.tsx.
+  hud: true,
+  ledState: "ok" as const,
+  classicVerdict: "Everything checked out.",
 };
 
 const renderConsole = (props = base) =>
@@ -201,6 +208,21 @@ const renderConsole = (props = base) =>
       <LabConsole {...props} />
     </ConfirmProvider>,
   );
+
+// THE BENCH READING SET, by position. The four gauges left the canvas CORNERS in issue #49
+// slice 6 (04-test-approved.png draws them as a strip under the hologram, and the handoff forbids
+// covering that canvas with click targets or diagrams), so `.lc-tl/.lc-tr/.lc-bl/.lc-br` are gone.
+// Index order is the same order those corners read in: Proven · Noise floor · Safe stack ·
+// Instruments read — and guard 1 below still pins exactly that.
+// TWO handles on ONE door since slice 6: the comp's "Start with Optimize" primary and the
+// "Optimize · Start here" row in the station list both call the same setter, so a bare
+// /optimize/i role query now matches both. Tests about the LIST say so with this.
+const stationNode = (re: RegExp) =>
+  Array.from(document.querySelectorAll<HTMLButtonElement>(".dock-node")).find((b) =>
+    re.test(b.textContent ?? ""),
+  )!;
+
+const reading = (i: number) => document.querySelectorAll(".lc-readings > .lc-reading")[i]!;
 
 // The open station's NAME. Since the bento conversion it is the enclosing <BentoTile>'s title rather
 // than a hand-rolled .lc-detail-name — the panel head is the tile's, so the assertion reads it there.
@@ -239,7 +261,7 @@ describe("LabConsole", () => {
 
   it("renders a dock node for every Lab station (no gallery) with Optimize as the primary", () => {
     renderConsole();
-    expect(screen.getByRole("button", { name: /optimize/i })).toHaveClass("dock-node-primary");
+    expect(stationNode(/optimize/i)).toHaveClass("dock-node-primary");
     expect(screen.getByRole("button", { name: /benchmark/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /latency/i })).toBeInTheDocument();
     // Renamed 2026-08-11 (§4): the dock node says the problem ("crash"), not the metaphor.
@@ -249,7 +271,7 @@ describe("LabConsole", () => {
 
   it("opens the Optimize enable-all when its dock node is clicked", () => {
     renderConsole();
-    fireEvent.click(screen.getByRole("button", { name: /optimize/i }));
+    fireEvent.click(stationNode(/optimize/i));
     // OptimizeStation's real enable-all control — Fix's slim view renders "Apply reviewed (N)",
     // not "Apply all safe fixes (N)" (that longer label is the non-slim/classic view only).
     expect(screen.getByRole("button", { name: /apply reviewed/i })).toBeInTheDocument();
@@ -275,7 +297,7 @@ describe("LabConsole", () => {
   it("the safe-stack gauge shows the real remaining count when recs are loaded", () => {
     renderConsole();
     // Two unapplied safe recs in the fixture → the gauge reads "2 · measured", never NOT-YET.
-    const bl = document.querySelector(".lc-bl")!;
+    const bl = reading(2);
     expect(bl.textContent).toContain("Safe stack");
     expect(bl.querySelector(".ag-v")!.textContent).toBe("2");
     expect(bl.querySelector(".ag-tag-ny")).toBeNull(); // NOT the NOT-YET tag
@@ -286,7 +308,7 @@ describe("LabConsole", () => {
   it("the safe-stack gauge reads 'N on · = all N applied' on a full ring once nothing is left to apply", () => {
     const applied = (recsFixture as Array<Record<string, unknown>>).map((r) => ({ ...r, currently_applied: true }));
     renderConsole({ ...base, fast: { ...fast, recs: applied as never[] } });
-    const bl = document.querySelector(".lc-bl")!;
+    const bl = reading(2);
     expect(bl.querySelector(".ag-v")!.textContent).toBe("2");
     expect(bl.textContent).toContain("on");
     expect(bl.textContent).not.toContain("ready");
@@ -303,10 +325,16 @@ describe("LabConsole", () => {
     const eyebrow = dock.querySelector(".dock-eyebrow")!;
     expect(eyebrow.textContent).toBe("Start here");
     expect(eyebrow.closest(".dock-node")).toHaveClass("dock-node-primary");
-    // Nothing open on entry → the caption is Optimize's when-line, the plain sentence the router uses.
-    expect(dock.querySelector(".dock-caption")!.textContent).toBe(
-      "Optimize · You just want it faster and safe, without fiddling.",
+    // In LIST layout every row prints its OWN when-line — the plain sentence the router and the
+    // guided face use — so the shared hover caption is gone: it would have said a second time what
+    // the row already says an inch away, and announced it through aria-live besides.
+    expect(dock.querySelector(".dock-caption"), "the list must not also draw the hover caption").toBeNull();
+    const primary = dock.querySelector(".dock-node-primary")!;
+    expect(primary.querySelector(".dock-hint")!.textContent).toBe(
+      "You just want it faster and safe, without fiddling.",
     );
+    // Every station carries its own, not just the primary one.
+    expect(dock.querySelectorAll(".dock-node").length).toBe(dock.querySelectorAll(".dock-hint").length);
   });
 
   it("the safe-stack gauge is honest NOT-YET (never a fabricated 0) while recs are not loaded — bug→guard 2026-07-09", () => {
@@ -317,14 +345,20 @@ describe("LabConsole", () => {
       ...base,
       fast: { ...fast, recs: null as unknown as LabFastPathProps["recs"] },
     });
-    const bl = document.querySelector(".lc-bl")!;
+    const bl = reading(2);
     expect(bl.querySelector(".ag-tag-ny")).not.toBeNull(); // the NOT-YET tag is present
     expect(bl.querySelector(".ag-v")!.textContent).not.toBe("0"); // never a fabricated 0
   });
 
-  it("reduced motion is threaded through (no throw, console still renders every station)", () => {
+  it("reduced motion is threaded through, ON THE STAGE the glow is actually gated on", () => {
     renderConsole();
-    expect(document.querySelector(".lab-console")!.getAttribute("data-motion")).toBe("reduced");
+    // bug→guard, and it is the SECOND time this exact bug has shipped: the pointer glow is gated
+    // on `[data-motion="full"] .lc-stage`, and in the approved composition the stage has no
+    // `.lab-console` ancestor at all — so a switch set on that root would have been set on an
+    // element the stage no longer lives inside, and silently done nothing. History's row stagger
+    // died the same way when the tape moved out of its console (fixed 2026-08-23). The switch now
+    // rides the element the selector names, and this test reads it there.
+    expect(document.querySelector(".lc-stage")!.getAttribute("data-motion")).toBe("reduced");
   });
 
   it("no lede line — the console opens straight on the stage (owner header-slop law 2026-07-10)", () => {
@@ -333,7 +367,8 @@ describe("LabConsole", () => {
     // The room's reassurance lives in the Optimize panel (its context), not the header;
     // the undo half moved to Fix's consent line (title-header law) so the panel says it once.
     expect(container.querySelector(".lc-detail-note")).toBeNull(); // closed → nowhere
-    fireEvent.click(screen.getByRole("button", { name: /optimize/i }));
+    // The LIST row is the one this test is about, not the primary above it.
+    fireEvent.click(stationNode(/optimize/i));
     const note = container.querySelector(".lc-detail-note")!.textContent!;
     // bug→guard (self-review 2026-07-17, rounds 1–3): this note twice shipped a FALSE room-wide
     // census. Round 1 said "the only station ... that changes anything" — false once Intelligence
@@ -368,14 +403,28 @@ describe("LabConsole", () => {
 // could not add the PSU or cooler Compy admits it cannot read. The form now lives in the Lab's own
 // chrome (.lc-manual > RigManualParts); this block fails the build if it ever unmounts again.
 describe("LabConsole — add a part (manual parts in the Lab's own chrome)", () => {
+  // Slice 6 makes the form a DISCLOSURE — 04-test-approved.png draws "Add a part Compy can't
+  // detect" as the station list's last row, not as an always-open form. It is a disclosure and
+  // never a removal: the form stays MOUNTED when closed (`hidden`), which is what keeps the
+  // TRAIN 1 guard above true, and this helper is the one click a user makes to reach it.
+  const openManual = () => fireEvent.click(document.querySelector(".lc-route")!);
+
   it("mounts the add-a-part form in the Lab chrome, outside the chromeless viewer", () => {
     renderConsole();
+    // MOUNTED even while closed — the defect this block exists for was the form UNMOUNTING, and a
+    // disclosure that unmounted its body would re-ship it wearing a chevron.
     expect(document.querySelector(".lc-manual .rig-manual")).not.toBeNull();
+    expect(document.querySelector<HTMLElement>(".lc-manual")!.hidden).toBe(true);
+    openManual();
+    expect(document.querySelector<HTMLElement>(".lc-manual")!.hidden).toBe(false);
     expect(screen.getByText("Add a part Compy can't detect:")).toBeInTheDocument();
+    // The row's own label drops the form's trailing colon, as the comp draws it.
+    expect(document.querySelector(".lc-route-nm")!.textContent).toBe("Add a part Compy can't detect");
   });
 
   it("adding a part from the Lab persists it and lists it as user-added", () => {
     renderConsole();
+    openManual();
     const input = screen.getByPlaceholderText("e.g. Corsair RM850x");
     fireEvent.change(input, { target: { value: "Corsair RM850x" } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
@@ -390,6 +439,7 @@ describe("LabConsole — add a part (manual parts in the Lab's own chrome)", () 
 
   it("removing the part from the Lab clears it from storage", () => {
     renderConsole();
+    openManual();
     fireEvent.change(screen.getByPlaceholderText("e.g. Corsair RM850x"), {
       target: { value: "Noctua NH-D15" },
     });
@@ -414,15 +464,23 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
 
   it("guard 1 — the four corners are exactly Proven · Noise floor · Safe stack · Instruments read, never Health's numbers", () => {
     renderConsole();
-    const stage = document.querySelector(".lc-stage")!;
-    expect(stage.textContent).not.toContain("Readiness");
-    expect(stage.textContent).not.toContain("Avg FPS");
-    expect(stage.textContent).not.toContain("1% low");
-    const cornerLabel = (corner: string) => document.querySelector(`${corner} .ag-label span`)!.textContent;
-    expect(cornerLabel(".lc-tl")).toBe("Proven");
-    expect(cornerLabel(".lc-tr")).toBe("Noise floor");
-    expect(cornerLabel(".lc-bl")).toBe("Safe stack");
-    expect(cornerLabel(".lc-br")).toBe("Instruments read");
+    const strip = document.querySelector(".lc-readings")!;
+    // 04-test-approved.png prints READINESS, AVG FPS and 1% LOW in this strip. They are NOT
+    // adopted and this guard is why: the handoff names them "the older duplicated Health metrics
+    // shown in an early generated draft", and the comp itself says its values are examples, not a
+    // licence. A picture is not a reason to move Health's verdict into Test.
+    expect(strip.textContent).not.toContain("Readiness");
+    expect(strip.textContent).not.toContain("Avg FPS");
+    expect(strip.textContent).not.toContain("1% low");
+    const readingLabel = (i: number) => reading(i).querySelector(".ag-label span")!.textContent;
+    expect(readingLabel(0)).toBe("Proven");
+    expect(readingLabel(1)).toBe("Noise floor");
+    expect(readingLabel(2)).toBe("Safe stack");
+    expect(readingLabel(3)).toBe("Instruments read");
+    // ...and the strip sits UNDER the canvas, never over it. The handoff is explicit that the real
+    // rig stays the focal surface and its canvas is not to be covered with click targets or
+    // diagrams; four rings floating in its corners were doing exactly that.
+    expect(document.querySelector(".lc-stage")!.contains(strip)).toBe(false);
   });
 
   it("guard 2 — cross-room duplication: Test's corner labels and Health's corner labels are disjoint (read from the i18n bundles)", () => {
@@ -453,8 +511,8 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
 
   it("guard 4 — Proven and Noise floor are honest NOT-YET (never a fabricated 0) while the scoreboard/trial probes are unread", () => {
     renderConsole();
-    expect(document.querySelector(".lc-tl .ag-tag-ny")).not.toBeNull();
-    expect(document.querySelector(".lc-tr .ag-tag-ny")).not.toBeNull();
+    expect(reading(0).querySelector(".ag-tag-ny")).not.toBeNull();
+    expect(reading(1).querySelector(".ag-tag-ny")).not.toBeNull();
   });
 
   it("Proven reads the scoreboard's award count once loaded", async () => {
@@ -467,7 +525,7 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
           : Promise.resolve(null),
     );
     renderConsole();
-    const tl = document.querySelector(".lc-tl")!;
+    const tl = reading(0);
     await waitFor(() => expect(tl.querySelector(".ag-v")!.textContent).toBe("3"));
     expect(tl.querySelector(".ag-tag-ny")).toBeNull();
     expect(tl.querySelector(".ag-note")!.textContent).toBe("= verified before and after");
@@ -493,7 +551,7 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
           : Promise.resolve(null),
     );
     renderConsole();
-    const tr = document.querySelector(".lc-tr")!;
+    const tr = reading(1);
     await waitFor(() => expect(tr.querySelector(".ag-v")!.textContent).toBe("4"));
     expect(tr.querySelector(".ag-tag-ny")).toBeNull();
   });

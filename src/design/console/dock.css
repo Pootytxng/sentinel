@@ -89,3 +89,86 @@
   border-color: var(--ix-accent);
   background: color-mix(in srgb, var(--ix-accent) 14%, var(--ix-glass-fill));
 }
+
+/* ---- LIST LAYOUT (comp fidelity 2026-08-23, 04-test-approved.png) -------------------------
+   Test draws its six stations as a DOCUMENT -- ruled rows, one hairline apiece -- not as a wall
+   of six equal buttons. Same reason History's record stopped being a card wall: six equal tiles
+   read as "six things you have to choose between", which is the room's standing intimidation
+   complaint; ruled rows read as a list you can scan, with one row (Optimize) marked as the way
+   in. Home passes no `layout` and never enters this block.
+
+   Every row is still the SAME <button> the grid draws, with the same aria-pressed, the same
+   click/focus handlers and the same tab order -- the handoff requires existing Dock keyboard
+   behaviour to survive, so this is a restyle, never a re-implementation. */
+:root[data-v2="on"] .dock[data-layout="list"] {
+  display: block;
+  padding: 0;
+}
+:root[data-v2="on"] .dock[data-layout="list"] .dock-node {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr auto;
+  grid-template-rows: auto auto;
+  place-items: start;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 2px;
+  width: 100%;
+  min-width: 0;
+  padding: 14px 2px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ix-glass-border);
+  border-radius: 0;
+  box-shadow: none;
+  text-align: left;
+}
+:root[data-v2="on"] .dock[data-layout="list"] .dock-node:hover {
+  background: var(--ix-glass-fill);
+}
+:root[data-v2="on"] .dock[data-layout="list"] .dock-ic {
+  grid-area: 1 / 1 / 3 / 2;
+  align-self: center;
+  font-size: var(--type-section);
+  opacity: 0.85;
+}
+:root[data-v2="on"] .dock[data-layout="list"] .dock-nm {
+  grid-area: 1 / 2 / 2 / 3;
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-card);
+  font-weight: var(--type-card-weight);
+  color: var(--ix-text-1);
+  letter-spacing: normal;
+  text-transform: none;
+}
+:root[data-v2="on"] .dock[data-layout="list"] .dock-eyebrow {
+  grid-area: 1 / 3 / 2 / 4;
+}
+/* "Optimize · Start here" -- the separator is the comp's, and it belongs to the eyebrow rather
+   than to the name, so a node with no eyebrow never draws a dangling dot. */
+:root[data-v2="on"] .dock[data-layout="list"] .dock-eyebrow::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--v2-faint);
+}
+:root[data-v2="on"] .dock[data-layout="list"] .dock-led {
+  grid-area: 1 / 4 / 2 / 5;
+  justify-self: start;
+  align-self: center;
+}
+:root[data-v2="on"] .dock[data-layout="list"] .dock-hint {
+  grid-area: 2 / 2 / 3 / 5;
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-body);
+  color: var(--ix-text-2);
+}
+:root[data-v2="on"] .dock[data-layout="list"] .dock-go {
+  grid-area: 1 / 5 / 3 / 6;
+  align-self: center;
+  font-size: var(--type-section);
+  line-height: 1;
+  color: var(--v2-faint);
+}
+:root[data-v2="on"] .dock[data-layout="list"] .dock-node:hover .dock-go,
+:root[data-v2="on"] .dock[data-layout="list"] .dock-node-active .dock-go {
+  color: var(--ix-text-1);
+}

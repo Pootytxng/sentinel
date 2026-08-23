@@ -25,8 +25,14 @@
     "vendorInsightsTitle": "For your Radeon GPU",
     "vendorInsightsIntro": "Plain-English notes tailored to your GPU, read from settings Compy already sees. Advisory only — Compy changes nothing here.",
     "scope": {
-      "global": { "label": "Global", "blurb": "Shows the GPU picture across all your usage — no single game assumed." },
-      "per-game": { "label": "Per-game", "blurb": "Frames the GPU view around the game you're currently in." }
+      "global": {
+        "label": "Global",
+        "blurb": "Shows the GPU picture across all your usage — no single game assumed."
+      },
+      "per-game": {
+        "label": "Per-game",
+        "blurb": "Frames the GPU view around the game you're currently in."
+      }
     },
     "insights": {
       "hagsOnTitle": "GPU scheduling on",
@@ -105,9 +111,6 @@
       "undoStacked": "Undo them, or re-run to confirm."
     }
   },
-  "labGround": {
-    "masthead": "Proving ground"
-  },
   "labConsole": {
     "provenLabel": "Proven",
     "provenNoteSome": "= verified before and after",
@@ -163,7 +166,19 @@
       "fanUnread": "No monitor is publishing this fan's speed right now, so there's nothing to read — Compy won't guess a number.",
       "userAddedSubsystem": "You added this",
       "userAddedNote": "You added this part yourself, so Compy has no reading for it — it's here to keep your rig's picture complete."
-    }
+    },
+    "narrative": {
+      "eyebrow": "Proving ground",
+      "headline": "Test one change at a time",
+      "sub": "Compy measures before and after, then restores the change unless the result clearly beats the noise.",
+      "action": "Start with Optimize",
+      "actionNote": "Best when you want it faster and safe, without fiddling.",
+      "safety": "One reversible change · one measured result · restore by default."
+    },
+    "bench": {
+      "aria": "Your rig on the bench"
+    },
+    "addPartRoute": "Add a part Compy can't detect"
   },
   "optimizeStation": {
     "gaugeAriaLabel": "{{applied}} of {{total}} safe tweaks on",

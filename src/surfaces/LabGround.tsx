@@ -5,10 +5,8 @@ import { LabConsole } from "./LabConsole";
 import ExperimentBench from "./ExperimentBench";
 import { GpuProfile } from "./GpuProfile";
 import { liveGpuProfileSnapshot } from "../data/gpu-profile-store";
-import { RoomShell } from "../design/room-shell";
 import { useReducedMotion } from "../design/use-motion";
 import { useHudFlag } from "../design/use-hud";
-import { HudMasthead } from "./hud-masthead";
 import { deriveReverted } from "./use-scan";
 import { optimizeVerdict } from "./optimize-v2-data";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
@@ -74,58 +72,51 @@ export function LabGround(props: LabFastPathProps & {
   );
 
   return (
-    <RoomShell
-      room="lab"
-      verdict={(() => {
-        if (!hud) {
-          // Flag off: the exact pre-rollout tree (verdict sentence as the h1, classic contract).
-          return reduced || !verdict.settled ? (
-            verdict.headline
-          ) : (
-            <DecryptedText
-              key={verdict.headline}
-              text={verdict.headline}
-              animateOn="view"
-              sequential
-              speed={22}
-              useOriginalCharsOnly
-            />
-          );
-        }
-        return (
-          <>
-            <HudMasthead
-              label={t("lab.labGround.masthead")}
-              led={!verdict.settled ? "scan" : verdict.allClear ? "ok" : "warn"}
-            />
-            <span className="hud-headline">{t("common.rail.lab", "Lab")}</span>
-          </>
-        );
-      })()}
-    >
-      {/* THE OPS CONSOLE (spec 2026-07-09, Phase 1, Task 4) — a real 3D hologram center-stage with
-          four corner arc gauges + a Dock of stations (Optimize primary, the measure→prove
-          instruments beside it), replacing the Instrument Bench bento. Same audited apply path,
-          zero new IPC. */}
-      <LabConsole
-        fast={fast}
-        diagnostics={diagnostics}
-        diagnosticsCaptured={diagnosticsCaptured}
-        vendor={vendor}
-        hw={hw}
-      />
-      {/* Intelligence Phase 3 — the controlled-experiment engine + optimization simulator. ARMED
-          2026-07-17 (owner-signed): renders the bench when experiment_gate() is true; still
-          fails-dark (renders NOTHING) if the gate ever reads false. */}
-      {/* C-14 — the GPU profile surface, ADVISORY ONLY. Built, tested and mounted nowhere since
-          2026-08-04 (owner fork B_gpu, closed 2026-08-22 in favour of wiring it in). It can never be
-          anything but advisory: LOCKED rule 6 makes GPU-profile APPLY structurally impossible,
-          because AMD profile state is not user-mode readable and so rollback-first cannot be
-          satisfied. Nothing here writes to the machine. Sibling of the console, the same out-of-grid
-          tile idiom ExperimentBench already uses. */}
-      <GpuProfile currentSnapshot={gpuSnapshot} />
-      <ExperimentBench />
-    </RoomShell>
+    /* THE SHELL MOVED DOWN INTO THE CONSOLE (issue #49 slice 6). The approved Test direction is a
+       narrative column beside an evidence column, and every fact in both — which station is open,
+       what the hologram has selected, what the bench has measured — is state LabConsole holds.
+       Writing the shell up here would have meant threading its setters back down through this
+       wrapper for nothing. What stays here is what is genuinely this component's: the room verdict
+       computed off the fixes state, and the two out-of-grid surfaces that are siblings of the
+       console rather than parts of it. */
+    <LabConsole
+      fast={fast}
+      diagnostics={diagnostics}
+      diagnosticsCaptured={diagnosticsCaptured}
+      vendor={vendor}
+      hw={hw}
+      hud={hud}
+      /* The eyebrow dot speaks the SAME verdict the classic headline speaks — one source, so the
+         dot and the sentence can never disagree about the room. */
+      ledState={!verdict.settled ? "scan" : verdict.allClear ? "ok" : "warn"}
+      classicVerdict={
+        reduced || !verdict.settled ? (
+          verdict.headline
+        ) : (
+          <DecryptedText
+            key={verdict.headline}
+            text={verdict.headline}
+            animateOn="view"
+            sequential
+            speed={22}
+            useOriginalCharsOnly
+          />
+        )
+      }
+      below={
+        <>
+          {/* C-14 — the GPU profile surface, ADVISORY ONLY. It can never be anything but advisory:
+              LOCKED rule 6 makes GPU-profile APPLY structurally impossible, because AMD profile
+              state is not user-mode readable and so rollback-first cannot be satisfied. Nothing
+              here writes to the machine. */}
+          <GpuProfile currentSnapshot={gpuSnapshot} />
+          {/* Intelligence Phase 3 — the controlled-experiment engine + optimization simulator.
+              ARMED 2026-07-17 (owner-signed); still fails dark (renders NOTHING) if the gate ever
+              reads false. */}
+          <ExperimentBench />
+        </>
+      }
+    />
   );
 }
 

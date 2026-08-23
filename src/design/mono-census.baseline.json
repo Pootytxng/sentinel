@@ -171,6 +171,8 @@
     "src/surfaces/hud-rooms.css: :root[data-v2=\"on\"][data-hud=\"on\"] :is(.v2-room[data-room=\"fix\"], .v2-room[data-room=\"lab\"] :where(.lg-fast)) .check-drift-when": "value",
     "src/surfaces/hud-rooms.css: :root[data-v2=\"on\"][data-hud=\"on\"] :is(.v2-room[data-room=\"fix\"], .v2-room[data-room=\"lab\"] :where(.lg-fast)) .check-driver-kind, :root[data-v2=\"on\"][data-hud=\"on\"] :is(.v2-room[data-room=\"fix\"], .v2-room[data-room=\"lab\"] :where(.lg-fast)) .fix-evidence, :root[data-v2=\"on\"][data-hud=\"on\"] :is(.v2-room[data-room=\"fix\"], .v2-room[data-room=\"lab\"] :where(.lg-fast)) .fix-override-chip, :root[data-v2=\"on\"][data-hud=\"on\"] :is(.v2-room[data-room=\"fix\"], .v2-room[data-room=\"lab\"] :where(.lg-fast)) .fix-hist-rig-tag, :root[data-v2=\"on\"][data-hud=\"on\"] :is(.v2-room[data-room=\"fix\"], .v2-room[data-room=\"lab\"] :where(.lg-fast)) .slimrow-badge": "value",
     "src/surfaces/hud-rooms.css: :root[data-v2=\"on\"][data-hud=\"on\"] :is(.v2-room[data-room=\"fix\"], .v2-room[data-room=\"lab\"] :where(.lg-fast)) .fix-group-count": "value",
+    "src/surfaces/lab-console.css: :root[data-v2=\"on\"] .lc-eyebrow": "chrome-tag",
+    "src/surfaces/lab-console.css: :root[data-v2=\"on\"] .lc-mono": "value",
     "src/surfaces/lab-v2.css: :root[data-v2=\"on\"] .v2-room[data-room=\"lab\"] .lab-reading-v": "value",
     "src/surfaces/lab/OptimizeStation.css: .lab-gauge-caption-k": "chrome-tag",
     "src/surfaces/lab/OptimizeStation.css: .lab-gauge-center": "value",
