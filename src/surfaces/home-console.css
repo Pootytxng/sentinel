@@ -143,8 +143,14 @@
      one hex. (A user who picks a very dark accent in the picker is choosing a darker button;
      that trade lives with the picker, and COLOR-1 kept the picker on purpose.) */
   color: var(--v2-bg);
-  background: var(--v2-accent);
-  border: 1px solid var(--v2-accent);
+  /* GREEN, not the accent (owner ruling 2026-08-23 — he put the four approved comps
+     back on the table and said "this is exactly how its supposed to look"). The comp
+     fills this button #2ecf86; the token carries the sampled value and the reasoning.
+     This is the room's ONE affirmative action, so it wears the ladder's good end — the
+     colour-coded alert system he asked to keep, applied to a control instead of a
+     reading. The violet it used to wear was MY call and he overruled it. */
+  background: var(--v2-cta);
+  border: 1px solid var(--v2-cta);
   border-radius: var(--v2-r-sm);
   padding: 12px 22px;
   cursor: pointer;
@@ -168,7 +174,7 @@
 :root[data-v2="on"] .hc-front-door[aria-expanded="true"] {
   color: var(--v2-text);
   background: transparent;
-  border-color: var(--v2-accent-line);
+  border-color: var(--v2-line);
 }
 /* The readout strip — measured provenance as segmented instrument fields. */
 :root[data-v2="on"] .v2-measured:has(.hc-readout-seg) {

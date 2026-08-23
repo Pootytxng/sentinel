@@ -188,6 +188,13 @@ describe("HUD room rollout: title-header law (h1 = the room title, never a statu
       expect(h1.textContent).toContain("Last session ran smooth");
       // LED honesty, carried: nothing is being captured in this fixture, so nothing is lit.
       expect(c.querySelector(".mc-masthead-eyebrow .mc-led-on")).toBeNull();
+      // ...and TIGHTENED 2026-08-23 to the whole dot, not just its lit class. 02-live-approved.png
+      // draws no dot beside this label at all, and idle is the state the app sits in nearly all the
+      // time — so an unlit grey dot that only ever means "not recording" was chrome the comp does
+      // not have. The dot now exists ONLY while a capture runs, which is the one moment it carries
+      // information. The old assertion passed on the old markup (the element was there, just not
+      // .mc-led-on), which is exactly why it had to be tightened rather than trusted.
+      expect(c.querySelector(".mc-masthead-eyebrow .mc-led"), `flag ${flag}`).toBeNull();
       cleanup();
     }
   });

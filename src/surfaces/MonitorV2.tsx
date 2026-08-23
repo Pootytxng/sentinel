@@ -172,13 +172,13 @@ export function MonitorV2(props: Props) {
       verdict={
         <>
           <span className="mc-masthead-eyebrow">
-            {/* Real state only: lit while a capture is actually recording, and never animated —
-                an idle pulse would be motion that means nothing. Same element the live face
-                wears, so the two faces read as one room. */}
-            <span
-              className={`mc-led ${capturing ? "mc-led-on" : ""}`}
-              aria-hidden="true"
-            />
+            {/* NO DOT WHEN NOTHING IS RECORDING (owner ruling 2026-08-23 — match the comps
+                exactly). 02-live-approved.png carries no dot beside this label at all, and
+                its idle state is the state the app is in most of the time; the label itself
+                is drawn in the accent instead. The dot survives ONLY as the recording light,
+                which is the one moment this room has a live state to report — so the comp is
+                matched where it speaks, and nothing honest is lost where it is silent. */}
+            {capturing && <span className="mc-led mc-led-on" aria-hidden="true" />}
             {t("monitor.monitorConsole.narrative.eyebrow")}
           </span>
           <span className="mc-headline" key={verdict.headline}>

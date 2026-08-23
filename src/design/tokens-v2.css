@@ -42,6 +42,18 @@
   --v2-accent-dim: rgba(167, 139, 250, 0.14);
   --v2-accent-line: rgba(167, 139, 250, 0.25); /* active-nav / hero-frame hairline */
 
+  /* THE PRIMARY-ACTION GREEN (issue #49, owner ruling 2026-08-23: "this is exactly how
+     its supposed to look ... what should remain is the color coded system we have for
+     alert levels"). Sampled off the approved comps rather than guessed: Health
+     #2ecf86, History #28d582, Test #2fcd82 — one value, three renders. It is the GOOD
+     end of the same green/amber/red ladder as --v2-ok, one step deeper, because a large
+     solid FILL at --v2-ok's brightness shouts where a thin MEASURED border does not.
+     Live's primary stays --v2-accent: its comp draws that one button violet, and the
+     accent is user-pickable, so that button must follow the picker and not a frozen hex.
+     Deeper than --v2-ok, so --v2-bg ink clears AA on it by a wider margin than it does
+     on --v2-ok itself (tokens-v2-guard checks the floor, not my arithmetic). */
+  --v2-cta: #2ed083;
+
   /* Status — color is information, never decoration */
   --v2-ok: #3ddc97;
   --v2-ok-dim: rgba(61, 220, 151, 0.12);

@@ -223,6 +223,10 @@
    collision: the first draft of this rule silently inherited the shared eyebrow's family, casing
    and ink through the global cascade. Named for Health's `.hc-masthead-eyebrow` instead, which
    is the element this actually is. */
+/* THE LABEL CARRIES THE ROOM'S ACCENT (owner ruling 2026-08-23, match the comps).
+   Health and History draw a grey label with a coloured dot; 02-live-approved.png draws
+   no dot and tints the label itself — sampled #8d73e9, which is the accent. Following
+   the token rather than that hex keeps the user's accent picker working here. */
 :root[data-v2="on"] .mc-masthead-eyebrow {
   display: flex;
   align-items: center;
@@ -230,7 +234,7 @@
   font: 600 var(--type-label) var(--v2-font-sans);
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--v2-faint);
+  color: var(--v2-accent-text, var(--v2-accent));
 }
 /* State, not decoration: the dot is lit only while the helper is ACTUALLY recording. It never
    animates — an idle pulse would be motion that means nothing, and this room already has one
@@ -376,6 +380,26 @@
 }
 
 /* One calm sensor strip (the handoff's word), five readings across. THREE ROW TRACKS again. */
+/* A SENSOR WITH NO SOURCE WEARS THE AMBER PILL HERE (owner ruling 2026-08-23).
+   The kit's default is Health's quiet grey line, and 01-health-approved.png keeps it;
+   02-live-approved.png draws this one cell as an amber outlined NO READING pill beside
+   four green MEASURED pills, and the owner put both pictures back on the table and said
+   they are exactly how it is supposed to look. So the difference is real and deliberate,
+   and it lives HERE — room-scoped presentation over the shared instrument — rather than
+   in `Reading`, which must keep telling every other room the quiet truth. Geometry is
+   .rd-tag's, so the row's two possible endings occupy the same box.
+   I argued against this (amber is --v2-warn, and an absent sensor SOURCE is not a fault)
+   and was overruled; the ruling is the record. */
+:root[data-v2="on"] .mc-ev-sensors .rd-none {
+  font: var(--type-label) var(--v2-font-sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border: 1px solid var(--v2-warn);
+  color: var(--v2-warn);
+  line-height: 1.35;
+}
+
 :root[data-v2="on"] .mc-ev-sensors {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
