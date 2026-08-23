@@ -452,7 +452,7 @@
 /* .hc-corner / .hc-tl / .hc-tr / .hc-bl / .hc-br — DELETED (issue #49). They pinned the four
    ArcGauges to the canvas corners. The approved direction says gauges may not cover rig content,
    so the gauges moved into .hc-readout and their anchors went with them rather than staying as
-   dead rules every session pays to parse. The readings themselves all survive — see .hc-read. */
+   dead rules every session pays to parse. The readings themselves all survive — see .reading (the kit's). */
 
 /* ── Instrument annotations — vertically centered on the stage edges, between the corner
    gauges; the parallax plane (Task 4). Never intercept drag-orbit. ── */
@@ -698,7 +698,7 @@
    is 126px where the instrument needs ~151, so the overflow moved INSIDE the cell — made the track
    `auto`. R8: `auto` IS max-content, and the gauge's translated note runs ~187px unwrapped, so the
    track took 253px and starved the four readings — floored the readings at `max-content` instead.
-   R9: that released THEIR content, and the CPU cell carries `.hc-read-none` ("no CPU temp — see
+   R9: that released THEIR content, and the CPU cell carries `.rd-none` ("no CPU temp — see
    below", 161px, an owner-decided offer line, #134/Q9c) — which starved the readiness cell to 26px
    and printed its label on top of AVG FPS at all three sizes.
    Every one of those measurements was taken inside a box some earlier round had clamped, and a
@@ -747,79 +747,14 @@
   border-left: 1px solid var(--v2-line);
   padding-left: var(--hc-readout-sep);
 }
-:root[data-v2="on"] .hc-read,
+/* THE CELLS ARE THE SHARED KIT'S (slice 3) — src/design/console/Reading.tsx + reading.css own
+   .reading/.rd-*, and this strip owns only where they sit. The contract that keeps the row a row
+   lives with the component as READING_ROWS: the strip declares exactly that many row tracks above,
+   every cell spans them, and both halves are guarded against ONE number rather than three copies.
+   Health's own readiness cell is not a Reading (it is an ArcGauge), so it has to opt in by hand. */
 :root[data-v2="on"] .hc-read-arc {
   min-width: 0;
-}
-:root[data-v2="on"] .hc-read {
-  /* `span 3` MUST match .hc-readout's grid-template-rows track count — guarded in
-     home-console.test.tsx, which derives one from the other rather than trusting both. */
-  display: grid;
   grid-row: span 3;
-  grid-template-rows: subgrid;
-  align-self: stretch;
-  align-items: start;
-  justify-items: start;
-}
-/* The instrument spans the same three rows rather than sitting in the label's one. */
-:root[data-v2="on"] .hc-read-arc {
-  grid-row: span 3;
-}
-/* SANS, not mono — the handoff's content rule is explicit that mono is for timestamps and counts
-   while headings and labels stay sans, and this is a label. It is the one place this strip differs
-   from ArcGauge's own .ag-label, which predates the rule. */
-:root[data-v2="on"] .hc-read-label {
-  font: var(--type-label) var(--v2-font-sans);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--v2-muted);
-}
-/* The measured value. Mono + tabular figures so a changing reading does not reflow its neighbours
-   (mono law: measured values only). --type-section is the scale step above the card title, which is
-   what makes these read as the instrument's numbers rather than as tile copy. */
-:root[data-v2="on"] .hc-read-v {
-  font-family: var(--v2-font-mono);
-  font-size: var(--type-section);
-  font-weight: var(--type-section-weight);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  color: var(--v2-text);
-  display: flex;
-  align-items: baseline;
-  gap: 2px;
-}
-:root[data-v2="on"] .hc-read-u {
-  font-size: var(--type-label);
-  color: var(--v2-faint);
-}
-/* Tone rides the SAME arcTone() map the corner gauges used, so no reading changed its meaning by
-   changing its shape. "good" deliberately stays text-coloured — the green in this strip belongs to
-   the MEASURED attestation, not to the number, exactly as the approved comp shows it. */
-:root[data-v2="on"] .hc-read-accent .hc-read-v {
-  color: var(--v2-accent-text, var(--v2-accent));
-}
-:root[data-v2="on"] .hc-read-warn .hc-read-v {
-  color: var(--v2-warn);
-}
-:root[data-v2="on"] .hc-read-empty .hc-read-v {
-  color: var(--v2-faint);
-}
-/* MEASURED — the attestation, not a grade. Same words and same green in every cell that has a real
-   reading, because "we measured this" is one claim with one appearance. */
-:root[data-v2="on"] .hc-read-tag {
-  font: var(--type-label) var(--v2-font-sans);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  padding: 1px 5px;
-  border: 1px solid var(--v2-ok);
-  color: var(--v2-ok);
-}
-/* ...and its only alternative: why there is no reading. Quiet, sentence case, never a pill — a
-   missing measurement must not look like a badge that was earned. */
-:root[data-v2="on"] .hc-read-none {
-  font-size: var(--type-label);
-  color: var(--v2-faint);
-  line-height: 1.35;
 }
 
 /* ── WHAT HAS BEEN HAPPENING (issue #49) — the three shortcuts into the interview. Row buttons, not
@@ -955,7 +890,7 @@
 }
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-verdict,
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-panel,
-:root[data-v2="on"] .home-console[data-motion="full"] .hc-read,
+:root[data-v2="on"] .home-console[data-motion="full"] .reading,
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-happening-row,
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-limiter,
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-specs,

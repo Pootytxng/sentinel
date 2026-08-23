@@ -38,6 +38,7 @@
     "src/design/console/Dock.tsx": "rostered",
     "src/design/console/HudFrame.tsx": "rostered",
     "src/design/console/Oscilloscope.tsx": "rostered",
+    "src/design/console/Reading.tsx": "rostered",
     "src/design/console/ReticleCursor.tsx": "aria-hidden: decorative pointer reticle, mounted aria-hidden=\"true\" and stood down under reduced motion / coarse pointer — AT never reaches it",
     "src/design/jarvis/LenisSpine.tsx": "no-dom: effect-only smooth-scroll spine — returns null, contributes no node for AT to meet",
     "src/design/jarvis/MagneticLayer.tsx": "no-dom: effect-only cursor-magnetism layer — returns null, contributes no node for AT to meet",

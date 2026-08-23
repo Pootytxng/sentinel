@@ -27,6 +27,7 @@ import { HardwareGrid } from "./HardwareGrid";
 import { ArcGauge, type ArcTone } from "../design/console/ArcGauge";
 import { Term } from "../design/Term";
 import { Dock, type DockNode } from "../design/console/Dock";
+import { Reading } from "../design/console/Reading";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { useConfirmOptional } from "../design/ConfirmDialog";
 import { safeFixesReadyList } from "./optimize-v2-data";
@@ -239,66 +240,12 @@ function SpecBox({ title, rows }: { title: string; rows: [string, string][] }) {
   );
 }
 
-// ONE CELL OF THE EVIDENCE PANEL'S READOUT STRIP (four-room direction, issue #49).
-//
-// WHY IT IS NOT AN ArcGauge. The four corner gauges came off the canvas in this slice — the
-// approved direction says plainly that gauges and controls may not cover rig content — and the
-// strip they landed in is a HIERARCHY, not five equal instruments: the composite readiness score
-// keeps its ring because a 0–100 out of a formula is what a ring is for, and the four raw
-// readings beside it are just numbers. Five rings in a row would be the "twelve equal tiles"
-// failure the bento exists to prevent, in miniature.
-//
-// It is deliberately Health-local for now, the same as Callout and SpecBox above. If Live and
-// Test prove they want the same cell — and their approved comps say they will — slice 3 (the
-// shared instrument kit) is where it gets promoted, with two more callers as the evidence.
-//
-// HONESTY: `value == null` is a real state, not a zero, and it never renders as one. A measured
-// cell prints its number and the MEASURED attestation; an unmeasured cell prints the em-dash pair
-// and, in that same slot, why there is no reading — the caller's own plain-English line where it
-// has one (CPU temp keeps its "see below", which is the C-19 dead-end fix travelling with the
-// fact), otherwise ArcGauge's own "no reading". Two shapes, never a third, and never a zero.
-function Reading({
-  id,
-  label,
-  value,
-  unit,
-  tone = "neutral",
-  note,
-}: {
-  /** Stable name for this reading, on `data-read`. It is what the honesty guards anchor to, and it
-      is the reason they survived the move off the canvas: they used to select the CORNER a gauge
-      was pinned to (.hc-tl/.hc-tr/.hc-bl/.hc-br), so re-laying-out the room silently unhooked
-      them. A reading's identity is which fact it states, never where it sits. */
-  id: string;
-  /** ReactNode so a caller can gloss jargon inline (the <Term> on "1% low"). */
-  label: React.ReactNode;
-  value: number | null;
-  /** Short only (°C, fps) — the same rail as ArcGauge's unit.length <= 3. */
-  unit?: string;
-  /** The corner gauges' own ArcTone, through the same arcTone() map — not a second scale. */
-  tone?: ArcTone;
-  /** This reading's specific reason for having no reading, when it has one to give. */
-  note?: string;
-}) {
-  const { t } = useTranslation();
-  const empty = value == null;
-  return (
-    <div className={`hc-read hc-read-${tone} ${empty ? "hc-read-empty" : ""}`} data-read={id}>
-      <span className="hc-read-label">{label}</span>
-      <span className="hc-read-v hc-mono">
-        {/* The number is its own node so the unit never rides along in its text — the honesty
-            guards read this span and compare it to the reading they expect. */}
-        <span className="hc-read-n">{empty ? "— —" : Math.round(value)}</span>
-        {!empty && unit && <span className="hc-read-u">{unit}</span>}
-      </span>
-      {empty ? (
-        <span className="hc-read-none">{note ?? t("common.arcGauge.noReading")}</span>
-      ) : (
-        <span className="hc-read-tag">{t("common.arcGauge.measured")}</span>
-      )}
-    </div>
-  );
-}
+// WHY THE FOUR RAW READINGS ARE NOT ArcGauges (four-room direction, issue #49). The strip is a
+// HIERARCHY, not five equal instruments: the composite readiness score keeps its ring because a
+// 0-100 out of a formula is what a ring is for, and the four raw readings beside it are just
+// numbers. Five rings in a row would be the "twelve equal tiles" failure the bento exists to
+// prevent, in miniature. The cell itself now lives in the kit (slice 3) — see Reading.tsx, whose
+// READING_ROWS contract .hc-readout below is what satisfies.
 
 export function HomeConsole({
   hw,

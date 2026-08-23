@@ -37,6 +37,7 @@ import { ArcGauge } from "./console/ArcGauge";
 import { Dock } from "./console/Dock";
 import { HudFrame } from "./console/HudFrame";
 import { Oscilloscope } from "./console/Oscilloscope";
+import { Reading } from "./console/Reading";
 import CountUp from "./vendor/CountUp/CountUp";
 import DecryptedText from "./vendor/DecryptedText/DecryptedText";
 import ElectricBorder from "./vendor/ElectricBorder/ElectricBorder";
@@ -346,6 +347,18 @@ describe("axe · console and bento", () => {
     await expectNoAxeViolations(measured.container);
     measured.unmount();
     const unknown = render(<ArcGauge label="1% low" value={null} max={240} unit="fps" measured={false} />);
+    await expectNoAxeViolations(unknown.container);
+  });
+
+  it("Reading (measured, and the honest unmeasured cell with its reason)", async () => {
+    const measured = render(<Reading id="avgFps" label="Average fps" value={118} unit="fps" />);
+    await expectNoAxeViolations(measured.container);
+    measured.unmount();
+    // The absent reading is the state worth checking: it is text, not an empty node, and its reason
+    // must be reachable rather than conveyed by the em-dashes alone.
+    const unknown = render(
+      <Reading id="cpuTemp" label="CPU temperature" value={null} note="no CPU temp - see below" />,
+    );
     await expectNoAxeViolations(unknown.container);
   });
 

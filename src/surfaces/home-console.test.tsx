@@ -5,6 +5,7 @@ import { railFor } from "../design/homeRail";
 import { postureLine } from "./command-center-data";
 import { activeChangeCount } from "./dashboard-data";
 import { HomeConsole } from "./HomeConsole";
+import { READING_ROWS } from "../design/console/Reading";
 // i18n update (2026-07-23): postureLine now takes a TFunction as its last param — the real
 // i18next instance (English default, same as every assertion below already expects).
 import i18n from "../i18n";
@@ -363,12 +364,12 @@ describe("HomeConsole — the console stage (the real rig + its honest readout)"
   const readout = (c: HTMLElement, id: string) => {
     const el = c.querySelector<HTMLElement>(`[data-read="${id}"]`);
     if (!el) throw new Error(`no reading named ${id}`);
-    const v = el.querySelector(".ag-v") ?? el.querySelector(".hc-read-n");
+    const v = el.querySelector(".ag-v") ?? el.querySelector(".rd-n");
     return {
       el,
       value: v!.textContent,
       /** Honest-unmeasured: NOT YET on the ring, the reason line in a readout cell. */
-      unmeasured: el.querySelector(".ag-tag-ny") ?? el.querySelector(".hc-read-none"),
+      unmeasured: el.querySelector(".ag-tag-ny") ?? el.querySelector(".rd-none"),
     };
   };
 
@@ -989,22 +990,30 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     // rounds 3, 5, 8 and 9, one axis over. Sharing the rows removes the dependency instead: row 1
     // is as tall as the tallest label, row 2 as the tallest value, row 3 as the tallest
     // attestation, in every language, however many lines any one label takes.
+    // SLICE 3 SPLIT THIS CONTRACT ACROSS TWO FILES, so the guard reads both. The cell is the shared
+    // kit's now (design/console/reading.css) and the strip is still Health's (home-console.css);
+    // either half alone looks fine while the pair is broken, which is exactly the seam a promotion
+    // creates. READING_ROWS is the one number both sides are checked against -- never a literal 3.
     const css = readFileSync(join("src", "surfaces", "home-console.css"), "utf8");
+    const kit = readFileSync(join("src", "design", "console", "reading.css"), "utf8");
     const readout = block(css, ':root[data-v2="on"] .hc-readout');
-    // EVERY rule that touches the class, not just the first one: .hc-read-arc is styled by a shared
+    // EVERY rule that touches the class, not just the first one: a cell can be styled by a shared
     // rule AND by its own, and block() would only ever see whichever came first.
-    const rulesFor = (cls: string) =>
-      Array.from(stripComments(css).matchAll(/([^{}]+)\{([^}]*)\}/g))
+    const rulesFor = (cls: string, source: string) =>
+      Array.from(stripComments(source).matchAll(/([^{}]+)\{([^}]*)\}/g))
         .filter(([, sel]) => new RegExp("\\" + cls + "(?![\\w-])").test(sel))
         .map(([, , body]) => body)
         .join("\n");
-    const read = rulesFor(".hc-read");
-    const arc = rulesFor(".hc-read-arc");
+    const read = rulesFor(".reading", kit);
+    const arc = rulesFor(".hc-read-arc", css);
 
     const rows = /grid-template-rows:\s*([^;]+);/.exec(readout);
     expect(rows, ".hc-readout must own the rows the readings are laid onto").not.toBeNull();
     const trackCount = rows![1].trim().split(/\s+/).length;
-    expect(trackCount, "label, value and attestation -- the three parts of every reading").toBe(3);
+    expect(
+      trackCount,
+      "label, value and attestation -- Reading.tsx's READING_ROWS, which is what its cells span",
+    ).toBe(READING_ROWS);
 
     expect(
       read,
@@ -1014,16 +1023,16 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     expect(read, "...and it has to be a grid for that to mean anything").toMatch(/display:\s*grid/);
     expect(read, "a subgrid item must cover the tracks it borrows").toMatch(/align-self:\s*stretch/);
 
-    // The span and the track count are the same fact stated twice, so DERIVE one from the other --
-    // a cell that spans 2 of 3 rows silently stops sharing the third.
-    for (const [what, blk] of [[".hc-read", read], [".hc-read-arc", arc]] as const) {
+    // The span and the track count are the same fact stated twice, so DERIVE both from READING_ROWS
+    // -- a cell that spans 2 of 3 rows silently stops sharing the third.
+    for (const [what, blk] of [[".reading (kit)", read], [".hc-read-arc", arc]] as const) {
       const span = /grid-row:\s*span\s*(\d+)/.exec(blk);
       expect(span, what + " must span the strip's rows explicitly").not.toBeNull();
       expect(
         Number(span![1]),
         what + " spans " + span![1] + " of .hc-readout's " + trackCount + " rows. Add a row to the " +
           "strip without adding it here and the cells quietly stop sharing it.",
-      ).toBe(trackCount);
+      ).toBe(READING_ROWS);
     }
   });
 

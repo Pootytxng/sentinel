@@ -1,0 +1,79 @@
+/* Console kit — Reading. One measured fact: label · value · attestation.
+   Scoped under [data-v2="on"] (flag-off byte-identity). Moved here from home-console.css
+   (issue #49 slice 3) with the declarations unchanged — only the selectors were renamed off
+   Health's `hc-` prefix, because a shared instrument must not carry one room's name into three
+   others. Behaviour, tokens and type steps are byte-for-byte what Health shipped and reviewed. */
+
+/* THE CELL SHARES ITS PARENT'S ROWS — see READING_ROWS in Reading.tsx for the full contract and
+   why. `span 3` MUST match the placing strip's grid-template-rows track count; both sides are
+   guarded (reading.test.tsx here, and the consumer's own suite there), each deriving the number
+   from READING_ROWS rather than trusting a hand-copied 3. */
+:root[data-v2="on"] .reading {
+  min-width: 0;
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  align-self: stretch;
+  align-items: start;
+  justify-items: start;
+}
+
+/* SANS, not mono — the handoff's content rule is explicit that mono is for timestamps and counts
+   while headings and labels stay sans, and this is a label. It is the one place this instrument
+   differs from ArcGauge's own .ag-label, which predates the rule. */
+:root[data-v2="on"] .rd-label {
+  font: var(--type-label) var(--v2-font-sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--v2-muted);
+}
+
+/* The measured value. Mono + tabular figures so a changing reading does not reflow its neighbours
+   (mono law: measured values only). --type-section is the scale step above the card title, which is
+   what makes these read as the instrument's numbers rather than as tile copy. */
+:root[data-v2="on"] .rd-v {
+  font-family: var(--v2-font-mono);
+  font-size: var(--type-section);
+  font-weight: var(--type-section-weight);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--v2-text);
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+:root[data-v2="on"] .rd-u {
+  font-size: var(--type-label);
+  color: var(--v2-faint);
+}
+
+/* Tone rides the caller's arcTone() map, so no reading changed its meaning by changing its shape.
+   "good" deliberately stays text-coloured — the green in this instrument belongs to the MEASURED
+   attestation, not to the number, exactly as the approved comp shows it. */
+:root[data-v2="on"] .rd-accent .rd-v {
+  color: var(--v2-accent-text, var(--v2-accent));
+}
+:root[data-v2="on"] .rd-warn .rd-v {
+  color: var(--v2-warn);
+}
+:root[data-v2="on"] .rd-empty .rd-v {
+  color: var(--v2-faint);
+}
+
+/* MEASURED — the attestation, not a grade. Same words and same green in every cell that has a real
+   reading, because "we measured this" is one claim with one appearance. */
+:root[data-v2="on"] .rd-tag {
+  font: var(--type-label) var(--v2-font-sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border: 1px solid var(--v2-ok);
+  color: var(--v2-ok);
+}
+/* ...and its only alternative: why there is no reading. Quiet, sentence case, never a pill — a
+   missing measurement must not look like a badge that was earned. */
+:root[data-v2="on"] .rd-none {
+  font-size: var(--type-label);
+  color: var(--v2-faint);
+  line-height: 1.35;
+}

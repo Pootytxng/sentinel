@@ -60,6 +60,7 @@ const patternsTileCss = loadV2Css("surfaces", "blackbook", "patterns-tile.css");
 const hudRoomsCss = loadV2Css("surfaces", "hud-rooms.css");
 const ambientHudCss = loadV2Css("surfaces", "ambient-hud.css");
 const consoleArcGaugeCss = loadV2Css("design", "console", "arc-gauge.css");
+const consoleReadingCss = loadV2Css("design", "console", "reading.css");
 const consoleOscilloscopeCss = loadV2Css("design", "console", "oscilloscope.css");
 const consoleDockCss = loadV2Css("design", "console", "dock.css");
 const consoleReticleCss = loadV2Css("design", "console", "reticle.css");
@@ -87,6 +88,7 @@ const V2_CSS: [string, string][] = [
   ["hud-rooms.css", hudRoomsCss],
   ["ambient-hud.css", ambientHudCss],
   ["console/arc-gauge.css", consoleArcGaugeCss],
+  ["console/reading.css", consoleReadingCss],
   ["console/oscilloscope.css", consoleOscilloscopeCss],
   ["console/dock.css", consoleDockCss],
   ["console/reticle.css", consoleReticleCss],
@@ -179,6 +181,25 @@ describe("v2 CSS scoping (flag-off byte-identity mechanism)", () => {
       expect(unscopedSelectors(css)).toEqual([]);
     });
   }
+
+  // bug→guard (issue #49 slice 3, 2026-08-23): V2_CSS is a HAND-MAINTAINED list, so a brand-new v2
+  // stylesheet is checked by this suite only if whoever added it remembered to register it — and a
+  // sheet nobody registered is a sheet nobody scopes. Enumerating the whole tree would just fail on
+  // the pre-v2 sheets that legitimately are not here, so the guard pins the one directory that is
+  // v2-only BY DEFINITION: the shared console kit, whose components are placed in every room.
+  it("every stylesheet in the shared console kit is registered above", () => {
+    const dir = join("src", "design", "console");
+    const onDisk = readdirSync(dir).filter((f) => f.endsWith(".css")).sort();
+    const registered = V2_CSS.map(([name]) => name)
+      .filter((n) => n.startsWith("console/"))
+      .map((n) => n.slice("console/".length))
+      .sort();
+    expect(
+      onDisk,
+      "a kit stylesheet that is not in V2_CSS is never checked for scoping, so it leaks out of the " +
+        "v2 namespace into every room that imports the component. Add it to the list above.",
+    ).toEqual(registered);
+  });
 
   // bug→guard (issue #49, 2026-08-23): the parser used to treat a depth-0 `@media` header as a
   // selector, so home-console.css's short-viewport override was reported as an offender while the
