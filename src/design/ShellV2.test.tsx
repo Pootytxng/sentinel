@@ -206,17 +206,20 @@ describe("ShellV2 digit shortcuts (the kbd hints must WORK)", () => {
 });
 
 describe("ShellV2 topbar", () => {
-  // bug -> guard (owner ruling 2026-08-23). This used to assert the topbar PRINTS the room
-  // name. All four approved comps draw that bar empty on the left, finishing the navigation
-  // audit's "one name per room": the rail is on screen, the active room is the highlighted
-  // item in it, and this span repeated it three inches away. 2026-08-18 dropped the tagline
-  // beside it on exactly that reasoning and left the title, which was the same duplication
-  // one word shorter. The assertion is inverted rather than deleted so the title cannot
-  // wander back in on a later "the topbar looks empty" impulse.
-  it("does NOT repeat the room name the rail already highlights", () => {
+  // bug -> guard, and the bug was a guard. On 2026-08-22 this assertion was INVERTED to
+  // "the topbar draws no room name", citing "all four approved comps draw that bar empty".
+  // That citation was false, and re-measuring the PNGs is what caught it:
+  // 01-health-approved.png prints "Health" in this bar and 04-test-approved.png prints "Test";
+  // only Live's and History's are empty. Two comps out of four is not a rule anyone designed,
+  // there is no product reason two rooms would be named in shared chrome and two nameless, and
+  // the standing brief says preserve every existing control -- so the element stays and this
+  // assertion is back the way it was, now with the measurement written down beside it.
+  it("names the active room, as Health's and Test's comps do", () => {
     const { container } = render(shell({ activeId: "play" }));
-    expect(container.querySelector(".v2-room-title")).toBeNull();
-    // …and the room is still named exactly once, by the rail item that navigated here.
+    const title = container.querySelector(".v2-room-title");
+    expect(title, "the topbar's room title went missing again").not.toBeNull();
+    expect(title!.textContent).toContain("Live");
+    // …and the rail still names it too — that duplication is what the comps actually draw.
     const rail = container.querySelector(".v2-rail, nav");
     expect(rail!.textContent).toContain("Live");
   });

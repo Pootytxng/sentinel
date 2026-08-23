@@ -61,10 +61,32 @@ describe("bento: one hero per grid", () => {
     expect(withBento.length).toBeGreaterThan(0);
   });
 
+  // THE ONE EXEMPTION (2026-08-23, History): a grid whose tiles are ALL span="full" is a STACK of
+  // bands, not a bento, and there is nothing in it for a hero to be bigger than. History's foot is
+  // that shape — the record tape moved out to the room's evidence column, leaving the receipts
+  // strip and the library as two full-bleed bands beneath both columns. Requiring a hero there
+  // would invent a second focal point BELOW the room's real one, which is the overwhelm this file
+  // guards against, pointing the other way.
+  //
+  // It cannot be used to escape the rule. The failure this guard exists to stop is a WALL of
+  // equal partial tiles; full-width tiles do not tile — each one starts and ends its own row, so
+  // the moment a single partial span appears the exemption is gone and the hero is required again.
+  // A grid with no literal spans at all is NOT exempt (`spans.length > 0`): that is a grid built
+  // entirely from expressions, which is the unknowable case the literal rule below already bans.
   it.each(withBento.map((f) => f.path))("%s — every <BentoGrid> has exactly one hero", (path) => {
     const src = files.find((f) => f.path === path)!.src;
     for (const [i, block] of bentoBlocks(src).entries()) {
       const heroes = block.match(/span=["']hero["']/g) ?? [];
+      const spans = block.match(/span=["'][a-z]+["']/g) ?? [];
+      const stacked = spans.length > 0 && spans.every((s) => /["']full["']/.test(s));
+      if (stacked) {
+        expect(
+          heroes.length,
+          `${path}: <BentoGrid> #${i + 1} is a stack of full-width bands, so it may not also ` +
+            `carry a hero`,
+        ).toBe(0);
+        continue;
+      }
       expect(
         heroes.length,
         `${path}: <BentoGrid> #${i + 1} has ${heroes.length} hero tiles, expected exactly 1`,

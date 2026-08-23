@@ -84,13 +84,16 @@
   --v2-pad: 16px;
   --v2-pad-sm: 12px;
 
-  /* The evidence column of the approved four-room split (issue #49). Measured off the approved
-     comps, not invented: at the 1120px content cap the evidence column is 620px and the narrative
-     column is the remaining 452px, which is why this is the WIDER of the two — on Health the rig
-     is "the dominant evidence surface" and it may not be squeezed to make room for prose.
-     `min(620px, 58%)` so the column yields first when the window is narrower than the cap: at the
-     1280-wide floor (1004px of content) the evidence column takes 582px and the narrative still
-     gets 374px, instead of a fixed 620 crushing the 40px verdict into a column it cannot hold.
-     One rule, no media query, and none may be added. */
-  --v2-aside: min(620px, 58%);
+  /* The evidence column of the approved four-room split (issue #49) — RE-MEASURED 2026-08-23
+     against the PNGs themselves rather than the handoff's prose. The comps do not use one share:
+     Health's panel takes 55% of the content box and Test's 58%, while Live's takes 68% and
+     History's tape 70%. That is two families, not four numbers, and this token carries the
+     panelled one (Health, Test); shell-v2.css carries the wide one for Live and History.
+     56.5% is the midpoint of the two panelled comps — 655px at the 1160px content box, against
+     Health's measured 638 and Test's 673.
+     The px arm keeps the column yielding first when the window is narrower than the content cap:
+     at the 1280-wide floor (952px of content) the evidence column takes 538px and the narrative
+     still gets 366px, instead of a fixed width crushing the headline into a column it cannot
+     hold. One rule, no media query, and none may be added. */
+  --v2-aside: min(680px, 56.5%);
 }

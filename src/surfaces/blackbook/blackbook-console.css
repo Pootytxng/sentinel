@@ -53,52 +53,89 @@
 /* ── the tape ── grouped by calendar month (intimidation pass 2026-08-20). The month head is
    the same mono eyebrow grammar as every section scent in this room, with a hairline running out
    to the right so the eye reads it as a divider, not another row. */
-:root[data-v2="on"] .bc-tape { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-:root[data-v2="on"] .bc-month { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* The tape is RoomShell's evidence column now (03-history-approved.png), so it owns its
+   own vertical rhythm rather than a tile's padding. 26px between months: a month break is
+   the one gap in this column that is not a row separator. */
+:root[data-v2="on"] .bc-tape { display: flex; flex-direction: column; gap: 26px; min-width: 0; }
+:root[data-v2="on"] .bc-month { display: flex; flex-direction: column; gap: 0; min-width: 0; }
 /* Sans, not mono: a month name is a label, and mono is for machine values (mono-law C-17) — the
    row's kind tags keep the mono chrome idiom, which is what makes the head read as a divider. */
-:root[data-v2="on"] .bc-month-h { display: flex; align-items: center; gap: 12px; margin: 0;
+/* THE MONTH HEAD RULES THE WHOLE COLUMN (03-history-approved.png). It used to run a hairline
+   out to the right of the label, which reads as a row with a very long dash; the comp rules the
+   full width UNDER it, which reads as what it is — a divider between two months. */
+:root[data-v2="on"] .bc-month-h { display: block; margin: 0 0 2px;
+  border-bottom: 1px solid var(--ix-glass-border); padding-bottom: 12px;
   font-size: var(--type-label); font-weight: 600; letter-spacing: .12em;
   text-transform: uppercase; color: var(--ix-text-3); }
-:root[data-v2="on"] .bc-month-h::after { content: ""; flex: 1; height: 1px;
-  background: var(--ix-glass-border); }
 :root[data-v2="on"] .bc-month-rows { list-style: none; margin: 0; padding: 0; display: flex;
-  flex-direction: column; gap: 6px; min-width: 0; }
-/* Two tracks, never three: the timestamp lives INSIDE the body's first line (see .bc-row-body),
+  flex-direction: column; gap: 0; min-width: 0; }
+/* THE ROW IS RULED, NOT BOXED (03-history-approved.png). Eight outlined cards stacked down a
+   column is the "card wall" the handoff names as the thing this room is escaping; the comp draws
+   one hairline between records and lets the tape read as a document. Nothing is lost — the
+   separation is still explicit, it just costs one edge instead of four.
+
+   Two tracks, never three: the timestamp lives INSIDE the body's first line (see .bc-row-body),
    so no fixed track can be overrun by a long date — the overlap the installed build showed on
    every row when the time had its own 116px column. Guard: blackbook-console.test.tsx. */
 :root[data-v2="on"] .bc-row { display: grid;
-  grid-template-columns: 100px minmax(0, 1fr); align-items: baseline; gap: 14px;
-  padding: 10px 14px; border: 1px solid var(--ix-glass-border); min-width: 0; }
+  grid-template-columns: 100px minmax(0, 1fr); align-items: baseline; gap: 24px;
+  padding: 16px 0; border: 0; border-bottom: 1px solid var(--ix-glass-border); min-width: 0; }
 :root[data-v2="on"] .bc-row-muted { opacity: .62; }
 
 /* Tape disclosure — the tape mounts the recent slice (nav-mount cost); this unrolls the rest.
-   Quiet mono like .bc-manage but muted: it's a read-more, not an action door. */
+   Plain text and a caret, no outline (the comp draws "Show 11 older records ⌄"): it is a
+   read-more at the foot of a document, and an outlined button there reads as a second action
+   competing with the room's one primary. */
 :root[data-v2="on"] .bc-tape-more { display: inline-flex; align-self: flex-start; align-items: center;
-  gap: 8px; font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .04em; padding: 7px 14px;
-  cursor: pointer; background: transparent; color: var(--ix-text-3); border: 1px solid var(--ix-glass-border);
+  gap: 10px; font-family: var(--v2-font-sans); font-size: var(--type-body); padding: 16px 0 0;
+  cursor: pointer; background: transparent; color: var(--ix-text-2); border: 0;
   font-variant-numeric: tabular-nums; }
-:root[data-v2="on"] .bc-tape-more:hover { color: var(--ix-text-1); border-color: var(--ix-text-3); }
+:root[data-v2="on"] .bc-tape-more:hover { color: var(--ix-text-1); }
+:root[data-v2="on"] .bc-tape-more:focus-visible { outline: 2px solid var(--v2-accent);
+  outline-offset: 3px; }
+:root[data-v2="on"] .bc-tape-more-chev { font-size: var(--type-label); }
 
-/* The kind tag — micro-label; the actionable "change" kind rides the accent, the rest stay calm. */
+/* The kind tag — an outlined micro-pill that carries the record's MEANING in the room's own
+   colour ladder (03-history-approved.png): a Compy change is the accent, because it is the one
+   kind the user did; drift Compy merely OBSERVED is amber, because "something changed and it
+   wasn't us" is the uncertainty rung; a session is neutral, because a session is just a fact. */
 :root[data-v2="on"] .bc-tag { align-self: baseline; font-family: var(--ix-mono); font-size: var(--type-label);
-  letter-spacing: .14em; text-transform: uppercase; padding: 3px 8px; white-space: nowrap;
-  border: 1px solid var(--ix-glass-border); color: var(--ix-text-3); }
+  letter-spacing: .14em; text-transform: uppercase; padding: 4px 9px; white-space: nowrap;
+  text-align: center; border: 1px solid var(--ix-glass-border); border-radius: var(--v2-r-sm);
+  color: var(--ix-text-3); }
 :root[data-v2="on"] .bc-tag[data-kind="change"] { color: var(--ix-accent-text);
   border-color: color-mix(in srgb, var(--ix-accent) 40%, var(--ix-glass-border)); }
 :root[data-v2="on"] .bc-tag[data-kind="session"] { color: var(--ix-text-2); }
+:root[data-v2="on"] .bc-tag[data-kind="observed"] { color: var(--ix-amber);
+  border-color: color-mix(in srgb, var(--ix-amber) 40%, var(--ix-glass-border)); }
 
 :root[data-v2="on"] .bc-time { font-size: var(--type-label); letter-spacing: .06em; color: var(--ix-text-3);
   white-space: nowrap; grid-column: 2; grid-row: 1; justify-self: end; }
 
-/* The body is a two-column grid: title (col 1) and timestamp (col 2) share the first line — the
-   title wraps, the time never does and never overlaps; everything the kind-specific body adds
-   after the title (meta, notes, chips) spans both columns at full width. */
-:root[data-v2="on"] .bc-row-body { display: grid; grid-template-columns: minmax(0, 1fr) max-content;
-  column-gap: 14px; row-gap: 4px; align-items: baseline; min-width: 0; }
-:root[data-v2="on"] .bc-row-body > :not(.bc-row-title):not(.bc-time) { grid-column: 1 / -1; }
-:root[data-v2="on"] .bc-row-title { grid-column: 1; grid-row: 1; font-size: var(--type-label);
-  letter-spacing: .01em; color: var(--ix-text-1); overflow-wrap: anywhere; }
+/* The latest session's chevron — the twin of the room's primary action, on the row that action
+   is about. Quiet at rest; it is a shortcut, not a second CTA. */
+:root[data-v2="on"] .bc-row-go { grid-column: 3; grid-row: 1; justify-self: end;
+  background: transparent; border: 0; padding: 0 0 0 14px; cursor: pointer;
+  font-size: var(--type-card); line-height: 1; color: var(--ix-text-3); }
+:root[data-v2="on"] .bc-row-go:hover { color: var(--ix-text-1); }
+:root[data-v2="on"] .bc-row-go:focus-visible { outline: 2px solid var(--v2-accent);
+  outline-offset: 2px; }
+
+/* The body is a grid: title (col 1) and timestamp (col 2) share the first line — the title
+   wraps, the time never does and never overlaps; a third auto track holds the review chevron when
+   the row has one. Everything the kind-specific body adds after the title (meta, notes, chips)
+   spans every column at full width. */
+:root[data-v2="on"] .bc-row-body { display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content auto;
+  column-gap: 14px; row-gap: 8px; align-items: baseline; min-width: 0; }
+:root[data-v2="on"] .bc-row-body > :not(.bc-row-title):not(.bc-time):not(.bc-row-go) {
+  grid-column: 1 / -1; }
+/* THE TITLE IS THE ROW (03-history-approved.png sets it a full step above the meta beneath it).
+   At --type-label it was the same size as the timestamp and the stats, so a tape of eight records
+   read as eight paragraphs of chrome with no sentence to land on. */
+:root[data-v2="on"] .bc-row-title { grid-column: 1; grid-row: 1; font-size: var(--type-card);
+  font-weight: 600; line-height: 1.35; letter-spacing: -0.005em;
+  color: var(--ix-text-1); overflow-wrap: anywhere; }
 :root[data-v2="on"] .bc-row-meta { display: flex; align-items: baseline; flex-wrap: wrap;
   gap: 6px 12px; font-size: var(--type-label); letter-spacing: .02em; color: var(--ix-text-2); }
 :root[data-v2="on"] .bc-stat { font-family: var(--ix-mono); font-variant-numeric: tabular-nums;
@@ -112,7 +149,10 @@
 /* State + chips — flat mono tags, semantic red only for a real warning (scam flags). */
 :root[data-v2="on"] .bc-state { font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .12em;
   text-transform: uppercase; color: var(--ix-text-3); }
-:root[data-v2="on"] .bc-state-on { color: var(--ix-accent-text); }
+/* GREEN (03-history-approved.png; owner ruling 2026-08-23 — keep the green/amber/red
+   ladder for state). "still on" is a GOOD state, and the accent it used to wear is the
+   room's focus colour, which says "look here" rather than "this is fine". */
+:root[data-v2="on"] .bc-state-on { color: var(--v2-ok); }
 :root[data-v2="on"] .bc-chip { font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .06em;
   padding: 2px 8px; color: var(--ix-text-2);
   border: 1px solid var(--ix-glass-border); }
@@ -164,6 +204,6 @@
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
-:root[data-v2="on"] .blackbook-console[data-motion="full"] .bc-row {
+:root[data-v2="on"] .bc-tape[data-motion="full"] .bc-row {
   animation: v2-bc-reveal 340ms cubic-bezier(.2, .7, .2, 1) backwards;
 }

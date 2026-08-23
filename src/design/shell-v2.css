@@ -200,13 +200,27 @@
 }
 :root[data-v2="on"] .v2-top {
   flex: none;
-  height: 46px;
+  /* 50px -- measured. The comps rule this bar at y=41..93 under a 41px window titlebar; 52 comp
+     px is 50 app px at the calibrated scale. It was 46. */
+  height: 50px;
   border-bottom: 1px solid var(--v2-line);
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 0 20px;
   background: var(--v2-panel);
+}
+/* THE ROOM TITLE, RESTORED (2026-08-23). It was deleted on 2026-08-22 on the claim that all four
+   approved comps draw this bar empty. That claim was wrong, and re-checking the PNGs is what
+   found it: 01-health-approved.png prints "Health" here and 04-test-approved.png prints "Test",
+   at a 12px cap = --type-card; only Live's and History's comps leave it empty. The comps disagree
+   with each other, so this is a call, and it goes to KEEPING the element -- there is no product
+   reason two rooms would be named in shared chrome and two nameless, an omission in two pictures
+   is likelier than a rule, and the brief's standing instruction is to preserve every existing
+   control. --type-card, not the --type-label it used to carry: measured. */
+:root[data-v2="on"] .v2-room-title {
+  font-weight: var(--type-card-weight);
+  font-size: var(--type-card);
 }
 /* `.v2-stamp` deleted 2026-08-18 with the version above — build identifiers live in Settings →
    About. The margin-left:auto it used to carry now belongs to the unconditional spacer, because
@@ -222,8 +236,13 @@
   overflow-y: auto;
   padding: 26px 30px;
 }
+/* THE CONTENT BOX (re-measured 2026-08-23). All four comps put content between x=286 and
+   x=1494 of 1550 -- a 1208px box, 1169 app px, which no 1120 cap can produce. With this sheet's
+   30px gutters, 1160 lands the box at x=278..1438 on the owner's 1500-wide window against the
+   comps' 277..1446. The cap still exists and still binds on a wide monitor: it is the reason a
+   1920 window does not stretch a 46ch sentence across 1600px. */
 :root[data-v2="on"] .v2-content-wrap {
-  max-width: 1120px;
+  max-width: 1160px;
   margin: 0 auto;
 }
 
@@ -323,6 +342,32 @@
   grid-area: aside;
   min-width: 0;
 }
+
+/* ---- THE RULED ASIDE (comp fidelity 2026-08-23) ------------------------------------------
+   Health and Test hand their evidence column a PANEL: it has its own edge, so the eye already
+   knows where the story stops. Live and History hand theirs bare content on the page ground --
+   a record tape, a session readout -- and both approved comps draw a hairline in the gutter to
+   do the job that panel edge was doing. Measured: 03-history-approved.png puts it at x=647 with
+   the tape starting 26px later; 02-live-approved.png at x=672.
+
+   Those two comps also give the evidence column two thirds of the width rather than the 55% a
+   panel gets, which is the difference between the tape reading as a document and reading as a
+   sidebar. Keyed on data-room because it IS a per-room composition choice and there are exactly
+   two families of it -- writing it twice in two room sheets is how the two would drift apart.
+   Still one rule and no media query: the % yields before the px cap does. */
+:root[data-v2="on"] .v2-room[data-layout="split"][data-room="learn"],
+:root[data-v2="on"] .v2-room[data-layout="split"][data-room="play"] {
+  --v2-aside: min(830px, 69%);
+}
+/* THE HAIRLINE IS HISTORY'S ALONE. Live and History share the wide column above, but not this:
+   02-live-approved.png draws a bordered, filled, rounded PANEL there (its x=672 vertical is that
+   panel's own left edge), while 03-history-approved.png draws bare records on the page ground
+   with one hairline in the gutter at x=647 and the tape starting 26px past it. Keying both rooms
+   off this rule was a misread of Live's panel edge as a divider. */
+:root[data-v2="on"] .v2-room[data-layout="split"][data-room="learn"] > .v2-room-aside {
+  border-left: 1px solid var(--v2-line);
+  padding-left: 26px;
+}
 :root[data-v2="on"] .v2-room[data-layout="split"] > .v2-room-below {
   grid-area: below;
   min-width: 0;
@@ -350,13 +395,30 @@
   max-width: 20ch;
   text-wrap: balance;
 }
+/* THE HERO HEADLINE -- Health and Test only (see --type-hero in type-scale.css for the measured
+   cap heights). It is the same two families as --v2-aside because it is the same fact: those two
+   rooms hand the story a ~460px column, and 52px is what a 460px column can carry. */
+:root[data-v2="on"] .v2-room[data-layout="split"][data-room="home"] > .v2-verdict h1,
+:root[data-v2="on"] .v2-room[data-layout="split"][data-room="lab"] > .v2-verdict h1 {
+  font-size: var(--type-hero);
+  font-weight: var(--type-hero-weight);
+}
+/* The narrow-column rooms set their headline looser: measured baseline-to-baseline is 52 app px
+   on a 40px headline in 03-history-approved.png, where Health's 52px headline runs at 1.10. */
+:root[data-v2="on"] .v2-room[data-layout="split"][data-room="learn"] > .v2-verdict h1,
+:root[data-v2="on"] .v2-room[data-layout="split"][data-room="play"] > .v2-verdict h1 {
+  line-height: 1.25;
+}
 :root[data-v2="on"] .v2-room[data-layout="split"] > .v2-verdict .v2-verdict-sub {
   font-size: var(--type-body);
   line-height: 1.5;
   max-width: 46ch;
 }
+/* Measured: 29 app px of air under Health's sub before its button, 41 under History's -- the
+   12px flex gap alone left the action crowding the sentence it answers. */
 :root[data-v2="on"] .v2-room[data-layout="split"] > .v2-verdict .v2-verdict-action {
   margin-left: 0;
+  margin-top: 16px;
 }
 /* The quiet slot's expander head — "more, not attention-needing" (P5 calm chrome), but it
    still has to READ as a control. It used to be set in --v2-faint, the ink this system
@@ -486,6 +548,52 @@
 }
 :root[data-v2="on"] .v2-update-go { border-color: var(--v2-ok); }
 :root[data-v2="on"] .v2-update-fine { font-size: var(--type-label); color: var(--v2-faint); }
+
+/* ---- THE PRIMARY ACTION (approved comps 2026-08-23) --------------------------------------
+   ONE affordance per room, and three of the four comps draw it identically: a filled green
+   button under the room's own sentence. It lived in home-console.css while Health was the only
+   room that had one; History and Test draw the same control, and a taste decision copied into
+   three sheets is a taste decision that will drift in two of them.
+
+   GREEN, not the accent (owner ruling 2026-08-23 -- he put the four approved comps back on the
+   table and said "this is exactly how its supposed to look"). The comps fill this #2ecf86;
+   --v2-cta carries the sampled value. It is the room's affirmative action, so it wears the
+   good end of the same green/amber/red ladder he asked to keep -- the ladder applied to a
+   control instead of a reading. Live is the exception and keeps its own violet .mc-start: its
+   button STARTS and STOPS a capture, so it is a mode switch rather than an affirmation, and
+   02-live-approved.png draws it violet for exactly that reason. */
+:root[data-v2="on"] .v2-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-card);
+  font-weight: var(--type-card-weight);
+  letter-spacing: -0.005em;
+  /* Ink is the page ground, not a literal: the fill is a light green, so the darkest token in
+     the system is the legible ink on it. */
+  color: var(--v2-bg);
+  background: var(--v2-cta);
+  border: 1px solid var(--v2-cta);
+  border-radius: var(--v2-r-sm);
+  /* 48x228 for "Review latest session" in 03-history-approved.png (50x236 comp px). */
+  padding: 13px 24px;
+  cursor: pointer;
+  transition: filter 0.12s ease, transform 0.12s ease;
+}
+:root[data-v2="on"] .v2-primary:hover {
+  filter: brightness(1.08);
+}
+:root[data-v2="on"] .v2-primary:active {
+  transform: translateY(1px);
+}
+/* Its OWN focus mark, not the inherited default. The button's fill is bright, so a ring drawn in
+   an accent would vanish into it -- the mark is the page ink, offset outward. Hover spends
+   brightness; focus must spend something hover does not (focus-ring-guard). */
+:root[data-v2="on"] .v2-primary:focus-visible {
+  outline: 2px solid var(--v2-text);
+  outline-offset: 2px;
+}
 
 /* ---- The narrative foot: route row + padlocked method line (comp fidelity 2026-08-23) ----
    The row is a LIST ROW, not a button that looks like one: full bleed, hairline above, the

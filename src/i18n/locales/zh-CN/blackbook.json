@@ -20,7 +20,6 @@
     },
     "faceToggleAriaLabel": "历史(History)视图",
     "guideLede": "指南库是 Compy 的资料库:收录每一个优化项和坊间传言,并按实测记录评级——针对这台设备量身参考。",
-    "fieldRecordsLabel": "现场记录",
     "verdict": {
       "noRecordHeadline": "在网上听说了什么优化技巧?先在这里查一查再尝试。",
       "noRecordSub": "我们只回答已经验证过的内容——搜索历史,或粘贴整份指南,获取每条说法的评级。",
@@ -31,7 +30,13 @@
       "scamFlaggedInline_other": " · 已标记 {{count}} 个诈骗套路",
       "gradedHeadline_other": "你已核查了 {{count}} 份指南——其中 {{pct}}% 的优化项是真实有效的。",
       "recognizedBreakdown": "在我们识别的优化项中:{{real}} 项真有效 · {{placebo}} 项安慰剂 · {{risky}} 项有风险{{scamPart}}。"
-    }
+    },
+    "narrative": {
+      "eyebrow": "本机记录",
+      "headline": "改动了什么,什么时候",
+      "sub": "会话、改动,以及外部漂移——全部只留在这台电脑上。"
+    },
+    "reviewLatest": "查看最近一次会话"
   },
   "blackbookConsole": {
     "typeLabel": {
@@ -81,8 +86,6 @@
       "sub": "还没有游戏对局、指南核查或外部变化——这些 Compy 是与变更记录分开保存的。"
     },
     "sectionHead": {
-      "record": "记录",
-      "since": "Compy 在这台电脑上做过的一切 · 自 ",
       "sinceIncomplete": "Compy 目前还能读到的内容 · 自 "
     },
     "changeBody": {
@@ -113,13 +116,14 @@
       "betweenMid": " 至 ",
       "noDetail": "在两次 Compy 读数之间发现的变化。"
     },
-    "tapeMore_other": "显示 {{count}} 条更早的记录",
+    "tapeMore_other": "显示另外 {{count}} 条记录",
     "manageJump_other": "前往「测试」撤销这 {{count}} 项优化中的任意一项",
     "library": {
       "eyebrow": "指南库",
       "scent": "在网上看到什么优化技巧?先查一查再动手——每一条说法都经过评级。",
       "openAll": "打开指南库"
-    }
+    },
+    "tapeMore_one": "显示另外 {{count}} 条记录"
   },
   "patternsTile": {
     "confidenceLevel": {

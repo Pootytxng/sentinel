@@ -792,7 +792,7 @@ export function HomeConsole({
         interviewAvailable ? (
           <button
             type="button"
-            className="hc-front-door"
+            className="hc-front-door v2-primary"
             aria-haspopup="dialog"
             aria-expanded={interviewOpen}
             onClick={(e) => {

@@ -71,7 +71,11 @@ describe("focus-visible must stay visible", () => {
   // guard at the exact moment the shape came back.
   const rowLike: [string, string][] = [
     [".hi-answer", join("src", "surfaces", "home-interview.css")],
-    [".hc-front-door", join("src", "surfaces", "home-console.css")],
+    // Health's front door, 2026-08-23: the fill, the border and the ring moved to the shared
+    // `.v2-primary` (three rooms draw this control). Following the class instead of the
+    // affordance would have left the guard reading a sheet where nothing paints it any more --
+    // green, and blind. `.v2-primary` is the stronger target: it covers all three rooms at once.
+    [".v2-primary", join("src", "design", "shell-v2.css")],
   ];
   for (const [sel, file] of rowLike) {
     it(`${sel} draws a real ring, not just the hover tint`, () => {

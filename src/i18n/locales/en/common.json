@@ -24,6 +24,7 @@
     "footerIncompletePre": "Ledger incomplete ·",
     "footerEmphFloor": "at least {{n}}",
     "footerEmphUnknown": "count unknown",
+    "fallbackTitle": "Compy",
     "searchPlaceholder": "Search or jump anywhere"
   },
   "palette": {

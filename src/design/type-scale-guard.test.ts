@@ -86,6 +86,9 @@ describe("TYPE-1: the six-step type scale is law", () => {
 
   it("the six tokens carry the decided values (verdict 40 · section 26 · card 17 · body 15 · label 13 · data 13)", () => {
     const scale = readFileSync(join("src", "design", "type-scale.css"), "utf8");
+    // hero is the seventh step (2026-08-23, measured off the approved comps) — pinned here
+    // so it cannot be quietly re-tuned away from the picture it was measured from.
+    expect(scale).toMatch(/--type-hero:\s*52px/);
     expect(scale).toMatch(/--type-verdict:\s*40px/);
     expect(scale).toMatch(/--type-section:\s*26px/);
     expect(scale).toMatch(/--type-card:\s*17px/);

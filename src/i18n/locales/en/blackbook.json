@@ -20,7 +20,6 @@
     },
     "faceToggleAriaLabel": "History view",
     "guideLede": "The Field Guide is Compy's library: every tweak and myth, graded by the measured record — hardware-aware for this rig.",
-    "fieldRecordsLabel": "Field records",
     "verdict": {
       "noRecordHeadline": "Heard a tweak online? Look it up here before you try it.",
       "noRecordSub": "We only answer what's been verified — search History, or paste a whole guide and get every claim graded.",
@@ -35,7 +34,13 @@
       "gradedHeadline_one": "You've fact-checked {{count}} guide — {{pct}}% of its tweaks were real.",
       "gradedHeadline_other": "You've fact-checked {{count}} guides — {{pct}}% of their tweaks were real.",
       "recognizedBreakdown": "Of the tweaks we recognized: {{real}} real · {{placebo}} placebo · {{risky}} risky{{scamPart}}."
-    }
+    },
+    "narrative": {
+      "eyebrow": "Local record",
+      "headline": "What changed, and when",
+      "sub": "Sessions, changes, and outside drift—kept on this PC."
+    },
+    "reviewLatest": "Review latest session"
   },
   "blackbookConsole": {
     "typeLabel": {
@@ -86,8 +91,6 @@
       "sub": "No gaming sessions, guide checks or outside changes yet — Compy keeps those separately from the change record."
     },
     "sectionHead": {
-      "record": "The record",
-      "since": "everything Compy has done on this PC · since ",
       "sinceIncomplete": "what Compy can still read · since "
     },
     "changeBody": {
@@ -119,8 +122,8 @@
       "betweenMid": " and ",
       "noDetail": "Noticed between two Compy readings."
     },
-    "tapeMore_one": "show {{count}} older record",
-    "tapeMore_other": "show {{count}} older records",
+    "tapeMore_one": "Show {{count}} older record",
+    "tapeMore_other": "Show {{count}} older records",
     "manageJump_one": "Undo the {{count}} change in Test",
     "manageJump_other": "Undo any of the {{count}} changes in Test",
     "library": {

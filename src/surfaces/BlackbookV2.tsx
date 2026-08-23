@@ -3,14 +3,16 @@ import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import Learn from "./Learn";
 import { RoomShell } from "../design/room-shell";
+import { useV2Nav } from "../design/ShellV2";
 import { SegmentedControl } from "../design/SegmentedControl";
 import { useReducedMotion } from "../design/use-motion";
 import { useHudFlag, useBlackbookConsoleFlag, useIntelligenceFlag } from "../design/use-hud";
-import { HudMasthead } from "./hud-masthead";
 import { readAutopsyLedger } from "../data/autopsy-ledger";
 import { blackbookVerdict } from "./blackbook-v2-data";
 import { BlackbookConsole } from "./blackbook/BlackbookConsole";
-import { useLedgerHealth } from "../design/LedgerHealthNotice";
+import { LogbookTape } from "./blackbook/LogbookTape";
+import { useLogbookView } from "./blackbook/logbook-view";
+import { LedgerHealthNotice, useLedgerHealth } from "../design/LedgerHealthNotice";
 import { PatternsTile } from "./blackbook/PatternsTile";
 import { buildLogbook } from "./blackbook/logbook";
 import type { AppliedChange, SessionSummary, IntelEvent, IntelligenceTimeline } from "../types";
@@ -19,11 +21,12 @@ import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import "../i18n";
 import "./blackbook-v2.css";
 
-// BlackbookV2 (V2-6, spec 2026-07-02-v2-shell-sourcing-and-plan) — the Blackbook room on the
-// V2 shell: verdict (the reader's own autopsy record, honest no-record state) → the room's
-// working face → forward door (RoomShell, from DOOR_MAP: learn → lab, "Open the instruments").
-// No measured-line header strip (owner header-slop law 2026-07-10) — the corpus size and the
-// never-the-internet promise live in the body's own copy.
+// BlackbookV2 (V2-6, spec 2026-07-02-v2-shell-sourcing-and-plan) — the History room on the V2
+// shell. Since the approved four-room direction (03-history-approved.png, issue #49) it is the
+// SPLIT composition: a narrative column (eyebrow → verdict → one sentence → one primary action →
+// quiet routes) beside the record tape, with the receipts strip, the patterns band and the library
+// full-width beneath both. Nothing was removed to fit the picture — the supporting surfaces moved
+// down, the face switch moved into the routes, and every filter, count and door is the same one.
 //
 // This is the classic Blackbook (Learn) composed VERBATIM with the same props and the same
 // locked read-only cores (searchKnowledge / autopsyScan / KNOWLEDGE — zero IPC, zero network,
@@ -32,19 +35,15 @@ import "./blackbook-v2.css";
 // without it (test-pinned). The re-skin is the token re-point in blackbook-v2.css — the same
 // mechanism the five themes, OptimizeV2 and MonitorV2 use; classic CSS/DOM untouched.
 //
-// Deliberately NO primaryAction — the P6 spec names Blackbook the room that may have none: its
-// work (search, filters, grading a pasted guide) lives in the body, and hoisting one mode
-// would demote the other.
-//
 // Phase 4 (plan 2026-07-12-console-hud-phase4-blackbook, direction A "The Logbook"): behind
-// compy_blackbook_console (DEFAULT ON), the room gains a flight-recorder LOGBOOK face — one
-// reverse-chronological tape unifying the user's real changes, sessions and guide checks
+// compy_blackbook_console (DEFAULT ON), the room's working face is a flight-recorder LOGBOOK —
+// one reverse-chronological tape unifying the user's real changes, sessions and guide checks
 // (buildLogbook, a PURE view over data App already holds). Phase 4 itself added zero IPC;
 // Intelligence Phase 1 adds exactly ONE read-only fetch here (get_intelligence_timeline) so the
 // tape can also carry the machine changes Compy merely OBSERVED — still zero mutation, zero
-// network. The field guide (this file's Learn tree) stays reachable via the mode toggle. Flag
-// off renders EXACTLY today's Learn tree, byte-identical for both compy_editorial states
-// (test-pinned).
+// network. The field guide (this file's Learn tree) stays reachable from the narrative column, and
+// the face toggle returns from it. Flag off renders EXACTLY today's Learn tree, byte-identical for
+// both compy_editorial states (test-pinned).
 
 type Face = "logbook" | "guide";
 const FACE_IDS: Face[] = ["logbook", "guide"];
@@ -71,6 +70,7 @@ export function BlackbookV2({
   const reduced = useReducedMotion();
   const hud = useHudFlag();
   const consoleOn = useBlackbookConsoleFlag();
+  const nav = useV2Nav();
   // Seeded from the persisted ledger; Learn reports each new grading up so the room verdict AND
   // the Logbook tape update the moment a guide is fact-checked (same data, no second read).
   const [ledger, setLedger] = useState(readAutopsyLedger);
@@ -115,12 +115,38 @@ export function BlackbookV2({
   // it qualifies, and only while the console face can render the disclosure (classic mode makes no
   // IPC). UNKNOWN leaves every line below exactly as it was — see `design/LedgerHealthNotice.tsx`.
   const health = useLedgerHealth(changes, consoleOn);
+  // The tape's and the strip's ONE shared state — see `blackbook/logbook-view.ts`. Hooks may not be
+  // called conditionally, so this runs on every path; it reads nothing and costs a fold over
+  // records that the disabled paths simply never render.
+  const view = useLogbookView(records, health);
+
+  // THE SPLIT is the logbook face only. The field guide is a library — a search field, a category
+  // tree and a grading panel — and it has no evidence column to sit beside, so it stays the linear
+  // composition it has always been (`aside` absent ⇒ RoomShell renders exactly the old DOM).
+  const split = hud && consoleOn && face === "logbook";
+  const openGuide = (fid?: string) => {
+    setGuideFocus(fid ?? null);
+    setFace("guide");
+  };
+  // "Review latest session" opens the session where its full readout already lives — Live, which
+  // draws the last session's deck. Through the rail's OWN handler (useV2Nav), so navigation still
+  // never teleports, and only when a session actually exists: a button promising a reading Compy
+  // does not have is a fabricated claim in control form. With no session, the room's one dominant
+  // action becomes the door that is always real — the field guide.
+  const reviewLatest = view.latestSession ? () => nav.navigate("play") : null;
 
   return (
     <RoomShell
       room="learn"
+      /* UX-1: the caveat that qualifies every claim in this room outranks them, so it prints above
+         the verdict. It used to sit inside the console body, one scroll below the sentence it
+         qualifies. Self-nulls when the ledger is healthy. */
+      notice={consoleOn ? <LedgerHealthNotice health={health} /> : undefined}
       verdict={(() => {
-        if (!hud) {
+        // The narrative belongs to the LOGBOOK face. With the console flag off this room is the
+        // field-guide library, and "What changed, and when" would be a headline for a screen that
+        // is not showing changes -- so the classic verdict sentence stays the h1 there.
+        if (!hud || !consoleOn) {
           // Flag off: the exact pre-rollout tree — the verdict sentence as the h1, with the
           // verdict-only DecryptedText moment (the adopt-list law).
           return reduced ? (
@@ -136,63 +162,140 @@ export function BlackbookV2({
             />
           );
         }
-        // HUD header = title only (owner title-header law 2026-07-10 round 2). The autopsy
-        // record moves back into its context — the Autopsy panel's own record rollup (Learn's
-        // keepRecord below un-trims it) and, under the console, the Logbook's own status line.
-        // No LED: a record count is not a health state, and this room computes no live status.
+        // THE ROOM'S OWN SENTENCE (03-history-approved.png). It replaces the bare title "Blackbook"
+        // that the 2026-07-10 title-header law put here — the same correction Health took in UX-1,
+        // for the same reason: the rail already says which room this is, so the biggest words on
+        // the screen were a label nobody came to read. What this room IS — the local record of what
+        // changed and when — is not redundant with anything.
         return (
           <>
-            <HudMasthead label={t("blackbook.blackbookV2.fieldRecordsLabel")} />
-            {/* "Blackbook" is the rail's own label for this room (id "learn", see homeRail.ts) —
-                sourced from the shared common.rail.* keys (owned alongside the rest of the rail
-                copy) rather than re-translated here. The English literal is a defaultValue so this
-                still renders correctly before that namespace is populated. */}
-            <span className="hud-headline">{t("common.rail.learn", "Blackbook")}</span>
+            <span className="bbv2-eyebrow">
+              <span className="bbv2-eyebrow-dot" aria-hidden="true" />
+              {t("blackbook.blackbookV2.narrative.eyebrow")}
+            </span>
+            <span className="bbv2-headline">{t("blackbook.blackbookV2.narrative.headline")}</span>
           </>
         );
       })()}
-      sub={hud ? undefined : verdict.sub}
+      sub={hud && consoleOn ? t("blackbook.blackbookV2.narrative.sub") : verdict.sub}
+      primaryAction={
+        hud && consoleOn ? (
+          <button
+            type="button"
+            className="v2-primary"
+            onClick={reviewLatest ?? (() => openGuide())}
+          >
+            {reviewLatest
+              ? t("blackbook.blackbookV2.reviewLatest")
+              : t("blackbook.blackbookConsole.library.openAll")}
+          </button>
+        ) : undefined
+      }
+      aside={
+        split ? (
+          <LogbookTape view={view} reduced={reduced} onReviewSession={reviewLatest ?? undefined} />
+        ) : undefined
+      }
+      below={
+        split ? (
+          <BlackbookConsole
+            view={view}
+            vendor={vendor}
+            /* Intelligence Phase 2 — cross-session pattern synthesis sits with the supporting
+               surfaces (§5E: Blackbook holds the historical record). Self-contained fetch so the
+               console stays zero-IPC; renders nothing until there's something honest to say.
+               Handed IN rather than rendered beside the console so it lands inside the same bento
+               grid as its own full-width tile. */
+            patterns={<PatternsTile />}
+            onOpenLab={() => onOpenLab?.()}
+            onOpenGuide={openGuide}
+          />
+        ) : undefined
+      }
     >
       {consoleOn ? (
-        <>
-          {/* The room's face toggle — the Logbook tape or the full field guide. */}
-          <div className="bbv2-bar">
-            <SegmentedControl
-              segments={FACE_IDS.map((id) => ({
-                id,
-                label: t(`blackbook.blackbookV2.faces.${id}`),
-              }))}
-              value={face}
-              onChange={(id) => setFace(id as Face)}
-              aria-label={t("blackbook.blackbookV2.faceToggleAriaLabel")}
-            />
-          </div>
-          {/* The Field Guide introduces ITSELF on its own tab (tester Matthew 2026-07-22: he first
-              met the term inside the Logbook and was confused — the description belongs where the
-              guide lives, and in the intro's Blackbook blurb, not buried in a sibling tab). */}
-          {face === "guide" && (
-            <p className="bbv2-guide-lede">{t("blackbook.blackbookV2.guideLede")}</p>
-          )}
-          {face === "logbook" ? (
+        face === "logbook" ? (
+          !split ? (
+            /* THE CLASSIC COMPOSITION -- `compy_editorial` off, the devtools failsafe. The two
+               flags are independent and always have been: `compy_blackbook_console` chooses the
+               room's FACE (logbook vs field guide), `compy_editorial` chooses the SHELL it wears.
+               Gating the tape and the strip on the shell flag deleted the whole logbook face from
+               the failsafe, which is the one composition that exists to still work. Linear, in the
+               room body, with the face toggle it has always had. */
             <>
+              <div className="bbv2-bar">
+                <SegmentedControl
+                  segments={FACE_IDS.map((id) => ({
+                    id,
+                    label: t(`blackbook.blackbookV2.faces.${id}`),
+                  }))}
+                  value={face}
+                  onChange={(id) => setFace(id as Face)}
+                  aria-label={t("blackbook.blackbookV2.faceToggleAriaLabel")}
+                />
+              </div>
+              <LogbookTape
+                view={view}
+                reduced={reduced}
+                onReviewSession={reviewLatest ?? undefined}
+              />
               <BlackbookConsole
-                records={records}
-                health={health}
+                view={view}
                 vendor={vendor}
-                /* Intelligence Phase 2 — cross-session pattern synthesis sits above the record tape
-                   (§5E: Blackbook holds the historical record). Self-contained fetch so the console
-                   stays zero-IPC; renders nothing until there's something honest to say. Handed IN
-                   rather than rendered beside the console so it lands inside the same bento grid as
-                   its own full-width tile. */
                 patterns={<PatternsTile />}
                 onOpenLab={() => onOpenLab?.()}
-                onOpenGuide={(fid) => {
-                  setGuideFocus(fid ?? null);
-                  setFace("guide");
-                }}
+                onOpenGuide={openGuide}
               />
             </>
           ) : (
+          /* THE QUIET ROUTES (03-history-approved.png): the story column's foot. They are the
+             room's two secondary doors — undo, which lives in the Lab, and the field guide, which
+             is this room's other face. The segmented control that used to carry the face switch is
+             gone from THIS face only: the comp draws a route here, and a toggle whose second
+             option is a whole other library reads as a tab when it is really a door. The toggle
+             still renders on the guide face, which is where a way back is what you need. */
+          <div className="bbv2-routes">
+            {view.activeChanges > 0 && (
+              <button type="button" className="bbv2-route" onClick={() => onOpenLab?.()}>
+                <span>
+                  {t("blackbook.blackbookConsole.manageJump", { count: view.activeChanges })}
+                </span>
+                <span className="bbv2-route-chev" aria-hidden="true">
+                  ›
+                </span>
+              </button>
+            )}
+            {/* Suppressed when the guide IS the primary action above (no sessions recorded yet) —
+                one affordance per destination, never the same door twice in one column. */}
+            {reviewLatest && (
+              <button type="button" className="bbv2-route" onClick={() => openGuide()}>
+                <span>{t("blackbook.blackbookConsole.library.openAll")}</span>
+                <span className="bbv2-route-chev" aria-hidden="true">
+                  ›
+                </span>
+              </button>
+            )}
+          </div>
+          )
+        ) : (
+          <>
+            {/* The way back to the record. */}
+            <div className="bbv2-bar">
+              <SegmentedControl
+                segments={FACE_IDS.map((id) => ({
+                  id,
+                  label: t(`blackbook.blackbookV2.faces.${id}`),
+                }))}
+                value={face}
+                onChange={(id) => setFace(id as Face)}
+                aria-label={t("blackbook.blackbookV2.faceToggleAriaLabel")}
+              />
+            </div>
+            {/* The Field Guide introduces ITSELF on its own tab (tester Matthew 2026-07-22: he
+                first met the term inside the Logbook and was confused — the description belongs
+                where the guide lives, and in the intro's Blackbook blurb, not buried in a sibling
+                tab). */}
+            <p className="bbv2-guide-lede">{t("blackbook.blackbookV2.guideLede")}</p>
             <Learn
               asPanel
               v2
@@ -202,8 +305,8 @@ export function BlackbookV2({
               onClose={onClose}
               onAutopsyRecorded={setLedger}
             />
-          )}
-        </>
+          </>
+        )
       ) : (
         <Learn
           asPanel

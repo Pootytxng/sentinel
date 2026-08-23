@@ -35,6 +35,9 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import { BlackbookConsole } from "./BlackbookConsole";
+import { LogbookTape } from "./LogbookTape";
+import { useLogbookView } from "./logbook-view";
+import { LedgerHealthNotice } from "../../design/LedgerHealthNotice";
 import { BlackbookV2 } from "../BlackbookV2";
 import type { LogbookRecord, LogbookChange, LogbookSession, LogbookAutopsy } from "./logbook";
 import type { LedgerHealth, SessionSummary } from "../../types";
@@ -114,16 +117,31 @@ const autopsy = (over: Partial<LogbookAutopsy> = {}): LogbookAutopsy => ({
   ...over,
 });
 
-function mountConsole(records: LogbookRecord[], health: LedgerHealth | null) {
-  return render(
-    <BlackbookConsole
-      records={records}
-      health={health}
-      vendor="amd"
-      onOpenLab={vi.fn()}
-      onOpenGuide={vi.fn()}
-    />,
+// The room is THREE siblings over one shared view state (logbook-view.ts) since the approved
+// split put the disclosure, the tape and the receipts strip in three RoomShell slots. The
+// ledger-health claims this file guards are spread across all three -- the notice is the shell's
+// `notice`, the changes tile is in the strip, the scent line and the empty state are in the tape --
+// so mounting any one of them alone would leave the rest unguarded. The ORDER here is the order
+// RoomShell renders them, which is what keeps the "caveat before its subject" assertion honest.
+function Logbook({
+  records,
+  health,
+}: {
+  records: LogbookRecord[];
+  health: LedgerHealth | null;
+}) {
+  const view = useLogbookView(records, health);
+  return (
+    <>
+      <LedgerHealthNotice health={health} />
+      <LogbookTape view={view} reduced />
+      <BlackbookConsole view={view} vendor="amd" onOpenLab={vi.fn()} onOpenGuide={vi.fn()} />
+    </>
   );
+}
+
+function mountConsole(records: LogbookRecord[], health: LedgerHealth | null) {
+  return render(<Logbook records={records} health={health} />);
 }
 
 // Every claim is asserted through the ELEMENT that carries it, not a substring of the room: a text
@@ -136,17 +154,27 @@ const tileD = (c: HTMLElement, kind: string) =>
 const scent = (c: HTMLElement) => c.querySelector(".bc-sect-s")?.textContent ?? "";
 const notice = (c: HTMLElement) => c.querySelector(".ledger-health");
 
+// THE WIDEST CLAIM IS GONE, AND THAT IS THE POINT NOW (2026-08-23). It used to print above every
+// tape: "everything Compy has done on this PC · since <date>". 03-history-approved.png draws no head
+// there at all, and following the picture was only safe because the CLAIM went with the chrome --
+// so this constant flipped from something the healthy room must SAY into something no room may say
+// in any health state. That is strictly stronger: a sentence that never claims completeness cannot
+// be falsified by a ledger that would not open.
 const WIDEST_CLAIM = "everything Compy has done on this PC";
+/** The head only appears to NARROW: a filter is active, or the ledger is known incomplete. */
+const head = (c: HTMLElement) => c.querySelector(".bc-sect");
 
 describe("the Logbook may not speak for a ledger it could not read", () => {
-  it("a healthy ledger is left alone — the room keeps its widest claim and shows no disclosure", () => {
+  it("a healthy ledger is left alone — no disclosure, and no claim needing one", () => {
     useReduced();
     const { container } = mountConsole([change(), session(), autopsy()], HEALTHY);
 
     expect(tileN(container, "change")).toBe("1");
     expect(tileD(container, "change")).toBe("1 still on · every one undoable");
-    expect(scent(container)).toContain(WIDEST_CLAIM);
     expect(notice(container)).toBeNull();
+    // Nothing narrows, because nothing over-claimed in the first place.
+    expect(head(container)).toBeNull();
+    expect(container.textContent).not.toContain(WIDEST_CLAIM);
   });
 
   it("UNKNOWN health is not incompleteness — the room renders byte-identically to healthy", () => {
@@ -170,7 +198,7 @@ describe("the Logbook may not speak for a ledger it could not read", () => {
     expect(tileN(container, "change")).toBe("—");
     expect(tileD(container, "change")).toBe("can't be read right now");
     expect(scent(container)).toContain("what Compy can still read");
-    expect(scent(container)).not.toContain(WIDEST_CLAIM);
+    expect(container.textContent).not.toContain(WIDEST_CLAIM);
     expect(notice(container)).toBeTruthy();
     expect(screen.getByText("Compy can't read its own record right now")).toBeTruthy();
   });
@@ -192,7 +220,11 @@ describe("the Logbook may not speak for a ledger it could not read", () => {
     expect(tileN(container, "change")).toBe("2");
     expect(tileN(container, "change")).not.toBe("—");
     expect(tileD(container, "change")).toBe("2 still on · part of the record is missing");
-    expect(scent(container)).not.toContain(WIDEST_CLAIM);
+    // The head is BACK here, and only here-shaped states: known-incomplete is one of the two
+    // things it exists to say.
+    expect(head(container)).not.toBeNull();
+    expect(scent(container)).toContain("what Compy can still read");
+    expect(container.textContent).not.toContain(WIDEST_CLAIM);
     expect(screen.getByText("Compy can't tell you everything it did")).toBeTruthy();
   });
 
@@ -275,7 +307,8 @@ describe("BlackbookV2 wires the probe to the tape it qualifies", () => {
 
     expect(notice(container)).toBeTruthy();
     expect(tileN(container, "change")).toBe("—");
-    expect(scent(container)).not.toContain(WIDEST_CLAIM);
+    expect(scent(container)).toContain("what Compy can still read");
+    expect(container.textContent).not.toContain(WIDEST_CLAIM);
   });
 
   it("a probe that fails leaves the room exactly as it was", async () => {
@@ -285,6 +318,8 @@ describe("BlackbookV2 wires the probe to the tape it qualifies", () => {
     expect(notice(container)).toBeNull();
     expect(tileN(container, "change")).toBe("0");
     expect(tileD(container, "change")).toBe("nothing changed yet");
-    expect(scent(container)).toContain(WIDEST_CLAIM);
+    // Byte-for-byte the healthy room: no head, and nothing claiming completeness.
+    expect(head(container)).toBeNull();
+    expect(container.textContent).not.toContain(WIDEST_CLAIM);
   });
 });

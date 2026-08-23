@@ -113,7 +113,7 @@ const ROOMS: {
     name: "BlackbookV2",
     label: "Field records",
     title: "History",
-    hud: true,
+    hud: false,
     mount: () => render(<BlackbookV2 focusId={null} vendor="amd" onClose={() => {}} />).container,
   },
 ];
@@ -130,41 +130,35 @@ const mountWithFlag = (room: (typeof ROOMS)[number], flag: string | null) => {
   return room.mount();
 };
 
-describe("HUD room rollout: flag-off byte-identity (the classic failsafe)", () => {
-  for (const room of ROOMS.filter((r) => r.hud)) {
-    it(`${room.name}: flag='0' renders zero HUD DOM; flag absent (default ON) renders the masthead`, () => {
-      const off = mountWithFlag(room, "0");
-      expect(off.querySelector(".hud-masthead-eyebrow")).toBeNull();
-      expect(off.querySelector("[class*='hud-']")).toBeNull();
-      cleanup();
-      const absent = mountWithFlag(room, null);
-      expect(absent.querySelector(".hud-masthead-eyebrow")).not.toBeNull();
-    });
-  }
+describe("HUD room rollout: the rollout is over — no room wears the masthead", () => {
+  // THE LIST IS EMPTY, WHICH IS THE RESULT, NOT A GAP. Live left the Instrument-HUD masthead in
+  // issue #49 slice 4 and History in slice 5; both now draw the approved four-room header instead
+  // (their own eyebrow, and an h1 that is the room's sentence). The per-room byte-identity loop
+  // that used to live here had nothing left to iterate, so it is replaced by the assertion that
+  // actually protects the user now: NEITHER room may grow a masthead back, in EITHER flag state.
+  //
+  // HudMasthead itself is not dead code — LabGround still mounts it, and has its own suite. When
+  // that one converts too, this file retires with the rollout it pins.
+  it("the rollout list has no HUD room left", () => {
+    expect(ROOMS.filter((r) => r.hud)).toEqual([]);
+  });
+
+  it("no room grows the masthead back, in either flag state", () => {
+    for (const room of ROOMS) {
+      for (const flag of ["0", "1"]) {
+        const c = mountWithFlag(room, flag);
+        expect(c.querySelector(".hud-masthead-eyebrow"), `${room.name} flag ${flag}`).toBeNull();
+        expect(c.querySelector(".hud-headline"), `${room.name} flag ${flag}`).toBeNull();
+        // ...and with no masthead there is no eyebrow to hang an LED in — which is what the
+        // retired "LED honesty" loop was checking one level down.
+        expect(c.querySelector(".hud-led"), `${room.name} flag ${flag}`).toBeNull();
+        cleanup();
+      }
+    }
+  });
 });
 
 describe("HUD room rollout: title-header law (h1 = the room title, never a status sentence)", () => {
-  for (const room of ROOMS.filter((r) => r.hud)) {
-    it(`${room.name}: flag on → eyebrow "${room.label}", h1 exactly "${room.title}", no header sub; flag '0' keeps the classic verdict-sentence h1`, () => {
-      // Classic contract: the verdict SENTENCE is the h1 (never the bare title).
-      const off = mountWithFlag(room, "0");
-      const offH1 = off.querySelector(".v2-verdict h1");
-      expect(offH1).not.toBeNull();
-      expect(offH1!.textContent!.trim()).not.toBe(room.title);
-      cleanup();
-      // HUD contract (owner title-header law 2026-07-10): header = eyebrow + TITLE, nothing else.
-      const on = mountWithFlag(room, "1");
-      const eyebrow = on.querySelector(".hud-masthead-eyebrow");
-      expect(eyebrow).not.toBeNull();
-      expect(eyebrow!.textContent).toContain(room.label);
-      const headline = on.querySelector(".hud-headline");
-      expect(headline).not.toBeNull();
-      expect(headline!.textContent).toBe(room.title);
-      // The header carries no sub — verdict facts live in their body context now.
-      expect(on.querySelector(".v2-verdict-sub")).toBeNull();
-    });
-  }
-
   // ISSUE #49 SLICE 4 — Monitor left the HUD masthead, and this replaces the two rows it used to
   // fill in the loops above. It is not a relaxation: the old pins were "under the flag the h1 is
   // the bare title `Live`" and "the header carries no sub". What the owner's title-header law
@@ -211,6 +205,30 @@ describe("HUD room rollout: title-header law (h1 = the room title, never a statu
     expect(rule).toContain(':not([data-hud="on"])');
   });
 
+  // ISSUE #49 SLICE 5 — History's half of the same replacement, mirroring the Monitor block above.
+  // `mountWithFlag` pins the console face OFF, so what mounts here is the field-guide library, and
+  // a library's h1 is its verdict sentence in BOTH flag states — never the bare word "History".
+  it("BlackbookV2: no HUD masthead in either flag state, and never a bare-title h1", () => {
+    for (const flag of ["0", "1"]) {
+      const c = mountWithFlag(ROOMS[1], flag);
+      expect(c.querySelector(".hud-masthead-eyebrow"), `flag ${flag}`).toBeNull();
+      const h1 = c.querySelector(".v2-verdict h1")!;
+      expect(h1.textContent!.trim(), `flag ${flag}`).not.toBe(ROOMS[1].title);
+      cleanup();
+    }
+  });
+
+  // ...and the LOGBOOK face, which is what the owner actually sees (the console flag is default
+  // ON): the approved narrative header — a dotted eyebrow over the room's own sentence.
+  it("BlackbookV2: the logbook face wears the approved narrative header", () => {
+    localStorage.clear();
+    localStorage.setItem("compy_editorial", "1");
+    const c = ROOMS[1].mount();
+    expect(c.querySelector(".bbv2-eyebrow")!.textContent).toContain("Local record");
+    expect(c.querySelector(".v2-verdict h1")!.textContent).toContain("What changed, and when");
+    expect(c.querySelector(".hud-masthead-eyebrow")).toBeNull();
+  });
+
   it("BlackbookV2: the browse-mode Autopsy hint returns under the HUD (its coaching left the header)", () => {
     const on = mountWithFlag(ROOMS[1], "1");
     expect(on.querySelector(".lx-autopsy-hint")).not.toBeNull();
@@ -221,14 +239,6 @@ describe("HUD room rollout: title-header law (h1 = the room title, never a statu
   });
 });
 
-describe("HUD room rollout: LED honesty (real state or no LED)", () => {
-  // The scan/ok LED pair was pinned on OptimizeV2, deleted in the 2026-08-06 generation prune.
-  // Optimize's live home is lab/OptimizeStation inside LabGround, which renders no masthead of
-  // its own — so no room in this suite computes a live state, and none may show an LED.
-  for (const room of ROOMS.filter((r) => r.hud)) {
-    it(`${room.name}: no live room state → no LED in the eyebrow`, () => {
-      const on = mountWithFlag(room, "1");
-      expect(on.querySelector(".hud-masthead-eyebrow .hud-led")).toBeNull();
-    });
-  }
-});
+// The "LED honesty" describe retired with the masthead it policed — its rule (no live room state
+// ⇒ no LED) is carried by the `.hud-led` assertion in "no room grows the masthead back" above,
+// which is strictly wider: it holds in both flag states rather than only under the flag.

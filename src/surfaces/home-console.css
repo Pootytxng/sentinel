@@ -141,46 +141,10 @@
 :root[data-v2="on"] .v2-room[data-room="home"] .v2-verdict-action {
   order: 1;
 }
-:root[data-v2="on"] .hc-front-door {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--v2-font-sans);
-  font-size: var(--type-card);
-  font-weight: var(--type-card-weight);
-  letter-spacing: -0.005em;
-  /* Ink is the page ground, not a literal: the shipped accent is a light violet, so the darkest
-     token in the system is the legible ink on it, and it follows the theme rather than freezing
-     one hex. (A user who picks a very dark accent in the picker is choosing a darker button;
-     that trade lives with the picker, and COLOR-1 kept the picker on purpose.) */
-  color: var(--v2-bg);
-  /* GREEN, not the accent (owner ruling 2026-08-23 — he put the four approved comps
-     back on the table and said "this is exactly how its supposed to look"). The comp
-     fills this button #2ecf86; the token carries the sampled value and the reasoning.
-     This is the room's ONE affirmative action, so it wears the ladder's good end — the
-     colour-coded alert system he asked to keep, applied to a control instead of a
-     reading. The violet it used to wear was MY call and he overruled it. */
-  background: var(--v2-cta);
-  border: 1px solid var(--v2-cta);
-  border-radius: var(--v2-r-sm);
-  padding: 12px 22px;
-  cursor: pointer;
-  transition: filter 0.12s ease, transform 0.12s ease;
-}
-:root[data-v2="on"] .hc-front-door:hover {
-  filter: brightness(1.08);
-}
-:root[data-v2="on"] .hc-front-door:active {
-  transform: translateY(1px);
-}
-/* Its OWN focus mark, not the inherited default. The button's fill IS the accent, so a ring drawn
-   in the accent would vanish into it — the mark is the page ink, offset outward. Hover spends
-   brightness; focus must spend something hover does not (focus-ring-guard). */
-:root[data-v2="on"] .hc-front-door:focus-visible {
-  outline: 2px solid var(--v2-text);
-  outline-offset: 2px;
-}
-/* Open state reads as open — the panel below is the button's own disclosure, so the control
+/* The front door's LOOK is .v2-primary now (shell-v2.css) — three of the four approved comps
+   draw the same filled green button, and Health was only its first tenant. What stays here is the
+   part that is Health's alone: this button owns a disclosure, and the others do not.
+   Open state reads as open — the panel below is the button's own disclosure, so the control
    stops shouting once it has been used (a pressed door is not still an invitation). */
 :root[data-v2="on"] .hc-front-door[aria-expanded="true"] {
   color: var(--v2-text);

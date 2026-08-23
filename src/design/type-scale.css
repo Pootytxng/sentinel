@@ -5,8 +5,17 @@
    type-scale-guard.test.ts (the mechanized floor). Floor is 13px, per the foundation decision
    (supersedes the audit's 11px: still too small at couch distance on 1080p).
 
-   verdict 40/650 · section 26/650 · card 17/600 · body 15/400 · label 13/500 · data 13 mono */
+   hero 52/650 · verdict 40/650 · section 26/650 · card 17/600 · body 15/400 · label 13/500 · data 13 mono */
 :root {
+  /* HERO — the seventh step, added 2026-08-23 from the approved comps, not from taste.
+     Measured cap heights in the four PNGs: Health 38px and Test 39px against History
+     30px and Live 29px, at a scale where 29px IS our 40px --type-verdict. So two of the
+     four approved rooms set their headline a full step above the verdict step, and one
+     size cannot draw both. It tracks the narrative column's WIDTH -- Health and Test
+     give the story ~460px beside a 56% evidence panel, Live and History ~310px beside a
+     69% one -- which is why the split keys it off the same room families as --v2-aside
+     and never off a media query. */
+  --type-hero: 52px;
   --type-verdict: 40px;
   --type-section: 26px;
   --type-card: 17px;
@@ -14,6 +23,7 @@
   --type-label: 13px;
   --type-data: 13px; /* machine values (mono) — same step as label, distinct role */
 
+  --type-hero-weight: 650;
   --type-verdict-weight: 650;
   --type-section-weight: 650;
   --type-card-weight: 600;

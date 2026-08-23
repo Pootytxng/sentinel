@@ -39,7 +39,7 @@ function body(css: string, selector: string): string {
 
 describe("comp fidelity — the primary action wears the ladder's good end (owner ruling 2026-08-23)", () => {
   const tokens = read("src", "design", "tokens-v2.css");
-  const home = read("src", "surfaces", "home-console.css");
+  const shell = read("src", "design", "shell-v2.css");
   const monitor = read("src", "surfaces", "monitor-console.css");
 
   it("--v2-cta is defined in the TOKEN layer, and is the green the comps actually use", () => {
@@ -57,13 +57,22 @@ describe("comp fidelity — the primary action wears the ladder's good end (owne
     expect(Math.abs(r - 0x2e)).toBeLessThanOrEqual(0x12);
   });
 
-  it("Health's front door is GREEN — the violet it used to wear was overruled", () => {
-    const b = body(home, ':root[data-v2="on"] .hc-front-door');
-    expect(b, "the front-door rule moved or was renamed").toContain("background");
+  it("the shared primary action is GREEN — the violet it used to wear was overruled", () => {
+    // Asserted on `.v2-primary` in the SHELL sheet, not on Health's own `.hc-front-door`: three
+    // rooms draw this same control (Health's front door, History's "Review latest session",
+    // Test's run action) and a colour ruling copied into three surface sheets is a ruling that
+    // will drift in two of them. Health's button carries both classes; the class check below is
+    // what keeps this guard pointed at the affordance the owner actually looked at.
+    const b = body(shell, ':root[data-v2="on"] .v2-primary');
+    expect(b, "the primary-action rule moved or was renamed").toContain("background");
     expect(b).toMatch(/background:\s*var\(--v2-cta\)/);
     expect(b, "the border must follow the fill, or the button gets a violet outline").toMatch(
       /border:\s*1px solid var\(--v2-cta\)/,
     );
+    expect(
+      read("src", "surfaces", "HomeConsole.tsx"),
+      "Health's front door must wear the shared primary, or this ruling stops reaching it",
+    ).toMatch(/className="hc-front-door v2-primary"/);
   });
 
   it("Live's Start capture stays VIOLET — the comps differ here ON PURPOSE", () => {
@@ -227,8 +236,144 @@ describe("comp fidelity — Live, matched against 02-live-approved.png", () => {
     expect(post, "the no-driver fact").toMatch(/driver/i);
     expect(post, "the anti-cheat promise").toMatch(/anti-cheat/i);
   });
+});
 
-  it("the topbar does not repeat the room name — all four comps draw it empty", () => {
-    expect(shell, "the room-title rule came back").not.toContain(".v2-room-title");
+/* THE SHELL GEOMETRY ALL FOUR COMPS SHARE.
+ *
+ * Every number below is measured off the approved PNGs and divided by the calibrated scale. The
+ * comps are 1550px-wide renders of a 1500px design — proven two independent ways: the rail measures
+ * 223 comp px against our 216px token, and Live's headline cap measures 29 comp px against our
+ * --type-verdict 40px face. Both ratios land on 1550/1500 = 1.0333, so a comp measurement is an app
+ * measurement divided by that. Anything here quoting a comp px also quotes the app px it becomes.
+ *
+ * COLOUR IS DELIBERATELY NOT CHASED HERE. The PNGs are uniformly contrast-lifted (their page ground
+ * samples #11161e against our --v2-bg #0a0c10, their headline pure #ffffff against --v2-text
+ * #e8ebf2). Because the BACKGROUND is lifted along with the ink, that is a gamma difference in the
+ * render, not a different palette — matching it would mean typing literals into token slots, which
+ * tokens-v2-guard forbids for exactly this reason. Geometry is what the comps can be trusted on.
+ */
+describe("comp fidelity — the shell geometry all four comps share", () => {
+  const shell = read("src", "design", "shell-v2.css");
+  const tokens = read("src", "design", "tokens-v2.css");
+  const scale = read("src", "design", "type-scale.css");
+
+  it("the topbar still names the room — two of the four comps print it there", () => {
+    // bug→guard, and the bug was mine: the 2026-08-22 pass deleted this element citing "all four
+    // comps draw it empty", which is false. 01-health-approved.png prints "Health" in the topbar
+    // and 04-test-approved.png prints "Test"; only Live's and History's are empty. A guard that
+    // pins a misreading is worse than no guard, so this one pins the re-measured fact instead.
+    expect(shell, "the room-title rule went missing again").toContain(".v2-room-title");
+    expect(
+      shell,
+      "measured at a 12px cap = --type-card, not the --type-label it once carried",
+    ).toMatch(/\.v2-room-title \{[^}]*font-size: var\(--type-card\)/);
+  });
+
+  it("the content box is the comps' 1169px, which the old 1120 cap could not produce", () => {
+    // All four comps put content between x=286 and x=1494 of 1550 — a 1208px box = 1169 app px.
+    // With this sheet's 30px gutters, a 1160 cap lands x=278..1438 on the owner's 1500-wide
+    // window against the comps' 277..1446. The cap still binds on a wide monitor, which is the
+    // reason it exists: a 1920 window may not stretch a 46-character sentence across 1600px.
+    expect(body(shell, ':root[data-v2="on"] .v2-content-wrap')).toMatch(/max-width:\s*1160px/);
+  });
+
+  it("the topbar is the comps' 50px", () => {
+    // Ruled at y=41..93 under a 41px window titlebar: 52 comp px = 50 app px. It was 46.
+    expect(body(shell, ':root[data-v2="on"] .v2-top')).toMatch(/height:\s*50px/);
+  });
+
+  it("the evidence column is TWO families, not one number", () => {
+    // Measured aside share: Health 55%, Test 58% — both PANELLED rooms, where the evidence sits in
+    // a bordered box. Live 68%, History 70% — both WIDE rooms, where it runs on the page ground.
+    // One token could not serve both without being wrong twice, and the split is a room family, not
+    // a viewport width, so it is keyed off [data-room] and needs no breakpoint (the handoff forbids
+    // breakpoints outright).
+    expect(tokens, "the panelled default").toMatch(/--v2-aside:\s*min\(680px,\s*56\.5%\)/);
+    expect(shell, "the wide pair").toMatch(
+      /\[data-room="learn"\],\s*\n[^{]*\[data-room="play"\] \{\s*\n\s*--v2-aside: min\(830px, 69%\);/,
+    );
+  });
+
+  it("the hero headline belongs to the panelled rooms, and only to them", () => {
+    // Headline cap heights: Health 38–40 comp px and Test the same — a 52px face. Live and History
+    // measure 29–30 — the 40px --type-verdict this shell already had. Same two families as the
+    // aside above, for the same reason: a 460px story column can carry 52px, a 300px one cannot.
+    expect(scale, "the seventh step").toMatch(/--type-hero:\s*52px/);
+    expect(shell).toMatch(
+      /\[data-room="home"\] > \.v2-verdict h1,\s*\n[^{]*\[data-room="lab"\] > \.v2-verdict h1 \{\s*\n\s*font-size: var\(--type-hero\);/,
+    );
+    expect(shell, "the wide pair must NOT be promoted with them").not.toMatch(
+      /\[data-room="learn"\][^{]*\{[^}]*font-size: var\(--type-hero\)/,
+    );
+  });
+
+  it("the primary action stands off the sentence it answers", () => {
+    // 29 app px of air under Health's sub before its button, 41 under History's. The flex gap
+    // alone was 12, which is why the installed build had the button crowding its own sentence.
+    expect(
+      body(shell, ':root[data-v2="on"] .v2-room[data-layout="split"] > .v2-verdict .v2-verdict-action'),
+    ).toMatch(/margin-top:\s*16px/);
+  });
+});
+
+describe("comp fidelity — History, matched against 03-history-approved.png", () => {
+  const shell = read("src", "design", "shell-v2.css");
+  const tape = read("src", "surfaces", "blackbook", "blackbook-console.css");
+  const room = read("src", "surfaces", "blackbook-v2.css");
+
+  it("the record is a DOCUMENT, not a wall of cards", () => {
+    // The single biggest difference between the installed build and the comp. Every record used to
+    // be a bordered, filled, rounded card; the comp draws bare rows separated by one hairline, the
+    // way a bank statement is drawn. Cards say "twelve things to deal with"; ruled rows say "a
+    // list you can scan" — which is the standing "Compy is overwhelming" complaint, in one room.
+    const b = body(tape, ':root[data-v2="on"] .bc-row');
+    expect(b, "the row rule went missing").not.toBe("");
+    expect(b, "a row may not draw a box").toMatch(/border:\s*0/);
+    expect(b, "one hairline is the whole separator").toMatch(
+      /border-bottom:\s*1px solid var\(--ix-glass-border\)/,
+    );
+    expect(b, "a filled row is a card again").not.toMatch(/\bbackground:/);
+  });
+
+  it("the month head is a ruled label, not a card title", () => {
+    const b = body(tape, ':root[data-v2="on"] .bc-month-h');
+    expect(b).toMatch(/border-bottom:\s*1px solid var\(--ix-glass-border\)/);
+    expect(b).toMatch(/text-transform:\s*uppercase/);
+  });
+
+  it("the divider beside the record is HISTORY's alone — Live draws a panel there", () => {
+    // Both rooms show a vertical at the same place, and reading Live's as a divider is a mistake
+    // this file already made once: 02-live-approved.png's x=672 line is the left EDGE of a
+    // bordered, filled, rounded panel, while 03-history-approved.png's x=647 is a bare hairline in
+    // the gutter with the tape starting 26px past it. Keying both off one rule drew Live a
+    // duplicate border down the inside of its own panel.
+    expect(shell).toMatch(
+      /\[data-room="learn"\] > \.v2-room-aside \{\s*\n\s*border-left: 1px solid var\(--v2-line\);/,
+    );
+    expect(shell, "Live must not be given the hairline again").not.toMatch(
+      /\[data-room="play"\] > \.v2-room-aside \{\s*\n\s*border-left:/,
+    );
+  });
+
+  it("the narrative column opens on a dotted mono label", () => {
+    const b = body(room, ':root[data-v2="on"] .bbv2-eyebrow');
+    expect(b, "the eyebrow rule went missing").not.toBe("");
+    expect(b).toMatch(/font-family:\s*var\(--v2-font-mono\)/);
+    expect(b).toMatch(/text-transform:\s*uppercase/);
+    // The dot is the room accent — the one violet on a screen whose action is green.
+    expect(body(room, ':root[data-v2="on"] .bbv2-eyebrow-dot')).toMatch(
+      /background:\s*var\(--v2-accent\)/,
+    );
+  });
+
+  it("the quiet routes are text and a chevron, never a second button", () => {
+    // The room has exactly ONE filled action. An outlined control under it reads as a choice
+    // between two equals, which is precisely what the comp is not drawing.
+    const b = body(room, ':root[data-v2="on"] .bbv2-route');
+    expect(b, "the route rule went missing").not.toBe("");
+    expect(b).toMatch(/border:\s*0/);
+    expect(b).toMatch(/background:\s*transparent/);
+    // ...and it still takes a visible focus mark, because it is still a button (focus-ring law).
+    expect(room).toMatch(/\.bbv2-route:focus-visible \{[^}]*outline:\s*2px/);
   });
 });

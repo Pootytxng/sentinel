@@ -24,6 +24,7 @@
     "footerIncompletePre": "台账不完整 ·",
     "footerEmphFloor": "至少 {{n}} 项",
     "footerEmphUnknown": "数量未知",
+    "fallbackTitle": "Compy",
     "searchPlaceholder": "搜索或跳转到任意位置"
   },
   "palette": {

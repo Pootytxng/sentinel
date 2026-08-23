@@ -3,6 +3,9 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { BlackbookConsole } from "./BlackbookConsole";
+import { LogbookTape } from "./LogbookTape";
+import { useLogbookView } from "./logbook-view";
+import { useReducedMotion } from "../../design/use-motion";
 import { BlackbookV2 } from "../BlackbookV2";
 import type {
   LogbookRecord,
@@ -10,7 +13,7 @@ import type {
   LogbookSession,
   LogbookAutopsy,
 } from "./logbook";
-import type { SessionSummary } from "../../types";
+import type { SessionSummary, LedgerHealth } from "../../types";
 
 // Guards for the Logbook console face (Console HUD Phase 4). Covers the T4 rails: honest empty
 // (never a fabricated row), title-header law (h1 = bare "Blackbook", status in the body),
@@ -81,16 +84,41 @@ const autopsy = (over: Partial<LogbookAutopsy> = {}): LogbookAutopsy => ({
   ...over,
 });
 
-function mountConsole(records: LogbookRecord[], over: Partial<Parameters<typeof BlackbookConsole>[0]> = {}) {
-  return render(
-    <BlackbookConsole
-      records={records}
-      vendor="amd"
-      onOpenLab={vi.fn()}
-      onOpenGuide={vi.fn()}
-      {...over}
-    />,
+// THE ROOM IS TWO SIBLINGS NOW. `useLogbookView` holds the state they share (the strip's filter
+// drives the tape), `LogbookTape` is RoomShell's evidence column and `BlackbookConsole` is the
+// supporting grid beneath both columns -- see logbook-view.ts. Mounting them together is what
+// BlackbookV2 does, so it is what these guards must do: every assertion below is about the pair.
+function Logbook({
+  records,
+  health = null,
+  onReviewSession,
+  ...over
+}: {
+  records: LogbookRecord[];
+  health?: LedgerHealth | null;
+  onReviewSession?: () => void;
+} & Partial<Omit<Parameters<typeof BlackbookConsole>[0], "view">>) {
+  const view = useLogbookView(records, health);
+  const reduced = useReducedMotion();
+  return (
+    <>
+      <LogbookTape view={view} reduced={reduced} onReviewSession={onReviewSession} />
+      <BlackbookConsole
+        view={view}
+        vendor="amd"
+        onOpenLab={() => {}}
+        onOpenGuide={() => {}}
+        {...over}
+      />
+    </>
   );
+}
+
+function mountConsole(
+  records: LogbookRecord[],
+  over: Partial<Omit<Parameters<typeof BlackbookConsole>[0], "view">> = {},
+) {
+  return render(<Logbook records={records} {...over} />);
 }
 
 describe("BlackbookConsole — honest empty (never a fabricated row)", () => {
@@ -146,16 +174,27 @@ describe("BlackbookConsole — the tape renders each real record kind", () => {
     expect(text).toContain("You fact-checked a guide");
   });
 
-  it("the tape head speaks the field-guide grammar: 'The record' + the since date", () => {
+  // REWRITTEN 2026-08-23, and the rewrite is a TIGHTENING. This used to pin the tape's head as
+  // "The record" + "everything Compy has done on this PC · since <date>". 03-history-approved.png
+  // draws nothing above the first month head, and that is only safe to follow because the widest
+  // CLAIM went out with the chrome: no line on this screen now says the record is complete, so
+  // there is nothing left needing a bound. What is pinned instead is the stronger honesty rule --
+  // a healthy, unfiltered tape asserts NOTHING about its own completeness, and the head appears
+  // only in the two states that NARROW it (a filter is on, or the ledger is known incomplete).
+  it("a healthy unfiltered tape claims nothing about its own completeness", () => {
     useReduced();
     const { container } = mountConsole([session()]);
-    // "The record" is the bento tile's own title now (the hero's <h3>), not part of the badge —
-    // the tile frame draws the head, so a hand-rolled section head would be a second title.
-    const hero = container.querySelector(".v2-tile-hero")!;
-    expect(hero.querySelector(".v2-tile-title")!.textContent).toContain("The record");
-    const sect = container.querySelector(".bc-sect")!;
-    expect(sect.textContent).toContain("everything Compy has done on this PC");
-    expect(sect.textContent).toMatch(/since\s/);
+    expect(container.querySelector(".bc-sect"), "the tape drew a head with nothing to say").toBeNull();
+    expect(container.textContent).not.toContain("everything Compy has done on this PC");
+  });
+
+  it("...and the head returns the moment the tape is showing a slice", () => {
+    useReduced();
+    const { container } = mountConsole([session(), change()]);
+    fireEvent.click(container.querySelector('.bc-tile[data-kind="change"]')!);
+    const sect = container.querySelector(".bc-sect");
+    expect(sect, "a filtered tape must say it is filtered").not.toBeNull();
+    expect(sect!.textContent).toContain("only");
   });
 
   // bug→guard (autopsy LOW, 2026-07-14): a 59m50s session (3590s) used to render the impossible
@@ -259,7 +298,10 @@ describe("BlackbookConsole — reduced motion is still", () => {
   it("data-motion='reduced' and no inline animation-delay on the rows", () => {
     useReduced();
     const { container } = mountConsole([change(), session()]);
-    const root = container.querySelector(".blackbook-console") as HTMLElement;
+    // On the TAPE, not the console root: the rows moved to the room's evidence column, and the
+    // reveal is gated on `[data-motion="full"] .bc-row`. A switch set on an ancestor the rows no
+    // longer have is a switch that silently stopped working — which is what happened.
+    const root = container.querySelector(".bc-tape") as HTMLElement;
     expect(root.dataset.motion).toBe("reduced");
     for (const row of container.querySelectorAll<HTMLElement>(".bc-row")) {
       expect(row.style.animationDelay).toBe("");
@@ -268,7 +310,7 @@ describe("BlackbookConsole — reduced motion is still", () => {
 });
 
 describe("BlackbookV2 console — title-header law + honest data flow", () => {
-  it("h1 is the bare title 'Blackbook'; the record count lives in the body, not the header", () => {
+  it("h1 is the room's own sentence; the record count lives in the body, not the header", () => {
     useReduced();
     localStorage.setItem("compy_blackbook_console", "1"); // editorial default ON
     const s: SessionSummary = {
@@ -288,7 +330,15 @@ describe("BlackbookV2 console — title-header law + honest data flow", () => {
     const { container } = render(
       <BlackbookV2 focusId={null} vendor="amd" onClose={() => {}} sessions={[s]} />,
     );
-    expect((container.querySelector(".hud-headline") as HTMLElement).textContent).toBe("History");
+    // The HUD masthead is gone (issue #49 slice 5, following Live in slice 4). The h1 is the
+    // room's own sentence now, exactly as 03-history-approved.png draws it, above a dotted
+    // eyebrow. What this guard has always been about survives untouched below: no COUNT is
+    // allowed into a heading.
+    expect(container.querySelector(".hud-headline")).toBeNull();
+    const h1 = container.querySelector(".v2-verdict h1") as HTMLElement;
+    expect(h1.textContent).toContain("What changed, and when");
+    expect(container.querySelector(".bbv2-eyebrow")!.textContent).toContain("Local record");
+    expect(h1.textContent).not.toMatch(/\d/);
     // the counts live in the body Receipts Strip, never a heading
     const strip = container.querySelector(".bc-strip") as HTMLElement;
     expect(strip).not.toBeNull();
@@ -482,7 +532,12 @@ describe("BlackbookConsole — the tape is grouped by month and the row cannot o
     expect(css).toMatch(/\.bc-time\s*\{[^}]*white-space:\s*nowrap/);
     expect(css).toMatch(/\.bc-time\s*\{[^}]*grid-column:\s*2/);
     expect(css).toMatch(/\.bc-row-title\s*\{[^}]*grid-column:\s*1/);
+    // The chevron is the body's third track (the newest row's "review this session" twin), so
+    // it is excluded from the full-width sweep alongside the title and the time.
+    expect(css).toMatch(/\.bc-row-go\s*\{[^}]*grid-column:\s*3/);
     // Everything else the body holds spans the full width.
-    expect(css).toMatch(/\.bc-row-body\s*>\s*:not\(\.bc-row-title\):not\(\.bc-time\)\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/);
+    expect(css).toMatch(
+      /\.bc-row-body\s*>\s*:not\(\.bc-row-title\):not\(\.bc-time\):not\(\.bc-row-go\)\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/,
+    );
   });
 });
