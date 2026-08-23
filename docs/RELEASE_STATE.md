@@ -25,7 +25,7 @@
 <!-- latest_release_version is enforced by check (1) to equal src-tauri/tauri.conf.json's version, so it
      means "the version THIS TREE is configured to build" — NOT "the newest published release".
      Published truth is carried separately by published_release_* below. Do not conflate them. -->
-<!-- STATE:source_main_commit=d5571766 -->
+<!-- STATE:source_main_commit=7d262e14 -->
 <!-- STATE:latest_release_version=0.9.26 -->
 <!-- STATE:candidate_version=0.9.26 -->
 <!-- STATE:candidate_branch=main -->
@@ -72,8 +72,10 @@
 | **Legal status** | **OPEN** — EULA + privacy are DRAFTS only. Gates a PUBLIC release. | `docs/` legal drafts |
 
 **Bottom line:** the newest **published** release and the public updater manifest are both
-**v0.9.26 (`5e64074c`)**, published 2026-08-19T09:14Z under owner GO ("the fleet-move GO"), and the
-owner's desk runs those same bytes — **the deliberate desk/fleet divergence of 2026-08-18 is closed.**
+**v0.9.26 (`5e64074c`)**, published 2026-08-19T09:14Z under owner GO ("the fleet-move GO"). **The
+owner's desk does NOT run those bytes.** It runs a newer, unreleased v0.9.26 desk build stamped
+**`d5a6a630`** (built 2026-08-22; C-14's Lab GPU panel and the armed entry write-refusal). Same
+version number, different commit — never read byte equivalence out of a matching version string.
 It replaced v0.9.25 (`efde8310`), which replaced v0.9.24 (`289c658d`), v0.9.18 (`cfc0c4b7`),
 v0.9.17 (`a614744c`), v0.9.15 (`1b437785`) and v0.9.12 (`a1be896`) as the fleet-visible build.
 Versions and stamps are carried by the anchors and the rows above, not restated here. v0.9.26 is the
@@ -171,7 +173,7 @@ fleet path has since carried real traffic — the owner reports at least two tes
 | Item | Status |
 |---|---|
 | Private-beta functional blockers | **NONE** — Gaming Mode signed off; installed-build QA + runtime closure done; the updater path is live and owner-proven. |
-| Publish of the current fleet build | **CLOSED for v0.9.24 - published 2026-08-13T21:29Z under explicit owner GO ("send out the most current working version of the app to the tester"), transaction 9/9, alias verified on attempt 1 in 3.5s; `published_*` anchors carry the artifact truth. First fleet build carrying the design foundation (TYPE-1 + COLOR-1 + UX-1), and the second in a row where the desk look FAILED first and was fixed before anything shipped.** Prior close, v0.9.18: **published 2026-08-13T06:57Z under explicit owner GO ("go"), transaction 9/9, alias converged after the documented edge-cache delay.** Prior close, v0.9.17: **CLOSED — published 2026-08-12** under owner GO ("i permit you to proceed with everything yourself"). Transaction complete 9/9; public installer + `latest.json` byte-match the signed receipt; updater signature verifies against the pinned key; the latest-alias converged on the first check. **First published build that was visually reviewed on the installed binary before shipping** — and the first review round FAILED, which is the only reason that step is worth having. Supersedes the v0.9.15 publish (also closed 2026-08-12), v0.9.12 (2026-08-03) and v0.9.11 (2026-07-28). Any *future* candidate still needs its own owner GO/NO-GO after local preparation. |
+| Publish of the current fleet build | **CLOSED for v0.9.26 - published 2026-08-19T09:14Z under explicit owner GO ("the fleet-move GO"), release id `372920800`, transaction 9/9, alias verified on attempt 1 in 3.7s; `published_*` anchors carry the artifact truth. The desk has since moved ahead of it again to the unreleased `d5a6a630`; that is a candidate, not a publish, and it needs its own GO.** Prior close, v0.9.24: **published 2026-08-13T21:29Z under explicit owner GO ("send out the most current working version of the app to the tester"), transaction 9/9, alias verified on attempt 1 in 3.5s; `published_*` anchors carry the artifact truth. First fleet build carrying the design foundation (TYPE-1 + COLOR-1 + UX-1), and the second in a row where the desk look FAILED first and was fixed before anything shipped.** Prior close, v0.9.18: **published 2026-08-13T06:57Z under explicit owner GO ("go"), transaction 9/9, alias converged after the documented edge-cache delay.** Prior close, v0.9.17: **CLOSED — published 2026-08-12** under owner GO ("i permit you to proceed with everything yourself"). Transaction complete 9/9; public installer + `latest.json` byte-match the signed receipt; updater signature verifies against the pinned key; the latest-alias converged on the first check. **First published build that was visually reviewed on the installed binary before shipping** — and the first review round FAILED, which is the only reason that step is worth having. Supersedes the v0.9.15 publish (also closed 2026-08-12), v0.9.12 (2026-08-03) and v0.9.11 (2026-07-28). Any *future* candidate still needs its own owner GO/NO-GO after local preparation. |
 | Tester distribution of the published build | **CLOSED — A0 canary PASS.** A tester updated through the normal public updater and runs v0.9.11 with no reported failure, proving the fleet path end-to-end on a machine that is not the owner's. Widening to the remaining invitees is an owner distribution call, not a blocker. |
 | Hosted CI | **NOT A BLOCKER — settled OFF by owner decision (2026-07-16).** Listed here only so its absence is never re-read as an unresolved gate. Local gates are the verification path. |
 | Data-root integrity (#130) | **RESOLVER LANDED, OWNER DESK RECOVERED 2026-08-18.** `src-tauri/src/data_root.rs` resolves the persistence root by where it LANDS (final path + NTFS identity), not by the `APPDATA` string, and issues `MutationRoot` - the capability `history.rs`/`actions.rs` now require - only for a verified canonical root. The owner-approved option-B recovery RAN on 2026-08-18: union merge of the split Trust Ledger (3 + 61 -> **64 receipts**, zero id collisions, both inputs hash-verified and backed up to `C:UsersKuyacodecompy-data-root-recovery`), then the packaged-Claude overlay `Compy` folder MOVED (never deleted) to `overlay-Compy` in the same archive. The resolver re-run on the desk now returns **`Canonical`**, so applies and rollbacks are unblocked here. Guards: 17 unit + `scripts/data-root-guard.test.mjs` + PowerShell preflight parity (`scripts/lib/canonical-data-root.ps1`, verified passing on the desk post-merge) + 15 merge-tool guards. Not a publish blocker. **SHIPPED to the desk 2026-08-18** in the `421657a9` build - the resolver is present in the installed `%LOCALAPPDATA%\Compy\compy.exe`, so the interim "launch from Desktop/Start menu only" restriction is LIFTED. |
@@ -183,21 +185,26 @@ fleet path has since carried real traffic — the owner reports at least two tes
 | Remote-rules production key + CDN + staged rollout | **OPEN** — gates arming remote fetch. |
 | v0.9.10 release debris | **CLOSED — deleted 2026-07-28** under owner authorization (draft `360948018` + releases-repo tag). Source tag `92c7608`, recovery branches and local evidence preserved. |
 
-**No active blocker remains on the v0.9.15 release train** — it is complete 9/9, the v0.9.11 canary
-passed on the same updater path, and the debris is cleared, so **normal product development may
-resume.** Every row still marked OPEN above gates a *future* PUBLIC (store/marketing) release or the
-arming of a dark feature; none of them blocks the shipped v0.9.15 build or the work that follows it.
+**No active blocker remains on the v0.9.26 release train** — it is complete 9/9, published
+2026-08-19, and the fleet is on it, so **normal product development may resume.** Every row still
+marked OPEN above gates a *future* PUBLIC (store/marketing) release or the arming of a dark feature;
+none of them blocks the shipped v0.9.26 build, the newer desk candidate `d5a6a630`, or the work
+that follows them.
 
 **✅ VERSION DEBT — PAID 2026-08-12.** The debt was a tree declaring a version no signed cut existed
-for, so desk work could not reach a tester. It is closed: v0.9.15 was built **with**
-`TAURI_SIGNING_PRIVATE_KEY`, published, and the updater manifest now offers it. The debt reopens the
+for, so desk work could not reach a tester. It is closed and has stayed closed through v0.9.26,
+which was built **with** `TAURI_SIGNING_PRIVATE_KEY`, published, and is what the updater manifest
+now offers. The debt reopens the
 moment the next bump lands without a publish — the honest name for that state is a *candidate*, and
 `STATE:candidate_published` is the anchor that says which it is.
 
 ## Required owner decisions (live)
 
 **Everything already CLOSED, ANSWERED or DONE has left this section** — it is named *(live)* and a
-closed decision sitting in it is drift by definition. v0.9.18's publish GO, the 2026-08-21 "runs a lot
+closed decision sitting in it is drift by definition. **One structural exception:**
+`verify-release-state.mjs` requires decision **1** to name the current `candidate_version`, so the
+newest publish GO stays here after it closes — it is the version anchor, not an open question.
+Everything else that closes leaves. v0.9.25's and v0.9.24's GOs, v0.9.18's publish GO, the 2026-08-21 "runs a lot
 slower than before" investigation (answered: not measurably slower; the ambient backdrop was ~88% of
 idle CPU, and two of #127's measurements had never settled) and the backdrop fix that followed are
 byte-preserved in [archive/RELEASE_STATE_HISTORY.md](archive/RELEASE_STATE_HISTORY.md).
@@ -218,22 +225,16 @@ byte-preserved in [archive/RELEASE_STATE_HISTORY.md](archive/RELEASE_STATE_HISTO
    fixed with guards during the run (`5d21961a`, `b8e31e67`, `0e885823`); the consolidated
    fail-in-seconds preflight for `release.ps1` is still owed - see `docs/BACKLOG.md`.
 
-2. **Candidates v0.9.25 and v0.9.24 publish GO/NO-GO - both CLOSED 2026-08-13, both 9 of 9.**
-   Moved verbatim to [`archive/RELEASE_STATE_HISTORY.md`](archive/RELEASE_STATE_HISTORY.md) on
-   2026-08-21 for the byte budget; no markdown links were in the block, so it moved byte-for-byte.
-   v0.9.25's entry is where the owner's slowdown report was first recorded with "Do not report it as
-   fixed" - **that instruction is now discharged by the ANSWERED 2026-08-21 record above**, which
-   measured it rather than closing it by assertion.
-3. **Widening the invitee fleet onto the published build (now v0.9.18)** — the publishes themselves are **CLOSED** (v0.9.17 then v0.9.18, both 9/9). What is left
+2. **Widening the invitee fleet onto the published build (now v0.9.26)** — the publishes themselves are **CLOSED** (through v0.9.26, 9/9). What is left
    was never a pipeline question: **whether/when the remaining invitees move onto the updater path.** Six people hold the hand-sent
-   0.9.0 link and would each have to install once by hand to join it; everyone already on it is offered v0.9.18 automatically. Every
+   0.9.0 link and would each have to install once by hand to join it; everyone already on it is offered v0.9.26 automatically. Every
    stated precondition is met — the v0.9.11 canary PASSED on the normal updater path and at least two testers auto-updated onto
    v0.9.12 unaided — so this is a distribution call, not a readiness one. **Owner territory: it means naming humans and messaging
    them.** Worth saying when you do: v0.9.17 renamed three rooms a returning tester already learned and nothing in the app
    tells them the names changed.
-4. Code-signing route + legal finalization (PUBLIC gates).
-5. When/whether to arm Receipts (its own security review + owner sign-off).
-6. Tier 1 case-intelligence direction is approved. Do not re-ask that product decision; bring back
+3. Code-signing route + legal finalization (PUBLIC gates).
+4. When/whether to arm Receipts (its own security review + owner sign-off).
+5. Tier 1 case-intelligence direction is approved. Do not re-ask that product decision; bring back
    only the exact endpoint, signing custody, disclosure, security review and measured dark/canary
    evidence required to arm real traffic.
 

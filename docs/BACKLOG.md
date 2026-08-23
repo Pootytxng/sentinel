@@ -67,17 +67,17 @@
 > never painted, and [`../src/perf-evidence-integrity-guard.test.ts`](../src/perf-evidence-integrity-guard.test.ts)
 > fails the build if a doc cites one.
 
-1. **DELIVERED — waiting on one word. `compy.gg` tells the world Compy is free, and that is live
-   right now.** *Why it matters:* the site contradicts the owner's own 2026-07-21 monetization
-   decree on the public internet, and every day it stands is a pricing expectation being set that
-   money later has to fight. Draft PR [#193](https://github.com/Pootytxng/sentinel/pull/193) changes
-   `site/llms.txt:5` — **and its real source `site/generate.mjs:441`, because that file is GENERATED
-   and an output-only fix is reverted by the next run** — to *"Compy is a Windows desktop app with a
-   free tier."* The line drafted on `claude/review-consolidation-structure-9d13f2` was **rejected,
-   not landed**: it reads *"free forever"*, the exact phrasing that same decree supersedes. **Owner-
-   gated twice** (price *wording* is brand + money; `site/**` auto-deploys to other people's
-   machines) → [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) §B6. Stays a **draft** until
-   he answers; `docs/WORK_CONTROL.md` allows a blocked draft precisely because it claims nothing.
+> **The pricing row CLOSED 2026-08-22 — the owner answered (*"land 193 dude"*) and PR
+> [#193](https://github.com/Pootytxng/sentinel/pull/193) merged as `d5571766`.** `compy.gg` no
+> longer tells the world Compy is free: `site/llms.txt:5` **and its generator
+> `site/generate.mjs:441`** both read *"Compy is a Windows desktop app with a free tier."* The
+> `claude/review-consolidation-structure-9d13f2` draft (*"free forever"*) was **rejected, not
+> landed** — that phrasing is what the 2026-07-21 decree supersedes. The twin owner-gate (price
+> *wording* is brand + money; `site/**` auto-deploys to other people's machines,
+> [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) §B6) was **satisfied, not bypassed**.
+
+**① is EMPTY as of 2026-08-22** — both rows closed above, and an empty ① is the one queue state
+worth celebrating. It stays here so a new report has a place to land, not as a claim of work.
 
 #### ③ REPO HYGIENE — real, but nobody is waiting on it
 
@@ -118,14 +118,16 @@ question for the owner ("may I adopt these two?"), not an indefinite wait.
 **#126's remaining nine refs are a DECISION queue, not a cleanup queue** — two are the PRs above,
 one is a Codex claim, and the rest need an owner product-scope call (bklit design system ·
 user-feedback Lab recovery · quiet-pit-wall half B) or a per-file landing (review-consolidation —
-which is where item 1's price fix lives — tool-shed-hygiene, lab-49-parity-port). Evidence:
+whose price wording was rejected and superseded by the landed `d5571766` — tool-shed-hygiene,
+lab-49-parity-port). Evidence:
 [`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md), now at **120/120** against its doc-budget ceiling,
 so the next branch pushed to origin must archive that file's current sweep before it can add its row.
 
-**NOT A LANE, but a trap for the next one:** the PRIMARY worktree `C:/Users/Kuya/code/sentinel` has
-local `main` at `ffe85271`, **22 commits behind `origin/main`**, and holds an untracked receipt that a
-fast-forward would collide with. A branch cut there starts stale. Left untouched on purpose — another
-session left work in it — so whoever owns it next should `git -C ... merge --ff-only origin/main` first.
+**THAT TRAP IS DISCHARGED, 2026-08-23:** the PRIMARY worktree `C:/Users/Kuya/code/sentinel` is on
+`main` at `7d262e14` = `origin/main`, **0 ahead / 0 behind**, and the untracked receipt that would
+have collided with a fast-forward is gone. The only dirty path is `.codex/config.toml` (another
+lane's, leave it). A branch cut there no longer starts stale — **re-derive before believing this
+line, not because it is suspect but because it is exactly the kind that goes stale in a day.**
 
 **ALSO OPEN, not yet queued** (so none of it drops silently): #133 CARE capability rails tasks 4–7 ·
 #140 CPU temp (PawnIO/MSR — needs a Capability Exception record first) · #64 Q2b main-window caller
@@ -139,13 +141,14 @@ after it shipped, which is the same false reading that the archived-marker guard
 **THE MONEY STACK IS STALLED AT PHASE 2 AND NOTHING ABOVE MOVES IT.**
 [`RECEIPTS_DOCTRINE.md`](RECEIPTS_DOCTRINE.md) §4 puts the compy.gg one-pager + waitlist there,
 with **"waitlist signups in 14 days"** as the first real market signal, and every phase after it is
-funded by that one. Item 1 above is the only row in this queue that touches the site at all, and it
-is a correction, not a step forward. Named here so the gap is visible rather than implied: **the
-whole live queue is quality and hygiene, and the mission includes income.**
+funded by that one. The only site-touching work this queue ever held was the pricing correction that
+landed as `d5571766` — a correction, not a step forward, and it is now closed. Named here so the gap
+is visible rather than implied: **the whole live queue is quality and hygiene, and the mission
+includes income.**
 
 **OWNER-GATED — visible, never blocking:** 12 open items across `OWNER_ACTION_CHECKLIST.md` §A/§B/§C —
 the Desktop key copy, the two Claude-settings edits (A_settings), distribution widening (B2), the
-funnel + monetization inputs (B3/B6, now including the live `llms.txt` price line), the two
+funnel + monetization inputs (B3/B6 — the `llms.txt` price line came off this list with `d5571766`), the two
 substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-screen forks
 (B_startup/B_gpu), the analytics region question (B_eu), and the §C money/legal gates.
 
