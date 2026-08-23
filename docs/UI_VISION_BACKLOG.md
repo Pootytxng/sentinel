@@ -36,7 +36,7 @@ once, not as four bespoke grids. Build order is the handoff's: shell → Health 
 | 2. Health | ✅ `40aca1ca` — installed; self-review round **11** PASS, after ten FAILs that left eleven permanent guards |
 | 3. Shared instrument kit | ✅ `acdb93c2` — `Reading` → `src/design/console/`; installed; round **12** PASS, re-measured pixel-identical to R11 |
 | 4. Live | ✅ `67ce2724` — installed; self-review round **13** PASS, a real Start→Stop capture exercised on the built app |
-| 5. History | □ |
+| 5. History | ✅ `c894e81c` — the record becomes a document; shell re-measured off all four comps (content box, topbar, two aside families, `--type-hero`) |
 | 6. Test | □ |
 | 7. Whole-app convergence | □ |
 
@@ -89,11 +89,50 @@ _Slice 4 (Live) adds:_
    The owner title-header law of 2026-07-10 was written against a NOTIFICATION standing in a
    header; what replaces the title here is the room's measured verdict. Re-pinned in
    `hud-rooms-flag.test.tsx`, which now also proves no HUD chrome survives on Monitor either way.
-   History still wears the masthead until slice 5.
+   History followed in slice 5 (`c894e81c`) and the rollout list is now empty — the per-room
+   loops in `hud-rooms-flag.test.tsx` are replaced by the assertion that neither room may grow
+   a masthead BACK, in either flag state. `HudMasthead` survives only in LabGround.
 10. **Live gains ONE primary action where the room had none.** The comp makes Start capture the
    dominant action. The control MOVED out of the console's control row rather than being copied,
    so the screen still carries exactly one capture toggle (`monitor-console.test.tsx` proves the
    count). Sessions still has no primary action.
+
+**⚖️ OWNER RULING 2026-08-23 — THE COMPS ARE THE SPEC, AND THE LADDER STAYS.** He put all four
+approved PNGs back on the table beside the installed build and said, verbatim: *"this is exactly how
+its supposed to look and it still isnt quite there not sure how you werent able to match this
+perfectly but it needs to to suffice. what should remain is the color coded system we have for alert
+levels such as green yellow red for optimal metrics and notifications please persist with this train
+until youve perfected your work"*. Three things follow.
+
+1. **The bar moved from "defensible deviation, logged" to "match the picture."** A difference is a
+   finding, not a taste call to argue for. The fidelity self-review is briefed that way from now on:
+   *every* difference is reported, with no allowance for a documented or defended one — the round-13
+   brief told the reviewer the deviations were pre-logged substitutions, so it passed a room he then
+   said was not there yet. That framing was the miss.
+2. **Substitutions 1 and 8 are OVERRULED, and the comps were right both times.**
+   • **1 (violet primary)** → Health, History and Test take the comps' GREEN (`--v2-cta`, sampled
+   #2ecf86 / #28d582 / #2fcd82 across the three PNGs); Live keeps violet, because 02-live-approved
+   draws it violet on purpose — its button starts and stops a MEASUREMENT, which is a mode switch,
+   not an affirmation. This also re-supersedes the 2026-08-20 issue #180 §C button-placement pick.
+   • **8 (quiet "No reading")** → Health keeps the quiet grey, Live shows the amber `NO READING`
+   pill. The two comps disagreeing was the answer, not the problem.
+3. **The green/amber/red ladder is a keeper, named by him.** `comp-fidelity-guard.test.ts` pins the
+   whole ladder — both ends and the middle — so a later "let's make this consistent" pass has to
+   argue with the approved picture instead of quietly flattening one rung to grey.
+
+_Slice 5 (History) adds these deviations:_
+
+11. **The shell keeps its honest outbound footer; the comp's is "Local record · nothing sent."**
+   Rejected MECHANICALLY, not by taste: `src/outbound-claim-guard.test.ts` fails the build on an
+   absolute offline claim, and the signed updater is live (Capability Exception Gate, 2026-08-09).
+   The comp's line would be a false claim in a picture's clothing.
+12. **The narrative and evidence columns start flush; the comp offsets the record downward.** The
+   split is one grid with shared rows so the two columns cannot drift apart on a long verdict.
+   Faking the offset would mean a hard-coded top pad that becomes wrong the moment the headline
+   wraps to a third line.
+13. **History's "manage N changes" route keeps its counted copy** where the comp shows an uncounted
+   label. The count is a real number the room already holds, and dropping it to match a picture
+   would trade a fact for a wording.
 
 **🔧 SELF-REVIEW ROUND 1 — FAIL, fixed, guarded.** The reviewer read the installed room against
 `01-health-approved.png` and caught the h1: at 40px Health said **"Applied Compy changes"**. The
