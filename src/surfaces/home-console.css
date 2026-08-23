@@ -295,8 +295,13 @@
        --hc-hud-reserve   36px  = .v2-content's margin-bottom in the HUD shell (self-review round 2;
                                   hud-frame.css owns it, and hud-frame-clearance-guard.test.ts
                                   pins it — this must never be smaller than that value)
-       --hc-panel-below  238px  = the control row + the readout strip under the stage, MEASURED on
-                                  the installed build at 1280×720 (self-review rounds 3 and 5)
+       --hc-panel-below  256px  = the control row + the readout strip under the stage. 238px was
+                                  MEASURED on the installed build at 1280×720 (rounds 3 and 5);
+                                  round 8 makes the readiness note wrap, which adds at most ONE line
+                                  — 13px × 1.35 line-height, rounded up to 18px. Deliberately the
+                                  conservative direction: over-reserving costs rig height, while
+                                  under-reserving clips a reading, which is the honest-measurement
+                                  failure. Round 9 replaces it with the measured figure.
        --hc-stage-slack   14px  = margin, so a wrapped label cannot re-slice the strip
 
      At the three proof heights (inner viewport, measured — the window chrome is ~9px):
@@ -308,7 +313,7 @@
   --hc-stage-max: 500px;
   --hc-chrome-top: 72px;
   --hc-hud-reserve: 36px;
-  --hc-panel-below: 238px;
+  --hc-panel-below: 256px;
   --hc-stage-slack: 14px;
   --hc-stage-h: clamp(
     var(--hc-stage-min),
@@ -671,29 +676,30 @@
    equal tiles" failure the bento exists to prevent, in miniature. The 1.4fr first track is measured
    off the approved comp, where the readiness cell is about a third wider than its neighbours
    because it carries the ring, the grade word and the "= n of m checks passed" line. ── */
-/* THE STRIP'S WIDTH BUDGET — measured at 1280x720, the narrowest size the approved handoff requires,
-   where .hc-readout's content box is 533px (clientWidth 565 less its own 16px padding either side).
-   Round 6 clamped the readiness track to minmax(0, 1.4fr) so it could no longer overflow the
-   CONTAINER, and round 7 measured the SAME 25px collision back: an fr share of 1.4/5.4 hands that
-   track 126px while its instrument intrinsically needs 151 (56px ring + 10px .arc-gauge gap + 85px
-   "Readiness", one unbreakable word at the 13px type floor). Clamping a track to zero does not make
-   its contents smaller — it moves the overflow inside the cell. Two readings that touch are not two
-   readings, so this is the honest-measurement law's problem, not a spacing nit.
-   The row was simply 16px over-subscribed, and nothing that carries meaning gives that back: the
-   ring is the comp's, every label is already at the type floor, and the strip may NOT reflow to a
-   second row — the stage clamp's --hc-panel-below is measured against a one-row readout, so wrapping
-   here pushes the readings under the fold, which is the defect rounds 3–5 fought. So the width comes
-   out of the separation, which carries no reading: gap and divider padding drop 12px → 8px (freeing
-   32px), and the readiness track becomes `auto`, sized by its own instrument instead of by a share
-   that was never enough. The hairline still does the separating.
-   MEASURED needs at 1280x720: readiness 151 | avg fps 73 | 1% low 73 | gpu temp 76 | cpu temp 76.
-   Budget: 151 + 4×(1px hairline + 8px pad) + 298 + 4×8px gap = 517 ≤ 533, i.e. 16px of slack.
-   The arithmetic is guarded in home-console.test.tsx, so a sixth reading or a longer label fails the
-   build instead of the screen. */
+/* THE STRIP'S WIDTH BUDGET — the same collision three rounds running, each fix opening the other
+   side. R6: the readiness track was a bare 1.4fr, whose automatic minimum is min-content, so it
+   overflowed the CONTAINER — clamped to minmax(0, 1.4fr). R7: a 1.4/5.4 share is 126px where the
+   instrument needs ~151, so the overflow moved INSIDE the cell and "READINESS" spilled into AVG FPS
+   — track made `auto`. R8: `auto` IS max-content, and the gauge's note line ("= 15 of 16 checks
+   passed", a TRANSLATED string) runs ~187px unwrapped, so the track took 253px and starved the four
+   readings instead — their values overflowed by 6.9–20.1px at every size, smashing the MEASURED
+   pills together. Two readings that touch are not two readings, so this is the honest-measurement
+   law's problem, not a spacing nit.
+   The lesson is that NO hardcoded content width is trustworthy here: the note and every label are
+   translated, and a scrollWidth measured inside a clamped box is not max-content — which is exactly
+   how R7's 151px estimate was 102px wrong. So the rule is structural and holds in BOTH directions at
+   once: the four readings are FLOORED at their own content, so nothing can ever starve a reading;
+   the readiness track is FLEX-sized and never content-sized, so no child of the gauge, in any
+   language, can widen it; and the leftover the gauge is guaranteed must still clear the instrument.
+   The note wraps instead of pushing — which costs one line of height, paid in --hc-panel-below.
+   MEASURED at 1280×720 (533px content box): readings 73 | 73 | 76 | 76, each plus its 1px hairline
+   and 8px pad = 334; gaps 4×8 = 32; leftover for the gauge = 167 ≥ the 150 it needs (56px ring +
+   10px gap + 84px "Readiness", one unbreakable word at the 13px type floor). The arithmetic is
+   guarded in home-console.test.tsx. */
 :root[data-v2="on"] .hc-readout {
   --hc-readout-sep: 8px;
   display: grid;
-  grid-template-columns: auto repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 2fr) repeat(4, minmax(max-content, 1fr));
   align-items: start;
   gap: var(--hc-readout-sep);
   padding: var(--v2-pad);

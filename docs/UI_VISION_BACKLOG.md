@@ -173,7 +173,26 @@ came out of the separation, which carries no reading: gap and divider padding 12
 readiness track becomes `auto` so the instrument sizes itself. 517 ≤ 533, 16px of slack. The guard
 that replaced round 6's is now the **arithmetic** rather than the syntax — no track declaration is
 safe on its own — and it fails on round 6's stylesheet with "each reading gets 83.5px but the widest
-needs 89px". **Round 8 is next.**
+needs 89px".
+
+**🔧 SELF-REVIEW ROUND 8 — FAIL, fixed, guarded.** Third time on the same collision, third
+mechanism — and this one was my own measurement being wrong. Round 7 sized the readiness track
+`auto` on the strength of a measured 85px label. But `auto` IS max-content, and that 85px was a
+`scrollWidth` read inside a box round 6 had clamped to 60px, where the gauge's note line ("= 15 of 16
+checks passed", a **translated** string) was wrapping. Released to max-content it runs ~187px
+unwrapped, so the track took **253px, not 151** — a 102px miss — and starved the four readings
+instead: AVG FPS and 1% LOW overflowed their own cells by 6.9–20.1px at ALL THREE sizes, smashing the
+green MEASURED pills together. The reviewer caught it at 1920×1080 as well as 1280×720, so the fix
+had made the room worse everywhere, not better. **A scrollWidth measured inside a clamped box is not
+max-content**, and no hardcoded content width is trustworthy in a translated UI. So round 8 stops
+estimating and pins the structure in both directions at once: the four readings are FLOORED at their
+own content (`minmax(max-content, 1fr)`) so nothing can ever starve a reading, and the readiness
+track is FLEX-sized (`minmax(0, 2fr)`) so no child of the gauge — note, unit or tag, in any language
+— can widen it. The note wraps instead of pushing, which costs one line of height, reserved
+conservatively in `--hc-panel-below` (238 → 256px) because over-reserving costs rig height while
+under-reserving clips a reading. Guard rewritten again, now leftover-based and pinning both track
+directions; it fails on round 7's stylesheet. **Round 9 is next**, and it must measure
+`--hc-panel-below` so that reserve stops being a ceiling and becomes a number.
 
 ### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) ✅ ALL FIVE BUILT (⑤ shipped to the desk 2026-08-20, awaiting the owner's eye): ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED; owner tried it and said *"i like it"* 2026-08-20, so the default flips ON inside the comprehensibility sweep, which first fixes the button placement he objected to — see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door — SHIPPED 2026-08-20 (desk build `0808e33e`, self-review PASS 10/10); owner veto-on-sight still open**
 

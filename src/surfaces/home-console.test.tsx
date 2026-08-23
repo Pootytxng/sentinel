@@ -852,22 +852,26 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     ).toBe(2 * Number(padM![1]));
   });
 
-  it("CSS: the five readings FIT the narrowest supported panel (measured width budget)", () => {
-    // bug->guard (self-review rounds 6 AND 7, issue #49, 2026-08-23). Round 6: the readiness track
-    // was a bare 1.4fr, whose AUTOMATIC minimum is min-content, so it overflowed the CONTAINER by
-    // 25px and "READINESS" touched "AVG FPS" with zero gap. Round 6 clamped it to minmax(0, 1.4fr)
-    // -- and round 7 measured the SAME 25px collision, because an fr share of 1.4/5.4 gives that
-    // track 126px while its instrument needs 151. Clamping a track to zero does not shrink its
-    // contents; it moves the overflow inside the cell. Two readings that touch are not two readings,
-    // so this is an honest-measurement failure, not a spacing nit.
-    // Which is why this guard is the ARITHMETIC and not the syntax: no track declaration is safe on
-    // its own -- what keeps the readings apart is that the five cells, their hairlines, their pads
-    // and their gaps all FIT the panel at 1280x720, the narrowest size the approved handoff
-    // requires. Constants below are measured off the installed build at that size.
-    const CLIENT = 565; // .hc-readout clientWidth, 1280x720 (panel 567.23)
-    const TRACK1 = 151; // 56px ring + 10px .arc-gauge gap + 85px "Readiness" (unbreakable, 13px floor)
-    const CELLS = [73, 73, 76, 76]; // avg fps | 1% low | gpu temp | cpu temp -- widest child of each
+  it("CSS: readings are content-floored, the gauge is flex-capped (measured width budget)", () => {
+    // bug->guard, self-review rounds 6, 7 AND 8 (issue #49, 2026-08-23). The same collision three
+    // times, each round fixing one side and opening the other:
+    //   R6 -- the readiness track was a bare 1.4fr, whose AUTOMATIC minimum is min-content, so it
+    //         overflowed the CONTAINER and "READINESS" touched "AVG FPS". Clamped to minmax(0, ...).
+    //   R7 -- a 1.4/5.4 share is 126px where the instrument needs ~151, so the overflow simply moved
+    //         INSIDE the cell. Track made `auto`.
+    //   R8 -- `auto` IS max-content, and the gauge's note ("= 15 of 16 checks passed", a TRANSLATED
+    //         string) runs ~187px unwrapped, so the track took 253px and starved the four readings
+    //         instead: their values overflowed by 6.9-20.1px at every size.
+    // NO hardcoded content width is trustworthy here -- the note and every label are translated, and
+    // a scrollWidth measured inside a clamped box is NOT max-content, which is how R7's 151px
+    // estimate came out 102px wrong. So the invariant is structural and holds both directions at
+    // once: the readings are FLOORED at their own content so nothing can starve them, the readiness
+    // track is FLEX-sized and never content-sized so no child of the gauge can widen it, and the
+    // leftover the gauge is guaranteed must still clear the instrument.
+    const CLIENT = 565; // .hc-readout clientWidth at 1280x720, the narrowest supported size
+    const READS = [73, 73, 76, 76]; // widest child of each reading cell, MEASURED at that size
     const HAIRLINE = 1;
+    const GAUGE_MIN = 150; // 56px ring + 10px .arc-gauge gap + 84px "Readiness" (one unbreakable word)
 
     const css = readFileSync(join("src", "surfaces", "home-console.css"), "utf8");
     const tokens = readFileSync(join("src", "design", "tokens-v2.css"), "utf8");
@@ -899,40 +903,35 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
       ".hc-readout > * + * padding-left",
     );
 
-    // The fr tracks split whatever the readiness instrument leaves. Each must clear the WIDEST of
-    // the four readings plus its own hairline and pad -- a total that merely fits on average still
-    // clips GPU TEMP, which is the exact shape of the round-7 defect.
+    // The readings take their own width off the top; whatever is left is what the gauge is
+    // GUARANTEED, and it has to be enough to draw the instrument and set its label on one line.
     const content = CLIENT - 2 * pad;
-    const share = (content - 4 * gap - TRACK1) / 4;
-    const widest = Math.max(...CELLS) + HAIRLINE + sep;
+    const readsWidth = READS.reduce((a, w) => a + w + HAIRLINE + sep, 0);
+    const leftover = content - 4 * gap - readsWidth;
     expect(
-      share,
-      "at 1280x720 each reading gets " + share + "px but the widest needs " + widest + "px: the " +
-        "readout strip is over-subscribed, so a reading will be clipped or collide with its " +
-        "neighbour. Buy the width back from gap/padding (they carry no reading) -- never from the " +
-        "type floor, and never by wrapping to a second row (--hc-panel-below assumes one).",
-    ).toBeGreaterThanOrEqual(widest);
+      leftover,
+      "at 1280x720 the four readings leave the gauge " + leftover + "px and it needs " + GAUGE_MIN +
+        "px: the readout strip is over-subscribed, so either the gauge is crushed or a reading is " +
+        "clipped. Buy the width back from gap/padding (they carry no reading) -- never from the " +
+        "type floor, and never by wrapping the strip to a second row (--hc-panel-below reserves one).",
+    ).toBeGreaterThanOrEqual(GAUGE_MIN);
 
-    const spent =
-      TRACK1 + CELLS.reduce((a, w) => a + w + HAIRLINE + sep, 0) + 4 * gap;
-    expect(spent, "the whole strip must fit its own content box at 1280x720").toBeLessThanOrEqual(
-      content,
-    );
-
-    // …and the declaration has to keep matching that arithmetic: the readiness track sized by its
-    // own instrument (never a share that starves it), the four readings still clamped to zero so
-    // none of them can be widened by its own content.
+    // …and the declaration has to keep matching that arithmetic, in BOTH directions.
     const cols = /grid-template-columns:\s*([^;]+);/.exec(readout);
     expect(cols, ".hc-readout must declare its tracks explicitly").not.toBeNull();
+    const norm = cols![1].replace(/\s+/g, "");
     expect(
-      cols![1].trim(),
-      "the readiness track must keep an intrinsic width (`auto`): an fr share cannot be trusted to " +
-        "cover the instrument, which is how round 7 reproduced round 6's collision",
-    ).toMatch(/^auto\b/);
+      norm,
+      "the readiness track must be FLEX-sized, never content-sized: `auto`/`max-content` lets any " +
+        "child of the gauge -- a translated note, a unit, a tag -- widen the track and starve the " +
+        "readings, which is exactly how round 8 failed",
+    ).toMatch(/^minmax\(0,\d+fr\)/);
     expect(
-      cols![1],
-      "the four reading tracks keep minmax(0, 1fr) so none is widened by its own content",
-    ).toMatch(/repeat\(\s*4\s*,\s*minmax\(\s*0\s*,\s*1fr\s*\)\s*\)/);
+      norm,
+      "the four reading tracks must be FLOORED at their own content (minmax(max-content, 1fr)): a " +
+        "zero minimum lets the gauge starve them, and a reading clipped by its neighbour is a " +
+        "reading nobody can read",
+    ).toMatch(/repeat\(4,minmax\(max-content,1fr\)\)$/);
   });
 
   it("CSS: Health is ONE fluid composition — no breakpoint, and the readings still clear the fold", () => {
@@ -984,8 +983,10 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
 
     // MEASURED on the installed build (self-review round 5): the window chrome costs ~9px, so an
     // outer 1280x720 gives a 711px viewport whose .v2-content clips at 675, with .hc-panel starting
-    // at 72 and carrying 238px of control row + readout strip below the stage.
-    const SHORT = { viewport: 711, panelTop: 72, clip: 675, below: 238 };
+    // at 72 and carrying 238px of control row + readout strip below the stage. Round 8 makes the
+    // readiness note wrap, which adds at most one 13px x 1.35 line -- reserved as 18px, the
+    // conservative direction, until round 9 measures it.
+    const SHORT = { viewport: 711, panelTop: 72, clip: 675, below: 256 };
     expect(
       SHORT.panelTop + stageAt(SHORT.viewport) + SHORT.below,
       "at 1280x720 the whole readout strip must end above the lane's clip",
