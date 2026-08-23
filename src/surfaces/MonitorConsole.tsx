@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { invoke } from "@tauri-apps/api/core";
@@ -24,8 +24,10 @@ import {
   type Grade,
 } from "../data/metric-grade";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
-import { ArcGauge, type ArcTone } from "../design/console/ArcGauge";
+import { type ArcTone } from "../design/console/ArcGauge";
+import { Reading } from "../design/console/Reading";
 import { Oscilloscope } from "../design/console/Oscilloscope";
+import { RoomShell } from "../design/room-shell";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { Term } from "../design/Term";
 import { BentoGrid, BentoTile } from "../design/bento/BentoGrid";
@@ -34,6 +36,8 @@ import { DeckScope } from "./monitor/DeckScope";
 import { SessionStack } from "./monitor/SessionStack";
 import { deckDeltaFrom, fmtDeltaGlyph } from "./monitor/monitor-stack-profile";
 import { prettyGameName } from "./game-name";
+import { monitorVerdict } from "./monitor-v2-data";
+import { fmtDur } from "./Play";
 import type { GpuVendor } from "./walkthroughs";
 import "../i18n";
 import "./monitor-console.css";
@@ -117,6 +121,8 @@ export function MonitorConsole({
   vendor = "any",
   sessions = [],
   onFpsActive,
+  quiet,
+  bar,
 }: {
   active: boolean;
   vendor?: GpuVendor;
@@ -124,6 +130,15 @@ export function MonitorConsole({
   sessions?: SessionSummary[];
   /** Mirrors the room's live capture state up to MonitorV2 (the V2-8 forward-door rule). */
   onFpsActive?: (active: boolean) => void;
+  /** THE LIVE FACE OWNS ITS OWN SHELL (issue #49 slice 4). The approved comp puts Start capture
+   *  in the narrative column and the last session in an evidence column, and both are built from
+   *  state this component owns — the capture stream, the sensors, the session array. Rather than
+   *  hoist that ownership (and split the one 1 Hz poll the room has), the face renders the
+   *  RoomShell itself and MonitorV2 hands down the two pieces that are the ROOM's, not the
+   *  face's: the segment bar and the advisory-presets expander. MonitorV2 keeps its own RoomShell
+   *  for the Sessions face, which is a different composition (no evidence column). */
+  quiet?: ReactNode;
+  bar?: ReactNode;
 }) {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
@@ -335,278 +350,408 @@ export function MonitorConsole({
     ? t("monitor.monitorConsole.scopeCapturingHint")
     : t("monitor.monitorConsole.scopeIdleHint");
 
+  // THE LAST SESSION IS THE EVIDENCE (issue #49 slice 4). The approved Live comp makes the latest
+  // COMPLETED session the focal proof, not the live window: name, duration, its average, its 1%
+  // low and how many Compy changes were on while it ran. All five are recorded facts on
+  // SessionSummary — nothing here is sampled, so the panel holds still while capture starts and
+  // stops. `sessions` arrives newest-first (the same array the stack and the delta row read).
+  const latest = sessions[0] ?? null;
+  const lastGame = latest
+    ? capFirst(prettyGameName(latest.process_name) || t("monitor.monitorConsole.unknownGame"))
+    : null;
+  // The room's session answer, from the one helper that also grades the rows below — it moved OFF
+  // the h1 (the narrative now answers "can I start?") and INTO the panel that shows the session it
+  // is about. Same sentence, same source, printed once.
+  const sessionLine = monitorVerdict(sessions, t);
+
+  // THE NARRATIVE'S ONE VERDICT is about readiness, because the action beneath it is Start capture.
+  // Three states, all real: mid-command, recording, idle. Nothing is claimed about a game.
+  const headline = fpsBusy
+    ? t("monitor.monitorConsole.narrative.busyHeadline")
+    : fpsActive
+      ? t("monitor.monitorConsole.narrative.capturingHeadline")
+      : t("monitor.monitorConsole.narrative.readyHeadline");
+
   return (
-    <div className="monitor-console" data-motion={reduced ? "reduced" : "full"}>
-      {/* The room's real capture control — same audited toggle the classic tiles carry. */}
-      <div className="mc-capture">
+    <RoomShell
+      room="play"
+      /* V2-8 placement, unchanged: the forward door belongs to the session-END state. The live
+         face owns the capture stream, so it owns this answer directly now instead of mirroring
+         it up a level first. */
+      doorOpen={!fpsActive}
+      /* THE NARRATIVE COLUMN (approved four-room direction). Eyebrow → one human verdict → one
+         short explanation → one dominant action, exactly as Health composes it. The LED breathes
+         only while the helper is actually recording; there is no idle animation to mean nothing. */
+      verdict={
+        <>
+          <span className="mc-masthead-eyebrow">
+            <span className={`mc-led ${fpsActive ? "mc-led-on" : ""}`} aria-hidden="true" />
+            {t("monitor.monitorConsole.narrative.eyebrow")}
+          </span>
+          <span className="mc-headline" key={headline}>
+            {headline}
+          </span>
+        </>
+      }
+      sub={t("monitor.monitorConsole.narrative.sub")}
+      /* THE ONE DOMINANT ACTION — the room's capture toggle, MOVED here from the control row
+         rather than copied: there is still exactly one Start/Stop capture control on this screen
+         (one-mention law), it is simply where the comp puts it and where the eye already is after
+         reading the sentence above it. It keeps the audited commands and the busy/declined
+         semantics it always had. */
+      primaryAction={
         <button
           type="button"
-          className={`mc-cap ${fpsActive ? "mc-cap-on" : ""}`}
+          className={`mc-start ${fpsActive ? "mc-start-on" : ""}`}
           disabled={fpsBusy}
           onClick={toggleCapture}
         >
-          {fpsBusy ? "…" : fpsActive ? t("monitor.monitorConsole.stopCapture") : t("monitor.monitorConsole.startCapture")}
+          {fpsBusy
+            ? t("monitor.monitorConsole.narrative.busyAction")
+            : fpsActive
+              ? t("monitor.monitorConsole.stopCapture")
+              : t("monitor.monitorConsole.startCapture")}
         </button>
-        <span className="mc-cap-status" style={live ? { color: gradeColor(low1Grade) || undefined } : undefined}>
-          {live ? (
-            <>
-              {Math.round(sample.low1_fps)} <Term id="one-percent-lows">{t("monitor.monitorConsole.oneLowTermLabel")}</Term>{t("monitor.monitorConsole.estSuffix")}
-            </>
-          ) : fps?.status === "declined" ? (
-            t("monitor.monitorConsole.declinedStatus")
-          ) : fpsActive ? (
-            t("monitor.monitorConsole.capturingStatus")
-          ) : (
-            t("monitor.monitorConsole.idleStatus")
-          )}
-        </span>
-        {/* The in-game overlay's control — the room's other real action (§A0 item 1). */}
-        <span className="mc-ov">
-          <button
-            type="button"
-            className={`mc-cap ${overlayOn ? "mc-cap-on" : ""}`}
-            onClick={toggleOverlay}
-          >
-            {overlayOn ? t("monitor.monitorConsole.overlayOn") : t("monitor.monitorConsole.overlayLabel")}
-          </button>
-          {overlayOn && (
-            <>
-              {CORNERS.map(([c, glyph]) => (
-                <button
-                  key={c}
-                  type="button"
-                  className={`mc-ov-corner ${corner === c ? "mc-ov-corner-on" : ""}`}
-                  aria-label={t("monitor.monitorConsole.overlayCornerAria", { corner: cornerLabel(t, c) })}
-                  onClick={() => chooseCorner(c)}
-                >
-                  {glyph}
-                </button>
-              ))}
-              <span className="mc-ov-group" role="group" aria-label={t("monitor.monitorConsole.overlayDensityAria")}>
-                {(["minimal", "standard", "full"] as OverlayDensity[]).map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    className={`mc-ov-seg ${density === d ? "mc-ov-seg-on" : ""}`}
-                    aria-pressed={density === d}
-                    onClick={() => chooseDensity(d)}
-                  >
-                    {d === "minimal"
-                      ? t("monitor.monitorConsole.densityMin")
-                      : d === "standard"
-                        ? t("monitor.monitorConsole.densityStd")
-                        : t("monitor.monitorConsole.densityFull")}
-                  </button>
-                ))}
-              </span>
-              <button
-                type="button"
-                className={`mc-ov-seg ${backdrop === "on" ? "mc-ov-seg-on" : ""}`}
-                aria-pressed={backdrop === "on"}
-                aria-label={t("monitor.monitorConsole.overlayBackgroundAria")}
-                onClick={() => chooseBackdrop(backdrop === "on" ? "off" : "on")}
-              >
-                {t("monitor.monitorConsole.backdropLabel")}
-              </button>
-            </>
-          )}
-        </span>
-      </div>
+      }
+      quiet={quiet}
+      /* THE EVIDENCE COLUMN — one panel, in the comp's order: what the last session was, what it
+         measured, the live trace, how it compared, and the sensors right now. The pointer
+         spotlight and the reticle move with it (stageRef was the bento stage; the instruments
+         moved, so their tracking area moved with them — it is still exactly one stage). */
+      aside={
+        <section
+          className="mc-evidence"
+          ref={stageRef}
+          aria-label={t("monitor.monitorConsole.evidence.aria")}
+        >
+          <header className="mc-ev-head">
+            <h2 className="mc-ev-title">
+              {t("monitor.monitorConsole.evidence.lastSession")}
+              {lastGame && (
+                <>
+                  {" "}
+                  <span className="mc-ev-sep" aria-hidden="true">
+                    ·
+                  </span>{" "}
+                  {lastGame}
+                </>
+              )}
+            </h2>
+            {latest && <span className="mc-ev-dur">{fmtDur(latest.duration_secs)}</span>}
+          </header>
 
-      {/* THE INSTRUMENT STAGE — the signature instruments: the motion IS the data, real
-          buffered samples only. Spotlight + reticle live here; NO hologram, NO parallax. */}
-      <div className="mc-stage" ref={stageRef}>
-        {/* BENTO (2026-08-12) — the stage's four instrument clusters become tiles of deliberately
-            unequal weight, so the eye is told where to start (the frametime deck). The grid lives
-            INSIDE .mc-stage on purpose: stageRef feeds <ReticleCursor scopeRef> and the pointer
-            tilt, so the tracking area must stay exactly the stage it always was. Strict row-major,
-            no dense flow: hero(7)+half(5) fills row 1, hero's second row +half(5) fills row 2,
-            full(12) closes it — no holes at any width.
-            The conditional delta row is folded INSIDE the hero rather than given its own tile:
-            without a prior session a conditional TILE would leave a visible gap. */}
-        <BentoGrid className="mc-bento">
-          <BentoTile title={t("monitor.monitorConsole.bento.deck")} span="hero">
-            {/* THE HERO — the full-width frametime scope (v5 Flight Deck): real ms axis, dashed
-                budget line, exact-moment spike pins, hover scrub + drag-zoom (ported from the
-                deleted waterfall's front trace). Always mounted — it carries its own honest empty. */}
-            <DeckScope
-              ftWin={ftWin.current}
-              live={live}
-              budget={ftBudget}
-              tone={live ? arcTone(gradeFrametimeMs(sample.avg_frametime_ms, rig)) : "accent"}
+          {latest ? (
+            <>
+              <p className="mc-ev-verdict">{sessionLine.headline}</p>
+              {sessionLine.sub && <p className="mc-ev-note">{sessionLine.sub}</p>}
+              {/* READING_ROWS strip (see Reading.tsx): three row tracks, and the changes-on cell
+                  spans all three so a wrapped label in any language cannot move one value out of
+                  the row. It is the same contract Health's readout strip satisfies. */}
+              <div className="mc-ev-readings">
+                <Reading
+                  id="avgFps"
+                  label={t("monitor.monitorConsole.deltaAvgFps")}
+                  value={latest.avg_fps}
+                  unit="fps"
+                  tone={arcTone(gradeFps(latest.avg_fps, rig))}
+                />
+                <Reading
+                  id="low1"
+                  label={t("monitor.monitorConsole.deltaOneLow")}
+                  value={latest.low1_fps_est}
+                  unit="fps"
+                  tone={arcTone(gradeLow1(latest.low1_fps_est, latest.avg_fps))}
+                />
+                <span className="mc-ev-changes">
+                  {t("monitor.monitorConsole.changesOn", { count: latest.compy_changes_active })}
+                </span>
+              </div>
+            </>
+          ) : (
+            <p className="mc-ev-none">{t("monitor.monitorConsole.evidence.noSession")}</p>
+          )}
+
+          {/* The real trace. There is no PERSISTED per-frame series behind a session record — the
+              comp's line is a design-pass example — so this is the live buffer, which is the only
+              real one Compy has, with its own honest empty state when nothing is being captured.
+              Inventing a stored trace to match the picture is exactly what the honesty law bars. */}
+          <div className="mc-ev-trace">
+            <Oscilloscope
+              samples={live ? fpsH.current : []}
+              cap={FPS_CAP}
+              label={t("monitor.monitorConsole.fpsScopeLabel")}
+              unit="fps"
+              tone={live ? arcTone(gradeFps(sample.fps, rig)) : "accent"}
               reduced={reduced}
-              cap={FT_CAP}
               emptyHint={scopeHint}
             />
+          </div>
 
-            {/* The deck's debrief — recorded facts only; renders NOTHING without a prior session,
-                and a cross-game prior is labeled so a genre gap never reads as a regression (the
-                v4 law, carried). Intimidation pass 2026-08-20: this was ONE all-caps mono string
-                ("VS YOUR LAST LLL SESSION (DIFFERENT GAME) AVG FPS ▲52 1% LOW ▲56 SPIKES ▲17 12
-                COMPY CHANGES ON · COMBINED EFFECT") that wrapped mid-thought under the scope. Same
-                facts, now a template: a plain sentence, three boxed value cells, one caveat line. */}
-            {deck && (
-              <div className="mc-delta">
-                <span className="mc-delta-k">
-                  {/* Process names arrive lowercase ("valorant"); a sentence wants "Valorant".
-                      The old row sidestepped this by upper-casing everything. */}
-                  {t("monitor.monitorConsole.vsLastSession", {
-                    game: capFirst(prettyGameName(deck.prev.process_name) || t("monitor.monitorConsole.unknownGame")),
-                  })}
-                  {!deck.sameGame && t("monitor.monitorConsole.differentGameTag")}
-                </span>
-                <div className="mc-delta-cells">
-                  {(
-                    [
-                      ["avg", t("monitor.monitorConsole.deltaAvgFps"), fmtDeltaGlyph(deck.avgFps)],
-                      ["low1", t("monitor.monitorConsole.deltaOneLow"), fmtDeltaGlyph(deck.low1)],
-                      ["spikes", t("monitor.monitorConsole.deltaSpikes"), fmtDeltaGlyph(deck.spikes)],
-                    ] as const
-                  ).map(([key, k, v]) => (
-                    <span key={key} className="mc-delta-v" data-k={key}>
-                      <span className="mc-delta-vk">{k}</span>
-                      <span className="mc-delta-vv">{v}</span>
-                    </span>
-                  ))}
-                </div>
-                {deck.changesOn > 0 && (
-                  // Honesty caveat (consumer panel 2026-07-14): with >1 change on, these deltas are
-                  // the COMBINED effect — never imply per-change attribution. The one-change-at-a-time
-                  // answer is the Lab's A/B benchmark, and the tooltip says so.
-                  <span
-                    className="mc-delta-tag"
-                    title={
-                      deck.changesOn > 1
-                        ? t("monitor.monitorConsole.combinedEffectTooltip")
-                        : undefined
-                    }
-                  >
-                    {t("monitor.monitorConsole.changesOn", { count: deck.changesOn })}
-                    {deck.changesOn > 1 && t("monitor.monitorConsole.combinedEffectTag")}
+          {/* The deck's debrief — recorded facts only; renders NOTHING without a prior session,
+              and a cross-game prior is labeled so a genre gap never reads as a regression (the
+              v4 law, carried). Moved here whole from the deck hero: it compares the SESSION the
+              panel is already about, so this is where it belongs. */}
+          {deck && (
+            <div className="mc-delta">
+              <span className="mc-delta-k">
+                {/* Process names arrive lowercase ("valorant"); a sentence wants "Valorant". */}
+                {t("monitor.monitorConsole.vsLastSession", {
+                  game: capFirst(
+                    prettyGameName(deck.prev.process_name) ||
+                      t("monitor.monitorConsole.unknownGame"),
+                  ),
+                })}
+                {!deck.sameGame && t("monitor.monitorConsole.differentGameTag")}
+              </span>
+              <div className="mc-delta-cells">
+                {(
+                  [
+                    ["avg", t("monitor.monitorConsole.deltaAvgFps"), fmtDeltaGlyph(deck.avgFps)],
+                    ["low1", t("monitor.monitorConsole.deltaOneLow"), fmtDeltaGlyph(deck.low1)],
+                    ["spikes", t("monitor.monitorConsole.deltaSpikes"), fmtDeltaGlyph(deck.spikes)],
+                  ] as const
+                ).map(([key, k, v]) => (
+                  <span key={key} className="mc-delta-v" data-k={key}>
+                    <span className="mc-delta-vk">{k}</span>
+                    <span className="mc-delta-vv">{v}</span>
                   </span>
-                )}
+                ))}
               </div>
-            )}
-          </BentoTile>
-
-          <BentoTile title={t("monitor.monitorConsole.bento.readouts")} span="half">
-            {/* Consumer-term readouts (owner direction §A0 item 6) — measured values only, em-dash
-                when nothing is measured. Same windows the traces draw; spike count = the SAME
-                detector as the markers (one source, can't disagree). */}
-            <div className="mc-readouts">
-              <div className="mc-readout">
-                <span className="mc-readout-v" style={ink(gradeFps(stats.maxFps, rig))}>
-                  {stats.maxFps == null ? "—" : Math.round(stats.maxFps)}
-                </span>
-                <span className="mc-readout-k">{t("monitor.monitorConsole.maxFpsLabel")}</span>
-              </div>
-              <div className="mc-readout">
-                <span className="mc-readout-v" style={ink(gradeFps(stats.avgFps, rig))}>
-                  {stats.avgFps == null ? "—" : Math.round(stats.avgFps)}
-                </span>
-                <span className="mc-readout-k">{t("monitor.monitorConsole.avgFpsLabel")}</span>
-              </div>
-              <div className="mc-readout">
+              {deck.changesOn > 0 && (
+                // Honesty caveat (consumer panel 2026-07-14): with >1 change on, these deltas are
+                // the COMBINED effect — never imply per-change attribution. The one-change-at-a-time
+                // answer is the Lab's A/B benchmark, and the tooltip says so.
                 <span
-                  className="mc-readout-v"
-                  style={ink(gradeFrametimeMs(stats.lowestLatencyMs, rig))}
+                  className="mc-delta-tag"
+                  title={
+                    deck.changesOn > 1
+                      ? t("monitor.monitorConsole.combinedEffectTooltip")
+                      : undefined
+                  }
                 >
-                  {stats.lowestLatencyMs == null ? "—" : `${stats.lowestLatencyMs.toFixed(1)} ms`}
+                  {t("monitor.monitorConsole.changesOn", { count: deck.changesOn })}
+                  {deck.changesOn > 1 && t("monitor.monitorConsole.combinedEffectTag")}
                 </span>
-                <span className="mc-readout-k">{t("monitor.monitorConsole.lowestLatencyLabel")}</span>
-              </div>
-              <div className="mc-readout">
-                <span
-                  className="mc-readout-v"
-                  style={stats.spikeCount ? ink("bad") : undefined}
-                >
-                  {stats.spikeCount == null ? "—" : stats.spikeCount}
-                </span>
-                <span className="mc-readout-k">{t("monitor.monitorConsole.spikesLabel")}</span>
-              </div>
+              )}
             </div>
-          </BentoTile>
+          )}
 
-          <BentoTile title={t("monitor.monitorConsole.bento.gauges")} span="half">
-            {/* Honest gauges over the same sensor reads the tiles surface; null ⇒ NOT-YET, never 0.
-                CPU utilisation stays deliberately ungraded (high while gaming is fine). */}
-            <div className="mc-gauges">
-              <ArcGauge
-                label={t("monitor.monitorConsole.gpuTempLabel")}
-                value={gpu?.temperature_c ?? null}
-                max={100}
-                unit="°C"
-                tone={arcTone(gpuGrade)}
-                measured={gpu?.temperature_c != null}
-              />
-              <ArcGauge
-                label={t("monitor.monitorConsole.gpuLoadLabel")}
-                value={gpu?.utilization_gpu_pct ?? null}
-                max={100}
-                unit="%"
-                tone="neutral"
-                measured={gpu?.utilization_gpu_pct != null}
-              />
-              {/* Beside the GPU's temperature, because "is it running hot" is ONE question with
-                  two answers. Null renders ArcGauge's honest NOT-YET; the ladder that turns that
-                  into a fix (CpuTempOffer) lives on Home's CPU callout, so the same offer is not
-                  printed twice (one-mention law). */}
-              <ArcGauge
-                label={t("monitor.monitorConsole.cpuTempLabel")}
-                value={cpuTemp ? Math.round(cpuTemp.temp_c) : null}
-                max={100}
-                unit="°C"
-                tone={arcTone(gradeCpuTempC(cpuTemp?.temp_c ?? null))}
-                measured={cpuTemp != null}
-              />
-              <ArcGauge
-                label={t("monitor.monitorConsole.cpuLabel")}
-                value={cpu ? Math.round(cpu.usage_overall_pct) : null}
-                max={100}
-                unit="%"
-                tone="neutral"
-                measured={cpu != null}
-              />
-              <ArcGauge
-                label={t("monitor.monitorConsole.ramLabel")}
-                value={ramPct}
-                max={100}
-                unit="%"
-                tone={arcTone(gradeRamPct(ramPct))}
-                measured={ramPct != null}
-              />
-            </div>
-          </BentoTile>
+          {/* ONE CALM SENSOR STRIP (the handoff's word). These were five ArcGauges in a bento
+              tile; the approved comp reads them as plain readings, so they became the shared kit's
+              Reading — same five facts, same sources, same null-is-never-zero rule, and the
+              MEASURED attestation now says what the dial's `measured` prop used to.
+              GPU temp tone stays vendor-gated (NVIDIA ungraded — LOCKED rule 5), and CPU load
+              stays deliberately ungraded (high while gaming is fine). */}
+          <div
+            className="mc-ev-sensors"
+            aria-label={t("monitor.monitorConsole.evidence.sensorsAria")}
+          >
+            <Reading
+              id="gpuTemp"
+              label={t("monitor.monitorConsole.gpuTempLabel")}
+              value={gpu?.temperature_c ?? null}
+              unit="°C"
+              tone={arcTone(gpuGrade)}
+            />
+            <Reading
+              id="gpuLoad"
+              label={t("monitor.monitorConsole.gpuLoadLabel")}
+              value={gpu?.utilization_gpu_pct ?? null}
+              unit="%"
+            />
+            <Reading
+              id="cpuLoad"
+              label={t("monitor.monitorConsole.cpuLabel")}
+              value={cpu ? cpu.usage_overall_pct : null}
+              unit="%"
+            />
+            <Reading
+              id="ram"
+              label={t("monitor.monitorConsole.ramLabel")}
+              value={ramPct}
+              unit="%"
+              tone={arcTone(gradeRamPct(ramPct))}
+            />
+            {/* Beside the GPU's temperature, because "is it running hot" is ONE question with two
+                answers. Null renders the kit's honest no-reading line; the ladder that turns that
+                into a fix (CpuTempOffer) lives on Health's CPU callout, so the same offer is not
+                printed twice (one-mention law). */}
+            <Reading
+              id="cpuTemp"
+              label={t("monitor.monitorConsole.cpuTempLabel")}
+              value={cpuTemp ? cpuTemp.temp_c : null}
+              unit="°C"
+              tone={arcTone(gradeCpuTempC(cpuTemp?.temp_c ?? null))}
+            />
+          </div>
 
-          <BentoTile title={t("monitor.monitorConsole.bento.scope")} span="full">
-            <div className="mc-scopes">
-              <Oscilloscope
-                samples={live ? fpsH.current : []}
-                cap={FPS_CAP}
-                label={t("monitor.monitorConsole.fpsScopeLabel")}
-                unit="fps"
-                tone={live ? arcTone(gradeFps(sample.fps, rig)) : "accent"}
+          {/* The game-HUD Target Cursor, stage-scoped (kit handles reduced/coarse-pointer null
+              + the rAF pointerleave stop — Phase-1's review fix). */}
+          <ReticleCursor scopeRef={stageRef} />
+        </section>
+      }
+      /* BELOW BOTH COLUMNS — everything real that the comp's two columns do not hold. It moved
+         down; none of it was deleted to make the picture fit (the shell's own `below` contract). */
+      below={
+        <div className="mc-below">
+          <BentoGrid className="mc-bento">
+            <BentoTile title={t("monitor.monitorConsole.bento.deck")} span="hero">
+              {/* THE FRAMETIME DECK (v5 Flight Deck): real ms axis, dashed budget line,
+                  exact-moment spike pins, hover scrub + drag-zoom. Always mounted — it carries
+                  its own honest empty. */}
+              <DeckScope
+                ftWin={ftWin.current}
+                live={live}
+                budget={ftBudget}
+                tone={live ? arcTone(gradeFrametimeMs(sample.avg_frametime_ms, rig)) : "accent"}
                 reduced={reduced}
+                cap={FT_CAP}
                 emptyHint={scopeHint}
               />
-            </div>
-          </BentoTile>
-        </BentoGrid>
+            </BentoTile>
 
-        {/* The game-HUD Target Cursor, stage-scoped (kit handles reduced/coarse-pointer null
-            + the rAF pointerleave stop — Phase-1's review fix). */}
-        <ReticleCursor scopeRef={stageRef} />
+            <BentoTile title={t("monitor.monitorConsole.bento.readouts")} span="half">
+              {/* Consumer-term readouts (owner direction §A0 item 6) — the LIVE window, which is a
+                  different fact from the last session's averages in the evidence panel above.
+                  Measured values only, em-dash when nothing is measured. Same windows the traces
+                  draw; spike count = the SAME detector as the markers (one source, can't disagree). */}
+              <div className="mc-readouts">
+                <div className="mc-readout">
+                  <span className="mc-readout-v" style={ink(gradeFps(stats.maxFps, rig))}>
+                    {stats.maxFps == null ? "—" : Math.round(stats.maxFps)}
+                  </span>
+                  <span className="mc-readout-k">{t("monitor.monitorConsole.maxFpsLabel")}</span>
+                </div>
+                <div className="mc-readout">
+                  <span className="mc-readout-v" style={ink(gradeFps(stats.avgFps, rig))}>
+                    {stats.avgFps == null ? "—" : Math.round(stats.avgFps)}
+                  </span>
+                  <span className="mc-readout-k">{t("monitor.monitorConsole.avgFpsLabel")}</span>
+                </div>
+                <div className="mc-readout">
+                  <span
+                    className="mc-readout-v"
+                    style={ink(gradeFrametimeMs(stats.lowestLatencyMs, rig))}
+                  >
+                    {stats.lowestLatencyMs == null ? "—" : `${stats.lowestLatencyMs.toFixed(1)} ms`}
+                  </span>
+                  <span className="mc-readout-k">
+                    {t("monitor.monitorConsole.lowestLatencyLabel")}
+                  </span>
+                </div>
+                <div className="mc-readout">
+                  <span className="mc-readout-v" style={stats.spikeCount ? ink("bad") : undefined}>
+                    {stats.spikeCount == null ? "—" : stats.spikeCount}
+                  </span>
+                  <span className="mc-readout-k">{t("monitor.monitorConsole.spikesLabel")}</span>
+                </div>
+              </div>
+            </BentoTile>
+          </BentoGrid>
+
+          {/* THE SESSION STACK — every recent session a flat row on ONE shared axis. */}
+          <SessionStack sessions={sessions} reduced={reduced} />
+        </div>
+      }
+    >
+      {bar}
+      <div className="monitor-console" data-motion={reduced ? "reduced" : "full"}>
+        {/* The quiet route the comp puts directly under the action — and it is not a new one:
+            `Term` is the glossary affordance this room already used to explain ETW capture. */}
+        <p className="mc-how">
+          <Term id="etw">{t("monitor.monitorConsole.narrative.howItWorks")}</Term>
+        </p>
+
+        {/* What capture is doing right now. The Start/Stop button is NOT repeated here — it moved
+            up to the one action slot — so this row is status plus the room's other real control. */}
+        <div className="mc-capture">
+          <span
+            className="mc-cap-status"
+            style={live ? { color: gradeColor(low1Grade) || undefined } : undefined}
+          >
+            {live ? (
+              <>
+                {Math.round(sample.low1_fps)}{" "}
+                <Term id="one-percent-lows">{t("monitor.monitorConsole.oneLowTermLabel")}</Term>
+                {t("monitor.monitorConsole.estSuffix")}
+              </>
+            ) : fps?.status === "declined" ? (
+              t("monitor.monitorConsole.declinedStatus")
+            ) : fpsActive ? (
+              t("monitor.monitorConsole.capturingStatus")
+            ) : (
+              t("monitor.monitorConsole.idleStatus")
+            )}
+          </span>
+          {/* The in-game overlay's control — the room's other real action (§A0 item 1). */}
+          <span className="mc-ov">
+            <button
+              type="button"
+              className={`mc-cap ${overlayOn ? "mc-cap-on" : ""}`}
+              onClick={toggleOverlay}
+            >
+              {overlayOn
+                ? t("monitor.monitorConsole.overlayOn")
+                : t("monitor.monitorConsole.overlayLabel")}
+            </button>
+            {overlayOn && (
+              <>
+                {CORNERS.map(([c, glyph]) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className={`mc-ov-corner ${corner === c ? "mc-ov-corner-on" : ""}`}
+                    aria-label={t("monitor.monitorConsole.overlayCornerAria", {
+                      corner: cornerLabel(t, c),
+                    })}
+                    onClick={() => chooseCorner(c)}
+                  >
+                    {glyph}
+                  </button>
+                ))}
+                <span
+                  className="mc-ov-group"
+                  role="group"
+                  aria-label={t("monitor.monitorConsole.overlayDensityAria")}
+                >
+                  {(["minimal", "standard", "full"] as OverlayDensity[]).map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      className={`mc-ov-seg ${density === d ? "mc-ov-seg-on" : ""}`}
+                      aria-pressed={density === d}
+                      onClick={() => chooseDensity(d)}
+                    >
+                      {d === "minimal"
+                        ? t("monitor.monitorConsole.densityMin")
+                        : d === "standard"
+                          ? t("monitor.monitorConsole.densityStd")
+                          : t("monitor.monitorConsole.densityFull")}
+                    </button>
+                  ))}
+                </span>
+                <button
+                  type="button"
+                  className={`mc-ov-seg ${backdrop === "on" ? "mc-ov-seg-on" : ""}`}
+                  aria-pressed={backdrop === "on"}
+                  aria-label={t("monitor.monitorConsole.overlayBackgroundAria")}
+                  onClick={() => chooseBackdrop(backdrop === "on" ? "off" : "on")}
+                >
+                  {t("monitor.monitorConsole.backdropLabel")}
+                </button>
+              </>
+            )}
+          </span>
+        </div>
+
+        {/* Same honesty micro-line the room always carried, method stated — anti-cheat-safe
+            wording preserved verbatim (the handoff names it explicitly). */}
+        <p className="mc-honest">
+          <Term id="etw">{t("monitor.monitorConsole.etwEmph")}</Term>
+          {t("monitor.monitorConsole.etwHonestyPost")}
+        </p>
       </div>
-
-      {/* Same honesty micro-line the classic face carries — method stated. */}
-      <p className="mc-honest">
-        <Term id="etw">{t("monitor.monitorConsole.etwEmph")}</Term>{t("monitor.monitorConsole.etwHonestyPost")}
-      </p>
-
-      {/* THE SESSION STACK — the face's second half (the stack IS the session shelf): every
-          recent session a flat row on ONE shared axis. */}
-      <SessionStack sessions={sessions} reduced={reduced} />
-    </div>
+    </RoomShell>
   );
 }
 

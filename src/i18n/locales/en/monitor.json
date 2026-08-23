@@ -26,7 +26,6 @@
       "live": "Live",
       "sessions": "Sessions"
     },
-    "liveTelemetryLabel": "Live telemetry",
     "tuningPresetsLabel": "Tuning presets",
     "tuningPresetsHint": "by-hand checklists · advisory — Compy never changes these for you",
     "monitorSectionsAria": "Live sections",
@@ -85,11 +84,24 @@
     "ramLabel": "RAM",
     "etwEmph": "Watched from outside your game",
     "etwHonestyPost": " — nothing added to it, and no driver installed deep in Windows. Safe with anti-cheat.",
+    "narrative": {
+      "eyebrow": "Session monitor",
+      "readyHeadline": "Ready when you are",
+      "capturingHeadline": "Recording your session",
+      "busyHeadline": "One moment",
+      "busyAction": "…",
+      "sub": "Start capture, then play. Compy watches from outside your game.",
+      "howItWorks": "How capture works"
+    },
+    "evidence": {
+      "aria": "Last session",
+      "lastSession": "Last session",
+      "noSession": "No session recorded yet. Start capture, play, and the first one lands here.",
+      "sensorsAria": "Live sensor readings"
+    },
     "bento": {
       "deck": "Frame time",
-      "readouts": "This session",
-      "gauges": "Sensors",
-      "scope": "Frame rate"
+      "readouts": "This session"
     }
   },
   "monitorDomainCards": {

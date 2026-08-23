@@ -3,6 +3,7 @@ import { render, screen, cleanup, waitFor } from "@testing-library/react";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { MonitorConsole } from "./MonitorConsole";
+import { READING_ROWS } from "../design/console/Reading";
 
 /** [label, value] of one boxed delta cell (`data-k` = avg | low1 | spikes). */
 const cell = (row: Element, k: string): [string, string] => {
@@ -121,7 +122,7 @@ afterEach(() => {
 });
 
 describe("MonitorConsole — live stream feeds real instruments (a)", () => {
-  it("the fps oscilloscope draws the buffered real samples; gauges show measured values with graded ink", async () => {
+  it("the fps oscilloscope draws the buffered real samples; the sensor strip shows measured values with graded ink", async () => {
     mockPolls(() => liveFps);
     const { container } = mount();
     await waitFor(() => {
@@ -129,13 +130,18 @@ describe("MonitorConsole — live stream feeds real instruments (a)", () => {
     });
     // Latest readout is the real value.
     expect(screen.getByText(/142\s*fps/)).toBeTruthy();
-    // Gauges: AMD GPU temp 62°C grades (non-neutral ink), CPU stays deliberately ungraded.
-    const gauges = container.querySelectorAll(".arc-gauge");
-    expect(gauges.length).toBeGreaterThanOrEqual(3);
-    expect(container.querySelector(".arc-gauge.ag-good")).not.toBeNull();
-    await waitFor(() => expect(screen.getByText("62")).toBeTruthy());
-    expect(screen.getByText("34")).toBeTruthy(); // CPU %
-    expect(screen.getByText("48")).toBeTruthy(); // RAM % (14.2/29.4)
+    // THE SENSOR STRIP (issue #49 slice 4). The five corner ArcGauges became the shared kit's
+    // five Readings -- same five facts, same sources, same grading. AMD GPU temp 62°C grades
+    // (non-neutral ink), CPU load stays deliberately ungraded (busy while gaming is fine), and a
+    // measured cell carries the MEASURED attestation the dial's `measured` prop used to.
+    const read = (id: string) => container.querySelector<HTMLElement>(`[data-read="${id}"]`)!;
+    expect(container.querySelectorAll(".mc-ev-sensors > .reading").length).toBe(5);
+    await waitFor(() => expect(read("gpuTemp").querySelector(".rd-n")!.textContent).toBe("62"));
+    expect(read("gpuTemp").classList.contains("rd-good")).toBe(true);
+    expect(read("gpuTemp").querySelector(".rd-tag")).not.toBeNull();
+    expect(read("cpuLoad").querySelector(".rd-n")!.textContent).toBe("34"); // CPU %
+    expect(read("cpuLoad").classList.contains("rd-neutral")).toBe(true);
+    expect(read("ram").querySelector(".rd-n")!.textContent).toBe("48"); // RAM % (14.2/29.4)
   });
 
   it("consumer-term readouts derive from the same real windows (v3 T2)", async () => {
@@ -412,7 +418,7 @@ describe("MonitorConsole — the stack IS the shelf (f)", () => {
 });
 
 describe("MonitorConsole — vendor honesty (d)", () => {
-  it("NVIDIA fixture ⇒ the GPU temp gauge stays ungraded (LOCKED rule 5)", async () => {
+  it("NVIDIA fixture ⇒ the GPU temp reading stays ungraded (LOCKED rule 5)", async () => {
     invokeMock.mockImplementation((cmd: string) => {
       if (cmd === "get_cpu_sensors") return Promise.resolve(cpuSnap);
       if (cmd === "get_gpu_sensors")
@@ -420,12 +426,17 @@ describe("MonitorConsole — vendor honesty (d)", () => {
       if (cmd === "get_fps_status") return Promise.resolve(stoppedFps);
       return Promise.resolve(null);
     });
-    mount({ vendor: "nvidia" });
-    await waitFor(() => expect(screen.getByText("62")).toBeTruthy());
-    const gpuGauge = screen.getByText("GPU temp").closest(".arc-gauge");
-    expect(gpuGauge?.classList.contains("ag-neutral")).toBe(true);
-    expect(gpuGauge?.classList.contains("ag-good")).toBe(false);
-    expect(gpuGauge?.classList.contains("ag-warn")).toBe(false);
+    const { container } = mount({ vendor: "nvidia" });
+    // A reading's identity is WHICH FACT it states, never where it sits (Reading.tsx). That is
+    // exactly why this guard survived slice 4 moving the fact out of a corner-pinned dial and
+    // into the strip: the selector never described the layout in the first place.
+    await waitFor(() =>
+      expect(container.querySelector('[data-read="gpuTemp"] .rd-n')!.textContent).toBe("62"),
+    );
+    const gpuRead = container.querySelector('[data-read="gpuTemp"]')!;
+    expect(gpuRead.classList.contains("rd-neutral")).toBe(true);
+    expect(gpuRead.classList.contains("rd-good")).toBe(false);
+    expect(gpuRead.classList.contains("rd-warn")).toBe(false);
   });
 });
 
@@ -468,11 +479,21 @@ describe("MonitorConsole — laws (e) + the one face", () => {
     mockPolls(() => liveFps);
     const { container } = mount();
     await waitFor(() => expect(container.querySelector(".monitor-console")).not.toBeNull());
-    expect(container.querySelectorAll("h1, h2").length).toBe(0);
-    const h3s = [...container.querySelectorAll("h3")];
+    // RE-SCOPED, NOT RELAXED (issue #49 slice 4). The live face now composes its own RoomShell,
+    // so the room has exactly ONE h1 and it is the shell's verdict slot -- the same slot every
+    // other room fills. What the law actually bans is a heading inside the room BODY and a
+    // heading that is really a status sentence, and both are still pinned below.
+    expect(
+      container.querySelectorAll(".monitor-console h1, .monitor-console h2, .monitor-console h3")
+        .length,
+    ).toBe(0);
+    const h1s = [...container.querySelectorAll("h1")];
+    expect(h1s.length).toBe(1);
+    expect(h1s[0].closest(".v2-verdict"), "the one h1 must be the shell's verdict").not.toBeNull();
+    const h3s = [...container.querySelectorAll("h2, h3")];
     for (const h of h3s) {
-      expect(h.className, `heading "${h.textContent}" is not a bento tile title`).toContain(
-        "v2-tile-title",
+      expect(h.className, `heading "${h.textContent}" is not a titled tile or panel`).toMatch(
+        /v2-tile-title|mc-ev-title/,
       );
       const text = (h.textContent ?? "").trim();
       expect(text.length, `tile title "${text}" is long enough to be a status sentence`).
@@ -486,5 +507,151 @@ describe("MonitorConsole — laws (e) + the one face", () => {
     mount();
     await waitFor(() => expect(screen.getByText("GPU temp")).toBeTruthy());
     expect(screen.getByText("GPU load")).toBeTruthy();
+  });
+});
+
+// == issue #49 slice 4: the contracts that MOVED INTO this component =========================
+// The approved Live comp is the four-room SPLIT -- a narrative column beside an evidence column --
+// and both halves are built from state THIS component owns (the capture stream, the sensors, the
+// session array). So the live face composes its own RoomShell instead of having that ownership
+// hoisted into MonitorV2 and the room's one 1 Hz poll split in two. These are the shell contracts
+// that used to be pinned in monitor-v2.test.tsx against a MonitorConsole *stub*; a stub cannot
+// prove them any more, so they are pinned here, against the real component.
+describe("MonitorConsole - the live face owns the room's shell (issue #49 slice 4)", () => {
+  it("ONE verdict, ONE forward door to Blackbook, ONE primary action and it is the capture toggle", async () => {
+    mockPolls(() => stoppedFps);
+    const { container } = mount();
+    await waitFor(() => expect(container.querySelector(".monitor-console")).not.toBeNull());
+    const h1s = container.querySelectorAll(".v2-verdict h1");
+    expect(h1s.length).toBe(1);
+    expect(h1s[0].textContent).toContain("Ready when you are");
+    const doors = container.querySelectorAll(".v2-door");
+    expect(doors.length).toBe(1);
+    expect(doors[0].textContent).toContain("See what changed");
+    // The one-mention law: the capture control MOVED into the action slot, it was not copied
+    // there -- there is still exactly one Start/Stop capture button on the screen.
+    const actions = container.querySelectorAll(".v2-verdict-action button");
+    expect(actions.length).toBe(1);
+    expect(actions[0].textContent).toBe("Start capture");
+    expect(screen.getAllByRole("button", { name: /^(Start|Stop) capture$/ }).length).toBe(1);
+  });
+
+  it("closes the forward door while a capture is recording (V2-8 placement, carried)", async () => {
+    // The door belongs to the session-END state. It used to be MonitorV2 that closed it, off the
+    // onFpsActive mirror; the face owns the stream, so it now answers directly -- and the mirror
+    // still fires, because Sessions (where no face is mounted) still needs it.
+    let live = true;
+    mockPolls(() => (live ? liveFps : stoppedFps));
+    const { container, props } = mount();
+    await waitFor(() => expect(container.querySelectorAll(".v2-door").length).toBe(0));
+    expect(container.querySelector(".v2-verdict h1")!.textContent).toContain(
+      "Recording your session",
+    );
+    live = false;
+    await waitFor(() => expect(container.querySelectorAll(".v2-door").length).toBe(1), {
+      timeout: 3000,
+    });
+    await waitFor(() => expect(props.onFpsActive).toHaveBeenLastCalledWith(false), {
+      timeout: 3000,
+    });
+  }, 8000);
+
+  it("renders the two pieces the ROOM hands down - segment bar and quiet slot", async () => {
+    // bug->guard: MonitorV2 builds the segment bar and the advisory-presets expander once (they
+    // belong to the room, not to either face) and passes them down. Drop either prop and the Live
+    // screen silently loses its tab bar -- a whole navigation control, gone with a green build.
+    mockPolls(() => stoppedFps);
+    const { container } = mount({
+      bar: <div data-testid="room-bar" />,
+      quiet: <button type="button">room-quiet</button>,
+    });
+    await waitFor(() => expect(container.querySelector(".monitor-console")).not.toBeNull());
+    expect(screen.getByTestId("room-bar")).toBeTruthy();
+    expect(container.querySelector(".v2-quiet-slot button")!.textContent).toBe("room-quiet");
+  });
+
+  it("the evidence column states the last session, and says so honestly when there is none", async () => {
+    mockPolls(() => stoppedFps);
+    const { container, unmount } = mount();
+    await waitFor(() => expect(container.querySelector(".mc-ev-title")).not.toBeNull());
+    expect(container.querySelector(".mc-ev-title")!.textContent).toContain("Valorant");
+    expect(container.querySelector('[data-read="avgFps"] .rd-n')!.textContent).toBe("240");
+    expect(container.querySelector('[data-read="low1"] .rd-n')!.textContent).toBe("190");
+    unmount();
+
+    const bare = mount({ sessions: [] });
+    await waitFor(() => expect(bare.container.querySelector(".mc-ev-none")).not.toBeNull());
+    // Honest empty: no session is a real state, and it never renders as a zero-fps session.
+    expect(bare.container.querySelector(".mc-ev-none")!.textContent).toContain(
+      "No session recorded yet",
+    );
+    expect(bare.container.querySelector('[data-read="avgFps"]')).toBeNull();
+  });
+});
+
+// == THE READING_ROWS PARENT CONTRACT, guarded from the PLACING side ==========================
+// bug->guard, carried from Health's self-review round 10 (issue #49). A Reading subgrids onto its
+// PARENT's rows so row 1 is as tall as the tallest LABEL across the whole strip. Health shipped
+// the staggered version -- "GPU TEMP" wrapping at 1280x720 where "AVG FPS" did not, pushing one
+// value 17px below its neighbours -- and a full review round was spent finding it. Live places
+// Readings in TWO strips, so it inherits the obligation twice. Reading.tsx states the contract;
+// this is the half that proves Live actually satisfies it, and it derives every number from
+// READING_ROWS so adding a fourth row to the cell can never leave a strip declaring three.
+describe("MonitorConsole - the READING_ROWS parent contract on both strips", () => {
+  const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const rulesFor = (cls: string, source: string) =>
+    Array.from(stripComments(source).matchAll(/([^{}]+)\{([^}]*)\}/g))
+      .filter(([, sel]) => new RegExp("\\" + cls + "(?![\\w-])").test(sel))
+      .map(([, , body]) => body)
+      .join("\n");
+
+  const sheet = () => readFileSync(join("src", "surfaces", "monitor-console.css"), "utf8");
+
+  for (const strip of [".mc-ev-readings", ".mc-ev-sensors"]) {
+    it("CSS: " + strip + " owns exactly READING_ROWS row tracks", () => {
+      const blk = rulesFor(strip, sheet());
+      expect(blk, strip + " must be styled at all").not.toBe("");
+      expect(blk, strip + " places Readings, so it must be the grid they subgrid onto").toMatch(
+        /display:\s*grid/,
+      );
+      const rows = /grid-template-rows:\s*([^;]+);/.exec(blk);
+      expect(rows, strip + " must own the rows its readings are laid onto").not.toBeNull();
+      expect(
+        rows![1].trim().split(/\s+/).length,
+        "label, value and attestation - Reading.tsx's READING_ROWS, which is what its cells span",
+      ).toBe(READING_ROWS);
+    });
+  }
+
+  it("every NON-Reading cell in either strip spans the strip's rows", async () => {
+    // The half a CSS-only guard cannot see. `.mc-ev-changes` is a plain span sitting between two
+    // Readings; without an explicit span it occupies the LABEL row alone and the strip grows a
+    // fourth line under it. This walks the RENDERED children, so the next sibling somebody adds is
+    // caught the same way -- the failure class, not the one instance.
+    mockPolls(() => stoppedFps);
+    const { container } = mount();
+    await waitFor(() => expect(container.querySelector(".mc-ev-readings")).not.toBeNull());
+    const css = sheet();
+    for (const strip of [".mc-ev-readings", ".mc-ev-sensors"]) {
+      const el = container.querySelector(strip)!;
+      const strays = [...el.children].filter((c) => !c.classList.contains("reading"));
+      for (const c of strays) {
+        const cls = [...c.classList].map((n) => "." + n);
+        expect(
+          cls.length,
+          "a bare <" + c.tagName.toLowerCase() + "> in " + strip + " has no class to span with",
+        ).toBeGreaterThan(0);
+        const span = /grid-row:\s*span\s*(\d+)/.exec(cls.map((n) => rulesFor(n, css)).join("\n"));
+        expect(
+          span,
+          cls.join("") + " sits in " + strip + " beside Readings and must span its rows " +
+            "explicitly, or it lands in the label row alone and the strip grows a row under it",
+        ).not.toBeNull();
+        expect(
+          Number(span![1]),
+          cls.join("") + " spans " + span![1] + " of " + strip + "'s " + READING_ROWS + " rows",
+        ).toBe(READING_ROWS);
+      }
+    }
   });
 });

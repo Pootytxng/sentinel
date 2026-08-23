@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
+import type { ReactNode } from "react";
 import { MonitorV2 } from "./MonitorV2";
 import { TuningPresets } from "./TuningPresets";
 import { monitorVerdict as monitorVerdictRaw } from "./monitor-v2-data";
 import type { SessionSummary } from "../types";
+import { readFileSync } from "fs";
+import { join } from "path";
 // i18n update (2026-07-23): monitorVerdict's headline/sub now come from t(...) (Simplified
 // Chinese translation pass) instead of literal English strings, so it takes a TFunction as its
 // last param. This test-local wrapper resolves it through the real i18next instance (English is
@@ -40,14 +43,26 @@ vi.mock("./Play", async (importOriginal) => {
   };
 });
 vi.mock("./MonitorConsole", () => ({
-  MonitorConsole: (props: { onFpsActive?: (a: boolean) => void }) => (
+  // Since issue #49 slice 4 the live face composes the room's RoomShell ITSELF (the approved Live
+  // comp is the four-room split, and both of its columns are built from state the face owns), so
+  // this stub deliberately renders no shell — that absence is what the delegation guard below
+  // measures. It DOES render `bar` and `quiet`, because those two are the ROOM's and are handed
+  // down: a stub that swallowed them would let every navigation assertion in this file pass
+  // against a screen with no tab bar on it.
+  MonitorConsole: (props: {
+    onFpsActive?: (a: boolean) => void;
+    bar?: ReactNode;
+    quiet?: ReactNode;
+  }) => (
     <div data-testid="monitor-console">
+      {props.bar}
       <button type="button" onClick={() => props.onFpsActive?.(true)}>
         stub-capture-on
       </button>
       <button type="button" onClick={() => props.onFpsActive?.(false)}>
         stub-capture-off
       </button>
+      {props.quiet}
     </div>
   ),
 }));
@@ -163,13 +178,36 @@ describe("monitorVerdict — pure, measured, branch-proper copy", () => {
   });
 });
 
+// TWO FACES, TWO COMPOSITIONS (issue #49 slice 4). The approved Live comp is the four-room
+// SPLIT, whose evidence column is built entirely from state MonitorConsole owns, so the live face
+// composes its own RoomShell and this shell delegates. Sessions has no evidence column — it is a
+// different composition, not the same one with a slot left empty — so its shell is still this
+// one's. The Live-side shell contracts (one verdict, one door, the door closing during a capture,
+// and the ONE primary action the comp adds) are pinned against the REAL component in
+// monitor-console.test.tsx, where a stub can no longer stand in for them.
 describe("MonitorV2 — RoomShell composition", () => {
-  it("renders ONE verdict (the pure helper's output) and ONE forward door to Blackbook", () => {
+  it("Live: the face owns the shell, and this one does not render a second", () => {
+    // The guard against the obvious wrong fix — wrapping the delegated face in a RoomShell here
+    // "for consistency", which would print two verdicts and two forward doors on one screen.
     useReduced();
     const { container } = mount();
+    expect(screen.getByTestId("monitor-console")).toBeTruthy();
+    expect(container.querySelectorAll(".v2-verdict").length).toBe(0);
+    expect(container.querySelectorAll(".v2-door").length).toBe(0);
+  });
+
+  it("Sessions: renders ONE verdict (the pure helper's output) and ONE forward door to Blackbook", () => {
+    useReduced();
+    const { container } = mount();
+    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
     const h1s = container.querySelectorAll(".v2-verdict h1");
     expect(h1s.length).toBe(1);
-    expect(h1s[0].textContent).toBe("Last session ran smooth — valorant at 240 fps average.");
+    // The h1 is eyebrow + headline (one header idiom per room, slice 4); the VERDICT is the
+    // headline, asserted exactly rather than as a substring so a stray sentence still fails.
+    expect(h1s[0].querySelector(".mc-masthead-eyebrow")!.textContent).toContain("Session monitor");
+    expect(h1s[0].querySelector(".mc-headline")!.textContent).toBe(
+      "Last session ran smooth — valorant at 240 fps average.",
+    );
     const doors = container.querySelectorAll(".v2-door");
     expect(doors.length).toBe(1);
     expect(doors[0].textContent).toContain("See what changed");
@@ -178,26 +216,72 @@ describe("MonitorV2 — RoomShell composition", () => {
   it("no measured-line header strip — header space is header-format text only (owner law 2026-07-10)", () => {
     useReduced();
     const { container } = mount();
+    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
     expect(container.querySelector(".v2-measured")).toBeNull();
   });
 
-  it("no primary action — the room's actions live with their tiles (one-mention law)", () => {
+  it("Sessions: no primary action — the debrief's actions live with its cards (one-mention law)", () => {
+    // Live is now the exception the approved comp asked for, and it is an exception that MOVED a
+    // control rather than adding one (monitor-console.test.tsx proves there is still exactly one
+    // Start/Stop capture button on that screen). Sessions gained nothing and still has no slot.
     useReduced();
     const { container } = mount();
+    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
     expect(container.querySelector(".v2-verdict-action")).toBeNull();
   });
 
   // V2-8 (P6 §2 placement): the door belongs to the session-end state — ABSENT while a capture
   // session is live, back when it ends. The Live face mirrors its already-polled get_fps_status
-  // up via onFpsActive (no second IPC).
-  it("closes the forward door during a live capture session, reopens when it ends", () => {
+  // up via onFpsActive (no second IPC), which is what keeps this shell's own door honest after
+  // the user walks over to Sessions mid-capture.
+  it("Sessions: the door stays shut while a capture the Live face reported is still recording", () => {
     useReduced();
     const { container } = mount();
-    expect(container.querySelectorAll(".v2-door").length).toBe(1);
     fireEvent.click(screen.getByText("stub-capture-on"));
+    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
     expect(container.querySelectorAll(".v2-door").length).toBe(0);
+    fireEvent.click(screen.getByRole("tab", { name: "Live" }));
     fireEvent.click(screen.getByText("stub-capture-off"));
+    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
     expect(container.querySelectorAll(".v2-door").length).toBe(1);
+  });
+
+  it("CSS: the Sessions header STACKS — a two-line h1 cannot seat its sub-line beside itself", () => {
+    // Caught reading the cascade, not the screen, but it is a real defect and gets a real guard.
+    // Live is the split layout, whose narrative column already stacks. Sessions is NOT split, so
+    // it inherits the shell's linear header: a flex ROW with `align-items: baseline`. That was
+    // correct while the h1 was one 17px sentence; the moment slice 4 put an eyebrow line above
+    // that sentence, "baseline" became the EYEBROW's baseline and the sub-line would sit up beside
+    // a two-line heading. Delete the override and the header silently comes apart again.
+    const css = readFileSync(join("src", "surfaces", "monitor-v2.css"), "utf8").replace(
+      /\/\*[\s\S]*?\*\//g,
+      "",
+    );
+    const rule = css
+      .split("}")
+      .find((b) => b.includes('[data-room="play"]') && b.includes(".v2-verdict"));
+    expect(rule, "the room must own its header's stacking").toBeDefined();
+    expect(rule, "only the non-split face needs it — Live's column already stacks").toContain(
+      ':not([data-layout="split"])',
+    );
+    expect(rule).toMatch(/flex-direction:\s*column/);
+  });
+
+  it("hands the ROOM's two pieces down to the live face — segment bar and quiet slot", () => {
+    // bug→guard (issue #49 slice 4). The bar and the presets expander belong to the room, not to
+    // either face, so they are built once here and passed down. Drop either prop and the Live
+    // screen silently loses a whole navigation control with a green build behind it.
+    useReduced();
+    const { container } = mount();
+    const console_ = screen.getByTestId("monitor-console");
+    expect(console_.querySelector(".mv2-bar"), "the segment bar must reach the live face").not.toBeNull();
+    expect(
+      console_.querySelector("#mv2-presets-body"),
+      "the advisory presets must reach the live face",
+    ).not.toBeNull();
+    // …and exactly once: the room must not ALSO render them outside the face it handed them to.
+    expect(container.querySelectorAll(".mv2-bar").length).toBe(1);
+    expect(container.querySelectorAll("#mv2-presets-body").length).toBe(1);
   });
 
   // bug→guard (MonitorV2.tsx capture poll): only the Live face polls get_fps_status and mirrors it

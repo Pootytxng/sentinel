@@ -7,9 +7,7 @@ import { RoomShell } from "../design/room-shell";
 import { SegmentedControl } from "../design/SegmentedControl";
 import { useReducedMotion } from "../design/use-motion";
 import { useDocumentVisible } from "../data/use-document-visible";
-import { useHudFlag } from "../design/use-hud";
 import { MonitorConsole } from "./MonitorConsole";
-import { HudMasthead } from "./hud-masthead";
 import { monitorVerdict } from "./monitor-v2-data";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import "../i18n";
@@ -27,9 +25,12 @@ import "./monitor-v2.css";
 // was correct — the fork had one noticeable difference and split the room's identity for it
 // (pinned by monitor-one-face-guard.test.tsx).
 //
-// Deliberately NO primaryAction: the room's real actions (capture toggle, overlay) live with
-// their tiles/cards, and hoisting one would duplicate live state the tiles already own — the
-// one-mention law outranks filling the optional slot.
+// PRIMARY ACTION, per face (issue #49 slice 4). Sessions still has none: hoisting one of the
+// debrief's card actions would duplicate live state those cards already own, and the one-mention
+// law outranks filling an optional slot. Live now has exactly one — the approved comp makes Start
+// capture the dominant action — and it MOVED there out of the control row rather than being
+// copied, so that screen still carries exactly one capture toggle. Live composes its own shell
+// (below), so it fills that slot itself.
 //
 // V2-8 (P6 §2 placement): the forward door is ABSENT during a live capture session — it belongs
 // to the session-end state, not mid-game. The Live face already polls get_fps_status for its own
@@ -49,7 +50,6 @@ export function MonitorV2(props: Props) {
     { id: "sessions", label: t("monitor.monitorV2.segments.sessions") },
   ];
   const reduced = useReducedMotion();
-  const hud = useHudFlag();
   const [segment, setSegment] = useState<Segment>("live");
   const visible = useDocumentVisible();
   const [presetsOpen, setPresetsOpen] = useState(false);
@@ -95,86 +95,114 @@ export function MonitorV2(props: Props) {
 
   const verdict = monitorVerdict(props.sessions, t);
 
+  // The segment bar and the advisory-presets expander belong to the ROOM, not to either face, so
+  // they are built once here and handed to whichever face is composing the shell below.
+  const bar = (
+    <div className="mv2-bar">
+      <SegmentedControl
+        segments={SEGMENTS}
+        value={segment}
+        onChange={(id) => setSegment(id as Segment)}
+        aria-label={t("monitor.monitorV2.monitorSectionsAria")}
+      />
+    </div>
+  );
+
+  const quiet = (
+    <>
+      {/* The advisory preset checklists are "more, not attention-needing" — the quiet
+          slot's contract. The head names what's inside; TuningPresets renders verbatim
+          (bare = its standalone title only, which this head replaces). */}
+      <button
+        type="button"
+        className="v2-quiet"
+        onClick={() => setPresetsOpen((o) => !o)}
+        aria-expanded={presetsOpen}
+        aria-controls="mv2-presets-body"
+      >
+        <span aria-hidden="true" className="v2-quiet-caret">
+          ▸
+        </span>
+        {t("monitor.monitorV2.tuningPresetsLabel")}
+        <span className="mv2-quiet-hint">{t("monitor.monitorV2.tuningPresetsHint")}</span>
+      </button>
+      <div id="mv2-presets-body" className="mv2-presets-body" hidden={!presetsOpen}>
+        <TuningPresets vendor={props.vendor} bare />
+      </div>
+    </>
+  );
+
+  // TWO FACES, TWO COMPOSITIONS (issue #49 slice 4). The approved Live comp is the four-room
+  // SPLIT — a narrative column (Session monitor → one verdict → one sentence → Start capture)
+  // beside an evidence column holding the last session. Both halves are built from state the
+  // live face owns (the capture stream, the sensors, the session array), so the live face
+  // renders its own RoomShell rather than having that ownership hoisted up here and the room's
+  // one 1 Hz poll split in two. Sessions keeps the linear shell below: it has no evidence column,
+  // so it is a different composition, not the same one with a slot left empty.
+  if (segment === "live") {
+    return (
+      <MonitorConsole
+        active={props.active}
+        vendor={props.vendor ?? "any"}
+        sessions={props.sessions}
+        onFpsActive={setCapturing}
+        quiet={quiet}
+        bar={bar}
+      />
+    );
+  }
+
   return (
     <RoomShell
       room="play"
       doorOpen={!capturing}
-      verdict={(() => {
-        if (!hud) {
-          // Flag off: the exact pre-rollout tree — the verdict sentence as the h1, with the
-          // verdict-only DecryptedText moment (the adopt-list law).
-          return reduced ? (
-            verdict.headline
-          ) : (
-            <DecryptedText
-              key={verdict.headline}
-              text={verdict.headline}
-              animateOn="view"
-              sequential
-              speed={22}
-              useOriginalCharsOnly
-            />
-          );
-        }
-        // HUD header = title only (owner title-header law 2026-07-10 round 2). The last-session
-        // answer lives in its context — Play's last-session hero + the session rows grade with
-        // the SAME shortVerdict (one source, can't disagree). LED breathes ONLY while a capture
-        // is actually recording (the room's one live state); otherwise no LED, never fabricated.
-        return (
-          <>
-            <HudMasthead label={t("monitor.monitorV2.liveTelemetryLabel")} led={capturing ? "scan" : null} />
-            {/* Room label — owned by the rail (common.json), not re-translated here (rule: reuse
-                common.rail.<id> for any rendered rail/room label). */}
-            <span className="hud-headline">{t("common.rail.play", "Monitor")}</span>
-          </>
-        );
-      })()}
-      sub={hud ? undefined : verdict.sub}
-      quiet={
+      /* ONE HEADER IDIOM PER ROOM (issue #49 slice 4). Live and Sessions are two faces of ONE
+         room, so they cannot wear two different headers a tab apart — which is what shipping the
+         approved narrative header on Live while Sessions kept the Instrument-HUD masthead would
+         have done. The HUD masthead is therefore gone from Monitor, the same way UX-1 retired it
+         from Home (docs/decisions/2026-08-11-design-foundation.md, decision 1: "the front door is
+         a verdict"). The owner title-header law it served — a header is a NAME, never a status
+         sentence — is not weakened by that: it was written against a *notification* standing in
+         the header, and what replaces it here is the room's measured verdict, which is the one
+         thing on this screen the user actually came for. The room label is redundant with the
+         rail that navigated here; the verdict is redundant with nothing.
+         Sessions keeps the verdict-only DecryptedText moment (the adopt-list law) because its
+         headline IS a measured verdict landing. Live's is a state line ("Ready when you are"),
+         which is not a measurement and so is not marked as one. */
+      verdict={
         <>
-          {/* The advisory preset checklists are "more, not attention-needing" — the quiet
-              slot's contract. The head names what's inside; TuningPresets renders verbatim
-              (bare = its standalone title only, which this head replaces). */}
-          <button
-            type="button"
-            className="v2-quiet"
-            onClick={() => setPresetsOpen((o) => !o)}
-            aria-expanded={presetsOpen}
-            aria-controls="mv2-presets-body"
-          >
-            <span aria-hidden="true" className="v2-quiet-caret">
-              ▸
-            </span>
-            {t("monitor.monitorV2.tuningPresetsLabel")}
-            <span className="mv2-quiet-hint">
-              {t("monitor.monitorV2.tuningPresetsHint")}
-            </span>
-          </button>
-          <div id="mv2-presets-body" className="mv2-presets-body" hidden={!presetsOpen}>
-            <TuningPresets vendor={props.vendor} bare />
-          </div>
+          <span className="mc-masthead-eyebrow">
+            {/* Real state only: lit while a capture is actually recording, and never animated —
+                an idle pulse would be motion that means nothing. Same element the live face
+                wears, so the two faces read as one room. */}
+            <span
+              className={`mc-led ${capturing ? "mc-led-on" : ""}`}
+              aria-hidden="true"
+            />
+            {t("monitor.monitorConsole.narrative.eyebrow")}
+          </span>
+          <span className="mc-headline" key={verdict.headline}>
+            {reduced ? (
+              verdict.headline
+            ) : (
+              <DecryptedText
+                key={verdict.headline}
+                text={verdict.headline}
+                animateOn="view"
+                sequential
+                speed={22}
+                useOriginalCharsOnly
+              />
+            )}
+          </span>
         </>
       }
+      sub={verdict.sub}
+      quiet={quiet}
     >
-      <div className="mv2-bar">
-        <SegmentedControl
-          segments={SEGMENTS}
-          value={segment}
-          onChange={(id) => setSegment(id as Segment)}
-          aria-label={t("monitor.monitorV2.monitorSectionsAria")}
-        />
-      </div>
+      {bar}
       <div className="mv2-body">
-        {segment === "live" ? (
-          <MonitorConsole
-            active={props.active}
-            vendor={props.vendor ?? "any"}
-            sessions={props.sessions}
-            onFpsActive={setCapturing}
-          />
-        ) : (
-          <Play {...props} view={segment} onFpsActive={setCapturing} v2 />
-        )}
+        <Play {...props} view={segment} onFpsActive={setCapturing} v2 />
       </div>
     </RoomShell>
   );

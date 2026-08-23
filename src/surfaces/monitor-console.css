@@ -204,3 +204,192 @@
 :root[data-v2="on"] .monitor-console[data-motion="full"] .mc-honest { animation-delay: 0.22s; }
 :root[data-v2="on"] .monitor-console[data-motion="full"] .ss { animation-delay: 0.28s; }
 :root[data-v2="on"] .monitor-console[data-motion="full"] .mc-last { animation-delay: 0.34s; }
+
+/* ══ LIVE ON THE APPROVED FOUR-ROOM SPLIT (issue #49 slice 4, 2026-08-23) ═══════════════════════
+   The room is now the same composition Health is: a narrative column (eyebrow → one verdict → one
+   sentence → one dominant action) beside an evidence column holding the last session. RoomShell
+   owns the geometry (shell-v2.css, data-layout="split"); everything here is what goes INSIDE the
+   two columns. NO BREAKPOINT — the handoff bars adding one, and the aside is a single fixed step.
+
+   THE PARENT CONTRACT (Reading.tsx): both strips below place shared-kit `Reading` cells, so both
+   declare exactly READING_ROWS row tracks and every non-Reading sibling spans all of them. That is
+   what stops a label wrapping in one language from moving only its own value — the defect rounds
+   6–11 were spent on in Health, which this room does not get to re-learn. */
+
+/* ── The narrative column ─────────────────────────────────────────────────────────────────── */
+/* NOT `.mc-eyebrow`. That name is already taken by the SHARED measurement chrome
+   (measurement-chrome.css) -- an unscoped, mono, uppercase eyebrow the debrief and the Lab bench
+   both wear -- and this room's stylesheet uses `mc-` for "monitor console". Two prefixes, one
+   collision: the first draft of this rule silently inherited the shared eyebrow's family, casing
+   and ink through the global cascade. Named for Health's `.hc-masthead-eyebrow` instead, which
+   is the element this actually is. */
+:root[data-v2="on"] .mc-masthead-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 600 var(--type-label) var(--v2-font-sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--v2-faint);
+}
+/* State, not decoration: the dot is lit only while the helper is ACTUALLY recording. It never
+   animates — an idle pulse would be motion that means nothing, and this room already has one
+   honest live signal (the trace). */
+:root[data-v2="on"] .mc-led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--v2-faint);
+}
+:root[data-v2="on"] .mc-led-on {
+  background: var(--v2-ok);
+}
+:root[data-v2="on"] .mc-headline {
+  display: block;
+}
+
+/* THE ONE DOMINANT ACTION. Same shape as Health's front door on purpose — one filled accent button
+   per room, so "the primary thing" looks identical in every room a user walks into. */
+:root[data-v2="on"] .mc-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-card);
+  font-weight: var(--type-card-weight);
+  letter-spacing: -0.005em;
+  color: var(--v2-bg);
+  background: var(--v2-accent);
+  border: 1px solid var(--v2-accent);
+  border-radius: var(--v2-r-sm);
+  padding: 12px 22px;
+  cursor: pointer;
+  transition: filter 0.12s ease, transform 0.12s ease;
+}
+:root[data-v2="on"] .mc-start:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+:root[data-v2="on"] .mc-start:active:not(:disabled) {
+  transform: translateY(1px);
+}
+/* Its OWN focus mark: the fill IS the accent, so an accent ring would vanish into it. */
+:root[data-v2="on"] .mc-start:focus-visible {
+  outline: 2px solid var(--v2-text);
+  outline-offset: 2px;
+}
+:root[data-v2="on"] .mc-start:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+/* Recording is a STOP control, and a stop control must not keep wearing the invitation's fill. */
+:root[data-v2="on"] .mc-start-on {
+  color: var(--v2-text);
+  background: transparent;
+  border-color: var(--v2-accent-line);
+}
+/* The quiet route the comp puts directly under the action. Term supplies the affordance; this
+   only gives it its own line and a little air. */
+:root[data-v2="on"] .mc-how {
+  margin: 0 0 18px;
+  font-size: var(--type-body);
+}
+
+/* ── The evidence column ──────────────────────────────────────────────────────────────────── */
+:root[data-v2="on"] .mc-evidence {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: var(--v2-pad);
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-r);
+  background: var(--v2-panel);
+  min-width: 0;
+}
+:root[data-v2="on"] .mc-ev-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+:root[data-v2="on"] .mc-ev-title {
+  margin: 0;
+  font: var(--type-card) / 1.3 var(--v2-font-sans);
+  font-weight: var(--type-card-weight);
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .mc-ev-sep {
+  color: var(--v2-faint);
+}
+:root[data-v2="on"] .mc-ev-dur {
+  font-family: var(--v2-font-mono);
+  font-size: var(--type-label);
+  font-variant-numeric: tabular-nums;
+  color: var(--v2-muted);
+  white-space: nowrap;
+}
+:root[data-v2="on"] .mc-ev-verdict {
+  margin: 0;
+  font-size: var(--type-body);
+  line-height: 1.45;
+  color: var(--v2-text);
+}
+/* The F3 honesty framing that used to ride the room's h1 — "live estimate, not benchmark-grade".
+   It qualifies the sentence above it, so it stays with it. */
+:root[data-v2="on"] .mc-ev-note,
+:root[data-v2="on"] .mc-ev-none {
+  margin: 0;
+  font-size: var(--type-label);
+  line-height: 1.4;
+  color: var(--v2-faint);
+}
+
+/* The last session's own numbers. THREE ROW TRACKS = READING_ROWS. */
+:root[data-v2="on"] .mc-ev-readings {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr);
+  grid-template-rows: auto auto auto;
+  align-items: start;
+  row-gap: 7px;
+  column-gap: 14px;
+}
+/* Not a Reading, so it opts into the shared rows by hand — otherwise it sits in the LABEL row
+   alone and the strip grows a fourth line under it. */
+:root[data-v2="on"] .mc-ev-changes {
+  grid-row: span 3;
+  align-self: center;
+  min-width: 0;
+  font-size: var(--type-label);
+  line-height: 1.4;
+  color: var(--v2-muted);
+}
+/* Hairline between readings — the same divider Health's strip uses, for the same reason: three
+   facts side by side must never read as one sentence. */
+:root[data-v2="on"] .mc-ev-readings > * + *,
+:root[data-v2="on"] .mc-ev-sensors > * + * {
+  border-left: 1px solid var(--v2-line);
+  padding-left: 14px;
+}
+
+:root[data-v2="on"] .mc-ev-trace {
+  min-width: 0;
+}
+
+/* One calm sensor strip (the handoff's word), five readings across. THREE ROW TRACKS again. */
+:root[data-v2="on"] .mc-ev-sensors {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-rows: auto auto auto;
+  align-items: start;
+  row-gap: 7px;
+  column-gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--v2-line);
+}
+
+/* ── Below both columns ───────────────────────────────────────────────────────────────────── */
+:root[data-v2="on"] .mc-below {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}

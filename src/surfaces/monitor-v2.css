@@ -107,3 +107,18 @@
 :root[data-v2="on"] .mv2-presets-body[hidden] {
   display: none;
 }
+
+/* ONE HEADER IDIOM PER ROOM (issue #49 slice 4). Live composes the SPLIT shell, whose narrative
+   column already stacks the header for us. Sessions has no evidence column, so it is not split and
+   the shell's linear header applies — a baseline-aligned flex ROW. That was right while the h1 was
+   a single 17px sentence. It is wrong now the h1 carries an eyebrow line above that sentence:
+   `align-items: baseline` aligns a sibling to the h1's FIRST baseline, which is the eyebrow's, so
+   the sub-line would seat itself up beside a two-line heading instead of under it. The room's
+   header therefore stacks on both faces — the same correction Health's own header carries. */
+:root[data-v2="on"] .v2-room[data-room="play"]:not([data-layout="split"]) .v2-verdict {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 14px;
+}

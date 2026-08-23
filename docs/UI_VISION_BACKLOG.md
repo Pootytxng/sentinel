@@ -66,6 +66,35 @@ protocol: a reskin that quietly drops parts of the comp is not the comp):
    "Checked · Fix in Test" band; the comp shows one always-present sub-line. Pre-existing
    2026-08-20 logic, untouched by this train — listed so the difference is not read as drift.
 
+_Slice 4 (Live) adds:_
+
+7. **The evidence column's trace is the LIVE buffer, not a persisted session trace.** The Live comp
+   draws a frame-rate line inside the last-session panel. There is no stored per-frame series
+   behind a session record — `SessionSummary` carries averages, lows and peaks, nothing per-sample —
+   so the picture's line is a design-pass example with no data behind it. The panel shows the real
+   1 Hz capture buffer with its own honest empty state instead. Inventing a stored trace to match
+   the picture is exactly what the honest-measurement law bars. **Making the comp literally true
+   would need a new backend series**, which this train is barred from adding.
+8. **A missing CPU temperature reads as Health's quiet "No reading", not Live's amber pill.** The
+   two approved comps disagree with each other here: Health shows `—` with a quiet grey line, Live
+   shows `—` with an amber outlined NO READING pill. Both rooms now use Health's treatment — the
+   one that passed self-review rounds 11 and 12 and is the shared kit's — because amber is
+   `--v2-warn` ("something is wrong with your PC") and an absent sensor SOURCE is not that. Slice 7
+   is where a single answer has to hold anyway.
+9. **Monitor no longer wears the Instrument-HUD masthead — in either flag state.** Live's approved
+   header is the narrative one (eyebrow → verdict → sentence → action), and Sessions is one tab
+   away, so leaving the HUD masthead on Sessions would have put two header idioms inside one room.
+   Both faces now wear the room's header, the same way UX-1 retired the masthead from Home
+   (`docs/decisions/2026-08-11-design-foundation.md` decision 1 — "the front door is a verdict").
+   The owner title-header law of 2026-07-10 was written against a NOTIFICATION standing in a
+   header; what replaces the title here is the room's measured verdict. Re-pinned in
+   `hud-rooms-flag.test.tsx`, which now also proves no HUD chrome survives on Monitor either way.
+   History still wears the masthead until slice 5.
+10. **Live gains ONE primary action where the room had none.** The comp makes Start capture the
+   dominant action. The control MOVED out of the console's control row rather than being copied,
+   so the screen still carries exactly one capture toggle (`monitor-console.test.tsx` proves the
+   count). Sessions still has no primary action.
+
 **🔧 SELF-REVIEW ROUND 1 — FAIL, fixed, guarded.** The reviewer read the installed room against
 `01-health-approved.png` and caught the h1: at 40px Health said **"Applied Compy changes"**. The
 owner's name-it-and-fix-it-inline law makes the verdict BE the flagged check's label, and

@@ -26,7 +26,6 @@
       "live": "实时",
       "sessions": "会话"
     },
-    "liveTelemetryLabel": "实时遥测",
     "tuningPresetsLabel": "调优预设",
     "tuningPresetsHint": "手动操作清单 · 仅供参考——Compy 不会替你更改任何设置",
     "monitorSectionsAria": "实时分区",
@@ -85,11 +84,24 @@
     "ramLabel": "内存",
     "etwEmph": "从游戏外部观察",
     "etwHonestyPost": "——不向其中添加任何东西，也不会安装深入 Windows 底层的驱动。对反作弊安全。",
+    "narrative": {
+      "eyebrow": "会话监测",
+      "readyHeadline": "随时可以开始",
+      "capturingHeadline": "正在记录你的会话",
+      "busyHeadline": "稍等",
+      "busyAction": "…",
+      "sub": "先开始采集，再去游玩。Compy 从游戏外部观察。",
+      "howItWorks": "采集是怎么做的"
+    },
+    "evidence": {
+      "aria": "上一次会话",
+      "lastSession": "上一次会话",
+      "noSession": "还没有记录任何会话。开始采集并游玩，第一条就会出现在这里。",
+      "sensorsAria": "实时传感器读数"
+    },
     "bento": {
       "deck": "帧生成时间",
-      "readouts": "本次会话",
-      "gauges": "传感器",
-      "scope": "帧率"
+      "readouts": "本次会话"
     }
   },
   "monitorDomainCards": {

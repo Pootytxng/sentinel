@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, fireEvent, within } from "@testing-library/react";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { MonitorV2 } from "./MonitorV2";
 import { BlackbookV2 } from "./BlackbookV2";
 import type { SessionSummary } from "../types";
+import type { ReactNode } from "react";
 
 // Instrument-HUD rollout guards (owner approval 2026-07-06 — supersedes
 // hud-rooms-untouched.test.tsx, exactly as that checkpoint file said it would be; the flag
@@ -28,7 +29,14 @@ vi.mock("./Play", async (importOriginal) => {
   const orig = (await importOriginal()) as Record<string, unknown>;
   return { ...orig, default: () => <div data-testid="play-stub" /> };
 });
-vi.mock("./MonitorConsole", () => ({ MonitorConsole: () => <div data-testid="console-stub" /> }));
+vi.mock("./MonitorConsole", () => ({
+  // Since issue #49 slice 4 the live face composes the room's shell itself; `bar` (the segment
+  // control) is the ROOM's and is handed down to it. The stub passes it through so the Sessions
+  // face — the one MonitorV2 still composes — stays reachable from here.
+  MonitorConsole: (props: { bar?: ReactNode }) => (
+    <div data-testid="console-stub">{props.bar}</div>
+  ),
+}));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn().mockResolvedValue(null) }));
 
 beforeAll(() => {
@@ -69,11 +77,21 @@ const session = {
   compy_changes_active: 1,
 } as SessionSummary;
 
-const ROOMS: { name: string; label: string; title: string; mount: () => HTMLElement }[] = [
+// `hud: false` = this room no longer wears the Instrument-HUD masthead at all. Monitor left it
+// in issue #49 slice 4 (see the Monitor-specific guard below); History follows in slice 5, and the
+// day this list has no `hud: true` room left, this suite retires with the rollout it pins.
+const ROOMS: {
+  name: string;
+  label: string;
+  title: string;
+  hud: boolean;
+  mount: () => HTMLElement;
+}[] = [
   {
     name: "MonitorV2",
     label: "Live telemetry",
     title: "Live",
+    hud: false,
     mount: () =>
       render(
         <MonitorV2
@@ -95,6 +113,7 @@ const ROOMS: { name: string; label: string; title: string; mount: () => HTMLElem
     name: "BlackbookV2",
     label: "Field records",
     title: "History",
+    hud: true,
     mount: () => render(<BlackbookV2 focusId={null} vendor="amd" onClose={() => {}} />).container,
   },
 ];
@@ -112,7 +131,7 @@ const mountWithFlag = (room: (typeof ROOMS)[number], flag: string | null) => {
 };
 
 describe("HUD room rollout: flag-off byte-identity (the classic failsafe)", () => {
-  for (const room of ROOMS) {
+  for (const room of ROOMS.filter((r) => r.hud)) {
     it(`${room.name}: flag='0' renders zero HUD DOM; flag absent (default ON) renders the masthead`, () => {
       const off = mountWithFlag(room, "0");
       expect(off.querySelector(".hud-masthead-eyebrow")).toBeNull();
@@ -125,7 +144,7 @@ describe("HUD room rollout: flag-off byte-identity (the classic failsafe)", () =
 });
 
 describe("HUD room rollout: title-header law (h1 = the room title, never a status sentence)", () => {
-  for (const room of ROOMS) {
+  for (const room of ROOMS.filter((r) => r.hud)) {
     it(`${room.name}: flag on → eyebrow "${room.label}", h1 exactly "${room.title}", no header sub; flag '0' keeps the classic verdict-sentence h1`, () => {
       // Classic contract: the verdict SENTENCE is the h1 (never the bare title).
       const off = mountWithFlag(room, "0");
@@ -145,6 +164,33 @@ describe("HUD room rollout: title-header law (h1 = the room title, never a statu
       expect(on.querySelector(".v2-verdict-sub")).toBeNull();
     });
   }
+
+  // ISSUE #49 SLICE 4 — Monitor left the HUD masthead, and this replaces the two rows it used to
+  // fill in the loops above. It is not a relaxation: the old pins were "under the flag the h1 is
+  // the bare title `Live`" and "the header carries no sub". What the owner's title-header law
+  // (2026-07-10 round 2) actually caught was a NOTIFICATION standing in a header — "1 change you
+  // applied was turned off outside compy" — and UX-1 then replaced the law for Home outright
+  // (docs/decisions/2026-08-11-design-foundation.md decision 1: the front door is a verdict,
+  // because the room title is redundant with the rail that navigated here and the verdict is
+  // redundant with nothing). The approved four-room direction extends that to Live. So what is
+  // pinned now is the part that still protects the user: the header is the room's MEASURED
+  // verdict, the same sentence in both flag states, and no HUD chrome survives in either.
+  it("Monitor: no HUD masthead in EITHER flag state — the four-room header replaced it, identically", () => {
+    for (const flag of ["0", "1"]) {
+      const c = mountWithFlag(ROOMS[0], flag);
+      fireEvent.click(within(c).getByRole("tab", { name: "Sessions" }));
+      expect(c.querySelector(".hud-masthead-eyebrow"), `flag ${flag}`).toBeNull();
+      expect(c.querySelector(".hud-headline"), `flag ${flag}`).toBeNull();
+      // The room's own eyebrow, and an h1 that is the measured verdict — never the bare title.
+      expect(c.querySelector(".mc-masthead-eyebrow")!.textContent).toContain("Session monitor");
+      const h1 = c.querySelector(".v2-verdict h1")!;
+      expect(h1.textContent!.trim()).not.toBe(ROOMS[0].title);
+      expect(h1.textContent).toContain("Last session ran smooth");
+      // LED honesty, carried: nothing is being captured in this fixture, so nothing is lit.
+      expect(c.querySelector(".mc-masthead-eyebrow .mc-led-on")).toBeNull();
+      cleanup();
+    }
+  });
 
   it("Monitor: the sessions-hero top row is hidden ONLY under the classic verdict header (bug→guard, 2026-07-10 self-review catch)", () => {
     // The relocated last-session line (incl. "live estimate") lives on .play-hero-top; the old
@@ -172,7 +218,7 @@ describe("HUD room rollout: LED honesty (real state or no LED)", () => {
   // The scan/ok LED pair was pinned on OptimizeV2, deleted in the 2026-08-06 generation prune.
   // Optimize's live home is lab/OptimizeStation inside LabGround, which renders no masthead of
   // its own — so no room in this suite computes a live state, and none may show an LED.
-  for (const room of ROOMS) {
+  for (const room of ROOMS.filter((r) => r.hud)) {
     it(`${room.name}: no live room state → no LED in the eyebrow`, () => {
       const on = mountWithFlag(room, "1");
       expect(on.querySelector(".hud-masthead-eyebrow .hud-led")).toBeNull();
