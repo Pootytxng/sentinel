@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  DESK_FLEET_RELATIONS,
+  falseEquivalenceClaims,
   LINEAGE_ROW_CAPS,
   embeddedStampTokens,
   extractCitations,
@@ -369,5 +372,179 @@ describe("RELEASE_STATE.md as it stands, against the tree it cites", () => {
     // a warning here as it does at the CLI — `--strict` is a release-gate concern, and failing
     // `npm test` on a few lines of tolerated drift would get this muted rather than fixed.
     expect(citations.length).toBeGreaterThan(10);
+  });
+});
+
+// ── check (8): the desk/fleet relation ───────────────────────────────────────────────────────────
+// The defect these exist for is on the record: between 2026-08-19 and 2026-08-23 the live document
+// carried published_release_commit=5e64074c and owner_installed_stamp=d5a6a630 twelve lines apart
+// while asserting "the owner's desk runs those same bytes -- the deliberate desk/fleet divergence of
+// 2026-08-18 is closed". It passed every gate for four days and a human fixed the words by hand.
+//
+// The first block is the prose detector on its own. The second builds REAL git repositories, because
+// the relation is derived from ancestry and a stubbed comparator would prove only the stub -- the
+// no-raw-select-guard lesson, where a mutation test passed on a string the real sweep never produces.
+
+describe("false-equivalence prose detector", () => {
+  it("fires on the exact sentence that shipped and survived four days", () => {
+    const shipped =
+      "**v0.9.26 (`5e64074c`)**, published 2026-08-19T09:14Z under owner GO, and the\n" +
+      "owner's desk runs those same bytes — **the deliberate desk/fleet divergence of 2026-08-18 is closed.**";
+    expect(falseEquivalenceClaims(shipped).length).toBeGreaterThan(0);
+  });
+
+  it("fires on the softer form that reads as a status rather than a claim", () => {
+    expect(falseEquivalenceClaims("It closes the three-lane desk/fleet gap: the fleet now gets the resolver.")).toHaveLength(1);
+    expect(falseEquivalenceClaims("The desk/fleet divergence is closed.")).toHaveLength(1);
+    expect(falseEquivalenceClaims("Desk and fleet are byte-identical.")).toHaveLength(1);
+  });
+
+  // If the detector cannot tell a ban from its own rationale it gets muted, not fixed.
+  it("stays silent on the corrective wording the document actually needs to carry", () => {
+    const corrected =
+      "**The owner's desk does NOT run those bytes.** It runs a newer, unreleased v0.9.26 desk build.\n" +
+      "Same version number, different commit — never read byte equivalence out of a matching version string.\n" +
+      "The desk/fleet divergence is NOT closed; it is deliberate, and the relation anchor records it.";
+    expect(falseEquivalenceClaims(corrected)).toEqual([]);
+  });
+
+  it("lets one negated sentence excuse only itself, never the paragraph around it", () => {
+    const mixed = "The desk does not run those bytes. The desk/fleet divergence is closed.";
+    expect(falseEquivalenceClaims(mixed)).toHaveLength(1);
+  });
+});
+
+// A REAL repository, because ancestry is the thing under test. `orphan: true` gives the second
+// commit no common ancestor with the first, which is the only way to reach `divergent-history`.
+const gitFixture = ({ orphan = false } = {}) => {
+  const root = mkdtempSync(join(tmpdir(), "release-state-git-"));
+  const git = (...args) =>
+    execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  writeFileSync(join(root, "seed.txt"), "seed\n");
+  git("init", "-q");
+  git("config", "user.email", "guard@example.invalid");
+  git("config", "user.name", "guard");
+  git("config", "commit.gpgsign", "false");
+  git("add", "-A");
+  git("commit", "-q", "-m", "first");
+  const first = git("rev-parse", "--short", "HEAD");
+  if (orphan) git("checkout", "-q", "--orphan", "other-history");
+  writeFileSync(join(root, "second.txt"), "second\n");
+  git("add", "-A");
+  git("commit", "-q", "-m", "second");
+  const second = git("rev-parse", "--short", "HEAD");
+  return { root, first, second, git };
+};
+
+const identityDoc = ({ published, installed, relation, prose = "" }) =>
+  [
+    "# RELEASE_STATE", "", "## CURRENT STATE", "",
+    `<!-- STATE:published_release_commit=${published} -->`,
+    `<!-- STATE:owner_installed_stamp=${installed} -->`,
+    ...(relation ? [`<!-- STATE:desk_fleet_relation=${relation} -->`] : []),
+    "", prose, "",
+    "## Gate matrix", "", "| gate | `f()` — `seed.txt:1` |", "",
+    "## Release blockers", "",
+  ].join("\n");
+
+/** Run verifyRepo over a real git repo whose RELEASE_STATE names real commits, then clean up. */
+const withGitFixture = ({ orphan = false, ...docOpts }, assert) => {
+  const fx = gitFixture({ orphan });
+  try {
+    const doc = join(fx.root, "docs", "RELEASE_STATE.md");
+    mkdirSync(dirname(doc), { recursive: true });
+    writeFileSync(
+      doc,
+      identityDoc({
+        published: docOpts.published(fx),
+        installed: docOpts.installed(fx),
+        relation: docOpts.relation,
+        prose: docOpts.prose,
+      }),
+    );
+    assert(verifyRepo(fx.root), fx);
+  } finally {
+    rmSync(fx.root, { recursive: true, force: true });
+  }
+};
+
+const failures = (r) => r.stateFail.join("\n");
+
+describe("check (8) against real repositories: the relation is derived, not believed", () => {
+  it("accepts a truthfully declared desk-ahead", () => {
+    withGitFixture(
+      { published: (f) => f.first, installed: (f) => f.second, relation: "desk-ahead" },
+      (r) => {
+        expect(failures(r)).not.toContain("RELATION-DRIFT");
+        expect(failures(r)).not.toContain("DIVERGENT-HISTORY");
+        expect(failures(r)).not.toContain("FALSE-EQUIVALENCE");
+      },
+    );
+  });
+
+  // THE defect class: two unequal identities plus a claim that they are the same build.
+  it("rejects a same-commit anchor while the two identities are different commits", () => {
+    withGitFixture(
+      { published: (f) => f.first, installed: (f) => f.second, relation: "same-commit" },
+      (r) => {
+        expect(failures(r)).toContain("RELATION-DRIFT");
+        expect(failures(r)).toContain("says same-commit");
+        expect(failures(r)).toContain("git ancestry says desk-ahead");
+      },
+    );
+  });
+
+  it("names desk-behind when the desk is the older of the two", () => {
+    withGitFixture(
+      { published: (f) => f.second, installed: (f) => f.first, relation: "desk-ahead" },
+      (r) => expect(failures(r)).toContain("git ancestry says desk-behind"),
+    );
+  });
+
+  it("fails closed when neither identity is an ancestor of the other", () => {
+    withGitFixture(
+      { orphan: true, published: (f) => f.first, installed: (f) => f.second, relation: "desk-ahead" },
+      (r) => expect(failures(r)).toContain("DIVERGENT-HISTORY"),
+    );
+  });
+
+  it("rejects same-bytes prose whenever the declared relation is not same-commit", () => {
+    withGitFixture(
+      {
+        published: (f) => f.first,
+        installed: (f) => f.second,
+        relation: "desk-ahead",
+        prose: "The owner's desk runs those same bytes and the desk/fleet divergence is closed.",
+      },
+      (r) => expect(failures(r)).toContain("FALSE-EQUIVALENCE"),
+    );
+  });
+
+  it("treats a missing relation anchor as a failure rather than a pass", () => {
+    withGitFixture(
+      { published: (f) => f.first, installed: (f) => f.second, relation: null },
+      (r) => expect(failures(r)).toContain("STATE:desk_fleet_relation anchor missing"),
+    );
+  });
+
+  it("rejects a relation value that is not one of the four", () => {
+    withGitFixture(
+      { published: (f) => f.first, installed: (f) => f.second, relation: "fine" },
+      (r) => {
+        expect(failures(r)).toContain("RELATION-UNKNOWN");
+        for (const v of DESK_FLEET_RELATIONS) expect(failures(r)).toContain(v);
+      },
+    );
+  });
+
+  // The whole point of deriving from ancestry: an installer hash is not evidence either way. NSIS
+  // packaging is not byte-preserving and Rust release links are not reproducible, so a correct
+  // install of the same commit hashes differently — that spuriously failed a good 0.9.7 install on
+  // 2026-07-23. If check (8) ever reads a hash anchor, this goes red.
+  it("never consults an installer hash to decide the relation", () => {
+    const src = readFileSync(join(resolve(dirname(fileURLToPath(import.meta.url))), "verify-release-state.mjs"), "utf8");
+    const check8 = src.slice(src.indexOf("// (8) DESK/FLEET RELATION"));
+    expect(check8).not.toContain("installer_sha256");
+    expect(check8).not.toContain("published_manifest_sha256");
   });
 });

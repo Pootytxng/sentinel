@@ -46,6 +46,42 @@ export const LINEAGE_ROW_CAPS = {
 };
 const DOC_REL = "docs/RELEASE_STATE.md";
 
+// The only four ways the published build and the owner's desk build can relate (check 8). Derived
+// from git ancestry and NEVER from an artifact hash — see the check's own header for why.
+export const DESK_FLEET_RELATIONS = ["same-commit", "desk-ahead", "desk-behind", "divergent-history"];
+
+// Prose that asserts the desk and the fleet are the SAME BUILD. Check (8) rejects every one of these
+// unless the declared relation is `same-commit`.
+//
+// Segmented and negation-filtered rather than one big regex, because the document has to be able to
+// EXPLAIN the ban without the explanation reading as a violation of it: "never read byte equivalence
+// out of a matching version string" and "the owner's desk does NOT run those bytes" are the correct
+// wording and must stay green. codex-config-guard solves the same problem by stripping comments
+// first; no-raw-select-guard is what happens when nobody thinks about it (its own mutation test
+// passed on a string the real sweep never produces).
+const EQUIVALENCE_CLAIMS = [
+  /\bsame bytes\b/i,
+  /\bidentical bytes\b/i,
+  /\bbyte[- ]identical\b/i,
+  /\bdivergence\b[^.\n]{0,40}\b(?:is|was|are|were)\s+closed\b/i,
+  /\bdesk\/fleet\b[^.\n]{0,60}\b(?:divergence|gap)\b[^.\n]{0,40}\b(?:is|was|are|were)\s+closed\b/i,
+  /\bcloses?\b[^.\n]{0,40}\bdesk\/fleet\b[^.\n]{0,20}\bgap\b/i,
+];
+// One negation excuses only the SEGMENT it sits in, never a whole paragraph — which is why the text
+// is split to sentence granularity before this is applied.
+const NEGATED = /\b(?:not|never|no longer|isn't|aren't|doesn't|rather than|instead of)\b/i;
+
+/** Sentence-ish segments of `docText` that claim desk/fleet equivalence without negating it. */
+export function falseEquivalenceClaims(docText) {
+  return docText
+    .split(/\r?\n/)
+    .flatMap((line) => line.split(/(?<=[.;:])\s+/))
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter((s) => !NEGATED.test(s))
+    .filter((s) => EQUIVALENCE_CLAIMS.some((re) => re.test(s)));
+}
+
 // #123: JavaScript RegExp has no \Z anchor - the old lookahead's `\Z` parsed as a literal letter,
 // so any capital Z inside the section (an ISO timestamp suffix, say) truncated it BEFORE the
 // numbered list and a truthful decision read as STALE. `(?![\s\S])` is JS's real end-of-input;
@@ -403,6 +439,92 @@ function checkCurrentState(root, docLines, { machine }) {
       notes.push(`STATE-SKIP       owner_installed_stamp: ${stamps.length} of ${tokens.length} embedded tokens resolve to a commit (need exactly 1) — anchor left unverified`);
     } else if (stamps[0] !== installedStamp) {
       stateFail.push(`INSTALLED-STAMP-DRIFT: STATE:owner_installed_stamp ${installedStamp} != the stamp embedded in the installed compy.exe (${stamps[0]}) — the build on the owner's desk is not the one CURRENT STATE names; re-stamp it to \`${stamps[0]}\` (and reconcile the owner-installed row with it)`);
+    }
+  }
+
+  // (8) DESK/FLEET RELATION. Why this exists: for four days (2026-08-19 → 2026-08-23) this document
+  // carried STATE:published_release_commit=5e64074c and STATE:owner_installed_stamp=d5a6a630 TWELVE
+  // LINES APART while asserting in prose that the owner's desk ran "those same bytes" and that the
+  // desk/fleet divergence was "closed". Every check above passed. Two independent reasons:
+  // published_release_commit was read by NOTHING — a repo-wide search found exactly one hit, the
+  // anchor defining itself — and no check has ever read a prose claim (check 5 COUNTS "Bottom line"
+  // sections without reading one word of them; 5b caps those two rows' SIZE, not their truth).
+  // An anchor nothing consumes is decoration. A human fixed the words by hand in 848f6bf8; this is
+  // the thing that would have caught it, and would catch it again tomorrow.
+  //
+  // Repo-only ON PURPOSE, unlike (6) and (7): both inputs are source-controlled anchors and the
+  // verdict comes from git ancestry, so it needs no host, no installed binary, no network. It runs on
+  // every `npm test`. The document-internal half needs no git at all.
+  //
+  // IT MUST NEVER COMPARE INSTALLER HASHES. NSIS packaging is not byte-preserving and Rust release
+  // links are not reproducible (PE timestamp + debug GUID differ per link), so a legitimate install
+  // of THIS commit routinely hashes differently from the staged binary — byte-matching the two
+  // spuriously failed a correct 0.9.7/100ace3 install on 2026-07-23, which is why ship-reinstall.ps1
+  // verifies by embedded stamp. Divergence is a question about COMMITS, and only about commits.
+  const publishedCommit = anchor("published_release_commit");
+  const relation = anchor("desk_fleet_relation");
+  if (!publishedCommit) {
+    stateFail.push("STATE:published_release_commit anchor missing from CURRENT STATE");
+  }
+  if (!relation) {
+    stateFail.push(
+      `STATE:desk_fleet_relation anchor missing from CURRENT STATE — declare one of ${DESK_FLEET_RELATIONS.join(" / ")} ` +
+      "so the desk/fleet story is a checkable value rather than a sentence nobody verifies",
+    );
+  } else if (!DESK_FLEET_RELATIONS.includes(relation)) {
+    stateFail.push(`RELATION-UNKNOWN: STATE:desk_fleet_relation ${relation} is not one of ${DESK_FLEET_RELATIONS.join(" / ")}`);
+  } else if (relation !== "same-commit") {
+    // Document-internal contradiction: the doc's OWN anchor says the two builds are different, and
+    // the doc's own prose says they are the same. No git needed to know that cannot both be true.
+    const claims = falseEquivalenceClaims(docText);
+    if (claims.length)
+      stateFail.push(
+        `FALSE-EQUIVALENCE: STATE:desk_fleet_relation is ${relation}, so the desk and the fleet are NOT the same build — ` +
+        `but ${DOC_REL} still claims they are: ${claims.map((c) => JSON.stringify(c.length > 140 ? `${c.slice(0, 140)}…` : c)).join(" · ")}. ` +
+        "A matching version number is not byte equivalence. State the divergence plainly or fix the anchor.",
+      );
+  }
+
+  // The anchor itself is only worth as much as the ancestry it claims, so re-derive it from git.
+  if (!publishedCommit || !installedStamp) {
+    // already failed above / in (7)
+  } else if (gitOut(["rev-parse", "--git-dir"]) === null) {
+    notes.push("STATE-SKIP       desk_fleet_relation: no git history here — the relation anchor is not re-derived");
+  } else if (gitOut(["rev-parse", "--is-shallow-repository"]) === "true") {
+    notes.push("STATE-SKIP       desk_fleet_relation: shallow clone — the relation anchor is not re-derived");
+  } else {
+    const pub = gitOut(["rev-parse", "--verify", "--quiet", `${publishedCommit}^{commit}`]);
+    const desk = gitOut(["rev-parse", "--verify", "--quiet", `${installedStamp}^{commit}`]);
+    if (!pub) {
+      stateFail.push(
+        `PUBLISHED-COMMIT-UNKNOWN: STATE:published_release_commit ${publishedCommit} resolves to no commit in this repo — ` +
+        "the fleet's identity names something that does not exist here",
+      );
+    } else if (!desk) {
+      notes.push(
+        `STATE-SKIP       desk_fleet_relation: STATE:owner_installed_stamp ${installedStamp} resolves to no commit here — relation not re-derived`,
+      );
+    } else {
+      const actual =
+        pub === desk
+          ? "same-commit"
+          : gitOk(["merge-base", "--is-ancestor", pub, desk])
+            ? "desk-ahead"
+            : gitOk(["merge-base", "--is-ancestor", desk, pub])
+              ? "desk-behind"
+              : "divergent-history";
+      if (actual === "divergent-history") {
+        stateFail.push(
+          `DIVERGENT-HISTORY: published ${publishedCommit} and installed ${installedStamp} share no ancestry line — neither is an ` +
+          "ancestor of the other, so the owner's desk is running a build that did not come from the published lineage. This fails " +
+          "closed: reconcile the two identities before any release decision reads this document.",
+        );
+      } else if (relation && DESK_FLEET_RELATIONS.includes(relation) && relation !== actual) {
+        stateFail.push(
+          `RELATION-DRIFT: STATE:desk_fleet_relation says ${relation}, but git ancestry says ${actual} ` +
+          `(published ${publishedCommit}, installed ${installedStamp}) — re-stamp the anchor to \`${actual}\``,
+        );
+      }
     }
   }
 
