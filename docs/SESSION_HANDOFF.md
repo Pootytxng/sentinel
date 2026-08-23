@@ -13,7 +13,7 @@ Worktree `C:\Users\Kuya\code\sentinel-fourroom` · branch `feat/four-room-visual
 
 Slices: 1 shell `34bd33e7` ✅ · 2 Health `40aca1ca` ✅ (round 11) · 3 instrument kit `acdb93c2` ✅
 (round 12) · 4 Live `67ce2724` ✅ (round 13) · 5 History `c894e81c` ✅ · 6 Test `8c9fb804` ✅ ·
-**7 convergence `0c550138` — installed, self-review round 16 IN FLIGHT.**
+**7 convergence `0c550138` — installed, self-review round 16 PASS.** All seven slices built.
 
 ## The standard this train is held to
 
@@ -64,25 +64,21 @@ No Rust diff since `8c9fb804`, so `cargo test` was not re-run.
 
 ## NEXT ACTION (in order)
 
-1. **Read the round-16 self-review verdict.** Dispatched against the installed `0c550138`; it gates
-   everything below. On FAIL: fix → rebuild → `scripts/ship-reinstall.ps1` → re-dispatch a FULL
-   fresh review. **Never re-approve off source inspection or green tsc/vitest — both round-15
-   regressions passed their guards while broken live.** The two measurements that round most needs:
-   the four h1 sizes (Health/Test must compute **52px**, History/Live **40px**, all four subs
-   **15px**), and whether `shell-v2.css`'s `max-width: 20ch` on the split h1 (down from hud-rooms'
-   34ch) wrecks any headline.
-2. **On PASS — `docs/RELEASE_STATE.md:65`.** The "Owner-installed version + embedded stamp" row is
-   STALE at `67ce2724` (slice 4). Rewrite it to `0c550138`, installer SHA-256
-   `8C8DC1DDC0C6F8A6F4FC35B2622DE706FAE4AEC749EFA596291FF76DB71DB0C8`, stamp
-   `0c550138 · release · shell 0.9.26`, demoting `67ce2724` and `8c9fb804` into the lineage. It must
-   come out **shorter** than the row it replaces (doc-budget). Then
-   `node scripts/verify-release-state.mjs`.
-3. **`docs/UI_VISION_BACKLOG.md:25`** — tick slices 6 and 7, and clear **substitution 1** ("Primary
-   action is VIOLET, not green"): the owner overruled the violet, `--v2-cta` is a token now and
-   `comp-fidelity-guard.test.ts` pins it.
-4. **Then hand the head + evidence to Codex** for the independent visual and frontend-contract
-   review the brief requires. "No new IPC" is already true from the branch diff; the formal audit is
-   still owed.
+**Round 16 returned PASS** on the installed `0c550138`, measured at the owner's 1500×980 with
+1280×720 and 1920×1080 spot-checked: Health's verdict computes `column`/`nowrap` with every child
+inside the parent's 721.6px right edge (round 15: 749.6, clipped), h1s **52 · 52 · 40 · 40**, all
+four subs **15px**, 6/6 station subtitles verbatim, eyebrow→headline gap 16px in all four rooms,
+zero `HudMasthead` left in `src/`, `no-debug-port` CLEAN on teardown. `RELEASE_STATE.md:65` and
+`UI_VISION_BACKLOG.md:25` are reconciled to it. So what is left is:
+
+1. **Hand the head + evidence to Codex** for the independent visual and frontend-contract review the
+   brief requires. "No new IPC" is already true from the branch diff — no `invoke` was added or
+   changed on this branch — but the formal audit is still owed and is Codex's, not mine.
+2. **Then the owner's call on pushing `feat/four-room-visual-direction`.** Do not push it without
+   him: #49 authorized local implementation and its verification, explicitly not release.
+3. If anything comes back from Codex: fix → rebuild → `scripts/ship-reinstall.ps1` → **re-dispatch a
+   FULL fresh self-review**. Never re-approve off source inspection or green tsc/vitest — both
+   round-15 regressions passed their existing guards while broken live.
 
 ## Deviations awaiting the owner's sign-off (do not silently resolve)
 

@@ -22,7 +22,7 @@
 These are owner asks that are **never-built or parked**, not yet reflected as active work anywhere
 else. This is the list the owner meant.
 
-### ⭐ FOUR-ROOM. The approved four-room visual direction (issue [#49](https://github.com/Pootytxng/sentinel/issues/49), owner-approved comps 2026-08-23) 🟡 IN BUILD
+### ⭐ FOUR-ROOM. The approved four-room visual direction (issue [#49](https://github.com/Pootytxng/sentinel/issues/49), owner-approved comps 2026-08-23) 🟢 ALL SEVEN SLICES BUILT · unpushed
 
 Four approved PNGs (Health · Live · History · Test) + `HANDOFF.md` in
 `~/.codex/visualizations/2026/08/23/01a02bee.../compy-four-room-handoff/`. Every comp is the SAME
@@ -37,16 +37,17 @@ once, not as four bespoke grids. Build order is the handoff's: shell → Health 
 | 3. Shared instrument kit | ✅ `acdb93c2` — `Reading` → `src/design/console/`; installed; round **12** PASS, re-measured pixel-identical to R11 |
 | 4. Live | ✅ `67ce2724` — installed; self-review round **13** PASS, a real Start→Stop capture exercised on the built app |
 | 5. History | ✅ `c894e81c` — the record becomes a document; shell re-measured off all four comps (content box, topbar, two aside families, `--type-hero`) |
-| 6. Test | □ |
-| 7. Whole-app convergence | □ |
+| 6. Test | ✅ `8c9fb804` — the approved composition; the bench readings ruled apart from the hologram |
+| 7. Whole-app convergence | ✅ `0c550138` — installed; round **16** PASS. Two **cascade ties** closed (a later same-specificity rule was beating `shell-v2.css`, so Health's because-line rendered outside its column and three headlines were 26px against comps measuring 52/40), Test's emoji became the comp's six measured line marks, its row subtitles took the comp's wording, and four drifted room eyebrows became one `RoomEyebrow`. Three guards now walk **every** `.css` under `src/` — a single-file source read cannot see a cascade, which is how round 14 passed green while the app was broken |
 
 **⚠️ SUBSTITUTIONS — shipped simpler than the comp, needing the owner's sign-off** (false-done
 protocol: a reskin that quietly drops parts of the comp is not the comp):
 
-1. **Primary action is VIOLET, not green.** The Health/History/Test comps show a green filled
-   button; Live shows violet. The handoff's own colour contract says violet = focus/direction and
-   green = good/measured, and the live `.hc-front-door` is already violet. Shipping one colour in
-   all four rooms; a before/after goes to the owner for veto on sight.
+1. ~~**Primary action is VIOLET, not green.**~~ **RESOLVED `c894e81c`** — the owner overruled the
+   violet on sight. Health, History and Test wear the green `--v2-cta` their comps draw; Live keeps
+   violet, which is what ITS comp draws. The token lives in `tokens-v2.css` and
+   `comp-fidelity-guard.test.ts` pins it, so a later "let's be consistent" pass cannot flatten the
+   difference back.
 2. **The "What's been happening?" rows carry no icon and no sub-description.** The comp shows both.
    The app has no symptom icon set, and a per-row description would be new copy the interview data
    does not have — and the handoff bars mockup copy from becoming product copy by default. Rows
