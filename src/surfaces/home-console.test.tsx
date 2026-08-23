@@ -852,26 +852,87 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     ).toBe(2 * Number(padM![1]));
   });
 
-  it("CSS: no readout track can be widened by its own content (the readings never collide)", () => {
-    // bug->guard (self-review round 6, issue #49, 2026-08-23). At 1280x720 the readiness cell's
-    // content ran 25px past its own column: "READINESS" and "AVG FPS" touched with zero gap and the
-    // MEASURED pill sat on top of the neighbouring reading. Cause: an `fr` track's AUTOMATIC minimum
-    // is min-content, so the wide first track could not shrink below the ArcGauge's intrinsic width.
-    // The other four tracks already carried minmax(0, ...); this one never did. Two readings that
-    // overlap are not two readings -- an honest-measurement failure, not a spacing nit.
+  it("CSS: the five readings FIT the narrowest supported panel (measured width budget)", () => {
+    // bug->guard (self-review rounds 6 AND 7, issue #49, 2026-08-23). Round 6: the readiness track
+    // was a bare 1.4fr, whose AUTOMATIC minimum is min-content, so it overflowed the CONTAINER by
+    // 25px and "READINESS" touched "AVG FPS" with zero gap. Round 6 clamped it to minmax(0, 1.4fr)
+    // -- and round 7 measured the SAME 25px collision, because an fr share of 1.4/5.4 gives that
+    // track 126px while its instrument needs 151. Clamping a track to zero does not shrink its
+    // contents; it moves the overflow inside the cell. Two readings that touch are not two readings,
+    // so this is an honest-measurement failure, not a spacing nit.
+    // Which is why this guard is the ARITHMETIC and not the syntax: no track declaration is safe on
+    // its own -- what keeps the readings apart is that the five cells, their hairlines, their pads
+    // and their gaps all FIT the panel at 1280x720, the narrowest size the approved handoff
+    // requires. Constants below are measured off the installed build at that size.
+    const CLIENT = 565; // .hc-readout clientWidth, 1280x720 (panel 567.23)
+    const TRACK1 = 151; // 56px ring + 10px .arc-gauge gap + 85px "Readiness" (unbreakable, 13px floor)
+    const CELLS = [73, 73, 76, 76]; // avg fps | 1% low | gpu temp | cpu temp -- widest child of each
+    const HAIRLINE = 1;
+
     const css = readFileSync(join("src", "surfaces", "home-console.css"), "utf8");
+    const tokens = readFileSync(join("src", "design", "tokens-v2.css"), "utf8");
     const readout = block(css, ':root[data-v2="on"] .hc-readout');
+    const divider = /\.hc-readout\s*>\s*\*\s*\+\s*\*\s*\{([^}]*)\}/.exec(stripComments(css));
+    expect(divider, "the readout must still draw a hairline between readings").not.toBeNull();
+
+    // A length here may be a px literal, a v2 token, or the strip's own local variable. Resolve it,
+    // so the budget is checked against what the browser will actually use.
+    const len = (raw: string | undefined, where: string): number => {
+      expect(raw, where + " must declare a length").toBeTruthy();
+      const v = (raw ?? "").trim();
+      const direct = /^(\d+(?:\.\d+)?)px$/.exec(v);
+      if (direct) return Number(direct[1]);
+      const ref = /^var\(\s*(--[\w-]+)\s*\)$/.exec(v);
+      expect(ref, where + ' must be a px literal or one var(), got "' + v + '"').not.toBeNull();
+      const name = ref![1];
+      const find = (hay: string) =>
+        new RegExp(name + ":\\s*(\\d+(?:\\.\\d+)?)px").exec(hay);
+      const hit = find(readout) ?? find(tokens);
+      expect(hit, name + " must resolve to a px value (locally or in tokens-v2.css)").not.toBeNull();
+      return Number(hit![1]);
+    };
+
+    const gap = len(/(?:^|[^-])gap:\s*([^;]+);/.exec(readout)?.[1], ".hc-readout gap");
+    const pad = len(/padding:\s*([^;]+);/.exec(readout)?.[1], ".hc-readout padding");
+    const sep = len(
+      /padding-left:\s*([^;]+);/.exec(divider![1])?.[1],
+      ".hc-readout > * + * padding-left",
+    );
+
+    // The fr tracks split whatever the readiness instrument leaves. Each must clear the WIDEST of
+    // the four readings plus its own hairline and pad -- a total that merely fits on average still
+    // clips GPU TEMP, which is the exact shape of the round-7 defect.
+    const content = CLIENT - 2 * pad;
+    const share = (content - 4 * gap - TRACK1) / 4;
+    const widest = Math.max(...CELLS) + HAIRLINE + sep;
+    expect(
+      share,
+      "at 1280x720 each reading gets " + share + "px but the widest needs " + widest + "px: the " +
+        "readout strip is over-subscribed, so a reading will be clipped or collide with its " +
+        "neighbour. Buy the width back from gap/padding (they carry no reading) -- never from the " +
+        "type floor, and never by wrapping to a second row (--hc-panel-below assumes one).",
+    ).toBeGreaterThanOrEqual(widest);
+
+    const spent =
+      TRACK1 + CELLS.reduce((a, w) => a + w + HAIRLINE + sep, 0) + 4 * gap;
+    expect(spent, "the whole strip must fit its own content box at 1280x720").toBeLessThanOrEqual(
+      content,
+    );
+
+    // …and the declaration has to keep matching that arithmetic: the readiness track sized by its
+    // own instrument (never a share that starves it), the four readings still clamped to zero so
+    // none of them can be widened by its own content.
     const cols = /grid-template-columns:\s*([^;]+);/.exec(readout);
     expect(cols, ".hc-readout must declare its tracks explicitly").not.toBeNull();
-
-    // Every flexible track needs a stated zero minimum. Strip the minmax() calls that HAVE one, then
-    // no bare `fr` may remain -- so a sixth reading added later cannot reintroduce the same defect.
-    const bare = cols![1].replace(/minmax\(\s*0\s*,[^)]*\)/g, "");
     expect(
-      bare,
-      "every fr track in the readout needs minmax(0, ...): an fr track's automatic minimum is " +
-        "min-content, so without it a cell is sized by its content and overlaps its neighbour",
-    ).not.toMatch(/\dfr|\bfr\b/);
+      cols![1].trim(),
+      "the readiness track must keep an intrinsic width (`auto`): an fr share cannot be trusted to " +
+        "cover the instrument, which is how round 7 reproduced round 6's collision",
+    ).toMatch(/^auto\b/);
+    expect(
+      cols![1],
+      "the four reading tracks keep minmax(0, 1fr) so none is widened by its own content",
+    ).toMatch(/repeat\(\s*4\s*,\s*minmax\(\s*0\s*,\s*1fr\s*\)\s*\)/);
   });
 
   it("CSS: Health is ONE fluid composition — no breakpoint, and the readings still clear the fold", () => {

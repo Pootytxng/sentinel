@@ -157,7 +157,23 @@ Health's and the defect is the KIT's, so both halves are fixed at the source: `m
 gauge's own label column and `min-width: 0` on the item, plus `minmax(0, 1.4fr)` on the readout
 track. Guards in `home-console.test.tsx` (no bare `fr` may survive in the readout, so a sixth reading
 cannot reintroduce it) and `arc-gauge.test.tsx` (the kit's own rule, for every room that ever puts a
-gauge in a flexible cell). Both proven to fail on round 5's CSS. **Round 7 is next.**
+gauge in a flexible cell). Both proven to fail on round 5's CSS.
+
+**🔧 SELF-REVIEW ROUND 7 — FAIL, fixed, guarded.** The fluid geometry passed again, and the
+SAME 25px collision came back at 1280×720 by a different mechanism: clamping the readiness track to
+`minmax(0, 1.4fr)` never made its contents smaller — it moved the overflow INSIDE the cell, where
+"Readiness" (one unbreakable word at the 13px type floor) rendered 85px in a 60px box. An fr share of
+1.4/5.4 hands that track 126px while the instrument intrinsically needs 151. So round 6 fixed the
+container and left the reading clipped. This round measured every cell instead of guessing a fourth
+time: readiness 151 · avg fps 73 · 1% low 73 · gpu temp 76 · cpu temp 76, in a 533px content box —
+the strip was **16px over-subscribed**, and the four number cells had under 1px of slack each.
+Nothing that carries meaning could give it back (the ring is the comp's, every label is at the type
+floor, and the strip may not wrap — `--hc-panel-below` is measured against ONE row), so the width
+came out of the separation, which carries no reading: gap and divider padding 12px → 8px, and the
+readiness track becomes `auto` so the instrument sizes itself. 517 ≤ 533, 16px of slack. The guard
+that replaced round 6's is now the **arithmetic** rather than the syntax — no track declaration is
+safe on its own — and it fails on round 6's stylesheet with "each reading gets 83.5px but the widest
+needs 89px". **Round 8 is next.**
 
 ### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) ✅ ALL FIVE BUILT (⑤ shipped to the desk 2026-08-20, awaiting the owner's eye): ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED; owner tried it and said *"i like it"* 2026-08-20, so the default flips ON inside the comprehensibility sweep, which first fixes the button placement he objected to — see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door — SHIPPED 2026-08-20 (desk build `0808e33e`, self-review PASS 10/10); owner veto-on-sight still open**
 

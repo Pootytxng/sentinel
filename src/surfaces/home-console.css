@@ -671,18 +671,31 @@
    equal tiles" failure the bento exists to prevent, in miniature. The 1.4fr first track is measured
    off the approved comp, where the readiness cell is about a third wider than its neighbours
    because it carries the ring, the grade word and the "= n of m checks passed" line. ── */
+/* THE STRIP'S WIDTH BUDGET — measured at 1280x720, the narrowest size the approved handoff requires,
+   where .hc-readout's content box is 533px (clientWidth 565 less its own 16px padding either side).
+   Round 6 clamped the readiness track to minmax(0, 1.4fr) so it could no longer overflow the
+   CONTAINER, and round 7 measured the SAME 25px collision back: an fr share of 1.4/5.4 hands that
+   track 126px while its instrument intrinsically needs 151 (56px ring + 10px .arc-gauge gap + 85px
+   "Readiness", one unbreakable word at the 13px type floor). Clamping a track to zero does not make
+   its contents smaller — it moves the overflow inside the cell. Two readings that touch are not two
+   readings, so this is the honest-measurement law's problem, not a spacing nit.
+   The row was simply 16px over-subscribed, and nothing that carries meaning gives that back: the
+   ring is the comp's, every label is already at the type floor, and the strip may NOT reflow to a
+   second row — the stage clamp's --hc-panel-below is measured against a one-row readout, so wrapping
+   here pushes the readings under the fold, which is the defect rounds 3–5 fought. So the width comes
+   out of the separation, which carries no reading: gap and divider padding drop 12px → 8px (freeing
+   32px), and the readiness track becomes `auto`, sized by its own instrument instead of by a share
+   that was never enough. The hairline still does the separating.
+   MEASURED needs at 1280x720: readiness 151 | avg fps 73 | 1% low 73 | gpu temp 76 | cpu temp 76.
+   Budget: 151 + 4×(1px hairline + 8px pad) + 298 + 4×8px gap = 517 ≤ 533, i.e. 16px of slack.
+   The arithmetic is guarded in home-console.test.tsx, so a sixth reading or a longer label fails the
+   build instead of the screen. */
 :root[data-v2="on"] .hc-readout {
+  --hc-readout-sep: 8px;
   display: grid;
-  /* minmax(0, 1.4fr), NOT a bare 1.4fr — bug->guard (self-review round 6, issue #49, 2026-08-23).
-     An `fr` track's automatic minimum is min-content, so the wide first cell could not shrink below
-     the ArcGauge's intrinsic width: at 1280x720 the readiness cell's content ran 25px past its own
-     column and "READINESS" touched "AVG FPS" with zero gap, the MEASURED pill colliding with the
-     neighbouring reading. The other four tracks already carried the clamp; this one never did. Two
-     readings that overlap are not two readings, which is why this is an honest-measurement failure
-     and not a spacing nit. The gauge needs the matching half of the fix (arc-gauge.css). */
-  grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(0, 1fr));
+  grid-template-columns: auto repeat(4, minmax(0, 1fr));
   align-items: start;
-  gap: var(--v2-pad-sm);
+  gap: var(--hc-readout-sep);
   padding: var(--v2-pad);
   border-top: 1px solid var(--v2-line);
 }
@@ -690,7 +703,7 @@
    be read as one sentence. */
 :root[data-v2="on"] .hc-readout > * + * {
   border-left: 1px solid var(--v2-line);
-  padding-left: var(--v2-pad-sm);
+  padding-left: var(--hc-readout-sep);
 }
 :root[data-v2="on"] .hc-read,
 :root[data-v2="on"] .hc-read-arc {

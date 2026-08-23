@@ -7,7 +7,7 @@
 ## Cycle note — 2026-08-23, four-room visual direction (issue #49) — MID-TRAIN, slice 2 of 7
 
 **Worktree `C:/Users/Kuya/code/sentinel-fourroom`, branch `feat/four-room-visual-direction`, head
-`8fd043d1`, not pushed + UNCOMMITTED R6 work (`home-console.*`, `console/arc-gauge.*`, docs).** Owner brief: implement
+`976cfd0b` + this R7 commit, not pushed.** Owner brief: implement
 the approved comps in `~/.codex/visualizations/2026/08/23/01a02bee-.../compy-four-room-handoff/`
 (`HANDOFF.md` + four PNGs), in the handoff's order: shell → Health → shared instruments → Live →
 History → Test → convergence. **Local implementation only — the brief does NOT authorize release or
@@ -29,7 +29,7 @@ for veto on sight — his silence is not approval).
   the `below` hero and is UNCONDITIONAL (one-hero-guard forbids a conditional hero). Seven guards
   that selected the CORNER a gauge sat in were re-anchored to `data-read="…"`, never deleted.
 
-### Six self-review rounds, six FAILs, eight guards — slice 2 is NOT done
+### Seven self-review rounds, seven FAILs, eight guards — slice 2 is NOT done
 
 Every round was a complete fresh review against `01-health-approved.png` on the INSTALLED build, and
 every fix was proven to FAIL on the pre-fix source first. All four findings were honest-measurement
@@ -43,35 +43,35 @@ and R2 are landed and written up in `docs/UI_VISION_BACKLOG.md` §FOUR-ROOM.
    its clearance was a `padding-bottom`, which clears only a document's END, where `margin-bottom`
    shortens the scroll viewport itself. Same commit: it named the CPU/GPU a THIRD time on Health, so
    the rig segment stands down. Guards `hud-frame-clearance-guard`, `hud-readout-no-duplicate-guard`.
-3. **R3+R4 → `2ea9683d`, `cbb36365`. At 1280×720 the readout strip was sliced** — five labels on
-   screen with none of their five values, which reads as five readings that came back empty. R3
-   lowered the stage floor; R4 found that a floor ALONE does nothing, because the rig is an r3f
-   `<Canvas>` that measures its parent and the parent, having no `height`, is sized by that canvas
-   in turn. An authoritative `height` breaks the circle. Verified on the installed build in R5.
-4. **R5 → `8fd043d1`. Those two shipped as an `@media` block the approved handoff forbids** —
-   *"no responsive media queries. Do not add breakpoints as a shortcut."* The pixels were right and
-   the mechanism was not, and two commits passed a live decision without naming it. Health's
-   geometry is now ONE continuous derivation — `clamp(320px, calc(100vh − named chrome), 500px)` on
-   `.hc-panel`, every subtrahend a named variable. **Verified in R6** at measured viewports
-   971/711/1071, growing and shrinking. Guard rejects any `@media` in the file.
-5. **R6 → UNCOMMITTED. At 1280×720 READINESS and AVG FPS touched with zero gap**, the readiness
-   cell's content running 25px past its own column and the MEASURED pill sitting on its neighbour.
-   Present since the strip was built; six rounds of review missed it. An `fr` track's automatic
-   minimum is min-content, so the wide first track could not shrink below the ArcGauge's intrinsic
-   width — the other four already carried `minmax(0, …)`. **The symptom was Health's, the defect is
-   the console kit's**, so it is fixed at the source (`arc-gauge.css`: `minmax(0, 1fr)` label column
-   + `min-width: 0` on the item) as well as in the readout track. Guards in both files.
+3. **R3+R4 → `2ea9683d`, `cbb36365`. At 1280×720 the readout strip was sliced** — five labels with
+   none of their five values, which reads as five readings that came back empty. R4 found that a
+   floor ALONE does nothing: the rig is an r3f `<Canvas>` that measures its parent, and the parent,
+   having no `height`, is sized by that canvas in turn. An authoritative `height` breaks the circle.
+4. **R5 → `8fd043d1`. Those two shipped as an `@media` block the approved handoff forbids** — *"no
+   responsive media queries. Do not add breakpoints as a shortcut."* Health's geometry is now ONE
+   continuous derivation — `clamp(320px, calc(100vh − named chrome), 500px)` on `.hc-panel`, every
+   subtrahend named. **Verified in R6 and R7** at measured viewports 971/711/1071. Guard bans `@media`.
+5. **R6 → `976cfd0b`. At 1280×720 READINESS and AVG FPS touched with zero gap**, present since the
+   strip was built and missed by six rounds. An `fr` track's automatic minimum is min-content, so the
+   wide first track could not shrink below the ArcGauge's width — the other four already carried
+   `minmax(0, …)`. **The symptom was Health's, the defect the console kit's**, so `arc-gauge.css` got
+   the matching half (`minmax(0, 1fr)` label column + `min-width: 0` on the item). Incomplete — see R7.
+6. **R7 → this commit. The SAME 25px collision came back by a different mechanism.** Clamping a track
+   to zero never made its contents smaller; it moved the overflow INSIDE the cell, and an fr share of
+   1.4/5.4 gives that track 126px where the instrument needs 151. Measured every cell rather than
+   guess a fourth time: the strip was **16px over-subscribed** at 1280×720. Gap and divider padding
+   12→8px, track → `auto`. The guard is now the ARITHMETIC, not the track syntax.
 
-**EXACT NEXT STEP.** R6's fix is in the tree, guarded and gated but NOT committed. Commit it →
-`cargo clean -p compy --release` → `npm run tauri build` → `scripts/ship-reinstall.ps1` → the same
-script `-ProofOnly -ExpectedCommit <full 40-char HEAD>` → **self-review round 7, complete and
-fresh**. Arrive at every size by RESIZING, never by launching there — a cold mount renders correctly
-even on broken CSS, which is how R3's defect survived a round. Prove all three handoff heights
-(1280×720, 1500×980, 1920×1080) and **quote the measured `.hc-stage` box and canvas inline height at
-each** — R6 confirmed the viewports but not those two numbers. On PASS → `docs/RELEASE_STATE.md`
-(line 45 `STATE:owner_installed_stamp`; the desk row at line 65 moved VERBATIM into
-`archive/RELEASE_STATE_HISTORY.md` under that file's existing `### <date> - the <hash> … moved
-verbatim (byte budget)` convention; plus the `d5a6a630` mentions at lines 77, 176, 191) → slice 3.
+**EXACT NEXT STEP.** R7's fix is committed, guarded and gated. `cargo clean -p compy --release` →
+`npm run tauri build` → `scripts/ship-reinstall.ps1` → the same script `-ProofOnly -ExpectedCommit
+<full 40-char HEAD>` → **self-review round 8, complete and fresh**. Arrive at every size by RESIZING,
+never by launching there — a cold mount renders correctly even on broken CSS, which is how R3's
+defect survived a round. Prove all three handoff heights and quote, at each, the `.hc-stage` box, the
+`.hc-stage canvas` inline height, and **every readout cell rect with its label/value scrollWidth** —
+those are the numbers R7's budget is built on, and three rounds were lost to not having them. On PASS
+→ `docs/RELEASE_STATE.md` (line 45 `STATE:owner_installed_stamp`; the desk row at line 65 moved
+VERBATIM into `archive/RELEASE_STATE_HISTORY.md` under its `### <date> - the <hash> … moved verbatim
+(byte budget)` convention; plus the `d5a6a630` mentions at 77, 176, 191) → slice 3.
 
 ## Live traps for whoever is next
 
@@ -111,7 +111,7 @@ room — his veto on sight always stands, and the violet-vs-green call above is 
 checklist's remaining items are money/legal calls that cannot move until Pro exists.
 
 **This session: LEAVE OPEN — slice 2 of 7 is mid-flight in `sentinel-fourroom`.** His live app
-is `8fd043d1`, one installer on the Desktop.
+is `976cfd0b`; R7's fix ships on top of it in this commit.
 
 ## Cycle notes before this train — archived
 
