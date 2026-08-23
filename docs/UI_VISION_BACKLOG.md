@@ -33,7 +33,7 @@ once, not as four bespoke grids. Build order is the handoff's: shell → Health 
 | Slice | State |
 | --- | --- |
 | 1. Shell alignment | ✅ `34bd33e7` — `aside`/`below` slots, `--v2-aside`, grid-areas (no wrapper divs) |
-| 2. Health | ✅ `e6e35dfb` — built; installed evidence + self-review in progress |
+| 2. Health | ✅ `e6e35dfb` + verdict-label fix — installed, self-review round 2 |
 | 3. Shared instrument kit | □ |
 | 4. Live | □ |
 | 5. History | □ |
@@ -59,6 +59,24 @@ protocol: a reskin that quietly drops parts of the comp is not the comp):
    panel on Home on sight (2026-08-12) and the guard keeping it deleted is still green — the
    approved comp's frame ("What's been happening?") and wording are different, and the comp is the
    newer decision. Flagging it anyway, because it is the same slot he once rejected.
+5. **The rig keeps its control row (3D / Cards / Exploded / Orbit / All parts);** the static comp
+   shows no controls between stage and readout. The handoff's own Health spec requires preserving
+   that behaviour, so the comp is the incomplete half here, not the build.
+6. **In the attention state the verdict sub-line stands down** in favour of the separate
+   "Checked · Fix in Test" band; the comp shows one always-present sub-line. Pre-existing
+   2026-08-20 logic, untouched by this train — listed so the difference is not read as drift.
+
+**🔧 SELF-REVIEW ROUND 1 — FAIL, fixed, guarded.** The reviewer read the installed room against
+`01-health-approved.png` and caught the h1: at 40px Health said **"Applied Compy changes"**. The
+owner's name-it-and-fix-it-inline law makes the verdict BE the flagged check's label, and
+`system-posture.test.ts` pins `headline === label` — but every Attention branch in
+`src-tauri/src/readiness.rs` emitted a neutral category noun, so the law produced a filing-cabinet
+tab. The guard's own fixture ("Monitor below max refresh") is what its author expected the catalog
+to emit; it never did. **All ten Attention labels now name the finding** (calm rows keep their
+category label, which is correct for a row that says "fine"), and
+`src/surfaces/readiness-attention-label-guard.test.ts` scans the Rust catalog and fails if any check
+ever reuses its calm label for its attention state. Proven to fail on the old source before the fix
+landed.
 
 ### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) ✅ ALL FIVE BUILT (⑤ shipped to the desk 2026-08-20, awaiting the owner's eye): ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED; owner tried it and said *"i like it"* 2026-08-20, so the default flips ON inside the comprehensibility sweep, which first fixes the button placement he objected to — see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door — SHIPPED 2026-08-20 (desk build `0808e33e`, self-review PASS 10/10); owner veto-on-sight still open**
 

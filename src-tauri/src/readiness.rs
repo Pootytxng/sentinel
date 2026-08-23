@@ -150,7 +150,7 @@ pub(crate) fn evaluate_readiness(
         ),
         Some(d) => check(
             "monitor-refresh",
-            "Monitor refresh rate",
+            "Monitor below max refresh",
             ReadinessStatus::Attention,
             format!(
                 "Running at {} Hz but the display supports {} Hz. Set the higher rate in Windows \
@@ -175,7 +175,7 @@ pub(crate) fn evaluate_readiness(
         checks.push(match (below, any_known) {
             (Some(m), _) => check(
                 "memory-speed",
-                "Memory speed",
+                "Memory below its rated speed",
                 ReadinessStatus::Attention,
                 "Your RAM is running below its rated speed — enabling EXPO/XMP in BIOS unlocks the \
                  speed the kit is sold at. It's a BIOS memory profile, not something Compy changes.",
@@ -212,7 +212,7 @@ pub(crate) fn evaluate_readiness(
         checks.push(match (populated, soldered_lpddr) {
             (1, false) => check(
                 "memory-channels",
-                "Memory channels",
+                "Memory running single-channel",
                 ReadinessStatus::Attention,
                 "You have a single RAM stick — adding a matching second stick enables dual-channel \
                  memory, a real bandwidth gain for gaming. It's a hardware add, not a BIOS setting.",
@@ -366,7 +366,7 @@ pub(crate) fn evaluate_readiness(
         checks.push(match (bad, any_healthy) {
             (Some(d), _) => check(
                 "drive-health",
-                "Drive health",
+                "Drive reporting a SMART warning",
                 ReadinessStatus::Attention,
                 "A drive is reporting a SMART health warning. Back up important data and check the \
                  drive with its vendor's tool — this can precede a failure.",
@@ -557,7 +557,7 @@ pub(crate) fn evaluate_readiness(
             } else {
                 check(
                     "install-drive",
-                    "Game install drive",
+                    "Games on slow storage",
                     ReadinessStatus::Attention,
                     "Only HDD storage was detected. Games load and stream textures much slower on \
                      an HDD than on an SSD/NVMe drive.",
@@ -573,7 +573,7 @@ pub(crate) fn evaluate_readiness(
                 .collect();
             check(
                 "install-drive",
-                "Game install drive",
+                "A game library on an HDD",
                 ReadinessStatus::Attention,
                 format!(
                     "A game library is on an HDD ({}). Games load and stream textures much slower \
@@ -660,7 +660,7 @@ pub(crate) fn evaluate_readiness(
                 ),
                 Some(age) => check(
                     "gpu-driver-age",
-                    "GPU driver age",
+                    "GPU driver over a year old",
                     ReadinessStatus::Attention,
                     format!(
                         "{} driver is over a year old ({} days). Updating is recommended.",
@@ -694,7 +694,7 @@ pub(crate) fn evaluate_readiness(
             },
             Some(false) => ReadinessCheck {
                 id: "vrr",
-                label: "Variable refresh rate (G-SYNC / FreeSync)",
+                label: "Variable refresh rate is off",
                 // Gains-based: a verified supported-but-OFF VRR is a MODEST, clearly-perceptible win
                 // (smoother pacing + no tearing across the whole refresh range) — above negligible,
                 // so it earns Attention, with the magnitude stated so the user can gauge it.
@@ -785,7 +785,7 @@ pub(crate) fn evaluate_readiness(
             } else {
                 check(
                     "power-profile",
-                    "Power profile",
+                    "Power plan isn't performance-oriented",
                     ReadinessStatus::Attention,
                     format!(
                         "Active plan \"{}\". A performance plan (High performance / Ultimate \
@@ -853,7 +853,7 @@ pub(crate) fn evaluate_readiness(
             };
             let mut ac = check(
                 "applied-changes",
-                "Applied Compy changes",
+                "Compy changes were turned back off",
                 ReadinessStatus::Attention,
                 detail,
                 Some(format!(
