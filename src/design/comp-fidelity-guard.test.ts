@@ -118,3 +118,88 @@ describe("comp fidelity — the colour-coded alert ladder the owner asked to kee
     );
   });
 });
+
+describe("comp fidelity — Health, matched against 01-health-approved.png", () => {
+  const tokens = read("src", "design", "tokens-v2.css");
+  const home = read("src", "surfaces", "home-console.css");
+  const reading = read("src", "design", "console", "reading.css");
+  const arc = read("src", "design", "console", "arc-gauge.css");
+
+  it("the ladder is complete: green, amber AND red, each its own token", () => {
+    // The owner's words were "green yellow red". The v2 layer had the first two and stopped, so a
+    // genuinely bad reading had to borrow amber and read as merely noteworthy. --v2-bad is not a
+    // new colour — it is --ix-danger (#f3716f), the red this app has always used, given a v2 name.
+    const m = tokens.match(/--v2-bad:\s*(#[0-9a-fA-F]{6})/);
+    expect(m, "--v2-bad must live in the token layer").not.toBeNull();
+    const [, hex] = m!;
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    expect(r, `${hex} must be red-dominant`).toBeGreaterThan(g + 60);
+    expect(r).toBeGreaterThan(b + 60);
+    // …and each grade tier resolves to its OWN rung. A future "simplify the tones" pass that
+    // collapses two of these into one has flattened the thing the owner explicitly asked to keep.
+    expect(body(arc, ':root[data-v2="on"] .ag-grade-good')).toMatch(/color:\s*var\(--v2-ok\)/);
+    expect(body(arc, ':root[data-v2="on"] .ag-grade-warn')).toMatch(/color:\s*var\(--v2-warn\)/);
+    expect(body(arc, ':root[data-v2="on"] .ag-grade-bad')).toMatch(/color:\s*var\(--v2-bad\)/);
+  });
+
+  it("the attention verdict is WHITE — the eyebrow dot carries the state, not the sentence", () => {
+    // Sampled: the comp's "One thing needs your attention" is rgb(229,234,240), and the only amber
+    // on that screen is the 6px dot beside RIG DIAGNOSTIC. An amber HEADLINE at 40px is the room
+    // shouting; a dot is the room pointing. Both say the same thing and only one of them is calm.
+    const b = body(home, ':root[data-v2="on"] .v2-verdict h1:has(.hc-verdict-attention)');
+    expect(b, "the attention headline rule moved or was renamed").not.toBe("");
+    expect(b).toMatch(/-webkit-text-fill-color:\s*var\(--v2-text\)/);
+    expect(b, "the headline must not wear the warn token").not.toContain("--v2-warn");
+  });
+
+  it("Health's one action sits under its own sentence, not out at the far margin", () => {
+    // `margin-left: auto` pushed the button to the right edge of the narrative column, where it
+    // read as a dismissal ("OK") instead of an offer. The comp puts it flush left under the count.
+    const b = body(home, ':root[data-v2="on"] .v2-room[data-room="home"] .v2-verdict-action');
+    expect(b, "the Home action-placement rule is gone").not.toBe("");
+    expect(b, "no auto margin — the action is left-aligned under the sub-line").not.toMatch(
+      /margin-left:\s*auto/,
+    );
+  });
+
+  it("a healthy number is WHITE with a green stamp beside it, never tinted", () => {
+    // The comp draws 191 / 152 / 49°c in plain white and puts the colour in the MEASURED pill. The
+    // accent tint on .rd-v made every good reading violet, which is the room's ACCENT — so a
+    // healthy number and a linked control wore the same ink and neither meant anything.
+    expect(reading, "the accent tint on a reading's value must stay deleted").not.toMatch(
+      /\.rd-accent\s+\.rd-v\s*\{[^}]*color:/,
+    );
+    expect(body(reading, ':root[data-v2="on"] .rd-warn .rd-v')).toMatch(/color:\s*var\(--v2-warn\)/);
+  });
+
+  it("the rescue row's name is plain — the accent is on the ring and on Open", () => {
+    // It used to be accent-coloured mono, which made a door out of Windows' crash log look like a
+    // code identifier. The comp sets the name in white sans and colours the two parts that say
+    // "this is a door": the life ring and the word Open.
+    const label = body(home, ':root[data-v2="on"] .hc-care-label');
+    expect(label).toMatch(/color:\s*var\(--v2-text\)/);
+    expect(label, "a rescue door is not an identifier").not.toContain("mono");
+    expect(body(home, ':root[data-v2="on"] .hc-care-open')).toMatch(
+      /color:\s*var\(--v2-accent-text, var\(--v2-accent\)\)/,
+    );
+    expect(body(home, ':root[data-v2="on"] .hc-care-ico')).toMatch(
+      /color:\s*var\(--v2-accent-text, var\(--v2-accent\)\)/,
+    );
+    // And the row is not a card: a border around it made it read as a fourth answer to the
+    // question above, which it is not. A rule above it says "different thing" instead.
+    expect(body(home, ':root[data-v2="on"] .hc-care')).toMatch(
+      /border-top:\s*1px solid var\(--v2-line\)/,
+    );
+  });
+
+  it("each symptom card carries its glyph in the room's accent", () => {
+    expect(body(home, ':root[data-v2="on"] .hc-happening-ico')).toMatch(
+      /color:\s*var\(--v2-accent-text, var\(--v2-accent\)\)/,
+    );
+    // The grey second line is body copy, not another instrument label — no tracking, no caps.
+    const sub = body(home, ':root[data-v2="on"] .hc-happening-sub');
+    expect(sub, "the card's description line is missing").not.toBe("");
+    expect(sub).toMatch(/color:\s*var\(--v2-muted\)/);
+    expect(sub).not.toContain("text-transform");
+  });
+});

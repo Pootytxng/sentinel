@@ -36,6 +36,18 @@
 :root[data-v2="on"] .ag-tag { align-self: flex-start; font-size: var(--type-label); letter-spacing: .1em;
   padding: 1px 5px; border: 1px solid var(--ready); color: var(--ready); }
 :root[data-v2="on"] .ag-tag-ny { border-color: var(--v2-warn, #f5c542); color: var(--v2-warn, #f5c542); }
+/* THE GRADE WORD (01-health-approved.png, owner ruling 2026-08-23). Not a pill: the MEASURED
+   tag is boxed because it is a stamp of provenance and has to read as a badge, whereas the
+   grade is the gauge's ANSWER and reads as a word. Tracked like the label it sits under, so
+   the label column stays one voice. The comp draws a hairline between it and the note below,
+   which is why this is an adjacent-sibling rule and not `.ag-note { border-top }`: only a
+   GRADED gauge gets the rule, and every ungraded one keeps its note flush as before. */
+:root[data-v2="on"] .ag-grade { align-self: flex-start; font-size: var(--type-label);
+  letter-spacing: .1em; font-weight: 700; }
+:root[data-v2="on"] .ag-grade-good { color: var(--v2-ok); }
+:root[data-v2="on"] .ag-grade-warn { color: var(--v2-warn); }
+:root[data-v2="on"] .ag-grade-bad { color: var(--v2-bad); }
+:root[data-v2="on"] .ag-grade + .ag-note { border-top: 1px solid var(--v2-line); padding-top: 5px; }
 /* The "how we calculate this" line (consumer-panel Phase 2): plain sentence case, no tracking —
    it's an explanation, not another instrument label. */
 :root[data-v2="on"] .ag-note { font-size: var(--type-label); letter-spacing: 0; text-transform: none;

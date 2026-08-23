@@ -4,7 +4,8 @@
       "eyebrow": "主机诊断"
     },
     "care": {
-      "label": "崩溃与卡死救援"
+      "label": "崩溃与卡死救援",
+      "open": "打开"
     },
     "intake": {
       "rows": {
@@ -32,7 +33,7 @@
       "storage": "存储",
       "gpu": "GPU",
       "cpu": "CPU",
-      "cpuNoTemp": "无 CPU 温度——见下方"
+      "cpuNoTemp": "无读数 · 见下方"
     },
     "happening": {
       "eyebrow": "最近发生了什么？",
@@ -63,7 +64,12 @@
     },
     "stage": {
       "readinessLabel": "就绪度",
-      "readinessNote": "= {{total}} 项检测中通过 {{passed}} 项",
+      "readinessNote": "{{total}} 项检查中通过 {{passed}} 项",
+      "readinessGrade": {
+        "good": "良好",
+        "fair": "尚可",
+        "poor": "需要处理"
+      },
       "avgFps": "平均 FPS",
       "onePercentLow": "1% 低帧",
       "gpuTemp": "GPU 温度",
@@ -89,6 +95,10 @@
     },
     "cpuTemp": {
       "tileTitle": "CPU 温度"
+    },
+    "verdict": {
+      "attentionSub_one": "{{total}} 项检查中有 {{count}} 项表现良好。",
+      "attentionSub_other": "{{total}} 项检查中有 {{count}} 项表现良好。"
     }
   },
   "interview": {
@@ -96,10 +106,13 @@
       "start": {
         "question": "你的电脑现在怎么了？",
         "crash": "它崩溃、卡死，或者自己重启了",
+        "crashHint": "游戏或 Windows 意外关闭。",
         "slow": "游戏感觉慢、卡顿或不流畅",
+        "slowHint": "帧率变低、加载变慢或出现卡顿。",
         "heat": "机器很烫，或者风扇很响",
         "changed": "我改了一些设置——有用吗？",
-        "unsure": "我不确定——帮我整体看看"
+        "unsure": "我不确定——帮我整体看看",
+        "unsureHint": "感觉哪里不对劲，但说不上来。"
       },
       "crash": {
         "question": "它什么时候发生？",

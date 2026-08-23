@@ -97,10 +97,17 @@
    never a second alarm). The ambient-HUD foil paints the h1 through background-clip:text with a
    transparent fill, which would swallow that hue, so the warn state opts out of the foil rather
    than losing the colour. COLOR-1 §4 still holds: the WORD carries the state, hue only agrees. */
+/* THE VERDICT IS NOT COLOUR-CODED (owner ruling 2026-08-23, comp fidelity). 01's verdict reads
+   "One thing needs your attention" and is drawn WHITE — sampled rgb(229,234,240) — even in the
+   state that names a problem. The colour-coded ladder the owner asked to keep lives on readings
+   and notifications: the amber eyebrow dot right above this line is already carrying the state.
+   An amber 40px sentence is not a grade, it is alarm paint on prose, and it makes every visit
+   where one check needs attention read like a failure. The gradient/animation stand-down for the
+   attention state is kept — a celebration sweep under a problem sentence was the original bug. */
 :root[data-v2="on"] .v2-verdict h1:has(.hc-verdict-attention) {
   background-image: none;
-  -webkit-text-fill-color: var(--v2-warn);
-  color: var(--v2-warn);
+  -webkit-text-fill-color: var(--v2-text);
+  color: var(--v2-text);
   animation: none;
 }
 :root[data-v2="on"] .hc-mono {
@@ -120,15 +127,19 @@
 :root[data-v2="on"] .hc-verdict-dek {
   color: inherit;
 }
-/* THE ONE ACTION. The only filled accent button on this screen — everything else here is an
-   outline (re-run), a card (care), a door (dock) or a toggle (view controls), so the Duolingo
-   rule holds by weight rather than by deletion. It rides the RIGHT END of the verdict line
-   (owner pick 2026-08-20, issue #180 §C — the earlier "left-aligned under the verdict" call is
-   superseded): margin-left:auto is the base shell's seat for a room action, and `order` keeps
-   it on the verdict's row ahead of the full-width because-line. */
+/* THE ONE ACTION. The only filled button on this screen — everything else here is an outline
+   (re-run), a card (care), a door (dock) or a toggle (view controls), so the Duolingo rule holds
+   by weight rather than by deletion.
+   LEFT, under the because-line (owner ruling 2026-08-23: the four approved comps back on the
+   table, "this is exactly how its supposed to look"). 01-health-approved.png stacks the column
+   flush left — eyebrow, headline, sub, button — and every other room's comp does the same. That
+   RE-SUPERSEDES the 2026-08-20 issue #180 §C pick that seated it at the right end of the verdict
+   row; the picture is newer than the pick and the owner put it back on the table himself.
+   `order: 1` stays, and in this column it is what puts the button LAST, after the sub-line. The
+   base shell's margin-left:auto is what pulled it right, so the override that re-asserted it is
+   gone rather than fought with a third rule. */
 :root[data-v2="on"] .v2-room[data-room="home"] .v2-verdict-action {
   order: 1;
-  margin-left: auto;
 }
 :root[data-v2="on"] .hc-front-door {
   display: inline-flex;
@@ -797,12 +808,16 @@
   flex-direction: column;
   gap: 8px;
 }
+/* THE COMP'S CARD (owner ruling 2026-08-23): glyph · title over one grey line · chevron.
+   A three-column grid rather than flex with space-between, because the middle column is the
+   only one allowed to take the slack — under flex the chevron drifted away from the card edge
+   as the title got shorter, and the three cards' chevrons stopped lining up with each other. */
 :root[data-v2="on"] .hc-happening-row {
   width: 100%;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--v2-pad-sm);
+  gap: 14px;
   text-align: left;
   padding: 14px var(--v2-pad);
   background: var(--v2-panel);
@@ -819,9 +834,30 @@
   outline: 2px solid var(--v2-accent);
   outline-offset: 2px;
 }
+/* The glyph is the room's accent — it is the one coloured thing on a resting card, and it
+   marks the card as a DOOR rather than a statement. It does not change on hover: the border
+   and the chevron already answer the pointer, and a third response to one gesture is noise. */
+:root[data-v2="on"] .hc-happening-ico {
+  display: flex;
+  color: var(--v2-accent-text, var(--v2-accent));
+}
+:root[data-v2="on"] .hc-happening-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
 :root[data-v2="on"] .hc-happening-label {
   font: 600 var(--type-card) var(--v2-font-sans);
   color: var(--v2-text);
+  min-width: 0;
+}
+/* The interview's own elaboration of the answer above it. Sentence case, body register, no
+   tracking — it is a sentence a person says, not an instrument label. */
+:root[data-v2="on"] .hc-happening-sub {
+  font-size: var(--type-body);
+  color: var(--v2-muted);
+  line-height: 1.45;
   min-width: 0;
 }
 :root[data-v2="on"] .hc-happening-go {
@@ -932,12 +968,18 @@
    rescue. Deliberately quieter than the verdict above it and calmer than a fast-path button: it is
    a sign, not a call to action, and a user who is NOT in trouble should be able to ignore it
    without effort. Tokens only (no literal colours) — pinned by the tokens-v2 guard. */
+/* NO CARD (owner ruling 2026-08-23). 01-health-approved.png draws this as a plain row under
+   a hairline, not as a glass panel — and the comp is right for a reason worth writing down:
+   the three cards above it are the answers to one question, and boxing the rescue door the
+   same way made it read as a fourth answer to that question, which it is not. A rule above
+   it says "different thing" more accurately than a border around it. */
 :root[data-v2="on"] .hc-care {
   display: flex;
-  margin: 12px 0 0;
-  background: var(--ix-glass-fill);
-  border: 1px solid var(--ix-glass-border);
-  border-top-color: var(--ix-glass-top);
+  margin: var(--v2-pad) 0 0;
+  padding-top: var(--v2-pad);
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--v2-line);
   /* NO SIDE STRIPE (2026-08-18). A >1px coloured `border-left` used as an accent on a card or
      callout is a banned pattern — it is the reflex move, never a designed one, and on Home it made
      the calmest row on the screen shout in accent while the verdict above it did not. The signal
@@ -947,12 +989,13 @@
   overflow: hidden;
 }
 :root[data-v2="on"] .hc-care-entry {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 14px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
   width: 100%;
-  padding: 10px 18px;
+  padding: 10px 14px;
+  border-radius: var(--v2-r-sm);
   border: 0;
   background: transparent;
   color: inherit;
@@ -972,24 +1015,39 @@
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
-/* The three parts read as ONE line, left to right, each only as wide as its own words.
-   They are deliberately NOT on the intake rows' fixed 340px column grid: that grid exists so four
-   stacked rows line up with each other, and a single entry on it inherits the gap without the
-   alignment — a visual self-review on the installed 0.9.16 build showed the because-line stranded
-   ~130px out in open space with nothing above or below it to line up against. */
+/* THE ACCENT MOVED FROM THE NAME TO THE GLYPH AND THE VERB. The name used to be the only
+   coloured thing here, in mono, which made a rescue door look like a code identifier. In the
+   comp the name is plain white sans — it is a thing you can have, not a symbol — and the
+   accent sits on the life ring and on "Open", which are the two parts that say it is a door.
+   Same signal, on the parts that carry it. (The 2026-08-18 no-side-stripe note above still
+   holds: the row has no stripe and never gets one.) */
+:root[data-v2="on"] .hc-care-ico {
+  display: flex;
+  color: var(--v2-accent-text, var(--v2-accent));
+}
+:root[data-v2="on"] .hc-care-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
 :root[data-v2="on"] .hc-care-label {
-  flex: none;
-  font-weight: 600;
-  color: var(--ix-accent-text);
+  font: 600 var(--type-card) var(--v2-font-sans);
+  color: var(--v2-text);
 }
+/* Not italic any more: the comp sets it as ordinary body copy, and italics on a sentence the
+   user is meant to recognise as THEIR OWN situation reads as a quotation of someone else. */
 :root[data-v2="on"] .hc-care-symptom {
-  flex: 0 1 auto;
   min-width: 0;
-  font-style: italic;
-  color: var(--ix-text-2);
+  font-size: var(--type-body);
+  color: var(--v2-muted);
+  line-height: 1.45;
 }
-:root[data-v2="on"] .hc-care-because {
-  flex: 0 1 auto;
-  min-width: 0;
-  color: var(--ix-text-3);
+:root[data-v2="on"] .hc-care-open {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font: 600 var(--type-body) var(--v2-font-sans);
+  color: var(--v2-accent-text, var(--v2-accent));
+  white-space: nowrap;
 }

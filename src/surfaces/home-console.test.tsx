@@ -218,7 +218,11 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
     expect(c.querySelector(".hc-led-scan")).toBeNull();
     // The check line is a plain sentence now, not the `3/3` ratio the navigation audit put on its
     // own jargon list (2026-08-11 §3). Same measured fact, said the way a person would say it.
-    expect(c.querySelector(".v2-measured")!.textContent).toContain("All 3 checks look good");
+    // QUERIED BY THE BAND'S OWN CLASS, not by the shell slot it used to occupy (owner ruling
+    // 2026-08-23): 01-health-approved.png draws nothing under the verdict, so the band moved out
+    // of `measured` and into `below`. What this test cares about is the SENTENCE, which is
+    // unchanged — pinning it to a slot was pinning the wrong thing.
+    expect(c.querySelector(".rcb")!.textContent).toContain("All 3 checks look good");
   });
 
   // UX-1 decision 1's second half: ONE action. The front door is the screen's only filled primary
@@ -281,8 +285,9 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
     const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
     expect(c.querySelector(".hc-front-door"), "the fresh-install front door is missing").not.toBeNull();
     expect(c.querySelectorAll(".hc-front-door")).toHaveLength(1);
-    // Neither of these was ever gated on the flag; they ride along in every state.
-    expect(c.querySelector(".hc-rerun-band, .v2-measured")).not.toBeNull();
+    // Neither of these was ever gated on the flag; they ride along in every state. (`.rcb` is
+    // the band's own root; it moved out of the shell's `measured` slot on 2026-08-23.)
+    expect(c.querySelector(".rcb")).not.toBeNull();
     expect(c.querySelector(".hc-care-entry")).not.toBeNull();
   });
 
@@ -330,8 +335,14 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
       attention_count: 1,
     };
     const c = mount({ ...props, readiness: attn }).container;
-    // No because-line node at all in the attention state…
-    expect(c.querySelector(".v2-verdict-sub"), "attention dek must stand down").toBeNull();
+    // THE DEK STANDS DOWN; A COUNT STANDS UP (owner ruling 2026-08-23). §C barred the flagged
+    // check's DETAIL PARAGRAPH from the header, and that is still what this test guards — the
+    // assertion below it, which is the one that actually catches the defect, is untouched.
+    // 01-health-approved.png draws "15 of 16 checks look good." in this exact position, so the
+    // sub node exists again; what may never come back is the paragraph.
+    const sub = c.querySelector(".v2-verdict-sub");
+    expect(sub, "the comp's count line").not.toBeNull();
+    expect(sub!.textContent, "the count, not the check's prose").toBe("1 of 2 checks looks good.");
     // …so the paragraph is nowhere in the header. The named headline stays.
     expect(c.querySelector(".v2-verdict")!.textContent).not.toContain("turn it back on");
     expect(c.querySelector(".hc-verdict-line")!.textContent).toContain("Applied Compy changes");
@@ -385,7 +396,9 @@ describe("HomeConsole — the console stage (the real rig + its honest readout)"
     for (const id of ["avgFps", "low1", "gpuTemp"]) {
       const r = readout(c, id);
       expect(r.unmeasured, `${id} must say why there is no reading`).not.toBeNull();
-      expect(r.value, `${id} readout`).toBe("— —");
+      // ONE dash, not two (owner ruling 2026-08-23). Every approved comp draws a single em-dash
+      // for a reading with no source; the doubled dash was mine and read as a redaction.
+      expect(r.value, `${id} readout`).toBe("—");
     }
   });
 
@@ -403,7 +416,9 @@ describe("HomeConsole — the console stage (the real rig + its honest readout)"
     cleanup();
     const checking = mount({ ...props, readiness: null, priorities: null }).container;
     expect(readout(checking, "readiness").unmeasured).not.toBeNull();
-    expect(checking.querySelector(".v2-measured")!.textContent).toContain("Checking your PC now");
+    // `.rcb` = the band's own root. It moved out of the shell's `measured` slot on 2026-08-23
+    // (see the note on the front-door test above); the sentence it prints is unchanged.
+    expect(checking.querySelector(".rcb")!.textContent).toContain("Checking your PC now");
   });
 
   it("GPU temp reading shows the polled value once it lands", async () => {
@@ -418,8 +433,11 @@ describe("HomeConsole — the console stage (the real rig + its honest readout)"
   it("CPU temp: unreadable stays unreadable, and still points at the fix", () => {
     const c = mount().container;
     const r = readout(c, "cpuTemp");
-    expect(r.value).toBe("— —");
-    expect(r.unmeasured!.textContent).toBe("no CPU temp — see below");
+    expect(r.value).toBe("—");
+    // "No reading" is the comp's wording (01-health-approved.png prints exactly that under CPU
+    // TEMP); "see below" is C-19's requirement that an unmeasured reading is never a dead end,
+    // and the CpuTempOffer tile it points at is literally below this strip. Both, in one line.
+    expect(r.unmeasured!.textContent).toBe("No reading · see below");
     // …and it is stated exactly once. It used to print on the annotation plane; printing it in
     // both places would be the same number twice on one screen.
     expect(c.querySelectorAll(".hc-ann .hc-callout-v").length).toBeLessThanOrEqual(3);
@@ -1194,5 +1212,44 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
       px["hc-hud-reserve"],
       "Health must reserve at least the HUD readout band's own height",
     ).toBeGreaterThanOrEqual(hudMargin);
+  });
+});
+
+// ── 01-health-approved.png, the narrative column below the fold (owner ruling 2026-08-23) ────────
+// The comp draws three symptom CARDS (glyph · title · one grey line · chevron) and, under a rule,
+// one rescue ROW (life ring · name · the user's own symptom · Open). These pin the parts that were
+// wrong, and one that must never come back.
+describe("HomeConsole — the symptom cards and the rescue row match the comp", () => {
+  it("each card carries a glyph, the interview's own title, and its own second line", () => {
+    const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
+    const rows = Array.from(c.querySelectorAll(".hc-happening-row"));
+    expect(rows.length, "the three shortcuts are gone").toBe(3);
+    for (const row of rows) {
+      expect(row.querySelector(".hc-happening-ico svg"), "a card with no glyph").not.toBeNull();
+      expect(row.querySelector(".hc-happening-label")!.textContent!.length).toBeGreaterThan(0);
+      // The grey line is the CHOICE's own hint, threaded out of home-interview-data — not copy
+      // authored on this surface. If it ever renders empty the two have drifted apart.
+      const sub = row.querySelector(".hc-happening-sub");
+      expect(sub, "the card's description line is missing").not.toBeNull();
+      expect(sub!.textContent!.length).toBeGreaterThan(0);
+    }
+    expect(rows[0].querySelector(".hc-happening-sub")!.textContent).toBe(
+      "A game or Windows closed unexpectedly.",
+    );
+  });
+
+  it("the rescue row is name + symptom + Open, and the method line stays off it", () => {
+    const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
+    const entry = c.querySelector(".hc-care-entry")!;
+    expect(entry.querySelector(".hc-care-ico svg"), "the life ring is missing").not.toBeNull();
+    expect(entry.querySelector(".hc-care-label")!.textContent).toBe("Crash & Freeze Rescue");
+    expect(entry.querySelector(".hc-care-symptom")!.textContent).toBe(
+      "It crashed or froze and I don't know why",
+    );
+    expect(entry.querySelector(".hc-care-open")!.textContent).toContain("Open");
+    // The comp draws ONE description line. `because` ("reads Windows' own crash & freeze record in
+    // plain English") is a METHOD note and belongs to the station this row opens, not to the door.
+    expect(entry.querySelector(".hc-care-because"), "the method line is back on the door").toBeNull();
+    expect(entry.textContent, "…and not smuggled in unclassed either").not.toContain("plain English");
   });
 });

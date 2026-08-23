@@ -41,7 +41,9 @@ describe("Reading", () => {
 
   it("an unmeasured reading is em-dashes and a REASON — never a zero, never the attestation", () => {
     const { container } = render(<Reading id="cpuTemp" label="CPU TEMP" value={null} unit="°C" />);
-    expect(container.querySelector(".rd-n")!.textContent).toBe("— —");
+    // ONE em-dash. Two of them (the original) read as a redaction rather than an absence, and
+    // every one of the four approved comps draws a single dash — owner ruling 2026-08-23.
+    expect(container.querySelector(".rd-n")!.textContent).toBe("—");
     expect(container.querySelector(".rd-u"), "no unit on a reading that does not exist").toBeNull();
     expect(
       container.querySelector(".rd-tag"),

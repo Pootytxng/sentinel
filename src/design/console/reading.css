@@ -49,10 +49,12 @@
 
 /* Tone rides the caller's arcTone() map, so no reading changed its meaning by changing its shape.
    "good" deliberately stays text-coloured — the green in this instrument belongs to the MEASURED
-   attestation, not to the number, exactly as the approved comp shows it. */
-:root[data-v2="on"] .rd-accent .rd-v {
-  color: var(--v2-accent-text, var(--v2-accent));
-}
+   attestation, not to the number, exactly as the approved comp shows it.
+   ...and as of 2026-08-23, "accent" stays text-coloured for the same reason. In the comps every
+   healthy number — 191, 152, 49°C — is WHITE with a green MEASURED pill beside it; the violet
+   was this instrument painting "we grade this as fine" onto the digits, where the eye reads a
+   colour as a warning it then cannot find. Colour is information here: amber still means the
+   reading itself is off, and that is the rung of the ladder that has something to say. */
 :root[data-v2="on"] .rd-warn .rd-v {
   color: var(--v2-warn);
 }

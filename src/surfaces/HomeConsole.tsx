@@ -28,6 +28,7 @@ import { ArcGauge, type ArcTone } from "../design/console/ArcGauge";
 import { Term } from "../design/Term";
 import { Dock, type DockNode } from "../design/console/Dock";
 import { Reading } from "../design/console/Reading";
+import { Icon } from "../design/Icon";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { useConfirmOptional } from "../design/ConfirmDialog";
 import { safeFixesReadyList } from "./optimize-v2-data";
@@ -96,6 +97,13 @@ type Props = {
     recIds: string[],
   ) => Promise<{ applied: number; skipped: { title: string; reason: string }[] }>;
 };
+
+/* WHICH PICTURE EACH SURFACED ANSWER WEARS (01-health-approved.png). Keyed by the
+   interview's own choice id, so this map cannot invent a card for an answer that does not
+   exist and cannot outlive one that is removed — the row simply stops rendering with it.
+   Presentation lives here rather than in home-interview-data because a glyph is not part of
+   the taxonomy: the interview's own screens draw no icons at all. */
+const HAPPENING_GLYPH: Record<string, string> = { crash: "burst", slow: "gauge", unsure: "help" };
 
 const fmtGB1 = (b: number) => (b / 1024 ** 3).toFixed(1);
 
@@ -504,6 +512,34 @@ export function HomeConsole({
           readiness!.checks.length,
       )
     : null;
+  const checksGood = readinessKnown
+    ? Math.max(
+        0,
+        readiness!.checks.length - readiness!.attention_count - readiness!.unknown_count,
+      )
+    : 0;
+  /**
+   * THE READINESS BAND — the one word 01-health-approved.png prints beside the ring.
+   *
+   * These thresholds are stated HERE, next to the number they band, because a grade is an
+   * interpretation of a measurement and an undocumented interpretation is indistinguishable
+   * from an invented one. Nothing is measured here that was not already measured: the score
+   * is the share of readiness checks that passed, so the band is arithmetic on a real ratio,
+   * never a claim about the machine beyond it. Null score (checks still running, or none at
+   * all) yields NO grade — the gauge falls back to its honest not-yet state.
+   *
+   *   >= 90  GOOD        at 16 checks that is at most one imperfect check
+   *   >= 70  FAIR        a handful want a look; the room still works
+   *    < 70  NEEDS WORK  a third or more are failing or unreadable
+   */
+  const readinessGrade =
+    readinessScore == null
+      ? null
+      : readinessScore >= 90
+        ? { word: t("home.homeConsole.stage.readinessGrade.good"), tone: "good" as const }
+        : readinessScore >= 70
+          ? { word: t("home.homeConsole.stage.readinessGrade.fair"), tone: "warn" as const }
+          : { word: t("home.homeConsole.stage.readinessGrade.poor"), tone: "bad" as const };
 
   // The dek: postureLine's sentence often opens by restating its own headline. Under the
   // display verdict that reads as a stutter, so the dek drops the restated prefix and keeps
@@ -719,13 +755,29 @@ export function HomeConsole({
       }
       /* The because-line. It qualifies the verdict, so it sits directly beneath it in the
          header rather than starting the body — progressive disclosure reads top-down.
-         ATTENTION stands it down entirely (owner pick 2026-08-20, issue #180 §C): in that state
-         the sentence is the flagged CHECK's full detail paragraph — check-row copy, not a dek —
-         and printing it under the verdict re-creates the title-header defect the owner caught
-         twice. The headline already NAMES the check (2026-07-17 guard) and the measured band
-         directly below routes to the fix in Test, which keeps the full story. */
+         ATTENTION DOES NOT PRINT THE DEK (owner pick 2026-08-20, issue #180 §C, still in
+         force): in that state the sentence is the flagged CHECK's full detail paragraph —
+         check-row copy, not a dek — and printing it under the verdict re-creates the
+         title-header defect the owner caught twice.
+
+         IT DOES PRINT A COUNT (owner ruling 2026-08-23). 01-health-approved.png draws
+         "15 of 16 checks look good." under exactly this headline, and §C barred the
+         PARAGRAPH, not a line. The two readings of the picture are compatible and the
+         count is the better half of both: it is the one fact that stops "one thing needs
+         your attention" reading as "your PC is broken" — the proportion. Same numbers the
+         readiness ring is derived from, so nothing new is measured or claimed, and it
+         self-nulls the moment the checks are not known. */
       sub={
-        dekRedundant || posture.tone === "attention" ? undefined : (
+        posture.tone === "attention" ? (
+          readinessKnown ? (
+            <span className="hc-verdict-dek">
+              {t("home.homeConsole.verdict.attentionSub", {
+                count: checksGood,
+                total: readiness!.checks.length,
+              })}
+            </span>
+          ) : undefined
+        ) : dekRedundant ? undefined : (
           <span className="hc-verdict-dek">{dek}</span>
         )
       }
@@ -753,15 +805,13 @@ export function HomeConsole({
           </button>
         ) : undefined
       }
-      measured={
-        <RerunCheckBand
-          readiness={readiness}
-          checking={checking}
-          onRunCheck={onRunCheck}
-          onSeeInFix={onSeeInFix}
-          fixRoomLabel={fixRoomLabel}
-        />
-      }
+      /* NO `measured` SLOT ON HEALTH (owner ruling 2026-08-23). The re-run band used to sit
+         here, directly under the verdict, and 01-health-approved.png draws nothing in that
+         position — the narrative column goes verdict → count → one button → the symptom cards.
+         The band is NOT deleted, it moved (see `below`), because it is the only entry point
+         to <FirstCheck> and it carries the check→fix hallway. Its provenance (a date, a
+         state dot) is already above it in the eyebrow, which is why the comp can leave the
+         slot empty without losing a fact: the band was saying the dateline twice. */
       /* THE EVIDENCE COLUMN (approved four-room direction, issue #49). Every approved comp is the
          same composition — a narrative column beside a column of evidence — and on Health the
          evidence is the rig. One panel holds it: the real hologram, then its view controls, then
@@ -957,14 +1007,16 @@ export function HomeConsole({
                   value={readinessScore}
                   max={100}
                   unit="score"
+                  /* The RING stays the accent. Sampled straight out of the comp: its ring is
+                     violet and only the word beside it is green, so the colour-coded ladder
+                     lives in the GRADE and the ring stays the room's instrument. */
                   tone="accent"
+                  grade={readinessGrade?.word}
+                  gradeTone={readinessGrade?.tone}
                   note={
                     readinessKnown
                       ? t("home.homeConsole.stage.readinessNote", {
-                          passed: Math.max(
-                            0,
-                            readiness!.checks.length - readiness!.attention_count - readiness!.unknown_count,
-                          ),
+                          passed: checksGood,
                           total: readiness!.checks.length,
                         })
                       : undefined
@@ -1019,6 +1071,17 @@ export function HomeConsole({
          who wants more arrives. Nothing here is new and nothing here was cut. */
       below={
         <div className="home-console" data-motion={reduced ? "reduced" : "full"}>
+        {/* The check line and its Re-run affordance, relocated out of the shell's `measured`
+            slot (see the note above it). It leads `below` rather than trailing it: a reader
+            who scrolls past the fold is asking "what did you actually check?", and this
+            sentence — with its route to the fixes — is the answer to exactly that. */}
+        <RerunCheckBand
+          readiness={readiness}
+          checking={checking}
+          onRunCheck={onRunCheck}
+          onSeeInFix={onSeeInFix}
+          fixRoomLabel={fixRoomLabel}
+        />
         <BentoGrid>
         {/* THE DETECTED RECORD — boxed templates, always open (owner 2026-08-06: "better grouping
             and boxed templates"). Static facts only; everything that MOVES is in the evidence
@@ -1183,7 +1246,18 @@ export function HomeConsole({
                       setInterviewOpen(true);
                     }}
                   >
-                    <span className="hc-happening-label">{c.label}</span>
+                    {/* Icon · title · one grey line · chevron — 01-health-approved.png's card
+                        exactly. The glyph is chosen by ANSWER ID, so a choice that stops
+                        existing takes its picture with it; the fallback is the not-sure mark
+                        rather than a blank, because an unlabelled card is worse than a
+                        generic one. Both strings are still the interview's own words. */}
+                    <span className="hc-happening-ico" aria-hidden="true">
+                      <Icon name={HAPPENING_GLYPH[c.id] ?? "help"} size={22} />
+                    </span>
+                    <span className="hc-happening-text">
+                      <span className="hc-happening-label">{c.label}</span>
+                      {c.hint && <span className="hc-happening-sub">{c.hint}</span>}
+                    </span>
                     <span className="hc-happening-go" aria-hidden="true">
                       &rsaquo;
                     </span>
@@ -1207,9 +1281,24 @@ export function HomeConsole({
                 onOpenLabStation ? onOpenLabStation(care.station) : onNavigate?.(care.room)
               }
             >
-              <span className="hc-care-label hc-mono">{care.label}</span>
-              <span className="hc-care-symptom">{care.symptom}</span>
-              <span className="hc-care-because">{care.because}</span>
+              {/* THE COMP'S ROW: life ring · name · the symptom in the user's words · Open.
+                  `care.because` ("reads Windows' own crash & freeze record in plain English")
+                  is NOT printed here any more — 01-health-approved.png draws one description
+                  line, and of the two this is the one a frightened user is scanning for. The
+                  string is deliberately still returned by homeCareEntry: it is a METHOD note,
+                  and the honest place for a method note is the station it describes, not a
+                  third line on the door. Logged as a substitution in UI_VISION_BACKLOG. */}
+              <span className="hc-care-ico" aria-hidden="true">
+                <Icon name="lifebuoy" size={22} />
+              </span>
+              <span className="hc-care-text">
+                <span className="hc-care-label">{care.label}</span>
+                <span className="hc-care-symptom">{care.symptom}</span>
+              </span>
+              <span className="hc-care-open">
+                {t("home.homeConsole.care.open")}
+                <span aria-hidden="true"> &rsaquo;</span>
+              </span>
             </button>
           </section>
         )}

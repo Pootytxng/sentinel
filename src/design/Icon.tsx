@@ -13,6 +13,14 @@ export const ICONS: Record<string, ReactNode> = {
   // that opens every room's honesty micro-line. Same 24-grid and stroke discipline as the rest.
   clock: (<><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 1.8" /></>),
   lock: (<><rect x="5" y="10.5" width="14" height="9.5" rx="2" /><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5" /></>),
+  // 01-health-approved.png draws a glyph on every symptom card and on the rescue row. They are
+  // pictures of the SYMPTOM in the user's words, not of a feature: a burst for something that
+  // blew up, a dial for something that got slow, a question mark for not knowing, a life ring
+  // for rescue. Same 24-grid, same 1.8 stroke, no fill — they read as one family with the rest.
+  burst: (<path d="M12 3.4l1.8 3.4 3.7-1.1-1.1 3.7 3.4 1.8-3.4 1.8 1.1 3.7-3.7-1.1L12 20.6l-1.8-3.4-3.7 1.1 1.1-3.7L4.2 12l3.4-1.8-1.1-3.7 3.7 1.1z" />),
+  gauge: (<><circle cx="12" cy="12" r="8.5" /><path d="M12 12l3.6-2.8" /><path d="M12 15.6h.01" /></>),
+  help: (<><circle cx="12" cy="12" r="8.5" /><path d="M9.7 9.6a2.4 2.4 0 114 1.9c-.9.6-1.6 1-1.6 2.1" /><path d="M12 16.8h.01" /></>),
+  lifebuoy: (<><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="3.4" /><path d="M12 3.5v5.1M12 15.4v5.1M3.5 12h5.1M15.4 12h5.1" /></>),
 };
 
 export function Icon({ name, size = 18 }: { name: string; size?: number }) {

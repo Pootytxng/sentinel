@@ -79,6 +79,16 @@ export type InterviewChoice = {
   next: InterviewStep;
   /** The not-sure answer for this screen. Exactly one per screen (law 1). */
   unsure?: boolean;
+  /**
+   * ONE PLAIN ELABORATION, owned by the choice itself. 01-health-approved.png draws Home's
+   * three shortcut cards as a title plus a grey line — "It crashed or froze" over "A game
+   * or Windows closed unexpectedly." — and the owner ruled the comps exact (2026-08-23).
+   * It lives HERE, beside the label, and not in Home's own copy, for the same reason the
+   * label already lives here: Home renders the interview's wording verbatim so a shortcut
+   * and the question it jumps to can never drift apart. Optional, because only the answers
+   * a surface shows as a CARD need one — the interview's own screens render the label alone.
+   */
+  hint?: string;
 };
 
 export type InterviewQuestion = {
@@ -97,13 +107,24 @@ export function interviewQuestions(t: TFunction): Record<InterviewQuestionId, In
       id: "start",
       question: k("start.question"),
       choices: [
-        { id: "crash", label: k("start.crash"), next: { kind: "question", id: "crash" } },
-        { id: "slow", label: k("start.slow"), next: { kind: "question", id: "slow" } },
+        {
+          id: "crash",
+          label: k("start.crash"),
+          hint: k("start.crashHint"),
+          next: { kind: "question", id: "crash" },
+        },
+        {
+          id: "slow",
+          label: k("start.slow"),
+          hint: k("start.slowHint"),
+          next: { kind: "question", id: "slow" },
+        },
         { id: "heat", label: k("start.heat"), next: { kind: "finding", id: "heat" } },
         { id: "changed", label: k("start.changed"), next: { kind: "finding", id: "didItHelp" } },
         {
           id: "unsure",
           label: k("start.unsure"),
+          hint: k("start.unsureHint"),
           next: { kind: "finding", id: "sweep" },
           unsure: true,
         },

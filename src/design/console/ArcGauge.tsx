@@ -17,12 +17,24 @@ const TICKS = Array.from({ length: 24 }, (_, i) => {
 });
 
 export function ArcGauge({
-  label, value, max, unit, tone = "neutral", measured = true, note,
+  label, value, max, unit, tone = "neutral", measured = true, note, grade, gradeTone = "good",
 }: {
   /** ReactNode so callers can gloss jargon labels inline (e.g. a <Term> tooltip on "1% low"). */
   label: ReactNode; value: number | null; max: number; unit: string; tone?: ArcTone; measured?: boolean;
   /** One quiet "how we calculate this" line under the label — shown only with a live value. */
   note?: string;
+  /**
+   * ONE WORD SAYING WHETHER THE NUMBER IS ANY GOOD — 01-health-approved.png prints GOOD in
+   * green where every other gauge prints MEASURED, and the owner ruled the comps exact
+   * (2026-08-23). It REPLACES the MEASURED pill rather than joining it, which is the whole
+   * point: a reader told the score is 94 and then told it was MEASURED has been told
+   * nothing they can act on. The CALLER owns the banding and must state its thresholds
+   * where it computes them — a grade is an interpretation OF a measurement, so it may only
+   * ever be derived from one, and it never renders in the empty state (see `empty`).
+   */
+  grade?: string;
+  /** Which end of the ladder the grade sits on: green good, amber wants-a-look, red bad. */
+  gradeTone?: "good" | "warn" | "bad";
 }) {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
@@ -88,6 +100,7 @@ export function ArcGauge({
           <span className="ag-u ag-u-side">{empty ? t("common.arcGauge.noReading") : unit}</span>
         )}
         {empty ? <span className="ag-tag ag-tag-ny">{t("common.arcGauge.notYet")}</span>
+               : grade ? <span className={`ag-grade ag-grade-${gradeTone}`}>{grade}</span>
                : measured ? <span className="ag-tag">{t("common.arcGauge.measured")}</span> : null}
         {note && !empty && <span className="ag-note">{note}</span>}
       </div>

@@ -69,7 +69,11 @@ export function Reading({
       <span className="rd-v">
         {/* The number is its own node so the unit never rides along in its text — the honesty
             guards read this span and compare it to the reading they expect. */}
-        <span className="rd-n">{empty ? "— —" : Math.round(value)}</span>
+        {/* ONE em dash (2026-08-23, comp fidelity): the comps draw a single rule where a number
+            would be. The doubled dash was reading as a redacted value rather than an absent one,
+            and it is wider than any real reading in the strip, so the empty cell was the loudest
+            thing in a row of measurements. */}
+        <span className="rd-n">{empty ? "—" : Math.round(value)}</span>
         {!empty && unit && <span className="rd-u">{unit}</span>}
       </span>
       {empty ? (

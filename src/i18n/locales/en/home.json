@@ -4,7 +4,8 @@
       "eyebrow": "Rig diagnostic"
     },
     "care": {
-      "label": "Crash & Freeze Rescue"
+      "label": "Crash & Freeze Rescue",
+      "open": "Open"
     },
     "intake": {
       "rows": {
@@ -36,7 +37,7 @@
       "storage": "Storage",
       "gpu": "GPU",
       "cpu": "CPU",
-      "cpuNoTemp": "no CPU temp — see below"
+      "cpuNoTemp": "No reading · see below"
     },
     "happening": {
       "eyebrow": "What's been happening?",
@@ -67,7 +68,12 @@
     },
     "stage": {
       "readinessLabel": "Readiness",
-      "readinessNote": "= {{passed}} of {{total}} checks passed",
+      "readinessNote": "{{passed}} of {{total}} checks passed",
+      "readinessGrade": {
+        "good": "GOOD",
+        "fair": "FAIR",
+        "poor": "NEEDS WORK"
+      },
       "avgFps": "Avg FPS",
       "onePercentLow": "1% low",
       "gpuTemp": "GPU temp",
@@ -93,6 +99,10 @@
     },
     "cpuTemp": {
       "tileTitle": "CPU temperature"
+    },
+    "verdict": {
+      "attentionSub_one": "{{count}} of {{total}} checks looks good.",
+      "attentionSub_other": "{{count}} of {{total}} checks look good."
     }
   },
   "interview": {
@@ -100,10 +110,13 @@
       "start": {
         "question": "What is your PC doing?",
         "crash": "It crashed, froze, or restarted on its own",
+        "crashHint": "A game or Windows closed unexpectedly.",
         "slow": "Games feel slow, laggy, or choppy",
+        "slowHint": "Lower FPS, longer loads, or stutters.",
         "heat": "It runs hot, or the fans get loud",
         "changed": "I changed something — did it help?",
-        "unsure": "I am not sure — just look it over"
+        "unsure": "I am not sure — just look it over",
+        "unsureHint": "Something feels off, but I'm not sure what."
       },
       "crash": {
         "question": "When does it happen?",

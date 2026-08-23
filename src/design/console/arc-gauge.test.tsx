@@ -66,3 +66,31 @@ describe("ArcGauge", () => {
     ).toMatch(/min-width:\s*0/);
   });
 });
+
+// THE GRADE WORD (01-health-approved.png, owner ruling 2026-08-23). Two properties, and the second
+// one is the one that could quietly rot: a grade is an INTERPRETATION of a measurement, so it may
+// never appear over an absent one. If this ever renders beside "— —" the gauge is claiming a
+// judgement about a number it does not have, which is the honest-measurement law, broken.
+describe("ArcGauge — the grade word", () => {
+  it("replaces the MEASURED stamp rather than joining it", () => {
+    const { container } = render(
+      <ArcGauge label="READINESS" value={94} max={100} unit="score" grade="GOOD" />,
+    );
+    const g = container.querySelector(".ag-grade");
+    expect(g, "the grade word is missing").not.toBeNull();
+    expect(g!.textContent).toBe("GOOD");
+    expect(g!.className).toContain("ag-grade-good");
+    expect(
+      container.querySelector(".ag-tag"),
+      "MEASURED and a grade are two answers to one question",
+    ).toBeNull();
+  });
+
+  it("never renders over a reading that does not exist", () => {
+    const { container } = render(
+      <ArcGauge label="READINESS" value={null} max={100} unit="score" grade="GOOD" />,
+    );
+    expect(container.querySelector(".ag-grade"), "a grade over no measurement").toBeNull();
+    expect(container.querySelector(".ag-tag-ny"), "the honest not-yet stamp must stand").not.toBeNull();
+  });
+});
