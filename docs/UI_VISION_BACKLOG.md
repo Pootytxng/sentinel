@@ -78,6 +78,26 @@ category label, which is correct for a row that says "fine"), and
 ever reuses its calm label for its attention state. Proven to fail on the old source before the fix
 landed.
 
+**🔧 SELF-REVIEW ROUND 2 — FAIL, fixed, guarded.** Two findings, both against
+`01-health-approved.png` on the installed build.
+**(a) The HUD readout was covering real readings at rest** — the READINESS / AVG FPS numbers at
+1280×720, and the Detected record's Processor row at 1500×980, the owner's actual viewport. Its
+clearance was `padding-bottom`, which only clears the END of a document; the readout is fixed to the
+VIEWPORT, so at any scroll offset it painted over whatever sat in its band — and the 2026-08-20
+intimidation pass had given it an opaque ground, turning a smudge into a curtain. **A covered reading
+reads as an absent one, so this is an honest-measurement failure, not a cosmetic one.**
+`.v2-shell-hud .v2-content` now reserves the band with `margin-bottom`, shortening the scroll
+viewport itself. **(b) The readout was printing the CPU/GPU model a third time** on Health — the
+Detected record names both parts and the 3D rig annotates them — against `HudFrame.tsx`'s own
+doctrine that the readout carries only values no other chrome shows. The rig segment now stands down
+on Health and the readout collapses to the clock; every other room is unchanged. Guards:
+`src/design/console/hud-frame-clearance-guard.test.ts` (parses the stylesheet's declared geometry and
+fails if the reserve is a padding or is smaller than the band the readout occupies) and
+`src/design/console/hud-readout-no-duplicate-guard.test.tsx` (renders the shell on Health and on a
+room that does not show the rig, so it cannot pass by the frame vanishing). Both proven to fail on
+the pre-fix source. **Round 3 is required before slice 2 can be called done** — the owner's rule is
+that any visual correction earns another complete self-review.
+
 ### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) ✅ ALL FIVE BUILT (⑤ shipped to the desk 2026-08-20, awaiting the owner's eye): ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED; owner tried it and said *"i like it"* 2026-08-20, so the default flips ON inside the comprehensibility sweep, which first fixes the button placement he objected to — see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door — SHIPPED 2026-08-20 (desk build `0808e33e`, self-review PASS 10/10); owner veto-on-sight still open**
 
 > **③ BUILT, TESTED AND INSTALLED 2026-08-20 — and it is OFF until he says otherwise.** Turn it on

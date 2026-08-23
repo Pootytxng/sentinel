@@ -52,7 +52,11 @@ function Stage() {
 
 describe("compy_hud_frame default ON (the HUD frame + shell reticle)", () => {
   it("renders the frame: four corner brackets + the rig·clock readout, nothing duplicated", async () => {
-    const { container } = render(shell({ rig: "Ryzen 7 · RX 9070 XT" }));
+    // NOT on Health: since the four-room rebuild that room names the processor and GPU in its
+    // own Detected record and on the 3D rig, so the shell stands the readout's rig segment down
+    // there rather than print it a third time (hud-readout-no-duplicate-guard, issue #49).
+    // This case is about the frame ITSELF, so it renders in a room that still reads the rig.
+    const { container } = render(shell({ rig: "Ryzen 7 · RX 9070 XT", activeId: "play" }));
     const frame = container.querySelector(".hud-frame");
     expect(frame).toBeTruthy();
     expect(frame?.getAttribute("aria-hidden")).toBe("true");

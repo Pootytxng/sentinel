@@ -352,7 +352,12 @@ export function ShellV2({
         </div>
         {jarvis && <LenisSpine wrapperRef={contentRef} contentRef={wrapRef} />}
         {jarvis && <MagneticLayer scopeRef={shellRef} />}
-        {hudFrame && <HudFrame rig={rig ?? null} />}
+        {/* The readout shows only values NO other chrome shows (HudFrame.tsx doctrine). On
+            Health the rig line is already on screen twice over -- the Detected record names the
+            processor and GPU, and the 3D rig annotates them -- so it stands down there and the
+            readout collapses to the clock. Room id "home" is the tab labelled Health.
+            bug->guard, self-review round 2 (issue #49): hud-readout-no-duplicate-guard. */}
+        {hudFrame && <HudFrame rig={activeId === "home" ? null : (rig ?? null)} />}
         {hudFrame && <ReticleCursor scopeRef={shellRef} appWide />}
         {paletteEnabled && (
           <CommandPalette

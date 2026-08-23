@@ -78,7 +78,28 @@
    .v2-shell-hud class ShellV2 sets with the flag, NOT `:has(> .hud-frame)`: a `:has()`
    on the shell re-evaluates on every DOM mutation underneath it, which taxed exactly
    the biggest room swaps (Blackbook legs 87–156ms vs the ≲50ms nav bar, self-review
-   round 2). Guard: no :has() keyed on the shell may return (overlay-ambient-guard.test.ts). */
+   round 2). Guard: no :has() keyed on the shell may return (overlay-ambient-guard.test.ts).
+
+   bug→guard (self-review round 2, issue #49, 2026-08-23): this used to be
+   `padding-bottom: 52px`, and padding CANNOT do this job. The readout is fixed to the
+   VIEWPORT; padding only clears the END of the document, so at any scroll offset —
+   including scrollTop 0 on a page taller than the window — whatever happened to lie in
+   that band was painted over. On Health that was measured facts: at 1280×720 the readout
+   covered the READINESS / AVG FPS numbers, at 1500×980 (the owner's real viewport) the
+   Detected record's Processor row. A covered reading reads as an absent one, which is the
+   honest-measurement law's problem, not a cosmetic one. The 2026-08-20 intimidation pass
+   gave the readout an opaque ground so text stopped colliding mid-scroll — that made the
+   curtain solid, which is precisely why it now HIDES rather than clashes.
+
+   `margin-bottom` fixes it structurally: it shrinks the scroll viewport itself, so the
+   band the readout occupies falls outside the scrollable area and no content can render
+   there, at any offset, in any room. Reserve = the frame's 6px bottom inset + the
+   readout's 2px offset + its box (4px + ~18px line + 4px) ≈ 34px, rounded to 36px so a
+   font fallback with a taller line box cannot eat the margin. The old 52px padding is not
+   simply moved: padding still buys breathing room at the document END, but it is no
+   longer load-bearing, so it drops to a normal 16px. Pinned by
+   hud-frame-clearance-guard.test.ts — keep the two in step. */
 :root[data-v2="on"] .v2-shell-hud .v2-content {
-  padding-bottom: 52px;
+  margin-bottom: 36px;
+  padding-bottom: 16px;
 }
