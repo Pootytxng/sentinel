@@ -39,6 +39,13 @@ export type LabStationInfo = {
   name: string;
   forLine: string; // 1. What it's for — one line, real-world.
   whenLine: string; // 2. Reach for it when — the symptom that sends you here (mirrors the router).
+  /** The Test room's station-row subtitle, printed under the name in 04-test-approved.png
+   *  ("Measure performance with a repeatable run."). It is a SECOND line rather than a
+   *  rewrite of whenLine because whenLine is what the command palette searches on — the
+   *  symptom words ("crashed", "stutter", "a beat behind") are how someone in trouble finds
+   *  the station, and the comp's task-framed sentence does not carry them. Two registers,
+   *  two jobs, and neither is ever on screen beside the other. */
+  dockLine: string;
   connectsLine: string; // 4. How it connects — the thread to a sibling station.
 };
 
@@ -52,6 +59,7 @@ export function labStations(t: TFunction): Record<LabStationKey, LabStationInfo>
       name: t("lab.stations.optimize.name"),
       forLine: t("lab.stations.optimize.forLine"),
       whenLine: t("lab.stations.optimize.whenLine"),
+      dockLine: t("lab.stations.optimize.dockLine"),
       // The cohesion thread: the fast path points INTO the proving loop — apply the stack here,
       // then prove it moved at the Benchmark station.
       connectsLine: t("lab.stations.optimize.connectsLine"),
@@ -60,30 +68,35 @@ export function labStations(t: TFunction): Record<LabStationKey, LabStationInfo>
       name: t("lab.stations.diagnostics.name"),
       forLine: t("lab.stations.diagnostics.forLine"),
       whenLine: t("lab.stations.diagnostics.whenLine"),
+      dockLine: t("lab.stations.diagnostics.dockLine"),
       connectsLine: t("lab.stations.diagnostics.connectsLine"),
     },
     benchmark: {
       name: t("lab.stations.benchmark.name"),
       forLine: t("lab.stations.benchmark.forLine"),
       whenLine: t("lab.stations.benchmark.whenLine"),
+      dockLine: t("lab.stations.benchmark.dockLine"),
       connectsLine: t("lab.stations.benchmark.connectsLine"),
     },
     latency: {
       name: t("lab.stations.latency.name"),
       forLine: t("lab.stations.latency.forLine"),
       whenLine: t("lab.stations.latency.whenLine"),
+      dockLine: t("lab.stations.latency.dockLine"),
       connectsLine: t("lab.stations.latency.connectsLine"),
     },
     tuning: {
       name: t("lab.stations.tuning.name"),
       forLine: t("lab.stations.tuning.forLine"),
       whenLine: t("lab.stations.tuning.whenLine"),
+      dockLine: t("lab.stations.tuning.dockLine"),
       connectsLine: t("lab.stations.tuning.connectsLine"),
     },
     blackbox: {
       name: t("lab.stations.blackbox.name"),
       forLine: t("lab.stations.blackbox.forLine"),
       whenLine: t("lab.stations.blackbox.whenLine"),
+      dockLine: t("lab.stations.blackbox.dockLine"),
       connectsLine: t("lab.stations.blackbox.connectsLine"),
     },
   };

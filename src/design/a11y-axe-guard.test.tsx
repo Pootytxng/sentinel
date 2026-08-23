@@ -35,6 +35,7 @@ import { BentoGrid, BentoTile } from "./bento/BentoGrid";
 import { Sheet } from "./bento/Sheet";
 import { ArcGauge } from "./console/ArcGauge";
 import { Dock } from "./console/Dock";
+import { RoomEyebrow } from "./room-eyebrow";
 import { HudFrame } from "./console/HudFrame";
 import { Oscilloscope } from "./console/Oscilloscope";
 import { Reading } from "./console/Reading";
@@ -374,6 +375,26 @@ describe("axe · console and bento", () => {
       />,
     );
     await expectNoAxeViolations(container);
+  });
+
+  it("RoomEyebrow (every dot state, and the dateline)", async () => {
+    // The dot is the one place this element puts a FACT in colour, so the check that matters is
+    // that the fact is never colour-only: the dot is aria-hidden and the label beside it says the
+    // same thing in words. Every state is mounted, because a state nobody renders here is a state
+    // nobody checks.
+    for (const dot of ["ok", "warn", "scan", "accent", "rec"] as const) {
+      const { container, unmount } = render(
+        <RoomEyebrow label="System check" dot={dot} dateline="2 minutes ago" />,
+      );
+      await expectNoAxeViolations(container);
+      unmount();
+    }
+    // ...and the two shapes with no dot at all: Live's accent label, and a bare one.
+    const accent = render(<RoomEyebrow label="Session monitor" tone="accent" />);
+    await expectNoAxeViolations(accent.container);
+    accent.unmount();
+    const bare = render(<RoomEyebrow label="Local record" />);
+    await expectNoAxeViolations(bare.container);
   });
 
   it("HudFrame (with a rig line, and without one)", async () => {

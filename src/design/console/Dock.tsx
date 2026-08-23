@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useReducedMotion } from "../use-motion";
 import "./dock.css";
 
 export type DockNode = {
   key: string;
   name: string;
-  icon?: string;
+  /** A station mark. A NODE, not a string, since issue #49 slice 7 replaced the Test room's
+   *  platform emoji with the comp's monochrome line marks (src/surfaces/station-icons.tsx).
+   *  Home's dock passes none and its DOM is unchanged. */
+  icon?: ReactNode;
   primary?: boolean;
   measured?: boolean;
   /** One plain sentence saying WHEN you come to this station ("Your aim feels a beat behind.").

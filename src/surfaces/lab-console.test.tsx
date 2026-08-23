@@ -330,8 +330,10 @@ describe("LabConsole", () => {
     // the row already says an inch away, and announced it through aria-live besides.
     expect(dock.querySelector(".dock-caption"), "the list must not also draw the hover caption").toBeNull();
     const primary = dock.querySelector(".dock-node-primary")!;
+    // The comp's subtitle, not the symptom line — 04-test-approved.png prints the TASK under each
+    // station name. whenLine is untouched and still feeds the command palette's search.
     expect(primary.querySelector(".dock-hint")!.textContent).toBe(
-      "You just want it faster and safe, without fiddling.",
+      "Test one change at a time and keep what helps.",
     );
     // Every station carries its own, not just the primary one.
     expect(dock.querySelectorAll(".dock-node").length).toBe(dock.querySelectorAll(".dock-hint").length);

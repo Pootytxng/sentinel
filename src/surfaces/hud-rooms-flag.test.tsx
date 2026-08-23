@@ -179,19 +179,19 @@ describe("HUD room rollout: title-header law (h1 = the room title, never a statu
       expect(c.querySelector(".hud-masthead-eyebrow"), `flag ${flag}`).toBeNull();
       expect(c.querySelector(".hud-headline"), `flag ${flag}`).toBeNull();
       // The room's own eyebrow, and an h1 that is the measured verdict — never the bare title.
-      expect(c.querySelector(".mc-masthead-eyebrow")!.textContent).toContain("Session monitor");
+      expect(c.querySelector(".v2-eyebrow")!.textContent).toContain("Session monitor");
       const h1 = c.querySelector(".v2-verdict h1")!;
       expect(h1.textContent!.trim()).not.toBe(ROOMS[0].title);
       expect(h1.textContent).toContain("Last session ran smooth");
       // LED honesty, carried: nothing is being captured in this fixture, so nothing is lit.
-      expect(c.querySelector(".mc-masthead-eyebrow .mc-led-on")).toBeNull();
+      expect(c.querySelector(".v2-eyebrow .v2-eyebrow-dot-rec")).toBeNull();
       // ...and TIGHTENED 2026-08-23 to the whole dot, not just its lit class. 02-live-approved.png
       // draws no dot beside this label at all, and idle is the state the app sits in nearly all the
       // time — so an unlit grey dot that only ever means "not recording" was chrome the comp does
       // not have. The dot now exists ONLY while a capture runs, which is the one moment it carries
       // information. The old assertion passed on the old markup (the element was there, just not
-      // .mc-led-on), which is exactly why it had to be tightened rather than trusted.
-      expect(c.querySelector(".mc-masthead-eyebrow .mc-led"), `flag ${flag}`).toBeNull();
+      // .v2-eyebrow-dot-rec), which is exactly why it had to be tightened rather than trusted.
+      expect(c.querySelector(".v2-eyebrow .v2-eyebrow-dot"), `flag ${flag}`).toBeNull();
       cleanup();
     }
   });
@@ -227,7 +227,7 @@ describe("HUD room rollout: title-header law (h1 = the room title, never a statu
     localStorage.clear();
     localStorage.setItem("compy_editorial", "1");
     const c = ROOMS[1].mount();
-    expect(c.querySelector(".bbv2-eyebrow")!.textContent).toContain("Local record");
+    expect(c.querySelector(".v2-eyebrow")!.textContent).toContain("Local record");
     expect(c.querySelector(".v2-verdict h1")!.textContent).toContain("What changed, and when");
     expect(c.querySelector(".hud-masthead-eyebrow")).toBeNull();
   });

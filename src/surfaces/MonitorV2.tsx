@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import Play from "./Play";
 import { TuningPresets } from "./TuningPresets";
 import { RoomShell } from "../design/room-shell";
+import { RoomEyebrow } from "../design/room-eyebrow";
 import { SegmentedControl } from "../design/SegmentedControl";
 import { useReducedMotion } from "../design/use-motion";
 import { useDocumentVisible } from "../data/use-document-visible";
@@ -171,16 +172,17 @@ export function MonitorV2(props: Props) {
          which is not a measurement and so is not marked as one. */
       verdict={
         <>
-          <span className="mc-masthead-eyebrow">
-            {/* NO DOT WHEN NOTHING IS RECORDING (owner ruling 2026-08-23 — match the comps
+          <RoomEyebrow
+            tone="accent"
+            /* NO DOT WHEN NOTHING IS RECORDING (owner ruling 2026-08-23 — match the comps
                 exactly). 02-live-approved.png carries no dot beside this label at all, and
                 its idle state is the state the app is in most of the time; the label itself
                 is drawn in the accent instead. The dot survives ONLY as the recording light,
                 which is the one moment this room has a live state to report — so the comp is
-                matched where it speaks, and nothing honest is lost where it is silent. */}
-            {capturing && <span className="mc-led mc-led-on" aria-hidden="true" />}
-            {t("monitor.monitorConsole.narrative.eyebrow")}
-          </span>
+                matched where it speaks, and nothing honest is lost where it is silent. */
+            dot={capturing ? "rec" : undefined}
+            label={t("monitor.monitorConsole.narrative.eyebrow")}
+          />
           <span className="mc-headline" key={verdict.headline}>
             {reduced ? (
               verdict.headline

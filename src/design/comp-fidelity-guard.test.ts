@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 
 /* COMP FIDELITY — the owner's 2026-08-23 ruling, mechanised.
@@ -89,7 +89,6 @@ describe("comp fidelity — the primary action wears the ladder's good end (owne
 describe("comp fidelity — the colour-coded alert ladder the owner asked to keep", () => {
   const monitor = read("src", "surfaces", "monitor-console.css");
   const reading = read("src", "design", "console", "reading.css");
-  const home = read("src", "surfaces", "home-console.css");
 
   it("Live draws a missing sensor as the comp's AMBER pill", () => {
     // 02-live-approved.png: an amber outlined NO READING pill (sampled #ffd110) sitting beside four
@@ -115,15 +114,19 @@ describe("comp fidelity — the colour-coded alert ladder the owner asked to kee
   });
 
   it("the room eyebrows are colour-coded, each the way its own comp draws it", () => {
-    // Health: grey label + a DOT that carries the state (amber on attention) — 01's dot sampled
-    // #ffd847. Live: no dot at rest, and the LABEL itself in the accent — 02's glyphs sampled
-    // #8d73e9. Both are "colour is information"; they just put the information in different places.
-    expect(body(home, ':root[data-v2="on"] .hc-masthead-eyebrow')).toMatch(
-      /color:\s*var\(--v2-faint\)/,
-    );
-    expect(body(home, ':root[data-v2="on"] .hc-led-warn')).toMatch(/background:\s*var\(--v2-warn\)/);
-    expect(body(monitor, ':root[data-v2="on"] .mc-masthead-eyebrow')).toMatch(
+    // ONE rule since slice 7 (src/design/room-eyebrow.tsx carries the four-comp measurements).
+    // Colour stays per-room because THERE it is information: Health and Test put the state in the
+    // DOT — 01's sampled #ffd847 — while Live draws no dot at rest and tints the LABEL instead,
+    // 02's glyphs sampled #8d73e9. Same element, two honest places to put one fact.
+    const eyebrow = read("src", "design", "shell-v2.css");
+    const b = body(eyebrow, ':root[data-v2="on"] .v2-eyebrow');
+    expect(b, "the shared eyebrow rule went missing").not.toBe("");
+    expect(b).toMatch(/color:\s*var\(--v2-muted\)/);
+    expect(body(eyebrow, ':root[data-v2="on"] .v2-eyebrow[data-tone="accent"]')).toMatch(
       /color:\s*var\(--v2-accent-text, var\(--v2-accent\)\)/,
+    );
+    expect(body(eyebrow, ':root[data-v2="on"] .v2-eyebrow-dot-warn')).toMatch(
+      /background:\s*var\(--v2-warn\)/,
     );
   });
 });
@@ -477,12 +480,15 @@ describe("comp fidelity — History, matched against 03-history-approved.png", (
   });
 
   it("the narrative column opens on a dotted mono label", () => {
-    const b = body(room, ':root[data-v2="on"] .bbv2-eyebrow');
+    // The rule converged into the shell in slice 7; what is History's OWN here is the violet
+    // dot, which every other room draws in a different colour or not at all.
+    const eyebrow = read("src", "design", "shell-v2.css");
+    const b = body(eyebrow, ':root[data-v2="on"] .v2-eyebrow');
     expect(b, "the eyebrow rule went missing").not.toBe("");
     expect(b).toMatch(/font-family:\s*var\(--v2-font-mono\)/);
     expect(b).toMatch(/text-transform:\s*uppercase/);
     // The dot is the room accent — the one violet on a screen whose action is green.
-    expect(body(room, ':root[data-v2="on"] .bbv2-eyebrow-dot')).toMatch(
+    expect(body(eyebrow, ':root[data-v2="on"] .v2-eyebrow-dot-accent')).toMatch(
       /background:\s*var\(--v2-accent\)/,
     );
   });
@@ -496,5 +502,122 @@ describe("comp fidelity — History, matched against 03-history-approved.png", (
     expect(b).toMatch(/background:\s*transparent/);
     // ...and it still takes a visible focus mark, because it is still a button (focus-ring law).
     expect(room).toMatch(/\.bbv2-route:focus-visible \{[^}]*outline:\s*2px/);
+  });
+});
+
+/* ══ CASCADE FIDELITY (self-review round 15, 2026-08-23) ══════════════════════════════════════
+ *
+ * Round 15 found two SEVERE regressions and neither was a missing declaration. Both were cascade
+ * ties, which is precisely what a source-text guard cannot see:
+ *
+ *   1. shell-v2.css declared `flex-wrap: nowrap` on the split verdict. home-console.css declared
+ *      `flex-wrap: wrap` on `[data-room="home"] .v2-verdict` at the SAME (0,5,0) specificity and
+ *      loaded later, so it won. Health's because-line rendered at x=749.6 with its parent's box
+ *      ending at x=721.6 — off the story column, clipped behind the rig. Round 14's guard read
+ *      shell-v2.css's text, found "nowrap", and passed while the app stayed broken.
+ *   2. hud-rooms.css's generic `:not([data-room="home"]):not([data-room="check"])` verdict rules
+ *      were (0,7,1) against the shell's room-scoped (0,6,1). Test's h1 rendered 26px where its
+ *      comp measures 52 — and Live's and History's did too, unmeasured, for two whole slices.
+ *
+ * So these read EVERY stylesheet in the tree and ask a different question: not "is the right
+ * declaration written somewhere" but "can anything else reach this element and win". A rule that
+ * is allowed to reach the four approved rooms has to say so out loud.
+ */
+const CSS_FILES: string[] = (() => {
+  const out: string[] = [];
+  const walk = (dir: string) => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name);
+      if (statSync(p).isDirectory()) walk(p);
+      else if (name.endsWith(".css")) out.push(p);
+    }
+  };
+  walk("src");
+  return out;
+})();
+
+/** Every rule in a sheet as [selector, declarations], comments stripped, whitespace collapsed. */
+function rulesOf(css: string): Array<[string, string]> {
+  // Comments out, then at-rule PRELUDES out (`@media ... {`), so an at-rule's opening brace can
+  // never be mistaken for a rule's. The stray closing brace it leaves behind splits into a
+  // fragment with no "{" and is skipped below.
+  const clean = css
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/@[a-zA-Z-]+[^{}]*\{/g, "");
+  const out: Array<[string, string]> = [];
+  for (const block of clean.split("}")) {
+    const i = block.indexOf("{");
+    if (i < 0) continue;
+    out.push([block.slice(0, i).trim().replace(/\s+/g, " "), block.slice(i + 1)]);
+  }
+  return out;
+}
+
+/** The four rooms the approved comps govern. `fix` and `check` still wear the HUD register. */
+const APPROVED_ROOMS = ["home", "play", "learn", "lab"];
+
+describe("cascade fidelity — the shell owns the four approved rooms' verdict", () => {
+  it("nothing outside the shell may re-wrap a split verdict", () => {
+    // The exact defect: a column flex container that wraps contributes the height of its TALLEST
+    // CHILD instead of the sum, so the auto grid row sizes to the h1 alone and every later child
+    // wraps into a phantom second column. It only bites once a headline passes two lines, which is
+    // why four review rounds walked past it.
+    const offenders: string[] = [];
+    for (const file of CSS_FILES) {
+      // shell-v2.css owns BOTH sides of this: the linear rooms' wrapping baseline row and the
+      // split rooms' nowrap column, in that order, in one file where the order is visible.
+      if (file.endsWith("shell-v2.css")) continue;
+      for (const [sel, decls] of rulesOf(readFileSync(file, "utf8"))) {
+        if (!/\.v2-verdict(?![\w-])/.test(sel)) continue;
+        if (!/flex-wrap:\s*wrap/.test(decls)) continue;
+        if (sel.includes(':not([data-layout="split"])')) continue;
+        offenders.push(`${file}: ${sel}`);
+      }
+    }
+    expect(
+      offenders,
+      "a rule outside shell-v2.css can wrap a split verdict — scope it :not([data-layout=\"split\"])",
+    ).toEqual([]);
+  });
+
+  it("no rule outside the shell may size the four approved rooms' verdict type", () => {
+    const offenders: string[] = [];
+    for (const file of CSS_FILES) {
+      if (file.endsWith("shell-v2.css") || file.endsWith("type-scale.css")) continue;
+      for (const [sel, decls] of rulesOf(readFileSync(file, "utf8"))) {
+        if (!/\.v2-verdict/.test(sel)) continue;
+        if (!/(^|[;{\s])font(-size)?:/.test(decls)) continue;
+        // Saying "not the split composition" out loud is the whole ask.
+        if (sel.includes(':not([data-layout="split"])')) continue;
+        // A rule that positively names a room OUTSIDE the approved four is that room's own call.
+        const positive = sel.replace(/:not\([^)]*\)/g, "");
+        const named = [...positive.matchAll(/\[data-room="([a-z]+)"\]/g)].map((m) => m[1]);
+        if (named.length > 0 && named.every((r) => !APPROVED_ROOMS.includes(r))) continue;
+        offenders.push(`${file}: ${sel}`);
+      }
+    }
+    expect(
+      offenders,
+      "the four rooms' verdict type is measured off the comps in shell-v2.css and belongs there",
+    ).toEqual([]);
+  });
+
+  it("no room may grow its own eyebrow again (slice 7 convergence)", () => {
+    // Four private copies of one element, three of them measurably off their own comp. The rule
+    // that replaced them is `.v2-eyebrow` in shell-v2.css; the measurements are in
+    // src/design/room-eyebrow.tsx. `.mc-eyebrow` in measurement-chrome.css is NOT one of these —
+    // that is <SectionLabel>, a different element that only shares a word.
+    const GONE = ["hc-masthead-eyebrow", "mc-masthead-eyebrow", "bbv2-eyebrow", "lc-eyebrow"];
+    const offenders: string[] = [];
+    for (const file of CSS_FILES) {
+      for (const [sel] of rulesOf(readFileSync(file, "utf8"))) {
+        for (const cls of GONE) {
+          if (sel.includes(`.${cls}`)) offenders.push(`${file}: ${sel}`);
+        }
+      }
+    }
+    expect(offenders, "the room eyebrow is one element — see src/design/room-eyebrow.tsx").toEqual(
+      [],
+    );
   });
 });

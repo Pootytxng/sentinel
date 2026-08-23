@@ -7,6 +7,7 @@ import { ArcGauge } from "../design/console/ArcGauge";
 import { Dock, type DockNode } from "../design/console/Dock";
 import { BentoGrid, BentoTile } from "../design/bento/BentoGrid";
 import { RoomShell } from "../design/room-shell";
+import { RoomEyebrow } from "../design/room-eyebrow";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { RigViewer } from "./rig/RigViewer";
 import { RigManualParts } from "./rig/RigManualParts";
@@ -20,6 +21,7 @@ import {
   type LabStationFacts,
 } from "./lab-guided-data";
 import { stationHasReading } from "./lab-bento-data";
+import { STATION_ICON } from "./station-icons";
 import { changesBetweenRuns } from "./benchmark-view";
 import { safeFixesReady } from "./optimize-v2-data";
 import { deriveReverted } from "./use-scan";
@@ -56,17 +58,6 @@ import "./lab-console.css";
 // the render changed, from a bento grid of bays to this console. Rendered by LabGround for the Lab
 // tab ONLY when `compy_lab_ground` is on (DEFAULT ON since 2026-07-10) — flag "0", the untouched
 // classic LabV2 renders.
-
-// A small local icon map — the guided/bento data modules don't define one (checked before writing
-// this). Presentation-only; never gates behavior.
-const STATION_ICON: Record<LabStationKey, string> = {
-  optimize: "⛭",
-  diagnostics: "📋",
-  benchmark: "📈",
-  latency: "⚡",
-  tuning: "🌡",
-  blackbox: "🗃",
-};
 
 export function LabConsole({
   fast,
@@ -353,9 +344,11 @@ export function LabConsole({
   const instrumentsRead = measureKeys.filter((k) => stationHasReading(k, facts)).length;
   const instrumentsTotal = measureKeys.length;
 
-  // Each node carries its station's whenLine (the same sentence the router and the guided face
-  // use), so the dock can say in plain words when you come to the hovered / open / primary station
-  // — the "start here" six equal buttons lacked (intimidation pass 2026-08-21).
+  // Each node carries its station's dockLine — the subtitle 04-test-approved.png prints under the
+  // name — so the list says in plain words what each station is for, which is what the "start here"
+  // six equal buttons lacked (intimidation pass 2026-08-21). It is deliberately NOT whenLine: that
+  // sentence is the symptom that sends you here, it still feeds the command palette's search, and
+  // the comp draws the task instead. See LabStationInfo.dockLine.
   const dockNodes: DockNode[] = [
     {
       key: "optimize",
@@ -363,14 +356,14 @@ export function LabConsole({
       icon: STATION_ICON.optimize,
       primary: true,
       measured: stackApplied || safeReady > 0,
-      hint: stations.optimize.whenLine,
+      hint: stations.optimize.dockLine,
     },
     ...measureKeys.map((k) => ({
       key: k,
       name: stations[k].name,
       icon: STATION_ICON[k],
       measured: stationHasReading(k, facts),
-      hint: stations[k].whenLine,
+      hint: stations[k].dockLine,
     })),
   ];
 
@@ -390,11 +383,11 @@ export function LabConsole({
       verdict={
         hud ? (
           <>
-            <span className="lc-eyebrow">
-              <span className={`lc-led lc-led-${ledState}`} aria-hidden="true" />
-              {t("lab.labConsole.narrative.eyebrow")} <span className="lc-eyebrow-sep">·</span>{" "}
-              <span className="lc-mono">{dateline}</span>
-            </span>
+            <RoomEyebrow
+              dot={ledState}
+              label={t("lab.labConsole.narrative.eyebrow")}
+              dateline={dateline}
+            />
             <span className="lc-headline">{t("lab.labConsole.narrative.headline")}</span>
           </>
         ) : (

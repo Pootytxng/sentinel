@@ -12,6 +12,7 @@ import type {
 } from "../types";
 import type { HardwareInfo } from "../App";
 import { RoomShell } from "../design/room-shell";
+import { RoomEyebrow } from "../design/room-eyebrow";
 import { useReducedMotion } from "../design/use-motion";
 import { useIntelligenceFlag, useHomeInterviewFlag } from "../design/use-hud";
 import { readHologramV2 } from "../design/theme";
@@ -729,11 +730,11 @@ export function HomeConsole({
       notice={<LedgerHealthNotice health={ledgerHealth} />}
       verdict={
         <>
-          <span className="hc-masthead-eyebrow">
-            <span className={`hc-led hc-led-${ledState}`} aria-hidden="true" />
-            {t("home.homeConsole.masthead.eyebrow")} <span className="hc-eyebrow-sep">·</span>{" "}
-            <span className="hc-mono">{dateline}</span>
-          </span>
+          <RoomEyebrow
+            dot={ledState}
+            label={t("home.homeConsole.masthead.eyebrow")}
+            dateline={dateline}
+          />
           {/* UX-1 — THE FRONT DOOR IS A VERDICT (docs/decisions/2026-08-11-design-foundation.md,
               decision 1). This REPLACES the owner title-header law of 2026-07-10 for Home only,
               and the replacement is the whole point of the step: the audit measured that the one

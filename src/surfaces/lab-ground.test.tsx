@@ -138,7 +138,7 @@ describe("LabGround OPS CONSOLE — LabConsole replaces the Instrument Bench ben
     // room), so the no-count rule is read off the headline itself — which is where a fixes count
     // would land if this ever regressed.
     expect(c.querySelector(".lc-headline")!.textContent, "no count may reach the headline").not.toMatch(/\d/);
-    expect(c.querySelector(".lc-eyebrow")!.textContent).toContain("Proving ground");
+    expect(c.querySelector(".v2-eyebrow")!.textContent).toContain("Proving ground");
     // ...and the room now explains itself in one sentence under it, as every other room does.
     expect(c.querySelector(".v2-verdict-sub")!.textContent).toContain("measures before and after");
     cleanup();

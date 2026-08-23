@@ -39,12 +39,15 @@
   );
 }
 
-/* The verdict speaks in sentence case — calm confidence, not a shouted banner (same rule
+/* THE FOUR APPROVED ROOMS COMPOSE THEIR OWN VERDICT NOW (self-review round 15, severe).
+   These three rules are scoped to the ONE room still wearing the HUD masthead register
+   rather than to "every room except home and check" — see the note above them. The
+   scoping comment at the top of this file still describes the SKIN rules; it is only
+   the verdict that narrowed.
+
+   The verdict speaks in sentence case — calm confidence, not a shouted banner (same rule
    as Home's masthead; the HUD register stays in the eyebrow above it). */
-:root[data-v2="on"][data-hud="on"]
-  .v2-room:not([data-room="home"]):not([data-room="check"])
-  .v2-verdict
-  h1 {
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .v2-verdict h1 {
   display: block;
   margin: 0 0 6px;
   font: 650 var(--type-section) / 1.15 var(--v2-font-sans);
@@ -53,17 +56,13 @@
   max-width: 34ch;
   text-wrap: balance;
 }
-:root[data-v2="on"][data-hud="on"]
-  .v2-room:not([data-room="home"]):not([data-room="check"])
-  .v2-verdict-sub {
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .v2-verdict-sub {
   display: block;
   font-size: var(--type-label);
   max-width: 64ch;
   margin-top: 2px;
 }
-:root[data-v2="on"][data-hud="on"]
-  .v2-room:not([data-room="home"]):not([data-room="check"])
-  .v2-verdict-action {
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .v2-verdict-action {
   margin: 12px 0 0;
 }
 

@@ -35,25 +35,6 @@
   gap: 16px;
 }
 
-/* ── Masthead — HomeHud's proven system-console register, in the console's namespace ── */
-:root[data-v2="on"] .hc-masthead-eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font: 600 var(--type-label) var(--v2-font-sans);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--v2-faint);
-  margin-bottom: 10px;
-}
-:root[data-v2="on"] .hc-masthead-eyebrow .hc-mono {
-  font: var(--type-label) var(--v2-font-mono);
-  letter-spacing: 0.08em;
-}
-:root[data-v2="on"] .hc-eyebrow-sep {
-  color: var(--v2-accent-text, var(--v2-accent));
-  letter-spacing: 0;
-}
 /* ── UX-1: THE FRONT DOOR IS A VERDICT (docs/decisions/2026-08-11-design-foundation.md §1) ──
    The header used to hold the word "Home" at --type-section and the answer lived a block down
    at --type-card — the audit's exact finding, that the biggest thing on the screen was a label
@@ -64,8 +45,16 @@
    and the because-line, when present, wraps to its own full row beneath. This supersedes the
    2026-08-11 "vertical stack": stacked, an attention verdict pushed the front door below a
    paragraph of check fine print. flex-end sits the button on the 40px headline's line, not up
-   beside the eyebrow. */
-:root[data-v2="on"] .v2-room[data-room="home"] .v2-verdict {
+   beside the eyebrow.
+
+   SCOPED OFF THE SPLIT LAYOUT (self-review round 15, 2026-08-23, severe). This rule and
+   shell-v2.css's split-column rule tie at (0,5,0), and this file loads later — so a row
+   that wraps was quietly beating the column the four-room comps approved. In a column,
+   `flex-wrap: wrap` threw the because-line clean out of the story column: measured live
+   at x=749.6 against a parent whose box ends at x=721.6, clipped behind the rig panel.
+   The 2026-08-20 pick still governs the composition it was made for. It just no longer
+   reaches the one it was not. */
+:root[data-v2="on"] .v2-room[data-room="home"]:not([data-layout="split"]) .v2-verdict {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
@@ -74,7 +63,7 @@
 }
 /* The verdict speaks in sentence case — calm confidence, not a shouted banner (the round-1
    type-voice correction carried over from the HUD masthead). */
-:root[data-v2="on"] .v2-verdict h1:has(.hc-headline) {
+:root[data-v2="on"] .v2-room:not([data-layout="split"]) .v2-verdict h1:has(.hc-headline) {
   display: block;
   margin: 0;
   font: var(--type-verdict-weight) var(--type-verdict) / 1.1 var(--v2-font-sans);
@@ -117,7 +106,7 @@
    not the label floor — this is a sentence a person reads, not a machine field. `order` seats
    it AFTER the action in the flex row so it wraps to its own full row beneath the verdict line
    (DOM order — and so reading order — is unchanged: verdict, because-line, action). */
-:root[data-v2="on"] .v2-room[data-room="home"] .v2-verdict-sub {
+:root[data-v2="on"] .v2-room[data-room="home"]:not([data-layout="split"]) .v2-verdict-sub {
   order: 2;
   flex: 1 1 100%;
   font: var(--type-body-weight) var(--type-body) / 1.5 var(--v2-font-sans);

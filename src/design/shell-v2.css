@@ -672,3 +672,76 @@
   flex: 0 0 auto;
   margin-top: 1px;
 }
+
+/* ══ THE ROOM EYEBROW (issue #49 slice 7 — whole-app convergence) ═════════════════════════════
+   ONE rule set for all four rooms. src/design/room-eyebrow.tsx carries the comp measurements this
+   is derived from and the four private copies it replaced.
+
+   It renders INSIDE the h1 (RoomShell's verdict slot), which the split layout sets in
+   --type-verdict at -0.5px tracking and 650 weight — so family, size, weight, line-height AND
+   tracking all have to be spoken again here, or the eyebrow silently inherits a headline. */
+:root[data-v2="on"] .v2-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  font-family: var(--v2-font-mono);
+  font-size: var(--type-body);
+  font-weight: var(--type-label-weight);
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--v2-muted);
+}
+/* Live: no dot, and the label itself carries the room. */
+:root[data-v2="on"] .v2-eyebrow[data-tone="accent"] {
+  color: var(--v2-accent-text, var(--v2-accent));
+}
+/* The state mark. Geometry is shared; the colour is the room's own answer. */
+:root[data-v2="on"] .v2-eyebrow-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+}
+:root[data-v2="on"] .v2-eyebrow-dot-ok,
+:root[data-v2="on"] .v2-eyebrow-dot-rec {
+  background: var(--v2-ok);
+  box-shadow: 0 0 5px var(--v2-ok-dim);
+}
+:root[data-v2="on"] .v2-eyebrow-dot-warn {
+  background: var(--v2-warn);
+  box-shadow: 0 0 5px var(--v2-warn-dim);
+}
+:root[data-v2="on"] .v2-eyebrow-dot-accent {
+  background: var(--v2-accent);
+}
+/* "Still measuring" — the one state that moves, because it is the one state still happening.
+   Test drew this in --v2-info and Health in --v2-accent; one state may not wear two colours in one
+   app, and violet is what "working" means everywhere else here. */
+:root[data-v2="on"] .v2-eyebrow-dot-scan {
+  background: var(--v2-accent);
+  box-shadow: 0 0 5px var(--v2-accent-dim);
+  animation: v2-eyebrow-pulse 1.4s ease-in-out infinite;
+}
+/* The eyebrow lives outside every room console (it is in RoomShell's verdict slot), so it stills
+   via the ROOT motion attribute rather than a console-scoped one. */
+:root[data-v2="on"][data-motion="reduced"] .v2-eyebrow-dot-scan {
+  animation: none;
+}
+@keyframes v2-eyebrow-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+:root[data-v2="on"] .v2-eyebrow-sep,
+:root[data-v2="on"] .v2-eyebrow-date {
+  color: var(--v2-faint);
+}
+:root[data-v2="on"] .v2-eyebrow-sep {
+  letter-spacing: 0;
+}

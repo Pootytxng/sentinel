@@ -214,8 +214,8 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
     expect(lines[0].textContent).toBe(posture.headline);
     expect(lines[0].closest(".v2-verdict")).not.toBeNull();
     expect(lines[0].closest(".home-console")).toBeNull();
-    expect(c.querySelector(".hc-masthead-eyebrow .hc-led-ok")).not.toBeNull();
-    expect(c.querySelector(".hc-led-scan")).toBeNull();
+    expect(c.querySelector(".v2-eyebrow .v2-eyebrow-dot-ok")).not.toBeNull();
+    expect(c.querySelector(".v2-eyebrow-dot-scan")).toBeNull();
     // The check line is a plain sentence now, not the `3/3` ratio the navigation audit put on its
     // own jargon list (2026-08-11 §3). Same measured fact, said the way a person would say it.
     // QUERIED BY THE BAND'S OWN CLASS, not by the shell slot it used to occupy (owner ruling

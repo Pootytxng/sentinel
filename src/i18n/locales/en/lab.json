@@ -199,36 +199,42 @@
       "name": "Optimize",
       "forLine": "Enable the safe, vetted tweaks for your rig — in one tap.",
       "whenLine": "You just want it faster and safe, without fiddling.",
+      "dockLine": "Test one change at a time and keep what helps.",
       "connectsLine": "Prove the stack you just applied — run Benchmark and watch the before/after."
     },
     "diagnostics": {
       "name": "Diagnostics",
       "forLine": "Know exactly what's in your rig before you change anything.",
       "whenLine": "You just want to know what's in this PC.",
+      "dockLine": "Check baseline and find what's getting in the way.",
       "connectsLine": "Feeds every other station — you read their numbers against what's really in here."
     },
     "benchmark": {
       "name": "Benchmark",
       "forLine": "Prove a change actually helped — not a placebo.",
       "whenLine": "You're asking \"did that tweak actually do anything, or did I imagine it?\"",
+      "dockLine": "Measure performance with a repeatable run.",
       "connectsLine": "The bench's spine — run it before and after any Optimize or Tuning change."
     },
     "latency": {
       "name": "Latency",
       "forLine": "Cut the delay between your hand and the screen.",
       "whenLine": "Your aim or clicks feel a beat behind.",
+      "dockLine": "Check system and network latency.",
       "connectsLine": "Pair it with Benchmark to prove a latency change held."
     },
     "tuning": {
       "name": "Tuning",
       "forLine": "Run cooler and quieter without losing frames (AMD).",
       "whenLine": "It runs hot or loud and you want it calmer without giving up frames.",
+      "dockLine": "Fine-tune settings in a controlled way.",
       "connectsLine": "Benchmark grades whether your frames held after the undervolt."
     },
     "blackbox": {
       "name": "Crash & Freeze Rescue",
       "forLine": "Understand a crash or freeze after it happens.",
       "whenLine": "It crashed or froze and you don't know why.",
+      "dockLine": "Collect logs and data to make crashes actionable.",
       "connectsLine": "Check Diagnostics for the rig state behind what it finds."
     },
     "routerLeadOptimize": {

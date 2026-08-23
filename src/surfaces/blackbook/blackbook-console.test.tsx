@@ -337,7 +337,7 @@ describe("BlackbookV2 console — title-header law + honest data flow", () => {
     expect(container.querySelector(".hud-headline")).toBeNull();
     const h1 = container.querySelector(".v2-verdict h1") as HTMLElement;
     expect(h1.textContent).toContain("What changed, and when");
-    expect(container.querySelector(".bbv2-eyebrow")!.textContent).toContain("Local record");
+    expect(container.querySelector(".v2-eyebrow")!.textContent).toContain("Local record");
     expect(h1.textContent).not.toMatch(/\d/);
     // the counts live in the body Receipts Strip, never a heading
     const strip = container.querySelector(".bc-strip") as HTMLElement;

@@ -276,40 +276,6 @@
    =========================================================================================== */
 
 /* ---- the story column --------------------------------------------------------------------- */
-/* The eyebrow speaks Health's grammar, because 01 and 04 draw the same thing: a grey mono label
-   with a DOT that carries the state. Colour is information here and nowhere else on this line. */
-:root[data-v2="on"] .lc-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--v2-font-mono);
-  font-size: var(--type-label);
-  font-weight: var(--type-label-weight);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--v2-faint);
-}
-:root[data-v2="on"] .lc-led {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--v2-faint);
-}
-:root[data-v2="on"] .lc-led-ok {
-  background: var(--v2-ok);
-}
-:root[data-v2="on"] .lc-led-warn {
-  background: var(--v2-warn);
-}
-:root[data-v2="on"] .lc-led-scan {
-  background: var(--v2-info);
-}
-:root[data-v2="on"] .lc-eyebrow-sep {
-  color: var(--v2-line);
-}
-:root[data-v2="on"] .lc-mono {
-  font-family: var(--v2-font-mono);
-}
 :root[data-v2="on"] .lc-headline {
   display: block;
 }

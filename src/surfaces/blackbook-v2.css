@@ -97,34 +97,9 @@
    quiet routes at the foot. Everything here lives INSIDE RoomShell's verdict/body slots, so
    these rules only shape what the shell already lays out -- no new layout, no new element.
 
-   THE EYEBROW is mono, not sans: it is a label for the room, and this system's mono is where
-   labels and machine values live. Measured 15px (11px cap) with a 9px accent dot 11px to its
-   left, sitting 17px above the headline's line box. The letter-spacing is deliberately NOT the
-   .14em this app uses on micro-labels -- at 15px mono the comp measures ~.06em, because a
-   15px eyebrow is already wide enough to read as one.
-
-   It is a child of the h1, which the split sets in --type-verdict at -0.5px tracking and 650
-   weight, so all three of those have to be spoken again here or the eyebrow inherits a headline. */
-:root[data-v2="on"] .bbv2-eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  margin-bottom: 16px;
-  font-family: var(--v2-font-mono);
-  font-size: var(--type-body);
-  font-weight: var(--type-label-weight);
-  line-height: 1.2;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--v2-muted);
-}
-:root[data-v2="on"] .bbv2-eyebrow-dot {
-  width: 8px;
-  height: 8px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--v2-accent);
-}
+   THE EYEBROW converged into the shared `.v2-eyebrow` in slice 7
+   (src/design/room-eyebrow.tsx). Its .06em was this room's own drift — all four
+   comps measure .08em. */
 /* A block, so the eyebrow above it gets a line of its own inside the same h1. */
 :root[data-v2="on"] .bbv2-headline {
   display: block;

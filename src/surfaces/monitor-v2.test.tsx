@@ -204,7 +204,7 @@ describe("MonitorV2 — RoomShell composition", () => {
     expect(h1s.length).toBe(1);
     // The h1 is eyebrow + headline (one header idiom per room, slice 4); the VERDICT is the
     // headline, asserted exactly rather than as a substring so a stray sentence still fails.
-    expect(h1s[0].querySelector(".mc-masthead-eyebrow")!.textContent).toContain("Session monitor");
+    expect(h1s[0].querySelector(".v2-eyebrow")!.textContent).toContain("Session monitor");
     expect(h1s[0].querySelector(".mc-headline")!.textContent).toBe(
       "Last session ran smooth — valorant at 240 fps average.",
     );

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import Learn from "./Learn";
 import { RoomShell } from "../design/room-shell";
+import { RoomEyebrow } from "../design/room-eyebrow";
 import { useV2Nav } from "../design/ShellV2";
 import { SegmentedControl } from "../design/SegmentedControl";
 import { useReducedMotion } from "../design/use-motion";
@@ -169,10 +170,7 @@ export function BlackbookV2({
         // changed and when — is not redundant with anything.
         return (
           <>
-            <span className="bbv2-eyebrow">
-              <span className="bbv2-eyebrow-dot" aria-hidden="true" />
-              {t("blackbook.blackbookV2.narrative.eyebrow")}
-            </span>
+            <RoomEyebrow dot="accent" label={t("blackbook.blackbookV2.narrative.eyebrow")} />
             <span className="bbv2-headline">{t("blackbook.blackbookV2.narrative.headline")}</span>
           </>
         );

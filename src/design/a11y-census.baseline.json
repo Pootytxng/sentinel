@@ -42,6 +42,7 @@
     "src/design/console/ReticleCursor.tsx": "aria-hidden: decorative pointer reticle, mounted aria-hidden=\"true\" and stood down under reduced motion / coarse pointer — AT never reaches it",
     "src/design/jarvis/LenisSpine.tsx": "no-dom: effect-only smooth-scroll spine — returns null, contributes no node for AT to meet",
     "src/design/jarvis/MagneticLayer.tsx": "no-dom: effect-only cursor-magnetism layer — returns null, contributes no node for AT to meet",
+    "src/design/room-eyebrow.tsx": "rostered",
     "src/design/room-shell.tsx": "rostered:shell",
     "src/design/vendor/CountUp/CountUp.tsx": "rostered",
     "src/design/vendor/DecryptedText/DecryptedText.tsx": "rostered",

@@ -28,6 +28,7 @@ import { type ArcTone } from "../design/console/ArcGauge";
 import { Reading } from "../design/console/Reading";
 import { Oscilloscope } from "../design/console/Oscilloscope";
 import { RoomShell } from "../design/room-shell";
+import { RoomEyebrow } from "../design/room-eyebrow";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { Term } from "../design/Term";
 import { Icon } from "../design/Icon";
@@ -385,16 +386,17 @@ export function MonitorConsole({
          only while the helper is actually recording; there is no idle animation to mean nothing. */
       verdict={
         <>
-          <span className="mc-masthead-eyebrow">
-            {/* NO DOT WHEN NOTHING IS RECORDING (owner ruling 2026-08-23 — match the comps
+          <RoomEyebrow
+            tone="accent"
+            /* NO DOT WHEN NOTHING IS RECORDING (owner ruling 2026-08-23 — match the comps
                 exactly). 02-live-approved.png carries no dot beside this label at all, and
                 its idle state is the state the app is in most of the time; the label itself
                 is drawn in the accent instead. The dot survives ONLY as the recording light,
                 which is the one moment this room has a live state to report — so the comp is
-                matched where it speaks, and nothing honest is lost where it is silent. */}
-            {fpsActive && <span className="mc-led mc-led-on" aria-hidden="true" />}
-            {t("monitor.monitorConsole.narrative.eyebrow")}
-          </span>
+                matched where it speaks, and nothing honest is lost where it is silent. */
+            dot={fpsActive ? "rec" : undefined}
+            label={t("monitor.monitorConsole.narrative.eyebrow")}
+          />
           <span className="mc-headline" key={headline}>
             {headline}
           </span>

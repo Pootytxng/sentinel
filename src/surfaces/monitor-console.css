@@ -221,37 +221,10 @@
    6–11 were spent on in Health, which this room does not get to re-learn. */
 
 /* ── The narrative column ─────────────────────────────────────────────────────────────────── */
-/* NOT `.mc-eyebrow`. That name is already taken by the SHARED measurement chrome
-   (measurement-chrome.css) -- an unscoped, mono, uppercase eyebrow the debrief and the Lab bench
-   both wear -- and this room's stylesheet uses `mc-` for "monitor console". Two prefixes, one
-   collision: the first draft of this rule silently inherited the shared eyebrow's family, casing
-   and ink through the global cascade. Named for Health's `.hc-masthead-eyebrow` instead, which
-   is the element this actually is. */
-/* THE LABEL CARRIES THE ROOM'S ACCENT (owner ruling 2026-08-23, match the comps).
-   Health and History draw a grey label with a coloured dot; 02-live-approved.png draws
-   no dot and tints the label itself — sampled #8d73e9, which is the accent. Following
-   the token rather than that hex keeps the user's accent picker working here. */
-:root[data-v2="on"] .mc-masthead-eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font: 600 var(--type-label) var(--v2-font-sans);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--v2-accent-text, var(--v2-accent));
-}
-/* State, not decoration: the dot is lit only while the helper is ACTUALLY recording. It never
-   animates — an idle pulse would be motion that means nothing, and this room already has one
-   honest live signal (the trace). */
-:root[data-v2="on"] .mc-led {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--v2-faint);
-}
-:root[data-v2="on"] .mc-led-on {
-  background: var(--v2-ok);
-}
+/* The eyebrow converged into the shared `.v2-eyebrow` in slice 7
+   (src/design/room-eyebrow.tsx). It is scoped under :root[data-v2="on"], so it cannot
+   collide with the UNSCOPED `.mc-eyebrow` in measurement-chrome.css the way this room's
+   first draft did — that one is <SectionLabel>, a different element sharing a word. */
 :root[data-v2="on"] .mc-headline {
   display: block;
 }
