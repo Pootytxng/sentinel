@@ -67,13 +67,21 @@ Detect → diagnose → debrief → prove. That loop is built and running today 
   need its own Capability Exception Gate record; vulnerable borrowed drivers and generic kernel
   read/write surfaces remain barred. Game/process injection remains prohibited — FPS is captured
   externally through ETW and sensors use documented vendor interfaces.
-- **Local-first, one outbound call.** No account, no remote config, no telemetry. **The in-app
+- **Local-first, one outbound call.** No account, no remote config, and no telemetry **today —
+  because no send path has ever been built**, not because absolutism is still the policy (see the
+  Receipts-telemetry line below). **The in-app
   updater (LIVE 2026-07-22, owner-directed) is the one thing that talks out:** a signed-update
   check against the public releases repo on launch + every 4h; nothing downloads until the user
   clicks Update now, and every package is signature-verified against the pinned public key before
   install (private key lives outside the repo). The Export report still leaves only by the user's
-  hand. **Receipts telemetry** (anonymous, opt-in, default-off, kill-switched) remains a separate
-  gated track requiring its own security review and owner sign-off before it can arm. The old
+  hand. **Receipts telemetry** (anonymous, kill-switched) remains a separate gated track requiring
+  its own security review and owner sign-off before it can arm. **⚠️ ITS DEFAULT AFTER ARMING IS
+  GENUINELY UNSETTLED, and `docs/RECEIPTS_DOCTRINE.md` contradicts itself (found 2026-08-23):** its
+  Phase-3 line says *"opt-in results sharing … default OFF"* <!-- retired-claim-allow --> while its
+  amended anti-absolutism line says **on by default once armed, disclosed at first run**. Both are
+  in the law. **Nobody should quote either as settled until the owner rules** — see the issue filed
+  2026-08-23. What IS true today: the gate is built dark with no send path, so nothing can send
+  regardless of which default wins. The old
   "verified zero-outbound" absolute is RETIRED by the updater decision <!-- outbound-claim-allow --> — the in-app footer now
   states exactly what leaves the machine: "Outbound: signed update check only." Since 2026-08-03
   the automatic check is also switchable off (Settings → About → Automatic update checks), with a
@@ -130,9 +138,9 @@ you to turn off its own telemetry.
 - **Monetization has a real build order**, not an open question: `docs/RECEIPTS_DOCTRINE.md` (the
   law) + `docs/MONETIZATION_PLAN.md` (the sequencing, 2026-07-15). Four layers ranked by
   passivity — affiliate upgrade links (hold, needs accounts + data) → content/SEO (live today,
-  $0) → Compy Pro subscription (built dark, ~$3–4/mo or ~$25/yr, needs entity + payments) → B2B
-  licensing (parked, post-traction). **The one durable promise: optimize + rollback stay free
-  forever; Pro sells new value, never gates the free promise.**
+  $0) → Compy Pro (built dark, **$4.99/mo · $39/yr · $89 lifetime**, owner decision 2026-08-22;
+  needs entity + payments) → B2B licensing (parked, post-traction). **The one durable promise:
+  optimize + rollback stay free forever; Pro sells new value, never gates the free promise.**
 
 ## Open questions (where outside opinions help most)
 
@@ -148,8 +156,12 @@ you to turn off its own telemetry.
    (separate recovery snapshot before any remediation). Not publicly called "Paramedic Mode."
 3. **Does "measures instead of promises" land** with a 20-something gamer, or does it sound like
    homework next to "BOOST FPS NOW"?
-4. **Pricing shape — mostly decided.** Compy Pro is scoped at ~$3–4/mo or ~$25/yr in the doctrine,
-   gated on a legal entity + merchant-of-record + real shipped Pro value. Still genuinely open:
-   the exact price, and what value beyond history/multi-rig/deep-monitoring justifies it.
+4. **Pricing — the number is DECIDED, the shape is under challenge.** Compy Pro is
+   **$4.99/mo · $39/yr · $89 lifetime** (owner decision 2026-08-22), gated on a legal entity +
+   merchant-of-record + real shipped Pro value. **No price is published anywhere until Pro exists.**
+   Still genuinely open: what value beyond history/multi-rig/deep-monitoring justifies it — and
+   whether the monthly tier should exist at all, since comparable-based research on 2026-08-23
+   found the nearest paid analogue selling *lifetime* for less than Compy's annual. That challenge
+   is the owner's to rule on; it is not settled by this doc.
 
 *Thanks for reading — tear it apart.*
