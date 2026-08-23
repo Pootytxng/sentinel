@@ -127,7 +127,22 @@ exactly why the bug survived a round — and the launch-then-shrink path that mi
 every human and every capture harness actually takes. The override now states an authoritative
 `height` for the stage and the rig, which breaks the circle from the outside. Guard: the same
 short-viewport case now REQUIRES an explicit height on both boxes and that it agree with the floor.
-Proven to fail on round 3's CSS. **Round 5 is next.**
+Proven to fail on round 3's CSS.
+
+**🔧 SELF-REVIEW ROUND 5 — FAIL, fixed, guarded.** The round-4 fix VERIFIED on the installed
+build — canvas back to its stated height, all five readings above the fold at 1280×720, the tall
+viewport regrowing correctly — and the round still failed, on the rubric's prior-decisions item.
+Rounds 3 and 4 delivered that fix as an `@media (max-height: 860px)` block, and the owner-approved
+handoff rules that out in as many words: *"The current desktop shell intentionally has no responsive
+media queries. Do not add breakpoints as a shortcut. The finished composition must still be proven at
+1280×720, the owner's real 1500×980 viewport, and 1920×1080."* Two commits shipped past a live
+decision without naming the conflict — the defect here is the MECHANISM, not the pixels.
+Health's geometry is now **one continuous derivation**: the stage absorbs the whole viewport
+difference between a floor and the comp's ceiling, `clamp(320px, calc(100vh − named chrome), 500px)`,
+with every subtrahend a named variable someone can check. The owner's 980px window and 1080p still
+land on exactly the approved 500px stage; 720p lands on 351px and the strip clears. Guard: the same
+case now REJECTS any `@media` rule in `home-console.css` and re-runs the arithmetic at all three
+proof heights. Proven to fail on round 4's CSS. **Round 6 is next.**
 
 ### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) ✅ ALL FIVE BUILT (⑤ shipped to the desk 2026-08-20, awaiting the owner's eye): ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED; owner tried it and said *"i like it"* 2026-08-20, so the default flips ON inside the comprehensibility sweep, which first fixes the button placement he objected to — see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door — SHIPPED 2026-08-20 (desk build `0808e33e`, self-review PASS 10/10); owner veto-on-sight still open**
 

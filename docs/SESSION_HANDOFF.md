@@ -29,7 +29,7 @@ for veto on sight — his silence is not approval).
   the `below` hero and is UNCONDITIONAL (one-hero-guard forbids a conditional hero). Seven guards
   that selected the CORNER a gauge sat in were re-anchored to `data-read="…"`, never deleted.
 
-### Four self-review rounds, four FAILs, six guards — slice 2 is NOT done
+### Five self-review rounds, five FAILs, six guards — slice 2 is NOT done
 
 Every round was a complete fresh review against `01-health-approved.png` on the INSTALLED build, and
 every fix was proven to FAIL on the pre-fix source first. All four findings were honest-measurement
@@ -44,31 +44,27 @@ and R2 are landed and written up in `docs/UI_VISION_BACKLOG.md` §FOUR-ROOM.
    shortens the scroll viewport itself. Same commit: the readout printed the CPU/GPU model a THIRD
    time on Health, so the rig segment stands down there. Guards
    `hud-frame-clearance-guard.test.ts`, `hud-readout-no-duplicate-guard.test.tsx`.
-3. **R3 → UNCOMMITTED. At 1280×720 the readout STRIP was sliced in half by `.v2-content`'s own
-   overflow — five labels on screen, none of their values.** The comfortable-viewport stage box
-   (`min-height: 500px` + 40px padding) costs 540px of a lane only ~595px tall. R2's reserve could
-   not fix this; it cannot create height a 720px window lacks. **The stage floor now compresses below
-   860px of viewport height** (320 stage / 280 rig / 280 card ceiling) — the rig is the one elastic
-   element on Health, and 860 sits well below the owner's real 980px window, so his viewport and the
-   comp's proportions are untouched. Guard: the short-viewport case in
-   `src/surfaces/home-console.test.tsx` pins the threshold band, re-checks the card-viewport
-   derivation inside the override, and caps the compressed box at the measured 397px.
-4. **R4 → UNCOMMITTED. R3's floor was not enough and LOOKED like it was.** `getComputedStyle`
-   reported the new 320px `min-height` while the box on screen stayed 500px: the rig is an r3f
-   `<Canvas>` that measures its parent and writes its own inline size, and the parent — with no
-   `height` of its own — is sized by that canvas in turn. Lowering a floor under a box already
-   taller than it changes nothing. Growing the window worked, which is why R3 passed its own check;
-   **launch-then-shrink, the path every human and every capture harness takes, did not.** The
-   override now states an authoritative `height` on the stage AND the rig. Same guard, extended to
-   require it.
+3. **R3+R4 → `2ea9683d`, `cbb36365`. At 1280×720 the readout strip was sliced** — five labels on
+   screen with none of their five values, which reads as five readings that came back empty. R3
+   lowered the stage floor; R4 found that a floor ALONE does nothing, because the rig is an r3f
+   `<Canvas>` that measures its parent and the parent, having no `height`, is sized by that canvas
+   in turn. An authoritative `height` breaks the circle. Verified on the installed build in R5.
+4. **R5 → UNCOMMITTED. Both of those shipped as an `@media` block the approved handoff forbids**
+   — *"no responsive media queries. Do not add breakpoints as a shortcut."* The pixels were right
+   and the mechanism was not, and two commits passed a live decision without naming it. Health's
+   geometry is now ONE continuous derivation — `clamp(320px, calc(100vh − named chrome), 500px)` on
+   `.hc-panel`, every subtrahend a named variable. 980px and 1080p still land on the comp's exact
+   500px stage. Guard: the case now REJECTS any `@media` rule in the file and re-runs the
+   arithmetic at all three proof heights.
 
-**EXACT NEXT STEP.** R4's fix is in the tree, guarded and gated but NOT committed. Commit it →
+**EXACT NEXT STEP.** R5's fix is in the tree, guarded and gated but NOT committed. Commit it →
 `cargo clean -p compy --release` → `npm run tauri build` → `scripts/ship-reinstall.ps1` → the same
-script `-ProofOnly -ExpectedCommit <full 40-char HEAD>` → **self-review round 5, complete and
-fresh**. Its re-verification must use the ROUND-4 REPRO, not a cold mount: launch (or size up to
-1500×980 first), THEN resize down to 1280×720, and confirm `.hc-stage canvas`'s inline style reports
-`height: 280px` (not 460px) and that all five `.hc-readout` values are visible at scrollTop 0. A
-cold mount at 720p passed even with the broken CSS. On PASS → `docs/RELEASE_STATE.md` (line 45
+script `-ProofOnly -ExpectedCommit <full 40-char HEAD>` → **self-review round 6, complete and
+fresh**. Re-verification must use the ROUND-4 REPRO, not a cold mount: size UP to 1500×980 first,
+THEN down to 1280×720, and confirm `.hc-stage canvas`'s inline height followed and all five
+`.hc-readout` values are visible at scrollTop 0 — a cold mount at 720p passed even with broken CSS.
+Prove all THREE handoff heights this time (1280×720, 1500×980, 1920×1080), since the fix is now one
+fluid formula rather than two hardcoded cases. On PASS → `docs/RELEASE_STATE.md` (line 45
 `STATE:owner_installed_stamp`; the desk row at line 65 moved VERBATIM into
 `archive/RELEASE_STATE_HISTORY.md` under that file's existing `### <date> - the <hash> … moved
 verbatim (byte budget)` convention; plus the `d5a6a630` mentions at lines 77, 176, 191) → slice 3.
@@ -111,7 +107,7 @@ room — his veto on sight always stands, and the violet-vs-green call above is 
 checklist's remaining items are money/legal calls that cannot move until Pro exists.
 
 **This session: LEAVE OPEN — slice 2 of 7 is mid-flight in `sentinel-fourroom`.** His live app
-is `2ea9683d`, one installer on the Desktop.
+is `cbb36365`, one installer on the Desktop.
 
 ## Cycle notes before this train — archived
 

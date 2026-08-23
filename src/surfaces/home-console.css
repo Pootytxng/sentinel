@@ -272,6 +272,57 @@
    all three parts, not just the glass: a border around the canvas alone would have drawn a box
    around the rig and left the numbers floating beside it. ── */
 :root[data-v2="on"] .hc-panel {
+  /* ── HEALTH'S ONE FLUID GEOMETRY — NO BREAKPOINT (self-review round 5, issue #49, 2026-08-23) ──
+     The approved handoff is explicit: "The current desktop shell intentionally has no responsive
+     media queries. Do not add breakpoints as a shortcut. The finished composition must still be
+     proven at 1280×720, the owner's real 1500×980 viewport, and 1920×1080." Rounds 3 and 4 fixed a
+     real defect — at 720p the readout strip was sliced, five labels showing none of their five
+     values — with exactly the shortcut that sentence rules out: an `@media (max-height: 860px)`
+     block carrying a second set of hardcoded numbers. It worked and it was still the wrong
+     mechanism, and neither commit acknowledged the conflict. This is the same fix expressed as one
+     composition that flexes, which is what the handoff asks for. `shell-v2.css` already carries the
+     same convention in prose ("NO BREAKPOINT") for the aside column.
+
+     The stage is the one genuinely elastic element on Health — it is a rendered canvas, so a
+     shorter box is a smaller rig and nothing else; every other block here is text at a fixed type
+     size and would have to be cut. So the stage absorbs the whole viewport difference, between a
+     floor and the approved comp's ceiling, continuously:
+
+       stage = clamp(320px, viewport − everything that is NOT the stage, 500px)
+
+     Every subtrahend is a real number someone can check, which is why each is named:
+       --hc-chrome-top    72px  = 46px shell topbar + 26px .v2-content padding-top
+       --hc-hud-reserve   36px  = .v2-content's margin-bottom in the HUD shell (self-review round 2;
+                                  hud-frame.css owns it, and hud-frame-clearance-guard.test.ts
+                                  pins it — this must never be smaller than that value)
+       --hc-panel-below  238px  = the control row + the readout strip under the stage, MEASURED on
+                                  the installed build at 1280×720 (self-review rounds 3 and 5)
+       --hc-stage-slack   14px  = margin, so a wrapped label cannot re-slice the strip
+
+     At the three proof heights (inner viewport, measured — the window chrome is ~9px):
+       1280×720  → 711 − 360 = 351px stage, panel ends at 661 vs the lane's 675 clip. Clears.
+       1500×980  → 971 − 360 = 611 → clamped to 500. The owner's viewport keeps the comp exactly.
+       1920×1080 → 1071 − 360 = 711 → clamped to 500. Same.
+     Guard: home-console.test.tsx re-runs that arithmetic and rejects any `@media` in this file. */
+  --hc-stage-min: 320px;
+  --hc-stage-max: 500px;
+  --hc-chrome-top: 72px;
+  --hc-hud-reserve: 36px;
+  --hc-panel-below: 238px;
+  --hc-stage-slack: 14px;
+  --hc-stage-h: clamp(
+    var(--hc-stage-min),
+    calc(
+      100vh - var(--hc-chrome-top) - var(--hc-hud-reserve) - var(--hc-panel-below) -
+        var(--hc-stage-slack)
+    ),
+    var(--hc-stage-max)
+  );
+  /* The rig gets the stage's CONTENT box: box-sizing is border-box globally (App.css), so the
+     stage's height already includes its 2×20px padding. 500 − 40 = 460 and 320 − 40 = 280, the two
+     numbers rounds 3 and 4 arrived at by hand. */
+  --hc-rig-h: calc(var(--hc-stage-h) - 40px);
+
   position: relative;
   display: flex;
   flex-direction: column;
@@ -293,7 +344,14 @@
      comp, whose canvas is ~500 tall in a ~620 column. The .hc-stage-cards ceiling below DERIVES
      from this value — its comment + the bug→guard test in home-console.test.tsx (which READS this
      min-height) must move together with it. */
-  min-height: 500px;
+  /* `height`, not only `min-height` — round 4's lesson, and it is load-bearing. The rig is an r3f
+     <Canvas> that measures its PARENT and writes its own inline pixel size; a parent with only a
+     floor is in turn sized by that canvas, and that circle has no bottom. Round 4 set a lower floor
+     here and `getComputedStyle` faithfully reported it while the box on screen stayed 500px, because
+     lowering a floor under a box already taller than the floor changes nothing and nothing
+     re-measures. An authoritative height breaks the circle from the outside. */
+  min-height: var(--hc-stage-h);
+  height: var(--hc-stage-h);
   display: grid;
   place-items: center;
   padding: 20px;
@@ -301,8 +359,12 @@
 
 :root[data-v2="on"] .hc-rig {
   width: 100%;
-  height: 100%;
-  min-height: 460px; /* rides the 500px stage (was 480 at 540) */
+  /* An explicit height, not `height: 100%` — a percentage needs a definite parent, and "definite"
+     is the exact property the canvas circularity above takes away. --hc-rig-h is the stage's own
+     content box, so this is the same number by construction, stated in a way that cannot depend on
+     what the canvas decided first. */
+  height: var(--hc-rig-h);
+  min-height: var(--hc-rig-h);
   display: grid;
   place-items: center;
 }
@@ -319,55 +381,11 @@
      Ceiling = stage content = 500 − 2·20 = 460. bug→guard: the "2D card viewport" block in
      home-console.test.tsx still DERIVES this bound from .hc-stage's min-height and padding, so the
      two values cannot drift apart (self-reviewer 2026-07-18; derivation 2026-07-23; reserve
-     retired with the corner gauges, issue #49). */
-  max-height: 460px;
+     retired with the corner gauges, issue #49). The literal 460 became --hc-rig-h in round 5, so
+     the derivation is now stated in the stylesheet itself rather than only in the guard. */
+  max-height: var(--hc-rig-h);
 }
 
-/* ── SHORT VIEWPORTS: the stage floor compresses so the readings stay above the fold. ──
-   bug→guard (self-review round 3, issue #49, 2026-08-23). The three numbers above are a comfortable
-   viewport's budget: stage 500 + 40 padding = 540px of the scroll lane before .hc-readout even
-   begins. At 1280×720 the lane is only ~595px tall, so the readout strip started at y≈648 and was
-   sliced by .v2-content's own overflow at y≈675 — the five LABELS (READINESS / AVG FPS / 1% LOW /
-   GPU TEMP / CPU TEMP) were on screen with none of their VALUES. A row of labels with no numbers
-   does not read as "scroll down", it reads as five readings that came back empty, which is the
-   honest-measurement law's problem and not a cosmetic one. (Round 2's margin reserve stopped
-   scrolled content entering the HUD readout's band; it could not create vertical room that a 720px
-   window does not have.)
-
-   The floor drops instead of the strip moving, because the rig is the one element here that is
-   genuinely elastic — it is a rendered canvas, so a shorter box is a smaller rig and nothing else;
-   every other block on Health is text or numbers at a fixed type size and would have to be cut.
-   The threshold is 860px, comfortably below the owner's real 980px-tall window, so his viewport and
-   the approved comp's proportions are untouched.
-
-   The base rules keep their explicit `min-height: 500px` / `max-height: 460px` so the derivation
-   guard in home-console.test.tsx still reads them. The same derivation is re-satisfied here:
-   cards 280 <= stage content (320 - 2*20) = 280. Guard: home-console.test.tsx pins BOTH. */
-@media (max-height: 860px) {
-  /* `height`, not only `min-height` — and this is the whole fix, not a belt-and-braces extra.
-     bug→guard (self-review round 4, issue #49, 2026-08-23): the first attempt set the floors alone
-     and LOOKED correct — `getComputedStyle(.hc-stage).minHeight` really did report 320px — while
-     the box on screen stayed 500px and the readings stayed sliced. The rig is an r3f <Canvas> that
-     measures its PARENT and writes its own inline pixel size; the parent, having no `height` of its
-     own, is then sized by that canvas. That circle has no bottom: lowering a floor under a box that
-     is already taller than the floor changes nothing, nothing re-measures, and the canvas keeps the
-     inline `height: 460px` it was given at the previous window size. Growing worked (a floor CAN
-     push a box up), which is exactly why the bug survived a round — and the launch-then-shrink path
-     that misses it is the one every human and every capture harness actually takes.
-     An explicit height breaks the circle from the outside: the box is 320px because CSS says so,
-     the canvas's ResizeObserver fires, and it redraws at the size it is given. */
-  :root[data-v2="on"] .hc-stage {
-    min-height: 320px;
-    height: 320px;
-  }
-  :root[data-v2="on"] .hc-rig {
-    min-height: 280px;
-    height: 280px;
-  }
-  :root[data-v2="on"] .hc-stage-cards {
-    max-height: 280px;
-  }
-}
 :root[data-v2="on"] .hc-stage-loading {
   display: grid;
   place-items: center;

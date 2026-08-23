@@ -830,81 +830,114 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     const css = readFileSync(join("src", "surfaces", "home-console.css"), "utf8");
     const cards = block(css, ':root[data-v2="on"] .hc-stage-cards');
     expect(cards).toMatch(/overflow-y:\s*auto/); // a scroll viewport (clips, then scrolls), not clip
-    const m = cards.match(/max-height:\s*(\d+)px/);
-    expect(m, "max-height must be an explicit px bound").not.toBeNull();
-    const maxH = Number(m![1]);
-    // DERIVED bound: read the stage's own min-height AND padding so the two can never drift apart.
-    // With the overlays gone the viewport may use the whole content box — but never more than it,
-    // which is what keeps a tall HardwareGrid a scroller instead of a stage-stretching column.
+
+    // The bound is no longer a literal that could drift from the stage: it IS the stage's content
+    // box, named once on .hc-panel and read here (round 5). With the overlays gone the viewport may
+    // use the whole content box — but never more than it, which is what keeps a tall HardwareGrid a
+    // scroller instead of a stage-stretching column.
+    expect(cards, "the card viewport rides the stage's own content box").toMatch(
+      /max-height:\s*var\(--hc-rig-h\)/,
+    );
+
+    const panel = block(css, ':root[data-v2="on"] .hc-panel');
+    const rigCalc = /--hc-rig-h:\s*calc\(var\(--hc-stage-h\)\s*-\s*(\d+)px\)/.exec(panel);
+    expect(rigCalc, "--hc-rig-h must be DERIVED from --hc-stage-h, never restated").not.toBeNull();
+
     const stage = block(css, ':root[data-v2="on"] .hc-stage');
-    const minM = stage.match(/min-height:\s*(\d+)px/);
     const padM = stage.match(/padding:\s*(\d+)px/);
-    expect(minM, ".hc-stage must declare an explicit min-height").not.toBeNull();
     expect(padM, ".hc-stage must declare an explicit px padding").not.toBeNull();
-    const content = Number(minM![1]) - 2 * Number(padM![1]);
-    expect(maxH).toBeLessThanOrEqual(content);
-    expect(maxH).toBeGreaterThan(0);
+    expect(
+      Number(rigCalc![1]),
+      "box-sizing is border-box, so the rig's box is the stage minus BOTH paddings",
+    ).toBe(2 * Number(padM![1]));
   });
 
-  it("CSS: the stage floor compresses on a short viewport, so the readings clear the fold", () => {
-    // bug→guard (self-review round 3, issue #49, 2026-08-23). At 1280×720 the scroll lane is only
-    // ~595px tall. The comfortable-viewport stage box (min-height 500 + 2×20 padding = 540) pushed
-    // .hc-readout to content-offset ~568, so .v2-content's own overflow sliced the strip in half —
-    // the five LABELS were on screen with none of their VALUES. Five labelled readings showing no
-    // numbers do not read as "scroll down", they read as five readings that came back empty, which
-    // is an honest-measurement failure. Round 2's HUD margin reserve could not fix this: it stops
-    // scrolled content entering the readout's band, it cannot create height a 720px window lacks.
+  it("CSS: Health is ONE fluid composition — no breakpoint, and the readings still clear the fold", () => {
+    // bug->guard (self-review rounds 3, 4 and 5, issue #49, 2026-08-23). Three findings, one rule.
+    //
+    // R3: at 1280x720 the 540px stage box pushed .hc-readout past .v2-content's clip -- five LABELS
+    //     on screen with none of their five VALUES. Labelled readings showing no numbers do not
+    //     read as "scroll down", they read as five readings that came back empty, which is an
+    //     honest-measurement failure and not a cosmetic one.
+    // R4: a lower min-height ALONE did nothing. The rig is an r3f <Canvas> that measures its parent
+    //     and writes its own inline pixel size, and a parent with only a floor is then sized by that
+    //     canvas; lowering a floor under a box already taller than it changes nothing and nothing
+    //     re-measures. An authoritative `height` is what breaks the circle.
+    // R5: both fixes were delivered as an @media block, which the owner-approved handoff rules out
+    //     in as many words -- "The current desktop shell intentionally has no responsive media
+    //     queries. Do not add breakpoints as a shortcut. The finished composition must still be
+    //     proven at 1280x720, the owner's real 1500x980 viewport, and 1920x1080." The same fix now
+    //     rides one continuous derivation, and this guard re-runs it at all three of those heights.
     const css = readFileSync(join("src", "surfaces", "home-console.css"), "utf8");
 
-    const mq = /@media\s*\(max-height:\s*(\d+)px\)\s*\{([\s\S]*?)\n\}/.exec(css);
-    expect(mq, "Health must carry a short-viewport override for the stage floor").not.toBeNull();
-    const threshold = Number(mq![1]);
-    const inside = mq![2];
-
-    // Below the owner's real 980px-tall window, so his viewport keeps the approved comp's
-    // proportions; at or above 720, so the size this defect was measured at is actually covered.
-    expect(threshold).toBeLessThan(980);
-    expect(threshold).toBeGreaterThanOrEqual(720);
-
-    const stageMin = Number(/\.hc-stage\s*\{[^}]*min-height:\s*(\d+)px/.exec(inside)?.[1]);
-    const cardsMax = Number(/\.hc-stage-cards\s*\{[^}]*max-height:\s*(\d+)px/.exec(inside)?.[1]);
-    expect(Number.isFinite(stageMin), "the override must set an explicit stage min-height").toBe(true);
-    expect(Number.isFinite(cardsMax), "the override must re-bound the card viewport too").toBe(true);
-
-    // A FLOOR IS NOT ENOUGH, and this is the round-4 defect (self-review, issue #49): the rig is an
-    // r3f <Canvas> that measures its parent and writes its own inline pixel size, while the parent
-    // -- given no `height` -- is sized by that canvas in turn. Lowering a floor under a box that is
-    // already taller than the floor changes nothing, so on the launch-then-shrink path (the one
-    // every human and every capture harness takes) the canvas kept its old inline height and the
-    // readings stayed sliced, even though getComputedStyle reported the new min-height correctly.
-    // The override must therefore state an authoritative `height` for both boxes.
-    const stageH = Number(/\.hc-stage\s*\{[^}]*[^-]height:\s*(\d+)px/.exec(inside)?.[1]);
-    const rigH = Number(/\.hc-rig\s*\{[^}]*[^-]height:\s*(\d+)px/.exec(inside)?.[1]);
+    // A comment NAMING the retired block is not a breakpoint, so compare against the rules alone.
     expect(
-      Number.isFinite(stageH),
-      "the override must set an explicit stage HEIGHT, not only a min-height: a floor cannot " +
-        "shrink a box whose rendered height comes from the canvas inside it",
-    ).toBe(true);
-    expect(
-      Number.isFinite(rigH),
-      "the override must set an explicit rig HEIGHT for the same reason",
-    ).toBe(true);
-    expect(stageH, "the stated height and floor must agree").toBe(stageMin);
+      stripComments(css),
+      "no @media in Health: the approved handoff forbids breakpoints as a shortcut",
+    ).not.toMatch(/@media/);
 
-    // MEASURED at 1280×720 on the installed build (self-review round 3): the scroll lane is 595px,
-    // the furniture above the stage costs 28px, and .hc-readout is 170px tall. The whole strip has
-    // to fit above the fold, so the stage BOX (min-height + its 2×20px padding) can be at most
-    // 595 − 28 − 170 = 397px, i.e. a min-height of 357px. Anything taller slices the values off.
-    const pad = Number(/:root\[data-v2="on"\] \.hc-stage \{[^}]*padding:\s*(\d+)px/.exec(css)?.[1]);
-    expect(Number.isFinite(pad)).toBe(true);
-    expect(
-      stageMin + 2 * pad,
-      "the compressed stage box must leave the readout strip fully above the fold at 1280×720",
-    ).toBeLessThanOrEqual(397);
+    const panel = block(css, ':root[data-v2="on"] .hc-panel');
+    const px = (name: string) => {
+      const m = new RegExp(`--${name}:\\s*(\\d+)px`).exec(panel);
+      expect(m, `--${name} must be an explicit px value on .hc-panel`).not.toBeNull();
+      return Number(m![1]);
+    };
+    const min = px("hc-stage-min");
+    const max = px("hc-stage-max");
+    const subtrahends = ["hc-chrome-top", "hc-hud-reserve", "hc-panel-below", "hc-stage-slack"];
+    const offset = subtrahends.reduce((n, k) => n + px(k), 0);
 
-    // The base derivation still has to hold inside the override, or a tall HardwareGrid stretches
-    // the stage instead of scrolling inside it — the exact thing the base bound exists to stop.
-    expect(cardsMax).toBeLessThanOrEqual(stageMin - 2 * pad);
-    expect(cardsMax).toBeGreaterThan(0);
+    // The stage absorbs the whole viewport difference, continuously, between a floor and the
+    // approved comp's ceiling. Every term is named so the arithmetic below is auditable.
+    const decl = /--hc-stage-h:\s*clamp\(([\s\S]*?)\);/.exec(panel);
+    expect(decl, "--hc-stage-h must be a clamp()").not.toBeNull();
+    const body = decl![1];
+    expect(body).toContain("var(--hc-stage-min)");
+    expect(body).toContain("var(--hc-stage-max)");
+    expect(body, "the middle term must track the VIEWPORT, not a breakpoint").toContain("100vh");
+    for (const k of subtrahends) expect(body, `${k} must be part of the derivation`).toContain(`var(--${k})`);
+
+    const stageAt = (viewport: number) => Math.min(max, Math.max(min, viewport - offset));
+
+    // MEASURED on the installed build (self-review round 5): the window chrome costs ~9px, so an
+    // outer 1280x720 gives a 711px viewport whose .v2-content clips at 675, with .hc-panel starting
+    // at 72 and carrying 238px of control row + readout strip below the stage.
+    const SHORT = { viewport: 711, panelTop: 72, clip: 675, below: 238 };
+    expect(
+      SHORT.panelTop + stageAt(SHORT.viewport) + SHORT.below,
+      "at 1280x720 the whole readout strip must end above the lane's clip",
+    ).toBeLessThanOrEqual(SHORT.clip);
+
+    // ...and the owner's real window and 1080p keep the approved comp's proportions exactly.
+    expect(stageAt(971), "1500x980 must still get the comp's full stage").toBe(max);
+    expect(stageAt(1071), "1920x1080 must still get the comp's full stage").toBe(max);
+
+    // R4's lesson, pinned: the stage and the rig are sized by CSS, never by the canvas inside them.
+    const stage = block(css, ':root[data-v2="on"] .hc-stage');
+    expect(
+      stage,
+      "the stage needs an authoritative height, not only a floor: a floor cannot shrink a box " +
+        "whose rendered height comes from the canvas inside it",
+    ).toMatch(/(^|[^-])height:\s*var\(--hc-stage-h\)/m);
+    expect(stage).toMatch(/min-height:\s*var\(--hc-stage-h\)/);
+    const rig = block(css, ':root[data-v2="on"] .hc-rig');
+    expect(rig, "the rig needs a stated height for the same reason -- a percentage of an " +
+      "indefinite parent is exactly what the canvas circularity takes away").toMatch(
+      /(^|[^-])height:\s*var\(--hc-rig-h\)/m,
+    );
+
+    // The HUD reserve is hud-frame.css's number (self-review round 2 owns the 36px). If that band
+    // grows and Health's reserve does not, the strip is back underneath it.
+    const hud = stripComments(
+      readFileSync(join("src", "design", "console", "hud-frame.css"), "utf8"),
+    );
+    const hudMargin = Number(
+      /\.v2-shell-hud \.v2-content\s*\{[^}]*margin-bottom:\s*(\d+)px/.exec(hud)?.[1],
+    );
+    expect(Number.isFinite(hudMargin), "hud-frame.css must still declare the band's reserve").toBe(true);
+    expect(
+      px("hc-hud-reserve"),
+      "Health must reserve at least the HUD readout band's own height",
+    ).toBeGreaterThanOrEqual(hudMargin);
   });
 });
