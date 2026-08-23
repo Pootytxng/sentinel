@@ -22,6 +22,44 @@
 These are owner asks that are **never-built or parked**, not yet reflected as active work anywhere
 else. This is the list the owner meant.
 
+### ⭐ FOUR-ROOM. The approved four-room visual direction (issue [#49](https://github.com/Pootytxng/sentinel/issues/49), owner-approved comps 2026-08-23) 🟡 IN BUILD
+
+Four approved PNGs (Health · Live · History · Test) + `HANDOFF.md` in
+`~/.codex/visualizations/2026/08/23/01a02bee.../compy-four-room-handoff/`. Every comp is the SAME
+composition — a narrative column beside an evidence column — so the split lives in `RoomShell`
+once, not as four bespoke grids. Build order is the handoff's: shell → Health → shared instruments
+→ Live → History → Test → convergence.
+
+| Slice | State |
+| --- | --- |
+| 1. Shell alignment | ✅ `34bd33e7` — `aside`/`below` slots, `--v2-aside`, grid-areas (no wrapper divs) |
+| 2. Health | ✅ `e6e35dfb` — built; installed evidence + self-review in progress |
+| 3. Shared instrument kit | □ |
+| 4. Live | □ |
+| 5. History | □ |
+| 6. Test | □ |
+| 7. Whole-app convergence | □ |
+
+**⚠️ SUBSTITUTIONS — shipped simpler than the comp, needing the owner's sign-off** (false-done
+protocol: a reskin that quietly drops parts of the comp is not the comp):
+
+1. **Primary action is VIOLET, not green.** The Health/History/Test comps show a green filled
+   button; Live shows violet. The handoff's own colour contract says violet = focus/direction and
+   green = good/measured, and the live `.hc-front-door` is already violet. Shipping one colour in
+   all four rooms; a before/after goes to the owner for veto on sight.
+2. **The "What's been happening?" rows carry no icon and no sub-description.** The comp shows both.
+   The app has no symptom icon set, and a per-row description would be new copy the interview data
+   does not have — and the handoff bars mockup copy from becoming product copy by default. Rows
+   are the interview's own verbatim labels + a chevron.
+3. **The readiness cell keeps ArcGauge's ring-left / label-right layout;** the comp stacks the
+   label above the ring and adds a "GOOD" grade word beside it. Restructuring the shared gauge is
+   slice 3's job by the handoff's own sequence, and the grade word is content the strip does not
+   currently hold.
+4. **A symptom picker is back on Health.** The owner deleted a permanent "What are you here to do?"
+   panel on Home on sight (2026-08-12) and the guard keeping it deleted is still green — the
+   approved comp's frame ("What's been happening?") and wording are different, and the comp is the
+   newer decision. Flagging it anyway, because it is the same slot he once rejected.
+
 ### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) ✅ ALL FIVE BUILT (⑤ shipped to the desk 2026-08-20, awaiting the owner's eye): ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED; owner tried it and said *"i like it"* 2026-08-20, so the default flips ON inside the comprehensibility sweep, which first fixes the button placement he objected to — see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door — SHIPPED 2026-08-20 (desk build `0808e33e`, self-review PASS 10/10); owner veto-on-sight still open**
 
 > **③ BUILT, TESTED AND INSTALLED 2026-08-20 — and it is OFF until he says otherwise.** Turn it on
