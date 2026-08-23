@@ -71,9 +71,11 @@ four subs **15px**, 6/6 station subtitles verbatim, eyebrow→headline gap 16px 
 zero `HudMasthead` left in `src/`, `no-debug-port` CLEAN on teardown. `RELEASE_STATE.md:65` and
 `UI_VISION_BACKLOG.md:25` are reconciled to it. So what is left is:
 
-1. **Hand the head + evidence to Codex** for the independent visual and frontend-contract review the
-   brief requires. "No new IPC" is already true from the branch diff — no `invoke` was added or
-   changed on this branch — but the formal audit is still owed and is Codex's, not mine.
+1. **The Codex brief is written and committed** —
+   [`docs/reviews/2026-08-23-codex-four-room-review-brief.md`](reviews/2026-08-23-codex-four-room-review-brief.md).
+   It names the head, the four comps, the scale divisor, the three logged deviations and the
+   re-run commands. Point a Codex session at it; **never wait on the verdict**
+   (`docs/WORK_CONTROL.md#roles`) — it is advisory input, not a gate.
 2. **Then the owner's call on pushing `feat/four-room-visual-direction`.** Do not push it without
    him: #49 authorized local implementation and its verification, explicitly not release.
 3. If anything comes back from Codex: fix → rebuild → `scripts/ship-reinstall.ps1` → **re-dispatch a
