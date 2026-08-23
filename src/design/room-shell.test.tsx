@@ -1,3 +1,5 @@
+import { readFileSync } from "fs";
+import { join } from "path";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { RoomShell, ForwardDoor, DOOR_MAP, doorFor } from "./room-shell";
@@ -161,5 +163,82 @@ describe("ForwardDoor — navigates via the rail handler, labels from the rail",
       </ShellV2>,
     );
     expect(screen.getByText("→ Optimize")).toBeTruthy();
+  });
+});
+
+// ── THE SPLIT — approved four-room visual direction (issue #49, 2026-08-22) ──────────────
+// The split is opt-in and DERIVED: supplying an evidence column is the only way a room gets the
+// geometry. These guards pin the two properties the whole slice rests on — a room that does not
+// supply one is byte-identical to before, and a room that does keeps the fixed slot order with
+// the story still ahead of the instrument panel in reading order.
+describe("RoomShell split layout — the evidence column (issue #49)", () => {
+  it("no aside → NO data-layout attribute and no split elements (non-split DOM unchanged)", () => {
+    const { container } = render(
+      <RoomShell room="lab" verdict="v">
+        <div>body</div>
+      </RoomShell>,
+    );
+    const room = container.querySelector(".v2-room")!;
+    expect(room.hasAttribute("data-layout")).toBe(false);
+    expect(container.querySelector(".v2-room-aside")).toBeNull();
+    expect(container.querySelector(".v2-room-below")).toBeNull();
+  });
+
+  it("aside supplied → data-layout='split' and the evidence column renders its content", () => {
+    const { container } = render(
+      <RoomShell room="home" verdict="v" aside={<div>the rig</div>}>
+        <div>body</div>
+      </RoomShell>,
+    );
+    const room = container.querySelector(".v2-room")!;
+    expect(room.getAttribute("data-layout")).toBe("split");
+    expect(container.querySelector(".v2-room-aside")!.textContent).toBe("the rig");
+  });
+
+  it("`below` alone does NOT trigger the split — the evidence column is the only trigger", () => {
+    const { container } = render(
+      <RoomShell room="home" verdict="v" below={<div>under</div>}>
+        <div>body</div>
+      </RoomShell>,
+    );
+    expect(container.querySelector(".v2-room")!.hasAttribute("data-layout")).toBe(false);
+    expect(container.querySelector(".v2-room-below")!.textContent).toBe("under");
+  });
+
+  it("every slot present → fixed document order, narrative BEFORE the instrument panel", () => {
+    const { container } = render(
+      <RoomShell
+        room="home"
+        notice={<div>notice</div>}
+        verdict="v"
+        sub="s"
+        measured="m"
+        primaryAction={<button>go</button>}
+        quiet={<button className="v2-quiet">q</button>}
+        aside={<div>rig</div>}
+        below={<div>under</div>}
+      >
+        <div>body</div>
+      </RoomShell>,
+    );
+    const room = container.querySelector(".v2-room")!;
+    expect([...room.children].map((el) => el.className)).toEqual([
+      "v2-notice-slot",
+      "v2-verdict",
+      "v2-measured",
+      "v2-room-body",
+      "v2-quiet-slot",
+      "v2-room-aside",
+      "v2-room-below",
+      "v2-door",
+    ]);
+  });
+
+  it("split geometry is token-driven — the column template references --v2-aside, never a px", () => {
+    const css = readFileSync(join("src", "design", "shell-v2.css"), "utf8");
+    const block = css.slice(css.indexOf('.v2-room[data-layout="split"] {'));
+    const template = block.slice(0, block.indexOf("}"));
+    expect(template).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, var(--v2-aside))");
+    expect(readFileSync(join("src", "design", "tokens-v2.css"), "utf8")).toContain("--v2-aside:");
   });
 });

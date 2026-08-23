@@ -257,6 +257,99 @@
   color: var(--v2-faint);
   margin-bottom: var(--v2-gap);
 }
+
+/* ── THE SPLIT — approved four-room visual direction (issue #49, 2026-08-22) ──────────
+   All four approved comps are ONE composition, not four layouts: a narrative column
+   (eyebrow → verdict → one-sentence sub → one primary action → quiet routes) beside an
+   evidence column (the rig, the last session, the record tape). RoomShell DERIVES
+   data-layout="split" from an `aside` being supplied, so this whole block is dormant for any
+   room that has not adopted an evidence column — and a room cannot ask for the geometry
+   without supplying the evidence that earns it.
+
+   NO WRAPPER ELEMENTS. The split is grid AREAS laid over the children RoomShell has always
+   rendered, so a non-split room's DOM is byte-identical and every selector, query and
+   slot-order guard aimed at it keeps resolving.
+
+   ROW SIZING. The narrative rows are `auto` except the body, which is the one flexible track.
+   The aside spans all four narrative rows, so when the evidence panel is taller than the story
+   — it usually is; the rig stage alone is 540px — the slack lands in the body row instead of
+   being shared out between the verdict, the sub and the action, which would drift the headline
+   down off the top of the panel it is meant to sit beside.
+
+   NO BREAKPOINT. --v2-aside is one fixed step (tokens-v2.css) and the narrative column takes
+   the remainder, which holds from the 1280-wide floor to the 1120px content cap. The handoff
+   bars adding a media query, and this sheet's own laws already do. */
+:root[data-v2="on"] .v2-room[data-layout="split"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--v2-aside));
+  grid-template-rows: auto auto auto 1fr auto auto auto;
+  grid-template-areas:
+    "notice   notice"
+    "verdict  aside"
+    "measured aside"
+    "body     aside"
+    "quiet    aside"
+    "below    below"
+    "door     door";
+  column-gap: calc(var(--v2-gap) * 2);
+  align-content: start;
+}
+:root[data-v2="on"] .v2-room[data-layout="split"] > .v2-notice-slot {
+  grid-area: notice;
+}
+:root[data-v2="on"] .v2-room[data-layout="split"] > .v2-verdict {
+  grid-area: verdict;
+}
+:root[data-v2="on"] .v2-room[data-layout="split"] > .v2-measured {
+  grid-area: measured;
+}
+:root[data-v2="on"] .v2-room[data-layout="split"] > .v2-room-body {
+  grid-area: body;
+  min-width: 0;
+}
+:root[data-v2="on"] .v2-room[data-layout="split"] > .v2-quiet-slot {
+  grid-area: quiet;
+  align-self: end;
+}
+:root[data-v2="on"] .v2-room[data-layout="split"] > .v2-room-aside {
+  grid-area: aside;
+  min-width: 0;
+}
+:root[data-v2="on"] .v2-room[data-layout="split"] > .v2-room-below {
+  grid-area: below;
+  min-width: 0;
+  margin-top: calc(var(--v2-gap) * 2);
+}
+:root[data-v2="on"] .v2-room[data-layout="split"] > .v2-door {
+  grid-area: door;
+}
+
+/* The narrative column is a STACK, not the baseline row the linear rooms use: in the approved
+   comps the primary action sits under its own sentence, where the eye already is, instead of
+   floating out to the right margin of a 610px column with nothing to align to. */
+:root[data-v2="on"] .v2-room[data-layout="split"] > .v2-verdict {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 0;
+}
+:root[data-v2="on"] .v2-room[data-layout="split"] > .v2-verdict h1 {
+  font-size: var(--type-verdict);
+  font-weight: var(--type-verdict-weight);
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+  max-width: 20ch;
+  text-wrap: balance;
+}
+:root[data-v2="on"] .v2-room[data-layout="split"] > .v2-verdict .v2-verdict-sub {
+  font-size: var(--type-body);
+  line-height: 1.5;
+  max-width: 46ch;
+}
+:root[data-v2="on"] .v2-room[data-layout="split"] > .v2-verdict .v2-verdict-action {
+  margin-left: 0;
+}
 /* The quiet slot's expander head — "more, not attention-needing" (P5 calm chrome), but it
    still has to READ as a control. It used to be set in --v2-faint, the ink this system
    reserves for machine metadata (.v2-measured), with a colour-only hover — i.e.

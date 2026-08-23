@@ -9,11 +9,26 @@
 //   primaryAction ONE affordance, never two. Optional.
 //   children      the room body (ranked list / room content). Required.
 //   quiet         the "nothing else needs attention" expander. Optional.
+//   aside         the EVIDENCE column (four-room direction, issue #49). Optional.
+//   below         full-width content under both columns (split layout only). Optional.
 //   door          derived from DOOR_MAP by room id — rooms cannot pick their own destination.
 //   doorOpen      P6 §2 placement rules (V2-8): a room may CLOSE its door while its chapter is
 //                 unfinished — Optimize opens it only in the apply-complete/all-clear state (the
 //                 door is the reward for finishing, not a bypass); Monitor closes it during a
 //                 live capture session. Rooms still never pick the destination or label.
+//
+// THE SPLIT (owner-approved four-room visual direction, 2026-08-22 — issue #49). All four
+// approved comps are ONE composition, not four layouts: a narrative column (eyebrow → verdict →
+// one-sentence sub → one primary action → quiet routes) beside an evidence column (the rig, the
+// last session, the record tape). `aside` is that second column, and passing it is the ONLY way a
+// room enters split layout — `data-layout="split"` is derived, never passed, so a room cannot ask
+// for the geometry without supplying the evidence that justifies it.
+//
+// WHY NO WRAPPER DIVS. The split is done with grid areas in shell-v2.css over the SAME children
+// this shell has always rendered, so a non-split room's DOM is byte-identical to before and every
+// existing room selector, query and slot-order guard keeps resolving. Reading order stays
+// narrative-first (verdict → body → quiet → aside → below → door): the story is what a screen
+// reader should hear before the instrument panel.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { HomeRailId } from "./homeRail";
@@ -60,6 +75,8 @@ export function RoomShell({
   measured,
   primaryAction,
   quiet,
+  aside,
+  below,
   doorOpen = true,
   children,
 }: {
@@ -74,6 +91,11 @@ export function RoomShell({
   measured?: ReactNode;
   primaryAction?: ReactNode;
   quiet?: ReactNode;
+  /** The evidence column of the approved split (issue #49). Present ⇒ split layout. */
+  aside?: ReactNode;
+  /** Full-width content beneath BOTH columns — where a split room keeps everything that is
+   *  real but below the fold. Content moves down here; it is never deleted to make a comp fit. */
+  below?: ReactNode;
   /** P6 §2 placement: false hides the room's door while its chapter is unfinished. Default open. */
   doorOpen?: boolean;
   children: ReactNode;
@@ -89,7 +111,7 @@ export function RoomShell({
   const { t } = useTranslation();
   const doorLabel = door ? t(`common.roomShell.door.${room}`, door.label) : null;
   return (
-    <section className="v2-room" data-room={room}>
+    <section className="v2-room" data-room={room} data-layout={aside != null ? "split" : undefined}>
       {notice != null && <div className="v2-notice-slot">{notice}</div>}
       <header className="v2-verdict">
         <h1>{verdict}</h1>
@@ -99,6 +121,8 @@ export function RoomShell({
       {measured != null && <div className="v2-measured">{measured}</div>}
       <div className="v2-room-body">{children}</div>
       {quiet != null && <div className="v2-quiet-slot">{quiet}</div>}
+      {aside != null && <aside className="v2-room-aside">{aside}</aside>}
+      {below != null && <div className="v2-room-below">{below}</div>}
       {door && <ForwardDoor to={door.to} label={doorLabel!} />}
     </section>
   );
