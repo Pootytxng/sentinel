@@ -35,7 +35,7 @@ once, not as four bespoke grids. Build order is the handoff's: shell → Health 
 | 1. Shell alignment | ✅ `34bd33e7` — `aside`/`below` slots, `--v2-aside`, grid-areas (no wrapper divs) |
 | 2. Health | ✅ `40aca1ca` — installed; self-review round **11** PASS, after ten FAILs that left eleven permanent guards |
 | 3. Shared instrument kit | ✅ `acdb93c2` — `Reading` → `src/design/console/`; installed; round **12** PASS, re-measured pixel-identical to R11 |
-| 4. Live | □ |
+| 4. Live | ✅ `67ce2724` — installed; self-review round **13** PASS, a real Start→Stop capture exercised on the built app |
 | 5. History | □ |
 | 6. Test | □ |
 | 7. Whole-app convergence | □ |
@@ -288,6 +288,22 @@ stayed minimized. The reviewer caught it, re-measured through the true `Tauri Wi
 `GetClientRect == innerWidth/innerHeight`, and the "regression" evaporated. **A capture whose
 target window was never verified is not evidence** — that check is now part of how this room gets
 reviewed, not a one-off.
+
+**✅ SELF-REVIEW ROUND 13 — PASS. The Live room (slice 4) is done.** Measured on the installed
+build `67ce2724` at 1280×720, 1500×980 and 1920×1080 against `02-live-approved.png`, with the
+build stamp re-confirmed live before every capture. The round did what no static check can: it
+**started and stopped a real capture** — LED lit, headline switched to "Recording your session",
+the door closed, Stop reverted cleanly — and then walked the overlay toggle, all four corner
+positions, MIN/STD/FULL/BACKDROP, the tuning-presets disclosure and both directions of the segment
+bar. Nothing that was in this room before is missing. Headline geometry: exactly ONE capture toggle
+page-wide (the old control-row button MOVED, it was not copied), no horizontal overflow at
+1280×720 (`scrollWidth == clientWidth == 1264`), the five-up sensor strip baseline-identical
+across all five cells (label y=591, values y=615–641), Sessions' header computing
+`flex-direction: column` at all three widths — the cascade defect caught by reading CSS rather
+than the screen, confirmed fixed on the screen — and the missing CPU temperature holding
+`rgb(122,131,151)` grey, never amber, never zero. **Both deviations from the comp were already
+logged** (items 7–10 above) and the reviewer found no unlogged third — which is the check that
+makes a substitution list worth keeping.
 
 ### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) ✅ ALL FIVE BUILT (⑤ shipped to the desk 2026-08-20, awaiting the owner's eye): ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED; owner tried it and said *"i like it"* 2026-08-20, so the default flips ON inside the comprehensibility sweep, which first fixes the button placement he objected to — see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door — SHIPPED 2026-08-20 (desk build `0808e33e`, self-review PASS 10/10); owner veto-on-sight still open**
 

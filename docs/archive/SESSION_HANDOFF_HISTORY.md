@@ -4,6 +4,40 @@
 > THE LIVE POINTER lives in docs/SESSION_HANDOFF.md; this file is the reverse-chron record.
 > APPEND new dated sections at the TOP, directly below this header.
 
+
+## Slice 2 (Health) — the eleven self-review rounds, moved verbatim 2026-08-23
+
+_Was `docs/SESSION_HANDOFF.md`; moved when slice 4 landed. Paths below are repo-root-relative._
+
+### Eleven self-review rounds, ten FAILs, eleven guards — slice 2 IS DONE
+
+Every round was a complete fresh review against `01-health-approved.png` on the INSTALLED build, and
+every fix was proven to FAIL on the pre-fix source first. All four findings were honest-measurement
+failures wearing layout clothes — a reading nobody can read is a reading that came back empty. R1
+and R2 are landed and written up in `docs/UI_VISION_BACKLOG.md` §FOUR-ROOM.
+
+1. **R1 → `7cb43840`.** The 40px verdict read "Applied Compy changes", a filing-cabinet tab: the
+   name-it law was guarded with a SYNTHETIC fixture the Rust catalog never matched. All ten
+   `Attention` labels now name the finding. Guard `readiness-attention-label-guard.test.ts`.
+2. **R2 → `d5bff77e`.** The viewport-fixed `.hud-frame-readout` was a curtain over live readings:
+   its clearance was a `padding-bottom`, which clears only a document's END, where `margin-bottom`
+   shortens the scroll viewport itself. Same commit: it named the CPU/GPU a THIRD time on Health, so
+   the rig segment stands down. Guards `hud-frame-clearance-guard`, `hud-readout-no-duplicate-guard`.
+3. **R3+R4 → `2ea9683d`, `cbb36365`. At 1280×720 the readout strip was sliced** — five labels, none
+   of their values. A floor ALONE does nothing; only an authoritative height breaks the r3f canvas's
+   measure-my-parent circle.
+4. **R5 → `8fd043d1`. Those two shipped as an `@media` block the approved handoff forbids** — *"no
+   responsive media queries."* Guard bans `@media`; verified breakpoint-free in every round since.
+5. **R6 → R11, ONE collision in the readout strip, six rounds — each fix released the side the last
+   one clamped.** `1.4fr` (automatic minimum = min-content) → `auto` → `auto` IS max-content and the
+   TRANSLATED note runs 187px → flooring the readings at max-content starved the instrument to
+   26.4px. **Every one of those numbers was a `scrollWidth` read inside a box an earlier round had
+   clamped, which is not max-content.** R9 deleted the CLASS: the panel measures ITSELF, every track
+   is `minmax(<px floor>, <n>fr)`, `overflow-y: auto` is the net. R10 hit the same class one axis
+   over (a wrapping label moved its own value) → the cells **subgrid onto one shared set of rows**.
+   R11 PASSED. Residual ACCEPTED: at 720p the panel's bottom PADDING lands ~18px under the lane's
+   clip (last text 12px above it, lane scrolls). Do NOT grow `--hc-chrome-top` to close it.
+
 ### 2026-08-23 - the two 2026-08-22 cycle notes, moved verbatim (line budget)
 
 ## Cycle note — 2026-08-22, third pass — BACKLOG section caps (landed; the guard now says it)
