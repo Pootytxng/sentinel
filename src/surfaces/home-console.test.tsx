@@ -871,6 +871,26 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     expect(Number.isFinite(stageMin), "the override must set an explicit stage min-height").toBe(true);
     expect(Number.isFinite(cardsMax), "the override must re-bound the card viewport too").toBe(true);
 
+    // A FLOOR IS NOT ENOUGH, and this is the round-4 defect (self-review, issue #49): the rig is an
+    // r3f <Canvas> that measures its parent and writes its own inline pixel size, while the parent
+    // -- given no `height` -- is sized by that canvas in turn. Lowering a floor under a box that is
+    // already taller than the floor changes nothing, so on the launch-then-shrink path (the one
+    // every human and every capture harness takes) the canvas kept its old inline height and the
+    // readings stayed sliced, even though getComputedStyle reported the new min-height correctly.
+    // The override must therefore state an authoritative `height` for both boxes.
+    const stageH = Number(/\.hc-stage\s*\{[^}]*[^-]height:\s*(\d+)px/.exec(inside)?.[1]);
+    const rigH = Number(/\.hc-rig\s*\{[^}]*[^-]height:\s*(\d+)px/.exec(inside)?.[1]);
+    expect(
+      Number.isFinite(stageH),
+      "the override must set an explicit stage HEIGHT, not only a min-height: a floor cannot " +
+        "shrink a box whose rendered height comes from the canvas inside it",
+    ).toBe(true);
+    expect(
+      Number.isFinite(rigH),
+      "the override must set an explicit rig HEIGHT for the same reason",
+    ).toBe(true);
+    expect(stageH, "the stated height and floor must agree").toBe(stageMin);
+
     // MEASURED at 1280×720 on the installed build (self-review round 3): the scroll lane is 595px,
     // the furniture above the stage costs 28px, and .hc-readout is 170px tall. The whole strip has
     // to fit above the fold, so the stage BOX (min-height + its 2×20px padding) can be at most

@@ -114,7 +114,20 @@ is text at a fixed size. The threshold sits well below the owner's real 980px wi
 viewport and the comp's proportions are untouched. Guard: the new short-viewport case in
 `src/surfaces/home-console.test.tsx` pins the threshold band, re-checks the card-viewport derivation
 inside the override, and caps the compressed stage box at the measured 397px that keeps the strip
-above the fold. Proven to fail on the pre-fix CSS. Round 4 is next.
+above the fold. Proven to fail on the pre-fix CSS.
+
+**🔧 SELF-REVIEW ROUND 4 — FAIL, fixed, guarded.** Round 3's fix set the stage FLOOR
+(`min-height`) and looked right — `getComputedStyle` really did report 320px — while the box on
+screen stayed 500px and the readings stayed sliced. **The rig is an r3f `<Canvas>` that measures its
+parent and writes its own inline pixel size, and the parent, having no `height` of its own, is then
+sized by that canvas.** That circle has no bottom: lowering a floor under a box already taller than
+the floor changes nothing, so nothing re-measures and the canvas keeps the inline height it was
+given at the previous window size. Growing the window worked (a floor CAN push a box up), which is
+exactly why the bug survived a round — and the launch-then-shrink path that misses it is the one
+every human and every capture harness actually takes. The override now states an authoritative
+`height` for the stage and the rig, which breaks the circle from the outside. Guard: the same
+short-viewport case now REQUIRES an explicit height on both boxes and that it agree with the floor.
+Proven to fail on round 3's CSS. **Round 5 is next.**
 
 ### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) ✅ ALL FIVE BUILT (⑤ shipped to the desk 2026-08-20, awaiting the owner's eye): ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED; owner tried it and said *"i like it"* 2026-08-20, so the default flips ON inside the comprehensibility sweep, which first fixes the button placement he objected to — see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door — SHIPPED 2026-08-20 (desk build `0808e33e`, self-review PASS 10/10); owner veto-on-sight still open**
 

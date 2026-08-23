@@ -344,11 +344,25 @@
    guard in home-console.test.tsx still reads them. The same derivation is re-satisfied here:
    cards 280 <= stage content (320 - 2*20) = 280. Guard: home-console.test.tsx pins BOTH. */
 @media (max-height: 860px) {
+  /* `height`, not only `min-height` — and this is the whole fix, not a belt-and-braces extra.
+     bug→guard (self-review round 4, issue #49, 2026-08-23): the first attempt set the floors alone
+     and LOOKED correct — `getComputedStyle(.hc-stage).minHeight` really did report 320px — while
+     the box on screen stayed 500px and the readings stayed sliced. The rig is an r3f <Canvas> that
+     measures its PARENT and writes its own inline pixel size; the parent, having no `height` of its
+     own, is then sized by that canvas. That circle has no bottom: lowering a floor under a box that
+     is already taller than the floor changes nothing, nothing re-measures, and the canvas keeps the
+     inline `height: 460px` it was given at the previous window size. Growing worked (a floor CAN
+     push a box up), which is exactly why the bug survived a round — and the launch-then-shrink path
+     that misses it is the one every human and every capture harness actually takes.
+     An explicit height breaks the circle from the outside: the box is 320px because CSS says so,
+     the canvas's ResizeObserver fires, and it redraws at the size it is given. */
   :root[data-v2="on"] .hc-stage {
     min-height: 320px;
+    height: 320px;
   }
   :root[data-v2="on"] .hc-rig {
     min-height: 280px;
+    height: 280px;
   }
   :root[data-v2="on"] .hc-stage-cards {
     max-height: 280px;

@@ -29,29 +29,21 @@ for veto on sight — his silence is not approval).
   the `below` hero and is UNCONDITIONAL (one-hero-guard forbids a conditional hero). Seven guards
   that selected the CORNER a gauge sat in were re-anchored to `data-read="…"`, never deleted.
 
-### Three self-review rounds, three FAILs, five guards — slice 2 is NOT done
+### Four self-review rounds, four FAILs, six guards — slice 2 is NOT done
 
 Every round was a complete fresh review against `01-health-approved.png` on the INSTALLED build, and
-every fix below was observed to FAIL on the pre-fix source before it was trusted (`git stash push
--- <file>` → run → `stash pop`). All three findings were honest-measurement failures wearing layout
-clothes, which is why none of them could be waved through as taste.
+every fix was proven to FAIL on the pre-fix source first. All four findings were honest-measurement
+failures wearing layout clothes — a reading nobody can read is a reading that came back empty. R1
+and R2 are landed and written up in `docs/UI_VISION_BACKLOG.md` §FOUR-ROOM.
 
-1. **R1 → `7cb43840`. The 40px verdict read "Applied Compy changes"** — a filing-cabinet tab. The
-   name-it-and-fix-it-inline law makes the verdict BE the flagged check's label and
-   `system-posture.test.ts` pins `headline === label`, but it was guarded with a SYNTHETIC fixture
-   while every `ReadinessStatus::Attention` branch in `readiness.rs` emitted a category noun. **All
-   ten Attention labels now name the finding** (calm branches keep their category label on purpose).
-   Guard `src/surfaces/readiness-attention-label-guard.test.ts` scans the Rust catalog in both its
-   construction forms and pins the parsed row count so it cannot pass vacuously.
-2. **R2 → `d5bff77e`. The viewport-fixed `.hud-frame-readout` was a curtain over live readings** —
-   READINESS / AVG FPS at 1280×720, the Detected record's Processor row at 1500×980. Its clearance
-   was `padding-bottom`, which only clears the END of a document; `margin-bottom` shortens the scroll
-   viewport itself, so nothing can render in the band at any offset in any room. Same commit: on
-   Health the readout printed the CPU/GPU model a THIRD time (Detected record + rig annotations), so
-   the rig segment stands down there and it collapses to the clock. Guards
-   `hud-frame-clearance-guard.test.ts` (parses the stylesheet's declared geometry) and
-   `hud-readout-no-duplicate-guard.test.tsx` (its second case renders a room that DOESN'T show the
-   rig, so it cannot pass by the frame vanishing).
+1. **R1 → `7cb43840`.** The 40px verdict read "Applied Compy changes", a filing-cabinet tab: the
+   name-it law was guarded with a SYNTHETIC fixture the Rust catalog never matched. All ten
+   `Attention` labels now name the finding. Guard `readiness-attention-label-guard.test.ts`.
+2. **R2 → `d5bff77e`.** The viewport-fixed `.hud-frame-readout` was a curtain over live readings;
+   its clearance was a `padding-bottom`, which only clears the END of a document. `margin-bottom`
+   shortens the scroll viewport itself. Same commit: the readout printed the CPU/GPU model a THIRD
+   time on Health, so the rig segment stands down there. Guards
+   `hud-frame-clearance-guard.test.ts`, `hud-readout-no-duplicate-guard.test.tsx`.
 3. **R3 → UNCOMMITTED. At 1280×720 the readout STRIP was sliced in half by `.v2-content`'s own
    overflow — five labels on screen, none of their values.** The comfortable-viewport stage box
    (`min-height: 500px` + 40px padding) costs 540px of a lane only ~595px tall. R2's reserve could
@@ -61,14 +53,22 @@ clothes, which is why none of them could be waved through as taste.
    comp's proportions are untouched. Guard: the short-viewport case in
    `src/surfaces/home-console.test.tsx` pins the threshold band, re-checks the card-viewport
    derivation inside the override, and caps the compressed box at the measured 397px.
+4. **R4 → UNCOMMITTED. R3's floor was not enough and LOOKED like it was.** `getComputedStyle`
+   reported the new 320px `min-height` while the box on screen stayed 500px: the rig is an r3f
+   `<Canvas>` that measures its parent and writes its own inline size, and the parent — with no
+   `height` of its own — is sized by that canvas in turn. Lowering a floor under a box already
+   taller than it changes nothing. Growing the window worked, which is why R3 passed its own check;
+   **launch-then-shrink, the path every human and every capture harness takes, did not.** The
+   override now states an authoritative `height` on the stage AND the rig. Same guard, extended to
+   require it.
 
-**EXACT NEXT STEP.** R3's fix is in the tree, gated and guarded but NOT committed. Commit it →
-`npm run tauri build` (`cargo clean -p compy --release` FIRST or the stale-build gate rejects it) →
-`scripts/ship-reinstall.ps1` → the same script `-ProofOnly -ExpectedCommit <full 40-char HEAD>` →
-**self-review round 4, a complete fresh review**, natively at 1280×720 / 1500×980 / 1920×1080. Its
-own re-verification: at 1280×720, scrollTop 0, all five `.hc-readout` values (readiness, AVG FPS,
-1% LOW, GPU TEMP, CPU TEMP) must be visible without scrolling, and `getBoundingClientRect` on
-`.hc-readout` vs `.hud-frame-readout` must not intersect. On PASS → `docs/RELEASE_STATE.md` (line 45
+**EXACT NEXT STEP.** R4's fix is in the tree, guarded and gated but NOT committed. Commit it →
+`cargo clean -p compy --release` → `npm run tauri build` → `scripts/ship-reinstall.ps1` → the same
+script `-ProofOnly -ExpectedCommit <full 40-char HEAD>` → **self-review round 5, complete and
+fresh**. Its re-verification must use the ROUND-4 REPRO, not a cold mount: launch (or size up to
+1500×980 first), THEN resize down to 1280×720, and confirm `.hc-stage canvas`'s inline style reports
+`height: 280px` (not 460px) and that all five `.hc-readout` values are visible at scrollTop 0. A
+cold mount at 720p passed even with the broken CSS. On PASS → `docs/RELEASE_STATE.md` (line 45
 `STATE:owner_installed_stamp`; the desk row at line 65 moved VERBATIM into
 `archive/RELEASE_STATE_HISTORY.md` under that file's existing `### <date> - the <hash> … moved
 verbatim (byte budget)` convention; plus the `d5a6a630` mentions at lines 77, 176, 191) → slice 3.
@@ -111,7 +111,7 @@ room — his veto on sight always stands, and the violet-vs-green call above is 
 checklist's remaining items are money/legal calls that cannot move until Pro exists.
 
 **This session: LEAVE OPEN — slice 2 of 7 is mid-flight in `sentinel-fourroom`.** His live app
-is `d5bff77e`, one installer on the Desktop.
+is `2ea9683d`, one installer on the Desktop.
 
 ## Cycle notes before this train — archived
 
