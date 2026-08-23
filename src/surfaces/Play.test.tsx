@@ -5,7 +5,7 @@ import type { SessionSummary } from "../types";
 // Play (+ the embedded debrief) polls/reads on mount; mock invoke so it doesn't throw outside Tauri.
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(null)) }));
 
-import Play from "./Play";
+import Play, { fmtDur, fmtDurCoarse } from "./Play";
 import { ConfirmProvider } from "../design/ConfirmDialog";
 
 afterEach(cleanup);
@@ -110,5 +110,23 @@ describe("Play", () => {
     renderPlay({ view: "live", onFpsActive });
     await waitFor(() => expect(onFpsActive).toHaveBeenLastCalledWith(true));
     vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
+  });
+});
+
+// THE COARSE DURATION (02-live-approved.png: "13m", not "13m 24s"). Two properties worth pinning:
+// the seconds go away, and the SUB-MINUTE case does not — "0m" would be a worse reading than the
+// precision it saves, and a 40-second capture is exactly when a user is watching the clock.
+describe("fmtDurCoarse — the comp's session-length register", () => {
+  it("drops the seconds above a minute and keeps them below one", () => {
+    expect(fmtDurCoarse(804)).toBe("13m");
+    expect(fmtDurCoarse(780)).toBe("13m");
+    expect(fmtDurCoarse(60)).toBe("1m");
+    expect(fmtDurCoarse(59)).toBe("59s");
+    expect(fmtDurCoarse(0)).toBe("0s");
+    expect(fmtDurCoarse(5025)).toBe("1h 23m");
+  });
+
+  it("leaves fmtDur exact — the session list still states the whole length", () => {
+    expect(fmtDur(804)).toBe("13m 24s");
   });
 });

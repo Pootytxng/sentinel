@@ -145,7 +145,11 @@ export function Oscilloscope({
     // 0 included (2026-08-23, comp fidelity): the approved Live trace labels 0 / 80 / 160 / 240,
     // and the baseline is the one tick that tells the reader the axis is anchored rather than
     // auto-ranged. Without it a calm trace and a collapsed one look alike.
-    if (zero) yTicks = [0, 1, 2, 3].map((q) => (q / 4) * (msCap as number));
+    // THIRDS, SO THE TOP TICK IS THE CAP. Quarters left the ceiling unlabelled, which is the
+    // one number a reader needs to judge everything else on the plot: without it a trace at
+    // 60% of the box means nothing until you work out what the box holds. The approved trace
+    // reads 0 / 80 / 160 / 240 against a 240 ceiling — four evenly spaced ticks, top included.
+    if (zero) yTicks = [0, 1, 2, 3].map((q) => (q / 3) * (msCap as number));
     if (spikes) {
       spikeIdx = spikeIndices(win, budget);
       for (const i of spikeIdx) if (worstIdx < 0 || win[i] > win[worstIdx]) worstIdx = i;

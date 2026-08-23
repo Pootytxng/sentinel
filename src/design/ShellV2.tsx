@@ -287,9 +287,13 @@ export function ShellV2({
 
         <div className="v2-main">
           <div className="v2-top">
-            <span className="v2-room-title">
-              {active ? railLabel(active) : t("common.shellV2.fallbackTitle")}
-            </span>
+            {/* NO ROOM TITLE HERE EITHER (owner ruling 2026-08-23). All four approved comps
+                draw this bar EMPTY on the left, and they are finishing a job the navigation
+                audit started: "one name per room". 2026-08-18 dropped the tagline beside this
+                title on that reasoning and left the title itself, which is the same
+                duplication one word shorter — the rail is on screen, the active room is the
+                highlighted item in it, and this span said it a second time three inches away.
+                The room's own h1 is the name that carries meaning; this one carried none. */}
             {/* NO TAGLINE HERE. The topbar printed `Live · watch it live` while the room below
                 printed its own name as an h1 — the title-header law violation the navigation audit
                 measured and ruled on: "drop the topbar tagline; keep one name per room"

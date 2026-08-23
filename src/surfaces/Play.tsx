@@ -89,6 +89,21 @@ export function fmtDur(sec: number): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m ${sec % 60}s`;
 }
 
+/**
+ * The same duration with the seconds dropped — "13m", not "13m 24s" (02-live-approved.png).
+ * For the places a length is CONTEXT rather than a measurement: how long the session ran, how
+ * far back the trace reaches. Nothing on this screen is decided on those seconds, and reading
+ * them costs the eye a beat every time it passes. Under a minute it still says seconds,
+ * because "0m" is worse than the precision it saves. `fmtDur` stays exact for the session
+ * list and everywhere else a duration is the fact itself.
+ */
+export function fmtDurCoarse(sec: number): string {
+  const h = Math.floor(sec / 3600);
+  if (h > 0) return `${h}h ${Math.floor((sec % 3600) / 60)}m`;
+  const m = Math.floor(sec / 60);
+  return m > 0 ? `${m}m` : `${sec}s`;
+}
+
 // Inline color for a graded metric value — applied only when the grade is non-neutral (neutral
 // inherits). Same hardware-tailored grading as Home / SessionDebrief / Overlay, so the SAME metric
 // reads the same green/amber/red everywhere. Utilisation (CPU/GPU %) stays ungraded by design.

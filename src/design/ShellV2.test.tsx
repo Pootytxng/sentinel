@@ -206,9 +206,19 @@ describe("ShellV2 digit shortcuts (the kbd hints must WORK)", () => {
 });
 
 describe("ShellV2 topbar", () => {
-  it("shows the active room title", () => {
+  // bug -> guard (owner ruling 2026-08-23). This used to assert the topbar PRINTS the room
+  // name. All four approved comps draw that bar empty on the left, finishing the navigation
+  // audit's "one name per room": the rail is on screen, the active room is the highlighted
+  // item in it, and this span repeated it three inches away. 2026-08-18 dropped the tagline
+  // beside it on exactly that reasoning and left the title, which was the same duplication
+  // one word shorter. The assertion is inverted rather than deleted so the title cannot
+  // wander back in on a later "the topbar looks empty" impulse.
+  it("does NOT repeat the room name the rail already highlights", () => {
     const { container } = render(shell({ activeId: "play" }));
-    expect(container.querySelector(".v2-room-title")?.textContent).toBe("Live");
+    expect(container.querySelector(".v2-room-title")).toBeNull();
+    // …and the room is still named exactly once, by the rail item that navigated here.
+    const rail = container.querySelector(".v2-rail, nav");
+    expect(rail!.textContent).toContain("Live");
   });
 
   // bug -> guard (2026-08-18, conformance audit C-09). Build identifiers are developer furniture:

@@ -288,6 +288,9 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
     expect(cell(row, "low1")).toEqual(["1% low", "▲4"]);
     expect(cell(row, "spikes")).toEqual(["Spikes", "±0"]);
     expect(row.querySelector(".mc-delta-tag")!.textContent).toContain("2 Compy changes were on");
+    // …and NO cross-game caveat, because the prior IS the same game. A caveat that prints
+    // unconditionally teaches the reader to stop reading caveats.
+    expect(row.querySelector(".mc-delta-note")).toBeNull();
   });
 
   it("multiple changes on → the tag says COMBINED EFFECT (no per-change attribution implied); a single change doesn't", async () => {
@@ -333,6 +336,12 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
       "Compared with your last Palworld session · a different game",
     );
     expect(cell(row, "spikes")).toEqual(["Spikes", "—"]);
+    // …and it says what the tag MEANS for the three numbers, which is the part a reader acts
+    // on (02-live-approved.png prints exactly this line under the cells). Two genres can
+    // differ by 50 fps with nothing wrong and nothing improved.
+    expect(row.querySelector(".mc-delta-note")!.textContent).toBe(
+      "Different game — context only, not a verdict.",
+    );
   });
 
   // Intimidation pass 2026-08-20 (⭐ standing directive: grouping, boxed templates, fewer words —

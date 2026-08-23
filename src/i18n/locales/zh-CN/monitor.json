@@ -67,6 +67,7 @@
     "vsLastSession": "对比上次 {{game}} 会话",
     "unknownGame": "未知游戏",
     "differentGameTag": " · 不同游戏",
+    "crossGameNote": "不同游戏 — 仅供参考，不是结论。",
     "deltaAvgFps": "平均 FPS",
     "deltaOneLow": "1% 最低帧",
     "deltaSpikes": "卡顿次数",
@@ -85,7 +86,7 @@
     "cpuLabel": "CPU 占用",
     "ramLabel": "内存",
     "etwEmph": "从游戏外部观察",
-    "etwHonestyPost": "——不向其中添加任何东西，也不会安装深入 Windows 底层的驱动。对反作弊安全。",
+    "etwHonestyPost": " · 不注入钩子或叠加层，也不在 Windows 底层安装驱动。与反作弊兼容。",
     "narrative": {
       "eyebrow": "会话监测",
       "readyHeadline": "随时可以开始",

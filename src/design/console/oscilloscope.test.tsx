@@ -202,15 +202,17 @@ describe('Oscilloscope — scale="zero" (owner direction 2026-07-11: match the R
     expect(Math.abs(parseFloat(worst.getAttribute("x1")!) - ((120 / 239) * 238 + 1))).toBeLessThan(0.2);
   });
 
-  it("zero scale: labeled ms gridlines at quarter-cap steps (a real axis, not decoration)", () => {
+  it("zero scale: labeled ms gridlines from 0 to the cap (a real axis, not decoration)", () => {
     const { container } = render(
       <Oscilloscope samples={dense} cap={240} label="frametime" unit="ms" scale="zero" reduced />,
     );
     const labels = [...container.querySelectorAll(".osc-ylab")].map((el) => el.textContent);
-    // 0 leads the axis as of 2026-08-23 (comp fidelity): the approved Live trace labels its
-    // baseline, and the baseline is the tick that tells the reader the scale is ANCHORED rather
-    // than auto-ranged. cap 50 → 0/12.5/25/37.5, rounded to ints at ≥10.
-    expect(labels).toEqual(["0", "13", "25", "38"]);
+    // BOTH ENDS ARE LABELLED as of 2026-08-23 (comp fidelity). The baseline tells the reader
+    // the scale is ANCHORED rather than auto-ranged; the CEILING tells them what the box
+    // holds, without which a trace at 60% of the height means nothing. The approved Live
+    // trace reads 0 / 80 / 160 / 240 against a 240 ceiling — four even ticks, top included.
+    // cap 50 → 0 / 16.7 / 33.3 / 50, rounded to ints at ≥10.
+    expect(labels).toEqual(["0", "17", "33", "50"]);
     // ...and they live in the gutter beside the plot, never over the signal. The stage keeps its
     // own box because the deck's scrub/drag pointer math measures it.
     expect(container.querySelector(".osc-stage .osc-ylab")).toBeNull();

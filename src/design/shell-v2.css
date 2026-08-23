@@ -208,10 +208,6 @@
   padding: 0 20px;
   background: var(--v2-panel);
 }
-:root[data-v2="on"] .v2-room-title {
-  font-weight: 600;
-  font-size: var(--type-label);
-}
 /* `.v2-stamp` deleted 2026-08-18 with the version above — build identifiers live in Settings →
    About. The margin-left:auto it used to carry now belongs to the unconditional spacer, because
    every remaining member of the right-hand cluster is conditional. */

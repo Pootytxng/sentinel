@@ -203,3 +203,32 @@ describe("comp fidelity — Health, matched against 01-health-approved.png", () 
     expect(sub).not.toContain("text-transform");
   });
 });
+
+describe("comp fidelity — Live, matched against 02-live-approved.png", () => {
+  const monitor = read("src", "surfaces", "monitor-console.css");
+  const shell = read("src", "design", "shell-v2.css");
+  const en = JSON.parse(read("src", "i18n", "locales", "en", "monitor.json"));
+
+  it("the cross-game caveat is quiet copy, not a fourth cell", () => {
+    const b = body(monitor, ':root[data-v2="on"] .mc-delta-note');
+    expect(b, "the cross-game caveat lost its rule").not.toBe("");
+    expect(b).toMatch(/color:\s*var\(--v2-faint\)/);
+    expect(b, "a pill here reads as another delta cell").not.toContain("border");
+  });
+
+  it("the honesty line keeps BOTH facts the comp's shorter wording could have cost", () => {
+    // The comp draws "Watched from outside your game · no hooks or injected overlay." — that
+    // phrasing is adopted. What is NOT adopted is dropping the rest: the no-driver fact (LOCKED
+    // rule 1 — the current build ships no driver) and the anti-cheat promise (LOCKED rule 2) are
+    // the reason this line exists at all, and a picture is not a reason to delete a claim a user
+    // makes decisions on. Logged as a deviation; pinned here so it cannot be "tidied" later.
+    const post: string = en.monitorConsole.etwHonestyPost;
+    expect(post, "the comp's wording").toContain("no hooks or injected overlay");
+    expect(post, "the no-driver fact").toMatch(/driver/i);
+    expect(post, "the anti-cheat promise").toMatch(/anti-cheat/i);
+  });
+
+  it("the topbar does not repeat the room name — all four comps draw it empty", () => {
+    expect(shell, "the room-title rule came back").not.toContain(".v2-room-title");
+  });
+});

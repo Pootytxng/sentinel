@@ -67,6 +67,7 @@
     "vsLastSession": "Compared with your last {{game}} session",
     "unknownGame": "unknown game",
     "differentGameTag": " · a different game",
+    "crossGameNote": "Different game — context only, not a verdict.",
     "deltaAvgFps": "Avg FPS",
     "deltaOneLow": "1% low",
     "deltaSpikes": "Spikes",
@@ -85,7 +86,7 @@
     "cpuLabel": "CPU load",
     "ramLabel": "RAM",
     "etwEmph": "Watched from outside your game",
-    "etwHonestyPost": " — nothing added to it, and no driver installed deep in Windows. Safe with anti-cheat.",
+    "etwHonestyPost": " · no hooks or injected overlay, and no driver installed deep in Windows. Safe with anti-cheat.",
     "narrative": {
       "eyebrow": "Session monitor",
       "readyHeadline": "Ready when you are",

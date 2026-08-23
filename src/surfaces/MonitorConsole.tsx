@@ -38,7 +38,7 @@ import { SessionStack } from "./monitor/SessionStack";
 import { deckDeltaFrom, fmtDeltaGlyph } from "./monitor/monitor-stack-profile";
 import { prettyGameName } from "./game-name";
 import { monitorVerdict } from "./monitor-v2-data";
-import { fmtDur } from "./Play";
+import { fmtDurCoarse } from "./Play";
 import type { GpuVendor } from "./walkthroughs";
 import "../i18n";
 import "./monitor-console.css";
@@ -460,7 +460,7 @@ export function MonitorConsole({
                 {/* The comp puts a clock glyph before this duration — it is the one number in the
                     head that is a LENGTH rather than a reading, and the glyph is what says so. */}
                 <Icon name="clock" size={14} />
-                {fmtDur(latest.duration_secs)}
+                {fmtDurCoarse(latest.duration_secs)}
               </span>
             )}
           </header>
@@ -519,7 +519,7 @@ export function MonitorConsole({
                  window's length in samples IS its length in seconds. Nothing is estimated. */
               span={{
                 start: t("monitor.monitorConsole.traceSpanAgo", {
-                  span: fmtDur(Math.min(fpsH.current.length, FPS_CAP)),
+                  span: fmtDurCoarse(Math.min(fpsH.current.length, FPS_CAP)),
                 }),
                 end: t("monitor.monitorConsole.traceSpanNow"),
               }}
@@ -556,6 +556,19 @@ export function MonitorConsole({
                   </span>
                 ))}
               </div>
+              {/* THE CROSS-GAME CAVEAT (02-live-approved.png prints exactly this under the
+                  cells). The header line already TAGS the prior as a different game; this says
+                  what that means for the three numbers under it, which is the part a reader
+                  acts on. Two different genres can differ by 50 fps with nothing wrong and
+                  nothing improved, so a cross-game delta is context and never a verdict.
+                  Renders alongside the changes-on tag when both are true: they are two
+                  independent reasons the same number is not attributable, and suppressing
+                  either one to keep the block tidy would be hiding a caveat. */}
+              {!deck.sameGame && (
+                <span className="mc-delta-note">
+                  {t("monitor.monitorConsole.crossGameNote")}
+                </span>
+              )}
               {deck.changesOn > 0 && (
                 // Honesty caveat (consumer panel 2026-07-14): with >1 change on, these deltas are
                 // the COMBINED effect — never imply per-change attribution. The one-change-at-a-time
