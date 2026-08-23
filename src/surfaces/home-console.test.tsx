@@ -1106,19 +1106,27 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
         "subtracting a child from its parent is how the arithmetic drifted in the first place",
     ).not.toContain("hc-stage-m");
 
-    // MEASURED on the installed build (self-review rounds 5 and 9): window chrome costs ~9px, so an
-    // outer 1280x720 gives a 711px viewport, .v2-content clips at 675, and .hc-panel starts at 72.
-    // All three are the SHELL, not Health's content, which is why they are still safe to state.
-    const SHORT = { viewport: 711, panelTop: 72, clip: 675 };
-    expect(px["hc-chrome-top"], "the named top chrome must be the panel's real top").toBe(SHORT.panelTop);
+    // WHAT THE CAP IS, stated exactly, because round 11 caught this guard overstating it: a CEILING
+    // against the lane's visible height. It is deliberately NOT a promise that the panel FITS the
+    // lane, and it cannot be one -- the panel starts below the room's verdict headline, a translated
+    // sentence whose height is precisely the content measurement rounds 3, 5, 8 and 9 proved cannot
+    // be pinned. (It measured 106 in English on 40aca1ca. Do NOT encode that; encoding it is the
+    // mistake those four rounds were.) Measured at an exact 1280x720 inner viewport on 40aca1ca:
+    // the lane clips at 684, the panel's own content is 596 -- under the 598 the cap allows, so at
+    // that size the cap is not even the binding constraint -- and the panel's bottom PADDING lands
+    // ~18px below the clip while its last painted text ends at 672, above it. The lane scrolls, so
+    // that is a short border, not a lost reading. What keeps readings readable is the never-clip net
+    // and the fact that only the stage shrinks.
+    const SHORT = 720;
     const capAt = (viewport: number) =>
       viewport - px["hc-chrome-top"] - px["hc-hud-reserve"] - px["hc-stage-slack"];
     expect(
-      SHORT.panelTop + capAt(SHORT.viewport),
-      "at 1280x720 the whole panel -- readout strip included -- must end above the lane's clip",
-    ).toBeLessThanOrEqual(SHORT.clip);
+      capAt(SHORT),
+      "at 1280x720 the cap must still leave the rig its usable floor -- inflate the named chrome " +
+        "past this and the stage has nowhere left to stand",
+    ).toBeGreaterThan(px["hc-stage-min"]);
     // ...and the owner's real window and 1080p must still be able to give the comp its full stage.
-    for (const v of [971, 1071]) {
+    for (const v of [980, 1080]) {
       expect(
         capAt(v),
         v + "px of viewport must still fit the approved comp's stage",

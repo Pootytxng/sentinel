@@ -319,7 +319,15 @@
   max-height: calc(
     100vh - var(--hc-chrome-top) - var(--hc-hud-reserve) - var(--hc-stage-slack)
   );
-  /* The net, not the plan. The stage gives ground first — it is the only shrinkable child — and
+  /* A CEILING, NOT A FIT (self-review round 11). This bounds the panel to the lane's VISIBLE
+     height; it does not promise the panel fits INSIDE the lane, because the panel starts below the
+     room's verdict headline and that headline is a translated sentence — the exact thing rounds 3,
+     5, 8 and 9 proved cannot be pinned to a number. Measured at 1280×720 on 40aca1ca: the panel's
+     bottom PADDING lands ~18px under the lane's clip while its last painted text ends 12px above
+     it, and the lane scrolls. That is a short border, not a lost reading — do NOT "fix" it by
+     growing --hc-chrome-top to the headline's height. That is the constant this all replaced.
+
+     The net, not the plan. The stage gives ground first — it is the only shrinkable child — and
      only if it reaches its 320px floor and the panel STILL cannot fit does the leftover become a
      scroll. Round 3's failure was five labels on screen with none of their five values, silently
      eaten by the lane's clip. A scrollbar is ugly; a reading nobody can reach is dishonest. */

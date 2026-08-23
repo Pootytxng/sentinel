@@ -227,7 +227,23 @@ the tallest label and every value starts on the same line in any language, howev
 label takes. A cosmetic 4px was also found for the two long labels (separator 8 → 6px, floor
 85 → 88px); it is explicitly *not* what keeps the strip correct. Two guards — one deriving each
 cell's row span from the strip's own track count so they cannot drift, one pinning the width budget
-to `column-gap` — both proven to FAIL on round 9's stylesheet. **Round 11 is next.**
+to `column-gap` — both proven to FAIL on round 9's stylesheet.
+
+**✅ SELF-REVIEW ROUND 11 — PASS. Health (slice 2) is done.** Verbatim: *"round 10's subgrid fix
+holds at all three sizes; item 1's headline check (all four `.hc-read-v` rects.top identical) is
+proven native, not jsdom, and the diff introduces no regression elsewhere on Health."* The proof the
+last ten rounds were reaching for: **all four value cells share one rect top at every size** —
+588.875 ×4 at 1280×720, 698.15625 ×4 at 1500×980 and 1920×1080 — with
+`getComputedStyle(.hc-read).gridTemplateRows` reporting live `subgrid` (no fallback), all four labels
+on one line, `.hc-panel` never clipping (`scrollHeight == clientHeight` at all three), the canvas
+sized 534×344 / 578×460 by grid stretch alone, no `@media`, and the honest `— —` +
+"no CPU temp — see below" state intact. **One residual, accepted and documented, not fixed:** at
+1280×720 the panel's bottom *padding* lands ~18px below the lane's clip while its last painted text
+ends 12px above it — the lane scrolls, so that is a short border, not a lost reading. Growing
+`--hc-chrome-top` to the verdict headline's height would "fix" it by re-introducing the exact
+translated-content constant rounds 3/5/8/9 were spent removing, so it stays. The round-9 guard that
+asserted the panel starts at 72px was asserting something untrue and has been corrected to say what
+the cap really is: a ceiling against the lane's visible height, not a promise of fit.
 
 ### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) ✅ ALL FIVE BUILT (⑤ shipped to the desk 2026-08-20, awaiting the owner's eye): ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED; owner tried it and said *"i like it"* 2026-08-20, so the default flips ON inside the comprehensibility sweep, which first fixes the button placement he objected to — see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door — SHIPPED 2026-08-20 (desk build `0808e33e`, self-review PASS 10/10); owner veto-on-sight still open**
 

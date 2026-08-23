@@ -4,6 +4,16 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-08-23 - the d5a6a630 C-14 desk-build Snapshot row, moved verbatim (byte budget)
+
+Moved out of docs/RELEASE_STATE.md when the four-room Health slice (`40aca1ca`) reached the desk
+and became the owner-installed build. Byte-for-byte below; its two relative links were rewritten
+from `archive/RELEASE_STATE_HISTORY.md` to `RELEASE_STATE_HISTORY.md` for this file's own
+directory level, which is the only edit. d5a6a630 was never published — it was a desk candidate,
+as `40aca1ca` still is.
+
+| **Owner-installed version + embedded stamp** | **0.9.26 desk build, embedded stamp `d5a6a630`** — built 2026-08-22 by `npm run tauri build` from the primary worktree `sentinel-home-room` at `lane/train-2026-08-22` (`d5a6a630`), installed silently by Claude via `scripts/ship-reinstall.ps1`, one installer on the Desktop, installer `Compy_0.9.26_x64-setup.exe` SHA-256 **`AABCED03DA5033289732A9D2AD8EA7AB730317362C636948A95BE510380D2417`**. **Live == build proved by the embedded stamp, never an exe hash** — `get_build_stamp()` on the installed binary returned `"d5a6a630 · release"`. **What this build puts on the desk is C-14:** the finished-but-mounted-nowhere `GpuProfile` surface is now a live advisory panel in the Lab room (sibling between the Ops Console and the Experiment Bench), fed by `liveGpuProfileSnapshot()` from real hardware — vendor/model/driver read, and `powerModeLabel`/`peakTempC` **permanently null by design** (AMD profile state is not user-mode readable; peak temp belongs to a monitored session the Lab does not hold), rendering as `—` and never as an invented value. Advisory forever under LOCKED rule 6 — apply is structurally impossible, so rollback-first cannot be satisfied. **Self-review VERDICT: PASS** on this installed build (11/11, stamp confirmed live): scope radiogroup flips both ways, capture-before/after wrote real values to localStorage only (**zero Windows writes across every interaction tested**), delta table showed "No changes between these two snapshots." with Power mode and Peak GPU temperature both `—`, empty state reads "Capture a before snapshot to begin.", contrast measured on real tokens, no duplication of any existing Lab copy, no overlap or clipping against either sibling, debug port torn down clean. Its lineage — `701c2113` (the ambient-idle-CPU fix reaching the desk), `36011078`, `1f2ba660`, `584654c8` and every desk build before them — is byte-preserved in [archive/RELEASE_STATE_HISTORY.md](RELEASE_STATE_HISTORY.md). byte-preserved with **`63db50d2`**, **`8ba6a6d1`**, **`0808e33e`**, **`ab54f1e4`**, **`1d5b3c4c`**, `75849be1`, `835d8868`, `aac90cd7`, `402b0080`, `40682344`, **`5e64074c`** (THE PUBLISHED BUILD), `75880de1`, `2f79febb` and `7f151d2c` in [archive/RELEASE_STATE_HISTORY.md](RELEASE_STATE_HISTORY.md). | `node scripts/verify-release-state.mjs` (check 7) · `Select-String -Path "$env:LOCALAPPDATA\Compy\compy.exe" -Pattern 36011078` · HKCU uninstall `DisplayVersion` |
+
 ### 2026-08-21 - the v0.9.25 and v0.9.24 GO/NO-GO records, moved verbatim (byte budget)
 
 Moved out of docs/RELEASE_STATE.md when the ANSWERED 2026-08-21 slowdown record landed and pushed the
