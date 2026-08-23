@@ -283,13 +283,14 @@
 :root[data-v2="on"] .v2-room[data-layout="split"] {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, var(--v2-aside));
-  grid-template-rows: auto auto auto 1fr auto auto auto;
+  grid-template-rows: auto auto auto 1fr auto auto auto auto;
   grid-template-areas:
     "notice   notice"
     "verdict  aside"
     "measured aside"
     "body     aside"
     "quiet    aside"
+    "footnote aside"
     "below    below"
     "door     door";
   /* 48px — three grid gaps. Measured off the approved comps, which set the two columns a full
@@ -297,6 +298,13 @@
      one wide row of cards. */
   column-gap: calc(var(--v2-gap) * 3);
   align-content: start;
+}
+/* THE NARRATIVE FOOT (approved comps 2026-08-23): a hairline, the forward route row, then the
+   room's method in one padlocked sentence. It closes the story column -- so it belongs in that
+   column, on the aside's last shared row, not stranded under both columns where the doorknob
+   used to sit. Rooms that pass no footnote never render this and their door is unmoved. */
+:root[data-v2="on"] .v2-room[data-layout="split"] > .v2-footnote-slot {
+  grid-area: footnote;
 }
 :root[data-v2="on"] .v2-room[data-layout="split"] > .v2-notice-slot {
   grid-area: notice;
@@ -482,3 +490,69 @@
 }
 :root[data-v2="on"] .v2-update-go { border-color: var(--v2-ok); }
 :root[data-v2="on"] .v2-update-fine { font-size: var(--type-label); color: var(--v2-faint); }
+
+/* ---- The narrative foot: route row + padlocked method line (comp fidelity 2026-08-23) ----
+   The row is a LIST ROW, not a button that looks like one: full bleed, hairline above, the
+   destination's rail glyph at the head and a chevron at the tail. Quiet ink at rest, because a
+   route the user may never take must not compete with the room's one primary action. */
+:root[data-v2="on"] .v2-footnote-slot {
+  margin-top: 18px;
+  border-top: 1px solid var(--v2-line);
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+:root[data-v2="on"] .v2-route-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 6px 2px;
+  background: none;
+  border: 0;
+  border-radius: var(--v2-r-sm);
+  color: var(--v2-text);
+  font: var(--type-body) var(--v2-font-sans);
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+:root[data-v2="on"] .v2-route-row:hover,
+:root[data-v2="on"] .v2-route-row:focus-visible {
+  color: var(--v2-accent-text, var(--v2-accent));
+}
+:root[data-v2="on"] .v2-route-row .nav-ico {
+  flex: 0 0 auto;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .v2-route-row:hover .nav-ico,
+:root[data-v2="on"] .v2-route-row:focus-visible .nav-ico {
+  color: inherit;
+}
+:root[data-v2="on"] .v2-route-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+:root[data-v2="on"] .v2-route-chev {
+  flex: 0 0 auto;
+  color: var(--v2-faint);
+  font-size: var(--type-card);
+  line-height: 1;
+}
+/* The method line: padlock, then the sentence. Two lines is the comp's own wrap, so the text is
+   allowed to wrap and the glyph stays pinned to the FIRST line rather than centring itself
+   against a growing block. */
+:root[data-v2="on"] .v2-footnote {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  font-size: var(--type-label);
+  line-height: 1.5;
+  color: var(--v2-faint);
+}
+:root[data-v2="on"] .v2-footnote .ico {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}

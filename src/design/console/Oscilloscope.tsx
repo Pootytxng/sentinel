@@ -70,6 +70,7 @@ export function Oscilloscope({
   scale = "window",
   scrub = null,
   sel = null,
+  span = null,
   stageProps,
   emptyHint,
 }: {
@@ -96,6 +97,12 @@ export function Oscilloscope({
   scrub?: number | null;
   /** Drag-selection band as x-fractions (order-free) — the caller's zoom-in-progress. */
   sel?: { start: number; end: number } | null;
+  /** The plotted window's time range, drawn under the plot as "<start> … <end>" — the
+   *  approved Live comp captions its trace "13m ago" / "now". The CALLER owns both strings
+   *  because only it knows what one sample means (Live polls at 1 Hz; the deck buffers
+   *  frametimes), and because an instrument that guessed a duration would be fabricating one.
+   *  Omitted, or with an empty window, nothing is drawn — no window, no time range. */
+  span?: { start: ReactNode; end: ReactNode } | null;
   /** Escape hatch for interactive callers (the Monitor deck): spread onto the stage div so
    *  pointer math shares the exact drawn geometry. The component itself stays stateless. */
   stageProps?: React.HTMLAttributes<HTMLDivElement>;
@@ -135,7 +142,10 @@ export function Oscilloscope({
     latest = win[win.length - 1];
     // Value-anchored gridlines at quarter-cap steps, labeled in ms — the "comprehensive"
     // half of the convention (a real axis, not decoration).
-    if (zero) yTicks = [1, 2, 3].map((q) => (q / 4) * (msCap as number));
+    // 0 included (2026-08-23, comp fidelity): the approved Live trace labels 0 / 80 / 160 / 240,
+    // and the baseline is the one tick that tells the reader the axis is anchored rather than
+    // auto-ranged. Without it a calm trace and a collapsed one look alike.
+    if (zero) yTicks = [0, 1, 2, 3].map((q) => (q / 4) * (msCap as number));
     if (spikes) {
       spikeIdx = spikeIndices(win, budget);
       for (const i of spikeIdx) if (worstIdx < 0 || win[i] > win[worstIdx]) worstIdx = i;
@@ -161,6 +171,24 @@ export function Oscilloscope({
           </span>
         )}
       </figcaption>
+      {/* THE AXIS GUTTER (comp fidelity 2026-08-23). The approved trace puts its tick values
+          OUTSIDE the plot, left of a vertical baseline rule, not floated over the signal. So the
+          labels moved into a sibling column and `.osc-stage` kept its exact box — the deck's
+          scrub/drag pointer math reads that box, and moving the labels must not move the math. */}
+      <div className="osc-plot">
+        {yTicks.length > 0 && (
+          <div className="osc-axis" aria-hidden="true">
+            {yTicks.map((v) => (
+              <span
+                key={`yl${v}`}
+                className="osc-ylab"
+                style={{ top: `${((toY(v) / H) * 100).toFixed(1)}%` }}
+              >
+                {v === 0 ? "0" : v.toFixed(v < 10 ? 1 : 0)}
+              </span>
+            ))}
+          </div>
+        )}
       <div className="osc-stage" {...stageProps}>
         <svg
           className="osc-grid"
@@ -168,9 +196,13 @@ export function Oscilloscope({
           preserveAspectRatio="none"
           aria-hidden="true"
         >
-          {GRID_X.map((x) => (
-            <line key={`x${x}`} className="osc-gridline" x1={x} y1="0" x2={x} y2={H} />
-          ))}
+          {/* Column rules belong to the UNLABELLED window scale only. Once the axis gutter is
+              drawn, the horizontal ticks carry the meaning and a grid of verticals divides the
+              time axis into eighths that stand for nothing — the approved comp draws none. */}
+          {msCap == null &&
+            GRID_X.map((x) => (
+              <line key={`x${x}`} className="osc-gridline" x1={x} y1="0" x2={x} y2={H} />
+            ))}
           {msCap == null &&
             GRID_Y.map((y) => (
               <line key={`y${y}`} className="osc-gridline" x1="0" y1={y} x2={W} y2={y} />
@@ -178,7 +210,7 @@ export function Oscilloscope({
           {yTicks.map((v) => (
             <line
               key={`t${v}`}
-              className="osc-gridline"
+              className="osc-gridline osc-tickline"
               x1="0"
               y1={toY(v).toFixed(1)}
               x2={W}
@@ -226,21 +258,18 @@ export function Oscilloscope({
             />
           ))}
         </svg>
-        {yTicks.map((v) => (
-          <span
-            key={`yl${v}`}
-            className="osc-ylab"
-            style={{ top: `${((toY(v) / H) * 100).toFixed(1)}%` }}
-            aria-hidden="true"
-          >
-            {v.toFixed(v < 10 ? 1 : 0)}
-          </span>
-        ))}
         {empty && (
           <span className="osc-nosignal">
             <span className="osc-nosignal-k">{t("common.oscilloscope.noSignal")}</span>
             {emptyHint != null && <span className="osc-nosignal-hint">{emptyHint}</span>}
           </span>
+        )}
+      </div>
+        {span && !empty && (
+          <div className="osc-span" aria-hidden="true">
+            <span>{span.start}</span>
+            <span>{span.end}</span>
+          </div>
         )}
       </div>
     </figure>

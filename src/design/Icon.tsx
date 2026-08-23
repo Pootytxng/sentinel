@@ -9,6 +9,10 @@ export const ICONS: Record<string, ReactNode> = {
   ledger: (<><rect x="5" y="3" width="14" height="18" rx="2" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="9" y1="12" x2="15" y2="12" /><line x1="9" y1="16" x2="13" y2="16" /></>),
   check: (<path d="M5 12l5 5 9-9" />),
   alert: (<><path d="M12 8v5" /><path d="M12 16h.01" /><circle cx="12" cy="12" r="9" /></>),
+  // Drawn by the approved four-room comps: the clock beside a session's duration, and the padlock
+  // that opens every room's honesty micro-line. Same 24-grid and stroke discipline as the rest.
+  clock: (<><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 1.8" /></>),
+  lock: (<><rect x="5" y="10.5" width="14" height="9.5" rx="2" /><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5" /></>),
 };
 
 export function Icon({ name, size = 18 }: { name: string; size?: number }) {

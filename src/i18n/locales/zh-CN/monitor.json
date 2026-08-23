@@ -77,6 +77,8 @@
     "scopeCapturingHint": "采集中——进入游戏后曲线会在这里绘制。",
     "combinedEffectTooltip": "这些差值反映的是所有当前启用更改（以及其他可能存在的差异）叠加后的综合效果——若需逐项测量单个更改的影响，请使用「测试」的前后对比基准测试。",
     "fpsScopeLabel": "fps",
+    "traceSpanAgo": "{{span}}前",
+    "traceSpanNow": "现在",
     "gpuTempLabel": "GPU 温度",
     "gpuLoadLabel": "GPU 负载",
     "cpuTempLabel": "CPU 温度",

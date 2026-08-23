@@ -35,8 +35,10 @@
 // independently and neither has to compromise for the other.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { HomeRailId } from "./homeRail";
+import { HOME_RAIL, type HomeRailId } from "./homeRail";
 import { useV2Nav } from "./ShellV2";
+import { NavGlyph } from "./NavGlyph";
+import { Icon } from "./Icon";
 
 // The journey door map — copy + destinations are the P6 spec table, pinned literally by
 // room-shell.test.tsx so a copy/destination drift fails CI. Keyed by rail id (home/fix/play/
@@ -44,7 +46,10 @@ import { useV2Nav } from "./ShellV2";
 export const DOOR_MAP: Record<HomeRailId, { to: HomeRailId; label: string } | null> = {
   home: { to: "fix", label: "Find what's worth fixing" },
   fix: { to: "play", label: "Watch it live" },
-  play: { to: "learn", label: "See what changed" },
+  // Re-copied 2026-08-23 to the approved Live comp, which names the destination inside the
+  // sentence and draws this as a route row rather than a doorknob. The DESTINATION is
+  // untouched, and still the map's to give -- a room may not pick where its door leads.
+  play: { to: "learn", label: "View all sessions in History" },
   learn: { to: "lab", label: "Open the instruments" },
   lab: null, // last chapter — the rail is the way home
   check: null, // legacy escape-hatch room (merge-off only) — outside the journey, no door
@@ -57,6 +62,25 @@ export const DOOR_MAP: Record<HomeRailId, { to: HomeRailId; label: string } | nu
 export function doorFor(room: HomeRailId, ground: boolean): { to: HomeRailId; label: string } | null {
   if (ground && room === "home") return { to: "lab", label: "Find what's worth fixing" };
   return DOOR_MAP[room];
+}
+
+// THE ROUTE ROW (approved four-room comps, 2026-08-23): the same door, drawn as a list row --
+// the destination's own rail glyph, the sentence, and a chevron at the far edge. The glyph is the
+// RAIL's, not a new one: the row teaches which room it opens by showing the mark the user already
+// clicks to get there. It navigates through the same V2Nav handler as the doorknob below, so
+// navigation still never teleports.
+export function RouteRow({ to, label }: { to: HomeRailId; label: string }) {
+  const nav = useV2Nav();
+  const icon = HOME_RAIL.find((r) => r.id === to)?.icon;
+  return (
+    <button type="button" className="v2-route-row" onClick={() => nav.navigate(to)}>
+      {icon != null && <NavGlyph name={icon} />}
+      <span className="v2-route-label">{label}</span>
+      <span className="v2-route-chev" aria-hidden="true">
+        ›
+      </span>
+    </button>
+  );
 }
 
 // The forward door: quiet chrome (text + arrow, no accent fill — a doorknob, not a CTA), and it
@@ -81,6 +105,7 @@ export function RoomShell({
   quiet,
   aside,
   below,
+  footnote,
   doorOpen = true,
   children,
 }: {
@@ -100,6 +125,12 @@ export function RoomShell({
   /** Full-width content beneath BOTH columns — where a split room keeps everything that is
    *  real but below the fold. Content moves down here; it is never deleted to make a comp fit. */
   below?: ReactNode;
+  /** The room's METHOD, stated in one padlocked sentence at the foot of the narrative column.
+   *  Live and Test's approved comps draw it there; Health's and History's draw none, so this is a
+   *  room's choice and not shell furniture. A room that states its method here also brings its
+   *  forward door up with it, as the comp's route row: that column gets exactly ONE forward
+   *  affordance, and leaving the bottom doorknob in place as well would make two of them. */
+  footnote?: ReactNode;
   /** P6 §2 placement: false hides the room's door while its chapter is unfinished. Default open. */
   doorOpen?: boolean;
   children: ReactNode;
@@ -126,8 +157,17 @@ export function RoomShell({
       {aside != null && <aside className="v2-room-aside">{aside}</aside>}
       <div className="v2-room-body">{children}</div>
       {quiet != null && <div className="v2-quiet-slot">{quiet}</div>}
+      {footnote != null && (
+        <div className="v2-footnote-slot">
+          {door && <RouteRow to={door.to} label={doorLabel!} />}
+          <p className="v2-footnote">
+            <Icon name="lock" size={14} />
+            <span>{footnote}</span>
+          </p>
+        </div>
+      )}
       {below != null && <div className="v2-room-below">{below}</div>}
-      {door && <ForwardDoor to={door.to} label={doorLabel!} />}
+      {door && footnote == null && <ForwardDoor to={door.to} label={doorLabel!} />}
     </section>
   );
 }

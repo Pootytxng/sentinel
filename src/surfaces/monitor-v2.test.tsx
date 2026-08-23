@@ -208,9 +208,11 @@ describe("MonitorV2 — RoomShell composition", () => {
     expect(h1s[0].querySelector(".mc-headline")!.textContent).toBe(
       "Last session ran smooth — valorant at 240 fps average.",
     );
+    // Sessions is the LINEAR face -- no evidence column, so no narrative foot to carry a route
+    // row, so it keeps the doorknob. Same destination, re-copied to the comp's sentence.
     const doors = container.querySelectorAll(".v2-door");
     expect(doors.length).toBe(1);
-    expect(doors[0].textContent).toContain("See what changed");
+    expect(doors[0].textContent).toContain("View all sessions in History");
   });
 
   it("no measured-line header strip — header space is header-format text only (owner law 2026-07-10)", () => {

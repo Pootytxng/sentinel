@@ -525,9 +525,13 @@ describe("MonitorConsole - the live face owns the room's shell (issue #49 slice 
     const h1s = container.querySelectorAll(".v2-verdict h1");
     expect(h1s.length).toBe(1);
     expect(h1s[0].textContent).toContain("Ready when you are");
-    const doors = container.querySelectorAll(".v2-door");
-    expect(doors.length).toBe(1);
-    expect(doors[0].textContent).toContain("See what changed");
+    // The forward affordance MOVED into the narrative foot as the comp's route row (2026-08-23)
+    // -- it did not multiply: the bottom doorknob is gone from this face, and there is still
+    // exactly one way forward, to the same room the DOOR_MAP always sent it to.
+    expect(container.querySelectorAll(".v2-door").length).toBe(0);
+    const routes = container.querySelectorAll(".v2-route-row");
+    expect(routes.length).toBe(1);
+    expect(routes[0].textContent).toContain("View all sessions in History");
     // The one-mention law: the capture control MOVED into the action slot, it was not copied
     // there -- there is still exactly one Start/Stop capture button on the screen.
     const actions = container.querySelectorAll(".v2-verdict-action button");
@@ -543,12 +547,15 @@ describe("MonitorConsole - the live face owns the room's shell (issue #49 slice 
     let live = true;
     mockPolls(() => (live ? liveFps : stoppedFps));
     const { container, props } = mount();
-    await waitFor(() => expect(container.querySelectorAll(".v2-door").length).toBe(0));
+    await waitFor(() => expect(container.querySelectorAll(".v2-route-row").length).toBe(0));
     expect(container.querySelector(".v2-verdict h1")!.textContent).toContain(
       "Recording your session",
     );
+    // The padlocked method line is NOT the door and does not close with it -- how capture works
+    // is true while it is running, and that is exactly when a user wants to read it.
+    expect(container.querySelectorAll(".v2-footnote").length).toBe(1);
     live = false;
-    await waitFor(() => expect(container.querySelectorAll(".v2-door").length).toBe(1), {
+    await waitFor(() => expect(container.querySelectorAll(".v2-route-row").length).toBe(1), {
       timeout: 3000,
     });
     await waitFor(() => expect(props.onFpsActive).toHaveBeenLastCalledWith(false), {

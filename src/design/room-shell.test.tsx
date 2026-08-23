@@ -23,7 +23,9 @@ describe("DOOR_MAP — the journey pinned literally (P6 spec table)", () => {
     expect(DOOR_MAP).toEqual({
       home: { to: "fix", label: "Find what's worth fixing" },
       fix: { to: "play", label: "Watch it live" },
-      play: { to: "learn", label: "See what changed" },
+      // Re-copied 2026-08-23 to the approved Live comp. The pin still does its job: the
+      // DESTINATION table is what may not drift, and Monitor -> Blackbook is unchanged.
+      play: { to: "learn", label: "View all sessions in History" },
       learn: { to: "lab", label: "Open the instruments" },
       lab: null,
       check: null,

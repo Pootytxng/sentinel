@@ -30,6 +30,7 @@ import { Oscilloscope } from "../design/console/Oscilloscope";
 import { RoomShell } from "../design/room-shell";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { Term } from "../design/Term";
+import { Icon } from "../design/Icon";
 import { BentoGrid, BentoTile } from "../design/bento/BentoGrid";
 import { readoutStats, type ReadoutStats } from "./monitor-console-data";
 import { DeckScope } from "./monitor/DeckScope";
@@ -420,6 +421,17 @@ export function MonitorConsole({
         </button>
       }
       quiet={quiet}
+      /* THE METHOD, at the foot of the story column where the comp puts it — the same honesty
+         micro-line the room always carried, moved rather than rewritten: the anti-cheat-safe
+         wording is preserved verbatim (the handoff names it explicitly) and it still glosses ETW
+         through the same Term. What is new is the padlock beside it, and the company it keeps:
+         the room's forward route now sits directly above it instead of at the page foot. */
+      footnote={
+        <>
+          <Term id="etw">{t("monitor.monitorConsole.etwEmph")}</Term>
+          {t("monitor.monitorConsole.etwHonestyPost")}
+        </>
+      }
       /* THE EVIDENCE COLUMN — one panel, in the comp's order: what the last session was, what it
          measured, the live trace, how it compared, and the sensors right now. The pointer
          spotlight and the reticle move with it (stageRef was the bento stage; the instruments
@@ -443,7 +455,14 @@ export function MonitorConsole({
                 </>
               )}
             </h2>
-            {latest && <span className="mc-ev-dur">{fmtDur(latest.duration_secs)}</span>}
+            {latest && (
+              <span className="mc-ev-dur">
+                {/* The comp puts a clock glyph before this duration — it is the one number in the
+                    head that is a LENGTH rather than a reading, and the glyph is what says so. */}
+                <Icon name="clock" size={14} />
+                {fmtDur(latest.duration_secs)}
+              </span>
+            )}
           </header>
 
           {latest ? (
@@ -490,6 +509,20 @@ export function MonitorConsole({
               tone={live ? arcTone(gradeFps(sample.fps, rig)) : "accent"}
               reduced={reduced}
               emptyHint={scopeHint}
+              /* ZERO-ANCHORED WITH A LABELLED AXIS (comp fidelity 2026-08-23). The approved trace
+                 reads 0 / 80 / 160 / 240 against a fixed floor, which is also the honest scale: a
+                 window normalised to its own min-max turns two frames of ordinary jitter into a
+                 mountain range. The numbers on OUR axis come from the real cap, never the comp's
+                 240 — the picture is the design, the data stays the machine's. */
+              scale="zero"
+              /* "2m ago … now" — the buffer polls once a second (the tick below), so the drawn
+                 window's length in samples IS its length in seconds. Nothing is estimated. */
+              span={{
+                start: t("monitor.monitorConsole.traceSpanAgo", {
+                  span: fmtDur(Math.min(fpsH.current.length, FPS_CAP)),
+                }),
+                end: t("monitor.monitorConsole.traceSpanNow"),
+              }}
             />
           </div>
 
@@ -750,12 +783,6 @@ export function MonitorConsole({
           </span>
         </div>
 
-        {/* Same honesty micro-line the room always carried, method stated — anti-cheat-safe
-            wording preserved verbatim (the handoff names it explicitly). */}
-        <p className="mc-honest">
-          <Term id="etw">{t("monitor.monitorConsole.etwEmph")}</Term>
-          {t("monitor.monitorConsole.etwHonestyPost")}
-        </p>
       </div>
     </RoomShell>
   );

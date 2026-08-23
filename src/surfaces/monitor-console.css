@@ -325,7 +325,12 @@
 :root[data-v2="on"] .mc-ev-sep {
   color: var(--v2-faint);
 }
+/* Glyph + number on one baseline (comp fidelity 2026-08-23) — the clock is part of the
+   reading, so it sits with it rather than floating beside it. */
 :root[data-v2="on"] .mc-ev-dur {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--v2-font-mono);
   font-size: var(--type-label);
   font-variant-numeric: tabular-nums;

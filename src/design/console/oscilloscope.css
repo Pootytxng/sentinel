@@ -11,12 +11,26 @@
   color: var(--ix-text-2); }
 :root[data-v2="on"] .osc-read { font-size: var(--type-label); letter-spacing: .04em; color: var(--ix-text-1);
   font-variant-numeric: tabular-nums; }
-:root[data-v2="on"] .osc-stage { position: relative; border: 1px solid var(--ix-glass-border); min-height: 64px; }
+/* THE PLOT ROW (comp fidelity 2026-08-23): tick gutter | plot, with the time-span captions in
+   the plot's own column so they align to the drawn signal and not to the figure. Two columns and
+   two rows, no wrapper divs beyond the row itself — `.osc-stage` keeps its exact box because the
+   deck's scrub and drag-zoom read that box for their pointer math. */
+:root[data-v2="on"] .osc-plot { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; }
+:root[data-v2="on"] .osc-axis { position: relative; grid-column: 1; grid-row: 1; width: 4.5ch; }
+:root[data-v2="on"] .osc-stage { position: relative; border: 1px solid var(--ix-glass-border); min-height: 64px;
+  grid-column: 2; grid-row: 1; }
+/* "13m ago … now" — the window's real duration at the ends of the signal it describes. */
+:root[data-v2="on"] .osc-span { grid-column: 2; grid-row: 2; display: flex; justify-content: space-between;
+  gap: 8px; margin-top: 5px; font-size: var(--type-label); color: var(--ix-text-3);
+  font-variant-numeric: tabular-nums; }
 :root[data-v2="on"] .osc-grid { display: block; width: 100%; height: 64px; }
 :root[data-v2="on"] .osc-grid line,
 :root[data-v2="on"] .osc-grid polyline,
 :root[data-v2="on"] .osc-grid path { vector-effect: non-scaling-stroke; }
 :root[data-v2="on"] .osc-gridline { stroke: var(--ix-text-3); stroke-width: .5; opacity: .25; }
+/* Dotted, like the comp's: a labelled tick line is a reading aid under the signal, and a solid
+   rule at this weight competes with the trace instead of supporting it. */
+:root[data-v2="on"] .osc-tickline { stroke-dasharray: 1.5 3; }
 :root[data-v2="on"] .osc-trace { stroke: var(--ix-accent); stroke-width: 1.25;
   stroke-linejoin: round; stroke-linecap: round; }
 :root[data-v2="on"] .osc-warn .osc-trace { stroke: var(--v2-warn); }
@@ -24,9 +38,10 @@
 :root[data-v2="on"] .osc-neutral .osc-trace { stroke: var(--ix-text-2); }
 :root[data-v2="on"] .osc-worst { font-size: var(--type-label); letter-spacing: .06em; color: var(--v2-warn);
   font-variant-numeric: tabular-nums; }
-/* Zero-scale ms tick labels (RTSS-style labeled axis): HTML spans so the stretched viewBox
-   can't distort the type; anchored to the right edge, quiet ink. */
-:root[data-v2="on"] .osc-ylab { position: absolute; right: 4px; transform: translateY(-50%);
+/* Zero-scale tick labels (RTSS-style labeled axis): HTML spans so the stretched viewBox can't
+   distort the type. They sit in the GUTTER now, right-aligned against the plot's left rule — the
+   approved comp reads them as an axis beside the chart, not as text floating over the signal. */
+:root[data-v2="on"] .osc-ylab { position: absolute; right: 0; transform: translateY(-50%);
   font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .06em; color: var(--ix-text-3);
   font-variant-numeric: tabular-nums; pointer-events: none; }
 :root[data-v2="on"] .osc-budget { stroke: var(--ix-text-3); stroke-width: .75; stroke-dasharray: 4 3; opacity: .6; }

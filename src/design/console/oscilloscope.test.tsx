@@ -207,7 +207,14 @@ describe('Oscilloscope — scale="zero" (owner direction 2026-07-11: match the R
       <Oscilloscope samples={dense} cap={240} label="frametime" unit="ms" scale="zero" reduced />,
     );
     const labels = [...container.querySelectorAll(".osc-ylab")].map((el) => el.textContent);
-    expect(labels).toEqual(["13", "25", "38"]); // cap 50 → 12.5/25/37.5, rounded ints ≥10
+    // 0 leads the axis as of 2026-08-23 (comp fidelity): the approved Live trace labels its
+    // baseline, and the baseline is the tick that tells the reader the scale is ANCHORED rather
+    // than auto-ranged. cap 50 → 0/12.5/25/37.5, rounded to ints at ≥10.
+    expect(labels).toEqual(["0", "13", "25", "38"]);
+    // ...and they live in the gutter beside the plot, never over the signal. The stage keeps its
+    // own box because the deck's scrub/drag pointer math measures it.
+    expect(container.querySelector(".osc-stage .osc-ylab")).toBeNull();
+    expect(container.querySelectorAll(".osc-axis .osc-ylab").length).toBe(4);
   });
 
   it('default scale="window" is unchanged — fps traces keep the relative mapping, no ms labels', () => {
