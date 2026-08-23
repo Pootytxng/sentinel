@@ -673,7 +673,14 @@
    because it carries the ring, the grade word and the "= n of m checks passed" line. ── */
 :root[data-v2="on"] .hc-readout {
   display: grid;
-  grid-template-columns: 1.4fr repeat(4, minmax(0, 1fr));
+  /* minmax(0, 1.4fr), NOT a bare 1.4fr — bug->guard (self-review round 6, issue #49, 2026-08-23).
+     An `fr` track's automatic minimum is min-content, so the wide first cell could not shrink below
+     the ArcGauge's intrinsic width: at 1280x720 the readiness cell's content ran 25px past its own
+     column and "READINESS" touched "AVG FPS" with zero gap, the MEASURED pill colliding with the
+     neighbouring reading. The other four tracks already carried the clamp; this one never did. Two
+     readings that overlap are not two readings, which is why this is an honest-measurement failure
+     and not a spacing nit. The gauge needs the matching half of the fix (arc-gauge.css). */
+  grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(0, 1fr));
   align-items: start;
   gap: var(--v2-pad-sm);
   padding: var(--v2-pad);

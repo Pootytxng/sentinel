@@ -2,6 +2,8 @@ import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 vi.mock("../use-motion", () => ({ useReducedMotion: () => true })); // reduced ⇒ useCountTo snaps (deterministic)
 import { ArcGauge } from "./ArcGauge";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 describe("ArcGauge", () => {
   it("renders an honest NOT-YET state when value is null — never a fabricated number", () => {
@@ -37,5 +39,30 @@ describe("ArcGauge", () => {
     rerender(<ArcGauge label="GPU temp" value={null} max={100} unit="°C" />);
     expect(container.querySelector(".ag-ctr .ag-u")).toBeNull();
     expect(container.querySelector(".ag-u-side")!.textContent).toMatch(/no reading/i);
+  });
+
+  it("CSS: the gauge can shrink -- its label column cannot widen the instrument (bug->guard, issue #49)", () => {
+    // self-review round 6, 2026-08-23. On Health at 1280x720 the readiness gauge ran 25px past its
+    // grid cell and collided with AVG FPS. An `fr` track's AUTOMATIC minimum is min-content, so the
+    // label, its tag pill and its note set a floor the whole instrument could not go below. The
+    // symptom was Health's, the defect is the KIT's: any room that places a gauge in a flexible cell
+    // inherits it, so both halves of the fix live here -- a zero minimum on the track AND on the item.
+    const css = readFileSync(join("src", "design", "console", "arc-gauge.css"), "utf8");
+    const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "");
+
+    const root = /\.arc-gauge\s*\{([^}]*)\}/.exec(strip(css));
+    expect(root, ".arc-gauge must declare its own grid").not.toBeNull();
+    expect(
+      root![1],
+      "the label column needs minmax(0, 1fr): a bare fr is sized by its content, so a long label " +
+        "or tag makes the whole gauge overflow whatever cell it was placed in",
+    ).toMatch(/grid-template-columns:\s*auto\s+minmax\(\s*0\s*,\s*1fr\s*\)/);
+
+    const label = /\.ag-label\s*\{([^}]*)\}/.exec(strip(css));
+    expect(label, ".ag-label must have a rule").not.toBeNull();
+    expect(
+      label![1],
+      "clamping the track alone is not enough -- the grid ITEM keeps its own min-content floor",
+    ).toMatch(/min-width:\s*0/);
   });
 });

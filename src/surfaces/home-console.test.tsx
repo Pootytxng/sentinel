@@ -852,6 +852,28 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     ).toBe(2 * Number(padM![1]));
   });
 
+  it("CSS: no readout track can be widened by its own content (the readings never collide)", () => {
+    // bug->guard (self-review round 6, issue #49, 2026-08-23). At 1280x720 the readiness cell's
+    // content ran 25px past its own column: "READINESS" and "AVG FPS" touched with zero gap and the
+    // MEASURED pill sat on top of the neighbouring reading. Cause: an `fr` track's AUTOMATIC minimum
+    // is min-content, so the wide first track could not shrink below the ArcGauge's intrinsic width.
+    // The other four tracks already carried minmax(0, ...); this one never did. Two readings that
+    // overlap are not two readings -- an honest-measurement failure, not a spacing nit.
+    const css = readFileSync(join("src", "surfaces", "home-console.css"), "utf8");
+    const readout = block(css, ':root[data-v2="on"] .hc-readout');
+    const cols = /grid-template-columns:\s*([^;]+);/.exec(readout);
+    expect(cols, ".hc-readout must declare its tracks explicitly").not.toBeNull();
+
+    // Every flexible track needs a stated zero minimum. Strip the minmax() calls that HAVE one, then
+    // no bare `fr` may remain -- so a sixth reading added later cannot reintroduce the same defect.
+    const bare = cols![1].replace(/minmax\(\s*0\s*,[^)]*\)/g, "");
+    expect(
+      bare,
+      "every fr track in the readout needs minmax(0, ...): an fr track's automatic minimum is " +
+        "min-content, so without it a cell is sized by its content and overlaps its neighbour",
+    ).not.toMatch(/\dfr|\bfr\b/);
+  });
+
   it("CSS: Health is ONE fluid composition — no breakpoint, and the readings still clear the fold", () => {
     // bug->guard (self-review rounds 3, 4 and 5, issue #49, 2026-08-23). Three findings, one rule.
     //

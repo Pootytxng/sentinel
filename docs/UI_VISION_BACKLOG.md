@@ -142,7 +142,22 @@ difference between a floor and the comp's ceiling, `clamp(320px, calc(100vh − 
 with every subtrahend a named variable someone can check. The owner's 980px window and 1080p still
 land on exactly the approved 500px stage; 720p lands on 351px and the strip clears. Guard: the same
 case now REJECTS any `@media` rule in `home-console.css` and re-runs the arithmetic at all three
-proof heights. Proven to fail on round 4's CSS. **Round 6 is next.**
+proof heights. Proven to fail on round 4's CSS.
+
+**🔧 SELF-REVIEW ROUND 6 — FAIL, fixed, guarded.** The fluid geometry VERIFIED: measured inner
+viewports 971 / 711 / 1071 across a resize-up, resize-down and resize-up-again cycle, with the stage
+landing on the comp's exact proportions at the owner's window and at 1080p. The round failed on a
+DIFFERENT defect at 1280×720, present since the readout strip was built and never caught: the
+readiness cell's content ran 25px past its own column, so **READINESS and AVG FPS touched with zero
+gap** and the MEASURED pill sat on the neighbouring reading. Cause: an `fr` track's automatic minimum
+is min-content, so the wide first track could not shrink below the ArcGauge's intrinsic width — the
+other four tracks already carried `minmax(0, …)`, that one never did. Two readings that overlap are
+not two readings, so this is an honest-measurement failure, not a spacing nit. The symptom was
+Health's and the defect is the KIT's, so both halves are fixed at the source: `minmax(0, 1fr)` on the
+gauge's own label column and `min-width: 0` on the item, plus `minmax(0, 1.4fr)` on the readout
+track. Guards in `home-console.test.tsx` (no bare `fr` may survive in the readout, so a sixth reading
+cannot reintroduce it) and `arc-gauge.test.tsx` (the kit's own rule, for every room that ever puts a
+gauge in a flexible cell). Both proven to fail on round 5's CSS. **Round 7 is next.**
 
 ### ⭐ FOUNDATION-1. The consumer-app foundation proposal (2026-08-11) ✅ ALL FIVE BUILT (⑤ shipped to the desk 2026-08-20, awaiting the owner's eye): ① type + colour (TYPE-1 + COLOR-1, desk 2026-08-13, v0.9.22 `700cd565`, looked at and passed), ② front door (UX-1 — its last clause, the Home → **Health** rename, closed 2026-08-19), ③ **interview (2026-08-20, issue #177 — BUILT AND INSTALLED; owner tried it and said *"i like it"* 2026-08-20, so the default flips ON inside the comprehensibility sweep, which first fixes the button placement he objected to — see below)**, ④ wording pass + banned-term guard (C-06, `4c9e440e`, 2026-08-18). **⑤ instruments behind a door — SHIPPED 2026-08-20 (desk build `0808e33e`, self-review PASS 10/10); owner veto-on-sight still open**
 

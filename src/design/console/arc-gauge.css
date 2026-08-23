@@ -2,7 +2,12 @@
    Scoped under [data-v2="on"] (flag-off byte-identity). NOT YET registered in tokens-v2-guard's
    V2_CSS array — that registration (plus resolving the --v2-warn/--ready literal fallbacks below
    against the guard's no-literal-color rule) is Task 4's job, not this one's. */
-:root[data-v2="on"] .arc-gauge { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; }
+/* minmax(0, 1fr) for the label column, not a bare 1fr: an `fr` track's automatic minimum is
+   min-content, so the label, its tag pill and its note set a floor the gauge could not go below and
+   the whole instrument overflowed whatever cell it was placed in. Caught on Health at 1280x720
+   (self-review round 6, issue #49) where the readiness gauge ran into AVG FPS — but the defect is
+   the KIT's, so it is fixed here, for every room that ever places a gauge in a flexible cell. */
+:root[data-v2="on"] .arc-gauge { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: center; }
 /* svg and .ag-ctr BOTH occupy column 1 / rows 1–2 so the number/unit render centered ON the ring.
    Without an explicit grid-column here the svg auto-flows to column 2 (number ends up beside the
    ring, not on it) — a real layout bug caught by visual self-review, not by a diff-only read. */
@@ -24,7 +29,9 @@
 /* TYPE-1 (2026-08-13): a unit too long for the 56px ring renders here, beside the label, at the
    same 13px floor — the ring never carries text it cannot hold, and nothing shrinks below floor. */
 :root[data-v2="on"] .ag-u-side { margin-top: 0; }
-:root[data-v2="on"] .ag-label { grid-column: 2; display: flex; flex-direction: column; gap: 4px;
+/* min-width: 0 — the grid ITEM's own floor, which is the other half of the same defect: clamping
+   the track alone still leaves the item refusing to shrink below its content. */
+:root[data-v2="on"] .ag-label { grid-column: 2; min-width: 0; display: flex; flex-direction: column; gap: 4px;
   font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .12em; text-transform: uppercase; color: var(--ix-text-2); }
 :root[data-v2="on"] .ag-tag { align-self: flex-start; font-size: var(--type-label); letter-spacing: .1em;
   padding: 1px 5px; border: 1px solid var(--ready); color: var(--ready); }
