@@ -75,6 +75,12 @@
 > landed** — that phrasing is what the 2026-07-21 decree supersedes. The twin owner-gate (price
 > *wording* is brand + money; `site/**` auto-deploys to other people's machines,
 > [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) §B6) was **satisfied, not bypassed**.
+> **2026-08-23, two corrections to that row's premise.** (a) `compy.gg` **does not resolve** —
+> NXDOMAIN from the desk — so no public page was carrying the old wording. (b) The source fix was
+> **not a shipped fix**: `dist-site/`, the deploy staging tree, still read *"Compy is a free desktop
+> app"* and failed `scripts/dist-site-staleness-guard.test.mjs` on the pre-push gate;
+> `node scripts/stage-dist-site.mjs` restaged it. **A generated tree between source and deploy is
+> where a landed fix goes to un-land.**
 
 **① is EMPTY as of 2026-08-22** — both rows closed above, and an empty ① is the one queue state
 worth celebrating. It stays here so a new report has a place to land, not as a claim of work.
