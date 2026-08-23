@@ -215,7 +215,6 @@ describe("comp fidelity — Health, matched against 01-health-approved.png", () 
 
 describe("comp fidelity — Live, matched against 02-live-approved.png", () => {
   const monitor = read("src", "surfaces", "monitor-console.css");
-  const shell = read("src", "design", "shell-v2.css");
   const en = JSON.parse(read("src", "i18n", "locales", "en", "monitor.json"));
 
   it("the cross-game caveat is quiet copy, not a fourth cell", () => {
