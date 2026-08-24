@@ -384,23 +384,30 @@ export function MonitorConsole({
       /* THE NARRATIVE COLUMN (approved four-room direction). Eyebrow → one human verdict → one
          short explanation → one dominant action, exactly as Health composes it. The LED breathes
          only while the helper is actually recording; there is no idle animation to mean nothing. */
+      /* ITS OWN SLOT, NOT A PASSENGER IN `verdict` (#211). This is the file that renders when Live
+         opens — the segment defaults to "live" — and it was missed on the first pass while the
+         other four rooms were corrected. Inside `verdict` the eyebrow renders inside the <h1>, so
+         the room's ONE top-level heading read "Session monitor" welded to a live status sentence
+         ("Ready when you are"). It only LOOKED like two lines because the base .v2-eyebrow rule is
+         a flex block; a screen reader still announced one fused string. The room's NAME is stable
+         and belongs in a heading; what the room is currently doing is not and does not. */
+      eyebrow={
+        <RoomEyebrow
+          tone="accent"
+          /* NO DOT WHEN NOTHING IS RECORDING (owner ruling 2026-08-23 — match the comps
+              exactly). 02-live-approved.png carries no dot beside this label at all, and
+              its idle state is the state the app is in most of the time; the label itself
+              is drawn in the accent instead. The dot survives ONLY as the recording light,
+              which is the one moment this room has a live state to report — so the comp is
+              matched where it speaks, and nothing honest is lost where it is silent. */
+          dot={fpsActive ? "rec" : undefined}
+          label={t("monitor.monitorConsole.narrative.eyebrow")}
+        />
+      }
       verdict={
-        <>
-          <RoomEyebrow
-            tone="accent"
-            /* NO DOT WHEN NOTHING IS RECORDING (owner ruling 2026-08-23 — match the comps
-                exactly). 02-live-approved.png carries no dot beside this label at all, and
-                its idle state is the state the app is in most of the time; the label itself
-                is drawn in the accent instead. The dot survives ONLY as the recording light,
-                which is the one moment this room has a live state to report — so the comp is
-                matched where it speaks, and nothing honest is lost where it is silent. */
-            dot={fpsActive ? "rec" : undefined}
-            label={t("monitor.monitorConsole.narrative.eyebrow")}
-          />
-          <span className="mc-headline" key={headline}>
-            {headline}
-          </span>
-        </>
+        <span className="mc-headline" key={headline}>
+          {headline}
+        </span>
       }
       sub={t("monitor.monitorConsole.narrative.sub")}
       /* THE ONE DOMINANT ACTION — the room's capture toggle, MOVED here from the control row

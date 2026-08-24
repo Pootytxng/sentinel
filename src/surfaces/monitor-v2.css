@@ -122,3 +122,15 @@
   gap: 8px;
   margin-bottom: 14px;
 }
+/* …and pay for that 8px here, not by widening it. `shell-v2.css` gives the eyebrow `margin-bottom:
+   2px` because it expects the linear container's 14px gap underneath — 2 + 14 = the 16px the comps
+   carry. This room overrides the gap to 8px for the whole stack above, which quietly made the
+   eyebrow→heading distance 10px instead: a 6px shortfall nobody asked for, measured on the
+   installed build. Raising the container gap would move the sub-line and the action too, which is
+   not what is wrong; only the eyebrow's own margin is. 8 + 8 = 16, everything else keeps its 8. */
+:root[data-v2="on"]
+  .v2-room[data-room="play"]:not([data-layout="split"])
+  .v2-verdict
+  > .v2-eyebrow {
+  margin-bottom: 8px;
+}

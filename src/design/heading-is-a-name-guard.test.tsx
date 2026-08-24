@@ -9,13 +9,18 @@
 // string. The eyebrow now has its own slot, rendering in the same place on screen, outside the
 // heading.
 //
-// Two halves, because either alone would rot:
+// Three halves, because any one alone would rot:
 //   - the CONTRACT half renders RoomShell and proves the h1 holds the verdict and nothing else;
-//   - the CALLER half reads the four room sources, because the contract cannot stop a room from
-//     putting an eyebrow back inside `verdict` tomorrow.
+//   - the CALLER half reads the room sources, because the contract cannot stop a room from putting
+//     an eyebrow back inside `verdict` tomorrow;
+//   - the COVERAGE half discovers every RoomShell caller from disk and fails if the caller list has
+//     missed one. That third half exists because the first version of this guard shipped with a
+//     hand-written list of four, and the fifth room — the one still carrying the bug — was simply
+//     not on it. A hand-written list of files to check is only ever as good as the memory that
+//     wrote it.
 import { describe, it, expect } from "vitest";
 import { render, cleanup } from "@testing-library/react";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import { afterEach } from "vitest";
 
@@ -24,7 +29,23 @@ import { RoomEyebrow } from "./room-eyebrow";
 
 afterEach(cleanup);
 
-const ROOMS = ["HomeConsole.tsx", "MonitorV2.tsx", "BlackbookV2.tsx", "LabConsole.tsx"];
+// MonitorConsole.tsx is in this list because leaving it out is exactly how #211 shipped half-fixed:
+// the first pass corrected the four rooms below it and this list could not see the fifth — the file
+// that actually renders when Live opens, since the segment defaults to "live". A caller-half guard
+// that reads only the files someone already remembered to fix proves nothing. Add every room that
+// mounts a RoomShell here; the list is the coverage.
+// HomeHud.tsx and HomeV2.tsx were added by the coverage test below on its first run — neither had
+// the bug (neither renders a RoomEyebrow at all), but neither was being read either. That is the
+// list doing its job on the day it was written.
+const ROOMS = [
+  "HomeConsole.tsx",
+  "HomeHud.tsx",
+  "HomeV2.tsx",
+  "MonitorConsole.tsx",
+  "MonitorV2.tsx",
+  "BlackbookV2.tsx",
+  "LabConsole.tsx",
+];
 
 /** The source of one JSX prop value, from `<name>={` to its matching brace. */
 function propSource(source: string, name: string): string {
@@ -91,5 +112,24 @@ describe("a room heading is a NAME, never a name welded to a readout (#211)", ()
       const source = readFileSync(join("src", "surfaces", file), "utf8");
       expect(propSource(source, "verdict"), `${file} has no verdict prop to read`).not.toBe("");
     }
+  });
+
+  // THE COVERAGE HALF. The two scans above are only worth the list they iterate, and that list was
+  // wrong once already. This one asks the disk instead: every surface that mounts a <RoomShell> is
+  // a room, so every one of them must be in ROOMS. A new room added tomorrow fails here on its
+  // first commit, with the file name in the message, instead of shipping unscanned.
+  it("ROOMS covers every surface that mounts a RoomShell", () => {
+    const surfaces = join("src", "surfaces");
+    const mounts = readdirSync(surfaces)
+      .filter((f) => f.endsWith(".tsx") && !f.endsWith(".test.tsx"))
+      .filter((f) => readFileSync(join(surfaces, f), "utf8").includes("<RoomShell"));
+    expect(mounts.length, "found no RoomShell callers at all — this scan is reading nothing").
+      toBeGreaterThan(0);
+    const missing = mounts.filter((f) => !ROOMS.includes(f));
+    expect(
+      missing,
+      `these surfaces mount a RoomShell but are not in ROOMS, so neither scan above reads them: ` +
+        `${missing.join(", ")}`,
+    ).toEqual([]);
   });
 });
