@@ -53,37 +53,46 @@
 
 #### ① A PERSON REPORTED IT AND WE HAVE NOT ANSWERED — these outrank everything
 
-> **Item 1 CLOSED 2026-08-22 — there is no cold-start regression, and `795d8ff5` (#130,
-> [`../src-tauri/src/data_root.rs`](../src-tauri/src/data_root.rs)) is exonerated.** `dc4d55e` was
-> built as a *product* in its own worktree and run against HEAD back to back, 3 cold starts each,
-> twice. On a quiet desk the old code measures **519 ms** documentReady to HEAD's **506 ms** — the
-> old build reproduces today's number, so nothing in the diff added the time, and what moved
-> between the 2026-08-05 and 2026-08-21 readings is the machine, not a commit. Full method,
-> numbers and the busy-desk caveat: [`perf/q7-baseline.json`](perf/q7-baseline.json)
-> `coldStartDocumentReadyMs`, now an **upper bound** rather than an open finding; traces in
-> [`perf/raw/`](perf/raw/) (`coldstart-{dc4d55e,head}-{B,C}.json`). bug → guard: a `cargo
-> build --release` binary loads the **dev URL** and measures a connection timeout that looks like
-> a start — [`../scripts/q7-probe.mjs`](../scripts/q7-probe.mjs) now refuses a sample whose rail
-> never painted, and [`../src/perf-evidence-integrity-guard.test.ts`](../src/perf-evidence-integrity-guard.test.ts)
-> fails the build if a doc cites one.
 
-> **The pricing row CLOSED 2026-08-22 — the owner answered (*"land 193 dude"*) and PR
-> [#193](https://github.com/Pootytxng/sentinel/pull/193) merged as `d5571766`.** `compy.gg` no
-> longer tells the world Compy is free: `site/llms.txt:5` **and its generator
-> `site/generate.mjs:441`** both read *"Compy is a Windows desktop app with a free tier."* The
-> `claude/review-consolidation-structure-9d13f2` draft (*"free forever"*) was **rejected, not
-> landed** — that phrasing is what the 2026-07-21 decree supersedes. The twin owner-gate (price
-> *wording* is brand + money; `site/**` auto-deploys to other people's machines,
-> [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) §B6) was **satisfied, not bypassed**.
-> **2026-08-23, two corrections to that row's premise.** (a) `compy.gg` **does not resolve** —
-> NXDOMAIN from the desk — so no public page was carrying the old wording. (b) The source fix was
-> **not a shipped fix**: `dist-site/`, the deploy staging tree, still read *"Compy is a free desktop
-> app"* and failed `scripts/dist-site-staleness-guard.test.mjs` on the pre-push gate;
-> `node scripts/stage-dist-site.mjs` restaged it. **A generated tree between source and deploy is
-> where a landed fix goes to un-land.**
+> **Two rows CLOSED 2026-08-22 moved verbatim to [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)**
+> (2026-08-24, NEXT UP section cap, to pay for the #213 row above): the cold-start non-regression
+> that exonerated `795d8ff5`/#130, and the `compy.gg` pricing row and its two corrections.
 
-**① is EMPTY as of 2026-08-22** — both rows closed above, and an empty ① is the one queue state
-worth celebrating. It stays here so a new report has a place to land, not as a claim of work.
+**① REFILLED 2026-08-24 — the owner reported five rendering defects, and ① is where they landed.**
+[#213](https://github.com/Pootytxng/sentinel/issues/213) · [#211](https://github.com/Pootytxng/sentinel/issues/211).
+Three of the five are real and **two were not**, which is the finding worth keeping.
+
+- **A4 (raw Windows tooltip on the rail) and A5 (the titlebar printing "Compy" an inch from the
+  wordmark) — FIXED and installed** (`02be7adc`, live at `9c349ce6`). bug → guard:
+  [`../src/design/shell-native-tooltip-guard.test.tsx`](../src/design/shell-native-tooltip-guard.test.tsx)
+  fails any element whose `title` and visible text contain one another; `title` survives only on
+  icon-only controls. Negative-controlled 2/5.
+- **#211 (a room's `<h1>` was its name welded to a live measurement) — FIXED** (`0712dc68`, completed
+  by `f223466a`). `eyebrow` is its own `RoomShell` slot now; guard
+  [`../src/design/heading-is-a-name-guard.test.tsx`](../src/design/heading-is-a-name-guard.test.tsx)
+  in **three** halves, because the shell contract alone cannot stop a room handing the eyebrow back
+  to `verdict={…}` tomorrow — **and because the caller half shipped blind to the one room that still
+  had the bug.** The self-review caught it on the installed binary: `MonitorConsole.tsx`, which is
+  what mounts when Live opens, was never in the guard's hand-written room list, so `<h1>` still read
+  "Session monitor" + "Ready when you are". The third half reads `src/surfaces` from disk and fails
+  by name when a `RoomShell` caller is missing from that list; it found two more rooms unscanned on
+  its first run. **A list of files to check is only as good as the memory that wrote it.**
+- **A2 and A3 were NOT defects.** A2's "orphan bracket" is
+  [`../src/design/console/hud-frame.css`](../src/design/console/hud-frame.css) drawing all four
+  corners symmetrically, default-on and working. A3's "clipped left edge" was the reviewing tool
+  passing `GetWindowRect` — which includes the invisible DWM resize border — to `CopyFromScreen`,
+  so the capture took ~8px of desktop and another window's text showed through it. **Prove the
+  pixels before calling something a defect**; that is now the counter-precedent inside rubric item
+  12.
+- **A1 (the wordmark reads `©ompy`) is the owner's**, and only because the taste decree reserves the
+  logo — [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) §D, recommendation attached.
+- **The process amendment landed as a guard, not a paragraph** (`565281c4`): *a clipped element, an
+  overlapping glyph, or an unstyled native control is a correctness failure, not a matter of taste*
+  is rubric item 12 in `.claude/agents/self-reviewer.md`, ALWAYS-on, named regions required as
+  evidence.
+
+**#213's B half (B1–B5) is direction, belongs to [#49](https://github.com/Pootytxng/sentinel/issues/49),
+and is blocked on the owner's ChatGPT mockups** — no session in this repo has them.
 
 #### ③ REPO HYGIENE — real, but nobody is waiting on it
 

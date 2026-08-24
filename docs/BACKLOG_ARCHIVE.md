@@ -7,6 +7,43 @@
 
 ---
 
+## 2026-08-24 — two closed NEXT UP ① rows, moved verbatim (section cap)
+
+Moved out of `docs/BACKLOG.md` byte-for-byte when the owner reported five rendering defects and ①
+refilled (#213/#211). Nothing was edited, and both files sit in the same directory so no relative
+link needed re-pointing. Point-in-time records; current truth is `docs/RELEASE_STATE.md`.
+
+> **Item 1 CLOSED 2026-08-22 — there is no cold-start regression, and `795d8ff5` (#130,
+> [`../src-tauri/src/data_root.rs`](../src-tauri/src/data_root.rs)) is exonerated.** `dc4d55e` was
+> built as a *product* in its own worktree and run against HEAD back to back, 3 cold starts each,
+> twice. On a quiet desk the old code measures **519 ms** documentReady to HEAD's **506 ms** — the
+> old build reproduces today's number, so nothing in the diff added the time, and what moved
+> between the 2026-08-05 and 2026-08-21 readings is the machine, not a commit. Full method,
+> numbers and the busy-desk caveat: [`perf/q7-baseline.json`](perf/q7-baseline.json)
+> `coldStartDocumentReadyMs`, now an **upper bound** rather than an open finding; traces in
+> [`perf/raw/`](perf/raw/) (`coldstart-{dc4d55e,head}-{B,C}.json`). bug → guard: a `cargo
+> build --release` binary loads the **dev URL** and measures a connection timeout that looks like
+> a start — [`../scripts/q7-probe.mjs`](../scripts/q7-probe.mjs) now refuses a sample whose rail
+> never painted, and [`../src/perf-evidence-integrity-guard.test.ts`](../src/perf-evidence-integrity-guard.test.ts)
+> fails the build if a doc cites one.
+
+> **The pricing row CLOSED 2026-08-22 — the owner answered (*"land 193 dude"*) and PR
+> [#193](https://github.com/Pootytxng/sentinel/pull/193) merged as `d5571766`.** `compy.gg` no
+> longer tells the world Compy is free: `site/llms.txt:5` **and its generator
+> `site/generate.mjs:441`** both read *"Compy is a Windows desktop app with a free tier."* The
+> `claude/review-consolidation-structure-9d13f2` draft (*"free forever"*) was **rejected, not
+> landed** — that phrasing is what the 2026-07-21 decree supersedes. The twin owner-gate (price
+> *wording* is brand + money; `site/**` auto-deploys to other people's machines,
+> [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) §B6) was **satisfied, not bypassed**.
+> **2026-08-23, two corrections to that row's premise.** (a) `compy.gg` **does not resolve** —
+> NXDOMAIN from the desk — so no public page was carrying the old wording. (b) The source fix was
+> **not a shipped fix**: `dist-site/`, the deploy staging tree, still read *"Compy is a free desktop
+> app"* and failed `scripts/dist-site-staleness-guard.test.mjs` on the pre-push gate;
+> `node scripts/stage-dist-site.mjs` restaged it. **A generated tree between source and deploy is
+> where a landed fix goes to un-land.**
+
+---
+
 ## 2026-08-22b — the last closed rows in the conformance + NEXT UP queues, moved out for the section caps
 
 Moved out of `docs/BACKLOG.md` byte-for-byte when `scripts/doc-budget.ps1` grew per-SECTION byte
