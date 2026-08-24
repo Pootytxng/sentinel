@@ -1,10 +1,18 @@
 # Codex project config for the Compy repo.
 #
-# ⚠ NOT LOADED BY DEFAULT (verified 2026-08-18, codex-cli 0.146.0). `codex doctor` reports exactly
-# one config source: %USERPROFILE%\.codex\config.toml. This file governs Codex only when CODEX_HOME
-# points at this directory. Editing it to change sandbox/approval behaviour does NOTHING otherwise --
-# change the global config, or launch with `-c sandbox_mode=...`. Keep this file as the portable
-# read-only scaffold it documents below; do not treat it as the live lane setting.
+# ⚠ THIS FILE IS LOADED (verified 2026-08-24). Current Codex reads a project-scoped
+# `.codex/config.toml` whenever the repository is trusted, and this repo is `trust_level = "trusted"`
+# in the global %USERPROFILE%\.codex\config.toml -- so the keys below are LIVE for ordinary runs
+# started here, not portable scaffolding. The header used to claim the opposite ("NOT LOADED BY
+# DEFAULT ... only when CODEX_HOME points at this directory", verified 2026-08-18 against
+# codex-cli 0.146.0). That is no longer true, and believing it is part of why the guarded paragraph
+# below failed: a reader concluded the file was inert and stopped looking. The global config still
+# wins where the two genuinely conflict, and a single run can still override with
+# `-c sandbox_mode=...`.
+#
+# Causal fix landed 2026-08-24: `external-agent-import-sync-enabled = false` in the global
+# %USERPROFILE%\.codex\config.toml, so the app-server no longer re-syncs -- and silently rewrites --
+# this file. That is what makes the edits below stay put.
 #
 # Deliberately minimal. Removed 2026-07-19 (portability/lane-hardening train):
 #   - shell_environment_policy.set CLAUDE_CODE_SUBAGENT_MODEL / CLAUDE_CODE_AUTO_COMPACT_WINDOW:
