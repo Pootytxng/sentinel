@@ -82,6 +82,26 @@ export function falseEquivalenceClaims(docText) {
     .filter((s) => EQUIVALENCE_CLAIMS.some((re) => re.test(s)));
 }
 
+
+// Check (9)'s two pure pieces, exported so the detector can be tested without a repo on disk.
+//
+// "The Bottom line" is ONE paragraph, not a section: it starts at the `**Bottom line:` lead-in that
+// check (5) counts and ends at the first blank line, because in this document that paragraph runs
+// unbroken to the blank line before the next heading. Reading to the next `##` instead would pull in
+// whatever prose someone adds below it later, and the scope of (9) is deliberately narrow — see the
+// check's own header for why the owner-installed ROW must stay outside it.
+export function bottomLineParagraph(docText) {
+  const lines = docText.split(/\r?\n/);
+  const start = lines.findIndex((l) => /^\*\*Bottom line/i.test(l));
+  if (start === -1) return null;
+  let end = start;
+  while (end < lines.length && lines[end].trim() !== "") end++;
+  return lines.slice(start, end).join("\n");
+}
+
+/** Does this paragraph talk about the owner's machine at all? If not, (9a) has nothing to check. */
+export const MENTIONS_DESK = /\bdesk\b/i;
+
 // #123: JavaScript RegExp has no \Z anchor - the old lookahead's `\Z` parsed as a literal letter,
 // so any capital Z inside the section (an ISO timestamp suffix, say) truncated it BEFORE the
 // numbered list and a truthful decision read as STALE. `(?![\s\S])` is JS's real end-of-input;
@@ -523,6 +543,75 @@ function checkCurrentState(root, docLines, { machine }) {
         stateFail.push(
           `RELATION-DRIFT: STATE:desk_fleet_relation says ${relation}, but git ancestry says ${actual} ` +
           `(published ${publishedCommit}, installed ${installedStamp}) — re-stamp the anchor to \`${actual}\``,
+        );
+      }
+    }
+  }
+
+  // (9) BOTTOM-LINE DESK STAMP. Why this exists: check (8) landed as the answer to four days of a
+  // false desk/fleet story, and it does not catch the OTHER half of that same defect. On 2026-08-23
+  // the Bottom line named desk build `67ce2724` — slice 4, two ships out of date — while the anchor
+  // twelve lines up read `0c550138` and every check, (8) included, passed. (8) cannot see it: both
+  // stamps are non-mainline desk commits, so the DERIVED relation is `desk-ahead` either way and the
+  // prose is correctly negated. (5) counts Bottom line sections without reading a word of one, and
+  // (7) compares the anchor to the installed binary, never the paragraph to the anchor. So the one
+  // sentence a human actually reads to learn what is on the owner's desk was verified by nothing.
+  //
+  // TWO HALVES, and the pure-doc one is the one that always runs:
+  //   (9a) if the Bottom line talks about the desk at all, it must contain the anchor's value
+  //        verbatim. No git, no host — a paragraph that describes the desk build without naming it
+  //        is either stale or unfalsifiable, and both are the same defect to a reader.
+  //   (9b) any commit-shaped token in that paragraph which git resolves, that is REACHABLE FROM HEAD
+  //        and NOT on the mainline and is not the anchor, is a stale desk stamp: those two
+  //        conditions are exactly what "a build made on this lane" means.
+  //
+  // THE DISCRIMINATOR IS ANCESTRY, NOT A HASH ALLOWLIST, and it was measured before it was written
+  // (2026-08-23, against this document): all eleven legitimate release hashes in the paragraph are
+  // ancestors of the mainline and clear on the second condition, and the one non-mainline citation —
+  // `2bd649d`, the preserved failed v0.9.9 candidate — is NOT reachable from HEAD and clears on the
+  // first. Only a build this lane actually produced satisfies both, which is the only kind of hash
+  // that can go stale here.
+  //
+  // SCOPED TO THE BOTTOM LINE PARAGRAPH ALONE, on purpose: the owner-installed row legitimately
+  // lists lane predecessors (`67ce2724`, `acdb93c2`, `40aca1ca` …) as the build lineage it is
+  // required to carry, and every one of them would trip (9b). A row that is supposed to name old
+  // lane builds and a sentence that is supposed to name only the current one are different
+  // contracts; merging them would make this check fire on correct history.
+  const bottomLine = bottomLineParagraph(docText);
+  if (bottomLine === null) {
+    // No Bottom line at all is check (5)'s territory (and the section guard's), not this one's.
+  } else if (!installedStamp) {
+    // Already failed in (7) — a missing anchor cannot be compared against anything.
+  } else {
+    if (MENTIONS_DESK.test(bottomLine) && !bottomLine.includes(installedStamp))
+      stateFail.push(
+        `BOTTOM-LINE-DESK-UNSTAMPED: the Bottom line describes the owner's desk build but never names ` +
+        `STATE:owner_installed_stamp (${installedStamp}) — write the anchor's value verbatim into that ` +
+        "paragraph, or stop describing the desk there. A desk sentence with no stamp in it is a claim " +
+        "no reader and no check can falsify.",
+      );
+
+    // The git half. Skipped — never failed — wherever ancestry is genuinely unknowable: this half is
+    // the discriminator itself, and without it every reachable hash would read as mainline and pass.
+    const mainRef = ["origin/main", "main"].find((r) => gitOut(["rev-parse", "--verify", "--quiet", `${r}^{commit}`]));
+    if (gitOut(["rev-parse", "--git-dir"]) === null) {
+      notes.push("STATE-SKIP       bottom_line_desk_stamp: no git history here — the paragraph's hashes are not re-derived");
+    } else if (gitOut(["rev-parse", "--is-shallow-repository"]) === "true") {
+      notes.push("STATE-SKIP       bottom_line_desk_stamp: shallow clone — the paragraph's hashes are not re-derived");
+    } else if (!mainRef) {
+      notes.push("STATE-SKIP       bottom_line_desk_stamp: no origin/main or main to separate lane builds from released ones");
+    } else {
+      for (const token of embeddedStampTokens(bottomLine)) {
+        if (token === installedStamp) continue;
+        const resolved = gitOut(["rev-parse", "--verify", "--quiet", `${token}^{commit}`]);
+        if (!resolved) continue;                                              // prose, a release id, a word made of hex
+        if (!gitOk(["merge-base", "--is-ancestor", resolved, "HEAD"])) continue; // not something this lane built
+        if (gitOk(["merge-base", "--is-ancestor", resolved, mainRef])) continue; // landed on the mainline: a real release
+        stateFail.push(
+          `STALE-DESK-STAMP: the Bottom line names \`${token}\`, a commit built on this lane and never landed on ` +
+          `${mainRef}, but STATE:owner_installed_stamp says the desk runs ${installedStamp} — that paragraph is ` +
+          `describing a build that was replaced. Re-stamp it to \`${installedStamp}\` (and say what that build put ` +
+          "on the desk, not what the old one did).",
         );
       }
     }

@@ -6,6 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   DESK_FLEET_RELATIONS,
+  bottomLineParagraph,
   falseEquivalenceClaims,
   LINEAGE_ROW_CAPS,
   embeddedStampTokens,
@@ -546,5 +547,163 @@ describe("check (8) against real repositories: the relation is derived, not beli
     const check8 = src.slice(src.indexOf("// (8) DESK/FLEET RELATION"));
     expect(check8).not.toContain("installer_sha256");
     expect(check8).not.toContain("published_manifest_sha256");
+  });
+});
+
+// A repo shaped like the real one: a published commit on `main`, a lane branched off it carrying two
+// desk builds, and a preserved candidate that never landed and is not reachable from the lane. Those
+// four commits are exactly the four cases check (9b) has to tell apart, and no fixture with a single
+// line of history can pose the question at all.
+const laneFixture = () => {
+  const root = mkdtempSync(join(tmpdir(), "release-state-lane-"));
+  const git = (...args) =>
+    execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  writeFileSync(join(root, "seed.txt"), "seed\n");
+  git("init", "-q");
+  git("config", "user.email", "guard@example.invalid");
+  git("config", "user.name", "guard");
+  git("config", "commit.gpgsign", "false");
+  git("add", "-A");
+  git("commit", "-q", "-m", "published");
+  git("checkout", "-q", "-B", "main"); // -B, not -b: init.defaultBranch may already be `main`
+  const published = git("rev-parse", "--short", "HEAD");
+  git("checkout", "-q", "-b", "preserved");
+  writeFileSync(join(root, "candidate.txt"), "candidate\n");
+  git("add", "-A");
+  git("commit", "-q", "-m", "failed candidate, preserved");
+  const preserved = git("rev-parse", "--short", "HEAD");
+  git("checkout", "-q", "main");
+  git("checkout", "-q", "-b", "lane");
+  writeFileSync(join(root, "slice.txt"), "slice\n");
+  git("add", "-A");
+  git("commit", "-q", "-m", "lane slice one");
+  const older = git("rev-parse", "--short", "HEAD");
+  writeFileSync(join(root, "slice2.txt"), "slice two\n");
+  git("add", "-A");
+  git("commit", "-q", "-m", "lane slice two");
+  const desk = git("rev-parse", "--short", "HEAD");
+  return { root, published, preserved, older, desk };
+};
+
+const laneDoc = ({ published, installed, bottom, after = "" }) =>
+  [
+    "# RELEASE_STATE", "", "## CURRENT STATE", "",
+    `<!-- STATE:published_release_commit=${published} -->`,
+    `<!-- STATE:owner_installed_stamp=${installed} -->`,
+    "<!-- STATE:desk_fleet_relation=desk-ahead -->",
+    "", bottom, "", after, "",
+    "## Gate matrix", "", "| gate | `f()` — `seed.txt:1` |", "",
+    "## Release blockers", "",
+  ].join("\n");
+
+/** Run verifyRepo over the lane fixture with a chosen Bottom line, then clean up. */
+const withLane = (build, assert) => {
+  const fx = laneFixture();
+  try {
+    const doc = join(fx.root, "docs", "RELEASE_STATE.md");
+    mkdirSync(dirname(doc), { recursive: true });
+    writeFileSync(doc, laneDoc({ published: fx.published, ...build(fx) }));
+    const r = verifyRepo(fx.root);
+    assert({
+      unstamped: r.stateFail.filter((f) => f.startsWith("BOTTOM-LINE-DESK-UNSTAMPED")),
+      stale: r.stateFail.filter((f) => f.startsWith("STALE-DESK-STAMP")),
+      notes: r.notes,
+    }, fx);
+  } finally {
+    rmSync(fx.root, { recursive: true, force: true });
+  }
+};
+
+describe("check (9): the Bottom line is read, not merely counted", () => {
+  it("takes the paragraph to the first blank line, and nothing below it", () => {
+    const p = bottomLineParagraph(["intro", "", "**Bottom line:** it runs `aaaaaaa`.", "second line.", "", "| a row | `bbbbbbb` |"].join("\n"));
+    expect(p).toBe("**Bottom line:** it runs `aaaaaaa`.\nsecond line.");
+  });
+
+  it("returns null when the document has no Bottom line at all — that is check (5)'s business", () => {
+    expect(bottomLineParagraph("# RELEASE_STATE\n\nnothing here\n")).toBeNull();
+  });
+
+  // (9a) — the half that needs no git at all.
+  it("FIRES: the paragraph describes the desk build and never names the anchor", () => {
+    withLane(
+      (fx) => ({ installed: fx.desk, bottom: "**Bottom line:** the owner's desk runs a newer, unreleased desk build." }),
+      ({ unstamped }) => {
+        expect(unstamped).toHaveLength(1);
+        expect(unstamped[0]).toContain("BOTTOM-LINE-DESK-UNSTAMPED");
+      },
+    );
+  });
+
+  it("stays silent when the paragraph names the anchor verbatim", () => {
+    withLane(
+      (fx) => ({ installed: fx.desk, bottom: `**Bottom line:** the owner's desk runs an unreleased build stamped \`${fx.desk}\`.` }),
+      ({ unstamped, stale }) => {
+        expect(unstamped).toHaveLength(0);
+        expect(stale).toHaveLength(0);
+      },
+    );
+  });
+
+  it("stays silent when the paragraph never mentions the desk — there is no claim to go stale", () => {
+    withLane(
+      (fx) => ({ installed: fx.desk, bottom: "**Bottom line:** the newest published release is the one the fleet has." }),
+      ({ unstamped }) => expect(unstamped).toHaveLength(0),
+    );
+  });
+
+  // (9b) — THE defect of 2026-08-23, in the shape it actually shipped: the anchor moved on, the
+  // sentence a reader trusts stayed on the previous lane build, and every other check passed.
+  it("FIRES: a superseded lane build is named beside the current one", () => {
+    withLane(
+      (fx) => ({
+        installed: fx.desk,
+        bottom: `**Bottom line:** the owner's desk runs \`${fx.desk}\`, which replaced \`${fx.older}\`.`,
+      }),
+      ({ stale }, fx) => {
+        expect(stale).toHaveLength(1);
+        expect(stale[0]).toContain(fx.older);
+        expect(stale[0]).toContain(fx.desk);
+      },
+    );
+  });
+
+  it("LOOKALIKE: a published hash that IS on the mainline is a release, not a stale stamp", () => {
+    withLane(
+      (fx) => ({
+        installed: fx.desk,
+        bottom: `**Bottom line:** the fleet runs \`${fx.published}\`; the owner's desk runs \`${fx.desk}\`.`,
+      }),
+      ({ stale, unstamped }) => {
+        expect(stale).toHaveLength(0);
+        expect(unstamped).toHaveLength(0);
+      },
+    );
+  });
+
+  // The real document cites `2bd649d`, a failed candidate preserved on its own branch. It is
+  // off-mainline like every stale desk stamp, and reachability from HEAD is the only thing that
+  // separates the two. Drop that condition and this goes red on correct provenance.
+  it("LOOKALIKE: an off-mainline commit unreachable from HEAD is preserved provenance", () => {
+    withLane(
+      (fx) => ({
+        installed: fx.desk,
+        bottom: `**Bottom line:** the owner's desk runs \`${fx.desk}\`; the failed candidate \`${fx.preserved}\` is preserved.`,
+      }),
+      ({ stale }) => expect(stale).toHaveLength(0),
+    );
+  });
+
+  // Scope. The owner-installed ROW is required to carry the build lineage, so every lane predecessor
+  // in it would trip (9b) if the check read the whole document instead of the one paragraph.
+  it("LOOKALIKE: lane predecessors listed BELOW the paragraph are lineage, and out of scope", () => {
+    withLane(
+      (fx) => ({
+        installed: fx.desk,
+        bottom: `**Bottom line:** the owner's desk runs \`${fx.desk}\`.`,
+        after: `| **Owner-installed version + embedded stamp** | \`${fx.desk}\`, whose predecessor was \`${fx.older}\`. | proof |`,
+      }),
+      ({ stale }) => expect(stale).toHaveLength(0),
+    );
   });
 });

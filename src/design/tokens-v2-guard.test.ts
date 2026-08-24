@@ -226,31 +226,67 @@ describe("v2 CSS scoping (flag-off byte-identity mechanism)", () => {
 });
 
 describe("v2 surface CSS consumes the token layer only (no-slop law)", () => {
+  // Every sheet loaded above that PAINTS a surface belongs here. The four-room console layer was
+  // loaded at the top of this file and then never listed, so home-console.css, monitor-console.css,
+  // lab-console.css, blackbook-console.css and the whole shared design/console/* kit sat outside the
+  // no-slop law while LOOKING covered — which is how arc-gauge.css kept literal #f5c542/#46d98a
+  // fallbacks through sixteen review rounds.
   const SURFACE_CSS: [string, string][] = [
     ["shell-v2.css", shellCss],
     ["home-v2.css", homeCss],
     ["home-hud.css", homeHudCss],
+    ["home-console.css", homeConsoleCss],
     ["monitor-v2.css", monitorCss],
+    ["monitor-console.css", monitorConsoleCss],
     ["blackbook-v2.css", blackbookCss],
+    ["blackbook/blackbook-console.css", blackbookConsoleCss],
     ["lab-v2.css", labCss],
+    ["lab-console.css", labConsoleCss],
     ["hud-rooms.css", hudRoomsCss],
     ["ambient-hud.css", ambientHudCss],
     ["RerunCheckBand.css", rerunBandCss],
     ["bento/bento.css", bentoCss],
+    ["console/arc-gauge.css", consoleArcGaugeCss],
+    ["console/dock.css", consoleDockCss],
+    ["console/hud-frame.css", hudFrameCss],
+    ["console/oscilloscope.css", consoleOscilloscopeCss],
+    ["console/reading.css", consoleReadingCss],
+    ["console/reticle.css", consoleReticleCss],
   ];
+
+  // MASK STENCILS ARE NOT PALETTE (greppable: tokens-v2-mask-allow). The border-mask idiom
+  //   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  //   mask-composite: exclude;
+  // uses #fff as an ALPHA channel: it selects which pixels survive, it never paints one. Three room
+  // console sheets carry four each. Tokenising them would be the actual defect — a themed colour
+  // there changes nothing visible and invites the next reader to "fix" the stencil into a real
+  // colour — so the colour sweep drops mask declarations instead of excusing those sheets wholesale.
+  const withoutMaskStencils = (css: string): string =>
+    css.replace(/(^|[;{])\s*(?:-webkit-)?mask(?:-image|-composite)?\s*:[^;}]*/g, "$1");
+
+  // A FAMILY TOKEN, FROM EITHER LAYER — never a literal stack. The old rule hard-coded
+  // `--v2-font-`, which is the v2 palette layer alone; the four-room console sheets are built on the
+  // Instrument-HUD layer (`--ix-mono`). That mismatch is the reason they could not join this suite
+  // without six false failures. The invariant was always "a token, not a stack", so that is what is
+  // encoded here. A fallback list — `var(--ix-mono, ui-monospace, monospace)` — IS a literal stack
+  // and is rejected on purpose: the fallback is exactly where an untokenised face sneaks back in.
+  const FAMILY_TOKEN = /var\(\s*(?:--v2-font-[\w-]+|--ix-mono|--ix-font-[\w-]+)\s*\)/;
+
   for (const [name, css] of SURFACE_CSS) {
-    it(`${name}: no color literals — every color comes from a --v2-* token`, () => {
-      expect(css.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).toEqual([]);
-      expect(css.match(/\brgba?\(/g) ?? []).toEqual([]);
-      expect(css.match(/\bhsla?\(/g) ?? []).toEqual([]);
+    it(`${name}: no color literals — every color comes from a design token`, () => {
+      const painted = withoutMaskStencils(css);
+      expect(painted.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).toEqual([]);
+      expect(painted.match(/\brgba?\(/g) ?? []).toEqual([]);
+      expect(painted.match(/\bhsla?\(/g) ?? []).toEqual([]);
     });
 
-    it(`${name}: font/font-family declarations reference only var(--v2-font-*)`, () => {
+    it(`${name}: font/font-family declarations name a family token, never a literal stack`, () => {
       const offenders: string[] = [];
       for (const m of css.matchAll(/(?:^|[;{])\s*(font(?:-family)?)\s*:\s*([^;}]+)/g)) {
-        if (!/var\(--v2-font-/.test(m[2]) && !/^\s*inherit\s*$/.test(m[2])) {
-          offenders.push(`${m[1]}: ${m[2].trim()}`);
-        }
+        const value = m[2].trim();
+        if (/^inherit$/.test(value)) continue;
+        if (FAMILY_TOKEN.test(value)) continue;
+        offenders.push(`${m[1]}: ${value}`);
       }
       expect(offenders).toEqual([]);
     });

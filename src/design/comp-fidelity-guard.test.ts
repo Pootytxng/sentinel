@@ -569,7 +569,13 @@ describe("cascade fidelity — the shell owns the four approved rooms' verdict",
       if (file.endsWith("shell-v2.css")) continue;
       for (const [sel, decls] of rulesOf(readFileSync(file, "utf8"))) {
         if (!/\.v2-verdict(?![\w-])/.test(sel)) continue;
-        if (!/flex-wrap:\s*wrap/.test(decls)) continue;
+        // `flex-flow: column wrap` is the SAME declaration in shorthand and was invisible here.
+        // `wrap-reverse` wraps too, so the token match is deliberately `wrap` with a word boundary
+        // on the left only — `nowrap` is excluded by requiring the value not to be preceded by "no".
+        const wraps =
+          /flex-wrap:\s*wrap\b/.test(decls) ||
+          /flex-flow:\s*[^;}]*(?<!no)\bwrap\b/.test(decls);
+        if (!wraps) continue;
         if (sel.includes(':not([data-layout="split"])')) continue;
         offenders.push(`${file}: ${sel}`);
       }
@@ -586,7 +592,12 @@ describe("cascade fidelity — the shell owns the four approved rooms' verdict",
       if (file.endsWith("shell-v2.css") || file.endsWith("type-scale.css")) continue;
       for (const [sel, decls] of rulesOf(readFileSync(file, "utf8"))) {
         if (!/\.v2-verdict/.test(sel)) continue;
-        if (!/(^|[;{\s])font(-size)?:/.test(decls)) continue;
+        // A room never had to write `font-size` to resize the headline: redeclaring the scale token
+        // the shell reads — `--type-hero: 26px` on its own verdict — moves it just as far, and the
+        // direct-declaration check never saw it. Both spellings are the same defect.
+        const sizesType =
+          /(^|[;{\s])font(-size)?:/.test(decls) || /(^|[;{\s])--type-[\w-]+\s*:/.test(decls);
+        if (!sizesType) continue;
         // Saying "not the split composition" out loud is the whole ask.
         if (sel.includes(':not([data-layout="split"])')) continue;
         // A rule that positively names a room OUTSIDE the approved four is that room's own call.
@@ -608,11 +619,45 @@ describe("cascade fidelity — the shell owns the four approved rooms' verdict",
     // src/design/room-eyebrow.tsx. `.mc-eyebrow` in measurement-chrome.css is NOT one of these —
     // that is <SectionLabel>, a different element that only shares a word.
     const GONE = ["hc-masthead-eyebrow", "mc-masthead-eyebrow", "bbv2-eyebrow", "lc-eyebrow"];
+
+    // Banning FOUR NAMES only bans four names: `.hc-room-eyebrow` re-grows the identical defect and
+    // sails through. So the rule is inverted for the sheets that dress the four approved rooms —
+    // ANY eyebrow class there must be one of the known-legitimate elements below, and a new one is a
+    // failure until it is added here on purpose. The names stay pinned rather than pattern-matched
+    // because "which element is this" is a judgement, and a regex would just re-open the hole.
+    const ROOM_SHEET =
+      /(?:home|monitor|lab|blackbook)-(?:console|v2)\.css$|hud-rooms\.css$|home-hud\.css$|[\\/]design[\\/]console[\\/]/;
+    const ALLOWED_EYEBROWS = new Set([
+      "v2-eyebrow", // THE room eyebrow — shell-v2.css owns it; rooms may only position it.
+      "v2-eyebrow-date",
+      "v2-eyebrow-dot",
+      "v2-eyebrow-dot-accent",
+      "v2-eyebrow-dot-ok",
+      "v2-eyebrow-dot-rec",
+      "v2-eyebrow-dot-scan",
+      "v2-eyebrow-dot-warn",
+      "v2-eyebrow-sep",
+      "v2-nav-eyebrow",
+      "mc-eyebrow", // <SectionLabel>. A different element that only shares the word.
+      "hc-specs-eyebrow", // the specs block's own label, not the room's.
+      "hud-eyebrow", // the HUD register (`fix`, `check`), which the comps do not govern.
+      "hud-eyebrow-sep",
+      "hud-masthead-eyebrow",
+      "dock-eyebrow",
+    ]);
+
     const offenders: string[] = [];
     for (const file of CSS_FILES) {
+      const isRoomSheet = ROOM_SHEET.test(file) && !file.endsWith("shell-v2.css");
       for (const [sel] of rulesOf(readFileSync(file, "utf8"))) {
         for (const cls of GONE) {
-          if (sel.includes(`.${cls}`)) offenders.push(`${file}: ${sel}`);
+          if (sel.includes(`.${cls}`)) offenders.push(`${file}: ${sel} (retired class .${cls})`);
+        }
+        if (!isRoomSheet) continue;
+        for (const m of sel.matchAll(/\.([a-zA-Z0-9_-]*eyebrow[a-zA-Z0-9_-]*)/g)) {
+          if (!ALLOWED_EYEBROWS.has(m[1])) {
+            offenders.push(`${file}: ${sel} (room-private eyebrow .${m[1]})`);
+          }
         }
       }
     }

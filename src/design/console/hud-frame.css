@@ -55,7 +55,7 @@
   position: absolute;
   right: 20px;
   bottom: 2px;
-  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-family: var(--ix-mono);
   font-size: var(--type-label);
   letter-spacing: 0.08em;
   text-transform: uppercase;
