@@ -6,105 +6,87 @@
 
 ## Where the train is standing
 
-**Issue #49 — the approved four-room visual direction.**
+**Issue [#49](https://github.com/Pootytxng/sentinel/issues/49) — the approved four-room visual direction.**
 Worktree `C:\Users\Kuya\code\sentinel-fourroom` · branch `feat/four-room-visual-direction`.
-**Installed desk build `8b1599b3`** — stamp-proved live (`8b1599b3 · release · shell 0.9.26`).
+**Installed desk build `ccc17355`** — stamp-proved live (`ccc17355 · release · shell 0.9.26`).
 
-**HEAD `c725c0a6` IS AHEAD OF THE DESK, and it is a UI change.** `git diff 8b1599b3 -- src` is no
-longer test-only: `FpsTrace` is real screen code the owner's installed app does not have. Do not
-describe the desk as current until it is rebuilt.
-
-Slices 1–8 all ✅ (`34bd33e7` · `40aca1ca` · `acdb93c2` · `67ce2724` · `c894e81c` · `8c9fb804` ·
-`0c550138` · `8b1599b3`). Then `b9bfcaf3` ship docs · `dae29252` Codex 4–8 · `7008c9b0` lane docs.
+**The blocker this file carried for a day is GONE.** `FpsTrace` has been built, installed and
+**self-reviewed PASS**. `git diff ccc17355 -- src` is empty: the desk and the lane tip are the same
+screen code, and the BACKLOG §A2 box is closed.
 
 ## What this session did
 
-**`c725c0a6` — Live finally draws the session trace.** BACKLOG §A2's open row, and the last real
-gap between the shipped four rooms and the brief. `fps_series` had been persisted for weeks and
-`grep -r fps_series src/` returned the `types.ts:179` declaration and nothing else.
+It was not this lane's session. The owner asked the `sentinel-home-room` session to *"run the self
+review and clear up any remaining work or unfinished task"*, and the one thing this lane's own
+handoff named as blocking was a `self-review` round **the building session could not spawn**. Picked
+up under a **verified takeover** (WORK_CONTROL §Collision rule 5) posted on #49 with the evidence —
+clean worktree, no live build process, no CDP port, a handoff commit as the previous session's last
+act. No four-room design decision was touched and nothing was merged to `main`.
 
-- `src/design/FpsTrace.tsx` + `.css`, geometry in `traceGeometry` (`src/design/geometry.ts`),
-  mounted in `SessionDebrief` between the summary tiles and the analysis.
-- **Not `<Sparkline>`, deliberately** — that takes `number[]` and steps x by index, which would
-  slide every post-gap sample leftward AND draw a straight line across unmeasured minutes.
-- Three honesty properties, each falsified by injecting the real defect: a missing bucket **ends
-  the run** (mutant: 7 red) · a gap-isolated sample becomes a **dot**, never dropped (5 red) · the
-  value axis is **anchored at 0**, not min-max normalised (1 red). Empty series says *"No trace
-  kept for this session"*, never a flat line at zero (2 red).
-- 22 new guards, en + zh-CN copy, a11y census (rostered, both faces) + mono census updated.
+1. **Gate** — `scripts/verify-local.ps1` at `ccc17355`, read in full: **371 test files / 5033 passed
+   / 5 skipped**, type-check + build clean, **964 Rust tests 0 failed**, clippy clean, exit 0.
+2. **Build + ship** — `npm run tauri build` (both bundles written; it exits 1 only on the
+   updater-signature step, because `TAURI_SIGNING_PRIVATE_KEY` is owner territory and absent), then
+   `scripts/ship-reinstall.ps1 -VerifyRuntime -ExpectedCommit ccc1735…` — runtime proof on **attempt
+   1, 0 transient**, one installer on the Desktop, installer SHA-256 `B3D55577…C2BB4C`.
+3. **`self-review` VERDICT: PASS, round 18** in the `self-reviewer` subagent, at the owner's
+   1500×980, on the **installed** binary.
+4. **Docs re-stamped in the same pass** — `RELEASE_STATE.md`'s owner-installed row + `STATE:` anchor
+   + Bottom line now name `ccc17355`; `8b1599b3`'s row moved byte-for-byte to
+   [`archive/RELEASE_STATE_HISTORY.md`](archive/RELEASE_STATE_HISTORY.md) under the row cap.
+   `verify-release-state.mjs` → **31/31 ok, 0 drift**.
 
-**Lane bookkeeping.** #49's claim had expired 2026-08-23, which made it unavailable in the launcher
-menu (`select.mjs:121`). A **Verified takeover** note (WORK_CONTROL §Collision rule 5) is posted on
-the issue with the evidence, the claim runs to **2026-08-25**, and `Next action` is updated.
+## What the review actually proved, and the one thing it could not
 
-## ⛔ The one thing blocking "done" — and it is not the owner's
+Two of `FpsTrace`'s three honesty properties were proved **on screen** against this desk's real
+`sessions.json` (series of 1229 / 506 / 69 samples):
 
-**`c725c0a6` HAS NOT BEEN VISUALLY SELF-REVIEWED.** The standing law (2026-06-20) requires a
-`self-review` round in the `self-reviewer` subagent — never inline — before a UI change may be
-called done, reinstalled, or shipped. The session that built it **could not spawn subagents**, so:
+- **a missing bucket ENDS the run** — the 1229-sample session draws two visibly split polylines, no
+  line painted across minutes nobody watched;
+- **the axis is anchored at 0** — the rung sits at real half-peak, so a steady session reads flat
+  instead of as a fabricated cliff.
 
-- the BACKLOG §A2 box stays `[ ]`, annotated `BUILT, not yet visually self-reviewed`;
-- **nothing was shipped.** No `npm run tauri build`, no `ship-reinstall.ps1`. The desk is untouched
-  and still runs `8b1599b3` — correctly, because shipping unreviewed UI is what that law prevents.
+**The third could not be produced and is NOT claimed.** A gap-isolated single sample renders as a
+dot — none of the three real sessions has an isolated single-bucket run, so that property stays
+verified in `geometry.ts` + `geometry.test.ts` only. It is written down as a real-data limit in the
+BACKLOG row and the RELEASE_STATE row. **Do not upgrade it to "observed" without a session that
+actually has one.**
 
-**Exact next action:** run `self-review` on `FpsTrace` against a build of `c725c0a6`, then
-`scripts/ship-reinstall.ps1 -VerifyRuntime`, then close the BACKLOG box. That is the whole of it.
+`1916cca0` is in the reviewed binary: the gap label had shipped on `--status-attention`, which would
+have made **amber mean two things** against COLOR-1. The installed build computes `--muted`
+`rgb(139,147,167)`.
 
-The owner has already SEEN the change — a preview page rendered from the real component and the
-real tokens (five data shapes, including both gap cases and the empty state) was handed over this
-session. Seeing is not the self-review round; the rubric still has to run.
+## What is left, and who owns it
 
-## ⛔ What is still the owner's
+- **#49's merge to `main` is the owner's**, and nothing here changes that. The lane is 44 commits
+  ahead of `main` and one behind it (`1568f3d3`, the #209 copy-truth train). **`main`'s five
+  Optimize copy fixes are not on the desk** — whoever merges carries them.
+- **New: [#211](https://github.com/Pootytxng/sentinel/issues/211)** — the reviewer flagged, out of
+  scope and correctly not failed, that the **Live room's `<h1>` concatenates its eyebrow with a
+  dynamic sentence** ("Session monitor" + "Last session ran smooth — …"). Inherited, not introduced
+  by `c725c0a6`. Needs its own bounded change plus the guard that stops the class.
+- **The backup ref is current again** — `origin/backup/four-room-preservation-2026-08-23` was
+  fast-forwarded to this tip, the additive move its own disposition row already authorizes.
 
-**Two taste calls, unchanged from last session** (`two-taste-calls.html` was handed over then):
-Test's bench readings, and Health's headline naming the flagged check. Both shipped under the taste
-decree — deciding was mine, seeing is his. Say the word and either goes back.
+## Live traps for whoever is next
 
-Everything else parked on him is closed.
+1. **`.codex/config.toml` regresses every few days** ([#196](https://github.com/Pootytxng/sentinel/issues/196))
+   — a red `codex-config-guard` in the push gate IS that regression: discard it, do not debug it.
+2. **`ship-reinstall.ps1 -VerifyRuntime` needs three arguments, not one.** `-ExpectedCommit` must be
+   the **full 40-char** sha, and `-ExpectedInstallerPath` / `-ExpectedInstallerSha256` are
+   all-or-nothing. Bare `-VerifyRuntime` throws before it does anything.
+3. **`npm run tauri build` exits 1 on a desk build and that is not a failure.** Both bundles are
+   written; the non-zero comes from the updater-signature step alone. Read the log, not the exit
+   code — and never pipe the build through `tail`, which reports `tail`'s exit code instead.
+4. **The owner-installed row is byte-capped at 3000** (`LINEAGE_ROW_CAPS`, check 5b). A ship that
+   overflows it must move the OLDEST inline predecessor to the archive and rewrite that segment's
+   relative links for the extra directory level. Do not raise the cap.
+5. **Check 9 reads the Bottom line too.** Re-stamping the row and the `STATE:` anchor is not enough
+   — the Bottom-line paragraph names the desk build in prose and fails separately if it goes stale.
 
-## Traps this session actually hit
+## Waiting on the owner
 
-- **`cli.mjs adopt` refuses `ADOPT_FOLDER_CLAIMED`** while the previous conversation's lineage
-  record is still inside its 12h TTL (`%LOCALAPPDATA%\CompyEntry\sessions\*.json`), even when that
-  conversation is provably gone. The tool offers no release — only "let it lapse". The **board**
-  claim is the one-writer authority; the record is a cache. Do not delete it to force an adopt.
-- **A session rooted in a SIBLING worktree** (e.g. `sentinel-home-room`) loads this repo's
-  CLAUDE.md, hooks and memory — but `project-write-assert` guards the **session root only**, so
-  writes to `sentinel-fourroom` are outside its jurisdiction. Self-enforce; say so in the report.
-- **`npx tsc --noEmit` is a false green here.** `npm run build` is the typecheck.
-- Vitest renders `t()` as the raw KEY unless the test imports `../i18n`. Asserting on English is
-  what proves a key exists — a typo ships as `common.fpsTrace.aria` and passes every other check.
-- **A red pre-push gate you did not cause.** `branch-disposition-audit` reads this checkout's
-  `refs/remotes/origin` cache, so a branch ANOTHER lane already deleted on origin still accuses you.
-  `git fetch origin --prune` cleared it and 27 tests went green with no code change. Fixed at
-  `cf710027` — the message now leads with the prune and stops claiming the ref "exists on origin".
+**Nothing blocking.** The one thing he may want to *look* at is the new trace: **Live → a past
+session → "Session shape"**. Reviewed and PASSed, but his veto on sight always stands.
 
-## Verification at HEAD — all green
-
-`npm run build` exit 0 · full pre-push gate **PASS, no skips** at `cf710027` (frontend 5033 passed /
-5 skipped · Rust 964 passed, 0 failed · clippy clean) · `pwsh scripts/doc-budget.ps1` ALL PASS.
-`npm run tauri build` was **not run** this session — nothing reached the owner's desk.
-
-## Standing constraints for whoever picks this up
-
-**The owner's standard, verbatim:** *"this is exactly how its supposed to look and it still isnt quite
-there not sure how you werent able to match this perfectly but it needs to to suffice. what should
-remain is the color coded system we have for alert levels such as green yellow red for optimal metrics
-and notifications please persist with this train until youve perfected your work"*
-
-**Comps** (the only source of truth for the look):
-`C:\Users\Kuya\.codex\visualizations\2026\08\23\01a02bee-5474-7961-b05a-e674fb8bb165\compy-four-room-handoff\`
-`01-health` → room id **`home`** · `02-live` → **`play`** · `03-history` → **`learn`** · `04-test` → **`lab`**.
-Room ids are not tab labels: `lab` is the tab the owner sees as **Test**. The PNGs are **1550px renders
-of a 1500px design — divide by 1.0333.** Brightness deltas vs a screenshot are gamma, not findings.
-
-**Headline sizes, settled:** `Home 52 · Live 40 · History 40 · Test 52` — the guard's own comp reading
-(`comp-fidelity-guard.test.ts:300`).
-
-**Every write here needs a verified session.** After a compaction or a new window:
-`node tools/entry/cli.mjs adopt --folder "C:\Users\Kuya\code\sentinel-fourroom" --issue 49 --session <id>`.
-`Bash` is the named hole in the write guard — adopt before the first `sed`, not after.
-
-## This session: leave open.
-
-One step remains and it is ours, not his: self-review `c725c0a6`, ship it, close the §A2 box.
+**This session: done for #49's review step — leave the lane open for its merge, which is his.**
