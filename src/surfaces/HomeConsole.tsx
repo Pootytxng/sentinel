@@ -728,13 +728,13 @@ export function HomeConsole({
       /* UX-1: the caveat that qualifies the verdict now outranks it in the shell, because the
          verdict itself moved into the h1. Self-nulls when the ledger is healthy. */
       notice={<LedgerHealthNotice health={ledgerHealth} />}
+      /* Its own slot, not a passenger in `verdict` (#211) — inside it the eyebrow rendered inside
+         the <h1>, welding the room's stable name to a headline that changes with every scan. */
+      eyebrow={
+        <RoomEyebrow dot={ledState} label={t("home.homeConsole.masthead.eyebrow")} dateline={dateline} />
+      }
       verdict={
         <>
-          <RoomEyebrow
-            dot={ledState}
-            label={t("home.homeConsole.masthead.eyebrow")}
-            dateline={dateline}
-          />
           {/* UX-1 — THE FRONT DOOR IS A VERDICT (docs/decisions/2026-08-11-design-foundation.md,
               decision 1). This REPLACES the owner title-header law of 2026-07-10 for Home only,
               and the replacement is the whole point of the step: the audit measured that the one

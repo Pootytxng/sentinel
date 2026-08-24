@@ -98,6 +98,7 @@ export function ForwardDoor({ to, label }: { to: HomeRailId; label: string }) {
 export function RoomShell({
   room,
   notice,
+  eyebrow,
   verdict,
   sub,
   measured,
@@ -115,6 +116,15 @@ export function RoomShell({
    *  room body and a caveat could simply precede it there; now the verdict is the h1, so the
    *  shell owns the one slot that outranks it. Renders nothing when null (the healthy case). */
   notice?: ReactNode;
+  /** The room's `<RoomEyebrow>`, and its own slot rather than a passenger inside `verdict`
+   *  ([#211](https://github.com/Pootytxng/sentinel/issues/211)). All four rooms used to pass the
+   *  eyebrow as the first child of `verdict`, which put it INSIDE the `<h1>` — so the page's one
+   *  top-level heading read as "Session monitor" + "Last session ran smooth — MortalShell2 at 191
+   *  fps average", a document title that mutates with a live measurement. A heading that changes
+   *  with data cannot be relied on for orientation, and a screen-reader user gets the room's name
+   *  and its current readout welded into one string. It renders in the same place it always did,
+   *  as the header's first child — just no longer inside the heading. */
+  eyebrow?: ReactNode;
   verdict: ReactNode;
   sub?: ReactNode;
   measured?: ReactNode;
@@ -149,6 +159,7 @@ export function RoomShell({
     <section className="v2-room" data-room={room} data-layout={aside != null ? "split" : undefined}>
       {notice != null && <div className="v2-notice-slot">{notice}</div>}
       <header className="v2-verdict">
+        {eyebrow}
         <h1>{verdict}</h1>
         {sub != null && <span className="v2-verdict-sub">{sub}</span>}
         {primaryAction != null && <div className="v2-verdict-action">{primaryAction}</div>}

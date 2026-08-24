@@ -260,6 +260,22 @@
   font-weight: 600;
   letter-spacing: -0.2px;
 }
+/* THE EYEBROW IS NO LONGER INSIDE THE HEADING (#211). It used to be the first child of the `<h1>`,
+   which made the page's one top-level heading read "Session monitor" + whatever the room had just
+   measured. It is now the header's first child instead — same place on screen, outside the heading.
+   Two consequences to pay for, both here:
+     1. It is a flex ITEM now, so in the LINEAR baseline row it would sit on the headline's baseline.
+        `flex-basis: 100%` gives it its own row (inert in the split layout's column direction).
+     2. The container's gap now lands between it and the headline, where nothing did before. Its own
+        16px is reduced by exactly that gap so the measurement from the approved comps survives the
+        move: 2 + the linear 14px gap, 4 + the split column's 12px, both = 16. */
+:root[data-v2="on"] .v2-verdict > .v2-eyebrow {
+  flex-basis: 100%;
+  margin-bottom: 2px;
+}
+:root[data-v2="on"] .v2-room[data-layout="split"] > .v2-verdict > .v2-eyebrow {
+  margin-bottom: 4px;
+}
 :root[data-v2="on"] .v2-verdict-sub {
   color: var(--v2-muted);
   font-size: var(--type-label);

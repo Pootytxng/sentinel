@@ -202,12 +202,20 @@ describe("MonitorV2 — RoomShell composition", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
     const h1s = container.querySelectorAll(".v2-verdict h1");
     expect(h1s.length).toBe(1);
-    // The h1 is eyebrow + headline (one header idiom per room, slice 4); the VERDICT is the
-    // headline, asserted exactly rather than as a substring so a stray sentence still fails.
-    expect(h1s[0].querySelector(".v2-eyebrow")!.textContent).toContain("Session monitor");
+    // The h1 is the VERDICT ALONE (#211). It used to be eyebrow + headline, which made this
+    // room's one top-level heading read "Session monitor" welded to whatever had just been
+    // measured — a document title that mutates with a live readout. The eyebrow moved to its
+    // own RoomShell slot: same place on screen, one level out of the heading. Asserted exactly
+    // rather than as a substring so a stray sentence still fails.
+    expect(h1s[0].querySelector(".v2-eyebrow")).toBeNull();
     expect(h1s[0].querySelector(".mc-headline")!.textContent).toBe(
       "Last session ran smooth — valorant at 240 fps average.",
     );
+    // ...and it is still ON SCREEN, in the header above the heading — so the move above cannot
+    // pass by having deleted the room's name.
+    expect(
+      container.querySelector(".v2-verdict > .v2-eyebrow")!.textContent,
+    ).toContain("Session monitor");
     // Sessions is the LINEAR face -- no evidence column, so no narrative foot to carry a route
     // row, so it keeps the doorknob. Same destination, re-copied to the comp's sentence.
     const doors = container.querySelectorAll(".v2-door");

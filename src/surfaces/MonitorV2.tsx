@@ -170,34 +170,38 @@ export function MonitorV2(props: Props) {
          Sessions keeps the verdict-only DecryptedText moment (the adopt-list law) because its
          headline IS a measured verdict landing. Live's is a state line ("Ready when you are"),
          which is not a measurement and so is not marked as one. */
+      /* ITS OWN SLOT, NOT A PASSENGER IN `verdict` (#211). Inside the verdict this eyebrow rendered
+         inside the <h1>, so Live's one top-level heading read "Session monitor" welded to whatever
+         the room had just measured — "Last session ran smooth — MortalShell2 at 191 fps average".
+         The room's NAME is stable and belongs in a heading; the measurement is not and does not. */
+      eyebrow={
+        <RoomEyebrow
+          tone="accent"
+          /* NO DOT WHEN NOTHING IS RECORDING (owner ruling 2026-08-23 — match the comps
+              exactly). 02-live-approved.png carries no dot beside this label at all, and
+              its idle state is the state the app is in most of the time; the label itself
+              is drawn in the accent instead. The dot survives ONLY as the recording light,
+              which is the one moment this room has a live state to report — so the comp is
+              matched where it speaks, and nothing honest is lost where it is silent. */
+          dot={capturing ? "rec" : undefined}
+          label={t("monitor.monitorConsole.narrative.eyebrow")}
+        />
+      }
       verdict={
-        <>
-          <RoomEyebrow
-            tone="accent"
-            /* NO DOT WHEN NOTHING IS RECORDING (owner ruling 2026-08-23 — match the comps
-                exactly). 02-live-approved.png carries no dot beside this label at all, and
-                its idle state is the state the app is in most of the time; the label itself
-                is drawn in the accent instead. The dot survives ONLY as the recording light,
-                which is the one moment this room has a live state to report — so the comp is
-                matched where it speaks, and nothing honest is lost where it is silent. */
-            dot={capturing ? "rec" : undefined}
-            label={t("monitor.monitorConsole.narrative.eyebrow")}
-          />
-          <span className="mc-headline" key={verdict.headline}>
-            {reduced ? (
-              verdict.headline
-            ) : (
-              <DecryptedText
-                key={verdict.headline}
-                text={verdict.headline}
-                animateOn="view"
-                sequential
-                speed={22}
-                useOriginalCharsOnly
-              />
-            )}
-          </span>
-        </>
+        <span className="mc-headline" key={verdict.headline}>
+          {reduced ? (
+            verdict.headline
+          ) : (
+            <DecryptedText
+              key={verdict.headline}
+              text={verdict.headline}
+              animateOn="view"
+              sequential
+              speed={22}
+              useOriginalCharsOnly
+            />
+          )}
+        </span>
       }
       sub={verdict.sub}
       quiet={quiet}

@@ -380,20 +380,18 @@ export function LabConsole({
          Instrument-HUD masthead is gone from this room as it went from Live and History -- the
          rail that navigated here already said "Test", and a masthead repeating it pushed the
          room's own sentence a third smaller than the label above it. */
-      verdict={
+      /* Its own slot, not a passenger in `verdict` (#211): inside it the eyebrow rendered inside the
+         <h1>. Same condition as the verdict below — the classic verdict draws no eyebrow at all. */
+      eyebrow={
         hud ? (
-          <>
-            <RoomEyebrow
-              dot={ledState}
-              label={t("lab.labConsole.narrative.eyebrow")}
-              dateline={dateline}
-            />
-            <span className="lc-headline">{t("lab.labConsole.narrative.headline")}</span>
-          </>
-        ) : (
-          classicVerdict
-        )
+          <RoomEyebrow
+            dot={ledState}
+            label={t("lab.labConsole.narrative.eyebrow")}
+            dateline={dateline}
+          />
+        ) : undefined
       }
+      verdict={hud ? <span className="lc-headline">{t("lab.labConsole.narrative.headline")}</span> : classicVerdict}
       sub={hud ? t("lab.labConsole.narrative.sub") : undefined}
       /* THE ONE DOMINANT ACTION. It opens the SAME Optimize station the list row below opens, by
          the same setter -- one door, two handles, never two code paths. The line under it is the

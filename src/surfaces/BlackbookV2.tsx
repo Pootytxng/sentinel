@@ -168,13 +168,15 @@ export function BlackbookV2({
         // for the same reason: the rail already says which room this is, so the biggest words on
         // the screen were a label nobody came to read. What this room IS — the local record of what
         // changed and when — is not redundant with anything.
-        return (
-          <>
-            <RoomEyebrow dot="accent" label={t("blackbook.blackbookV2.narrative.eyebrow")} />
-            <span className="bbv2-headline">{t("blackbook.blackbookV2.narrative.headline")}</span>
-          </>
-        );
+        return <span className="bbv2-headline">{t("blackbook.blackbookV2.narrative.headline")}</span>;
       })()}
+      /* Its own slot, not a passenger in `verdict` (#211): inside it the eyebrow rendered inside the
+         <h1>. Same condition as the branch above — the classic verdict draws no eyebrow at all. */
+      eyebrow={
+        hud && consoleOn ? (
+          <RoomEyebrow dot="accent" label={t("blackbook.blackbookV2.narrative.eyebrow")} />
+        ) : undefined
+      }
       sub={hud && consoleOn ? t("blackbook.blackbookV2.narrative.sub") : verdict.sub}
       primaryAction={
         hud && consoleOn ? (
