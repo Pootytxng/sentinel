@@ -73,7 +73,11 @@ process.stdout.write(
       `buried. Do NOT redo or re-verify any work and do NOT repeat the report you just gave. ` +
       `Append a short block to it and end the turn:\n` +
       `**Handoff**\n` +
-      `- This session: archive | delete | leave open — and the one-line reason.\n` +
+      `- This tab: "safe to close" OR "keep this tab open because <reason>". Say it about the ` +
+      `VS Code tab in front of him, not about the session — "leave session open" is not a verdict ` +
+      `he can act on and no longer passes.\n` +
+      `- Lane: does the next action continue THIS lane, or start a different one? Name the ` +
+      `branch or PR.\n` +
       `- Next session: the specific next task, paste-ready, naming files/branches/PRs by ` +
       `path or number. If nothing is outstanding, say that plainly and recommend what is worth ` +
       `doing next instead — "nothing left" without a direction is what he asked to stop seeing.\n` +
