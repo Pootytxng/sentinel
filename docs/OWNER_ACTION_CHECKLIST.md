@@ -303,9 +303,13 @@ These gate **public** release only (not the local app you use daily). Full list:
 - 🔒 **Legal** — `docs/EULA.md` + `docs/PRIVACY.md` are drafts to finalize. **Narrower than it looks
   (2026-07-11 audit):** license model (proprietary, all-rights-reserved) and governing law (United
   States) are already decided in EULA v0.3 — only the `[STATE]` venue blank is genuinely open.
-  **Bug found:** both docs already link to `https://github.com/Pootytxng/compy`, which doesn't exist
-  yet (current repo is still `Pootytxng/sentinel`, private) — fix the links when the rename below
-  actually happens, don't ship as-is.
+  ~~**Bug found:** both docs link to `https://github.com/Pootytxng/compy`, which doesn't exist.~~
+  **FIXED and re-verified 2026-08-23** — `docs/PRIVACY.md:87` and `site/privacy.html` both point at
+  `Pootytxng/compy-releases`, which is public and live. `git grep 'github.com/Pootytxng/compy\b'`
+  returns no hit in either legal doc. This entry sat here as a live bug for weeks after the fix
+  landed (`docs/BACKLOG_ARCHIVE.md:903` records it) and was re-reported from this line as though
+  still open. **A checklist that keeps a fixed bug open costs the same as one that misses a real
+  one.**
 - 🔒 **GitHub repo rename → `compy` + `compy.gg` domain** — bundled at first public exposure. **NOW
   TIMELY (2026-07-15):** the site is deployed and every canonical URL, the sitemap, and the JSON-LD
   already point at `https://compy.gg`, but the domain isn't purchased — the site currently lives only

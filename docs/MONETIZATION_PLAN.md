@@ -114,7 +114,8 @@ rides · the owner-gated unlock that turns it on.**
   effect.
 - **Owner-gated unlock (all owner territory):** ① a legal **entity** + **merchant-of-record**
   (Paddle is the doctrine's named route — handles VAT/tax so a solo owner doesn't) · ② a **price**
-  (owner taste/money call) · ③ enough shipped Pro *value* to be worth $25/yr · ④ the dark gate armed
+  — **DECIDED 2026-08-22, and the monthly tier is now under an evidence-backed challenge; see the
+  issue filed 2026-08-23** · ③ enough shipped Pro *value* to be worth **$39/yr** · ④ the dark gate armed
   behind a real payment webhook. **Status: correctly dark. The site says exactly the right thing
   about it today.**
 
