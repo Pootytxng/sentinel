@@ -38,14 +38,28 @@ function componentFiles(dir = DESIGN): string[] {
 }
 
 /** The `src/design/...` modules a guard file imports, resolved from its relative specifiers. */
-function importedComponents(guardFile: string): Set<string> {
+// CODEX FINDING 6 (2026-08-23, MED) — this used to be `importedComponents`, and the assertion
+// below it has always been named "actually mounts it". An import is not a mount: a guard file can
+// import a component, never render it, and the census still reads as covered — the exact silent
+// shrink C-13 exists to prevent, dressed as a green suite. So the check now requires the component
+// to appear as a JSX element in the guard that claims it. Type-only bindings are skipped, because
+// a type can never be mounted. Measured before writing: 38/38 `rostered` and 5/5 `rostered:shell`
+// entries already render, so this tightens the rule without moving a single census entry.
+export function mountedComponents(guardFile: string): Set<string> {
   const src = readFileSync(guardFile, "utf8");
   const found = new Set<string>();
-  for (const m of src.matchAll(/from\s+"(\.[^"]+)"/g)) {
+  for (const m of src.matchAll(/import\s+([\s\S]*?)\s+from\s+"(\.[^"]+)"/g)) {
     // Guard files live IN src/design, so "./x" and "./a/b" resolve under it; "../x" leaves it.
-    const spec = m[1];
+    const spec = m[2];
     if (!spec.startsWith("./")) continue;
-    found.add(`src/design/${spec.slice(2)}.tsx`);
+    const clause = m[1].trim();
+    if (clause.startsWith("type ")) continue; // `import type { X }` — nothing to mount
+    const names = [...clause.replace(/\btype\s+[A-Za-z0-9_]+/g, "").matchAll(/[A-Z][A-Za-z0-9_]*/g)].map(
+      (x) => x[0],
+    );
+    // `<Name` followed by anything that is not an identifier character: `<Foo/>`, `<Foo>`, `<Foo `.
+    if (names.some((n) => new RegExp("<" + n + "(?![A-Za-z0-9_])").test(src)))
+      found.add(`src/design/${spec.slice(2)}.tsx`);
   }
   return found;
 }
@@ -73,17 +87,18 @@ describe("a11y census — every src/design component is rostered or has a named 
   });
 
   it("only calls a component rostered when a guard file actually mounts it", () => {
-    const imported = {
-      rostered: importedComponents(GUARD_FILES[0]),
-      "rostered:shell": importedComponents(GUARD_FILES[1]),
+    const mounted = {
+      rostered: mountedComponents(GUARD_FILES[0]),
+      "rostered:shell": mountedComponents(GUARD_FILES[1]),
     };
     const unproven = ENTRIES.filter(
-      ([file, bucket]) => bucket in imported && !imported[bucket as keyof typeof imported].has(file),
+      ([file, bucket]) => bucket in mounted && !mounted[bucket as keyof typeof mounted].has(file),
     ).map(([file, bucket]) => `${file} (claims ${bucket})`);
     expect(
       unproven,
-      "Census claims coverage that the guard file does not import. Either add the mount or change " +
-        "the disposition — a coverage claim nobody checks is exactly the state C-13 was filed for.",
+      "Census claims coverage the guard file never RENDERS. Importing a component is not mounting " +
+        "it — add the JSX, or change the disposition. A coverage claim nobody checks is exactly " +
+        "the state C-13 was filed for.",
     ).toEqual([]);
   });
 

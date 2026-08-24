@@ -145,6 +145,35 @@ describe("bento: one hero per grid", () => {
     }
   });
 
+  // CODEX FINDING 8 (2026-08-23, LOW) — every rule in this file is a text search for the literal
+  // `<BentoGrid` / `<BentoTile`. `import { BentoGrid as Grid }` renders the identical grid under a
+  // name none of those searches match, and the whole file goes quietly vacuous for that room:
+  // `withBento` never lists it, so it is not even reported as unchecked. Resolving aliases would
+  // make the guard chase renames forever; keeping the two names literal is the same bargain the
+  // "no computed span" rule already makes — a reader (and a regex) can see the grid. Measured
+  // before writing: nothing in src/ aliases either name today, so this closes at zero debt.
+  it("nobody renames BentoGrid or BentoTile — an alias makes every rule above vacuous", () => {
+    const aliased: string[] = [];
+    for (const { path, src } of files) {
+      // `import { BentoGrid as Grid }`, `export { BentoTile as Tile }`, and the assignment form.
+      for (const [hit] of src.matchAll(/\b(BentoGrid|BentoTile)\s+as\s+[A-Za-z_$][\w$]*/g)) {
+        aliased.push(`${path}: ${hit}`);
+      }
+      for (const [hit] of src.matchAll(/\b[A-Za-z_$][\w$]*\s+as\s+(BentoGrid|BentoTile)\b/g)) {
+        aliased.push(`${path}: ${hit}`);
+      }
+      for (const [hit] of src.matchAll(/(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:BentoGrid|BentoTile)\s*[;,\n]/g)) {
+        aliased.push(`${path}: ${hit.trim()}`);
+      }
+    }
+    expect(
+      aliased,
+      "Every rule in this file finds grids by the literal text `<BentoGrid` / `<BentoTile`. A " +
+        "renamed one is invisible to all of them — the room silently leaves the one-hero rule " +
+        "instead of failing it. Import the components under their own names.",
+    ).toEqual([]);
+  });
+
   it.each(withBento.map((f) => f.path))("%s — no computed span", (path) => {
     const src = files.find((f) => f.path === path)!.src;
     for (const block of bentoBlocks(src)) {

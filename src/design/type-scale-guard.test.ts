@@ -101,6 +101,50 @@ describe("TYPE-1: the six-step type scale is law", () => {
     }
   });
 
+  // CODEX FINDING 7 (2026-08-23, MED) — the literal-size ban above accepts ANY
+  // `font-size: var(--type-*)`, and the scale test only reads type-scale.css. So the ban was
+  // trivially routed around in two spellings, neither of which any test could see:
+  //   `--type-shout: 96px` declared in a room sheet, then `font-size: var(--type-shout)`; or
+  //   `--type-hero: 96px` redeclared locally, silently re-tuning the shared step for that subtree.
+  // Both are the six-step scale being left, which is the only thing this file exists to prevent.
+  // Measured before writing: 0 `--type-*` are declared outside type-scale.css and 0 unknown ones
+  // are used, so both close at zero debt. If a seventh step is genuinely needed, add it to
+  // type-scale.css — where the floor test and the pinned values can see it.
+  it("every --type-* used for a font size is a real step of the scale, not a local invention", () => {
+    const scale = readFileSync(join("src", "design", "type-scale.css"), "utf8");
+    const declared = new Set([...scale.matchAll(/(--type-[\w-]+)\s*:/g)].map((m) => m[1]));
+    const unknown: string[] = [];
+    for (const f of files) {
+      const css = stripComments(readFileSync(f, "utf8"));
+      for (const m of css.matchAll(/font-size:\s*var\(\s*(--type-[\w-]+)/g)) {
+        if (!declared.has(m[1])) unknown.push(`${f}: font-size: var(${m[1]})`);
+      }
+    }
+    expect(
+      unknown,
+      "This resolves to nothing the scale declares. A --type-* name is not a licence; the step has " +
+        "to exist in type-scale.css, where the 13px floor and the pinned values apply to it.",
+    ).toEqual([]);
+  });
+
+  it("only type-scale.css may declare a --type-* step — a local override re-tunes the shared scale", () => {
+    const scalePath = join("src", "design", "type-scale.css");
+    const offenders: string[] = [];
+    for (const f of files) {
+      if (f === scalePath) continue;
+      const css = stripComments(readFileSync(f, "utf8"));
+      for (const m of css.matchAll(/(--type-[\w-]+)\s*:\s*([^;}]+)/g)) {
+        offenders.push(`${f}: ${m[1]}: ${m[2].trim().slice(0, 30)}`);
+      }
+    }
+    expect(
+      offenders,
+      "A --type-* declared outside type-scale.css changes the step for everything beneath it, and " +
+        "the guard above still reads var(--type-*) and passes. Put the value in the scale, or use " +
+        "a name that is not a scale step.",
+    ).toEqual([]);
+  });
+
   it("the Arial fallthrough stays dead: base + --font-ui speak the one UI face", () => {
     const app = readFileSync(join("src", "App.css"), "utf8");
     expect(app).toMatch(/--font-ui:\s*"Geist Sans"/);

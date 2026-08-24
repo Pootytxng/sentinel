@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from "vitest";
 import { existsSync } from "node:fs";
+import { dirname } from "node:path";
 import { findDesktopShortcut, planShortcut, readShortcut, scriptFromArgs, VERSIONED_PACKAGE } from "./shortcut.mjs";
 
 const CONTROL = "C:\\Users\\Kuya\\code\\compy-control";
@@ -156,13 +157,70 @@ describe("readShortcut", () => {
 
 // Not a fixture. This asserts the shortcut Kuya will actually double-click on THIS machine, which is
 // the only version of this claim that means anything.
+/**
+ * The two facts the live check adds on top of `planShortcut`: the launcher the shortcut passes to
+ * -File has to EXIST, and it has to be the launcher. Extracted from the live test so it can be
+ * falsified with fabricated facts — the alternative is mutating the owner's real Desktop shortcut
+ * to watch a guard go red, which is exactly the kind of surprise this module refuses to be.
+ */
+export function launcherProblems({ args }, exists = existsSync) {
+  const script = scriptFromArgs(args);
+  if (!script) return ["script.none"];
+  const out = [];
+  if (!exists(script)) out.push("script.missing");
+  if (!script.toLowerCase().endsWith("compy-entry.ps1")) out.push("script.wrongName");
+  return out;
+}
+
+describe("launcherProblems — the live check, driven over facts instead of a Desktop", () => {
+  const good = `-NoProfile -File "C:\\anywhere\\compy-entry.ps1"`;
+  it("is quiet when the launcher is named right and is on disk", () => {
+    expect(launcherProblems({ args: good }, () => true)).toEqual([]);
+  });
+  it("catches a launcher that is not there — the shortcut that does nothing when double-clicked", () => {
+    expect(launcherProblems({ args: good }, () => false)).toEqual(["script.missing"]);
+  });
+  it("catches a shortcut pointed at some other script", () => {
+    expect(launcherProblems({ args: `-NoProfile -File "C:\\x\\other.ps1"` }, () => true)).toEqual([
+      "script.wrongName",
+    ]);
+  });
+  it("catches a shortcut that passes no script at all", () => {
+    expect(launcherProblems({ args: "-NoProfile" }, () => true)).toEqual(["script.none"]);
+  });
+});
+
 describe("the real Desktop shortcut", () => {
   const lnk = findDesktopShortcut();
+  const facts = lnk ? readShortcut({ path: lnk }) : null;
 
-  it.runIf(lnk && existsSync(CONTROL))("passes every guard above", () => {
-    const facts = readShortcut({ path: lnk });
+  // FOUND 2026-08-24 — the same defect class as Codex finding 4, in the guard for the one artifact
+  // the owner actually double-clicks. This used to read `it.runIf(lnk && existsSync(CONTROL))`
+  // against a hardcoded `C:\Users\Kuya\code\compy-control` — a folder that stopped existing when
+  // the launcher moved into the repo. So this test has been SKIPPING silently on every run since,
+  // and a guard that cannot run is indistinguishable from a guard that passes. It was found by
+  // reading a skip count, which is the only way it could have been found.
+  //
+  // The rot WAS the hardcoded folder, so the folder is gone from the assertion. The control dir is
+  // now wherever the shortcut's own launcher lives, and what keeps that honest is the pair of
+  // checks below it: the launcher has to exist on disk and has to be compy-entry.ps1. Renaming or
+  // moving the repo can no longer disarm this — it can only fail it, which is the point.
+  it.runIf(lnk)("passes every guard above, and its launcher is really there", () => {
     expect(facts, `could not read ${lnk}`).not.toBe(null);
-    const plan = planShortcut({ ...facts, controlDir: CONTROL });
+    expect(launcherProblems(facts), JSON.stringify({ lnk, ...facts })).toEqual([]);
+    const plan = planShortcut({ ...facts, controlDir: dirname(scriptFromArgs(facts.args)) });
     expect(plan.defects, JSON.stringify({ lnk, ...facts })).toEqual([]);
+  });
+
+  // ...and the skip itself is now reported rather than silent. A machine with no Desktop shortcut
+  // is a legitimate state (CI, a fresh clone); a machine that HAS one and still skips is the bug
+  // this comment exists about, and it can no longer happen — the only condition left is the .lnk.
+  it("says out loud whether the real shortcut was checked at all", () => {
+    expect(typeof lnk === "string" || lnk === null).toBe(true);
+    if (lnk === null) {
+      expect(facts, "no Desktop shortcut found — the check above did not run").toBe(null);
+    } else {
+      expect(facts, `a shortcut exists at ${lnk} but could not be read`).not.toBe(null);
+    }
   });
 });

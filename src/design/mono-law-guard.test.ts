@@ -163,6 +163,22 @@ export function monoRules(sources: [string, string][]): string[] {
   return [...new Set(keys)].sort();
 }
 
+/**
+ * Every rule's declaration block, keyed exactly as `monoRules` keys them. Same parse, same
+ * normalization — a second, subtly different parser here would classify a rule the scan never saw.
+ */
+export function ruleBodies(sources: [string, string][]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const [file, raw] of sources) {
+    const css = raw.replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const key = `${file.replace(/\\/g, "/")}: ${rule[1].trim().replace(/\s+/g, " ")}`;
+      out.set(key, (out.get(key) ?? "") + rule[2]);
+    }
+  }
+  return out;
+}
+
 function loadCensus(): Census {
   return JSON.parse(readFileSync(CENSUS_PATH, "utf8")) as Census;
 }
@@ -233,6 +249,28 @@ describe("mono law (C-17): mono is for machine values, and every use is declared
       `Mono-on-prose debt may only shrink. Ceiling ${census.violationCeiling}; if you paid some off, ` +
         "lower violationCeiling to the new count in the same commit.",
     ).toBeLessThanOrEqual(census.violationCeiling);
+  });
+
+  // CODEX FINDING 5 (2026-08-23, MED) — `violation` ratchets down and `UNCLASSIFIED` fails the
+  // build, but `chrome-tag` was an unbounded free pass: any new mono-on-prose rule could be filed
+  // as the accepted HUD idiom and every assertion above stayed green. That is a census that
+  // BLESSES rather than records. The bucket's own definition is mechanical — "an uppercase,
+  // letter-spaced HUD micro-label" — so it is now checked instead of claimed. Measured before
+  // writing: all 64 existing chrome-tag rules already declare it, so this adds no debt and needs
+  // no allow-list. A tag that will not say `text-transform: uppercase` is not a tag.
+  it("every chrome-tag EARNS its bucket — the idiom is checked, not claimed", () => {
+    const census = loadCensus();
+    const bodies = ruleBodies(sources());
+    const unearned = Object.entries(census.rules)
+      .filter(([, b]) => b === "chrome-tag")
+      .map(([k]) => k)
+      .filter((k) => !/text-transform\s*:\s*uppercase/.test(bodies.get(k) ?? ""));
+    expect(
+      unearned,
+      "Filed as the accepted uppercase HUD micro-label idiom, but the rule never declares " +
+        "`text-transform: uppercase`. Mono on a sentence-case label is `violation` — down-only " +
+        "debt — not `chrome-tag`. Reclassify it, or stop using mono there.",
+    ).toEqual([]);
   });
 
   it("uses only the three real buckets", () => {

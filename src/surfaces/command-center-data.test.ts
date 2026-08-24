@@ -60,9 +60,40 @@ describe("postureLine (real headline + priorities-driven sentence)", () => {
     expect(p.sentence).toBe("Ready to play — this rig measured clean today.");
   });
 
-  it("attention readiness drives an attention tone", () => {
-    const p = postureLine(readiness([check("attention", "Refresh")]), priorities(0), 0);
+  // CODEX FINDING 4 (2026-08-23, HIGH) — this test used to assert p.tone alone. A tone is a
+  // colour; it is not the law. The owner's 2026-07-17 name-it-and-fix-it-inline ruling is that the
+  // attention verdict IS the flagged check, by name, and that the check's own detail travels with
+  // it. deriveSystemPosture is guarded for that in system-posture.test.ts — but postureLine is
+  // what Home actually renders, and NOTHING here proved it passed either one through. Replacing
+  // both with a generic "One thing needs your attention" + a stock disclaimer kept this file, and
+  // system-posture.test.ts, entirely green. So the passthrough is now the assertion.
+  it("attention: the headline IS the flagged check by name, and its detail travels with it", () => {
+    const flagged: ReadinessCheck = {
+      id: "refresh",
+      label: "Monitor below max refresh",
+      status: "attention",
+      detail: "Your monitor is running at 60Hz and supports 144Hz. Switch it in Test.",
+      value: null,
+    };
+    const p = postureLine(readiness([check("ready", "SSD"), flagged]), priorities(0), 0);
     expect(p.tone).toBe("attention");
+    // The name, not a count and not a category.
+    expect(p.headline).toBe("Monitor below max refresh");
+    expect(p.headline).not.toMatch(/things?[^.]*needs?[^.]*attention/i);
+    // The fix travels WITH the name — a stock disclaimer here is the defect this pins.
+    expect(p.sentence).toBe(flagged.detail);
+    expect(p.reassurance).toMatch(/without your say-so|say-so/i);
+  });
+
+  it("attention with several flagged checks still leads with a real name, never a bare number", () => {
+    const p = postureLine(
+      readiness([check("attention", "Monitor below max refresh"), check("attention", "GPU driver age")]),
+      priorities(0),
+      0,
+    );
+    expect(p.tone).toBe("attention");
+    expect(p.headline).toContain("Monitor below max refresh");
+    expect(p.headline).toContain("1 more");
   });
 });
 
