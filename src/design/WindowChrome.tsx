@@ -58,7 +58,15 @@ export function WindowChrome() {
     <>
       <header className="wc-bar" data-tauri-drag-region>
         <div className="wc-left" data-tauri-drag-region>
-          <span className="wc-title">{t("common.windowChrome.title")}</span>
+          {/* NO APP NAME HERE (#213 A5). This span read "Compy" in the system font, 40px above the
+              rail's designed <Wordmark> reading "Compy" again — the product introducing itself
+              twice, in two different hands, inside one glance. The designed mark is the one that
+              stays; a titlebar caption duplicating it is the one that goes. Nothing is lost: the
+              window is still named "Compy" to the OS (taskbar, Alt+Tab, `tauri.conf.json`'s window
+              title, which is what `grab.ps1` matches on), and the rail carries the brand on every
+              screen. The `common.windowChrome.title` key went with the span — a locale string kept
+              alive for a render that no longer exists is the next session's red herring.
+              Guard: shell-native-tooltip-guard.test.tsx. */}
           {/* Settings lives in the always-visible titlebar so it's reachable on every tab + every
               responsive layout (the rail gear vanished on non-Home tabs). Signals across the tree
               via a window event — App listens (it's the same bridge as compy:*-changed). */}

@@ -228,7 +228,14 @@ export function ShellV2({
                           aria-selected={activeId === item.id}
                           className="v2-nav-item"
                           onClick={() => onNavigate(item.id)}
-                          title={railLabel(item)}
+                          // NO `title` HERE (#213 A4). It carried the same string the <span> below
+                          // renders, so hovering a nav item summoned the OS tooltip — white ground,
+                          // black hairline, system font — over the rail, to say what was already on
+                          // screen an inch away. A native control nobody styled, showing nothing
+                          // new, is a rendering defect rather than a taste call. `title` still
+                          // belongs on an icon-only control (the titlebar buttons keep theirs); it
+                          // never belongs on a control that already shows its own label.
+                          // Guard: shell-native-tooltip-guard.test.tsx.
                           // The digit is a keyboard hint, not part of the room's name. Left in the
                           // accessible name it concatenated into "Home1"/"Blackbook3" — a screen
                           // reader announced the shortcut as if it were the label, and every nav test

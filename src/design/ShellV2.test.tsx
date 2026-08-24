@@ -82,8 +82,14 @@ describe("ShellV2 rail", () => {
     const instruments = container.querySelector(".v2-nav-instruments");
     expect(door, "the door group is missing").toBeTruthy();
     expect(instruments, "the instruments group is missing").toBeTruthy();
-    expect(Array.from(door!.querySelectorAll('[role="tab"]')).map((t) => t.getAttribute("title"))).toEqual(["Health"]);
-    expect(Array.from(instruments!.querySelectorAll('[role="tab"]')).map((t) => t.getAttribute("title"))).toEqual(["Live", "History", "Test"]);
+    // Read from the VISIBLE label, not the `title` attribute these two lines used to sample. That
+    // attribute is gone (#213 A4 — it summoned an unstyled OS tooltip to repeat the span beside it),
+    // and sampling it was always indirect: what this test means to pin is which room sits in which
+    // group, and the label span is where a reader actually finds that out.
+    const railNames = (group: Element) =>
+      Array.from(group.querySelectorAll('[role="tab"]')).map((t) => t.querySelector("span")?.textContent);
+    expect(railNames(door!)).toEqual(["Health"]);
+    expect(railNames(instruments!)).toEqual(["Live", "History", "Test"]);
     // The sign names the group for sighted users AND the tablist (aria-labelledby) — one element, both jobs.
     const sign = container.querySelector("#v2-nav-deeper");
     expect(sign?.textContent).toBe("Look deeper");

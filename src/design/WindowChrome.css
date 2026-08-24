@@ -48,19 +48,15 @@
   -webkit-user-select: none;
 }
 
+/* The 13px indent used to live on the app-name caption (#213 A5 removed it — the rail's Wordmark
+   is the one that stays). It moves here so the gear keeps the same optical left margin it had when
+   it followed the text: 6px of padding plus the button's own ~7px of icon inset. */
 .wc-left {
   display: flex;
   align-items: center;
   gap: 6px;
   height: 100%;
-}
-.wc-title {
-  padding-left: 13px;
-  font-size: var(--type-label);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--ix-text-2, #b8bcc8);
-  pointer-events: none; /* clicks fall through to the drag region (the bar) */
+  padding-left: 6px;
 }
 
 /* Settings gear in the titlebar — the app-wide Settings entry (always visible, every tab). */
