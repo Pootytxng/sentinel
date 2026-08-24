@@ -339,11 +339,20 @@ numbering, the motion default, the sibling-slop sweep) moved 2026-08-22 to
   PASS 10/10 on the installed binary). All three are confirmed gone from the live app. Full list and what
   remains: [`CONFORMANCE_AUDIT_2026-08-18.md`](CONFORMANCE_AUDIT_2026-08-18.md), queue in
   [`BACKLOG.md`](BACKLOG.md) (C-04 … C-17).
-  **The one call I want your eye on — recommendation attached, not a menu:** rename the **Home** room
-  to what it answers (**"Health"**). Home names a location; every other room names a job, and the
-  front door is where Compy either reads as a PC doctor or as a launcher. Say no and it stays Home.
-  Everything else in that queue is taste and therefore mine — I ship it and hand you a before/after
-  to veto on sight, per the 2026-08-07 decree.
+  **The one call I wanted your eye on — ✅ ANSWERED, nothing left here:** you took the Home → **Health**
+  rename on 2026-08-19; the rail ships it (`src/design/homeRail.ts:17`). Everything else in that queue
+  is taste and therefore mine — I ship it and hand you a before/after to veto on sight, per the
+  2026-08-07 decree.
+- 🔨 **The wordmark reads `©ompy`** ([#213](https://github.com/Pootytxng/sentinel/issues/213) A1)  ·  ⏳ NEW 2026-08-24
+  **This one is yours because it is the logo**, not because it is a taste call — a glyph that changes
+  what the mark READS as is a rendering defect, and the amendment adopted today says so (rubric item 12,
+  `.claude/agents/self-reviewer.md`). At the rail's real 16px, `Wordmark.css:17`'s `-0.053em` tuck pulls
+  the "o" into the C's mouth until the ring reads closed, and the lavender heartbeat sitting inside it
+  finishes the © signature. Two causes; fixing the kern alone does not clear it.
+  **Recommendation, not a menu — drop the interior pulse below ~24px only.** The arc geometry is
+  untouched, the pulse-C survives everywhere it is big enough to read (site header, About, splash), and
+  the triple-click egg is preserved by revealing the pulse during its beat instead of at rest. Rendered
+  at true rail size and sent to you 2026-08-24. Say no and it stays as it is.
 
 ---
 
