@@ -11,7 +11,8 @@ but is not yet in a released installer — it is disclosed here ahead of shippin
 so no build can ever collect something this policy has not already described. (v0.3 disclosed the
 signed, consent-first app updater that went live on 2026-07-22, and the Settings switch that turns
 its automatic checks off.) It is **not legal advice** — the owner should still have it reviewed by a
-qualified professional before public distribution. Owner/contact identity: Pootytxng (GitHub issues).
+qualified professional before public distribution. Owner/contact identity: Pootytxng — GitHub
+issues, or compysupport@gmail.com.
 
 > **Doctrine pointer (updated 2026-08-09):** This policy describes current runtime behavior.
 > Receipts remains disabled and no send path exists. Tier 1 signed case intelligence is approved as

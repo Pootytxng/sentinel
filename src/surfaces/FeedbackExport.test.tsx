@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
 
-const INTAKE_EMAIL = "christian.mcniel@gmail.com";
+const INTAKE_EMAIL = "compysupport@gmail.com";
 
 const RESULT = {
   path: "C:\\Users\\Kuya\\AppData\\Roaming\\Compy\\exports\\compy-report.md",
