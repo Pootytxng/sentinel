@@ -63,10 +63,14 @@
   color: var(--faint);
 }
 
-/* A broken line reads as a rendering bug until the copy says it is a real hole in the capture. */
+/* A broken line reads as a rendering bug until the copy says it is a real hole in the capture.
+   Deliberately NOT --status-attention: green/amber/red is the owner's ALERT-LEVEL system for how
+   the machine is doing, and a capture gap is an absence of measurement, not a warning about the
+   PC. Spending amber here would put a warning colour on a perfectly healthy session and dilute the
+   one palette the four-room standard says to persist with. */
 .ds-trace-gaps {
   font-size: var(--type-label);
-  color: var(--status-attention);
+  color: var(--muted);
 }
 
 .ds-trace-empty { display: flex; flex-direction: column; gap: 4px; }
