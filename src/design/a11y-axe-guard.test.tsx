@@ -11,6 +11,7 @@ import { NavGlyph } from "./NavGlyph";
 import { Stat } from "./Stat";
 import { StatusPill } from "./StatusPill";
 import { Sparkline } from "./Sparkline";
+import { FpsTrace } from "./FpsTrace";
 import { Wordmark } from "./Wordmark";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { BackButton, ForwardButton } from "./BackButton";
@@ -126,6 +127,9 @@ const ROSTER: Array<[name: string, node: ReactNode]> = [
   ["Stat (attention)", <Stat value="41" unit="fps" label="1% low" tone="attention" />],
   ["StatusPill", <StatusPill status="ready" label="Ready" />],
   ["Sparkline", <Sparkline values={[3, 9, 4, 12, 7, 15, 11]} />],
+  // Both faces: a real trace WITH a gap (the honest broken line) and the no-trace-on-record state.
+  ["FpsTrace", <FpsTrace series={[[0, 141], [10, 138], [40, 96], [50, 144]]} durationSecs={70} />],
+  ["FpsTrace (no trace)", <FpsTrace series={[]} durationSecs={600} />],
   ["Wordmark", <Wordmark />],
   ["AnimatedNumber", <AnimatedNumber value={42} />],
   ["BackButton", <BackButton onBack={() => {}} canGoBack />],

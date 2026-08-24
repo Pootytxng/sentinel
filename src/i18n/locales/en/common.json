@@ -48,6 +48,16 @@
     "body": "Something went wrong while loading. Restarting Compy usually clears it.",
     "reload": "Reload Compy"
   },
+  "fpsTrace": {
+    "eyebrow": "Session shape",
+    "peak": "peak {{peak}} fps",
+    "start": "start",
+    "gaps_one": "{{count}} gap — nothing was captured there",
+    "gaps_other": "{{count}} gaps — nothing was captured there",
+    "aria": "Frame rate through the session: peak {{peak}} fps over {{duration}}.",
+    "noneTitle": "No trace kept for this session.",
+    "noneHint": "Compy keeps the frame-rate trace for the 20 most recent sessions."
+  },
   "gallery": {
     "statusVocabulary": "Status vocabulary",
     "stats": "Stats",

@@ -9,6 +9,7 @@ import type {
   AppliedChange,
   ComparisonResult,
 } from "../types";
+import { FpsTrace } from "../design/FpsTrace";
 import { Term } from "../design/Term";
 import { useConfirm } from "../design/ConfirmDialog";
 import { TuningDebrief } from "./TuningDebrief";
@@ -358,6 +359,12 @@ export function SessionDebrief({
           grade={tempGrade(s.peak_gpu_temp_c)}
         />
       </div>
+
+      {/* The shape of the session, from the trace that was already being persisted and never drawn
+          (#49 deviation 3 / BACKLOG §A2). Sits between the summary numbers and the analysis on
+          purpose: numbers say WHAT it averaged, the trace says what it DID, and everything below
+          argues about why. Gaps stay gaps — see FpsTrace.tsx. */}
+      <FpsTrace series={s.fps_series} durationSecs={s.duration_secs} />
 
       {comparison ? (
         <ComparisonCard

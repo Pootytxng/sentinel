@@ -47,6 +47,15 @@
     "body": "加载过程中出了点问题。重启 Compy 通常就能解决。",
     "reload": "重新加载 Compy"
   },
+  "fpsTrace": {
+    "eyebrow": "本局走势",
+    "peak": "峰值 {{peak}} fps",
+    "start": "开始",
+    "gaps_other": "{{count}} 处中断 — 那段时间没有采集到数据",
+    "aria": "本局帧率走势：{{duration}} 内峰值 {{peak}} fps。",
+    "noneTitle": "这一局没有保留走势记录。",
+    "noneHint": "Compy 只为最近 20 局保留帧率走势。"
+  },
   "gallery": {
     "statusVocabulary": "状态词汇",
     "stats": "数据",

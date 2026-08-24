@@ -1,0 +1,74 @@
+/* Session shape — the persisted fps_series, drawn. See FpsTrace.tsx for why it is not <Sparkline>. */
+.ds-trace {
+  margin: 0 0 16px;
+  padding: 12px 14px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--panel);
+}
+
+.ds-trace-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+/* HUD micro-label — the approved chrome-tag idiom (mono + uppercase), same as .hero-eyebrow. */
+.ds-trace-eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--type-label);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+}
+
+.ds-trace-peak {
+  font-family: var(--font-mono);
+  font-size: var(--type-label);
+  color: var(--muted);
+}
+
+.ds-trace-svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.ds-trace-base { stroke: var(--border); stroke-width: 1; }
+.ds-trace-rung { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 6; }
+.ds-trace-line { stroke: var(--accent); stroke-width: 2; }
+.ds-trace-dot { stroke: var(--accent); stroke-width: 4; }
+
+.ds-trace-axis {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+/* The duration IS a machine value, so it keeps the mono face. */
+.ds-trace-tick {
+  font-family: var(--font-mono);
+  font-size: var(--type-label);
+  color: var(--faint);
+}
+
+/* "start" is a word, not a measurement — mono law keeps the instrument face off it. */
+.ds-trace-start {
+  font-size: var(--type-label);
+  color: var(--faint);
+}
+
+/* A broken line reads as a rendering bug until the copy says it is a real hole in the capture. */
+.ds-trace-gaps {
+  font-size: var(--type-label);
+  color: var(--status-attention);
+}
+
+.ds-trace-empty { display: flex; flex-direction: column; gap: 4px; }
+.ds-trace-none { margin: 0; font-size: var(--type-body); color: var(--fg-2); }
+.ds-trace-hint { margin: 0; font-size: var(--type-label); color: var(--faint); }

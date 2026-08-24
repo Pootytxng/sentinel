@@ -9,6 +9,7 @@
     "src/design/ConfirmDialog.tsx": "rostered",
     "src/design/EmptyState.tsx": "rostered",
     "src/design/ErrorBoundary.tsx": "rostered",
+    "src/design/FpsTrace.tsx": "rostered",
     "src/design/Gauge.tsx": "rostered",
     "src/design/Icon.tsx": "rostered",
     "src/design/KeepaliveRoom.tsx": "rostered",
