@@ -74,11 +74,16 @@ Everything else parked on him is closed.
 - **`npx tsc --noEmit` is a false green here.** `npm run build` is the typecheck.
 - Vitest renders `t()` as the raw KEY unless the test imports `../i18n`. Asserting on English is
   what proves a key exists — a typo ships as `common.fpsTrace.aria` and passes every other check.
+- **A red pre-push gate you did not cause.** `branch-disposition-audit` reads this checkout's
+  `refs/remotes/origin` cache, so a branch ANOTHER lane already deleted on origin still accuses you.
+  `git fetch origin --prune` cleared it and 27 tests went green with no code change. Fixed at
+  `cf710027` — the message now leads with the prune and stops claiming the ref "exists on origin".
 
 ## Verification at HEAD — all green
 
-`npm run build` exit 0 · `npx vitest run` **371 files, 5031 passed, 5 skipped** (was 370 / 5009) ·
-`pwsh scripts/doc-budget.ps1` ALL PASS. `npm run tauri build` was **not run** this session.
+`npm run build` exit 0 · full pre-push gate **PASS, no skips** at `cf710027` (frontend 5033 passed /
+5 skipped · Rust 964 passed, 0 failed · clippy clean) · `pwsh scripts/doc-budget.ps1` ALL PASS.
+`npm run tauri build` was **not run** this session — nothing reached the owner's desk.
 
 ## Standing constraints for whoever picks this up
 
