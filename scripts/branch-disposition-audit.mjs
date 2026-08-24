@@ -205,8 +205,21 @@ export function audit({ repoRoot, docPath = join(repoRoot, DOC), coverage } = {}
   const live = new Set(listRemoteRefs(repoRoot));
   for (const ref of live) {
     if (!seen.has(ref)) {
+      // THE THIRD DEGRADATION, and the only one that is loud instead of silent. The two above make
+      // the cache too small to speak from; this one makes it too OLD. A ref another lane deleted on
+      // origin stays in refs/remotes/origin here until something prunes it, and a leftover ref is
+      // byte-identical to an undispositioned one. It cost a lane that owns none of this a red
+      // pre-push gate on 2026-08-24 (origin/lane/copy-truth-2-2026-08-24, already deleted on
+      // origin), and the message it read told it to go delete a branch on the remote.
+      //
+      // So the cheap, local, non-destructive cure leads, and the destructive one is conditional on
+      // the ref SURVIVING it. The wording follows: this checkout can only say what its cache holds,
+      // never what origin holds — the same rule the coverage gates above enforce, one case later.
       problems.push(
-        `${ref} exists on origin but has no row in ${DOC} — disposition it, or delete it: ${pruneCommand(ref)}`,
+        `${ref} is in this checkout's cache of origin with no row in ${DOC}. Refresh the cache ` +
+          `first — \`git fetch origin --prune\` — a ref another lane already deleted on origin ` +
+          `lingers here and looks exactly like an undispositioned one. If it survives the prune, ` +
+          `disposition it, or delete it: ${pruneCommand(ref)}`,
       );
     }
   }

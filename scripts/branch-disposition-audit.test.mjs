@@ -181,6 +181,20 @@ describe("what the audit refuses to pass", () => {
     expect(problems[0]).toMatch(/no row/);
   });
 
+  // A stale ref and an undispositioned one are the same bytes in refs/remotes/origin, so this
+  // message is read by lanes that did nothing wrong. It has to send them to the local, reversible
+  // cure BEFORE it names a command that deletes a branch on the shared remote.
+  it("sends an unrowed ref to `fetch --prune` before it names a destructive command", () => {
+    const [problem] = run([["origin/landed", "PRESERVE"]]);
+    expect(problem).toMatch(/git fetch origin --prune/);
+    expect(problem.indexOf("git fetch origin --prune")).toBeLessThan(problem.indexOf("--delete"));
+  });
+
+  // It also may not assert that the ref is live on origin: a cache is the only thing it read.
+  it("does not claim an unrowed ref exists on origin", () => {
+    expect(run([["origin/landed", "PRESERVE"]])[0]).not.toMatch(/exists on origin/);
+  });
+
   it("fails when a row names a ref that is gone", () => {
     const problems = run([
       ["origin/landed", "PRESERVE"],
