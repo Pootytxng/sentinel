@@ -1,0 +1,58 @@
+{
+  "transition": "close-issue",
+  "actor": "claude-code",
+  "kind": "guard",
+  "issue": 125,
+  "currentHead": "1568f3d3ac1cb39a287a769204224b4a3998302f",
+  "explicitHandoff": "Owner turn 2026-08-24: \"run the self review and clear up any remaining work or unfinished task.\" #125 is a finished item that was never closed - the spec is COMPLETE, the hook is armed on main, and this session got the refusal itself.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com/Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room.",
+    "remoteState": "origin/main = 1568f3d3 (fetched this session). The lane ref lane/train-2026-08-22 is LOCAL ONLY - git ls-remote origin refs/heads/lane/train-2026-08-22 returns nothing - and was fast-forwarded to origin/main this session, so it is 0 ahead / 0 behind. No PR is attached to #125; the work landed directly as d5a6a630.",
+    "worktree": "Eight worktrees. This session holds sentinel-home-room alone; sentinel-fourroom is held under a verified takeover posted on #49 by this same session, which is a different issue and a different folder.",
+    "branch": "lane/train-2026-08-22 == origin/main == 1568f3d3, linear, no force-push anywhere.",
+    "dirtyState": "Clean at the moment of writing apart from this receipt, which by construction cannot ride inside the head it authorizes. The recurring .codex/config.toml regression (#196) was present at session start and was discarded, not debugged, per the standing note.",
+    "liveProcesses": "One compy.exe (pid 34000) running the INSTALLED 8b1599b3 desk build - unrelated to #125. One npm run tauri build running in sentinel-fourroom under the #49 takeover. No release or install pipeline holds either mutex."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "1568f3d3ac1cb39a287a769204224b4a3998302f",
+      "detail": "Run standalone at exactly this head - origin/main after PR #209 - because a GitHub merge commit is a head no pre-push hook ever gated. Read in FULL, not tailed: dependency bootstrap, git diff check, frontend tests 365 files / 4883 passed / 6 skipped, frontend type-check and build, 963 Rust tests 0 failed, Rust clippy, final line LOCAL CHECK RESULT: PASS, exit 0. Log: logs/verify-local-2026-08-24T11-41-54Z.log."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "detail": "#125 changes the agent harness (a PreToolUse hook), not the shipped application. No compy.exe bytes are affected, so there is nothing to install or stamp-prove. The desk build is deliberately NOT touched by this transition."
+  },
+  "selfReview": {
+    "applicable": false,
+    "detail": "No UI surface. src/**/*.{tsx,css} is untouched by the #125 work; its evidence is the harness behaving, quoted under closureNotes."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; docs/WORK_CONTROL.md makes that review advisory rather than blocking. The strongest available independent check is that the guard was exercised ADVERSARIALLY by an actor that wanted to write - this session - and it held."
+  },
+  "closureNotes": [
+    "The spec docs/superpowers/specs/2026-08-21-unverified-session-write-refusal.md line 3 reads: COMPLETE 2026-08-22 - all five steps.",
+    ".claude/settings.json:65 registers .claude/hooks/project-write-assert.mjs, so step 4 is armed on main, not merely written.",
+    "LIVE PROOF, not a citation: this session opened with `compy-entry: the launch token has expired - this session is unverified` (TOKEN_EXPIRED, a LAPSED code) and `tools/entry/cli.mjs assert` returned STOP - TOKEN_EXPIRED. The refusal behaved exactly as the spec's four properties require, and it was cured the documented way - `cli.mjs adopt --issue 210 --session 1b2be057-7b02-45fa-8ee5-5276ccb7dee2` - rather than by routing edits through the Bash escape hatch. Property 3 (the refusal carries a runnable cure) is therefore verified end to end by an actor who needed it.",
+    "Bash remains deliberately outside the hook's matcher (spec 3c), and tools/entry/tracked-hooks.test.mjs fails the build if it is ever added. That is a stated design property of the closed issue, not an open remainder."
+  ],
+  "remaining": [
+    "Nothing on #125. The issue was finished on 2026-08-22 and stayed open for two days only because nobody closed the row - the same false-open failure the archived-marker guard was written for."
+  ]
+}
