@@ -120,6 +120,31 @@ The dev build runs two same-origin webviews + a small default window, so capture
     processes still carrying the flag. Localhost-only, and still an unattended debug surface on
     his desk that nobody chose; it survives until he reboots or someone notices.
 
+12. **A rendering defect is CORRECTNESS, not taste (ALWAYS — there is no n/a).** *"A clipped
+    element, an overlapping glyph, or an unstyled native control is a correctness failure, not a
+    matter of taste"* (Cowork lane amendment, 2026-08-24, adopted by the owner in the same message
+    that handed this lane #49). Those three classes FAIL this item on sight. They may not be
+    deferred to the owner as a taste question, parked in `docs/UI_VISION_BACKLOG.md`, or reported
+    as "cosmetic" — the taste decree (CLAUDE.md, 2026-08-07) governs *choices between defensible
+    looks*, and a glyph colliding with its neighbour is not one of those. Scan the capture for
+    them explicitly and say what you looked at; "nothing clipped" with no named region is a FAIL.
+    - **clipped** — text or a control cut off by its own container at the owner's real resolution.
+    - **overlapping** — two painted things colliding so either becomes ambiguous. Includes a glyph
+      whose neighbour changes what it READS as: the wordmark's `-0.053em` tuck pulled "o" into the
+      C's mouth until `Compy` read `©ompy` (#213 A1).
+    - **unstyled native control** — anything the OS draws over Compy's own surface: the `title=`
+      tooltip (white ground, black hairline, system font), a bare `<select>` popup, a default
+      focus ring where the design supplies one. `title` belongs on an ICON-ONLY control and
+      nowhere else — on a control that already shows its label it summons that box to repeat
+      what is on screen an inch away (#213 A4, guard: `shell-native-tooltip-guard.test.tsx`).
+    **Precedents (the defects that created this item):** #213 A4 above, and A5 — `WindowChrome`
+    printed "Compy" in the titlebar an inch from the rail wordmark that says the same word.
+    **Counter-precedent, equally binding:** the same issue filed A2 (HUD corner brackets) and A3
+    (a cut-off left edge) as defects, and NEITHER was one — A2 is `hud-frame.css` drawing all four
+    corners symmetrically, A3 was the capture tool passing `GetWindowRect` (which includes the
+    invisible DWM resize border) to `CopyFromScreen`. **Prove the pixels before you call it a
+    defect**; a capture artifact reported as a rendering bug costs a lane a day.
+
 Any item FAILS → still complete the remaining items (report everything found in one pass), then
 return the FAIL verdict. Do not fix anything yourself — you are read-only on verdicts; the
 orchestrator fixes and re-dispatches.
@@ -142,6 +167,7 @@ SELF-REVIEW — <one-line scope>
 9 Earn its place: <flourish → meaning mapping, or n/a>      PASS|FAIL
 10 Prior decisions: <search terms + newest owner decision, or "none found">  PASS|FAIL
 11 Teardown: <quoted no-debug-port.mjs line>       PASS|FAIL
+12 Rendering defects: <regions scanned for clipped / overlapping / native>  PASS|FAIL
 VERDICT: PASS | FAIL — <if FAIL: minimal precise fix list, element + property + expected value>
 ```
 

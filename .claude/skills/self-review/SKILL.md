@@ -31,7 +31,7 @@ worker's context; only the verdict returns.
    - the owner's exact ask, quoted;
    - files touched + the specific elements/selectors changed;
    - states to exercise (hover / empty / loading / error) if relevant.
-2. **Receive** the single `SELF-REVIEW` block (10 rubric items, one evidence line each, VERDICT).
+2. **Receive** the single `SELF-REVIEW` block (12 rubric items, one evidence line each, VERDICT).
 3. **On FAIL:** apply the fix list, then re-dispatch for a full fresh review (from the top — a fix
    can break a neighboring item). Repeat until PASS.
 4. **On PASS:** quote the block in your done-report. That is the claim's license.
@@ -43,6 +43,15 @@ worker's context; only the verdict returns.
    token values (an approximation of a taste call is a fabricated claim), and hand it over with
    **`SendUserFile`** — never `Read` it back into the orchestrator (that is the Token Law above).
    Motion changes need something that moves: inline-rendered HTML (`display: "render"`), not a PNG.
+6. **A rendering defect is NOT a taste call and never takes route 5** (Cowork lane amendment
+   2026-08-24, adopted by the owner): *"a clipped element, an overlapping glyph, or an unstyled
+   native control is a correctness failure, not a matter of taste."* Fix it, guard it, report it
+   — do not hand him a before/after asking which he prefers, and do not file it in
+   `docs/UI_VISION_BACKLOG.md`. Rubric item 12 is where the reviewer catches it. The narrow
+   exception is the one thing the taste decree already reserves to him regardless of cause: the
+   **product name, logo, and price presentation**. So the wordmark reading `©ompy` (#213 A1) is a
+   real defect AND still his call to approve — fix candidates go to him with a recommendation
+   attached, never as a menu.
 
 ## Red flags — you're about to violate the law
 

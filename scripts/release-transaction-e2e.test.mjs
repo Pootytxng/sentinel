@@ -148,7 +148,12 @@ describe.runIf(windows)(`sandboxed end-to-end release publication ${WINDOWS_ONLY
         expect(retry.payload.events.filter((event) => event === `apply:${stage}`)).toHaveLength(1);
       }
     }
-  }, 120_000);
+    // 16 powershell.exe spawns (8 stages x fail-then-retry), each in its own sandbox. Alone it
+    // lands around 60s; inside the full suite, sharing 16 logical cores with ~370 other test
+    // files, it crossed the old 120s allowance and failed the push gate as a timeout rather than
+    // an assertion (observed 2026-08-24: 216s for this file, this test 120.2s). The allowance is
+    // the only thing widened here — every assertion above is unchanged.
+  }, 300_000);
 
   it("9. treats authentication failure as fatal", () =>
     expectFailure("authentication-failure", /failures are fatal.*Bad credentials/i));
