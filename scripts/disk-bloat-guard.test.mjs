@@ -19,7 +19,16 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { diskBloatFlags, gitCommonDir, measureDir, TARGET_BLOAT_BYTES, worktreeRoots } from "./lib/disk-bloat.mjs";
+import {
+  diskBloatFlags,
+  FLEET_BLOAT_BYTES,
+  gitCommonDir,
+  IDLE_BLOAT_BYTES,
+  IDLE_BLOAT_DAYS,
+  measureDir,
+  TARGET_BLOAT_BYTES,
+  worktreeRoots,
+} from "./lib/disk-bloat.mjs";
 
 const SCRIPTS = dirname(fileURLToPath(import.meta.url));
 const SOURCE = readFileSync(join(SCRIPTS, "lib", "disk-bloat.mjs"), "utf8");
@@ -77,6 +86,14 @@ describe("report-only, by construction", () => {
 
   it("keeps the owner's ~20 GB threshold", () => {
     expect(TARGET_BLOAT_BYTES).toBe(20 * 1024 ** 3);
+  });
+
+  // The fleet line is DERIVED from the owner's number rather than picked, so that a later edit
+  // cannot quietly retune the report by inventing a second, unrelated constant.
+  it("derives the fleet line from the owner's number instead of inventing one", () => {
+    expect(FLEET_BLOAT_BYTES).toBe(2 * TARGET_BLOAT_BYTES);
+    expect(IDLE_BLOAT_BYTES).toBeLessThan(TARGET_BLOAT_BYTES);
+    expect(IDLE_BLOAT_DAYS).toBe(14);
   });
 });
 
@@ -178,5 +195,86 @@ describe("the flag line", () => {
     const [flag] = diskBloatFlags(main, { threshold: 1024, cap: 3 });
     expect(flag).toContain("at least");
     expect(flag).toContain("measurement capped mid-walk");
+  });
+});
+
+// The class the original flag could not see. Measured 2026-08-24: six trees, 59.08 GB, NONE of them
+// over the 20 GB per-tree line — the flag was green while four idle trees held 35.9 GB between them.
+// Age is driven by moving `now` forward rather than by rewriting file mtimes, so these cases say the
+// same thing on any filesystem and never depend on a clock the test does not own.
+describe("idle build output — under the line, and nobody is using it", () => {
+  const targetOf = (root) => join(root, "src-tauri", "target");
+  const DAY = 24 * 60 * 60 * 1000;
+  const laterBy = (days) => Date.now() + days * DAY;
+
+  it("names a tree that is under the threshold but has gone untouched", () => {
+    const { main, linked } = fakeRepo(1);
+    file(join(targetOf(linked[0]), "cold.rlib"), 8192);
+    const flags = diskBloatFlags(main, { threshold: 1024 ** 4, idleThreshold: 1024, now: laterBy(30) });
+    expect(flags).toHaveLength(1);
+    expect(flags[0]).toContain("linked-0/src-tauri/target");
+    // 29 or 30: the file's mtime is written a hair after `now` is read, and some filesystems round
+    // it up. The age is a report line, not a gate, so a one-day floor is the honest assertion.
+    expect(flags[0]).toMatch(/has not been written to in (29|30) days/);
+    expect(flags[0]).toContain("nothing was deleted");
+    expect(flags[0]).toContain("cargo clean --manifest-path");
+  });
+
+  it("stays quiet while the tree is still being built in", () => {
+    const { main } = fakeRepo(1);
+    file(join(targetOf(main), "warm.rlib"), 8192);
+    expect(diskBloatFlags(main, { threshold: 1024 ** 4, idleThreshold: 1024, now: laterBy(IDLE_BLOAT_DAYS - 1) })).toEqual([]);
+  });
+
+  it("does not report the same tree twice when it is oversized AND idle", () => {
+    const { main } = fakeRepo(1);
+    file(join(targetOf(main), "huge-and-cold.rlib"), 8192);
+    const flags = diskBloatFlags(main, { threshold: 1024, idleThreshold: 512, now: laterBy(30) });
+    expect(flags).toHaveLength(1);
+    expect(flags[0]).toContain("of Rust build output (>");
+  });
+
+  it("leaves a tree too small to be worth its rebuild alone", () => {
+    const { main } = fakeRepo(1);
+    file(join(targetOf(main), "tiny.rlib"), 512);
+    expect(diskBloatFlags(main, { threshold: 1024 ** 4, idleThreshold: 4096, now: laterBy(90) })).toEqual([]);
+  });
+
+  it("treats a target holding no readable file as unknown age, not as old", () => {
+    const { main } = fakeRepo(1);
+    mkdirSync(join(targetOf(main), "debug", "incremental"), { recursive: true });
+    expect(diskBloatFlags(main, { threshold: 1024 ** 4, idleThreshold: 0, now: laterBy(90) })).toEqual([]);
+  });
+});
+
+// The number no per-tree rule can produce. This is the line that would have fired on 2026-08-24.
+describe("the fleet total", () => {
+  const targetOf = (root) => join(root, "src-tauri", "target");
+
+  it("reports the total across worktrees and names the biggest, without flagging any one of them", () => {
+    const { main, linked } = fakeRepo(2);
+    file(join(targetOf(linked[0]), "a.rlib"), 4096);
+    file(join(targetOf(linked[1]), "b.rlib"), 8192);
+    const flags = diskBloatFlags(main, { threshold: 1024 ** 4, fleetThreshold: 8192 });
+    expect(flags).toHaveLength(1);
+    expect(flags[0]).toContain("across 2 worktrees");
+    expect(flags[0]).toContain("linked-1");
+    expect(flags[0]).toContain("nothing was deleted");
+  });
+
+  it("says nothing when the machine's whole build output is within bounds", () => {
+    const { main, linked } = fakeRepo(2);
+    file(join(targetOf(linked[0]), "a.rlib"), 4096);
+    file(join(targetOf(linked[1]), "b.rlib"), 4096);
+    expect(diskBloatFlags(main, { threshold: 1024 ** 4, fleetThreshold: 1024 ** 3 })).toEqual([]);
+  });
+
+  it("comes last, after the per-tree lines it summarises", () => {
+    const { main, linked } = fakeRepo(1);
+    file(join(targetOf(linked[0]), "big.rlib"), 8192);
+    const flags = diskBloatFlags(main, { threshold: 1024, fleetThreshold: 4096 });
+    expect(flags).toHaveLength(2);
+    expect(flags[0]).toContain("linked-0/src-tauri/target");
+    expect(flags[1]).toContain("across 1 worktrees");
   });
 });
