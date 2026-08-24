@@ -17,9 +17,10 @@ import { lsGet, lsSet } from "../data/safe-storage";
 // the report survives even if they never send. The gated auto-POST variant ("send straight to Compy")
 // is a separate future surface with its own spec + security review + owner sign-off — not this.
 
-// Owner intake. Personal box today (organic beta seed); flip to feedback@compy.gg at public launch —
-// this one constant is the whole change. Reversible, single source of truth.
-const INTAKE_EMAIL = "christian.mcniel@gmail.com";
+// Owner intake. Dedicated support box (no longer the owner's personal mail); flip to
+// feedback@compy.gg at public launch — this one constant is the whole change. Reversible,
+// single source of truth.
+const INTAKE_EMAIL = "compysupport@gmail.com";
 // Mirrors the backend FEEDBACK_MAX_CHARS cap (export.rs) so the counter matches what actually lands.
 const NOTES_MAX = 4000;
 // Keep the mailto: URL within what real mail clients accept — the FULL note always lives in the saved

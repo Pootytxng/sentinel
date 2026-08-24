@@ -33,7 +33,15 @@ This is the grand re-opening. We were never open; now we are, and the door says 
 
 ### RETIRED (these were self-gags, not virtues)
 - **No-telemetry absolutism.** Replaced by **Receipts telemetry**: anonymous results sharing +
-  install counting, **on by default once armed, disclosed at first run** (amended 2026-08-18 §2).
+  install counting, **opt-in, default OFF — even after the gate is armed — and disclosed at first
+  run.** (This supersedes the 2026-08-18 amendment's "on by default once armed", which contradicted
+  the Phase-3 line in §4 for five days. **Ruled 2026-08-24 by the owner (issue #207): default OFF.
+  The published "no telemetry" claim outranks any later amendment.** The decisive reason is that the
+  claim is already public: the app's own shipped description and the public download page both
+  promise **"No telemetry"**, and the release repo's README says *"Outbound: signed update check
+  only."* An on-by-default sharing gate would contradict a promise users have already been given.
+  **This is a DOCUMENTATION ruling only — no code or gate value changes: `receipts_gate()` stays
+  hard-false and no send path exists.**)
   Purpose: aggregate real measured outcomes → marketing claims that are exciting AND true ("RX 6600 rigs measured +X% 1%-lows after these 3 fixes — N=412").
   Constraints (non-negotiable): first-run disclosure, a real off switch, anonymous (no PII/serials),
   kill-switch, no third-party trackers, payload inspectable by the user before send. It is a NEW
@@ -100,7 +108,8 @@ This is the grand re-opening. We were never open; now we are, and the door says 
 - **Phase 2 — compy.gg one-pager + waitlist** (owner hosts; Cowork drafts copy; assets may live in
   repo `site/`). KPI: **waitlist signups in 14 days** — the first real market signal.
 - **Phase 3 — Receipts telemetry** (opt-in results sharing + install counting). Gate: own spec,
-  security-grade review, default OFF, owner sign-off (new outbound boundary). KPI: opt-in rate.
+  security-grade review, **default OFF — and it stays OFF after arming (ruled 2026-08-24, issue
+  #207; see §2)** — owner sign-off (new outbound boundary). KPI: opt-in rate.
 - **Phase 4 — Affiliate surface** (Priorities + web reports). Gate: copy review (advisory framing,
   disclosure line). KPI: click-through. Owner errand: affiliate accounts.
 - **Phase 5 — Compy Pro dark scaffolding** (license gate + Pro surfaces). Gate: stays dark until

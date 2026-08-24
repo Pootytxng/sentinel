@@ -6,38 +6,60 @@ import { checkHandoffBlock, lastAssistantText } from "./lib/handoff-block.mjs";
 // proving it cannot be satisfied by half a block — that is the exact way the law kept failing.
 
 describe("checkHandoffBlock", () => {
-  it("accepts a block carrying both a disposition and a next action", () => {
-    const msg = `**HANDOFF** — this session can be archived. Next session: finish the
+  it("accepts a block carrying a tab verdict, a lane and a next action", () => {
+    const msg = `**HANDOFF** — this tab is safe to close. Same lane. Next session: finish the
       WebviewWindowBuilder fix in src-tauri/src/lib.rs.`;
     expect(checkHandoffBlock(msg)).toEqual({ ok: true, missing: [] });
   });
 
-  it("rejects a done-report with no disposition — the original failure mode", () => {
+  it("rejects a done-report with none of the three — the original failure mode", () => {
     // This is (a compressed version of) the message the owner had to correct on 2026-08-11:
     // complete, accurate, verified, and useless for keeping his sidebar clean.
     const msg = "Done. Three merged, main is green. Nothing for you to do.";
     const { ok, missing } = checkHandoffBlock(msg);
     expect(ok).toBe(false);
     expect(missing).toEqual([
-      "disposition (archive / delete / leave open)",
+      'tab verdict ("safe to close" / "keep this tab open because ...")',
       "next action for the following session",
+      "which lane that next action is on (same lane / a new lane / name it)",
     ]);
   });
 
-  it("rejects a disposition with no next action", () => {
-    const { ok, missing } = checkHandoffBlock("This session is safe to delete.");
+  it('rejects "leave session open" — the wording the owner could not act on', () => {
+    // 2026-08-20, his words: it never said "how im supposed to know when to actually close the tab
+    // in vscode". It described the model's state, so it must not satisfy the tab verdict.
+    const msg = "**HANDOFF** — leave session open. Next session: run the gate on the same lane.";
+    const { ok, missing } = checkHandoffBlock(msg);
+    expect(ok).toBe(false);
+    expect(missing).toEqual(['tab verdict ("safe to close" / "keep this tab open because ...")']);
+  });
+
+  it("rejects keeping the tab open without a reason — a hold he cannot evaluate is not a verdict", () => {
+    const msg = "Keep this tab open. Next session: re-run the gate on lane/cleanup-train.";
+    expect(checkHandoffBlock(msg).ok).toBe(false);
+    expect(checkHandoffBlock("Keep this tab open because PR #163 is mid-merge. Next session: merge it.").ok).toBe(true);
+  });
+
+  it("rejects a verdict and lane with no next action", () => {
+    const { ok, missing } = checkHandoffBlock("This tab is safe to close. Same lane.");
     expect(ok).toBe(false);
     expect(missing).toEqual(["next action for the following session"]);
   });
 
-  it("rejects a next action with no disposition", () => {
-    const { ok, missing } = checkHandoffBlock("Next session: rebuild and ship the installer.");
+  it("rejects a next action with no tab verdict", () => {
+    const { ok, missing } = checkHandoffBlock("Next session: ship the installer on the same lane.");
     expect(ok).toBe(false);
-    expect(missing).toEqual(["disposition (archive / delete / leave open)"]);
+    expect(missing).toEqual(['tab verdict ("safe to close" / "keep this tab open because ...")']);
+  });
+
+  it("rejects a verdict and next action that never say which lane", () => {
+    const { ok, missing } = checkHandoffBlock("Safe to close. Next session: rebuild and ship.");
+    expect(ok).toBe(false);
+    expect(missing).toEqual(["which lane that next action is on (same lane / a new lane / name it)"]);
   });
 
   it("is insensitive to wrapping and case, so reformatting cannot flip the verdict", () => {
-    const wrapped = "HANDOFF\n\nLEAVE\n  OPEN.\n\nNEXT   SESSION: run the gate.";
+    const wrapped = "HANDOFF\n\nSAFE   TO\n  CLOSE.\n\nNEXT   SESSION: run the gate on THIS LANE.";
     expect(checkHandoffBlock(wrapped).ok).toBe(true);
   });
 
@@ -48,11 +70,10 @@ describe("checkHandoffBlock", () => {
   });
 
   it("does not accept the bare word handoff as a next action substitute", () => {
-    // "handoff" IS in the next-action vocabulary, so this proves the disposition half still bites.
+    // "handoff" IS in the next-action vocabulary, so this proves the other two halves still bite.
     expect(checkHandoffBlock("Handoff below.").ok).toBe(false);
   });
 });
-
 describe("lastAssistantText", () => {
   const line = (obj) => JSON.stringify(obj) + "\n";
   const assistant = (text, extra = {}) => line({ type: "assistant", message: { content: [{ type: "text", text }] }, ...extra });

@@ -1,12 +1,18 @@
 # Compy — Privacy Policy
 
-**Status: DRAFT v0.4 (2026-08-04).** Reflects how the software AND the website behave today, with one
-stated exception: v0.4 adds the **local support record**, which is written and tested in the source
+**Status: DRAFT v0.5 (2026-08-24).** v0.5 adds four things the software already did but this policy
+did not describe — the **local session history** (including the game executable name), the
+**application-start notes** taken during capture, the **rig fingerprint**, and the **licence file**
+— and names the second GitHub host the update check redirects to. Nothing about the software
+changed; the policy was stricter than the build, and this closes that gap in the honest direction.
+Reflects how the software AND the website behave today, with one
+stated exception: v0.4 added the **local support record**, which is written and tested in the source
 but is not yet in a released installer — it is disclosed here ahead of shipping rather than after,
 so no build can ever collect something this policy has not already described. (v0.3 disclosed the
 signed, consent-first app updater that went live on 2026-07-22, and the Settings switch that turns
 its automatic checks off.) It is **not legal advice** — the owner should still have it reviewed by a
-qualified professional before public distribution. Owner/contact identity: Pootytxng (GitHub issues).
+qualified professional before public distribution. Owner/contact identity: Pootytxng — GitHub
+issues, or compysupport@gmail.com.
 
 > **Doctrine pointer (updated 2026-08-09):** This policy describes current runtime behavior.
 > Receipts remains disabled and no send path exists. Tier 1 signed case intelligence is approved as
@@ -38,6 +44,13 @@ machine**, including:
   services, registry values it knows how to read).
 - Live performance sensors while you have monitoring open (GPU/CPU usage, temperatures where
   available, RAM, and FPS/frametime for a running game).
+- **Which applications start, while — and only while — a capture session is running.** Once per
+  second Compy compares the list of running process names against the previous second, so that a
+  stutter can be explained by "something else just launched" instead of left a mystery. Only the
+  *newly started* names are noted, as a line reading `<name> starting`; routine Windows background
+  processes are skipped, and a large burst of launches (a login or a boot) is ignored rather than
+  blamed on one app. Compy does not read what those applications are doing, only that they started.
+  The notes are kept in the local session record described below and are not uploaded.
 
 This information is **displayed to you and used only on your device**. Compy does not include it
 in the update request, and does not upload it anywhere.
@@ -47,6 +60,29 @@ in the update request, and does not upload it anywhere.
 - **Change history / "Trust Ledger":** a local audit log of changes you chose to apply, so
   they can be rolled back. Stored at `%APPDATA%\Compy\history.json`. It records what was
   changed, the prior value (so it can be restored), and a timestamp. It stays on your device.
+- **Session history:** when a monitoring session ends, Compy writes a summary of it to
+  `%APPDATA%\Compy\sessions.json`, keeping up to the 100 most recent. Each entry records **the
+  executable name of the game or app that was presenting frames** (for example `game.exe`), the
+  start time and duration, the FPS / frametime / 1%-low figures, peak GPU temperature and usage,
+  peak RAM, whether Gaming Mode was on, and the rig fingerprint described below. For the most
+  recent sessions it also keeps the per-second stutter timeline and the events behind it —
+  including the application-start notes described above; older sessions shed those when the file is
+  saved. This is a record of what you played and when, and Compy keeps it so it can compare a bad
+  session against a good one. It stays on your device: there is no path in the software that sends
+  it, and deleting the file simply starts a new empty history.
+- **Rig fingerprint (`hw_fingerprint`):** a short label stamped onto Trust Ledger entries and
+  session summaries so Compy can tell "this rig" from "a rig you used to have" — which is what lets
+  it say *"applied before your hardware changed"* instead of guessing. **It is deliberately not a
+  machine ID.** It is the first 8 bytes of a SHA-256 of exactly four spec strings — GPU model, GPU
+  driver version, whole gigabytes of RAM, and display resolution/refresh rate — and nothing else:
+  no serial number, no MAC address, no Windows installation ID, no disk ID, no username. Thousands
+  of identical rigs produce the identical value, which is the point — it groups by hardware class
+  and cannot single you out. It stays on your disk.
+- **Licence file (only if you buy Compy Pro):** a purchased licence is saved as
+  `%APPDATA%\Compy\license.key`. The signed token inside it carries a **one-way hash of the email
+  address you purchased with** — not the address itself — along with the tier name and the issue
+  and expiry dates. Compy reads it locally to decide whether Pro features are unlocked; nothing
+  sends it back out.
 - **FPS monitoring working files:** temporary data under `%APPDATA%\Compy\runtime\`
   (`fps.json`, `fps.alive`) used to pass live capture data between Compy and its local
   capture helper. Local only.
@@ -84,7 +120,10 @@ Compy makes **one kind of automatic network request: a signed update check.**
 
 - **What it asks.** Whether a newer signed version of Compy exists, by fetching a fixed release
   manifest from GitHub:
-  `https://github.com/Pootytxng/compy-releases/releases/latest/download/latest.json`.
+  `https://github.com/Pootytxng/compy-releases/releases/latest/download/latest.json`. That URL is a
+  redirect, so the check touches **two GitHub-operated hosts**, not one: `github.com`, which answers
+  with the redirect, and `objects.githubusercontent.com`, GitHub's release-asset host, which serves
+  the manifest file itself. Both are GitHub; no other host is contacted.
 - **When.** Once when the app starts, and about every four hours while it stays open.
 - **What it sends about you.** Nothing. The request carries no hardware inventory, no sessions, no
   Trust Ledger, no settings, no identifier, and no account — there is no account. As with any

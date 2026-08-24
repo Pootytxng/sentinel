@@ -75,13 +75,16 @@ Detect → diagnose → debrief → prove. That loop is built and running today 
   clicks Update now, and every package is signature-verified against the pinned public key before
   install (private key lives outside the repo). The Export report still leaves only by the user's
   hand. **Receipts telemetry** (anonymous, kill-switched) remains a separate gated track requiring
-  its own security review and owner sign-off before it can arm. **⚠️ ITS DEFAULT AFTER ARMING IS
-  GENUINELY UNSETTLED, and `docs/RECEIPTS_DOCTRINE.md` contradicts itself (found 2026-08-23):** its
-  Phase-3 line says *"opt-in results sharing … default OFF"* <!-- retired-claim-allow --> while its
-  amended anti-absolutism line says **on by default once armed, disclosed at first run**. Both are
-  in the law. **Nobody should quote either as settled until the owner rules** — see the issue filed
-  2026-08-23. What IS true today: the gate is built dark with no send path, so nothing can send
-  regardless of which default wins. The old
+  its own security review and owner sign-off before it can arm. **ITS DEFAULT IS SETTLED: opt-in,
+  default OFF, and it stays OFF even after the gate is armed** — ruled 2026-08-24 by the owner on
+  issue #207, which resolved the contradiction found 2026-08-23 between `RECEIPTS_DOCTRINE.md`'s
+  Phase-3 line (*"opt-in results sharing … default OFF"* <!-- retired-claim-allow -->) and its
+  amended anti-absolutism line (**on by default once armed**) <!-- retired-claim-allow -->. The
+  deciding reason: the app's shipped description and the public download page both promise **"No
+  telemetry"**, and the releases README says "Outbound: signed update check only" — a claim already
+  published to users outranks a later internal amendment. The doctrine now says default OFF in both
+  places; quote that. Nothing about the runtime changed with the ruling — the gate is built dark
+  with no send path, so nothing can send regardless. The old
   "verified zero-outbound" absolute is RETIRED by the updater decision <!-- outbound-claim-allow --> — the in-app footer now
   states exactly what leaves the machine: "Outbound: signed update check only." Since 2026-08-03
   the automatic check is also switchable off (Settings → About → Automatic update checks), with a

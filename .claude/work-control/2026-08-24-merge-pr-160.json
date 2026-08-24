@@ -1,0 +1,66 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "feature",
+  "pr": 160,
+  "issue": 158,
+  "branch": "lane/usage-audit-disk-bloat",
+  "currentHead": "bf1b56c8e6a4ea0901fa8cb6be025fae80b6c3a0",
+  "explicitHandoff": "Owner turn 2026-08-24: \"run the self review and clear up any remaining work or unfinished task.\" docs/BACKLOG.md had already written down what that sentence unblocks, verbatim: PR #160 and PR #163 are \"BLOCKED - another lane owns these\" and \"if they are still idle at the next check this becomes one question for the owner ('may I adopt these two?')\". They are still idle four days on, and the owner's sentence IS that answer for the half that is provable. This receipt adopts #160 only. #163 stays untouched - it is CONFLICTING/DIRTY and needs its own lane to rebase, which is a rewrite, not a proof.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-home-room.",
+    "remoteState": "origin re-fetched with --prune immediately before this receipt. origin/main = 7eced01d - another lane merged PR #212 (support address / privacy contact) while this merge was being gated, so the FIRST candidate merge commit was discarded and remade on top of it rather than carried forward on a stale base. origin/lane/usage-audit-disk-bloat = e3c8b0c757b4ead619d6552dd964511ca5a5574e, unmoved since 2026-08-20. gh reported PR #160 mergeable UNKNOWN only because GitHub was still recomputing after main moved; git merge-tree --write-tree against origin/main wrote a clean tree with no conflict before either merge was made. No status checks exist on this repo by the Actions-budget decree, so the local gate below is the whole proof.",
+    "worktree": "git worktree list re-checked at merge time: nine worktrees. NO worktree holds lane/usage-audit-disk-bloat - C:/Users/Kuya/code/sentinel-diskbloat, the folder its lane used, sits on lane/cleanup-train-2026-08-20 at 456995b5. So this merge collides with no checkout at all. This session holds sentinel-home-room, plus sentinel-fourroom under a verified takeover posted on #49 for different work.",
+    "branch": "lane/train-2026-08-22 (LOCAL ONLY - git ls-remote returns nothing for it) at bf1b56c8, which is origin/main 7eced01d plus one --no-ff merge commit, 0 behind. Merged LOCALLY on purpose rather than through gh pr merge: a server-side merge commit is a head no pre-push hook ever gated, and an ungated head is the whole reason this PR stalled.",
+    "dirtyState": "Clean at this head apart from this receipt, which by construction cannot ride inside the head it authorizes. The recurring .codex/config.toml regression (#196) was discarded, not debugged, at session start per the standing note - and PR #212, merged mid-gate, is the lane that fixed its header for real.",
+    "liveProcesses": "No cargo, rustc, link or msbuild process anywhere on the machine at merge time - nothing is mid-build in any worktree. One compy.exe (pid 18804) running the INSTALLED ccc17355 desk build from the #49 takeover, unrelated to this PR. No release or install mutex is held."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "bf1b56c8e6a4ea0901fa8cb6be025fae80b6c3a0",
+      "detail": "Run standalone at EXACTLY this merge commit - not at the lane's base, which is 152 commits behind and is the stale proof this PR was stuck on. Read in FULL: dependency bootstrap, git diff check, frontend tests 366 files / 4904 passed / 6 skipped, type-check + build, 963 Rust tests 0 failed, clippy, final line LOCAL CHECK RESULT: PASS, exit 0. Log: logs/verify-local-2026-08-24T12-39-31Z.log. Two earlier runs are worth recording rather than hiding. Run 1 FAILED on scripts/branch-disposition-audit.test.mjs - 'origin/lane/support-email-2026-08-24 exists on origin but has no row' - and git ls-remote --heads origin proved that ref was NOT on origin at all: it was a stale remote-tracking entry left behind when another lane merged and deleted it, so the fix was git fetch --prune, not a row and not a threshold change. Run 2 passed, and was then INVALIDATED by that same lane's merge landing on main, which is why this head is a remade merge rather than the one run 2 gated."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "detail": "Nothing in this PR reaches compy.exe. Its four files are scripts/lib/disk-bloat.mjs, scripts/disk-bloat-guard.test.mjs, scripts/usage-audit.mjs and .claude/skills/usage-audit/SKILL.md - the weekly audit harness, which runs as a scheduled node task and is never compiled into the binary. src/ and src-tauri/ are untouched, so the owner's installed build is unaffected and is deliberately NOT rebuilt for this."
+  },
+  "selfReview": {
+    "applicable": false,
+    "detail": "No UI surface. src/**/*.{tsx,css} is untouched by this PR."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; docs/WORK_CONTROL.md makes that review advisory rather than blocking. The available substitutes were used instead: the incoming code carries its own adversarial guard (scripts/disk-bloat-guard.test.mjs asserts the report-only and no-subprocess properties against the SOURCE TEXT, so a later edit that added a delete call would fail the build), and the module was executed for real against this machine rather than trusted from its tests - see behaviourProof."
+  },
+  "behaviourProof": [
+    "diskBloatFlags(repoRoot) at the shipped 20 GiB threshold returns [] on this machine, and that is the correct answer, not a broken one: no single src-tauri/target here is over 20 GB.",
+    "Re-run at a 1 GiB threshold to prove it is measuring rather than merely silent, it found SIX worktrees in 4.2 s, biggest first: sentinel-home-room 13.0 GB, .claude/worktrees/merge-prs-tauri-visibility-c5660e 10.2 GB, sentinel-fourroom 10.1 GB, sentinel-testrig 10.1 GB, sentinel-diskbloat 7.8 GB, sentinel 7.8 GB. Issue #158's success criterion 'measures ALL worktrees, not just the checkout the script runs from' is therefore verified against reality, not only against the temp-directory fixtures.",
+    "FINDING, recorded rather than fixed: those six trees total ~59 GB, but the owner's ~20 GB threshold is PER TREE, so the flag as specified stays silent while the machine carries 59 GB of build output. The threshold is the owner's number (#158: 'over ~20GB') and this lane does not get to quietly redefine an owner-set number to make its own flag fire. Raised to him and left in his hands."
+  ],
+  "closureNotes": [
+    "Why this PR sat green for four days: its receipt .claude/work-control/2026-08-20-merge-pr-160.json was written at a head main left behind 152 commits ago, and refreshing an existing receipt's currentHead is refused by the auto-mode classifier - correctly, since from the outside that is indistinguishable from rewriting a proof so a blocked gate passes. A NEW receipt at a head that actually exists is a different act and is the documented way out.",
+    "Neither file the lane touches that also exists on main - scripts/usage-audit.mjs and .claude/skills/usage-audit/SKILL.md - received a single commit on main across those 152 (git log merge-base..origin/main -- <paths> is empty), so there is no semantic drift hiding under the clean textual merge.",
+    "PR #160's own thread already contains the correction that the earlier 'gh pr merge is refused by the classifier' premise was wrong: --delete-branch fails only in its LOCAL cleanup step, after the remote merge has already happened. That is a separate trap and is not what blocked this one."
+  ],
+  "remaining": [
+    "The remote ref lane/usage-audit-disk-bloat and its CLAIMED row in docs/BRANCH_DISPOSITIONS.md leave TOGETHER in the commit that follows this merge - the audit fails a row naming a dead ref and fails a ref with no row, so they cannot be split across two pushes.",
+    "PR #163 (lane/cleanup-train-2026-08-20) is NOT adopted here. It is CONFLICTING/DIRTY, it carries the superseded 2026-08-20 receipt for this very merge, and rebasing another lane's docs train is a rewrite rather than a proof.",
+    "#126's ref-retirement is one ref closer but still a DECISION queue: what remains needs owner product-scope calls, not gates."
+  ]
+}

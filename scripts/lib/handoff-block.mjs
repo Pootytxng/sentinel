@@ -9,18 +9,32 @@
 // and the hook is only plumbing.
 //
 // WHAT THE OWNER ACTUALLY NEEDS, and therefore what counts as a pass:
-//   1. A DISPOSITION — is this session archive / delete / leave open? He keeps no notes, so a
-//      session whose fate is unstated stays in his sidebar forever and buries the live work.
+//   1. A TAB VERDICT — may he close this VS Code tab, or must he keep it open and why? He keeps no
+//      notes, so a session whose fate is unstated stays in his sidebar forever and buries the live
+//      work.
 //   2. A NEXT ACTION — what the next session should do, specifically enough to paste and start.
-// Both, or it does not count. A cheerful "all done!" with no disposition is exactly the failure.
+//   3. A LANE — does that next action continue THIS lane, or start a different one? Without it he
+//      cannot tell whether the handoff describes the work he was just watching or something else.
+// All three, or it does not count. A cheerful "all done!" with no verdict is exactly the failure.
+//
+// WHY THE VOCABULARY CHANGED (owner, 2026-08-20). It used to demand "archive / delete / leave open".
+// In his words: that wording never said "what it literally means or how im supposed to know when to
+// actually close the tab in vscode". "Leave open" described the model's state, not an instruction he
+// could act on, so it is no longer accepted — the block must name the tab and the lane.
 
 // Matched against a whitespace-collapsed, lowercased copy: re-wrapping a block must never change
 // the verdict, and neither must capitalisation.
 const flatten = (text) => String(text ?? "").replace(/\s+/g, " ").toLowerCase();
 
-// The disposition vocabulary. Deliberately narrow: these are the three fates a session can have in
-// his sidebar, and a fuzzy synonym list would let a vague sentence pass as a decision.
-const DISPOSITION = /\b(archiv(e|ed|able)|delet(e|ed|able)|leave (it )?open|keep (it )?open|still open)\b/;
+// The tab verdict. Deliberately narrow, and deliberately about the TAB rather than the "session":
+// he acts on a window in front of him, not on the model's internal state. Keeping it open is only a
+// verdict when it carries a reason, so the "keep" arm requires because/until/so/while after it.
+const TAB_VERDICT =
+  /\b(safe to close|done with this tab|(you can |ok to )?close (this|the) tab|keep (this|the) tab open (because|until|so|while)\b)/;
+
+// Which lane the next action belongs to. "same lane" and "new lane" both pass; so does naming the
+// branch or PR outright, which is stronger. A handoff that names no lane is the ambiguity he hit.
+const LANE = /\b(same lane|this lane|a new lane|different lane|no lane|not lane-scoped|lane\/|branch |pr #\d|#\d{2,})/;
 
 // The next-action half. "handoff" alone is not enough — the word is easy to type and says nothing.
 const NEXT_ACTION = /\b(next session|next step|next action|hand ?off|resume|pick up|start here|paste)\b/;
@@ -33,8 +47,11 @@ const NEXT_ACTION = /\b(next session|next step|next action|hand ?off|resume|pick
 export function checkHandoffBlock(text) {
   const flat = flatten(text);
   const missing = [];
-  if (!DISPOSITION.test(flat)) missing.push("disposition (archive / delete / leave open)");
+  if (!TAB_VERDICT.test(flat)) {
+    missing.push('tab verdict ("safe to close" / "keep this tab open because ...")');
+  }
   if (!NEXT_ACTION.test(flat)) missing.push("next action for the following session");
+  if (!LANE.test(flat)) missing.push("which lane that next action is on (same lane / a new lane / name it)");
   return { ok: missing.length === 0, missing };
 }
 

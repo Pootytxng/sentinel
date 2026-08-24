@@ -113,13 +113,13 @@ worth celebrating. It stays here so a new report has a place to land, not as a c
 5. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
    below). Delegated to the Codex lane — do not duplicate it here.
 
-**BLOCKED — another lane owns these; `WORK_CONTROL.md` says hands off, not adjudicate:**
-PR [#160](https://github.com/Pootytxng/sentinel/pull/160) (`lane/usage-audit-disk-bloat`) is
-**MERGEABLE/CLEAN** and simply unmerged; PR [#163](https://github.com/Pootytxng/sentinel/pull/163)
-(`lane/cleanup-train-2026-08-20`) is **CONFLICTING/DIRTY** and needs its own lane to rebase. Neither
-has moved since 2026-08-20. An idle claim is an alarm, not a takeover — **but those two are also
-the reason #126 cannot finish**, so if they are still idle at the next check this becomes one
-question for the owner ("may I adopt these two?"), not an indefinite wait.
+**#160 is MERGED, 2026-08-24** — `bf1b56c8`; issue #158 closed with it, ref pruned, row dropped.
+It sat green four days on bookkeeping alone: its 2026-08-20 receipt named a head `main` had left
+152 commits behind, and refreshing an existing receipt’s `currentHead` is classifier-refused. The
+way out was a NEW receipt proved at a head that exists. **Still another lane’s:** PR
+[#163](https://github.com/Pootytxng/sentinel/pull/163) (`lane/cleanup-train-2026-08-20`) is
+**CONFLICTING/DIRTY** — a rebase is a rewrite, not a proof — and it carries the superseded receipt
+for that very merge.
 
 **#126's remaining nine refs are a DECISION queue, not a cleanup queue** — two are the PRs above,
 one is a Codex claim, and the rest need an owner product-scope call (bklit design system ·
@@ -138,7 +138,7 @@ line, not because it is suspect but because it is exactly the kind that goes sta
 **ALSO OPEN, not yet queued** (so none of it drops silently): #133 CARE capability rails tasks 4–7 ·
 #140 CPU temp (PawnIO/MSR — needs a Capability Exception record first) · #64 Q2b main-window caller
 checks · #54/#55 Project Doctor (Codex-claimed) · #49 Quiet Pit Wall (needs a visual self-review) ·
-#158 disk-bloat flag (that IS PR #160) · NAV-1 (awaiting owner direction) · the PHASE A–D rows
+NAV-1 (awaiting owner direction) · the PHASE A–D rows
 below. **TYPE-1's mono residual is NOT among them — it was closed 2026-08-18/19** (`3eca4a9f` +
 `be4c81ec`): [`../src/design/mono-law-guard.test.ts`](../src/design/mono-law-guard.test.ts) censuses
 every mono rule behind a down-only ratchet, 0 violations. It sat listed as open here for four days
