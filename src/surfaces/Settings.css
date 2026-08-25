@@ -387,6 +387,24 @@
 .receipts-error {
   color: var(--ix-danger);
 }
+/* The first-run card is a column of prose, and prose has a measure — `.receipts-hint` caps itself
+   at 56ch. Left unconstrained, the card's divider and its Accept/No-thanks row stretched the full
+   1090px of a span="full" tile while the text they belonged to stopped at ~483px, so the card read
+   as content stranded at the left of an empty tile. 62ch keeps the rules under the words they
+   divide, and still clears the 484px the two buttons need side by side. Only the DISCLOSURE is
+   constrained: the switch state below is a label-left / control-right row and wants the full
+   width. */
+.receipts-disclosure {
+  max-width: 62ch;
+}
+/* The first-run Accept / No-thanks pair. `.set-row` is built for label-left, control-right, so
+   reusing it as-is threw the two buttons to opposite ends of the tile — roughly 700px apart, far
+   enough that you cannot compare the two choices in one look. They are siblings, not a label and
+   its control, so they sit together. Both keep the identical `.set-action` treatment on purpose:
+   making "no thanks" the quieter button on a privacy disclosure is a dark pattern. */
+.receipts-choice {
+  justify-content: flex-start;
+}
 .receipts-preview {
   margin: 10px 0 0;
   padding: 12px;

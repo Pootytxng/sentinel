@@ -388,8 +388,17 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
     opt-in, default OFF even after arming, because the shipped "No telemetry" claim is already
     public.** Guards updated to match, never weakened.
     Merged `8b2f0f64` (PR #218): disclosure UI + off switch, `EULA.md` §10, no CSP widening needed
-    (the send is Rust-side). Receiver **deployed + empty** 2026-08-25 on the owner's yes. Still open: the **visual self-review** of that consent UI — not run, so
-    it is NOT owner-approved. `receipts_gate()` at `src-tauri/src/receipts.rs:23` is the last line
+    (the send is Rust-side). Receiver **deployed + empty** 2026-08-25 on the owner's yes.
+    **Visual self-review DONE 2026-08-25 — PASS** (12/12 after one round-trip). It ran on the
+    fixture rig, not a build, because the surface is unreachable in every build; the rig itself had
+    been dead since #148 and was repaired first (`041cabbc`). Round 1 FAILed item 2: both failure
+    messages rendered in `receipts-hint`, the same calm grey as ordinary copy, so a refused consent
+    write read as a footnote. Fixed and guarded in `b20e59dc` — and the same defect turned out to
+    be in `Fix.tsx` (a refused apply) and `LicensePanel.tsx` (a failed activation), both fixed in
+    the same commit. A second round-trip gave the first-run card a measure (62ch) so its divider and
+    its Accept / No-thanks pair stop where the prose stops instead of stretching a full-width tile.
+    **Still NOT owner-approved** — he has the before/after but has not ruled.
+    `receipts_gate()` at `src-tauri/src/receipts.rs:23` is the last line
     of it, not the first, and arming is owner territory. 🪪 **owner-gated sub-item:** EU/UK distribution
     needs a region check before any sharing ships there.
   - [ ] **Q9b — build Tier 3 in-app feedback + crash reports.** Own module

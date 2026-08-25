@@ -129,13 +129,13 @@ export default function ReceiptsConsent() {
       <div data-testid="receipts-consent">
         {consent.disclosed_at === null ? (
           // FIRST RUN. Nothing has been shared and nothing can be until this is answered.
-          <div data-testid="receipts-disclosure">
+          <div className="receipts-disclosure" data-testid="receipts-disclosure">
             <p className="receipts-hint">{t("optimize.receiptsConsent.hint")}</p>
             <p className="receipts-hint">
               {t("optimize.receiptsConsent.destination", { endpoint })}
             </p>
             {inspectRow}
-            <div className="set-row">
+            <div className="set-row receipts-choice">
               <button className="set-action" onClick={() => acknowledge(true)}>
                 {t("optimize.receiptsConsent.acceptButton")}
               </button>
