@@ -56,13 +56,16 @@ been deployed since 2026-07-15** — so no build lane was cut. What the KPI actu
 (#206) and the domain (#201 §1), not more website. Building a second one-pager would have produced a
 prettier page with the same zero.
 
-Production is also **2 weeks stale** and still says *"Compy is a free desktop app"* — the fix has
-been merged on `main` since 2026-08-22 and never deployed. `dist-site/` is rebuilt and staged
-(`npm run stage:site`). **The deploy is owner territory — it publishes.** Command:
-`npx wrangler pages deploy dist-site --project-name compy`.
-**Tell him what changed in the ask:** the staged tree now also carries `functions/api/usage.ts`, so
-approving the deploy stands up the Tier 2 receiver. It is inert — the app-side gate is false, so
-nothing on any PC sends to it — but it is a live endpoint, and that is his call to make knowingly.
+Production had also been **2 weeks stale**, still calling Compy *"a free desktop app"*. **Deployed
+2026-08-25** on the owner's yes, after he was told the staged tree now also carried
+`functions/api/usage.ts`: `npx wrangler pages deploy dist-site --project-name compy`. Promotion
+proven by hash — `compy-bd6.pages.dev` and the deployment URL return byte-identical HTML, so a
+"stale" apex is his browser cache, not the deploy.
+
+**The Tier 2 receiver is LIVE and inert.** `compy_reports` migration 0001 applied, `IP_PEPPER` set,
+`/api/usage` answers GET with 405 and a junk POST with 400 `{"ok":false}`. Nothing on any PC sends
+to it — `receipts_gate()` is false — and the table is empty. Standing it up before the arming
+commit is the sequence `functions/api/usage.ts` was designed around, not a step ahead of the gate.
 
 ## The design vision is a separate train — do not fold it into a UI fix
 
@@ -102,8 +105,8 @@ nothing on any PC sends to it — but it is a live endpoint, and that is his cal
 
 ## Waiting on the owner (all in `OWNER_ACTION_CHECKLIST.md`)
 
-1. **Approve the site deploy** — staged and verified, one command, publishes to the world.
-2. **Register `compy.gg`** (~$50/yr, money). Everything downstream of it is blocked, not scheduled.
-3. **The Ko-fi URL** (B3a).
-4. Whenever he wants: **#204** (Pro price shape) · **#213 A1** — the wordmark renders `©ompy`, a
+1. **Register `compy.gg`** (~$50/yr, money). Everything downstream of it is blocked, not scheduled —
+   including re-pointing the endpoint constant off `compy-bd6.pages.dev`.
+2. **The Ko-fi URL** (B3a).
+3. Whenever he wants: **#204** (Pro price shape) · **#213 A1** — the wordmark renders `©ompy`, a
    recommendation is attached in §D · **#213 B** needs his ChatGPT mockups.

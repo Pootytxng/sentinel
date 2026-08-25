@@ -388,7 +388,7 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
     opt-in, default OFF even after arming, because the shipped "No telemetry" claim is already
     public.** Guards updated to match, never weakened.
     Merged `8b2f0f64` (PR #218): disclosure UI + off switch, `EULA.md` §10, no CSP widening needed
-    (the send is Rust-side). Still open: the **visual self-review** of that consent UI — not run, so
+    (the send is Rust-side). Receiver **deployed + empty** 2026-08-25 on the owner's yes. Still open: the **visual self-review** of that consent UI — not run, so
     it is NOT owner-approved. `receipts_gate()` at `src-tauri/src/receipts.rs:23` is the last line
     of it, not the first, and arming is owner territory. 🪪 **owner-gated sub-item:** EU/UK distribution
     needs a region check before any sharing ships there.
