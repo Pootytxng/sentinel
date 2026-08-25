@@ -137,8 +137,8 @@ lab-49-parity-port). Evidence:
 so the next branch pushed to origin must archive that file's current sweep before it can add its row.
 
 **Two CLOSED rows moved verbatim to [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) 2026-08-25** —
-#160's merge (`bf1b56c8`, #158 closed with it) and the 2026-08-23 primary-worktree-trap discharge,
-whose commit numbers are now stale. Both are history; re-derive worktree state, never quote it.
+#160 landing on main (`bf1b56c8`, #158 closed with it) and the 2026-08-23 primary-checkout trap
+discharge, whose commit numbers are now stale. Both are history; re-derive that state, never quote it.
 
 **ALSO OPEN, not yet queued** (so none of it drops silently): #133 CARE capability rails tasks 4–7 ·
 #140 CPU temp (PawnIO/MSR — needs a Capability Exception record first) · #64 Q2b main-window caller
