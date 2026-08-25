@@ -89,7 +89,16 @@ closed and the owner **approved four room comps 2026-08-23**, bundled implementa
 pinned in `src/design/approved-comps-guard.test.ts`. Three ledgers instead said it "needs the owner's
 ChatGPT mockups, which no session in this repo has" — invented in `642d48d6`, never re-derived, and it
 handed his own complaint back to him. **B2 is his ruling, not a defect** (`a83d4809`, pinned by
-`comp-fidelity-guard.test.ts`): the mint CTA is sampled off the comps. B1/B3/B4/B5 are mine.
+`comp-fidelity-guard.test.ts`): the mint CTA is sampled off the comps. **DISCHARGED 2026-08-25**
+(`4d65902e`, shipped to his desk, self-review PASS 12/12): **B1** and **B5** were not directions at
+all — the titlebar grounded on the violet-tinted `--ix-base` (`rgb(12,10,20)` measured on the old
+binary; the comp samples `#0a0c10`) and the rail seam was drawing the light half of a bevel with
+nothing under it (`#07080a` at x=216 is new). **B3 is disproven as filed** — the comp's headline
+measure is ~16ch, NARROWER than the shipped 20ch, so the three-line wrap is copy length
+(`revertedTitle_one` interpolates an unbounded rec title into a display headline), not type scale.
+**B4 joins B2 as approved design** — the comp draws the nav numerals as bordered chips. Two A-list
+items also came back wrong: **A5's fix deviates from the comp** (it prints "Compy" in both places on
+purpose) and **A1's `©ompy` is in the comp too**, so it is the mark he approved, not a regression.
 
 #### ③ REPO HYGIENE — real, but nobody is waiting on it
 
@@ -119,14 +128,6 @@ handed his own complaint back to him. **B2 is his ruling, not a defect** (`a83d4
 5. **Extend the Codex weekly automation to product-conformance scope, writing INTO the repo** (row
    below). Delegated to the Codex lane — do not duplicate it here.
 
-**#160 is MERGED, 2026-08-24** — `bf1b56c8`; issue #158 closed with it, ref pruned, row dropped.
-It sat green four days on bookkeeping alone: its 2026-08-20 receipt named a head `main` had left
-152 commits behind, and refreshing an existing receipt’s `currentHead` is classifier-refused. The
-way out was a NEW receipt proved at a head that exists. **Still another lane’s:** PR
-[#163](https://github.com/Pootytxng/sentinel/pull/163) (`lane/cleanup-train-2026-08-20`) is
-**CONFLICTING/DIRTY** — a rebase is a rewrite, not a proof — and it carries the superseded receipt
-for that very merge.
-
 **#126's remaining nine refs are a DECISION queue, not a cleanup queue** — two are the PRs above,
 one is a Codex claim, and the rest need an owner product-scope call (bklit design system ·
 user-feedback Lab recovery · quiet-pit-wall half B) or a per-file landing (review-consolidation —
@@ -135,11 +136,9 @@ lab-49-parity-port). Evidence:
 [`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md), now at **120/120** against its doc-budget ceiling,
 so the next branch pushed to origin must archive that file's current sweep before it can add its row.
 
-**THAT TRAP IS DISCHARGED, 2026-08-23:** the PRIMARY worktree `C:/Users/Kuya/code/sentinel` is on
-`main` at `7d262e14` = `origin/main`, **0 ahead / 0 behind**, and the untracked receipt that would
-have collided with a fast-forward is gone. The only dirty path is `.codex/config.toml` (another
-lane's, leave it). A branch cut there no longer starts stale — **re-derive before believing this
-line, not because it is suspect but because it is exactly the kind that goes stale in a day.**
+**Two CLOSED rows moved verbatim to [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) 2026-08-25** —
+#160's merge (`bf1b56c8`, #158 closed with it) and the 2026-08-23 primary-worktree-trap discharge,
+whose commit numbers are now stale. Both are history; re-derive worktree state, never quote it.
 
 **ALSO OPEN, not yet queued** (so none of it drops silently): #133 CARE capability rails tasks 4–7 ·
 #140 CPU temp (PawnIO/MSR — needs a Capability Exception record first) · #64 Q2b main-window caller

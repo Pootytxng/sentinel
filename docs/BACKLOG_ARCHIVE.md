@@ -3122,3 +3122,19 @@ guard itself; this is the narrative.
   "Session monitor" + "Ready when you are". The third half reads `src/surfaces` from disk and fails
   by name when a `RoomShell` caller is missing from that list; it found two more rooms unscanned on
   its first run. **A list of files to check is only as good as the memory that wrote it.**
+
+## Moved out of BACKLOG ▶ NEXT UP 2026-08-25 (byte budget — verbatim)
+
+**#160 is MERGED, 2026-08-24** — `bf1b56c8`; issue #158 closed with it, ref pruned, row dropped.
+It sat green four days on bookkeeping alone: its 2026-08-20 receipt named a head `main` had left
+152 commits behind, and refreshing an existing receipt’s `currentHead` is classifier-refused. The
+way out was a NEW receipt proved at a head that exists. **Still another lane’s:** PR
+[#163](https://github.com/Pootytxng/sentinel/pull/163) (`lane/cleanup-train-2026-08-20`) is
+**CONFLICTING/DIRTY** — a rebase is a rewrite, not a proof — and it carries the superseded receipt
+for that very merge.
+
+**THAT TRAP IS DISCHARGED, 2026-08-23:** the PRIMARY worktree `C:/Users/Kuya/code/sentinel` is on
+`main` at `7d262e14` = `origin/main`, **0 ahead / 0 behind**, and the untracked receipt that would
+have collided with a fast-forward is gone. The only dirty path is `.codex/config.toml` (another
+lane's, leave it). A branch cut there no longer starts stale — **re-derive before believing this
+line, not because it is suspect but because it is exactly the kind that goes stale in a day.**

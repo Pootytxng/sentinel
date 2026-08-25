@@ -348,6 +348,10 @@ numbering, the motion default, the sibling-slop sweep) moved 2026-08-22 to
   untouched, the pulse-C survives everywhere it is big enough to read (site header, About, splash), and
   the triple-click egg is preserved by revealing the pulse during its beat instead of at rest. Rendered
   at true rail size and sent to you 2026-08-24. Say no and it stays as it is.
+  **Correction 2026-08-25 — this is not a regression, it is the mark you approved.** The same
+  arc-plus-crosshair C reads as `©` at rail size in `01-health-approved.png`, one of the four comps
+  you signed off on 2026-08-23. Nothing crept in. The recommendation above is unchanged; what changed
+  is that saying "leave it" is choosing what you already chose, not tolerating a bug.
 
 ---
 
