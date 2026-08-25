@@ -239,11 +239,11 @@ returns false, so the real `runas` branch is live (not the direct-spawn fallback
    owner (his hands, eyes, input, money/legal calls). Surface it when he asks "show my checklist" and
    at the end of every train; never let an item silently drop.
 5. **`docs/UI_VISION_BACKLOG.md`** — the ONE home for every owner-authored UI/design ask. For anything
-   UI/visual, read its 🔴 OPEN section. **Do NOT report UI as "done"/"queue empty" off RELEASE_STATE
-   alone** — that tracks the shipped Instrument-HUD reskin, not his unbuilt motion/interaction vision
-   (panoramic drag telemetry gallery, magnetic cursor, Lenis, GSAP data-reactivity). **A "COMPLETE"
-   redesign checkbox that leaves 🔴 items here is a false-done — a reskin is not the vision.** When
-   shipping something simpler than he asked, log it as a substitution needing sign-off.
+   UI/visual, read its 🔴 OPEN rows — today DIR-1 (the standing intuitive-UI lens) and §G (the site);
+   `src/ui-vision-status-guard.test.ts` rule D pins this line to those headings. **Do NOT report UI
+   as "done" off RELEASE_STATE alone, and do NOT re-queue a row from a paraphrase** — the July motion
+   stack (§A) shipped and the panoramic gallery was deleted on his order. **A "COMPLETE" redesign
+   checkbox that leaves 🔴 items is a false-done — a reskin is not the vision.** Log substitutions.
 6. **`docs/RECEIPTS_DOCTRINE.md`** (money/product direction) · **`docs/CHANGELOG.md`** (dated banners +
    full change history, point-in-time). Treat any file:line claim as point-in-time.
 

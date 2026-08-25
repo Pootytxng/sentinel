@@ -31,10 +31,10 @@ frontend-design, vercel web-design-guidelines — evaluated, extracted, not adde
 
 - **Nothing mechanical.** The lock is a build gate; drift now fails `npm test` and the pre-push
   gate on any editor/agent/hookless session.
-- **The owner's larger design VISION is not this train** and remains open by his own backlog:
-  `docs/UI_VISION_BACKLOG.md` 🔴 OPEN (panoramic drag telemetry gallery, magnetic cursor, Lenis,
-  GSAP data-reactivity). The self-review verdict said this plainly: 6c054b77 is one scoped
-  increment; a reskin/lock is not the vision. That is the natural next design train.
+- **The owner's larger design VISION is not this train.** What `docs/UI_VISION_BACKLOG.md` still
+  lists 🔴 OPEN is DIR-1 (the standing intuitive-UI lens) and §G (the site's mini demo, his call).
+  The July motion stack (§A: magnetic cursor, Lenis, GSAP ticks, wipe) SHIPPED `1d310e12`; the
+  panoramic gallery he DELETED (`2de8d17c`). Do not re-queue either from a paraphrase.
 - **#214 is CLOSED** (2026-08-24): independent review PASS at `6f9baf38`, work-control receipt
   gate PASS, evidence in
   [#214 issuecomment-5404575387](https://github.com/Pootytxng/sentinel/issues/214#issuecomment-5404575387).

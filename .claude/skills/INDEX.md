@@ -24,6 +24,9 @@
 
 ### Evaluated and rejected — do not re-add without reading this
 
+- **`mattpocock/skills`** (plugin, already installed machine-wide as `mattpocock-skills:*`) — looked
+  at 2026-08-24 on the owner's suggestion. Chat-time workflows (`grilling`, `diagnosing-bugs`, `tdd`,
+  `code-review`); nothing mechanizable to extract into a guard, nothing to vendor. Use on demand.
 - **`emilkowalski/skills`** (review-animations · improve-animations · find-animation-opportunities ·
   animation-vocabulary) — evaluated 2026-08-24 in the design-system lock-in (#214). The strongest
   motion content reviewed, and unlike LottieFiles it **agrees** with `impeccable` on every hard rule

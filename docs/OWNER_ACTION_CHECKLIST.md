@@ -210,41 +210,22 @@ push:
 - **"Upgrade-path engine"** (your Optimize feedback, 2026-07-03): the advisory upgrade block exists,
   but the fuller engine was deferred to "its own spec" and never built. Want it built, or leave it?
 
-### B5. Your UI vision — pick what to build next  ·  ⏳  ·  [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md)
-You caught (2026-07-08) that a UI task list you'd made had been dropped. It had — your design
-direction was scattered across ~20 specs and the redesign lane was marked "COMPLETE" after only the
-*look* (Instrument-HUD reskin) shipped, while the **motion/interaction layer you were most excited
-about was never built.** Now consolidated into [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) — its
-🔴 OPEN section is the real remaining work. **Direction now DECIDED (2026-07-09):** the drag gallery was
-built then rejected + **deleted**; the JARVIS motion stack (magnetic cursor, GSAP data-reactivity, hologram
-inertia) is being built via the APPROVED **Ops Console** rollout
-(`docs/superpowers/specs/2026-07-09-compy-console-hud-direction.md`; the Instrument-Bench bento was
-rejected on sight). **Correction (2026-07-11 audit — this line previously contradicted UI_VISION_BACKLOG.md and was
-wrong):** Lenis smooth-scroll — **UPDATE 2026-07-22: this correction is now ITSELF stale.** The
-2026-07-11 audit found Lenis "still unbuilt, verified 0 files" — true then, but the JARVIS motion
-train shipped 2026-07-12 (`1d310e1`) and built it: `src/design/jarvis/LenisSpine.tsx` exists,
-imports `lenis@1.3.25`, and is mounted in `ShellV2.tsx` behind the `jarvis` flag (A7 above confirms
-that flag is default-ON, owner-ratified 2026-07-14). UI_VISION_BACKLOG.md §A.5 already reflects this
-(🟢 BUILT) — only this file's paraphrase had drifted out of sync with it. The HoloLens onboarding
-tour redesign is **NOT open — it SHIPPED** (verified 2026-07-08, UI_VISION_BACKLOG.md §H) and should
-not have been listed here as unresolved.
-**Also corrected 2026-07-22 (same stale-paraphrase pattern — re-verified against current code, and
-UI_VISION_BACKLOG.md already had these right):** the magnetic-cursor slice is **BUILT**, not just a
-narrower "reticle" — `MagneticLayer.tsx` (delegated magnetic pull via GSAP `quickTo`) is imported and
-mounted in `ShellV2.tsx`, commit `1d310e1`. GSAP data-reactivity is **BUILT** — `ArcGauge`'s
-count-up/ring-sweep plus a GSAP data-tick flash on real measured changes. The room-transition wipe
-itself is **BUILT** (`1d310e1`, keyed remount on room change in `ShellV2.tsx`) — what's actually
-still partial is a *different*, narrower sub-piece: Monitor's "living oscilloscope trace" treatment
-for its meters (Home has one trace; Monitor's rollout is incomplete) — don't conflate the two.
-**Still genuinely open, unchanged:** the site-glow/"full overhaul" gate.
-
-<!-- shipped-status-history -->
-**Corrected 2026-08-19 (backlog C-12, same stale-paraphrase pattern as the two above).**
-CommandPalette was listed here as deliberately parked, quoting `ShellV2.tsx`'s "a search box that
-does nothing would be a fake affordance." The owner unparked it 2026-08-11 and it has shipped
-**DEFAULT ON** since `22fb15b2` — topbar box + Ctrl+K over every destination, `UI_VISION_BACKLOG.md`
-§D. **Nothing here is waiting on you for it.** `src/design/shipped-feature-doc-truth.test.ts` now
-fails the suite if this claim comes back.
+### B5. Your UI vision — what is still yours to call  ·  ⏳  ·  [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md)
+The motion/interaction stack you were most excited about is **built and on by default** — magnetic
+cursor, Lenis spine, GSAP data-ticks and the room wipe shipped `1d310e12` (2026-07-12) and you
+approved them on sight ("everything looks good"). The panoramic drag gallery you rejected 2026-07-09
+and it was **deleted on your order** (`2de8d17c`); its drag/inertia feel lives on the rig hologram.
+Two doc lines kept paraphrasing all of that as unbuilt and sent a session at it on 2026-08-24;
+`src/ui-vision-status-guard.test.ts` rule D now fails the build on a pointer that names features
+instead of rows. What [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) still lists 🔴 OPEN: **DIR-1**
+(your standing intuitive-UI lens — mine to apply on every train, nothing for you to pick) and **§G**
+(the site's mini playable demo, which you flagged "maybe later"). **Yours, and only these two:**
+1. **Do you want a panoramic drag surface back** — in the *type/level of effect* sense you meant in
+   July, not the sister-site clone? One line on what it should show and I build it. Recommendation:
+   **no** — the hologram's drag-orbit already carries that feel, and a second drag canvas is exactly
+   the sensory load DIR-1 bars.
+2. **#49's B1–B5 direction is blocked on the ChatGPT mockups only you have** — paste them into the
+   issue and that train resumes.
 - **You said "there's more I'm missing" + "capture it first"** — done (this doc). **Next → tell me if
   the 🔴 list is complete or still short an item.** The first build target is **DECIDED** — the Instrument
   Bench Phase-1 build (the drag gallery is deleted, not a build option). Note: your original **"Feature Roadmap Checklist (CC Brief)"**

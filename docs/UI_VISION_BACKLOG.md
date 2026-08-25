@@ -407,7 +407,7 @@ single-column reading/reveal surfaces, not dashboards. Four flag-off failsafes (
 `MonitorBasic`, classic `Play`) stay on old chrome on purpose. Guarded by `one-hero-guard.test.ts`
 (four rules; the last two written from defects this conversion itself caused).
 
-### ⭐ STANDING DIRECTIVE — organization · ease of access · inherently intuitive UI (owner, restated 2026-07-23; "made many times") 🔴 OPEN
+### ⭐ DIR-1. STANDING DIRECTIVE — organization · ease of access · inherently intuitive UI (owner, restated 2026-07-23; "made many times") 🔴 OPEN
 
 **Owner verbatim (2026-07-23, updater-ship session):**
 
@@ -631,7 +631,7 @@ room. Do not add to that baseline — fix the rule.
 Full evidence, screenshots and the remaining copy/layout findings:
 [`docs/decisions/2026-08-11-design-navigation-audit.md`](decisions/2026-08-11-design-navigation-audit.md).
 
-### NAV-1. Navigation & consolidation audit (2026-07-23) — findings + candidates awaiting owner direction 🔴 OPEN
+### NAV-1. Navigation & consolidation audit (2026-07-23) — ✅ CLOSED 2026-08-24: findings 1–4 and forks (a)–(c) below all shipped; the lens lives on as DIR-1
 
 **What real testers hit (2026-07-22 reviews, 0.9.0 build — the receipts for this audit):**
 J: after a check you're dropped on the dashboard "feeling lost — where do I go to apply these?";

@@ -147,7 +147,7 @@ line, not because it is suspect but because it is exactly the kind that goes sta
 **ALSO OPEN, not yet queued** (so none of it drops silently): #133 CARE capability rails tasks 4–7 ·
 #140 CPU temp (PawnIO/MSR — needs a Capability Exception record first) · #64 Q2b main-window caller
 checks · #54/#55 Project Doctor (Codex-claimed) · #49 Quiet Pit Wall (needs a visual self-review) ·
-NAV-1 (awaiting owner direction) · the PHASE A–D rows
+the PHASE A–D rows
 below. **TYPE-1's mono residual is NOT among them — it was closed 2026-08-18/19** (`3eca4a9f` +
 `be4c81ec`): [`../src/design/mono-law-guard.test.ts`](../src/design/mono-law-guard.test.ts) censuses
 every mono rule behind a down-only ratchet, 0 violations. It sat listed as open here for four days
