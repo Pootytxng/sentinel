@@ -6,7 +6,7 @@
 
 ## Where the train is standing
 
-**The 2026-08-25 persistent-workflow session cleared its queue and closed three issues.** `main` is
+**The 2026-08-25 persistent-workflow session cleared its queue and closed four issues.** `main` is
 green, nothing half-built, no lane mid-flight. Desk build `b2b740bf` (stamp-proved); fleet v0.9.26 (`5e64074c`).
 
 | Commit | What |
@@ -19,10 +19,11 @@ green, nothing half-built, no lane mid-flight. Desk build `b2b740bf` (stamp-prov
 | `7b7e5a1c` | four docs cited `claude/*.md` as if on disk — those are Cowork-only; corrected + guarded |
 | `a3f3a75b`·`77861d6d` | **this file called seven checkouts "all spent"** — eleven, four unmerged; corrected + guarded |
 | `4f73fb86` | `.codex`'s hook selftest was red 39/2 and run by nothing; both hooks repaired, its static half made resident |
+| `bd058100`·`9c4a8717` | #129 discharged — its commit-graph finding was **still red**, repaired, `verify` now exits 0; PR #163 closed superseded; #128 finally reached the owner's checklist |
 
 **Closed:** [#199](https://github.com/Pootytxng/sentinel/issues/199) (all four items) ·
 [#133](https://github.com/Pootytxng/sentinel/issues/133) (Tasks 4–7) ·
-[#203](https://github.com/Pootytxng/sentinel/issues/203) (`.mcp.json` → `shadcn@4.19.0`) — each with a gated receipt in `.claude/work-control/`.
+[#203](https://github.com/Pootytxng/sentinel/issues/203) (`.mcp.json`) · [#129](https://github.com/Pootytxng/sentinel/issues/129) (the Codex weekly handoff) — each with a gated receipt in `.claude/work-control/`.
 
 ## Q9a's one open item is now closed — the consent UI has been reviewed
 
@@ -96,7 +97,7 @@ the honest caveat only up to v0.9.26. See [`RELEASE_TRANSACTION.md`](RELEASE_TRA
 ## Repo state a fresh session should know without re-deriving
 
 - **Eleven worktrees besides `main`; six are spent but FOUR still carry work that is not on main** —
-  `lane/cleanup-train-2026-08-20` (PR #163, CONFLICTING, another lane's), `feat/user-feedback-lab-recovery`,
+  `lane/cleanup-train-2026-08-20` (PR #163 closed superseded 2026-08-25), `feat/user-feedback-lab-recovery`,
   `feat/lab-49-parity-port`, `lane/vision-pointer-guard-2026-08-24`. Do not reset those. The nested
   `.claude/worktrees/merge-prs-tauri-visibility-c5660e` is detached, dirty on `.codex/config.toml`,
   and **cannot be removed** without `--force`, which stays owner-blocked. `sentinel-testrig` holds an
