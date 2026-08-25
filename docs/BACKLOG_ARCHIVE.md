@@ -7,6 +7,28 @@
 
 ---
 
+## Moved from NEXT UP 2026-08-25 - the 2026-08-22 state-of-queue block
+
+> **STATE OF THIS QUEUE, 2026-08-22 (updated after the owner's "do everything" turn).** Items 1 and
+> 4 are DONE: the owner said *"land 193 dude"* and site pricing merged as `d5571766`; C-14
+> `GpuProfile` was wired into the Lab as an advisory panel, closing owner fork **B_gpu**. **One item
+> is left and it is not mine**: item 5 (the Codex weekly-automation scope) belongs to the Codex lane
+> and duplicating it is the failure mode, not the fix. Items 2 and 3 are recorded as
+> closed *to the limit of what can be measured on this desk*, which is not the same as solved — read
+> their rows for exactly what is still unproven (#121's cause is unattributable at this resolution;
+> #128's release-side mutex has still never been held during a real publish). **Do not read an empty
+> non-gated queue as an empty project** — the conformance queue below, the UI vision backlog and
+> `PHASE B`/`C`/`D` all hold real work that is gated, delegated, or waiting on a product decision.
+
+## Moved from NEXT UP 2026-08-25 - the 2026-08-22 closed-work record
+
+> **Closed 2026-08-22, and section ② with them.** The Test room's "Your rig" reading set
+> landed (PR [#194](https://github.com/Pootytxng/sentinel/pull/194), merged), and **COLOR-1 was never
+> open** — it shipped 2026-08-13 (`700cd565`), and the queue was reading the 🔴 marker on the
+> ARCHIVED original inside that row's collapsed `<details>` block. bug → guard:
+> [`../src/ui-vision-status-guard.test.ts`](../src/ui-vision-status-guard.test.ts) now fails the build
+> on a status marker inside an archive block, and on any queue item calling a shipped vision row open.
+
 ## 2026-08-24 — two closed NEXT UP ① rows, moved verbatim (section cap)
 
 Moved out of `docs/BACKLOG.md` byte-for-byte when the owner reported five rendering defects and ①

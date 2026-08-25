@@ -33,23 +33,15 @@
 > **Take the top unblocked item.** Owner items are named once, with a pointer —
 > [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) stays their home.
 
-> **Closed 2026-08-22, and section ② with them.** The Test room's "Your rig" reading set
-> landed (PR [#194](https://github.com/Pootytxng/sentinel/pull/194), merged), and **COLOR-1 was never
-> open** — it shipped 2026-08-13 (`700cd565`), and the queue was reading the 🔴 marker on the
-> ARCHIVED original inside that row's collapsed `<details>` block. bug → guard:
-> [`../src/ui-vision-status-guard.test.ts`](../src/ui-vision-status-guard.test.ts) now fails the build
-> on a status marker inside an archive block, and on any queue item calling a shipped vision row open.
+> **One more CLOSED block moved verbatim to [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) 2026-08-25**
+> (section cap): the 2026-08-22 record of PR #194 landing and COLOR-1 never having been open. Its
+> guard outlived it — `../src/ui-vision-status-guard.test.ts` carries that lesson in code.
 
-> **STATE OF THIS QUEUE, 2026-08-22 (updated after the owner's "do everything" turn).** Items 1 and
-> 4 are DONE: the owner said *"land 193 dude"* and site pricing merged as `d5571766`; C-14
-> `GpuProfile` was wired into the Lab as an advisory panel, closing owner fork **B_gpu**. **One item
-> is left and it is not mine**: item 5 (the Codex weekly-automation scope) belongs to the Codex lane
-> and duplicating it is the failure mode, not the fix. Items 2 and 3 are recorded as
-> closed *to the limit of what can be measured on this desk*, which is not the same as solved — read
-> their rows for exactly what is still unproven (#121's cause is unattributable at this resolution;
-> #128's release-side mutex has still never been held during a real publish). **Do not read an empty
-> non-gated queue as an empty project** — the conformance queue below, the UI vision backlog and
-> `PHASE B`/`C`/`D` all hold real work that is gated, delegated, or waiting on a product decision.
+> **And the 2026-08-22 "state of this queue" block, same treatment** (archive, byte-for-byte). It
+> recorded items 1 and 4 done, item 5 as the Codex lane's, and items 2/3 closed only to the limit
+> of this desk — detail that now lives in the #121 and #128 rows below. The one line worth keeping
+> in front of a reader: **an empty non-gated queue is not an empty project.** The conformance queue,
+> the UI vision backlog and PHASE B/C/D all hold real work that is gated or waiting on a decision.
 
 #### ① A PERSON REPORTED IT AND WE HAVE NOT ANSWERED — these outrank everything
 
@@ -93,9 +85,18 @@ handed his own complaint back to him. **B2 is his ruling, not a defect** (`a83d4
 (`4d65902e`, shipped to his desk, self-review PASS 12/12): **B1** and **B5** were not directions at
 all — the titlebar grounded on the violet-tinted `--ix-base` (`rgb(12,10,20)` measured on the old
 binary; the comp samples `#0a0c10`) and the rail seam was drawing the light half of a bevel with
-nothing under it (`#07080a` at x=216 is new). **B3 is disproven as filed** — the comp's headline
-measure is ~16ch, NARROWER than the shipped 20ch, so the three-line wrap is copy length
-(`revertedTitle_one` interpolates an unbounded rec title into a display headline), not type scale.
+nothing under it (`#07080a` at x=216 is new).
+**B3 was RIGHT, and its rebuttal was wrong twice** — corrected 2026-08-25 (`5a3b5e1c`). The comp's
+~16ch measure said nothing, because `max-width: 20ch` computes to 716px against a **452px** column
+and never binds; and `revertedTitle_one` renders at `--type-body` in a spotlight row, not in a
+headline at all. Measured on the installed build, counting real line boxes: the comp's own
+"You're ready to play" draws **2** lines at 52px, and so does everything up to 31 characters — but
+"Compy changes were turned back off" (34, **the state his machine is in**) draws **3**, and the
+worst multi-flag headline draws **4**. `--type-hero` is comp-derived and untouched; past the
+measured break the headline steps down one to `--type-verdict`, restoring 2 lines out to 43
+characters and worsening nothing. Residual, recorded not guessed: every remaining 3-liner is the
+`· and N more` suffix, which is verdict copy in two locales and the owner's own
+name-it-and-fix-it-inline law — it gets a decision, not a drive-by edit.
 **B4 joins B2 as approved design** — the comp draws the nav numerals as bordered chips. Two A-list
 items also came back wrong: **A5's fix deviates from the comp** (it prints "Compy" in both places on
 purpose) and **A1's `©ompy` is in the comp too**, so it is the mark he approved, not a regression.
