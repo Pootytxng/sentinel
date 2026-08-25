@@ -356,3 +356,63 @@ describe("repo-drift detectors are resident, because the repo changes every day"
     expect(DRIFT_DETECTORS.filter((n) => !onDisk.includes(n))).toEqual([]);
   });
 });
+
+// ── The same question, asked of the directory that proved this guard's own blind spot ────────────
+//
+// 2026-08-25. `.codex/hooks/hooks-selftest.mjs` was found FAILING 39/2. It had been red for an
+// unknown stretch, because nothing runs it: it is not a `*.test.mjs`, so `npm test` never collected
+// it, and it is not in `scripts/`, so the sweep above never asked where it runs. A residency guard
+// scoped to one directory answers the question only for that directory — and the un-asked directory
+// is where the rot was.
+//
+// The two real defects it should have caught are described in `scripts/codex-hooks-guard.test.mjs`.
+// This block exists so that adding a third file under `.codex/hooks/` is red until someone says
+// where it runs, exactly as it is in `scripts/`.
+const CODEX_HOOKS = join(ROOT, ".codex", "hooks");
+
+const CODEX_RESIDENCY = {
+  "self-review-reminder.mjs": {
+    kind: "codex-runtime",
+    // Its own logic and its configured command line; the in-product firing is Codex's, not ours.
+    pinnedBy: "scripts/codex-hooks-guard.test.mjs",
+    why: "A Codex CLI PostToolUse hook. Codex invokes it, so `npm test` cannot exercise the real path — what IS resident is the CONFIGURATION that points at it: codex-hooks-guard proves the entry names this file, resolves the repo root, carries both platform lines, and that the file is on disk. Its behaviour is exercised by hooks-selftest below.",
+  },
+  "hooks-selftest.mjs": {
+    kind: "manual",
+    // The static half of what it checks is resident; the behavioural half is not, deliberately.
+    pinnedBy: "scripts/codex-hooks-guard.test.mjs",
+    why: "Runs the configured command lines through real cmd.exe and sh shells from three CWDs (~1.5s) and compares `git status --porcelain` across its own run, which a parallel vitest suite would flake. Its STATIC half — schema, allow-set, root resolution, echo suppression, files-on-disk — was lifted into codex-hooks-guard and IS resident; that is the half that drifted. Run this one by hand after touching hooks: `node .codex/hooks/hooks-selftest.mjs`.",
+  },
+};
+
+const codexOnDisk = readdirSync(CODEX_HOOKS)
+  .filter((n) => /\.(mjs|ps1|js)$/.test(n))
+  .sort();
+
+describe("every script in .codex/hooks/ has a declared residency too", () => {
+  it("classifies each one", () => {
+    expect(codexOnDisk.filter((n) => !CODEX_RESIDENCY[n])).toEqual([]);
+  });
+
+  it("declares nothing that is no longer on disk", () => {
+    expect(Object.keys(CODEX_RESIDENCY).filter((n) => !codexOnDisk.includes(n))).toEqual([]);
+  });
+
+  it("is not vacuous", () => {
+    expect(codexOnDisk.length).toBeGreaterThan(1);
+  });
+
+  it("resolves every pin to a resident test that actually names its subject", () => {
+    const broken = [];
+    for (const [name, entry] of Object.entries(CODEX_RESIDENCY)) {
+      if (!entry.pinnedBy?.endsWith(".test.mjs") || !exists(entry.pinnedBy)) {
+        broken.push(`${name}: pinnedBy ${entry.pinnedBy} missing`);
+      } else if (!read(entry.pinnedBy).includes(name)) {
+        broken.push(`${name}: ${entry.pinnedBy} does not name it`);
+      }
+      // Nothing here is resident in the ordinary sense, so the written reason is the whole record.
+      if ((entry.why ?? "").length < 40) broken.push(`${name}: no written reason`);
+    }
+    expect(broken).toEqual([]);
+  });
+});

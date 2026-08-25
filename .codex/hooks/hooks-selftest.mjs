@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // Codex hook self-test (corrective follow-up 2026-07-20).
 //
-// Scope: the Codex lane now retains exactly ONE hook — self-review-reminder.mjs, a PostToolUse hook
-// matched on the Codex-native `apply_patch` tool name. The five Claude-lane hooks (stop-continue,
+// Scope: the Codex lane retains TWO advisory PostToolUse hooks — self-review-reminder.mjs on the
+// Codex-native `apply_patch` tool name, and the Impeccable skill's design detector, added later by
+// that skill's own installer. Both are read-only and inject advisory context only. The allow-set in
+// section (B) names them; a third arriving unannounced is a failure, not a bumped count. The five Claude-lane hooks (stop-continue,
 // ship-reminder, subagent-model-guard, subagent-throttle, context-size-advisor) were REMOVED as
 // not-Codex-native and/or not-read-only, so their tests are gone; this test also asserts they stay
 // gone (out of hooks.json and off disk).
@@ -232,12 +234,27 @@ let posixCmd = null;
         for (const h of group.hooks || []) entries.push({ ...h, matcher: group.matcher });
       }
     }
-    check("exactly ONE hook entry is configured (the retained self-review reminder)", entries.length === 1, `found ${entries.length}`);
+    // A COUNT was the wrong assertion. It read "exactly ONE" from 2026-07-20 to 2026-08-25, then the
+    // Impeccable skill's own installer added a second hook and this line was the only thing that
+    // noticed — as a bare number, which says nothing about WHAT arrived. An allow-set names each
+    // hook and its reason, so a new one is a deliberate edit here rather than a count going up.
+    const ALLOWED = [
+      { script: "self-review-reminder.mjs", matcher: "apply_patch", why: "advisory self-review nudge, Codex-native tool name" },
+      { script: "impeccable/scripts/hook.mjs", matcher: "Edit|Write|apply_patch", why: "Impeccable design detector, installed by its own skill" },
+    ];
+    const lineOf = (e) => `${e.command} ${e.commandWindows}`;
+    const unexpected = entries.filter((e) => !ALLOWED.some((a) => lineOf(e).includes(a.script)));
+    check("every configured hook is on the allow-set above", unexpected.length === 0, unexpected.map((e) => e.command).join(" | "));
+    for (const a of ALLOWED) {
+      const found = entries.filter((e) => lineOf(e).includes(a.script));
+      check(`${a.script} is configured exactly once (${a.why})`, found.length === 1, `found ${found.length}`);
+      if (found.length === 1) {
+        check(`${a.script} matches ${a.matcher}`, found[0].matcher === a.matcher, String(found[0].matcher));
+        check(`${a.script} is type "command" (the only executed type)`, found[0].type === "command");
+      }
+    }
 
-    const e0 = entries[0] || {};
-    check("the retained hook matches the Codex-native `apply_patch` tool name", e0.matcher === "apply_patch", String(e0.matcher));
-    check('the retained hook is type "command" (the only executed type)', e0.type === "command");
-    check("the retained hook targets self-review-reminder.mjs", /self-review-reminder\.mjs/.test(`${e0.command} ${e0.commandWindows}`));
+    const e0 = entries.find((e) => lineOf(e).includes("self-review-reminder.mjs")) || {};
 
     // Every configured hook MUST carry both a POSIX command and a native-Windows commandWindows.
     check("every configured hook has a POSIX `command`", entries.every((e) => typeof e.command === "string" && e.command.length > 0));
