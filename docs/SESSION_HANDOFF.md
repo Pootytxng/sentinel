@@ -7,22 +7,22 @@
 ## Where the train is standing
 
 **The 2026-08-25 persistent-workflow session cleared its queue and closed three issues.** `main` is
-green and pushed. Nothing is half-built and no lane is mid-flight. The desk build is `b2b740bf`,
-installed and stamp-proved; the published fleet is still v0.9.26 (`5e64074c`).
+green, nothing half-built, no lane mid-flight. Desk build `b2b740bf` (stamp-proved); fleet v0.9.26 (`5e64074c`).
 
 | Commit | What |
 |---|---|
 | `041cabbc` | the fixture preview rig had been **dead since #148** — one import of a deleted CSS file made vite 500 on every state; repaired + guarded, and four Q9a states built |
 | `b20e59dc` | error copy that read like calm body text, in **three** surfaces; fixed + guarded |
 | `e1837670` | #199 items 3–4: `scripts/emit-release-receipt.mjs`, wired into `release.ps1`, plus its guard |
-| `e7111bd9` | the "not re-verifiable" caveat given an expiry so it cannot become permanent |
-| `493dcc18` | `.claude/`'s three prose invariants (skills index ↔ disk, unwired hooks) became a test |
+| `e7111bd9`·`493dcc18` | the "not re-verifiable" caveat given an expiry; `.claude/`'s three prose invariants became a test |
 | `3b279ddf` | the Q9a consent card's two choices sat ~700px apart; given a measure and regrouped |
+| `7b7e5a1c` | four docs cited `claude/*.md` as if on disk — those are Cowork-only; corrected + guarded |
+| `a3f3a75b`·`77861d6d` | **this file called seven checkouts "all spent"** — eleven, four unmerged; corrected + guarded |
+| `4f73fb86` | `.codex`'s hook selftest was red 39/2 and run by nothing; both hooks repaired, its static half made resident |
 
-**Closed:** [#199](https://github.com/Pootytxng/sentinel/issues/199) (all four items),
-[#133](https://github.com/Pootytxng/sentinel/issues/133) (Tasks 4–7),
-[#203](https://github.com/Pootytxng/sentinel/issues/203) (`.mcp.json` pinned to `shadcn@4.19.0`).
-Each carries a gated work-control receipt under `.claude/work-control/`.
+**Closed:** [#199](https://github.com/Pootytxng/sentinel/issues/199) (all four items) ·
+[#133](https://github.com/Pootytxng/sentinel/issues/133) (Tasks 4–7) ·
+[#203](https://github.com/Pootytxng/sentinel/issues/203) (`.mcp.json` → `shadcn@4.19.0`) — each with a gated receipt in `.claude/work-control/`.
 
 ## Q9a's one open item is now closed — the consent UI has been reviewed
 
@@ -81,8 +81,8 @@ the honest caveat only up to v0.9.26. See [`RELEASE_TRANSACTION.md`](RELEASE_TRA
 - **A rewrite of THIS file can break `src/ui-vision-status-guard.test.ts` rule D**, which counts the
   pointer paragraphs citing the vision file as open and needs at least three across CLAUDE.md, this
   file and the checklist. Dropping the vision section above turns the push red.
-- **A new script in `scripts/` is red until `scripts/gate-residency-guard.test.mjs` is told where it
-  runs.** It caught `emit-release-receipt.mjs` on the first push of this session.
+- **A new script in `scripts/` or `.codex/hooks/` is red until `scripts/gate-residency-guard.test.mjs`
+  is told where it runs.** It caught `emit-release-receipt.mjs` on this session's first push.
 - **A new command needs FOUR things:** `#[tauri::command]`, registration in `lib.rs`, a name in
   `build.rs` `APP_COMMANDS`, and an `allow-*` grant in `capabilities/default.json`.
 - **A new `src/design` component needs an a11y disposition** or `a11y-census-guard` fails.

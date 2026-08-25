@@ -34,6 +34,17 @@ const git = (...args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8"
 
 const WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
 
+/**
+ * The one bullet that describes THIS machine's checkouts. Both rules read from it rather than from
+ * the whole document: on 2026-08-25 the fix for this very defect added a changelog row quoting the
+ * old wrong number ("seven worktrees, all spent"), which sits ABOVE the corrected bullet — a
+ * whole-document match would have read the quote and failed the doc for saying what it fixed.
+ * Rule A shouts if this bullet is ever reworded away, so scoping cannot make either rule inert.
+ */
+export function repoStateBullet(markdown) {
+  return markdown.split(/\r?\n(?=- \*\*)/).find((b) => /not on main|NOT on main/.test(b)) ?? null;
+}
+
 /** "Eleven worktrees besides `main`" / "7 worktrees" — the count, however it is spelled. */
 export function statedWorktreeCount(markdown) {
   const m = markdown.match(/\b(\d{1,2}|[A-Za-z]+)\s+worktrees\b/i);
@@ -44,9 +55,7 @@ export function statedWorktreeCount(markdown) {
 
 /** Branch names in backticks inside the bullet that claims work is NOT on main. */
 export function branchesClaimedUnmerged(markdown) {
-  const bullet = markdown
-    .split(/\r?\n(?=- \*\*)/)
-    .find((b) => /not on main|NOT on main/.test(b));
+  const bullet = repoStateBullet(markdown);
   if (!bullet) return [];
   return [...bullet.matchAll(/`((?:lane|feat|fix|agent|docs|claude|codex|design|tooling|recovery)\/[A-Za-z0-9._/-]+)`/g)]
     .map((m) => m[1])
@@ -95,6 +104,11 @@ describe("the handoff tells the truth about the worktrees", () => {
       branchesClaimedUnmerged("- **A; six are spent but FOUR still carry work that is not on main** —\n  `lane/a` and `feat/b`."),
     ).toEqual(["lane/a", "feat/b"]);
     expect(branchesClaimedUnmerged("- **Nothing to see.** `feat/b` is fine.")).toEqual([]);
+    // Scoping: a changelog row quoting the OLD number must not outrank the corrected bullet below it.
+    const quoted = "| `a3f3a75b` | said \"seven worktrees, all spent\" |\n\n- **Two worktrees besides `main`; one carries work that is not on main** — `lane/a`.";
+    expect(statedWorktreeCount(quoted)).toBe(7);
+    expect(statedWorktreeCount(repoStateBullet(quoted))).toBe(2);
+    expect(repoStateBullet("- **Nothing here.** All clean.")).toBe(null);
     // The ancestry half, against a stub — no branch on origin is merged today, so this is the only
     // way to prove the rule fires rather than merely never having anything to say.
     const all = () => true;
@@ -126,7 +140,7 @@ describe("the handoff tells the truth about the worktrees", () => {
       expect(live).toBe(1);
       return;
     }
-    const stated = statedWorktreeCount(markdown);
+    const stated = statedWorktreeCount(repoStateBullet(markdown) ?? markdown);
     expect(stated, `${HANDOFF} states no worktree count; nothing to check.`).not.toBe(null);
     expect(
       stated,
