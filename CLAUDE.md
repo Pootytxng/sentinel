@@ -251,8 +251,8 @@ returns false, so the real `runas` branch is live (not the direct-spawn fallback
 
 ## TOKEN LAW (rebuilt on a cost model 2026-08-18)
 
-**Full policy: `claude/TOKEN_ECONOMY_LAW.md` (HQ); it wins over this and
-`.claude/USAGE_ECONOMICS.md`.** Carried context is **85% of measured spend**, output 15%.
+**Full policy: `claude/TOKEN_ECONOMY_LAW.md` — a Cowork project doc, NOT on disk; it wins over this
+and `.claude/USAGE_ECONOMICS.md`.** Carried context is **85% of measured spend**, output 15%.
 
 The universal half is `~/.claude/CLAUDE.md` §6–7; it loads every session and is not repeated here.
 

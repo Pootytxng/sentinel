@@ -2,7 +2,9 @@
 
 > **This file is no longer the policy.** The authoritative token/usage law is the HQ project doc
 > **`claude/TOKEN_ECONOMY_LAW.md`**, with its evidence in `claude/TOKEN_ECONOMY_DOSSIER_2026-08-18.md`.
-> Where anything here and that file disagree, that file wins.
+> Where anything here and that file disagree, that file wins. Both live in the Cowork project
+> (`019ff3cc…`) and are **not on disk** — no Claude Code session can open them, so quote from this
+> file and ask Cowork for the rest rather than searching for a path that has never existed.
 >
 > **What changed and why.** Everything this file used to say was derived from token COUNTS. Weighting
 > those counts by price (cache-read 0.1x / cache-write 2.0x / output 5x) across 152 sessions and
