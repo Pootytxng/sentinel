@@ -6,7 +6,7 @@
 
 ## Where the train is standing
 
-**Desk build `0fbabb93` (stamp-proved, `-VerifyRuntime`, 1 attempt) — #213's B half is DONE.**
+**Desk build `5a3b5e1c` (stamp-proved, `-VerifyRuntime`, 1 attempt) — #213 is CLOSED, B3 included.**
 `main` is green, nothing half-built, no lane mid-flight. Fleet is still v0.9.26 (`5e64074c`).
 
 | Commit | What |
@@ -14,19 +14,19 @@
 | `4ec3749b` | **#213's B half was never blocked.** Three ledgers said it "needs the owner's ChatGPT mockups" — invented in `642d48d6`, never re-derived, and it handed his own complaint back to him. His four room comps were **approved 2026-08-23** and bundled. Retracted + guarded (`src/design/approved-comps-guard.test.ts`, which records the bundle path IN the test because prose is what failed). |
 | `4d65902e` | **B1 + B5 built, measured off the comps.** The titlebar was grounding on `--ix-base`, which the default violet theme tints (`rgb(12,10,20)` measured on the old binary) — the comps sample `#0a0c10`. The rail seam was drawing a bevel's light half with nothing under it. Both now token-only and pinned. |
 | `0fbabb93` | **B5 was a general rule, not one seam.** The comps draw EVERY plane boundary as two rows — highlight on the panel's edge, shadow on the ground outside it — and the app shipped only the light half everywhere. The titlebar/app and topbar/content seams now match (`.wc-bar::after`, `.v2-top` box-shadow). Guard written FIRST: `src/design/seam-bevel-guard.test.ts`, 12 tests, with the PIL samples in the header and a falsification case. |
+| `5a3b5e1c` | **B3 was RIGHT, and the rebuttal below was wrong twice.** `max-width: 20ch` computes to 716px against a **452px** column and never binds; `revertedTitle_one` renders at `--type-body`, not in a headline. Measured over CDP counting real line boxes: the comp's own headline draws 2 lines at 52px and so does everything to 31 chars — but the 34-char one **his machine was showing** drew 3, and the worst drew 4. `--type-hero` is comp-derived and untouched; past the break the headline steps down to `--type-verdict`. Guard: `src/design/headline-fit-guard.test.ts`, 12 tests, the 21-row measured table in the header. |
 
 **The card edges were measured too and deliberately NOT changed** — implied alpha ~0.13 against
 0.32–0.43 at the plane seams, i.e. at the render's noise floor. The numbers are in the #213 comment
 rather than a second token guessed into existence.
 
-**The other three B items came back wrong, and were NOT built.** B2 is the owner's own 2026-08-23
-ruling (`--v2-cta: #2ed083`, sampled off the comps in `a83d4809`). **B4** likewise — the comp draws
-the nav numerals as bordered chips. **B3 is disproven by measurement**: the comp's headline measure
-is ~16ch, *narrower* than the shipped 20ch, so the three-line wrap is copy length, not type scale.
-The real finding under it is `revertedTitle_one` — the title placeholder interpolates an unbounded
-recommendation title into a display-size headline. **Two A-list items were wrong too:** A5's fix
-deviates from the comp (which prints "Compy" in both places on purpose), and A1's `©ompy` is in the
-approved comp, so it is the mark he signed off, not a regression that crept in.
+**B2 and B4 came back wrong and were NOT built.** B2 is the owner's own 2026-08-23 ruling
+(`--v2-cta: #2ed083`, sampled off the comps in `a83d4809`); **B4** likewise — the comp draws the nav
+numerals as bordered chips. **B3's rebuttal is retracted** (see the `5a3b5e1c` row): the ~16ch
+comp measure said nothing because the cap never binds, and `revertedTitle_one` is not a headline.
+**Two A-list items were wrong too:** A5's fix deviates from the comp (which prints "Compy" in both
+places on purpose), and A1's `©ompy` is in the approved comp, so it is the mark he signed off, not a
+regression that crept in.
 
 > **The lesson, and it has now cost two sessions: check the owner decision behind a surface before
 > "fixing" it.** #213 was filed by an agent audit the day AFTER he approved the comps. Acting on its
