@@ -77,8 +77,8 @@ the honest caveat only up to v0.9.26. See [`RELEASE_TRANSACTION.md`](RELEASE_TRA
   when the label is missing and then `assert` still fails. Board cache
   `%LOCALAPPDATA%\CompyEntry\board.json`, 10-min TTL. `Claim expires` / `Last verified` are **date**
   fields: `gh project item-edit --date`, not `--text`.
-- **`scripts/launch-focus-guard.test.mjs` fails only under full parallelism** and names the test
-  runner's own `node.exe`. It passes 49/49 isolated — re-run before believing it.
+- **START HERE next session (`docs/BACKLOG.md:246`): root-cause the `launch-focus-guard` runtime
+  flake — NEW lane, needs an idle desk.** It fails only under full parallelism and names the runner's own `node.exe` (48/50 isolated, so re-run before believing a red). **Do not silence it with a skip** — instrument the probe to record WHAT raises the window; a raise 2.4s after launch is real while he games.
 - **A rewrite of THIS file can break `src/ui-vision-status-guard.test.ts` rule D**, which counts the
   pointer paragraphs citing the vision file as open and needs at least three across CLAUDE.md, this
   file and the checklist. Dropping the vision section above turns the push red.
@@ -113,7 +113,8 @@ the honest caveat only up to v0.9.26. See [`RELEASE_TRANSACTION.md`](RELEASE_TRA
 
 1. **Register `compy.gg`** (~$50/yr, money). Everything downstream is blocked, including re-pointing
    the endpoint constant off `compy-bd6.pages.dev`.
-2. **The Ko-fi URL** (B3a).
-3. **Rule on the Q9a consent screens** — he has the before/after; nothing ships on them until he does.
-4. Whenever he wants: **#204** (Pro price shape) · **#213 A1** — the wordmark renders `©ompy`, a
+2. **`B_shelter` (#128) — NEW 2026-08-25.** 1,100 lines of finished, verified collision-guard code, unpushed since 2026-08-18 and on no list he read until today. One word: land it or retire it.
+3. **The Ko-fi URL** (B3a).
+4. **Rule on the Q9a consent screens** — he has the before/after; nothing ships on them until he does.
+5. Whenever he wants: **#204** (Pro price shape) · **#213 A1** — the wordmark renders `©ompy`, a
    recommendation is attached in §D · **#213 B** needs his ChatGPT mockups.
