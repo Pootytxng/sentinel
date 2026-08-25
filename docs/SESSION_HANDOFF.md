@@ -117,4 +117,4 @@ the honest caveat only up to v0.9.26. See [`RELEASE_TRANSACTION.md`](RELEASE_TRA
 3. **The Ko-fi URL** (B3a).
 4. **Rule on the Q9a consent screens** — he has the before/after; nothing ships on them until he does.
 5. Whenever he wants: **#204** (Pro price shape) · **#213 A1** — the wordmark renders `©ompy`, a
-   recommendation is attached in §D · **#213 B** needs his ChatGPT mockups.
+   recommendation is attached in §D. **#213 B was retracted off this list 2026-08-25** — his comps were approved 2026-08-23 and bundled; B2 is his ruling, B1/B3/B4/B5 are mine.

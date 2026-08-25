@@ -67,16 +67,9 @@ Three of the five are real and **two were not**, which is the finding worth keep
   [`../src/design/shell-native-tooltip-guard.test.tsx`](../src/design/shell-native-tooltip-guard.test.tsx)
   fails any element whose `title` and visible text contain one another; `title` survives only on
   icon-only controls. Negative-controlled 2/5.
-- **#211 (a room's `<h1>` was its name welded to a live measurement) — FIXED** (`0712dc68`, completed
-  by `f223466a`). `eyebrow` is its own `RoomShell` slot now; guard
-  [`../src/design/heading-is-a-name-guard.test.tsx`](../src/design/heading-is-a-name-guard.test.tsx)
-  in **three** halves, because the shell contract alone cannot stop a room handing the eyebrow back
-  to `verdict={…}` tomorrow — **and because the caller half shipped blind to the one room that still
-  had the bug.** The self-review caught it on the installed binary: `MonitorConsole.tsx`, which is
-  what mounts when Live opens, was never in the guard's hand-written room list, so `<h1>` still read
-  "Session monitor" + "Ready when you are". The third half reads `src/surfaces` from disk and fails
-  by name when a `RoomShell` caller is missing from that list; it found two more rooms unscanned on
-  its first run. **A list of files to check is only as good as the memory that wrote it.**
+- **#211 (a room's `<h1>` was its name welded to a live measurement) — FIXED** (`0712dc68`,
+  `f223466a`); guard [`../src/design/heading-is-a-name-guard.test.tsx`](../src/design/heading-is-a-name-guard.test.tsx)
+  in three halves. Why three, and the room the caller half shipped blind to: [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md).
 - **A2 and A3 were NOT defects.** A2's "orphan bracket" is
   [`../src/design/console/hud-frame.css`](../src/design/console/hud-frame.css) drawing all four
   corners symmetrically, default-on and working. A3's "clipped left edge" was the reviewing tool
@@ -91,8 +84,12 @@ Three of the five are real and **two were not**, which is the finding worth keep
   is rubric item 12 in `.claude/agents/self-reviewer.md`, ALWAYS-on, named regions required as
   evidence.
 
-**#213's B half (B1–B5) is direction, belongs to [#49](https://github.com/Pootytxng/sentinel/issues/49),
-and is blocked on the owner's ChatGPT mockups** — no session in this repo has them.
+**#213's B half (B1–B5) was never blocked.** [#49](https://github.com/Pootytxng/sentinel/issues/49) is
+closed and the owner **approved four room comps 2026-08-23**, bundled implementation-ready at the path
+pinned in `src/design/approved-comps-guard.test.ts`. Three ledgers instead said it "needs the owner's
+ChatGPT mockups, which no session in this repo has" — invented in `642d48d6`, never re-derived, and it
+handed his own complaint back to him. **B2 is his ruling, not a defect** (`a83d4809`, pinned by
+`comp-fidelity-guard.test.ts`): the mint CTA is sampled off the comps. B1/B3/B4/B5 are mine.
 
 #### ③ REPO HYGIENE — real, but nobody is waiting on it
 

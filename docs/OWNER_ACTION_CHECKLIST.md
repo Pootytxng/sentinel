@@ -219,14 +219,16 @@ Two doc lines kept paraphrasing all of that as unbuilt and sent a session at it 
 `src/ui-vision-status-guard.test.ts` rule D now fails the build on a pointer that names features
 instead of rows. What [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) still lists 🔴 OPEN: **DIR-1**
 (your standing intuitive-UI lens — mine to apply on every train, nothing for you to pick) and **§G**
-(the site's mini playable demo, which you flagged "maybe later"). **Yours — one of the two is now
-answered, so only item 2 is still waiting on you:**
+(the site's mini playable demo, which you flagged "maybe later"). **Yours — BOTH are now answered, so nothing in this
+section is waiting on you:**
 1. ~~**Do you want a panoramic drag surface back**~~ — ✅ **ANSWERED "no", 2026-08-25.** You took the
    recommendation: no second drag canvas, the hologram's drag-orbit keeps that feel, and the sensory
    load DIR-1 bars stays barred. Written into `UI_VISION_BACKLOG.md` §A.1 so it cannot come back as
    a paraphrase. **Nothing on you here any more.**
-2. **#49's B1–B5 direction is blocked on the ChatGPT mockups only you have** — paste them into the
-   issue and that train resumes.
+2. ~~**#49's B1–B5 needs your ChatGPT mockups**~~ — ✅ **RETRACTED 2026-08-25, it was never true.**
+   You approved four room comps on 2026-08-23 and they have been bundled and implementation-ready
+   since. Three of my ledgers said you still owed me pictures. **Nothing on you here — B1/B3/B4/B5
+   are mine to make and show you, and B2 is already your ruling.**
 - **You said "there's more I'm missing" + "capture it first"** — done (this doc). **Next → tell me if
   the 🔴 list is complete or still short an item.** The first build target is **DECIDED** — the Instrument
   Bench Phase-1 build (the drag gallery is deleted, not a build option). Note: your original **"Feature Roadmap Checklist (CC Brief)"**

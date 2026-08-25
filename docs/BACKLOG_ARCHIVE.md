@@ -3106,3 +3106,19 @@ proof) stayed behind in the live queue rather than travelling here.
    gates close the suspected path and name the skip at its source, which is not the same as proving
    the cause. Row stays open until a real ship either passes clean or trips gate 1b and names it.
 6. **#128 · thin local release/install collision guard — LANDED 2026-08-21, never yet held during a real ship.** *Why it matters:* two agents can no longer race the same release or the same installed exe, and neither can quietly take the other's turn. It was written 2026-08-14 on `agent/local-collision-guard`, never left this disk, and is merged forward here. `release.ps1` holds `Local\Compy.ReleasePipeline.v1` and `ship-reinstall.ps1` holds `Local\Compy.InstalledBinary.v1`, each across the whole entrypoint, released on normal *and* error exit. A second process fails closed immediately; a **killed** holder fails closed *permanently* — no lease, no expiry, no takeover — until an operator runs `scripts/inspect-process-mutex-recovery.ps1` and supplies a live comment on the open `work-control` issue carrying the exact recovery-state SHA-256. **Fixed on the way in:** the state root composed itself from `$env:APPDATA`, which `data-root-guard.test.mjs` (#130) rejects — the branch predates that guard. It now resolves through `Get-CanonicalCompyDataRoot`, which matters here more than anywhere: a redirected shell would have put two lanes' `owner.json` in two different roots, each seeing a clean slate, and both proceeding. **Left:** the locks have never been held during an actual release or ship — #128 forbids running one, so that proof arrives with the next real ship.
+
+### #211 — the eyebrow guard, and why it has three halves (moved verbatim 2026-08-25, NEXT UP byte cap)
+
+Moved out of `BACKLOG.md` §① to pay for the #213 B-half correction. The lesson is live in the
+guard itself; this is the narrative.
+
+- **#211 (a room's `<h1>` was its name welded to a live measurement) — FIXED** (`0712dc68`, completed
+  by `f223466a`). `eyebrow` is its own `RoomShell` slot now; guard
+  [`../src/design/heading-is-a-name-guard.test.tsx`](../src/design/heading-is-a-name-guard.test.tsx)
+  in **three** halves, because the shell contract alone cannot stop a room handing the eyebrow back
+  to `verdict={…}` tomorrow — **and because the caller half shipped blind to the one room that still
+  had the bug.** The self-review caught it on the installed binary: `MonitorConsole.tsx`, which is
+  what mounts when Live opens, was never in the guard's hand-written room list, so `<h1>` still read
+  "Session monitor" + "Ready when you are". The third half reads `src/surfaces` from disk and fails
+  by name when a `RoomShell` caller is missing from that list; it found two more rooms unscanned on
+  its first run. **A list of files to check is only as good as the memory that wrote it.**
