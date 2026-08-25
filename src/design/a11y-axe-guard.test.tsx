@@ -18,6 +18,7 @@ import { BackButton, ForwardButton } from "./BackButton";
 import { SegmentedControl } from "./SegmentedControl";
 import { Picker, type PickerOption } from "./Picker";
 import { TrustSwitch, TrustSnapshotLine } from "./TrustSwitch";
+import { Toggle } from "./Toggle";
 import { SlimRecRow, SlimDetailRow } from "./SlimRecRow";
 import { TrustCue } from "./TrustCue";
 import { WhatsThis } from "./WhatsThis";
@@ -145,6 +146,12 @@ const ROSTER: Array<[name: string, node: ReactNode]> = [
     <TrustSwitch applied busy onToggle={() => {}} ariaLabel="Turn off Game Mode" label="On" />,
   ],
   ["TrustSnapshotLine", <TrustSnapshotLine restoresLabel="Off" appliedLabel="On" />],
+  ["Toggle (off)", <Toggle on={false} onChange={() => {}} ariaLabel="Share anonymous results" />],
+  ["Toggle (on)", <Toggle on onChange={() => {}} ariaLabel="Share anonymous results" />],
+  [
+    "Toggle (disabled)",
+    <Toggle on={false} disabled onChange={() => {}} ariaLabel="Share anonymous results" />,
+  ],
   [
     "SlimRecRow",
     // Renders an <li>. Its only caller (src/surfaces/Fix.tsx) always mounts it inside

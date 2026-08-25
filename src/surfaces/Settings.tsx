@@ -17,6 +17,7 @@ import {
   persistOverlayBackdrop,
 } from "../design/theme";
 import { Wordmark } from "../design/Wordmark";
+import { Toggle } from "../design/Toggle";
 import { BackButton, ForwardButton } from "../design/BackButton";
 import { readMotionPref, setMotionPref, type MotionPref } from "../design/use-motion";
 import { readExpertView, setExpertView } from "../design/use-expert-view";
@@ -50,29 +51,6 @@ const THEME_CARDS: { id: InstrumentTheme; swatch: [string, string, string] }[] =
 ];
 
 const DENSITIES: OverlayDensity[] = ["minimal", "standard", "full"];
-
-function Toggle({
-  on,
-  onChange,
-  ariaLabel,
-}: {
-  on: boolean;
-  onChange: (v: boolean) => void;
-  ariaLabel: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={ariaLabel}
-      className={`set-toggle ${on ? "set-toggle-on" : ""}`}
-      onClick={() => onChange(!on)}
-    >
-      <span className="set-toggle-thumb" />
-    </button>
-  );
-}
 
 // A small static preview reflecting the live theme (via --ix tokens).
 function LivePreview() {

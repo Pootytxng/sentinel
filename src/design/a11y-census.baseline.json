@@ -25,6 +25,7 @@
     "src/design/Stat.tsx": "rostered",
     "src/design/StatusPill.tsx": "rostered",
     "src/design/Term.tsx": "rostered",
+    "src/design/Toggle.tsx": "rostered",
     "src/design/TrustCue.tsx": "rostered",
     "src/design/TrustSwitch.tsx": "rostered",
     "src/design/UpdatePill.tsx": "rostered:shell",

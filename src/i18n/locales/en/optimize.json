@@ -475,6 +475,12 @@
   "receiptsConsent": {
     "title": "Share your receipts (opt-in)",
     "hint": "Off by default, anonymous by design. If you opt in, Compy shares only measured outcomes — your hardware class and session numbers, never your name, paths, or anything that identifies this PC. You can see exactly what would be sent, below, before anything ever leaves this PC.",
-    "inspectButton": "Inspect your receipt"
+    "inspectButton": "Inspect your receipt",
+    "destination": "If you turn it on, a receipt goes to one address we run — {{endpoint}} — and nowhere else. No analytics company, no ad network, no account.",
+    "acceptButton": "Share anonymous results",
+    "declineButton": "No thanks — keep it off",
+    "switchTitle": "Share anonymous results",
+    "switchOn": "On. After a monitored session, Compy sends one anonymous receipt to {{endpoint}}. Turn it off any time and it stops.",
+    "switchOff": "Off. Nothing about your PC or your sessions is sent."
   }
 }
