@@ -58,6 +58,20 @@ function scannedDocs() {
 /** Fenced blocks are commands and payloads, not prose claims. */
 const prose = (text) => text.replace(/```[\s\S]*?```/g, "");
 
+/**
+ * Inline code is an identifier, not a claim — and identifiers are named by people, not by this
+ * guard. On 2026-08-25 a handoff failed here because a worktree is literally NAMED
+ * `merge-prs-tauri-visibility-c5660e`; the sentence said only that the folder is dirty and cannot
+ * be removed. It claimed nothing about propagation, and no rewording of it would have made the
+ * docs truer.
+ *
+ * Only the MERGE half is read outside code, and the asymmetry is the whole point. The verb of a
+ * false claim is something a person writes in prose; the thing it acts on is routinely a backticked
+ * path, so the worktree half still scans the entire sentence. "Merging main updates
+ * `worktrees/foo`" is still caught — pinned below, alongside the branch-name case.
+ */
+const outsideInlineCode = (text) => text.replace(/`[^`]*`/g, " ");
+
 const sentences = (text) =>
   prose(text)
     .split(/\n{2,}|\r\n{2,}/)
@@ -77,7 +91,10 @@ const DENIES_PROPAGATION =
 
 const offendersIn = (text) =>
   sentences(text).filter(
-    (s) => MENTIONS_MERGE.test(s) && MENTIONS_WORKTREE.test(s) && !DENIES_PROPAGATION.test(s),
+    (s) =>
+      MENTIONS_MERGE.test(outsideInlineCode(s)) &&
+      MENTIONS_WORKTREE.test(s) &&
+      !DENIES_PROPAGATION.test(s),
   );
 
 describe("decision 7 — the docs must not imply a merge updates existing worktrees", () => {
@@ -105,6 +122,19 @@ describe("decision 7 — the docs must not imply a merge updates existing worktr
     // scan set narrowed to nothing" — the failure mode a scope fix invites.
     expect(offendersIn("Merging this makes the tooling readable from every worktree.")).toHaveLength(1);
     expect(offendersIn("A merge updates no existing worktree; each stays on its own commit.")).toEqual([]);
+  });
+
+  it("reads the merge half outside inline code, so a branch NAME cannot trip it", () => {
+    // Positive control: naming a folder is not claiming anything about it.
+    expect(
+      offendersIn("The nested `.claude/worktrees/merge-prs-tauri-visibility-c5660e` cannot be removed."),
+    ).toEqual([]);
+    // Negative controls: the narrowing must not buy that by swallowing a real claim. The first is
+    // the case the asymmetry exists for — the claim's TARGET is backticked, its verb is not.
+    expect(offendersIn("Merging main updates `worktrees/foo` for you.")).toHaveLength(1);
+    expect(
+      offendersIn("Merging this makes `docs/WORK_CONTROL.md` readable from every worktree."),
+    ).toHaveLength(1);
   });
 
   for (const rel of docs) {
