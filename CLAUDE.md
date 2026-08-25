@@ -8,7 +8,7 @@
 > Treat every file/line claim here as point-in-time — verify against current code before asserting.
 >
 > **Universal behavioral laws live in `~/.claude/CLAUDE.md`** (challenge duty · response shape ·
-> autonomy floor · tracking · toolchain-over-prose). They load in every session on this machine and
+> autonomy floor · tracking · §6 toolchain-over-prose · §7 token economy). They load every session and
 > are NOT repeated here. This file carries only what is true of *Compy specifically*.
 
 > **📍 LIVE GATE STATE → `docs/RELEASE_STATE.md` is authoritative.** Single current-truth matrix for
@@ -253,8 +253,6 @@ returns false, so the real `runas` branch is live (not the direct-spawn fallback
 
 **Full policy: `claude/TOKEN_ECONOMY_LAW.md` — a Cowork project doc, NOT on disk; it wins over this
 and `.claude/USAGE_ECONOMICS.md`.** Carried context is **85% of measured spend**, output 15%.
-
-The universal half is `~/.claude/CLAUDE.md` §6–7; it loads every session and is not repeated here.
 
 1. **Current state only** — history to `docs/archive/*`: move, never delete, leave a pointer.
    `scripts/doc-budget.ps1` enforces LINE and BYTE budgets; a FAIL means archive first.

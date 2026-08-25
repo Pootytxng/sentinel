@@ -199,6 +199,12 @@ describe("CLAUDE.md carries every operative law", () => {
 // RATCHET RULE: when a trim lands, move this DOWN to the new measurement + ~250 bytes, in the same
 // commit. Raising it is a deliberate decision that costs a law's worth of boot tax on every session
 // forever — say so out loud when you do it. Never raise it to make a commit pass.
+//
+// 2026-08-25: the file hit 25,025 and this test went red on a 25-byte edit. Trimmed to 24,928 by
+// deleting the TOKEN LAW line that re-stated the header's own deference to ~/.claude/CLAUDE.md. The
+// ceiling STAYS at 25,000 — the ratchet only moves down, and measurement + 250 would raise it. So
+// headroom is 72 bytes and the next addition must pay for itself with a deletion. That is the rule
+// working, not the rule being inconvenient.
 const MAX_BYTES = 25_000;
 const MIN_BYTES = 12_000;
 
