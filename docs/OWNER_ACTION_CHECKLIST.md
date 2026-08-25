@@ -353,6 +353,17 @@ numbering, the motion default, the sibling-slop sweep) moved 2026-08-22 to
   you signed off on 2026-08-23. Nothing crept in. The recommendation above is unchanged; what changed
   is that saying "leave it" is choosing what you already chose, not tolerating a bug.
 
+- 🔨 **The verdict headline's "· and 3 more" tail** ([#219](https://github.com/Pootytxng/sentinel/issues/219))  ·  ⏳ NEW 2026-08-25
+  **Only here because the fix edits a line you already ruled on**, not because the look is your call.
+  Your Health headline was drawing THREE lines where your approved comp draws two — measured on your
+  own machine, 172px of headline against the picture's 114px. Fixed and shipped (`5a3b5e1c`): a long
+  headline now sets one step smaller and fits two lines again. What is left is the "· and 3 more"
+  tail, which adds 13 characters to a headline that already fit, and the only clean place to move it
+  is the sentence underneath — and that sentence is **your** pick from 2026-08-20 (#180 §C: in the
+  attention state it prints the flagged check's own detail). **Recommendation: move the count down
+  into that sentence and leave the headline naming the one real thing.** Say no and the three longest
+  headlines keep wrapping to three lines; nothing breaks either way.
+
 ---
 
 ## Where the full lists live (so nothing is buried again)
