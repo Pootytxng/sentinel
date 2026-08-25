@@ -4,6 +4,15 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-08-25 - the 4d65902e #213 B1/B5 desk-build Snapshot row, moved verbatim (byte cap)
+
+Moved out of docs/RELEASE_STATE.md when the primary checkout built `0fbabb93` on top of it, which
+finished #213 B5 by carrying the same two-row bevel to the remaining two plane seams. Byte-for-byte,
+except the one relative link, which is re-pointed for this file's own directory level. 4d65902e was
+never published - a desk candidate, as `0fbabb93` still is.
+
+| **Owner-installed version + embedded stamp** | **0.9.26 desk build, embedded stamp `4d65902e`** — built 2026-08-25 from the PRIMARY checkout on `main`, installed silently by Claude via `scripts/ship-reinstall.ps1`, one installer on the Desktop, installer `Compy_0.9.26_x64-setup.exe` SHA-256 **`F778D401B3365B02666C814FD47F037597DDD37560526AE6E42C175CBE68B49E`**. **Live == build proved by the embedded stamp, never an exe hash** — the self-review invoked `get_build_stamp` over the debug port and it returned `"4d65902e · release"`. (The ship script ran without `-VerifyRuntime`, so the stamp proof came from the review round rather than the installer step; the proof is the stamp either way.) **ON `main`, UNDISTRIBUTED**: no publish, no tag, no updater move. **Unsigned by construction** — `TAURI_SIGNING_PRIVATE_KEY` is owner territory and absent, so the build wrote both bundles and reported the missing key on the updater-signature step alone. **This one DOES change what he sees, unlike its predecessor**, and it carries a PASS self-review (12/12): [#213](https://github.com/Pootytxng/sentinel/issues/213) B1 — the custom titlebar no longer grounds on the violet-tinted `--ix-base` (`rgb(12,10,20)` measured before, `rgb(10,12,16)` after, matching the approved comp's own sampled `#0a0c10`) — and #213 B5 — the rail/content seam gained the dark half of its bevel (x=216 at y=600: `#0a0c10` → `#07080a`, the light hairline at x=215 unchanged). Both were filed as design DIRECTION and both turned out to be measurable deviations from the comps the owner approved 2026-08-23. Its predecessor **`b2b740bf`** (Q9a Tier-2 consent path, `.mcp.json` pin, no-telemetry tripwire — all dark/backend, no visual review claimed) and the desk lineage behind it — `6c054b77`, `f223466a`, `ccc17355`, `8b1599b3`, **`5e64074c`** (THE PUBLISHED BUILD) — are byte-preserved in [RELEASE_STATE_HISTORY.md](RELEASE_STATE_HISTORY.md). | `node scripts/verify-release-state.mjs` (check 7) · `Select-String -Path "$env:LOCALAPPDATACompycompy.exe" -Pattern 4d65902e` · HKCU uninstall `DisplayVersion` — **both from a non-containerized session only** (a packaged host sees `%LOCALAPPDATA%`/`HKCU` through an overlay) |
+
 ### 2026-08-25 - the 6c054b77 #214 drift-lock desk-build Snapshot row, moved verbatim (row cap)
 
 Moved out of docs/RELEASE_STATE.md when the primary checkout built `b2b740bf` on top of it.

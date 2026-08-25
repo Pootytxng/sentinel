@@ -6,13 +6,18 @@
 
 ## Where the train is standing
 
-**Desk build `4d65902e` (stamp-proved) — the first build in weeks that changes what he SEES.**
+**Desk build `0fbabb93` (stamp-proved, `-VerifyRuntime`, 1 attempt) — #213's B half is DONE.**
 `main` is green, nothing half-built, no lane mid-flight. Fleet is still v0.9.26 (`5e64074c`).
 
 | Commit | What |
 |---|---|
 | `4ec3749b` | **#213's B half was never blocked.** Three ledgers said it "needs the owner's ChatGPT mockups" — invented in `642d48d6`, never re-derived, and it handed his own complaint back to him. His four room comps were **approved 2026-08-23** and bundled. Retracted + guarded (`src/design/approved-comps-guard.test.ts`, which records the bundle path IN the test because prose is what failed). |
 | `4d65902e` | **B1 + B5 built, measured off the comps.** The titlebar was grounding on `--ix-base`, which the default violet theme tints (`rgb(12,10,20)` measured on the old binary) — the comps sample `#0a0c10`. The rail seam was drawing a bevel's light half with nothing under it. Both now token-only and pinned. |
+| `0fbabb93` | **B5 was a general rule, not one seam.** The comps draw EVERY plane boundary as two rows — highlight on the panel's edge, shadow on the ground outside it — and the app shipped only the light half everywhere. The titlebar/app and topbar/content seams now match (`.wc-bar::after`, `.v2-top` box-shadow). Guard written FIRST: `src/design/seam-bevel-guard.test.ts`, 12 tests, with the PIL samples in the header and a falsification case. |
+
+**The card edges were measured too and deliberately NOT changed** — implied alpha ~0.13 against
+0.32–0.43 at the plane seams, i.e. at the render's noise floor. The numbers are in the #213 comment
+rather than a second token guessed into existence.
 
 **The other three B items came back wrong, and were NOT built.** B2 is the owner's own 2026-08-23
 ruling (`--v2-cta: #2ed083`, sampled off the comps in `a83d4809`). **B4** likewise — the comp draws
@@ -80,7 +85,7 @@ exist yet; the receiver is live, migrated and empty.
 - **Merge with `gh pr merge --merge`, never `--delete-branch`** (it set `core.bare=true` repo-wide
   once); prune the ref with `git push origin --delete <lane>`, which skips the gate.
 - **Bash heredocs eat one backslash level** — use quoted heredocs or the Write tool for TS/JS.
-- **Doc budgets are effectively full:** `RELEASE_STATE.md` 41/42KB, `BACKLOG.md::NEXT UP` 12.1/12.2KB.
+- **Doc budgets are effectively full:** `RELEASE_STATE.md` 41.5/42KB, `BACKLOG.md::NEXT UP` 12.1/12.2KB. `SESSION_HANDOFF.md` 118/120 lines. Overflow is paid by archiving verbatim behind a pointer — **never by raising a cap.**
   Archive a finished row verbatim before adding one; **never raise a cap to make room.**
 
 ## Repo state a fresh session should know without re-deriving
