@@ -71,6 +71,29 @@
   border-bottom: 1px solid var(--v2-line);
 }
 
+/* #213 B5b — the other half of the same bevel. Fixing the rail seam (4d65902e) found that the
+   comps draw EVERY plane boundary as two rows: a highlight on the panel's edge and a shadow on the
+   ground just outside it. This boundary had only the highlight. Row-averaged full width (x=30..1500)
+   in 01-health-approved.png: y38 #0c0d11 (ground) → y39 #07090d (dark) → y41 #1c1e23 (bright) →
+   y42 #0f1218 (panel); 04-test-approved.png draws the same pair one row up. It spans the RAIL as
+   well as the content, which is why it belongs here on the window chrome and not on `.v2-top`.
+
+   `bottom: 0` is the row immediately inside the border: absolute offsets resolve against the
+   padding box, so the strip lands on the last content row with the bright border under it. `.wc-bar`
+   is already `position: fixed`, so it is a containing block without a new `position` declaration —
+   and the bar is a flex row, so an out-of-flow child cannot disturb its layout.
+   Guarded by src/design/seam-bevel-guard.test.ts. */
+:root[data-v2="on"] .wc-bar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--v2-line-shadow);
+  pointer-events: none;
+}
+
 /* The 13px indent used to live on the app-name caption (#213 A5 removed it — the rail's Wordmark
    is the one that stays). It moves here so the gear keeps the same optical left margin it had when
    it followed the text: 6px of padding plus the button's own ~7px of icon inset. */

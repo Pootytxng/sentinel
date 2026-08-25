@@ -227,6 +227,13 @@
      px is 50 app px at the calibrated scale. It was 46. */
   height: 50px;
   border-bottom: 1px solid var(--v2-line);
+  /* #213 B5b — the bar's own half of the bevel. Sampled over the content column (x=900..1500) of
+     01-health-approved.png: y93 #1a1d23 (bright, inside the bar) → y95 #07090d (dark, in the ground
+     below) → y96 #0e1014; 04-test draws #1e2128 → #070a10. The SAME rows over the rail column
+     (x=30..200) are a flat #0f1217, so this shadow is the main column's only and must not ring the
+     bar. An outset shadow rather than a pseudo-element: `.v2-content` paints no background of its
+     own, so nothing covers the strip. Guarded by src/design/seam-bevel-guard.test.ts. */
+  box-shadow: 0 1px 0 var(--v2-line-shadow);
   display: flex;
   align-items: center;
   gap: 14px;
