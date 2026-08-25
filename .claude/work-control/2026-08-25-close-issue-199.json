@@ -1,0 +1,73 @@
+{
+  "transition": "close-issue",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "issue": 199,
+  "pr": null,
+  "currentHead": "e7111bd9d962a5cee0167318705f0a52848c2b67",
+  "explicitHandoff": "Owner turn 2026-08-25 (this session), verbatim: \"i permit you to complete any actions that may prevent you from moving forward unless its something absolutely irreversible\". #199 items 3-4 were marked 'not authorized in the reconciliation lane' - that lane, not this one.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com/Pootytxng/sentinel.",
+    "remoteState": "origin/main == local HEAD e7111bd9d962a5cee0167318705f0a52848c2b67. Items 3-4 landed this session in e1837670 and e7111bd9.",
+    "worktree": "c:/Users/Kuya/code/sentinel (main), sole writer.",
+    "branch": "main.",
+    "dirtyState": "Clean at e7111bd9d962a5cee0167318705f0a52848c2b67 apart from this receipt.",
+    "liveProcesses": "compy.exe live from the owner's desk install (untouched). One fixture vite server on :5199, review-only."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1",
+    "scripts/verify-release-state.mjs",
+    "scripts/doc-budget.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "e7111bd9d962a5cee0167318705f0a52848c2b67",
+      "detail": "Pre-push hook at this exact head. LOCAL CHECK RESULT: PASS, log logs/verify-local-2026-08-25T16-44-41Z.log. Includes release-receipt-guard 23/23 and gate-residency-guard 10/10."
+    },
+    {
+      "command": "scripts/verify-release-state.mjs",
+      "status": "passed",
+      "head": "e7111bd9d962a5cee0167318705f0a52848c2b67",
+      "detail": "31 citations: 31 ok, 0 near-drift, 0 broken, 0 missing sections, 0 state-drift."
+    },
+    {
+      "command": "scripts/doc-budget.ps1",
+      "status": "passed",
+      "head": "e7111bd9d962a5cee0167318705f0a52848c2b67",
+      "detail": "ALL PASS. docs/RELEASE_STATE.md 41KB/42KB after the six caveats and the owner-installed row rewrite."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "detail": "Release-pipeline tooling and documentation. No build was cut; scripts/release.ps1 was edited but not run, and running it is owner territory (it publishes to other people's machines)."
+  },
+  "selfReview": {
+    "applicable": false,
+    "detail": "No src/**/*.{tsx,css} in either commit."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; docs/WORK_CONTROL.md makes its review advisory rather than blocking."
+  },
+  "closureNotes": [
+    "All four disposition items are complete. Items 1-2 (the doc-side honesty edit) landed in the reconciliation lane; this session closed the residual drift where a caveat on one table row could be read as covering an uncaveated row two lines below it.",
+    "Item 3: scripts/emit-release-receipt.mjs, wired into scripts/release.ps1 after the transaction completes and before it prints PUBLISHED. Fail-forward on purpose - publication has already happened by then, so a throw would report a successful release as failed.",
+    "Item 4: scripts/release-receipt-guard.test.mjs, 23 tests. It accepts an honest caveat as an alternative to evidence only up to v0.9.26, the last release published before the emitter existed; a newer STATE:published_release_version demands a real receipt.",
+    "#199's own instruction was obeyed: no historical journal was fabricated or regenerated, and docs/release-receipts/ will never contain a receipt for v0.9.26 or earlier."
+  ],
+  "remaining": [
+    "The first durable receipt appears only when the next release is cut. That is owner territory - releasing ships to other people's machines."
+  ]
+}

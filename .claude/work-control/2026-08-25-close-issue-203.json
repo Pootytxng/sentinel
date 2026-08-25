@@ -1,0 +1,54 @@
+{
+  "transition": "close-issue",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "issue": 203,
+  "pr": null,
+  "currentHead": "e7111bd9d962a5cee0167318705f0a52848c2b67",
+  "explicitHandoff": "Owner turn 2026-08-25 (this session), verbatim: \"look over all of our recent work and the work we have planned to do and proceed with doing so, i authorize your recs based off your best reasoning\". #203 was the next non-gated item once its blocker cleared.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com/Pootytxng/sentinel.",
+    "remoteState": "origin/main == local HEAD e7111bd9d962a5cee0167318705f0a52848c2b67 after this session's pushes (1b9dbf6d..0f0aff38..e7111bd9).",
+    "worktree": "c:/Users/Kuya/code/sentinel (main), the sole writer. Six spent lane worktrees untouched; the stale nested .claude/worktrees/merge-prs-tauri-visibility-c5660e is detached and dirty and was NOT written to.",
+    "branch": "main.",
+    "dirtyState": "Clean at e7111bd9d962a5cee0167318705f0a52848c2b67 apart from this receipt.",
+    "liveProcesses": "compy.exe live from the owner's desk install (untouched). One fixture vite server on :5199, review-only."
+  },
+  "requiredGates": ["scripts/verify-local.ps1"],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "e7111bd9d962a5cee0167318705f0a52848c2b67",
+      "detail": "Pre-push hook at this exact head. LOCAL CHECK RESULT: PASS, log logs/verify-local-2026-08-25T16-44-41Z.log."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "detail": "Repo tooling only. .mcp.json is a developer-machine MCP declaration; it is not compiled into compy.exe and reaches no user."
+  },
+  "selfReview": {
+    "applicable": false,
+    "detail": "No src/**/*.{tsx,css} in the change. b4f0686d touches .mcp.json and scripts/codex-config-guard.test.mjs."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; docs/WORK_CONTROL.md makes its review advisory rather than blocking."
+  },
+  "closureNotes": [
+    "The blocker cleared: #203 said 'BLOCKED - do not touch .mcp.json' until #49's writer reached a checkpoint. #49 is CLOSED.",
+    "Disposition item 3 taken, not item 2: pinned to shadcn@4.19.0 rather than dropped, because .claude/settings.local.json lists shadcn under enabledMcpjsonServers - the evidence the issue was missing when it guessed the server might be dead weight.",
+    "The guard now discovers its own corpus (git ls-files, any *.mcp.json plus .claude/**/*.json) instead of taking a path as a given, which is the 'a guard's file filter can be narrower than its name' defect the issue named."
+  ],
+  "remaining": []
+}

@@ -1,0 +1,57 @@
+{
+  "transition": "close-issue",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "issue": 133,
+  "pr": null,
+  "currentHead": "e7111bd9d962a5cee0167318705f0a52848c2b67",
+  "explicitHandoff": "Owner turn 2026-08-25 (this session), verbatim: \"look over all of our recent work and the work we have planned to do and proceed with doing so\". #133's last open task closed in this session's b2b740bf.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com/Pootytxng/sentinel.",
+    "remoteState": "origin/main == local HEAD e7111bd9d962a5cee0167318705f0a52848c2b67. Tasks 4-6 landed 2026-08-18 (8caadb58, b4939c9f, f9233291); Task 7 verification is recorded in the issue's 2026-08-18 comment; b2b740bf is this session's addition to the Task 4 family.",
+    "worktree": "c:/Users/Kuya/code/sentinel (main), sole writer.",
+    "branch": "main - guards and docs only, per the plan's stop rules. No runtime Rust, no capability, no CSP, no endpoint, no key, no Windows mutation.",
+    "dirtyState": "Clean at e7111bd9d962a5cee0167318705f0a52848c2b67 apart from this receipt.",
+    "liveProcesses": "compy.exe live from the owner's desk install (untouched). One fixture vite server on :5199, review-only."
+  },
+  "requiredGates": ["scripts/verify-local.ps1"],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "e7111bd9d962a5cee0167318705f0a52848c2b67",
+      "detail": "Pre-push hook at this exact head. LOCAL CHECK RESULT: PASS, log logs/verify-local-2026-08-25T16-44-41Z.log. Task 7's own fuller verification (verify-release-state 32/32, verify-module-map 46/13, doc-budget ALL PASS, tsc clean, npm run build ok, mutation-proved Task 5 both directions) is recorded in the issue comment of 2026-08-18."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "detail": "Guards, tests and docs only. Nothing in Tasks 4-7 changes runtime behaviour or reaches a user's machine."
+  },
+  "selfReview": {
+    "applicable": false,
+    "detail": "No src/**/*.{tsx,css} in any of the four task commits. Task 6's copy audit edited locale JSON and docs, not components."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; docs/WORK_CONTROL.md makes its review advisory rather than blocking."
+  },
+  "closureNotes": [
+    "All four scoped tasks are complete: Task 4 (8caadb58) per-tier outbound invariants, Task 5 (b4939c9f) support-evidence tier separation, Task 6 (f9233291) live copy audit, Task 7 verification recorded 2026-08-18.",
+    "Task 6 was not a formality: docs/BETA_TESTER_README.md still told testers Compy makes 'no network calls, no account, no auto-update' a month after the signed updater armed, and the app promised in four places across both locales that Compy 'will never ship' a kernel driver - a permanent promise the owner retired on 2026-08-09.",
+    "b2b740bf, this session, closed the residual: the arming-time privacy check in the same family had never actually run."
+  ],
+  "remaining": [
+    "Tier 1 dark implementation (docs/superpowers/plans/2026-08-09-outbound-case-intelligence-tier1.md) is out of scope and untouched.",
+    "Every runtime arming stop point stays open: endpoint, signing custody, disclosures, security review, canary evidence. receipts_gate() is NOT armed."
+  ]
+}
