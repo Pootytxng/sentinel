@@ -21,6 +21,11 @@
 // Scope is deliberately narrow. This guard asserts the FLOOR and the two named regressions, not the
 // whole file: comments, ordering, formatting and any future key are free to change.
 //
+// The `@latest` half of it polices a COPY. The declaration originates in `.mcp.json`, which nothing
+// read until `scripts/mcp-config-guard.test.mjs` (issue #203, 2026-08-25) — so until then the rule
+// held in the file nobody edits and was free in the file everyone does. Both guards stay: this one
+// keeps the Codex lane's config honest, that one keeps the source honest.
+//
 // NOT asserted, because the file says so itself and it is true: this config is not loaded unless
 // CODEX_HOME points at this directory. The floor still has to be right — a scaffold that documents a
 // read-only lane and does not encode one is worse than no scaffold — but nobody should read a pass
