@@ -7,60 +7,47 @@
 ## Where the train is standing
 
 **The [#214](https://github.com/Pootytxng/sentinel/issues/214) design-system drift-lock train is
-one step from done.** Worktree `C:\Users\Kuya\code\sentinel-home-room` · branch
-`lane/train-2026-08-22` (lands on `main` by fast-forward push, no lane ref carried). Commit
-**`6c054b77`** is authored, **built, silently installed on the owner's desk and stamp-proven**
-(`6c054b77 · release · shell 0.9.26`, attempt 1; installer SHA-256
-`590453966653A3A04B0F8C0924B08F5D5C28F9DA3484623AB07D0A9DD5DD96D4`, one on the Desktop).
-`origin/main` is still at its parent `3f931ee2` — **the push has NOT happened yet.**
+DONE and ON `main`** (`6c054b77` the lock + fixes, `98e27e34` the state row; fast-forward push
+2026-08-24, local gate PASS). The owner's desk runs the `6c054b77` build, installed silently,
+stamp-proven attempt 1, one installer on the Desktop, self-review **PASS** on the installed binary.
+Worktree `C:\Users\Kuya\code\sentinel-home-room` · branch `lane/train-2026-08-22` (no lane ref
+pushed; main carries everything).
 
-## What this session did (all in 6c054b77 unless noted)
+## What the lock is (so nobody re-litigates it)
 
-1. **The lock (#214):** `src/design-detector-guard.test.ts` runs the vendored impeccable detector
-   over `src/` inside vitest — zero findings pinned, falsification probe, suppression census
-   (every ignore argued, rule/file-wide ignores banned, inline waivers pinned to exactly
-   Benchmark.css + home-interview.css), hook pinned in TRACKED `.claude/settings.json`, Codex hook
-   pinned at the tracked copy, version floor ≥3.9.1 (npm "latest" is 3.6.0 — a downgrade trap).
-   Plus a motion-law test: `transition: all`, standalone `ease-in`, `scale(0)` banned in src CSS
-   (comments stripped so prose about a ban never trips it).
-2. **Findings fixed, not waived:** spring/bounce beziers → new `--ease-out` quint token
-   (SegmentedControl pill+press, Picker caret+list); walkthrough cursor arrow + Fix advisory
-   chevron redrawn border-hack→clip-path; `.chip` + vendored Stepper `transition: all` narrowed
-   (THIRD_PARTY.md noted); 7 files' literal beziers → tokens. DESIGN.md §Motion now carries the
-   law + the four-question gate for new motion.
-3. **Skill-shed verdicts** recorded in `.claude/skills/INDEX.md`: emilkowalski/skills (4),
-   anthropics frontend-design, vercel web-design-guidelines — all evaluated 2026-08-24, none
-   added; everything mechanizable was extracted into the guard/DESIGN.md instead.
-4. Verified: vitest 375 files / 5080 passed, 4 skipped · `npm run build` PASS · detector src/ = 0.
+`src/design-detector-guard.test.ts` runs the vendored impeccable detector over `src/` inside
+vitest: zero findings pinned · falsification probe (planted defects must still be caught) ·
+suppression census (every ignore argued, rule/file-wide ignores banned, inline waivers pinned to
+exactly Benchmark.css + home-interview.css) · per-edit hook pinned in TRACKED
+`.claude/settings.json` (the 2026-08-21 settings.local.json unwire class is dead) · Codex hook
+pinned at the tracked copy · version floor ≥3.9.1 (**`npx impeccable update` DOWNGRADES** — npm
+"latest" is 3.6.0) · motion-law absolutes (`transition: all`, standalone `ease-in`, `scale(0)`)
+with comments stripped before scanning. DESIGN.md §Motion carries the prose law + the
+four-question gate for new motion. Skill-shed verdicts (emilkowalski ×4, anthropics
+frontend-design, vercel web-design-guidelines — evaluated, extracted, not added) are recorded in
+`.claude/skills/INDEX.md`.
 
-## What is left, and who owns it (exact order)
+## What is left on this arc, and who owns it
 
-1. **Self-reviewer verdict** — a `self-reviewer` subagent is reviewing the installed 6c054b77
-   build right now (brief: easing settle on Test-room segmented control + pickers, the two
-   clip-path glyphs, chip hover, token-consolidation spot-check). On FAIL: fix, rebuild, re-ship,
-   re-dispatch. On PASS: continue.
-2. **RELEASE_STATE.md snapshot row** — move the current `f223466a` desk row VERBATIM to the top of
-   `docs/archive/RELEASE_STATE_HISTORY.md` (heading format matches the ccc17355 entry; re-point
-   its one relative archive link), replace with a 6c054b77 row (SHA above, verdict quoted,
-   f223466a joins the predecessor lineage). Byte budget is tight: 41.7KB/42KB — stay compact.
-   Then `node scripts/verify-release-state.mjs` + `pwsh -NoProfile -File scripts/doc-budget.ps1`.
-3. **Commit docs** (same style, `Co-Authored-By: Claude Opus 5 (1M context)` trailer), then
-   **push `git push origin HEAD:main`** (re-check branch/worktree immediately before push).
-4. **#214 evidence comment** (guard test path, commit, stamp proof, vitest line). Closing #214
-   needs `scripts/work-control-gate.mjs` first — or leave OPEN and say so in the report.
-5. **Owner report** — plain+short: what the lock is, one why-it-matters line, quote the
-   SELF-REVIEW verdict block, `SendUserFile` the before/after
-   (`...\scratchpad\motion-before-after.html`, display render — motion needs a page that moves),
-   surface the open OWNER_ACTION_CHECKLIST items, end with a HANDOFF BLOCK.
+- **Nothing mechanical.** The lock is a build gate; drift now fails `npm test` and the pre-push
+  gate on any editor/agent/hookless session.
+- **The owner's larger design VISION is not this train** and remains open by his own backlog:
+  `docs/UI_VISION_BACKLOG.md` 🔴 OPEN (panoramic drag telemetry gallery, magnetic cursor, Lenis,
+  GSAP data-reactivity). The self-review verdict said this plainly: 6c054b77 is one scoped
+  increment; a reskin/lock is not the vision. That is the natural next design train.
+- #214 close-out (evidence comment + close under a work-control receipt) was in flight at the end
+  of the writing session — if #214 is still open, the evidence lives in the issue comments and
+  RELEASE_STATE row; verify and close it rather than redoing anything.
 
 ## Live traps for whoever is next
 
-- The scratchpad demo file intentionally contains the OLD bounce bezier + border-hack — the
-  impeccable hook flags it; that is a documented fixture, not a defect. It never enters the repo.
-- `npx impeccable update` DOWNGRADES (npm 3.6.0 < vendored 3.9.1) — the guard blocks it; don't.
+- The impeccable hook now fires from tracked `.claude/settings.json` — do NOT re-add it to
+  settings.local.json, and never hand-edit `.claude/skills/impeccable/` (re-vendor instead).
 - Bash edits bypass the write guard and the impeccable hook — use Edit/Write tools in src/.
 - The pre-push gate npm-ci's; never junction node_modules between worktrees.
-- Commit-body keywords close issues on push — reference #214 bare, never "fixes #214".
+- Commit-body keywords close issues on push — reference issues bare unless closing is intended.
+- Room labels on the rail are Health · Live · History · Test — never speak an internal id
+  (`lab`/`fix`/…) as a room name to the owner.
 
 ## Waiting on the owner
 
