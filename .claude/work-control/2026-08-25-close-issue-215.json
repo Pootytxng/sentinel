@@ -1,0 +1,58 @@
+{
+  "transition": "close-issue",
+  "actor": "claude-code",
+  "kind": "guard",
+  "issue": 215,
+  "currentHead": "7e875a0a90075906eff0a09a3520527ce1505241",
+  "explicitHandoff": "Owner turn 2026-08-25 (session 40375592): the single word \"override\", given after this session reported that it was SESSION_FOREIGN in C:/Users/Kuya/code/sentinel-vision-pointer (the launcher's terminal session 8fc927ae took the #215 launch and died holding the folder claim, #216) and offered exactly two cures: relaunch through the entrypoint, or \"override\" to land via Bash with the authorization recorded here. This receipt is that record. Earlier owner turn, same session: \"land #215 per RESUME-215.md (scratchpad of session 925238d3), step 2 onward.\"",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com/Pootytxng/sentinel; worktree C:/Users/Kuya/code/sentinel-vision-pointer, created by the launcher from origin/main 66bd28c2 (launch-20260824-222347.log).",
+    "remoteState": "origin/main was 66bd28c2 at landing time (fetched immediately before git apply); pushed HEAD:main fast-forward 66bd28c2..7e875a0a. The lane ref lane/vision-pointer-guard-2026-08-24 is LOCAL ONLY and was never pushed. No PR: #215 landed directly, per RESUME-215.md step 6.",
+    "worktree": "Twelve worktrees at session start. This session holds sentinel-vision-pointer alone. The scratch worktree from session 925238d3 (<scratchpad>/wt, detached at 66bd28c2) is where the patch was built and proven; it is not a writer.",
+    "branch": "lane/vision-pointer-guard-2026-08-24 == origin/main == 7e875a0a after the push; linear, no force-push.",
+    "dirtyState": "Clean after the landing commit apart from this receipt and .claude/work-control/2026-08-24-close-issue-49.json (the #49 close receipt session 925238d3 could not commit from its SESSION_FOREIGN folder), both committed on top per the trails-by-one-commit convention. One premature git apply from this session BEFORE the override was reverted to a clean tree and is recorded on #215 and #216.",
+    "liveProcesses": "Three claude.exe: the /fast CLI from 10:03 (home-room-81), one VS Code extension process from 22:24 (a home-room panel), and this session (22:26). No claude.exe for launcher session 8fc927ae and no transcript for it anywhere under ~/.claude/projects. One installed compy.exe running the desk build, untouched. No cargo/rustc/link/msbuild before the pre-push gate; the gate run below is the only build this session started besides npm run build."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "7e875a0a90075906eff0a09a3520527ce1505241",
+      "detail": "Run by the pre-push hook at exactly this head, before the fast-forward to main was accepted. Log read: dependency bootstrap, git diff check, frontend tests 375 files / 5086 passed / 5 skipped, frontend type-check and build, Rust 964 passed / 0 failed / 24 ignored, Rust clippy, final line LOCAL CHECK RESULT: PASS. Log: logs/verify-local-2026-08-25T08-45-43Z.log. Also at this head: node scripts/run-vitest.mjs run src/ui-vision-status-guard.test.ts 13/13; npm run build green; scripts/doc-budget.ps1 ALL PASS."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "detail": "#215 changes docs and one vitest guard (src/ui-vision-status-guard.test.ts). No compy.exe bytes are affected; nothing to install or stamp-prove. The desk build is deliberately NOT touched."
+  },
+  "selfReview": {
+    "applicable": false,
+    "detail": "No UI surface. src/**/*.{tsx,css} is untouched; the only src/ change is the guard test file."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; docs/WORK_CONTROL.md makes that review advisory rather than blocking. The patch was built and falsified in one session (925238d3) and re-applied, re-run and landed by a second (40375592) against the same base, which is the strongest cross-session check available."
+  },
+  "closureNotes": [
+    "Scope item 1 (guard): rule D in src/ui-vision-status-guard.test.ts. Falsified in session 925238d3 against the ORIGINAL docs: fails on exactly CLAUDE.md:241, docs/SESSION_HANDOFF.md:34, docs/OWNER_ACTION_CHECKLIST.md:213 - the three paragraphs that sent a session at the deleted gallery on 2026-08-24.",
+    "Scope item 2 (pointers name rows): CLAUDE.md item 5, docs/SESSION_HANDOFF.md, docs/OWNER_ACTION_CHECKLIST.md B5 now name DIR-1 and section G; the standing directive got the row id DIR-1.",
+    "Scope item 3 (NAV-1 closed): heading now reads CLOSED 2026-08-24, findings 1-4 and forks (a)-(c) all shipped; docs/BACKLOG.md no longer lists NAV-1 as open.",
+    "Out of scope by the issue's own text: rebuilding the gallery (a recorded owner deletion). B5 puts that question to the owner with a recommendation of no."
+  ],
+  "remaining": [
+    "Nothing on #215. Follow-up defect in the entry system is #216 (dead launcher session holds the folder claim for 12h)."
+  ]
+}
