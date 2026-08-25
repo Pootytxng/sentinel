@@ -257,3 +257,8 @@ The universal half is `~/.claude/CLAUDE.md` §6–7; it loads every session and 
 1. **Current state only** — history to `docs/archive/*`: move, never delete, leave a pointer.
    `scripts/doc-budget.ps1` enforces LINE and BYTE budgets; a FAIL means archive first.
 2. **`scripts/usage-audit.mjs` is the authority.** Extend that audit; never build a parallel monitor.
+
+## Agent skills
+
+`mattpocock-skills` config lives in `docs/agents/`: `issue-tracker.md` (GitHub, under
+`docs/WORK_CONTROL.md`), `triage-labels.md` (five defaults), `domain.md` (single-context).
