@@ -104,6 +104,25 @@ export function versionsNamed(context) {
   return [...new Set([...context.matchAll(/\bv?(\d+\.\d+\.\d+)\b/g)].map((m) => m[1]))];
 }
 
+/**
+ * The last release published before `scripts/emit-release-receipt.mjs` existed. Everything up to
+ * and including it can never have a durable receipt and lives on the honest caveat instead; every
+ * release AFTER it runs the emitter as part of the transaction, so a caveat there would just be the
+ * old unverifiable claim wearing new words. This constant is what stops the caveat from becoming a
+ * permanent escape hatch — #199 item 4 asks for evidence, not for a phrasing.
+ */
+const LAST_RELEASE_WITHOUT_AN_EMITTER = "0.9.26";
+
+/** Numeric semver ordering: > 0 when `a` is newer than `b`. Patch releases are not string-sortable. */
+export function compareVersions(a, b) {
+  const pa = String(a).split(".").map(Number);
+  const pb = String(b).split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
+  }
+  return 0;
+}
+
 const durableReceipts = () => {
   if (!existsSync(RECEIPTS_DIR)) return new Map();
   const out = new Map();
@@ -186,6 +205,37 @@ describe("#199 item 4 — the current published release references durable evide
       // And it must be as sanitized on disk as it was at emission — a hand-edit is still an edit.
       expect(scrubViolations(receipt), `${file}: carries machine-local detail`).toEqual([]);
     }
+  });
+
+  it("closes the caveat escape hatch once a release could have had a receipt", () => {
+    // Without this, #199 item 4 would be satisfiable forever by writing "not re-verifiable" on
+    // every new row. A release published after the emitter landed must produce evidence.
+    const version = publishedVersion(read(RELEASE_STATE));
+    if (compareVersions(version, LAST_RELEASE_WITHOUT_AN_EMITTER) <= 0) return;
+    expect(
+      durableReceipts().has(version),
+      `v${version} was published after scripts/emit-release-receipt.mjs landed, so it must have ` +
+        `docs/release-receipts/v${version}.json. A caveat is not an alternative here: the emitter ` +
+        "runs inside the transaction, and release.ps1 prints the re-run command if it failed.",
+    ).toBe(true);
+  });
+
+  it("FALSIFICATION: the version comparator orders patch releases numerically", () => {
+    // "0.9.9" > "0.9.26" as strings, and that mistake would silently exempt every future release.
+    expect(compareVersions("0.9.26", "0.9.9")).toBeGreaterThan(0);
+    expect(compareVersions("0.9.27", "0.9.26")).toBeGreaterThan(0);
+    expect(compareVersions("0.10.0", "0.9.26")).toBeGreaterThan(0);
+    expect(compareVersions("1.0.0", "0.9.26")).toBeGreaterThan(0);
+    expect(compareVersions("0.9.26", "0.9.26")).toBe(0);
+    expect(compareVersions("0.9.11", "0.9.26")).toBeLessThan(0);
+  });
+
+  it("FALSIFICATION: today's release is inside the grace window, and only just", () => {
+    // Pins the boundary itself. If someone bumps the constant to wave a future release through,
+    // this fails and says why.
+    expect(compareVersions(publishedVersion(read(RELEASE_STATE)), LAST_RELEASE_WITHOUT_AN_EMITTER))
+      .toBeLessThanOrEqual(0);
+    expect(existsSync(join(RECEIPTS_DIR, `v${LAST_RELEASE_WITHOUT_AN_EMITTER}.json`))).toBe(false);
   });
 });
 

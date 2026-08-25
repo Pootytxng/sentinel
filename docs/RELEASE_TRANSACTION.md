@@ -45,6 +45,36 @@ Git remotes, GitHub objects, downloaded assets, public manifest, and cryptograph
 A journaled stage whose real state is absent or incompatible is fatal. Compatible state created by
 an earlier interrupted attempt is adopted only after re-verification.
 
+## Durable receipt
+
+The journal is written beside the staged receipt under `src-tauri/target/release/bundle/nsis/`,
+which `src-tauri/.gitignore:3` ignores by construction. No journal has ever been committed, and
+`target/` is cleaned routinely — so a journal proves nothing after the fact, and the stage claims in
+[RELEASE_STATE.md](RELEASE_STATE.md) had no evidence anyone could re-check ([#199]).
+
+`scripts/release.ps1` therefore runs `scripts/emit-release-receipt.mjs` after the transaction
+completes and before it prints `PUBLISHED:`. That emitter derives a small sanitized summary —
+version, tag, source commit, release id, installer name and hashes, the stage list, and a SHA-256 of
+the journal bytes — and writes it to `docs/release-receipts/<tag>.json`, which is tracked. The
+operator commits it in a follow-up commit.
+
+Three properties matter:
+
+- **Bound, not copied.** `journal_sha256` ties the summary to those exact journal bytes without
+  republishing the journal's `evidence` map, which holds whatever each inspector returned.
+- **Sanitized by check, not by care.** The emitter re-reads its own finished object and refuses to
+  write if any string looks like a path, a UNC share, an environment expansion, a `file://` URL, or
+  this machine's user name or hostname.
+- **Fail-forward.** Publication has already happened when the emitter runs, so a failure here is a
+  loud warning with a re-run command, never a release failure.
+
+`scripts/release-receipt-guard.test.mjs` then requires every stage-completion claim in
+RELEASE_STATE.md to be backed by a receipt for each version it names, or to say in the same breath
+that it is not re-verifiable. Releases published before 2026-08-25 have no receipt and never will:
+[#199] forbids regenerating historical journals.
+
+[#199]: https://github.com/Pootytxng/sentinel/issues/199
+
 ## Retry rules
 
 - Source `main` may be the exact release commit or a descendant containing it. A fast-forwardable

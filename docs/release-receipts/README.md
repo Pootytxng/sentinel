@@ -27,3 +27,8 @@ release failure, because publication has already happened by then.
 **What enforces it.** `scripts/release-receipt-guard.test.mjs`: every stage-completion claim in
 `docs/RELEASE_STATE.md` must either be backed by a receipt here for every version it names, or say
 in the same breath that it is not re-verifiable and cite #199.
+
+That caveat is a grace, not an escape hatch, and the guard closes it: the last release that may use
+it is v0.9.26, the last one published before the emitter existed. The moment
+`STATE:published_release_version` names anything newer, the guard demands a file in this directory
+and will not accept words instead.
