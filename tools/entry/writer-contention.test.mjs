@@ -239,8 +239,11 @@ describe("liveness — the record must not outlive the process (#216)", () => {
   });
 
   it("never condemns on a dead pid ALONE — the pid may not be the session's own", () => {
-    // process.ppid is the Claude process that spawned the hook. If that assumption were ever wrong,
-    // a pid-only rule would mark every live session dead the instant it recorded itself.
+    // MEASURED, not hypothetical. On this machine, 2026-08-25: a lease this very session wrote at
+    // 09:16 recorded pid 26224, and fourteen minutes later that pid was GONE while the session was
+    // still typing — process.ppid is whatever spawned that one hook run, not the conversation. A
+    // pid-only rule would have marked a live session dead and handed its folder away. So the pid may
+    // only ever PROMOTE a lease to live; the transcript is the signal that condemns.
     expect(livenessOf(lease({ lastSeenAt: ago(1) }), { alive: false, seenAt: null, now: NOW })).toBe("unknown");
     expect(livenessOf(lease(), { alive: false, seenAt: ago(1), now: NOW })).toBe("live");
   });

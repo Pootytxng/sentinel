@@ -691,7 +691,10 @@ export function leaseFor(result, { lease = null, now = new Date(), pid = process
     window: result.window ?? null,
     repo: result.repo ?? null,
     sessionId: result.sessionId ?? null,
-    // #216: the record must not outlive the process. This is what makes a dead claim readable AS dead.
+    // #216: the record must not outlive the process. This is what makes a dead claim readable AS dead
+    // — but it is the WEAKER of the two signals and is never allowed to condemn on its own. Measured
+    // 2026-08-25: process.ppid here is the process that spawned this one hook run, and it is
+    // routinely gone minutes later while the conversation is still typing. See livenessOf.
     pid: Number.isInteger(pid) && pid > 0 ? pid : null,
     // Carried from the launcher's handshake when this start took one up, so the brief digest and the
     // ide-bridge's "did my window come up" question both keep working. Neither admits a session.
