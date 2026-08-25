@@ -1,0 +1,80 @@
+{
+  "transition": "close-issue",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "issue": 129,
+  "pr": null,
+  "currentHead": "a15263aa534dd5ba270802f4bfc8d8687e6cd64c",
+  "explicitHandoff": "#129's own final `### Handoff` comment released its claim (\"#129 claim: stays released; incoming Claude creates its own bounded claim\") and its Project state is `Review / Claude Code` — the review is assigned to this lane, so discharging it is not a takeover under docs/WORK_CONTROL.md §5. Owner turn 2026-08-25 (this session), verbatim: \"i permit you to complete any actions that may prevent you from moving forward unless its something absolutely irreversible\", and \"even the codex hq SYNCHRONMICITY\".",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com/Pootytxng/sentinel.",
+    "remoteState": "origin/main == local HEAD a15263aa534dd5ba270802f4bfc8d8687e6cd64c, pushed 86c6cdfa..a15263aa through the pre-push gate (LOCAL CHECK RESULT: PASS).",
+    "worktree": "c:/Users/Kuya/code/sentinel (main), sole writer. Eleven other registered worktrees; four carry unmerged work and were not touched.",
+    "branch": "main.",
+    "dirtyState": "Clean at a15263aa apart from this receipt.",
+    "liveProcesses": "compy.exe live from the owner's desk install (untouched). No build, release, install or git-maintenance process."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1",
+    "scripts/verify-release-state.mjs",
+    "scripts/doc-budget.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "a15263aa534dd5ba270802f4bfc8d8687e6cd64c",
+      "detail": "Pre-push hook at this exact head. LOCAL CHECK RESULT: PASS, log logs/verify-local-2026-08-25T17-34-56Z.log. Independently: vitest 383 files / 5935 passed / 2 skipped; cargo test 975 passed; clippy -D warnings clean; tsc --noEmit clean."
+    },
+    {
+      "command": "scripts/verify-release-state.mjs",
+      "status": "passed",
+      "head": "a15263aa534dd5ba270802f4bfc8d8687e6cd64c",
+      "detail": "--strict, exit 0. 0 broken, 0 missing sections, 0 state drift."
+    },
+    {
+      "command": "scripts/doc-budget.ps1",
+      "status": "passed",
+      "head": "a15263aa534dd5ba270802f4bfc8d8687e6cd64c",
+      "detail": "ALL PASS. CLAUDE.md 24,928 bytes after the trim that paid for the off-disk disclosure."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "detail": "No build was cut. #129 is an evidence-consolidation issue; nothing in its discharge touches a shipped artifact."
+  },
+  "selfReview": {
+    "applicable": false,
+    "detail": "No src/**/*.{tsx,css} changed in this discharge."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; docs/WORK_CONTROL.md makes its review advisory rather than blocking. #129 IS the Codex record being discharged, so its own evidence stands as the independent half."
+  },
+  "closureNotes": [
+    "#129's stated outcome is complete and has been for a week: the durable 2026-08-08..2026-08-17 handoff exists as the final `### Handoff` comment, it was acknowledged 2026-08-18, and the successor lane it named (#130, data-root integrity) is CLOSED. What kept #129 open was its six-item 'Later order' list, which is a to-do list addressed to this lane. Each item is now discharged or has its own issue.",
+    "Item 1 — 'backup-first commit-graph repair and full fsck verification'. STILL RED as of today and now FIXED. `git commit-graph verify` failed on nine commits the graph indexed that are absent from the object database (09074253, 2821ad94, 4c1d8120, 85ce9152, 89ea2bb1, 94c239f9, a0d7c8fe, b2fe9376, d27c7f13). Each was checked individually with `git cat-file -e`: all nine absent, none referenced in any tracked file, none in any reflog — pruned lane tips, not recoverable work, and nothing the graph could have restored. `git -c core.commitGraph=false fsck --connectivity-only` exits 0, so the object store itself is healthy and the graph was a stale cache. Backed the existing split graph up first, then `git commit-graph write --reachable --split=replace`; `git commit-graph verify` now exits 0. This is a derived cache under .git/, not repo content — nothing is committed and the worst case is deleting the files, which git tolerates.",
+    "Item 2 — 'diagnose the two red runtime guards'. Green. The full local verifier passes at this head; scripts/launch-focus-guard.test.mjs is 48 passed / 2 skipped run alone (its two environment-gated legs), and the whole suite is 5935 passed / 2 skipped.",
+    "Item 3 — 'resume #127 measurement-first'. #127 is closed; it is not in the open issue list.",
+    "Item 4 — 're-audit and land or retire #128'. #128 stays open on its own issue at `Needs Kuya`. Publishing that lane's unpushed local commit is owner territory (it reaches other people's machines), so it is not discharged here and its worktree/commit 707572f1 remain preserved.",
+    "Item 5 — 'reconcile stale docs/Project state'. Done this session. Every drift #129 named is gone: RELEASE_STATE's stale source-main and fleet-version rows verify --strict at 0 drift, and docs/SESSION_HANDOFF.md was rewritten from live state (it no longer names v0.9.15/v0.9.17, and the worktree paragraph that would have told a reader to reset four unmerged lanes is corrected and guarded by scripts/handoff-worktree-truth.test.mjs). #130's board row read `Active` while CLOSED and was corrected to Done. #55/#54 are deliberately NOT reconciled — they are Codex-lane rows whose claim is expired, and WORK_CONTROL §5 makes expiry an alarm, not takeover permission.",
+    "Item 6 — 'salvage 63e74591, disposition branches, reclaim build caches'. 63e74591 is present and intact (`feat(skills): add run-compy skill`). Branch disposition is #126, which is destructive git on refs that still carry work — owner territory. Build caches are deliberately left alone.",
+    "#129's item 9 independently found the same defect this session guarded: 'missing external `claude/` dossier files'. Those are Cowork project docs that have never been on this filesystem, and four live ledgers cited them as if they were paths. Fixed in 7b7e5a1c and pinned by scripts/hq-doc-citation-guard.test.mjs, which fails any live ledger naming a `claude/*.md` without saying in the same paragraph that it is off disk. Codex found the class in August; it is now a test."
+  ],
+  "remaining": [
+    "#128 — the local-only release/install collision guard. Complete and verified locally, unpushed, `Needs Kuya`. Publishing it is an owner decision.",
+    "#126 — retiring the unmerged origin lanes. Destructive git on refs that carry work; owner territory.",
+    "#55 / #54 — stale Codex-lane board rows pointing at a worktree that no longer exists. Left as an alarm, per WORK_CONTROL §5.",
+    "The commit-graph repair is local to this checkout's .git/. Other registered worktrees share this object store so they inherit it, but a fresh clone elsewhere would need its own run if it ever goes stale."
+  ]
+}
