@@ -44,23 +44,19 @@ territory, not an engineering task — the independent security review and the E
 
 1. **Opt-in, default OFF, and it STAYS off after arming** (owner ruling #207, 2026-08-24). #217's own
    success criterion said the opposite; it is stale. Do not walk it back off the issue text.
-2. **No `ip_hash` on the receipt row** — the hash lives only in `usage_rate`, counts only.
-3. **No CSP / webview-capability widening** — the send is Rust-side.
-4. **`reqwest` carries NO TLS feature** (`default-features = false, features = ["json"]`). Adding
-   `rustls` pulled 11 new crates, measured and reverted. TLS arrives from `tauri-plugin-updater`.
-5. **Endpoint is `https://compy-bd6.pages.dev/api/usage`** — `compy.gg` does not exist (#201 §1).
+2. **No `ip_hash` on the receipt row** (it lives only in `usage_rate`) and **no CSP widening** — the
+   send is Rust-side. **`reqwest` carries NO TLS feature**; `rustls` pulled 11 crates and was
+   reverted, TLS arrives from `tauri-plugin-updater`.
+3. **Endpoint is `https://compy-bd6.pages.dev/api/usage`** — `compy.gg` does not exist (#201 §1).
    The receiver is live, migrated and **empty**; nothing sends to it.
 
 ## What #199 changed about release evidence — read this before the next release
 
-Release-transaction journals live under `src-tauri/target/release/bundle/nsis/`, which is gitignored
-by construction, so **no journal has ever been committed** and every past "9 of 9" claim rests on
-prose. That is now said out loud in the six affected `RELEASE_STATE.md` rows rather than papered over.
-
-For the future, `scripts/release.ps1` emits a sanitized durable receipt to `docs/release-receipts/`
-after the transaction completes. **The next release cut must commit that file** — the guard accepts
-the honest caveat only up to v0.9.26, and demands a real receipt for anything newer. Mechanism and
-reasoning: [`RELEASE_TRANSACTION.md`](RELEASE_TRANSACTION.md) § Durable receipt.
+Release-transaction journals live under `src-tauri/target/release/bundle/nsis/`, gitignored by
+construction, so **no journal has ever been committed** and every past "9 of 9" claim rests on prose.
+Six `RELEASE_STATE.md` rows now say so. Going forward `scripts/release.ps1` emits a sanitized durable
+receipt to `docs/release-receipts/`: **the next release cut must commit that file** — the guard takes
+the honest caveat only up to v0.9.26. See [`RELEASE_TRANSACTION.md`](RELEASE_TRANSACTION.md).
 
 ## The design vision is a separate train — do not fold it into a UI fix
 
@@ -99,11 +95,15 @@ reasoning: [`RELEASE_TRANSACTION.md`](RELEASE_TRANSACTION.md) § Durable receipt
 
 ## Repo state a fresh session should know without re-deriving
 
-- **Seven worktrees, all spent.** None is mid-flight; delete or hard-reset before reusing one. The
-  nested `.claude/worktrees/merge-prs-tauri-visibility-c5660e` is detached and dirty on
-  `.codex/config.toml` and **cannot be removed** without `--force`, which stays owner-blocked.
-- **PR [#163](https://github.com/Pootytxng/sentinel/pull/163) is CONFLICTING/DIRTY** and belongs to
-  another lane. Do not adopt it opportunistically.
+- **Eleven worktrees besides `main`; six are spent but FOUR still carry work that is not on main** —
+  `lane/cleanup-train-2026-08-20` (PR #163, CONFLICTING, another lane's), `feat/user-feedback-lab-recovery`,
+  `feat/lab-49-parity-port`, `lane/vision-pointer-guard-2026-08-24`. Do not reset those. The nested
+  `.claude/worktrees/merge-prs-tauri-visibility-c5660e` is detached, dirty on `.codex/config.toml`,
+  and **cannot be removed** without `--force`, which stays owner-blocked. `sentinel-testrig` holds an
+  **ungated draft** receipt for the already-merged PR #194 — preserve it, never commit it as a receipt.
+- **The board carries stale rows.** #130 read `Active` while CLOSED (corrected 2026-08-25). #55/#54
+  are `Active`/`Review` on the Codex lane and point at `sentinel-project-doctor`, **a worktree that no
+  longer exists** — left alone, because a stale claim is an alarm, not a takeover (WORK_CONTROL §5).
 - **#156 and #128 discharge on evidence, not on work.** #156's silent-install flake needs a
   reproduction; #128's release-side mutex has never been held during a real publish. Both collect
   the next time a ship or a release runs — neither is a task to schedule.
