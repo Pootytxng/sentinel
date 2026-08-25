@@ -162,14 +162,38 @@ const FORBIDDEN = [
   "从不联网",
 ];
 
-export function findAbsolutes(text: string): { phrase: string; line: number }[] {
+// The telemetry promise, in every language it actually ships in. Kept SEPARATE from FORBIDDEN
+// because it is gated on a different surface: an update check is not telemetry, so this stays true
+// while the updater is live and stops being true only when receipts_gate() flips.
+//
+// The Chinese entry is not decoration. `src/i18n/locales/zh-CN/home.json:447` and
+// `settings.json:65` both carry 无遥测数据 — the same promise, to the same users — and an
+// English-only phrase list would have walked straight past them at arming time. That is the exact
+// defect this repo has already paid for once: plain-language-guard scanned 199 `.tsx?` files and
+// none of the 18 locale files it existed to police. A guard's phrase list can be narrower than its
+// subject the same way its file filter can.
+const TELEMETRY_PROMISE = ["no telemetry", "无遥测"];
+
+export function findAbsolutes(
+  text: string,
+  phrases: string[] = FORBIDDEN,
+): { phrase: string; line: number }[] {
   const hits: { phrase: string; line: number }[] = [];
   stripComments(text).split("\n").forEach((raw, i) => {
     if (raw.includes(ALLOW_MARKER)) return;
     const low = raw.toLowerCase();
-    for (const phrase of FORBIDDEN) if (low.includes(phrase)) hits.push({ phrase, line: i + 1 });
+    for (const phrase of phrases) if (low.includes(phrase)) hits.push({ phrase, line: i + 1 });
   });
   return hits;
+}
+
+/** Files whose live copy still promises no telemetry. Pure, so it can be exercised while dark. */
+export function telemetryPromiseOffenders(
+  files: { path: string; text: string }[],
+): { path: string; phrase: string; line: number }[] {
+  return files.flatMap(({ path, text }) =>
+    findAbsolutes(text, TELEMETRY_PROMISE).map((hit) => ({ path, ...hit })),
+  );
 }
 
 // ── The guard ───────────────────────────────────────────────────────────────────────────────────
@@ -244,13 +268,65 @@ describe("outbound-claim guard", () => {
   // not telemetry — so this claim is gated on receipts alone, not on the surface set above.
   it("absolute 'no telemetry' copy is reworded in the same change that arms receipts", () => {
     if (!receiptsArmed()) return;
-    const offenders = collect().filter((f) =>
-      readFileSync(f, "utf8").toLowerCase().includes("no telemetry"),
-    );
+    const offenders = telemetryPromiseOffenders(
+      collect().map((path) => ({ path, text: readFileSync(path, "utf8") })),
+    ).map((o) => `${o.path}:${o.line} → "${o.phrase}"`);
     expect(
       offenders,
-      `receipts_gate() is TRUE but absolute "no telemetry" copy still ships in:\n  ` +
-        `${offenders.join("\n  ")}\nRework it (e.g. "local-only by default; optional opt-in sharing").`,
+      `receipts_gate() is TRUE but the no-telemetry promise still ships in:\n  ` +
+        `${offenders.join("\n  ")}\nRework it (e.g. "local-only by default; optional opt-in sharing"), ` +
+        `or mark a line that names the phrase in order to RETIRE it with ${ALLOW_MARKER}.`,
+    ).toEqual([]);
+  });
+
+  // TRIPWIRE (2026-08-25, #133 Task 4). The test above has never run against real copy: its first
+  // line returns while receipts_gate() is false, which it has been every day of its existence. A
+  // conditional that has never been true is a test nobody has seen work, and this one guards the
+  // single promise the owner ruled outranks our own later amendments (#207, 2026-08-24 — the
+  // shipped app description and public download page both say "No telemetry"). Q9a then BUILT the
+  // send path that would make it false, so the day it fires is now a real, near date.
+  //
+  // Same idiom as `support-evidence-outbound-guard.test.ts`'s "states today's tier truth": assert
+  // the dormancy out loud, so flipping the gate fails HERE first with an explanation, instead of
+  // silently promoting a never-exercised check into a load-bearing one.
+  //
+  // Deliberately NOT asserted: that the promise still EXISTS anywhere. Pinning the phrase in place
+  // is the exact watch-list defect this file's header records — the retired receipts-copy-guard
+  // asserted the absolutes MUST STILL EXIST and thereby froze false copy. The promise is free to be
+  // reworded any day, by anyone, for any reason.
+  it("is honest that the no-telemetry check is dormant, and says so where it will be read", () => {
+    expect(
+      receiptsArmed(),
+      "receipts_gate() just flipped TRUE. The 'no telemetry' check above has run for the first " +
+        "time — it was dormant until now. Read its offender list as an AUDIT, not a bug: every " +
+        "file it names is public copy that promised no telemetry and no longer can. Rewording " +
+        "them is part of the arming commit, not a follow-up.",
+    ).toBe(false);
+  });
+
+  it("the dormant detector is provably able to fire (positive + negative controls)", () => {
+    const found = telemetryPromiseOffenders([
+      { path: "src-tauri/tauri.conf.json", text: '"longDescription": "…, no game injection, no telemetry."' },
+      { path: "site/index.html", text: "Local-first · no telemetry · no account" },
+      { path: "src/i18n/locales/zh-CN/settings.json", text: '"privacy": "无需账号、无遥测数据——…"' },
+    ]);
+    expect(found.map((o) => o.path)).toEqual([
+      "src-tauri/tauri.conf.json",
+      "site/index.html",
+      "src/i18n/locales/zh-CN/settings.json",
+    ]);
+    // English-only would have missed the third. That is the whole reason TELEMETRY_PROMISE is a list.
+    expect(found[2].phrase).toBe("无遥测");
+
+    // Negative controls: a code comment, a retirement note, and a sentence that is NOT the promise.
+    expect(telemetryPromiseOffenders([{ path: "a.ts", text: "// no telemetry here" }])).toEqual([]);
+    expect(
+      telemetryPromiseOffenders([{ path: "b.md", text: `we removed "no telemetry" ${ALLOW_MARKER}` }]),
+    ).toEqual([]);
+    expect(
+      telemetryPromiseOffenders([
+        { path: "c.md", text: "Windows telemetry tasks are what this rec turns off." },
+      ]),
     ).toEqual([]);
   });
 });
