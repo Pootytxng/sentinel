@@ -1,0 +1,61 @@
+{
+  "transition": "close-issue",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "issue": 217,
+  "pr": 218,
+  "currentHead": "f689012524affc30d0dcbb6a879328221f45866b",
+  "explicitHandoff": "Owner turn 2026-08-25 (this session), verbatim: \"go — build Q9a dark per the agreed design\". #217 IS Q9a.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com/Pootytxng/sentinel. Same inspection as .claude/work-control/2026-08-25-merge-pr-218.json, written at the same head; that receipt carries the full detail and this one does not restate it.",
+    "remoteState": "origin/main is f6890125 and equals local HEAD. #217 closed as completed by GitHub when PR #218 merged (8b2f0f64) — the PR body carried 'Closes #217' — not by a separate gh issue close.",
+    "worktree": "sentinel-q9a (the lane, spent, still on c6d8da3e) and sentinel (main). No other worktree written to.",
+    "branch": "lane/q9a-tier2-dark-2026-08-25 merged and its ref pruned; main at f6890125.",
+    "dirtyState": "Clean at f6890125. The two receipts are the only files written after that push and trail it by one commit.",
+    "liveProcesses": "Two claude.exe (31380, 13680). No compy.exe."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "f689012524affc30d0dcbb6a879328221f45866b",
+      "detail": "Pre-push hook at this head. LOCAL CHECK RESULT: PASS, log logs/verify-local-2026-08-25T14-43-15Z.log. The lane head that was merged, c6d8da3e, passed the same gate — 376 files / 5170 frontend tests, Rust 975, clippy clean."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "detail": "No build was cut and nothing was installed on the owner's desk. The merged code is unreachable in any build he could run — receipts_gate() at src-tauri/src/receipts.rs:23 is hard-false."
+  },
+  "selfReview": {
+    "applicable": true,
+    "status": "NOT RUN",
+    "detail": "Same open obligation recorded in the merge-pr receipt: c6d8da3e touches src/surfaces/ReceiptsConsent.tsx and adds src/design/Toggle.tsx. Not run, not waived, and the consent UI is NOT owner-approved. #217 closes on the BUILD being complete, which it is; the review is tracked as a live item in the BACKLOG Q9a row (still unchecked) and docs/SESSION_HANDOFF.md rather than dying with the issue."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session; docs/WORK_CONTROL.md makes its review advisory rather than blocking. See the merge-pr receipt for what stands in for it on the privacy default."
+  },
+  "closureNotes": [
+    "RECEIPT WRITTEN AFTER THE FACT, like its sibling: #217 auto-closed on the merge before either receipt existed. Recorded rather than back-dated.",
+    "Every scope item in #217's title landed: the endpoint (functions/api/usage.ts -> D1 compy_reports), the Rust send (send_decision / post_receipt / consent store in src-tauri/src/receipts.rs), the CSP question (answered: no widening needed, the send is Rust-side), the disclosure (first-run, plus a real off switch, in src/surfaces/ReceiptsConsent.tsx), and the privacy text (docs/PRIVACY.md v0.6 and docs/EULA.md §10).",
+    "ONE SCOPE ITEM WAS DELIBERATELY INVERTED: #217 asked for the policy guard to be amended from 'Tier 2 default-OFF' to disclosure-on-arming per the 2026-08-18 record. The owner overruled that on 2026-08-24 (#207) — the shipped app description and public download page already promise 'No telemetry'. The guard was strengthened instead of loosened. Closing the issue does not ratify its stale success criterion."
+  ],
+  "remaining": [
+    "The visual self-review of the consent UI — open, and deliberately not closed with the issue.",
+    "receipts_gate() is NOT armed. Arming is a separate owner-signed commit behind an independent security review and an EU/UK region check.",
+    "Q8 (Tier 1) is the item Q9a was sequenced before; it is untouched by this train."
+  ]
+}
