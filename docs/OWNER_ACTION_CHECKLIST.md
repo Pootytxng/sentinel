@@ -310,8 +310,13 @@ These gate **public** release only (not the local app you use daily). Full list:
   already point at `https://compy.gg`, but the domain isn't purchased — the site currently lives only
   on `compy-bd6.pages.dev`. Buying `compy.gg` + pointing it at the Pages project is the last
   owner-only step before the SEO/canonical layer is actually correct in the wild.
-- 🔒 **Receipts telemetry arming** — new outbound-network boundary; needs its security review + a
-  consent UI + your sign-off before it can leave the machine (dark by design until then).
+- 🔒 **Receipts telemetry arming** — new outbound-network boundary, still dark. **The consent UI you
+  were owed is now BUILT and merged** (#217 / PR #218, `8b2f0f64`): a first-run disclosure card, a
+  real off switch, `EULA.md` §10, `PRIVACY.md` v0.6, and the receiver deployed + empty on your yes.
+  Your 2026-08-24 ruling holds — **opt-in, default OFF even after arming**, because the shipped
+  description already promises "No telemetry". **Two things are on you, and only two:** ① you have
+  the disclosure card's before/after and have not ruled on how it looks; ② arming itself is still
+  yours and always will be. Nothing sends until you do both.
 
 ---
 
