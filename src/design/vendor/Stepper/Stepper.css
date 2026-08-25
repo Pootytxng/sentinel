@@ -78,8 +78,9 @@
 }
 
 .back-button {
-  /* Local mod: vendor's `transition: all` narrowed to the one property that changes (THIRD_PARTY.md). */
-  transition: color 350ms;
+  /* Local mod: vendor's `transition: all` narrowed to the properties that change — color, plus
+     the `.inactive` opacity fade the vendor's blanket transition covered (THIRD_PARTY.md). */
+  transition: color 350ms, opacity 350ms;
   border-radius: 0.25rem;
   padding: 0.25rem 0.5rem;
   color: var(--ix-text-3, #a3a3a3);

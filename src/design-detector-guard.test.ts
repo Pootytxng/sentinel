@@ -43,6 +43,9 @@ const runDetect = (args: string[]): Finding[] => {
 
 describe("design law: the impeccable detector is a build gate (#214)", () => {
   it("src/ carries zero detector findings", { timeout: 120_000 }, () => {
+    // The detector warns-and-continues on a target it can't stat (main.mjs), so an empty findings
+    // list is only meaningful if "src" really resolves from the runner's cwd (review 2026-08-24).
+    expect(existsSync("src"), "src/ did not resolve from the test cwd — the scan would be vacuous").toBe(true);
     const findings = runDetect(["src"]);
     expect(
       findings.map((f) => `${f.file}:${f.line} [${f.antipattern}] ${f.snippet}`),
@@ -82,7 +85,9 @@ describe("design law: the impeccable detector is a build gate (#214)", () => {
     // Patterns and samples are ASSEMBLED so a future detector version that learns these rules
     // never flags this file's own fixtures (same rule as the probe above).
     const bans: Array<{ name: string; re: RegExp }> = [
-      { name: "transition-all", re: new RegExp(["transition", ":\\s*all\\b"].join("")) },
+      // `all` is caught anywhere in the value list, not just first position (review 2026-08-24);
+      // the lookarounds keep token names like --all-ease out.
+      { name: "transition-all", re: new RegExp(["transition", ":[^;]*?(?<![-\\w])all(?![-\\w])"].join("")) },
       { name: "ease-in", re: new RegExp(["ease", "-in(?![-\\w])"].join("")) },
       { name: "scale-zero", re: new RegExp(["scale", "\\(0\\)"].join("")) },
     ];
@@ -98,9 +103,16 @@ describe("design law: the impeccable detector is a build gate (#214)", () => {
     // And each must NOT catch its legitimate look-alike.
     expect(bans[1].re.test("ease-in-out")).toBe(false);
     expect(bans[2].re.test("scale(0.97)")).toBe(false);
+    // transition-all: also caught mid-list, and NOT fired by a token name containing "all".
+    expect(bans[0].re.test(["transition: color 0.2s, ", "all 0.3s ease;"].join(""))).toBe(true);
+    expect(bans[0].re.test(["transition: color 0.2s var(--", "all-ease);"].join(""))).toBe(false);
 
+    const cssFiles = (readdirSync("src", { recursive: true }) as string[]).filter((p) =>
+      p.endsWith(".css"),
+    );
+    expect(cssFiles.length, "no CSS under src/ — the motion-law scan would be vacuous").toBeGreaterThan(0);
     const hits: string[] = [];
-    for (const f of (readdirSync("src", { recursive: true }) as string[]).filter((p) => p.endsWith(".css"))) {
+    for (const f of cssFiles) {
       // Blank out comments (newlines preserved) so prose ABOUT a ban never trips it.
       const css = readFileSync(join("src", f), "utf8").replace(/\/\*[\s\S]*?\*\//g, (m) =>
         m.replace(/[^\n]/g, " "),

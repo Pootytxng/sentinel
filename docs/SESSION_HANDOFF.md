@@ -35,9 +35,15 @@ frontend-design, vercel web-design-guidelines — evaluated, extracted, not adde
   `docs/UI_VISION_BACKLOG.md` 🔴 OPEN (panoramic drag telemetry gallery, magnetic cursor, Lenis,
   GSAP data-reactivity). The self-review verdict said this plainly: 6c054b77 is one scoped
   increment; a reskin/lock is not the vision. That is the natural next design train.
-- #214 close-out (evidence comment + close under a work-control receipt) was in flight at the end
-  of the writing session — if #214 is still open, the evidence lives in the issue comments and
-  RELEASE_STATE row; verify and close it rather than redoing anything.
+- **#214 is CLOSED** (2026-08-24): independent review PASS at `6f9baf38`, work-control receipt
+  gate PASS, evidence in
+  [#214 issuecomment-5404575387](https://github.com/Pootytxng/sentinel/issues/214#issuecomment-5404575387).
+  The reviewer's non-blocking findings were folded into a follow-up commit: Stepper back-button
+  `.inactive` opacity fade restored (`color 350ms, opacity 350ms`), guard hardened (vacuous-scan
+  asserts + `transition: all` caught mid-list), THIRD_PARTY.md's stale "DEFAULT OFF" stepper claim
+  corrected. That fix is on `main` but NOT in the desk build (`6c054b77`) — the **next ship's
+  self-review must eyeball the Setup back-button fade** (a 350ms opacity snap→fade in the tour
+  footer; end state was always correct).
 
 ## Live traps for whoever is next
 
