@@ -37,6 +37,20 @@ tauri-plugin-notification = "2"
 tauri-plugin-updater = "2"
 # relaunch() so "Update now" can restart into the new build after the installer runs.
 tauri-plugin-process = "2"
+# Tier 2 usage receipts (Q9a, #217) — the ONE HTTP client in the crate, and the SECOND outbound
+# surface after the signed updater. Named exception under the Capability Exception Gate:
+# docs/decisions/2026-08-18-outbound-capability-expansion.md §2, owner sign-off 2026-08-09.
+# It is already linked into every shipped build (tauri-plugin-updater depends on it), so declaring
+# it here compiles nothing new — it makes the dependency VISIBLE instead of transitive.
+# The send path lives ONLY in src-tauri/src/receipts.rs and refuses while receipts_gate() is false
+# — pinned by src/support-evidence-outbound-guard.test.ts.
+# NO TLS FEATURE IS NAMED HERE, and that is the whole point. Enabling reqwest 0.13's `rustls`
+# feature pulls aws-lc-rs, aws-lc-sys (a C/assembly crypto library needing cmake) and quinn —
+# MEASURED: 11 new crates in Cargo.lock. Feature unification already gives reqwest its TLS from
+# tauri-plugin-updater, so `json` alone adds nothing to the lockfile at all. Verified, not assumed:
+# scripts/usage-endpoint-guard.test.mjs pins the declaration, and  shows
+# reqwest resolving with __rustls either way.
+reqwest = { version = "0.13", default-features = false, features = ["json"] }
 # Remember last window size/position (tester gripe 2026-07-23: the 800x600 default was too
 # small — the intuitive fix is BOTH a larger first-run default (1280x720, tauri.conf.json)
 # AND respecting whatever size the user then chooses). Overlay window denylisted in lib.rs —

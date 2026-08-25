@@ -348,6 +348,12 @@ pub(crate) fn save_session(summary: SessionSummary) -> Result<bool, String> {
     // M4: if a comparison was armed for this game, compute the cross-session delta now.
     crate::comparison::on_session_finalized(&summary);
     save_session_to(&sessions_path(), summary)?;
+    // Tier 2 receipts (Q9a, #217): a finalized session is the ONLY thing that produces a receipt,
+    // so this is the only trigger. Inert in every shipped build — it returns on receipts_gate()
+    // before it reads consent, spawns anything, or touches the network. The call site lands in the
+    // dark commit on purpose, so arming stays a one-line owner-signed flip rather than a
+    // behavioural diff nobody reviewed.
+    crate::receipts::on_session_finalized();
     Ok(true)
 }
 

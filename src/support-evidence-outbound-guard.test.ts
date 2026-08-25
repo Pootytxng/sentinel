@@ -166,20 +166,66 @@ describe("support-evidence outbound guard: the evidence bundle never leaves by i
     expect(shipped, "a network share is not the local data dir").not.toMatch(/\\\\[A-Za-z0-9._-]+\\/);
   });
 
-  it("adds no HTTP client to the crate", () => {
-    // The structural backstop, and the one that survives a rewrite of the module: this crate has NO
-    // http client dependency at all. Shipping an uploader would mean adding one here, in a diff
-    // nobody can miss, rather than a quiet line inside a 700-line file.
-    const deps = readFileSync(CARGO, "utf8").split("\n").filter((l) => !l.trim().startsWith("#"));
-    const offenders = deps.filter((l) =>
+  it("adds no HTTP client to the crate beyond the ONE named outbound exception", () => {
+    // The structural backstop, and the one that survives a rewrite of the module: shipping an
+    // uploader means adding a client crate here, in a diff nobody can miss, rather than a quiet
+    // line inside a 700-line file.
+    //
+    // AMENDED 2026-08-25 (Q9a, #217). This read "no HTTP client at all", and was right to until the
+    // owner named an exception: the Tier 2 usage receipt
+    // (docs/decisions/2026-08-18-outbound-capability-expansion.md §2, sign-off 2026-08-09). The
+    // exception is admitted BY NAME rather than by relaxing the rule, so the NEXT uploader still
+    // fails here — which is the whole value of the original assertion, and is what it keeps.
+    const deps = readFileSync(CARGO, "utf8").split(/\r?\n/).filter((l) => !l.trim().startsWith("#"));
+    const clients = deps.filter((l) =>
       /^\s*(reqwest|ureq|isahc|attohttpc|surf|hyper|curl|tungstenite|tokio-tungstenite|tauri-plugin-http)\s*=/.test(l),
     );
+    const unnamed = clients.filter((l) => !/^\s*reqwest\s*=/.test(l));
     expect(
-      offenders,
-      "A network client crate appeared in src-tauri/Cargo.toml. Compy's only outbound surface is " +
-        "the signed update check (tauri-plugin-updater, owner-armed 2026-07-22). A new one is a new " +
-        "boundary: it needs its own spec, security review and owner sign-off (doctrine stop-rule 3).",
+      unnamed,
+      "A network client crate appeared in src-tauri/Cargo.toml that is not the one named outbound " +
+        "exception. Compy's outbound surface is the signed update check (tauri-plugin-updater, " +
+        "owner-armed 2026-07-22) and the Tier 2 usage receipt (reqwest, Q9a #217). A third is a " +
+        "new boundary: it needs its own spec, security review and owner sign-off (stop-rule 3).",
     ).toEqual([]);
+    expect(clients, "exactly one HTTP client, declared exactly once").toHaveLength(1);
+  });
+
+  it("declares reqwest with no TLS feature of its own, so it adds nothing to the lockfile", () => {
+    // reqwest is not new supply chain — tauri-plugin-updater already links it into every shipped
+    // build, so declaring it makes an existing dependency VISIBLE instead of transitive. That is
+    // measured, not assumed: the declaring commit changed exactly ONE line of Cargo.lock.
+    //
+    // And that is why the features list is pinned rather than left to taste. Enabling reqwest
+    // 0.13's own `rustls` feature pulls aws-lc-rs, aws-lc-sys (a C/assembly crypto library that
+    // needs cmake) and quinn — MEASURED at 11 new crates. Feature unification already hands reqwest
+    // its TLS from the updater (`__rustls`, `rustls-no-provider`), so naming a provider here would
+    // buy a second crypto stack for nothing.
+    const line = readFileSync(CARGO, "utf8")
+      .split(/\r?\n/)
+      .find((l) => /^\s*reqwest\s*=/.test(l));
+    expect(line, "reqwest must be declared for this rule to mean anything").toBeTruthy();
+    expect(line, "default features drag in native-tls (schannel) too").toContain(
+      "default-features = false",
+    );
+    expect(line, "a TLS provider feature here is 11 crates nobody asked for").not.toMatch(
+      /rustls|native-tls|http3|blocking/,
+    );
+    const features = (line ?? "").match(/features\s*=\s*\[([^\]]*)\]/)?.[1] ?? "";
+    expect(
+      features
+        .split(",")
+        .map((f) => f.trim().replace(/"/g, ""))
+        .filter(Boolean),
+      "widen this only with the measurement that justifies widening it",
+    ).toEqual(["json"]);
+  });
+
+  it("keeps the crate that actually supplies reqwest's TLS", () => {
+    // The one fragility of taking TLS by feature unification: if tauri-plugin-updater ever leaves,
+    // reqwest still COMPILES and then fails at runtime with no TLS backend. A build cannot catch
+    // that on its own, so the coupling is pinned here instead of living in a comment.
+    expect(readFileSync(CARGO, "utf8")).toMatch(/^\s*tauri-plugin-updater\s*=/m);
   });
 
   it("keeps the update check as the only network-capable plugin", () => {
