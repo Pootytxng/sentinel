@@ -101,6 +101,12 @@ $byteBudgets = @{
 # repo checks out CRLF on Windows and LF elsewhere, so an on-disk measure would give two different
 # answers for one unchanged file. Get-Content already drops the line endings, so the PowerShell and
 # the JS mirror agree by construction.
+#
+# Both reads pin -Encoding utf8 on purpose. Windows PowerShell 5.1 defaults to the ANSI code page,
+# so every em dash and emoji in these docs decodes as 2-3 separate chars and re-encodes ~300 bytes
+# heavier - NEXT UP reads 12.5KB under powershell.exe and 12.2KB under pwsh, from one unchanged
+# file. A phantom overflow here tells the next session to archive live rows, so the host must not
+# be able to move the number. Run it with either; scripts/doc-budget-guard.test.mjs pins this.
 $sectionByteBudgets = @{
   "docs/BACKLOG.md::NEXT UP" = 12544
   "docs/BACKLOG.md::Conformance queue" = 28160
@@ -112,7 +118,7 @@ $fail = 0
 foreach ($f in ($budgets.Keys | Sort-Object)) {
   $p = Join-Path $root $f
   if (-not (Test-Path $p)) { Write-Host "SKIP  $f (missing)"; continue }
-  $n = (Get-Content $p).Count
+  $n = (Get-Content $p -Encoding utf8).Count
   $b = $budgets[$f]
   if ($n -le $b) { Write-Host "PASS  $f  $n/$b" }
   else { Write-Host "FAIL  $f  $n/$b  -> archive history/log sections to docs/archive/, never delete"; $fail = 1 }
@@ -132,7 +138,7 @@ foreach ($k in ($sectionByteBudgets.Keys | Sort-Object)) {
   $rel = $parts[0]; $needle = $parts[1]
   $p = Join-Path $root $rel
   if (-not (Test-Path $p)) { Write-Host "SKIP  $k (missing)"; continue }
-  $lines = @(Get-Content $p)
+  $lines = @(Get-Content $p -Encoding utf8)
   $starts = @()
   for ($i = 0; $i -lt $lines.Count; $i++) {
     if ($lines[$i] -match '^#{1,6}\s' -and $lines[$i].Contains($needle)) { $starts += $i }

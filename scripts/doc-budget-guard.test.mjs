@@ -237,6 +237,17 @@ describe("section byte caps (the file budget cannot say WHICH queue refilled)", 
     expect(sectionBytes(lf, "Q")).toBe(sectionBytes(lf.replace(/\n/g, "\r\n"), "Q"));
   });
 
+  it("measures the same number whatever POWERSHELL runs it — every read pins utf8", () => {
+    // Measured 2026-08-25: NEXT UP read 12.5KB under `powershell.exe` (Windows PowerShell 5.1) and
+    // 12.2KB under `pwsh` 7, from one unchanged file. 5.1 decodes with the ANSI code page, so every
+    // em dash and emoji in these docs comes back as 2-3 chars and re-encodes ~300 bytes heavier. A
+    // phantom overflow is worse than a missed one: the FAIL message tells the next session to move
+    // LIVE rows into the archive to pay for bytes that were never there.
+    const reads = script.split(/\r?\n/).filter((l) => l.includes("Get-Content") && !/^\s*#/.test(l));
+    expect(reads.length).toBeGreaterThanOrEqual(2); // a rewrite that stops reading at all fails here
+    for (const line of reads) expect(line).toMatch(/-Encoding\s+utf8/i);
+  });
+
   it("parses nothing rather than inventing an empty pass when the table is gone", () => {
     expect(parseBudgets("# no tables here\n", "sectionByteBudgets")).toEqual({});
   });
