@@ -6,66 +6,61 @@
 
 ## Where the train is standing
 
-**Q9a is built, dark, merged.** [#217](https://github.com/Pootytxng/sentinel/issues/217) closed via
-PR [#218](https://github.com/Pootytxng/sentinel/pull/218), merged `8b2f0f64`; the lane ref is pruned.
-`C:\Users\Kuya\code\sentinel-q9a` is spent and still stands on `c6d8da3e` — a merge updates no
-existing worktree, so delete or reset it before reusing it. `receipts_gate()`
-(`src-tauri/src/receipts.rs:23`) is still **false** — this train built the path, it did not arm it.
+**The 2026-08-25 persistent-workflow session cleared its queue and closed three issues.** `main` is
+green and pushed. Nothing is half-built and no lane is mid-flight. The desk build is `b2b740bf`,
+installed and stamp-proved; the published fleet is still v0.9.26 (`5e64074c`).
 
 | Commit | What |
 |---|---|
-| `8d8feddd` | Tier 2 receiver: `functions/api/usage.ts`, `migrations-reports/0001_usage.sql`, `REPORTS` binding, `scripts/usage-endpoint-guard.test.mjs` |
-| `6efd01bf` | the Rust send path: `send_decision` (gate → disclosure → opt-in), `post_receipt`, consent store, 11 tests |
-| `3f033573` | nine live docs stopped claiming "no send path exists"; PRIVACY v0.6; the missing policy-guard assertion |
-| `c6d8da3e` | first-run disclosure + a real off switch; `Toggle` moved to `src/design/` |
+| `041cabbc` | the fixture preview rig had been **dead since #148** — one import of a deleted CSS file made vite 500 on every state; repaired + guarded, and four Q9a states built |
+| `b20e59dc` | error copy that read like calm body text, in **three** surfaces; fixed + guarded |
+| `e1837670` | #199 items 3–4: `scripts/emit-release-receipt.mjs`, wired into `release.ps1`, plus its guard |
+| `e7111bd9` | the "not re-verifiable" caveat given an expiry so it cannot become permanent |
+| `493dcc18` | `.claude/`'s three prose invariants (skills index ↔ disk, unwired hooks) became a test |
+| `3b279ddf` | the Q9a consent card's two choices sat ~700px apart; given a measure and regrouped |
 
-`scripts/verify-local.ps1` **PASS** at `c6d8da3e` — 376 files, 5170 tests, tsc, build, Rust 975,
-clippy. CI is `workflow_dispatch`-only, so the local gate IS the gate.
+**Closed:** [#199](https://github.com/Pootytxng/sentinel/issues/199) (all four items),
+[#133](https://github.com/Pootytxng/sentinel/issues/133) (Tasks 4–7),
+[#203](https://github.com/Pootytxng/sentinel/issues/203) (`.mcp.json` pinned to `shadcn@4.19.0`).
+Each carries a gated work-control receipt under `.claude/work-control/`.
 
-### Decisions already made — do not re-litigate, they are argued in the commit bodies
+## Q9a's one open item is now closed — the consent UI has been reviewed
 
-1. **Opt-in, default OFF, and it STAYS off after arming.** #217's own success criterion said to
-   amend the guard to "default-ON + disclosure"; the owner **overruled that on 2026-08-24 (#207)** —
-   the shipped app description and public download page already promise "No telemetry". The doc and
-   guard changes went the TIGHTER way. Do not walk it back off the stale issue text.
-2. **No `ip_hash` on the receipt row.** The hash lives only in `usage_rate`, counts only, and every
-   POST deletes rows past the hour **inside the same batch as the insert**.
+The visual self-review ran and **PASSed 12/12**, after one round-trip. It could not run on a build:
+`receipts_gate()` (`src-tauri/src/receipts.rs:23`) is hard-false, so the surface is unreachable in
+anything installable. The route is the fixture rig — and the rig itself was dead and had to be fixed
+first. **The owner has the before/after but has not ruled**, so the UI is reviewed, not approved.
+
+What round 1 caught is worth carrying: both failure messages rendered in `receipts-hint`, the calm
+grey of ordinary copy, so a refused consent write read as a footnote — and the same defect sat in
+`Fix.tsx` (a refused apply reading as an explanation) and `LicensePanel.tsx`. All three fixed;
+`src/error-styling-guard.test.ts` fails any component rendering an error in its calm copy's classes.
+
+**Still not arming.** `receipts_gate()` stays false. Before arming could be *considered* — owner
+territory, not an engineering task — the independent security review and the EU/UK region check.
+**Do NOT arm it.**
+
+### Q9a decisions already made — do not re-litigate, they are argued in the commit bodies
+
+1. **Opt-in, default OFF, and it STAYS off after arming** (owner ruling #207, 2026-08-24). #217's own
+   success criterion said the opposite; it is stale. Do not walk it back off the issue text.
+2. **No `ip_hash` on the receipt row** — the hash lives only in `usage_rate`, counts only.
 3. **No CSP / webview-capability widening** — the send is Rust-side.
-4. **`reqwest` is declared with `default-features = false, features = ["json"]` and NO TLS feature.**
-   Adding `rustls` pulled **11 new crates** (aws-lc-sys, cmake, quinn — measured in `Cargo.lock`,
-   reverted). TLS arrives from `tauri-plugin-updater`. Pinned by three tests in
-   `src/support-evidence-outbound-guard.test.ts`.
-5. **Endpoint constant is `https://compy-bd6.pages.dev/api/usage`** — `compy.gg` does not exist
-   (#201 §1). Re-pointing is a pre-arming checklist item.
+4. **`reqwest` carries NO TLS feature** (`default-features = false, features = ["json"]`). Adding
+   `rustls` pulled 11 new crates, measured and reverted. TLS arrives from `tauri-plugin-updater`.
+5. **Endpoint is `https://compy-bd6.pages.dev/api/usage`** — `compy.gg` does not exist (#201 §1).
+   The receiver is live, migrated and **empty**; nothing sends to it.
 
-### What Q9a still owes
+## What #199 changed about release evidence — read this before the next release
 
-- **The visual self-review was NOT run, so the consent UI is NOT owner-approved.** The surface is
-  dark and cannot be captured from a running build; the fixture-preview route
-  (`[[live-fixture-preview-via-vite-cdp]]`) is how to reach the disclosure and switch states. This
-  is the one open item from the merged lane — it is in the Q9a BACKLOG row too, not only here.
-- Before arming could ever be *considered* (owner territory, not an engineering task): the
-  independent security review, and the EU/UK region check. **Do NOT arm `receipts_gate()`.**
+Release-transaction journals live under `src-tauri/target/release/bundle/nsis/`, which is gitignored
+by construction, so **no journal has ever been committed** and every past "9 of 9" claim rests on
+prose. That is now said out loud in the six affected `RELEASE_STATE.md` rows rather than papered over.
 
-## The money-stack Phase 2 ask was answered by measuring, not building
-
-The owner asked for a new lane for the compy.gg one-pager + waitlist. **It is already built and has
-been deployed since 2026-07-15** — so no build lane was cut. What the KPI actually says:
-
-**5 waitlist signups, every one of them 2026-06-12/13. Nothing in ten weeks.** The lever is traffic
-(#206) and the domain (#201 §1), not more website. Building a second one-pager would have produced a
-prettier page with the same zero.
-
-Production had also been **2 weeks stale**, still calling Compy *"a free desktop app"*. **Deployed
-2026-08-25** on the owner's yes, after he was told the staged tree now also carried
-`functions/api/usage.ts`: `npx wrangler pages deploy dist-site --project-name compy`. Promotion
-proven by hash — `compy-bd6.pages.dev` and the deployment URL return byte-identical HTML, so a
-"stale" apex is his browser cache, not the deploy.
-
-**The Tier 2 receiver is LIVE and inert.** `compy_reports` migration 0001 applied, `IP_PEPPER` set,
-`/api/usage` answers GET with 405 and a junk POST with 400 `{"ok":false}`. Nothing on any PC sends
-to it — `receipts_gate()` is false — and the table is empty. Standing it up before the arming
-commit is the sequence `functions/api/usage.ts` was designed around, not a step ahead of the gate.
+For the future, `scripts/release.ps1` emits a sanitized durable receipt to `docs/release-receipts/`
+after the transaction completes. **The next release cut must commit that file** — the guard accepts
+the honest caveat only up to v0.9.26, and demands a real receipt for anything newer. Mechanism and
+reasoning: [`RELEASE_TRANSACTION.md`](RELEASE_TRANSACTION.md) § Durable receipt.
 
 ## The design vision is a separate train — do not fold it into a UI fix
 
@@ -76,37 +71,48 @@ commit is the sequence `functions/api/usage.ts` was designed around, not a step 
 
 ## Traps that cost this session real time
 
+- **The fixture rig can be silently dead.** `docs/ui-sweep/fixture/main.tsx` imported a CSS file
+  deleted five weeks earlier; vite answered every request with a 500 and each state rendered blank.
+  Nothing failed loudly. `src/fixture-parity-guard.test.ts` now resolves every relative import in the
+  rig's own sources. **If a fixture state looks empty, check the vite response before the component.**
 - **The entry guard refuses writes with `FOLDER_UNCLAIMED` until the issue is BOTH labelled
   `work-control` AND has its `Worktree / branch` board field set.** `adopt` says "adopted anyway"
-  when the label is missing and then `assert` still fails. The board cache is
-  `%LOCALAPPDATA%\CompyEntry\board.json`, 10-minute TTL — after editing the board, call
-  `invalidateBoardCache()` or wait it out. `Claim expires` / `Last verified` are **date** fields:
-  `gh project item-edit --date`, not `--text`.
+  when the label is missing and then `assert` still fails. Board cache
+  `%LOCALAPPDATA%\CompyEntry\board.json`, 10-min TTL. `Claim expires` / `Last verified` are **date**
+  fields: `gh project item-edit --date`, not `--text`.
 - **`scripts/launch-focus-guard.test.mjs` fails only under full parallelism** and names the test
-  runner's own `node.exe` console as the minimised window. It passes 49/49 isolated. It failed one
-  push and passed the retry — re-run before believing it.
+  runner's own `node.exe`. It passes 49/49 isolated — re-run before believing it.
 - **A rewrite of THIS file can break `src/ui-vision-status-guard.test.ts` rule D**, which counts the
   pointer paragraphs citing the vision file as open and needs at least three across CLAUDE.md, this
   file and the checklist. Dropping the vision section above turns the push red.
-- **A new command needs FOUR things or it fails at runtime:** `#[tauri::command]`, registration in
-  `lib.rs`, a name in `build.rs` `APP_COMMANDS`, and an `allow-*` grant in
-  `capabilities/default.json`. `src/command-authority-guard.test.ts` catches it; the permission
-  `.toml`s are gitignored and regenerate on build.
-- **A new `src/design` component needs an a11y disposition** or `a11y-census-guard` fails — roster it
-  in `a11y-axe-guard.test.tsx` rather than writing a reason string.
+- **A new script in `scripts/` is red until `scripts/gate-residency-guard.test.mjs` is told where it
+  runs.** It caught `emit-release-receipt.mjs` on the first push of this session.
+- **A new command needs FOUR things:** `#[tauri::command]`, registration in `lib.rs`, a name in
+  `build.rs` `APP_COMMANDS`, and an `allow-*` grant in `capabilities/default.json`.
+- **A new `src/design` component needs an a11y disposition** or `a11y-census-guard` fails.
 - **A fresh worktree needs `npm install`** — the pre-push gate `npm ci`s, so junctioning is forbidden.
-- **`git fetch origin --prune` before trusting the disposition audit**; add a lane's own row only
-  **after** its first push, and delete the row again once the lane merges and its ref is pruned.
 - **Merge with `gh pr merge --merge`, never `--delete-branch`** (it set `core.bare=true` repo-wide
-  once); prune the ref afterwards with `git push origin --delete <lane>`, which skips the gate.
-- **Bash heredocs eat one backslash level** — use quoted `<<'EOF'` or the Write tool for TS/JS.
-- `docs/RELEASE_STATE.md` hit its 42KB ceiling this session; the resolved #130 row was archived to
-  make room. Archive before adding — never raise a cap.
+  once); prune the ref with `git push origin --delete <lane>`, which skips the gate.
+- **Bash heredocs eat one backslash level** — use quoted heredocs or the Write tool for TS/JS.
+- **Two doc budgets are effectively full:** `RELEASE_STATE.md` 41/42KB and `BACKLOG.md::NEXT UP`
+  12.2/12.2KB. Archive a finished row before adding one; **never raise a cap to make room.**
+
+## Repo state a fresh session should know without re-deriving
+
+- **Seven worktrees, all spent.** None is mid-flight; delete or hard-reset before reusing one. The
+  nested `.claude/worktrees/merge-prs-tauri-visibility-c5660e` is detached and dirty on
+  `.codex/config.toml` and **cannot be removed** without `--force`, which stays owner-blocked.
+- **PR [#163](https://github.com/Pootytxng/sentinel/pull/163) is CONFLICTING/DIRTY** and belongs to
+  another lane. Do not adopt it opportunistically.
+- **#156 and #128 discharge on evidence, not on work.** #156's silent-install flake needs a
+  reproduction; #128's release-side mutex has never been held during a real publish. Both collect
+  the next time a ship or a release runs — neither is a task to schedule.
 
 ## Waiting on the owner (all in `OWNER_ACTION_CHECKLIST.md`)
 
-1. **Register `compy.gg`** (~$50/yr, money). Everything downstream of it is blocked, not scheduled —
-   including re-pointing the endpoint constant off `compy-bd6.pages.dev`.
+1. **Register `compy.gg`** (~$50/yr, money). Everything downstream is blocked, including re-pointing
+   the endpoint constant off `compy-bd6.pages.dev`.
 2. **The Ko-fi URL** (B3a).
-3. Whenever he wants: **#204** (Pro price shape) · **#213 A1** — the wordmark renders `©ompy`, a
+3. **Rule on the Q9a consent screens** — he has the before/after; nothing ships on them until he does.
+4. Whenever he wants: **#204** (Pro price shape) · **#213 A1** — the wordmark renders `©ompy`, a
    recommendation is attached in §D · **#213 B** needs his ChatGPT mockups.
