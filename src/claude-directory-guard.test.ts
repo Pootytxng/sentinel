@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync, readdirSync } from "fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 
 // .CLAUDE DIRECTORY GUARD (2026-08-25).
@@ -28,9 +28,9 @@ const read = (p: string) => readFileSync(p, "utf8");
 
 /** Directories under .claude/skills that actually carry a SKILL.md. */
 export function skillsOnDisk(dir = SKILLS): string[] {
-  return readdirSync(dir, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && existsSync(join(dir, e.name, "SKILL.md")))
-    .map((e) => e.name)
+  return readdirSync(dir)
+    .filter((name) => statSync(join(dir, name)).isDirectory())
+    .filter((name) => existsSync(join(dir, name, "SKILL.md")))
     .sort();
 }
 
