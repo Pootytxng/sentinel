@@ -381,6 +381,12 @@
   color: var(--ix-text-2);
   max-width: 56ch;
 }
+/* A failed consent write or a refused preview must READ as a failure. Same idiom as .fb-error
+   below: keep .receipts-hint for the metrics, override only the colour. Declared AFTER .receipts-hint
+   because both are single-class selectors — source order is what decides the cascade here. */
+.receipts-error {
+  color: var(--ix-danger);
+}
 .receipts-preview {
   margin: 10px 0 0;
   padding: 12px;
@@ -464,6 +470,11 @@
   margin: 2px 0 0;
   color: var(--ix-text-3);
   font-size: var(--type-label);
+}
+/* A rejected key and a failed activation are both failures; --ix-text-3 made them the quietest
+   text on the panel. Same idiom as .receipts-error / .fb-error above. */
+.set-license-error {
+  color: var(--ix-danger);
 }
 
 /* ── Feedback & help — always-visible beta/help surface. Reuses .set-section / .set-action /

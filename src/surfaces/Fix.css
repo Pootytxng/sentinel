@@ -124,6 +124,13 @@
   color: var(--ix-text-2);
   line-height: 1.5;
 }
+/* A failed apply/remove wears the reason line's metrics but NOT its calm colour. Before this
+   existed a refused scheduled-task disable read exactly like the tweak's own explanation, so the
+   row looked like it had simply said something extra. Declared after .fix-row-reason: both are
+   single-class selectors, so source order is the cascade. */
+.fix-row-error {
+  color: var(--ix-danger);
+}
 /* Expert-view exact-target line (spec 2026-07-11 §1): the registry key / service / setting a tweak
    touches, mono and quiet, with the one-line rollback-boundary disclaimer always beside it (ship
    condition). Renders inside both slim rows (within the row-toggle button) and guided rows; long

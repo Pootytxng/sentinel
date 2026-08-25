@@ -536,7 +536,7 @@ function DebloatTasks({
                   <span className="fix-row-headline">{t(`optimize.fix.debloatTasks.${key}.label`)}</span>
                   <span className="fix-row-tech">{t(`optimize.fix.debloatTasks.${key}.what`)}</span>
                 </span>
-                {err && <p className="fix-row-reason">{err}</p>}
+                {err && <p className="fix-row-reason fix-row-error">{err}</p>}
               </div>
               <button className="btn btn-small" disabled={busy === task.id || done} onClick={() => disable(task.id)}>
                 {done ? t("optimize.fix.disabledUndoInHistory") : busy === task.id ? t("optimize.fix.disablingEllipsis") : t("optimize.fix.disable")}
@@ -619,7 +619,7 @@ function PreloadApps() {
                   <span className="fix-row-headline">{t(`optimize.fix.preloadApps.${key}.label`)}</span>
                   <span className="fix-row-tech">{t(`optimize.fix.preloadApps.${key}.what`)}</span>
                 </span>
-                {err && <p className="fix-row-reason">{err}</p>}
+                {err && <p className="fix-row-reason fix-row-error">{err}</p>}
               </div>
               <button className="btn btn-small" disabled={busy === a.id || done} onClick={() => remove(a.id)}>
                 {done ? t("optimize.fix.removedUndoInHistory") : busy === a.id ? t("optimize.fix.removingEllipsis") : t("optimize.fix.remove")}

@@ -164,8 +164,8 @@ export default function ReceiptsConsent() {
             {inspectRow}
           </div>
         )}
-        {consentErr && <p className="receipts-hint">{consentErr}</p>}
-        {previewErr && <p className="receipts-hint">{previewErr}</p>}
+        {consentErr && <p className="receipts-hint receipts-error">{consentErr}</p>}
+        {previewErr && <p className="receipts-hint receipts-error">{previewErr}</p>}
         {preview && <pre className="receipts-preview">{JSON.stringify(preview, null, 2)}</pre>}
       </div>
     </BentoTile>

@@ -37,6 +37,10 @@ export function LicensePanel() {
   // explicit `armed` flag directly — NOT a string-match on `reason` (reworded copy must never arm the
   // gate). Until armed there's nothing a key could unlock, so we don't show the entry form.
   const armed = !!status && status.armed === true;
+  // A key the backend rejected is a FAILURE, not a note, and it now wears the same red as a thrown
+  // save error. Hoisted rather than called twice inline so the render reads as what it is.
+  const keyRejectionError =
+    status && !status.valid && keyInput.trim() !== "" ? friendlyReason(status.reason, t) : "";
 
   const submit = () => {
     setSaving(true);
@@ -87,13 +91,10 @@ export function LicensePanel() {
               {saving ? t("common.licensePanel.checking") : t("common.licensePanel.apply")}
             </button>
             {error ? (
-              <p className="set-license-note">{error}</p>
+              <p className="set-license-note set-license-error">{error}</p>
             ) : (
-              status &&
-              !status.valid &&
-              keyInput.trim() !== "" &&
-              friendlyReason(status.reason, t) && (
-                <p className="set-license-note">{friendlyReason(status.reason, t)}</p>
+              keyRejectionError && (
+                <p className="set-license-note set-license-error">{keyRejectionError}</p>
               )
             )}
           </div>
