@@ -48,6 +48,29 @@
   -webkit-user-select: none;
 }
 
+/* #213 B1 — THE PURPLE WASH ACROSS THE TOP EDGE, and the missing elevation logic, are one bug.
+   The rule above is deliberately theme-driven, and that was right when the titlebar was the only
+   chrome. It is not right now: `:root[data-itheme="violet"]` sets --ix-base to #0c0a14, "neon
+   purple on a violet-tinted charcoal" (instrument.css:64), and violet is the DEFAULT theme
+   (theme.ts:36). So the shipped titlebar renders #0c0a14 — red and blue lifted over green — while
+   every V2 surface beneath it is --v2-bg #0a0c10, which is cool the other way. Two colour systems
+   meeting at y=34, on every screen, for every user who never opened the theme picker. #213 named it
+   "a faint purple/magenta wash bleeding across the top edge" and read it as a design choice.
+
+   The approved comp settles it rather than taste: sampling 01-health-approved.png along y=20 gives
+   #0a0c10 at every x past the app name — the titlebar in the picture he approved on 2026-08-23 IS
+   --v2-bg, exactly. The same sample at y=50 gives #0f1217 for the rail, so the comp's planes run
+   titlebar (deepest) → rail/content (raised), which is the elevation logic #213 B1 said was absent.
+   One token fixes both halves.
+
+   Scoped under [data-v2="on"] like every other V2 rule, so flag-off stays byte-identical
+   (tokens-v2-guard) and the legacy instrument themes keep their tinted bar where V2 is not driving.
+   Guarded by src/design/titlebar-plane-guard.test.ts. */
+:root[data-v2="on"] .wc-bar {
+  background: var(--v2-bg);
+  border-bottom: 1px solid var(--v2-line);
+}
+
 /* The 13px indent used to live on the app-name caption (#213 A5 removed it — the rail's Wordmark
    is the one that stays). It moves here so the gear keeps the same optical left margin it had when
    it followed the text: 6px of padding plus the button's own ~7px of icon inset. */

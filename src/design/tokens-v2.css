@@ -17,6 +17,18 @@
   --v2-line: rgba(255, 255, 255, 0.07);
   --v2-line-strong: rgba(255, 255, 255, 0.12);
 
+  /* THE DARK HALF OF A SEAM (#213 B5, measured off the comps 2026-08-25). Every boundary in the
+     approved PNGs is a BEVEL, not a line: a light hairline with a dark one immediately beside it.
+     Scanning 01-health-approved.png across the rail/content seam at y=761 gives rail #0f1218 →
+     #171920 → #202227 → #090b10 → content #0e1015. The light peak #202227 is exactly what
+     --v2-line already computes to over --v2-panel, so the app has been shipping half a seam: the
+     light line with nothing under it. #213 called the result "hard 1px lines with no softening ...
+     what produces the 'boxed in' feeling overall", and read it as a direction to be decided later.
+     It is a missing declaration.
+     0.35 over the content ground #0e1015 lands #090a0e against the comp's #090b10 — within two per
+     channel, and no alpha in 0.01 steps lands closer on all three. */
+  --v2-line-shadow: rgba(0, 0, 0, 0.35);
+
   /* Text. faint was originally tuned to the AA-LARGE 3.0 floor (#626a80), on the theory that it was
      a caption tier. It never was: every one of the 29 rules that paired it with an explicit size set
      that size at 9–11px, so the whole third tier shipped at 3.44–3.63:1 — under AA's 4.5 — and a
@@ -78,6 +90,9 @@
   --v2-font-mono: "Geist Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
 
   /* Geometry rhythm — the only sanctioned radii/spacing steps for V2 chrome */
+  /* The rail column. Was a bare 216px literal in shell-v2.css's grid; it is a token now because
+     the #213 B5 seam has to sit at exactly that x and a second literal would drift from it. */
+  --v2-rail-w: 216px;
   --v2-r: 10px;
   --v2-r-sm: 7px;
   --v2-gap: 16px;

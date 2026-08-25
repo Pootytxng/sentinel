@@ -28,7 +28,7 @@
      to shell scope; .lc-reticle positions absolute inside its scope). */
   position: relative;
   display: grid;
-  grid-template-columns: 216px 1fr;
+  grid-template-columns: var(--v2-rail-w) 1fr;
   background: var(--v2-bg);
   color: var(--v2-text);
   font-family: var(--v2-font-sans);
@@ -37,6 +37,29 @@
 }
 
 /* ── Rail ── */
+/* #213 B5 — THE SEAM'S MISSING DARK HALF.
+   The rail's own `border-right: 1px solid var(--v2-line)` is correct and stays: it computes to
+   #202228 over --v2-panel, and the approved comp's light hairline at that seam samples #202227.
+   What the comp also draws, and this sheet never did, is a dark line on the CONTENT side of it —
+   #090b10 against a #0e1015 ground. Light beside dark reads as an edge with depth; the light line
+   alone reads as a line drawn on a flat plane, which is what #213 B5 reported.
+
+   It is a pseudo-element on the shell rather than a box-shadow on the rail because `.v2-top`
+   carries `background: var(--v2-panel)` and would paint over the rail's own shadow for the first
+   50px — the seam would lose its depth exactly beside the room title, where it is most visible.
+   Positioned, so it sits above both panels; `.v2-shell` is already the containing block for the
+   reticle. Guarded by src/design/titlebar-plane-guard.test.ts. */
+:root[data-v2="on"] .v2-shell::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--v2-rail-w);
+  width: 1px;
+  background: var(--v2-line-shadow);
+  pointer-events: none;
+  z-index: 1;
+}
 :root[data-v2="on"] .v2-rail {
   min-height: 0;
   border-right: 1px solid var(--v2-line);

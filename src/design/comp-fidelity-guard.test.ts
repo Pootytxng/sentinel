@@ -666,3 +666,70 @@ describe("cascade fidelity — the shell owns the four approved rooms' verdict",
     );
   });
 });
+
+/* #213 B5 — A SEAM IS A BEVEL, AND THE APP SHIPPED HALF OF ONE.
+ *
+ * #213 filed the rail/content boundary as DIRECTION: "hard 1px lines with no softening ... what
+ * produces the 'boxed in' feeling overall". Measuring the approved comps says otherwise — every
+ * boundary in them is a light hairline with a DARK one immediately beside it, which is what reads
+ * as an edge rather than as a line drawn on a flat plane.
+ *
+ * Scanning 01-health-approved.png horizontally at y=761, across the rail/content seam:
+ *
+ *     x=220  #0f1218   rail interior
+ *     x=222  #171920   ramp
+ *     x=223  #202227   THE LIGHT HALF  <- --v2-line over --v2-panel already computes to #202228
+ *     x=224  #090b10   THE DARK HALF   <- nothing in this app drew this
+ *     x=225  #0e1015   content ground
+ *
+ * The card edges do the same thing (y=426, x=824: #0d0e13 -> #090b0f -> #1a1d23 -> #0e1017), so
+ * this is a system in the comps, not one seam's accident. Only the rail seam is implemented here;
+ * the card-edge half is a wider pass and is logged with these numbers rather than guessed at.
+ */
+describe("#213 B5 — the rail seam carries the comp's dark half", () => {
+  /** sRGB composite of a black-alpha line over a ground, the way the browser paints it. */
+  function overBlack(ground: string, alpha: number): [number, number, number] {
+    const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(ground)!;
+    return m.slice(1).map((c) => Math.round(parseInt(c, 16) * (1 - alpha))) as [number, number, number];
+  }
+
+  const tokens = read("src", "design", "tokens-v2.css");
+  const shell = read("src", "design", "shell-v2.css");
+
+  it("the chosen alpha really does reproduce the comp's sampled dark line", () => {
+    // The comment above is a claim about a picture. This is the arithmetic that makes it checkable,
+    // so a later "let's round this to 0.5" has to argue with the sample rather than with taste.
+    const alpha = Number(/--v2-line-shadow:\s*rgba\(0,\s*0,\s*0,\s*([\d.]+)\)/.exec(tokens)?.[1]);
+    expect(alpha, "--v2-line-shadow is gone or is no longer a black alpha").toBeGreaterThan(0);
+    const got = overBlack("#0e1015", alpha); // the content ground beside the seam
+    const want = [0x09, 0x0b, 0x10]; // x=224 in 01-health-approved.png at y=761
+    for (const [i, ch] of got.entries()) {
+      expect(
+        Math.abs(ch - want[i]),
+        `channel ${"rgb"[i]}: ${alpha} over #0e1015 gives ${ch}, the comp sampled ${want[i]}`,
+      ).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it("the seam is drawn, at the rail's own width, in the shadow token", () => {
+    const seam = body(shell, ':root[data-v2="on"] .v2-shell::before');
+    expect(seam, "no .v2-shell::before — the seam lost its dark half again").toBeTruthy();
+    expect(seam).toMatch(/width:\s*1px/);
+    expect(seam).toMatch(/left:\s*var\(--v2-rail-w\)/);
+    expect(seam).toMatch(/background:\s*var\(--v2-line-shadow\)/);
+    expect(seam, "an unpositioned seam cannot clear .v2-top's panel fill").toMatch(/position:\s*absolute/);
+  });
+
+  it("the seam cannot desync from the column it marks", () => {
+    // The grid used a bare 216px. Two literals for one edge is how a seam drifts a pixel off the
+    // boundary and starts reading as a stray line.
+    const shellRule = body(shell, ':root[data-v2="on"] .v2-shell');
+    expect(shellRule).toMatch(/grid-template-columns:\s*var\(--v2-rail-w\)\s+1fr/);
+    expect(tokens).toMatch(/--v2-rail-w:\s*216px/);
+  });
+
+  it("the LIGHT half is untouched — it already matched the comp", () => {
+    const rail = body(shell, ':root[data-v2="on"] .v2-rail');
+    expect(rail).toMatch(/border-right:\s*1px solid var\(--v2-line\)/);
+  });
+});
