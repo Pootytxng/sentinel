@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readdirSync, readFileSync, statSync } from "fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 
 // FIXTURE-PARITY GUARD (2026-08-12).
@@ -227,5 +227,82 @@ describe("fixture preview parity with the product entry", () => {
       /Location.*docs\/ui-sweep\/fixture\/index\.html/,
     );
     expect(cfg).toMatch(/plugins:\s*\[react\(\),\s*redirectRootToFixture\]/);
+  });
+});
+
+// ── Every import the fixture entry makes must actually resolve ────────────────────────────────
+//
+// REAL FAILURE, found 2026-08-25 while adding the Q9a consent states. The fixture entry still
+// imported `src/Onboarding.css`, which `2baa07ef` (C-18b, #148) deleted along with the room it
+// styled; App.tsx dropped it in that same commit and the fixture's hand-copy was never touched.
+// Vite answered every request for main.tsx with a 500 — "Failed to resolve import" — so the page
+// was blank for EVERY state: the bench, the CPU-temp offer, all of them. The rig had been dead
+// since #148 and nobody knew, because the only thing that runs this server is a review, and a
+// review only happens when there is UI to review.
+//
+// The subsequence check at the top of this file structurally cannot catch it. It compares the
+// fixture's chain against App.tsx's and deliberately ALLOWS extras — lab-v2.css and monitor-v2.css
+// are legitimate ones. To a string comparison, an extra that no longer exists on disk is
+// indistinguishable from an extra that does.
+//
+// This is the cheapest possible statement of "the rig still boots": no server, no browser, no
+// screenshots — just resolve what the file says it imports.
+describe("fixture preview: every import resolves to a file that exists", () => {
+  const FIXTURE_DIR = "docs/ui-sweep/fixture";
+
+  /** Every RELATIVE specifier a source imports — side-effect and named alike. */
+  function relativeImports(source: string): string[] {
+    return [
+      ...[...source.matchAll(/^import\s+"(\.[^"]+)";/gm)].map((m) => m[1]),
+      ...[...source.matchAll(/from\s+"(\.[^"]+)"/g)].map((m) => m[1]),
+    ];
+  }
+
+  /** Vite's resolution, narrowed to the shapes this repo actually writes. */
+  function resolves(dir: string, spec: string): boolean {
+    const base = join(...dir.split("/"), ...spec.split("/"));
+    return [base, `${base}.ts`, `${base}.tsx`, join(base, "index.ts"), join(base, "index.tsx")].some(
+      (p) => existsSync(p),
+    );
+  }
+
+  // Both hand-written fixture sources, not just the entry: a dead import in stub-core.ts blanks
+  // the page by the same mechanism, one module deeper.
+  for (const file of ["main.tsx", "stub-core.ts"]) {
+    it(`${file} imports nothing that has been deleted or moved`, () => {
+      const specs = relativeImports(read(`${FIXTURE_DIR}/${file}`));
+      // Vacuity check: stub-core.ts legitimately has few relative imports, main.tsx has ~20.
+      if (file === "main.tsx") expect(specs.length).toBeGreaterThan(10);
+      const dead = specs.filter((s) => !resolves(FIXTURE_DIR, s));
+      expect(
+        dead,
+        `${FIXTURE_DIR}/${file} imports files that do not exist — vite answers 500 and EVERY ` +
+          `fixture state renders blank, not just the one being reviewed`,
+      ).toEqual([]);
+    });
+  }
+
+  // ── Falsification ───────────────────────────────────────────────────────────────────────────
+  // The exact shape of the 2026-08-25 defect, plus the two shapes a naive extractor gets wrong.
+  it("fires on the deleted sheet, and not on the ones that survive", () => {
+    const source = [
+      'import "../../../src/App.css";',
+      'import "../../../src/Onboarding.css";',
+      'import ReceiptsConsent from "../../../src/surfaces/ReceiptsConsent";',
+      'import { getState } from "./stub-core";',
+    ].join("\n");
+    const specs = relativeImports(source);
+    expect(specs).toHaveLength(4);
+    // Extensionless component and directory-index specifiers must NOT read as dead.
+    expect(specs.filter((s) => !resolves("docs/ui-sweep/fixture", s))).toEqual([
+      "../../../src/Onboarding.css",
+    ]);
+  });
+
+  it("does not mistake a bare package specifier for a relative one", () => {
+    // `react`, `@tauri-apps/api/core` and friends are resolved by node/vite, not by this check.
+    // Treating them as relative paths would make every fixture source fail with a false positive.
+    const source = 'import React from "react";\nimport { invoke } from "@tauri-apps/api/core";';
+    expect(relativeImports(source)).toEqual([]);
   });
 });

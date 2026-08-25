@@ -17,6 +17,16 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 
+// ── One sheet that loads BEFORE App.tsx's chain in the real app ───────────────────────────────
+// Settings.css is imported by Settings.tsx:35, which App.tsx pulls in at line 56 — sixteen lines
+// ABOVE its own CSS chain. ESM evaluates imports depth-first in source order, so the shipped app
+// inserts this sheet first, and it goes first here for the same reason rather than as a tidy
+// afterthought. It owns every class the Q9a consent tile paints with (.set-row, .set-action,
+// .set-row-title/-sub, .set-toggle, .receipts-hint, .receipts-preview); without it the tile
+// renders as unstyled block text and the Toggle as a bare <button>, under a banner claiming these
+// are the app's pixels.
+import "../../../src/surfaces/Settings.css";
+
 // ── App.tsx's stylesheet chain, verbatim and IN ORDER (src/App.tsx:72-89) ─────────────────────
 // Order is load-bearing: instrument.css must follow App.css so the accent re-point wins, and the
 // v2/hud token layers must come after the classics. Any reordering here silently re-skins the
@@ -25,7 +35,6 @@ import "../../../src/design/type-scale.css";
 import "../../../src/App.css";
 import "../../../src/design/doorknob.css";
 import "../../../src/design/instrument.css";
-import "../../../src/Onboarding.css";
 import "../../../src/arc-instrument.css";
 import "../../../src/design/living-instrument.css";
 import "../../../src/design/dashboard-skin.css";
@@ -62,9 +71,13 @@ import ExperimentBench from "../../../src/surfaces/ExperimentBench";
 // The CPU panel is mounted whole, not just the offer: the offer's job is to replace a dead-end
 // sublabel on the temperature row, so the row above it is part of what review has to judge.
 import { CpuMonitorPanel, type CpuSensorSnapshot } from "../../../src/surfaces/monitor-panels";
+// Q9a's consent tile. Dark in every build — see the stub's receipts section for why no build,
+// flag, or stored value on the owner's machine reaches these pixels.
+import ReceiptsConsent from "../../../src/surfaces/ReceiptsConsent";
+import { BentoGrid } from "../../../src/design/bento";
 // Same module instance the bench's aliased `@tauri-apps/api/core` import resolves to (both land on
 // this directory's stub-core.ts), so this reads the state the bench is actually rendering.
-import { getState, isCpuTempState } from "./stub-core";
+import { getState, isCpuTempState, isReceiptsState } from "./stub-core";
 
 // ══ src/main.tsx's pre-paint dataset block, hand-replicated ════════════════════════════════════
 // The overlay branch is dropped on purpose: detecting it needs getCurrentWindow(). This page is
@@ -170,9 +183,11 @@ function FixtureBanner() {
       Fixture preview — invented data, not a measurement
       <span style={{ display: "block", fontWeight: 500, textTransform: "none", opacity: 0.85 }}>
         state: <code>{getState()}</code> · no backend ·{" "}
-        {isCpuTempState()
-          ? "nothing is started — every CPU number here is invented"
-          : "Start / Conclude / Restore are blocked"}
+        {isReceiptsState()
+          ? "the receipts gate is HARD-FALSE in every build — nothing is armed and nothing is sent"
+          : isCpuTempState()
+            ? "nothing is started — every CPU number here is invented"
+            : "Start / Conclude / Restore are blocked"}
       </span>
     </div>
   );
@@ -200,7 +215,22 @@ const CPU: CpuSensorSnapshot = {
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <FixtureBanner />
-    {isCpuTempState() ? (
+    {isReceiptsState() ? (
+      // NOT a room. The consent tile lives in Settings, whose root is `.set-root > .set-shell`
+      // (Settings.tsx:182-183) with no `v2-room` wrapper anywhere in the tree — Settings.css
+      // resolves the --ix-* family straight from :root. The header, tagline and the other nine
+      // tiles are deliberately absent: they are chrome around the subject, and replicating them
+      // would put invented copy beside a privacy disclosure. The grid stays because
+      // ReceiptsConsent renders a `span="full"` BentoTile and a tile outside a grid is not the
+      // shipped layout.
+      <div className="set-root">
+        <div className="set-shell">
+          <BentoGrid>
+            <ReceiptsConsent />
+          </BentoGrid>
+        </div>
+      </div>
+    ) : isCpuTempState() ? (
       <section className="v2-room" data-room="play">
         <div className="v2-room-body">
           {/* cpuTemp={null} is the whole point: it is the branch that renders the offer. */}

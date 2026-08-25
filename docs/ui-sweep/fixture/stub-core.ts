@@ -180,10 +180,78 @@ const CPU_TEMP_STATES: Record<
   },
 };
 
-export const STATE_NAMES = [...Object.keys(STATES), ...Object.keys(CPU_TEMP_STATES)];
+// ── Q9a receipts consent (2026-08-25) ─────────────────────────────────────────────────────────
+// `ReceiptsConsent` renders NOTHING in every shipped build: `receipts_gate()` is hard-false
+// (src-tauri/src/receipts.rs:23), so the component's own probe returns false and it bails at
+// `if (!gate || !consent) return null`. There is no build, flag, or localStorage key on the
+// owner's machine that reaches these pixels — which is exactly the gap the fixture exists for,
+// and why the merged Q9a lane shipped with its visual self-review still owed.
+//
+// The stub answers `get_receipts_gate` with TRUE. That is a preview of a state the product does
+// not have, and the banner says so on every shot. Nothing here arms anything: the gate the app
+// reads is a Rust function, not this file.
+type ConsentState = { disclosed_at: string | null; enabled: boolean | null };
+
+// The real endpoint constant, not an invented one — `RECEIPTS_ENDPOINT`
+// (src-tauri/src/receipts.rs:202), which `get_receipts_endpoint` returns verbatim. The destination
+// line and the switch-on line both interpolate it, and a made-up address in a screenshot of a
+// privacy disclosure would be the one invented value on this page that actually misleads.
+const RECEIPTS_ENDPOINT = "https://compy-bd6.pages.dev/api/usage";
+
+// INVENTED, like everything else here — but shape-true to `ReceiptPayload` (receipts.rs:47) and
+// every bucket string is one of the fixed labels the Rust builder can emit (`ram_gb_bucket`
+// receipts.rs:63, `duration_bucket` receipts.rs:77). A preview whose buckets looked like raw
+// numbers would misrepresent the very privacy property the disclosure is claiming.
+const RECEIPT_PREVIEW = {
+  schema_version: 1,
+  hw_class: {
+    gpu_vendor: "AMD",
+    gpu_model: "Radeon RX 9070 XT",
+    cpu_family: "Ryzen 7 X3D",
+    ram_gb_bucket: "25-32",
+  },
+  outcome: {
+    kind: "session",
+    game: "example-game",
+    avg_fps: 164.2,
+    low1_fps_est: 118.7,
+    duration_bucket: "1-3h",
+    active_change_ids: ["gpu_hags", "game_dvr_off", "startup_trim"],
+  },
+};
+
+const RECEIPTS_STATES: Record<
+  string,
+  { consent: ConsentState; previewFails?: boolean; consentFails?: boolean }
+> = {
+  // First run: disclosed_at null is the ONLY thing that renders the disclosure, and it is the one
+  // state a user cannot return to once answered.
+  "receipts-firstrun": { consent: { disclosed_at: null, enabled: null } },
+  // Answered-and-declined. `enabled: false` and `enabled: null` are different facts to the
+  // backend and identical to this UI — both paint the switch OFF, which is what makes the
+  // "default OFF even after arming" ruling (#207) visible rather than merely asserted.
+  "receipts-off": { consent: { disclosed_at: "2026-08-25T09:14:00Z", enabled: false } },
+  "receipts-on": { consent: { disclosed_at: "2026-08-25T09:14:00Z", enabled: true } },
+  // Both error paragraphs at once. They render as bare `receipts-hint` text with no icon, no
+  // colour and no retry — the reviewer's job is to say whether that reads as an error at all.
+  "receipts-errors": {
+    consent: { disclosed_at: "2026-08-25T09:14:00Z", enabled: false },
+    previewFails: true,
+    consentFails: true,
+  },
+};
+
+export const STATE_NAMES = [
+  ...Object.keys(STATES),
+  ...Object.keys(CPU_TEMP_STATES),
+  ...Object.keys(RECEIPTS_STATES),
+];
 
 /** Which surface a state name belongs to — main.tsx mounts the bench or the CPU panel on this. */
 export const isCpuTempState = (name: string = current) => name in CPU_TEMP_STATES;
+
+/** Same question for the Q9a consent tile, which mounts in the Settings shell, not a room. */
+export const isReceiptsState = (name: string = current) => name in RECEIPTS_STATES;
 
 // The state is chosen by `?state=` on the URL so a capture run is a plain navigation — one page
 // load per shot, no leftover state from the previous one, and the URL in the address bar names the
@@ -191,7 +259,7 @@ export const isCpuTempState = (name: string = current) => name in CPU_TEMP_STATE
 function initialState(): string {
   try {
     const q = new URLSearchParams(window.location.search).get("state");
-    if (q && (STATES[q] || CPU_TEMP_STATES[q])) return q;
+    if (q && (STATES[q] || CPU_TEMP_STATES[q] || RECEIPTS_STATES[q])) return q;
   } catch {
     /* no URL (never in a browser) — fall through to the default */
   }
@@ -200,10 +268,19 @@ function initialState(): string {
 
 let current = initialState();
 
+// The consent tile is the one surface here whose own writes must be visible: an off switch that
+// cannot be seen moving has not been reviewed. This holds the position across the two setters, so
+// a click repaints exactly as it would against a live backend. Nothing persists — reload and the
+// URL's state is authoritative again.
+let receiptsConsent: ConsentState | null = RECEIPTS_STATES[current]
+  ? { ...RECEIPTS_STATES[current].consent }
+  : null;
+
 export const getState = () => current;
 export function setState(name: string): boolean {
-  if (!STATES[name] && !CPU_TEMP_STATES[name]) return false;
+  if (!STATES[name] && !CPU_TEMP_STATES[name] && !RECEIPTS_STATES[name]) return false;
   current = name;
+  receiptsConsent = RECEIPTS_STATES[name] ? { ...RECEIPTS_STATES[name].consent } : null;
   return true;
 }
 
@@ -231,6 +308,46 @@ export function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<
             new Error('FIXTURE PREVIEW — "launch_sensor_app" is refused in this state.'),
           )
         : Promise.resolve(null as T);
+    }
+  }
+  // Answered ahead of the bench lookup, same as the sensors branch above: the receipts states
+  // carry no experiments or sessions, and their commands must never fall through to it.
+  const receipts = RECEIPTS_STATES[current];
+  if (receipts) {
+    switch (cmd) {
+      case "get_receipts_gate":
+        // TRUE here, hard-FALSE in every build (receipts.rs:23). The banner carries that fact.
+        return Promise.resolve(true as T);
+      case "get_receipts_consent":
+        return Promise.resolve({ ...(receiptsConsent as ConsentState) } as T);
+      case "get_receipts_endpoint":
+        return Promise.resolve(RECEIPTS_ENDPOINT as T);
+      case "preview_receipt_payload":
+        // The real refusal string a user is most likely to meet once armed (receipts.rs:174) —
+        // reviewing invented error copy would prove nothing about the shipped error copy.
+        return receipts.previewFails
+          ? Promise.reject(
+              new Error("No monitored session yet — a receipt needs a measurement first."),
+            )
+          : Promise.resolve(structuredClone(RECEIPT_PREVIEW) as T);
+      case "acknowledge_receipts_disclosure":
+      case "set_receipts_sharing_enabled": {
+        if (receipts.consentFails) {
+          // What the backend actually propagates: save_consent_to (receipts.rs:311) maps a raw
+          // std::io::Error to its string, and the component prints it unwrapped. A reviewer
+          // should be looking at that, not at a polished message the app cannot produce.
+          return Promise.reject(new Error("Access is denied. (os error 5)"));
+        }
+        const next = { ...(receiptsConsent as ConsentState) };
+        if (cmd === "acknowledge_receipts_disclosure") {
+          // Stamped ONCE, exactly as receipts.rs:404 does it.
+          if (next.disclosed_at === null) next.disclosed_at = "2026-08-25T09:14:00Z";
+        } else {
+          next.enabled = args?.enabled === true;
+        }
+        receiptsConsent = next;
+        return Promise.resolve({ ...next } as T);
+      }
     }
   }
   const state = STATES[current];
