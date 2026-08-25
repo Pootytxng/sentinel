@@ -3106,3 +3106,13 @@ proof) stayed behind in the live queue rather than travelling here.
    gates close the suspected path and name the skip at its source, which is not the same as proving
    the cause. Row stays open until a real ship either passes clean or trips gate 1b and names it.
 6. **#128 · thin local release/install collision guard — LANDED 2026-08-21, never yet held during a real ship.** *Why it matters:* two agents can no longer race the same release or the same installed exe, and neither can quietly take the other's turn. It was written 2026-08-14 on `agent/local-collision-guard`, never left this disk, and is merged forward here. `release.ps1` holds `Local\Compy.ReleasePipeline.v1` and `ship-reinstall.ps1` holds `Local\Compy.InstalledBinary.v1`, each across the whole entrypoint, released on normal *and* error exit. A second process fails closed immediately; a **killed** holder fails closed *permanently* — no lease, no expiry, no takeover — until an operator runs `scripts/inspect-process-mutex-recovery.ps1` and supplies a live comment on the open `work-control` issue carrying the exact recovery-state SHA-256. **Fixed on the way in:** the state root composed itself from `$env:APPDATA`, which `data-root-guard.test.mjs` (#130) rejects — the branch predates that guard. It now resolves through `Get-CanonicalCompyDataRoot`, which matters here more than anywhere: a redirected shell would have put two lanes' `owner.json` in two different roots, each seeing a clean slate, and both proceeding. **Left:** the locks have never been held during an actual release or ship — #128 forbids running one, so that proof arrives with the next real ship.
+
+## NEXT UP — archived row (2026-08-25, NEXT UP section cap)
+
+Moved byte-for-byte out of `BACKLOG.md`'s NEXT UP queue to pay for the 2026-08-25 re-derivation of
+the ALSO OPEN list. It was itself only a pointer to rows already in this file.
+
+- [x] **Cutline rows SHIPPED 2026-08-18 → 2026-08-19, moved verbatim to
+  [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-20, byte budget, to pay for the NEXT UP
+  queue above): the product-conformance drift class + Cowork's 469-line audit, the Home front-door
+  restructure (UX-1 ②), and C-12's command-palette doc drift. All three were closed records, not work.

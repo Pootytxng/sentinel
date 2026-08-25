@@ -57,6 +57,7 @@
 > **Two rows CLOSED 2026-08-22 moved verbatim to [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)**
 > (2026-08-24, NEXT UP section cap, to pay for the #213 row above): the cold-start non-regression
 > that exonerated `795d8ff5`/#130, and the `compy.gg` pricing row and its two corrections.
+> A third followed 2026-08-25 (the 2026-08-18–19 cutline pointer row).
 
 **① REFILLED 2026-08-24 — the owner reported five rendering defects, and ① is where they landed.**
 [#213](https://github.com/Pootytxng/sentinel/issues/213) · [#211](https://github.com/Pootytxng/sentinel/issues/211).
@@ -144,11 +145,12 @@ have collided with a fast-forward is gone. The only dirty path is `.codex/config
 lane's, leave it). A branch cut there no longer starts stale — **re-derive before believing this
 line, not because it is suspect but because it is exactly the kind that goes stale in a day.**
 
-**ALSO OPEN, not yet queued** (so none of it drops silently): #133 CARE capability rails tasks 4–7 ·
-#140 CPU temp (PawnIO/MSR — needs a Capability Exception record first) · #64 Q2b main-window caller
-checks · #54/#55 Project Doctor (Codex-claimed) · #49 Quiet Pit Wall (needs a visual self-review) ·
-the PHASE A–D rows
-below. **TYPE-1's mono residual is NOT among them — it was closed 2026-08-18/19** (`3eca4a9f` +
+**ALSO OPEN, not yet queued — RE-DERIVED against `gh` 2026-08-25, and three of five were wrong**
+(so none of it drops silently): #54/#55 Project Doctor (Codex-claimed) · the PHASE A–D rows below.
+**#140 and #49 are CLOSED** and were listed open here. **#133 is not takeable work** — Tasks 4–6 and
+Task 7's mechanical half landed 2026-08-18 (`8caadb58`/`b4939c9f`/`f9233291`); only Codex's
+independent review remains. **#64 is a RECORDED DEFERRAL** — all four triggers unmet,
+`src/q2b-deferral-tripwire.test.ts` fails if one flips. Re-derive from `gh`, never from this line. **TYPE-1's mono residual is NOT among them — it was closed 2026-08-18/19** (`3eca4a9f` +
 `be4c81ec`): [`../src/design/mono-law-guard.test.ts`](../src/design/mono-law-guard.test.ts) censuses
 every mono rule behind a down-only ratchet, 0 violations. It sat listed as open here for four days
 after it shipped, which is the same false reading that the archived-marker guard was written for.
@@ -167,10 +169,6 @@ funnel + monetization inputs (B3/B6 — the `llms.txt` price line came off this 
 substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-screen forks
 (B_startup/B_gpu), the analytics region question (B_eu), and the §C money/legal gates.
 
-- [x] **Cutline rows SHIPPED 2026-08-18 → 2026-08-19, moved verbatim to
-  [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-20, byte budget, to pay for the NEXT UP
-  queue above): the product-conformance drift class + Cowork's 469-line audit, the Home front-door
-  restructure (UX-1 ②), and C-12's command-palette doc drift. All three were closed records, not work.
 - [ ] **Extend the Codex weekly automation with product-conformance scope, and make it write INTO the
   repo.** Today it is coordination-only (branches/claims/worktrees) and writes to `$CODEX_HOME`,
   outside the repo, where no lane ever reads it — which is why six days of drift went unseen. The
