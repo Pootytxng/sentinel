@@ -153,7 +153,7 @@ tile. Current runtime remains driver-free, and CPU temperature remains external-
 | Tier | Purpose | Consent | Data leaving Compy | Independent gate |
 |---|---|---|---|---|
 | **1 — signed case knowledge** | Keep public known-issue guidance current | disclosed request + global off switch | catalog request metadata only; **no machine-derived incident payload** | separate advisory signing trust, domain, cache, caps, timeouts; local deny-only kill switch |
-| **2 — scrubbed incident fingerprint** | Learn which issue shapes recur | on by default once armed, disclosed at first run, real off switch, previewable (amended 2026-08-18 §2) | allowlisted coarse fields only; no raw log/dump/path/serial/user identity | payload schema, redaction proof, retention/deletion, revocation, abuse review |
+| **2 — scrubbed incident fingerprint** | Learn which issue shapes recur | opt-in, default OFF and it stays OFF after arming, disclosed at first run, real off switch, previewable (ruled 2026-08-24 #207, superseding the 2026-08-18 §2 amendment) | allowlisted coarse fields only; no raw log/dump/path/serial/user identity | payload schema, redaction proof, retention/deletion, revocation, abuse review |
 | **3 — per-case evidence upload** | Let a user send one support case | explicit consent for that incident after preview/redaction | exactly the displayed bundle to a named recipient | one-case receipt, endpoint policy, retention/deletion response, no background queue |
 
 Tiers never inherit consent from one another. Tier 1 does not authorize Tier 2 or 3.

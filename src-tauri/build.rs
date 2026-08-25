@@ -20,6 +20,7 @@ use std::process::Command;
 // command cannot ship without being classified.
 const APP_COMMANDS: &[&str] = &[
     "acknowledge_hardware_changes",
+    "acknowledge_receipts_disclosure",
     "apply_recommendation",
     "apply_recommendations_batch",
     "arm_comparison",
@@ -72,6 +73,8 @@ const APP_COMMANDS: &[&str] = &[
     "get_nic_driver_info",
     "get_preload_apps",
     "get_priorities",
+    "get_receipts_consent",
+    "get_receipts_endpoint",
     "get_receipts_gate",
     "get_recommendations",
     "get_rules_source",
@@ -102,6 +105,7 @@ const APP_COMMANDS: &[&str] = &[
     "set_keep_game_mode",
     "set_license_key",
     "set_overlay_corner",
+    "set_receipts_sharing_enabled",
     "set_startup_entry_enabled",
     "show_overlay",
     "simulate_optimization",

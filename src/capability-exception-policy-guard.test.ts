@@ -52,9 +52,17 @@ const REQUIRED: Record<string, string[]> = {
     "no third-party game/process injection. this remains absolute",
     "tier 1 signed advisory download / no machine-data upload",
     "tier 2 scrubbed incident fingerprint",
-    // The 2026-08-18 §2 amendment, pinned so the brief cannot drift in EITHER direction: not back to
-    // the retired "opt-in, default-OFF", and not into losing the two guarantees that replaced it.
-    "on by default once armed, disclosed at first run, with a real off switch",
+    // AMENDED 2026-08-25 (Q9a, #217). This used to pin the 2026-08-18 §2 amendment's "on by default
+    // once armed". The owner OVERRULED that six days later — 2026-08-24, issue #207,
+    // `docs/RECEIPTS_DOCTRINE.md` §2 and §4 — because the shipped app description and the public
+    // download page already promise "No telemetry", and a claim already published to users outranks
+    // a later internal amendment. COMPY_OVERVIEW.md carried the ruling; CLAUDE.md,
+    // ARCHITECTURE_LOCKS.md, PRODUCT_DIRECTION.md, BACKLOG.md and this guard did not — so the guard
+    // was pinning text its own owner had retired. Still pinned in BOTH directions: the two
+    // guarantees that ride alongside the default (first-run disclosure, real off switch) are named
+    // here, not dropped, and `no policy doc re-asserts the retired default-ON wording` below stops
+    // the amendment creeping back in unmarked.
+    "opt-in, default off and it stays off after arming, disclosed at first run, with a real off switch",
     "tier 3 explicit per-case evidence upload",
     "signed remote rules — triple-gated off",
   ],
@@ -81,7 +89,8 @@ const REQUIRED: Record<string, string[]> = {
     "a compy driver is policy-possible",
     "current runtime remains driver-free",
     "no machine-derived incident payload",
-    "on by default once armed, disclosed at first run, real off switch, previewable",
+    // See the CLAUDE.md note above — overruled 2026-08-24 (#207).
+    "opt-in, default off and it stays off after arming, disclosed at first run, real off switch, previewable",
     "tier 1 does not authorize tier 2 or 3",
     "tier 1's initial kill switch is local and deny-only",
     "any remotely delivered disable signal is a new inbound trust surface",
@@ -103,7 +112,7 @@ const REQUIRED: Record<string, string[]> = {
     "no third-party game/process injection",
     "current build ships no compy driver",
     "tier 1 signed advisory download/no machine upload",
-    "tier 2 scrubbed fingerprint, on by default once armed, disclosed at first run",
+    "tier 2 scrubbed fingerprint, opt-in and default off even after arming",
     "tier 3 explicit per-case evidence upload",
   ],
   "docs/PRIVACY.md": [
@@ -235,10 +244,53 @@ const liveSnapshot: PolicySnapshot = Object.fromEntries(
   LIVE_POLICY_PATHS.map((path) => [path, readFileSync(path, "utf8")]),
 );
 
+// The greppable line-level escape hatch a doc uses to QUOTE a retired claim without re-asserting it
+// (COMPY_OVERVIEW.md and RECEIPTS_DOCTRINE.md both cite the superseded default this way).
+const RETIRED_CLAIM_ALLOW = "retired-claim-allow";
+const RETIRED_DEFAULT_ON = /on by default once armed/i;
+
+// Raw text, not stripped of comments: a comment re-asserting a superseded default misleads the next
+// reader exactly as body copy does.
+export function findRetiredDefaultAssertions(snapshot: PolicySnapshot): string[] {
+  const offenders: string[] = [];
+  for (const [path, text] of Object.entries(snapshot)) {
+    text.split(/\r?\n/).forEach((line, i) => {
+      if (RETIRED_DEFAULT_ON.test(line) && !line.includes(RETIRED_CLAIM_ALLOW)) {
+        offenders.push(`${path}:${i + 1}`);
+      }
+    });
+  }
+  return offenders;
+}
+
 describe("Capability Exception policy coherence", () => {
   it("keeps every applicable live mirror aligned", () => {
     expect(LIVE_POLICY_PATHS.some((path) => path.startsWith("docs/archive/"))).toBe(false);
     expect(auditCapabilityExceptionPolicy(liveSnapshot)).toEqual([]);
+  });
+
+  // The owner's 2026-08-24 ruling (#207) put Tier 2 BACK to opt-in / default OFF after a five-day
+  // amendment had had it default-ON once armed. A superseded default is the kind of wording that
+  // creeps back by copy-paste, and it would creep back as a LOOSENING of a privacy default — so the
+  // retired phrase may only appear where a doc is quoting it AS retired, which is what the marker
+  // declares. The corpus must actually contain such a quotation, or this guard is watching nothing.
+  it("no policy doc re-asserts the retired default-ON wording", () => {
+    const quoted = Object.values(liveSnapshot).filter((text) => RETIRED_DEFAULT_ON.test(text));
+    expect(quoted.length).toBeGreaterThan(0);
+    expect(findRetiredDefaultAssertions(liveSnapshot)).toEqual([]);
+  });
+
+  it("catches the retired default-ON wording when it comes back unmarked (positive control)", () => {
+    const snapshot = clone(liveSnapshot);
+    snapshot["docs/PRODUCT_DIRECTION.md"] += "\nReceipts sharing is on by default once armed.";
+    expect(findRetiredDefaultAssertions(snapshot)).toHaveLength(1);
+    expect(findRetiredDefaultAssertions(snapshot)[0]).toMatch(/^docs\/PRODUCT_DIRECTION\.md:\d+$/);
+
+    // ...and the marker is a real hatch, not a phrase the scanner ignores everywhere.
+    const marked = clone(liveSnapshot);
+    marked["docs/PRODUCT_DIRECTION.md"] +=
+      `\nRetired wording: "on by default once armed" <!-- ${RETIRED_CLAIM_ALLOW} -->`;
+    expect(findRetiredDefaultAssertions(marked)).toEqual([]);
   });
 
   it("rejects a blanket driver/network unlock", () => {

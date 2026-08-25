@@ -503,6 +503,7 @@ dependencies = [
  "ed25519-compact",
  "ferrisetw",
  "nvml-wrapper",
+ "reqwest",
  "serde",
  "serde_json",
  "sha2",

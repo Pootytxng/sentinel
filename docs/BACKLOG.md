@@ -361,8 +361,8 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
     pull only, local matching against existing crash incidents, zero machine-derived upload, separate
     key/schema/domain/cache from privileged remote rules. Runtime stays hard-false until exact
     endpoint, signing custody, disclosures, security review and canary evidence are approved.
-  - **Tier 2 — NOT authorized by Tier 1:** scrubbed incident fingerprint — on by default once armed,
-    disclosed at first run, real off switch, payload preview, no raw log/dump/path/serial (2026-08-18 §2).
+  - **Tier 2 — NOT authorized by Tier 1:** scrubbed incident fingerprint — opt-in, default OFF even
+    after arming, disclosed at first run, real off switch, payload preview, no raw log (2026-08-24 #207).
   - **Tier 3 — NOT authorized by Tier 1:** explicit one-case evidence upload after preview/redaction,
     named recipient + retention/deletion receipt, no background queue or inherited consent.
   - **Driver posture:** no driver is needed for Tier 1. A Compy driver is policy-possible only through
@@ -377,20 +377,21 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   *around* the outbound restrictions cost more than the restrictions were worth. **Runs BEFORE Q8's
   Tier 1 build** — Q9a tells us what users actually do, which is the input Tier 1's catalog is
   guessing at today. Ordering is a lane decision, not an owner gate; say so if it should flip.
-  - [ ] **Q9a — arm Tier 2 usage analytics, default-ON + disclosed.** *Bigger than a switch:*
-    `receipts.rs` has the payload builder, the scrub, the preview command and a mounted consent
-    surface, but **no send path exists at all** — no HTTP call, no endpoint, no queue, and the
-    webview capability/CSP does not permit one. So the work is: a receiving endpoint ($0 tier), the
-    Rust send path, the capability/CSP widening, the first-run disclosure, and the privacy/EULA text
-    — one coherent change. `receipts_gate()` at `src-tauri/src/receipts.rs:18` is the last line of
-    it, not the first. Payload preview, scrubbed allowlist and a real off switch stay mandatory —
-    they are what makes the disclosure true. Amend
-    `src/capability-exception-policy-guard.test.ts` (it currently asserts Tier 2 default-OFF) citing
-    the decision record, never by weakening the invariant. **Destination decided (B_land, 2026-08-18):** the
-    same-origin Pages-Function → D1 pattern `functions/api/waitlist.ts` already proves, writing to
-    D1 `compy_reports` (`73f5e8a3-1827-42e3-8543-9fedc3750532`). Separate endpoint and separate
-    table from Tier 3 — storage may be shared, consent and transport never. 🪪 **owner-gated
-    sub-item:** EU/UK distribution needs a region check before default-ON ships there.
+  - [ ] **Q9a — build the Tier 2 usage path DARK, opt-in + disclosed.** *Built 2026-08-25 (#217),
+    gate NOT armed.* Landed: receiver `functions/api/usage.ts` → D1 `compy_reports`
+    (`73f5e8a3-1827-42e3-8543-9fedc3750532`), separate endpoint + table from Tier 3, no per-row
+    ip_hash, rate hash self-deletes in 1h; sender in `receipts.rs` (`send_decision` refusing gate →
+    disclosure → opt-in, `post_receipt`, consent store); the crate's one `reqwest`, declared with no
+    TLS feature of its own (a `rustls` feature added 11 crates — measured, reverted, guarded);
+    `docs/PRIVACY.md` v0.6 disclosing payload/endpoint/switches ahead of arming.
+    **The issue's own title said "default-ON": overruled by the owner's 2026-08-24 ruling (#207) —
+    opt-in, default OFF even after arming, because the shipped "No telemetry" claim is already
+    public.** Guards updated to match, never weakened.
+    Still open: the first-run disclosure UI + off switch in `src/surfaces/ReceiptsConsent.tsx`, the
+    webview capability/CSP question (the send is Rust-side, so it may not need widening — verify),
+    and `docs/EULA.md`. `receipts_gate()` at `src-tauri/src/receipts.rs:23` is the last line of it,
+    not the first, and arming is owner territory. 🪪 **owner-gated sub-item:** EU/UK distribution
+    needs a region check before any sharing ships there.
   - [ ] **Q9b — build Tier 3 in-app feedback + crash reports.** Own module
     (`src-tauri/src/case_evidence_upload.rs`), never inside `support_evidence.rs`. Tier 3's gate is
     unchanged and applies in full: per-case consent, preview/redaction, named recipient, retention,

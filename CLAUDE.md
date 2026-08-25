@@ -25,8 +25,8 @@
 
 Compy is the **PC doctor for everyday, non-technical Windows gamers**: the first place a user goes
 after a crash, freeze, slowdown, or unexplained hiccup. It gathers local evidence, explains what is
-known versus only suspected, and guides the safest next test or recovery. Optimization/Performance remains a
-major specialty, but it is secondary to diagnosis and recovery. The durable engineering identity is
+known versus only suspected, and guides the safest next test or recovery. Optimization remains a major
+specialty, but it is secondary to diagnosis and recovery. The durable engineering identity is
 still *"a rollback-first Windows configuration safety layer that happens to optimize."* UX stays
 plain-English, hardware-aware, safe + reversible by default. **Never invent or assume hardware
 specs.**
@@ -47,9 +47,11 @@ must be in context at all times:
   is retired; the signed updater is live. New capabilities stay local/user-mode by default and cross
   a boundary only through a named, reviewed exception. Outbound has three distinct tiers: **Tier 1
   signed advisory download / no machine-data upload; Tier 2 scrubbed incident fingerprint; Tier 3
-  explicit per-case evidence upload.** Never merge their consent or transport. Receipts has no send
-  path yet; **2026-08-18 §2 — on by default once armed, disclosed at first run, with a real off
-  switch.** `src/outbound-claim-guard.test.ts` rejects absolute offline claims.
+  explicit per-case evidence upload.** Never merge their consent or transport. Receipts' send path
+  is built dark and refusing (Q9a); **ruled 2026-08-24 (#207): opt-in, default OFF and it stays OFF
+  after arming, disclosed at first run, with a real off switch** — the shipped description and
+  download page promise "No telemetry", which outranks the 2026-08-18 §2 amendment.
+  `src/outbound-claim-guard.test.ts` rejects absolute offline claims.
 - **ONE MUTATION BOUNDARY (mechanical, 2026-08-03):** Compy changes Windows from
   `src-tauri/src/actions.rs` and **nowhere else** — snapshot → apply → verify → receipt → rollback.
   `src/mutation-boundary-guard.test.ts` fails the build on a registry write, service/task change,
@@ -200,7 +202,7 @@ intelligence/measurement) lives in **`src-tauri/CLAUDE.md`**, which auto-loads o
 - ★ `services.rs` (~1040) — service-suspend/debloat mutation surface (ARMED).
 - ★ `gpu_profile.rs` (~590) — GPU profile handling (apply structurally impossible → advisory; AMD state not user-mode readable).
 - ★ `remote_rules.rs` (~590) — signed remote-rules (Ed25519 verify wired, fetch triple-gated OFF).
-- ★ `receipts.rs` (~415) — Receipts telemetry gate (built dark, no send path, default-OFF; outbound Tier 2).
+- ★ `receipts.rs` (~798) — Receipts gate + Tier 2 send path (Q9a): `send_decision` refuses gate → disclosure → opt-in. Built dark, hard-false, **default-OFF even armed** (#207).
 - ★ `license.rs` (~355) — Compy Pro license gate (built dark).
 - ★ `drift.rs` (~351) — applied-change drift detection vs live machine state.
 - ★ `data_root.rs` (~1050) — canonical data-root resolver (#130): measures where the root LANDS, not the `APPDATA` string; halts on a split; issues `MutationRoot`, the capability `history.rs`/`actions.rs` now require. Guard: `scripts/data-root-guard.test.mjs`.
