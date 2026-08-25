@@ -1,0 +1,62 @@
+{
+  "transition": "close-issue",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "issue": 216,
+  "currentHead": "92752920d51b492eec6ab990342790f2cc70680e",
+  "explicitHandoff": "Owner turn 2026-08-25 (session f36ae7ce), verbatim: \"take #216: rebuild tools/entry verification to verify by facts - a worktree of this repo on the board's branch for the issue, with no LIVE competing writer (record the claiming pid, treat a dead process as lapsed) - so any Claude tab in the right folder is verified without a launch token; keep the launcher for worktree creation only; guard it in tools/entry/writer-contention.test.mjs.\" The same turn answered the one open owner question (B5.1, panoramic drag surface): \"my answer = no\".",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com/Pootytxng/sentinel; worktree C:/Users/Kuya/code/sentinel-vision-pointer, the lane the launcher built for #215 on 2026-08-24 and the folder #216 is about. Verified from inside the rebuilt assert itself: repo resolves to pootytxng/sentinel, issue 215, branch lane/vision-pointer-guard-2026-08-24.",
+    "remoteState": "origin/main was 39ad4dda at session start and at the moment of the push (git fetch immediately before). Pushed HEAD:main fast-forward 39ad4dda..92752920. Linear, no force-push, no PR - the same direct-landing route #215 used, and the lane ref itself is local only and was never pushed.",
+    "worktree": "Eleven worktrees plus one detached merge worktree under sentinel/.claude/worktrees. This session holds sentinel-vision-pointer alone; every other lane is on a different branch and none of them was written to. No other worktree carries tools/entry work.",
+    "branch": "lane/vision-pointer-guard-2026-08-24 == origin/main == 92752920 after the push. Two commits this session: 9cc778cb (the rebuild) and 92752920 (a comment correction recording a measured fact).",
+    "dirtyState": "Clean at the moment of the push. This receipt is the only file written after it and trails by one commit, per the convention the #215 receipt used - the head it authorizes is the head it names.",
+    "liveProcesses": "Two claude.exe at receipt time: 34472 (2026-08-24 22:26, the session that landed #215) and 15056 (2026-08-25 01:54). No compy.exe running - the installed app is not up, so nothing to stamp or disturb. No cargo/rustc/msbuild before the pre-push gate; that gate's own Rust build is the only one this session started."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "92752920d51b492eec6ab990342790f2cc70680e",
+      "detail": "Run by the pre-push hook at exactly this head, before the fast-forward to main was accepted. Log: logs/verify-local-2026-08-25T09-32-09Z.log - dependency bootstrap, git diff check, frontend tests 375 files / 5135 passed / 5 skipped, frontend type-check and build, Rust 964 passed / 0 failed / 24 ignored, Rust clippy, final line LOCAL CHECK RESULT: PASS. Also at this head: npx vitest run tools/entry 47 files / 781 passed; npx tsc --noEmit clean; scripts/doc-budget.ps1 ALL PASS."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "detail": "#216 changes tools/entry, the two .claude/hooks entry hooks and docs. No compy.exe bytes are affected - src-tauri is untouched (the Rust suite in the gate is the pre-push hook's standard run, not a change under test). Nothing to install or stamp-prove, and the owner's desk build is deliberately left alone."
+  },
+  "selfReview": {
+    "applicable": false,
+    "detail": "No UI surface. src/**/*.{tsx,css} is untouched; the only src/ file involved is docs-adjacent (ui-vision-status-guard.test.ts was RUN, not changed)."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Codex is not running in this repo this session, and docs/WORK_CONTROL.md makes its review advisory rather than blocking. What stands in for it here is adversarial by construction and stronger than a read: the rebuilt contract was falsified against the real machine (verifySession in this very worktree, the tab the old contract refused, returns ok #215) and against a real liveness case the design had to survive (a lease this session wrote at 09:16 recorded pid 26224; that pid was dead fourteen minutes later while the session was still typing, and the transcript signal correctly kept it live)."
+  },
+  "closureNotes": [
+    "Scope item 1 (verify by facts): .claude/hooks/session-root-assert.mjs now verifies three measured facts - the folder is a git work tree of Pootytxng/sentinel, Work Control's `Worktree / branch` field names it for an issue and the live branch is the board's branch for that issue, and no live competing writer holds it. The launch token is not an input to any pass or any refusal; writer-contention.test.mjs pins that mechanically by extracting every refuse(\"CODE\") literal from the hook source and asserting SESSION_FOREIGN, LAUNCH_SPENT and NO_TOKEN are not among them.",
+    "Scope item 2 (record the claiming pid, treat a dead process as lapsed): the per-folder record is now a WRITER LEASE carrying sessionId + pid. livenessOf reads two signals - the pid may only PROMOTE a lease to live, the transcript under ~/.claude/projects/*/<sessionId>.jsonl is what CONDEMNS - giving \"none\"/\"live\"/\"dead\"/\"unknown\". A dead holder lapses and is taken over with the takeover disclosed in a note; unknown still locks the folder, per collision rule 4.",
+    "Scope item 3 (any Claude tab in the right folder verifies without a launch token): proven live, not asserted. This session is exactly the class #216 is about - a tab the launcher did not name, in the folder the dead launcher session 8fc927ae held - and verifySession returns ok, mode resume, issue 215.",
+    "Scope item 4 (launcher kept for worktree creation only): launch.mjs still creates the worktree, posts the claim, writes the brief and starts the window. Its token survives as an internal handshake for the ide-bridge nonce and the brief digest and admits nobody. One addition the rebuild required: launch.mjs now clears the 10-minute board cache immediately after posting the claim, or the session it starts seconds later would read its own brand-new worktree as unclaimed - guarded in writer-contention.test.mjs by asserting the invalidate call sits after the claim and before the window start.",
+    "Scope item 5 (guard it in tools/entry/writer-contention.test.mjs): 54 tests in that file, covering the #216 lockout directly (a foreign DEAD lease no longer refuses; a foreign LIVE one still does), each of the three facts as load-bearing, adopt's half of the same rule, the two liveness probes measured against the real machine, and the duplicated `Worktree / branch` grammar pinned equal to tools/entry/worktree-field.mjs.",
+    "TWO JUDGMENT CALLS, both deliberate, both reported to the owner in chat rather than buried: (a) the launch token FILE was demoted, not deleted - removing it would have meant redesigning launch.mjs and ide-bridge.mjs in the same change; (b) the context-window check is now a recorded note instead of a refusal, because a tab the owner opens himself has whatever window it has and refusing it would rebuild the lockout this issue is about.",
+    "Also landed in the same train, from the same owner turn: B5.1 in docs/OWNER_ACTION_CHECKLIST.md is answered \"no\" (no panoramic drag surface returns), written into docs/UI_VISION_BACKLOG.md section A.1 so it cannot come back as a paraphrase. src/ui-vision-status-guard.test.ts 13/13 after the edit."
+  ],
+  "remaining": [
+    "Nothing on #216. The five suites that encoded the token contract were rewritten to the facts contract rather than deleted (session-assert, session-identity, session-lineage, unknown-is-not-verified, session-root-assert), so no coverage was dropped to make the build green.",
+    "Not done here, and deliberately: docs/superpowers/specs/2026-08-21-unverified-session-write-refusal.md keeps its old code tables as a point-in-time record and carries a supersession banner instead of a rewrite."
+  ]
+}
