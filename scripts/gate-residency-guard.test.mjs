@@ -166,6 +166,10 @@ const RESIDENCY = {
     staticGuard: "scripts/release-pipeline-guard.test.mjs",
     why: "The prove step: installs the candidate on this machine and reads its live stamp. Mutates the desk it runs on.",
   },
+  "emit-release-receipt.mjs": {
+    kind: "npm-test",
+    runner: "scripts/release-receipt-guard.test.mjs",
+  },
   "release-publish.ps1": {
     kind: "release-entry",
     staticGuard: "scripts/release-pipeline-guard.test.mjs",
