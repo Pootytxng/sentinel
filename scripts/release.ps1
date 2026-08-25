@@ -385,10 +385,45 @@ if ($Mode -eq "publish" -or $Mode -eq "prove") {
     throw "Release transaction stopped before completion at $($transaction.StoppedAfter)."
   }
 
+  # DURABLE RECEIPT (#199 item 3). The transaction journal is written under src-tauri/target/, which
+  # src-tauri/.gitignore:3 ignores by construction -- so every past release's "9 of 9" claim died
+  # with its build directory and is not re-verifiable by anyone. This emits a small sanitized
+  # summary into a TRACKED path so THIS release's stage claim outlives a target/ clean. The
+  # historical record stays as it is: #199 forbids regenerating journals for past releases.
+  #
+  # FAIL-FORWARD, deliberately. Publication has already happened by the time control reaches this
+  # line. A throw here would report a release that genuinely succeeded as a failure, which is a
+  # worse defect than a missing receipt -- so a failure is a loud warning plus the exact command to
+  # re-run, and the exit code stays 0.
+  $durableReceiptPath = $null
+  $emitScript = Join-Path $PSScriptRoot "emit-release-receipt.mjs"
+  $emitRerun = "node scripts/emit-release-receipt.mjs --journal '$transactionJournalPath' --receipt '$stageReceiptPath'"
+  try {
+    $emit = Invoke-NativeProcess -Command "node" -ArgumentList @(
+      $emitScript,
+      "--journal", $transactionJournalPath,
+      "--receipt", $stageReceiptPath,
+      "--out-dir", (Join-Path $repo "docs\release-receipts")
+    ) -TimeoutMs 60000
+    if ($emit.TimedOut) { throw "emit-release-receipt.mjs timed out." }
+    if ($emit.ExitCode -ne 0) { throw (Get-FirstNonEmptyLine $emit.StdErr) }
+    $durableReceiptPath = $emit.StdOut.Trim()
+    if (-not $durableReceiptPath) { throw "emit-release-receipt.mjs printed no path." }
+  } catch {
+    $emitFailure = $_.Exception.Message
+    Write-Warning "DURABLE RECEIPT NOT WRITTEN: $emitFailure"
+    Write-Warning "The release itself published fine. Its 9-of-9 stage claim has no durable evidence until this is emitted -- see issue #199."
+    Write-Warning "Re-run by hand, then commit the file: $emitRerun"
+  }
+
   Write-Host "PUBLISHED: $($receipt.tag)"
   Write-Host "Source: $($receipt.commit)"
   Write-Host "Installer SHA-256: $($receipt.installer.sha256)"
   Write-Host "Transaction journal: $transactionJournalPath"
+  if ($durableReceiptPath) {
+    Write-Host "Durable receipt: $durableReceiptPath"
+    Write-Host "NEXT: commit that receipt. It is the only stage evidence that survives a target/ clean (#199)."
+  }
   exit 0
 }
 
