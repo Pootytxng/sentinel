@@ -461,6 +461,20 @@
   font-size: var(--type-hero);
   font-weight: var(--type-hero-weight);
 }
+/* #213 B3 -- what a 460px column can carry depends on the STRING, and the comp only ever showed
+   the short one. Measured over CDP on the installed build (452px column, 52px/650, line-height
+   57.2): the comp's own "You're ready to play" draws two lines, and so does every headline up to
+   31 characters. At 34 -- "Compy changes were turned back off", the state the owner's machine is
+   actually in -- it draws THREE, 172px where the picture has 114px, and the worst multi-flag
+   headline draws FOUR. --type-hero is comp-derived and is NOT changed: past the measured break
+   the headline takes one step down, which restores two lines out to 43 characters and never makes
+   any case worse. The break, the full table and the remaining 3-liners are recorded in
+   src/design/headline-fit.ts; guarded by src/design/headline-fit-guard.test.ts. */
+:root[data-v2="on"] .v2-room[data-layout="split"][data-room="home"] > .v2-verdict h1:has([data-fit="tight"]),
+:root[data-v2="on"] .v2-room[data-layout="split"][data-room="lab"] > .v2-verdict h1:has([data-fit="tight"]) {
+  font-size: var(--type-verdict);
+  font-weight: var(--type-verdict-weight);
+}
 /* The narrow-column rooms set their headline looser: measured baseline-to-baseline is 52 app px
    on a 40px headline in 03-history-approved.png, where Health's 52px headline runs at 1.10. */
 :root[data-v2="on"] .v2-room[data-layout="split"][data-room="learn"] > .v2-verdict h1,

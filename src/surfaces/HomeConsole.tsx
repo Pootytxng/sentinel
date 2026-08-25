@@ -38,6 +38,7 @@ import { SetupLauncherCard } from "./setup/SetupLauncherCard";
 import { CpuTempOffer } from "./CpuTempOffer";
 import { deriveReverted } from "./use-scan";
 import { BentoGrid, BentoTile, Sheet, useSheet } from "../design/bento";
+import { headlineFit } from "../design/headline-fit";
 import { homeCareEntry, fastPathReadyHeadline, fastPathApplyLabel } from "./home-intake-data";
 import { HomeInterview } from "./HomeInterview";
 import {
@@ -746,8 +747,17 @@ export function HomeConsole({
               copy of a label the rail already shows is exactly the noise TYPE-1 cleared.
               Still rendered exactly ONCE on the screen (one-mention law) — the body copy is
               deleted in the same change, not duplicated up here. */}
+          {/* #213 B3 — the hero step is right for the comp's headline and wrong for this app's
+              own attention labels. `--type-hero` is comp-derived and stays; what varies is which
+              step a LONG headline gets. Measured on the installed build in the 452px narrative
+              column: at 52px a 34-character label ("Compy changes were turned back off", the
+              state his machine is in) draws THREE lines where the approved comp draws two, and
+              the worst multi-flag headline draws four. Past the measured break the headline steps
+              down one to --type-verdict, which buys the second line back up to 43 characters.
+              The table and the residual are in src/design/headline-fit.ts. */}
           <span
             className={`hc-headline hc-verdict-line hc-verdict-${posture.tone}`}
+            data-fit={headlineFit(posture.headline)}
             key={posture.headline}
           >
             {posture.headline}
