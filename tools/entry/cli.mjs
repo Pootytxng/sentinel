@@ -29,7 +29,7 @@ import { reconcile, selectTask } from "./preflight.mjs";
 import { verdictLines } from "./render.mjs";
 import { buildMenu, chooseInteractively, renderMenu } from "./select.mjs";
 import { adopt } from "./adopt.mjs";
-import { assertSessionRoot, readToken } from "./session-assert.mjs";
+import { verifySession } from "./session-assert.mjs";
 
 const C = { dim: "\x1b[2m", red: "\x1b[31m", green: "\x1b[32m", yellow: "\x1b[33m", bold: "\x1b[1m", off: "\x1b[0m" };
 
@@ -134,7 +134,8 @@ export async function cmdChoose({
 
 function cmdAssert(argv) {
   const asJson = argv.includes("--json");
-  const result = assertSessionRoot({ token: readToken(), env: process.env, cwd: process.cwd() });
+  // A probe, never a claim: persist:false measures the facts without taking the folder's lease.
+  const result = verifySession({ env: process.env, cwd: process.cwd(), persist: false });
   if (asJson) console.log(JSON.stringify(result, null, 2));
   else if (result.ok) console.log(`  ${C.green}session root verified${C.off}  ${result.root}  ${C.dim}(#${result.issue}, ${result.branch}, via ${result.source})${C.off}`);
   else console.log(`\n  ${C.red}STOP — ${result.code}${C.off}\n  ${result.reason}\n`);

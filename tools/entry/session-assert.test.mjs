@@ -8,20 +8,54 @@
 // The `cd` succeeds, the prompt looks right, and every command that uses a relative path lands in
 // the intended folder — while settings, hooks and the context window all still come from somewhere
 // else. Its tell is precise: cwd matches the claim, the project root does not.
+//
+// #216 CHANGED WHAT THE CLAIM IS, NOT WHAT THESE GUARDS CATCH. The claim used to be a launch token:
+// one folder, one conversation, handed out once. It is now the Work Control board — the issue's
+// `Worktree / branch` field — which is the same claim every human and every agent already reads, and
+// which no session can consume. Guard 1 is therefore "the board does not name this folder", and
+// guard 8 is unchanged, because the shell-moved-but-root-did-not tell is a property of the session
+// rather than of the token that started it.
 
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { assertSessionRoot, makeToken, readToken, resolveSessionRoot, writeToken } from "./session-assert.mjs";
+import {
+  assertSessionRoot,
+  makeToken,
+  readToken,
+  resolveSessionRoot,
+  verdictFor,
+  writeToken,
+} from "./session-assert.mjs";
 
 const CLAIMED = "C:\\Users\\Kuya\\code\\sentinel-feedback";
 const ELSEWHERE = "C:\\Users\\Kuya\\code\\sentinel-rel";
+const BRANCH = "feat/user-feedback-lab-recovery";
 const NOW = new Date("2026-07-30T12:00:00Z");
+
+const BOARD = { reachable: true, stale: false, rows: [{ issue: 14, folder: CLAIMED, branch: BRANCH }] };
+const LIVE = { isWorktree: true, branch: BRANCH, repo: "pootytxng/sentinel" };
+const facts = (over = {}) =>
+  assertSessionRoot({
+    board: BOARD,
+    live: LIVE,
+    env: { CLAUDE_PROJECT_DIR: CLAIMED, CLAUDE_CODE_AUTO_COMPACT_WINDOW: "300000" },
+    cwd: CLAIMED,
+    now: NOW,
+    ...over,
+  });
 
 let store;
 const token = (over = {}) => ({
-  ...makeToken({ issue: 14, folder: CLAIMED, branch: "feat/user-feedback-lab-recovery", window: 300000, nonce: "n1", expiresAt: "2026-07-30T18:00:00Z" }),
+  ...makeToken({
+    issue: 14,
+    folder: CLAIMED,
+    branch: BRANCH,
+    window: 300000,
+    nonce: "n1",
+    expiresAt: "2026-07-30T18:00:00Z",
+  }),
   ...over,
 });
 
@@ -60,104 +94,93 @@ describe("resolving the REAL session root", () => {
   });
 });
 
-describe("guard 1 — claimed one folder, running in another", () => {
-  it("refuses when the session root is not the claimed folder", () => {
-    const r = assertSessionRoot({ token: token(), env: { CLAUDE_PROJECT_DIR: ELSEWHERE }, cwd: ELSEWHERE, now: NOW });
+describe("guard 1 — running in a folder the board does not claim", () => {
+  it("does not verify a session whose root no issue names", () => {
+    const r = facts({ env: { CLAUDE_PROJECT_DIR: ELSEWHERE }, cwd: ELSEWHERE });
     expect(r.ok).toBe(false);
-    expect(r.code).toBe("ROOT_MISMATCH");
-    expect(r.expected).toBe(CLAIMED);
-    expect(r.actual).toBe(ELSEWHERE);
+    expect(r.code).toBe("FOLDER_UNCLAIMED");
+    expect(r.root).toBe(ELSEWHERE);
   });
 
-  // These two are about FOLDER comparison. A launched session also reports the window the launcher
-  // established, and an unobserved window is now its own refusal (see the WINDOW_UNOBSERVED cases
-  // below), so the fixtures carry what a real launched session carries.
-  it("passes when they agree", () => {
-    const r = assertSessionRoot({ token: token(), env: { CLAUDE_PROJECT_DIR: CLAIMED, CLAUDE_CODE_AUTO_COMPACT_WINDOW: "300000" }, cwd: CLAIMED, now: NOW });
+  it("passes when the board's folder and the session's root are the same folder", () => {
+    const r = facts();
     expect(r.ok).toBe(true);
+    expect(r.issue).toBe(14);
   });
 
   it("compares folders case- and separator-insensitively", () => {
-    const r = assertSessionRoot({ token: token(), env: { CLAUDE_PROJECT_DIR: "c:/users/kuya/code/sentinel-feedback", CLAUDE_CODE_AUTO_COMPACT_WINDOW: "300000" }, cwd: CLAIMED, now: NOW });
+    const r = facts({
+      env: { CLAUDE_PROJECT_DIR: "c:/users/kuya/code/sentinel-feedback", CLAUDE_CODE_AUTO_COMPACT_WINDOW: "300000" },
+    });
     expect(r.ok).toBe(true);
   });
 });
 
 describe("guard 8 — the shell moved but the project root did not", () => {
   it("refuses, and names the failure precisely rather than as a generic mismatch", () => {
-    const r = assertSessionRoot({ token: token(), env: { CLAUDE_PROJECT_DIR: ELSEWHERE }, cwd: CLAIMED, now: NOW });
+    const r = facts({ env: { CLAUDE_PROJECT_DIR: ELSEWHERE }, cwd: CLAIMED });
     expect(r.ok).toBe(false);
     expect(r.code).toBe("CD_WITHOUT_ROOT");
     expect(r.reason).toMatch(/shell/i);
     expect(r.reason).toMatch(/project root/i);
   });
 
-  it("is distinguishable from a plain wrong-root run, because the fixes differ", () => {
-    const cdOnly = assertSessionRoot({ token: token(), env: { CLAUDE_PROJECT_DIR: ELSEWHERE }, cwd: CLAIMED, now: NOW });
-    const plain = assertSessionRoot({ token: token(), env: { CLAUDE_PROJECT_DIR: ELSEWHERE }, cwd: ELSEWHERE, now: NOW });
+  it("is distinguishable from a plain unclaimed folder, because the fixes differ", () => {
+    const cdOnly = facts({ env: { CLAUDE_PROJECT_DIR: ELSEWHERE }, cwd: CLAIMED });
+    const plain = facts({ env: { CLAUDE_PROJECT_DIR: ELSEWHERE }, cwd: ELSEWHERE });
     expect(cdOnly.code).not.toBe(plain.code);
+    // And the difference is not cosmetic: one is a live contradiction inside a claimed folder, the
+    // other is an ordinary window somewhere nobody claimed.
+    expect(verdictFor(cdOnly).exit).toBe(2);
+    expect(verdictFor(plain).exit).toBe(0);
   });
 });
 
 describe("failing closed", () => {
-  it("refuses when no token exists — a session with nothing to check is not a verified session", () => {
-    const r = assertSessionRoot({ token: null, env: { CLAUDE_PROJECT_DIR: CLAIMED }, cwd: CLAIMED, now: NOW });
+  it("does not verify a folder no issue on the board claims", () => {
+    const r = facts({ board: { reachable: true, rows: [] } });
     expect(r.ok).toBe(false);
-    expect(r.code).toBe("NO_TOKEN");
+    expect(r.code).toBe("FOLDER_UNCLAIMED");
   });
 
-  it("refuses an expired token", () => {
-    const r = assertSessionRoot({ token: token({ expiresAt: "2026-07-30T11:00:00Z" }), env: { CLAUDE_PROJECT_DIR: CLAIMED }, cwd: CLAIMED, now: NOW });
+  it("refuses when the board itself could not be measured", () => {
+    const r = facts({ board: { reachable: false, rows: [] } });
     expect(r.ok).toBe(false);
-    expect(r.code).toBe("TOKEN_EXPIRED");
+    expect(r.code).toBe("BOARD_UNREACHABLE");
   });
 
-  it("refuses a token already claimed by an earlier session, with no lineage to stand on", () => {
-    // Claimed once, still once. What a later session in this folder resumes is the FOLDER's lineage
-    // (session-lineage.test.mjs); a spent token with no such record verifies nothing on its own.
-    //
-    // The REFUSAL is unchanged — what changed is that it no longer claims the entrypoint never
-    // launched this folder. It did; the launch was taken up and the record has gone. LAUNCH_SPENT
-    // says that and stays advisory, exit 0, exactly as NO_TOKEN was.
-    const r = assertSessionRoot({ token: token({ claimedAt: "2026-07-30T09:00:00Z" }), lineage: null, env: { CLAUDE_PROJECT_DIR: CLAIMED }, cwd: CLAIMED, now: NOW });
-    expect(r.ok).toBe(false);
-    expect(r.code).toBe("LAUNCH_SPENT");
-    expect(r.reason).toMatch(/already taken up/i);
-    expect(r.reason).not.toMatch(/was not started through the entrypoint/i);
+  it("refuses a folder that is not a work tree of this repository", () => {
+    expect(facts({ live: { ...LIVE, isWorktree: false } }).code).toBe("NOT_A_WORKTREE");
+    expect(facts({ live: { ...LIVE, repo: "someone-else/fork" } }).code).toBe("REPO_MISMATCH");
   });
 
-  it("still says NO_TOKEN when the spent launch belongs to a different folder", () => {
-    const r = assertSessionRoot({
-      token: token({ claimedAt: "2026-07-30T09:00:00Z", folder: "C:\\Users\\Kuya\\code\\somewhere-else" }),
-      lineage: null,
-      env: { CLAUDE_PROJECT_DIR: CLAIMED },
-      cwd: CLAIMED,
-      now: NOW,
-    });
-    expect(r.code).toBe("NO_TOKEN");
+  it("refuses when the live branch is not the branch the board put the issue on", () => {
+    const r = facts({ live: { ...LIVE, branch: "main" } });
+    expect(r.ok).toBe(false);
+    expect(r.code).toBe("BRANCH_NOT_THE_BOARDS");
+    expect(r.expected).toBe(BRANCH);
+    expect(r.actual).toBe("main");
   });
 
   it("refuses when the root could not be observed at all", () => {
-    const r = assertSessionRoot({ token: token(), env: {}, cwd: CLAIMED, now: NOW });
+    const r = facts({ env: {}, hookInput: null });
     expect(r.ok).toBe(false);
     expect(r.code).toBe("ROOT_UNOBSERVED");
   });
 
-  it("checks the window the session actually got, not the one the launcher intended", () => {
-    const r = assertSessionRoot({
-      token: token(),
-      env: { CLAUDE_PROJECT_DIR: CLAIMED, CLAUDE_CODE_AUTO_COMPACT_WINDOW: "150000" },
-      cwd: CLAIMED,
-      now: NOW,
-    });
-    expect(r.ok).toBe(false);
-    expect(r.code).toBe("WINDOW_MISMATCH");
-    expect(r.expected).toBe(300000);
-    expect(r.actual).toBe(150000);
+  it("records the window the session actually got, and no longer refuses over it (#216)", () => {
+    // Under the token contract a session whose window was not the launcher's tier was REFUSED. A tab
+    // the owner opened himself has whatever window it has; refusing it would rebuild the lockout.
+    const r = facts({ env: { CLAUDE_PROJECT_DIR: CLAIMED, CLAUDE_CODE_AUTO_COMPACT_WINDOW: "150000" } });
+    expect(r.ok).toBe(true);
+    expect(r.window).toBe(150000);
   });
 });
 
 describe("the token on disk", () => {
+  // The token survives as a LAUNCHER HANDSHAKE — it carries the nonce the IDE bridge waits on and
+  // the brief digest — and nothing in the assert reads it any more. These tests keep that shape
+  // honest; writer-contention.test.mjs is what proves the assert ignores it.
   it("round-trips", () => {
     const t = token();
     writeToken(t, { dir: store });
@@ -168,7 +191,7 @@ describe("the token on disk", () => {
     expect(readToken({ dir: join(store, "nope") })).toBeNull();
   });
 
-  it("carries a nonce, so a stale token cannot validate a later session", () => {
+  it("carries a nonce, so the bridge can tell one launch from the next", () => {
     expect(makeToken({ issue: 1, folder: CLAIMED, branch: "b", window: 150000 }).nonce).toBeTruthy();
   });
 });

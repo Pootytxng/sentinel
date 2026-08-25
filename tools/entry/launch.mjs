@@ -40,7 +40,7 @@ import { postClaim, planRenew, execPlan } from "./claim.mjs";
 import { writeBrief } from "./brief.mjs";
 import { resolveWindow } from "./settings-resolve.mjs";
 import { establishTier, restampTier } from "./tier.mjs";
-import { makeToken, writeToken } from "./session-assert.mjs";
+import { invalidateBoardCache, makeToken, writeToken } from "./session-assert.mjs";
 import { pruneDeadOverlay, writeOverlay } from "./overlay.mjs";
 
 // Narration goes to stderr so stdout stays exactly one JSON line — and, when a log file is named, to
@@ -368,6 +368,11 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     });
     effects.record("posted the ownership claim", `#${task.number} until ${expires}`);
   }
+
+  // The claim IS the thing the session about to start will be verified against (#216), and the board
+  // is cached for ten minutes so the write guard can ask on every keystroke. Against a cache written
+  // before this claim, the session would read its own brand-new worktree as a folder nobody claimed.
+  invalidateBoardCache();
 
   // 4. brief -- the durable instructions, written BEFORE the token that admits a session.
   //

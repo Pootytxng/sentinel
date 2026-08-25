@@ -1,27 +1,39 @@
-// Verify the session root from INSIDE the session (spec §4.3) — guards 1, 8, 9 and 10.
+// Verify this session from INSIDE it, against FACTS about the folder it is in (#216, 2026-08-25).
 //
 // Everything the launcher checks happens before the session exists, so the launcher's word for its
-// own correctness is not evidence. #14 is the proof: every pre-launch value can agree and the
-// session can still be running somewhere else. This is the only component that observes the session
-// from within it, which is why it is a SessionStart hook — that is where CLAUDE_PROJECT_DIR is
-// populated and the payload carries `cwd`.
+// own correctness is not evidence. This is the only component that observes the session from within
+// it, which is why it is a SessionStart hook — that is where CLAUDE_PROJECT_DIR is populated and the
+// payload carries `cwd`.
 //
-// TWO RECORDS, NOT ONE TOKEN (#23, 2026-07-31). The token used to be single-use: the first
-// SessionStart consumed it, and the SessionStart that fires after compaction — same session, same
-// folder, same claim, same work — then read a consumed token and announced "this one is unverified".
-// Consumption answers "has this token been used before"; a resuming session is asking "am I the
-// session that was launched". Only the second question is about correctness. So:
+// WHAT CHANGED, AND WHY (#216). Verification used to run on a LAUNCH TOKEN: the launcher wrote a
+// record naming one folder, one branch and one conversation id, and only that conversation could
+// take it up. Two failures follow from that design and both happened on 2026-08-24:
 //
-//   * the LAUNCH (`launch.json`) is a pending intent, claimed exactly once, by the first session in
-//     the folder it names;
-//   * the LINEAGE (`sessions\<folderhash>.json`) is what that claim establishes — one record per
-//     folder, which any later SessionStart in that same folder may resume until it goes stale.
+//   * the owner opened his real conversation in the right folder, on the right branch, for the right
+//     issue — and was refused SESSION_FOREIGN, because the launcher had named a different id;
+//   * the session the launcher DID name then died without writing a line, and its record held the
+//     folder for twelve hours. `adopt`, the cure the refusal itself printed, refused too.
 //
-// Resume is not a loosening. Every resume re-verifies root, branch, repository and context window
-// against the live machine, which is strictly more than the old contract checked: `token.branch` was
-// recorded and never once looked at. And a lineage is not a way in — it names one folder, one branch,
-// one repository and one task, and a session that does not match all four is refused however
-// legitimately that record was created.
+// A token is a thing the launcher HANDED OUT, so it can only ever admit the one session it was
+// handed to, and it keeps admitting nobody after that session is gone. So verification no longer
+// asks who was launched. It asks what is true:
+//
+//   1. this folder is a git work tree of THIS repository;
+//   2. Work Control names it as the worktree for an issue, and the live branch is the board's
+//      branch for that issue;
+//   3. no OTHER conversation is live in it.
+//
+// Any Claude tab in the right folder therefore verifies, with no token and no relaunch. The
+// launcher's remaining job is CREATING the folder, not admitting sessions.
+//
+// THE LEASE IS NOT AN AUTHORIZATION. The per-folder record (`sessions\<folderhash>.json`) survives,
+// with exactly one job left: exclusion. It names the conversation currently writing here and the pid
+// holding it, so a second writer does not join, and — this is the #216 fix — so a record whose
+// process is gone reads as LAPSED instead of as an owner. It admits nobody; it only excludes.
+//
+// The launch token file survives too, demoted to a launcher-internal handshake: the launcher writes
+// it so `compy-entry wait` can learn that a window came up, and so the brief digest reaches the
+// session. It cannot verify anyone and it cannot refuse anyone.
 //
 // WHY IT LIVES HERE (owner decision 2, Issue #18, 2026-07-30). `.claude/hooks/` is the single
 // canonical hook source and it is tracked, so this file travels with the branch instead of existing
@@ -30,23 +42,24 @@
 //
 //   * It imports `node:` builtins ONLY. `--repair` copies flat files into older branches, so a
 //     `lib/` subdirectory would silently not travel and the hook would fail to load in exactly the
-//     folders that needed repairing. canonicalizePath/samePath are therefore duplicated from
-//     tools/entry/worktree-field.mjs, and pinned equal to it by test — duplicated path logic that
-//     DRIFTS is one copy calling two folders the same while the other calls them different, which
-//     is a wrong root passing for a right one.
+//     folders that needed repairing. canonicalizePath/samePath and the board field grammar are
+//     therefore duplicated from tools/entry/, and pinned equal to those copies by test — duplicated
+//     logic that DRIFTS is one copy calling two folders the same while the other calls them
+//     different, which is a wrong root passing for a right one.
 //   * tools/entry/session-assert.mjs re-exports this module rather than copying it. One
 //     implementation, two entry points.
 //
 // SEVERITY (owner decision 3). Tracked, this runs in every session in every checkout — including
-// sessions nobody launched through the entrypoint: an ad-hoc window, Cowork, Codex, a fresh clone.
-// There, "no launch token" is the normal state, not a fault, and blocking would break all of them.
-// So it STOPS only when a live launch or an established lineage DISAGREES with this session, and
-// otherwise says its piece in one line and gets out of the way. Codes nobody classified STOP: an
-// unclassified refusal must never become a silent pass.
+// sessions in folders no issue claims: an ad-hoc window, Cowork, Codex, a fresh clone, the main
+// checkout. There, "no issue claims this folder" is the normal state, not a fault, and blocking
+// would break all of them. So it STOPS only when a FACT disagrees with this session, and otherwise
+// says its piece in one line and gets out of the way. Codes nobody classified STOP: an unclassified
+// refusal must never become a silent pass.
 
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { join, resolve } from "node:path";
 
@@ -206,31 +219,225 @@ export function sweepLineage({ dir = TOKEN_DIR, now = new Date() } = {}) {
   return removed;
 }
 
-const lineageFromLaunch = ({ token, root, now, sessionId = null }) => ({
-  issue: token.issue,
-  folder: canonicalizePath(root),
-  branch: token.branch,
-  window: token.window,
-  repo: token.repo ?? null,
-  nonce: token.nonce ?? null,
-  briefHash: token.briefHash ?? null,
-  // Bound at the moment the launch is taken up: the launcher's assigned id when it assigned one,
-  // otherwise the id of the session that actually answered. Either way the folder's record now names
-  // ONE conversation, and a different one cannot resume on it.
-  sessionId: token.sessionId ?? sessionId ?? null,
-  launchedAt: token.issuedAt ?? null,
-  firstSeenAt: now.toISOString(),
-  lastSeenAt: now.toISOString(),
-  seenCount: 1,
-  expiresAt: new Date(now.getTime() + LINEAGE_TTL_MINUTES * 60_000).toISOString(),
-});
+// ── the board ────────────────────────────────────────────────────────────────────────────────────
+// The board is the FACT that says which issue a folder is working, and on which branch. It replaces
+// the launch token as the source of that answer, which is the whole of #216: a token is a thing the
+// launcher wrote, so only the session the launcher started could ever hold it, and a session that
+// died still held it. The board is a thing that is TRUE about the folder, so any session in that
+// folder can read it and none of them can consume it.
+//
+// Read through a short-lived cache because this runs on every SessionStart AND on every project
+// write (project-write-assert.mjs asks the same judge). One `gh` call per BOARD_TTL_MINUTES for the
+// whole machine is affordable; one per write is not.
 
-const touchLineage = (record, now) => ({
-  ...record,
-  lastSeenAt: now.toISOString(),
-  seenCount: (record.seenCount ?? 0) + 1,
-  expiresAt: new Date(now.getTime() + LINEAGE_TTL_MINUTES * 60_000).toISOString(),
-});
+export const BOARD_CACHE_NAME = "board.json";
+export const BOARD_TTL_MINUTES = 10;
+export const PROJECT = { number: 1, owner: "Pootytxng" };
+export const REPO = "Pootytxng/sentinel";
+export const EXPECTED_REPO = normalizeRepo(REPO);
+
+/**
+ * The `Worktree / branch` field grammar, in the subset this file needs: `path @ branch`, several
+ * entries joined by ` ; `. Duplicated from tools/entry/worktree-field.mjs on purpose (this file is
+ * copied flat by `--repair` and may import nothing but `node:`), and pinned equal to it by
+ * tools/entry/writer-contention.test.mjs.
+ *
+ * The canonical separator is split on LAST so a path containing "@" cannot steal it; the two legacy
+ * separators are split on FIRST because a branch routinely contains "/" and a Windows path never
+ * contains " / ".
+ */
+export function parseWorktreeEntries(field) {
+  const out = [];
+  for (const raw of String(field ?? "").split(" ; ")) {
+    const entry = raw.trim();
+    if (entry === "" || entry.toLowerCase() === "none") continue;
+    let halves = null;
+    const at = entry.lastIndexOf(" @ ");
+    if (at >= 0) halves = [entry.slice(0, at), entry.slice(at + 3)];
+    for (const sep of [" / ", " · "]) {
+      if (halves) break;
+      const k = entry.indexOf(sep);
+      if (k >= 0) halves = [entry.slice(0, k), entry.slice(k + sep.length)];
+    }
+    if (!halves) continue;
+    const folder = canonicalizePath(halves[0]);
+    // A trailing parenthetical is board metadata, not part of the branch name.
+    const branch = halves[1].trim().replace(/\s*\([^)]*\)$/, "");
+    if (!folder || !branch) continue;
+    out.push({ folder, branch });
+  }
+  return out;
+}
+
+/** Every (issue, folder, branch) the board currently asserts, flattened out of the items. */
+export function boardRows(items) {
+  const rows = [];
+  for (const item of items ?? []) {
+    const issue = Number(item?.number);
+    if (!Number.isInteger(issue) || issue <= 0) continue;
+    for (const e of parseWorktreeEntries(item["worktree / branch"] ?? item.worktreeBranch ?? "")) {
+      rows.push({ issue, folder: e.folder, branch: e.branch, status: item.status ?? null });
+    }
+  }
+  return rows;
+}
+
+/** The rows that name THIS folder. More than one is ambiguity, and ambiguity is refused. */
+export const rowsFor = (rows, root) => (rows ?? []).filter((r) => samePath(r.folder, root));
+
+const boardCacheFile = ({ dir = TOKEN_DIR } = {}) => join(dir, BOARD_CACHE_NAME);
+
+export function readBoardCache({ dir = TOKEN_DIR } = {}) {
+  try {
+    const parsed = JSON.parse(readFileSync(boardCacheFile({ dir }), "utf8"));
+    return parsed && Array.isArray(parsed.rows) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeBoardCache(cache, { dir = TOKEN_DIR } = {}) {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(boardCacheFile({ dir }), JSON.stringify(cache, null, 2));
+  return boardCacheFile({ dir });
+}
+
+/**
+ * Throw the cached answer away, because something just changed what the answer IS.
+ *
+ * The cache exists so the write guard can ask the same question on every Write without a `gh` call
+ * per keystroke, and ten minutes of staleness is harmless for a board nobody is editing. It is NOT
+ * harmless for the launcher: it posts the claim that puts the new worktree on the board and then
+ * starts a session in that worktree seconds later. Against a cache written before the claim, that
+ * session reads its own brand-new folder as unclaimed. Whoever writes the board clears this.
+ */
+export function invalidateBoardCache({ dir = TOKEN_DIR } = {}) {
+  try {
+    rmSync(boardCacheFile({ dir }), { force: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** One `gh` call. Returns null when the board could not be read — which is never "empty board". */
+export function fetchBoardRows() {
+  try {
+    const raw = execFileSync(
+      "gh",
+      ["project", "item-list", String(PROJECT.number), "--owner", PROJECT.owner, "--format", "json", "--limit", "100"],
+      { encoding: "utf8", timeout: 20_000, stdio: ["ignore", "pipe", "ignore"] },
+    );
+    const items = JSON.parse(raw).items ?? [];
+    return boardRows(items.map((it) => ({ ...it, number: it.content?.number })));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The board, cached. A stale cache is USED and disclosed when the fetch fails — the board saying
+ * something ten minutes ago is a fact; having no answer is not, and refusing every write on the
+ * machine because GitHub blipped is the outage this guard is supposed to prevent.
+ */
+export function boardFacts({ dir = TOKEN_DIR, now = new Date(), maxAgeMinutes = BOARD_TTL_MINUTES, fetch = fetchBoardRows } = {}) {
+  const cached = readBoardCache({ dir });
+  const ageMs = cached?.fetchedAt ? now.getTime() - new Date(cached.fetchedAt).getTime() : null;
+  if (cached && ageMs !== null && ageMs >= 0 && ageMs < maxAgeMinutes * 60_000) {
+    return { reachable: true, rows: cached.rows, fetchedAt: cached.fetchedAt, stale: false };
+  }
+  const rows = fetch();
+  if (rows) {
+    const fresh = { fetchedAt: now.toISOString(), rows };
+    try {
+      writeBoardCache(fresh, { dir });
+    } catch {
+      /* a cache that cannot be written is a slow path, not a failure */
+    }
+    return { reachable: true, rows, fetchedAt: fresh.fetchedAt, stale: false };
+  }
+  if (cached) return { reachable: true, rows: cached.rows, fetchedAt: cached.fetchedAt ?? null, stale: true };
+  return { reachable: false, rows: [], fetchedAt: null, stale: false };
+}
+
+// ── liveness ─────────────────────────────────────────────────────────────────────────────────────
+// #216: a record must not outlive its process. The lease below records the claiming pid and the
+// conversation id; this decides whether the writer that took the folder is still there.
+//
+// TWO SIGNALS, AND ONLY ONE OF THEM CAN CONDEMN.
+//
+//   pid       — `process.ppid` at the moment the lease was written, i.e. the Claude process that
+//               spawned this hook (settings.json runs it as `node <file>`, so the parent IS the CLI).
+//               It can only ever promote a lease to "live". It is never allowed to condemn on its
+//               own: if that assumption about the parent were ever wrong, a live session would look
+//               dead the instant it was recorded, and the one-writer rule would quietly stop working.
+//   transcript— `~/.claude/projects/<mangled folder>/<sessionId>.jsonl`. A conversation that is
+//               running writes to it. This is what condemns: cold, or never written at all.
+//
+// #216's dead claimant had no process AND no transcript. It reads dead here in ~5 minutes instead
+// of holding the folder for twelve hours.
+
+export const LIVE_STALE_MINUTES = 30;
+/** A session that just started has not flushed a transcript yet. Below this, absence proves nothing. */
+export const LIVE_GRACE_MINUTES = 5;
+export const CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
+
+/** @returns {true|false|null} null = no pid to ask about. EPERM means it exists and is not ours. */
+export function pidAlive(pid) {
+  const n = Number(pid);
+  if (!Number.isInteger(n) || n <= 0) return null;
+  try {
+    process.kill(n, 0);
+    return true;
+  } catch (e) {
+    return e?.code === "EPERM";
+  }
+}
+
+/**
+ * When this conversation last wrote to its transcript, or null if it has none.
+ * The project folder name is a mangling of the path, so this scans rather than reconstructs it —
+ * a reconstruction that drifts with the CLI would silently report every session as dead.
+ */
+export function transcriptSeenAt(sessionId, { dir = CLAUDE_PROJECTS_DIR } = {}) {
+  if (!sessionId || !existsSync(dir)) return null;
+  let newest = null;
+  for (const name of readdirSync(dir)) {
+    try {
+      const st = statSync(join(dir, name, `${sessionId}.jsonl`));
+      if (newest === null || st.mtimeMs > newest) newest = st.mtimeMs;
+    } catch {
+      /* not this folder */
+    }
+  }
+  return newest === null ? null : new Date(newest).toISOString();
+}
+
+/**
+ * @returns {"none"|"live"|"dead"|"unknown"} — "unknown" is not "dead": it falls back to the lease's
+ * own clock, which is exactly the pre-#216 behaviour, applied only where nothing could be measured.
+ */
+export function livenessOf(lease, { alive = null, seenAt = null, now = new Date(), staleMinutes = LIVE_STALE_MINUTES, graceMinutes = LIVE_GRACE_MINUTES } = {}) {
+  if (!lease || lease === CORRUPT) return "none";
+  const since = seenAt ? now.getTime() - new Date(seenAt).getTime() : null;
+  if (since !== null && since < staleMinutes * 60_000) return "live";
+  if (alive === true) return "live";
+  if (since !== null) return "dead";
+  const age = (() => {
+    const at = lease.lastSeenAt ?? lease.firstSeenAt ?? lease.adoptedAt ?? null;
+    return at ? now.getTime() - new Date(at).getTime() : null;
+  })();
+  if (age !== null && age > graceMinutes * 60_000) return "dead";
+  return "unknown";
+}
+
+/** The IO half: measure the two signals for a lease. */
+export function observeLiveness(lease, { now = new Date(), projectsDir = CLAUDE_PROJECTS_DIR } = {}) {
+  if (!lease || lease === CORRUPT) return { liveness: "none", alive: null, seenAt: null };
+  const alive = pidAlive(lease.pid);
+  const seenAt = transcriptSeenAt(lease.sessionId, { dir: projectsDir });
+  return { liveness: livenessOf(lease, { alive, seenAt, now }), alive, seenAt };
+}
 
 // ── live facts ───────────────────────────────────────────────────────────────────────────────────
 
@@ -252,9 +459,11 @@ const git = (root, args) => {
  * never assumed to agree.
  */
 export function observeLive(root) {
-  if (!root) return { branch: null, repo: null };
+  if (!root) return { branch: null, repo: null, isWorktree: null };
+  const isWorktree = git(root, ["rev-parse", "--is-inside-work-tree"]) === "true";
   const branch = git(root, ["rev-parse", "--abbrev-ref", "HEAD"]);
   return {
+    isWorktree,
     // A detached HEAD has no branch name to compare; mid-rebase is not a wrong folder.
     branch: branch === "HEAD" ? null : branch,
     repo: normalizeRepo(git(root, ["remote", "get-url", "origin"])),
@@ -280,263 +489,226 @@ export function resolveSessionRoot({ env = process.env, hookInput = null, cwd = 
 
 const refuse = (code, reason, extra = {}) => ({ ok: false, code, reason, advisory: ADVISORY_CODES.has(code), ...extra });
 
-/** Root, branch, repository and window against one claimed identity. Shared by launch and resume. */
-function checkIdentity({ claim, resolved, cwd, env, live, what }) {
-  if (!samePath(resolved.root, claim.folder)) {
-    // The shell moved and the root did not: relative paths land correctly while settings, hooks and
-    // the context window all still come from the other folder. Different failure, different fix.
-    if (samePath(cwd, claim.folder)) {
-      return refuse(
-        "CD_WITHOUT_ROOT",
-        `The shell is in the claimed folder but Claude's real project root is ${resolved.root}. ` +
-          "Changing directories does not move the project root — settings, hooks and the context window " +
-          "still come from the other folder. Reopen the folder as the workspace root instead of cd-ing into it.",
-        { expected: claim.folder, actual: resolved.root, root: resolved.root },
-      );
-    }
-    return refuse(
-      "ROOT_MISMATCH",
-      `${what} ${claim.folder} but this session's root is ${resolved.root}. Stop before writing anything.`,
-      { expected: claim.folder, actual: resolved.root, root: resolved.root },
-    );
-  }
-
-  // An empty or whitespace variable is not a window of zero -- `Number("")` is 0, which is finite,
-  // and would have been compared as a real observation.
-  const rawWindow = env?.CLAUDE_CODE_AUTO_COMPACT_WINDOW;
-  const liveWindow = String(rawWindow ?? "").trim() === "" ? Number.NaN : Number(rawWindow);
-  // Unobserved is not "matches". The launcher establishes the tier and this hook is the only thing
-  // that confirms the session actually GOT it; when the variable is absent or unreadable there is no
-  // observation to compare, and reporting a verified session on a window nobody measured is the same
-  // class of error as claiming a launch that never happened. Ad-hoc sessions never reach here --
-  // they have no claim at all.
-  if (claim.window && !Number.isFinite(liveWindow)) {
-    return refuse(
-      "WINDOW_UNOBSERVED",
-      `${what.toLowerCase()} a ${claim.window} context window, but this session reports none ` +
-        "(CLAUDE_CODE_AUTO_COMPACT_WINDOW is unset or not a number), so there is nothing to check it against. " +
-        "Relaunch through the entrypoint so the tier is established and observable.",
-      { expected: claim.window, actual: rawWindow ?? null, root: resolved.root },
-    );
-  }
-  if (claim.window && Number.isFinite(liveWindow) && liveWindow !== claim.window) {
-    return refuse(
-      "WINDOW_MISMATCH",
-      `This session is running with a ${liveWindow} context window; ${what.toLowerCase()} ${claim.window}. ` +
-        "The window a session actually got is the only one that counts.",
-      { expected: claim.window, actual: liveWindow, root: resolved.root },
-    );
-  }
-
-  const notes = [];
-  if (claim.branch && live?.branch && live.branch !== claim.branch) {
-    return refuse(
-      "BRANCH_MISMATCH",
-      `${what} branch ${claim.branch}, but ${resolved.root} is on ${live.branch}. ` +
-        "The branch under the session is the branch the work lands on.",
-      { expected: claim.branch, actual: live.branch, root: resolved.root },
-    );
-  }
-  // Looked and could not read is NOT the same as did not look. When a real observation was taken and
-  // came back empty, the branch this session would write on is unknown -- and every resume claims to
-  // re-verify it. A note under a green verdict said "verified" about something nobody could see.
-  // `live === null` means no observation was attempted at all (a pure probe, `persist:false`), and
-  // that stays a note: it is the caller declining to measure, not a measurement that failed.
-  if (claim.branch && live && !live.branch) {
-    return refuse(
-      "BRANCH_UNREADABLE",
-      `${what} branch ${claim.branch}, but the live branch in ${resolved.root} could not be read. ` +
-        "An unknown branch is not a verified one, and this session would be writing on it.",
-      { expected: claim.branch, actual: null, root: resolved.root },
-    );
-  }
-  if (claim.branch && !live) notes.push(`the live branch was not observed (expected ${claim.branch})`);
-
-  if (claim.repo && live?.repo && live.repo !== claim.repo) {
-    return refuse(
-      "REPO_MISMATCH",
-      `${what} the ${claim.repo} repository, but ${resolved.root} points at ${live.repo}.`,
-      { expected: claim.repo, actual: live.repo, root: resolved.root },
-    );
-  }
-  if (claim.repo && live && !live.repo) {
-    return refuse(
-      "REPO_UNREADABLE",
-      `${what} the ${claim.repo} repository, but the origin of ${resolved.root} could not be read. ` +
-        "A folder that cannot say which repository it belongs to has not been verified as this one.",
-      { expected: claim.repo, actual: null, root: resolved.root },
-    );
-  }
-  if (claim.repo && !live) notes.push(`the live repository was not observed (expected ${claim.repo})`);
-
-  return { ok: true, notes };
-}
-
 /**
+ * VERIFICATION BY FACTS (#216, owner instruction 2026-08-25).
+ *
+ * A session is verified when three things are true of the folder it is actually rooted in, and none
+ * of them is a thing the launcher handed it:
+ *
+ *   1. it is a git work tree of THIS repository;
+ *   2. the board names it as the worktree for an issue, and the live branch is the board's branch
+ *      for that issue;
+ *   3. no OTHER conversation is live in it.
+ *
+ * That is the whole contract. There is no launch token in it, which is the point: a token can only
+ * be held by the one session the launcher started, so the owner's own tab — same folder, same
+ * branch, same issue — was refused as SESSION_FOREIGN and then locked out for twelve hours by a
+ * claimant that had already died. Facts do not have that failure mode. Any Claude tab in the right
+ * folder verifies; the launcher's remaining job is creating the folder, not admitting sessions.
+ *
  * @returns {{ok: boolean, mode?: "launch"|"resume", code?: string, reason?: string, advisory?: boolean,
  *            expected?: any, actual?: any, root?: string, issue?: any, branch?: any, notes?: string[]}}
  */
 export function assertSessionRoot({
-  token,
-  lineage = null,
+  board,
+  lease = null,
+  live = null,
   env = process.env,
   hookInput = null,
   cwd = process.cwd(),
   now = new Date(),
-  live = null,
+  leaseLiveness = "unknown",
+  sessionId = null,
 }) {
   const resolved = resolveSessionRoot({ env, hookInput, cwd });
-  const expiredAt = (iso) => Boolean(iso) && new Date(iso) < now;
+  const me = sessionId ?? hookInput?.session_id ?? null;
+  const notes = [];
 
-  // An artifact that exists and cannot be read has destroyed the evidence this hook was going to
-  // verify against. Failing open there turns a damaged launch record into a silent pass.
-  if (token === CORRUPT) {
+  if (lease === CORRUPT) {
     return refuse(
-      "TOKEN_CORRUPT",
-      "The launch record exists but could not be read. Something wrote it partially or damaged it, so " +
-        "there is no way to tell which folder, branch or window this session was launched for. " +
-        "Relaunch through the entrypoint to write a fresh one.",
-      { root: resolved.root },
-    );
-  }
-  if (lineage === CORRUPT) {
-    return refuse(
-      "LINEAGE_CORRUPT",
-      `This folder's session record exists but could not be read, so nothing about ${resolved.root} is verified. ` +
-        "Relaunch through the entrypoint to establish it again.",
+      "LEASE_CORRUPT",
+      `${resolved.root} has a writer lease that exists and cannot be read, so there is no way to tell ` +
+        "which conversation holds it. Delete it deliberately if it is yours; guessing would be adoption by demolition.",
       { root: resolved.root },
     );
   }
 
-  const ours = lineage && resolved.observed && samePath(lineage.folder, resolved.root) && !expiredAt(lineage.expiresAt);
-  const pending = Boolean(token) && !claimedAtOf(token) && !expiredAt(token.expiresAt);
-
-  // A launch pending for ANOTHER folder is not this session's business when this folder already has
-  // its own established lineage — Kuya starting a second task must not STOP the first one's window.
-  // Without a lineage to stand on, a pending launch elsewhere is still a wrong-root refusal.
-  const answerToLaunch = pending && (samePath(resolved.root, token.folder) || !ours);
-
-  // ── a launch waiting to be taken up ────────────────────────────────────────────────────────────
-  if (answerToLaunch) {
-    if (!resolved.observed) {
-      return refuse(
-        "ROOT_UNOBSERVED",
-        "The real project root could not be observed (CLAUDE_PROJECT_DIR unset and no hook payload). " +
-          "Inferring it from the working directory is the exact mistake this guard exists to catch, so this fails closed.",
-        { root: resolved.root },
-      );
-    }
-    const verdict = checkIdentity({ claim: token, resolved, cwd, env, live, what: "The launch claimed" });
-    if (!verdict.ok) return verdict;
-
-    // When the launcher assigned the conversation id (`--session-id`), the session that takes the
-    // launch up must be that conversation. Otherwise a window that happened to be open in the folder
-    // could answer a launch meant for the one the launcher started.
-    const liveSession = hookInput?.session_id ?? null;
-    if (token.sessionId && liveSession && token.sessionId !== liveSession) {
-      return refuse(
-        "SESSION_FOREIGN",
-        "This launch was started for a different conversation than the one answering it. " +
-          "The launcher names the session it starts, and only that session may take up its launch.",
-        { expected: token.sessionId, actual: liveSession, root: resolved.root },
-      );
-    }
-
-    return {
-      ok: true,
-      mode: "launch",
-      root: resolved.root,
-      source: resolved.source,
-      issue: token.issue,
-      branch: token.branch,
-      window: token.window,
-      repo: token.repo ?? null,
-      briefHash: token.briefHash ?? null,
-      notes: verdict.notes,
-    };
-  }
-
-  // ── an established lineage carrying on ─────────────────────────────────────────────────────────
-  if (lineage && resolved.observed) {
-    if (!samePath(lineage.folder, resolved.root)) {
-      return refuse(
-        "LINEAGE_FOREIGN",
-        `The session record found for ${resolved.root} says it belongs to ${lineage.folder}. ` +
-          "A record that has been moved, copied or renamed underneath a folder verifies nothing.",
-        { expected: resolved.root, actual: lineage.folder, root: resolved.root },
-      );
-    }
-    if (expiredAt(lineage.expiresAt)) {
-      return refuse(
-        "LINEAGE_EXPIRED",
-        `This folder's session record lapsed at ${lineage.expiresAt} (last seen ${lineage.lastSeenAt}). ` +
-          "Relaunch from the entrypoint to verify the folder, branch and claim again.",
-        { root: resolved.root },
-      );
-    }
-    const verdict = checkIdentity({ claim: lineage, resolved, cwd, env, live, what: "This folder's session was launched on" });
-    if (!verdict.ok) return verdict;
-
-    // The clause that makes this a SESSION lineage rather than a folder one. Same root, same branch,
-    // same repo and same window describe the FOLDER; they say nothing about which conversation is
-    // running in it. A brand-new Claude process started in a verified folder used to inherit the
-    // whole authorization -- 12 hours of it, sliding forward on every sighting. It now has to be the
-    // conversation the record was bound to.
-    //
-    // An extension restart that genuinely resumes keeps its id, so it still passes. A record from
-    // before ids were bound has none, and is carried rather than broken.
-    const liveSession = hookInput?.session_id ?? null;
-    if (lineage.sessionId && liveSession && lineage.sessionId !== liveSession) {
-      return refuse(
-        "SESSION_FOREIGN",
-        `${resolved.root} has a verified session record, but it belongs to a different conversation. ` +
-          "A new session in a verified folder does not inherit the folder's authorization — relaunch through the entrypoint.",
-        { expected: lineage.sessionId, actual: liveSession, root: resolved.root },
-      );
-    }
-
-    return {
-      ok: true,
-      mode: "resume",
-      root: resolved.root,
-      source: resolved.source,
-      issue: lineage.issue,
-      branch: lineage.branch,
-      window: lineage.window,
-      repo: lineage.repo ?? null,
-      briefHash: lineage.briefHash ?? null,
-      notes: verdict.notes,
-    };
-  }
-
-  // ── nothing to check against ───────────────────────────────────────────────────────────────────
-  if (token && !claimedAtOf(token) && expiredAt(token.expiresAt)) {
-    return refuse("TOKEN_EXPIRED", `The launch token expired at ${token.expiresAt}. Relaunch from the entrypoint.`);
-  }
-  // A launch that WAS made for this folder, taken up, and whose session record is gone. Saying "this
-  // session was not started through the entrypoint" here is simply false -- it is what the upgraded
-  // hook told a live #23 session at the 07:16Z compaction, about a session the entrypoint had
-  // launched. The session is still unverified and this is still advisory, but the reason it gives is
-  // now the true one, and it names the way back.
-  if (token && claimedAtOf(token) && resolved.observed && samePath(resolved.root, token.folder)) {
+  if (!board || board.reachable === false) {
     return refuse(
-      "LAUNCH_SPENT",
-      `This folder's launch was already taken up at ${claimedAtOf(token)} and its session record is gone, ` +
-        "so this session is unverified. Relaunch through the entrypoint to verify it again.",
-      { root: resolved.root, issue: token.issue },
+      "BOARD_UNREACHABLE",
+      "Work Control could not be read, so there is no fact saying which issue this folder is working " +
+        "or on which branch. Unreachable is not the same as unclaimed, so nothing is asserted either way.",
+      { root: resolved.root },
+    );
+  }
+  if (board.stale) notes.push(`the board answer is cached from ${board.fetchedAt} (the live read failed)`);
+
+  const here = rowsFor(board.rows, resolved.root);
+
+  if (here.length === 0) {
+    // The shell moved and the root did not: relative paths land correctly while settings, hooks and
+    // the context window all still come from the other folder. Different failure, different fix.
+    if (resolved.observed && !samePath(cwd, resolved.root) && rowsFor(board.rows, cwd).length > 0) {
+      return refuse(
+        "CD_WITHOUT_ROOT",
+        `The shell is in a folder the board claims, but Claude's real project root is ${resolved.root}. ` +
+          "Changing directories does not move the project root — settings, hooks and the context window " +
+          "still come from the other folder. Reopen the folder as the workspace root instead of cd-ing into it.",
+        { expected: canonicalizePath(cwd), actual: resolved.root, root: resolved.root },
+      );
+    }
+    return refuse(
+      "FOLDER_UNCLAIMED",
+      `No issue on Work Control names ${resolved.root} as its worktree, so there is no claim, branch or ` +
+        "task to check this session against. A session with nothing to check is not a verified session.",
+      { root: resolved.root },
     );
   }
 
-  return refuse(
-    "NO_TOKEN",
-    "No launch pending for this folder and no session record in it, so nothing verified that its " +
-      "folder, branch and settings match a claim. A session with nothing to check is not a verified session.",
-  );
+  if (!resolved.observed) {
+    return refuse(
+      "ROOT_UNOBSERVED",
+      "The real project root could not be observed (CLAUDE_PROJECT_DIR unset and no hook payload). " +
+        "Inferring it from the working directory is the exact mistake this guard exists to catch, so this fails closed.",
+      { root: resolved.root },
+    );
+  }
+
+  if (here.length > 1) {
+    return refuse(
+      "FOLDER_AMBIGUOUS",
+      `Work Control names ${resolved.root} on more than one issue (#${here.map((r) => r.issue).join(", #")}). ` +
+        "Collision rule 4 — unknown means locked: one folder answers to one issue, so fix the board before writing.",
+      { actual: here.map((r) => r.issue), root: resolved.root },
+    );
+  }
+
+  const row = here[0];
+
+  if (!live) {
+    return refuse(
+      "FACTS_UNOBSERVED",
+      `The board says ${resolved.root} is the worktree for #${row.issue}, but nothing measured what the ` +
+        "folder actually is. An unmeasured folder is not a verified one.",
+      { root: resolved.root, issue: row.issue },
+    );
+  }
+  if (live.isWorktree === false) {
+    return refuse(
+      "NOT_A_WORKTREE",
+      `The board names ${resolved.root} as the worktree for #${row.issue}, but git does not call it a work ` +
+        "tree at all — so it has no branch and no remote, and nothing here can be verified.",
+      { root: resolved.root, issue: row.issue },
+    );
+  }
+  if (!live.repo) {
+    return refuse(
+      "REPO_UNREADABLE",
+      `The origin of ${resolved.root} could not be read. A folder that cannot say which repository it ` +
+        "belongs to has not been verified as this one.",
+      { expected: EXPECTED_REPO, actual: null, root: resolved.root, issue: row.issue },
+    );
+  }
+  if (live.repo !== EXPECTED_REPO) {
+    return refuse(
+      "REPO_MISMATCH",
+      `Work Control claims ${resolved.root} for #${row.issue} in ${EXPECTED_REPO}, but that folder points ` +
+        `at ${live.repo}.`,
+      { expected: EXPECTED_REPO, actual: live.repo, root: resolved.root, issue: row.issue },
+    );
+  }
+  if (!live.branch) {
+    return refuse(
+      "BRANCH_UNREADABLE",
+      `The board puts #${row.issue} on ${row.branch} in ${resolved.root}, but the live branch there could ` +
+        "not be read (a detached HEAD, or a rebase in progress). An unknown branch is not a verified one, " +
+        "and this session would be writing on it.",
+      { expected: row.branch, actual: null, root: resolved.root, issue: row.issue },
+    );
+  }
+  if (live.branch !== row.branch) {
+    return refuse(
+      "BRANCH_NOT_THE_BOARDS",
+      `Work Control puts #${row.issue} on ${row.branch}, but ${resolved.root} is on ${live.branch}. ` +
+        "The branch under the session is the branch the work lands on — move the branch, or move the board.",
+      { expected: row.branch, actual: live.branch, root: resolved.root, issue: row.issue },
+    );
+  }
+
+  // ── the one-writer rule ────────────────────────────────────────────────────────────────────────
+  // The lease is no longer an authorization — it authorizes nobody and admits nobody. Its only job
+  // is exclusion: it names the conversation currently writing here so a second one does not join it.
+  const foreign = lease && lease.sessionId && lease.sessionId !== me;
+  if (foreign && leaseLiveness === "live") {
+    return refuse(
+      "WRITER_LIVE",
+      `${resolved.root} is already being written by another conversation ` +
+        `(session ${String(lease.sessionId).slice(0, 8)}…, still live). One writer per worktree — use a ` +
+        "different worktree, or close that one.",
+      { expected: me, actual: lease.sessionId, root: resolved.root, issue: row.issue },
+    );
+  }
+  if (foreign && leaseLiveness === "unknown" && !(lease.expiresAt && new Date(lease.expiresAt) < now)) {
+    return refuse(
+      "WRITER_UNKNOWN",
+      `${resolved.root} has a lease held by another conversation (session ${String(lease.sessionId).slice(0, 8)}…) ` +
+        "and nothing could measure whether it is still running. Collision rule 4 — unknown means locked.",
+      { expected: me, actual: lease.sessionId, root: resolved.root, issue: row.issue },
+    );
+  }
+  if (foreign && leaseLiveness === "dead") {
+    notes.push(`took the folder over from session ${String(lease.sessionId).slice(0, 8)}…, whose process is gone`);
+  }
+
+  const rawWindow = String(env?.CLAUDE_CODE_AUTO_COMPACT_WINDOW ?? "").trim();
+  const window = rawWindow === "" || !Number.isFinite(Number(rawWindow)) ? null : Number(rawWindow);
+  if (window === null) notes.push("no context window observed, so none is recorded");
+
+  return {
+    ok: true,
+    // "launch" is the first start of this conversation in this folder; "resume" is any later one.
+    // The distinction only chooses which opening line the brief hands over.
+    mode: lease && me && lease.sessionId === me ? "resume" : "launch",
+    root: resolved.root,
+    source: resolved.source,
+    issue: row.issue,
+    branch: live.branch,
+    window,
+    repo: live.repo,
+    briefHash: lease && lease.issue === row.issue ? (lease.briefHash ?? null) : null,
+    sessionId: me,
+    notes,
+  };
+}
+
+/** The writer lease this verdict earns — the exclusion record, carrying the pid that holds it. */
+export function leaseFor(result, { lease = null, now = new Date(), pid = process.ppid, token = null }) {
+  const same = lease && lease.sessionId && lease.sessionId === result.sessionId;
+  return {
+    issue: result.issue,
+    folder: canonicalizePath(result.root),
+    branch: result.branch,
+    window: result.window ?? null,
+    repo: result.repo ?? null,
+    sessionId: result.sessionId ?? null,
+    // #216: the record must not outlive the process. This is what makes a dead claim readable AS dead.
+    pid: Number.isInteger(pid) && pid > 0 ? pid : null,
+    // Carried from the launcher's handshake when this start took one up, so the brief digest and the
+    // ide-bridge's "did my window come up" question both keep working. Neither admits a session.
+    nonce: token?.nonce ?? (same ? (lease.nonce ?? null) : null),
+    briefHash: token?.briefHash ?? (same ? (lease.briefHash ?? null) : null),
+    launchedAt: token?.issuedAt ?? (same ? (lease.launchedAt ?? null) : null),
+    firstSeenAt: same ? (lease.firstSeenAt ?? now.toISOString()) : now.toISOString(),
+    lastSeenAt: now.toISOString(),
+    seenCount: same ? (lease.seenCount ?? 0) + 1 : 1,
+    expiresAt: new Date(now.getTime() + LINEAGE_TTL_MINUTES * 60_000).toISOString(),
+  };
 }
 
 /**
- * The IO shell: read the records, take the verdict, then persist exactly what the verdict earned.
- * `persist: false` makes it a pure diagnostic — `compy-entry assert` must not claim a launch.
+ * The IO shell: measure the facts, take the verdict, then record exactly what the verdict earned.
+ * `persist: false` makes it a pure diagnostic — the write guard asks this on every single write and
+ * must not take the folder just by asking about it.
  */
 export function verifySession({
   dir = TOKEN_DIR,
@@ -545,23 +717,37 @@ export function verifySession({
   cwd = process.cwd(),
   now = new Date(),
   live = null,
+  board = null,
   persist = true,
 } = {}) {
   const resolved = resolveSessionRoot({ env, hookInput, cwd });
-  const token = readToken({ dir });
-  const lineage = resolved.observed ? readLineage({ root: resolved.root, dir }) : null;
+  const lease = resolved.observed ? readLineage({ root: resolved.root, dir }) : null;
   const facts = live ?? observeLive(resolved.observed ? resolved.root : null);
+  const rows = board ?? boardFacts({ dir, now });
+  const { liveness } = observeLiveness(lease, { now });
 
-  const result = assertSessionRoot({ token, lineage, env, hookInput, cwd, now, live: facts });
+  const result = assertSessionRoot({
+    board: rows,
+    lease,
+    live: facts,
+    env,
+    hookInput,
+    cwd,
+    now,
+    leaseLiveness: liveness,
+  });
   if (!persist) return result;
 
-  if (result.ok && result.mode === "launch") {
-    writeLineage(lineageFromLaunch({ token, root: result.root, now, sessionId: hookInput?.session_id ?? null }), { dir });
-    claimToken({ dir }, now);
-  } else if (result.ok && result.mode === "resume") {
-    writeLineage(touchLineage(lineage, now), { dir });
-  } else if (result.code === "LINEAGE_EXPIRED") {
-    removeLineage({ root: resolved.root, dir });
+  if (result.ok) {
+    // The launch handshake, if one is pending for this folder. It admits nobody — it only lets the
+    // launcher's own `wait` learn that a window came up, and carries the brief digest across.
+    const token = readToken({ dir });
+    const pending =
+      token && token !== CORRUPT && !claimedAtOf(token) && samePath(token.folder ?? "", result.root) && !(token.expiresAt && new Date(token.expiresAt) < now)
+        ? token
+        : null;
+    writeLineage(leaseFor(result, { lease: lease === CORRUPT ? null : lease, now, token: pending }), { dir });
+    if (pending) claimToken({ dir }, now);
   }
   sweepLineage({ dir, now });
 
@@ -571,38 +757,24 @@ export function verifySession({
 // ── severity ─────────────────────────────────────────────────────────────────────────────────────
 
 /**
- * Refusals that mean "there is nothing live to disagree with" rather than "something is wrong".
- * A session that was never launched through the entrypoint is a normal session, not a broken one.
+ * Refusals that mean "there is nothing to disagree with" rather than "something is wrong".
+ * A folder no issue claims is a normal folder, not a broken one — the main checkout is one.
  *
- * The set is stored SPLIT (#125 step 1, spec docs/superpowers/specs/
- * 2026-08-21-unverified-session-write-refusal.md §1b) because the two halves are not one case, and a
- * consumer that cannot tell them apart writes the wrong rule:
+ * The set stays SPLIT (#125 step 1) because the two halves are not one case and the write guard's
+ * cure differs:
  *
- *   UNVERIFIABLE — nothing was ever verified for this folder. There is no branch, no issue, no
- *                  session id on disk to check anything against; the session is not wrong, it is
- *                  unknown.
- *   LAPSED       — a launch DID happen and its clock ran out. Folder, branch, issue and session id
- *                  survive on disk, which makes "just re-verify against what is there" look safe.
- *                  It is not: §2 measured the live token against the session doing the work and it
- *                  disagreed on branch, session id AND issue, because the honest sessions are
- *                  exactly the ones whose branch and issue legitimately moved on. A rule that only
- *                  passes sessions that changed nothing does not pass the sessions doing the work.
- *
- * `SessionStart` treats both alike and always has — this is data, not a behaviour change. The
- * consumer that needs the distinction is the project-write refusal (step 3), whose cure differs:
- * an UNVERIFIABLE session adopts with an issue it must supply, a LAPSED one can be offered the
- * issue already on disk.
+ *   UNVERIFIABLE — nothing says what this folder is for. There is no issue and no branch to check
+ *                  anything against; the session is not wrong, it is unknown.
+ *   LAPSED       — a fact existed and could not be read this time. Retrying is the cure, not adopting.
  */
-export const UNVERIFIABLE_CODES = new Set(["NO_TOKEN"]);
-export const LAPSED_CODES = new Set(["TOKEN_EXPIRED", "LINEAGE_EXPIRED", "LAUNCH_SPENT"]);
+export const UNVERIFIABLE_CODES = new Set(["FOLDER_UNCLAIMED"]);
+export const LAPSED_CODES = new Set(["BOARD_UNREACHABLE"]);
 export const ADVISORY_CODES = new Set([...UNVERIFIABLE_CODES, ...LAPSED_CODES]);
 
-/** One line each — this prints on every session that has no token, so it must not be a wall of text. */
+/** One line each — this prints on every session in an unclaimed folder, so it must not be a wall. */
 const ADVISORY_LINES = {
-  NO_TOKEN: "compy-entry: no launch token — this session was not started through the entrypoint, so its folder, branch and claim are unverified.",
-  TOKEN_EXPIRED: "compy-entry: the launch token has expired — this session is unverified.",
-  LINEAGE_EXPIRED: "compy-entry: this folder's session record has lapsed — this session is unverified until you relaunch from the entrypoint.",
-  LAUNCH_SPENT: "compy-entry: this folder's launch was already taken up and its session record is gone — this session is unverified until you relaunch from the entrypoint.",
+  FOLDER_UNCLAIMED: "compy-entry: no issue on Work Control claims this folder — its branch and task are unverified.",
+  BOARD_UNREACHABLE: "compy-entry: Work Control could not be read — this session is unverified until it can be.",
 };
 
 /**
@@ -632,8 +804,7 @@ export function verdictFor(result) {
       `compy-entry: STOP — ${result?.code ?? "UNKNOWN"}`,
       result?.reason ?? "",
       "",
-      "This session does not match the claim it was launched under. Do not write anything.",
-      "Close this window and relaunch from the Compy entrypoint.",
+      "This session does not match the facts of the folder it is in. Do not write anything.",
       "",
     ].join("\n"),
   };

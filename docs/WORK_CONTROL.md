@@ -164,6 +164,14 @@ branch belong in the issue claim. Read-only reviewers may inspect a writer workt
 7. **No chat-only handoff.** A session is not handed off until the issue records evidence, remaining
    work, and the exact next action.
 
+**The local writer lease is not the claim** (#216, 2026-08-25). Every verified session takes a
+per-folder record under `%LOCALAPPDATA%\CompyEntry\sessions\` naming the conversation writing there
+and its pid. It enforces rule 2 between windows on this machine and nothing else. A lease whose
+conversation is provably gone — no process, no transcript — **lapses and may be taken over**, and the
+takeover is disclosed in the session's own output; a lease that is live, or that nothing could
+measure, still locks the folder (rule 4). Rule 5 is untouched by this: the 12-hour **board** claim is
+never taken over on a clock or on a dead pid, only with the evidence and takeover note it requires.
+
 ## Windows-session collision guards
 
 The Project claim and linked issue remain authoritative. The Windows named mutexes below enforce

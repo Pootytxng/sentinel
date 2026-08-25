@@ -87,6 +87,9 @@ describe("adopt — the five assertions a launch makes, made by hand", () => {
   it("refuses a folder a different conversation still holds (one writer per worktree)", () => {
     const r = planAdoption(
       facts({
+        // #216: it is the LIVENESS of that conversation that refuses, not its clock — a record whose
+        // process is gone lapses however long it had left. writer-contention.test.mjs owns that pair.
+        liveness: "live",
         existing: {
           folder: FOLDER,
           sessionId: OTHER_SESSION,
@@ -194,16 +197,18 @@ describe("adopt — a real adoption in a throwaway worktree is accepted by the a
     });
     expect(r.ok, r.reason).toBe(true);
 
-    // The point of the whole exercise: the assert must now treat this session as verified, without
-    // any token, purely on the record adoption wrote.
+    // The point of the whole exercise: with the board naming this folder for #125, the assert reads
+    // the adopted lease as this conversation resuming rather than as a stranger arriving.
+    const board = { reachable: true, rows: [{ issue: 125, folder: assert.canonicalizePath(repo), branch: "lane/adopt-fixture" }] };
     const verdict = assert.assertSessionRoot({
-      token: null,
-      lineage: assert.readLineage({ root: repo, dir: store }),
+      board,
+      lease: assert.readLineage({ root: repo, dir: store }),
       env: { CLAUDE_PROJECT_DIR: repo },
       hookInput: { session_id: SESSION },
       cwd: repo,
       now: new Date("2026-08-22T13:00:00Z"),
       live: assert.observeLive(repo),
+      leaseLiveness: "live",
     });
     expect(verdict.ok, verdict.reason).toBe(true);
     expect(verdict.mode).toBe("resume");
@@ -211,18 +216,20 @@ describe("adopt — a real adoption in a throwaway worktree is accepted by the a
     expect(assert.verdictFor(verdict).exit).toBe(0);
   });
 
-  it("and a DIFFERENT conversation in that same folder is still refused", () => {
+  it("and a DIFFERENT conversation in that same folder is still refused while this one is live", () => {
+    const board = { reachable: true, rows: [{ issue: 125, folder: assert.canonicalizePath(repo), branch: "lane/adopt-fixture" }] };
     const verdict = assert.assertSessionRoot({
-      token: null,
-      lineage: assert.readLineage({ root: repo, dir: store }),
+      board,
+      lease: assert.readLineage({ root: repo, dir: store }),
       env: { CLAUDE_PROJECT_DIR: repo },
       hookInput: { session_id: OTHER_SESSION },
       cwd: repo,
       now: new Date("2026-08-22T13:00:00Z"),
       live: assert.observeLive(repo),
+      leaseLiveness: "live",
     });
     expect(verdict.ok).toBe(false);
-    expect(verdict.code).toBe("SESSION_FOREIGN");
-    expect(assert.verdictFor(verdict).exit).toBe(2); // adoption does not weaken the foreign-session stop
+    expect(verdict.code).toBe("WRITER_LIVE");
+    expect(assert.verdictFor(verdict).exit).toBe(2); // adoption does not weaken the one-writer rule
   });
 });

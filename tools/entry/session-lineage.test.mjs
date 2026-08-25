@@ -7,16 +7,20 @@
 // a resuming session asks is "am I the session that was launched". Those are different questions, and
 // only the second one is about correctness.
 //
-// So the token becomes a two-part record: a PENDING LAUNCH (claimed exactly once, by the first
-// session in the right root) and a per-root LINEAGE (which that claim establishes, and which any
-// later SessionStart in that same root may resume until it goes stale). Resumability is not a
-// loosening: every resume re-verifies root, branch, repository and window against the live machine,
-// which is strictly MORE than the old contract checked — `token.branch` was recorded and never
-// looked at.
+// #216 FINISHED THAT ARGUMENT BY REMOVING ITS SUBJECT. If a session's right to be here is measured
+// from the folder rather than handed to it, there is nothing to consume and nothing to run out.
+// Verification is now three facts — a work tree of this repository, on the branch Work Control put
+// the issue on — and the per-folder record survives with ONE job left: exclusion. It is a WRITER
+// LEASE. It says who is writing here so a second conversation does not join them; it admits nobody,
+// it authorizes nobody, and losing it makes a session ordinary rather than unverified.
 //
-// Guard 10 is the other half. Resume must not become a way in: a record belongs to one folder, one
-// branch, one repository and one task, and a session that does not match all four is refused, no
-// matter how legitimately that record was created.
+// Guard 9 is therefore about continuity: compaction and extension restarts must stay verified and
+// keep the same lease rather than starting a new one. Guard 10 is the other half and is the reason
+// the lease is not a loophole: it cannot let a session into a folder whose facts disagree, and a
+// lease that goes stale is swept rather than left to rot.
+//
+// Every case here injects the board. Reading it live would make this suite slow, networked, and
+// dependent on what the queue happens to look like today.
 
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -39,12 +43,14 @@ const OTHER = "C:\\Users\\Kuya\\code\\sentinel-rel";
 const BRANCH = "tooling/start-work-marathon";
 const REPO = "pootytxng/sentinel";
 const WINDOW = 300000;
+const ME = "11111111-1111-4111-8111-111111111111";
 
 let dir;
 const at = (iso) => new Date(iso);
 const T0 = "2026-07-31T10:00:00.000Z";
 
-const live = (over = {}) => ({ branch: BRANCH, repo: REPO, ...over });
+const live = (over = {}) => ({ isWorktree: true, branch: BRANCH, repo: REPO, ...over });
+const board = (rows = [{ issue: 23, folder: FOLDER, branch: BRANCH }]) => ({ reachable: true, stale: false, rows });
 
 const launch = (over = {}) =>
   writeToken(
@@ -52,7 +58,7 @@ const launch = (over = {}) =>
     { dir },
   );
 
-/** One SessionStart, as the hook sees it: which root, which live facts, when. */
+/** One SessionStart, as the hook sees it: which root, which live facts, when, and whose. */
 const sessionStart = (over = {}) =>
   verifySession({
     dir,
@@ -60,6 +66,8 @@ const sessionStart = (over = {}) =>
     cwd: FOLDER,
     now: at(T0),
     live: live(),
+    board: board(),
+    hookInput: { session_id: ME },
     ...over,
   });
 
@@ -69,7 +77,7 @@ beforeEach(() => {
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 describe("guard 9 — compaction and extension restarts stay verified", () => {
-  it("claims the launch on the first SessionStart and establishes a lineage", () => {
+  it("verifies the first start and takes the folder's writer lease", () => {
     launch();
     const first = sessionStart();
 
@@ -81,7 +89,7 @@ describe("guard 9 — compaction and extension restarts stay verified", () => {
     expect(record).toMatchObject({ issue: 23, branch: BRANCH, window: WINDOW, repo: REPO, seenCount: 1 });
   });
 
-  it("RESUMES the same lineage after compaction instead of calling it unverified", () => {
+  it("RESUMES the same lease after compaction instead of calling it unverified", () => {
     launch();
     sessionStart();
 
@@ -105,7 +113,7 @@ describe("guard 9 — compaction and extension restarts stay verified", () => {
     expect(new Date(record.expiresAt).getTime()).toBe(at("2026-07-31T19:00:00.000Z").getTime() + LINEAGE_TTL_MINUTES * 60_000);
   });
 
-  it("still marks the token consumed, so an older hook in an unmerged worktree keeps quiet", () => {
+  it("still marks the launch token consumed, so an older hook in an unmerged worktree keeps quiet", () => {
     launch();
     sessionStart();
 
@@ -117,41 +125,48 @@ describe("guard 9 — compaction and extension restarts stay verified", () => {
     expect(token.consumedAt).toBe(token.claimedAt);
   });
 
-  it("expires deterministically once nothing has been seen for the lineage lifetime", () => {
+  // The reversal that closes #216. A lease that has gone stale used to END the session's
+  // verification (LINEAGE_EXPIRED); it now ends the session's HOLD on the folder and nothing else,
+  // because the facts that verify the session are still true and were never in the lease.
+  it("stays verified once the lease goes stale — the hold lapses, the session does not", () => {
     launch();
     sessionStart();
 
     const stale = sessionStart({ now: at("2026-08-02T10:00:00.000Z") });
 
-    expect(stale.ok).toBe(false);
-    expect(stale.code).toBe("LINEAGE_EXPIRED");
-    expect(stale.advisory).toBe(true);
-    expect(readLineage({ root: FOLDER, dir })).toBeNull(); // cleaned up, not left to rot
+    expect(stale.ok).toBe(true);
+    expect(stale.issue).toBe(23);
+    // The same conversation simply retakes the folder and its record continues; expiry is about who
+    // may hold the folder, and an expired hold no longer excludes anyone.
+    const record = readLineage({ root: FOLDER, dir });
+    expect(new Date(record.expiresAt) > at("2026-08-02T10:00:00.000Z")).toBe(true);
+  });
+
+  it("sweeps a lease that expired in a folder nothing came back to", () => {
+    launch();
+    sessionStart();
+    // A different folder's start, long after: the sweep runs on every verify, not only on its own.
+    sessionStart({
+      env: { CLAUDE_PROJECT_DIR: OTHER },
+      cwd: OTHER,
+      live: live({ branch: "main" }),
+      now: at("2026-08-02T10:00:00.000Z"),
+    });
+    expect(readLineage({ root: FOLDER, dir })).toBeNull();
   });
 });
 
-describe("guard 10 — a lineage is not a way in", () => {
-  it("refuses a session in another root while the launch is still pending", () => {
+describe("guard 10 — the lease is not a way in", () => {
+  it("does not verify a session in a folder no issue on the board claims", () => {
     launch();
-    const r = sessionStart({ env: { CLAUDE_PROJECT_DIR: OTHER }, cwd: OTHER });
-
-    expect(r.ok).toBe(false);
-    expect(r.code).toBe("ROOT_MISMATCH");
-    expect(r.advisory).toBe(false);
-  });
-
-  it("leaves unrelated sessions alone once the launch has been claimed", () => {
-    launch();
-    sessionStart();
-
-    // Kuya's ad-hoc window in another checkout. Nothing is pending, nothing is its lineage.
     const r = sessionStart({ env: { CLAUDE_PROJECT_DIR: OTHER }, cwd: OTHER, live: live({ branch: "main" }) });
 
-    expect(r.code).toBe("NO_TOKEN");
-    expect(r.advisory).toBe(true);
+    expect(r.ok).toBe(false);
+    expect(r.code).toBe("FOLDER_UNCLAIMED");
+    expect(r.advisory).toBe(true); // Kuya's ad-hoc window in another checkout is not an error
   });
 
-  it("refuses a lineage record that names a different folder than the session it is verifying", () => {
+  it("a lease copied into another folder's slot admits nothing, because it was never the authority", () => {
     launch();
     sessionStart();
 
@@ -162,20 +177,20 @@ describe("guard 10 — a lineage is not a way in", () => {
 
     const r = sessionStart({ env: { CLAUDE_PROJECT_DIR: OTHER }, cwd: OTHER });
     expect(r.ok).toBe(false);
-    expect(r.code).toBe("LINEAGE_FOREIGN");
+    expect(r.code).toBe("FOLDER_UNCLAIMED");
   });
 
-  it("refuses a resume whose live branch is not the branch that was launched", () => {
+  it("refuses when the live branch is not the branch the board put the issue on", () => {
     launch();
     sessionStart();
 
     const r = sessionStart({ live: live({ branch: "main" }), now: at("2026-07-31T11:00:00.000Z") });
     expect(r.ok).toBe(false);
-    expect(r.code).toBe("BRANCH_MISMATCH");
+    expect(r.code).toBe("BRANCH_NOT_THE_BOARDS");
     expect(r.reason).toContain("main");
   });
 
-  it("refuses a resume in a different repository", () => {
+  it("refuses a folder pointing at a different repository", () => {
     launch();
     sessionStart();
 
@@ -184,7 +199,7 @@ describe("guard 10 — a lineage is not a way in", () => {
     expect(r.code).toBe("REPO_MISMATCH");
   });
 
-  it("refuses a resume whose live context window is not the one the launch resolved", () => {
+  it("records a changed context window rather than refusing over it (#216)", () => {
     launch();
     sessionStart();
 
@@ -192,26 +207,29 @@ describe("guard 10 — a lineage is not a way in", () => {
       env: { CLAUDE_PROJECT_DIR: FOLDER, CLAUDE_CODE_AUTO_COMPACT_WINDOW: "150000" },
       now: at("2026-07-31T11:00:00.000Z"),
     });
-    expect(r.ok).toBe(false);
-    expect(r.code).toBe("WINDOW_MISMATCH");
+    expect(r.ok).toBe(true);
+    expect(r.window).toBe(150000);
+    expect(readLineage({ root: FOLDER, dir }).window).toBe(150000);
   });
 
-  it("lets a new launch supersede an old lineage, and reports the NEW task", () => {
+  it("follows the board when the board moves the folder to another issue", () => {
     launch();
     sessionStart();
 
-    launch({ issue: 24, branch: "tooling/next", nonce: "n2", now: at("2026-07-31T11:00:00.000Z") });
-    const r = sessionStart({ live: live({ branch: "tooling/next" }), now: at("2026-07-31T11:01:00.000Z") });
+    const r = sessionStart({
+      board: board([{ issue: 24, folder: FOLDER, branch: "tooling/next" }]),
+      live: live({ branch: "tooling/next" }),
+      now: at("2026-07-31T11:01:00.000Z"),
+    });
 
     expect(r.ok).toBe(true);
-    expect(r.mode).toBe("launch");
     expect(r.issue).toBe(24);
-    expect(readLineage({ root: FOLDER, dir })).toMatchObject({ issue: 24, branch: "tooling/next", seenCount: 1 });
+    expect(readLineage({ root: FOLDER, dir })).toMatchObject({ issue: 24, branch: "tooling/next" });
   });
 
   it("does not infer the root it is verifying", () => {
     launch();
-    const r = sessionStart({ env: {}, cwd: FOLDER });
+    const r = sessionStart({ env: {}, cwd: FOLDER, hookInput: null });
 
     expect(r.ok).toBe(false);
     expect(r.code).toBe("ROOT_UNOBSERVED");
@@ -222,13 +240,13 @@ describe("guard 10 — a lineage is not a way in", () => {
 describe("what cannot be observed is said, not assumed", () => {
   // REWRITTEN, not extended. This asserted `ok: true` with a note — a green verified session whose
   // branch nobody could read. But the header of this very file, and the issue's own acceptance text,
-  // both say every resume re-verifies branch and repository, and a note under a pass does not verify
+  // both say the branch under the session is checked, and a note under a pass does not check
   // anything. Unknown identity is not verified identity: the session is about to write, and the
   // branch it would write on is the thing that could not be read.
   //
   // The distinction that survives is between "looked and failed" and "did not look". A real
-  // observation that came back empty is a refusal; no observation at all — a pure probe — is still a
-  // note, because that is the caller declining to measure rather than a measurement failing.
+  // observation that came back empty is a refusal; no observation at all is its own refusal too now
+  // (FACTS_UNOBSERVED) — under the facts contract there is no verdict left to reach without them.
   it("refuses when a real observation of the live branch comes back empty", () => {
     launch();
     sessionStart();
@@ -248,20 +266,16 @@ describe("what cannot be observed is said, not assumed", () => {
     expect(r.code).toBe("REPO_UNREADABLE");
   });
 
-  // `verifySession` always observes -- passing it `live: null` means "go and read the folder", which
-  // on a fixture path reads nothing and is therefore a failed observation. The did-not-look case
-  // exists one layer down, where a caller hands the assertion no facts at all.
-  it("still only notes it when no observation was taken at all", () => {
-    launch();
+  it("refuses when nothing measured the folder at all", () => {
     const r = assertSessionRoot({
-      token: readToken({ dir }),
+      board: board(),
+      live: null,
       env: { CLAUDE_PROJECT_DIR: FOLDER, CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(WINDOW) },
       cwd: FOLDER,
       now: at(T0),
-      live: null,
     });
-    expect(r.ok).toBe(true);
-    expect(r.notes.join(" ")).toMatch(/not observed/i);
+    expect(r.ok).toBe(false);
+    expect(r.code).toBe("FACTS_UNOBSERVED");
   });
 
   it("never persists anything when asked not to", () => {
@@ -272,6 +286,8 @@ describe("what cannot be observed is said, not assumed", () => {
       cwd: FOLDER,
       now: at(T0),
       live: live(),
+      board: board(),
+      hookInput: { session_id: ME },
       persist: false,
     });
 

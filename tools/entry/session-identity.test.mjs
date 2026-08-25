@@ -7,18 +7,27 @@
 //
 // The fix is that the launcher NAMES the session it starts rather than starting one and hoping to
 // recognise it later: one id is generated before anything is written, goes to the CLI as
-// `--session-id`, into the launch token, and then into the lineage. After that "is this the session I
-// launched" has an answer.
+// `--session-id`, into the launch token, and then into the folder's record.
 //
-// Two things this must NOT break: an extension restart that genuinely resumes keeps its id and still
-// passes, and a record written before ids existed carries rather than breaks.
+// #216 KEPT THE NAME AND CHANGED WHAT IT IS FOR. Naming the session was doing two jobs, and only one
+// of them was sound. It is still how the folder's record says WHO holds the folder — that is the
+// one-writer rule, and it is load-bearing. It is no longer how a session proves it may work here:
+// under the token contract a conversation the launcher had not named was refused outright, which is
+// how a launched CLI that died with no process and no transcript kept the folder for twelve hours
+// and locked out the owner's own window standing in it. Verification is by facts now (a work tree of
+// this repo, on the board's branch, no LIVE competing writer), and the exclusion half is decided by
+// liveness — see writer-contention.test.mjs.
+//
+// What must NOT break: an extension restart that genuinely resumes keeps its id and reads as a
+// resume rather than a fresh launch, and a record written before ids existed carries rather than
+// breaks.
 
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { planClaudeStart } from "./claude-start.mjs";
-import { assertSessionRoot, makeToken, normalizeRepo, readLineage, verifySession, writeToken } from "./session-assert.mjs";
+import { makeToken, normalizeRepo, readLineage, verifySession, writeToken } from "./session-assert.mjs";
 
 const FOLDER = "C:\\Users\\Kuya\\code\\sentinel-marathon";
 const BRANCH = "tooling/entry-acceptance";
@@ -41,10 +50,13 @@ afterEach(() => {
 
 const env = { CLAUDE_PROJECT_DIR: FOLDER, CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(WINDOW) };
 // `observeLive` normalises the origin URL, so the fixture has to be what it really produces.
-const live = { branch: BRANCH, repo: normalizeRepo(REPO) };
+const live = { isWorktree: true, branch: BRANCH, repo: normalizeRepo(REPO) };
+// The board is injected in every case: this suite is about identity, and a real `gh` call here would
+// make it slow, networked, and dependent on what the queue happens to look like today.
+const board = { reachable: true, stale: false, rows: [{ issue: 23, folder: FOLDER, branch: BRANCH }] };
 const arm = (sessionId) =>
   writeToken(makeToken({ issue: 23, folder: FOLDER, branch: BRANCH, window: WINDOW, repo: REPO, sessionId }), { dir });
-const start = (session_id) => verifySession({ dir, env, cwd: FOLDER, live, hookInput: { session_id } });
+const start = (session_id) => verifySession({ dir, env, cwd: FOLDER, live, board, hookInput: { session_id } });
 
 describe("the launcher names the session it starts", () => {
   it("puts the assigned id on the launch token", () => {
@@ -52,38 +64,43 @@ describe("the launcher names the session it starts", () => {
     expect(t.sessionId).toBe(OURS);
   });
 
-  it("carries it into the folder's record when the launch is taken up", () => {
+  it("writes that conversation, and its pid, onto the folder's record", () => {
     arm(OURS);
     expect(start(OURS).ok).toBe(true);
-    expect(readLineage({ root: FOLDER, dir }).sessionId).toBe(OURS);
+    const record = readLineage({ root: FOLDER, dir });
+    expect(record.sessionId).toBe(OURS);
+    // #216: the record has to be able to answer "is that conversation still there", and a record
+    // with no pid and no transcript can only be aged out by a clock.
+    expect(record.pid).toBe(process.ppid);
   });
 
-  it("refuses a different conversation answering the launch", () => {
+  it("carries the launch token's nonce onto the record, so the bridge can still match it", () => {
     arm(OURS);
-    const r = start(THEIRS);
-    expect(r.ok).toBe(false);
-    expect(r.code).toBe("SESSION_FOREIGN");
+    const nonce = JSON.parse(JSON.stringify(readLineage({ root: FOLDER, dir }) ?? {})).nonce ?? null;
+    expect(nonce).toBe(null); // nothing written yet
+    start(OURS);
+    expect(readLineage({ root: FOLDER, dir }).nonce).toBeTruthy();
   });
 });
 
-describe("a verified folder is not a verified session", () => {
-  // The defect, exactly: same folder, same branch, same repo, same window — different conversation.
-  it("refuses a new conversation trying to resume the folder's record", () => {
+describe("a folder verified by facts, and who is holding it", () => {
+  it("reads a fresh conversation as a launch and the same one again as a resume", () => {
     arm(OURS);
     expect(start(OURS).mode).toBe("launch");
-
-    const r = start(THEIRS);
-    expect(r.ok).toBe(false);
-    expect(r.code).toBe("SESSION_FOREIGN");
-    expect(r.reason).toMatch(/does not inherit/i);
+    expect(start(OURS).mode).toBe("resume");
   });
 
-  it("lets the same conversation resume — an extension restart keeps its id", () => {
+  // THIS IS THE #216 REVERSAL, and it is the reason this file was rewritten rather than deleted.
+  // The same call used to produce SESSION_FOREIGN. A second conversation is now judged on whether
+  // the first is still alive, not on whether the launcher happened to name it.
+  it("does not refuse a conversation the launcher never named — it asks whether the first is alive", () => {
     arm(OURS);
     start(OURS);
-    const r = start(OURS);
-    expect(r.ok).toBe(true);
-    expect(r.mode).toBe("resume");
+    const r = start(THEIRS);
+    expect(r.code).not.toBe("SESSION_FOREIGN");
+    // Our own pid was recorded a moment ago and is very much alive, so the folder is held — by a
+    // writer that can be proven to exist, which is the whole difference.
+    expect(r.code).toBe("WRITER_LIVE");
   });
 
   // Records written before ids were bound must carry, not break: nothing to compare is not a mismatch.
@@ -91,13 +108,6 @@ describe("a verified folder is not a verified session", () => {
     arm(null);
     expect(start(undefined).ok).toBe(true);
     expect(readLineage({ root: FOLDER, dir }).sessionId).toBe(null);
-    expect(start(THEIRS).ok).toBe(true);
-  });
-
-  it("does not refuse when the hook reports no session id at all", () => {
-    arm(OURS);
-    const r = assertSessionRoot({ token: { ...makeToken({ issue: 23, folder: FOLDER, branch: BRANCH, window: WINDOW, sessionId: OURS }) }, env, cwd: FOLDER, live });
-    expect(r.ok).toBe(true);
   });
 });
 

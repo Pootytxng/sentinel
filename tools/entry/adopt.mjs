@@ -22,11 +22,9 @@
 //      that refuses more than half the real queue, including its own issue, is not a safety
 //      property; it is an outage. So OPEN is the gate (a closed issue means the claim is over) and
 //      the label is reported in the record and the output.
-//   2. The CONTEXT WINDOW IS RECORDED ONLY IF THIS PROCESS CAN SEE IT. `checkIdentity` treats a
-//      claimed window as a hard check, and an adopted record that claims a tier this session cannot
-//      prove would refuse the session on its very next SessionStart. When the CLI inherits
-//      CLAUDE_CODE_AUTO_COMPACT_WINDOW it is recorded and checked from then on; when it does not,
-//      the record claims no window rather than a guessed one. Unobserved stays unknown.
+//   2. The CONTEXT WINDOW IS RECORDED ONLY IF THIS PROCESS CAN SEE IT. When the CLI inherits
+//      CLAUDE_CODE_AUTO_COMPACT_WINDOW it is recorded; when it does not, the record claims no window
+//      rather than a guessed one. Unobserved stays unknown.
 //
 // The refusal codes here are ADOPT_-prefixed and deliberately distinct from the assert's codes:
 // these describe why an adoption was declined, not why a session is unverified, and merging the two
@@ -41,6 +39,7 @@ import {
   canonicalizePath,
   normalizeRepo,
   observeLive,
+  observeLiveness,
   readLineage,
   writeLineage,
 } from "../../.claude/hooks/session-root-assert.mjs";
@@ -105,6 +104,7 @@ const refuse = (code, reason, extra = {}) => ({ ok: false, code, reason, ...extr
  * @param {{branch: string|null, repo: string|null}} f.live  what the folder actually is
  * @param {{state: string, labels: string[], title: string}|null} f.issueFacts  null = unreadable
  * @param {object|null} f.existing     the folder's current session record, if any
+ * @param {"none"|"live"|"dead"|"unknown"} f.liveness  is the conversation holding that record still there
  * @param {number|null} f.window       the observed context window, or null if unobservable
  * @param {Date} f.now
  */
@@ -117,6 +117,7 @@ export function planAdoption({
   issueFacts,
   existing = null,
   window = null,
+  liveness = "unknown",
   now = new Date(),
 }) {
   if (!sessionId) {
@@ -183,18 +184,30 @@ export function planAdoption({
     );
   }
 
-  // The one-writer rule (docs/WORK_CONTROL.md). A live record for THIS folder that belongs to a
-  // different conversation is another writer, and adoption must not take the folder from it.
-  const liveRecord = existing && (!existing.expiresAt || new Date(existing.expiresAt) >= now) ? existing : null;
-  if (liveRecord && liveRecord.sessionId && liveRecord.sessionId !== sessionId) {
+  // The one-writer rule (docs/WORK_CONTROL.md). A record for THIS folder that belongs to a different
+  // conversation is another writer, and adoption must not take the folder from it.
+  //
+  // #216: "another writer" means a writer that still EXISTS. The clock alone said the folder was
+  // held for twelve hours by a session that had no process and had never written a transcript, and
+  // the honest cure this command is supposed to be refused the owner's real conversation. So the
+  // question asked here is liveness, not expiry: a live foreign record still refuses, a dead one
+  // lapses and is taken over. "unknown" — nothing could be measured — still refuses, because
+  // collision rule 4 says unknown means locked.
+  const unexpired = existing && (!existing.expiresAt || new Date(existing.expiresAt) >= now) ? existing : null;
+  const foreign = unexpired && unexpired.sessionId && unexpired.sessionId !== sessionId ? unexpired : null;
+  if (foreign && liveness !== "dead") {
     return refuse(
       "ADOPT_FOLDER_CLAIMED",
-      `${folder} already has a live session record bound to another conversation ` +
-        `(#${liveRecord.issue ?? "?"}, session ${String(liveRecord.sessionId).slice(0, 8)}…). One ` +
-        "writer per worktree — use a different worktree, or let that record lapse.",
-      { expected: sessionId, actual: liveRecord.sessionId },
+      `${folder} already has a session record bound to another conversation ` +
+        `(#${foreign.issue ?? "?"}, session ${String(foreign.sessionId).slice(0, 8)}…) and that ` +
+        (liveness === "live"
+          ? "conversation is still live. One writer per worktree — use a different worktree, or close that one."
+          : "nothing could measure whether it is still running. Collision rule 4 — unknown means locked."),
+      { expected: sessionId, actual: foreign.sessionId, liveness },
     );
   }
+  // Only OUR OWN record refreshes in place; a dead foreign one is replaced, not inherited.
+  const liveRecord = foreign ? null : unexpired;
 
   const record = {
     issue: issueNumber,
@@ -205,6 +218,10 @@ export function planAdoption({
     nonce: null,
     briefHash: null,
     sessionId,
+    // NOT this process's pid. `compy-entry adopt` runs from a Bash tool and exits immediately, so
+    // recording it would write a pid that is dead before the record is read. The adopting
+    // conversation proves its own liveness through its transcript instead (#216).
+    pid: null,
     launchedAt: null,
     // Adoption is the moment this folder became verified for this conversation; re-adopting the same
     // session keeps the original first sighting so the record's history is not rewritten.
@@ -224,6 +241,7 @@ export function planAdoption({
     notes.push("no context window observed, so the record claims none (it will not be checked)");
   }
   if (liveRecord) notes.push("this conversation already held the folder — the record was refreshed");
+  if (foreign) notes.push(`took the folder over from session ${String(foreign.sessionId).slice(0, 8)}…, whose process is gone`);
 
   return { ok: true, record, notes, title: issueFacts.title };
 }
@@ -241,9 +259,11 @@ export function adopt({
   lookupIssue = lookupIssueViaGh,
   read = readLineage,
   write = writeLineage,
+  liveness = observeLiveness,
 } = {}) {
   const root = canonicalizePath(folder);
   const rawWindow = String(env?.CLAUDE_CODE_AUTO_COMPACT_WINDOW ?? "").trim();
+  const existing = read({ root, dir });
   const plan = planAdoption({
     folder: root,
     issue,
@@ -251,7 +271,8 @@ export function adopt({
     isWorktree: isWorktree(root),
     live: live ?? observeLive(root),
     issueFacts: Number.isInteger(Number(issue)) && Number(issue) > 0 ? lookupIssue(Number(issue)) : null,
-    existing: read({ root, dir }),
+    existing,
+    liveness: liveness(existing, { now }).liveness,
     window: rawWindow === "" ? null : Number(rawWindow),
     now,
   });

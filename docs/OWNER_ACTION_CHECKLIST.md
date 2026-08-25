@@ -219,11 +219,12 @@ Two doc lines kept paraphrasing all of that as unbuilt and sent a session at it 
 `src/ui-vision-status-guard.test.ts` rule D now fails the build on a pointer that names features
 instead of rows. What [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) still lists 🔴 OPEN: **DIR-1**
 (your standing intuitive-UI lens — mine to apply on every train, nothing for you to pick) and **§G**
-(the site's mini playable demo, which you flagged "maybe later"). **Yours, and only these two:**
-1. **Do you want a panoramic drag surface back** — in the *type/level of effect* sense you meant in
-   July, not the sister-site clone? One line on what it should show and I build it. Recommendation:
-   **no** — the hologram's drag-orbit already carries that feel, and a second drag canvas is exactly
-   the sensory load DIR-1 bars.
+(the site's mini playable demo, which you flagged "maybe later"). **Yours — one of the two is now
+answered, so only item 2 is still waiting on you:**
+1. ~~**Do you want a panoramic drag surface back**~~ — ✅ **ANSWERED "no", 2026-08-25.** You took the
+   recommendation: no second drag canvas, the hologram's drag-orbit keeps that feel, and the sensory
+   load DIR-1 bars stays barred. Written into `UI_VISION_BACKLOG.md` §A.1 so it cannot come back as
+   a paraphrase. **Nothing on you here any more.**
 2. **#49's B1–B5 direction is blocked on the ChatGPT mockups only you have** — paste them into the
    issue and that train resumes.
 - **You said "there's more I'm missing" + "capture it first"** — done (this doc). **Next → tell me if

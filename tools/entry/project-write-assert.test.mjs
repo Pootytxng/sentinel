@@ -40,7 +40,7 @@ const SESSION = "11111111-2222-3333-4444-555555555555";
 const write = (over = {}) => ({
   toolName: "Write",
   toolInput: { file_path: `${ROOT}\\src\\App.css` },
-  verdict: { ok: false, code: "NO_TOKEN", reason: "…" },
+  verdict: { ok: false, code: "FOLDER_UNCLAIMED", reason: "…" },
   root: ROOT,
   sessionId: SESSION,
   cwd: ROOT,
@@ -54,9 +54,9 @@ describe("one implementation of identity — the hook asks, it does not decide",
   });
 
   it("carries none of the assert's refusal codes as literals of its own", () => {
-    // If this file ever names ROOT_MISMATCH or SESSION_FOREIGN itself, it has started deciding
+    // If this file ever names BRANCH_NOT_THE_BOARDS or WRITER_LIVE itself, it has started deciding
     // identity, which is the drift this test exists to catch. It may name the two exported SETS.
-    for (const code of ["ROOT_MISMATCH", "SESSION_FOREIGN", "LINEAGE_FOREIGN", "WINDOW_MISMATCH"]) {
+    for (const code of ["BRANCH_NOT_THE_BOARDS", "WRITER_LIVE", "WRITER_UNKNOWN", "REPO_MISMATCH"]) {
       expect(SOURCE, `${code} is decided by session-root-assert.mjs, not here`).not.toContain(`"${code}"`);
     }
   });
@@ -64,8 +64,8 @@ describe("one implementation of identity — the hook asks, it does not decide",
   it("reads the UNVERIFIABLE / LAPSED split as data instead of re-listing the codes", () => {
     expect(SOURCE).toMatch(/\bUNVERIFIABLE_CODES\b/);
     expect(SOURCE).toMatch(/\bLAPSED_CODES\b/);
-    expect(SOURCE).not.toContain('"LAUNCH_SPENT"');
-    expect(SOURCE).not.toContain('"TOKEN_EXPIRED"');
+    expect(SOURCE).not.toContain('"FOLDER_UNCLAIMED"');
+    expect(SOURCE).not.toContain('"BOARD_UNREACHABLE"');
   });
 
   it("never persists — a hook that fires on every write must not establish identity", () => {
@@ -152,10 +152,10 @@ describe("the refusal ships its cure — the failure mode this whole spec exists
 
   it("does NOT offer adoption when a live record actively disagrees — it would refuse as well", () => {
     const d = decide(
-      write({ verdict: { ok: false, code: "SESSION_FOREIGN", reason: "belongs to another conversation" } }),
+      write({ verdict: { ok: false, code: "WRITER_LIVE", reason: "belongs to another conversation" } }),
     );
     expect(d.allow).toBe(false);
-    expect(d.reason).toContain("SESSION_FOREIGN");
+    expect(d.reason).toContain("WRITER_LIVE");
     expect(d.reason).toContain("belongs to another conversation");
     expect(d.reason).not.toContain("cli.mjs adopt");
   });
@@ -216,7 +216,7 @@ describe("the wire format", () => {
         session_id: SESSION,
       },
       env: { CLAUDE_PROJECT_DIR: ROOT },
-      verify: () => ({ ok: false, code: "NO_TOKEN", reason: "nothing to check" }),
+      verify: () => ({ ok: false, code: "FOLDER_UNCLAIMED", reason: "nothing to check" }),
       issueLookup: () => null,
     });
     expect(d.allow).toBe(false);

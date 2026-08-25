@@ -11,9 +11,11 @@
 // FALLBACK ONLY (owner decision 3, Issue #18, 2026-07-30). The tracked `.claude/settings.json`
 // registration is primary; this overlay covers the branches that predate it. It must therefore stand
 // DOWN when the target already registers the assert itself — hook groups CONCATENATE across settings
-// layers, so tracked-plus-overlay runs the assert twice, the first run consumes the single-use launch
-// token, and the second refuses TOKEN_CONSUMED. That is every launch into an up-to-date branch
-// failing. Guarded by overlay.test.mjs.
+// layers, so tracked-plus-overlay runs the assert twice. Before #216 that BRICKED the launch: the
+// first run consumed the single-use launch token and the second refused the token it had just spent.
+// Verification is by facts now, so the second run agrees with the first — and the session still gets
+// the whole SessionStart output twice, brief and opening instruction included, which is its own
+// defect. The stand-down rule is unchanged. Guarded by overlay.test.mjs.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -65,9 +67,9 @@ export function planOverlay({ dir, controlDir }) {
   const ours = (current.hooks?.SessionStart ?? []).filter(isOurs);
 
   // Standing down is not the same as leaving the last one lying there. An overlay we no longer want
-  // still RUNS — a second assert that consumes the token the first one needed — and it addresses the
-  // control folder by absolute path, so it also breaks the moment that folder renames the file it
-  // points at. Both were measured on 2026-07-30. What we installed, we take back.
+  // still RUNS — a second assert, so a second brief and a second opening instruction — and it
+  // addresses the control folder by absolute path, so it also breaks the moment that folder renames
+  // the file it points at. Both were measured on 2026-07-30. What we installed, we take back.
   if (trackedRegistersAssert(dir)) {
     const stale = ours.length > 0;
     return {
@@ -79,7 +81,7 @@ export function planOverlay({ dir, controlDir }) {
       current,
       reason: stale
         ? "the branch registers the root assert itself now, so this leftover overlay is a second copy — removing it"
-        : "the branch's tracked settings already register the root assert — a second copy would consume the launch token twice",
+        : "the branch's tracked settings already register the root assert — a second copy would run it, and announce it, twice",
     };
   }
 

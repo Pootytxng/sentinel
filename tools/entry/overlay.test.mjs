@@ -109,11 +109,13 @@ describe("it preserves whatever was already there", () => {
 // Owner decision 3 (Issue #18, 2026-07-30): the TRACKED SessionStart registration is primary; this
 // overlay is demoted to a fallback for branches that predate it.
 //
-// This is not tidiness — it is the difference between a working launcher and a bricked one. Hook
-// groups CONCATENATE across settings layers, so a tracked registration plus a local overlay means
-// the assert runs TWICE. The first run consumes the single-use launch token; the second finds it
-// consumed and refuses. Every launch into an up-to-date branch would fail. The overlay must
-// therefore stand down whenever the target already registers the assert itself.
+// This is not tidiness. Hook groups CONCATENATE across settings layers, so a tracked registration
+// plus a local overlay means the assert runs TWICE. Before #216 that bricked the launcher outright:
+// the first run consumed the single-use launch token and the second refused the token it had just
+// spent, so every launch into an up-to-date branch failed. Verification is by facts now and the two
+// runs agree — but the session is still handed its whole SessionStart output twice, brief and
+// opening instruction included. The overlay must therefore stand down whenever the target already
+// registers the assert itself.
 describe("the overlay is a fallback, not a second copy", () => {
   // A plain string literal, so `${...}` stays literal text — this is what settings.json really holds.
   const PROJECT_DIR_VAR = "${CLAUDE_PROJECT_DIR}";
@@ -147,7 +149,7 @@ describe("the overlay is a fallback, not a second copy", () => {
     expect(plan.reason).toMatch(/tracked/i);
   });
 
-  it("writes nothing at all in that case — two asserts would consume the token twice", () => {
+  it("writes nothing at all in that case — two asserts would announce the session twice", () => {
     const dir = withTracked("k", trackedSettings);
     const r = writeOverlay({ dir, controlDir: CONTROL });
     expect(r.wrote).toBe(false);

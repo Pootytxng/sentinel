@@ -1,5 +1,13 @@
 # Spec — refusing project writes from an unverified session (#125)
 
+> ⚠️ **PARTLY SUPERSEDED 2026-08-25 by #216.** The four properties in §3b still hold and the write
+> refusal still ships with its cure. What changed underneath is *what makes a session verified*: it
+> is no longer a launch token but three measured facts (a work tree of this repo · the folder and
+> branch Work Control names for the issue · no live competing writer). Every code table below that
+> names `NO_TOKEN`, `TOKEN_EXPIRED`, `LAUNCH_SPENT`, `LINEAGE_EXPIRED`, `SESSION_FOREIGN` or
+> `LINEAGE_FOREIGN` is a point-in-time record. The live sets are `UNVERIFIABLE = {FOLDER_UNCLAIMED}`
+> and `LAPSED = {BOARD_UNREACHABLE}`; see `tools/entry/writer-contention.test.mjs`.
+
 **Status:** ✅ **COMPLETE 2026-08-22 — all five steps.** Steps 1–3 built; **step 4 armed** on the
 owner's word (the hook is registered in `.claude/settings.json` on `Write|Edit|NotebookEdit`, and
 this machine's live session was adopted first per §4's ordering); **step 5 flipped** — the advisory

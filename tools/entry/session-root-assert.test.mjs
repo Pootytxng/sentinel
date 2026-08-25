@@ -56,25 +56,23 @@ const liveToken = (over = {}) =>
 const verdictOf = (result) => tracked.verdictFor(result);
 
 describe("severity — a tracked hook must block on disagreement and only advise otherwise", () => {
-  // WINDOW_UNOBSERVED, TOKEN_CORRUPT and LINEAGE_CORRUPT all mean "the evidence this hook verifies
-  // against is not there", which is a reason to stop rather than a reason to shrug. Only a session
-  // with NO artifacts at all is an ordinary unverified session.
+  // Everything that means "a fact about this folder disagrees with this session", plus everything
+  // that means "the evidence could not be read". Unreadable is a reason to stop, not to shrug.
   const STOP = [
-    "ROOT_MISMATCH",
     "CD_WITHOUT_ROOT",
-    "WINDOW_MISMATCH",
-    "WINDOW_UNOBSERVED",
     "ROOT_UNOBSERVED",
-    "BRANCH_MISMATCH",
+    "FOLDER_AMBIGUOUS",
+    "FACTS_UNOBSERVED",
+    "NOT_A_WORKTREE",
     "REPO_MISMATCH",
-    "LINEAGE_FOREIGN",
-    "TOKEN_CORRUPT",
-    "LINEAGE_CORRUPT",
-    "BRANCH_UNREADABLE",
     "REPO_UNREADABLE",
-    "SESSION_FOREIGN",
+    "BRANCH_UNREADABLE",
+    "BRANCH_NOT_THE_BOARDS",
+    "WRITER_LIVE",
+    "WRITER_UNKNOWN",
+    "LEASE_CORRUPT",
   ];
-  const ADVISE = ["NO_TOKEN", "TOKEN_EXPIRED", "LINEAGE_EXPIRED", "LAUNCH_SPENT"];
+  const ADVISE = ["FOLDER_UNCLAIMED", "BOARD_UNREACHABLE"];
 
   it("classifies every refusal code the assert can actually produce", () => {
     const produced = [...readFileSync(HOOK_FILE, "utf8").matchAll(/refuse\(\s*"([A-Z_]+)"/g)].map((m) => m[1]);
@@ -101,8 +99,8 @@ describe("severity — a tracked hook must block on disagreement and only advise
     expect([...tracked.ADVISORY_CODES].sort()).toEqual(
       [...tracked.UNVERIFIABLE_CODES, ...tracked.LAPSED_CODES].sort(),
     );
-    // And the split still describes reality: only NO_TOKEN has nothing on disk to check against.
-    expect([...tracked.UNVERIFIABLE_CODES]).toEqual(["NO_TOKEN"]);
+    // And the split still describes reality: only FOLDER_UNCLAIMED means nothing claims this folder.
+    expect([...tracked.UNVERIFIABLE_CODES]).toEqual(["FOLDER_UNCLAIMED"]);
   });
 
   it("no STOP code leaks into either advisory classification", () => {
@@ -113,7 +111,7 @@ describe("severity — a tracked hook must block on disagreement and only advise
   });
 
   for (const code of STOP) {
-    it(`stops on ${code} — a live token disagrees with this session`, () => {
+    it(`stops on ${code} — a fact disagrees with this session`, () => {
       const v = verdictOf({ ok: false, code, reason: "…" });
       expect(v.exit).toBe(2);
       expect(v.level).toBe("stop");
@@ -121,7 +119,7 @@ describe("severity — a tracked hook must block on disagreement and only advise
   }
 
   for (const code of ADVISE) {
-    it(`advises on ${code} — there is no live token to disagree with`, () => {
+    it(`advises on ${code} — there is nothing to disagree with`, () => {
       const v = verdictOf({ ok: false, code, reason: "…" });
       expect(v.exit).toBe(0);
       expect(v.level).toBe("advisory");
@@ -141,8 +139,8 @@ describe("severity — a tracked hook must block on disagreement and only advise
   });
 
   it("names the code and the reason when it stops, so the fix is obvious from the message", () => {
-    const v = verdictOf({ ok: false, code: "ROOT_MISMATCH", reason: "claimed A but root is B" });
-    expect(v.message).toContain("ROOT_MISMATCH");
+    const v = verdictOf({ ok: false, code: "BRANCH_NOT_THE_BOARDS", reason: "claimed A but root is B" });
+    expect(v.message).toContain("BRANCH_NOT_THE_BOARDS");
     expect(v.message).toContain("claimed A but root is B");
     expect(v.message).toMatch(/STOP/);
   });
@@ -153,35 +151,43 @@ describe("severity — a tracked hook must block on disagreement and only advise
   });
 });
 
-describe("the assert itself still fails closed on a real disagreement", () => {
-  it("blocks when the session root is not the claimed folder", () => {
-    const r = tracked.assertSessionRoot({
-      token: liveToken(),
-      env: { CLAUDE_PROJECT_DIR: OTHER },
-      cwd: OTHER,
+describe("the assert fails closed when a FACT disagrees", () => {
+  const BRANCH = "feat/single-entry-workflow";
+  const SESSION = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+  const BOARD = {
+    reachable: true,
+    stale: false,
+    fetchedAt: new Date("2026-08-25T06:00:00.000Z").toISOString(),
+    rows: [{ issue: 18, folder: FOLDER, branch: BRANCH }],
+  };
+  const LIVE = { isWorktree: true, branch: BRANCH, repo: "pootytxng/sentinel" };
+
+  const facts = (over = {}) =>
+    tracked.assertSessionRoot({
+      board: BOARD,
+      live: LIVE,
+      env: { CLAUDE_PROJECT_DIR: FOLDER, CLAUDE_CODE_AUTO_COMPACT_WINDOW: "150000" },
+      cwd: FOLDER,
+      hookInput: { session_id: SESSION, cwd: FOLDER },
+      ...over,
     });
-    expect(r.ok).toBe(false);
-    expect(r.code).toBe("ROOT_MISMATCH");
-    expect(verdictOf(r).exit).toBe(2);
+
+  it("verifies a tab in the folder the board claims, on the branch the board names", () => {
+    const r = facts();
+    expect(r.ok).toBe(true);
+    expect(r.issue).toBe(18);
+    expect(verdictOf(r).exit).toBe(0);
   });
 
   it("blocks when the shell moved but the project root did not", () => {
-    const r = tracked.assertSessionRoot({
-      token: liveToken(),
-      env: { CLAUDE_PROJECT_DIR: OTHER },
-      cwd: FOLDER,
-    });
+    const r = facts({ env: { CLAUDE_PROJECT_DIR: OTHER }, hookInput: { session_id: SESSION, cwd: OTHER } });
     expect(r.code).toBe("CD_WITHOUT_ROOT");
     expect(verdictOf(r).exit).toBe(2);
   });
 
-  it("blocks when the live context window is not the one the launch resolved", () => {
-    const r = tracked.assertSessionRoot({
-      token: liveToken(),
-      env: { CLAUDE_PROJECT_DIR: FOLDER, CLAUDE_CODE_AUTO_COMPACT_WINDOW: "300000" },
-      cwd: FOLDER,
-    });
-    expect(r.code).toBe("WINDOW_MISMATCH");
+  it("blocks when the live branch is not the one the board put the issue on", () => {
+    const r = facts({ live: { ...LIVE, branch: "main" } });
+    expect(r.code).toBe("BRANCH_NOT_THE_BOARDS");
     expect(verdictOf(r).exit).toBe(2);
   });
 
@@ -190,9 +196,9 @@ describe("the assert itself still fails closed on a real disagreement", () => {
   // fatal would close windows for nothing; the WRITE path is the half that refuses. Deleting the
   // advisory assertion is how the next change silently makes session start fatal, which is exactly
   // what the spec's rollout order (§4 step 5) says not to let happen.
-  it("only advises in a session that was never launched through the entrypoint", () => {
-    const r = tracked.assertSessionRoot({ token: null, env: { CLAUDE_PROJECT_DIR: OTHER }, cwd: OTHER });
-    expect(r.code).toBe("NO_TOKEN");
+  it("only advises in a folder no issue on the board claims", () => {
+    const r = facts({ board: { reachable: true, rows: [] } });
+    expect(r.code).toBe("FOLDER_UNCLAIMED");
     expect(verdictOf(r).exit).toBe(0);
   });
 
@@ -201,7 +207,12 @@ describe("the assert itself still fails closed on a real disagreement", () => {
     // A root that EXISTS on disk: isInsideRoot canonicalizes both sides, so a fabricated folder
     // resolves to nothing and would make this pass for the wrong reason.
     const here = join(HERE, "..", "..");
-    const r = tracked.assertSessionRoot({ token: null, env: { CLAUDE_PROJECT_DIR: here }, cwd: here });
+    const r = facts({
+      board: { reachable: true, rows: [] },
+      env: { CLAUDE_PROJECT_DIR: here },
+      hookInput: { session_id: SESSION, cwd: here },
+      cwd: here,
+    });
     const d = decide({
       toolName: "Write",
       toolInput: { file_path: join(here, "src", "App.tsx") },
@@ -217,7 +228,12 @@ describe("the assert itself still fails closed on a real disagreement", () => {
   it("and still lets that same session write OUTSIDE the project — the gate is scoped, not total", async () => {
     const { decide } = await import("../../.claude/hooks/project-write-assert.mjs");
     const here = join(HERE, "..", "..");
-    const r = tracked.assertSessionRoot({ token: null, env: { CLAUDE_PROJECT_DIR: here }, cwd: here });
+    const r = facts({
+      board: { reachable: true, rows: [] },
+      env: { CLAUDE_PROJECT_DIR: here },
+      hookInput: { session_id: SESSION, cwd: here },
+      cwd: here,
+    });
     const d = decide({
       toolName: "Write",
       toolInput: { file_path: join(tmpdir(), "compy-scratch.txt") },
@@ -229,35 +245,26 @@ describe("the assert itself still fails closed on a real disagreement", () => {
     expect(d.why).toBe("outside the project root");
   });
 
-  it("claims the launch once, so the token alone cannot verify a later session", () => {
-    // The launch is still single-use. What changed is what a later session leans on: its FOLDER's
-    // lineage, established by that claim (session-lineage.test.mjs), not the spent token. A session
-    // with neither is unverified — advisory, exactly as an ad-hoc window is.
+  // #216. The token used to BE the verification: written by the launcher, naming one conversation,
+  // single-use. A session it did not name was refused; a session it did name held the folder after
+  // it died. It is now a launcher-internal handshake and nothing else, and the way that is kept
+  // true is that the assert cannot even see it.
+  it("no longer consults the launch token, for a pass or for a refusal", () => {
     const dir = tokenDir();
-    tracked.writeToken(liveToken(), { dir });
+    // A live token naming a DIFFERENT folder and a DIFFERENT conversation. Under the old contract
+    // this alone produced a refusal in this folder; under facts it is not an input.
+    tracked.writeToken(liveToken({ folder: OTHER, sessionId: "99999999-9999-9999-9999-999999999999" }), { dir });
+    expect(facts().ok).toBe(true);
 
-    const first = tracked.assertSessionRoot({
-      token: tracked.readToken({ dir }),
-      // A launched session reports the window the launcher established; an unobserved one is now its
-      // own refusal, so the fixture carries what the real thing carries.
-      env: { CLAUDE_PROJECT_DIR: FOLDER, CLAUDE_CODE_AUTO_COMPACT_WINDOW: "150000" },
-      cwd: FOLDER,
-    });
-    expect(first.ok).toBe(true);
-    expect(first.mode).toBe("launch");
+    // And a spent token for THIS folder does not stop the next tab either — the LAUNCH_SPENT and
+    // SESSION_FOREIGN refusals that stranded #215 and #216 have no code left to be produced by.
+    tracked.writeToken(liveToken({ folder: FOLDER, sessionId: "99999999-9999-9999-9999-999999999999" }), { dir });
     tracked.claimToken({ dir });
-
-    const second = tracked.assertSessionRoot({
-      token: tracked.readToken({ dir }),
-      lineage: null,
-      env: { CLAUDE_PROJECT_DIR: FOLDER, CLAUDE_CODE_AUTO_COMPACT_WINDOW: "150000" },
-      cwd: FOLDER,
-    });
-    expect(second.ok).toBe(false);
-    // A launch that WAS made for this folder and taken up now says exactly that, instead of denying
-    // the entrypoint ever launched it. Still advisory, still exit 0.
-    expect(second.code).toBe("LAUNCH_SPENT");
-    expect(verdictOf(second).exit).toBe(0);
+    expect(facts().ok).toBe(true);
+    const produced = [...readFileSync(HOOK_FILE, "utf8").matchAll(/refuse\(\s*"([A-Z_]+)"/g)].map((m) => m[1]);
+    expect(produced).not.toContain("SESSION_FOREIGN");
+    expect(produced).not.toContain("LAUNCH_SPENT");
+    expect(produced).not.toContain("NO_TOKEN");
   });
 });
 

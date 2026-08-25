@@ -27,11 +27,12 @@
 //      folder, branch, repo or conversation; adoption would refuse that too (ADOPT_FOLDER_CLAIMED),
 //      so offering it would be advice that cannot work. Those get the assert's own reason instead.
 //
-// LAPSED IS REFUSED LIKE NO_TOKEN, deliberately. §2 of the spec measured a live lapsed token against
-// the session actually doing the work: it disagreed on branch, session id AND issue, because the
-// honest sessions are exactly the ones whose branch and issue legitimately moved on. So a lapsed
-// record cannot re-verify itself, and it gets the same answer as never-launched — with one kindness:
-// the issue is still on disk, so the cure is printed with that number already in it.
+// LAPSED IS REFUSED LIKE AN UNCLAIMED FOLDER, deliberately. Since #216 there is exactly one lapsed
+// code — BOARD_UNREACHABLE — and it means the fact that would answer "what is this folder for" could
+// not be read this time. A session cannot re-verify itself out of that: the answer is on the board,
+// not in anything local, so it gets the same refusal as a folder nothing claims. The kindness that
+// survives is the cure line, which is printed with the folder's issue number already in it when a
+// previous read left one on disk.
 //
 // IT NEVER PERSISTS. `verifySession({persist: false})`. This hook runs on every single write; it is
 // a checkpoint, not the thing that establishes identity. SessionStart owns the record. (Persisting

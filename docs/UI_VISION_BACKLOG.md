@@ -939,6 +939,12 @@ the "0" failsafe, byte-identity re-pinned to explicit "0").** His ranked plan, p
    entirely** (direction-proposal Q3). The redirect: drag/inertia lands on the real rig hologram
    (`drei OrbitControls` damping) instead — see the approved **Instrument Bench** proposal, principle 6
    (`docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md`).
+   **ASKED AND ANSWERED — the owner said "no" on 2026-08-25.** The one question this row still held
+   open was whether he wanted a panoramic drag surface back in the *type/level of effect* sense he
+   meant in July (not the sister-site clone). He answered no, against a recommendation of no. This
+   is settled, not parked: nothing here is to be re-queued, re-proposed or revived from a paraphrase.
+   The drag/inertia feel keeps living on the rig hologram. Recorded from
+   `docs/OWNER_ACTION_CHECKLIST.md` B5.1.
 2. **GSAP data-reactivity** — gauge sweeps / count-ups / shader uniforms animated FROM live metrics
    (honesty win: motion serves real data). Chosen stack `:135-137`. GSAP was "deferred"; a CSS ring
    gauge + CountUp shipped instead. ~~NOT BUILT as specified~~ → **🟢 BUILT `1d310e1`:** the console

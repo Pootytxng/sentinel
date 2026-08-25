@@ -208,7 +208,7 @@ describe("handing the brief to the session", () => {
 
   it("says nothing at all when the session was refused — an unverified session gets no instructions", () => {
     writeBrief(brief(), { dir });
-    expect(sessionStartOutput({ ok: false, code: "ROOT_MISMATCH", issue: 23 }, { briefDir: dir, source: "startup" })).toBeNull();
+    expect(sessionStartOutput({ ok: false, code: "BRANCH_NOT_THE_BOARDS", issue: 23 }, { briefDir: dir, source: "startup" })).toBeNull();
   });
 
   it("says nothing when there is no brief for this task, rather than improvising one", () => {
