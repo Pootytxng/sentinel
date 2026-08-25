@@ -11,7 +11,7 @@
 | Skill | Fires when | Cheapest executor | Notes |
 |---|---|---|---|
 | `self-review` | any UI change about to be claimed done/fixed/ready | dispatcher: any · worker: **sonnet** (pinned) | Verdict block = the license. Never review inline (token law: evidence stays in worker context). |
-| `impeccable` | building / critiquing / polishing frontend UI | main agent; its `scripts/` do the heavy lift | 28 subcommands (`reference/*.md`), anti-pattern detector wired as PostToolUse hook via settings.local.json. **Owns motion too** — `reference/animate.md`. Vendored third-party (v3.9.1, Apache 2.0, `npx impeccable`): do NOT hand-edit, re-vendor. |
+| `impeccable` | building / critiquing / polishing frontend UI | main agent; its `scripts/` do the heavy lift | 28 subcommands (`reference/*.md`). Its detector is a **build gate** (`src/design-detector-guard.test.ts`, #214) AND a PostToolUse hook in **tracked** `.claude/settings.json` (the 2026-08-21 settings.local.json unwire can't recur). **Owns motion too** — `reference/animate.md` + DESIGN.md §Motion. Vendored v3.9.1 (Apache 2.0): do NOT hand-edit, and **never `npx impeccable update` — npm's "latest" is 3.6.0, a DOWNGRADE** (version-floored by the guard). |
 | `hygiene` | "maintenance" / "cleanup" / stale-state or bloat suspicion | main agent (script does the lift) | `scripts/repo-hygiene.ps1` + doc-budget gate; PROCESS-KILL SAFETY rule inside - read it before killing anything named claude. |
 | `compy-coverage-sweep` | expanding test coverage (test-only, never prod code) | orchestrator: any · crews: **sonnet** | Disjoint file domains, 3-ring verification gate. |
 | `mutation-gate` | ANY diff touching `actions.rs` / `history.rs`, gate flips, elevation | any (it's a checklist) · reviewer dispatch: **sonnet** | 10-item rollback-first contract + required dispatches. Highest-stakes surface in the repo. |
@@ -23,6 +23,27 @@
 | `status` | "where are we" / "what's left" / "show me" / end of any train | dispatcher: any · doc reads: **sonnet** | Added 2026-08-05: >50% of the owner's short messages are status questions and there was no surface for them. Reconstructs from git + the state docs; never answers from session memory. |
 
 ### Evaluated and rejected — do not re-add without reading this
+
+- **`emilkowalski/skills`** (review-animations · improve-animations · find-animation-opportunities ·
+  animation-vocabulary) — evaluated 2026-08-24 in the design-system lock-in (#214). The strongest
+  motion content reviewed, and unlike LottieFiles it **agrees** with `impeccable` on every hard rule
+  (ease-out only, GPU props, reduced-motion, restraint). Not added because everything worth keeping
+  was **extracted into the toolchain instead** (`~/.claude/CLAUDE.md` §6: guard > prose): its
+  mechanizable absolutes the impeccable detector lacked — `transition: all`, standalone `ease-in`,
+  `scale(0)` entrances — are now the motion-law test in `src/design-detector-guard.test.ts` (the
+  sweep fixed the 3 real `transition: all` hits it found), and its four-question motion gate
+  (frequency/purpose/speed/function) is DESIGN.md §Motion. The remainder is review-workflow prose
+  duplicating `impeccable animate`/`audit` + the self-review law, at permanent boot cost;
+  animation-vocabulary is a naming glossary with no repo use. On-demand:
+  `npx skills use https://github.com/emilkowalski/skills --skill review-animations` (et al.).
+- **`anthropics/skills` frontend-design** — evaluated 2026-08-24. Greenfield brand/identity guidance
+  (pick a subject, signature element, avoid templated palettes) for projects **without** a design
+  system; Compy's is LOCKED (DESIGN.md: Instrument cockpit, Hearth palette) and `impeccable`'s
+  register system + detector covers the same ground deeper and mechanically. Nothing to extract.
+- **`vercel-labs/skills` web-design-guidelines** — evaluated 2026-08-24. A 46-line wrapper that
+  **WebFetches its rules from a GitHub URL on every run** — unpinned upstream + network dependency,
+  the exact drift class #214 exists to end — and its generic a11y/UX checks are already run locally
+  by `impeccable audit` + the theme-contrast/doorknob/border-hygiene guards. Nothing to extract.
 
 - **`LottieFiles/motion-design-skill`** (MIT, docs-only) — added 2026-08-05 (`23c30e8d`), **voided the
   same day**. Not rejected for quality; rejected because it **contradicts `impeccable` on hard rules**

@@ -78,7 +78,8 @@
 }
 
 .back-button {
-  transition: all 350ms;
+  /* Local mod: vendor's `transition: all` narrowed to the one property that changes (THIRD_PARTY.md). */
+  transition: color 350ms;
   border-radius: 0.25rem;
   padding: 0.25rem 0.5rem;
   color: var(--ix-text-3, #a3a3a3);
@@ -96,7 +97,8 @@
 }
 
 .next-button {
-  transition: all 350ms;
+  /* Local mod: vendor's `transition: all` narrowed to the one property that changes (THIRD_PARTY.md). */
+  transition: background-color 350ms;
   display: flex;
   align-items: center;
   justify-content: center;

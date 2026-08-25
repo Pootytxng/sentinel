@@ -890,7 +890,7 @@
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-limiter,
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-specs,
 :root[data-v2="on"] .home-console[data-motion="full"] .dock {
-  animation: v2-hc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: v2-hc-rise 0.5s var(--ease-out) backwards;
 }
 /* The stagger reads the composition left-to-right and then down, the way the room does: the panel
    arrives, its five readings count in under it, and the three answers land in the narrative column

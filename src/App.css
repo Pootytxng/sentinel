@@ -45,6 +45,10 @@
 
   /* ── Motion ───────────────────────────────────────────────────────────── */
   --ease: cubic-bezier(0.4, 0.12, 0.18, 1);
+  /* Exits/entrances & anything that "settles": exponential ease-out (quint). Bounce/elastic
+     easing (overshoot params > 1) is BANNED — real objects decelerate, they don't wobble.
+     Enforced mechanically by src/design-detector-guard.test.ts (bounce-easing rule). */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --dur: 160ms;
   --dur-slow: 300ms;
 }
@@ -638,7 +642,8 @@ textarea {
   font-size: var(--type-label);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  /* Enumerate what actually changes — `transition: all` animates unintended properties off-GPU. */
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 .chip:hover { color: var(--fg); border-color: #2f384d; }
 .chip-active {

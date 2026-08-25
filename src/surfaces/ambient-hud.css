@@ -64,7 +64,7 @@
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: v2-foil-pan 1.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: v2-foil-pan 1.6s var(--ease-out) both;
 }
 @keyframes v2-foil-pan {
   from {

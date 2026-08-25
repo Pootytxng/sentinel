@@ -5,5 +5,23 @@
       "maxFindings": 5,
       "maxChars": 8000
     }
+  },
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "geist sans",
+        "reason": "Deliberate keep (owner-directed overhaul 2026-08-25, #214): impeccable's own product register permits familiar sans faces in product UI; Geist is bundled+licensed (OFL), the approved four-room comps and 17 self-review rounds were measured on it, and mono-law-guard is built around Geist Mono. Swapping typefaces would invalidate comp fidelity for zero user value.",
+        "createdAt": "2026-08-25T02:24:23.529Z"
+      },
+      {
+        "rule": "overused-font",
+        "value": "geist mono",
+        "reason": "Same ruling as Geist Sans — see that entry. Geist Mono is the measured numerals face the mono-law guard enforces.",
+        "createdAt": "2026-08-25T02:24:23.603Z"
+      }
+    ]
   }
 }

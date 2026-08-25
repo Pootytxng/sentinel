@@ -82,8 +82,20 @@ for controls/active/key-numbers only — never decoration. Status has its own se
 
 ## Motion
 
-- `--ease cubic-bezier(0.4,0.12,0.18,1)` (ease-out, no bounce/elastic). `--dur 160ms`,
-  `--dur-slow 300ms`, `--dur-tap 90ms`. Hover lift `-2px`, press `translateY(1px)`.
+- Easing tokens (App.css `:root`) — use them, never literal beziers: `--ease
+  cubic-bezier(0.4,0.12,0.18,1)` (house curve) · `--ease-out cubic-bezier(0.22,1,0.36,1)` (quint;
+  exits, entrances, anything that settles). `--dur 160ms`, `--dur-slow 300ms`, `--dur-tap 90ms`.
+  Hover lift `-2px`, press `translateY(1px)`.
+- **Motion-law absolutes** (mechanical — `src/design-detector-guard.test.ts` fails the build):
+  no bounce/elastic easing (overshoot >1; things settle, they don't wobble) · no `transition: all`
+  (enumerate what changes) · no standalone `ease-in` · no `scale(0)` entrances (start 0.95–0.97 +
+  opacity) · no layout-property transitions (width/height/margin/top…) without an argued inline
+  waiver: `impeccable-disable-next-line <rule>` on the line directly above, AND the file pinned in
+  the guard's waiver list in the same diff.
+- New motion answers four questions before it exists: **frequency** (keyboard-initiated or
+  100+/day → no animation), **purpose** (feedback / spatial story / state change / bridging a jarring
+  swap — "looks cool" fails), **speed** (UI ≤300ms), **function** (data being read never moves for
+  style).
 - Motion **conveys state**: dial sweeps 0→real value on mount then holds the truth; glow
   lights only *live* instrument surfaces, never plain numbers; gentle card stagger on grids.
 - **Reduced motion:** global reset in `tokens.css` kills animation/transition durations;
@@ -124,5 +136,7 @@ change; detail expands in place. Surfaces live in `src/surfaces/`.
 `theme-contrast.test.ts` (WCAG incl. ink-on-accent, all 5 themes) · `theme-literal-guard.test.ts`
 (no bare theme hexes; use tokens/color-mix) · `border-hygiene-guard.test.ts` (no undefined
 fallback-less `--ix-*` tokens; no side-stripe idioms) · `doorknob-guard.test.ts` ·
-`homeRail.test.ts` (rail parity) · `sweep-guard.test.ts` (one shimmer). Polish must keep all
+`homeRail.test.ts` (rail parity) · `sweep-guard.test.ts` (one shimmer) ·
+`design-detector-guard.test.ts` (the impeccable anti-pattern detector as a build gate + the
+motion-law absolutes + every suppression enumerated and argued). Polish must keep all
 green and must not hard-code colors that should be tokens.

@@ -89,8 +89,8 @@
     0 0 16px color-mix(in srgb, var(--ix-accent) 20%, transparent),
     inset 0 1px 0 color-mix(in srgb, var(--ix-text-1) 20%, transparent);
   transition:
-    transform 380ms cubic-bezier(0.34, 1.2, 0.4, 1),
-    width 380ms cubic-bezier(0.34, 1.2, 0.4, 1),
+    transform 380ms var(--ease-out),
+    width 380ms var(--ease-out),
     opacity 200ms ease;
   will-change: transform, width;
 }
@@ -113,7 +113,7 @@
   white-space: nowrap;
   transition:
     color 280ms ease,
-    transform 130ms cubic-bezier(0.34, 1.5, 0.6, 1);
+    transform 130ms var(--ease-out);
 }
 
 /* idle hover — a quiet brighten; the gliding pill owns the "selected" emphasis */
@@ -121,7 +121,7 @@
   color: var(--ix-text-1);
 }
 
-/* tactile press — a satisfying little give on click (settles via the spring ease; motion-gated below) */
+/* tactile press — a satisfying little give on click (settles via --ease-out; motion-gated below) */
 .seg-btn:active {
   transform: scale(0.92);
 }

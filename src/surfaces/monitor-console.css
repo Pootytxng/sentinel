@@ -202,7 +202,7 @@
 :root[data-v2="on"] .monitor-console[data-motion="full"] .mc-honest,
 :root[data-v2="on"] .monitor-console[data-motion="full"] .ss,
 :root[data-v2="on"] .monitor-console[data-motion="full"] .mc-last {
-  animation: v2-mc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: v2-mc-rise 0.5s var(--ease-out) backwards;
 }
 :root[data-v2="on"] .monitor-console[data-motion="full"] .mc-stage { animation-delay: 0.1s; }
 :root[data-v2="on"] .monitor-console[data-motion="full"] .mc-honest { animation-delay: 0.22s; }

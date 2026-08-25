@@ -32,6 +32,10 @@
   height: 7px;
   border-radius: 50%;
   background: var(--v2-line-strong);
+  /* Deliberate width animation: the current-dot grows 7px→22px and must DISPLACE its sibling
+     dots (transform can't move neighbors); a handful of 7px dots, negligible reflow. The
+     layout-transition ban stands everywhere a transform can do the job. */
+  /* impeccable-disable-next-line layout-transition */
   transition: background 0.15s ease, width 0.15s ease;
 }
 :root[data-v2="on"] .hi-dot[data-state="current"] {
