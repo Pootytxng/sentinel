@@ -96,7 +96,11 @@ jurisdictions do not allow certain exclusions; some rights may not apply to you.
 
 The Software itself runs locally and collects no personal data. Its one automatic network use is a
 **signed update check** (live since 2026-07-22), which carries none of your data and which you can
-switch off in Settings; an installer downloads only after you approve it. Separately, the Compy
+switch off in Settings; an installer downloads only after you approve it. The Software also contains
+an **anonymous results sharing** path that is switched off at the source, so no build you can install
+sends anything through it; were it ever enabled in a future signed release, it would remain **off
+until you turn it on**, would be disclosed to you on first run, and could be turned off again at any
+time. Separately, the Compy
 **website** (including the launch-waitlist form) collects your email address — and a one-way hash of
 your IP address for spam prevention — only if you choose to submit it. Full detail, including
 retention and how to request deletion, is in `PRIVACY.md`.

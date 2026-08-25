@@ -1,6 +1,12 @@
 # Compy — Privacy Policy
 
-**Status: DRAFT v0.5 (2026-08-24).** v0.5 adds four things the software already did but this policy
+**Status: DRAFT v0.6 (2026-08-25).** v0.6 discloses **anonymous results sharing ("Receipts")** — a
+sending path that now exists in Compy's source code but is **switched off at the source, so no build
+can send anything**, and which is **off for you even after it is switched on**, until you turn it on
+yourself. It sends nothing today; it is written here *before* it can ever run, so no build can
+transmit something this policy has not already described. See **Anonymous results sharing** under
+**Network use** for the exact fields, endpoint and switches. v0.5 added four things the software
+already did but this policy
 did not describe — the **local session history** (including the game executable name), the
 **application-start notes** taken during capture, the **rig fingerprint**, and the **licence file**
 — and names the second GitHub host the update check redirects to. Nothing about the software
@@ -14,8 +20,12 @@ its automatic checks off.) It is **not legal advice** — the owner should still
 qualified professional before public distribution. Owner/contact identity: Pootytxng — GitHub
 issues, or compysupport@gmail.com.
 
-> **Doctrine pointer (updated 2026-08-09):** This policy describes current runtime behavior.
-> Receipts remains disabled and no send path exists. Tier 1 signed case intelligence is approved as
+> **Doctrine pointer (updated 2026-08-25):** This policy describes current runtime behavior.
+> Receipts is **built but disabled**: the send path exists in source as of 2026-08-25, and its gate
+> is fixed to *off* in code, so a shipped build has no way to reach the network through it. Arming
+> that gate is a separate, owner-signed change that cannot land without this policy already
+> describing it — which, as of v0.6, it does. Even armed, sharing stays **opt-in and off by default**
+> (owner ruling 2026-08-24, issue #207). Tier 1 signed case intelligence is approved as
 > a dark design but has no module, endpoint or traffic today. Before any Capability Exception Gate outbound tier is armed, this policy
 > and generated site copy must be updated in the SAME release with its exact endpoint, payload,
 > consent, retention/deletion and off-switch behavior; Tier 1 cannot authorize Tier 2 or 3.
@@ -29,7 +39,10 @@ issues, or compysupport@gmail.com.
 share any of your data — no accounts, no telemetry, no analytics, no advertising, and no upload of
 your hardware, sessions, or results. Its one automatic network use is a **signed update check**,
 which carries none of your data and which you can switch off in Settings; an installer downloads
-only after you approve it. **The only personal data we ever collect is on our website:** if you join
+only after you approve it. A second path — **anonymous results sharing** — is written into the
+software but switched off in code, sends nothing in any build you can install, and would stay off
+for you until you switched it on; it is described in full below so it can never arrive unannounced.
+**The only personal data we ever collect is on our website:** if you join
 the launch waitlist, we store your email (to send one launch message) and a hashed version of your
 IP (for spam prevention) — nothing else, and no third-party trackers. Details below.
 
@@ -104,11 +117,14 @@ The FPS working files and the first-run flag are safe to delete — Compy just r
 
 ## What Compy does NOT do
 
-- No telemetry, usage analytics, or crash reporting. (Two clarifications, so this can't be
+- No telemetry, usage analytics, or crash reporting. (Three clarifications, so this can't be
   misread: Compy does ask GitHub whether a newer signed version exists — see **Network use**
   below — but that request carries nothing about you or your PC, and you can switch it off. And
   Compy does keep the **local support record** described above — that is a file on your disk that
-  only you can read or send, not reporting, because nothing transmits it.)
+  only you can read or send, not reporting, because nothing transmits it. Third: the **anonymous
+  results sharing** path described under **Network use** is present in the source code but switched
+  off at the source, so no build sends anything; if it is ever switched on, it stays off for you
+  until you turn it on.)
 - No account, login, or cloud sync.
 - No advertising or tracking identifiers.
 - No selling or sharing of data with third parties.
@@ -116,7 +132,9 @@ The FPS working files and the first-run flag are safe to delete — Compy just r
 
 ## Network use
 
-Compy makes **one kind of automatic network request: a signed update check.**
+Compy makes **one kind of automatic network request: a signed update check.** (A second path exists
+in the source but is switched off in every build — see **Anonymous results sharing** at the end of
+this section.)
 
 - **What it asks.** Whether a newer signed version of Compy exists, by fetching a fixed release
   manifest from GitHub:
@@ -139,6 +157,45 @@ Compy makes **one kind of automatic network request: a signed update check.**
 Separately, some advisory recommendations may **open a link in your default web browser** (for
 example, a GPU driver download page) — but only when you click the link. Once a link opens, your
 browser, not Compy, handles it under your browser's own privacy terms.
+
+### Anonymous results sharing ("Receipts") — built, switched off, and opt-in if it is ever switched on
+
+Compy's source code contains a second network path, which **sends nothing in any build you can
+install today.** It is disclosed here in full, ahead of ever running, so that it can never appear on
+your PC as a surprise. Two independent switches stand in front of it:
+
+- **A switch in the code, currently fixed to off.** Compy is built with sharing disabled at the
+  source; there is no setting, file, or command that can turn it on in a shipped build. Enabling it
+  requires a new signed release, which cannot be published unless this policy already describes it.
+- **Your switch, which starts off.** If the first switch is ever enabled, sharing is still **off
+  until you turn it on**. Compy will tell you it exists on first run and show you exactly what a
+  receipt contains before you decide. Turning it off later stops it, permanently and immediately —
+  it is not a one-time choice.
+
+**Exactly what one receipt would contain, and nothing else:**
+
+- **Your PC's class, not your PC.** GPU maker and retail model name (e.g. "AMD", "Radeon RX 9070
+  XT"), CPU family, and a RAM **range** such as "17-24" GB. Ranges, not exact numbers, because an
+  exact byte count can single out an unusual machine.
+- **One result.** The game's executable name with its folder path removed (so a Windows username
+  embedded in a path cannot survive), average FPS, estimated 1% low, a session-length **range** such
+  as "<15min", and the **ID numbers** of the Compy recommendations that were active — the IDs only,
+  never their values, registry data, or file paths.
+- **A schema version number.**
+
+**What a receipt never contains:** your name, email, IP address, Windows username, machine name,
+serial numbers, hardware IDs, file paths, installed program lists, browsing data, or any identifier
+that could tie two receipts to the same PC. There is no account, so there is nothing to attach it to.
+
+- **Where it would go.** One address, `compy-bd6.pages.dev/api/usage` (the future `compy.gg`), which
+  we operate. No third party, no analytics provider, no ad network.
+- **When.** At most once when a monitored gaming session ends.
+- **What we would keep.** The receipt itself, with no network identifier stored beside it. To stop
+  flooding, the server counts submissions using a **hashed** form of your IP address held in a
+  separate table that **deletes itself after one hour** — it is never written next to a receipt, so
+  receipts cannot be linked back to a machine or to each other, even by us.
+- **Why it exists.** To learn whether a recommendation actually helps on hardware like yours, so the
+  advice you get is measured rather than guessed.
 
 > **About "telemetry" recommendations:** Some of Compy's optional recommendations help you
 > *disable* Windows or NVIDIA telemetry services. That is a privacy feature that reduces what

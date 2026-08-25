@@ -1807,3 +1807,10 @@ as a taste call under the 2026-08-07 decree, with a before/after for him to veto
 question. `src/ambient-animation-cost-guard.test.ts` guard 6 now fails the build on any
 document-level layer that animates forever, whatever property it animates.
 
+
+## Data-root integrity (#130) — RESOLVED, moved from RELEASE_STATE.md 2026-08-25
+
+Moved byte-for-byte when RELEASE_STATE.md hit its byte budget; the resolver shipped 2026-08-18 and
+nothing about it is a live gate. RELEASE_STATE.md keeps a one-line pointer here.
+
+| Data-root integrity (#130) | **RESOLVER LANDED, OWNER DESK RECOVERED 2026-08-18.** `src-tauri/src/data_root.rs` resolves the persistence root by where it LANDS (final path + NTFS identity), not by the `APPDATA` string, and issues `MutationRoot` - the capability `history.rs`/`actions.rs` now require - only for a verified canonical root. The owner-approved option-B recovery RAN on 2026-08-18: union merge of the split Trust Ledger (3 + 61 -> **64 receipts**, zero id collisions, both inputs hash-verified and backed up to `C:UsersKuyacodecompy-data-root-recovery`), then the packaged-Claude overlay `Compy` folder MOVED (never deleted) to `overlay-Compy` in the same archive. The resolver re-run on the desk now returns **`Canonical`**, so applies and rollbacks are unblocked here. Guards: 17 unit + `scripts/data-root-guard.test.mjs` + PowerShell preflight parity (`scripts/lib/canonical-data-root.ps1`, verified passing on the desk post-merge) + 15 merge-tool guards. Not a publish blocker. **SHIPPED to the desk 2026-08-18** in the `421657a9` build - the resolver is present in the installed `%LOCALAPPDATA%\Compy\compy.exe`, so the interim "launch from Desktop/Start menu only" restriction is LIFTED. |

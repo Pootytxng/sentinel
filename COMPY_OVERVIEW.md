@@ -68,7 +68,8 @@ Detect → diagnose → debrief → prove. That loop is built and running today 
   read/write surfaces remain barred. Game/process injection remains prohibited — FPS is captured
   externally through ETW and sensors use documented vendor interfaces.
 - **Local-first, one outbound call.** No account, no remote config, and no telemetry **today —
-  because no send path has ever been built**, not because absolutism is still the policy (see the
+  because the one send path that exists (Receipts, built 2026-08-25) is gated hard-false in code and
+  no build can reach it**, not because absolutism is still the policy (see the
   Receipts-telemetry line below). **The in-app
   updater (LIVE 2026-07-22, owner-directed) is the one thing that talks out:** a signed-update
   check against the public releases repo on launch + every 4h; nothing downloads until the user
@@ -83,8 +84,10 @@ Detect → diagnose → debrief → prove. That loop is built and running today 
   deciding reason: the app's shipped description and the public download page both promise **"No
   telemetry"**, and the releases README says "Outbound: signed update check only" — a claim already
   published to users outranks a later internal amendment. The doctrine now says default OFF in both
-  places; quote that. Nothing about the runtime changed with the ruling — the gate is built dark
-  with no send path, so nothing can send regardless. The old
+  places; quote that. Nothing about the runtime changed with the ruling. **Q9a (2026-08-25) then
+  built the send path itself** — receiver, HTTP client and consent store — and left `receipts_gate()`
+  hard-false, so nothing can send regardless; the refusal order is gate → disclosure → your switch,
+  and each is pinned by a test. `docs/PRIVACY.md` v0.6 describes it in full ahead of any arming. The old
   "verified zero-outbound" absolute is RETIRED by the updater decision <!-- outbound-claim-allow --> — the in-app footer now
   states exactly what leaves the machine: "Outbound: signed update check only." Since 2026-08-03
   the automatic check is also switchable off (Settings → About → Automatic update checks), with a
@@ -133,7 +136,8 @@ you to turn off its own telemetry.
   code signing, legal, and a Pro entity/payments are all owner-gated. Signing and legal gate the
   *public app* release; the domain gates the site's canonical URLs; none of this blocks the beta.
 - **Still dark on purpose:** remote rules (triple-gated off), Tier 1 case intelligence (approved
-  design, no runtime module/endpoint yet), Receipts sharing (no send path), Compy Pro licensing
+  design, no runtime module/endpoint yet), Receipts sharing (**path built 2026-08-25, gate
+  hard-false**), Compy Pro licensing
   (needs an entity + payments). Gaming Mode is **no longer on this list — it's live.**
 - **The tweak catalog is open, not frozen** (owner decision 2026-07-09): a tweak earns inclusion
   by measurable benefit under the same permanent safety rails (reversible, no ungated kernel capability /
