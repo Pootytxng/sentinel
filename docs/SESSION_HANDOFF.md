@@ -6,76 +6,104 @@
 
 ## Where the train is standing
 
-**The [#216](https://github.com/Pootytxng/sentinel/issues/216) entry-verification rebuild is DONE
-and ON `main`** (`9cc778cb` the rebuild, `92752920` a measured-fact comment fix, `5c3689be` the
-work-control receipt; fast-forward push 2026-08-25, `scripts/verify-local.ps1` PASS at `92752920`,
-log `logs/verify-local-2026-08-25T09-32-09Z.log`). Worktree
-`C:\Users\Kuya\code\sentinel-vision-pointer` · branch `lane/vision-pointer-guard-2026-08-24` (no
-lane ref pushed; main carries everything). Immediately before it, [#215](https://github.com/Pootytxng/sentinel/issues/215)
-landed the UI-vision pointer guard (`7e875a0a`) and [#214](https://github.com/Pootytxng/sentinel/issues/214)
-the design-system drift-lock (`6c054b77`).
+**Q9a is built, dark, merged.** [#217](https://github.com/Pootytxng/sentinel/issues/217) closed via
+PR [#218](https://github.com/Pootytxng/sentinel/pull/218), merged `8b2f0f64`; the lane ref is pruned.
+`C:\Users\Kuya\code\sentinel-q9a` is spent and still stands on `c6d8da3e` — a merge updates no
+existing worktree, so delete or reset it before reusing it. `receipts_gate()`
+(`src-tauri/src/receipts.rs:23`) is still **false** — this train built the path, it did not arm it.
 
-**The owner's desk still runs the `6c054b77` build.** Nothing since then touches `src-tauri`, so
-there is nothing to reinstall — but the next ship's self-review must eyeball the Setup back-button
-fade (`66bd28c2`, a 350ms opacity snap→fade in the tour footer; end state was always correct).
+| Commit | What |
+|---|---|
+| `8d8feddd` | Tier 2 receiver: `functions/api/usage.ts`, `migrations-reports/0001_usage.sql`, `REPORTS` binding, `scripts/usage-endpoint-guard.test.mjs` |
+| `6efd01bf` | the Rust send path: `send_decision` (gate → disclosure → opt-in), `post_receipt`, consent store, 11 tests |
+| `3f033573` | nine live docs stopped claiming "no send path exists"; PRIVACY v0.6; the missing policy-guard assertion |
+| `c6d8da3e` | first-run disclosure + a real off switch; `Toggle` moved to `src/design/` |
 
-## What the entry rebuild changed (so nobody re-litigates it)
+`scripts/verify-local.ps1` **PASS** at `c6d8da3e` — 376 files, 5170 tests, tsc, build, Rust 975,
+clippy. CI is `workflow_dispatch`-only, so the local gate IS the gate.
 
-A session used to prove itself with a LAUNCH TOKEN — one folder, one conversation, claimed once.
-Exactly one session could hold it and it kept holding it after that session died, which is how a
-launcher CLI with no process and no transcript locked the owner's own window out of this folder for
-twelve hours. Verification is now BY FACTS, measured at SessionStart and on every project write:
+### Decisions already made — do not re-litigate, they are argued in the commit bodies
 
-1. the folder is a git work tree of `Pootytxng/sentinel`;
-2. Work Control names it — an issue's `Worktree / branch` field points here and the live branch is
-   the one the board put that issue on (cached 10 min machine-wide; `launch.mjs` clears that cache
-   the moment it posts a claim, or a fresh worktree reads as unclaimed);
-3. no **live** competing writer holds it.
+1. **Opt-in, default OFF, and it STAYS off after arming.** #217's own success criterion said to
+   amend the guard to "default-ON + disclosure"; the owner **overruled that on 2026-08-24 (#207)** —
+   the shipped app description and public download page already promise "No telemetry". The doc and
+   guard changes went the TIGHTER way. Do not walk it back off the stale issue text.
+2. **No `ip_hash` on the receipt row.** The hash lives only in `usage_rate`, counts only, and every
+   POST deletes rows past the hour **inside the same batch as the insert**.
+3. **No CSP / webview-capability widening** — the send is Rust-side.
+4. **`reqwest` is declared with `default-features = false, features = ["json"]` and NO TLS feature.**
+   Adding `rustls` pulled **11 new crates** (aws-lc-sys, cmake, quinn — measured in `Cargo.lock`,
+   reverted). TLS arrives from `tauri-plugin-updater`. Pinned by three tests in
+   `src/support-evidence-outbound-guard.test.ts`.
+5. **Endpoint constant is `https://compy-bd6.pages.dev/api/usage`** — `compy.gg` does not exist
+   (#201 §1). Re-pointing is a pre-arming checklist item.
 
-Any Claude tab in the right folder verifies, launched or not. The per-folder record is a WRITER
-LEASE — it names the conversation and its pid, authorizes nobody, and enforces one-writer-per-folder
-only. **Liveness ordering is load-bearing: the pid may only PROMOTE a lease to live; the transcript
-at `~/.claude/projects/*/<sessionId>.jsonl` is what CONDEMNS.** Measured 2026-08-25: a lease written
-at 09:16 recorded pid 26224 and that pid was gone fourteen minutes later while the session was still
-typing, so a pid-only rule would condemn live sessions. Unknown still locks the folder (collision
-rule 4). Guard: `tools/entry/writer-contention.test.mjs` (54). `launch.json` survives as launcher
-plumbing (ide-bridge nonce + brief digest) and no assert reads it — pinned by extracting every
-`refuse("CODE")` literal from the hook source.
+### What Q9a still owes
 
-Two deliberate calls, both reported to the owner: the token file was demoted rather than deleted,
-and the context-window check dropped from a refusal to a recorded note.
+- **The visual self-review was NOT run, so the consent UI is NOT owner-approved.** The surface is
+  dark and cannot be captured from a running build; the fixture-preview route
+  (`[[live-fixture-preview-via-vite-cdp]]`) is how to reach the disclosure and switch states. This
+  is the one open item from the merged lane — it is in the Q9a BACKLOG row too, not only here.
+- Before arming could ever be *considered* (owner territory, not an engineering task): the
+  independent security review, and the EU/UK region check. **Do NOT arm `receipts_gate()`.**
 
-## What is left on this arc, and who owns it
+## The money-stack Phase 2 ask was answered by measuring, not building
 
-- **Nothing mechanical.** #216 is closed with a gate-PASS receipt
-  (`.claude/work-control/2026-08-25-close-issue-216.json`), evidence in
-  [#216 issuecomment-5408439086](https://github.com/Pootytxng/sentinel/issues/216#issuecomment-5408439086).
-- **The owner's larger design VISION is not this train.** What `docs/UI_VISION_BACKLOG.md` still
-  lists 🔴 OPEN is DIR-1 (the standing intuitive-UI lens) and §G (the site's mini demo, his call).
-  The July motion stack (§A: magnetic cursor, Lenis, GSAP ticks, wipe) SHIPPED `1d310e12`; the
-  panoramic gallery he DELETED (`2de8d17c`) and on 2026-08-25 he answered **"no"** to bringing a
-  drag surface back — §A.1 records it. Do not re-queue any of them from a paraphrase.
-- **Take the top unblocked row in `BACKLOG.md` ▶ NEXT UP.** There is no #216 follow-up.
+The owner asked for a new lane for the compy.gg one-pager + waitlist. **It is already built and has
+been deployed since 2026-07-15** — so no build lane was cut. What the KPI actually says:
 
-## Live traps for whoever is next
+**5 waitlist signups, every one of them 2026-06-12/13. Nothing in ten weeks.** The lever is traffic
+(#206) and the domain (#201 §1), not more website. Building a second one-pager would have produced a
+prettier page with the same zero.
 
-- `.claude/hooks/session-root-assert.mjs` may import `node:` builtins ONLY (it is copied flat by
-  `--repair`); `tools/entry/tracked-hooks.test.mjs` enforces it. That is why `canonicalizePath` and
-  the `Worktree / branch` grammar are duplicated there and pinned equal by test.
-- The impeccable hook fires from tracked `.claude/settings.json` — do NOT re-add it to
-  settings.local.json, and never hand-edit `.claude/skills/impeccable/` (re-vendor instead).
-- Bash edits bypass the write guard and the impeccable hook — use Edit/Write tools in `src/`.
-- `BACKLOG.md`'s NEXT UP section sits at 12503/12544 bytes — **41 bytes of headroom, so the next row
-  added there fails `doc-budget.ps1` until its oldest CLOSED row moves to `BACKLOG_ARCHIVE.md`
-  verbatim.** Archive first, then add. Never raise the cap.
-- The pre-push gate npm-ci's; never junction node_modules between worktrees.
-- Commit-body keywords close issues on push — reference issues bare unless closing is intended.
-- Room labels on the rail are Health · Live · History · Test — never speak an internal id
-  (`lab`/`fix`/…) as a room name to the owner.
+Production is also **2 weeks stale** and still says *"Compy is a free desktop app"* — the fix has
+been merged on `main` since 2026-08-22 and never deployed. `dist-site/` is rebuilt and staged
+(`npm run stage:site`). **The deploy is owner territory — it publishes.** Command:
+`npx wrangler pages deploy dist-site --project-name compy`.
+**Tell him what changed in the ask:** the staged tree now also carries `functions/api/usage.ts`, so
+approving the deploy stands up the Tier 2 receiver. It is inert — the app-side gate is false, so
+nothing on any PC sends to it — but it is a live endpoint, and that is his call to make knowingly.
 
-## Waiting on the owner
+## The design vision is a separate train — do not fold it into a UI fix
 
-Nothing new from this train, and **B5.1 is now ANSWERED** ("no" to a panoramic drag surface).
-Standing items live in `OWNER_ACTION_CHECKLIST.md` §A/§B/§C/§D (updater key backup A0, two settings
-lines A_settings, updater-widening B2, funnel B3, monetization B6, substituted asks B4, the #49
-mockups B5.2, wordmark `©ompy` call in §D).
+- What `docs/UI_VISION_BACKLOG.md` still lists 🔴 OPEN is **DIR-1** (the standing intuitive-UI lens)
+  and **§G** (the site's mini demo, his call). The July motion stack (§A) **shipped**, and the
+  panoramic gallery he **deleted** — on 2026-08-25 he answered "no" to bringing it back. Read the
+  rows; never re-queue this file from a paraphrase.
+
+## Traps that cost this session real time
+
+- **The entry guard refuses writes with `FOLDER_UNCLAIMED` until the issue is BOTH labelled
+  `work-control` AND has its `Worktree / branch` board field set.** `adopt` says "adopted anyway"
+  when the label is missing and then `assert` still fails. The board cache is
+  `%LOCALAPPDATA%\CompyEntry\board.json`, 10-minute TTL — after editing the board, call
+  `invalidateBoardCache()` or wait it out. `Claim expires` / `Last verified` are **date** fields:
+  `gh project item-edit --date`, not `--text`.
+- **`scripts/launch-focus-guard.test.mjs` fails only under full parallelism** and names the test
+  runner's own `node.exe` console as the minimised window. It passes 49/49 isolated. It failed one
+  push and passed the retry — re-run before believing it.
+- **A rewrite of THIS file can break `src/ui-vision-status-guard.test.ts` rule D**, which counts the
+  pointer paragraphs citing the vision file as open and needs at least three across CLAUDE.md, this
+  file and the checklist. Dropping the vision section above turns the push red.
+- **A new command needs FOUR things or it fails at runtime:** `#[tauri::command]`, registration in
+  `lib.rs`, a name in `build.rs` `APP_COMMANDS`, and an `allow-*` grant in
+  `capabilities/default.json`. `src/command-authority-guard.test.ts` catches it; the permission
+  `.toml`s are gitignored and regenerate on build.
+- **A new `src/design` component needs an a11y disposition** or `a11y-census-guard` fails — roster it
+  in `a11y-axe-guard.test.tsx` rather than writing a reason string.
+- **A fresh worktree needs `npm install`** — the pre-push gate `npm ci`s, so junctioning is forbidden.
+- **`git fetch origin --prune` before trusting the disposition audit**; add a lane's own row only
+  **after** its first push, and delete the row again once the lane merges and its ref is pruned.
+- **Merge with `gh pr merge --merge`, never `--delete-branch`** (it set `core.bare=true` repo-wide
+  once); prune the ref afterwards with `git push origin --delete <lane>`, which skips the gate.
+- **Bash heredocs eat one backslash level** — use quoted `<<'EOF'` or the Write tool for TS/JS.
+- `docs/RELEASE_STATE.md` hit its 42KB ceiling this session; the resolved #130 row was archived to
+  make room. Archive before adding — never raise a cap.
+
+## Waiting on the owner (all in `OWNER_ACTION_CHECKLIST.md`)
+
+1. **Approve the site deploy** — staged and verified, one command, publishes to the world.
+2. **Register `compy.gg`** (~$50/yr, money). Everything downstream of it is blocked, not scheduled.
+3. **The Ko-fi URL** (B3a).
+4. Whenever he wants: **#204** (Pro price shape) · **#213 A1** — the wordmark renders `©ompy`, a
+   recommendation is attached in §D · **#213 B** needs his ChatGPT mockups.

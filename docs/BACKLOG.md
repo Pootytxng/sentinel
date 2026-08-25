@@ -387,10 +387,10 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
     **The issue's own title said "default-ON": overruled by the owner's 2026-08-24 ruling (#207) —
     opt-in, default OFF even after arming, because the shipped "No telemetry" claim is already
     public.** Guards updated to match, never weakened.
-    Still open: the first-run disclosure UI + off switch in `src/surfaces/ReceiptsConsent.tsx`, the
-    webview capability/CSP question (the send is Rust-side, so it may not need widening — verify),
-    and `docs/EULA.md`. `receipts_gate()` at `src-tauri/src/receipts.rs:23` is the last line of it,
-    not the first, and arming is owner territory. 🪪 **owner-gated sub-item:** EU/UK distribution
+    Merged `8b2f0f64` (PR #218): disclosure UI + off switch, `EULA.md` §10, no CSP widening needed
+    (the send is Rust-side). Still open: the **visual self-review** of that consent UI — not run, so
+    it is NOT owner-approved. `receipts_gate()` at `src-tauri/src/receipts.rs:23` is the last line
+    of it, not the first, and arming is owner territory. 🪪 **owner-gated sub-item:** EU/UK distribution
     needs a region check before any sharing ships there.
   - [ ] **Q9b — build Tier 3 in-app feedback + crash reports.** Own module
     (`src-tauri/src/case_evidence_upload.rs`), never inside `support_evidence.rs`. Tier 3's gate is
