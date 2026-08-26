@@ -1,0 +1,91 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 221,
+  "issue": 220,
+  "branch": "lane/care-tier1-2026-08-25",
+  "currentHead": "db02b6cb0ceaa4ece45aefec93e80adf13b6df0c",
+  "explicitHandoff": "Owner turn: 'go — build Q9a dark per the agreed design', then 'whyd you stop if youre not done. continue'. Scope is plan tasks 1-7 of docs/superpowers/plans/2026-08-09-outbound-case-intelligence-tier1.md — Compy Care Tier 1 built DARK. Tasks 10-11 (independent security review + arming) are owner territory and are explicitly NOT in this lane; docs/OWNER_ACTION_CHECKLIST.md §C now carries a row saying so.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel. Worktree C:/Users/Kuya/code/sentinel-q9a, which is NOT the main checkout — main is checked out by the sibling worktree C:/Users/Kuya/code/sentinel.",
+    "remoteState": "git fetch --prune run this turn. origin/main = 59d13f29, unchanged since this lane was cut from it, so the PR is a fast-forward with no rebase owed. gh pr view 221: OPEN, not draft, MERGEABLE, mergeStateStatus CLEAN.",
+    "worktree": "Twelve worktrees live (eleven besides main). This lane is alone in sentinel-q9a; no other lane has touched src-tauri/src/case_intelligence.rs or src/case-intelligence-outbound-guard.test.ts, both of which this PR creates or owns outright.",
+    "branch": "lane/care-tier1-2026-08-25, thirteen commits past origin/main, fast-forward. The last docs commit was amended three times before it ever reached the remote - no pushed history was rewritten, and a reflexive --force-with-lease was correctly refused by the destructive-git guard. Its row in docs/BRANCH_DISPOSITIONS.md is CLAIMED and must be retired when this lands.",
+    "dirtyState": "Clean apart from this receipt file itself, which trails by one commit by construction.",
+    "liveProcesses": "compy.exe PID 21188 running from the installed build (unrelated to this lane; nothing was rebuilt or reinstalled by it). No dev server on 1420 and no fixture server on 5199 — both fixture Vite servers from the self-review were killed earlier this train. No cargo build in flight."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "c327f7f5959649e1c2fe8a988c3e024524c3267f",
+      "detail": "The first push of this lane, inside .githooks/pre-push. 389 test files, 5435 passed / 5 skipped, Rust 1118 passed / 0 failed / 24 ignored, clippy clean, LOCAL CHECK RESULT: PASS. Recorded because it proves plan tasks 1-7 green on their own; it is NOT the head this receipt authorizes."
+    },
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "failed",
+      "head": "b15654bc8d829c0244ee609672f58713c06df943",
+      "detail": "PRESERVED, not discarded. tools/entry/doc-truth.test.mjs decision 7 failed on docs/SESSION_HANDOFF.md: the merge instruction paired 'merge' and 'worktree' in one sentence without denying propagation. The detector is deliberately dumb and this is the second lane to hit it (PR #166 was the first), so the sentence was reworded rather than the guard loosened. Nothing was pushed."
+    },
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "failed",
+      "head": "66ab26a6b740faa62681d9161036222592409ea4",
+      "detail": "PRESERVED, not discarded. The SAME guard, now on docs/BRANCH_DISPOSITIONS.md, and caused by the previous fix: de-drifting that row introduced the phrase 'pre-merge review' into a sentence that already named the worktree, and /\\bmerg(e|es|ed|ing)\\b/i matches across the hyphen. Reworded to 'independent review'. The lesson recorded for the next lane: after fixing a decision-7 offender, re-run the guard over the WHOLE corpus, because the fix itself can create the next one."
+    },
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "failed",
+      "head": "db02b6cb0ceaa4ece45aefec93e80adf13b6df0c",
+      "detail": "PRESERVED, not discarded. ONE failure out of 5446: scripts/process-mutex-guard.test.mjs 'fails closed when a second process reaches a held resource', at 4318ms inside a 39.6s file. Not this lane's code - nothing in the PR touches a mutex, and commit 4a8dae40 already records this exact suite as one that starves the pool it joins and races itself. Re-run standalone at this same head: 6 passed / 6, 60s. Treated as the known parallelism flake per the standing rule that a gate flake is re-run before it is believed, NOT waived: the re-run is the evidence, and the doc-truth guard that failed the two previous heads passed here, which is what those repairs were for."
+    },
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "db02b6cb0ceaa4ece45aefec93e80adf13b6df0c",
+      "detail": "The authorizing run. Re-run of the SAME head inside .githooks/pre-push after the flake was isolated: 389 test files / 389 passed, 5441 passed / 5 skipped (5446), Rust 1119 passed / 0 failed / 24 ignored, clippy clean, LOCAL CHECK RESULT: PASS. The ref landed: c327f7f5..db02b6cb. Nothing in the tree changed between the failing run and this one - same commit, same files - which is what makes the flake diagnosis honest rather than convenient."
+    }
+  ],
+  "shipProof": {
+    "verdict": "n/a",
+    "reason": "Nothing was rebuilt or reinstalled by this lane, and nothing needed to be: Tier 1 ships DARK. Its gate is hard-false, its trust key is all zeros, and both catalog allowlists are empty, so the installed build's behaviour is byte-for-byte identical whether or not this code is present. The UI half (the Black Box's KnownIssueBlock) was proven on a live fixture render rather than on an installed build, for the same reason — it cannot be reached in a shipped binary."
+  },
+  "selfReview": {
+    "verdict": "PASS 12/12",
+    "reason": "Run under .claude/skills/self-review by the self-reviewer subagent against the live KnownIssueBlock at the owner's real resolution, using the Vite+CDP fixture route because the gate makes the state unreachable in the app. Rubric covered contrast, type scale, the flag-names-it-and-fixes-it-inline law, and the title-header law."
+  },
+  "independentReview": {
+    "practical": true,
+    "writer": "claude-code",
+    "reviewer": "rust-tauri-reviewer subagent (non-writing, separate context, sonnet per .claude/settings.json)",
+    "status": "passed",
+    "head": "db02b6cb0ceaa4ece45aefec93e80adf13b6df0c",
+    "reason": "CLEAN, no blockers. The code review ran at b15654bc and was re-bound twice as docs-only commits moved the head; each re-bind was verified, not asserted - the reviewer confirmed src-tauri/src/case_intelligence.rs and src/case-intelligence-outbound-guard.test.ts byte-identical between b15654bc and this head, and re-checked the four darkness locks and the actions.rs zero-diff at each. It independently confirmed: the new placeholder check is a no-op with a real key (all 143 case_intelligence tests use a generated real key and pass unchanged); moving the trust-root refusal ahead of the manifest size cap REDUCES a size-correlated timing signal rather than creating one; parse_manifest has zero remaining references and CaseCatalogManifest::validate() still has a live caller, so nothing went dead with it; the new Rust test bites at four real call sites and fails as SignatureInvalid with the fix reverted; and the new TS guard's bias is toward false NEGATIVES, never false positives. It disagreed with nothing. Its three warnings and two nits are recorded, not waved off: two went into the Tier 1 plan's task 10 in commit db02b6cb, and the third - a non-recursive readdirSync that can only misfire if src-tauri/src is ever split into subdirectories - was deliberately NOT fixed in this PR, because widening a guard's scope on the way into a merge is how a guard change rides in unreviewed."
+  },
+  "docGates": [
+    "doc-budget.ps1 ALL PASS (BACKLOG 80.3KB/84KB and 908/1000 lines after archiving 60 closed PHASE A rows to docs/archive/BACKLOG_PHASE_A_SHIPPED_2026-08-25.md; RELEASE_STATE 39.6KB/42KB)",
+    "verify-release-state.mjs — 31 citations, 31 ok, 0 near-drift, 0 broken, 0 state-drift",
+    "branch-disposition-audit.mjs — OK, every origin ref has a proven row",
+    "markdown-link-guard — inside verify-local.ps1; caught the archive file's one relative link the moment it became tracked, which was fixed in d1545246"
+  ],
+  "boundaryProof": {
+    "actionsRs": "git diff origin/main..HEAD -- src-tauri/src/actions.rs is empty. The ONE Windows-mutation boundary is untouched by the whole PR.",
+    "locks": "Three independent locks, each of which refuses on its own: case_intelligence_gate() hard-returns false; CASE_SIGNING_PUBKEY is CaseSigningKey::new([0u8; 32]); CASE_CATALOG_ORIGINS and CASE_CATALOG_ENDPOINTS are both empty slices. Plus a deny-only 'fetch-disabled' file whose presence refuses and whose absence enables nothing.",
+    "unreachable": "refresh_case_catalog is not registered as a tauri::command and has no production caller. Arming is plan tasks 10-11 and needs an owner-signed commit.",
+    "csp": "tauri.conf.json connect-src is unchanged: \"'self' ipc: http://ipc.localhost\". No frontend fetch was added."
+  }
+}
