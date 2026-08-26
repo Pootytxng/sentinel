@@ -6,19 +6,19 @@
 
 ## Where the train is standing
 
-**A LANE IS MID-FLIGHT AND UNPUSHED.** Compy Care **Tier 1**, built dark, issue
-[#220](https://github.com/Pootytxng/sentinel/issues/220).
+**A LANE IS PUSHED AND OPEN FOR MERGE.** Compy Care **Tier 1**, built dark, issue
+[#220](https://github.com/Pootytxng/sentinel/issues/220) → PR
+[#221](https://github.com/Pootytxng/sentinel/pull/221).
 
 | | |
 |---|---|
 | Worktree | `C:\Users\Kuya\code\sentinel-q9a` — **not** the main checkout |
-| Branch | `lane/care-tier1-2026-08-25`, cut off `origin/main` `59d13f29` |
+| Branch | `lane/care-tier1-2026-08-25`, head `c327f7f5`, cut off `origin/main` `59d13f29` |
 | Plan | `docs/superpowers/plans/2026-08-09-outbound-case-intelligence-tier1.md` (11 tasks) |
-| Committed | tasks 1–6, six commits, **nothing pushed** |
-| Working tree | **task 7 complete and reviewed, UNCOMMITTED** (17 files) |
+| State | **plan tasks 1–7 of 11 done**, 11 commits, pushed, PR open + MERGEABLE, tree clean |
+| Gate | `pwsh scripts/verify-local.ps1` **PASS at `c327f7f5`** (the pre-push hook ran it) |
 
-Commits, oldest last: `f025c63a` (pull path) · `04aa6e61` (matcher) · `2baf79e8` (cache) ·
-`5f9a40fc` (trust root) · `8b821a69` (schema) · `4a9b0bc0` (froze the pre-Tier-1 station).
+Issue #220 is scoped to exactly tasks 1–7, so merging PR #221 closes it.
 
 - **Eleven worktrees besides `main`. Six are spent; five carry commits that are not on main — do
   NOT delete or hard-reset those five before checking them**: `lane/care-tier1-2026-08-25`
@@ -71,17 +71,16 @@ recorded inline. `BACKLOG.md`'s Tier 1 row is `[BUILT-DARK]`, three follow-up ni
 
 ## THE NEXT STEP, exactly
 
-1. Commit task 7. Message drafted at
-   `%LOCALAPPDATA%\Temp\claude\c--Users-Kuya-code-sentinel\27dfa021-…\scratchpad\msg7.txt`
-   (session-scoped — if gone, rewrite from this file and the plan):
-   `git add src-tauri/src/blackbox.rs src-tauri/src/case_intelligence.rs src/types.ts
-   src/surfaces/BlackBox.tsx src/surfaces/BlackBox.css src/surfaces/BlackBox.test.tsx src/i18n
-   src/mutation-boundary-guard.test.ts src/case-intelligence-outbound-guard.test.ts
-   src/fixture-parity-guard.test.ts src/design/mono-census.baseline.json docs/ui-sweep/fixture`
-   Then a separate `docs:` commit for RELEASE_STATE / PRIVACY / BACKLOG / the archive / this file /
-   the policy guard.
-2. `pwsh scripts/verify-local.ps1` → push `lane/care-tier1-2026-08-25` → PR against #220.
-3. Kill the vite server on port 5199 if it is still up.
+1. **Merge PR #221** with `gh pr merge 221 --merge`. **Never pass `--delete-branch`**: it sets
+   `core.bare=true` repo-wide and corrupts every worktree. Prune the ref afterwards with
+   `git push origin --delete lane/care-tier1-2026-08-25`, then drop the lane's row from
+   `docs/BRANCH_DISPOSITIONS.md` (the audit fails on a row naming a dead ref).
+2. Merging is a **proof-dependent** transition under `docs/WORK_CONTROL.md`: build the receipt and
+   run `node scripts/work-control-gate.mjs <receipt.json>` first. It binds every named gate AND the
+   independent review to the exact current head — a review of an earlier head does not count.
+3. Close #220 (tasks 1–7 is its whole scope) and point its BACKLOG row at the merge.
+4. Plan tasks 8–9 are then the next lane. Tasks 10–11 (arming) are owner territory, and
+   `docs/OWNER_ACTION_CHECKLIST.md` §C now carries a row saying exactly that.
 
 **OUT of this lane, deliberately:** plan tasks 8–9 (further UI — another writer may be live on UI
 surfaces) and 10–11 (independent security review + arming — owner territory).

@@ -642,6 +642,23 @@ git commit -m "feat(care): persist and surface new crash incidents (#91)"
 
 ### Task 10: Security/privacy review and dark acceptance
 
+**Carried forward from the #221 pre-merge review (2026-08-25)** — two items this task must close,
+recorded here because nothing else would carry them across the gap between building dark and arming:
+
+1. `ReqwestCaseHttp::get` wraps `reqwest_get` in `tauri::async_runtime::block_on`
+   (`src-tauri/src/case_intelligence.rs`, the `impl CaseHttp for ReqwestCaseHttp` block). It is safe
+   from a sync command thread and **deadlocks if it is ever called from inside an async command
+   body**. Nothing calls it in this build. Whoever arms Tier 1 must confirm the call site is sync, or
+   make `refresh_case_catalog` async end to end.
+2. `catalog_version` is a `u64` on the Rust side and a `number` in TypeScript. Beyond 2^53 the JS
+   side loses precision silently. Harmless at real catalog versions; pin it if the wire type is ever
+   used for anything but comparison.
+3. The dead-`pub(crate)`-fn guard in `src/case-intelligence-outbound-guard.test.ts` builds its
+   corpus with a NON-recursive `readdirSync` over `src-tauri/src`. Every `.rs` file in the crate sits
+   flat in that directory today, so it is accurate now. The day anyone splits the crate into
+   subdirectories the guard goes quiet rather than wrong — a false negative, which is the failure
+   mode nobody notices. Add `{ recursive: true }` at that point, not before.
+
 **Files:**
 
 - Modify: `docs/PRIVACY.md` only to describe the exact dark/current behavior

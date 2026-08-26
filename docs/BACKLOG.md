@@ -865,8 +865,9 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 
 ## PHASE C — Outbound capabilities 📡 (separate gates; each ships DARK before arming)
 - [BUILT-DARK] **Tier 1 signed case knowledge** — `case_intelligence.rs` (~4.4k lines) + the Black
-  Box's `KnownIssueBlock`; #220. Schema · trust root · cache · matcher · pull path · UI, all built,
-  self-reviewed PASS 12/12 and **dark behind three independent locks**: `case_intelligence_gate()`
+  Box's `KnownIssueBlock`; #220, open as PR #221 (not merged). Schema · trust root · cache ·
+  matcher · pull path · UI, all built, self-reviewed PASS 12/12 and **dark behind three
+  independent locks**: `case_intelligence_gate()`
   hard-false, an all-zero signing key, and BOTH catalog allowlists empty. Separate trust domain from
   privileged remote rules; download only, no machine-data upload. **Remaining: plan tasks 8–9 (UI
   polish) and 10–11 (independent security review + arming) — arming is owner territory.**
