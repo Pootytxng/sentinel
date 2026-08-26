@@ -7,7 +7,7 @@
 
 ## Where the train is standing
 
-**ONE THING IS MID-FLIGHT — the two issue closes under THE NEXT STEP.** Compy Care **Tier 1 plan tasks
+**NOTHING IS MID-FLIGHT. `main` is clean and every issue this train touched is closed.** Compy Care **Tier 1 plan tasks
 8–9** — crash-rescue discoverability and the persisted local incident observer — landed 2026-08-26 as
 PR [#223](https://github.com/Pootytxng/sentinel/pull/223) (`0e8f7835`). Tasks 1–7 landed before it as
 PR [#221](https://github.com/Pootytxng/sentinel/pull/221).
@@ -81,10 +81,9 @@ falsified before it was counted.
 
 ## THE NEXT STEP, exactly
 
-**IN FLIGHT:** #222 closed itself when PR #223 merged; **#128 is still open**, and NEITHER has its
-receipt landed — `.claude/work-control/2026-08-26-close-issue-{222,128}.json` are uncommitted. Rebind
-`currentHead` to the head you gate at, fill `independentReview`, comment what is NOT closed on both,
-close #128, push. Then pick one:
+**#222 and #128 are both closed, with receipts** — `.claude/work-control/2026-08-26-close-issue-{222,128}.json`,
+work-control gate PASS at `7764df4a`, three independent verification passes behind them (two returned
+FIX-BEFORE-CLOSE; the third CLEAN). Nothing is half-done. Pick one:
 
 1. **The three queued Tier 1 nits** in `docs/BACKLOG.md` PHASE C — all small, all real.
 2. **Q9b — Tier 3 in-app feedback + crash reports** (`docs/BACKLOG.md`, own module
