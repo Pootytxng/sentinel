@@ -1,4 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+// DIR-1 first-timer walk, 2026-08-26, finding #5: "1% low" is a measurement word, and the
+// reader this product is for has never met it. `src/jargon-term-gloss-guard.test.ts` derives
+// its worklist from the shipped locale, so every place that prints the bare word is graded.
+import { Term } from "../design/Term";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
@@ -555,7 +559,7 @@ export function HomeHud({
                     </span>
                     <span className="hud-unit">{t("home.homeHud.ledger.fpsAvg")}</span>
                     <span className="hud-note">
-                      {t("home.homeHud.ledger.onePercentLowLabel")}{" "}
+                      <Term id="one-percent-lows">{t("home.homeHud.ledger.onePercentLowLabel")}</Term>{" "}
                       <span
                         className={`hud-mono${gradeClass(low1Grade)}`}
                         style={gradeInk(low1Grade)}

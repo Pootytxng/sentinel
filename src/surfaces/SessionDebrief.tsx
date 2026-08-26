@@ -25,7 +25,9 @@ import "../i18n";
 // Session debrief cluster — extracted verbatim from App.tsx so it can render in place inside Play
 // (halfway-home §1, owner-greenlit). Locked copy unchanged. Styles are global (App.css / arc).
 
-function CmpReceipt({ label, before, after }: { label: string; before: number; after: number }) {
+// `label` is a ReactNode so a caller can gloss jargon inline, exactly as DebriefTile does —
+// this receipt prints "1% low", and a bare measurement word is a dead end (jargon-term-gloss-guard).
+function CmpReceipt({ label, before, after }: { label: ReactNode; before: number; after: number }) {
   const max = Math.max(before, after, 1);
   return (
     <div className="cmp-receipt">
@@ -144,7 +146,11 @@ function ComparisonCard({
         <>
           <div className="cmp-receipts">
             <CmpReceipt label={t("monitor.sessionDebrief.avgFpsLabel")} before={r.baseline_avg_fps} after={r.after_avg_fps} />
-            <CmpReceipt label={t("monitor.sessionDebrief.oneLowLabel")} before={r.baseline_low1_fps} after={r.after_low1_fps} />
+            <CmpReceipt
+              label={<Term id="one-percent-lows">{t("monitor.sessionDebrief.oneLowLabel")}</Term>}
+              before={r.baseline_low1_fps}
+              after={r.after_low1_fps}
+            />
           </div>
           <p className="cmp-delta">{deltaLine}</p>
         </>

@@ -491,7 +491,7 @@ export function MonitorConsole({
                 />
                 <Reading
                   id="low1"
-                  label={t("monitor.monitorConsole.deltaOneLow")}
+                  label={<Term id="one-percent-lows">{t("monitor.monitorConsole.deltaOneLow")}</Term>}
                   value={latest.low1_fps_est}
                   unit="fps"
                   tone={arcTone(gradeLow1(latest.low1_fps_est, latest.avg_fps))}
@@ -555,9 +555,16 @@ export function MonitorConsole({
                 {(
                   [
                     ["avg", t("monitor.monitorConsole.deltaAvgFps"), fmtDeltaGlyph(deck.avgFps)],
-                    ["low1", t("monitor.monitorConsole.deltaOneLow"), fmtDeltaGlyph(deck.low1)],
+                    [
+                      "low1",
+                      <Term id="one-percent-lows">{t("monitor.monitorConsole.deltaOneLow")}</Term>,
+                      fmtDeltaGlyph(deck.low1),
+                    ],
                     ["spikes", t("monitor.monitorConsole.deltaSpikes"), fmtDeltaGlyph(deck.spikes)],
-                  ] as const
+                    // Widened from `as const` so the "1% low" cell can carry its glossary
+                    // trigger — the OTHER two cells stay plain strings, which is the point:
+                    // "Average FPS" and "Spikes" are ordinary English, "1% low" is not.
+                  ] as [string, ReactNode, ReactNode][]
                 ).map(([key, k, v]) => (
                   <span key={key} className="mc-delta-v" data-k={key}>
                     <span className="mc-delta-vk">{k}</span>

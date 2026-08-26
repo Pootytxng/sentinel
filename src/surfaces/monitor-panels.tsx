@@ -2,6 +2,14 @@ import { useTranslation } from "react-i18next";
 import { fmtGB, fmtGHz } from "./hardware-format";
 import { prettyGameName } from "./game-name";
 import { CpuTempOffer } from "./CpuTempOffer";
+// DIR-1 first-timer walk, 2026-08-26, finding #5. "1% low" and "frametime" print here as bare
+// stat labels, and the persona this room is built for has never seen a frametime chart -- they
+// cannot tell whether a lower number is good or bad. Every OTHER live surface that prints these
+// two already wraps them in <Term>; this box was one of the places the glossary had not reached.
+// So this is not new copy and not a new affordance -- it is the existing glossary reaching the
+// last places that were missing it. Fail-soft by construction: an unknown id renders the children
+// as plain text, so the worst case is exactly today's screen. Guard: src/jargon-term-gloss-guard.
+import { Term } from "../design/Term";
 import "../i18n";
 
 // The deep Monitoring panels — moved VERBATIM out of App.tsx (T3, spec
@@ -139,13 +147,17 @@ export function FpsPanel({
         </div>
         <div className="fps-stats">
           <div className="fps-stat">
-            <span className="fps-stat-label">{t("monitor.monitorPanels.frametimeStatLabel")}</span>
+            <span className="fps-stat-label">
+              <Term id="frametime">{t("monitor.monitorPanels.frametimeStatLabel")}</Term>
+            </span>
             <span className="fps-stat-value">
               {sample.avg_frametime_ms.toFixed(1)} ms
             </span>
           </div>
           <div className="fps-stat">
-            <span className="fps-stat-label">{t("monitor.monitorPanels.oneLowStatLabel")}</span>
+            <span className="fps-stat-label">
+              <Term id="one-percent-lows">{t("monitor.monitorPanels.oneLowStatLabel")}</Term>
+            </span>
             <span className="fps-stat-value">~{Math.round(sample.low1_fps)} FPS</span>
           </div>
           <div className="fps-stat">
