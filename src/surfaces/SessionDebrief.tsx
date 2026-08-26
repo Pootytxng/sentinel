@@ -294,7 +294,23 @@ export function SessionDebrief({
     ? recs.find((r) => r.id === (topLimiter.linked ?? topLimiter.id))
     : undefined;
   const canArm = !!topRec && !topRec.currently_applied;
-  const cleanSession = ratio >= 0.75 && !shownInsight && !canArm;
+  // DIR-1a APPLIED TO LIVE (owner direction 2026-08-26: "offering help should only be an option if
+  // there an indicator that something was detected from your pc that it would even inquire that").
+  // `priorities.limiters` are derived from the MACHINE's readiness checks (priorities.rs —
+  // `Attention` → `Bucket::Limiter`), never from this session's frames. So any rig carrying an open
+  // limiter handed EVERY session — including one this card had just graded "Smooth session" — a
+  // button calling the change "the #1 fix", and suppressed the honest clean line to do it
+  // (`cleanSession` used to require `!canArm`). One card, two contradictory sentences, and a
+  // problem asserted that nothing here measured.
+  //
+  // The offer is NOT hidden: hiding is barred (owner reversal 2026-08-06, "intimidation is a
+  // STRUCTURE defect… never a switch") and "I want more fps" is a real reason to change something
+  // on a healthy rig — it is one of the four goal answers Health's front door gained the same day.
+  // What is chosen on evidence is the FRAMING, exactly as Health picks between its symptom half and
+  // its goal half on `somethingDetected`. Measured trouble → "Apply the #1 fix"; nothing measured →
+  // "Try one change", under a clean line that no longer claims there is nothing worth changing.
+  const problemMeasured = ratio < 0.75 || !!shownInsight;
+  const cleanSession = !problemMeasured;
 
   // BACKLOG:236 Ledger half — the ComparisonCard above already owns the rollback control for ITS
   // rec ("Revert it"). In the common flow (apply a fix from this debrief → `arm_comparison` for that
@@ -440,6 +456,17 @@ export function SessionDebrief({
         )}
       </div>
 
+      {/* The clean line no longer stands DOWN for the offer — it stands ABOVE it, in the shorter
+          wording, so the card never says "nothing worth changing" beside a button inviting a
+          change. With no offer to make it keeps the full sentence it always had. */}
+      {cleanSession && (
+        <p className="debrief-clean">
+          {canArm && topRec
+            ? t("monitor.sessionDebrief.cleanSessionOffer")
+            : t("monitor.sessionDebrief.cleanSession")}
+        </p>
+      )}
+
       {canArm && topRec ? (
         <button
           className="debrief-cta"
@@ -476,10 +503,19 @@ export function SessionDebrief({
             }).catch(() => {});
           }}
         >
-          {busyId === topRec.id ? t("monitor.sessionDebrief.applying") : t("monitor.sessionDebrief.applyFix")}
+          {/* Both branches stay LITERAL t("…") call sites on purpose: affordance-census.test.ts
+              walks sources for that exact shape, so folding the choice inside the t() argument
+              would read to the census as the "#1 fix" affordance having been dropped — case 2 in
+              its own triage list ("moved somewhere the walker cannot see — fix the edge, do not
+              re-record"). Nothing here is retired; the wording is chosen, and both wordings ship. */}
+          {busyId === topRec.id ? (
+            t("monitor.sessionDebrief.applying")
+          ) : problemMeasured ? (
+            t("monitor.sessionDebrief.applyFix")
+          ) : (
+            t("monitor.sessionDebrief.applyTry")
+          )}
         </button>
-      ) : cleanSession ? (
-        <p className="debrief-clean">{t("monitor.sessionDebrief.cleanSession")}</p>
       ) : null}
     </div>
   );

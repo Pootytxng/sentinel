@@ -525,6 +525,37 @@ Windows. Guard `src/surfaces/home-console-front-door-gate.test.tsx`, falsified t
 **This directive is a STANDING lens, not a closed row:** any new Health affordance has to answer
 "is this framing earned?" before it ships.
 
+**THE LENS WALKED THE OTHER THREE ROOMS 2026-08-26.** Live · History · Test, read against the rail in
+`src/design/homeRail.ts`, asking of every affordance: is the framing earned by evidence this room
+actually measured?
+
+- **History — clean.** Its zero-evidence face is already goal-framed ("Heard a tweak online? Look it
+  up here before you try it"), every tile reads as a count or a plain "none yet", and its one offer
+  (undo) is conditional on there being an active change.
+- **Test — clean, and already deliberate about it.** The station dock draws each station's
+  **`dockLine`** (the task) and *not* its `whenLine` (the symptom that sends you there) — the
+  2026-08-21 intimidation pass made that choice on purpose and left the reasoning in
+  `LabConsole.tsx`. The router's five lines carry three non-symptom answers, and its lead answer is
+  a goal ("I just want my PC faster — safely, no fiddling").
+- **Live — ONE REAL VIOLATION, fixed.** `SessionDebrief`'s primary CTA read **"Apply the #1 fix —
+  compare next session"** whenever an unapplied recommendation existed, *regardless of how the
+  session graded*. `priorities.limiters` come from the MACHINE's readiness checks
+  (`src-tauri/src/priorities.rs`, `PriorityStatus::Attention` → `Bucket::Limiter`), never from the
+  session's frames — so any rig carrying an open limiter got a button calling a change "the #1 fix"
+  directly under a headline that had just said **"Smooth session"**, and the honest clean line was
+  suppressed to make room for it (`cleanSession` required `!canArm`). One card, two contradictory
+  sentences, and a problem asserted that nothing on the card measured.
+  **Fixed as framing, not hiding** — the same shape Health uses to choose between its two halves:
+  measured trouble (`ratio < 0.75` or a stutter insight) still earns "Apply the #1 fix"; a session
+  with nothing measured against it gets "Try one change — compare next session" under "Good session,
+  good rig." The offer itself never disappears — a switch is barred by the 2026-08-06 reversal, and
+  "I want more fps" is one of the four goal answers this very directive put on Health's front door.
+  Guard `src/surfaces/session-debrief-earned-framing-guard.test.tsx`, falsified three ways against
+  the old behaviour; rules B and C exist so a future "fix" that just deletes the button fails too.
+  **The 2026-06-04 first-experience spec is not contradicted** — its zero-case was written as "clean
+  session, nothing armed, no insight" and simply never contemplated a smooth session on a rig with an
+  open limiter.
+
 #### DIR-1b. A named problem must show a next step (owner ruling 2026-08-26) ✅ SHIPPED `b21bc18b`
 
 #180 §C bars the flagged check's DETAIL PARAGRAPH from Health's header, which left the attention

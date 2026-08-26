@@ -282,7 +282,9 @@
     "replaceComparisonConfirm": "Replace & apply",
     "applying": "Applying…",
     "applyFix": "Apply the #1 fix — compare next session",
-    "cleanSession": "Good session, good rig. Nothing worth changing."
+    "applyTry": "Try one change — compare next session",
+    "cleanSession": "Good session, good rig. Nothing worth changing.",
+    "cleanSessionOffer": "Good session, good rig."
   },
   "sessionTrends": {
     "proGateFeature": "Long-term history & trends",
