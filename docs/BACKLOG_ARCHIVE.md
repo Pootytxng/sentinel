@@ -7,6 +7,32 @@
 
 ---
 
+## 2026-08-26 — Tier 1 tasks 8–9, moved verbatim (BACKLOG file byte cap)
+
+Moved out of docs/BACKLOG.md ▶ PHASE C to pay for the third Tier 1 nit recorded beside it. The row
+is a closed record — PR #223 merged as `0e8f7835` and #222 closed with it — and its guards are in
+the tree. A pointer stays on the live board. Byte-for-byte, nothing re-worded.
+
+- [x] **Tier 1 tasks 8–9 — crash-rescue deep-link + the persisted LOCAL incident observer** —
+  **LANDED 2026-08-26, PR [#223](https://github.com/Pootytxng/sentinel/pull/223) (`0e8f7835`).**
+  #222, `src-tauri/src/incident_observer.rs` (+30 Rust tests). Home's permanent rescue door now
+  carries a transient notice when Windows recorded a crash while the user was away; one click lands
+  on THAT incident inside the Black Box, marked, with an honest negative when Windows has rotated
+  the record out. The observer reads the existing local crash path on three named moments — launch ·
+  main-window foreground · session finalized — and **no timer, service, scheduled task, watcher or
+  poll exists**; the two non-launch triggers are throttled against a persisted watermark, the
+  first-ever pass seeds silently so installing Compy never announces pre-Compy crashes, and it says
+  only WHAT happened and WHEN. No outbound surface, no identity, no `actions.rs` diff, and dismiss
+  deletes no Windows record. Guards: `src/surfaces/care-home-route-guard.test.ts` +
+  `src/care-incident-observer-contract.test.ts`. **An independent review caught three things before
+  it landed, all fixed with guards first** (bug→guard): a dismissed crash could be re-announced
+  because `incident_id` hashes the crash's INSTANT and `blackbox::merge_into` moves it when a
+  corroborating WER record lands — fixed by storing each row's matching traits and reconciling
+  shifted identities before anything decides what is new · a lost-update race plus a shared temp
+  filename on the state file — fixed with one process lock around every read-modify-write, the
+  expensive scan deliberately outside it · a guard that read raw source, so a commented-out trigger
+  could satisfy it. A second review pass at the landing head returned CLEAN.
+
 ## 2026-08-26 - #213's two FIXED A-half rows, moved verbatim (NEXT UP byte cap)
 
 Moved out of docs/BACKLOG.md ▶ NEXT UP section ① to pay for the false-open correction above it.
