@@ -573,3 +573,61 @@ describe("Tier 1's evidence keys and the words a user reads for them", () => {
     });
   }
 });
+
+describe("nothing in Tier 1 is defined and then never reached", () => {
+  // bug→guard (#220, 2026-08-25, pre-merge review warning 2). `parse_manifest` shipped with zero
+  // callers anywhere — not production, not tests — and, unlike its sibling `parse_catalog`, it
+  // validated a manifest with NO signature check at all. Dead code is untidy; dead code shaped like
+  // a verification helper is a trap for whoever arms Tier 1 in plan tasks 10–11.
+  //
+  // The scope is one module on purpose, and so is counting the test block as a call site. Several
+  // `pub(crate)` fns here are PRODUCTION-BINDING WRAPPERS — `cached_catalog`, `match_incident`,
+  // `verify_catalog_chain`, `refresh_case_catalog` bind the compiled constants, and their only
+  // callers today are the tests that prove Tier 1 is dark. That is the module's idiom, not rot.
+  // What is banned is a function that nothing anywhere so much as mentions.
+  //
+  // Known blind spot, stated rather than papered over: a short name like `key` or `level` matches
+  // elsewhere in the crate by coincidence, so this catches an orphan with a distinctive name and
+  // would miss one called `new`. It is a floor, not a proof.
+  const RUST_DIR = join("src-tauri", "src");
+
+  function crateSource(): string {
+    return readdirSync(RUST_DIR)
+      .filter((f) => f.endsWith(".rs"))
+      .map((f) => stripRustComments(readFileSync(join(RUST_DIR, f), "utf8")))
+      .join("\n");
+  }
+
+  function declaredNames(moduleSource: string): string[] {
+    const prod = stripRustComments(productionSource(moduleSource));
+    return [...new Set([...prod.matchAll(/pub\(crate\)\s+fn\s+([a-z_][a-z0-9_]*)/g)].map((m) => m[1]))];
+  }
+
+  function orphans(moduleSource: string, corpus: string): string[] {
+    return declaredNames(moduleSource).filter((n) => {
+      const all = (corpus.match(new RegExp(String.raw`\b${n}\b`, "g")) || []).length;
+      const defs = (corpus.match(new RegExp(String.raw`fn\s+${n}\b`, "g")) || []).length;
+      return all - defs < 1;
+    });
+  }
+
+  it("finds the functions at all, so an empty offender list is not vacuous", () => {
+    const names = declaredNames(readFileSync(MODULE, "utf8"));
+    expect(names.length, "the pub(crate) fn extractor went blind").toBeGreaterThanOrEqual(10);
+    expect(names).toContain("advise");
+  });
+
+  it("every pub(crate) fn in the module is reached from somewhere in the crate", () => {
+    expect(orphans(readFileSync(MODULE, "utf8"), crateSource())).toEqual([]);
+  });
+
+  it("catches the exact shape that got through — a function nothing calls", () => {
+    const fixture = "pub(crate) fn parse_manifest(json: &str) -> R<CaseCatalogManifest> { todo!() }\n";
+    expect(orphans(fixture, stripRustComments(fixture))).toEqual(["parse_manifest"]);
+    expect(orphans(fixture, stripRustComments(`${fixture}let m = parse_manifest(body)?;`))).toEqual([]);
+    // A mention in a comment is not a call site.
+    expect(orphans(fixture, stripRustComments(`${fixture}// parse_manifest is unused for now`))).toEqual([
+      "parse_manifest",
+    ]);
+  });
+});

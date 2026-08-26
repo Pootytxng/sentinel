@@ -343,15 +343,6 @@ pub(crate) fn parse_catalog(json: &str) -> R<CaseCatalog> {
     Ok(catalog)
 }
 
-/// Parse and fully validate a manifest. Note that while `CASE_CATALOG_ORIGINS` is empty this ALWAYS
-/// fails at the origin check — Tier 1 is dark and there is nowhere legitimate to download from.
-pub(crate) fn parse_manifest(json: &str) -> R<CaseCatalogManifest> {
-    let manifest: CaseCatalogManifest =
-        serde_json::from_str(json).map_err(|e| CaseCatalogError::Malformed(e.to_string()))?;
-    manifest.validate()?;
-    Ok(manifest)
-}
-
 // ─── Validation primitives ─────────────────────────────────────────────────
 
 /// Substrings that disqualify a string from being plain advisory prose, each with the reason a
@@ -890,6 +881,20 @@ fn canonical_signed_payload(raw_manifest: &[u8]) -> T<(Vec<u8>, String)> {
 fn verify_manifest_with(raw_manifest: &[u8], cx: &CaseTrustContext<'_>) -> T<CaseCatalogManifest> {
     use ed25519_compact::{PublicKey, Signature};
 
+    // The compiled trust root is checked HERE, at the funnel every path crosses — not only in the
+    // `verify_catalog_chain` wrapper below. Found by the #221 pre-merge review: the cache store, the
+    // cache read and the refresh all call this function directly, so a check living only in that
+    // wrapper never ran on any real path.
+    //
+    // Without this line an all-zero key is not caught by `PublicKey::from_slice` (32 zero bytes are
+    // a well-formed slice); it reaches `.verify()`, which rejects it as a WEAK key, and the whole
+    // thing surfaces as `SignatureInvalid` — "they sent us a bad signature" when the truth is "this
+    // build has no trust root and never accepts anything". Correct refusal, wrong diagnosis, and the
+    // wrong one is what a future reader would act on.
+    if cx.key.is_placeholder() {
+        return Err(CaseTrustError::PlaceholderKey);
+    }
+
     if raw_manifest.len() > CASE_MANIFEST_MAX_BYTES {
         return Err(CaseTrustError::Oversize {
             field: "manifest",
@@ -990,11 +995,17 @@ fn verify_chain_with(
     Ok((manifest, catalog))
 }
 
-/// THE production entry point, and it cannot succeed in this build.
+/// The production-bound verification wrapper: `verify_chain_with` against the COMPILED trust root.
 ///
-/// The placeholder-key guard runs before anything is read, so a shipped binary refuses a catalog
-/// without parsing it — and `CASE_CATALOG_ORIGINS` being empty would refuse it a second time even if
-/// a key were present. Two independent reasons, either of which alone keeps Tier 1 dark.
+/// **Not the shipped entry point** — that is `advise`, which reaches verification through
+/// `cache_load_verified`. This is the fourth of the module's production-binding wrappers
+/// (`advise`, `cached_catalog`, `match_incident`, this) and, like its siblings, its callers today
+/// are the tests that prove Tier 1 is dark; tasks 8–11 are what will call it for real.
+///
+/// It cannot succeed in this build. The placeholder-key refusal below is a fast path, not the only
+/// one: `verify_manifest_with` makes the same check at the funnel every real path crosses, and
+/// `CASE_CATALOG_ORIGINS` being empty would refuse a catalog a third time even if a key were
+/// present. Independent reasons, any one of which alone keeps Tier 1 dark.
 pub(crate) fn verify_catalog_chain(
     raw_manifest: &[u8],
     raw_catalog: &[u8],
@@ -3116,6 +3127,53 @@ mod tests {
             );
             assert!(CASE_CATALOG_ORIGINS.is_empty(), "the second, independent reason");
             assert!(!case_intelligence_gate(), "and the gate above both of them");
+        }
+
+        /// A dark build must say **no trust root** on the paths that actually run — not "your
+        /// signature is bad".
+        ///
+        /// The regression this pins was found in the #221 pre-merge review. The wrapper above is
+        /// not the funnel: the cache write, the cache read and the refresh all reach
+        /// `verify_manifest_with` directly, so a placeholder check living only in the wrapper never
+        /// ran on a real path. The all-zero key sails through `PublicKey::from_slice` (32 zero
+        /// bytes ARE a well-formed slice), is rejected inside `.verify()` as a WEAK key, and
+        /// surfaces as `SignatureInvalid`. The refusal is correct either way; the DIAGNOSIS is not,
+        /// and the diagnosis is what a future reader acts on. Delete the check at the head of
+        /// `verify_manifest_with` and this test fails.
+        #[test]
+        fn a_dark_build_reports_no_trust_root_on_the_paths_that_actually_run() {
+            let kp = KeyPair::generate();
+            let (manifest, catalog) = signed_pair(&kp);
+            let dark = CaseSigningKey::new([0u8; 32]);
+            assert!(dark.is_placeholder(), "the fixture is the shipped trust root's shape");
+
+            // Not vacuous: these exact bytes verify against a real key.
+            assert!(verify_chain_with(&manifest, &catalog, &cx(&key_of(&kp))).is_ok());
+
+            assert_eq!(
+                verify_manifest_with(&manifest, &cx(&dark)).expect_err("there is no trust root"),
+                CaseTrustError::PlaceholderKey,
+                "the funnel every real path crosses"
+            );
+            assert_eq!(
+                refuse(&manifest, &catalog, &cx(&dark)),
+                CaseTrustError::PlaceholderKey,
+                "the full chain"
+            );
+
+            let root = TempRoot::new("dark-trust-root");
+            assert_eq!(
+                cache_store_verified(&root.cache(), &manifest, &catalog, &cx(&dark))
+                    .expect_err("a dark build must not populate its cache either"),
+                CaseCacheError::Untrusted(CaseTrustError::PlaceholderKey),
+                "the cache write path"
+            );
+            assert!(!root.file().exists(), "and it wrote nothing on the way out");
+            assert_eq!(
+                cache_load_verified(&root.cache(), &cx(&dark)).expect_err("nor read one"),
+                CaseCacheError::Missing,
+                "nothing was ever stored, so the read is Missing rather than Untrusted"
+            );
         }
     }
 
