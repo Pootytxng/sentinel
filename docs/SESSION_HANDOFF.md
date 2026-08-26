@@ -7,16 +7,16 @@
 
 ## Where the train is standing
 
-**`main` is clean and pushed; the desk build is `1703be9f`, installed and live.** The **DIR-1
-first-timer walk** is CLOSED — its two owner rulings shipped in `b21bc18b` (DIR-1a/DIR-1b in
-`UI_VISION_BACKLOG.md`), and **NEXT UP ② closed 2026-08-26**, the last thing it left open.
+**`main` is clean and pushed at `9c43015c`; the desk build is still `1703be9f`** (no rebuild — the
+change since is copy on a card that needs a real measured session to appear). **DIR-1a has now walked
+Live · History · Test:** History and Test came back clean; Live's one real violation is fixed.
 
 | | |
 |---|---|
 | Installed | `1703be9f`, stamp byte-found in the installed exe, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
-| Shipped | rule 5's "GPU sensor coverage" sentence reaches a screen for the first time · the dead `deepMonitoring` route is deleted |
-| Self-review | **PASS 12/12** at `1703be9f`, quoted in the RELEASE_STATE owner-installed row |
-| Gate | `tsc` clean · 5623 frontend tests · doc-truth 0 drift · doc-budget ALL PASS |
+| Shipped | `1703be9f` rule 5's "GPU sensor coverage" sentence reaches a screen · `9c43015c` Live's debrief stops calling a change "the #1 fix" after a session it graded smooth |
+| Self-review | **PASS 12/12** at `1703be9f`. **NOT run on `9c43015c`** — that session was barred from dispatching the subagent; copy + one conditional, no layout moved |
+| Gate | `tsc` clean · 5628 frontend tests · doc-truth 0 drift · doc-budget ALL PASS · pre-push local gate PASS |
 
 ## The rule that came out of the walk — read this before touching Health
 
@@ -82,10 +82,10 @@ self-reviewer reaches a state the shipped app cannot be put into (the front-door
 
 ## THE NEXT STEP, exactly
 
-**Take NEXT UP ②** (the dead-code pair: delete or re-reach `FpsPanel`, then re-home the GPU sensor
-coverage line). After that, P2's last item is the **Consumer / Technical / Support evidence
-exports**: the backend half exists (`src-tauri/src/support_evidence.rs`,
-`src/surfaces/SupportEvidence.tsx`), the Consumer and Technical projections as SURFACES do not.
+**Build the Consumer / Technical / Support evidence exports** — P2's last item, and the last thing
+`UI_VISION_BACKLOG.md` still lists as open under DIR-1. The backend half exists
+(`src-tauri/src/support_evidence.rs`, `src/surfaces/SupportEvidence.tsx`); the Consumer and Technical
+projections as SURFACES do not. DIR-1a applies to them before they ship: earned framing, or none.
 
 **The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
 (`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
