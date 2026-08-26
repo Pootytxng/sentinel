@@ -29,6 +29,9 @@ type LenisLike = {
   stop(): void;
   start(): void;
   destroy(): void;
+  /** Optional on purpose: the spine degrades to the bare scrollTop write if a Lenis version ever
+   *  drops it, rather than throwing inside a navigation. */
+  scrollTo?(target: number, options?: { immediate?: boolean }): void;
 };
 
 /** How long the loop keeps ticking after the lane stops moving. One second of frames costs ~0.1% of
@@ -125,6 +128,19 @@ export function LenisSpine({
       raf = requestAnimationFrame(loop);
     };
 
+    /** ShellV2 resets the lane to its top on every room change (its own comment carries the
+     *  measurement). The raw `scrollTop = 0` it writes is enough while this spine is absent, but
+     *  Lenis eases toward a target it holds internally, so an in-flight lerp can drag the new room
+     *  back down within a frame or two of paint. Hard-sync instead of racing it: jump the wrapper,
+     *  reset the motion baseline so the idle detector does not read the jump as a scroll, and tell
+     *  Lenis the target moved. `immediate` because this is navigation mechanics — the room must
+     *  already be at its top when it paints, not glide there while the user reads it. */
+    const onLaneReset = () => {
+      wrapper.scrollTop = 0;
+      lastTop = 0;
+      lenis?.scrollTo?.(0, { immediate: true });
+    };
+
     const onVisibility = () => {
       if (document.hidden) {
         // A hidden window is a park like any other — and the longest one there is. Left unrecorded,
@@ -158,6 +174,7 @@ export function LenisSpine({
       }
       wrapper.addEventListener("scroll", wake, { passive: true });
       document.addEventListener("visibilitychange", onVisibility);
+      window.addEventListener("compy:lane-reset", onLaneReset);
       // One arming pass so a scroll restored on mount settles, then it parks on its own.
       wake();
     })();
@@ -169,6 +186,7 @@ export function LenisSpine({
       for (const type of WAKE_EVENTS) wrapper.removeEventListener(type, wake);
       wrapper.removeEventListener("scroll", wake);
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("compy:lane-reset", onLaneReset);
       lenis?.destroy();
       lenis = null;
     };

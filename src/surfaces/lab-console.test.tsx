@@ -289,6 +289,70 @@ describe("LabConsole", () => {
     expect(document.querySelector(".lc-detail")).toBeNull();
   });
 
+  // bug -> guard (DIR-1 first-timer walk, 2026-08-26, finding #1). The detail panel renders BELOW
+  // the dock, so a station could open entirely off screen. The walk measured the deep-link case
+  // live: from Health's "It crashed, froze, or restarted" -> "Read the crash record", the Crash &
+  // Freeze Rescue node came back aria-pressed="true" and #lab-console-detail was in the DOM, while
+  // the only thing visible was this room's unrelated hero. A press with no visible effect is the
+  // dead end the walk was sent to find.
+  //
+  // Two traps this guard fell into first, both of which make it pass VACUOUSLY: src/test/setup.ts
+  // stubs `scrollIntoView` on HTMLElement.prototype, which SHADOWS Element.prototype (spy the same
+  // prototype the stub is on), and `spy.mock.contexts` is where `this` lands -- `.instances`
+  // records only `new` calls, so it reads empty for a prototype method.
+  //
+  // `block: "nearest"` is load-bearing and pinned below: it is what keeps a hand click from
+  // yanking the dock off screen when the panel is already visible. Falsified both ways -- dropping
+  // the scroll fails the first two, and scrolling on close fails the third.
+  const onDetail = (spy: { mock: { contexts: unknown[] } }) =>
+    spy.mock.contexts.filter((el) => (el as Element | undefined)?.id === "lab-console-detail");
+
+  it("scrolls a hand-opened station into view, and only as far as it has to", () => {
+    const spy = vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
+    try {
+      renderConsole();
+      fireEvent.click(screen.getByRole("button", { name: /benchmark/i }));
+      expect(onDetail(spy).length, "the opened station was never scrolled into view").toBeGreaterThan(0);
+      // `.at(-1)` is not in this project's lib target — index arithmetic instead.
+      const last = spy.mock.calls[spy.mock.calls.length - 1];
+      expect(last?.[0], "a hand click must not yank the dock off screen").toEqual({ block: "nearest" });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("scrolls the deep-linked station into view on arrival", () => {
+    const spy = vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
+    try {
+      localStorage.setItem("compy_lab_open_station", "benchmark");
+      renderConsole();
+      expect(openStationName(), "the deep link did not open its station").toBe("Benchmark");
+      expect(onDetail(spy).length, "the deep-linked station was never scrolled into view").toBeGreaterThan(0);
+    } finally {
+      spy.mockRestore();
+      localStorage.removeItem("compy_lab_open_station");
+    }
+  });
+
+  // `stationNode`, not a bare role query: with Benchmark OPEN, its own panel renders a second
+  // button matching /benchmark/i, and the query that works for the first click is ambiguous for the
+  // second. The dock helper always addresses the dock.
+  it("does not scroll when a station is CLOSED — the reader keeps their place", () => {
+    renderConsole();
+    fireEvent.click(stationNode(/benchmark/i));
+    const spy = vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
+    try {
+      fireEvent.click(stationNode(/benchmark/i));
+      expect(document.querySelector(".lc-detail"), "the station did not close").toBeNull();
+      // Nothing at all, not merely "not the detail panel": closing must not move the lane by way
+      // of some other node either. A filtered assertion here let a scroll-the-dock-on-close
+      // mutation survive falsification.
+      expect(spy, "closing a station moved the page").not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("shows an honest NOT-YET gauge when a reading is absent (no fabricated number)", () => {
     renderConsole();
     expect(screen.getAllByText(/not yet/i).length).toBeGreaterThan(0);

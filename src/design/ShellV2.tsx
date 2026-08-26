@@ -121,6 +121,30 @@ export function ShellV2({
     if (changed && jarvis) setWipe((w) => w + 1);
   }, [activeId, jarvis]);
 
+  // THE LANE GOES BACK TO ITS TOP ON EVERY ROOM CHANGE (DIR-1 first-timer walk, 2026-08-26,
+  // finding #1). `.v2-content` below is ONE scroll container shared by every room and nothing ever
+  // reset it, so the app handed a new room the PREVIOUS room's scroll offset: measured on the
+  // installed build — scroll History to 300px, click Health, Health opens already 300px down. The
+  // cost lands on exactly the person this walk was for: Live's only button ("Start capture") sits
+  // 466px above the fold on a fresh visit, and a first-timer arriving mid-page sees a room with
+  // nothing to press and no reason to suspect there is.
+  //
+  // Deliberately NOT part of the motion layer, and deliberately not smooth: this is navigation
+  // MECHANICS (a room must be at its top the instant it paints), so it runs with `jarvis` off, with
+  // reduced motion, and on the failsafe rails. Nothing is hidden and nothing is gated — the same
+  // content is there, the reader just starts at its beginning.
+  useEffect(() => {
+    const lane = contentRef.current;
+    if (!lane) return;
+    lane.scrollTop = 0;
+    // While the motion layer is on, Lenis owns this lane and eases toward a target of its own, so a
+    // bare scrollTop write can be pulled back by the next frame of an in-flight lerp. The spine
+    // listens for this and hard-syncs; with the layer off nothing is listening and the write above
+    // is the whole fix. An event rather than a ref because LenisSpine's effect deps must stay
+    // stable — adding a reset key to them would tear down and rebuild the Lenis instance per room.
+    window.dispatchEvent(new CustomEvent("compy:lane-reset"));
+  }, [activeId]);
+
   // NO BUILD-STAMP PROBE HERE. The topbar used to invoke `get_build_stamp` on every shell mount and
   // print `555e2996 · release` beside the room name. The command still exists and Settings → About
   // still shows it — that is where the navigation audit put build identifiers (§4), and it is the

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { ShellV2, ROOM_CRUMB } from "./ShellV2";
 import { railFor, HOME_RAIL } from "./homeRail";
+import { readFileSync } from "fs";
 
 // V2-2 shell guards: the rail renders the blessed room set with WORKING digit hints (a hint that
 // does nothing is a fake affordance), the topbar carries the room title + the real build stamp
@@ -270,5 +271,63 @@ describe("ShellV2 topbar", () => {
     for (const r of HOME_RAIL) {
       expect(top, `the topbar is printing ${r.id}'s crumb again`).not.toContain(ROOM_CRUMB[r.id]);
     }
+  });
+});
+
+// bug -> guard (DIR-1 first-timer walk, 2026-08-26, finding #1). `.v2-content` is ONE scroll
+// container shared by every room, and nothing reset it between rooms — so a room could open at
+// whatever offset the PREVIOUS room happened to be left at. Measured on the installed build:
+// History scrolled to 300, click Health, Health opens at 300. The person it costs is the exact one
+// this walk was for — Live's only button ("Start capture") is 466px above the fold on a fresh
+// visit, so a first-timer arriving mid-page sees a room with nothing to press.
+//
+// Falsified both ways: deleting the reset effect fails the first test, and gating it on the motion
+// layer fails the second.
+describe("ShellV2 content lane — every room opens at its own top", () => {
+  const lane = (c: HTMLElement) => c.querySelector<HTMLElement>(".v2-content")!;
+
+  it("resets the shared scroll lane when the room changes", () => {
+    const { container, rerender } = render(shell({ activeId: "learn" }));
+    lane(container).scrollTop = 300;
+    expect(lane(container).scrollTop, "jsdom must actually hold the offset").toBe(300);
+    rerender(shell({ activeId: "home" }));
+    expect(lane(container).scrollTop, "the new room inherited the old room's scroll offset").toBe(0);
+  });
+
+  it("does NOT re-scroll a room the user is already reading", () => {
+    const { container, rerender } = render(shell({ activeId: "learn" }));
+    lane(container).scrollTop = 300;
+    // Same room, a re-render for any other reason (a probe resolving, a flag reading, a prop
+    // changing). Yanking the reader back to the top here would be its own wayfinding defect.
+    rerender(shell({ activeId: "learn", ledgerCount: 42 }));
+    expect(lane(container).scrollTop, "a same-room re-render stole the reader's place").toBe(300);
+  });
+
+  // Navigation MECHANICS, not motion. Gating this on `jarvis` / reduced motion would leave the
+  // original defect live for every user on the failsafe path — including anyone whose WebView2
+  // reports prefers-reduced-motion, which on this desk it does.
+  it("is not gated on the motion layer, and is not animated", () => {
+    const src = readFileSync("src/design/ShellV2.tsx", "utf8");
+    const effect = /lane\.scrollTop = 0;[\s\S]*?\}, \[([^\]]*)\]\);/.exec(src);
+    expect(effect, "the lane-reset effect is gone").toBeTruthy();
+    expect(effect![1].trim(), "the reset must depend on the room id and nothing else").toBe("activeId");
+    const body = src.slice(src.indexOf("const lane = contentRef.current;"), effect!.index + effect![0].length);
+    for (const gate of ["jarvis", "reducedMotion", "prefers-reduced-motion", "behavior: \"smooth\""]) {
+      expect(body, `the lane reset is gated or animated by ${gate}`).not.toContain(gate);
+    }
+  });
+
+  // The spine listens for the same event; without it an in-flight lerp can drag the new room back
+  // down within a frame or two of paint.
+  it("hands the reset to the smooth-scroll spine too", () => {
+    expect(readFileSync("src/design/ShellV2.tsx", "utf8")).toContain('CustomEvent("compy:lane-reset")');
+    const spine = readFileSync("src/design/jarvis/LenisSpine.tsx", "utf8");
+    expect(spine).toContain('window.addEventListener("compy:lane-reset", onLaneReset)');
+    expect(spine, "the listener must be removed on unmount").toContain(
+      'window.removeEventListener("compy:lane-reset", onLaneReset)',
+    );
+    expect(spine, "the spine must jump, not ease, on a navigation").toContain(
+      "lenis?.scrollTo?.(0, { immediate: true })",
+    );
   });
 });

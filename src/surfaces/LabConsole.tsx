@@ -316,6 +316,30 @@ export function LabConsole({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on mount by design
   }, []);
 
+  // AN OPENED STATION HAS TO BE ON SCREEN (DIR-1 first-timer walk, 2026-08-26, finding #1). The
+  // detail panel renders BELOW the dock, so opening a station could put the thing the user just
+  // asked for entirely below the fold — and the deep-link path was worse than a hand click: coming
+  // from Health's "It crashed, froze, or restarted" → "Read the crash record", the walk measured
+  // `aria-pressed="true"` on the Crash & Freeze Rescue node and `#lab-console-detail` present in
+  // the DOM, while the only thing on screen was this room's unrelated hero. Press a button, see
+  // nothing change: the exact dead end this walk was looking for.
+  //
+  // `block: "nearest"` is the whole restraint. Already fully visible → it does nothing, so a hand
+  // click near the top of the dock does not yank the dock off screen and cost the user the way to
+  // switch stations. Taller than the lane (the usual case) → the spec aligns its top edge to the
+  // top of the view, which is the deep-link behaviour we want. Instant, not smooth: this is
+  // navigation mechanics, and reduced motion must not be able to turn it off.
+  //
+  // Ordering, deliberately relied upon: a deep-link arrives with a ROOM change, and ShellV2 resets
+  // the shared lane to its top in that same commit. This effect cannot fight it, because the mount
+  // effect above only sets state — the panel does not exist until the NEXT commit, so this scroll
+  // runs strictly after the reset rather than being erased by it.
+  const detailRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!openStation) return;
+    detailRef.current?.scrollIntoView({ block: "nearest" });
+  }, [openStation]);
+
   // The identical instrument bodies the classic Lab renders — one source for every layout. Optimize
   // opens <OptimizeStation> inline instead (handled by the caller, not this switch).
   const stationBody = (k: LabStationKey): ReactNode => {
@@ -809,7 +833,7 @@ export function LabConsole({
             </button>
           }
         >
-          <div className="lc-detail" id="lab-console-detail">
+          <div className="lc-detail" id="lab-console-detail" ref={detailRef}>
             {openStation === "optimize" && (
               /* The room's reassurance, relocated from the header (owner header-slop law 2026-07-10)
                  to its context. This note does NOT census which stations mutate — the Lab has several
