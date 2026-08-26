@@ -51,6 +51,18 @@ tauri-plugin-process = "2"
 # scripts/usage-endpoint-guard.test.mjs pins the declaration, and  shows
 # reqwest resolving with __rustls either way.
 reqwest = { version = "0.13", default-features = false, features = ["json"] }
+# The rustls crypto provider, named so Compy can install it ITSELF.
+#
+# bug->guard (#220, 2026-08-25): reqwest here has no TLS provider of its own — it inherits rustls
+# from tauri-plugin-updater through feature unification, and THAT plugin installs the process-wide
+# provider only when an update check actually runs (tauri-plugin-updater-2.10.1/src/updater.rs:448).
+# `reqwest::Client::builder().build()` PANICS when no provider is installed, so any outbound call
+# that happens before the first update check would take the app down. Found by the Tier 1 transport
+# tests, which build a client in a unit test where no updater has ever run.
+# MEASURED, not assumed: rustls 0.23.42 and ring 0.17.14 are already in Cargo.lock, so declaring
+# them adds ZERO packages — it makes an existing transitive dependency nameable.
+# NOTE FOR THE RECEIPTS LANE: src-tauri/src/receipts.rs has the same latent panic and is still dark.
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 # Remember last window size/position (tester gripe 2026-07-23: the 800x600 default was too
 # small — the intuitive fix is BOTH a larger first-run default (1280x720, tauri.conf.json)
 # AND respecting whatever size the user then chooses). Overlay window denylisted in lib.rs —

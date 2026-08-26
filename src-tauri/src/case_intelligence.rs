@@ -1225,7 +1225,11 @@ fn cache_prune(dir: &std::path::Path) -> Result<usize, CaseCacheError> {
     };
     let mut removed = 0;
     for entry in entries.flatten() {
-        if entry.file_name() == CASE_CACHE_FILE_NAME {
+        // The cache file is the data. The kill switch is not debris either: sweeping it away would
+        // turn "off" quietly back into "on" at the next tidy-up.
+        if entry.file_name() == CASE_CACHE_FILE_NAME
+            || entry.file_name() == CASE_FETCH_DISABLE_FILE
+        {
             continue;
         }
         let path = entry.path();
@@ -1664,6 +1668,267 @@ pub(crate) fn advise(
         facts,
     )
 }
+
+// ─── The pull path (dark) ──────────────────────────────────────────────────
+//
+// Plan task 6. Tier 1's transport, and the whole of it. One shape: ask a compiled URL for a file,
+// read the answer, refuse everything else.
+//
+// **This code can only ask.** There is no body, no query string, no custom header, no cookie jar and
+// no method other than GET — so there is no field in which a machine fact could travel even by
+// accident. That is not a promise about intent; it is the reason `src/case-intelligence-outbound-
+// guard.test.ts` can decide the question by reading the source, and why the section banner above is
+// load-bearing: the guard slices the file at it and fails loudly if it moves.
+//
+// **The transport cannot see the facts.** `CaseIncidentFacts`, `CaseLocalFacts` and every match type
+// live ABOVE this line and are never named below it. The incident does not travel; the catalog does.
+//
+// **Explicit refresh only.** No startup poll, no timer, no background thread. A refresh happens
+// because something asked for one, and in this build nothing can: the gate is hard-false and the
+// endpoint allowlist is empty, so a call refuses before a client is ever constructed.
+
+/// The exact URLs a manifest may be requested from. **EMPTY in this build** — this is the third
+/// independent reason no fetch can happen, after the gate and the placeholder trust root.
+///
+/// Exact URLs, not origins, and separate from `CASE_CATALOG_ORIGINS` (which says where the manifest
+/// is then allowed to POINT). Two lists because they answer two questions, and collapsing them would
+/// let whoever controls the manifest host nominate the next one.
+const CASE_CATALOG_ENDPOINTS: &[&str] = &[];
+
+/// Wall-clock cap on a single request.
+const CASE_FETCH_TIMEOUT_SECS: u64 = 15;
+
+/// A constant product name with no version, OS build or machine id in it — the same rule
+/// `receipts.rs` follows. A header is data too.
+const CASE_FETCH_USER_AGENT: &str = "Compy";
+
+/// The local, DENY-ONLY kill switch: a file in the case-intelligence namespace whose PRESENCE
+/// refuses every fetch.
+///
+/// Deny-only is the property that matters. Its absence enables nothing — the gate still governs — so
+/// there is no state of the filesystem that turns Tier 1 on, and nothing in this module writes or
+/// deletes it. A switch that can enable is a remote control with a friendly name.
+const CASE_FETCH_DISABLE_FILE: &str = "fetch-disabled";
+
+/// What a Tier 1 request may come back as. Deliberately not `reqwest::Response`: the seam hands back
+/// a status and a bounded body and nothing else, so no caller can reach a header, a cookie or a
+/// streaming handle through it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct CaseHttpResponse {
+    pub(crate) status: u16,
+    pub(crate) body: Vec<u8>,
+}
+
+/// Why a refresh did not happen. Every variant is a refusal Compy can explain in one line.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum CaseFetchError {
+    /// The feature is dark. Every shipped build today.
+    Gated,
+    /// The local deny-only switch is engaged.
+    KillSwitch,
+    /// No endpoint is compiled in, so there is nowhere to ask.
+    NoEndpoint,
+    /// A URL that is not on the compiled list. Refused before any client is built.
+    OffAllowlist(String),
+    /// The network did not answer, or answered in a way the client could not read.
+    Transport(String),
+    /// A non-200 answer.
+    Status(u16),
+    /// A redirect. Refused rather than followed — see the policy note on the client.
+    Redirected(u16),
+    /// The answer was larger than its cap, refused without being kept.
+    Oversize { found: usize, max: usize },
+    /// It arrived, and it did not prove itself.
+    Trust(CaseTrustError),
+    /// It proved itself and the disk refused it.
+    Cache(CaseCacheError),
+}
+
+impl std::fmt::Display for CaseFetchError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Gated => write!(f, "case intelligence is off in this build"),
+            Self::KillSwitch => write!(f, "case-intelligence downloads are switched off on this PC"),
+            Self::NoEndpoint => write!(f, "no case-catalog endpoint is configured"),
+            Self::OffAllowlist(url) => write!(f, "{url} is not an allowed case-catalog endpoint"),
+            Self::Transport(m) => write!(f, "could not reach the case catalog: {m}"),
+            Self::Status(code) => write!(f, "the case catalog answered with status {code}"),
+            Self::Redirected(code) => write!(f, "the case catalog redirected ({code}); refused"),
+            Self::Oversize { found, max } => {
+                write!(f, "the case catalog answered with {found} bytes, cap is {max}")
+            }
+            Self::Trust(e) => write!(f, "{e}"),
+            Self::Cache(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+/// The injected transport seam.
+///
+/// One method, and look at what it takes: a `&str` and a cap. There is no argument through which a
+/// caller could pass an incident, a machine fact or a match — the type signature is the smallest
+/// honest statement of "this can only ask", and it is what lets the tests below drive a REAL local
+/// HTTP server rather than a mock that agrees with whatever the code does.
+pub(crate) trait CaseHttp {
+    fn get(&self, url: &str, max_bytes: usize) -> Result<CaseHttpResponse, CaseFetchError>;
+}
+
+/// The production transport. Never constructed in a shipped build — every path into it refuses
+/// first — but written as it would actually ship, because a seam whose production side is a stub
+/// proves nothing about the code that would run.
+pub(crate) struct ReqwestCaseHttp;
+
+impl CaseHttp for ReqwestCaseHttp {
+    fn get(&self, url: &str, max_bytes: usize) -> Result<CaseHttpResponse, CaseFetchError> {
+        // Sync at the seam so the whole refusal chain above it stays sync and testable. Safe to call
+        // from a Tauri command thread; it must not be called from inside the async runtime's own
+        // worker, and nothing in this build calls it at all.
+        tauri::async_runtime::block_on(reqwest_get(url, max_bytes))
+    }
+}
+
+/// The one place in Tier 1 where a socket is opened.
+///
+/// Everything about this client is a refusal. No redirect policy means reqwest follows up to ten
+/// hops by default and would walk straight off the allowlist, so the policy is `none()` and a 3xx
+/// comes back as an error. There is no cookie store (the crate is built without one), no default
+/// header beyond the constant user agent, and no way to attach anything to the request.
+async fn reqwest_get(url: &str, max_bytes: usize) -> Result<CaseHttpResponse, CaseFetchError> {
+    // Install the process-wide crypto provider before building anything. reqwest inherits rustls
+    // from the updater plugin through feature unification, and that plugin installs the provider
+    // only when an update check actually runs — so building a client first PANICS. Idempotent:
+    // `install_default` returns Err when one is already set, which is not an error here.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(CASE_FETCH_TIMEOUT_SECS))
+        .user_agent(CASE_FETCH_USER_AGENT)
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| CaseFetchError::Transport(e.to_string()))?;
+
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| CaseFetchError::Transport(e.to_string()))?;
+
+    let status = response.status().as_u16();
+    if response.status().is_redirection() {
+        return Err(CaseFetchError::Redirected(status));
+    }
+    if status != 200 {
+        return Err(CaseFetchError::Status(status));
+    }
+
+    // Refuse on the declared length before reading a byte of it, then refuse again on what actually
+    // arrived — a declared length is a claim, and this one comes from the party being checked.
+    if let Some(declared) = response.content_length() {
+        if declared > max_bytes as u64 {
+            return Err(CaseFetchError::Oversize { found: declared as usize, max: max_bytes });
+        }
+    }
+    let body = response.bytes().await.map_err(|e| CaseFetchError::Transport(e.to_string()))?;
+    if body.len() > max_bytes {
+        return Err(CaseFetchError::Oversize { found: body.len(), max: max_bytes });
+    }
+
+    Ok(CaseHttpResponse { status, body: body.to_vec() })
+}
+
+/// Is the local deny-only switch engaged? Reads one path and answers; writes nothing, ever.
+fn case_fetch_disabled(dir: &std::path::Path) -> bool {
+    dir.join(CASE_FETCH_DISABLE_FILE).exists()
+}
+
+/// Fetch, verify and commit ONE manifest URL.
+///
+/// Order matters and is the point: allowlist, then kill switch, then the manifest, then the trust
+/// chain, then the body, then the commit. Every refusal that can be made without a request is made
+/// without a request — an unreachable endpoint should cost nothing, and a switched-off machine
+/// should not be observable to anyone by the requests it stops making.
+fn refresh_from<H: CaseHttp>(
+    http: &H,
+    dir: &std::path::Path,
+    cx: &CaseTrustContext<'_>,
+    manifest_url: &str,
+    endpoints: &[&str],
+) -> Result<CaseCatalogManifest, CaseFetchError> {
+    if !endpoints.contains(&manifest_url) {
+        return Err(CaseFetchError::OffAllowlist(manifest_url.to_string()));
+    }
+    if case_fetch_disabled(dir) {
+        return Err(CaseFetchError::KillSwitch);
+    }
+
+    let raw_manifest = http.get(manifest_url, CASE_MANIFEST_MAX_BYTES)?.body;
+
+    // Verify the manifest BEFORE asking for the body it names, against the version floor taken from
+    // the copy already on disk. A manifest that fails here costs one small request and never gets to
+    // choose what is downloaded next.
+    let mut at_floor = cx.clone();
+    at_floor.last_seen_catalog_version = cache_floor_version(dir, cx);
+    let manifest =
+        verify_manifest_with(&raw_manifest, &at_floor).map_err(CaseFetchError::Trust)?;
+
+    // The rollback rule, applied one step early. `cache_store_verified` enforces it again at commit
+    // time and would refuse the same document — but by then the body has been downloaded. Checking
+    // here means an attempt to serve an older catalog costs one small request and stops.
+    if manifest.catalog_version < at_floor.last_seen_catalog_version {
+        return Err(CaseFetchError::Trust(CaseTrustError::CatalogVersionRollback {
+            latest: at_floor.last_seen_catalog_version,
+            attempted: manifest.catalog_version,
+        }));
+    }
+
+    // `catalog_url` was checked against the compiled origin allowlist inside the verification above,
+    // so this is a signed pointer to an approved origin — never an arbitrary URL from a document.
+    let raw_catalog = http.get(&manifest.catalog_url, CASE_CATALOG_MAX_BYTES)?.body;
+
+    // Store re-runs the whole chain, so the digest binding and every freshness rule are enforced by
+    // the same code that guards a cached read. There is no path that commits something unproven.
+    cache_store_verified(dir, &raw_manifest, &raw_catalog, &at_floor).map_err(CaseFetchError::Cache)
+}
+
+/// Try each compiled endpoint in order and keep the first that verifies and commits.
+///
+/// The endpoints are mirrors of one signed document, not different documents: the signature and the
+/// version floor are identical for all of them, so a hostile mirror cannot win by answering fastest.
+fn refresh_with<H: CaseHttp>(
+    http: &H,
+    dir: &std::path::Path,
+    cx: &CaseTrustContext<'_>,
+    endpoints: &[&str],
+) -> Result<CaseCatalogManifest, CaseFetchError> {
+    let mut last = CaseFetchError::NoEndpoint;
+    for endpoint in endpoints {
+        match refresh_from(http, dir, cx, endpoint, endpoints) {
+            Ok(manifest) => return Ok(manifest),
+            // A switched-off machine stops here rather than working through the list.
+            Err(CaseFetchError::KillSwitch) => return Err(CaseFetchError::KillSwitch),
+            Err(e) => last = e,
+        }
+    }
+    Err(last)
+}
+
+/// The shipped entry point: an explicit, user-initiated refresh.
+///
+/// It returns `Gated` in every build today, before a directory is read or a client is built. It is
+/// not registered as a command and nothing calls it — arming stays a reviewed, owner-signed change
+/// rather than a behaviour diff that rides in with a call site.
+pub(crate) fn refresh_case_catalog() -> Result<CaseCatalogManifest, CaseFetchError> {
+    if !case_intelligence_gate() {
+        return Err(CaseFetchError::Gated);
+    }
+    refresh_with(
+        &ReqwestCaseHttp,
+        &case_cache_dir(),
+        &production_trust_context(),
+        CASE_CATALOG_ENDPOINTS,
+    )
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -3778,6 +4043,365 @@ mod tests {
             assert!(!case_intelligence_gate(), "task 5 must not arm anything");
             let outcome = advise(&bb_incident(), &amd_facts());
             assert_eq!(outcome, CaseMatchOutcome::Nothing(CaseMatchLevel::NoCatalog));
+        }
+    }
+
+    /// Plan task 6 — the pull path.
+    ///
+    /// These drive a REAL local HTTP server on 127.0.0.1 through the REAL reqwest client, because
+    /// the claims worth making here — "it is a bare GET", "a redirect is refused", "the body is
+    /// capped" — are claims about bytes on a wire, and a mock would only agree with whatever the
+    /// code already does. Nothing leaves the loopback interface; the server binds port 0, serves a
+    /// scripted answer, records the exact request it received, and dies with the test.
+    mod transport {
+        use super::*;
+        use std::io::{Read, Write};
+        use std::sync::{Arc, Mutex};
+
+        // ── A local HTTP server, in as few lines as will hold a request ─────
+
+        struct Fixture {
+            base: String,
+            seen: Arc<Mutex<Vec<String>>>,
+        }
+
+        impl Fixture {
+            /// Serve `script` in order, one answer per connection.
+            fn start(script: Vec<Vec<u8>>) -> Self {
+                let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind loopback");
+                let base = format!("http://{}", listener.local_addr().unwrap());
+                let seen = Arc::new(Mutex::new(Vec::new()));
+                let sink = Arc::clone(&seen);
+                std::thread::spawn(move || {
+                    for answer in script {
+                        let Ok((mut stream, _)) = listener.accept() else { return };
+                        let mut head = Vec::new();
+                        let mut byte = [0u8; 1];
+                        while !head.ends_with(b"\r\n\r\n") {
+                            match stream.read(&mut byte) {
+                                Ok(1) => head.push(byte[0]),
+                                _ => break,
+                            }
+                        }
+                        sink.lock().unwrap().push(String::from_utf8_lossy(&head).to_string());
+                        let _ = stream.write_all(&answer);
+                        let _ = stream.flush();
+                    }
+                });
+                Self { base, seen }
+            }
+
+            fn url(&self, path: &str) -> String {
+                format!("{}{path}", self.base)
+            }
+
+            /// Every request the server actually received, verbatim.
+            fn requests(&self) -> Vec<String> {
+                self.seen.lock().unwrap().clone()
+            }
+        }
+
+        fn answer(status: &str, extra_headers: &str, body: &[u8]) -> Vec<u8> {
+            let head = format!(
+                "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n{extra_headers}\r\n",
+                body.len()
+            );
+            let mut out = head.into_bytes();
+            out.extend_from_slice(body);
+            out
+        }
+
+        fn ok(body: &[u8]) -> Vec<u8> {
+            answer("200 OK", "", body)
+        }
+
+        // ── The transport itself, over a real socket ───────────────────────
+
+        #[test]
+        fn a_plain_two_hundred_comes_back_whole() {
+            let server = Fixture::start(vec![ok(b"{\"hello\":true}")]);
+            let got = ReqwestCaseHttp
+                .get(&server.url("/v1/manifest.json"), 4096)
+                .expect("the fixture must answer, or every transport test below is vacuous");
+            assert_eq!(got.status, 200);
+            assert_eq!(got.body, b"{\"hello\":true}");
+        }
+
+        #[test]
+        fn the_bytes_on_the_wire_are_a_bare_get_with_nothing_attached() {
+            // The strongest statement this file can make: not "the code looks like a GET" but "the
+            // server received a GET, with no query string, no cookie, no authorization and no body".
+            let server = Fixture::start(vec![ok(b"{}")]);
+            ReqwestCaseHttp.get(&server.url("/v1/manifest.json"), 4096).unwrap();
+
+            let requests = server.requests();
+            assert_eq!(requests.len(), 1, "one request, not a retry storm");
+            let request = &requests[0];
+            assert!(request.starts_with("GET /v1/manifest.json HTTP/1.1\r\n"), "{request}");
+            assert!(!request.contains('?'), "a query string reached the wire: {request}");
+            let lower = request.to_lowercase();
+            for banned in ["cookie", "authorization", "x-", "content-length", "content-type"] {
+                assert!(!lower.contains(banned), "the request carries {banned}: {request}");
+            }
+            assert!(lower.contains("user-agent: compy\r\n"), "{request}");
+            // Head only: a GET with a body would have to declare one, and nothing follows the head.
+            assert!(request.ends_with("\r\n\r\n"), "{request}");
+        }
+
+        #[test]
+        fn a_redirect_is_refused_rather_than_followed() {
+            // reqwest follows ten hops by default. Following even one would walk the request
+            // straight off the compiled allowlist, so the policy is none() and a 3xx is an error.
+            let server = Fixture::start(vec![answer(
+                "302 Found",
+                "Location: https://elsewhere.example.test/catalog.json\r\n",
+                b"",
+            )]);
+            let refused = ReqwestCaseHttp.get(&server.url("/v1/manifest.json"), 4096);
+            assert_eq!(refused, Err(CaseFetchError::Redirected(302)));
+            assert_eq!(server.requests().len(), 1, "it must not have chased the Location header");
+        }
+
+        #[test]
+        fn a_non_two_hundred_is_refused_with_its_status() {
+            for (line, code) in [("404 Not Found", 404u16), ("500 Internal Server Error", 500)] {
+                let server = Fixture::start(vec![answer(line, "", b"nope")]);
+                assert_eq!(
+                    ReqwestCaseHttp.get(&server.url("/v1/manifest.json"), 4096),
+                    Err(CaseFetchError::Status(code))
+                );
+            }
+        }
+
+        #[test]
+        fn an_oversized_answer_is_refused_on_the_declared_length_before_it_is_read() {
+            let body = vec![b'x'; 5000];
+            let server = Fixture::start(vec![ok(&body)]);
+            let refused = ReqwestCaseHttp.get(&server.url("/v1/catalog.json"), 1024);
+            assert_eq!(refused, Err(CaseFetchError::Oversize { found: 5000, max: 1024 }));
+        }
+
+        #[test]
+        fn an_unreachable_endpoint_is_a_refusal_and_never_a_panic() {
+            // Port 1 on loopback: nothing listens, and the refusal must be an ordinary Err.
+            let refused = ReqwestCaseHttp.get("http://127.0.0.1:1/manifest.json", 4096);
+            assert!(matches!(refused, Err(CaseFetchError::Transport(_))), "{refused:?}");
+        }
+
+        // ── The refresh, end to end ────────────────────────────────────────
+
+        /// A transport that records what it was asked for and answers from a script — used where the
+        /// question is about the ORDER of refusals rather than about bytes on a wire.
+        struct Scripted {
+            answers: Mutex<Vec<Result<CaseHttpResponse, CaseFetchError>>>,
+            asked: Mutex<Vec<String>>,
+        }
+
+        impl Scripted {
+            fn new(answers: Vec<Result<CaseHttpResponse, CaseFetchError>>) -> Self {
+                Self { answers: Mutex::new(answers), asked: Mutex::new(Vec::new()) }
+            }
+            fn refusing() -> Self {
+                Self::new(Vec::new())
+            }
+            fn asked(&self) -> Vec<String> {
+                self.asked.lock().unwrap().clone()
+            }
+        }
+
+        impl CaseHttp for Scripted {
+            fn get(&self, url: &str, _max_bytes: usize) -> Result<CaseHttpResponse, CaseFetchError> {
+                self.asked.lock().unwrap().push(url.to_string());
+                let mut answers = self.answers.lock().unwrap();
+                if answers.is_empty() {
+                    return Err(CaseFetchError::Transport("no answer scripted".into()));
+                }
+                answers.remove(0)
+            }
+        }
+
+        fn body_of(bytes: &[u8]) -> Result<CaseHttpResponse, CaseFetchError> {
+            Ok(CaseHttpResponse { status: 200, body: bytes.to_vec() })
+        }
+
+        const MANIFEST_URL: &str = "https://cases.example.test/v1/manifest.json";
+        const ENDPOINTS: &[&str] = &[MANIFEST_URL];
+
+        #[test]
+        fn a_verified_refresh_lands_in_the_cache_and_is_readable_again() {
+            let root = TempRoot::new("refresh-ok");
+            let kp = ed25519_compact::KeyPair::generate();
+            let (manifest, catalog) = signed_pair(&kp);
+            let http = Scripted::new(vec![body_of(&manifest), body_of(&catalog)]);
+            let key = key_of(&kp);
+
+            let stored = refresh_with(&http, &root.cache(), &cx(&key), ENDPOINTS)
+                .expect("a correctly signed pair must land");
+            assert_eq!(stored.catalog_version, 7);
+            // The manifest is asked for first, and the body it names second — never the other way.
+            assert_eq!(http.asked(), vec![MANIFEST_URL.to_string(), stored.catalog_url.clone()]);
+
+            let (_, cached) = cache_load_verified(&root.cache(), &cx(&key)).expect("loads back");
+            assert_eq!(cached.entries.len(), 1);
+        }
+
+        #[test]
+        fn a_url_off_the_compiled_list_is_refused_without_a_request() {
+            let root = TempRoot::new("refresh-offlist");
+            let key = key_of(&ed25519_compact::KeyPair::generate());
+            let http = Scripted::refusing();
+            let refused = refresh_from(
+                &http,
+                &root.cache(),
+                &cx(&key),
+                "https://somewhere.else.test/manifest.json",
+                ENDPOINTS,
+            );
+            assert!(matches!(refused, Err(CaseFetchError::OffAllowlist(_))), "{refused:?}");
+            assert!(http.asked().is_empty(), "it asked anyway");
+        }
+
+        #[test]
+        fn an_empty_endpoint_list_has_nowhere_to_ask() {
+            let root = TempRoot::new("refresh-noendpoint");
+            let key = key_of(&ed25519_compact::KeyPair::generate());
+            let http = Scripted::refusing();
+            assert_eq!(
+                refresh_with(&http, &root.cache(), &cx(&key), &[]),
+                Err(CaseFetchError::NoEndpoint)
+            );
+            assert!(http.asked().is_empty());
+        }
+
+        #[test]
+        fn the_kill_switch_refuses_before_any_request_is_made() {
+            let root = TempRoot::new("refresh-killswitch");
+            std::fs::create_dir_all(root.cache()).unwrap();
+            std::fs::write(root.cache().join(CASE_FETCH_DISABLE_FILE), b"").unwrap();
+            let key = key_of(&ed25519_compact::KeyPair::generate());
+            let http = Scripted::refusing();
+            assert_eq!(
+                refresh_with(&http, &root.cache(), &cx(&key), ENDPOINTS),
+                Err(CaseFetchError::KillSwitch)
+            );
+            assert!(http.asked().is_empty(), "a switched-off PC must not be observable by its traffic");
+        }
+
+        #[test]
+        fn the_kill_switch_survives_a_prune() {
+            // The pruner deletes everything in the namespace that is not the cache file. If it swept
+            // the switch away, "off" would quietly become "on" at the next tidy-up.
+            let root = TempRoot::new("killswitch-prune");
+            std::fs::create_dir_all(root.cache()).unwrap();
+            let switch = root.cache().join(CASE_FETCH_DISABLE_FILE);
+            std::fs::write(&switch, b"").unwrap();
+            std::fs::write(root.cache().join("debris.tmp"), b"x").unwrap();
+            assert_eq!(cache_prune(&root.cache()), Ok(1));
+            assert!(switch.exists(), "the pruner deleted the kill switch");
+            assert!(case_fetch_disabled(&root.cache()));
+        }
+
+        #[test]
+        fn a_manifest_that_does_not_verify_never_causes_the_body_to_be_asked_for() {
+            // The point of verifying the small document first: a forged manifest must not get to
+            // choose what is downloaded next.
+            let root = TempRoot::new("refresh-badsig");
+            let kp = ed25519_compact::KeyPair::generate();
+            let (manifest, _) = signed_pair(&kp);
+            let stranger = key_of(&ed25519_compact::KeyPair::generate());
+            let http = Scripted::new(vec![body_of(&manifest)]);
+
+            let refused = refresh_with(&http, &root.cache(), &cx(&stranger), ENDPOINTS);
+            assert!(matches!(refused, Err(CaseFetchError::Trust(_))), "{refused:?}");
+            assert_eq!(http.asked(), vec![MANIFEST_URL.to_string()], "it fetched the body anyway");
+        }
+
+        #[test]
+        fn an_older_catalog_than_the_one_on_disk_is_refused_as_a_rollback() {
+            let root = TempRoot::new("refresh-rollback");
+            let kp = ed25519_compact::KeyPair::generate();
+            let key = key_of(&kp);
+            // Land version 7 first.
+            let (manifest, catalog) = signed_pair(&kp);
+            refresh_with(
+                &Scripted::new(vec![body_of(&manifest), body_of(&catalog)]),
+                &root.cache(),
+                &cx(&key),
+                ENDPOINTS,
+            )
+            .expect("the first refresh must land");
+
+            // Now offer a perfectly signed version 3.
+            let older_catalog = catalog_bytes();
+            let mut older = base_manifest_value(&older_catalog);
+            older["catalog_version"] = json!(3u64);
+            let older = sign(&kp, older);
+            let http = Scripted::new(vec![body_of(&older), body_of(&older_catalog)]);
+            let refused = refresh_with(&http, &root.cache(), &cx(&key), ENDPOINTS);
+            assert_eq!(
+                refused,
+                Err(CaseFetchError::Trust(CaseTrustError::CatalogVersionRollback {
+                    latest: 7,
+                    attempted: 3
+                }))
+            );
+        }
+
+        #[test]
+        fn a_failed_refresh_leaves_the_last_known_good_copy_and_local_analysis_alone() {
+            // The offline case, which is most of the time. A refresh that cannot happen must cost
+            // the user nothing they already had.
+            let root = TempRoot::new("refresh-offline");
+            let kp = ed25519_compact::KeyPair::generate();
+            let key = key_of(&kp);
+            let (manifest, catalog) = signed_pair(&kp);
+            refresh_with(
+                &Scripted::new(vec![body_of(&manifest), body_of(&catalog)]),
+                &root.cache(),
+                &cx(&key),
+                ENDPOINTS,
+            )
+            .expect("the first refresh must land");
+
+            let dead = Scripted::new(vec![Err(CaseFetchError::Transport("offline".into()))]);
+            assert!(refresh_with(&dead, &root.cache(), &cx(&key), ENDPOINTS).is_err());
+
+            // Still there, still verifying, still able to answer a crash.
+            let outcome = advise_in(
+                &root.cache(),
+                &cx(&key),
+                &CaseIncidentFacts {
+                    kind: CaseIncidentKind::GpuTimeout,
+                    faulting_app: None,
+                    faulting_module: Some("amdkmdag.sys".into()),
+                    error_code: None,
+                    has_vitals: true,
+                },
+                &CaseLocalFacts {
+                    gpu_vendor: Some("AMD".into()),
+                    gpu_driver_version: Some("26.1.1".into()),
+                    windows_build: Some(26100),
+                },
+            );
+            assert_eq!(outcome.level(), CaseMatchLevel::MatchedKnownIssue);
+        }
+
+        // ── Darkness ───────────────────────────────────────────────────────
+
+        #[test]
+        fn the_compiled_endpoint_list_is_empty_and_would_be_https_only() {
+            // Empty today, so the second assertion is a pin rather than a check: the day the owner
+            // adds an endpoint, a plain-http one fails here.
+            assert!(CASE_CATALOG_ENDPOINTS.is_empty(), "an endpoint shipped without arming review");
+            for endpoint in CASE_CATALOG_ENDPOINTS {
+                assert!(endpoint.starts_with("https://"), "{endpoint} is not https");
+            }
+        }
+
+        #[test]
+        fn the_shipped_refresh_refuses_before_it_reads_a_directory_or_builds_a_client() {
+            assert!(!case_intelligence_gate());
+            assert_eq!(refresh_case_catalog(), Err(CaseFetchError::Gated));
         }
     }
 }
