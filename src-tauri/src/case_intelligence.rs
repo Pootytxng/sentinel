@@ -323,6 +323,10 @@ pub(crate) struct CaseIntelligenceMatch {
     /// Which local facts lined up, in plain words — the "why" a reader is owed.
     pub(crate) evidence_refs: Vec<String>,
     pub(crate) next_steps: Vec<AdvisoryStep>,
+    /// The entry's own caveats, carried at EVERY level. Spec §9.4 does not list this field; showing
+    /// advice while withholding the caveat that says when not to take it is exactly the kind of
+    /// omission the honesty rules exist to prevent, so it is here deliberately.
+    pub(crate) contraindications: Vec<String>,
     pub(crate) source_url: String,
     pub(crate) source_updated_at: String,
 }
@@ -1269,6 +1273,398 @@ pub(crate) fn cached_catalog() -> Option<(CaseCatalogManifest, CaseCatalog)> {
 // document that a positive-control test proves valid — so a test cannot pass because the document
 // was broken for some unrelated reason.
 
+// ─── The local matcher ─────────────────────────────────────────────────────
+//
+// Plan task 5. Everything here is pure: two plain structs of facts Compy already read off this
+// machine, a verified catalog, and a decision. No IO, no clock, no network, and nothing that can be
+// serialized into a request — the matching happens entirely on the user's side of the wire, which is
+// what makes Tier 1 a download rather than a lookup service.
+//
+// **The rule for every check is the same: a fact Compy cannot see never satisfies anything.** A
+// matcher over an absent fact is false, not "probably". That is the difference between "this matches
+// the recorded shape" and a horoscope.
+//
+// **The matcher writes no prose.** Every word in a result is copied from the catalog entry that was
+// signed. Compy contributes the level and which local facts lined up, and nothing else — so the
+// honest-language rules in spec §4 are enforced at the catalog's door, not patched up afterwards.
+
+/// The machine facts a catalog may test against, as the caller already has them. Options because
+/// "unknown" is a real state on a real machine and must stay distinguishable from a value.
+///
+/// This is deliberately NOT the hardware snapshot type: it is the smallest set of fields the closed
+/// matcher set can reference, so widening what a catalog can see requires widening this struct in a
+/// reviewed commit rather than falling out of an unrelated hardware change.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct CaseLocalFacts {
+    pub(crate) gpu_vendor: Option<String>,
+    pub(crate) gpu_driver_version: Option<String>,
+    pub(crate) windows_build: Option<u32>,
+}
+
+/// The incident facts a catalog may test against — Black Box's normalized output, adapted.
+///
+/// `blackbox.rs` is NOT modified for this. The adapter lives on Tier 1's side of the boundary for
+/// the same reason `CaseIncidentKind` does: Black Box owns the classification, Tier 1 owns what a
+/// signed document is allowed to see, and the day those two want to change independently the seam is
+/// already here. It also keeps task 1's characterization tests meaning what they said.
+///
+/// Neither this nor `CaseLocalFacts` derives `Serialize`, on purpose and with a test: matching is a
+/// local decision, so there must be no type in this path that a future `send` could accept.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct CaseIncidentFacts {
+    pub(crate) kind: CaseIncidentKind,
+    pub(crate) faulting_app: Option<String>,
+    pub(crate) faulting_module: Option<String>,
+    pub(crate) error_code: Option<String>,
+    pub(crate) has_vitals: bool,
+}
+
+impl CaseIncidentFacts {
+    /// Read the facts off a Black Box incident. Reads, never collects: incident collection stays in
+    /// `blackbox.rs` and is not duplicated here.
+    pub(crate) fn from_incident(incident: &crate::blackbox::Incident) -> Self {
+        Self {
+            kind: CaseIncidentKind::from_incident(incident.kind),
+            faulting_app: incident.receipt.faulting_app.clone(),
+            faulting_module: incident.receipt.faulting_module.clone(),
+            error_code: incident.receipt.code.clone(),
+            has_vitals: incident.vitals.is_some(),
+        }
+    }
+}
+
+/// What the matcher concluded.
+///
+/// A refinement of spec §9.4, not a departure from it: the spec's struct carries a `level`, and it
+/// still does. What this enum adds is that the three no-match levels cannot be dressed up as a
+/// result — `NoCatalog` has no title, no summary and no source, and a struct that could hold those
+/// as empty strings is a card the UI could render blank. `Found` always carries one of the two
+/// levels that mean something matched, and a test pins that.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum CaseMatchOutcome {
+    /// Nothing to show: `NoCatalog`, `CatalogUnavailable` or `NoKnownMatch`. The crash station renders
+    /// all three exactly as it renders today — which is to say, without a known-issue section at all.
+    Nothing(CaseMatchLevel),
+    /// A written-up case whose recorded shape lines up with this incident.
+    Found(Box<CaseIntelligenceMatch>),
+}
+
+impl CaseMatchOutcome {
+    pub(crate) fn level(&self) -> CaseMatchLevel {
+        match self {
+            Self::Nothing(level) => *level,
+            Self::Found(m) => m.level,
+        }
+    }
+}
+
+impl EvidenceRequirement {
+    /// The stable key this requirement is known by. These are KEYS, never values: `evidence_refs`
+    /// names which local facts lined up and must never carry the facts themselves, so that a match
+    /// can be shown, logged or (in some later tier, with its own consent) transmitted without
+    /// carrying an executable name or a driver string along with it.
+    pub(crate) fn key(self) -> &'static str {
+        match self {
+            Self::FaultingApp => "faulting_app",
+            Self::FaultingModule => "faulting_module",
+            Self::ErrorCode => "error_code",
+            Self::GpuVendor => "gpu_vendor",
+            Self::GpuDriverVersion => "gpu_driver_version",
+            Self::WindowsBuild => "windows_build",
+            Self::Vitals => "vitals",
+        }
+    }
+
+    /// Is this fact present at all? Presence, not agreement — a matcher decides agreement.
+    fn present(self, incident: &CaseIncidentFacts, facts: &CaseLocalFacts) -> bool {
+        match self {
+            Self::FaultingApp => incident.faulting_app.is_some(),
+            Self::FaultingModule => incident.faulting_module.is_some(),
+            Self::ErrorCode => incident.error_code.is_some(),
+            Self::GpuVendor => facts.gpu_vendor.is_some(),
+            Self::GpuDriverVersion => facts.gpu_driver_version.is_some(),
+            Self::WindowsBuild => facts.windows_build.is_some(),
+            Self::Vitals => incident.has_vitals,
+        }
+    }
+}
+
+/// Reduce an executable or module path to the bare family name a catalog token can equal.
+///
+/// `C:\Windows\System32\DriverStore\amdkmdag.sys` → `amdkmdag`. Case-folded, path-stripped, and one
+/// known extension removed. Nothing else is stripped: a name with a character outside the token
+/// charset simply cannot equal any token, which is the safe outcome and needs no special case.
+fn normalize_family(raw: &str) -> String {
+    let base = raw.rsplit(['\\', '/']).next().unwrap_or(raw).trim().to_ascii_lowercase();
+    for ext in [".exe", ".dll", ".sys"] {
+        if let Some(stem) = base.strip_suffix(ext) {
+            return stem.to_string();
+        }
+    }
+    base
+}
+
+fn normalize_code(raw: &str) -> String {
+    raw.trim().to_ascii_lowercase()
+}
+
+impl PublicMatcher {
+    /// Which local fact this matcher reads. Used both to evaluate it and to report it.
+    fn evidence(&self) -> EvidenceRequirement {
+        match self {
+            Self::AppFamilyEquals { .. } | Self::AppFamilyPrefix { .. } => {
+                EvidenceRequirement::FaultingApp
+            }
+            Self::ModuleFamilyEquals { .. } | Self::ModuleFamilyPrefix { .. } => {
+                EvidenceRequirement::FaultingModule
+            }
+            Self::ErrorCodeEquals { .. } => EvidenceRequirement::ErrorCode,
+            Self::GpuVendorEquals { .. } => EvidenceRequirement::GpuVendor,
+            Self::GpuDriverVersionRange { .. } => EvidenceRequirement::GpuDriverVersion,
+            Self::WindowsBuildRange { .. } => EvidenceRequirement::WindowsBuild,
+        }
+    }
+
+    /// Does this matcher hold against the local facts?
+    ///
+    /// Every arm reads a fact that may be absent, and every arm answers `false` when it is. A prefix
+    /// is anchored at the start and nowhere else — there is no substring check here, and a catalog
+    /// value like `amd` matches `amdkmdag` but never `xamdy`, because "contains" is how a matcher
+    /// language grows into a pattern language.
+    fn holds(&self, incident: &CaseIncidentFacts, facts: &CaseLocalFacts) -> bool {
+        match self {
+            Self::AppFamilyEquals { value } => incident
+                .faulting_app
+                .as_deref()
+                .is_some_and(|app| normalize_family(app) == *value),
+            Self::AppFamilyPrefix { value } => incident
+                .faulting_app
+                .as_deref()
+                .is_some_and(|app| normalize_family(app).starts_with(value.as_str())),
+            Self::ModuleFamilyEquals { value } => incident
+                .faulting_module
+                .as_deref()
+                .is_some_and(|m| normalize_family(m) == *value),
+            Self::ModuleFamilyPrefix { value } => incident
+                .faulting_module
+                .as_deref()
+                .is_some_and(|m| normalize_family(m).starts_with(value.as_str())),
+            Self::ErrorCodeEquals { value } => incident
+                .error_code
+                .as_deref()
+                .is_some_and(|code| normalize_code(code) == *value),
+            Self::GpuVendorEquals { value } => facts
+                .gpu_vendor
+                .as_deref()
+                .is_some_and(|vendor| vendor.trim().to_ascii_lowercase() == *value),
+            Self::GpuDriverVersionRange { min, max } => {
+                // A driver string Compy cannot read as a version is not "probably in range".
+                let Some(local) = facts.gpu_driver_version.as_deref() else { return false };
+                let (Ok(local), Ok(min), Ok(max)) = (
+                    parse_version("local", local),
+                    parse_version("min", min),
+                    parse_version("max", max),
+                ) else {
+                    return false;
+                };
+                local >= min && local <= max
+            }
+            Self::WindowsBuildRange { min, max } => {
+                facts.windows_build.is_some_and(|b| b >= *min && b <= *max)
+            }
+        }
+    }
+}
+
+/// One entry that survived matching, kept with everything the tie-break needs.
+struct Candidate<'a> {
+    entry: &'a CaseEntry,
+    level: CaseMatchLevel,
+    matchers_hit: usize,
+    evidence_present: usize,
+    refs: Vec<String>,
+}
+
+/// Match ONE incident against a verified catalog.
+///
+/// An entry qualifies only if all three hold:
+///  1. the entry names this incident's kind — a write-up about GPU timeouts has nothing to say about
+///     a hang, however well its other matchers line up;
+///  2. EVERY matcher holds (they are an AND, never a best-of);
+///  3. at least one matcher exists — the schema already requires that, and this is the second lock,
+///     because an entry with no matchers would match every incident of its kind.
+///
+/// Then the level: every `required_evidence` present is `MatchedKnownIssue`, anything missing is
+/// `PossibleKnownIssue`. Matchers ask whether the facts AGREE; required evidence asks whether Compy
+/// can SEE enough to stand behind the answer, and those are different questions.
+pub(crate) fn match_facts(
+    catalog: &CaseCatalog,
+    catalog_version: u64,
+    incident: &CaseIncidentFacts,
+    facts: &CaseLocalFacts,
+) -> CaseMatchOutcome {
+    let mut candidates: Vec<Candidate<'_>> = Vec::new();
+
+    for entry in &catalog.entries {
+        if !entry.incident_kinds.contains(&incident.kind) {
+            continue;
+        }
+        if entry.matchers.is_empty() || !entry.matchers.iter().all(|m| m.holds(incident, facts)) {
+            continue;
+        }
+
+        let present: Vec<EvidenceRequirement> = entry
+            .required_evidence
+            .iter()
+            .copied()
+            .filter(|r| r.present(incident, facts))
+            .collect();
+        let level = if present.len() == entry.required_evidence.len() {
+            CaseMatchLevel::MatchedKnownIssue
+        } else {
+            CaseMatchLevel::PossibleKnownIssue
+        };
+
+        // What lined up: the facts the matchers actually read, plus the required evidence that was
+        // there. Sorted and de-duplicated so the same match always reads the same way.
+        let mut refs: Vec<String> = entry
+            .matchers
+            .iter()
+            .map(|m| m.evidence().key().to_string())
+            .chain(present.iter().map(|r| r.key().to_string()))
+            .collect();
+        refs.sort();
+        refs.dedup();
+
+        candidates.push(Candidate {
+            entry,
+            level,
+            matchers_hit: entry.matchers.len(),
+            evidence_present: present.len(),
+            refs,
+        });
+    }
+
+    // Deterministic, total order — two runs over the same catalog and the same incident must never
+    // disagree, and `id` is unique per catalog so the last key breaks every remaining tie.
+    candidates.sort_by(|a, b| {
+        let rank = |level: CaseMatchLevel| match level {
+            CaseMatchLevel::MatchedKnownIssue => 2u8,
+            CaseMatchLevel::PossibleKnownIssue => 1,
+            _ => 0,
+        };
+        rank(b.level)
+            .cmp(&rank(a.level))
+            .then(b.matchers_hit.cmp(&a.matchers_hit))
+            .then(b.evidence_present.cmp(&a.evidence_present))
+            .then(b.entry.revision.cmp(&a.entry.revision))
+            .then(a.entry.id.cmp(&b.entry.id))
+    });
+
+    let Some(best) = candidates.first() else {
+        return CaseMatchOutcome::Nothing(CaseMatchLevel::NoKnownMatch);
+    };
+
+    // The suppression rule. `research_only` marks a step whose real-world fix is irreversible — a PSU
+    // swap, a repaste, a BIOS flash. On partial evidence those are withheld entirely: pointing
+    // someone at an expensive, unrecoverable action on a maybe is the actual harm this level exists
+    // to prevent. On a full match they are kept, still flagged, so the surface frames them as
+    // something to look into rather than something to do.
+    let next_steps: Vec<AdvisoryStep> = best
+        .entry
+        .next_steps
+        .iter()
+        .filter(|step| best.level == CaseMatchLevel::MatchedKnownIssue || !step.research_only)
+        .cloned()
+        .collect();
+
+    CaseMatchOutcome::Found(Box::new(CaseIntelligenceMatch {
+        case_id: best.entry.id.clone(),
+        catalog_version,
+        level: best.level,
+        title: best.entry.title.clone(),
+        summary: best.entry.summary.clone(),
+        evidence_refs: best.refs.clone(),
+        next_steps,
+        // Always carried, at every level. A step without its caveat is worse than no step: the caveat
+        // is what stops someone doing it in the one situation where it hurts. Spec §9.4 does not list
+        // this field; showing advice while withholding its own contraindication would be the kind of
+        // omission the honesty rules exist to prevent, so it is here deliberately.
+        contraindications: best.entry.contraindications.clone(),
+        source_url: best.entry.source_url.clone(),
+        source_updated_at: best.entry.source_updated_at.clone(),
+    }))
+}
+
+/// The `&Incident` entry point: adapt, then match. Kept separate from `match_facts` so the pure core
+/// is testable without constructing a whole Black Box incident, and so the ONE place that reads Black
+/// Box's internals is a single named function.
+pub(crate) fn match_incident(
+    catalog: &CaseCatalog,
+    catalog_version: u64,
+    incident: &crate::blackbox::Incident,
+    facts: &CaseLocalFacts,
+) -> CaseMatchOutcome {
+    match_facts(catalog, catalog_version, &CaseIncidentFacts::from_incident(incident), facts)
+}
+
+/// The production trust context: the compiled key, the compiled (empty) origin allowlist, the real
+/// clock and this build's version. Factored out so the cache read and the advisory path cannot drift
+/// apart on what "trusted" means.
+fn production_trust_context() -> CaseTrustContext<'static> {
+    CaseTrustContext {
+        key: &CASE_SIGNING_PUBKEY,
+        catalog_origins: CASE_CATALOG_ORIGINS,
+        now: chrono::Utc::now(),
+        app_version: env!("CARGO_PKG_VERSION"),
+        last_seen_catalog_version: 0,
+    }
+}
+
+/// The whole path, from "what do we hold" to "what may this incident be told", against a given
+/// cache directory and trust context.
+///
+/// The three empty answers stay DISTINCT here rather than collapsing into one, because they are
+/// different facts about Compy and a reader deserves the difference: `NoCatalog` means nothing has
+/// ever been fetched, `CatalogUnavailable` means something is held but no longer proves itself, and
+/// `NoKnownMatch` means the catalog was consulted and had nothing on this. Only the first is the
+/// state of a machine that has simply never been online for it.
+fn advise_in(
+    dir: &std::path::Path,
+    cx: &CaseTrustContext<'_>,
+    incident: &CaseIncidentFacts,
+    facts: &CaseLocalFacts,
+) -> CaseMatchOutcome {
+    match cache_load_verified(dir, cx) {
+        Err(CaseCacheError::Missing) => CaseMatchOutcome::Nothing(CaseMatchLevel::NoCatalog),
+        // Corrupt, oversize, unreadable, tampered, expired, rolled back — all of them mean the same
+        // thing to a user: we hold something we cannot stand behind, so we will not use it.
+        Err(_) => CaseMatchOutcome::Nothing(CaseMatchLevel::CatalogUnavailable),
+        Ok((manifest, catalog)) => {
+            match_facts(&catalog, manifest.catalog_version, incident, facts)
+        }
+    }
+}
+
+/// The shipped entry point.
+///
+/// In this build it always returns `Nothing(NoCatalog)` and never touches the disk: the gate is
+/// hard-false, and behind it the placeholder trust root would refuse whatever a load returned anyway.
+pub(crate) fn advise(
+    incident: &crate::blackbox::Incident,
+    facts: &CaseLocalFacts,
+) -> CaseMatchOutcome {
+    if !case_intelligence_gate() {
+        return CaseMatchOutcome::Nothing(CaseMatchLevel::NoCatalog);
+    }
+    advise_in(
+        &case_cache_dir(),
+        &production_trust_context(),
+        &CaseIncidentFacts::from_incident(incident),
+        facts,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1925,12 +2321,15 @@ mod tests {
             level: CaseMatchLevel::MatchedKnownIssue,
             title: "Display driver timeout".into(),
             summary: "Matches the recorded shape.".into(),
-            evidence_refs: vec!["the faulting module was amdkmdag".into()],
+            // Keys, not values — task 5 fixed the contract: a ref names which local fact lined up
+            // and never carries the fact itself.
+            evidence_refs: vec!["faulting_module".into()],
             next_steps: vec![AdvisoryStep {
                 headline: "Install the newest driver".into(),
                 detail: "The vendor published a newer driver.".into(),
                 research_only: false,
             }],
+            contraindications: vec!["Skip this if you already run a newer driver.".into()],
             source_url: "https://www.amd.com/kb/1".into(),
             source_updated_at: "2026-02-04T00:00:00Z".into(),
         };
@@ -1938,6 +2337,43 @@ mod tests {
         assert!(wire.contains("matched_known_issue"));
         assert!(!wire.contains("confidence"), "a numeric confidence must never appear on the wire");
         assert!(!wire.contains("score"));
+    }
+
+    // ─── A throwaway data root, shared by the cache and matcher modules ────
+    //
+    // Lifted here so BOTH child modules can use it: the matcher's three cache-state tests
+    // need a real directory for the same reason every cache test does.
+    use std::path::PathBuf;
+
+    /// A throwaway data root that cleans itself up even when a test panics, so a failing run
+    /// never leaves the next one to inherit its debris.
+    struct TempRoot(PathBuf);
+
+    impl TempRoot {
+        fn new(label: &str) -> Self {
+            static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let dir = std::env::temp_dir()
+                .join(format!("compy-case-cache-{}-{label}-{n}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).expect("temp root");
+            Self(dir)
+        }
+
+        /// The namespace under the root, exactly as production composes it.
+        fn cache(&self) -> PathBuf {
+            self.0.join(CASE_CACHE_DIR_NAME)
+        }
+
+        fn file(&self) -> PathBuf {
+            case_cache_file(&self.cache())
+        }
+    }
+
+    impl Drop for TempRoot {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
     }
 
     // ─── Trust chain (plan task 3) ─────────────────────────────────────────
@@ -2391,38 +2827,6 @@ mod tests {
     // ships.
     mod cache {
         use super::*;
-        use std::path::PathBuf;
-
-        /// A throwaway data root that cleans itself up even when a test panics, so a failing run
-        /// never leaves the next one to inherit its debris.
-        struct TempRoot(PathBuf);
-
-        impl TempRoot {
-            fn new(label: &str) -> Self {
-                static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-                let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                let dir = std::env::temp_dir()
-                    .join(format!("compy-case-cache-{}-{label}-{n}", std::process::id()));
-                let _ = std::fs::remove_dir_all(&dir);
-                std::fs::create_dir_all(&dir).expect("temp root");
-                Self(dir)
-            }
-
-            /// The namespace under the root, exactly as production composes it.
-            fn cache(&self) -> PathBuf {
-                self.0.join(CASE_CACHE_DIR_NAME)
-            }
-
-            fn file(&self) -> PathBuf {
-                case_cache_file(&self.cache())
-            }
-        }
-
-        impl Drop for TempRoot {
-            fn drop(&mut self) {
-                let _ = std::fs::remove_dir_all(&self.0);
-            }
-        }
 
         fn stored(root: &TempRoot, kp: &ed25519_compact::KeyPair) -> (Vec<u8>, Vec<u8>) {
             let (manifest, catalog) = signed_pair(kp);
@@ -2815,6 +3219,565 @@ mod tests {
             assert!(!case_intelligence_gate());
             assert!(cached_catalog().is_none());
             assert!(case_cache_dir().ends_with(CASE_CACHE_DIR_NAME));
+        }
+    }
+
+    /// Plan task 5 — the local matcher.
+    ///
+    /// Every test here is pure except the three that exercise `advise_in`, and those touch only a
+    /// temp directory. Nothing in this module opens a socket, and that is the point: matching a
+    /// crash against public knowledge is something Compy does entirely on the user's side of the
+    /// wire. The catalog travels; the incident never does.
+    mod matcher {
+        use super::*;
+
+        // ── Fixtures ───────────────────────────────────────────────────────
+
+        /// Build a catalog through the real parser, so a fixture can never assert behaviour on a
+        /// document the shipped path would have refused.
+        fn catalog_of(entries: Vec<Value>) -> CaseCatalog {
+            let doc = json!({ "schema_version": CASE_SCHEMA_VERSION, "entries": entries });
+            parse_catalog(&doc.to_string()).expect("fixture catalog must parse")
+        }
+
+        fn one(entry: Value) -> CaseCatalog {
+            catalog_of(vec![entry])
+        }
+
+        fn entry_with(edit: impl FnOnce(&mut Value)) -> Value {
+            let mut entry = base_entry();
+            edit(&mut entry);
+            entry
+        }
+
+        /// The incident `base_entry` was written about: a display-driver timeout naming amdkmdag.
+        fn gpu_incident() -> CaseIncidentFacts {
+            CaseIncidentFacts {
+                kind: CaseIncidentKind::GpuTimeout,
+                faulting_app: None,
+                faulting_module: Some(
+                    "C:\\Windows\\System32\\DriverStore\\FileRepository\\amdkmdag.sys".to_string(),
+                ),
+                error_code: None,
+                has_vitals: true,
+            }
+        }
+
+        fn amd_facts() -> CaseLocalFacts {
+            CaseLocalFacts {
+                gpu_vendor: Some("AMD".to_string()),
+                gpu_driver_version: Some("26.1.1".to_string()),
+                windows_build: Some(26100),
+            }
+        }
+
+        fn found(outcome: &CaseMatchOutcome) -> &CaseIntelligenceMatch {
+            match outcome {
+                CaseMatchOutcome::Found(m) => m,
+                CaseMatchOutcome::Nothing(level) => {
+                    panic!("expected a match, got {level:?}")
+                }
+            }
+        }
+
+        fn run(catalog: &CaseCatalog) -> CaseMatchOutcome {
+            match_facts(catalog, 7, &gpu_incident(), &amd_facts())
+        }
+
+        // ── The positive control ───────────────────────────────────────────
+        //
+        // If this ever fails, every negative test below is passing for free.
+
+        #[test]
+        fn the_recorded_shape_matches_and_the_result_is_the_catalogs_own_words() {
+            let catalog = one(base_entry());
+            let outcome = run(&catalog);
+            let m = found(&outcome);
+            assert_eq!(m.level, CaseMatchLevel::MatchedKnownIssue);
+            assert_eq!(m.case_id, "amd-tdr-adrenalin-2026-q1");
+            assert_eq!(m.catalog_version, 7);
+            assert_eq!(m.title, catalog.entries[0].title);
+            assert_eq!(m.summary, catalog.entries[0].summary);
+            assert_eq!(m.source_url, catalog.entries[0].source_url);
+        }
+
+        // ── The incident kind is a gate, not a hint ────────────────────────
+
+        #[test]
+        fn a_writeup_about_another_incident_kind_never_matches() {
+            let catalog = one(entry_with(|e| e["incident_kinds"] = json!(["app_crash"])));
+            assert_eq!(run(&catalog).level(), CaseMatchLevel::NoKnownMatch);
+        }
+
+        #[test]
+        fn an_entry_listing_several_kinds_matches_any_one_of_them() {
+            let catalog =
+                one(entry_with(|e| e["incident_kinds"] = json!(["blue_screen", "gpu_timeout"])));
+            assert_eq!(run(&catalog).level(), CaseMatchLevel::MatchedKnownIssue);
+        }
+
+        // ── Matchers are an AND, and an absent fact is never a pass ────────
+
+        #[test]
+        fn every_matcher_must_hold_not_merely_one_of_them() {
+            // The module still lines up; the vendor no longer does.
+            let catalog = one(base_entry());
+            let facts = CaseLocalFacts { gpu_vendor: Some("nvidia".into()), ..amd_facts() };
+            let outcome = match_facts(&catalog, 7, &gpu_incident(), &facts);
+            assert_eq!(outcome.level(), CaseMatchLevel::NoKnownMatch);
+        }
+
+        #[test]
+        fn a_matcher_over_a_fact_compy_cannot_see_fails_rather_than_passes() {
+            // The heart of the refuse-to-guess rail: unknown is not "probably yes".
+            let catalog = one(base_entry());
+            let facts = CaseLocalFacts { gpu_vendor: None, ..amd_facts() };
+            let outcome = match_facts(&catalog, 7, &gpu_incident(), &facts);
+            assert_eq!(outcome.level(), CaseMatchLevel::NoKnownMatch);
+        }
+
+        #[test]
+        fn an_entry_with_no_matchers_cannot_match_every_incident_of_its_kind() {
+            // The schema already refuses this document, so it is built by hand to reach the second
+            // lock. Two locks, because "matches every GPU timeout ever" is the single worst thing a
+            // signed catalog could be talked into saying.
+            let catalog = CaseCatalog {
+                schema_version: CASE_SCHEMA_VERSION,
+                entries: vec![CaseEntry {
+                    id: "catch-all".into(),
+                    revision: 1,
+                    incident_kinds: vec![CaseIncidentKind::GpuTimeout],
+                    matchers: vec![],
+                    required_evidence: vec![],
+                    title: "Everything".into(),
+                    summary: "Anything at all.".into(),
+                    next_steps: vec![],
+                    contraindications: vec![],
+                    source_url: "https://www.amd.com/x".into(),
+                    source_updated_at: "2026-02-04T00:00:00Z".into(),
+                }],
+            };
+            assert_eq!(run(&catalog).level(), CaseMatchLevel::NoKnownMatch);
+        }
+
+        // ── Each matcher, checked on its own terms ─────────────────────────
+
+        #[test]
+        fn an_app_family_ignores_the_path_the_case_and_the_extension() {
+            let catalog = one(entry_with(|e| {
+                e["matchers"] = json!([{ "app_family_equals": { "value": "bar" } }]);
+                e["required_evidence"] = json!(["faulting_app"]);
+            }));
+            let incident = CaseIncidentFacts {
+                faulting_app: Some("C:\\Games\\Foo\\Bar.EXE".to_string()),
+                ..gpu_incident()
+            };
+            let outcome = match_facts(&catalog, 7, &incident, &amd_facts());
+            assert_eq!(outcome.level(), CaseMatchLevel::MatchedKnownIssue);
+        }
+
+        #[test]
+        fn a_prefix_matcher_is_anchored_and_is_never_a_substring_search() {
+            // `amd` must reach amdkmdag and must NOT reach xamdy. The day this fails, the matcher
+            // language has quietly become a pattern language.
+            let catalog = one(entry_with(|e| {
+                e["matchers"] = json!([{ "module_family_prefix": { "value": "amd" } }]);
+                e["required_evidence"] = json!(["faulting_module"]);
+            }));
+
+            let hits = CaseIncidentFacts {
+                faulting_module: Some("amdkmdag.sys".into()),
+                ..gpu_incident()
+            };
+            assert_eq!(
+                match_facts(&catalog, 7, &hits, &amd_facts()).level(),
+                CaseMatchLevel::MatchedKnownIssue
+            );
+
+            let misses =
+                CaseIncidentFacts { faulting_module: Some("xamdy.sys".into()), ..gpu_incident() };
+            assert_eq!(
+                match_facts(&catalog, 7, &misses, &amd_facts()).level(),
+                CaseMatchLevel::NoKnownMatch
+            );
+        }
+
+        #[test]
+        fn an_error_code_folds_case_and_surrounding_space_and_nothing_else() {
+            let catalog = one(entry_with(|e| {
+                e["matchers"] = json!([{ "error_code_equals": { "value": "0xc0000005" } }]);
+                e["required_evidence"] = json!(["error_code"]);
+            }));
+
+            let spelled_loudly = CaseIncidentFacts {
+                error_code: Some("  0xC0000005 ".into()),
+                ..gpu_incident()
+            };
+            assert_eq!(
+                match_facts(&catalog, 7, &spelled_loudly, &amd_facts()).level(),
+                CaseMatchLevel::MatchedKnownIssue
+            );
+
+            let different_code =
+                CaseIncidentFacts { error_code: Some("0xc0000006".into()), ..gpu_incident() };
+            assert_eq!(
+                match_facts(&catalog, 7, &different_code, &amd_facts()).level(),
+                CaseMatchLevel::NoKnownMatch
+            );
+        }
+
+        #[test]
+        fn a_driver_version_inside_the_range_matches_and_one_outside_it_does_not() {
+            let catalog = one(entry_with(|e| {
+                e["matchers"] =
+                    json!([{ "gpu_driver_version_range": { "min": "26.1.0", "max": "26.2.0" } }]);
+                e["required_evidence"] = json!(["gpu_driver_version"]);
+            }));
+
+            assert_eq!(run_with_driver(&catalog, "26.1.1"), CaseMatchLevel::MatchedKnownIssue);
+            assert_eq!(run_with_driver(&catalog, "26.1.0"), CaseMatchLevel::MatchedKnownIssue);
+            assert_eq!(run_with_driver(&catalog, "26.2.0"), CaseMatchLevel::MatchedKnownIssue);
+            assert_eq!(run_with_driver(&catalog, "26.0.9"), CaseMatchLevel::NoKnownMatch);
+            assert_eq!(run_with_driver(&catalog, "26.2.1"), CaseMatchLevel::NoKnownMatch);
+        }
+
+        fn run_with_driver(catalog: &CaseCatalog, driver: &str) -> CaseMatchLevel {
+            let facts = CaseLocalFacts { gpu_driver_version: Some(driver.into()), ..amd_facts() };
+            match_facts(catalog, 7, &gpu_incident(), &facts).level()
+        }
+
+        #[test]
+        fn a_driver_range_compares_in_release_order_not_alphabetical_order() {
+            // "26.10" sorts BEFORE "26.9" as text and AFTER it as a release. A string compare here
+            // would quietly offer 26.10 users advice written for a driver they are past.
+            let catalog = one(entry_with(|e| {
+                e["matchers"] =
+                    json!([{ "gpu_driver_version_range": { "min": "26.1", "max": "26.9" } }]);
+                e["required_evidence"] = json!(["gpu_driver_version"]);
+            }));
+            assert_eq!(run_with_driver(&catalog, "26.9"), CaseMatchLevel::MatchedKnownIssue);
+            assert_eq!(run_with_driver(&catalog, "26.10"), CaseMatchLevel::NoKnownMatch);
+        }
+
+        #[test]
+        fn a_driver_string_compy_cannot_read_as_a_version_never_lands_inside_a_range() {
+            let catalog = one(entry_with(|e| {
+                e["matchers"] =
+                    json!([{ "gpu_driver_version_range": { "min": "0.0.1", "max": "99.0.0" } }]);
+                e["required_evidence"] = json!(["gpu_driver_version"]);
+            }));
+            assert_eq!(run_with_driver(&catalog, "Adrenalin 26.1"), CaseMatchLevel::NoKnownMatch);
+            assert_eq!(run_with_driver(&catalog, ""), CaseMatchLevel::NoKnownMatch);
+        }
+
+        #[test]
+        fn a_windows_build_range_is_inclusive_at_both_ends() {
+            let catalog = one(entry_with(|e| {
+                e["matchers"] = json!([{ "windows_build_range": { "min": 26100, "max": 26200 } }]);
+                e["required_evidence"] = json!(["windows_build"]);
+            }));
+            for (build, expected) in [
+                (26099u32, CaseMatchLevel::NoKnownMatch),
+                (26100, CaseMatchLevel::MatchedKnownIssue),
+                (26200, CaseMatchLevel::MatchedKnownIssue),
+                (26201, CaseMatchLevel::NoKnownMatch),
+            ] {
+                let facts = CaseLocalFacts { windows_build: Some(build), ..amd_facts() };
+                assert_eq!(
+                    match_facts(&catalog, 7, &gpu_incident(), &facts).level(),
+                    expected,
+                    "build {build}"
+                );
+            }
+        }
+
+        // ── Required evidence sets the level ───────────────────────────────
+        //
+        // Matchers ask whether the facts AGREE. Required evidence asks whether Compy can SEE enough
+        // to stand behind the answer. Different questions, and the level is the second one.
+
+        #[test]
+        fn missing_required_evidence_drops_a_hit_to_possible() {
+            let catalog = one(entry_with(|e| {
+                e["required_evidence"] = json!(["faulting_module", "gpu_vendor", "vitals"]);
+            }));
+            let blind = CaseIncidentFacts { has_vitals: false, ..gpu_incident() };
+            let outcome = match_facts(&catalog, 7, &blind, &amd_facts());
+            assert_eq!(outcome.level(), CaseMatchLevel::PossibleKnownIssue);
+        }
+
+        #[test]
+        fn evidence_refs_name_the_facts_and_never_carry_their_values() {
+            // A ref is a key. The day one carries an executable name, a match becomes a thing that
+            // could not safely be logged, shown to a friend, or sent anywhere under any later tier.
+            let catalog = one(base_entry());
+            let outcome = run(&catalog);
+            let m = found(&outcome);
+            assert_eq!(m.evidence_refs, vec!["faulting_module", "gpu_vendor"]);
+            let joined = m.evidence_refs.join(" ");
+            assert!(!joined.to_lowercase().contains("amdkmdag"), "leaked a module name: {joined}");
+            assert!(!joined.contains("C:\\"), "leaked a path: {joined}");
+        }
+
+        #[test]
+        fn evidence_refs_are_sorted_and_deduplicated_so_a_match_reads_the_same_every_time() {
+            // Two matchers over the same fact, and that fact also required: one ref, not three.
+            let catalog = one(entry_with(|e| {
+                e["matchers"] = json!([
+                    { "module_family_prefix": { "value": "amd" } },
+                    { "module_family_equals": { "value": "amdkmdag" } }
+                ]);
+                e["required_evidence"] = json!(["faulting_module"]);
+            }));
+            let outcome = run(&catalog);
+            assert_eq!(found(&outcome).evidence_refs, vec!["faulting_module"]);
+        }
+
+        // ── Suppression: what a maybe is allowed to suggest ────────────────
+
+        fn two_steps() -> Value {
+            json!([
+                {
+                    "headline": "Install the newest Adrenalin driver",
+                    "detail": "AMD published a driver that changes this behaviour.",
+                    "research_only": false
+                },
+                {
+                    "headline": "Have the power supply checked",
+                    "detail": "A shop can test whether the supply holds up under load.",
+                    "research_only": true
+                }
+            ])
+        }
+
+        #[test]
+        fn a_possible_match_withholds_the_irreversible_steps_entirely() {
+            // research_only marks a fix nobody can undo: a PSU swap, a repaste, a BIOS flash.
+            // Pointing someone at one of those on a maybe is the harm this level exists to prevent.
+            let catalog = one(entry_with(|e| {
+                e["next_steps"] = two_steps();
+                e["required_evidence"] = json!(["faulting_module", "gpu_vendor", "vitals"]);
+            }));
+            let blind = CaseIncidentFacts { has_vitals: false, ..gpu_incident() };
+            let outcome = match_facts(&catalog, 7, &blind, &amd_facts());
+            let m = found(&outcome);
+            assert_eq!(m.level, CaseMatchLevel::PossibleKnownIssue);
+            assert_eq!(m.next_steps.len(), 1);
+            assert!(!m.next_steps[0].research_only);
+        }
+
+        #[test]
+        fn a_full_match_keeps_the_irreversible_steps_and_keeps_them_flagged() {
+            let catalog = one(entry_with(|e| e["next_steps"] = two_steps()));
+            let outcome = run(&catalog);
+            let m = found(&outcome);
+            assert_eq!(m.level, CaseMatchLevel::MatchedKnownIssue);
+            assert_eq!(m.next_steps.len(), 2);
+            assert!(m.next_steps[1].research_only, "the flag must survive to the surface");
+        }
+
+        #[test]
+        fn a_possible_match_whose_every_step_is_irreversible_offers_none_of_them() {
+            let catalog = one(entry_with(|e| {
+                e["next_steps"] = json!([{
+                    "headline": "Have the power supply checked",
+                    "detail": "A shop can test whether the supply holds up under load.",
+                    "research_only": true
+                }]);
+                e["required_evidence"] = json!(["faulting_module", "gpu_vendor", "vitals"]);
+            }));
+            let blind = CaseIncidentFacts { has_vitals: false, ..gpu_incident() };
+            let outcome = match_facts(&catalog, 7, &blind, &amd_facts());
+            let m = found(&outcome);
+            assert!(m.next_steps.is_empty());
+            // Still worth showing: the write-up, the caveats and where it came from are the value.
+            assert!(!m.summary.is_empty());
+            assert!(!m.source_url.is_empty());
+        }
+
+        #[test]
+        fn contraindications_ride_along_at_every_level() {
+            // A step shown without its own caveat is worse than no step: the caveat is the part that
+            // stops someone doing it in the one situation where it hurts.
+            let catalog = one(base_entry());
+            let full = run(&catalog);
+            assert_eq!(found(&full).contraindications, catalog.entries[0].contraindications);
+
+            let partial_catalog = one(entry_with(|e| {
+                e["required_evidence"] = json!(["faulting_module", "gpu_vendor", "vitals"]);
+            }));
+            let blind = CaseIncidentFacts { has_vitals: false, ..gpu_incident() };
+            let partial = match_facts(&partial_catalog, 7, &blind, &amd_facts());
+            assert_eq!(found(&partial).level, CaseMatchLevel::PossibleKnownIssue);
+            assert_eq!(found(&partial).contraindications.len(), 1);
+        }
+
+        // ── One answer, chosen the same way every time ─────────────────────
+
+        fn named(id: &str, edit: impl FnOnce(&mut Value)) -> Value {
+            let mut entry = base_entry();
+            entry["id"] = json!(id);
+            edit(&mut entry);
+            entry
+        }
+
+        #[test]
+        fn a_full_match_outranks_a_possible_one_whatever_order_they_are_written_in() {
+            let possible = named("aaa-possible", |e| {
+                e["required_evidence"] = json!(["faulting_module", "gpu_vendor", "error_code"]);
+            });
+            let full = named("zzz-full", |_| {});
+            for entries in [vec![possible.clone(), full.clone()], vec![full, possible]] {
+                let catalog = catalog_of(entries);
+                let outcome = run(&catalog);
+                assert_eq!(found(&outcome).case_id, "zzz-full");
+            }
+        }
+
+        #[test]
+        fn between_two_full_matches_the_more_specific_write_up_wins() {
+            let broad = named("aaa-broad", |e| {
+                e["matchers"] = json!([{ "gpu_vendor_equals": { "value": "amd" } }]);
+                e["required_evidence"] = json!(["gpu_vendor"]);
+            });
+            let specific = named("zzz-specific", |_| {}); // two matchers
+            let catalog = catalog_of(vec![broad, specific]);
+            assert_eq!(found(&run(&catalog)).case_id, "zzz-specific");
+        }
+
+        #[test]
+        fn an_exact_tie_breaks_on_revision_and_then_on_id_so_two_runs_never_disagree() {
+            let older = named("bbb", |e| e["revision"] = json!(2));
+            let newer = named("ccc", |e| e["revision"] = json!(9));
+            let catalog = catalog_of(vec![older, newer]);
+            assert_eq!(found(&run(&catalog)).case_id, "ccc", "the later revision wins");
+
+            let left = named("bbb", |e| e["revision"] = json!(4));
+            let right = named("ccc", |e| e["revision"] = json!(4));
+            let tied = catalog_of(vec![right, left]);
+            assert_eq!(found(&run(&tied)).case_id, "bbb", "a dead tie breaks on id, ascending");
+        }
+
+        #[test]
+        fn the_same_catalog_and_the_same_incident_always_produce_the_same_answer() {
+            let a = named("aaa", |_| {});
+            let b = named("bbb", |_| {});
+            let c = named("ccc", |_| {});
+            let forward = catalog_of(vec![a.clone(), b.clone(), c.clone()]);
+            let backward = catalog_of(vec![c, b, a]);
+            let first = run(&forward);
+            assert_eq!(first, run(&forward), "the matcher must be a function, not a coin toss");
+            assert_eq!(found(&first).case_id, found(&run(&backward)).case_id);
+        }
+
+        // ── Honesty ────────────────────────────────────────────────────────
+
+        #[test]
+        fn the_matcher_writes_no_prose_of_its_own() {
+            // Every word a user reads was signed by whoever wrote the case up. Compy contributes the
+            // level and which facts lined up, and nothing else — which is why "caused", "definitely"
+            // and "fixed" can be barred at the catalog's door and stay barred.
+            let catalog = one(entry_with(|e| e["next_steps"] = two_steps()));
+            let entry = &catalog.entries[0];
+            let outcome = run(&catalog);
+            let m = found(&outcome);
+            assert_eq!(m.title, entry.title);
+            assert_eq!(m.summary, entry.summary);
+            assert_eq!(m.case_id, entry.id);
+            assert_eq!(m.next_steps, entry.next_steps);
+            assert_eq!(m.contraindications, entry.contraindications);
+            assert_eq!(m.source_url, entry.source_url);
+            assert_eq!(m.source_updated_at, entry.source_updated_at);
+        }
+
+        #[test]
+        fn a_match_carries_no_numeric_confidence_on_the_wire() {
+            let catalog = one(base_entry());
+            let outcome = run(&catalog);
+            let wire = serde_json::to_value(found(&outcome)).unwrap();
+            let keys: Vec<&str> = wire.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+            for banned in ["confidence", "score", "probability", "percent", "certainty", "rank"] {
+                assert!(!keys.contains(&banned), "{banned} must never reach the wire: {keys:?}");
+            }
+            assert_eq!(wire["level"], json!("matched_known_issue"));
+        }
+
+        // ── The Black Box seam ─────────────────────────────────────────────
+
+        fn bb_incident() -> crate::blackbox::Incident {
+            crate::blackbox::Incident {
+                headline: "Your display driver stopped responding".into(),
+                tag: "Display 4101".into(),
+                when: "2026-08-20T21:42:00-05:00".into(),
+                when_display: "Aug 20, 9:42 PM".into(),
+                vitals: None,
+                receipt: crate::blackbox::Receipt {
+                    source: "System log · Display 4101".into(),
+                    event_ids: vec![4101],
+                    faulting_app: None,
+                    faulting_module: Some("amdkmdag.sys".into()),
+                    code: None,
+                    detail: "Display driver amdkmdag stopped responding and has recovered.".into(),
+                },
+                assessment: None,
+                kind: crate::blackbox::IncidentKind::GpuTimeout,
+            }
+        }
+
+        #[test]
+        fn the_adapter_reads_a_black_box_incident_without_black_box_knowing_tier_one_exists() {
+            // `blackbox.rs` is not modified by this task. The seam lives on Tier 1's side, so the
+            // frozen characterization tests from task 1 still mean what they said.
+            let catalog = one(entry_with(|e| e["required_evidence"] = json!(["faulting_module"])));
+            let outcome = match_incident(&catalog, 7, &bb_incident(), &amd_facts());
+            assert_eq!(outcome.level(), CaseMatchLevel::MatchedKnownIssue);
+        }
+
+        #[test]
+        fn nothing_on_the_matching_path_can_be_serialized_into_a_request() {
+            // The plan's words: the matcher "creates no serializable request or payload". The facts
+            // types are the ones a future send path would reach for, so they must not be reachable —
+            // a derive is one word, and this test is the thing that has to be argued with.
+            let source = include_str!("case_intelligence.rs");
+            for name in ["struct CaseLocalFacts", "struct CaseIncidentFacts"] {
+                let at = source.find(name).unwrap_or_else(|| panic!("{name} not found"));
+                let derives = &source[at.saturating_sub(160)..at];
+                assert!(
+                    !derives.contains("Serialize"),
+                    "{name} must not derive Serialize — matching is a local decision"
+                );
+            }
+        }
+
+        // ── The three empty answers, and the shipped path ──────────────────
+
+        #[test]
+        fn a_machine_that_has_never_fetched_a_catalog_has_no_catalog_not_an_error() {
+            let root = TempRoot::new("advise-missing");
+            let key = key_of(&ed25519_compact::KeyPair::generate());
+            let outcome =
+                advise_in(&root.cache(), &cx(&key), &gpu_incident(), &amd_facts());
+            assert_eq!(outcome, CaseMatchOutcome::Nothing(CaseMatchLevel::NoCatalog));
+        }
+
+        #[test]
+        fn a_catalog_we_hold_but_cannot_prove_is_unavailable_rather_than_absent() {
+            // Different facts about Compy, so different answers. "Never fetched" and "held but no
+            // longer trustworthy" must not collapse into one word.
+            let root = TempRoot::new("advise-corrupt");
+            std::fs::create_dir_all(root.cache()).unwrap();
+            std::fs::write(root.file(), b"{ not an envelope").unwrap();
+            let key = key_of(&ed25519_compact::KeyPair::generate());
+            let outcome =
+                advise_in(&root.cache(), &cx(&key), &gpu_incident(), &amd_facts());
+            assert_eq!(outcome, CaseMatchOutcome::Nothing(CaseMatchLevel::CatalogUnavailable));
+        }
+
+        #[test]
+        fn the_shipped_entry_point_is_dark_and_never_touches_the_disk() {
+            assert!(!case_intelligence_gate(), "task 5 must not arm anything");
+            let outcome = advise(&bb_incident(), &amd_facts());
+            assert_eq!(outcome, CaseMatchOutcome::Nothing(CaseMatchLevel::NoCatalog));
         }
     }
 }
