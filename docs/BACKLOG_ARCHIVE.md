@@ -3303,3 +3303,57 @@ for that very merge.
 have collided with a fast-forward is gone. The only dirty path is `.codex/config.toml` (another
 lane's, leave it). A branch cut there no longer starts stale — **re-derive before believing this
 line, not because it is suspect but because it is exactly the kind that goes stale in a day.**
+
+## NEXT UP ① — #213 A1 + the process amendment, moved out of BACKLOG.md 2026-08-26 (section cap)
+
+Both CLOSED. Preserved byte-for-byte:
+
+- **A1 (the wordmark reads `©ompy`) — RULED AND SHIPPED 2026-08-26** (`014a3e8c`, self-review PASS).
+  The owner chose "drop the inner ring when tiny". `PULSE_MIN_SIZE` in
+  [`../src/design/Wordmark.tsx`](../src/design/Wordmark.tsx) is **22**, not the ~24 proposed:
+  captured at 16/19/20/22/24 with live token values, the pulse reads as an enclosed blob at 16 and
+  19, marginal at 20, a legible zigzag at 22 — and Settings → About draws the mark at exactly 22,
+  so the flourish stays where it measures readable. Below it the polyline is ABSENT, not
+  transparent (a sub-pixel stroke still fattens the ring, which is the mechanism). The triple-click
+  egg survives by revealing the pulse for its own redraw, closed by a TIMER — under reduced motion
+  `animation: none` means `animationend` never fires and the pulse would strand on screen.
+  Guard `../src/design/wordmark-small-size-guard.test.tsx`, falsified four ways.
+- **The process amendment landed as a guard, not a paragraph** (`565281c4`): *a clipped element, an
+  overlapping glyph, or an unstyled native control is a correctness failure, not a matter of taste*
+  is rubric item 12 in `.claude/agents/self-reviewer.md`, ALWAYS-on, named regions required as
+  evidence.
+
+## NEXT UP ① — #213's B half (B1–B5), moved out of BACKLOG.md 2026-08-26 (section cap)
+
+All closed. Preserved byte-for-byte:
+
+**#213's B half (B1–B5) was never blocked.** [#49](https://github.com/Pootytxng/sentinel/issues/49) is
+closed and the owner **approved four room comps 2026-08-23**, bundled implementation-ready at the path
+pinned in `src/design/approved-comps-guard.test.ts`. Three ledgers instead said it "needs the owner's
+ChatGPT mockups, which no session in this repo has" — invented in `642d48d6`, never re-derived, and it
+handed his own complaint back to him. **B2 is his ruling, not a defect** (`a83d4809`, pinned by
+`comp-fidelity-guard.test.ts`): the mint CTA is sampled off the comps. **DISCHARGED 2026-08-25**
+(`4d65902e`, shipped to his desk, self-review PASS 12/12): **B1** and **B5** were not directions at
+all — the titlebar grounded on the violet-tinted `--ix-base` (`rgb(12,10,20)` measured on the old
+binary; the comp samples `#0a0c10`) and the rail seam was drawing the light half of a bevel with
+nothing under it (`#07080a` at x=216 is new).
+**B3 was RIGHT, and its rebuttal was wrong twice** — corrected 2026-08-25 (`5a3b5e1c`). The comp's
+~16ch measure said nothing, because `max-width: 20ch` computes to 716px against a **452px** column
+and never binds; and `revertedTitle_one` renders at `--type-body` in a spotlight row, not in a
+headline at all. Measured on the installed build, counting real line boxes: the comp's own
+"You're ready to play" draws **2** lines at 52px, and so does everything up to 31 characters — but
+"Compy changes were turned back off" (34, **the state his machine is in**) draws **3**, and the
+worst multi-flag headline draws **4**. `--type-hero` is comp-derived and untouched; past the
+measured break the headline steps down one to `--type-verdict`, restoring 2 lines out to 43
+characters and worsening nothing. The residual — every remaining 3-liner being the
+`· and N more` suffix — went to the owner as a decision rather than a drive-by edit, and
+**he ruled on 2026-08-26 ([#219](https://github.com/Pootytxng/sentinel/issues/219)): drop the count
+from the headline.** Shipped in `014a3e8c`: the attention headline is the flagged check's label and
+stops. Nothing is hidden — the sub still prints the proportion ("15 of 16 checks look good.") and
+the remaining flagged checks are one press away in Check and Fix, which render them in full.
+**The first wording of that sentence was WRONG and an independent review caught it** — it said the
+rest were printed further down Home itself, and Home shows one flagged thing plus a door. Corrected
+in code, doc and comment, and pinned. `home.posture.attentionMore` is deleted from BOTH locales.
+**B4 joins B2 as approved design** — the comp draws the nav numerals as bordered chips. Two A-list
+items also came back wrong: **A5's fix deviates from the comp** (it prints "Compy" in both places on
+purpose) and **A1's `©ompy` is in the comp too**, so it is the mark he approved, not a regression.

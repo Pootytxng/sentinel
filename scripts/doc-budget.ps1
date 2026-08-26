@@ -121,14 +121,20 @@ $byteBudgets = @{
 # file. A phantom overflow here tells the next session to archive live rows, so the host must not
 # be able to move the number. Run it with either; scripts/doc-budget-guard.test.mjs pins this.
 $sectionByteBudgets = @{
-  # 12544 -> 12288 on 2026-08-26. NEXT UP FAILED at 13320 when the #213 A1 and #219 rulings
-  # were recorded, and the payment came from the archive: five archive-POINTER blocks (each one
-  # a stub for work already in BACKLOG_ARCHIVE.md, five separate collapsed notes costing their
-  # bytes on every read) plus the A2/A3 not-a-defect finding moved out verbatim, leaving one
-  # consolidated pointer. 13320 -> 11775. The ratchet banks 256 of the 1545 bytes freed; the
-  # rest is deliberate room, because this queue is where a NEW owner bug report lands and a
-  # zero-headroom cap would fail the session that answers him.
-  "docs/BACKLOG.md::NEXT UP" = 12288
+  # 12288 -> 11776, later the same day (2026-08-26). NEXT UP failed again at 12.2KB when the
+  # first-timer walk's two dead-code findings were filed. Paid from the archive as the law
+  # requires, never from the cap: #213's A1 block, the taste-vs-defect process amendment and the
+  # whole B1-B5 half moved out VERBATIM (4130 bytes) behind two collapsed pointers - all three
+  # were closed records, and their guards live in the tree, which is the only reason they were
+  # safe to move. 12.2KB -> 10.2KB. The ratchet banks 512 of the ~2KB freed and leaves ~1.5KB of
+  # deliberate room, for the same reason as the ratchet before it: this queue is where a NEW
+  # owner bug report lands, and a zero-headroom cap would fail the session that answers him.
+  #
+  # 12544 -> 12288 earlier on 2026-08-26. NEXT UP FAILED at 13320 when the #213 A1 and #219
+  # rulings were recorded, and the payment came from the archive: five archive-POINTER blocks
+  # plus the A2/A3 not-a-defect finding moved out verbatim, leaving one consolidated pointer.
+  # 13320 -> 11775, banking 256 of the 1545 bytes freed.
+  "docs/BACKLOG.md::NEXT UP" = 11776
   "docs/BACKLOG.md::Conformance queue" = 26624
   "docs/BACKLOG.md::HQ STEERING LOG" = 4608
 }
