@@ -31,7 +31,9 @@ The dev build runs two same-origin webviews + a small default window, so capture
   `docs/ui-sweep/cdp-shot.mjs`. Do NOT trust `setDeviceMetricsOverride` — it distorts when the
   real window is small (it has manufactured a false floating-panel defect AND can hide real ones).
 - Confirm the shot is the MAIN window (the nav rail present — currently 4 `.v2-nav-item`s
-  (Home/Monitor/Blackbook/Lab); the FPS overlay never has a rail), not the overlay.
+  (**Health · Live · History · Test**); the FPS overlay never has a rail), not the overlay.
+  `src/design/homeRail.ts` is the source of those names and wins if this line ever disagrees;
+  `src/stale-reference-guard.test.ts` fails the build if it does.
 - For the EXACT element changed: scroll to it / zoom — look AT it, not just the page.
 - **Real-density law (bug→guard 2026-07-11, v4 waterfall rejection):** when the diff renders
   data-driven density (charts, timelines, sparklines, long lists), judge on REAL data at real

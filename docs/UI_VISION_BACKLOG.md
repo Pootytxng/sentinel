@@ -1078,7 +1078,9 @@ f16d158). **Still OPEN:** Phase 4 (catalog-expansion pipeline — a SEPARATE gat
 ~~the slice-1 Optimize-rail TAB removal + full rail collapse (**deferred, owner call — the standalone Optimize tab
 still coexists with Lab station 1 during preview; this is the ONE open eyeball decision**)~~ → ✅ **DECIDED + SHIPPED
 2026-07-10 (`59249bb`)** — the owner's round-4 "ALL GOOD" cleared it: the standalone Optimize tab is gone, "the Lab's
-Optimize station is the one door", the ground rail is Home · Monitor · Blackbook · Lab (`src/design/homeRail.ts:36`),
+Optimize station is the one door", the ground rail is Home · Monitor · Blackbook · Lab (`src/design/homeRail.ts:36`)
+— **those four rooms are labeled Health · Live · History · Test since the owner's 2026-08-12 and 2026-08-19 renames;
+the ids, the structure and every decision in this section are unchanged, only the words on the buttons** —
 and `compy_lab_ground="0"` still restores the classic rail/tabs/rooms live. **Still NOT built from §A (this
 marathon only realized A.1's gallery):** ~~the rest of the JARVIS motion stack — GSAP data-reactivity (A.2), magnetic
 cursor (A.3), Lenis smooth-scroll spine (A.5), room-transition wipe (A.6) — remain 🔴 OPEN~~ → **built 2026-07-12

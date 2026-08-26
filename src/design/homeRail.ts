@@ -35,14 +35,14 @@ export const HOME_RAIL: HomeRailItem[] = [
 // room dock both resolve through it). When the Optimize merge (phase 1a) is off, this is
 // HOME_RAIL verbatim (the blessed six-home set). When on, Check + Tune collapse into ONE room: the
 // standalone `check` entry drops and the `fix` entry is relabeled "Optimize" AND moves into Check's
-// slot (position 2) — the spec order Home · Optimize · Monitor · Blackbook · Lab (5), keeping the
+// slot (position 2) — the spec order Health · Optimize · Live · History · Test (5), keeping the
 // diagnose-first surface near the top where Check was. The id stays "fix" (the persisted nav key —
 // location history and routing are untouched). Pure: no DOM/localStorage reads here.
 //
 // `ground` (the Lab proving-ground merge, owner decision 2026-07-10 — ships WITH the
 // compy_lab_ground default-ON flip): the standalone Optimize room drops from the rail entirely —
-// the Lab's Optimize station is the ONE door to the safe-tweak toggles. Rail = Home · Monitor ·
-// Blackbook · Lab (4), relative order preserved so the Lab stays the last chapter (no reorder,
+// the Lab's Optimize station is the ONE door to the safe-tweak toggles. Rail = Health · Live ·
+// History · Test (4), relative order preserved so the Lab stays the last chapter (no reorder,
 // no new door — smallest visual delta from the shipped rail). Ground wins over `merged`; the
 // classic rails stay reachable via the compy_lab_ground="0" failsafe.
 export function railFor(merged: boolean, ground = false): HomeRailItem[] {

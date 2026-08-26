@@ -37,7 +37,7 @@ screen shows is a claim** — unverified, the same defect in a comment as in a d
 ## IN FLIGHT — one background agent; re-dispatch if this session died before it reported
 
 **The DIR-1 wayfinding walk** (the owner's chosen next task, picked 2026-08-26). An agent walks
-Home · Monitor · Blackbook · Lab on the INSTALLED build as a first-time non-technical gamer whose PC
+Health · Live · History · Test on the INSTALLED build as a first-time non-technical gamer whose PC
 just froze, and returns a RANKED ≤12 finding list: what a first-timer cannot tell · on-screen
 evidence (exact text + selector + a measured fact) · why it strands them · a STRUCTURAL fix.
 **Intimidation is a STRUCTURE defect — grouping, boxed templates, fewer words; NEVER a switch and

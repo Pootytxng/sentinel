@@ -50,9 +50,11 @@ Two independent layers, both mechanical:
      restore a tab that was already visited, so it adds no new reachable tab.
 
    `railFor(merged, ground)` (`src/design/homeRail.ts:41-55`) drops the `check` **and** `fix` rail
-   entries when `ground` is true. At default flags the rail is Home · Monitor · Blackbook · Lab and
-   only `"Overview" | "Play" | "Learn" | "Lab"` are reachable — **`"Optimize"` is written by no
-   code path at all** (see the correction below).
+   entries when `ground` is true. At default flags the rail is **Health · Live · History · Test**
+   (the labels the owner set on 2026-08-12 and 2026-08-19; the four rooms and their ids are
+   unchanged) and only `"Overview" | "Play" | "Learn" | "Lab"` are reachable — those are internal
+   view keys, never labels — so **`"Optimize"` is written by no code path at all** (see the
+   correction below).
 2. **The classic-tree gate.** `roomPanels` renders only inside the `v2Shell` branch
    (`src/App.tsx:1547`, i.e. `!settingsActive`), behind
    `src/App.tsx:1719-1723`:
@@ -189,7 +191,7 @@ and one deletable file (`Optimize.tsx`) that is better landed as part of retirin
 `Optimize` tab once the Lab overhaul closes.
 
 Finding 2's framing — "bless one face per room, delete the rest" — is right about **one** room and
-wrong about the other four. Home, Monitor, Blackbook and the Lab each already have exactly one
+wrong about the other four. Health, Live, History and Test each already have exactly one
 blessed shell; their "extra faces" are that shell's own parts, and the count Finding 2 read as
 rivalry was really composition depth. **Optimize is the real case:** three shells over the same
 `Check` + `Fix` parts, of which `lab/OptimizeStation` is live, `OptimizeV2` is the
