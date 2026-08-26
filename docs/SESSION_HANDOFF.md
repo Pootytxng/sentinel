@@ -7,16 +7,16 @@
 
 ## Where the train is standing
 
-**`main` is clean and pushed at `9c43015c`; the desk build is still `1703be9f`** (no rebuild — the
+**`main` is clean and pushed at `9424f11c`; the desk build is still `1703be9f`** (no rebuild — the
 change since is copy on a card that needs a real measured session to appear). **DIR-1a has now walked
 Live · History · Test:** History and Test came back clean; Live's one real violation is fixed.
 
 | | |
 |---|---|
 | Installed | `1703be9f`, stamp byte-found in the installed exe, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
-| Shipped | `1703be9f` rule 5's "GPU sensor coverage" sentence reaches a screen · `9c43015c` Live's debrief stops calling a change "the #1 fix" after a session it graded smooth |
-| Self-review | **PASS 12/12** at `1703be9f`. **NOT run on `9c43015c`** — that session was barred from dispatching the subagent; copy + one conditional, no layout moved |
-| Gate | `tsc` clean · 5628 frontend tests · doc-truth 0 drift · doc-budget ALL PASS · pre-push local gate PASS |
+| Shipped | `1703be9f` rule 5's "GPU sensor coverage" sentence reaches a screen · `9c43015c` Live's debrief stops calling a change "the #1 fix" after a session it graded smooth · `9424f11c` three fixture states so those three outcomes can be LOOKED at |
+| Self-review | **PASS 12/12** at `9424f11c`, through the three new `?state=debrief-*` previews. `.debrief-clean` → `.debrief-cta` gap measured 10px (matches the rule written blind); CTA contrast 6.85:1 |
+| Gate | `tsc` clean · 5630 frontend tests · doc-truth 9 · doc-budget ALL PASS · pre-push local gate PASS |
 
 ## The rule that came out of the walk — read this before touching Health
 
@@ -46,12 +46,12 @@ gauges already carry plain-English notes) — **an audit is not a work order.**
 ## Before you touch the UI — the fixture route, and the guards already covering copy
 
 `docs/ui-sweep/fixture/` mounts the REAL component against a build-time stub of
-`@tauri-apps/api/core`; six FirstWin `?state=` values exist (`firstwin-held`, `-reverted`,
-`-unreadable`, `-check-failed`, `-undo-failed`, `-latest`). Serve on 5199 with
-`npx vite --config docs/ui-sweep/fixture/vite.config.mts`; a bare `/` drops your `?state=`.
-`src/fixture-parity-guard.test.ts` fails the build if the stub stops answering a command the card
-sends, **or if `rollback_change` is answered outside the FirstWin branch**. It is also how the
-self-reviewer reaches a state the shipped app cannot be put into (the front-door gate's clear half).
+`@tauri-apps/api/core`: six FirstWin `?state=` values (`firstwin-held`, `-reverted`, `-unreadable`,
+`-check-failed`, `-undo-failed`, `-latest`) and three debrief ones (`debrief-smooth-offer`,
+`-rough-fix`, `-clean-none`). Serve on 5199 — `npx vite --config docs/ui-sweep/fixture/vite.config.mts`;
+a bare `/` drops your `?state=`. `src/fixture-parity-guard.test.ts` fails the build if the stub
+stops answering a command a card sends, **or if a WRITE is answered outside its own branch** —
+and it is how the self-reviewer reaches a state the shipped app cannot be put into on demand.
 
 - `src/data/jargon-guard.test.ts` covers the **Blackbook DATA corpus only**, NOT surface copy.
   A wayfinding fix in a SURFACE needs its own guard, or an extension of one of these:
