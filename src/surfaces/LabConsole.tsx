@@ -252,6 +252,10 @@ export function LabConsole({
   // Detail view — exactly ONE station open at a time (the dock IS the menu). Clicking a node opens
   // it, clicking again closes, clicking another swaps. Optimize is included — it is NOT always-on.
   const [openStation, setOpenStation] = useState<LabStationKey | null>(null);
+  // The optional exact-incident selector that rides alongside a `blackbox` deep-link (Tier 1 task
+  // 9). One-shot, like the station key: read and cleared on mount, so a later ordinary visit to the
+  // Lab never re-opens somebody's old crash.
+  const [openIncidentId, setOpenIncidentId] = useState<string | null>(null);
   // "Add a part Compy can't detect" is a disclosure in the station list now (04-test-approved.png
   // draws it as the list's last row). Closed by default; the form stays mounted either way.
   const [manualOpen, setManualOpen] = useState(false);
@@ -262,8 +266,19 @@ export function LabConsole({
     day: "numeric",
     year: "numeric",
   });
+  // bug->guard, #222 frontend/IPC contract audit (2026-08-25). The localStorage key is one-shot,
+  // but the React state DERIVED from it was set once on mount and never cleared. Closing Black Box
+  // and reopening it BY HAND — still on the Lab tab, so nothing remounts — handed the old id
+  // straight back to <BlackBox>, which fired an unrequested scan and re-marked a crash the user had
+  // already walked away from. Every hand-driven station change now drops the selection: the
+  // deep-link is a one-time delivery, not a mode the room stays in.
+  const closeStation = () => {
+    setOpenStation(null);
+    setOpenIncidentId(null);
+  };
   const onDockOpen = (key: string) => {
     const k = key as LabStationKey;
+    setOpenIncidentId(null);
     setOpenStation((cur) => (cur === k ? null : k));
   };
   // Station deep-link (tester J 2026-07-22, Phase 5): "Take me to Test" from the first-check
@@ -280,9 +295,15 @@ export function LabConsole({
   // for. A stale or unknown value is dropped, and the user simply lands on the dock.
   useEffect(() => {
     let pending: string | null = null;
+    let incident: string | null = null;
     try {
       pending = localStorage.getItem("compy_lab_open_station");
       if (pending) localStorage.removeItem("compy_lab_open_station");
+      // BOTH keys are consumed and cleared here, and the incident key is cleared even when the
+      // station is missing or unrenderable. A one-shot that survives its own visit is not one-shot:
+      // it would silently re-select a stale crash the next time anything opened this console.
+      incident = localStorage.getItem("compy_lab_open_incident");
+      if (incident) localStorage.removeItem("compy_lab_open_incident");
     } catch {
       /* ignore — no deep-link this visit */
     }
@@ -290,6 +311,8 @@ export function LabConsole({
     const openable: LabStationKey[] = ["optimize", ...measureKeys];
     const target = openable.find((k) => k === pending);
     if (target) setOpenStation(target);
+    // The incident selector only means anything at the station that can honour it.
+    if (target === "blackbox" && incident) setOpenIncidentId(incident);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on mount by design
   }, []);
 
@@ -318,7 +341,7 @@ export function LabConsole({
           />
         ) : null;
       case "blackbox":
-        return <BlackBox onReport={setBbReport} />;
+        return <BlackBox onReport={setBbReport} selectedIncidentId={openIncidentId} />;
     }
   };
 
@@ -781,7 +804,7 @@ export function LabConsole({
           span="full"
           title={stations[openStation].name}
           badge={
-            <button className="lc-detail-close" onClick={() => setOpenStation(null)} aria-label={t("lab.labConsole.closeStationAriaLabel")}>
+            <button className="lc-detail-close" onClick={closeStation} aria-label={t("lab.labConsole.closeStationAriaLabel")}>
               {t("lab.labConsole.close")}
             </button>
           }

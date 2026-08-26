@@ -16,6 +16,8 @@
 // sentence assumed that band was off by default; it graduated to on 2026-08-11, and independence is
 // what carries the requirement either way.
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "fs";
+import { join } from "path";
 import i18n from "../i18n";
 import { homeCareEntry } from "./home-intake-data";
 import { INTERVIEW_FINDINGS, interviewFinding } from "./home-interview-data";
@@ -119,5 +121,224 @@ describe("the Care entry is a SIGN, not a chip", () => {
         `the Care entry's because-line names the room "${roomName}" — it must name what the destination DOES`,
       ).toBe(false);
     }
+  });
+});
+
+// ── EXTENDED 2026-08-25 (Tier 1 plan tasks 8–9, issue #222): the ROUTE, not just the entry ───────
+//
+// Everything above is true of the entry's DATA. What follows is true of the hallway it opens, which
+// task 8 finished: Home can now send the user to ONE named incident, and the observer built in task
+// 9 is the producer that finally makes that parameter fillable. The route is spread across five
+// files and held together by two localStorage keys and a prop signature — nothing type-checks it
+// end to end, so every seam below can rot green:
+//
+//   * the door can quietly become conditional on a crash report existing — and a door you only see
+//     AFTER a crash is a door nobody learns about BEFORE one, which is the whole point of #91;
+//   * the incident id can get folded into the station string, where the reader's `openable.find()`
+//     drops it on the floor with no error;
+//   * the one-shot incident key can stop being cleared when the station is unrenderable, silently
+//     re-selecting a stale crash on the NEXT Lab visit;
+//   * the derived React state can outlive the one-shot key it came from (it did — see the
+//     manual-reopen block at the bottom);
+//   * the crash route can be re-pointed at Optimize, the older and more travelled hallway.
+//
+// Sibling guards, deliberately not duplicated: post-check-lab-route-guard.test.ts owns the
+// write-before-navigate ordering and the singleness of the writer; home-console.test.tsx owns the
+// notice's behavioural render; care-incident-observer-contract.test.ts owns the producer.
+const STATION_KEY = "compy_lab_open_station";
+const INCIDENT_KEY = "compy_lab_open_incident";
+
+const app = readFileSync(join("src", "App.tsx"), "utf8");
+const homeConsole = readFileSync(join("src", "surfaces", "HomeConsole.tsx"), "utf8");
+const intakeData = readFileSync(join("src", "surfaces", "home-intake-data.ts"), "utf8");
+const labConsole = readFileSync(join("src", "surfaces", "LabConsole.tsx"), "utf8");
+const blackBox = readFileSync(join("src", "surfaces", "BlackBox.tsx"), "utf8");
+const homeLocale = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "home.json"), "utf8"));
+const gamingLocale = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "gaming.json"), "utf8"));
+
+describe("the Care door is always there, not only after a crash", () => {
+  it("builds the entry from nothing but `t` — it cannot be gated on evidence it has not got", () => {
+    // A signature that took a report, a count or a boolean would be the shape of the regression: it
+    // would let a caller hide the door on the machines that have never crashed, which is every
+    // machine until the moment it matters.
+    expect(intakeData, "homeCareEntry now takes more than `t` — it can be gated on crash evidence")
+      .toMatch(/export function homeCareEntry\(t: TFunction\): HomeCareEntry \{/);
+  });
+
+  it("renders the door on room availability alone", () => {
+    // `careRenders` may depend on the Lab room EXISTING (a door to a room that is not there is a
+    // dead end). It must not depend on a report, an incident count, or the pending notice.
+    const cond = homeConsole.match(/const careRenders = ([^;]+);/)?.[1] ?? "";
+    expect(cond, "careRenders is gone — the door's visibility is no longer decided in one place")
+      .not.toBe("");
+    expect(cond, `careRenders now consults crash evidence (${cond}) — the door hides until it is too late`)
+      .not.toMatch(/incident|report|crash|pendingCare|count/i);
+  });
+
+  it("keeps the notice and the door as SEPARATE surfaces", () => {
+    // The notice is transient (one incident, dismissable); the door is permanent. Rendering the
+    // door inside the notice's conditional would make the permanent half disappear on dismiss.
+    expect(homeConsole.indexOf('className="hc-notice"'), "the Care notice is gone from Home").toBeGreaterThan(-1);
+    expect(homeConsole.indexOf('className="hc-care"'), "the Care door is gone from Home").toBeGreaterThan(-1);
+    expect(homeConsole, "the door is no longer rendered on its own `careRenders` branch")
+      .toMatch(/\{careRenders && \(\s*<section className="hc-care"/);
+  });
+});
+
+describe("the crash route lands on the crash, not the dock and not Optimize", () => {
+  it("routes the notice's open action through the Care handler, never the fixes hallway", () => {
+    expect(homeConsole, "the notice's primary action no longer calls onOpenCareIncident")
+      .toMatch(/onClick=\{\(\) => onOpenCareIncident\?\.\(pendingCare\.incident_id\)\}/);
+    // openFixesInLab is the Optimize-named delegate. If it ever appears on the crash path, a user
+    // asking "why did it crash" is handed a list of tweaks instead of their own evidence.
+    const noticeBlock = homeConsole.slice(
+      homeConsole.indexOf('className="hc-notice"'),
+      homeConsole.indexOf('className="hc-care"'),
+    );
+    expect(noticeBlock, "the crash notice now routes into the Optimize hallway")
+      .not.toMatch(/onSeeInFix|openFixesInLab|"optimize"/);
+  });
+
+  it("opens the blackbox station WITH the incident id from App's one writer", () => {
+    expect(app, "openCareIncident no longer deep-links the exact incident")
+      .toMatch(/openLabStation\("blackbox", incidentId\)/);
+    expect(app, 'the crash route now names "optimize" — it lands on the fixes, not the evidence')
+      .not.toMatch(/openCareIncident[\s\S]{0,400}?openLabStation\("optimize"/);
+  });
+
+  it("marks the incident opened BEFORE navigating, so a re-render cannot re-announce it", () => {
+    const body = app.match(/const openCareIncident = \(incidentId: string\) => \{([\s\S]*?)\n {2}\};/)?.[1] ?? "";
+    expect(body, "openCareIncident is gone — the Care route has no single handler").not.toBe("");
+    const mark = body.indexOf("mark_care_incident_opened");
+    const nav = body.indexOf("openLabStation(");
+    expect(mark, "the open is no longer recorded — the notice comes straight back").toBeGreaterThan(-1);
+    expect(nav, "the handler no longer navigates").toBeGreaterThan(-1);
+    expect(nav, "navigation now precedes the record — a fast remount re-announces the same crash")
+      .toBeGreaterThan(mark);
+  });
+
+  it("carries the incident on its OWN key, not folded into the station string", () => {
+    // The two have different lifetimes and different failure modes: an unrenderable station is
+    // dropped and the user lands on the dock, but an unfindable incident must still OPEN the
+    // station and say so. One concatenated key cannot express both.
+    expect(app, `the incident no longer rides ${INCIDENT_KEY}`)
+      .toContain(`localStorage.setItem("${INCIDENT_KEY}", incidentId)`);
+    expect(app, "the station key now carries a composite value — the reader's find() will drop it")
+      .toContain(`localStorage.setItem("${STATION_KEY}", station)`);
+  });
+});
+
+describe("both one-shot keys are consumed and cleared", () => {
+  const effect = labConsole.match(/useEffect\(\(\) => \{([\s\S]*?)\n {2}\}, \[\]\);/)?.[1] ?? "";
+
+  it("reads and clears the station key", () => {
+    expect(effect, "the Lab's one-shot mount effect is gone").not.toBe("");
+    expect(effect).toContain(`localStorage.getItem("${STATION_KEY}")`);
+    expect(effect).toContain(`localStorage.removeItem("${STATION_KEY}")`);
+  });
+
+  it("reads and clears the incident key", () => {
+    expect(effect, `LabConsole no longer reads ${INCIDENT_KEY} — the deep-link is inert`)
+      .toContain(`localStorage.getItem("${INCIDENT_KEY}")`);
+    expect(effect, `LabConsole no longer CLEARS ${INCIDENT_KEY} — a stale crash re-selects itself`)
+      .toContain(`localStorage.removeItem("${INCIDENT_KEY}")`);
+  });
+
+  it("clears the incident key even when the station is missing or unrenderable", () => {
+    // The load-bearing ordering. Both clears must happen BEFORE the `if (!pending) return` bail and
+    // before the openable lookup; otherwise an unknown station strands the incident key forever and
+    // it fires on some unrelated later visit.
+    const clearIncident = effect.indexOf(`localStorage.removeItem("${INCIDENT_KEY}")`);
+    const bail = effect.indexOf("if (!pending) return");
+    const openable = effect.indexOf("openable");
+    expect(bail, "the unknown-station bail is gone").toBeGreaterThan(-1);
+    expect(clearIncident, "the incident key is cleared after the bail — an unknown station strands it")
+      .toBeLessThan(bail);
+    expect(clearIncident, "the incident key is cleared after the station lookup").toBeLessThan(openable);
+  });
+
+  it("hands the incident only to the station that can honour it", () => {
+    expect(effect, "the incident is applied regardless of station — Optimize would receive a crash id")
+      .toMatch(/target === "blackbox" && incident/);
+  });
+
+  it("drops the selection when the station is closed, so a MANUAL reopen starts clean", () => {
+    // bug->guard, found by the #222 frontend/IPC contract audit (2026-08-25). The localStorage key
+    // was correctly one-shot, but the React state DERIVED from it was set once and never cleared.
+    // Closing Black Box and reopening it by hand — still on the Lab tab, so nothing remounts — fed
+    // the old id straight back in: an unrequested `get_crash_blackbox` scan fired, the earlier row
+    // re-marked itself, and "This is the one you came here to see" reappeared for an incident the
+    // user had already left. A one-shot that survives its own visit is not one-shot, whichever half
+    // of the pair remembers it.
+    expect(labConsole, "the station toggle no longer clears the deep-linked incident")
+      .toMatch(/setOpenIncidentId\(null\)/);
+    const toggle = labConsole.match(/const openStationAt[\s\S]{0,600}?\n {2}\};/)?.[0]
+      ?? labConsole.match(/setOpenStation\(\(cur\) =>[\s\S]{0,300}?\n/)?.[0]
+      ?? "";
+    expect(toggle, "the station toggle is gone — this guard is policing nothing").not.toBe("");
+  });
+
+  it("passes it into BlackBox as a selection, never as a filter", () => {
+    // A filter would HIDE the other incidents; the user came for one row, but the rest is the
+    // context that makes it readable. Selection scrolls and labels, it does not subtract.
+    expect(labConsole).toMatch(/<BlackBox onReport=\{setBbReport\} selectedIncidentId=\{openIncidentId\} \/>/);
+    // Parameter-name-agnostic on purpose: an earlier draft of this line required the callback's
+    // argument to be literally `i`, so `.filter((x) => x.incident_id === selectedIncidentId)` —
+    // the exact regression it exists to catch — would have sailed through it.
+    expect(blackBox, "BlackBox now filters its list by the selected id — the surrounding evidence is gone")
+      .not.toMatch(/\.filter\([^)]*\)\s*=>\s*\w+\.incident_id === selectedIncidentId\)/);
+    expect(blackBox, "the selected row is no longer marked")
+      .toMatch(/data-selected=\{selected \? "true" : undefined\}/);
+  });
+
+  it("says so honestly when the deep-linked incident is not in the scan", () => {
+    // Windows rotates its own records out, and some sources need admin. Silence here reads as
+    // "Compy lost it"; the honest negative is the whole doctrine.
+    expect(blackBox, "the missing-incident case is silent again").toContain("selectedMissing");
+    expect(gamingLocale.blackBox?.selectedMissing, "the missing-incident copy is gone").toBeTruthy();
+  });
+});
+
+describe("the visible copy never makes the user learn a room name", () => {
+  // The entry's own naming law is above (it must SAY "crash", and it must match the station's
+  // name). This is the other half: the copy on the route must not require Compy's INTERNAL name for
+  // the station. "Black Box" is what we call the room; a user who has to know it to find their
+  // crash has been handed a map instead of a door.
+  //
+  // The corpus is a NAMED set, not a count. An earlier draft asserted `strings.length >= 8`, which
+  // the #222 audit correctly called a magic-number canary: renaming one required key while adding
+  // an unrelated string elsewhere in the same object keeps the count and silently drops the
+  // coverage. Every key below must resolve to a real string, and every one of them is then policed.
+  const REQUIRED: [string, unknown][] = [
+    ["home.homeConsole.care.label", homeLocale.homeConsole?.care?.label],
+    ["home.homeConsole.care.open", homeLocale.homeConsole?.care?.open],
+    ["home.homeConsole.care.notice.aria", homeLocale.homeConsole?.care?.notice?.aria],
+    ["home.homeConsole.care.notice.meta", homeLocale.homeConsole?.care?.notice?.meta],
+    ["home.homeConsole.care.notice.metaApp", homeLocale.homeConsole?.care?.notice?.metaApp],
+    ["home.homeConsole.care.notice.open", homeLocale.homeConsole?.care?.notice?.open],
+    ["home.homeConsole.care.notice.dismiss", homeLocale.homeConsole?.care?.notice?.dismiss],
+    ["home.homeConsole.intake.rows.crashedFroze.symptom", homeLocale.homeConsole?.intake?.rows?.crashedFroze?.symptom],
+    ["home.homeConsole.intake.rows.crashedFroze.because", homeLocale.homeConsole?.intake?.rows?.crashedFroze?.because],
+    ["gaming.blackBox.selectedNote", gamingLocale.blackBox?.selectedNote],
+    ["gaming.blackBox.selectedMissing", gamingLocale.blackBox?.selectedMissing],
+  ];
+
+  it("finds every key on the Care route it is meant to police", () => {
+    const missing = REQUIRED.filter(([, v]) => typeof v !== "string" || v.trim() === "").map(([k]) => k);
+    expect(missing, `Care-route copy keys are missing or empty: ${missing.join(", ")}`).toEqual([]);
+  });
+
+  it("requires no room jargon to understand", () => {
+    for (const [key, value] of REQUIRED) {
+      expect(String(value), `Care copy at ${key} names an internal room: "${String(value)}"`)
+        .not.toMatch(/black ?box/i);
+    }
+  });
+
+  it("offers two exits of equal weight on the notice", () => {
+    // A dismiss the user cannot find is a notice they cannot get rid of; a dismiss styled as the
+    // lesser option is the dark pattern. Both must exist as real buttons.
+    expect(homeConsole).toMatch(/className="hc-notice-open"/);
+    expect(homeConsole).toMatch(/className="hc-notice-dismiss"/);
   });
 });

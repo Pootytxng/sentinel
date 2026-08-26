@@ -41,7 +41,7 @@ const firstCheck = readFileSync(join("src", "surfaces", "FirstCheck.tsx"), "utf8
 
 const HELPER = "openLabStation"; // the one writer of the intent
 const FIX_HELPER = "openFixesInLab"; // its Optimize-named delegate, used by the check->fix hallway
-const helperBody = app.match(/const openLabStation = \(station: LabStationKey\) => \{([\s\S]*?)\n {2}\};/)?.[1] ?? "";
+const helperBody = app.match(/const openLabStation = \(station: LabStationKey, incidentId\?: string\) => \{([\s\S]*?)\n {2}\};/)?.[1] ?? "";
 
 describe("post-check lab route (J, 2026-07-22)", () => {
   it("persists the station intent from the post-check route", () => {
@@ -119,7 +119,7 @@ describe("the check->fix hallway (2026-08-06)", () => {
     // The crash deep-link must not grow its own localStorage write — that is the second writer the
     // singleness test above exists to forbid, and the ordering bug it would reintroduce.
     expect(app, `Home's intake band no longer routes its station deep-link through ${HELPER}`)
-      .toMatch(/onOpenLabStation=\{\(s\) => openLabStation\(s as LabStationKey\)\}/);
+      .toMatch(/onOpenLabStation=\{\(s, incidentId\) => openLabStation\(s as LabStationKey, incidentId\)\}/);
   });
 
   it("no Home face still defaults its fix room to the deleted Optimize room", () => {

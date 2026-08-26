@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -20,9 +20,14 @@ import "./BlackBox.css";
 // the raw IDs/module/code; plain English up top (Sarah & Caleb bar).
 export function BlackBox({
   onReport,
+  selectedIncidentId,
 }: {
   // Feeds the scan result up (V2 Lab's latest-readings strip) — same read, no second IPC.
   onReport?: (r: BlackBoxReport) => void;
+  /** The exact incident the user was routed here to see (Care observer deep-link, Tier 1 task 9).
+   *  When present the station scans on mount instead of waiting for a click — a user who followed
+   *  "Find out why" already asked the question, and making them press Scan is asking it twice. */
+  selectedIncidentId?: string | null;
 } = {}) {
   const { t } = useTranslation();
   const [report, setReport] = useState<BlackBoxReport | null>(null);
@@ -40,6 +45,24 @@ export function BlackBox({
       .catch(() => setError(t("gaming.blackBox.scanErrorMsg")))
       .finally(() => setScanning(false));
   };
+
+  // Arrive-and-scan, once, only on a deep-link. The scan itself is the SAME on-demand read a click
+  // makes — no watcher, no cadence, no second IPC shape.
+  useEffect(() => {
+    if (selectedIncidentId) scan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on mount by design
+  }, []);
+
+  // Was the incident the user came for actually found? A scan can honestly come back without it:
+  // the record may have aged past the newest-25 cap, or a source that named it may need admin. The
+  // station SAYS so rather than silently showing a list and letting the user assume they misread
+  // the card — "the thing you clicked is not here" is information, and hiding it is the dead-end
+  // this product exists to avoid.
+  const selectedMissing =
+    !!selectedIncidentId &&
+    !!report &&
+    !scanning &&
+    !report.incidents.some((i) => i.incident_id === selectedIncidentId);
 
   return (
     <div className="bb">
@@ -69,9 +92,18 @@ export function BlackBox({
           ) : (
             <ul className="bb-list">
               {report.incidents.map((inc, i) => (
-                <IncidentRow key={`${inc.when}-${i}`} inc={inc} allIncidents={report.incidents} />
+                <IncidentRow
+                  key={inc.incident_id || `${inc.when}-${i}`}
+                  inc={inc}
+                  allIncidents={report.incidents}
+                  selected={!!selectedIncidentId && inc.incident_id === selectedIncidentId}
+                />
               ))}
             </ul>
+          )}
+
+          {selectedMissing && (
+            <p className="bb-selected-missing">{t("gaming.blackBox.selectedMissing")}</p>
           )}
 
           {report.skipped_sources.length > 0 && (
@@ -86,12 +118,27 @@ export function BlackBox({
   );
 }
 
-function IncidentRow({ inc, allIncidents }: { inc: CrashIncident; allIncidents: CrashIncident[] }) {
+function IncidentRow({
+  inc,
+  allIncidents,
+  selected = false,
+}: {
+  inc: CrashIncident;
+  allIncidents: CrashIncident[];
+  /** This is the exact incident the user was routed here to see. Marked, and scrolled into view —
+   *  a deep-link that lands the user in a list of twenty-five rows has not actually arrived. */
+  selected?: boolean;
+}) {
   const { t } = useTranslation();
   const [showReceipt, setShowReceipt] = useState(false);
+  const ref = useRef<HTMLLIElement | null>(null);
+  useEffect(() => {
+    if (selected) ref.current?.scrollIntoView({ block: "center", behavior: "auto" });
+  }, [selected]);
   const r = inc.receipt;
   return (
-    <li className="bb-item">
+    <li className="bb-item" ref={ref} data-selected={selected ? "true" : undefined}>
+      {selected && <p className="bb-selected-note">{t("gaming.blackBox.selectedNote")}</p>}
       <div className="bb-item-head">
         <span className="bb-tag">{inc.tag}</span>
         <span className="bb-headline">{inc.headline}</span>

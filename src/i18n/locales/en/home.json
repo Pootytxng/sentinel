@@ -5,7 +5,14 @@
     },
     "care": {
       "label": "Crash & Freeze Rescue",
-      "open": "Open"
+      "open": "Open",
+      "notice": {
+        "aria": "Something Compy noticed",
+        "meta": "{{kind}} · {{when}}",
+        "metaApp": "{{kind}} · {{app}} · {{when}}",
+        "open": "Find out why",
+        "dismiss": "Not now"
+      }
     },
     "intake": {
       "rows": {

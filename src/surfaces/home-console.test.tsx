@@ -9,7 +9,13 @@ import { READING_ROWS } from "../design/console/Reading";
 // i18n update (2026-07-23): postureLine now takes a TFunction as its last param — the real
 // i18next instance (English default, same as every assertion below already expects).
 import i18n from "../i18n";
-import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
+import type {
+  AppliedChange,
+  GameReadiness,
+  PendingCareIncident,
+  Priorities,
+  SessionSummary,
+} from "../types";
 import type { HardwareInfo } from "../App";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -170,6 +176,9 @@ const props: {
   fixRoomLabel?: string;
   onNavigate?: (key: string) => void;
   rooms?: { key: string; name: string }[];
+  pendingCare?: PendingCareIncident | null;
+  onOpenCareIncident?: (incidentId: string) => void;
+  onDismissCareIncident?: (incidentId: string) => void;
 } = {
   hw,
   readiness,
@@ -1251,5 +1260,104 @@ describe("HomeConsole — the symptom cards and the rescue row match the comp", 
     // plain English") is a METHOD note and belongs to the station this row opens, not to the door.
     expect(entry.querySelector(".hc-care-because"), "the method line is back on the door").toBeNull();
     expect(entry.textContent, "…and not smuggled in unclassed either").not.toContain("plain English");
+  });
+});
+
+// ── The Care notice (Tier 1 plan task 9 — the observer's only visible surface) ───────────────────
+//
+// The notice is what the incident observer produces. It is the one thing on Home the user did not
+// ask for, so every assertion below is about restraint: it says WHAT happened, it offers two real
+// exits, and it never displaces the permanent rescue door underneath it.
+describe("HomeConsole — the Care notice", () => {
+  const pending = {
+    incident_id: "a1b2c3d4e5f60718",
+    occurred_at: "2026-08-24T21:14:00Z",
+    occurred_display: "yesterday, 9:14 PM",
+    kind: "App crash",
+    app_label: "cyberpunk2077.exe",
+    summary: "Cyberpunk 2077 closed unexpectedly.",
+  };
+  const withNotice = { ...props, rooms: groundRooms, onNavigate: () => {}, pendingCare: pending };
+
+  it("renders nothing at all when the observer has nothing to say", () => {
+    const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
+    expect(c.querySelector(".hc-notice"), "a notice rendered with no pending incident").toBeNull();
+    // …and the permanent door is still there. This is the pairing that matters: the door does not
+    // depend on the notice, so a machine that has never crashed still learns where rescue lives.
+    expect(c.querySelector(".hc-care-entry"), "the rescue door vanished with the notice").not.toBeNull();
+  });
+
+  it("states what happened, to which app, and when — and stops there", () => {
+    const c = mount(withNotice).container;
+    const notice = c.querySelector(".hc-notice")!;
+    expect(notice, "the notice did not render for a pending incident").not.toBeNull();
+    expect(notice.querySelector(".hc-notice-head")!.textContent).toBe("Cyberpunk 2077 closed unexpectedly.");
+    const meta = notice.querySelector(".hc-notice-meta")!.textContent!;
+    expect(meta).toContain("App crash");
+    expect(meta).toContain("cyberpunk2077.exe");
+    expect(meta).toContain("yesterday, 9:14 PM");
+    // No cause, no confidence, no fix. Compy has not looked yet — it has only noticed.
+    expect(notice.textContent, "the notice speculates about a cause it has not established")
+      .not.toMatch(/because|caused|likely|probably|driver|overheat/i);
+  });
+
+  it("drops the app clause when Windows did not name an app", () => {
+    const c = mount({ ...withNotice, pendingCare: { ...pending, app_label: null } }).container;
+    const meta = c.querySelector(".hc-notice-meta")!.textContent!;
+    expect(meta).toContain("App crash");
+    expect(meta).toContain("yesterday, 9:14 PM");
+    // An empty separator ("App crash ·  · yesterday") is how a missing field reads as a bug.
+    expect(meta, "the app slot rendered empty rather than being dropped").not.toMatch(/·\s*·/);
+  });
+
+  it("keeps the permanent rescue door BELOW it, not replaced by it", () => {
+    const c = mount(withNotice).container;
+    const notice = c.querySelector(".hc-notice")!;
+    const door = c.querySelector(".hc-care")!;
+    expect(door, "the notice replaced the permanent rescue door").not.toBeNull();
+    expect(
+      notice.compareDocumentPosition(door) & Node.DOCUMENT_POSITION_FOLLOWING,
+      "the transient notice now renders below the permanent door",
+    ).toBeTruthy();
+  });
+
+  it("hands the exact incident id to the open handler", () => {
+    // The whole point of task 8's deep-link: the user clicks one crash and lands on THAT crash.
+    const opened: string[] = [];
+    const c = mount({ ...withNotice, onOpenCareIncident: (id: string) => opened.push(id) }).container;
+    fireEvent.click(c.querySelector(".hc-notice-open")!);
+    expect(opened, "the open button did not carry the incident id").toEqual(["a1b2c3d4e5f60718"]);
+  });
+
+  it("offers a dismiss that is a real, findable button", () => {
+    const dismissed: string[] = [];
+    const c = mount({ ...withNotice, onDismissCareIncident: (id: string) => dismissed.push(id) }).container;
+    const btn = c.querySelector(".hc-notice-dismiss")!;
+    expect(btn.tagName, "the dismiss is not a button — it cannot be reached by keyboard").toBe("BUTTON");
+    fireEvent.click(btn);
+    expect(dismissed).toEqual(["a1b2c3d4e5f60718"]);
+  });
+
+  it("gives both exits the same element weight", () => {
+    // A dismiss rendered as a link, or as text, next to a filled primary is the dark pattern: it
+    // reads as "the only real choice is to look". Both are buttons, side by side, in one group.
+    const c = mount(withNotice).container;
+    const acts = c.querySelector(".hc-notice-acts")!;
+    const buttons = acts.querySelectorAll("button");
+    expect(buttons.length, "the notice's action group is not exactly two buttons").toBe(2);
+    expect(buttons[0].textContent).toBe("Find out why");
+    expect(buttons[1].textContent).toBe("Not now");
+  });
+
+  it("is a labelled region, not an alert that steals focus", () => {
+    // role="alert" would interrupt a screen-reader user mid-sentence for something that already
+    // happened and is not urgent. A named region is findable without being an interruption.
+    const c = mount(withNotice).container;
+    const notice = c.querySelector(".hc-notice")!;
+    expect(notice.tagName).toBe("SECTION");
+    expect(notice.getAttribute("aria-label"), "the notice lost its accessible name").toBe(
+      "Something Compy noticed",
+    );
+    expect(notice.getAttribute("role"), "the notice became an alert").toBeNull();
   });
 });

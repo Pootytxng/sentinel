@@ -23,6 +23,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 function assessedIncident(): CrashIncident {
   return {
+    incident_id: "a1b2c3d4e5f60718",
     headline: "Your graphics driver stopped responding and recovered — Jun 12",
     tag: "GPU timeout",
     when: "2026-06-12T21:00:00Z",
@@ -343,5 +344,85 @@ describe("Black Box — Tier 1 known-issue block", () => {
     expect(screen.queryByText("Known issue on record")).not.toBeInTheDocument();
     expect(body).not.toMatch(/known issue/i);
     expect(document.querySelector(".bb-known")).toBeNull();
+  });
+});
+
+// ── The deep-link (Tier 1 plan task 8) ──────────────────────────────────────────────────────────
+//
+// Home can send the user here pointed at ONE incident. Everything below is about what that pointer
+// may and may not do: it selects, it never subtracts, and when Windows no longer has the record it
+// says so out loud rather than showing a list that quietly lacks the thing the user clicked.
+describe("BlackBox — the deep-linked incident", () => {
+  const other = (): CrashIncident => ({
+    ...assessedIncident(),
+    incident_id: "ffffffffffffffff",
+    headline: "Windows restarted unexpectedly — Jun 10",
+    when: "2026-06-10T03:00:00Z",
+    when_display: "Jun 10, 3:00 AM",
+    assessment: null,
+  });
+
+  it("scans on arrival, so the user does not land on an empty room", () => {
+    reportMock.value = { incidents: [assessedIncident()], skipped_sources: [] };
+    render(<BlackBox selectedIncidentId="a1b2c3d4e5f60718" />);
+    expect(
+      vi.mocked(invoke).mock.calls.map((c) => c[0]),
+      "arriving with an incident selected did not trigger the scan",
+    ).toContain("get_crash_blackbox");
+  });
+
+  it("does not scan on its own when nobody pointed it anywhere", () => {
+    // The station is otherwise click-to-scan by design: reading the Event Log is not free, and the
+    // standing bar is that Compy is the least resource-hungry app on the PC.
+    render(<BlackBox />);
+    expect(
+      vi.mocked(invoke).mock.calls.map((c) => c[0]),
+      "the station now scans on every mount",
+    ).not.toContain("get_crash_blackbox");
+  });
+
+  it("marks the pointed-at row and leaves every other row in place", async () => {
+    reportMock.value = { incidents: [other(), assessedIncident()], skipped_sources: [] };
+    const { container } = render(<BlackBox selectedIncidentId="a1b2c3d4e5f60718" />);
+    await screen.findByText(/graphics driver stopped responding/i);
+    const rows = container.querySelectorAll(".bb-item");
+    expect(rows.length, "the selection filtered the list — the surrounding evidence is gone").toBe(2);
+    const marked = container.querySelectorAll('.bb-item[data-selected="true"]');
+    expect(marked.length, "exactly one row should be marked as the one the user came for").toBe(1);
+    expect(marked[0].textContent).toContain("graphics driver stopped responding");
+    expect(marked[0].querySelector(".bb-selected-note")!.textContent).toBe(
+      "This is the one you came here to see.",
+    );
+  });
+
+  it("marks nothing when it was not sent anywhere", async () => {
+    reportMock.value = { incidents: [assessedIncident()], skipped_sources: [] };
+    const { container } = render(<BlackBox />);
+    scan();
+    await screen.findByText(/graphics driver stopped responding/i);
+    expect(
+      container.querySelectorAll('.bb-item[data-selected="true"]').length,
+      "a row is marked as deep-linked with no deep-link",
+    ).toBe(0);
+  });
+
+  it("says so when the incident is no longer in Windows' records", async () => {
+    // Windows rotates its own logs; some sources need admin. An honest negative is the doctrine.
+    reportMock.value = { incidents: [other()], skipped_sources: [] };
+    const { container } = render(<BlackBox selectedIncidentId="a1b2c3d4e5f60718" />);
+    await screen.findByText(/Windows restarted unexpectedly/i);
+    const note = container.querySelector(".bb-selected-missing");
+    expect(note, "the deep-linked incident is absent and the station said nothing").not.toBeNull();
+    expect(note!.textContent).toContain("isn't in this scan");
+  });
+
+  it("stays quiet about a missing incident when the one asked for IS there", async () => {
+    reportMock.value = { incidents: [assessedIncident()], skipped_sources: [] };
+    const { container } = render(<BlackBox selectedIncidentId="a1b2c3d4e5f60718" />);
+    await screen.findByText(/graphics driver stopped responding/i);
+    expect(
+      container.querySelector(".bb-selected-missing"),
+      "the station claims the incident is missing while rendering it",
+    ).toBeNull();
   });
 });

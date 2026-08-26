@@ -28,6 +28,7 @@ mod gaming_session;
 mod gpu_profile; // Read-only GPU profile before/after delta core (advisory; NOT the gated apply/rollback). Wired to a command + the GpuProfile surface later.
 mod hardware;
 mod history;
+mod incident_observer; // Compy Care Tier 1 (task 9, #222) — the PERSISTED local incident observer: remembers across launches which crashes this machine has already been told about, so one that happened while Compy was closed is surfaced once and never twice. Pure consumer of blackbox.rs; three event triggers and NO cadence, service, scheduled task or network. Writes only its own state file.
 mod hwchange; // Hardware-change detection (A5 "Re-Run Setup") — read-only fingerprint diff across launches.
 mod intelligence; // Intelligence Phase 1 — READ-ONLY event timeline + deterministic "What changed?" engine (bands-only confidence, zero mutation, zero network).
 mod intelligence_patterns; // Intelligence Phase 2 — READ-ONLY cross-session pattern detection over recorded sessions.json (deterministic trend/thermal/memory/driver/mode/fade detectors; bands-only, passive-capped at Medium, zero mutation/network).
@@ -117,6 +118,26 @@ pub(crate) fn notify_debrief_ready(game: &str) {
         format!("Your {game} debrief is ready in Compy.")
     };
     let _ = app.notification().builder().title("Session ended").body(body).show();
+}
+
+/// Fire the Care "a game closed unexpectedly" toast (Tier 1 task 9).
+///
+/// Deliberately promises nothing about clicking it. The registered notification path exposes
+/// `show()` and no supported action/click callback that could carry an incident payload, so the copy
+/// tells the user to open Compy rather than implying the toast will take them somewhere specific.
+/// The persisted Home card in `incident_observer.rs` is the authority; this is only a nudge toward
+/// it, and a user with notifications off loses the nudge, never the card.
+pub(crate) fn notify_care_incident(headline: &str) {
+    use tauri_plugin_notification::NotificationExt;
+    let Some(app) = APP_HANDLE.get() else {
+        return;
+    };
+    let _ = app
+        .notification()
+        .builder()
+        .title("Compy noticed something")
+        .body(format!("{headline} Open Compy to review the evidence."))
+        .show();
 }
 
 pub(crate) fn current_power_plan_name() -> Option<String> {
@@ -1193,6 +1214,9 @@ pub fn run() {
             hwchange::get_hardware_changes,
             hwchange::acknowledge_hardware_changes,
             blackbox::get_crash_blackbox,
+            incident_observer::get_pending_care_incident,
+            incident_observer::mark_care_incident_opened,
+            incident_observer::dismiss_care_incident,
             license::get_license_status,
             license::set_license_key,
             get_leftovers,
@@ -1305,6 +1329,14 @@ pub fn run() {
             //     the full §1 teardown.
             use tauri::Manager;
             if window.label() == "main" {
+                // Care trigger 2 of 3 (Tier 1 task 9): the user came back to Compy. Throttled by
+                // `should_scan` — alt-tabbing is not evidence that a crash happened, and this event
+                // fires every single time.
+                if let tauri::WindowEvent::Focused(true) = event {
+                    crate::incident_observer::scan_async(
+                        crate::incident_observer::ScanTrigger::Foreground,
+                    );
+                }
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     if crate::tray::close_to_tray_enabled() {
                         api.prevent_close();
@@ -1331,6 +1363,11 @@ pub fn run() {
             );
             // Capture the handle so the session recorder thread can fire the debrief toast.
             let _ = APP_HANDLE.set(app.handle().clone());
+            // Care trigger 1 of 3 (Tier 1 task 9): the launch scan. This is the one that catches a
+            // crash that happened while Compy was CLOSED — the persisted watermark is what makes
+            // that possible, and this is the only trigger that is not throttled, because it runs
+            // once per process. Off-thread and best-effort: it must never delay the first window.
+            crate::incident_observer::scan_async(crate::incident_observer::ScanTrigger::Launch);
             // Build the (always-present) tray icon; the close-to-tray BEHAVIOR stays gated on the
             // opt-in flag, so an unconfigured user still gets the §1 clean exit.
             if let Err(e) = crate::tray::init(app.handle()) {

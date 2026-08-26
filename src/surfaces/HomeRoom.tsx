@@ -1,6 +1,7 @@
 import type {
   AppliedChange,
   GameReadiness,
+  PendingCareIncident,
   Priorities,
   Recommendation,
   SessionSummary,
@@ -37,7 +38,12 @@ type Props = {
   /** Console intake band only: App's single station-intent writer (openLabStation). An intake row
    *  whose symptom has ONE answering instrument routes through here so it lands on that instrument
    *  instead of the Lab dock. Absent → the row falls back to a plain room nav, never a dead end. */
-  onOpenLabStation?: (station: string) => void;
+  onOpenLabStation?: (station: string, incidentId?: string) => void;
+  /** Console-only (Care observer, Tier 1 task 9): the one incident the observer noticed and the
+   *  user has not acknowledged, plus its two exits. Absent → no card, never a placeholder. */
+  pendingCare?: PendingCareIncident | null;
+  onOpenCareIncident?: (incidentId: string) => void;
+  onDismissCareIncident?: (incidentId: string) => void;
   /** Console intake band only (compy_home_intake, BACKLOG:916): the live recs catalog the
    *  one-tap fast path derives its safe stack from (null = loading, undefined = not wired). */
   recs?: Recommendation[] | null;

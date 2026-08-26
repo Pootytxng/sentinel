@@ -4064,6 +4064,7 @@ mod tests {
 
         fn bb_incident() -> crate::blackbox::Incident {
             crate::blackbox::Incident {
+                incident_id: "test-incident".into(),
                 headline: "Your display driver stopped responding".into(),
                 tag: "Display 4101".into(),
                 when: "2026-08-20T21:42:00-05:00".into(),

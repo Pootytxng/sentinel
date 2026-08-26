@@ -46,7 +46,7 @@ import Learn from "./surfaces/Learn";
 import { prewarmScan } from "./surfaces/use-scan";
 import { activeChangeCount } from "./surfaces/dashboard-data";
 import { gpuVendor } from "./surfaces/walkthroughs";
-import type { BatchApplyReport, ExportResult } from "./types";
+import type { BatchApplyReport, ExportResult, PendingCareIncident } from "./types";
 import { LEDGER_CHANGED_EVENT } from "./types";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet, lsSet } from "./data/safe-storage";
@@ -1042,15 +1042,58 @@ function App() {
   // Home intake band's "it crashed or froze" row needs the SAME race-free handoff to the crash
   // evidence, so the station is now the parameter and this stays the ONE writer of the intent —
   // one ordering to get right, pinned by post-check-lab-route-guard.
-  const openLabStation = (station: LabStationKey) => {
+  //
+  // Extended 2026-08-25 (Care observer, Tier 1 task 9): the optional exact-incident selector. It
+  // rides a SEPARATE one-shot key rather than being encoded into the station string, because the
+  // two facts have different lifetimes and different failure modes — a station the destination
+  // cannot render is dropped and the user lands on the dock, while an incident the destination
+  // cannot find must still open the station. Encoding them together makes one unparseable value
+  // able to lose both. `home-intake-data.ts` deliberately deferred this parameter until something
+  // could fill it; `incident_observer.rs` is that something.
+  const openLabStation = (station: LabStationKey, incidentId?: string) => {
     try {
       localStorage.setItem("compy_lab_open_station", station);
+      if (incidentId) localStorage.setItem("compy_lab_open_incident", incidentId);
     } catch {
       /* non-fatal — the user still lands in the Lab, just on the dock */
     }
     navHome("lab");
   };
   const openFixesInLab = () => openLabStation("optimize");
+
+  // ── The Care observer's Home card (Tier 1 task 9, #222) ───────────────────────────────────────
+  // The backend decides what is pending; this only reads it. Read whenever the user is on Home,
+  // because the observer's own scans run on their own triggers (launch, window foreground, session
+  // end) and a card can appear while the user is in another room.
+  //
+  // ONE effect, not two. A separate mount-only read was redundant: `activeTab` starts at
+  // "Overview", so both fired back to back on every cold start, and on a boot that restores some
+  // other tab the mount read fetched a card Home was not rendering anyway. (#222 IPC audit.)
+  const [pendingCare, setPendingCare] = useState<PendingCareIncident | null>(null);
+  const refreshPendingCare = useCallback(() => {
+    invoke<PendingCareIncident | null>("get_pending_care_incident")
+      .then((c) => setPendingCare(c ?? null))
+      .catch(() => setPendingCare(null));
+  }, []);
+  useEffect(() => {
+    if (activeTab === "Overview") refreshPendingCare();
+  }, [activeTab, refreshPendingCare]);
+  // "Find out why" — mark it opened, then route to the EXACT incident. The card is cleared
+  // optimistically: the user is on their way to the evidence, so leaving it behind them would be
+  // an unacknowledged notice for something they just acknowledged.
+  const openCareIncident = (incidentId: string) => {
+    setPendingCare(null);
+    invoke("mark_care_incident_opened", { incidentId }).catch(() => {
+      /* non-fatal — the card reappears on the next read, which is the safe direction */
+    });
+    openLabStation("blackbox", incidentId);
+  };
+  // "Not now" — clears Compy's POINTER only. Every Windows record behind it (Event Log entry, WER
+  // report, reliability row) is untouched and still readable from Crash & Freeze Rescue.
+  const dismissCareIncident = (incidentId: string) => {
+    setPendingCare(null);
+    invoke("dismiss_care_incident", { incidentId }).catch(() => {});
+  };
   const HOME_FOR_TAB: Partial<Record<Tab, HomeRailId>> = {
     Overview: "home",
     Play: "play",
@@ -1442,7 +1485,10 @@ function App() {
               onNavigate={(k) => navHome(k as HomeRailId)}
               // Console intake band only: the crash row lands ON the crash evidence, through the
               // same single writer every other station deep-link uses.
-              onOpenLabStation={(s) => openLabStation(s as LabStationKey)}
+              onOpenLabStation={(s, incidentId) => openLabStation(s as LabStationKey, incidentId)}
+              pendingCare={pendingCare}
+              onOpenCareIncident={openCareIncident}
+              onDismissCareIncident={dismissCareIncident}
               rooms={rail
                 .filter((r) => r.id !== "home")
                 .map((r) => ({
