@@ -6,7 +6,8 @@
 
 > **⚠ CATALOG OPENED (owner decision 2026-07-09):** the frozen-catalog language below is
 > SUPERSEDED by the **measurable-benefit-under-rails** policy (CLAUDE.md LOCKED rule 6, ★ PRIMARY
-> BLUEPRINT `docs/superpowers/specs/2026-07-08-lab-proving-ground.md` Directive 1). The catalog now
+> BLUEPRINT `docs/superpowers/specs/2026-07-08-lab-proving-ground.md` **Directive 1 — one of the
+> parts of that spec that still stands; its §2/§3/§8 UI direction is superseded**). The catalog now
 > grows **both** upward (below) AND by **measured additions**: a tweak earns inclusion by measurable
 > benefit — even individually-negligible; the cumulative measured stack is the point — **on top of**
 > the permanent safety rails (reversible · no ungated kernel capability · no injection /

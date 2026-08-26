@@ -42,28 +42,12 @@ untouched.
   checkout carries commits and this bullet does not name it. Re-derive with `git worktree list` and
   `git rev-list --count origin/main..<branch>`; never carry these numbers forward unchecked.
 
-## What the pre-land review caught, and the guards that now hold it
+## What the pre-land review caught
 
-An independent `rust-tauri-reviewer` pass found three things in the observer, all fixed in
-`97a0e945`, each with a guard, per the bug→guard law. A second pass at the landing head returned
-**CLEAN** after re-running the Rust suite, clippy, vitest and `tsc` itself.
-
-1. **A dismissed crash could be announced again.** `incident_id` is a hash over the crash's traits
-   *including its instant*, and `blackbox::merge_into` moves that instant — and fills in the faulting
-   module — the moment a corroborating WER report lands. So one crash wears two ids across two scans,
-   the second reads as never-seen, and a card you had just dismissed comes back. Fixed by recording
-   each row's matching traits at observation time and reconciling shifted identities *before* anything
-   decides what is new, gated on the old id having left the report so a genuine crash-loop repeat
-   still counts as two. Guards: `a_dismissed_crash_is_not_reannounced_when_its_identity_shifts` and
-   `two_ids_that_are_both_live_stay_two_incidents`.
-2. **A lost-update race on the state file**, plus a shared temp filename. Fixed with one process lock
-   around every read-modify-write (the expensive scan stays *outside* it) and a per-call temp path.
-3. **A guard that read raw source**, so a `// TODO: wire ScanTrigger::Foreground` could satisfy it.
-   Now comment-stripped, and it asserts real call sites.
-
-The second pass's one nit — the `should_scan` guard regex also accepted an *unlocked* watermark read,
-the exact regression finding 2 exists to catch — was taken in the same commit as this file, and
-falsified before it was counted.
+Three findings in the observer, all fixed in `97a0e945` with a guard each, and a second pass at the
+landing head returned CLEAN. Now a closed record — moved verbatim to
+[`archive/PR_223_PRELAND_REVIEW.md`](archive/PR_223_PRELAND_REVIEW.md) on 2026-08-26 to pay this
+file's line budget. Read it there before re-deriving any of it.
 
 ## Two gate traps this lane paid for — do not pay again
 
@@ -90,8 +74,15 @@ walks subdirectories, and a failed `openUrl` now shows the URL instead of lookin
 1. **Q9b — Tier 3 in-app feedback + crash reports** (`docs/BACKLOG.md`, own module
    `src-tauri/src/case_evidence_upload.rs`, never inside `support_evidence.rs`). Tier 3's gate applies
    in full: per-case consent, preview/redaction, named recipient, retention, deletion receipt.
-2. **The Instrument Bench Phase-1 build** —
-   `docs/superpowers/plans/2026-07-09-lab-instrument-bench-p1.md`. The decided first UI target.
+2. **A wayfinding pass under DIR-1** (`docs/UI_VISION_BACKLOG.md`) — walk every room as a
+   first-time non-technical gamer, fix each place someone cannot tell what to do next, before/after
+   each. His standing directive, restated "many times", and the lens over every 🔴 row in that file.
+
+**The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
+(`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Lab is the Ops Console
+(`LabConsole`), and the proving bench it was meant to deliver already ships armed as
+`ExperimentBench`. `src/superseded-plan-citation-guard.test.ts` now fails the build if any live doc
+points at a superseded plan or spec without saying so.
 
 **Do NOT touch** plan tasks 10–11 (independent security review + arming). Owner territory, filed in
 `docs/OWNER_ACTION_CHECKLIST.md` §C so that arming can never happen quietly.

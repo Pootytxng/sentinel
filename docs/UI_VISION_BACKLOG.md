@@ -937,8 +937,10 @@ the "0" failsafe, byte-identity re-pinned to explicit "0").** His ranked plan, p
    clone of the sister-site effect (`330cd5c`, flag `compy_lab_ground` OFF); owner rejected it 2026-07-09
    (he wanted the *type/level* of effect referenced, not the feature cloned) and ordered it **deleted
    entirely** (direction-proposal Q3). The redirect: drag/inertia lands on the real rig hologram
-   (`drei OrbitControls` damping) instead — see the approved **Instrument Bench** proposal, principle 6
-   (`docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md`).
+   (`drei OrbitControls` damping) instead — principle 6 of the **Instrument Bench** proposal
+   (`docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md`, which the owner then
+   REJECTED as the Lab that same day — the live Lab is the Ops Console, and that doc now survives
+   only as the record of this redirect).
    **ASKED AND ANSWERED — the owner said "no" on 2026-08-25.** The one question this row still held
    open was whether he wanted a panoramic drag surface back in the *type/level of effect* sense he
    meant in July (not the sister-site clone). He answered no, against a recommendation of no. This
@@ -1017,7 +1019,9 @@ the three competing nav idioms into one. **Key finding: the measure→change→p
 is safe** (Benchmark tweak trial, 16 catalog recs, auto-rollback). Gallery = the trophy/results space +
 the terminal room's missing completion signal, built on existing R3F primitives + cross-IPC measured
 data. Subsumes B (Two Futures hologram gets its purpose) + the panoramic gallery (§A.1) lands HERE.
-Full spec: `docs/superpowers/specs/2026-07-08-lab-proving-ground.md`. Mutation scope: builds on the safe
+Full spec: `docs/superpowers/specs/2026-07-08-lab-proving-ground.md` — **its §2/§3/§8 UI direction was
+SUPERSEDED on 2026-07-09** (the Lab shipped as the Ops Console instead); §0, Directive 1, §2a and §5–§7
+still stand as written. Mutation scope: builds on the safe
 16 recs + already-armed gates; NEW tweaks beyond the frozen catalog stay a LOCKED-rule-6 owner decision.
 Build: flag `compy_lab_ground` DEFAULT OFF, 4 phases, P-series eyeball. **No longer owner-bound — mine to
 build.**
