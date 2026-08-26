@@ -357,6 +357,45 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
     expect(c.querySelector(".hc-verdict-line")!.textContent).toContain("Applied Compy changes");
   });
 
+  // BUG -> GUARD (self-caught 2026-08-26, DIR-1 first-timer walk). The limiter row stands DOWN
+  // when the verdict headline already names it, and the code comment justifying that stand-down
+  // said the fix route "still lives in the verdict dek + the Dock". The dek had been stood down in
+  // this very state by #180 §C, so the justification named a sibling that no longer renders — the
+  // exact shape of the #219 miss, where four documents said Home listed the remaining checks
+  // "in full below" and it did not. A sentence about what a screen shows is a claim, and an
+  // unverified claim is the same defect in a comment as in a doc.
+  //
+  // Both halves are pinned: the SENTENCE (so it cannot silently go stale again) and the BEHAVIOUR
+  // it depends on (so the route it now names cannot quietly disappear the way the dek did).
+  it("limiter stand-down: the comment names a route that actually renders", () => {
+    const source = readFileSync("src/surfaces/HomeConsole.tsx", "utf8");
+    const justification = source.match(/the limiter row stands down[\s\S]*?Mirrors the dek/)?.[0];
+    expect(justification, "the stand-down comment moved — re-pin it").toBeTruthy();
+    expect(justification, "the dek does NOT render in the attention state; it cannot be the route")
+      .not.toMatch(/route still lives in the verdict dek/);
+    expect(justification).toContain("the primary action + the Dock");
+
+    // …and the route it now names is really on screen in the state the stand-down fires in.
+    const attn: GameReadiness = {
+      ...readiness,
+      checks: [
+        {
+          id: "applied-changes",
+          label: "Applied Compy changes",
+          status: "attention",
+          detail: "Turn it back on or roll it back in Test.",
+          value: null,
+        },
+        { id: "b", label: "B", status: "ready", detail: "", value: null },
+      ],
+      ready_count: 1,
+      attention_count: 1,
+    };
+    const c = mount({ ...props, readiness: attn }).container;
+    expect(c.querySelector(".hc-verdict-line")!.textContent).toContain("Applied Compy changes");
+    expect(c.querySelector(".hc-front-door"), "the ONE action UX-1 decision 1 promoted").not.toBeNull();
+  });
+
   it("header-slop pin: no lede/explainer node anywhere in the console header", () => {
     const c = mount().container;
     expect(c.querySelector(".home-console-lede")).toBeNull();

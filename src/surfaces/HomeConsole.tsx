@@ -625,8 +625,13 @@ export function HomeConsole({
   // One-owner-per-screen (P5 voice law): in the attention state the verdict headline now NAMES
   // the top flagged item; if the #1 limiter is that same item its identical title would stack a
   // few hundred px below the verdict, so the limiter row stands down and lets the verdict own it
-  // (the fix route still lives in the verdict dek + the Dock). Mirrors the dek/ForwardDoor
-  // standdowns. The `... and ` arm anchored the RETIRED several-flagged headline
+  // (the fix route then lives in the primary action + the Dock). Mirrors the dek/ForwardDoor
+  // standdowns. CORRECTED 2026-08-26: this line used to say the route "still lives in the verdict
+  // dek", which stopped being true the day #180 §C stood the dek DOWN in exactly the attention
+  // state this standdown fires in. A stand-down justified by a sibling that no longer renders is
+  // how a screen quietly loses its last route, so `home-console.test.tsx` now pins this sentence.
+  //
+  // The `... and ` arm anchored the RETIRED several-flagged headline
   // ("<label> · and N more", dropped by owner ruling 2026-08-26 / #219). It is kept because a
   // catalog label may legitimately contain " and ", and because a ledger written before the
   // ruling can still carry the old phrasing; it can never match the live derivation again.
