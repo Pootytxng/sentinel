@@ -2,12 +2,17 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
 import { BlackBox } from "./BlackBox";
-import type { BlackBoxReport, CrashIncident } from "../types";
+import type { BlackBoxReport, CrashIncident, CaseIntelligenceMatch } from "../types";
 
 // Settable per-test scan response (vi.mock factories are hoisted — this must be too).
 const reportMock = vi.hoisted(() => ({
   value: { incidents: [], skipped_sources: [] } as BlackBoxReport,
 }));
+
+// The external-browser opener. Mocked so a test can prove the source URL leaves the app only after a
+// click, and that it is the catalog's own verified URL rather than anything the station composed.
+const openUrlMock = vi.hoisted(() => vi.fn());
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: openUrlMock }));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
@@ -53,6 +58,11 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   vi.mocked(invoke).mockClear();
+  // mockReset() strips the implementation, so the next call would return undefined and the
+  // component's `.catch` would throw inside an event handler. Re-arm it as a resolved promise —
+  // that is what the real plugin hands back. (Surfaced by the full-suite run, not the file's own.)
+  openUrlMock.mockReset();
+  openUrlMock.mockResolvedValue(undefined);
   reportMock.value = { incidents: [], skipped_sources: [] };
 });
 
@@ -155,32 +165,34 @@ describe("Black Box — frozen pre-Tier-1 behavior (characterization)", () => {
     expect(localStorage.getItem("compy_bb_feedback")).toContain('"vote":"yes"');
   });
 
-  it("an incident carrying an UNKNOWN optional field renders exactly as one without it", async () => {
-    // The Tier 1 wire contract adds an optional `case_intelligence` field to the incident. Today the
-    // station has no such field and must ignore one that appears. When task 7 lands, this test is the
-    // one that has to be changed on purpose — its failure is the signal, not a nuisance.
-    const withField = {
-      ...assessedIncident(),
-      case_intelligence: { case_id: "unused", level: "MatchedKnownIssue" },
-    } as unknown as CrashIncident;
-
-    reportMock.value = { incidents: [withField], skipped_sources: [] };
-    render(<BlackBox />);
-    scan();
-    await screen.findByText("What this points to");
-    const withText = document.body.textContent || "";
-
-    cleanup();
+  it("an incident with the Tier 1 field ABSENT renders identically to one where it is null", async () => {
+    // CHANGED ON PURPOSE by task 7 — the signal fired exactly as this suite intended. The old
+    // phrasing ("an unknown optional field is ignored") stopped saying anything the moment
+    // `case_intelligence` became a field the station knows. The compatibility half is what actually
+    // had to survive, and it is what this now pins: a dark build OMITS the field, an explicit null
+    // means the same thing, and both must render the pre-Tier-1 station exactly. The gate is off in
+    // every shipped build, so this is the shipped path, not an edge case.
     reportMock.value = { incidents: [assessedIncident()], skipped_sources: [] };
     render(<BlackBox />);
     scan();
     await screen.findByText("What this points to");
+    const absentText = document.body.textContent || "";
 
-    expect(document.body.textContent || "").toBe(withText);
-    expect(withText).not.toContain("unused");
+    cleanup();
+    const nulled = { ...assessedIncident(), case_intelligence: null } as CrashIncident;
+    reportMock.value = { incidents: [nulled], skipped_sources: [] };
+    render(<BlackBox />);
+    scan();
+    await screen.findByText("What this points to");
+
+    expect(document.body.textContent || "").toBe(absentText);
+    expect(absentText).not.toMatch(/known issue/i);
   });
 
-  it("no known-issue / advisory-source chrome exists on the station yet", async () => {
+  it("no known-issue or advisory-source chrome appears on an incident with no match", async () => {
+    // CHANGED ON PURPOSE by task 7: the title, not the bar. Tier 1 chrome exists in the code now and
+    // must stay invisible on an incident the catalog said nothing about — which is every incident in
+    // every shipped build, because the gate is hard-false.
     reportMock.value = { incidents: [assessedIncident()], skipped_sources: [] };
     render(<BlackBox />);
     scan();
@@ -189,5 +201,147 @@ describe("Black Box — frozen pre-Tier-1 behavior (characterization)", () => {
     expect(body).not.toMatch(/known issue/i);
     expect(body).not.toMatch(/matches the recorded shape/i);
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+});
+
+// ─── Tier 1 known-issue block (#220, plan task 7) ───────────────────────────────────────────────
+//
+// The crash station may now CARRY a signed known-issue write-up. Two rules run through every test
+// here: the words on screen are the publisher's, never Compy's, and the block is visibly SEPARATE
+// from Compy's own local reading — a user must always be able to tell whose word they are taking.
+function matchedCase(): CaseIntelligenceMatch {
+  return {
+    case_id: "amd-tdr-adrenalin-2026-q1",
+    catalog_version: 7,
+    level: "matched_known_issue",
+    title: "Adrenalin 26.1.1 display timeouts on RDNA4",
+    summary: "AMD records display timeouts on this driver line with certain multi-monitor setups.",
+    evidence_refs: ["faulting_module", "gpu_vendor"],
+    next_steps: [
+      {
+        headline: "Update to Adrenalin 26.2.1 or later",
+        detail: "The release notes list a fix for this timeout.",
+        research_only: false,
+      },
+    ],
+    contraindications: ["Do not do this mid-download — the display will blank while the driver swaps."],
+    source_url: "https://www.amd.com/en/resources/support-articles/release-notes.html",
+    source_updated_at: "2026-02-01",
+  };
+}
+
+function casedIncident(over: Partial<CaseIntelligenceMatch> = {}): CrashIncident {
+  return { ...assessedIncident(), case_intelligence: { ...matchedCase(), ...over } };
+}
+
+describe("Black Box — Tier 1 known-issue block", () => {
+  it("a verified match renders the label, the write-up, what lined up, a next step and the provenance", async () => {
+    reportMock.value = { incidents: [casedIncident()], skipped_sources: [] };
+    render(<BlackBox />);
+    scan();
+    expect(await screen.findByText("Known issue on record")).toBeInTheDocument();
+    expect(screen.getByText("Adrenalin 26.1.1 display timeouts on RDNA4")).toBeInTheDocument();
+    expect(screen.getByText(/AMD records display timeouts/)).toBeInTheDocument();
+    expect(screen.getByText(/Update to Adrenalin 26.2.1 or later/)).toBeInTheDocument();
+    // Provenance: whose list this came from, and how old it is. Without both, "known issue" is a
+    // claim with no way to check it.
+    expect(screen.getByText(/Published 2026-02-01/)).toBeInTheDocument();
+    expect(screen.getByText(/Case list v7/)).toBeInTheDocument();
+  });
+
+  it("what lined up is shown in plain English — never a raw key, never the machine's own values", async () => {
+    reportMock.value = { incidents: [casedIncident()], skipped_sources: [] };
+    render(<BlackBox />);
+    scan();
+    await screen.findByText("Known issue on record");
+    const body = document.body.textContent || "";
+    expect(body).toContain("the file that stopped responding");
+    expect(body).toContain("your graphics card brand");
+    expect(body).not.toContain("faulting_module"); // the wire key must not surface
+    expect(body).not.toContain("gpu_vendor");
+  });
+
+  it("the publisher's caveats ride along with the advice, never separated from it", async () => {
+    reportMock.value = { incidents: [casedIncident()], skipped_sources: [] };
+    render(<BlackBox />);
+    scan();
+    await screen.findByText("Known issue on record");
+    expect(screen.getByText(/the display will blank while the driver swaps/)).toBeInTheDocument();
+  });
+
+  it("a PARTIAL match says so — Compy could not check everything, and does not pretend it did", async () => {
+    reportMock.value = {
+      incidents: [casedIncident({ level: "possible_known_issue" })],
+      skipped_sources: [],
+    };
+    render(<BlackBox />);
+    scan();
+    await screen.findByText("Known issue on record");
+    const body = document.body.textContent || "";
+    expect(body).toMatch(/couldn't check every detail/i);
+    expect(body).not.toMatch(/this matches a known issue/i);
+  });
+
+  it("the known-issue block is a SEPARATE section from Compy's own reading", async () => {
+    reportMock.value = { incidents: [casedIncident()], skipped_sources: [] };
+    render(<BlackBox />);
+    scan();
+    await screen.findByText("Known issue on record");
+    const known = document.querySelector(".bb-known");
+    const own = document.querySelector(".bb-assess");
+    expect(known).not.toBeNull();
+    expect(own).not.toBeNull();
+    expect(known!.contains(own!)).toBe(false);
+    expect(own!.contains(known!)).toBe(false);
+    // And it says out loud whose words these are.
+    expect(document.body.textContent || "").toMatch(/publisher's words, not Compy's/i);
+  });
+
+  it("the copy never claims a cause and never claims a fix", async () => {
+    reportMock.value = { incidents: [casedIncident()], skipped_sources: [] };
+    render(<BlackBox />);
+    scan();
+    await screen.findByText("Known issue on record");
+    const body = document.body.textContent || "";
+    expect(body).toMatch(/matches a known issue/i);
+    expect(body).not.toMatch(/\b(caused|cause of|will fix|fixes this|fixed|solved|guaranteed)\b/i);
+    expect(body).not.toMatch(/\d%/);
+  });
+
+  it("the source opens in the user's browser only after a click, at the catalog's own URL", async () => {
+    reportMock.value = { incidents: [casedIncident()], skipped_sources: [] };
+    render(<BlackBox />);
+    scan();
+    await screen.findByText("Known issue on record");
+    // Nothing navigates on render, and there is no <a href> for the webview to follow.
+    expect(openUrlMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /open the write-up/i }));
+    expect(openUrlMock).toHaveBeenCalledTimes(1);
+    expect(openUrlMock).toHaveBeenCalledWith(matchedCase().source_url);
+  });
+
+  it("still issues exactly one backend call — the match arrives with the scan, not from a second fetch", async () => {
+    reportMock.value = { incidents: [casedIncident()], skipped_sources: [] };
+    render(<BlackBox />);
+    scan();
+    await screen.findByText("Known issue on record");
+    expect(vi.mocked(invoke).mock.calls.map((c) => c[0])).toEqual(["get_crash_blackbox"]);
+  });
+
+  it("a null match renders no chrome at all — an unverifiable catalog leaves no trace on screen", async () => {
+    // The backend attaches the field ONLY on a real match: no catalog, an expired or unverifiable
+    // one, and simply nothing that fits all arrive here the same way — as nothing. The station must
+    // not hint that something was withheld.
+    const inc = { ...assessedIncident(), case_intelligence: null } as CrashIncident;
+    reportMock.value = { incidents: [inc], skipped_sources: [] };
+    render(<BlackBox />);
+    scan();
+    await screen.findByText("What this points to");
+    const body = document.body.textContent || "";
+    expect(screen.queryByText("Known issue on record")).not.toBeInTheDocument();
+    expect(body).not.toMatch(/known issue/i);
+    expect(document.querySelector(".bb-known")).toBeNull();
   });
 });

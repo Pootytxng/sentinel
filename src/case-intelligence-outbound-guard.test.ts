@@ -185,6 +185,30 @@ export function rustGateLiteral(source: string, name: string): boolean {
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════
 
+// Everything inside Tier 1 that is NOT the advisory result: the fetch, the trust chain and the
+// cache. No module outside case_intelligence.rs may name any of them — that is what makes "one
+// transport, in one file, decidable by reading the source" true rather than aspirational.
+const TIER1_INTERNALS = [
+  "refresh_case_catalog",
+  "refresh_with",
+  "refresh_from",
+  "CaseHttp",
+  "ReqwestCaseHttp",
+  "reqwest_get",
+  "CASE_CATALOG_ENDPOINTS",
+  "CASE_CATALOG_ORIGINS",
+  "CASE_SIGNING_PUBKEY",
+  "CASE_FETCH_DISABLE_FILE",
+  "verify_catalog_chain",
+  "verify_manifest_with",
+  "cache_store_verified",
+  "cache_load_verified",
+  "cached_catalog",
+  "case_cache_dir",
+  "parse_catalog",
+  "parse_manifest",
+];
+
 describe("Tier 1 owns its transport, and that transport can only ask", () => {
   const raw = readFileSync(MODULE, "utf8");
 
@@ -197,16 +221,47 @@ describe("Tier 1 owns its transport, and that transport can only ask", () => {
   });
 
   it("only this module holds Tier 1's transport", () => {
-    // The other candidates each already have — or are forbidden from having — a transport of their
-    // own. Tier 1's must not appear inside any of them, in either direction.
-    for (const path of [RECEIPTS, REMOTE_RULES, SUPPORT_EVIDENCE, BLACKBOX]) {
+    // The trust-domain neighbours must not reach Tier 1 AT ALL. Each already has, or is forbidden
+    // from having, a transport of its own, and a shared symbol is how two domains quietly become one.
+    for (const path of [RECEIPTS, REMOTE_RULES, SUPPORT_EVIDENCE]) {
       const body = prod(path);
       expect(
         /case_intelligence/.test(body),
-        `${path} reaches case_intelligence. Tier 1's pull path lives in exactly one module; a second ` +
-          `caller is a second surface with no exception record of its own.`,
+        `${path} reaches case_intelligence. Tier 1 keeps its own key, schema, origins, cache and ` +
+          `gate; a neighbour that names it has joined a trust domain it was never reviewed for.`,
       ).toBe(false);
     }
+
+    // The crash station is the ONE consumer, and consuming is not transporting. Narrowed on
+    // 2026-08-25 when task 7 attached the optional match to an incident and this line went red for
+    // the right file and the wrong reason: "nobody may name Tier 1" would have barred the advisory
+    // from ever being SHOWN, which is the entire point of building it. So the bar moved from "may
+    // not mention" to "may not fetch, verify or cache", which is what the module boundary is for.
+    const bb = prod(BLACKBOX);
+    for (const sym of TIER1_INTERNALS) {
+      expect(
+        bb.includes(sym),
+        `${BLACKBOX} names ${sym}. The crash station reads the RESULT; fetching, verifying and ` +
+          `caching stay inside case_intelligence.rs, where the guards in this file can see them.`,
+      ).toBe(false);
+    }
+
+    // And what it may name is a CLOSED list, so widening the seam is a reviewed diff line here
+    // rather than a call site that lands unnoticed.
+    const named = new Set<string>();
+    for (const m of bb.matchAll(/case_intelligence::(?:{([^}]*)}|(\w+))/g)) {
+      for (const part of (m[1] ?? m[2]).split(",")) {
+        const name = part.trim();
+        if (name) named.add(name);
+      }
+    }
+    expect([...named].sort(), "the Tier 1 seam into the crash station changed").toEqual([
+      "CaseIntelligenceMatch",
+      "CaseMatchOutcome",
+      "advise",
+      "case_intelligence_gate",
+      "local_facts_from",
+    ]);
   });
 
   it("the fetch path asks for a file and cannot carry one", () => {
@@ -470,4 +525,51 @@ describe("catches the shapes it was written for", () => {
     expect(rustGateLiteral("fn g() -> bool {\n  // would be: KEY != [0u8; 32]\n  false\n}", "g")).toBe(false);
     expect(rustGateLiteral("fn g() -> bool { true }", "other")).toBe(false);
   });
+});
+
+describe("Tier 1's evidence keys and the words a user reads for them", () => {
+  // bug→guard (#220, 2026-08-25, IPC contract audit warning 1). `evidence_refs` are KEYS, and the
+  // frontend turns each one into a phrase with
+  //   t(`gaming.blackBox.knownIssue.evidenceKey.${ref}`, { defaultValue: "" })
+  // The `defaultValue: ""` is deliberate and stays: a catalog signed by a newer schema could name a
+  // fact this build has no label for, and showing a raw key like `gpu_driver_version` to a user is
+  // worse than showing nothing.
+  //
+  // But it makes the OTHER failure silent too. Add an eighth `EvidenceRequirement` variant without
+  // adding its locale line and the ref renders as an EMPTY <li> — no error, no failed build, and
+  // nothing a reviewer would notice, because the list simply looks one item shorter than it should.
+  // The Rust enum is the only source of these strings (`EvidenceRequirement::key()`; the refs are
+  // built from `m.evidence().key()` and `r.key()` and never from catalog text), so the two sides can
+  // be compared directly.
+  const KEY_FN = /pub\(crate\) fn key\(self\) -> &'static str \{([\s\S]*?)\n    \}/;
+
+  /** Every key `EvidenceRequirement::key()` can return, read out of the source. */
+  function rustEvidenceKeys(): string[] {
+    const body = KEY_FN.exec(readFileSync(MODULE, "utf8"))?.[1];
+    expect(body, "EvidenceRequirement::key() moved or changed shape — this guard went blind").toBeTruthy();
+    return [...(body as string).matchAll(/=>\s*"([a-z_]+)"/g)].map((m) => m[1]).sort();
+  }
+
+  /** The evidenceKey.* labels one locale file carries. */
+  function localeEvidenceKeys(locale: string): string[] {
+    const json = JSON.parse(readFileSync(join("src", "i18n", "locales", locale, "gaming.json"), "utf8"));
+    const node = json?.blackBox?.knownIssue?.evidenceKey;
+    expect(node, `${locale}/gaming.json has no blackBox.knownIssue.evidenceKey block`).toBeTruthy();
+    return Object.keys(node).sort();
+  }
+
+  it("finds the enum at all (the extractor must not silently return nothing)", () => {
+    // Falsification anchor. Every assertion below compares two lists, and two empty lists are
+    // equal — so a regex that stopped matching would turn this whole block green and vacuous.
+    expect(rustEvidenceKeys().length).toBeGreaterThanOrEqual(7);
+    expect(rustEvidenceKeys()).toContain("faulting_module");
+  });
+
+  for (const locale of ["en", "zh-CN"]) {
+    it(`${locale} has a label for every key the matcher can emit, and no orphans`, () => {
+      // Equality, not containment, in BOTH directions. A missing label renders an empty list item;
+      // a leftover label is a string somebody is still translating for a fact that no longer exists.
+      expect(localeEvidenceKeys(locale)).toEqual(rustEvidenceKeys());
+    });
+  }
 });

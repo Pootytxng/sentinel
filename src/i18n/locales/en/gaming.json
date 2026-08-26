@@ -265,6 +265,27 @@
       "weak": "Weak signal"
     },
     "whatThisPointsTo": "What this points to",
+    "knownIssue": {
+      "label": "Known issue on record",
+      "matchedLine": "This matches a known issue the manufacturer has published.",
+      "possibleLine": "This looks like a known issue, but Compy couldn't check every detail.",
+      "linedUpLabel": "What lined up",
+      "evidenceKey": {
+        "faulting_app": "the app that stopped",
+        "faulting_module": "the file that stopped responding",
+        "error_code": "the error code Windows recorded",
+        "gpu_vendor": "your graphics card brand",
+        "gpu_driver_version": "your graphics driver version",
+        "windows_build": "your Windows build",
+        "vitals": "Compy's own vitals from that session"
+      },
+      "stepsLabel": "What the write-up suggests",
+      "cautionLabel": "Before you try it",
+      "sourceButton": "Open the write-up",
+      "publishedOn": "Published {{date}}",
+      "catalogVersion": "Case list v{{version}}",
+      "attribution": "These are the publisher's words, not Compy's."
+    },
     "assessLinePreBeyond": "This one is",
     "assessLinePreConsistent": "The evidence is consistent with",
     "assessLinePostBeyond": "— beyond what Compy can safely narrow down.",

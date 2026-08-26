@@ -381,8 +381,8 @@ const FORBIDDEN_PROSE: &[(&str, &str)] = &[
     ("data:", "an inline data url"),
     ("powershell", "a shell the reader would be told to run"),
     ("cmd.exe", "a shell the reader would be told to run"),
-    ("reg add", "a registry write"),
-    ("reg delete", "a registry write"),
+    ("reg add", "a registry write"), // mutation-boundary-allow: the BANNED substring, listed so no signed document can carry it
+    ("reg delete", "a registry write"), // mutation-boundary-allow: same — this list refuses the command, it never runs one
     ("regedit", "a registry editor"),
     ("sc.exe", "a service change"),
     ("schtasks", "a scheduled-task change"),
@@ -1335,6 +1335,41 @@ impl CaseIncidentFacts {
             has_vitals: incident.vitals.is_some(),
         }
     }
+}
+
+/// Read this machine's own facts out of the hardware snapshot Compy already collects.
+///
+/// Pure and total, and every field is an Option that stays `None` when the value is not honestly
+/// readable. That is the same rule the matcher enforces from the other side — an absent fact never
+/// satisfies a matcher — and it only holds if nothing upstream quietly invents a value first. So a
+/// blank driver string is absent rather than `""`, an unparseable build is absent rather than `0`,
+/// and an adapter Compy does not recognise has no vendor rather than a guess.
+///
+/// Reads, never collects: the hardware snapshot is `hardware.rs`'s job and is not duplicated here.
+pub(crate) fn local_facts_from(hw: &crate::hardware::HardwareInfo) -> CaseLocalFacts {
+    let gpu = hw.gpus.first();
+    CaseLocalFacts {
+        gpu_vendor: gpu.and_then(|g| vendor_token(&g.name)).map(str::to_string),
+        gpu_driver_version: gpu
+            .map(|g| g.driver_version.trim())
+            .filter(|v| !v.is_empty())
+            .map(str::to_string),
+        windows_build: hw
+            .windows_version
+            .as_ref()
+            .and_then(|w| w.build.trim().parse::<u32>().ok()),
+    }
+}
+
+/// Fold an adapter name to one of the three tokens a catalog is allowed to name, or to nothing.
+///
+/// The closed set is the point. Adapter names carry marketing text that changes between driver
+/// releases, so matching on the raw string would let a catalog entry be written against something
+/// that silently stops being true; matching on the token means `gpu_vendor_equals` compares the same
+/// three values forever.
+fn vendor_token(name: &str) -> Option<&'static str> {
+    let lower = name.to_lowercase();
+    CASE_GPU_VENDORS.iter().copied().find(|v| lower.contains(v))
 }
 
 /// What the matcher concluded.
@@ -3985,6 +4020,7 @@ mod tests {
                     detail: "Display driver amdkmdag stopped responding and has recovered.".into(),
                 },
                 assessment: None,
+                case_intelligence: None,
                 kind: crate::blackbox::IncidentKind::GpuTimeout,
             }
         }
@@ -4403,5 +4439,95 @@ mod tests {
             assert!(!case_intelligence_gate());
             assert_eq!(refresh_case_catalog(), Err(CaseFetchError::Gated));
         }
+    }
+
+    // ─── Plan task 7: this machine's own facts ─────────────────────────────
+    //
+    // The half of the match Compy supplies. Every one of these tests is about the same rule: an
+    // unreadable fact stays absent, because `matcher::an_absent_local_fact_never_satisfies_a_matcher`
+    // only protects the user if nothing upstream quietly invents a value first.
+    mod local_facts {
+        use super::*;
+        use crate::hardware::{GpuInfo, HardwareInfo, WindowsVersionInfo};
+
+        fn gpu(name: &str, driver: &str) -> GpuInfo {
+            GpuInfo { name: name.into(), driver_version: driver.into(), ..GpuInfo::default() }
+        }
+
+        fn win(build: &str) -> WindowsVersionInfo {
+            WindowsVersionInfo { build: build.into(), ..WindowsVersionInfo::default() }
+        }
+
+        #[test]
+        fn reads_vendor_driver_and_build_from_the_hardware_snapshot() {
+            let hw = HardwareInfo {
+                gpus: vec![gpu("AMD Radeon RX 9070 XT", "26.1.1")],
+                windows_version: Some(win("26100")),
+                ..HardwareInfo::default()
+            };
+            assert_eq!(
+                local_facts_from(&hw),
+                CaseLocalFacts {
+                    gpu_vendor: Some("amd".into()),
+                    gpu_driver_version: Some("26.1.1".into()),
+                    windows_build: Some(26100),
+                }
+            );
+        }
+
+        #[test]
+        fn the_vendor_is_folded_to_the_catalogs_own_closed_token_set() {
+            // Whatever the adapter calls itself, the fact handed to the matcher is one of the three
+            // tokens a catalog is allowed to name — so a matcher can never be written against a
+            // marketing string that varies by driver release.
+            for (name, expect) in [
+                ("AMD Radeon RX 9070 XT", "amd"),
+                ("NVIDIA GeForce RTX 3060 Ti", "nvidia"),
+                ("Intel(R) UHD Graphics 770", "intel"),
+            ] {
+                let hw = HardwareInfo { gpus: vec![gpu(name, "1.0")], ..HardwareInfo::default() };
+                assert_eq!(local_facts_from(&hw).gpu_vendor.as_deref(), Some(expect), "{name}");
+                assert!(CASE_GPU_VENDORS.contains(&expect));
+            }
+        }
+
+        #[test]
+        fn an_unrecognised_adapter_yields_no_vendor_rather_than_a_guess() {
+            let hw = HardwareInfo {
+                gpus: vec![gpu("Microsoft Basic Display Adapter", "10.0.26100.1")],
+                ..HardwareInfo::default()
+            };
+            assert_eq!(local_facts_from(&hw).gpu_vendor, None);
+        }
+
+        #[test]
+        fn an_empty_or_blank_driver_string_is_absent_not_an_empty_version() {
+            // "" would sail past `is_some()` and satisfy a `gpu_driver_version` evidence requirement
+            // while telling the user nothing — a full match built on a blank.
+            for driver in ["", "   "] {
+                let hw = HardwareInfo {
+                    gpus: vec![gpu("AMD Radeon RX 9070 XT", driver)],
+                    ..HardwareInfo::default()
+                };
+                assert_eq!(local_facts_from(&hw).gpu_driver_version, None, "{driver:?}");
+            }
+        }
+
+        #[test]
+        fn an_unreadable_windows_build_is_absent() {
+            for build in ["", "26100.1742", "not a number"] {
+                let hw = HardwareInfo {
+                    windows_version: Some(win(build)),
+                    ..HardwareInfo::default()
+                };
+                assert_eq!(local_facts_from(&hw).windows_build, None, "{build:?}");
+            }
+        }
+
+        #[test]
+        fn a_machine_with_nothing_readable_yields_nothing_and_never_panics() {
+            assert_eq!(local_facts_from(&HardwareInfo::default()), CaseLocalFacts::default());
+        }
+
     }
 }

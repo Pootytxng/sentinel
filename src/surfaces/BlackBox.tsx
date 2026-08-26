@@ -1,10 +1,16 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
+import { openUrl } from "@tauri-apps/plugin-opener";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../i18n";
-import type { BlackBoxReport, CrashIncident, CrashAssessment } from "../types";
+import type {
+  BlackBoxReport,
+  CrashIncident,
+  CrashAssessment,
+  CaseIntelligenceMatch,
+} from "../types";
 import { resolutionFor, type HelpMark } from "../data/blackbox-resolution";
 import "./BlackBox.css";
 
@@ -107,6 +113,11 @@ function IncidentRow({ inc, allIncidents }: { inc: CrashIncident; allIncidents: 
           measured-absence line under a step the user marked helpful. */}
       {inc.assessment && <AssessmentBlock inc={inc} allIncidents={allIncidents} />}
 
+      {/* Compy Care Tier 1 (only present when case_intelligence_gate() is ON and the SIGNED catalog
+          matched): somebody else's published write-up, carried verbatim. A separate section from the
+          triage block above on purpose — that one is Compy's own reading, this one is a quote. */}
+      {inc.case_intelligence && <KnownIssueBlock m={inc.case_intelligence} />}
+
       <button
         className="bb-receipt-toggle"
         onClick={() => setShowReceipt((s) => !s)}
@@ -194,6 +205,109 @@ function AssessmentBlock({ inc, allIncidents }: { inc: CrashIncident; allInciden
       </div>
       <ResolutionFeedback inc={inc} allIncidents={allIncidents} />
     </div>
+  );
+}
+
+// Compy Care Tier 1 — the signed known-issue write-up.
+//
+// Every string rendered here comes from the catalog entry that was signature-verified before it
+// reached the frontend; this component contributes structure and labels, never a claim. Two rules
+// it exists to keep visible:
+//
+//   1. WHOSE WORDS. It is a section of its own, headed and attributed, so a user can always tell
+//      the publisher's write-up from Compy's own reading in the block above it. Merging them would
+//      be the cheapest possible way to launder an outside claim into a Compy one.
+//   2. WHAT COMPY COULD CHECK. `matched_known_issue` means every required fact was readable;
+//      `possible_known_issue` means some were not, and it says so rather than rounding up.
+//
+// `evidence_refs` arrive as KEYS ("faulting_module"), never as this machine's values — the wire
+// stays safe to log or show a friend, and the plain-English label is looked up here.
+function KnownIssueBlock({ m }: { m: CaseIntelligenceMatch }) {
+  const { t } = useTranslation();
+  const matched = m.level === "matched_known_issue";
+  return (
+    <section className="bb-known" aria-label={t("gaming.blackBox.knownIssue.label")}>
+      <div className="bb-known-head">
+        <span className="bb-known-label">{t("gaming.blackBox.knownIssue.label")}</span>
+      </div>
+      <p className="bb-known-line">{matched
+          ? t("gaming.blackBox.knownIssue.matchedLine")
+          : t("gaming.blackBox.knownIssue.possibleLine")}</p>
+
+      <p className="bb-known-title">{m.title}</p>
+      <p className="bb-known-summary">{m.summary}</p>
+
+      {m.evidence_refs.length > 0 && (
+        <div className="bb-known-lined-up">
+          <span className="bb-known-sublabel">{t("gaming.blackBox.knownIssue.linedUpLabel")}</span>
+          <ul className="bb-known-evidence">
+            {m.evidence_refs.map((ref) => (
+              // The static head stays a full dotted path so `orphan-key-guard` can harvest the
+              // prefix — the shape SupportEvidence.tsx uses, and the only one that scan can see.
+              // defaultValue: a catalog signed by a newer schema could name a fact this build has no
+              // label for. Showing the raw key would be worse than showing nothing, so it is dropped.
+              <li key={ref}>
+                {t(`gaming.blackBox.knownIssue.evidenceKey.${ref}`, { defaultValue: "" })}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {m.next_steps.length > 0 && (
+        <div className="bb-known-steps">
+          <span className="bb-known-sublabel">{t("gaming.blackBox.knownIssue.stepsLabel")}</span>
+          {m.next_steps.map((step, i) => (
+            <div
+              key={i}
+              className={`bb-known-step${step.research_only ? " bb-known-step-research" : ""}`}
+            >
+              <span className="bb-known-step-tag">
+                {step.research_only
+                  ? t("gaming.blackBox.worthResearching")
+                  : t("gaming.blackBox.safeNextStep")}
+              </span>
+              <p className="bb-known-step-headline">{step.headline}</p>
+              <p className="bb-known-step-detail">{step.detail}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* The caveats ride WITH the advice, never in a collapsed panel of their own — advice shown
+          without the line that says when not to take it is the omission the honesty rules exist for. */}
+      {m.contraindications.length > 0 && (
+        <div className="bb-known-caution">
+          <span className="bb-known-sublabel">{t("gaming.blackBox.knownIssue.cautionLabel")}</span>
+          <ul className="bb-known-caution-list">
+            {m.contraindications.map((c, i) => (
+              <li key={i}>{c}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="bb-known-source">
+        {/* A button, not a link: the URL leaves the app only on a click, and it goes to the user's
+            own browser rather than anywhere the webview could follow it. The URL is the catalog's
+            own, already checked against the compiled origin allowlist during verification. */}
+        <button
+          className="bb-known-source-btn"
+          onClick={() => {
+            openUrl(m.source_url).catch(() => {
+              /* no browser to hand it to — nothing to recover, and nothing to claim */
+            });
+          }}
+        >
+          {t("gaming.blackBox.knownIssue.sourceButton")}
+        </button>
+        <span className="bb-known-provenance">
+          {t("gaming.blackBox.knownIssue.publishedOn", { date: m.source_updated_at })} ·{" "}
+          {t("gaming.blackBox.knownIssue.catalogVersion", { version: m.catalog_version })}
+        </span>
+      </div>
+      <p className="bb-known-attribution">{t("gaming.blackBox.knownIssue.attribution")}</p>
+    </section>
   );
 }
 

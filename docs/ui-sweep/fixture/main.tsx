@@ -74,10 +74,15 @@ import { CpuMonitorPanel, type CpuSensorSnapshot } from "../../../src/surfaces/m
 // Q9a's consent tile. Dark in every build — see the stub's receipts section for why no build,
 // flag, or stored value on the owner's machine reaches these pixels.
 import ReceiptsConsent from "../../../src/surfaces/ReceiptsConsent";
+// The crash station, whole. Compy Care Tier 1's known-issue block is a section INSIDE an incident
+// card, so rendering it alone would prove nothing about the question the review has to answer:
+// whether a user can tell Compy's own reading apart from somebody else's quoted write-up sitting
+// directly under it.
+import { BlackBox } from "../../../src/surfaces/BlackBox";
 import { BentoGrid } from "../../../src/design/bento";
 // Same module instance the bench's aliased `@tauri-apps/api/core` import resolves to (both land on
 // this directory's stub-core.ts), so this reads the state the bench is actually rendering.
-import { getState, isCpuTempState, isReceiptsState } from "./stub-core";
+import { getState, isBlackboxState, isCpuTempState, isReceiptsState } from "./stub-core";
 
 // ══ src/main.tsx's pre-paint dataset block, hand-replicated ════════════════════════════════════
 // The overlay branch is dropped on purpose: detecting it needs getCurrentWindow(). This page is
@@ -187,7 +192,9 @@ function FixtureBanner() {
           ? "the receipts gate is HARD-FALSE in every build — nothing is armed and nothing is sent"
           : isCpuTempState()
             ? "nothing is started — every CPU number here is invented"
-            : "Start / Conclude / Restore are blocked"}
+            : isBlackboxState()
+              ? "case intelligence is HARD-FALSE in every build — nothing was downloaded, verified or matched"
+              : "Start / Conclude / Restore are blocked"}
       </span>
     </div>
   );
@@ -235,6 +242,19 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
         <div className="v2-room-body">
           {/* cpuTemp={null} is the whole point: it is the branch that renders the offer. */}
           <CpuMonitorPanel cpu={CPU} history={[CPU, CPU]} cpuTemp={null} />
+        </div>
+      </section>
+    ) : isBlackboxState() ? (
+      // The Lab room, same as the bench — the station mounts under LabConsole's "blackbox" tab
+      // (LabConsole.tsx), which lives inside the Lab room body. So the --ix-* re-point above is the
+      // one the shipped app resolves the block's border, ground and text from.
+      //
+      // The scan is NOT auto-fired here. The station renders nothing until its scan button is
+      // clicked, and that is true in the app too; a reviewer clicks it, which also exercises the
+      // one transition the block has.
+      <section className="v2-room" data-room="lab">
+        <div className="v2-room-body">
+          <BlackBox />
         </div>
       </section>
     ) : (

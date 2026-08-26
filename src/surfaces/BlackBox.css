@@ -336,6 +336,148 @@
   color: var(--ix-text-2); /* a recurrence is reported just as plainly — neutral, never hidden */
 }
 
+/* Compy Care Tier 1 — the signed known-issue write-up. Deliberately NOT dressed like `.bb-assess`:
+   that block is Compy's own reading and carries the accent wash, this one is a QUOTE from outside
+   and reads like one — neutral surface, dashed hairline, quieter type. A user should be able to tell
+   whose word they are taking before reading a label. Instrument tokens only, no new hexes.
+
+   The first draft did this with a 3px accent rule down the left edge, which is the side-stripe
+   pattern `src/side-stripe-guard.test.ts` and the design detector both ban outright. The dashed
+   border says "quoted from elsewhere" at least as well and costs no exception. */
+.bb-known {
+  border: 1px dashed var(--ix-border);
+  border-radius: var(--ix-radius);
+  background: var(--ix-surface-2);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.bb-known-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.bb-known-label {
+  font-family: var(--ix-mono);
+  font-size: var(--type-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ix-text-2);
+}
+.bb-known-line {
+  margin: 0;
+  color: var(--ix-text-1);
+  font-size: var(--type-label);
+  line-height: 1.5;
+}
+.bb-known-title {
+  margin: 0;
+  color: var(--ix-text-1);
+  font-size: var(--type-label);
+  font-weight: 600;
+  line-height: 1.45;
+}
+.bb-known-summary {
+  margin: 0;
+  color: var(--ix-text-2);
+  font-size: var(--type-label);
+  line-height: 1.55;
+}
+.bb-known-sublabel {
+  font-family: var(--ix-mono);
+  font-size: var(--type-label);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ix-text-3);
+}
+.bb-known-lined-up,
+.bb-known-steps,
+.bb-known-caution {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.bb-known-evidence,
+.bb-known-caution-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--ix-text-2);
+  font-size: var(--type-label);
+  line-height: 1.5;
+}
+.bb-known-step {
+  border: 1px solid var(--ix-border);
+  border-radius: var(--ix-radius);
+  /* --ix-bg-1, not a new --ix-surface-1: instrument.css documents a whole class of bugs where a
+     surface referenced a token nobody declared and the style silently vanished. The parent is
+     already --ix-surface-2, so the step needs a RECESSED ground to read as nested, and --ix-bg-1
+     is the declared token for exactly that. */
+  background: var(--ix-bg-1);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+/* Same dashed treatment `.bb-nextstep-research` uses: an irreversible real-world fix is something to
+   look into, and the border says so before the tag is read. */
+.bb-known-step-research {
+  border-style: dashed;
+}
+.bb-known-step-tag {
+  font-family: var(--ix-mono);
+  font-size: var(--type-label);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ix-accent-text);
+}
+.bb-known-step-research .bb-known-step-tag {
+  color: var(--ix-text-3);
+}
+.bb-known-step-headline {
+  margin: 0;
+  color: var(--ix-text-1);
+  font-size: var(--type-label);
+  font-weight: 600;
+}
+.bb-known-step-detail {
+  margin: 0;
+  color: var(--ix-text-2);
+  font-size: var(--type-label);
+  line-height: 1.55;
+}
+.bb-known-source {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.bb-known-source-btn {
+  /* No --ix-mono here, unlike `.bb-helpful-btn` next door: "Open the write-up" is prose, and the
+     mono law (C-17) reserves mono for machine values and the uppercase HUD-tag idiom. */
+  font-size: var(--type-label);
+  color: var(--ix-accent-text);
+  background: none;
+  border: 1px solid var(--ix-border);
+  border-radius: 999px;
+  padding: 2px 12px;
+  cursor: pointer;
+}
+.bb-known-provenance {
+  color: var(--ix-text-3);
+  font-size: var(--type-label);
+}
+.bb-known-attribution {
+  margin: 0;
+  color: var(--ix-text-3);
+  font-size: var(--type-label);
+  font-style: italic;
+}
+
 @media (max-width: 560px) {
   .bb-receipt-row {
     grid-template-columns: 1fr;

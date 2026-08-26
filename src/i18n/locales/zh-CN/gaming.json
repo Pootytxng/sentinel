@@ -261,6 +261,27 @@
       "weak": "弱信号"
     },
     "whatThisPointsTo": "指向的可能原因",
+    "knownIssue": {
+      "label": "已收录的已知问题",
+      "matchedLine": "这与厂商公布的一个已知问题相符。",
+      "possibleLine": "这看起来像一个已知问题，但 Compy 无法核对每一项细节。",
+      "linedUpLabel": "对上的信息",
+      "evidenceKey": {
+        "faulting_app": "出问题的程序",
+        "faulting_module": "停止响应的文件",
+        "error_code": "Windows 记录的错误代码",
+        "gpu_vendor": "你的显卡品牌",
+        "gpu_driver_version": "你的显卡驱动版本",
+        "windows_build": "你的 Windows 版本号",
+        "vitals": "Compy 在那次会话记录的最后生命体征"
+      },
+      "stepsLabel": "这份记录建议的做法",
+      "cautionLabel": "动手之前",
+      "sourceButton": "打开原始记录",
+      "publishedOn": "发布于 {{date}}",
+      "catalogVersion": "问题库 v{{version}}",
+      "attribution": "以上是发布方的原话，不是 Compy 的判断。"
+    },
     "assessLinePreBeyond": "这一项属于",
     "assessLinePreConsistent": "现有证据与以下情况相符:",
     "assessLinePostBeyond": "——已超出 Compy 能够安全判断的范围。",

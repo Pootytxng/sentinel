@@ -252,7 +252,18 @@ describe("mutation-boundary guard: Compy changes Windows from exactly one place"
       }
     }
     expect(marked.length, `${ALLOW_MARKER} lines: ${marked.join(", ")}`).toBeLessThanOrEqual(6);
-    expect([...new Set(marked)]).toEqual([join(BACKEND, "leftovers.rs")]);
+    // Two files, for two opposite reasons, and both are the marker working as designed:
+    //   leftovers.rs NAMES a command in copy that TELLS the user what it found (the restore itself
+    //     still runs through actions.rs);
+    //   case_intelligence.rs (#220, 2026-08-25) lists "reg add" / "reg delete" as BANNED SUBSTRINGS
+    //     — its FORBIDDEN_PROSE table is the thing that stops a signed advisory catalog from ever
+    //     carrying a registry command to a user. Writing the ban is how the ban exists, and the only
+    //     way to satisfy a raw-text scan otherwise would be to obfuscate the literal, which would
+    //     hide it from the next reader too.
+    expect([...new Set(marked)].sort()).toEqual([
+      join(BACKEND, "case_intelligence.rs"),
+      join(BACKEND, "leftovers.rs"),
+    ]);
   });
 
   it("drops only the marked line, never its neighbours", () => {
