@@ -315,9 +315,14 @@ These gate **public** release only (not the local app you use daily). Full list:
   were owed is now BUILT and merged** (#217 / PR #218, `8b2f0f64`): a first-run disclosure card, a
   real off switch, `EULA.md` §10, `PRIVACY.md` v0.6, and the receiver deployed + empty on your yes.
   Your 2026-08-24 ruling holds — **opt-in, default OFF even after arming**, because the shipped
-  description already promises "No telemetry". **Two things are on you, and only two:** ① you have
-  the disclosure card's before/after and have not ruled on how it looks; ② arming itself is still
-  yours and always will be. Nothing sends until you do both.
+  description already promises "No telemetry". **ONE thing is on you, not two — corrected 2026-08-26.**
+  ① ~~how the disclosure card looks~~ is **not** yours to rule on and never was: the 2026-08-07 taste
+  decree makes the look mine to decide and ship, yours to veto on sight. It has a visual self-review
+  **PASS 12/12** (2026-08-25, two fix round-trips — a refused consent write was rendering in the same
+  calm grey as ordinary copy, fixed in `b20e59dc` along with the identical defect in `Fix.tsx` and
+  `LicensePanel.tsx`), and you already have its before/after. Saying nothing is a valid answer; it
+  ships as built. ② **Arming itself is yours and always will be** — that is the whole gate. Nothing
+  sends until you do that one thing.
 - 🔒 **Compy Care Tier 1 arming** — a second outbound boundary, and as of **2026-08-26** the code
   for it is on `main` (#220, PR #221). It lets Compy show a publisher's own write-up next to a crash, from a catalog
   it has cryptographically verified. It **downloads** knowledge and **uploads nothing** — that is

@@ -1,0 +1,82 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 223,
+  "issue": 222,
+  "branch": "lane/care-discovery-2026-08-25",
+  "currentHead": "e02b24decfff994e5013293500197f372aaad12e",
+  "explicitHandoff": "Owner turn: 'Read docs/SESSION_HANDOFF.md, then start Tier 1 plan tasks 8-9 from docs/superpowers/plans/2026-08-09-outbound-case-intelligence-tier1.md - make crash rescue discoverable, and build the persisted local incident observer. Cut a fresh lane off main. Do NOT touch tasks 10-11 (security review + arming) - owner territory.' Scope is exactly tasks 8-9. Tasks 10-11 are untouched and remain owner territory.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel. Worktree C:/Users/Kuya/code/sentinel-care89, which is NOT the main checkout - main is checked out by the sibling worktree C:/Users/Kuya/code/sentinel.",
+    "remoteState": "git fetch origin --prune run this turn. origin/main = 50f4774ac1e966d3779a8e92b3dbe55f48828d2c, unchanged since this lane was cut from it, so the PR is a fast-forward with no rebase owed. gh pr view 223: OPEN, not draft, MERGEABLE, mergeStateStatus CLEAN.",
+    "worktree": "Twelve worktrees live (eleven besides main). This lane is alone in sentinel-care89. sentinel-local-collision-guard was retired this turn, once git proved #128 had been on main since 2026-08-21 (its own close-issue receipt is owed AFTER this merge, because the guard that pins the finding, scripts/shelter-tag-guard.test.mjs, rides in this PR's commit ae4f65d7), which is why the count is eleven-besides-main again despite this lane being new. No other lane has touched src-tauri/src/incident_observer.rs or src/care-incident-observer-contract.test.ts, both of which this PR creates outright.",
+    "branch": "lane/care-discovery-2026-08-25, four commits past origin/main, fast-forward. No pushed history was rewritten. Its row in docs/BRANCH_DISPOSITIONS.md is CLAIMED and must be retired when this lands.",
+    "dirtyState": "Clean apart from this receipt file itself, which trails by one commit by construction.",
+    "liveProcesses": "One compy.exe live, the installed build, relaunched plainly by the self-reviewer's teardown (verified by scripts/no-debug-port.mjs: CLEAN, none carrying --remote-debugging, env var unset at Process/User/Machine scope). No dev server on 1420, no fixture server, no cargo build in flight."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "failed",
+      "head": "5b6a0b21b6f80f1cd9e64e2f2d1b1a2f0d5c8e3a",
+      "detail": "PRESERVED, not discarded. The first push attempt of this lane, refused inside .githooks/pre-push with two real failures, both caused by this lane's own doc edits. (1) src/outbound-claim-guard.test.ts: the new src-tauri/CLAUDE.md module-map entry described the observer as having a 'zero outbound surface'. The signed update check is live, so the absolute phrasing is false and the guard is right; reworded to 'opens no network path of its own', which is both true and checkable. (2) scripts/handoff-worktree-truth.test.mjs: docs/SESSION_HANDOFF.md said eleven worktrees and cutting this lane made twelve. Re-derived rather than carried forward. Recorded because the honest history is that this lane's first push was refused, and the fix is in e0f02210, not in a loosened guard. The listed head is the pre-push tree state; the two commits it comprised are e0f02210's parents, preserved in the lane's history.",
+      "headNote": "The refused push covered ae4f65d7..97a0e945; no ref moved, so no remote head exists for it."
+    },
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "e0f02210",
+      "detail": "The lane's first landing push, inside .githooks/pre-push, after the two guard failures above were repaired. 391 test files, 5553 passed / 5 skipped, Rust 1155 passed / 0 failed / 24 ignored, clippy -D warnings clean, LOCAL CHECK RESULT: PASS. Recorded because it proves tasks 8-9 green on their own; it is NOT the head this receipt authorizes."
+    },
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "e02b24decfff994e5013293500197f372aaad12e",
+      "detail": "The authorizing run, inside .githooks/pre-push on the disposition-row push. PASS, zero GitHub Actions minutes. The ref landed: e0f02210..e02b24de. The only delta from the previous passing head is one row in docs/BRANCH_DISPOSITIONS.md, added on the first push per that file's own standing rule - a row for a ref that does not exist yet fails the very gate that would create it."
+    }
+  ],
+  "shipProof": {
+    "verdict": "n/a",
+    "reason": "Nothing was rebuilt or reinstalled by this lane. The observer's UI states - a pending crash card, and a deep-linked incident row - cannot be reached in a shipped build without a real crash on the owner's machine, so both were proven on the live Vite+CDP fixture route against this rig's REAL 25-incident Black Box report rather than on an installed build. Tier 1's fetch remains dark, so the installed build's behaviour is byte-for-byte identical whether or not this code is present."
+  },
+  "selfReview": {
+    "verdict": "PASS 12/12",
+    "reason": "Run under .claude/skills/self-review by the self-reviewer subagent at the owner's real resolution (1500x980 native OS resize, not a viewport emulation). Live-measured contrast on every new surface (headline 14.84:1, meta 5.76:1, accent text 6.51:1, .bb-selected-note 5.97:1, .bb-selected-missing 10.55:1); confirmed the notice does not duplicate the permanent rescue door from #91; exercised hover, focus-visible, the null-app-label variant, long-summary wrap and the 340px narrow case, which wraps by flex-wrap alone because home-console.css carries no @media by the #49 handoff's rule; and checked the 4d1afa92 precedent directly, confirming this card is not the generic intake chooser the owner had removed. Teardown verified by scripts/no-debug-port.mjs: CLEAN, exit 0."
+  },
+  "independentReview": {
+    "practical": true,
+    "writer": "claude-code",
+    "reviewer": "rust-tauri-reviewer subagent (non-writing, separate context, sonnet per .claude/settings.json), twice: a first pass that returned FIX-BEFORE-MERGE, and a second pass bound to this exact head that returned CLEAN. Plus a frontend-ipc-contract-auditor subagent on the IPC/TS half.",
+    "status": "passed",
+    "head": "e02b24decfff994e5013293500197f372aaad12e",
+    "reason": "FIRST PASS - FIX-BEFORE-MERGE on a confirmed logic defect, and it was a real one: incident_id is a hash over the crash's traits INCLUDING its instant, and blackbox::merge_into moves that instant - and fills in the faulting module - the moment a corroborating WER report lands. So one crash wears two ids across two scans, the second id reads as never-seen, and a card the user had just DISMISSED is announced again, breaking the module's own stated no-reannounce contract. Fixed by recording each row's matching traits at observation time and reconciling shifted identities before anything decides what is new, gated on the old id having left the report so two genuinely-live ids stay two incidents. Its second warning (a lost-update TOCTOU on the state file, and a shared temp filename) is fixed by one process lock around every read-modify-write plus a per-call temp path. Its guard-weakness note is fixed too: the trigger-wiring check now reads comment-stripped source, so a '// TODO: wire ScanTrigger::Foreground' can no longer satisfy it. Every one of the three is pinned by a new regression test before the fix was counted, per bug->guard. SECOND PASS - CLEAN at this head, and not by re-reading its own prior notes: it re-ran cargo test --lib (1155 passed), clippy -D warnings, vitest on the contract file plus adjacent surfaces (81 + 122 passed) and tsc --noEmit in this worktree, then confirmed each of the three fixes by hand-tracing rather than by assertion count - including that two_ids_that_are_both_live_stay_two_incidents is NOT vacuous (its 40s gap sits inside blackbox::CROSS_SOURCE_WINDOW_SECS, so the test exercises the live-gate itself), that adopt() preserves dismissed_at by construction because it mutates the same row, that one stale row cannot adopt two live incidents because live() is re-evaluated per iteration, and that ScanClaim's Drop still fires on the throttle-check early return. It re-verified all six hard constraints independently plus the four-authority command surface, and judged staying at SCHEMA_VERSION 1 correct because the three new fields are additive under serde(default) and an old file loads rather than quarantining. ITS ONE NIT IS ACCEPTED, NOT WAIVED, and deliberately not taken in this PR: src/care-incident-observer-contract.test.ts:139 lets the should_scan throttle-check match either 'state.last_scan_at' or 'read_state().last_scan_at', and only the second reads through the lock - so the guard would also accept a regression back to the unlocked read it exists to catch. It is guard precision, not a production defect (the sole call site is the locked one). Taking it here would move the head off the one this review covers and force a third review round for a test-only regex; it lands instead in the post-merge commit on main, in the same change that retires this lane's disposition row. The frontend auditor separately confirmed the Tauri camelCase arg convention across the three new commands (its own top suspect) and returned clean on types, locales and prop threading; its two nits - a duplicate mount-time invoke, and a stale selection surviving a manual station reopen - were both fixed rather than waved off."
+  },
+  "docGates": [
+    "doc-budget.ps1 PASS (BRANCH_DISPOSITIONS 118/120 lines after the new row)",
+    "verify-release-state.mjs - 31 citations, 31 ok, 0 near-drift, 0 broken, 0 state-drift",
+    "verify-module-map.mjs - OK, 48 .rs files, 14 starred; the incident_observer.rs entry's line count was re-derived rather than left at its first-draft estimate",
+    "branch-disposition-audit.mjs - OK, every origin ref has a proven row",
+    "tools/entry/doc-truth.test.mjs - run standalone, 12 passed, per the standing rule that decision 7 fails true sentences and a fix can create the next offender"
+  ],
+  "boundaryProof": {
+    "actionsRs": "git diff origin/main..HEAD -- src-tauri/src/actions.rs is empty. The ONE Windows-mutation boundary is untouched by the whole PR, and src/mutation-boundary-guard.test.ts passes.",
+    "locks": "Untouched by this lane and re-verified: case_intelligence_gate() hard-returns false; CASE_SIGNING_PUBKEY is CaseSigningKey::new([0u8; 32]); CASE_CATALOG_ORIGINS and CASE_CATALOG_ENDPOINTS are both empty slices.",
+    "unreachable": "refresh_case_catalog is still not registered as a tauri::command and still has no production caller. Arming is plan tasks 10-11 and needs an owner-signed commit; this lane did not touch remote_rules.rs, receipts.rs or license.rs.",
+    "csp": "tauri.conf.json is unchanged. No frontend fetch was added; the observer reads Windows' own records through the existing local blackbox path and opens no socket.",
+    "commandAuthority": "The three new commands agree across all four authorities - lib.rs generate_handler!, build.rs APP_COMMANDS, capabilities/default.json - and are absent from capabilities/overlay.json. Pinned by src/command-authority-guard.test.ts and again by the module's own contract guard."
+  }
+}

@@ -135,8 +135,8 @@ describe("an incident while Compy was closed is caught on next launch", () => {
   it("throttles the other two against a persisted watermark", () => {
     expect(prod, "the scan throttle is gone — every alt-tab now spends a WMI probe")
       .toMatch(/SCAN_MIN_INTERVAL_SECS/);
-    expect(prod, "the throttle no longer reads the persisted last_scan_at")
-      .toMatch(/should_scan\(trigger,\s*(?:state|read_state\(\))\.last_scan_at\.as_deref\(\),/);
+    expect(prod, "the throttle no longer reads the persisted last_scan_at THROUGH THE LOCK — an unlocked state.last_scan_at read is the TOCTOU this guard exists to catch")
+      .toMatch(/should_scan\(trigger,\s*read_state\(\)\.last_scan_at\.as_deref\(\),/);
   });
 
   it("persists the watermark and the observations to one file under the Compy data root", () => {

@@ -391,7 +391,9 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
     be in `Fix.tsx` (a refused apply) and `LicensePanel.tsx` (a failed activation), both fixed in
     the same commit. A second round-trip gave the first-run card a measure (62ch) so its divider and
     its Accept / No-thanks pair stop where the prose stops instead of stretching a full-width tile.
-    **Still NOT owner-approved** — he has the before/after but has not ruled.
+    **Approved by default, not pending** (corrected 2026-08-26): under the 2026-08-07 taste decree the
+    look is the lane's to decide and ship and the owner's to veto on sight, and he has the
+    before/after. It ships as built unless he says otherwise; only ARMING is his.
     `receipts_gate()` at `src-tauri/src/receipts.rs:23` is the last line
     of it, not the first, and arming is owner territory. 🪪 **owner-gated sub-item:** EU/UK distribution
     needs a region check before any sharing ships there.
@@ -871,7 +873,8 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   hard-false, an all-zero signing key, and BOTH catalog allowlists empty. Separate trust domain from
   privileged remote rules; download only, no machine-data upload. **Remaining: plan tasks 10–11
   (independent security review + arming) — arming is owner territory.**
-- [BUILT] **Tier 1 tasks 8–9 — crash-rescue deep-link + the persisted LOCAL incident observer** —
+- [x] **Tier 1 tasks 8–9 — crash-rescue deep-link + the persisted LOCAL incident observer** —
+  **LANDED 2026-08-26, PR [#223](https://github.com/Pootytxng/sentinel/pull/223) (`0e8f7835`).**
   #222, `src-tauri/src/incident_observer.rs` (+30 Rust tests). Home's permanent rescue door now
   carries a transient notice when Windows recorded a crash while the user was away; one click lands
   on THAT incident inside the Black Box, marked, with an honest negative when Windows has rotated
@@ -881,7 +884,14 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   first-ever pass seeds silently so installing Compy never announces pre-Compy crashes, and it says
   only WHAT happened and WHEN. No outbound surface, no identity, no `actions.rs` diff, and dismiss
   deletes no Windows record. Guards: `src/surfaces/care-home-route-guard.test.ts` +
-  `src/care-incident-observer-contract.test.ts`.
+  `src/care-incident-observer-contract.test.ts`. **An independent review caught three things before
+  it landed, all fixed with guards first** (bug→guard): a dismissed crash could be re-announced
+  because `incident_id` hashes the crash's INSTANT and `blackbox::merge_into` moves it when a
+  corroborating WER record lands — fixed by storing each row's matching traits and reconciling
+  shifted identities before anything decides what is new · a lost-update race plus a shared temp
+  filename on the state file — fixed with one process lock around every read-modify-write, the
+  expensive scan deliberately outside it · a guard that read raw source, so a commented-out trigger
+  could satisfy it. A second review pass at the landing head returned CLEAN.
 - [ ] **Tier 1 nit: a failed `openUrl` is invisible** — `BlackBox.tsx` `KnownIssueBlock` swallows the
   rejection deliberately (nothing to recover, nothing to claim), so if the OS has no browser handler
   the user clicks "Open the write-up" and nothing happens, indistinguishable from a dead click. Rare
