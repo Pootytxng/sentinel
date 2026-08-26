@@ -265,16 +265,17 @@ bound to a folder, a branch and an issue". **`Bash` is deliberately still unguar
 (spec §3c) that doubles as the escape hatch if the hook ever misbehaves, and a test now fails the
 build if anyone adds `Bash` to it or quietly unwires the hook. Reads stay advisory.
 
-### B_shelter. 1,100 lines of finished safety code, built and proven, never published  ·  ⏳ NEW 2026-08-25
-Issue [#128](https://github.com/Pootytxng/sentinel/issues/128) is complete and verified — it stops a
-release and an app-install from ever running over each other, which is the failure that once left you
-with an installer that exited "success" and replaced nothing. It has never been pushed. It lives as
-one commit on one machine, sheltered as the tag `preserve/local-collision-guard-707572f1` so it
-cannot be lost, and it does nothing for you sitting there.
-*Why it matters:* publishing is yours, not mine — this reaches a repo other people can pull. **One
-word and I open the PR, run the full gate and land it**; one word the other way and I retire the
-lane. It has sat undecided since 2026-08-18 because it appeared on no list you read. That is fixed by
-this line.
+### B_shelter. The collision guard — ✅ NOTHING WAS EVER WAITING ON YOU; it landed 2026-08-21
+**This row was wrong and is withdrawn.** Issue [#128](https://github.com/Pootytxng/sentinel/issues/128)'s
+1,100 lines are **on `main` and have been since 2026-08-21** — merged as `bf8e2e6e`, then hardened by
+`38279f95` to resolve its state root through the #130 resolver. Its tests run in every gate; the
+`scripts/process-mutex-guard.test.mjs` flake the handoff warns about IS this code, live.
+*Why it matters:* it stops a release and an app-install from running over each other — the failure that
+once left you with an installer that exited "success" and replaced nothing. It is protecting you now.
+*How the row got here:* it was re-derived on 2026-08-25 from the shelter tag
+`preserve/local-collision-guard-707572f1` without checking whether that commit was already an ancestor
+of `main`. It was. **Guard added so this class of stale ask cannot recur:** a shelter tag whose commit
+is reachable from `origin/main` now fails `scripts/shelter-tag-guard.test.mjs`.
 
 ### B_land. Where feedback and analytics land — ✅ DECIDED 2026-08-18  ·  full record in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 No email, no inbox: both features post to your own site like the waitlist already does, into Cloudflare D1 `compy_reports`. **Your one residual:** when the endpoints are built (Q9b) the site needs one deploy — one command, or one word to let me run it.
