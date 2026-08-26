@@ -901,6 +901,11 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [ ] **Tier 1 nit: `catalog_version` is `u64` in Rust, `number` in TS** — exact past 2^53-1 only.
   Harmless while the catalog uses small monotonic versions; revisit if it ever adopts a
   timestamp-derived scheme. Found by the same audit.
+- [ ] **Tier 1 nit: the orphan scan reads `src-tauri/src` non-recursively** —
+  `case-intelligence-outbound-guard.test.ts` builds its crate corpus with a flat `readdirSync`, so it
+  is complete today only because that directory has no subdirectories. The day a module moves into
+  one, the guard silently stops seeing it — a dead-code check that quietly covers less than it says.
+  Found by the second post-merge verification pass, 2026-08-26.
 - [ ] **`receipts.rs` shares #220's rustls-provider latent panic** — same defect class, still dark.
   Fix before Receipts is ever armed; flagged in `src-tauri/Cargo.toml`.
 - [BUILT-DARK] **Tier 2 precursor: Receipts** opt-in consent UI + payload preview —

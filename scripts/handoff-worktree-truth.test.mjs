@@ -102,6 +102,9 @@ const landedOnMain = (b) => {
  * handoff has to name. A checkout on a branch is named by its branch; a DETACHED one has no branch
  * at all, so it is named by the last segment of its path.
  *
+ * Each carrier also carries its own path, so a quoted path is only allowed to credit the checkout it
+ * actually points at — see the matcher below.
+ *
  * Rule C exists because that second shape is invisible to every other audit in this repo: they all
  * enumerate `origin` refs, and a detached checkout has none. One sat unnamed in the handoff for
  * fifteen days while `docs/BRANCH_DISPOSITIONS.md` said in as many words that "no worktree held it",
@@ -111,20 +114,26 @@ const landedOnMain = (b) => {
 export function carriersMissingFromBullet(bullet, carriers) {
   // Code spans only. A bare substring test would let a checkout whose name is also an ordinary word
   // be "named" by prose that never identifies it, which under-reports in the same silent direction
-  // as naming nothing at all. A path is credited by its last segment: the handoff writes the
-  // detached one as a full worktree path, and its identity is the segment, not the prefix.
+  // as naming nothing at all. The handoff writes a detached checkout as a worktree path rather than
+  // a name, so a path counts — but only a path that is genuinely a tail of that checkout's own.
   const spans = [...(bullet ?? "").matchAll(/`([^`]+)`/g)].map((m) => m[1]);
-  const tail = (span) => span.split(/[\\/]/).filter(Boolean).pop();
-  const named = (name) => spans.some((span) => span === name || tail(span) === name);
-  return carriers.filter((c) => c.commits > 0 && !named(c.name)).map((c) => c.name);
+  const norm = (span) => span.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  const tail = (span) => norm(span).split("/").filter(Boolean).pop() ?? "";
+  const named = (c) =>
+    spans.some((span) => {
+      if (span === c.name) return true;
+      // A quoted PATH credits a checkout only when it is genuinely a tail of THAT checkout's own
+      // path. Crediting any span whose last segment happens to equal the name would let an
+      // unrelated quoted path — a doc, a plan, another lane's file — silently account for a
+      // carrier it never identified, which under-reports in exactly the dangerous direction.
+      if (!c.path) return false;
+      const s = norm(span);
+      return s !== "" && norm(c.path).endsWith("/" + s) && tail(s) === c.name.toLowerCase();
+    });
+  return carriers.filter((c) => c.commits > 0 && !named(c)).map((c) => c.name);
 }
 
-/**
- * Checkouts whose distance from `origin/main` could not be measured at all. `null` is deliberately
- * not `0`: an unfetched or unresolvable `origin/main` makes every count throw at once, and a
- * `catch { return 0 }` would turn a total measurement failure into "nothing carries anything" —
- * a green rule that never read the handoff. These fail the build instead.
- */
+
 /**
  * `countAhead` carrying the one semantic that matters: a count that could not be TAKEN is `null`,
  * not `0`. Built from an injected runner so the total-failure path is falsifiable through the same
@@ -143,6 +152,12 @@ export function countAheadVia(runner) {
   };
 }
 
+/**
+ * Checkouts whose distance from `origin/main` could not be measured at all. `null` is deliberately
+ * not `0`: an unfetched or unresolvable `origin/main` makes every count throw at once, and a
+ * `catch { return 0 }` would turn a total measurement failure into "nothing carries anything" —
+ * a green rule that never read the handoff. These fail the build instead.
+ */
 export function unmeasuredCarriers(carriers) {
   return carriers.filter((c) => c.commits === null).map((c) => c.name);
 }
@@ -165,6 +180,7 @@ export function liveCarriers(list, countAhead) {
       const branch = branchLine ? branchLine.slice("branch ".length).replace(/^refs\/heads\//, "") : null;
       const committish = branch ?? (headLine ? headLine.slice("HEAD ".length) : null);
       return {
+        path,
         name: branch ?? path.split(/[\\/]/).filter(Boolean).pop(),
         commits: committish ? countAhead(committish) : null,
       };
@@ -207,10 +223,11 @@ describe("the handoff tells the truth about the worktrees", () => {
     // A checkout named only in prose is NOT named: the matcher reads code spans, so a carrier whose
     // name is also an ordinary word cannot be credited by a sentence that never identifies it.
     expect(carriersMissingFromBullet("- **not on main** — the recovery checkout.", [{ name: "recovery", commits: 2 }])).toEqual(["recovery"]);
-    // A detached checkout is credited by the last segment of its quoted path.
-    expect(
-      carriersMissingFromBullet("- **not on main** — `.claude/worktrees/ghost-c5660e`, detached.", [{ name: "ghost-c5660e", commits: 4 }]),
-    ).toEqual([]);
+    // A detached checkout is credited by a quoted path that is genuinely a tail of ITS path...
+    const ghost = { name: "ghost-c5660e", commits: 4, path: "C:/Users/Kuya/code/sentinel/.claude/worktrees/ghost-c5660e" };
+    expect(carriersMissingFromBullet("- **not on main** — `.claude/worktrees/ghost-c5660e`, detached.", [ghost])).toEqual([]);
+    // ...and NOT by an unrelated quoted path that merely ends in the same segment.
+    expect(carriersMissingFromBullet("- **not on main** — see `docs/notes/ghost-c5660e`.", [ghost])).toEqual(["ghost-c5660e"]);
     // An uncountable checkout is a failure, never a zero — the inert path a review caught in rule C.
     expect(unmeasuredCarriers([{ name: "lane/a", commits: 3 }, { name: "ghost", commits: null }])).toEqual(["ghost"]);
     expect(unmeasuredCarriers([{ name: "lane/a", commits: 0 }])).toEqual([]);
