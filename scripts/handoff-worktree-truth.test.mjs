@@ -91,6 +91,42 @@ const landedOnMain = (b) => {
   }
 };
 
+/**
+ * Every checkout that carries commits `origin/main` cannot reach, reduced to the one token the
+ * handoff has to name. A checkout on a branch is named by its branch; a DETACHED one has no branch
+ * at all, so it is named by the last segment of its path.
+ *
+ * Rule C exists because that second shape is invisible to every other audit in this repo: they all
+ * enumerate `origin` refs, and a detached checkout has none. One sat unnamed in the handoff for
+ * fifteen days while `docs/BRANCH_DISPOSITIONS.md` said in as many words that "no worktree held it",
+ * and both rule A and rule B passed the whole time — A only judges the branches the doc DOES name,
+ * and B only counts checkouts, which was right.
+ */
+export function carriersMissingFromBullet(bullet, carriers) {
+  const text = bullet ?? "";
+  return carriers.filter((c) => c.commits > 0 && !text.includes(c.name)).map((c) => c.name);
+}
+
+/** `git worktree list --porcelain` -> [{ name, commits }], counted against origin/main. */
+function liveCarriers(list, countAhead) {
+  return list
+    .split(/\r?\n\s*\r?\n/)
+    .map((block) => block.split(/\r?\n/).filter(Boolean))
+    .filter((lines) => lines.some((l) => l.startsWith("worktree ")))
+    .map((lines) => {
+      const path = lines.find((l) => l.startsWith("worktree ")).slice("worktree ".length);
+      const branchLine = lines.find((l) => l.startsWith("branch "));
+      const headLine = lines.find((l) => l.startsWith("HEAD "));
+      const branch = branchLine ? branchLine.slice("branch ".length).replace(/^refs\/heads\//, "") : null;
+      const committish = branch ?? (headLine ? headLine.slice("HEAD ".length) : null);
+      return {
+        name: branch ?? path.split(/[\\/]/).filter(Boolean).pop(),
+        commits: committish ? countAhead(committish) : 0,
+      };
+    })
+    .filter((c) => c.name !== "main");
+}
+
 const markdown = readFileSync(join(ROOT, HANDOFF), "utf8");
 
 describe("the handoff tells the truth about the worktrees", () => {
@@ -116,6 +152,13 @@ describe("the handoff tells the truth about the worktrees", () => {
     expect(landedBranches(["lane/a"], all, () => false)).toEqual([]);
     // An unfetched ref is unknown, not clean.
     expect(landedBranches(["lane/a"], () => false, all)).toEqual([]);
+    // Rule C, against stubs — the live tree is expected to be clean, so this is the only place the
+    // rule can be proven to FIRE rather than merely having nothing to say.
+    const bullet = "- **Two carry commits that are not on main** — `lane/a`.";
+    expect(carriersMissingFromBullet(bullet, [{ name: "lane/a", commits: 3 }])).toEqual([]);
+    expect(carriersMissingFromBullet(bullet, [{ name: "ghost-c5660e", commits: 4 }])).toEqual(["ghost-c5660e"]);
+    // A spent checkout is not owed a mention.
+    expect(carriersMissingFromBullet(bullet, [{ name: "ghost-c5660e", commits: 0 }])).toEqual([]);
   });
 
   it("A: every branch it calls unmerged is genuinely not on origin/main", () => {
@@ -147,5 +190,26 @@ describe("the handoff tells the truth about the worktrees", () => {
       `${HANDOFF} says ${stated} worktrees; this machine has ${live - 1} besides main. Re-derive it — ` +
         `the previous handoff's number is not evidence, and the same paragraph tells the reader to reset them.`,
     ).toBe(live - 1);
+  });
+
+  it("C: every checkout carrying commits is named — including one with no branch at all", () => {
+    const countAhead = (committish) => {
+      try {
+        return Number(git("rev-list", "--count", `origin/main..${committish}`));
+      } catch {
+        return 0;
+      }
+    };
+    const carriers = liveCarriers(git("worktree", "list", "--porcelain"), countAhead);
+    if (!carriers.some((c) => c.commits > 0)) {
+      // Vacuous by construction on a clean machine. Say so rather than reporting a silent pass.
+      expect(carriers.length).toBeGreaterThanOrEqual(0);
+      return;
+    }
+    const missing = carriersMissingFromBullet(repoStateBullet(markdown), carriers);
+    expect(
+      missing,
+      `${HANDOFF} does not name ${missing.length} checkout(s) that carry commits origin/main cannot reach: ${missing.join(", ")}. \nA detached checkout has no ref, so no origin-facing audit can see it — this bullet is the only place it can be recorded.`,
+    ).toEqual([]);
   });
 });

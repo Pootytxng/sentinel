@@ -391,9 +391,10 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
     be in `Fix.tsx` (a refused apply) and `LicensePanel.tsx` (a failed activation), both fixed in
     the same commit. A second round-trip gave the first-run card a measure (62ch) so its divider and
     its Accept / No-thanks pair stop where the prose stops instead of stretching a full-width tile.
-    **Approved by default, not pending** (corrected 2026-08-26): under the 2026-08-07 taste decree the
-    look is the lane's to decide and ship and the owner's to veto on sight, and he has the
-    before/after. It ships as built unless he says otherwise; only ARMING is his.
+    **Ships by default, not pending** (2026-08-26): the 2026-08-07 decree makes the look the lane's
+    to ship and the owner's to veto on sight, and he has the before/after. Only ARMING is his. Said
+    honestly — the decree carves out what reaches other people's machines, so a consent screen is
+    the closest case yet: first application, not settled precedent.
     `receipts_gate()` at `src-tauri/src/receipts.rs:23` is the last line
     of it, not the first, and arming is owner territory. 🪪 **owner-gated sub-item:** EU/UK distribution
     needs a region check before any sharing ships there.

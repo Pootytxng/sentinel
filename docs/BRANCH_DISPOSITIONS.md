@@ -77,7 +77,11 @@ dropped in this commit:
   another path, which is exactly what that disposition means). Both of its contributions are on the
   trunk: **A_disk** is in `docs/OWNER_ACTION_CHECKLIST.md` and has since been *closed* (2026-08-11/12)
   and archived (2026-08-18), and the duplicate `origin/docs/design-foundation` row it existed to drop
-  is dropped by this same commit. Nothing of it is left to land, and no worktree held it.
+  is dropped by this same commit. Nothing of it is left to land. **Correction 2026-08-26: this row
+  used to end "and no worktree held it", which was false for fifteen days.** `.claude/worktrees/merge-prs-tauri-visibility-c5660e` holds it detached at `defcf0ff`, four commits
+  `origin/main` cannot reach — 2026-08-11 edits to two docs since rewritten, so landing them is a
+  re-derivation. No guard saw it: an audit that reads `origin` refs is blind to a branchless
+  checkout. Rule C of `scripts/handoff-worktree-truth.test.mjs` now fails on that shape.
 
 **[#160](https://github.com/Pootytxng/sentinel/pull/160) is no longer one of them — MERGED
 2026-08-24** as `bf1b56c8`, adopted on the owner’s *“clear up any remaining work”* turn after four idle

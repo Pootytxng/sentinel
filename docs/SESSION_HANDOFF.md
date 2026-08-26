@@ -31,10 +31,15 @@ background machinery — exactly three triggers, all user-caused — makes no ca
 and `git diff … -- src-tauri/src/actions.rs` is **empty**, so the one Windows-mutation boundary is
 untouched.
 
-- **Ten worktrees besides `main`. Six are spent; four carry commits that are not on main — do
-  NOT delete or hard-reset those four before checking them**: `feat/user-feedback-lab-recovery`
+- **Ten worktrees besides `main`. Five are spent; five carry commits that are not on main — do
+  NOT delete or hard-reset those five before checking them**: `feat/user-feedback-lab-recovery`
   (49) · `feat/lab-49-parity-port` (6) · `lane/cleanup-train-2026-08-20` (5) ·
-  `lane/vision-pointer-guard-2026-08-24` (3). `C:\Users\Kuya\code\sentinel-care89` was retired
+  `lane/vision-pointer-guard-2026-08-24` (3) · and one carrying **no branch name at all**,
+  `.claude/worktrees/merge-prs-tauri-visibility-c5660e`, detached at `defcf0ff`, 4 commits
+  (the `claude/checklist-disk-item-c5660e` lineage). It hid for fifteen days because every audit
+  here reads `origin` refs and a detached checkout has none; rule C of
+  `scripts/handoff-worktree-truth.test.mjs` now fails the build if a checkout carries commits and
+  this bullet does not name it. `C:\Users\Kuya\code\sentinel-care89` was retired
   outright on 2026-08-26 once #223 landed, and `sentinel-local-collision-guard` was retired on
   2026-08-25 once git confirmed #128 had been on `main` since 2026-08-21. Re-derive with
   `git worktree list` and `git rev-list --count origin/main..<branch>`; never carry these numbers

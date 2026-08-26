@@ -316,8 +316,12 @@ These gate **public** release only (not the local app you use daily). Full list:
   real off switch, `EULA.md` §10, `PRIVACY.md` v0.6, and the receiver deployed + empty on your yes.
   Your 2026-08-24 ruling holds — **opt-in, default OFF even after arming**, because the shipped
   description already promises "No telemetry". **ONE thing is on you, not two — corrected 2026-08-26.**
-  ① ~~how the disclosure card looks~~ is **not** yours to rule on and never was: the 2026-08-07 taste
-  decree makes the look mine to decide and ship, yours to veto on sight. It has a visual self-review
+  ① ~~how the disclosure card looks~~ ships as a taste call instead of waiting on you: the
+  2026-08-07 decree makes the look mine to ship, yours to veto on sight. **Said honestly, because a
+  reviewer pushed back on the flat version:** that decree carves out what reaches other people's
+  machines, so a consent screen is the closest case yet — first application, not settled precedent.
+  The fix itself was a legibility defect, squarely taste's side. Want consent surfaces yours by
+  class? Say so and it becomes a rule. It has a visual self-review
   **PASS 12/12** (2026-08-25, two fix round-trips — a refused consent write was rendering in the same
   calm grey as ordinary copy, fixed in `b20e59dc` along with the identical defect in `Fix.tsx` and
   `LicensePanel.tsx`), and you already have its before/after. Saying nothing is a valid answer; it
