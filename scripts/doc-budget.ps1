@@ -121,7 +121,14 @@ $byteBudgets = @{
 # file. A phantom overflow here tells the next session to archive live rows, so the host must not
 # be able to move the number. Run it with either; scripts/doc-budget-guard.test.mjs pins this.
 $sectionByteBudgets = @{
-  "docs/BACKLOG.md::NEXT UP" = 12544
+  # 12544 -> 12288 on 2026-08-26. NEXT UP FAILED at 13320 when the #213 A1 and #219 rulings
+  # were recorded, and the payment came from the archive: five archive-POINTER blocks (each one
+  # a stub for work already in BACKLOG_ARCHIVE.md, five separate collapsed notes costing their
+  # bytes on every read) plus the A2/A3 not-a-defect finding moved out verbatim, leaving one
+  # consolidated pointer. 13320 -> 11775. The ratchet banks 256 of the 1545 bytes freed; the
+  # rest is deliberate room, because this queue is where a NEW owner bug report lands and a
+  # zero-headroom cap would fail the session that answers him.
+  "docs/BACKLOG.md::NEXT UP" = 12288
   "docs/BACKLOG.md::Conformance queue" = 26624
   "docs/BACKLOG.md::HQ STEERING LOG" = 4608
 }

@@ -7,6 +7,60 @@
 
 ---
 
+## 2026-08-26 — five NEXT UP archive-pointer blocks, moved verbatim (BACKLOG section byte cap)
+
+Moved out of `docs/BACKLOG.md` ▶ NEXT UP to pay for the #213 A1 and #219 ruling records. Every one
+of these was itself a *pointer* to work already archived here — five separate collapsed stubs, each
+costing its bytes on every read of the live queue. They are re-joined to the records they point at,
+and the live queue now carries one line instead of five blocks. Byte-for-byte, nothing re-worded;
+the relative links need no re-pointing because both files sit in `docs/`.
+
+**① The COLOR-1 / PR #194 stub (written 2026-08-25):**
+
+> **One more CLOSED block moved verbatim to [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) 2026-08-25**
+> (section cap): the 2026-08-22 record of PR #194 landing and COLOR-1 never having been open. Its
+> guard outlived it — `../src/ui-vision-status-guard.test.ts` carries that lesson in code.
+
+**② The 2026-08-22 "state of this queue" stub (written 2026-08-25):**
+
+> **And the 2026-08-22 "state of this queue" block, same treatment** (archive, byte-for-byte). It
+> recorded items 1 and 4 done, item 5 as the Codex lane's, and items 2/3 closed only to the limit
+> of this desk — detail that now lives in the #121 and #128 rows below. The one line worth keeping
+> in front of a reader: **an empty non-gated queue is not an empty project.** The conformance queue,
+> the UI vision backlog and PHASE B/C/D all hold real work that is gated or waiting on a decision.
+
+**③ The two-rows-closed-2026-08-22 stub (written 2026-08-24):**
+
+> **Two rows CLOSED 2026-08-22 moved verbatim to [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)**
+> (2026-08-24, NEXT UP section cap, to pay for the #213 row above): the cold-start non-regression
+> that exonerated `795d8ff5`/#130, and the `compy.gg` pricing row and its two corrections.
+
+**④ The #160 + primary-checkout-trap stub (written 2026-08-25):**
+
+**Two CLOSED rows moved verbatim to [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) 2026-08-25** —
+#160 landing on main (`bf1b56c8`, #158 closed with it) and the 2026-08-23 primary-checkout trap
+discharge, whose commit numbers are now stale. Both are history; re-derive that state, never quote it.
+
+**⑤ The cutline-rows stub (written 2026-08-20), the oldest row in the queue:**
+
+- [x] **Cutline rows SHIPPED 2026-08-18 → 2026-08-19, moved verbatim to
+  [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-20, byte budget, to pay for the NEXT UP
+  queue above): the product-conformance drift class + Cowork's 469-line audit, the Home front-door
+  restructure (UX-1 ②), and C-12's command-palette doc drift. All three were closed records, not work.
+
+**⑥ The A2/A3 not-a-defect finding (written 2026-08-24), the counter-precedent that became
+rubric item 12 in `.claude/agents/self-reviewer.md`:
+
+- **A2 and A3 were NOT defects.** A2's "orphan bracket" is
+  [`../src/design/console/hud-frame.css`](../src/design/console/hud-frame.css) drawing all four
+  corners symmetrically, default-on and working. A3's "clipped left edge" was the reviewing tool
+  passing `GetWindowRect` — which includes the invisible DWM resize border — to `CopyFromScreen`,
+  so the capture took ~8px of desktop and another window's text showed through it. **Prove the
+  pixels before calling something a defect**; that is now the counter-precedent inside rubric item
+  12.
+
+---
+
 ## 2026-08-26 — P1 stabilization (Q4 · Q5 · Q6 · Q7), moved verbatim (BACKLOG section byte cap)
 
 Moved out of docs/BACKLOG.md ▶ Conformance queue to pay for the P2 first-win entry recorded beside

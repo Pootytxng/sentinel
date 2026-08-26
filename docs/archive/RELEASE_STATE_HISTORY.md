@@ -4,6 +4,17 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-08-26 - the 456827bb desk row (the first-win journey), moved verbatim
+
+Superseded the same day by the 014a3e8c desk build, which carries the two owner rulings of
+2026-08-26 (#213 A1, the `©ompy` mark; #219, the counting headline). Moved byte-for-byte out of the
+Owner-installed row in docs/RELEASE_STATE.md, which carries a 3000-byte cap. Nothing re-worded,
+except the row's label cell and the one relative link, which is re-pointed for this file's own
+directory level.
+
+| **0.9.26 desk build, embedded stamp `456827bb`** | **0.9.26 desk build, embedded stamp `456827bb`** — built 2026-08-26 from the PRIMARY checkout on `main`, installed silently by Claude via `scripts/ship-reinstall.ps1`, one installer on the Desktop, installer `Compy_0.9.26_x64-setup.exe` SHA-256 **`E9CF426BD472244C4312B8E050CF3E0970756CDBCF39BA585C32F8EC0A4F3FB8`**. **Live == build proved by the embedded stamp, never an exe hash** — `-ProofOnly -ExpectedCommit` against the ship script: `456827bb · release · shell 0.9.26`, **proof attempts 1 (0 expected transient)**. **ON `main`, UNDISTRIBUTED**: no publish, no tag, no updater move. **Unsigned by construction** — `TAURI_SIGNING_PRIVATE_KEY` is owner territory and absent. It carries the **first-win journey** (P2 / [#49](https://github.com/Pootytxng/sentinel/issues/49)): `FirstWin` on Home follows the user's OWN first live change from press to proof to undo — it re-reads `get_recommendations` and compares the ledger's `is_still_active` against the machine's `currently_applied`, offers the already-audited `rollback_change`, and states **no speed result**, because no play session has happened. **PASS self-review (12/12)** over six fixture states and their click sequences; verdict contrast measured **held 5.1:1**, **reverted 9.5:1** (amber, never danger), **unreadable 5.6:1**. A race was caught and guarded mid-build: reading `recs` back through a ref after the PARENT's refresh would have confirmed a REVERTED change as held, because that refresh resolves before React re-renders. Its predecessor **`5a3b5e1c`** (#213 B3 — the verdict headline measured against its real 452px column, stepping down one type level past the break), **`0fbabb93`** (#213 B5, every plane boundary drawing the comps' two-row bevel) and the desk lineage behind them — `4d65902e`, `b2b740bf`, `6c054b77`, `f223466a`, `ccc17355`, `8b1599b3`, **`5e64074c`** (THE PUBLISHED BUILD) — are byte-preserved in [RELEASE_STATE_HISTORY.md](RELEASE_STATE_HISTORY.md). | `node scripts/verify-release-state.mjs` (check 7) · `Select-String -Path "$env:LOCALAPPDATA\Compy\compy.exe" -Pattern 456827bb` · HKCU uninstall `DisplayVersion` — **both from a non-containerized session only** (a packaged host sees `%LOCALAPPDATA%`/`HKCU` through an overlay) |
+
+
 ### 2026-08-26 - the 5a3b5e1c desk row (#213 B3, the verdict-headline fit rule), moved verbatim
 
 Superseded on 2026-08-26 by the 456827bb desk build (the first-win journey). Moved byte-for-byte out

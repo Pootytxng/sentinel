@@ -361,31 +361,17 @@ numbering, the motion default, the sibling-slop sweep) moved 2026-08-22 to
   rename on 2026-08-19; the rail ships it (`src/design/homeRail.ts:17`). Everything else in that queue
   is taste and therefore mine — I ship it and hand you a before/after to veto on sight, per the
   2026-08-07 decree.
-- 🔨 **The wordmark reads `©ompy`** ([#213](https://github.com/Pootytxng/sentinel/issues/213) A1)  ·  ⏳ NEW 2026-08-24
-  **This one is yours because it is the logo**, not because it is a taste call — a glyph that changes
-  what the mark READS as is a rendering defect, and the amendment adopted today says so (rubric item 12,
-  `.claude/agents/self-reviewer.md`). At the rail's real 16px, `Wordmark.css:17`'s `-0.053em` tuck pulls
-  the "o" into the C's mouth until the ring reads closed, and the lavender heartbeat sitting inside it
-  finishes the © signature. Two causes; fixing the kern alone does not clear it.
-  **Recommendation, not a menu — drop the interior pulse below ~24px only.** The arc geometry is
-  untouched, the pulse-C survives everywhere it is big enough to read (site header, About, splash), and
-  the triple-click egg is preserved by revealing the pulse during its beat instead of at rest. Rendered
-  at true rail size and sent to you 2026-08-24. Say no and it stays as it is.
-  **Correction 2026-08-25 — this is not a regression, it is the mark you approved.** The same
-  arc-plus-crosshair C reads as `©` at rail size in `01-health-approved.png`, one of the four comps
-  you signed off on 2026-08-23. Nothing crept in. The recommendation above is unchanged; what changed
-  is that saying "leave it" is choosing what you already chose, not tolerating a bug.
-
-- 🔨 **The verdict headline's "· and 3 more" tail** ([#219](https://github.com/Pootytxng/sentinel/issues/219))  ·  ⏳ NEW 2026-08-25
-  **Only here because the fix edits a line you already ruled on**, not because the look is your call.
-  Your Health headline was drawing THREE lines where your approved comp draws two — measured on your
-  own machine, 172px of headline against the picture's 114px. Fixed and shipped (`5a3b5e1c`): a long
-  headline now sets one step smaller and fits two lines again. What is left is the "· and 3 more"
-  tail, which adds 13 characters to a headline that already fit, and the only clean place to move it
-  is the sentence underneath — and that sentence is **your** pick from 2026-08-20 (#180 §C: in the
-  attention state it prints the flagged check's own detail). **Recommendation: move the count down
-  into that sentence and leave the headline naming the one real thing.** Say no and the three longest
-  headlines keep wrapping to three lines; nothing breaks either way.
+- ✅ **The wordmark reading `©ompy` — RULED AND SHIPPED 2026-08-26** ([#213](https://github.com/Pootytxng/sentinel/issues/213) A1)
+  You chose "drop the inner ring when tiny". Done: below 22px the heartbeat inside the C is not drawn,
+  so the rail mark reads **Compy**. The threshold is 22 rather than the ~24 I proposed because a
+  capture at 16/19/20/22/24 measured the pulse legible at 22 — Settings → About draws it at exactly
+  that size and keeps its flourish. Your triple-click egg still plays at rail size: the pulse appears
+  for the beat, then tucks away. Nothing else about the mark moved. Before/after sent to you.
+- ✅ **The verdict headline's "· and 3 more" tail — RULED AND SHIPPED 2026-08-26** ([#219](https://github.com/Pootytxng/sentinel/issues/219))
+  You chose "drop the count from the headline". Done: the big line names the one flagged thing and
+  stops. Nothing is hidden — the line under it still prints the honest proportion ("15 of 16 checks
+  look good.") and every other flagged check is still listed by name below. The retired translation
+  string is deleted in both languages so it cannot be wired back up by accident.
 
 ---
 

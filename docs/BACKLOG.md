@@ -33,37 +33,33 @@
 > **Take the top unblocked item.** Owner items are named once, with a pointer —
 > [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) stays their home.
 
-> **One more CLOSED block moved verbatim to [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) 2026-08-25**
-> (section cap): the 2026-08-22 record of PR #194 landing and COLOR-1 never having been open. Its
-> guard outlived it — `../src/ui-vision-status-guard.test.ts` carries that lesson in code.
-
-> **And the 2026-08-22 "state of this queue" block, same treatment** (archive, byte-for-byte). It
-> recorded items 1 and 4 done, item 5 as the Codex lane's, and items 2/3 closed only to the limit
-> of this desk — detail that now lives in the #121 and #128 rows below. The one line worth keeping
-> in front of a reader: **an empty non-gated queue is not an empty project.** The conformance queue,
-> the UI vision backlog and PHASE B/C/D all hold real work that is gated or waiting on a decision.
+> **Six CLOSED blocks collapsed into this one 2026-08-26** (NEXT UP section byte cap, to pay for
+> the #213 A1 and #219 rulings below). All six are in
+> [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md), byte-for-byte: the COLOR-1/PR #194 record, the
+> 2026-08-22 "state of this queue" block, the two-row moves of 2026-08-24 and 2026-08-25 and the
+> 2026-08-18→19 cutline rows — five stubs pointing at one archive — plus the A2/A3 not-a-defect
+> finding, whose lesson outlives it as rubric item 12 in `.claude/agents/self-reviewer.md`. The one
+> sentence worth keeping in front of a reader: **an empty non-gated queue is not an empty project**
+> — the conformance queue, the UI vision backlog and PHASE B/C/D hold real work, gated or awaiting
+> a decision.
 
 #### ① A PERSON REPORTED IT AND WE HAVE NOT ANSWERED — these outrank everything
-
-
-> **Two rows CLOSED 2026-08-22 moved verbatim to [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)**
-> (2026-08-24, NEXT UP section cap, to pay for the #213 row above): the cold-start non-regression
-> that exonerated `795d8ff5`/#130, and the `compy.gg` pricing row and its two corrections.
 
 **① REFILLED 2026-08-24 — the owner reported five rendering defects, and ① is where they landed.**
 [#213](https://github.com/Pootytxng/sentinel/issues/213) · [#211](https://github.com/Pootytxng/sentinel/issues/211).
 Three of the five are real and **two were not**, which is the finding worth keeping.
 
 - **A4/A5 (raw rail tooltip · the titlebar printing "Compy" beside the wordmark) and #211 (a room's `<h1>` welded to a live measurement) — all FIXED, rows moved verbatim to [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) 2026-08-26** (section cap). Their guards outlive them in the tree: `../src/design/shell-native-tooltip-guard.test.tsx` and `../src/design/heading-is-a-name-guard.test.tsx`.
-- **A2 and A3 were NOT defects.** A2's "orphan bracket" is
-  [`../src/design/console/hud-frame.css`](../src/design/console/hud-frame.css) drawing all four
-  corners symmetrically, default-on and working. A3's "clipped left edge" was the reviewing tool
-  passing `GetWindowRect` — which includes the invisible DWM resize border — to `CopyFromScreen`,
-  so the capture took ~8px of desktop and another window's text showed through it. **Prove the
-  pixels before calling something a defect**; that is now the counter-precedent inside rubric item
-  12.
-- **A1 (the wordmark reads `©ompy`) is the owner's**, and only because the taste decree reserves the
-  logo — [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) §D, recommendation attached.
+- **A1 (the wordmark reads `©ompy`) — RULED AND SHIPPED 2026-08-26** (`014a3e8c`, self-review PASS).
+  The owner chose "drop the inner ring when tiny". `PULSE_MIN_SIZE` in
+  [`../src/design/Wordmark.tsx`](../src/design/Wordmark.tsx) is **22**, not the ~24 proposed:
+  captured at 16/19/20/22/24 with live token values, the pulse reads as an enclosed blob at 16 and
+  19, marginal at 20, a legible zigzag at 22 — and Settings → About draws the mark at exactly 22,
+  so the flourish stays where it measures readable. Below it the polyline is ABSENT, not
+  transparent (a sub-pixel stroke still fattens the ring, which is the mechanism). The triple-click
+  egg survives by revealing the pulse for its own redraw, closed by a TIMER — under reduced motion
+  `animation: none` means `animationend` never fires and the pulse would strand on screen.
+  Guard `../src/design/wordmark-small-size-guard.test.tsx`, falsified four ways.
 - **The process amendment landed as a guard, not a paragraph** (`565281c4`): *a clipped element, an
   overlapping glyph, or an unstyled native control is a correctness failure, not a matter of taste*
   is rubric item 12 in `.claude/agents/self-reviewer.md`, ALWAYS-on, named regions required as
@@ -87,9 +83,12 @@ headline at all. Measured on the installed build, counting real line boxes: the 
 "Compy changes were turned back off" (34, **the state his machine is in**) draws **3**, and the
 worst multi-flag headline draws **4**. `--type-hero` is comp-derived and untouched; past the
 measured break the headline steps down one to `--type-verdict`, restoring 2 lines out to 43
-characters and worsening nothing. Residual, recorded not guessed: every remaining 3-liner is the
-`· and N more` suffix, which is verdict copy in two locales and the owner's own
-name-it-and-fix-it-inline law — it gets a decision, not a drive-by edit.
+characters and worsening nothing. The residual — every remaining 3-liner being the
+`· and N more` suffix — went to the owner as a decision rather than a drive-by edit, and
+**he ruled on 2026-08-26 ([#219](https://github.com/Pootytxng/sentinel/issues/219)): drop the count
+from the headline.** Shipped in `014a3e8c`: the attention headline is the flagged check's label and
+stops. Nothing is hidden — the sub still prints the proportion ("15 of 16 checks look good.") and
+the list below still names every check. `home.posture.attentionMore` is deleted from BOTH locales.
 **B4 joins B2 as approved design** — the comp draws the nav numerals as bordered chips. Two A-list
 items also came back wrong: **A5's fix deviates from the comp** (it prints "Compy" in both places on
 purpose) and **A1's `©ompy` is in the comp too**, so it is the mark he approved, not a regression.
@@ -130,10 +129,6 @@ lab-49-parity-port). Evidence:
 [`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md), now at **120/120** against its doc-budget ceiling,
 so the next branch pushed to origin must archive that file's current sweep before it can add its row.
 
-**Two CLOSED rows moved verbatim to [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) 2026-08-25** —
-#160 landing on main (`bf1b56c8`, #158 closed with it) and the 2026-08-23 primary-checkout trap
-discharge, whose commit numbers are now stale. Both are history; re-derive that state, never quote it.
-
 **ALSO OPEN, not yet queued** (so none of it drops silently): **#64** Q2b main-window caller checks
 — open but DEFERRED BY DECISION, re-verified against its own trigger list 2026-08-25 and the reasons
 still hold · **#54/#55** Project Doctor, Codex-claimed against a worktree that no longer exists (a
@@ -161,10 +156,6 @@ funnel + monetization inputs (B3/B6 — the `llms.txt` price line came off this 
 substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-screen forks
 (B_startup/B_gpu), the analytics region question (B_eu), and the §C money/legal gates.
 
-- [x] **Cutline rows SHIPPED 2026-08-18 → 2026-08-19, moved verbatim to
-  [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md)** (2026-08-20, byte budget, to pay for the NEXT UP
-  queue above): the product-conformance drift class + Cowork's 469-line audit, the Home front-door
-  restructure (UX-1 ②), and C-12's command-palette doc drift. All three were closed records, not work.
 - [ ] **Extend the Codex weekly automation with product-conformance scope, and make it write INTO the
   repo.** Today it is coordination-only (branches/claims/worktrees) and writes to `$CODEX_HOME`,
   outside the repo, where no lane ever reads it — which is why six days of drift went unseen. The
