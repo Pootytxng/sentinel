@@ -823,6 +823,7 @@ type T<X> = Result<X, CaseTrustError>;
 /// point can build it from compiled constants and the clock while tests can build it from fixtures —
 /// the same code path either way, which is the point: a test must not be able to take a shortcut a
 /// download cannot.
+#[derive(Clone)]
 struct CaseTrustContext<'a> {
     key: &'a CaseSigningKey,
     catalog_origins: &'a [&'a str],
@@ -1011,6 +1012,255 @@ pub(crate) fn verify_catalog_chain(
     )
 }
 
+// ─── Last-known-good cache ─────────────────────────────────────────────────
+//
+// Plan task 4. Compy is offline most of the time, so the useful question is not "can we fetch" but
+// "what do we still hold that we can still prove". This cache answers that and nothing else.
+//
+// **One file, not two.** The obvious layout is `manifest.json` beside `catalog.json`, and it is
+// wrong: two renames cannot be one atomic act, so an interruption between them leaves a manifest
+// describing a catalog that is no longer there. Verification would catch the mismatch — but the
+// cost is losing a perfectly good last-known-good copy to a power cut. Both documents go into ONE
+// envelope written to one temp file and swapped in with one rename, so the pair is committed
+// whole or not at all. The raw bytes are preserved exactly, because a re-serialized document is a
+// different document to a signature.
+//
+// **Verified in, verified out.** `cache_store_verified` runs the full trust chain before it writes,
+// and `cache_load_verified` runs it again on every read. The second pass is the one that matters:
+// the cache lives in the user's own writable data directory, so anything that can be written there
+// by anyone can be written there by anything. A cached catalog gets exactly as much trust as a
+// freshly downloaded one — none, until it verifies.
+//
+// **There is no embedded fallback catalog, deliberately.** Remote *rules* ship an embedded baseline
+// because Compy must still have a rule set with no network. Tier 1 is the opposite: it has nothing
+// to say unless someone has written the case up, and an embedded catalog would be advisory text
+// with a frozen expiry that no revocation could ever reach. No catalog is the honest state, and the
+// crash station already renders it as today's behavior — nothing.
+//
+// **Namespacing.** Everything lives under `%APPDATA%\Compy\case-intelligence\`, which is not the
+// Trust Ledger, not the remote-rules cache and not the support-evidence record. Nothing local ever
+// goes in: the envelope holds the downloaded documents verbatim and no incident, match, machine
+// fact or timestamp of our own.
+
+/// The cache directory name. A dedicated namespace so "clear the advisory cache" can never be one
+/// slipped path segment away from clearing the rollback history.
+const CASE_CACHE_DIR_NAME: &str = "case-intelligence";
+
+/// The single file the namespace holds. Anything else in that directory is debris.
+const CASE_CACHE_FILE_NAME: &str = "last-known-good.json";
+
+/// Envelope schema. Separate from `CASE_SCHEMA_VERSION` on purpose: how Compy stores a catalog on
+/// disk is a local implementation detail, and bumping it must not look like the signed wire format
+/// changed.
+const CASE_CACHE_ENVELOPE_VERSION: u32 = 1;
+
+/// Read cap for the envelope, enforced before it is parsed. The two documents plus JSON string
+/// escaping and the wrapper — escaping can at worst double a document, so the slack is generous
+/// rather than tight, and its job is only to stop an unbounded read.
+const CASE_CACHE_MAX_BYTES: usize = 2 * (CASE_MANIFEST_MAX_BYTES + CASE_CATALOG_MAX_BYTES) + 4096;
+
+/// Why the cache could not be used. `Missing` is the ordinary state, not a fault: a machine that has
+/// never fetched a catalog is exactly as healthy as one that has.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum CaseCacheError {
+    /// No cached catalog. The normal state, and the one this build always ships in.
+    Missing,
+    /// The filesystem refused. Never fatal — Tier 1 is advisory, so a broken cache means no advice.
+    Io(String),
+    /// The envelope exceeded its read cap, refused before parsing.
+    Oversize { found: usize, max: usize },
+    /// The envelope itself is not readable as an envelope.
+    Corrupt(String),
+    /// The envelope was intact but the documents inside it did not verify.
+    Untrusted(CaseTrustError),
+}
+
+impl std::fmt::Display for CaseCacheError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Missing => write!(f, "no cached case catalog"),
+            Self::Io(m) => write!(f, "case catalog cache is unreadable: {m}"),
+            Self::Oversize { found, max } => {
+                write!(f, "case catalog cache is {found} bytes, read cap is {max}")
+            }
+            Self::Corrupt(m) => write!(f, "case catalog cache is corrupt: {m}"),
+            Self::Untrusted(e) => write!(f, "cached case catalog no longer verifies: {e}"),
+        }
+    }
+}
+
+/// The two downloaded documents, verbatim, and nothing else. `deny_unknown_fields` means a future
+/// attempt to tuck a local fact in here fails to parse rather than quietly persisting it.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CaseCacheEnvelope {
+    envelope_version: u32,
+    manifest: String,
+    catalog: String,
+}
+
+/// `%APPDATA%\Compy\case-intelligence\`. Built on `compy_data_dir()` — the READ root. Tier 1 never
+/// needs `data_root::mutation_root()` and must never acquire it: a `MutationRoot` is authorization
+/// to change Windows and file a receipt, and an advisory download has no business holding one.
+pub(crate) fn case_cache_dir() -> std::path::PathBuf {
+    crate::compy_data_dir().join(CASE_CACHE_DIR_NAME)
+}
+
+fn case_cache_file(dir: &std::path::Path) -> std::path::PathBuf {
+    dir.join(CASE_CACHE_FILE_NAME)
+}
+
+/// Verify a freshly fetched pair and, only if it verifies, commit it as the new last-known-good.
+///
+/// Verification is INSIDE this function rather than a precondition on the caller, so there is no
+/// version of the call that writes something unproven. The write is a temp file plus one rename —
+/// on Windows `std::fs::rename` maps to `MoveFileEx` with `REPLACE_EXISTING`, so an interrupted
+/// store can only ever leave the previous good envelope plus an ignorable `.tmp`.
+fn cache_store_verified(
+    dir: &std::path::Path,
+    raw_manifest: &[u8],
+    raw_catalog: &[u8],
+    cx: &CaseTrustContext<'_>,
+) -> Result<CaseCatalogManifest, CaseCacheError> {
+    let (manifest, _) =
+        verify_chain_with(raw_manifest, raw_catalog, cx).map_err(CaseCacheError::Untrusted)?;
+
+    // Both documents parsed as JSON during verification, so both are valid UTF-8 by construction;
+    // the error arm is unreachable and is written as an error rather than an unwrap anyway.
+    let envelope = CaseCacheEnvelope {
+        envelope_version: CASE_CACHE_ENVELOPE_VERSION,
+        manifest: std::str::from_utf8(raw_manifest)
+            .map_err(|e| CaseCacheError::Corrupt(e.to_string()))?
+            .to_string(),
+        catalog: std::str::from_utf8(raw_catalog)
+            .map_err(|e| CaseCacheError::Corrupt(e.to_string()))?
+            .to_string(),
+    };
+    let body = serde_json::to_vec(&envelope).map_err(|e| CaseCacheError::Corrupt(e.to_string()))?;
+
+    std::fs::create_dir_all(dir).map_err(|e| CaseCacheError::Io(e.to_string()))?;
+    let path = case_cache_file(dir);
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, &body).map_err(|e| CaseCacheError::Io(format!("write: {e}")))?;
+    std::fs::rename(&tmp, &path).map_err(|e| CaseCacheError::Io(format!("swap: {e}")))?;
+    Ok(manifest)
+}
+
+/// Read the last-known-good pair and put it through the full trust chain again.
+///
+/// Order: read cap → envelope parse → envelope version → trust chain. The cap runs on the file's
+/// length before a byte of it is parsed, so a hostile or corrupt multi-megabyte file costs a stat
+/// and nothing else.
+fn cache_load_verified(
+    dir: &std::path::Path,
+    cx: &CaseTrustContext<'_>,
+) -> Result<(CaseCatalogManifest, CaseCatalog), CaseCacheError> {
+    let path = case_cache_file(dir);
+    let meta = match std::fs::metadata(&path) {
+        Ok(m) => m,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(CaseCacheError::Missing),
+        Err(e) => return Err(CaseCacheError::Io(e.to_string())),
+    };
+    if meta.len() > CASE_CACHE_MAX_BYTES as u64 {
+        return Err(CaseCacheError::Oversize {
+            found: meta.len() as usize,
+            max: CASE_CACHE_MAX_BYTES,
+        });
+    }
+
+    let body = std::fs::read(&path).map_err(|e| CaseCacheError::Io(e.to_string()))?;
+    let envelope: CaseCacheEnvelope =
+        serde_json::from_slice(&body).map_err(|e| CaseCacheError::Corrupt(e.to_string()))?;
+    if envelope.envelope_version != CASE_CACHE_ENVELOPE_VERSION {
+        return Err(CaseCacheError::Corrupt(format!(
+            "envelope_version {} is not {CASE_CACHE_ENVELOPE_VERSION}",
+            envelope.envelope_version
+        )));
+    }
+
+    verify_chain_with(envelope.manifest.as_bytes(), envelope.catalog.as_bytes(), cx)
+        .map_err(CaseCacheError::Untrusted)
+}
+
+/// The monotonicity floor for a fresh download: the `catalog_version` of the copy that currently
+/// VERIFIES, never a number read out of an unverified file.
+///
+/// Taken from a verified load with the floor itself set to zero — the cache cannot be its own
+/// rollback evidence. If the cached copy no longer verifies (tampered, expired, key rotated) the
+/// floor is zero, which is correct: a version nobody can prove is not evidence of anything.
+///
+/// Someone with write access to the user's data directory can therefore reset the floor. That is
+/// not a hole this cache can close — the same access could delete the file outright — and it is why
+/// the floor is a freshness heuristic layered on top of the signature, never a substitute for it.
+fn cache_floor_version(dir: &std::path::Path, cx: &CaseTrustContext<'_>) -> u64 {
+    let mut at_zero = cx.clone();
+    at_zero.last_seen_catalog_version = 0;
+    cache_load_verified(dir, &at_zero)
+        .map(|(manifest, _)| manifest.catalog_version)
+        .unwrap_or(0)
+}
+
+/// Remove the case-intelligence namespace and nothing else. Scoped to the directory this module
+/// owns, so it can never reach the Trust Ledger, a session file or an export.
+fn cache_clear(dir: &std::path::Path) -> Result<(), CaseCacheError> {
+    match std::fs::remove_dir_all(dir) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(CaseCacheError::Io(e.to_string())),
+    }
+}
+
+/// Delete anything in the namespace that is not the one file it is supposed to hold — an abandoned
+/// `.tmp`, a rename left over from an older layout. This is the file-count cap: the directory holds
+/// exactly one file, and everything else is debris rather than data.
+fn cache_prune(dir: &std::path::Path) -> Result<usize, CaseCacheError> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(e) => return Err(CaseCacheError::Io(e.to_string())),
+    };
+    let mut removed = 0;
+    for entry in entries.flatten() {
+        if entry.file_name() == CASE_CACHE_FILE_NAME {
+            continue;
+        }
+        let path = entry.path();
+        let ok = if path.is_dir() {
+            std::fs::remove_dir_all(&path).is_ok()
+        } else {
+            std::fs::remove_file(&path).is_ok()
+        };
+        if ok {
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
+/// The read every caller actually wants: the catalog if there is one that still proves itself, and
+/// `None` otherwise — missing, corrupt, tampered, expired and unverifiable all collapse to the same
+/// answer, because they lead to the same behavior. Tier 1 having nothing to say is a normal state,
+/// not an error to surface.
+///
+/// In this build it is always `None`: the production trust root is the all-zeros placeholder, so the
+/// verification inside a load cannot succeed no matter what is on disk.
+pub(crate) fn cached_catalog() -> Option<(CaseCatalogManifest, CaseCatalog)> {
+    if !case_intelligence_gate() {
+        return None;
+    }
+    cache_load_verified(
+        &case_cache_dir(),
+        &CaseTrustContext {
+            key: &CASE_SIGNING_PUBKEY,
+            catalog_origins: CASE_CATALOG_ORIGINS,
+            now: chrono::Utc::now(),
+            app_version: env!("CARGO_PKG_VERSION"),
+            last_seen_catalog_version: 0,
+        },
+    )
+    .ok()
+}
+
 // ─── Tests ─────────────────────────────────────────────────────────────────
 //
 // Everything here is a schema test: given a document, is it accepted or refused, and for WHICH rule.
@@ -1022,7 +1272,9 @@ pub(crate) fn verify_catalog_chain(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ed25519_compact::KeyPair;
     use serde_json::{json, Value};
+    use sha2::{Digest, Sha256};
 
     const HEX64: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     /// A test-only download origin, injected so the manifest rules OTHER than the allowlist stay
@@ -1068,6 +1320,88 @@ mod tests {
             "catalog_url": "https://cases.example.test/v1/catalog.json",
             "signature": "a".repeat(SIGNATURE_HEX_CHARS)
         })
+    }
+
+    // ─── Signing fixtures, shared by the trust and cache modules below ──────
+    //
+    // These live in the parent so BOTH child modules can use them: a cache test needs a real
+    // signed pair for exactly the same reason a verification test does. Every keypair is
+    // generated inside the test — no key material, public or private, is committed.
+
+    fn hex_of(bytes: &[u8]) -> String {
+        const TABLE: &[u8; 16] = b"0123456789abcdef";
+        let mut out = String::with_capacity(bytes.len() * 2);
+        for &b in bytes {
+            out.push(TABLE[(b >> 4) as usize] as char);
+            out.push(TABLE[(b & 0x0f) as usize] as char);
+        }
+        out
+    }
+
+    fn sha256_hex(bytes: &[u8]) -> String {
+        let mut h = Sha256::new();
+        h.update(bytes);
+        hex_of(&h.finalize())
+    }
+
+    /// A catalog body, as the bytes that actually travel — the digest has to be taken over the
+    /// exact bytes, so the tests hold the serialized form rather than the `Value`.
+    fn catalog_bytes() -> Vec<u8> {
+        serde_json::to_vec(&base_catalog()).unwrap()
+    }
+
+    fn base_manifest_value(catalog: &[u8]) -> Value {
+        json!({
+            "schema_version": 1,
+            "catalog_version": 7,
+            "created_at": "2026-08-01T00:00:00Z",
+            "expires_at": "2026-12-01T00:00:00Z",
+            "min_app_version": "0.0.0",
+            "max_app_version": "99.0.0",
+            "catalog_sha256": sha256_hex(catalog),
+            "catalog_url": "https://cases.example.test/catalog.json",
+            "signature": ""
+        })
+    }
+
+    /// Sign a manifest the way the real signer must: over the Tier 1 context prefix followed by
+    /// the canonical JSON with `signature` removed.
+    fn sign(kp: &KeyPair, mut manifest: Value) -> Vec<u8> {
+        manifest["signature"] = Value::String(String::new());
+        let raw = serde_json::to_vec(&manifest).unwrap();
+        let (payload, _) = canonical_signed_payload(&raw).unwrap();
+        let sig = kp.sk.sign(&payload, None);
+        manifest["signature"] = Value::String(hex_of(&sig[..]));
+        serde_json::to_vec(&manifest).unwrap()
+    }
+
+    /// The default fixture: a correctly signed manifest over a valid catalog.
+    fn signed_pair(kp: &KeyPair) -> (Vec<u8>, Vec<u8>) {
+        let catalog = catalog_bytes();
+        let manifest = sign(kp, base_manifest_value(&catalog));
+        (manifest, catalog)
+    }
+
+    fn key_of(kp: &KeyPair) -> CaseSigningKey {
+        CaseSigningKey::new(*kp.pk)
+    }
+
+    /// A fixed instant inside the fixture's validity window, so expiry is a property of the
+    /// document under test and never of the day the suite happens to run.
+    fn at(instant: &str) -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::parse_from_rfc3339(instant)
+            .unwrap()
+            .with_timezone(&chrono::Utc)
+    }
+
+    fn cx<'a>(key: &'a CaseSigningKey) -> CaseTrustContext<'a> {
+        CaseTrustContext {
+            key,
+            catalog_origins: TEST_CATALOG_ORIGINS,
+            now: at("2026-09-01T00:00:00Z"),
+            app_version: "1.0.0",
+            last_seen_catalog_version: 0,
+        }
     }
 
     fn refuse(v: &Value) -> CaseCatalogError {
@@ -1617,84 +1951,6 @@ mod tests {
     // listed there rather than faked here with a hand-written `Location` header.
     mod verification {
         use super::*;
-        use ed25519_compact::KeyPair;
-        use sha2::{Digest, Sha256};
-
-        fn hex_of(bytes: &[u8]) -> String {
-            const TABLE: &[u8; 16] = b"0123456789abcdef";
-            let mut out = String::with_capacity(bytes.len() * 2);
-            for &b in bytes {
-                out.push(TABLE[(b >> 4) as usize] as char);
-                out.push(TABLE[(b & 0x0f) as usize] as char);
-            }
-            out
-        }
-
-        fn sha256_hex(bytes: &[u8]) -> String {
-            let mut h = Sha256::new();
-            h.update(bytes);
-            hex_of(&h.finalize())
-        }
-
-        /// A catalog body, as the bytes that actually travel — the digest has to be taken over the
-        /// exact bytes, so the tests hold the serialized form rather than the `Value`.
-        fn catalog_bytes() -> Vec<u8> {
-            serde_json::to_vec(&base_catalog()).unwrap()
-        }
-
-        fn base_manifest_value(catalog: &[u8]) -> Value {
-            json!({
-                "schema_version": 1,
-                "catalog_version": 7,
-                "created_at": "2026-08-01T00:00:00Z",
-                "expires_at": "2026-12-01T00:00:00Z",
-                "min_app_version": "0.0.0",
-                "max_app_version": "99.0.0",
-                "catalog_sha256": sha256_hex(catalog),
-                "catalog_url": "https://cases.example.test/catalog.json",
-                "signature": ""
-            })
-        }
-
-        /// Sign a manifest the way the real signer must: over the Tier 1 context prefix followed by
-        /// the canonical JSON with `signature` removed.
-        fn sign(kp: &KeyPair, mut manifest: Value) -> Vec<u8> {
-            manifest["signature"] = Value::String(String::new());
-            let raw = serde_json::to_vec(&manifest).unwrap();
-            let (payload, _) = canonical_signed_payload(&raw).unwrap();
-            let sig = kp.sk.sign(&payload, None);
-            manifest["signature"] = Value::String(hex_of(&sig[..]));
-            serde_json::to_vec(&manifest).unwrap()
-        }
-
-        /// The default fixture: a correctly signed manifest over a valid catalog.
-        fn signed_pair(kp: &KeyPair) -> (Vec<u8>, Vec<u8>) {
-            let catalog = catalog_bytes();
-            let manifest = sign(kp, base_manifest_value(&catalog));
-            (manifest, catalog)
-        }
-
-        fn key_of(kp: &KeyPair) -> CaseSigningKey {
-            CaseSigningKey::new(*kp.pk)
-        }
-
-        /// A fixed instant inside the fixture's validity window, so expiry is a property of the
-        /// document under test and never of the day the suite happens to run.
-        fn at(instant: &str) -> chrono::DateTime<chrono::Utc> {
-            chrono::DateTime::parse_from_rfc3339(instant)
-                .unwrap()
-                .with_timezone(&chrono::Utc)
-        }
-
-        fn cx<'a>(key: &'a CaseSigningKey) -> CaseTrustContext<'a> {
-            CaseTrustContext {
-                key,
-                catalog_origins: TEST_CATALOG_ORIGINS,
-                now: at("2026-09-01T00:00:00Z"),
-                app_version: "1.0.0",
-                last_seen_catalog_version: 0,
-            }
-        }
 
         fn refuse(manifest: &[u8], catalog: &[u8], cx: &CaseTrustContext<'_>) -> CaseTrustError {
             verify_chain_with(manifest, catalog, cx).expect_err("should have been refused")
@@ -2124,6 +2380,441 @@ mod tests {
             );
             assert!(CASE_CATALOG_ORIGINS.is_empty(), "the second, independent reason");
             assert!(!case_intelligence_gate(), "and the gate above both of them");
+        }
+    }
+
+    // ─── Last-known-good cache (plan task 4) ───────────────────────────────
+    //
+    // Real files in a real temp directory. A cache is a filesystem behaviour — atomicity, debris,
+    // partial writes, a neighbour's data one directory up — and none of that is observable through
+    // a mock, so these tests pay for a few directories and get to assert the thing that actually
+    // ships.
+    mod cache {
+        use super::*;
+        use std::path::PathBuf;
+
+        /// A throwaway data root that cleans itself up even when a test panics, so a failing run
+        /// never leaves the next one to inherit its debris.
+        struct TempRoot(PathBuf);
+
+        impl TempRoot {
+            fn new(label: &str) -> Self {
+                static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+                let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let dir = std::env::temp_dir()
+                    .join(format!("compy-case-cache-{}-{label}-{n}", std::process::id()));
+                let _ = std::fs::remove_dir_all(&dir);
+                std::fs::create_dir_all(&dir).expect("temp root");
+                Self(dir)
+            }
+
+            /// The namespace under the root, exactly as production composes it.
+            fn cache(&self) -> PathBuf {
+                self.0.join(CASE_CACHE_DIR_NAME)
+            }
+
+            fn file(&self) -> PathBuf {
+                case_cache_file(&self.cache())
+            }
+        }
+
+        impl Drop for TempRoot {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+
+        fn stored(root: &TempRoot, kp: &ed25519_compact::KeyPair) -> (Vec<u8>, Vec<u8>) {
+            let (manifest, catalog) = signed_pair(kp);
+            let key = key_of(kp);
+            cache_store_verified(&root.cache(), &manifest, &catalog, &cx(&key))
+                .expect("the fixture must store, or every test below is vacuous");
+            (manifest, catalog)
+        }
+
+        /// Rewrite the cache file with a hand-edited envelope — the shape of an attacker, or of a
+        /// half-written disk, that a load has to survive.
+        fn rewrite_envelope(root: &TempRoot, edit: impl FnOnce(&mut Value)) {
+            let mut envelope: Value =
+                serde_json::from_slice(&std::fs::read(root.file()).unwrap()).unwrap();
+            edit(&mut envelope);
+            std::fs::write(root.file(), serde_json::to_vec(&envelope).unwrap()).unwrap();
+        }
+
+        // ── The positive control ───────────────────────────────────────────
+
+        #[test]
+        fn a_verified_pair_round_trips_through_the_cache() {
+            let root = TempRoot::new("roundtrip");
+            let kp = ed25519_compact::KeyPair::generate();
+            stored(&root, &kp);
+            let key = key_of(&kp);
+            let (manifest, catalog) =
+                cache_load_verified(&root.cache(), &cx(&key)).expect("should load");
+            assert_eq!(manifest.catalog_version, 7);
+            assert_eq!(catalog.entries.len(), 1);
+        }
+
+        #[test]
+        fn a_missing_cache_is_the_ordinary_state_not_a_fault() {
+            let root = TempRoot::new("missing");
+            let kp = ed25519_compact::KeyPair::generate();
+            let key = key_of(&kp);
+            assert_eq!(
+                cache_load_verified(&root.cache(), &cx(&key)).unwrap_err(),
+                CaseCacheError::Missing,
+                "a machine that has never fetched a catalog is not broken"
+            );
+        }
+
+        // ── Namespacing ────────────────────────────────────────────────────
+
+        #[test]
+        fn the_cache_lives_in_its_own_namespace_and_holds_exactly_one_file() {
+            let root = TempRoot::new("namespace");
+            let kp = ed25519_compact::KeyPair::generate();
+            stored(&root, &kp);
+
+            assert_eq!(CASE_CACHE_DIR_NAME, "case-intelligence");
+            let files: Vec<String> = std::fs::read_dir(root.cache())
+                .unwrap()
+                .flatten()
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .collect();
+            assert_eq!(files, vec![CASE_CACHE_FILE_NAME.to_string()]);
+        }
+
+        /// The neighbours that must never be in reach: the Trust Ledger, the remote-rules cache and
+        /// the support record all live one directory UP from this namespace.
+        #[test]
+        fn storing_loading_and_clearing_touch_nothing_outside_the_namespace() {
+            let root = TempRoot::new("neighbours");
+            let neighbours = ["history.json", "rules-manifest.json", "support-evidence.json"];
+            for name in neighbours {
+                std::fs::write(root.0.join(name), b"neighbour").unwrap();
+            }
+
+            let kp = ed25519_compact::KeyPair::generate();
+            stored(&root, &kp);
+            let key = key_of(&kp);
+            let _ = cache_load_verified(&root.cache(), &cx(&key));
+            cache_clear(&root.cache()).expect("clear");
+
+            assert!(!root.cache().exists(), "the namespace itself is gone");
+            for name in neighbours {
+                assert_eq!(
+                    std::fs::read(root.0.join(name)).unwrap(),
+                    b"neighbour",
+                    "{name} must be untouched by anything Tier 1 does"
+                );
+            }
+        }
+
+        #[test]
+        fn clearing_a_cache_that_was_never_written_is_not_an_error() {
+            let root = TempRoot::new("clear-empty");
+            assert_eq!(cache_clear(&root.cache()), Ok(()));
+        }
+
+        // ── Only verified bytes are committed ──────────────────────────────
+
+        #[test]
+        fn storing_refuses_to_commit_a_pair_that_does_not_verify() {
+            let root = TempRoot::new("refuse-store");
+            let signer = ed25519_compact::KeyPair::generate();
+            let other = ed25519_compact::KeyPair::generate();
+            let (manifest, catalog) = signed_pair(&signer);
+
+            let key = key_of(&other);
+            assert_eq!(
+                cache_store_verified(&root.cache(), &manifest, &catalog, &cx(&key)).unwrap_err(),
+                CaseCacheError::Untrusted(CaseTrustError::SignatureInvalid)
+            );
+            assert!(!root.file().exists(), "nothing unproven may reach the disk at all");
+        }
+
+        /// The reason the envelope is one file: a store that fails must not cost the copy already
+        /// held. Two files and two renames could not promise this.
+        #[test]
+        fn a_failed_store_leaves_the_previous_good_copy_intact() {
+            let root = TempRoot::new("keep-lkg");
+            let kp = ed25519_compact::KeyPair::generate();
+            stored(&root, &kp);
+            let good = std::fs::read(root.file()).unwrap();
+
+            let impostor = ed25519_compact::KeyPair::generate();
+            let (bad_manifest, bad_catalog) = signed_pair(&impostor);
+            let key = key_of(&kp);
+            assert!(cache_store_verified(&root.cache(), &bad_manifest, &bad_catalog, &cx(&key)).is_err());
+
+            assert_eq!(std::fs::read(root.file()).unwrap(), good, "the LKG survives a bad update");
+            assert!(cache_load_verified(&root.cache(), &cx(&key)).is_ok());
+        }
+
+        #[test]
+        fn a_store_leaves_no_temp_file_behind() {
+            let root = TempRoot::new("no-tmp");
+            let kp = ed25519_compact::KeyPair::generate();
+            stored(&root, &kp);
+            assert!(
+                !root.file().with_extension("json.tmp").exists(),
+                "a rename, not a copy — a lingering .tmp means the swap did not happen"
+            );
+        }
+
+        /// Debris is anything in the namespace that is not the one file. Pruning removes it and
+        /// leaves the cache itself alone — that is the file-count cap.
+        #[test]
+        fn pruning_removes_debris_and_never_the_cache_itself() {
+            let root = TempRoot::new("prune");
+            let kp = ed25519_compact::KeyPair::generate();
+            stored(&root, &kp);
+            std::fs::write(root.cache().join("last-known-good.json.tmp"), b"{}").unwrap();
+            std::fs::write(root.cache().join("catalog.json"), b"{}").unwrap();
+            std::fs::create_dir_all(root.cache().join("stale-subdir")).unwrap();
+
+            assert_eq!(cache_prune(&root.cache()), Ok(3));
+            let key = key_of(&kp);
+            assert!(cache_load_verified(&root.cache(), &cx(&key)).is_ok());
+            assert_eq!(std::fs::read_dir(root.cache()).unwrap().count(), 1);
+        }
+
+        #[test]
+        fn a_leftover_temp_file_does_not_disturb_a_load() {
+            let root = TempRoot::new("tmp-ignored");
+            let kp = ed25519_compact::KeyPair::generate();
+            stored(&root, &kp);
+            std::fs::write(root.file().with_extension("json.tmp"), b"torn").unwrap();
+            let key = key_of(&kp);
+            assert!(cache_load_verified(&root.cache(), &cx(&key)).is_ok());
+        }
+
+        // ── Verified again on every load ───────────────────────────────────
+
+        /// The whole point of re-verifying: the cache sits in the user's own writable directory, so
+        /// what was proven at store time proves nothing at load time.
+        #[test]
+        fn a_tampered_cached_catalog_is_refused_on_load() {
+            let root = TempRoot::new("tamper-catalog");
+            let kp = ed25519_compact::KeyPair::generate();
+            stored(&root, &kp);
+            rewrite_envelope(&root, |e| {
+                let mut catalog: Value = serde_json::from_str(e["catalog"].as_str().unwrap()).unwrap();
+                catalog["entries"][0]["next_steps"][0]["headline"] = json!("Run this installer");
+                e["catalog"] = json!(serde_json::to_string(&catalog).unwrap());
+            });
+            let key = key_of(&kp);
+            assert_eq!(
+                cache_load_verified(&root.cache(), &cx(&key)).unwrap_err(),
+                CaseCacheError::Untrusted(CaseTrustError::DigestMismatch)
+            );
+        }
+
+        #[test]
+        fn a_tampered_cached_manifest_is_refused_on_load() {
+            let root = TempRoot::new("tamper-manifest");
+            let kp = ed25519_compact::KeyPair::generate();
+            stored(&root, &kp);
+            rewrite_envelope(&root, |e| {
+                let mut manifest: Value =
+                    serde_json::from_str(e["manifest"].as_str().unwrap()).unwrap();
+                manifest["catalog_version"] = json!(9999);
+                e["manifest"] = json!(serde_json::to_string(&manifest).unwrap());
+            });
+            let key = key_of(&kp);
+            assert_eq!(
+                cache_load_verified(&root.cache(), &cx(&key)).unwrap_err(),
+                CaseCacheError::Untrusted(CaseTrustError::SignatureInvalid)
+            );
+        }
+
+        #[test]
+        fn a_cache_written_under_a_different_key_is_refused_on_load() {
+            let root = TempRoot::new("key-rotate");
+            let kp = ed25519_compact::KeyPair::generate();
+            stored(&root, &kp);
+            let rotated = key_of(&ed25519_compact::KeyPair::generate());
+            assert_eq!(
+                cache_load_verified(&root.cache(), &cx(&rotated)).unwrap_err(),
+                CaseCacheError::Untrusted(CaseTrustError::SignatureInvalid),
+                "rotating the trust root must invalidate everything the old one signed"
+            );
+        }
+
+        #[test]
+        fn an_expired_cached_catalog_is_refused_on_load() {
+            let root = TempRoot::new("expired");
+            let kp = ed25519_compact::KeyPair::generate();
+            stored(&root, &kp);
+            let key = key_of(&kp);
+            let mut context = cx(&key);
+            context.now = at("2027-01-01T00:00:00Z");
+            assert_eq!(
+                cache_load_verified(&root.cache(), &context).unwrap_err(),
+                CaseCacheError::Untrusted(CaseTrustError::Expired),
+                "a cached copy does not get to outlive its own expiry"
+            );
+        }
+
+        #[test]
+        fn a_cached_catalog_below_the_rollback_floor_is_refused_on_load() {
+            let root = TempRoot::new("rollback");
+            let kp = ed25519_compact::KeyPair::generate();
+            stored(&root, &kp); // catalog_version 7
+            let key = key_of(&kp);
+            let mut context = cx(&key);
+            context.last_seen_catalog_version = 9;
+            assert_eq!(
+                cache_load_verified(&root.cache(), &context).unwrap_err(),
+                CaseCacheError::Untrusted(CaseTrustError::CatalogVersionRollback {
+                    latest: 9,
+                    attempted: 7
+                })
+            );
+        }
+
+        // ── The rollback floor ─────────────────────────────────────────────
+
+        /// The floor is read from a copy that VERIFIES, never from a number sitting in a file — and
+        /// the cache is not allowed to be its own rollback evidence, so the floor is zeroed for the
+        /// load that computes it.
+        #[test]
+        fn the_rollback_floor_comes_from_a_copy_that_verifies() {
+            let root = TempRoot::new("floor");
+            let kp = ed25519_compact::KeyPair::generate();
+            stored(&root, &kp);
+            let key = key_of(&kp);
+
+            assert_eq!(cache_floor_version(&root.cache(), &cx(&key)), 7);
+
+            let mut already_high = cx(&key);
+            already_high.last_seen_catalog_version = 99;
+            assert_eq!(
+                cache_floor_version(&root.cache(), &already_high),
+                7,
+                "the floor must not be its own input, or the first high number would stick forever"
+            );
+
+            let rotated = key_of(&ed25519_compact::KeyPair::generate());
+            assert_eq!(
+                cache_floor_version(&root.cache(), &cx(&rotated)),
+                0,
+                "a version nobody can prove is not evidence of anything"
+            );
+        }
+
+        #[test]
+        fn the_floor_of_an_empty_cache_is_zero() {
+            let root = TempRoot::new("floor-empty");
+            let kp = ed25519_compact::KeyPair::generate();
+            let key = key_of(&kp);
+            assert_eq!(cache_floor_version(&root.cache(), &cx(&key)), 0);
+        }
+
+        // ── The envelope ───────────────────────────────────────────────────
+
+        /// The cache holds the two downloaded documents and NOTHING local. No incident, no match, no
+        /// machine fact, not even a timestamp of our own — `deny_unknown_fields` on the envelope
+        /// means a future attempt to add one fails to parse instead of quietly persisting.
+        #[test]
+        fn the_envelope_holds_the_two_documents_verbatim_and_nothing_local() {
+            let root = TempRoot::new("envelope");
+            let kp = ed25519_compact::KeyPair::generate();
+            let (manifest, catalog) = stored(&root, &kp);
+
+            let written: Value = serde_json::from_slice(&std::fs::read(root.file()).unwrap()).unwrap();
+            let mut keys: Vec<&str> = written.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+            keys.sort_unstable();
+            assert_eq!(keys, vec!["catalog", "envelope_version", "manifest"]);
+
+            assert_eq!(written["manifest"].as_str().unwrap().as_bytes(), manifest.as_slice());
+            assert_eq!(written["catalog"].as_str().unwrap().as_bytes(), catalog.as_slice());
+            assert_eq!(written["envelope_version"], json!(CASE_CACHE_ENVELOPE_VERSION));
+        }
+
+        #[test]
+        fn an_envelope_carrying_an_extra_field_is_refused() {
+            let root = TempRoot::new("extra-field");
+            let kp = ed25519_compact::KeyPair::generate();
+            stored(&root, &kp);
+            rewrite_envelope(&root, |e| {
+                e["last_incident_id"] = json!("local-machine-fact");
+            });
+            let key = key_of(&kp);
+            assert!(matches!(
+                cache_load_verified(&root.cache(), &cx(&key)).unwrap_err(),
+                CaseCacheError::Corrupt(_)
+            ));
+        }
+
+        #[test]
+        fn an_envelope_from_another_version_is_refused() {
+            let root = TempRoot::new("envelope-version");
+            let kp = ed25519_compact::KeyPair::generate();
+            stored(&root, &kp);
+            rewrite_envelope(&root, |e| {
+                e["envelope_version"] = json!(CASE_CACHE_ENVELOPE_VERSION + 1);
+            });
+            let key = key_of(&kp);
+            assert!(matches!(
+                cache_load_verified(&root.cache(), &cx(&key)).unwrap_err(),
+                CaseCacheError::Corrupt(_)
+            ));
+        }
+
+        #[test]
+        fn a_corrupt_cache_file_is_refused_without_a_panic() {
+            let root = TempRoot::new("corrupt");
+            let kp = ed25519_compact::KeyPair::generate();
+            stored(&root, &kp);
+            let good = std::fs::read(root.file()).unwrap();
+            let key = key_of(&kp);
+
+            for (why, bytes) in [
+                ("truncated mid-write", good[..good.len() / 2].to_vec()),
+                ("empty", Vec::new()),
+                ("not json", b"\x00\x01\x02 not json".to_vec()),
+                ("json but not an envelope", b"[1,2,3]".to_vec()),
+            ] {
+                std::fs::write(root.file(), &bytes).unwrap();
+                assert!(
+                    matches!(
+                        cache_load_verified(&root.cache(), &cx(&key)).unwrap_err(),
+                        CaseCacheError::Corrupt(_)
+                    ),
+                    "a {why} cache must be refused, never panic"
+                );
+            }
+        }
+
+        #[test]
+        fn an_oversized_cache_file_is_refused_before_it_is_parsed() {
+            let root = TempRoot::new("oversize");
+            let kp = ed25519_compact::KeyPair::generate();
+            stored(&root, &kp);
+            let huge = vec![b'x'; CASE_CACHE_MAX_BYTES + 1];
+            std::fs::write(root.file(), &huge).unwrap();
+            let key = key_of(&kp);
+            assert_eq!(
+                cache_load_verified(&root.cache(), &cx(&key)).unwrap_err(),
+                CaseCacheError::Oversize {
+                    found: CASE_CACHE_MAX_BYTES + 1,
+                    max: CASE_CACHE_MAX_BYTES
+                },
+                "the cap is a stat on the file, not a failure part-way through reading it"
+            );
+        }
+
+        // ── The darkness proof ─────────────────────────────────────────────
+
+        /// The production read is `None` in this build and never touches the disk to find out: the
+        /// gate is checked first, and behind it the placeholder trust root would refuse anything a
+        /// load returned anyway.
+        #[test]
+        fn the_production_read_returns_nothing_because_tier_1_is_dark() {
+            assert!(!case_intelligence_gate());
+            assert!(cached_catalog().is_none());
+            assert!(case_cache_dir().ends_with(CASE_CACHE_DIR_NAME));
         }
     }
 }
