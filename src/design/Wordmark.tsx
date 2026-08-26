@@ -17,13 +17,25 @@ const PULSE_MIN_SIZE = 24;
 export function Wordmark({ size = 19, className = "" }: { size?: number; className?: string }) {
   const w = (18 / 19) * size;
   const h = (21 / 19) * size;
-  const showPulse = size >= PULSE_MIN_SIZE;
   // Fidgeter's reward (shadow realm, Six Laws): triple-click the mark → the launch heartbeat redraws
   // once. Pure delight — nothing changes, nothing unlocks. `cmp-shadow` marks a DELIBERATE knobless
   // interaction: the sanctioned exception to the doorknob law (an egg must never wear a knob), so it
   // stays invisible until found. Removing it leaves zero trace.
   const [beat, setBeat] = useState(0);
   const taps = useRef<number[]>([]);
+  // Below the threshold the egg is not lost, it is REVEALED — the pulse appears for the length of
+  // its own redraw and then goes back into hiding, which is what the recommendation sent to the
+  // owner on 2026-08-24 promised. A permanent reveal would put the © reading straight back, so the
+  // window is closed by a timer rather than by `animationend`: under reduced motion the CSS sets
+  // `animation: none` and that event never fires, which would strand the pulse on screen forever.
+  const [revealing, setRevealing] = useState(false);
+  const showPulse = size >= PULSE_MIN_SIZE || revealing;
+  useEffect(() => {
+    if (beat === 0) return;
+    setRevealing(true);
+    const id = setTimeout(() => setRevealing(false), 760); // 720ms redraw + a frame of slack
+    return () => clearTimeout(id);
+  }, [beat]);
   // The Konami handshake (shadow realm) replays the heartbeat too, via a window event.
   useEffect(() => {
     const onBeat = () => setBeat((b) => b + 1);
@@ -59,10 +71,9 @@ export function Wordmark({ size = 19, className = "" }: { size?: number; classNa
           strokeWidth="104"
           strokeLinecap="round"
         />
-        {/* Below PULSE_MIN_SIZE this is absent, not merely transparent — a sub-pixel stroke still
-            fattens the ring it sits inside, which is the whole mechanism behind the © reading. The
-            fidget egg keeps counting taps at any size; at rail size it simply has nothing to redraw,
-            and an egg with nothing to show is the correct silent failure for an egg. */}
+        {/* At rest below PULSE_MIN_SIZE this is absent, not merely transparent — a sub-pixel stroke
+            still fattens the ring it sits inside, which is the whole mechanism behind the © reading.
+            It comes back for the length of the egg's redraw and then hides again. */}
         {showPulse && (
           <polyline
             key={beat}

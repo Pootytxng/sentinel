@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { render } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render } from "@testing-library/react";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { Wordmark } from "./Wordmark";
@@ -91,6 +91,44 @@ describe("the wordmark drops its interior pulse at sizes where it reads as ©", 
       expect(el?.textContent).toBe("ompy");
       expect(el?.getAttribute("aria-label")).toBe("Compy");
     }
+  });
+
+  // The recommendation the owner ruled on promised the triple-click egg would SURVIVE at rail size
+  // by revealing the pulse during its beat rather than at rest. An implementation that simply
+  // deleted the pulse below the threshold would honour the headline of the ruling and quietly break
+  // the half of it that was written down — so both ends of the reveal are pinned here.
+  describe("the fidget egg survives below the threshold", () => {
+    afterEach(() => vi.useRealTimers());
+
+    it("a triple-click at rail size reveals the pulse, then hides it again", () => {
+      vi.useFakeTimers();
+      const { container } = render(<Wordmark size={16} />);
+      const mark = container.querySelector(".cmp-wordmark")!;
+      expect(container.querySelector("polyline")).toBeNull();
+
+      // Three taps inside the 600ms window. Date.now() advances with the fake clock, which is what
+      // the component's own tap-window filter reads.
+      act(() => {
+        fireEvent.click(mark);
+        fireEvent.click(mark);
+        fireEvent.click(mark);
+      });
+      expect(container.querySelector("polyline")).not.toBeNull();
+
+      act(() => void vi.advanceTimersByTime(800));
+      expect(container.querySelector("polyline")).toBeNull();
+    });
+
+    it("two taps are not three — the egg does not fire on an ordinary click", () => {
+      vi.useFakeTimers();
+      const { container } = render(<Wordmark size={16} />);
+      const mark = container.querySelector(".cmp-wordmark")!;
+      act(() => {
+        fireEvent.click(mark);
+        fireEvent.click(mark);
+      });
+      expect(container.querySelector("polyline")).toBeNull();
+    });
   });
 
   it("names every in-app call site's size, so a new one cannot land unchecked", () => {
