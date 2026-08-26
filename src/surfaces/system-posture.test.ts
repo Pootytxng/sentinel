@@ -1,4 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { readdirSync, readFileSync } from "fs";
+import { join } from "path";
+// (fs/path typed by src/test-node-shims.d.ts — same pattern as voice-guard.test.ts.)
 import { deriveSystemPosture as deriveSystemPostureRaw } from "./system-posture";
 import type { GameReadiness, ReadinessCheck } from "../types";
 // i18n update (2026-07-23): deriveSystemPosture's headline/sub now come from t(...) (Simplified
@@ -81,6 +84,62 @@ describe("deriveSystemPosture", () => {
     ]);
     const p = deriveSystemPosture({ readiness: r, activeChanges: 0, monitoringAvailable: true });
     expect(p.headline).toBe("2 startup apps slow your boot");
+  });
+
+  // bug -> guard (independent review, 2026-08-26). The #219 change was correct, but the sentence
+  // written ABOUT it was not: code comment, BACKLOG, RELEASE_STATE and the owner's own checklist all
+  // said the remaining flagged checks were "listed in full in the body below". They are not. Home
+  // renders this headline, the proportion, and the #1 limiter tile — one flagged thing plus a door;
+  // the full per-check list lives in Check and Fix, one press away. `reasons` below carries every
+  // flagged label and NOTHING consumes it, which is exactly what made the false sentence plausible
+  // to four readers. A claim about what a screen shows is a claim, and an unverified claim is the
+  // same defect in a comment as in a doc — so the comment is now pinned to the code.
+  const POSTURE_SRC = "src/surfaces/system-posture.ts";
+  const DERIVATION_ONLY = "it is derivation-only";
+
+  function surfaceFiles(): string[] {
+    return (readdirSync("src", { recursive: true }) as string[])
+      .filter((f) => f.endsWith(".tsx") && !f.includes(".test."))
+      .map((f) => join("src", f));
+  }
+
+  it("`reasons` is derivation-only, and the comment says so — neither may drift alone", () => {
+    const files = surfaceFiles();
+    // Non-vacuity: if the walk stops finding surfaces, the assertion below proves nothing.
+    expect(files.length).toBeGreaterThan(20);
+    expect(files.some((f) => f.endsWith("HomeConsole.tsx"))).toBe(true);
+
+    const consumers = files.filter((f) => /reasons/.test(readFileSync(f, "utf8")));
+    const saysDerivationOnly = readFileSync(POSTURE_SRC, "utf8").includes(DERIVATION_ONLY);
+
+    if (consumers.length === 0) {
+      // Still unrendered: the comment MUST keep saying so, so nobody describes it as on-screen.
+      expect(saysDerivationOnly, `${POSTURE_SRC} must keep the "${DERIVATION_ONLY}" note`).toBe(true);
+    } else {
+      // Someone wired it up — good, but then the note is now false and has to go with the change.
+      expect(
+        saysDerivationOnly,
+        `${consumers.join(", ")} now render reasons; drop the "${DERIVATION_ONLY}" note`,
+      ).toBe(false);
+    }
+  });
+
+  it("the retired 'listed in full below' claim is gone from code AND from the live docs", () => {
+    // The exact false sentence, grep-banned in both places it landed. Falsified by re-adding it.
+    const RETIRED = ["listed in full in the body below", "list below still names every check"];
+    const targets = [
+      POSTURE_SRC,
+      "src/surfaces/HomeConsole.tsx",
+      "docs/BACKLOG.md",
+      "docs/RELEASE_STATE.md",
+      "docs/OWNER_ACTION_CHECKLIST.md",
+    ];
+    const offenders: string[] = [];
+    for (const file of targets) {
+      const text = readFileSync(file, "utf8");
+      for (const phrase of RETIRED) if (text.includes(phrase)) offenders.push(`${file}: "${phrase}"`);
+    }
+    expect(offenders).toEqual([]);
   });
 
   it("no locale still ships the retired count-tail string", () => {

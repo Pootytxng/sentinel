@@ -88,7 +88,10 @@ characters and worsening nothing. The residual — every remaining 3-liner being
 **he ruled on 2026-08-26 ([#219](https://github.com/Pootytxng/sentinel/issues/219)): drop the count
 from the headline.** Shipped in `014a3e8c`: the attention headline is the flagged check's label and
 stops. Nothing is hidden — the sub still prints the proportion ("15 of 16 checks look good.") and
-the list below still names every check. `home.posture.attentionMore` is deleted from BOTH locales.
+the remaining flagged checks are one press away in Check and Fix, which render them in full.
+**The first wording of that sentence was WRONG and an independent review caught it** — it said the
+rest were printed further down Home itself, and Home shows one flagged thing plus a door. Corrected
+in code, doc and comment, and pinned. `home.posture.attentionMore` is deleted from BOTH locales.
 **B4 joins B2 as approved design** — the comp draws the nav numerals as bordered chips. Two A-list
 items also came back wrong: **A5's fix deviates from the comp** (it prints "Compy" in both places on
 purpose) and **A1's `©ompy` is in the comp too**, so it is the mark he approved, not a regression.

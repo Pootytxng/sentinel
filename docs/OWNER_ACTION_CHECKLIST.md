@@ -370,7 +370,10 @@ numbering, the motion default, the sibling-slop sweep) moved 2026-08-22 to
 - ✅ **The verdict headline's "· and 3 more" tail — RULED AND SHIPPED 2026-08-26** ([#219](https://github.com/Pootytxng/sentinel/issues/219))
   You chose "drop the count from the headline". Done: the big line names the one flagged thing and
   stops. Nothing is hidden — the line under it still prints the honest proportion ("15 of 16 checks
-  look good.") and every other flagged check is still listed by name below. The retired translation
+  look good.") and the rest are one press away in Check and Fix. **Correction:** I first told you
+  "the rest are still visible in the list below" — on Home they are not, they are one click away.
+  Nothing is hidden either way, but you ruled on a slightly wrong description of the screen and you
+  should know that. Say the word and Home can name them all inline. The retired translation
   string is deleted in both languages so it cannot be wired back up by accident.
 
 ---

@@ -62,8 +62,17 @@ export function deriveSystemPosture(
     // tail was measured as the thing pushing the 40px verdict past two lines, and it was the only
     // part of the headline that named nothing — a bare number appended to a real finding. Nothing
     // is hidden by dropping it: the line directly beneath prints the honest proportion ("15 of 16
-    // checks look good", HomeConsole's attentionSub) and every remaining flagged check is listed in
-    // full in the body below. The count moved DOWN a level; it did not disappear.
+    // checks look good", HomeConsole's attentionSub), and the remaining flagged checks are ONE PRESS
+    // away — Check and Fix render `readiness.checks` in full, and Home carries the route in the
+    // verdict dek and the Dock. The count moved DOWN a level; it did not disappear.
+    //
+    // CORRECTED 2026-08-26 by independent review, and the correction is the point: this comment
+    // first claimed the rest were all printed further down this same screen. They are not: Home
+    // shows this headline, the proportion, and the #1 limiter tile — one flagged thing, plus a door. `reasons`
+    // below carries every flagged label but NOTHING renders it; it is derivation-only, and
+    // system-posture.test.ts fails if that stops being true without this line being rewritten.
+    // A sentence about what a screen shows is a claim, and an unverified claim is the same defect
+    // whether it lands in a doc or in a comment.
     const top = attentionChecks[0];
     const headline = top.label;
     return {
