@@ -91,7 +91,7 @@
   (`src/surfaces/HomeInterview.tsx` ← `home-interview-data.ts`, flag `compy_home_interview`, default
   ON, `"0"` failsafe, Settings → Behavior toggle). Full band history — option A/C greenlight, the
   declined door-level hints, the one-owner stand-down, the self-reviewer PASS — moved to
-  [BACKLOG_ARCHIVE.md](BACKLOG_ARCHIVE.md#2026-08-20--pre-room-intent-router-the-intake-band-superseded-by-the-interview).
+  [BACKLOG_ARCHIVE.md](../BACKLOG_ARCHIVE.md#2026-08-20--pre-room-intent-router-the-intake-band-superseded-by-the-interview).
 - [x] basic-mode simplification — SCOPE-CHECK FIRST, build only what's missing: FirstCheck's one-verdict
   flow + verdict cards + the answer-first Home already cover most of "one screen, one verdict, one
   action"; audit that flow against the panel's basic-mode ask and close only genuine gaps (no parallel
