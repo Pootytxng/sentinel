@@ -591,10 +591,37 @@ describe("nothing in Tier 1 is defined and then never reached", () => {
   // would miss one called `new`. It is a floor, not a proof.
   const RUST_DIR = join("src-tauri", "src");
 
+  // RECURSIVE on purpose. This used to be a flat `readdirSync`, which was complete only because
+  // `src-tauri/src` happens to hold no subdirectory today. The day a module moves into one, a flat
+  // read stops seeing it and the orphan check silently covers less than its name says — a dead-code
+  // guard that goes quiet is worse than no guard, because the green tick keeps being cited. Skips
+  // `target` so pointing this at `src-tauri` itself stays cheap.
+  function collectRust(root: string): string[] {
+    if (!existsSync(root)) return [];
+    const out: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const rel = join(dir, name);
+        let st;
+        try {
+          st = statSync(rel);
+        } catch {
+          continue;
+        }
+        if (st.isDirectory()) {
+          if (name !== "target" && !SKIP_DIRS.has(name)) walk(rel);
+          continue;
+        }
+        if (name.endsWith(".rs")) out.push(rel);
+      }
+    };
+    walk(root);
+    return out;
+  }
+
   function crateSource(): string {
-    return readdirSync(RUST_DIR)
-      .filter((f) => f.endsWith(".rs"))
-      .map((f) => stripRustComments(readFileSync(join(RUST_DIR, f), "utf8")))
+    return collectRust(RUST_DIR)
+      .map((f) => stripRustComments(readFileSync(f, "utf8")))
       .join("\n");
   }
 
@@ -610,6 +637,22 @@ describe("nothing in Tier 1 is defined and then never reached", () => {
       return all - defs < 1;
     });
   }
+
+  it("the crate corpus descends into subdirectories, so a moved module cannot go quiet", () => {
+    // Falsified against a real nested file rather than a fixture: `src-tauri/examples/sign_manifest.rs`
+    // sits one level below `src-tauri`, and `src-tauri/build.rs` sits flat beside it. A flat read of
+    // `src-tauri` returns the second and not the first, so this assertion is exactly the difference
+    // between the two implementations — it fails the moment the walk stops descending.
+    const nested = collectRust("src-tauri").map((f) => f.replace(/\\/g, "/"));
+    expect(nested, "the walk no longer descends — the orphan scan now covers less than it claims").toContain(
+      "src-tauri/examples/sign_manifest.rs",
+    );
+    expect(nested).toContain("src-tauri/build.rs");
+    // And `target` stays skipped, or this walk becomes a build-output crawl.
+    expect(nested.some((f) => f.includes("/target/"))).toBe(false);
+    // The production corpus is still non-empty and still the module's own directory.
+    expect(collectRust(RUST_DIR).length).toBeGreaterThan(30);
+  });
 
   it("finds the functions at all, so an empty offender list is not vacuous", () => {
     const names = declaredNames(readFileSync(MODULE, "utf8"));

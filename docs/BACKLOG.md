@@ -885,14 +885,11 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   the user clicks "Open the write-up" and nothing happens, indistinguishable from a dead click. Rare
   path; any visible failure state is new UI and owes its own self-review. Found by the #220 IPC
   contract audit, 2026-08-25.
-- [ ] **Tier 1 nit: `catalog_version` is `u64` in Rust, `number` in TS** — exact past 2^53-1 only.
-  Harmless while the catalog uses small monotonic versions; revisit if it ever adopts a
-  timestamp-derived scheme. Found by the same audit.
-- [ ] **Tier 1 nit: the orphan scan reads `src-tauri/src` non-recursively** —
-  `case-intelligence-outbound-guard.test.ts` builds its crate corpus with a flat `readdirSync`, so it
-  is complete today only because that directory has no subdirectories. The day a module moves into
-  one, the guard silently stops seeing it — a dead-code check that quietly covers less than it says.
-  Found by the second post-merge verification pass, 2026-08-26.
+- [x] **Tier 1 nits, two of three CLOSED 2026-08-26** — `catalog_version` is now refused above
+  `MAX_JS_EXACT_INT` in `case_intelligence.rs`, so the `u64`→`number` crossing is exact by
+  construction rather than by the catalog author's restraint; and the orphan scan's crate corpus
+  walks subdirectories, so a module that moves into one cannot make that guard go quiet. Both
+  falsified in both directions.
 - [ ] **`receipts.rs` shares #220's rustls-provider latent panic** — same defect class, still dark.
   Fix before Receipts is ever armed; flagged in `src-tauri/Cargo.toml`.
 - [BUILT-DARK] **Tier 2 precursor: Receipts** opt-in consent UI + payload preview —

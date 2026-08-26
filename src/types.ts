@@ -503,6 +503,8 @@ export type CaseAdvisoryStep = {
 };
 export type CaseIntelligenceMatch = {
   case_id: string;
+  // `u64` in Rust. Exact here only because `case_intelligence.rs` refuses any manifest whose
+  // catalog_version is above MAX_JS_EXACT_INT — do not widen that bound without a bigint here.
   catalog_version: number;
   level: CaseMatchLevel;
   title: string;

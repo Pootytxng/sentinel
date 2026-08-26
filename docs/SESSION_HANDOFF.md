@@ -110,7 +110,7 @@ blockers** — `compy.gg` registration, the Ko-fi URL and Compy Pro pricing all 
   independent security review.
 
 **Three asks that used to sit here were never really his:** #128 (`B_shelter`) landed on `main` on
-2026-08-21 — its issue closes with the in-flight receipt above, and `scripts/shelter-tag-guard.test.mjs`
+2026-08-21 — its issue is closed with a gated receipt, and `scripts/shelter-tag-guard.test.mjs`
 fails the build if a doc ever again calls landed work unpublished · **#213's B half** was retracted at
 source (B1/B5 shipped, B3 disproven, B2/B4 never defects) · **the Q9a consent screens** are a taste
 call the 2026-08-07 decree makes the lane's to ship and his to veto on sight, not a ruling he owes.

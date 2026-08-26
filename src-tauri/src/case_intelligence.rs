@@ -132,7 +132,8 @@ pub(crate) enum CaseCatalogError {
     Duplicate { field: &'static str, value: String },
     /// A hex field was not the exact expected length, or was not lowercase hex.
     BadHex { field: &'static str, expected: usize },
-    /// `catalog_version` must be a positive number.
+    /// `catalog_version` must be positive AND exactly representable on the other side of the IPC
+    /// boundary — see `MAX_JS_EXACT_INT`.
     BadCatalogVersion { found: u64 },
     /// A numeric range was inverted (min greater than max).
     InvertedRange { field: &'static str },
@@ -158,13 +159,27 @@ impl std::fmt::Display for CaseCatalogError {
             }
             Self::Duplicate { field, value } => write!(f, "{field} repeats {value:?}"),
             Self::BadHex { field, expected } => write!(f, "{field} must be {expected} lowercase hex chars"),
-            Self::BadCatalogVersion { found } => write!(f, "catalog_version {found} is not positive"),
+            Self::BadCatalogVersion { found } => {
+                write!(f, "catalog_version {found} is not in 1..={MAX_JS_EXACT_INT}")
+            }
             Self::InvertedRange { field } => write!(f, "{field} range is inverted"),
         }
     }
 }
 
 type R<T> = Result<T, CaseCatalogError>;
+
+/// `Number.MAX_SAFE_INTEGER` — the largest integer JavaScript represents exactly.
+///
+/// `catalog_version` is `u64` here and `number` in `src/types.ts`, and every integer past this one
+/// silently rounds on the way across the IPC boundary. The frontend PRINTS this value (the Black Box
+/// known-issue line names the catalog version), and monotonicity is what stops a stale catalog being
+/// replayed — so a rounded copy is both a wrong thing shown to the user and a comparison against a
+/// number nobody sent. Small monotonic versions never approach it; a timestamp-derived scheme
+/// (nanoseconds, or any id built from a hash) walks straight into it. Refusing at the boundary makes
+/// the crossing exact BY CONSTRUCTION instead of by the catalog author's restraint, which is the
+/// same reason every other wire field here is bounded rather than trusted.
+const MAX_JS_EXACT_INT: u64 = 9_007_199_254_740_991;
 
 // ─── Wire types ────────────────────────────────────────────────────────────
 
@@ -644,7 +659,7 @@ impl CaseCatalogManifest {
                 expected: CASE_SCHEMA_VERSION,
             });
         }
-        if self.catalog_version == 0 {
+        if self.catalog_version == 0 || self.catalog_version > MAX_JS_EXACT_INT {
             return Err(CaseCatalogError::BadCatalogVersion { found: self.catalog_version });
         }
 
@@ -2556,6 +2571,28 @@ mod tests {
         let mut m = base_manifest();
         m["catalog_version"] = json!(0u64);
         assert!(matches!(refuse_manifest(&m), CaseCatalogError::BadCatalogVersion { .. }));
+    }
+
+    /// The `u64` here is a `number` in `src/types.ts`, and the frontend prints it. Past
+    /// `MAX_JS_EXACT_INT` the value the user reads is not the value that was signed, and the
+    /// monotonicity floor compares against a number nobody sent. Both edges pinned: the largest
+    /// exact integer is accepted, the first inexact one is refused.
+    #[test]
+    fn catalog_schema_manifest_rejects_a_version_javascript_cannot_represent_exactly() {
+        let mut ok = base_manifest();
+        ok["catalog_version"] = json!(MAX_JS_EXACT_INT);
+        // `accept_manifest` panics if validation refuses, so reaching the assert IS the proof it
+        // was accepted; the assert then pins that the value survived deserialization unrounded.
+        assert_eq!(accept_manifest(&ok).catalog_version, MAX_JS_EXACT_INT);
+
+        for over in [MAX_JS_EXACT_INT + 1, u64::MAX] {
+            let mut m = base_manifest();
+            m["catalog_version"] = json!(over);
+            assert!(
+                matches!(refuse_manifest(&m), CaseCatalogError::BadCatalogVersion { .. }),
+                "catalog_version {over} rounds on the way to the frontend and must be refused"
+            );
+        }
     }
 
     #[test]
