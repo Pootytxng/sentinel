@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { invoke } from "@tauri-apps/api/core";
@@ -124,7 +124,6 @@ export default function Play({
   changes,
   rollback,
   activeChangeFor,
-  deepMonitoring,
   vendor = "any",
   view = "all",
   onFpsActive,
@@ -144,7 +143,6 @@ export default function Play({
   // ledger row so the session debrief's "next test" can carry a real rollback button. Same pair
   // (`activeChangeFor` + `rollback`) the Fix/Optimize surfaces already take.
   activeChangeFor?: (recId: string) => AppliedChange | undefined;
-  deepMonitoring?: ReactNode;
   vendor?: GpuVendor;
   // Monitor restructure (spec 2026-06-21): the Monitor shell renders Play twice under a segmented
   // control. "all" (default) = today's whole surface byte-identical (flag-off path); "sessions" = the
@@ -443,18 +441,6 @@ export default function Play({
           )}
         </div>
       </div>
-      )}
-
-      {/* Full monitoring — the deep classic Monitoring panels (memory pressure, per-core, charts).
-          Polling stays gated by MonitoringTab's `active` prop (only while Play is the live room). */}
-      {showLive && deepMonitoring && (
-        <div className="play-monitor">
-          <div className="play-monitor-head">
-            <span className="play-monitor-title">{t("monitor.play.fullMonitoringTitle")}</span>
-            <span className="play-monitor-sub">{t("monitor.play.fullMonitoringSub")}</span>
-          </div>
-          <div className="play-monitor-body">{deepMonitoring}</div>
-        </div>
       )}
 
       {/* Sessions — rows expand IN PLACE into the full debrief (no route; navigation never teleports). */}

@@ -393,6 +393,28 @@
   border-top: 1px solid var(--v2-line);
 }
 
+/* The GPU vendor-honesty caveat (LOCKED rule #5), directly under the readings it qualifies.
+   It is a footnote, not a reading: no top rule of its own — the strip above already drew one —
+   and the room's muted ink, so it reads as the fine print it is rather than a sixth sensor.
+   App.css paints .coverage-note strong a hardcoded #4ade80 for the pre-v2 shell; inside the
+   console that green is off-palette, so the accent is re-stated in the room's own token. */
+:root[data-v2="on"] .mc-ev-coverage {
+  margin: 10px 0 0;
+  font-size: var(--type-label);
+  line-height: 1.45;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .mc-ev-coverage .coverage-note {
+  display: block;
+  margin-top: 0;
+  font-size: inherit;
+  color: inherit;
+}
+:root[data-v2="on"] .mc-ev-coverage .coverage-note strong {
+  color: var(--v2-ok);
+  font-weight: 600;
+}
+
 /* ── Below both columns ───────────────────────────────────────────────────────────────────── */
 :root[data-v2="on"] .mc-below {
   display: flex;

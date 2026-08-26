@@ -13,27 +13,10 @@ import "./i18n";
 import FirstCheck, { FIRST_CHECK_KEY } from "./surfaces/FirstCheck";
 import { SetupTour, ONBOARDED_KEY } from "./surfaces/setup/SetupTour";
 import { LibraryContext } from "./surfaces/library-context";
-import { Term } from "./design/Term";
 import { Wordmark } from "./design/Wordmark";
 import { readCloseToTray, persistDisplayRefreshHz } from "./design/theme";
 import { ShellV2 } from "./design/ShellV2";
 import { fmtGB } from "./surfaces/hardware-format";
-// Deep Monitoring panels + their sensor types — moved verbatim to surfaces/monitor-panels (T3)
-// so the summary-first MonitorDomainCards can reuse them as its expanded detail.
-import {
-  FpsPanel,
-  MemoryPressureBanner,
-  CpuMonitorPanel,
-  GpuMonitorPanel,
-  type CpuSensorSnapshot,
-  type GpuSensorSnapshot,
-  type MemoryPressure,
-  type FpsStatus,
-  type CpuTemp,
-} from "./surfaces/monitor-panels";
-import { MonitorDomainCards } from "./surfaces/MonitorDomainCards";
-import { readMonitorCards } from "./design/theme";
-import { useReducedMotion } from "./design/use-motion";
 import { railFor, type HomeRailId } from "./design/homeRail";
 import { HomeRoom } from "./surfaces/HomeRoom";
 import { TrustMoment } from "./surfaces/TrustMoment";
@@ -50,10 +33,9 @@ import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport, ExportResult, PendingCareIncident } from "./types";
 import { LEDGER_CHANGED_EVENT } from "./types";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
-import { lsGet, lsSet } from "./data/safe-storage";
+import { lsGet } from "./data/safe-storage";
 import { invalidateProbe } from "./data/probe-cache";
 import type { LabStationKey } from "./surfaces/lab-guided-data";
-import { useDocumentVisible } from "./data/use-document-visible";
 import Settings from "./surfaces/Settings";
 import {
   type GamingSessionFile,
@@ -1529,7 +1511,6 @@ function App() {
                   onExport={onExport}
                   changes={changes}
                   rollback={rollback}
-                  deepMonitoring={<MonitoringTab active embedded />}
                   vendor={detectedVendor}
                 />
               )}
@@ -1608,275 +1589,6 @@ function App() {
 
 
 // ─── Tabs ────────────────────────────────────────────────────────────────
-
-// Monitoring poll cadence and rolling-window size. 1 Hz is plenty granular
-// for "is my GPU thermal-throttling" / "is my game CPU-bound" trends; faster
-// rates burn battery and HMR-spam the renderer without insight. The 60-sample
-// window means each chart shows the last minute — long enough to spot a
-// thermal trend, short enough to react to a moment-ago spike.
-const MONITORING_POLL_MS = 1000;
-const MONITORING_WINDOW = 60;
-
-function MonitoringTab({ active, embedded = false }: { active: boolean; embedded?: boolean }) {
-  const { t } = useTranslation();
-  // Summary-first domain cards (T3, default ON; classic panel stack is the failsafe). Live-synced
-  // so flipping the Settings toggle re-lays this tab without a reload (same pattern as useHudFlag).
-  const [cards, setCards] = useState(readMonitorCards);
-  useEffect(() => {
-    const sync = () => setCards(readMonitorCards());
-    window.addEventListener("compy:monitor-cards-changed", sync);
-    return () => window.removeEventListener("compy:monitor-cards-changed", sync);
-  }, []);
-  const reduced = useReducedMotion();
-  const visible = useDocumentVisible();
-  const [gpuSamples, setGpuSamples] = useState<GpuSensorSnapshot[][]>([]);
-  const [cpuSamples, setCpuSamples] = useState<CpuSensorSnapshot[]>([]);
-  const [hasGpu, setHasGpu] = useState<boolean | null>(null);
-  const [fps, setFps] = useState<FpsStatus | null>(null);
-  const [fpsBusy, setFpsBusy] = useState(false);
-  const [overlayOn, setOverlayOn] = useState(false);
-  const [cpuTemp, setCpuTemp] = useState<CpuTemp | null>(null);
-  const [mem, setMem] = useState<MemoryPressure | null>(null);
-  const [overlayCorner, setOverlayCorner] = useState<string>(
-    () => lsGet("compy_overlay_corner") ?? "top-left",
-  );
-
-  // Sync the overlay toggle with the actual window state on mount (e.g. the
-  // overlay may already be open from earlier in this app session).
-  useEffect(() => {
-    invoke<boolean>("overlay_visible").then(setOverlayOn).catch(() => {});
-  }, []);
-
-  const toggleOverlay = async () => {
-    try {
-      if (overlayOn) {
-        await invoke("hide_overlay");
-        setOverlayOn(false);
-      } else {
-        await invoke("show_overlay");
-        setOverlayOn(true);
-        // Re-apply the saved corner once the window is shown.
-        invoke("set_overlay_corner", { corner: overlayCorner }).catch(() => {});
-      }
-    } catch {
-      /* ignore — leave toggle as-is */
-    }
-  };
-
-  const chooseCorner = async (corner: string) => {
-    setOverlayCorner(corner);
-    lsSet("compy_overlay_corner", corner);
-    try {
-      await invoke("set_overlay_corner", { corner });
-    } catch {
-      /* overlay may be hidden — the choice applies next time it's shown */
-    }
-  };
-
-  // Poll only while the tab is active AND the window is on screen. When the user switches away we
-  // drop the interval so we don't burn cycles on charts that aren't visible — and "not visible"
-  // includes minimized/alt-tabbed-into-a-game, which the active flag alone can't see. This is the
-  // app's heaviest poll (five IPC calls a second, one of them the vendor GPU SDK). The sample
-  // buffer is preserved in state so coming back doesn't lose history.
-  useEffect(() => {
-    if (!active || !visible) return;
-    let cancelled = false;
-    const tick = async () => {
-      try {
-        const [gpuSnap, cpuSnap, fpsStatus, temp, memp] = await Promise.all([
-          invoke<GpuSensorSnapshot[]>("get_gpu_sensors"),
-          invoke<CpuSensorSnapshot>("get_cpu_sensors"),
-          invoke<FpsStatus>("get_fps_status"),
-          invoke<CpuTemp | null>("get_cpu_temp").catch(() => null),
-          invoke<MemoryPressure>("get_memory_pressure").catch(() => null),
-        ]);
-        if (cancelled) return;
-        setHasGpu(gpuSnap.length > 0);
-        setFps(fpsStatus);
-        setCpuTemp(temp);
-        if (memp) setMem(memp);
-        setGpuSamples((prev) => {
-          const next = [...prev, gpuSnap];
-          return next.length > MONITORING_WINDOW
-            ? next.slice(-MONITORING_WINDOW)
-            : next;
-        });
-        setCpuSamples((prev) => {
-          const next = [...prev, cpuSnap];
-          return next.length > MONITORING_WINDOW
-            ? next.slice(-MONITORING_WINDOW)
-            : next;
-        });
-      } catch {
-        if (!cancelled) setHasGpu(false);
-      }
-    };
-    tick();
-    const id = window.setInterval(tick, MONITORING_POLL_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-  }, [active, visible]);
-
-  const enableFps = async () => {
-    setFpsBusy(true);
-    try {
-      await invoke("start_fps_capture");
-    } catch {
-      /* surfaced via get_fps_status polling */
-    } finally {
-      setFpsBusy(false);
-    }
-  };
-  const stopFps = async () => {
-    setFpsBusy(true);
-    try {
-      await invoke("stop_fps_capture");
-      setFps((prev) => (prev ? { ...prev, active: false, sample: null } : prev));
-    } finally {
-      setFpsBusy(false);
-    }
-  };
-
-  const latestGpu = gpuSamples[gpuSamples.length - 1] ?? [];
-  const latestCpu = cpuSamples[cpuSamples.length - 1] ?? null;
-  const haveAnything = latestCpu !== null || latestGpu.length > 0;
-
-  return (
-    <section className="tab-pane">
-      {/* Header overlay controls + telemetry blurb hidden when embedded in Play (Play has its own
-          live + overlay cards) — embedded shows only the deep panels Play lacks. */}
-      {!embedded && (
-      <>
-      <div className="section-header">
-        <h2 className="section-title">{t("app.monitoring.title")}</h2>
-        <div className="section-header-actions">
-          <button
-            className={`btn-small ${overlayOn ? "btn-small-on" : ""}`}
-            onClick={toggleOverlay}
-            title={t("app.monitoring.overlayToggleTitle")}
-          >
-            {overlayOn ? t("app.monitoring.hideOverlay") : t("app.monitoring.showOverlay")}
-          </button>
-          {overlayOn && (
-            <div style={{ display: "flex", gap: 4 }} title={t("app.monitoring.moveOverlayTitle")}>
-              {(
-                [
-                  ["top-left", "↖"],
-                  ["top-right", "↗"],
-                  ["bottom-left", "↙"],
-                  ["bottom-right", "↘"],
-                ] as const
-              ).map(([corner, glyph]) => (
-                <button
-                  key={corner}
-                  className={`btn-small ${overlayCorner === corner ? "btn-small-on" : ""}`}
-                  onClick={() => chooseCorner(corner)}
-                  title={t(`app.monitoring.corners.${corner}`)}
-                  aria-label={t("app.monitoring.moveOverlayAria", { corner: t(`app.monitoring.corners.${corner}`) })}
-                  aria-pressed={overlayCorner === corner}
-                >
-                  {glyph}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="read-only-pill">
-            {!haveAnything
-              ? t("app.monitoring.starting")
-              : t("app.monitoring.historyDuration", { seconds: cpuSamples.length })}
-          </div>
-        </div>
-      </div>
-      <p className="section-help">
-        {t("app.monitoring.helpPre")}
-        <Term id="frametime">{t("app.monitoring.frametimeTerm")}</Term>
-        {t("app.monitoring.helpMid1")}
-        <Term id="etw">{t("app.monitoring.etwTerm")}</Term>
-        {t("app.monitoring.helpMid2")}
-        <Term id="kernel-driver">{t("app.monitoring.kernelDriverTerm")}</Term>
-        {t("app.monitoring.helpPost")}
-      </p>
-      </>
-      )}
-
-      {/* vendor-honesty: always rendered (LOCKED rule #5) — this line was silently unreachable for
-          weeks because it lived inside the !embedded header above while every live call site embeds
-          (self-review catch, 2026-07-07). Do not move it back under a mode gate; pinned by
-          vendor-honesty-line-guard.test.ts. */}
-      <p className="section-help">
-        <span className="coverage-note">
-          GPU sensor coverage: <strong>AMD — verified</strong> · NVIDIA —
-          implemented, not yet hardware-verified · Intel — planned.
-        </span>
-      </p>
-
-      {/* RAM-pressure warning — the invisible stutter cause; shows only when tight/critical */}
-      {mem && <MemoryPressureBanner mem={mem} />}
-
-      {/* FPS / frametime — headline metric, opt-in (needs admin). Hidden when embedded in Play (its
-          live card already owns capture). */}
-      {!embedded && (
-        <FpsPanel
-          fps={fps}
-          busy={fpsBusy}
-          onEnable={enableFps}
-          onStop={stopFps}
-        />
-      )}
-
-      {/* Domain panels. Cards ON (default): summary-first instrument cards — headline + gauge +
-          spark per domain, the FULL classic panel one click away (T3). Cards OFF: the classic
-          full-width panel stack, byte-identical (failsafe). */}
-      {cards ? (
-        <MonitorDomainCards
-          cpuSamples={cpuSamples}
-          gpuSamples={gpuSamples}
-          cpuTemp={cpuTemp}
-          mem={mem}
-          reduced={reduced}
-        />
-      ) : (
-        <>
-          {/* CPU panel — vendor-agnostic, always shows */}
-          {latestCpu && (
-            <CpuMonitorPanel
-              cpu={latestCpu}
-              history={cpuSamples}
-              cpuTemp={cpuTemp}
-            />
-          )}
-
-          {/* GPU panels — one per detected adapter */}
-          {latestGpu.map((gpu) => (
-            <GpuMonitorPanel
-              key={`${gpu.vendor}-${gpu.index}`}
-              gpu={gpu}
-              history={gpuSamples.map(
-                (snap) =>
-                  snap.find(
-                    (g) => g.index === gpu.index && g.vendor === gpu.vendor,
-                  ) ?? null,
-              )}
-            />
-          ))}
-        </>
-      )}
-
-      {/* GPU sensors missing — same honest explanation in both layouts. */}
-      {hasGpu === false && (
-        <div className="empty">
-          {t("app.monitoring.gpuSensorsUnavailable")}
-        </div>
-      )}
-
-      {!haveAnything && (
-        <div className="empty">{t("app.monitoring.collectingFirstSample")}</div>
-      )}
-    </section>
-  );
-}
 
 function DiagnosticsTab({ sections }: { sections: DiagnosticSection[] }) {
   const { t } = useTranslation();

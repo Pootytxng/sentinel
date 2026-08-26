@@ -653,6 +653,24 @@ export function MonitorConsole({
             />
           </div>
 
+          {/* vendor-honesty: always rendered (LOCKED rule #5). This sentence is the rule's ONE
+              user-visible surface, and it has now gone dark TWICE. 2026-07-07 it was nested in
+              MonitoringTab's `{!embedded && …}` header while every call site embedded; the fix
+              hoisted it out of that gate and pinned it — but the guard only proved "not under a
+              mode gate", so it stayed green while the whole component went dark one level up
+              (MonitorV2 returns MonitorConsole on "live" and only reaches Play on "sessions",
+              where Play's `showLive` is false, so `deepMonitoring` never rendered at all).
+              It lives HERE now because this is the surface that actually draws GPU sensors, and
+              a coverage caveat belongs beside the readings it qualifies — not one route away.
+              Do not move it behind a condition; vendor-honesty-line-guard.test.ts now pins the
+              RENDER PATH, not just the nesting. */}
+          <p className="mc-ev-coverage">
+            <span className="coverage-note">
+              GPU sensor coverage: <strong>AMD — verified</strong> · NVIDIA —
+              implemented, not yet hardware-verified · Intel — planned.
+            </span>
+          </p>
+
           {/* The game-HUD Target Cursor, stage-scoped (kit handles reduced/coarse-pointer null
               + the rAF pointerleave stop — Phase-1's review fix). */}
           <ReticleCursor scopeRef={stageRef} />

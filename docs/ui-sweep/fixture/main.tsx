@@ -77,7 +77,7 @@ import { applyRoomAccents } from "../../../src/design/theme";
 import ExperimentBench from "../../../src/surfaces/ExperimentBench";
 // The CPU panel is mounted whole, not just the offer: the offer's job is to replace a dead-end
 // sublabel on the temperature row, so the row above it is part of what review has to judge.
-import { CpuMonitorPanel, type CpuSensorSnapshot } from "../../../src/surfaces/monitor-panels";
+import { CpuTempOffer } from "../../../src/surfaces/CpuTempOffer";
 // Q9a's consent tile. Dark in every build — see the stub's receipts section for why no build,
 // flag, or stored value on the owner's machine reaches these pixels.
 import ReceiptsConsent from "../../../src/surfaces/ReceiptsConsent";
@@ -91,7 +91,7 @@ import { BlackBox } from "../../../src/surfaces/BlackBox";
 // and its rollback instead, so the pixels are the app's.
 import { FirstWin } from "../../../src/surfaces/FirstWin";
 import type { AppliedChange } from "../../../src/types";
-import { BentoGrid } from "../../../src/design/bento";
+import { BentoGrid, BentoTile } from "../../../src/design/bento";
 // Same module instance the bench's aliased `@tauri-apps/api/core` import resolves to (both land on
 // this directory's stub-core.ts), so this reads the state the bench is actually rendering.
 import {
@@ -226,17 +226,6 @@ function FixtureBanner() {
 // --ix-* re-point selector matches — see the lab-v2.css note above. The rest of RoomShell (the
 // verdict header, doors, quiet slot) is deliberately NOT replicated: it is chrome around the
 // bench, not the subject of this review, and faking it would put invented copy on screen.
-// INVENTED, like everything else on this page. Shape matches `CpuSensorSnapshot`
-// (src/surfaces/monitor-panels.tsx:12). Two identical history entries because one would trip the
-// panel's "warming up" branch, which is a different state from the one under review.
-const CPU: CpuSensorSnapshot = {
-  usage_overall_pct: 21.4,
-  usage_per_core_pct: [34, 12, 8, 41, 17, 6, 22, 9, 55, 13, 7, 19, 28, 11, 5, 24],
-  frequency_mhz: 4712,
-  ram_used_bytes: 11_400_000_000,
-  ram_total_bytes: 31_580_000_000,
-};
-
 // The CPU-temp states mount the Monitor room, the bench states the Lab room. Each room element is
 // the declaring element for its own --ix-* re-point (see the sheet notes above), so the wrapper is
 // not decoration — swap it and the palette in the screenshot stops being the app's.
@@ -259,10 +248,19 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
         </div>
       </div>
     ) : isCpuTempState() ? (
-      <section className="v2-room" data-room="play">
+      // The offer used to be reviewed through CpuMonitorPanel, its 2026-08 host. That panel — and
+      // the whole monitor-panels.tsx / MonitorDomainCards / MonitoringTab subtree behind it — was
+      // deleted once it turned out no route rendered any of it, so reviewing the offer there was
+      // reviewing it on a surface no user could reach. It now mounts the way HomeConsole:1274
+      // mounts it: Health's room, a full-span BentoTile, shown only while nothing publishes a
+      // temperature. The offer takes no props — its own get_sensor_sources read is the branch.
+      <section className="v2-room" data-room="home">
         <div className="v2-room-body">
-          {/* cpuTemp={null} is the whole point: it is the branch that renders the offer. */}
-          <CpuMonitorPanel cpu={CPU} history={[CPU, CPU]} cpuTemp={null} />
+          <BentoGrid>
+            <BentoTile title="CPU temperature" span="full">
+              <CpuTempOffer />
+            </BentoTile>
+          </BentoGrid>
         </div>
       </section>
     ) : isBlackboxState() ? (

@@ -85,8 +85,10 @@ describe("hidden-poll guard", () => {
   it("finds the sensor-polling surfaces at all (the corpus is the weak part)", () => {
     // A refactor that renames the commands or the timer call would silently empty the corpus and
     // turn every assertion below into a no-op. Pin the floor: the census found 13 on 2026-08-04;
-    // the 2026-08-20 sweep (issue #180) deleted MonitorBasic.tsx, one of the 13.
-    expect(pollingSurfaces().length).toBeGreaterThanOrEqual(12);
+    // the 2026-08-20 sweep (issue #180) deleted MonitorBasic.tsx, one of the 13, and the
+    // 2026-08-26 dead-route removal deleted App.tsxs MonitoringTab, another — its 1 Hz five-IPC
+    // tick was the heaviest poll in the app and nothing rendered a pixel of its output.
+    expect(pollingSurfaces().length).toBeGreaterThanOrEqual(11);
   });
 
   it("every sensor-polling surface gates on document visibility", () => {

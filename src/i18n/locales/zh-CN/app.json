@@ -78,31 +78,6 @@
     "retry": "重试",
     "reading": "正在读取硬件信息…"
   },
-  "monitoring": {
-    "title": "监测",
-    "overlayToggleTitle": "在无边框或窗口化游戏上显示一个紧凑的常驻置顶浮层",
-    "hideOverlay": "隐藏浮层",
-    "showOverlay": "显示浮层",
-    "moveOverlayTitle": "将浮层移动到屏幕角落",
-    "moveOverlayAria": "将浮层移动到{{corner}}角",
-    "corners": {
-      "top-left": "左上",
-      "top-right": "右上",
-      "bottom-left": "左下",
-      "bottom-right": "右下"
-    },
-    "starting": "正在启动…",
-    "historyDuration": "{{seconds}} 秒历史记录 · 1 Hz",
-    "helpPre": "来自这台电脑的实时读数。CPU 占用率来自 Windows 自带的计数器(无需额外安装)。显卡读数直接来自显卡驱动自带的传感器。FPS 与",
-    "frametimeTerm": "帧时间",
-    "helpMid1": "的测量方式是",
-    "etwTerm": "从游戏外部观察",
-    "helpMid2": "。不会向你的游戏添加任何东西,也不会安装",
-    "kernelDriverTerm": "深入 Windows 底层的组件",
-    "helpPost": "——兼容反作弊系统。浮层会显示在无边框或窗口化游戏画面上(不支持独占全屏)。图表展示最近一分钟的数据。",
-    "gpuSensorsUnavailable": "显卡传感器不可用。Compy 直接从显卡驱动自带的传感器读取这些数据——它随你的 NVIDIA 或 AMD 驱动一同安装,无需额外安装任何东西。这通常说明驱动的传感器服务没有响应,更新或重新安装显卡驱动一般就能恢复。Intel 显卡目前还没有专属面板。",
-    "collectingFirstSample": "正在采集首个样本…"
-  },
   "diagnostics": {
     "title": "诊断信息",
     "help": "这里是 Compy 对你 PC 的原始观测数据,优化建议引擎正是依据这些观测结果来决定展示哪些内容。如果你期待的某项优化建议没有出现——或者出现了一项你没料到的——答案通常就在这里。"

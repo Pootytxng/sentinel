@@ -91,9 +91,10 @@
 
 /* BENTO: the tile IS the box — same precedent as `.v2-tile-body .hc-limiter` (home-console.css).
    HomeConsole mounts the offer inside a `.v2-tile-full` that already draws the frame, fill and
-   radius, so the offer drops its own shell there rather than nesting one inside the other. The
-   `monitor-panels.tsx` mount sits in a plain panel with no tile around it and keeps its frame,
-   which is why this is scoped and not a rewrite of the base rule. */
+   radius, so the offer drops its own shell there rather than nesting one inside the other. This
+   stays SCOPED rather than becoming the base rule: the base still draws the offer its own frame
+   for any un-tiled mount. (The `monitor-panels.tsx` mount that used to be that second case was
+   deleted 2026-08-26 with the unreachable route it hung off; HomeConsole is the only mount now.) */
 .v2-tile-body > .cpu-temp-offer {
   margin-top: 0;
   padding: 0;

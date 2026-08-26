@@ -78,31 +78,6 @@
     "retry": "Try again",
     "reading": "Reading your hardware…"
   },
-  "monitoring": {
-    "title": "Monitoring",
-    "overlayToggleTitle": "Show a compact always-on-top HUD over borderless/windowed games",
-    "hideOverlay": "Hide overlay",
-    "showOverlay": "Show overlay",
-    "moveOverlayTitle": "Move the overlay to a screen corner",
-    "moveOverlayAria": "Move the overlay to the {{corner}} corner",
-    "corners": {
-      "top-left": "top left",
-      "top-right": "top right",
-      "bottom-left": "bottom left",
-      "bottom-right": "bottom right"
-    },
-    "starting": "Starting…",
-    "historyDuration": "{{seconds}}s history · 1 Hz",
-    "helpPre": "Live readings from your PC. CPU usage comes from Windows' own counters — nothing extra installed. GPU readings come straight from your graphics driver's sensors. Frame rate &",
-    "frametimeTerm": "frametime",
-    "helpMid1": " are measured ",
-    "etwTerm": "from outside your game",
-    "helpMid2": ". Nothing is added to your games, and nothing is installed ",
-    "kernelDriverTerm": "deep inside Windows",
-    "helpPost": " — safe with anti-cheat. The overlay draws over borderless and windowed games (not exclusive fullscreen). Charts show the last minute.",
-    "gpuSensorsUnavailable": "GPU sensors unavailable. Compy reads these straight from your graphics driver's own sensors — installed with your NVIDIA or AMD driver, so there is nothing extra to add. This normally means the driver's sensor service isn't answering; updating or reinstalling your GPU driver is what usually brings it back. Intel GPUs don't have a panel here yet.",
-    "collectingFirstSample": "Collecting first sample…"
-  },
   "diagnostics": {
     "title": "Diagnostics",
     "help": "Compy's raw view of your PC. These are the observations the recommendation engine reads to decide what to surface. If a rec you expect doesn't show up — or one you don't expect does — the answer usually lives here."

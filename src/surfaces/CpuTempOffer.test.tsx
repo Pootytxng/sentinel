@@ -164,24 +164,13 @@ describe("CpuTempOffer — every state ends in something the user can do", () =>
 // sentence first and the fix second. tsc and every unit test were green: nothing here rendered the
 // two together. This mounts the real panel and pins that the retired sentence is gone for good.
 describe("the panel replaces the dead end, it does not stack on top of it", () => {
-  it("renders the offer and NOT the retired fallback sentence when no temp is published", async () => {
-    backend.report = { apps: [], scanned: 12 } as SensorSourceReport;
-    const { CpuMonitorPanel } = await import("./monitor-panels");
-    const cpu = {
-      usage_overall_pct: 21,
-      usage_per_core_pct: [10, 20],
-      frequency_mhz: 4700,
-      ram_used_bytes: 8_000_000_000,
-      ram_total_bytes: 32_000_000_000,
-    };
-    render(<CpuMonitorPanel cpu={cpu} history={[cpu]} cpuTemp={null} />);
-    await waitFor(() => expect(screen.getByText(/Turn CPU temperature on/i)).toBeTruthy());
-    expect(
-      screen.queryByText(/No sensor app is publishing it yet/i),
-      "the retired dead-end sublabel is back — the offer must REPLACE it, not stack under it",
-    ).toBeNull();
-  });
-
+  // The render half of this guard mounted `CpuMonitorPanel` from monitor-panels.tsx. That whole
+  // file was deleted once the dead `deepMonitoring` route came out (it had no reachable render
+  // path — MonitorV2 answers "live" with MonitorConsole and only reaches Play on "sessions",
+  // where `showLive` is false), so the case had no fixture left to mount. Nothing is weakened:
+  // the dead-end sentence can only come BACK through its i18n key, and the case below bans that
+  // key from every shipped locale — which is the stronger of the two assertions anyway, because
+  // it holds no matter which surface would have printed it.
   it("keeps the retired copy out of the shipped locales", () => {
     for (const locale of ["en", "zh-CN"]) {
       const json = readFileSync(join("src", "i18n", "locales", locale, "monitor.json"), "utf8");

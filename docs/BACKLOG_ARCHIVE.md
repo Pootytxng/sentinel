@@ -7,6 +7,45 @@
 
 ---
 
+## 2026-08-26 — NEXT UP ② closed in full, moved verbatim (NEXT UP byte cap)
+
+Moved out of `docs/BACKLOG.md` ▶ NEXT UP the day it closed. Both rows are done; a closed row does
+not belong in a linear queue of what is next. Byte-for-byte, nothing re-worded — the two relative
+links point into `src/`, one directory up from `docs/`, exactly as they did in the live file.
+
+#### ② FOUND BY LOOKING, NOT BY A TEST — opened 2026-08-26 by the DIR-1 first-timer walk
+
+1. ✅ **CLOSED 2026-08-26 — and it was four times bigger than the row said.** The row scoped this
+   to `FpsPanel` plus 61 lines of header, on the theory that `MonitoringTab`'s one call site always
+   passes `embedded`. That much was true, and it was the smaller half. `MonitoringTab` itself never
+   rendered: `MonitorV2` answers the `"live"` segment with `<MonitorConsole>` and only reaches
+   `<Play>` on `"sessions"`, where Play's `showLive = view !== "sessions"` is false — so the
+   `deepMonitoring` slot holding it was dead on every route, and `monitor-panels.tsx` (606 lines)
+   and `MonitorDomainCards.tsx` (333) went with it. **Item 2 below asserted the opposite** —
+   "`GpuMonitorPanel` is reachable via `MonitorDomainCards`" — which was false: MonitorDomainCards
+   had exactly one mount, inside the dead MonitoringTab. Deleted, not re-reached: MonitorConsole is the
+   owner-approved Live face and already draws the FPS scope, the frametime trace and five sensor
+   readings. **What genuinely goes with it:** the per-core bar grid, the long metric-row detail, and
+   the NVIDIA-only "unverified" pill whose hover tooltip was rule 5's second surface — the coverage
+   line now states that fact in plain text for every vendor, which no user has to hover to find.
+   All revivable from the commit if ever wanted. Removed `get_fps_status` and `overlay_visible` IPC
+   that nothing consumed, and 79 locale keys per language.
+2. ✅ **CLOSED 2026-08-26 — the line is on screen for the first time.** The row's *conclusion* was
+   right (rule 5's sentence was not readable) and its *reason* was wrong: the line sat OUTSIDE the
+   `!embedded` gate, behind a sentinel comment, exactly where the 2026-07-07 fix put it. The
+   component around it had gone dark. It now lives in
+   [`../src/surfaces/MonitorConsole.tsx`](../src/surfaces/MonitorConsole.tsx), directly under the
+   sensor strip whose coverage it qualifies, on the face the Monitor room opens on.
+   **The guard is the real lesson.** `vendor-honesty-line-guard.test.ts` was green the whole time —
+   it proved "present, once, not wrapped in a condition", which is not reachability. It now walks
+   the route: MonitorV2 → Live segment → MonitorConsole → sibling of the sensor strip, and forbids
+   a `deepMonitoring`-shaped slot from becoming the line's home again. **Two other guards had the
+   same blind spot** and were re-recorded rather than argued with: the affordance census counted 80
+   strings as reachable affordances that no user could reach, and the mono census described CSS in a
+   file nothing rendered. Source-reachability is not user-reachability — that is the class.
+
+---
+
 ## 2026-08-26 — five NEXT UP archive-pointer blocks, moved verbatim (BACKLOG section byte cap)
 
 Moved out of `docs/BACKLOG.md` ▶ NEXT UP to pay for the #213 A1 and #219 ruling records. Every one

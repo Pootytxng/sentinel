@@ -66,20 +66,14 @@ claim** — the first wording said Home printed the remaining flagged checks its
 review caught it, and `system-posture.test.ts` now pins the comment to the code both ways.
 Guards: `comp-fidelity-guard.test.ts`, `approved-comps-guard.test.ts`.
 
-#### ② FOUND BY LOOKING, NOT BY A TEST — opened 2026-08-26 by the DIR-1 first-timer walk
+#### ② FOUND BY LOOKING, NOT BY A TEST — ✅ BOTH ROWS CLOSED 2026-08-26, record archived
 
-1. **`FpsPanel` and 61 lines of App's monitoring header are UNREACHABLE dead code.** `MonitoringTab`
-   has exactly ONE call site ([`../src/App.tsx:1532`](../src/App.tsx#L1532)) and it always passes
-   `embedded`, so both `{!embedded && (…)}` blocks (`App.tsx` 1750–1802 and 1820–1827) never render
-   — `FpsPanel` in [`../src/surfaces/monitor-panels.tsx`](../src/surfaces/monitor-panels.tsx) with
-   them. Found by the self-reviewer while verifying a glossary fix it could not reach on screen.
-   **Delete or re-reach — it is not free:** dead UI reads as shipped UI to every later audit, and a
-   fix aimed at it looks done and changes nothing.
-2. **The "GPU sensor coverage" honesty line is inside that dead block** ([`../src/App.tsx:1810`](../src/App.tsx#L1810))
-   and exists nowhere else, so the sentence LOCKED rule 5 requires — *NVIDIA: implemented, not yet
-   hardware-verified* — is not readable in the shipped app. Nothing FALSE is shown and the NVML
-   tooltip half of the rule is fine (`GpuMonitorPanel` is reachable via `MonitorDomainCards`), so
-   this is a missing disclosure, not a fabricated claim. Re-home it when item 1 is settled.
+Opened by the DIR-1 first-timer walk, closed the same day. The dead `deepMonitoring` route is gone
+(`MonitoringTab` + `monitor-panels.tsx` + `MonitorDomainCards.tsx`) and rule 5's "GPU sensor
+coverage" sentence is on screen for the first time, on MonitorConsole. **The finding worth keeping:
+source-reachability is not user-reachability** — three separate guards were green while the code
+they described rendered nowhere. Full record:
+[`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md).
 
 #### ③ REPO HYGIENE — real, but nobody is waiting on it
 
