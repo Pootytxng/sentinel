@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { invoke } from "@tauri-apps/api/core";
 import { BlackBox } from "./BlackBox";
 import type { BlackBoxReport, CrashIncident } from "../types";
 
@@ -51,6 +52,7 @@ function assessedIncident(): CrashIncident {
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  vi.mocked(invoke).mockClear();
   reportMock.value = { incidents: [], skipped_sources: [] };
 });
 
@@ -103,5 +105,89 @@ describe("BlackBox surface (v2 triage UI)", () => {
     render(<BlackBox />);
     scan();
     expect(await screen.findByText(/no crashes or freezes recorded/i)).toBeInTheDocument();
+  });
+});
+
+// ─── Characterization: the pre-Tier-1 freeze (#220, plan task 1) ───────────────────────────────
+//
+// Tier 1 case intelligence (Q8) adds a signed, pull-only advisory catalog behind a hard-false gate.
+// These tests do not test Tier 1 — they pin what the crash station does TODAY, so that the moment
+// any part of Tier 1 becomes reachable in the shipped path, a test says so out loud instead of the
+// change arriving silently. Each one is expected to be edited deliberately, by the task that is
+// allowed to change that behavior, and never re-baselined to make a red suite green.
+describe("Black Box — frozen pre-Tier-1 behavior (characterization)", () => {
+  it("a scan issues exactly ONE backend call, get_crash_blackbox, and no other", async () => {
+    reportMock.value = { incidents: [assessedIncident()], skipped_sources: [] };
+    render(<BlackBox />);
+    scan();
+    await screen.findByText("What this points to");
+    const calls = vi.mocked(invoke).mock.calls.map((c) => c[0]);
+    expect(calls).toEqual(["get_crash_blackbox"]);
+  });
+
+  it("raw receipt evidence stays BEHIND the expander — ids and codes are absent until it is opened", async () => {
+    const inc = assessedIncident();
+    inc.receipt.code = "0x00000116";
+    reportMock.value = { incidents: [inc], skipped_sources: [] };
+    render(<BlackBox />);
+    scan();
+    await screen.findByText(inc.headline);
+
+    expect(document.body.textContent || "").not.toContain("0x00000116");
+    expect(document.body.textContent || "").not.toContain("System log · Display 4101");
+
+    fireEvent.click(screen.getByRole("button", { name: /show the receipt/i }));
+    expect(screen.getByText("0x00000116")).toBeInTheDocument();
+    expect(screen.getByText("System log · Display 4101")).toBeInTheDocument();
+  });
+
+  it("the 'did this help' mark is written LOCALLY and sends nothing — no extra backend call", async () => {
+    reportMock.value = { incidents: [assessedIncident()], skipped_sources: [] };
+    render(<BlackBox />);
+    scan();
+    await screen.findByText("What this points to");
+    vi.mocked(invoke).mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: /^yes$/i }));
+    await screen.findByText(/you marked this pointed you the right way/i);
+
+    expect(vi.mocked(invoke).mock.calls).toHaveLength(0);
+    expect(localStorage.getItem("compy_bb_feedback")).toContain('"vote":"yes"');
+  });
+
+  it("an incident carrying an UNKNOWN optional field renders exactly as one without it", async () => {
+    // The Tier 1 wire contract adds an optional `case_intelligence` field to the incident. Today the
+    // station has no such field and must ignore one that appears. When task 7 lands, this test is the
+    // one that has to be changed on purpose — its failure is the signal, not a nuisance.
+    const withField = {
+      ...assessedIncident(),
+      case_intelligence: { case_id: "unused", level: "MatchedKnownIssue" },
+    } as unknown as CrashIncident;
+
+    reportMock.value = { incidents: [withField], skipped_sources: [] };
+    render(<BlackBox />);
+    scan();
+    await screen.findByText("What this points to");
+    const withText = document.body.textContent || "";
+
+    cleanup();
+    reportMock.value = { incidents: [assessedIncident()], skipped_sources: [] };
+    render(<BlackBox />);
+    scan();
+    await screen.findByText("What this points to");
+
+    expect(document.body.textContent || "").toBe(withText);
+    expect(withText).not.toContain("unused");
+  });
+
+  it("no known-issue / advisory-source chrome exists on the station yet", async () => {
+    reportMock.value = { incidents: [assessedIncident()], skipped_sources: [] };
+    render(<BlackBox />);
+    scan();
+    await screen.findByText("What this points to");
+    const body = document.body.textContent || "";
+    expect(body).not.toMatch(/known issue/i);
+    expect(body).not.toMatch(/matches the recorded shape/i);
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 });
