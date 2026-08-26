@@ -128,7 +128,10 @@ export function carriersMissingFromBullet(bullet, carriers) {
       // carrier it never identified, which under-reports in exactly the dangerous direction.
       if (!c.path) return false;
       const s = norm(span);
-      return s !== "" && norm(c.path).endsWith("/" + s) && tail(s) === c.name.toLowerCase();
+      // The whole path counts as well as a tail of it: that is the raw form `git worktree list`
+      // prints, and the handoff bullet tells the next author to re-derive with exactly that
+      // command. endsWith alone cannot match it — a string is never a PROPER suffix of itself.
+      return s !== "" && (s === norm(c.path) || norm(c.path).endsWith("/" + s)) && tail(s) === c.name.toLowerCase();
     });
   return carriers.filter((c) => c.commits > 0 && !named(c)).map((c) => c.name);
 }
@@ -228,6 +231,14 @@ describe("the handoff tells the truth about the worktrees", () => {
     expect(carriersMissingFromBullet("- **not on main** — `.claude/worktrees/ghost-c5660e`, detached.", [ghost])).toEqual([]);
     // ...and NOT by an unrelated quoted path that merely ends in the same segment.
     expect(carriersMissingFromBullet("- **not on main** — see `docs/notes/ghost-c5660e`.", [ghost])).toEqual(["ghost-c5660e"]);
+    // A pasted full path counts — `git worktree list` prints exactly this, and the bullet tells the
+    // next author to re-derive with it. Found by the third verification pass, which caught the
+    // matcher demanding a PROPER suffix and so false-failing on the one format most likely to be
+    // pasted. It failed loud rather than crediting silently, but a guard that cries wolf gets muted.
+    expect(carriersMissingFromBullet("- **not on main** — `C:/Users/Kuya/code/sentinel/.claude/worktrees/ghost-c5660e`.", [ghost])).toEqual([]);
+    expect(carriersMissingFromBullet("- **not on main** — `C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\ghost-c5660e`.", [ghost])).toEqual([]);
+    // A different checkout's full path still credits nobody.
+    expect(carriersMissingFromBullet("- **not on main** — `C:/Users/Kuya/code/sentinel-care89`.", [ghost])).toEqual(["ghost-c5660e"]);
     // An uncountable checkout is a failure, never a zero — the inert path a review caught in rule C.
     expect(unmeasuredCarriers([{ name: "lane/a", commits: 3 }, { name: "ghost", commits: null }])).toEqual(["ghost"]);
     expect(unmeasuredCarriers([{ name: "lane/a", commits: 0 }])).toEqual([]);
