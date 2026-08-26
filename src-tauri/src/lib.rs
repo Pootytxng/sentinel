@@ -8,6 +8,7 @@ mod benchmark_verdict; // [A] verdict engine (bootstrap CI, Keep/Revert/Inconclu
 mod benchmark_scoreboard; // [B] scoreboard — WIRED (Score card + persisted ledger; Keep-only awards, firewalled). P4 cohort/network still unbuilt.
 mod benchmark_trial; // live trial runner — WIRED: calibration + tweak A-B trial (Drop-guarded rollback).
 mod capture; // Measurement Platform 2.0 — the capture-backend boundary + per-session CaptureCapabilities (additive, honesty-first; names/versions/bounds the existing ETW-DXGI frame capture, measures & mutates NOTHING new).
+mod case_intelligence; // Compy Care Tier 1 (Q8, #220) — the signed, pull-only PUBLIC ADVISORY catalog: strict domain types + parser behind a hard-false gate. DOWNLOAD-only, uploads no machine data ever; its own key/schema/origins/cache, separate from remote_rules (Tier 0 privileged policy) and receipts (Tier 2). No mutation, no regex, no causal claim.
 mod comparability; // Measurement Platform 2.0 (Task F) — the pure session-comparability gate: composes capture_capabilities + game_state + hw_fingerprint into an honest "how far can these two sessions be compared?" verdict (bands-only ceiling, never assumes unrecorded context matched). Additive metadata; blocks nothing, exposes limits.
 mod comparison; // M4 cross-session comparison engine (arm → finalize-delta → honest verdict).
 mod game_state; // Measurement Platform 2.0 (Task E) — additive per-session GameStateFingerprint (the honest conditions a session ran under; collects only provable fields, infers nothing).

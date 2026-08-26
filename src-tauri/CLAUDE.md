@@ -37,6 +37,7 @@ Line counts drift — treat as rough and verify against current code before asse
 - `recommendations.rs` (~970), `readiness.rs` (~1615), `priorities.rs` (~707), `diagnostics.rs` (~637), `leftovers.rs` (~1200) — recs catalog, gaming-readiness, priority ranking, diagnostics, leftover-cleanup advisory.
 - `export.rs` (~814) — evidence-pack / share-card export.
 - `support_evidence.rs` (~931) — Q5 local support evidence: bounded, redacted-at-construction, on-disk only. No outbound surface (`src/support-evidence-outbound-guard.test.ts`); `record` swallows every error so it can never block a rollback.
+- `case_intelligence.rs` (~1275) — **Compy Care Tier 1, DARK** (#220): the signed, pull-only PUBLIC-ADVISORY catalog — strict domain types + parser (`parse_manifest`/`parse_catalog`). DOWNLOAD-only; it uploads no machine data, so it is advisory, not an outbound *send* path like Tier 2. Its own key/schema/origins/cache, separate from the privileged remote-rules trust domain. Cannot represent a command, registry path, action id or regex; matchers are a closed set over a lowercase token charset. `case_intelligence_gate()` is hard-false and CASE_CATALOG_ORIGINS is EMPTY, so no manifest can validate. **When the owner arms it this line moves to the ★ half in the root `CLAUDE.md`** — a live gate belongs in the always-loaded file.
 - `tray.rs` (~177) — system-tray integration.
 
 **Intelligence & Measurement Platform (read-only, additive — no mutation markers, verified 2026-08-02)**
