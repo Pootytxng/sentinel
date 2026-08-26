@@ -504,6 +504,7 @@ dependencies = [
  "ferrisetw",
  "nvml-wrapper",
  "reqwest",
+ "rustls",
  "serde",
  "serde_json",
  "sha2",

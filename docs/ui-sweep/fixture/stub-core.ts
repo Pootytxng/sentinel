@@ -241,10 +241,170 @@ const RECEIPTS_STATES: Record<
   },
 };
 
+// ── Compy Care Tier 1 — the signed known-issue block (#220, 2026-08-25) ────────────────
+// The Black Box's Tier 1 section is unreachable on the owner's machine and will stay that way for
+// as long as Tier 1 is dark. Three independent locks have to fall for a match to exist:
+// `case_intelligence_gate()` is hard-false, `CASE_SIGNING_PUBKEY` is all zeros, and both catalog
+// allowlists are empty — so even a build with the gate forced on would verify nothing and render
+// nothing. Forcing any of them for a screenshot is exactly what the plan's boundaries forbid.
+//
+// So the fixture answers `get_crash_blackbox` with a report that already carries the field. The
+// shape is `CrashIncident.case_intelligence` (src/types.ts), which mirrors `CaseIntelligenceMatch`
+// (src-tauri/src/case_intelligence.rs) — nothing here fakes a signature, a catalog or a fetch,
+// because none of that reaches the UI: by the time an incident has this field, verification has
+// already happened or the field is absent.
+//
+// The three states are the three the review actually needs: a FULL match, a PARTIAL one (which is
+// the level that withholds `research_only` steps), and an incident with the field absent — the
+// control that proves a dark build paints no Tier 1 chrome at all.
+const CASE_MATCHED = {
+  case_id: "amd-rdna4-display-timeout-2026-02",
+  catalog_version: 7,
+  level: "matched_known_issue",
+  title: "Display timeouts on RDNA4 cards running Adrenalin 26.1.1",
+  summary:
+    "The publisher records the display driver timing out on RDNA4 cards on this driver line when a second monitor runs at a different refresh rate. The write-up names the affected driver range and the release that addresses it.",
+  // KEYS, never this machine's values — the component looks each one up in
+  // `gaming.blackBox.knownIssue.evidenceKey.*` and drops any key it has no label for.
+  evidence_refs: ["faulting_module", "gpu_driver_version", "gpu_vendor"],
+  next_steps: [
+    {
+      headline: "Update to Adrenalin 26.2.1 or later",
+      detail: "The release notes list a change for this timeout on RDNA4 cards.",
+      research_only: false,
+    },
+    {
+      // Kept at this level and flagged; the partial state below drops it entirely.
+      headline: "Look into whether your two monitors run at different refresh rates",
+      detail: "The write-up narrows the reports to mixed-refresh multi-monitor setups.",
+      research_only: true,
+    },
+  ],
+  contraindications: [
+    "Do not start a driver update mid-download or mid-game — the display blanks for a few seconds while the driver swaps.",
+  ],
+  // A real, publicly reachable page on the publisher's own domain. An invented URL in a screenshot
+  // of a provenance line would be the one fake value here that actually misleads — the whole point
+  // of the line is that the user can go and read the source.
+  source_url: "https://www.amd.com/en/resources/support-articles/release-notes.html",
+  source_updated_at: "2026-02-04",
+};
+
+const CASE_POSSIBLE = {
+  case_id: "publisher-anticheat-launch-close-2026-06",
+  catalog_version: 7,
+  level: "possible_known_issue",
+  title: "The game closes at launch after an anti-cheat service update",
+  summary:
+    "The publisher records the game closing immediately at launch when its anti-cheat service is left stopped after an update.",
+  evidence_refs: ["error_code", "faulting_app"],
+  next_steps: [
+    {
+      headline: "Run the launcher's repair on this game",
+      detail: "The publisher's repair option reinstalls the anti-cheat service.",
+      research_only: false,
+    },
+  ],
+  contraindications: [],
+  source_url: "https://help.example-publisher.com/known-issues/anticheat-launch",
+  source_updated_at: "2026-06-14",
+};
+
+const bbIncident = (over: Record<string, unknown>) => ({
+  headline: "Your graphics driver stopped responding and recovered",
+  tag: "GPU timeout",
+  when: "2026-08-20T21:42:00-05:00",
+  when_display: "Aug 20, 9:42 PM",
+  vitals: {
+    session_started_at: "2026-08-20T20:10:00-05:00",
+    game: "Example Game",
+    peak_gpu_temp_c: 71,
+    peak_gpu_usage_pct: 98,
+    avg_frametime_ms: 8.4,
+    low1_fps_est: 96,
+    summary: "Example Game · 1h 32m · peak GPU 71°C · 1% low ~96 fps",
+  },
+  receipt: {
+    source: "System log · Display 4101",
+    event_ids: [4101],
+    faulting_app: null,
+    faulting_module: "amdkmdag",
+    code: null,
+    detail: "Display driver amdkmdag stopped responding and has recovered.",
+  },
+  // Compy's OWN reading. Present on purpose in every state: the review has to judge whether a user
+  // can tell this block apart from the quoted one below it, and that is only answerable side by side.
+  assessment: {
+    consistent_with: "your graphics driver (amdkmdag) repeatedly timing out",
+    strength: "strong",
+    evidence: [
+      "the same driver module (amdkmdag) stopped responding across 2 separate crashes",
+      "the GPU temperature was not in the overheating range in those sessions",
+    ],
+    next_step: {
+      headline: "Do a clean reinstall of your graphics driver",
+      detail: "Download the current driver and install it with the clean-install option.",
+      reversible: true,
+      research_only: false,
+    },
+    beyond_us: false,
+  },
+  ...over,
+});
+
+const APP_CRASH = {
+  headline: "A game closed unexpectedly",
+  tag: "App crash",
+  when: "2026-08-19T18:02:00-05:00",
+  when_display: "Aug 19, 6:02 PM",
+  vitals: null,
+  receipt: {
+    source: "Application log · 1000",
+    event_ids: [1000],
+    faulting_app: "example-game.exe",
+    faulting_module: "ntdll.dll",
+    code: "0xc0000005",
+    detail: "Faulting application example-game.exe, faulting module ntdll.dll.",
+  },
+  assessment: null,
+};
+
+const BLACKBOX_STATES: Record<string, { report: unknown }> = {
+  // The full match, alongside a partial one on a second incident — the two levels have to be
+  // legible as different at a glance, and one shot per level cannot answer that.
+  "tier1-matched": {
+    report: {
+      incidents: [
+        bbIncident({ case_intelligence: CASE_MATCHED }),
+        { ...APP_CRASH, case_intelligence: CASE_POSSIBLE },
+      ],
+      skipped_sources: [],
+    },
+  },
+  // The partial alone, on the incident that also carries Compy's own assessment: this is where a
+  // user is most at risk of reading the quoted write-up as Compy's own verdict.
+  "tier1-possible": {
+    report: {
+      incidents: [bbIncident({ case_intelligence: CASE_POSSIBLE })],
+      skipped_sources: [],
+    },
+  },
+  // THE CONTROL, and the state that matters most. This is every shipped build: the backend omits
+  // the field entirely rather than sending a null, so nothing Tier 1 draws may appear here — no
+  // heading, no rule, no reserved gap under the assessment block.
+  "tier1-none": {
+    report: {
+      incidents: [bbIncident({}), APP_CRASH],
+      skipped_sources: ["Application log (needs administrator)"],
+    },
+  },
+};
+
 export const STATE_NAMES = [
   ...Object.keys(STATES),
   ...Object.keys(CPU_TEMP_STATES),
   ...Object.keys(RECEIPTS_STATES),
+  ...Object.keys(BLACKBOX_STATES),
 ];
 
 /** Which surface a state name belongs to — main.tsx mounts the bench or the CPU panel on this. */
@@ -253,13 +413,18 @@ export const isCpuTempState = (name: string = current) => name in CPU_TEMP_STATE
 /** Same question for the Q9a consent tile, which mounts in the Settings shell, not a room. */
 export const isReceiptsState = (name: string = current) => name in RECEIPTS_STATES;
 
+/** And for the Black Box, which mounts in the Lab room like the bench does. */
+export const isBlackboxState = (name: string = current) => name in BLACKBOX_STATES;
+
 // The state is chosen by `?state=` on the URL so a capture run is a plain navigation — one page
 // load per shot, no leftover state from the previous one, and the URL in the address bar names the
 // state the screenshot shows.
 function initialState(): string {
   try {
     const q = new URLSearchParams(window.location.search).get("state");
-    if (q && (STATES[q] || CPU_TEMP_STATES[q] || RECEIPTS_STATES[q])) return q;
+    if (q && (STATES[q] || CPU_TEMP_STATES[q] || RECEIPTS_STATES[q] || BLACKBOX_STATES[q])) {
+      return q;
+    }
   } catch {
     /* no URL (never in a browser) — fall through to the default */
   }
@@ -278,7 +443,9 @@ let receiptsConsent: ConsentState | null = RECEIPTS_STATES[current]
 
 export const getState = () => current;
 export function setState(name: string): boolean {
-  if (!STATES[name] && !CPU_TEMP_STATES[name] && !RECEIPTS_STATES[name]) return false;
+  if (!STATES[name] && !CPU_TEMP_STATES[name] && !RECEIPTS_STATES[name] && !BLACKBOX_STATES[name]) {
+    return false;
+  }
   current = name;
   receiptsConsent = RECEIPTS_STATES[name] ? { ...RECEIPTS_STATES[name].consent } : null;
   return true;
@@ -348,6 +515,21 @@ export function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<
         receiptsConsent = next;
         return Promise.resolve({ ...next } as T);
       }
+    }
+  }
+  // Answered ahead of the bench lookup, same as the two branches above. The Black Box states carry
+  // no experiments or sessions and must never fall through to it.
+  const blackbox = BLACKBOX_STATES[current];
+  if (blackbox) {
+    if (cmd === "get_crash_blackbox") return Promise.resolve(structuredClone(blackbox.report) as T);
+    // The source button hands its URL to the OS browser through the opener plugin, which reaches
+    // the backend as this command. Resolving it lets the click be exercised for real; nothing
+    // opens, because there is no backend here. The url is echoed to the console so a reviewer can
+    // prove WHICH one left — it must be the catalog entry's own, never one the station composed.
+    if (cmd === "plugin:opener|open_url") {
+      // eslint-disable-next-line no-console
+      console.log("FIXTURE PREVIEW - open_url:", args?.url);
+      return Promise.resolve(null as T);
     }
   }
   const state = STATES[current];

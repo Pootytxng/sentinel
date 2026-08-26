@@ -486,6 +486,34 @@ export type CrashAssessment = {
   next_step: CrashNextStep;
   beyond_us: boolean;
 };
+// Compy Care Tier 1 (mirrors src-tauri/src/case_intelligence.rs). A match against the SIGNED
+// public-advisory catalog: somebody else's published write-up, carried verbatim. Every string here
+// is the catalog entry's own — Compy contributes the level and which local facts lined up, nothing
+// more. There is no confidence, score or percentage, by design and by test.
+export type CaseMatchLevel =
+  | "no_catalog"
+  | "catalog_unavailable"
+  | "no_known_match"
+  | "possible_known_issue"
+  | "matched_known_issue";
+export type CaseAdvisoryStep = {
+  headline: string;
+  detail: string;
+  research_only: boolean; // an irreversible real-world fix — "look into", never "do this"
+};
+export type CaseIntelligenceMatch = {
+  case_id: string;
+  catalog_version: number;
+  level: CaseMatchLevel;
+  title: string;
+  summary: string;
+  // Evidence KEYS ("faulting_module"), never the machine's values — the UI translates them.
+  evidence_refs: string[];
+  next_steps: CaseAdvisoryStep[];
+  contraindications: string[];
+  source_url: string; // verified against the catalog's compiled origin allowlist before it got here
+  source_updated_at: string;
+};
 export type CrashIncident = {
   headline: string;
   tag: string;
@@ -494,6 +522,9 @@ export type CrashIncident = {
   vitals: CrashVitals | null;
   receipt: CrashReceipt;
   assessment?: CrashAssessment | null;
+  // Absent in every shipped build: `case_intelligence_gate()` is hard-false, and the backend omits
+  // the field entirely rather than sending a null, so a dark build is byte-identical to pre-Tier-1.
+  case_intelligence?: CaseIntelligenceMatch | null;
 };
 export type BlackBoxReport = {
   incidents: CrashIncident[];

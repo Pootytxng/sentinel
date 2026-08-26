@@ -118,11 +118,20 @@ const REQUIRED: Record<string, string[]> = {
   "docs/PRIVACY.md": [
     "this policy describes current runtime behavior",
     "capability exception gate outbound tier",
-    "no module, endpoint or traffic today",
+    // AMENDED 2026-08-25 (#220), same reason as the RELEASE_STATE row below: the module now
+    // exists, so "no module" was a false statement in a PRIVACY policy of all places. What a
+    // reader is owed is the reachability claim, which is unchanged and now names all three locks.
+    "no endpoint, no key and no traffic today",
     "tier 1 cannot authorize tier 2 or 3",
   ],
   "docs/RELEASE_STATE.md": [
-    "owner-approved direction; not built / no runtime traffic",
+    // AMENDED 2026-08-25 (#220). This pinned "OWNER-APPROVED DIRECTION; NOT BUILT / NO RUNTIME
+    // TRAFFIC". The Tier 1 module was built dark that day, so half of that phrase became false and
+    // a guard that forces a doc to keep saying it would be forcing a lie. The load-bearing half is
+    // the RUNTIME half — this row exists so RELEASE_STATE can never quietly claim outbound Tier 1
+    // is live — and that is what stays pinned. "Built" is a source fact; "armed" is the gate fact,
+    // and only the second one is a promise to users.
+    "no runtime traffic, nothing armed",
     "no machine-derived upload",
     "one surface: signed update check/download",
     "current runtime ships no compy driver and performs no game/process injection",
@@ -338,11 +347,11 @@ describe("Capability Exception policy coherence", () => {
   it("rejects a false current-runtime claim", () => {
     const snapshot = clone(liveSnapshot);
     snapshot["docs/RELEASE_STATE.md"] = snapshot["docs/RELEASE_STATE.md"].replace(
-      "OWNER-APPROVED DIRECTION; NOT BUILT / NO RUNTIME TRAFFIC",
+      "NO RUNTIME TRAFFIC, NOTHING ARMED",
       "LIVE / RUNTIME TRAFFIC ENABLED",
     );
     expect(auditCapabilityExceptionPolicy(snapshot)).toContain(
-      "docs/RELEASE_STATE.md: missing policy marker: owner-approved direction; not built / no runtime traffic",
+      "docs/RELEASE_STATE.md: missing policy marker: no runtime traffic, nothing armed",
     );
   });
 

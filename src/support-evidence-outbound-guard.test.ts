@@ -333,7 +333,12 @@ describe("support evidence stays unreachable from the outbound tiers", () => {
     // and nobody notices, the conditionals are green because they never ran. This is the tripwire:
     // when a tier lands, THIS test fails first and tells the author the separation checks just went
     // live — it is not a reason to delete them.
-    expect(existsSync(TIER1_MODULE), "Tier 1 is approved but not built (docs/RELEASE_STATE.md)").toBe(false);
+    //
+    // IT FIRED, exactly as designed (#220, 2026-08-25): Tier 1 landed and this line went red before
+    // any other test in this file. The separation checks below are now LIVE rather than vacuous, and
+    // the row is flipped to today's truth rather than deleted — the day Tier 3 lands it must fire
+    // again for the same reason.
+    expect(existsSync(TIER1_MODULE), "Tier 1 is BUILT (dark) — the separation checks below are live").toBe(true);
     expect(existsSync(TIER3_MODULE), "Tier 3 is not authorized by Tier 1 and has no module").toBe(false);
   });
 

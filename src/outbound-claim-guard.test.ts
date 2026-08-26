@@ -446,7 +446,12 @@ export function auditOutboundTiers(snap: OutboundSnapshot): string[] {
       continue;
     }
     if (t.id === "tier1" && t.built) {
-      const hit = t.source.match(UPLOAD_SHAPE);
+      // Comments stripped first. Tier 1's module doc NAMES what it refuses to do ("Tier 1 uploads no
+      // machine data at all"), and scanning raw text would make documenting the ban the thing that
+      // breaks the ban — the same rot src/support-evidence-outbound-guard.test.ts strips for. Only
+      // executable source can carry a request. (bug→guard, #220: this fired on the doc comment the
+      // hour Tier 1 landed.)
+      const hit = stripComments(t.source).match(UPLOAD_SHAPE);
       if (hit) {
         findings.push(
           `${t.label} must stay download-only, but ${t.module} carries an upload-shaped call ` +
@@ -570,7 +575,11 @@ describe("outbound tier separation", () => {
     const snap = readOutboundSnapshot();
     expect(snap.remoteRulesArmed, "remote rules fetch is triple-gated OFF").toBe(false);
     expect(tierOf(snap, "tier2").armed).toBe(receiptsArmed());
-    expect(tierOf(snap, "tier1").built, "Tier 1 is approved but not built").toBe(false);
+    // Built dark on 2026-08-25 (#220): the module exists, `case_intelligence_gate()` is hard-false,
+    // and the compiled trust root is the all-zeros placeholder. BUILT and ARMED are separate facts
+    // and this row asserts both, so arming shows up here as a red test rather than as silence.
+    expect(tierOf(snap, "tier1").built, "Tier 1 is built (dark)").toBe(true);
+    expect(tierOf(snap, "tier1").armed, "Tier 1 must stay dark until the owner arms it").toBe(false);
     expect(tierOf(snap, "tier3").built, "Tier 3 is not authorized by Tier 1").toBe(false);
   });
 

@@ -169,6 +169,57 @@ describe("fixture preview parity with the product entry", () => {
       );
     }
   });
+  it("answers every command the Black Box sends", () => {
+    // Same shape as the CPU-temp check above, and for the same reason: the stub's default branch
+    // REJECTS an unknown command, so a station that asks for something the stub does not answer
+    // renders its error paragraph — which reads as "the feature is broken", not "the rig is stale".
+    //
+    // The Tier 1 known-issue block (#220) is the reason this matters more than usual. It is
+    // unreachable in every build — the gate is hard-false, the signing key is a placeholder and
+    // both catalog allowlists are empty — so these three states are the ONLY route to its pixels.
+    // If the station gains a command and nobody adds a stub, the next review looks at an error
+    // message and cannot tell that from a real one.
+    const station = read("src/surfaces/BlackBox.tsx");
+    const stub = read("docs/ui-sweep/fixture/stub-core.ts");
+    const asked = [...station.matchAll(/invoke<[^>]*>\(\s*["']([\w.:|]+)["']/g)].map((m) => m[1]);
+    expect(asked, "found no invoke() in BlackBox.tsx — this guard went vacuous").toContain(
+      "get_crash_blackbox",
+    );
+    const unanswered = [...new Set(asked)].filter((cmd) => !stub.includes(`"${cmd}"`)).sort();
+    expect(unanswered, "stub-core.ts must answer these or the Black Box states render an error").toEqual([]);
+  });
+
+  it("keeps the opener stubbed, so the source button can be clicked in a review", () => {
+    // The Tier 1 source button hands its URL to the OS browser through @tauri-apps/plugin-opener,
+    // which reaches the backend as `plugin:opener|open_url`. That is not an invoke() in src/ — it
+    // is inside the plugin — so the check above cannot see it, and without a stub the click lands
+    // on the default branch and rejects. The component swallows that, so the failure is SILENT:
+    // the reviewer clicks, nothing happens, and "does the source open on click, and with which
+    // URL" is exactly the criterion that cannot then be answered.
+    //
+    // Asserted as the QUOTED literal, with its quotes. A bare substring check passes against
+    // `"plugin:opener|open_url_GONE"` — which is exactly how this guard failed its own
+    // falsification run before shipping.
+    const stub = read("docs/ui-sweep/fixture/stub-core.ts");
+    expect(stub).toContain('"plugin:opener|open_url"');
+  });
+
+  it("keeps a Tier 1 state with the field ABSENT — the control", () => {
+    // The three states are not interchangeable. `tier1-none` is the one that represents every
+    // shipped build: `case_intelligence` omitted entirely, so nothing Tier 1 draws may appear.
+    // A review that only ever looked at a match would never notice the block leaving a reserved
+    // gap, a stray rule or an empty heading behind on the state 100% of users are actually in.
+    const stub = read("docs/ui-sweep/fixture/stub-core.ts");
+    for (const state of ["tier1-matched", "tier1-possible", "tier1-none"]) {
+      expect(stub, `the fixture lost the ${state} state`).toContain(`"${state}"`);
+    }
+    const none = stub.slice(stub.indexOf('"tier1-none"'));
+    expect(
+      none.slice(0, none.indexOf("};")),
+      "tier1-none must NOT carry case_intelligence — it is the absent-field control",
+    ).not.toContain("case_intelligence");
+  });
+
   it("exports every name the aliased module graph imports from @tauri-apps/api/core", () => {
     // bug→guard (self-review round 2, 2026-08-18): vite.config.mts aliases the WHOLE
     // "@tauri-apps/api/core" module to stub-core.ts. A named import it does NOT export is not a

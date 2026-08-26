@@ -146,6 +146,14 @@ pub(crate) struct Incident {
     /// from the wire when absent, so a flag-OFF incident serializes byte-for-byte like v1.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) assessment: Option<Assessment>,
+    /// Tier 1 (Compy Care, behind `case_intelligence::case_intelligence_gate()`): a match against the
+    /// SIGNED public-advisory catalog. `None` when the gate is OFF — every shipped build today — when
+    /// no verified catalog is held, or when nothing matched, so a dark build serializes byte-for-byte
+    /// like the station did before Tier 1 existed. Distinct from `assessment` on purpose: that is
+    /// Compy's own local reading, this is somebody else's published write-up, and merging them would
+    /// make it impossible for a user to tell whose word they are taking.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) case_intelligence: Option<crate::case_intelligence::CaseIntelligenceMatch>,
     /// Internal only (never serialized — the TS-facing discriminator is `tag`): the typed kind, kept so
     /// the pure `assess` pass can reason over the incident without re-parsing the tag string.
     #[serde(skip)]
@@ -215,6 +223,7 @@ fn assemble_incidents(
                 vitals,
                 receipt: build_receipt(&p),
                 assessment: None,
+                case_intelligence: None,
                 kind: p.kind,
             }
         })
@@ -225,7 +234,31 @@ fn assemble_incidents(
     if blackbox_v2_gate() {
         apply_assessments(&mut incidents);
     }
+    // Compy Care Tier 1: attach a signed known-issue write-up where one matches. Hard-false in every
+    // shipped build, so this is skipped entirely and every `case_intelligence` stays `None`.
+    if crate::case_intelligence::case_intelligence_gate() {
+        apply_case_intelligence(&mut incidents);
+    }
     incidents
+}
+
+/// Attach Tier 1 guidance where the verified catalog matched this machine.
+///
+/// Only reached with the gate ON, so a shipped build reads no hardware and touches no cache for this.
+/// The snapshot is taken ONCE for the whole report — it is the same machine on every row, and a crash
+/// scan must not pay for a hardware read per incident.
+///
+/// Nothing here can fail the scan. `advise` returns an outcome and never an error, and anything short
+/// of an actual match — no catalog, an expired or unverifiable one, or simply nothing that fits —
+/// leaves the field absent. A user who came here after a crash gets the local reading either way.
+fn apply_case_intelligence(incidents: &mut [Incident]) {
+    use crate::case_intelligence::{advise, local_facts_from, CaseMatchOutcome};
+    let facts = local_facts_from(&crate::hardware::collect_hardware());
+    for inc in incidents.iter_mut() {
+        if let CaseMatchOutcome::Found(m) = advise(inc, &facts) {
+            inc.case_intelligence = Some(*m);
+        }
+    }
 }
 
 /// Populate each incident's `assessment` from the pure rule engine. Two-phase (compute all, then
@@ -1614,6 +1647,67 @@ mod blackbox_tests {
         assert_eq!(fmt_hex_code("STATUS_FOO"), "STATUS_FOO");
     }
 
+    // ─── Tier 1 wire contract (#220, plan task 7) ──────────────────────────
+    //
+    // The crash station may CARRY a signed known-issue match, and today it never does. These tests
+    // pin both halves: the field is absent in every shipped build, and when it is present it is the
+    // catalog's own words under a stable wire name.
+    #[test]
+    fn an_incident_without_case_intelligence_omits_the_field_from_the_wire() {
+        // Absent, not `null`. A v1 client and a Tier-1-aware one see byte-identical JSON while the
+        // gate is off, which is what makes "absent field renders exactly as today" true by
+        // construction rather than by the frontend being careful.
+        let inc = mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("amdkmdag"), None, None, None);
+        let json = serde_json::to_string(&inc).expect("serializes");
+        assert!(!json.contains("case_intelligence"), "absent must not appear on the wire: {json}");
+    }
+
+    #[test]
+    fn the_shipped_scan_attaches_no_case_intelligence_because_the_gate_is_off() {
+        assert!(!crate::case_intelligence::case_intelligence_gate(), "Tier 1 must ship dark");
+        let events = vec![ev(
+            "Display",
+            4101,
+            "2026-06-12T21:00:00-07:00",
+            "Display driver amdkmdag stopped responding and has recovered.",
+            serde_json::Value::Null,
+        )];
+        let out = from_events(events, &[]);
+        assert!(!out.is_empty(), "the fixture still produces an incident");
+        assert!(
+            out.iter().all(|i| i.case_intelligence.is_none()),
+            "gate off ⇒ no catalog is read and no match is attached"
+        );
+    }
+
+    #[test]
+    fn a_present_match_rides_under_its_wire_name_and_carries_no_number() {
+        // Constructed directly — there is no gate-on path in a test build, and this is a contract
+        // test about the SHAPE the frontend must parse, not about the matcher.
+        let mut inc = mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("amdkmdag"), None, None, None);
+        inc.case_intelligence = Some(crate::case_intelligence::CaseIntelligenceMatch {
+            case_id: "amd-tdr-adrenalin-2026-q1".into(),
+            catalog_version: 7,
+            level: crate::case_intelligence::CaseMatchLevel::MatchedKnownIssue,
+            title: "Adrenalin 26.1.1 display timeouts on RDNA4".into(),
+            summary: "AMD records display timeouts on this driver line.".into(),
+            evidence_refs: vec!["faulting_module".into(), "gpu_vendor".into()],
+            next_steps: Vec::new(),
+            contraindications: Vec::new(),
+            source_url: "https://www.amd.com/en/resources/support-articles/release-notes.html".into(),
+            source_updated_at: "2026-02-01".into(),
+        });
+        let v = serde_json::to_value(&inc).expect("serializes");
+        let m = v.get("case_intelligence").expect("present under its wire name");
+        assert_eq!(m["level"], "matched_known_issue", "the level is a snake_case string, never a rank");
+        assert_eq!(m["evidence_refs"][0], "faulting_module", "evidence refs are KEYS, never values");
+        let json = serde_json::to_string(&inc).expect("serializes");
+        assert!(!json.contains('%'), "no percentage anywhere on the wire");
+        for word in ["confidence", "score", "probability"] {
+            assert!(!json.contains(word), "the wire must not carry a {word}");
+        }
+    }
+
     #[test]
     fn serde_shape_is_stable_for_the_ts_contract() {
         let events = vec![ev("Microsoft-Windows-Kernel-Power", 41, "2026-06-12T21:42:00-07:00", "rebooted without cleanly shutting down", serde_json::Value::Null)];
@@ -1945,6 +2039,7 @@ mod blackbox_tests {
                 detail: "d".into(),
             },
             assessment: None,
+            case_intelligence: None,
             kind,
         }
     }
