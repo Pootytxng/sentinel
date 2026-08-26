@@ -54,3 +54,25 @@ proven a no-op at that instant, and its row was flipped CLAIMED → MERGED in th
 the *branch itself* had added. Both sides had then touched the same new line differently, so the
 merge became a conflict and the proof could never be produced again. The audit caught it on `main`
 within the minute; the fix was to prune, because there was nothing left to re-prove.
+
+## Closed narratives of the 2026-08-21 sweep
+
+> Moved 2026-08-26 to pay `docs/BRANCH_DISPOSITIONS.md`'s line budget. Both record work that
+> finished: a ref merged and pruned, and a PR landed. Neither is a claim about any ref that is live
+> today.
+
+**[#160](https://github.com/Pootytxng/sentinel/pull/160) is no longer one of them — MERGED
+2026-08-24** as `bf1b56c8`, adopted on the owner’s *“clear up any remaining work”* turn after four idle
+days; its ref is pruned and its row dropped in the same change, because the audit fails both ways.
+[#163](https://github.com/Pootytxng/sentinel/pull/163) (`lane/cleanup-train-2026-08-20`) still
+belongs to another lane — hands off, not adjudicate. **Eight
+non-`PRESERVE` refs remain, and not one of them is retirable by proof**: each needs either an owner
+product-scope call or the lane that owns it. #126 is therefore part-discharged, not done — the
+proof-retirable refs are gone, and what is left is a decision queue, not a cleanup queue.
+
+**One live finding surfaced by the re-proof — LANDED 2026-08-22 on the owner's word ("land 193").**
+`main`'s `site/llms.txt:5` called Compy "a free desktop app"; PR
+[#193](https://github.com/Pootytxng/sentinel/pull/193) merged as `d5571766`, changing it and its real
+source `site/generate.mjs:441` to "a Windows desktop app with a free tier". The unlanded line on
+`claude/review-consolidation-structure-9d13f2` was **not** used — it says "free forever", the exact
+phrasing the 2026-07-21 decree supersedes.

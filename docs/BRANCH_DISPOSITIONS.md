@@ -81,23 +81,20 @@ dropped in this commit:
   used to end "and no worktree held it", which was false for fifteen days.** `.claude/worktrees/merge-prs-tauri-visibility-c5660e` holds it detached at `defcf0ff`, four commits
   `origin/main` cannot reach — 2026-08-11 edits to two docs since rewritten, so landing them is a
   re-derivation. No guard saw it: an audit that reads `origin` refs is blind to a branchless
-  checkout. Rule C of `scripts/handoff-worktree-truth.test.mjs` now fails on that shape.
+  checkout. Rule C of `scripts/handoff-worktree-truth.test.mjs` now fails on that shape. **Disposed
+  2026-08-26:** checkout retired, its work preserved under tag `preserve/checklist-disk-item-c5660e`
+  — the four commits plus one more holding an uncommitted edit found there that stripped every
+  comment out of `.codex/config.toml`, which is the record of why that lane is read-only.
 
-**[#160](https://github.com/Pootytxng/sentinel/pull/160) is no longer one of them — MERGED
-2026-08-24** as `bf1b56c8`, adopted on the owner’s *“clear up any remaining work”* turn after four idle
-days; its ref is pruned and its row dropped in the same change, because the audit fails both ways.
-[#163](https://github.com/Pootytxng/sentinel/pull/163) (`lane/cleanup-train-2026-08-20`) still
-belongs to another lane — hands off, not adjudicate. **Eight
-non-`PRESERVE` refs remain, and not one of them is retirable by proof**: each needs either an owner
-product-scope call or the lane that owns it. #126 is therefore part-discharged, not done — the
-proof-retirable refs are gone, and what is left is a decision queue, not a cleanup queue.
-
-**One live finding surfaced by the re-proof — LANDED 2026-08-22 on the owner's word ("land 193").**
-`main`'s `site/llms.txt:5` called Compy "a free desktop app"; PR
-[#193](https://github.com/Pootytxng/sentinel/pull/193) merged as `d5571766`, changing it and its real
-source `site/generate.mjs:441` to "a Windows desktop app with a free tier". The unlanded line on
-`claude/review-consolidation-structure-9d13f2` was **not** used — it says "free forever", the exact
-phrasing the 2026-07-21 decree supersedes.
+**Nine non-`PRESERVE` refs remain, and not one of them is retirable by proof** — each needs either
+an owner product-scope call or the lane that owns it, so #126 is part-discharged, not done: what is
+left is a decision queue, not a cleanup queue. Re-derived 2026-08-26 from `git ls-remote --heads
+origin` (twelve refs besides `main`, three `PRESERVE`); the count read "eight" until then, written
+before the `vision-pointer` row existed. The two closed narratives it used to carry — #160's merge
+and prune, and the #193 "free desktop app" fix — moved to
+[`archive/BRANCH_DISPOSITION_SWEEPS.md`](archive/BRANCH_DISPOSITION_SWEEPS.md) on 2026-08-26. The
+live warning inside the second one is not archived with it: it is in the
+`claude/review-consolidation-structure-9d13f2` row below, where a lander would actually look.
 
 | ref | disposition | evidence |
 | --- | --- | --- |

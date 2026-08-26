@@ -32,15 +32,14 @@ background machinery — exactly three triggers, all user-caused — makes no ca
 and `git diff … -- src-tauri/src/actions.rs` is **empty**, so the one Windows-mutation boundary is
 untouched.
 
-- **Ten worktrees besides `main`. Five are spent; five carry commits that are not on main — do
-  NOT delete or hard-reset those five before checking them**: `feat/user-feedback-lab-recovery`
+- **Nine worktrees besides `main`. Five are spent; four carry commits that are not on main — do
+  NOT delete or hard-reset those four before checking them**: `feat/user-feedback-lab-recovery`
   (49) · `feat/lab-49-parity-port` (6) · `lane/cleanup-train-2026-08-20` (5) ·
-  `lane/vision-pointer-guard-2026-08-24` (3) · and one carrying **no branch name at all**,
-  `.claude/worktrees/merge-prs-tauri-visibility-c5660e`, detached at `defcf0ff`, 4 commits
-  (the `claude/checklist-disk-item-c5660e` lineage). It hid for fifteen days because every audit
-  here reads `origin` refs and a detached checkout has none; rule C of
-  `scripts/handoff-worktree-truth.test.mjs` now fails the build if a checkout carries commits and
-  this bullet does not name it. Re-derive with `git worktree list` and
+  `lane/vision-pointer-guard-2026-08-24` (3). A tenth, detached with no branch name at all, hid for
+  fifteen days because every audit here reads `origin` refs and a branchless checkout has none; it
+  was retired 2026-08-26 under tag `preserve/checklist-disk-item-c5660e` (5 commits, recoverable,
+  none on `main`). Rule C of `scripts/handoff-worktree-truth.test.mjs` now fails the build if a
+  checkout carries commits and this bullet does not name it. Re-derive with `git worktree list` and
   `git rev-list --count origin/main..<branch>`; never carry these numbers forward unchecked.
 
 ## What the pre-land review caught, and the guards that now hold it
