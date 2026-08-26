@@ -496,6 +496,43 @@ who has just made their first real change is shown the change by its plain-Engli
 if they want it gone. Press to proof to undo, without being taught. It claims no speed result and
 says so — the only honest proof at that moment is that the setting is really there.
 
+**The first-timer walk ran 2026-08-26** — walk all four rooms as someone who has never seen Compy
+and whose PC just froze — and produced six findings. Three shipped (`c7d9049e` room-scroll reset ·
+Test station scroll-into-view · `31007819` the glossary on six bare "1% low"/"frametime" labels).
+One (#4) was **partly wrong** and is the reason an audit is not a work order: two of the four Test
+gauges already carried plain-English notes. Two were put to the owner because they collided with
+decisions he had already made, and **he ruled on both the same day** — recorded below.
+
+#### ⭐ DIR-1a. THE FRONT DOOR MAY NOT ASSUME SOMETHING IS WRONG (owner direction 2026-08-26) ✅ SHIPPED `b21bc18b`
+
+His words, verbatim: *"i feel like offering help should only be an option if there an indicator that
+something was detected from your pc that it would even inquire that ... also we have to remember
+that compy also does performance optimization and there should perhaps be an option that doesnt
+indicate there is an issue whaatsoever and just says something more relaxed like 'i want more fps'
+because the home page options all seem to only point towards some sort of 'issue' which shouldnt be
+the only rerason people are here in the first place also things like i want to monitor my fps or i
+want to see my benchmark results or hardware capabilitiues stuff like that"*.
+
+He was answering a narrower question (Health had two doors to one question) and **rejected both
+options to say something larger**: the problem was not the duplication, it was that every door on
+the screen was symptom-framed. Recorded here in full because a paraphrase of this would lose the
+half that matters — *offering help is conditional on evidence*.
+
+Shipped: the interview gained four goal answers (more FPS · watch my FPS · see my scores · what is
+in my PC) and now groups its start screen into two labelled halves; Health chooses between the
+halves on `somethingDetected` — a flagged readiness check or an incident the observer read out of
+Windows. Guard `src/surfaces/home-console-front-door-gate.test.tsx`, falsified three ways.
+**This directive is a STANDING lens, not a closed row:** any new Health affordance has to answer
+"is this framing earned?" before it ships.
+
+#### DIR-1b. A named problem must show a next step (owner ruling 2026-08-26) ✅ SHIPPED `b21bc18b`
+
+#180 §C bars the flagged check's DETAIL PARAGRAPH from Health's header, which left the attention
+state naming a problem with no way to act on it on screen. Offered the paragraph, the status quo, or
+one short route line, **he chose the route line**. It fires the same `onSeeInFix` the Re-run band's
+button fires and names that button's room from the same prop, so it cannot name a door the app does
+not have. §C is untouched: the paragraph still does not render here.
+
 **Still open under DIR-1:** the Consumer/Technical/Support evidence exports (P2's remaining item).
 
 ### PAL-1. The caption colour is too dim to read — ✅ SHIPPED 2026-08-11
