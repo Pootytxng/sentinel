@@ -317,8 +317,8 @@ These gate **public** release only (not the local app you use daily). Full list:
   description already promises "No telemetry". **Two things are on you, and only two:** ① you have
   the disclosure card's before/after and have not ruled on how it looks; ② arming itself is still
   yours and always will be. Nothing sends until you do both.
-- 🔒 **Compy Care Tier 1 arming** — a second outbound boundary, and as of **2026-08-25 (#220)** the
-  code for it exists. It lets Compy show a publisher's own write-up next to a crash, from a catalog
+- 🔒 **Compy Care Tier 1 arming** — a second outbound boundary, and as of **2026-08-26** the code
+  for it is on `main` (#220, PR #221). It lets Compy show a publisher's own write-up next to a crash, from a catalog
   it has cryptographically verified. It **downloads** knowledge and **uploads nothing** — that is
   what makes it Tier 1, and it can never authorize Tier 2 or 3. **Three independent locks each
   refuse on their own** (gate hard-false, all-zero trust key, empty endpoint AND origin lists), so
