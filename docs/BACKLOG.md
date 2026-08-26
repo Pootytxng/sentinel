@@ -869,8 +869,19 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   trust root · cache · matcher · pull path · UI, all built, self-reviewed PASS 12/12,
   independently reviewed CLEAN, and **dark behind three independent locks**: `case_intelligence_gate()`
   hard-false, an all-zero signing key, and BOTH catalog allowlists empty. Separate trust domain from
-  privileged remote rules; download only, no machine-data upload. **Remaining: plan tasks 8–9 (UI
-  polish) and 10–11 (independent security review + arming) — arming is owner territory.**
+  privileged remote rules; download only, no machine-data upload. **Remaining: plan tasks 10–11
+  (independent security review + arming) — arming is owner territory.**
+- [BUILT] **Tier 1 tasks 8–9 — crash-rescue deep-link + the persisted LOCAL incident observer** —
+  #222, `src-tauri/src/incident_observer.rs` (+30 Rust tests). Home's permanent rescue door now
+  carries a transient notice when Windows recorded a crash while the user was away; one click lands
+  on THAT incident inside the Black Box, marked, with an honest negative when Windows has rotated
+  the record out. The observer reads the existing local crash path on three named moments — launch ·
+  main-window foreground · session finalized — and **no timer, service, scheduled task, watcher or
+  poll exists**; the two non-launch triggers are throttled against a persisted watermark, the
+  first-ever pass seeds silently so installing Compy never announces pre-Compy crashes, and it says
+  only WHAT happened and WHEN. No outbound surface, no identity, no `actions.rs` diff, and dismiss
+  deletes no Windows record. Guards: `src/surfaces/care-home-route-guard.test.ts` +
+  `src/care-incident-observer-contract.test.ts`.
 - [ ] **Tier 1 nit: a failed `openUrl` is invisible** — `BlackBox.tsx` `KnownIssueBlock` swallows the
   rejection deliberately (nothing to recover, nothing to claim), so if the OS has no browser handler
   the user clicks "Open the write-up" and nothing happens, indistinguishable from a dead click. Rare

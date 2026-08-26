@@ -515,6 +515,11 @@ export type CaseIntelligenceMatch = {
   source_updated_at: string;
 };
 export type CrashIncident = {
+  // Stable, path-free identity for this merged incident (mirrors `incident_id_for` in
+  // src-tauri/src/blackbox.rs). The Care observer persists it across launches so one crash is
+  // announced once; the UI also uses it as the one-shot deep-link selector into Crash & Freeze
+  // Rescue. Sixteen lowercase hex characters — opaque by construction, never a path or a filename.
+  incident_id: string;
   headline: string;
   tag: string;
   when: string;
@@ -529,6 +534,22 @@ export type CrashIncident = {
 export type BlackBoxReport = {
   incidents: CrashIncident[];
   skipped_sources: string[];
+};
+
+// The Home card the Care observer surfaces (mirrors src-tauri/src/incident_observer.rs
+// PendingCareIncident). Deliberately small: an identity, when it happened, the neutral evidence
+// family, the app Windows named if it named one, and Black Box's own plain-English headline.
+//
+// There is no assessment, cause, confidence or advisory step here ON PURPOSE. A card is an
+// invitation to go look at the evidence — a surface with no room to show its working must not make
+// a claim the user cannot check.
+export type PendingCareIncident = {
+  incident_id: string;
+  occurred_at: string; // RFC3339, original local offset preserved
+  occurred_display: string; // "Aug 20, 9:42 PM" — already offset-correct
+  kind: string; // the neutral evidence tag ("App crash", "Blue screen")
+  app_label: string | null; // pretty process name when Windows named one; never a path
+  summary: string;
 };
 
 // Compy Pro — offline license status (mirrors src-tauri/src/license.rs LicenseStatus). DARK: while

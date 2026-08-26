@@ -153,9 +153,22 @@
     "sinceBaselineTitle": "相较于你的基准",
     "noChangesRecorded": "自基准以来没有记录到 Compy 的更改——这反映的是手动或环境因素导致的变化。",
     "noiseFloorNote": "±{{pct}}% 以内的变化会被判定为「无可测量的变化」——因为它低于重复测试的噪声下限,所以我们不会将其计为提升或退步。",
-    "componentLabels": { "cpu": "CPU", "ram": "内存", "gpu": "GPU", "disk": "磁盘" },
-    "verdictLabels": { "improved": "已提升", "noChange": "无可测量的变化", "regressed": "已退步" },
-    "trialVerdict": { "helped": "有帮助", "hurtReverted": "变差——已回滚", "noChange": "无可测量的变化" },
+    "componentLabels": {
+      "cpu": "CPU",
+      "ram": "内存",
+      "gpu": "GPU",
+      "disk": "磁盘"
+    },
+    "verdictLabels": {
+      "improved": "已提升",
+      "noChange": "无可测量的变化",
+      "regressed": "已退步"
+    },
+    "trialVerdict": {
+      "helped": "有帮助",
+      "hurtReverted": "变差——已回滚",
+      "noChange": "无可测量的变化"
+    },
     "trialReason": {
       "withinNoise": "这项改动仍在你电脑的重复测试噪声范围内",
       "conditionsUnstable": "当前环境噪声过大,无法可靠测量——请重试",
@@ -167,10 +180,22 @@
     "localWinTopPct": "在你经过验证的提升中排名前 {{top}}%",
     "localWinPercentile": "在你经过验证的提升中处于第 {{percentile}} 百分位(前 {{topPct}}%)",
     "useCaseProfiles": {
-      "gaming": { "label": "游戏", "blurb": "围绕游戏内 FPS 与帧时间稳定性来衡量。" },
-      "streaming": { "label": "直播", "blurb": "游戏加编码器——直播时留意 CPU 的余量。" },
-      "creation": { "label": "创作", "blurb": "剪辑与渲染——持续负载下的 CPU/GPU 和 RAM 最为重要。" },
-      "idle": { "label": "通用", "blurb": "不预设任何特定负载——中立的默认选项。" }
+      "gaming": {
+        "label": "游戏",
+        "blurb": "围绕游戏内 FPS 与帧时间稳定性来衡量。"
+      },
+      "streaming": {
+        "label": "直播",
+        "blurb": "游戏加编码器——直播时留意 CPU 的余量。"
+      },
+      "creation": {
+        "label": "创作",
+        "blurb": "剪辑与渲染——持续负载下的 CPU/GPU 和 RAM 最为重要。"
+      },
+      "idle": {
+        "label": "通用",
+        "blurb": "不预设任何特定负载——中立的默认选项。"
+      }
     }
   },
   "hardwareGrid": {
@@ -291,7 +316,9 @@
     "thanksNoted": "谢谢,已记录;比起瞎猜,我们更愿意保持沉默。",
     "didThisHelpQuestion": "这一步是否指对了方向?",
     "yesButton": "是",
-    "noButton": "否"
+    "noButton": "否",
+    "selectedNote": "这就是你要查看的那条记录。",
+    "selectedMissing": "本次扫描中没有你打开的那条记录。Windows 可能已经轮换掉了它，或者记录它的来源需要管理员权限才能读取。"
   },
   "twoFutures": {
     "heading": "双重未来",

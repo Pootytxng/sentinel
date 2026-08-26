@@ -6,6 +6,7 @@ import type {
   AppliedChange,
   GameReadiness,
   IntelligenceHeadline,
+  PendingCareIncident,
   Priorities,
   Recommendation,
   SessionSummary,
@@ -84,7 +85,15 @@ type Props = {
   /** App's single station-intent writer (openLabStation): persists the intended in-room instrument
    *  BEFORE navigating, so the destination console cannot mount first and lose it. Intake rows that
    *  carry a `station` route through here; without it they fall back to a plain room nav. */
-  onOpenLabStation?: (station: string) => void;
+  onOpenLabStation?: (station: string, incidentId?: string) => void;
+  // ── The Care observer's Home card (Tier 1 task 9, #222). All three optional: an isolated mount
+  //    with no wiring simply renders no card, never a placeholder.
+  /** The one incident the observer noticed and has not yet been acknowledged, or null. */
+  pendingCare?: PendingCareIncident | null;
+  /** "Find out why" — routes to the exact incident inside Crash & Freeze Rescue. */
+  onOpenCareIncident?: (incidentId: string) => void;
+  /** "Not now" — clears Compy's pointer. Never touches the Windows evidence itself. */
+  onDismissCareIncident?: (incidentId: string) => void;
   // ── Home intake band (BACKLOG:916, behind compy_home_intake, DEFAULT OFF). The three below
   //    are the ONLY wiring the pre-room intent router + its one-tap fast path need. All optional:
   //    an isolated mount (no wiring) simply shows no fast-path row — never a misleading "Checking…".
@@ -274,6 +283,9 @@ export function HomeConsole({
   recs,
   isAppliable,
   onApplyBatch,
+  pendingCare,
+  onOpenCareIncident,
+  onDismissCareIncident,
 }: Props) {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
@@ -1283,6 +1295,50 @@ export function HomeConsole({
             least likely person to go turn a Settings band back on to find help, and the tester who
             walked to Event Viewer (SESSION_HANDOFF §4) is the evidence for what happens when this
             sign is not in front of them. It lands ON the evidence station, never the Lab dock. */}
+        {/* THE CARE OBSERVER'S CARD (Tier 1 task 9, #222) — the one thing on Home the user did not
+            come looking for. It appears only when the observer has seen a NEW hard incident
+            (`incident_observer.rs`), it is the authority rather than the toast (notifications off
+            suppresses the nudge, never this), and it states what Windows recorded and nothing more:
+            no cause, no confidence, no advice. Two exits, both honest — go read the evidence, or
+            say "I know", which clears Compy's pointer and leaves every Windows record intact. */}
+        {pendingCare && (
+          <section className="hc-notice" aria-label={t("home.homeConsole.care.notice.aria")}>
+            <span className="hc-notice-ico" aria-hidden="true">
+              <Icon name="burst" size={20} />
+            </span>
+            <div className="hc-notice-text">
+              <p className="hc-notice-head">{pendingCare.summary}</p>
+              <p className="hc-notice-meta">
+                {pendingCare.app_label
+                  ? t("home.homeConsole.care.notice.metaApp", {
+                      kind: pendingCare.kind,
+                      app: pendingCare.app_label,
+                      when: pendingCare.occurred_display,
+                    })
+                  : t("home.homeConsole.care.notice.meta", {
+                      kind: pendingCare.kind,
+                      when: pendingCare.occurred_display,
+                    })}
+              </p>
+            </div>
+            <div className="hc-notice-acts">
+              <button
+                type="button"
+                className="hc-notice-open"
+                onClick={() => onOpenCareIncident?.(pendingCare.incident_id)}
+              >
+                {t("home.homeConsole.care.notice.open")}
+              </button>
+              <button
+                type="button"
+                className="hc-notice-dismiss"
+                onClick={() => onDismissCareIncident?.(pendingCare.incident_id)}
+              >
+                {t("home.homeConsole.care.notice.dismiss")}
+              </button>
+            </div>
+          </section>
+        )}
         {careRenders && (
           <section className="hc-care" aria-label={care.label}>
             <button

@@ -5,7 +5,14 @@
     },
     "care": {
       "label": "崩溃与卡死救援",
-      "open": "打开"
+      "open": "打开",
+      "notice": {
+        "aria": "Compy 注意到的情况",
+        "meta": "{{kind}} · {{when}}",
+        "metaApp": "{{kind}} · {{app}} · {{when}}",
+        "open": "查看原因",
+        "dismiss": "暂不查看"
+      }
     },
     "intake": {
       "rows": {

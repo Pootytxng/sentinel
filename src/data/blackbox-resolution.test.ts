@@ -13,6 +13,7 @@ const ASSESS: CrashAssessment = {
 
 function inc(tag: string, when: string, assessed = true): CrashIncident {
   return {
+    incident_id: `${tag}-${when}`,
     headline: "h",
     tag,
     when,

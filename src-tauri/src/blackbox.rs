@@ -42,7 +42,7 @@ const VITALS_GRACE_SECS: i64 = 90;
 /// Event Log, WER, and Reliability all stamp the actual crash instant, so their copies of one crash
 /// land within a few seconds; 60s absorbs clock/rounding differences without hiding distinct
 /// incidents (a real crash-loop's repeats ≥60s apart stay separate). Errs toward not double-listing.
-const CROSS_SOURCE_WINDOW_SECS: i64 = 60;
+pub(crate) const CROSS_SOURCE_WINDOW_SECS: i64 = 60;
 
 // ─── Typed incident families (the only ones v1 recognizes) ─────────────────
 
@@ -58,7 +58,7 @@ pub(crate) enum IncidentKind {
 
 impl IncidentKind {
     /// Neutral evidence tag (spec output) — describes the recorded signal, claims no cause.
-    fn tag(self) -> &'static str {
+    pub(crate) fn tag(self) -> &'static str {
         match self {
             IncidentKind::GpuTimeout => "GPU timeout",
             IncidentKind::AppCrash => "App crash",
@@ -135,6 +135,10 @@ pub(crate) struct Receipt {
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub(crate) struct Incident {
+    /// Stable, path-free identity for this merged incident — see `incident_id_for`. Added for the
+    /// Care observer (Tier 1 plan task 9), which persists it across launches so the same crash is
+    /// never announced twice; the frontend also carries it as a one-shot deep-link selector.
+    pub(crate) incident_id: String,
     pub(crate) headline: String,     // plain-English (Sarah & Caleb bar)
     pub(crate) tag: String,          // neutral evidence tag
     pub(crate) when: String,         // RFC3339
@@ -216,6 +220,7 @@ fn assemble_incidents(
             let vitals = correlate_vitals(when_utc, sessions);
             let game = vitals.as_ref().and_then(|v| v.game.clone());
             Incident {
+                incident_id: incident_id_for(p.kind, when_utc, &p.fields),
                 headline: build_headline(p.kind, &p.fields, &when_display, game.as_deref()),
                 tag: p.kind.tag().to_string(),
                 when: p.when.to_rfc3339(),
@@ -647,7 +652,7 @@ fn same_incident(a: &ProtoIncident, b: &ProtoIncident) -> bool {
 /// Normalize an app name for comparison: strip `.exe`, lowercase. So "Game.exe" == "game.exe".
 /// Deliberately NOT `pretty_proc` — matching stays on the raw binary name (minus extension); a
 /// launcher exe and its "-Win64-Shipping" binary are different processes and must not merge.
-fn norm_app(a: &Option<String>) -> Option<String> {
+pub(crate) fn norm_app(a: &Option<String>) -> Option<String> {
     a.as_deref().map(|s| {
         let n = s.trim();
         n.strip_suffix(".exe")
@@ -929,6 +934,59 @@ fn extract_fields(kind: IncidentKind, ev: &RawEvent) -> IncidentFields {
     }
 }
 
+/// Reduce one identity component to a bare, comparable token: the file-NAME only, trimmed and
+/// lowercased. Empty and whitespace-only collapse to `None`, so an absent field and a blank one
+/// hash identically rather than producing two identities for one crash.
+///
+/// The basename step is the load-bearing one. `faulting_app`/`faulting_module` normally arrive as
+/// bare names, but WER and Reliability both *can* hand back a full path, and a path names the
+/// user's profile directory or a game's install location. This identity is persisted to disk by the
+/// observer and handed to the webview as a deep-link selector, so a path must never survive into it
+/// — hashing does not make a path safe, it makes it unauditable.
+fn identity_token(value: Option<&str>) -> Option<String> {
+    let raw = value?.trim();
+    let base = raw.rsplit(['\\', '/']).next().unwrap_or(raw).trim();
+    if base.is_empty() {
+        return None;
+    }
+    Some(base.to_ascii_lowercase())
+}
+
+/// Stable, path-free identity for one MERGED incident.
+///
+/// Derived from what makes a crash the crash it is — family, instant, and the app/module/code
+/// Windows named — hashed so the result is a fixed-width opaque token rather than a smuggled
+/// filename. Sixteen hex characters (64 bits); these are compared for equality inside one machine's
+/// own bounded observation list, never used as a cryptographic commitment.
+///
+/// STABILITY, stated honestly: this is exactly as stable as `when` is. `merge_into` keeps the
+/// NEWEST time when a second source corroborates a crash, so an incident whose WER report is
+/// written after its Event Log entry can present a different instant — and therefore a different id
+/// — on a later scan. That is why the observer does not rely on this id alone: its per-app/family
+/// cooldown (`incident_observer.rs`) is what absorbs a re-identified incident, and the id's job is
+/// only to make the common case exact. A coarser time bucket was rejected on purpose: crashes 60s
+/// apart are already separate rows by `same_incident`, and bucketing would silently fuse a
+/// crash-loop's repeats into one.
+fn incident_id_for(kind: IncidentKind, when_utc: DateTime<Utc>, fields: &IncidentFields) -> String {
+    use sha2::{Digest, Sha256};
+    let module = fields.faulting_module.as_deref().or(fields.driver.as_deref());
+    // Field-separated with a byte that cannot occur in any component, so ("ab", "c") and ("a",
+    // "bc") cannot collide into the same pre-image.
+    let mut h = Sha256::new();
+    h.update(kind.tag().as_bytes());
+    h.update([0u8]);
+    h.update(when_utc.to_rfc3339().as_bytes());
+    for part in [
+        identity_token(fields.faulting_app.as_deref()),
+        identity_token(module),
+        identity_token(fields.code.as_deref()),
+    ] {
+        h.update([0u8]);
+        h.update(part.unwrap_or_default().as_bytes());
+    }
+    h.finalize().iter().take(8).map(|b| format!("{b:02x}")).collect()
+}
+
 fn build_receipt(p: &ProtoIncident) -> Receipt {
     Receipt {
         source: p.sources.join(" + "),
@@ -960,7 +1018,7 @@ fn format_when(dt: DateTime<FixedOffset>) -> String {
 }
 
 /// Prettify for DISPLAY; empty/blank → None (no fabricated game name).
-fn pretty_proc_opt(name: &str) -> Option<String> {
+pub(crate) fn pretty_proc_opt(name: &str) -> Option<String> {
     let n = name.trim();
     if n.is_empty() {
         return None;
@@ -1610,6 +1668,152 @@ mod blackbox_tests {
         assert!(v.summary.contains("no notable vitals"), "no invented numbers: {}", v.summary);
     }
 
+    // ── incident_id: the Care observer's identity for a merged incident (Tier 1 task 9) ──
+
+    fn ifields(app: Option<&str>, module: Option<&str>, code: Option<&str>) -> IncidentFields {
+        IncidentFields {
+            faulting_app: app.map(Into::into),
+            faulting_module: module.map(Into::into),
+            code: code.map(Into::into),
+            driver: None,
+        }
+    }
+
+    fn utc(s: &str) -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&Utc)
+    }
+
+    #[test]
+    fn an_incident_id_is_sixteen_lowercase_hex_characters() {
+        let id = incident_id_for(
+            IncidentKind::AppCrash,
+            utc("2026-08-20T21:42:00Z"),
+            &ifields(Some("game.exe"), Some("d3d11.dll"), Some("c0000005")),
+        );
+        assert_eq!(id.len(), 16, "fixed width: {id}");
+        assert!(id.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()), "{id}");
+    }
+
+    #[test]
+    fn the_same_incident_hashes_identically_every_time() {
+        let a = incident_id_for(
+            IncidentKind::GpuTimeout,
+            utc("2026-08-20T21:42:00Z"),
+            &ifields(None, Some("amdkmdag"), None),
+        );
+        let b = incident_id_for(
+            IncidentKind::GpuTimeout,
+            utc("2026-08-20T21:42:00Z"),
+            &ifields(None, Some("amdkmdag"), None),
+        );
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn each_identity_component_changes_the_id() {
+        let base = incident_id_for(
+            IncidentKind::AppCrash,
+            utc("2026-08-20T21:42:00Z"),
+            &ifields(Some("game.exe"), Some("d3d11.dll"), Some("c0000005")),
+        );
+        let variants = [
+            incident_id_for(
+                IncidentKind::AppHang,
+                utc("2026-08-20T21:42:00Z"),
+                &ifields(Some("game.exe"), Some("d3d11.dll"), Some("c0000005")),
+            ),
+            incident_id_for(
+                IncidentKind::AppCrash,
+                utc("2026-08-20T21:43:00Z"),
+                &ifields(Some("game.exe"), Some("d3d11.dll"), Some("c0000005")),
+            ),
+            incident_id_for(
+                IncidentKind::AppCrash,
+                utc("2026-08-20T21:42:00Z"),
+                &ifields(Some("other.exe"), Some("d3d11.dll"), Some("c0000005")),
+            ),
+            incident_id_for(
+                IncidentKind::AppCrash,
+                utc("2026-08-20T21:42:00Z"),
+                &ifields(Some("game.exe"), Some("nvlddmkm.sys"), Some("c0000005")),
+            ),
+            incident_id_for(
+                IncidentKind::AppCrash,
+                utc("2026-08-20T21:42:00Z"),
+                &ifields(Some("game.exe"), Some("d3d11.dll"), Some("c0000374")),
+            ),
+        ];
+        for v in variants {
+            assert_ne!(base, v, "a changed identity component must change the id");
+        }
+    }
+
+    #[test]
+    fn a_windows_path_never_survives_into_an_incident_id() {
+        // WER and Reliability can both hand back a full path. Two records for the SAME crash — one
+        // naming a bare exe, one naming its full path — must be ONE identity, which is what proves
+        // the path was reduced to its basename rather than hashed as-is.
+        let bare = incident_id_for(
+            IncidentKind::AppCrash,
+            utc("2026-08-20T21:42:00Z"),
+            &ifields(Some("game.exe"), None, None),
+        );
+        let pathy = incident_id_for(
+            IncidentKind::AppCrash,
+            utc("2026-08-20T21:42:00Z"),
+            &ifields(Some(r"C:\Users\Kuya\Games\Game.exe"), None, None),
+        );
+        assert_eq!(bare, pathy);
+    }
+
+    #[test]
+    fn an_absent_component_and_a_blank_one_are_the_same_identity() {
+        let absent = incident_id_for(
+            IncidentKind::BlueScreen,
+            utc("2026-08-20T21:42:00Z"),
+            &ifields(None, None, None),
+        );
+        let blank = incident_id_for(
+            IncidentKind::BlueScreen,
+            utc("2026-08-20T21:42:00Z"),
+            &ifields(Some("   "), Some(""), None),
+        );
+        assert_eq!(absent, blank, "a blank field must not fork the identity");
+    }
+
+    #[test]
+    fn a_tdr_falls_back_to_the_driver_name_for_its_module_component() {
+        // build_receipt shows the GPU driver as the "module" for a TDR; the identity must agree,
+        // otherwise two TDRs from different drivers would share an id.
+        let amd = incident_id_for(
+            IncidentKind::GpuTimeout,
+            utc("2026-08-20T21:42:00Z"),
+            &IncidentFields { driver: Some("amdkmdag".into()), ..Default::default() },
+        );
+        let nvidia = incident_id_for(
+            IncidentKind::GpuTimeout,
+            utc("2026-08-20T21:42:00Z"),
+            &IncidentFields { driver: Some("nvlddmkm".into()), ..Default::default() },
+        );
+        assert_ne!(amd, nvidia);
+    }
+
+    #[test]
+    fn every_assembled_incident_carries_a_non_empty_id() {
+        let events = vec![RawEvent {
+            provider: "Application Error".into(),
+            id: 1000,
+            time: "2026-08-20T21:42:00-05:00".into(),
+            message: "Faulting application name: game.exe".into(),
+            props: serde_json::Value::Null,
+        }];
+        let incidents = assemble_incidents(events, Vec::new(), Vec::new(), &[]);
+        assert!(!incidents.is_empty(), "the fixture must produce an incident");
+        for inc in &incidents {
+            assert_eq!(inc.incident_id.len(), 16, "assembled incidents carry the real id");
+        }
+    }
+
     #[test]
     fn pretty_proc_strips_exe_and_handles_empty() {
         assert_eq!(pretty_proc("Helldivers2.exe"), "Helldivers2");
@@ -2017,6 +2221,7 @@ mod blackbox_tests {
         temp: Option<u32>,
     ) -> Incident {
         Incident {
+            incident_id: "test-incident".into(),
             headline: "h".into(),
             tag: kind.tag().to_string(),
             when: when.into(),

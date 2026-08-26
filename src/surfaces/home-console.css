@@ -926,6 +926,96 @@
    the three cards above it are the answers to one question, and boxing the rescue door the
    same way made it read as a fourth answer to that question, which it is not. A rule above
    it says "different thing" more accurately than a border around it. */
+/* THE CARE OBSERVER'S CARD (Tier 1 task 9, #222) — the one row on Home the user did not go
+   looking for, so it is also the one row most at risk of reading as scareware. Everything about
+   its register is a decision against that:
+     · a PANEL, not an alert — same surface and hairline as every other card on this screen;
+     · no red, no amber, no warning triangle, no pulse. The glyph is neutral and the only accent
+       is on the verb, exactly like the rescue door below it;
+     · two exits of visibly equal weight. A dismiss styled as the lesser option is a dark pattern,
+       and "I already know about this" is a completely legitimate answer;
+     · the headline is Windows' own record in plain English, and the meta line is what/when. No
+       cause, no confidence, no "your PC is at risk".
+   No side stripe (the >1px coloured border-left is a banned pattern, src/side-stripe-guard.test.ts)
+   and a real focus ring rather than the hover wash (src/focus-ring-guard.test.ts). */
+/* ONE FLUID ROW, NO BREAKPOINT. The approved Health handoff rules out media queries in as many
+   words, and round 9 of issue #49 established why the shortcut keeps failing here: any number you
+   hand-measure off the screen is wrong in the next language. So the row wraps on its own content
+   instead. `flex: 1 1 22ch` says "give the headline about twenty-two characters of measure before
+   the buttons may take the row"; below that the actions wrap under the text by themselves. The
+   browser does the measuring, which is the one measurement that cannot go stale. */
+:root[data-v2="on"] .hc-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin: var(--v2-pad) 0 0;
+  padding: 12px 14px;
+  background: var(--v2-panel-2);
+  border: 1px solid var(--v2-line);
+  border-radius: var(--ix-radius);
+}
+:root[data-v2="on"] .hc-notice-ico {
+  display: flex;
+  color: var(--v2-accent-text, var(--v2-accent));
+}
+:root[data-v2="on"] .hc-notice-text {
+  display: flex;
+  flex: 1 1 22ch;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+:root[data-v2="on"] .hc-notice-head {
+  margin: 0;
+  font: 600 var(--type-card) var(--v2-font-sans);
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .hc-notice-meta {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--type-body);
+  color: var(--v2-muted);
+  line-height: 1.45;
+}
+:root[data-v2="on"] .hc-notice-acts {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+:root[data-v2="on"] .hc-notice-open,
+:root[data-v2="on"] .hc-notice-dismiss {
+  padding: 7px 12px;
+  border-radius: var(--v2-r-sm);
+  border: 1px solid var(--v2-line-strong);
+  background: transparent;
+  font: 600 var(--type-body) var(--v2-font-sans);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+:root[data-v2="on"] .hc-notice-open {
+  border-color: var(--v2-accent-line);
+  color: var(--v2-accent-text, var(--v2-accent));
+}
+:root[data-v2="on"] .hc-notice-dismiss {
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .hc-notice-open:hover {
+  background: var(--v2-accent-dim);
+}
+:root[data-v2="on"] .hc-notice-dismiss:hover {
+  background: var(--v2-line);
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .hc-notice-open:focus-visible,
+:root[data-v2="on"] .hc-notice-dismiss:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 :root[data-v2="on"] .hc-care {
   display: flex;
   margin: var(--v2-pad) 0 0;

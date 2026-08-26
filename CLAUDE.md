@@ -183,7 +183,7 @@ A `ship-reminder` PostToolUse hook nudges this after any `tauri build`.
 
 ### Rust module map (`lib.rs` carved into safety-boundary modules)
 
-Complete 2026-08-18 (47 `.rs` files; line counts rough). **Mutation/rollback +
+Complete 2026-08-18 (48 `.rs` files; line counts rough). **Mutation/rollback +
 gate-relevant modules are starred ★ — scope any mutation-gate change against these first.** The
 read-only remainder (hardware/sensors, monitoring/FPS, benchmark/Lab, advisory/ranking/export,
 intelligence/measurement) lives in **`src-tauri/CLAUDE.md`**, which auto-loads only when work touches
@@ -191,7 +191,7 @@ intelligence/measurement) lives in **`src-tauri/CLAUDE.md`**, which auto-loads o
 
 **Core wiring & entry**
 - `main.rs` — argv router: `--fps-capture` → headless ETW helper (`run_fps_capture`); `--run-elevated <hex>` → elevated-PowerShell child (elevation boundary, owner territory); else `run()`. Runs BEFORE any window.
-- ★ `lib.rs` (~1585) — `run()` wiring + command registration, state probes, `compy_data_dir`, startup-apps, `gaming_mode_gate` (`lib.rs:520`), `safety_tests`. ★ for the command surface only: the `set_startup_entry_enabled` exception was **closed 2026-08-03** — it moved to `history.rs` and mutates through `actions::apply_startup_entry_enabled`, with a typed `SetStartupEntryEnabled` action, a raw-bytes snapshot and a Trust Ledger entry like every other apply. `actions.rs` is the only Windows-mutation boundary, with no exceptions.
+- ★ `lib.rs` (~1870) — `run()` wiring + command registration, state probes, `compy_data_dir`, startup-apps, `gaming_mode_gate` (`lib.rs:558`), `safety_tests`. ★ for the command surface only: the `set_startup_entry_enabled` exception was **closed 2026-08-03** — it moved to `history.rs` and mutates through `actions::apply_startup_entry_enabled`, with a typed `SetStartupEntryEnabled` action, a raw-bytes snapshot and a Trust Ledger entry like every other apply. `actions.rs` is the only Windows-mutation boundary, with no exceptions.
 
 **★ Mutation, rollback & gates (the safety boundary)**
 - ★ `actions.rs` (~5404) — THE Windows-mutation + rollback boundary, no exceptions: typed `AppliedAction`/`RollbackAction`/`Snapshot`, all `apply_*`/`rollback_*_typed`, `dispatch_rollback`, `resolve_rollback`, `synthesize_legacy_rollback`, `run_elevated_powershell`.

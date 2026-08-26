@@ -354,6 +354,11 @@ pub(crate) fn save_session(summary: SessionSummary) -> Result<bool, String> {
     // dark commit on purpose, so arming stays a one-line owner-signed flip rather than a
     // behavioural diff nobody reviewed.
     crate::receipts::on_session_finalized();
+    // Care trigger 3 of 3 (Tier 1 task 9): a session that just ended is the likeliest moment for a
+    // crash to have been recorded, so the observer gets one targeted look. Throttled like the
+    // foreground trigger, off-thread, and it cannot fail this save — `scan_async` swallows
+    // everything by contract.
+    crate::incident_observer::scan_async(crate::incident_observer::ScanTrigger::SessionFinalized);
     Ok(true)
 }
 

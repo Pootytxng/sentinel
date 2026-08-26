@@ -78,6 +78,32 @@
   gap: 9px;
 }
 
+/* THE DEEP-LINKED ROW (Care observer, Tier 1 task 9). A user who followed "Find out why" from Home
+   arrives in a list of up to twenty-five rows, so the one they clicked is marked — otherwise the
+   deep-link technically worked and practically did not. Marked with the accent BORDER and a short
+   label, not a coloured fill: the row's own content must stay exactly as readable as its
+   neighbours', and a highlighted background is how a "helpful" callout becomes the hardest thing on
+   the screen to read. */
+.bb-item[data-selected="true"] {
+  border-color: var(--accent);
+}
+
+.bb-selected-note {
+  margin: 0;
+  font-size: var(--type-label);
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* The honest negative. Shown when the deep-linked incident is NOT in the scan — an aged-out record
+   or a source that needs admin. Saying so beats a silent list the user has to audit themselves. */
+.bb-selected-missing {
+  margin: 0;
+  font-size: var(--type-body);
+  color: var(--ix-text-2);
+  line-height: 1.5;
+}
+
 .bb-item-head {
   display: flex;
   align-items: baseline;

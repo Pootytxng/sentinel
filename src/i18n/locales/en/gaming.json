@@ -155,9 +155,22 @@
     "sinceBaselineTitle": "Since your baseline",
     "noChangesRecorded": "No Compy changes recorded since the baseline — this reflects manual or ambient changes.",
     "noiseFloorNote": "Changes within ±{{pct}}% are reported as “no measurable change” — below the run-to-run noise floor, so we won’t call them a win or a loss.",
-    "componentLabels": { "cpu": "CPU", "ram": "Memory", "gpu": "GPU", "disk": "Disk" },
-    "verdictLabels": { "improved": "Improved", "noChange": "No measurable change", "regressed": "Regressed" },
-    "trialVerdict": { "helped": "Helped", "hurtReverted": "Hurt — reverted", "noChange": "No measurable change" },
+    "componentLabels": {
+      "cpu": "CPU",
+      "ram": "Memory",
+      "gpu": "GPU",
+      "disk": "Disk"
+    },
+    "verdictLabels": {
+      "improved": "Improved",
+      "noChange": "No measurable change",
+      "regressed": "Regressed"
+    },
+    "trialVerdict": {
+      "helped": "Helped",
+      "hurtReverted": "Hurt — reverted",
+      "noChange": "No measurable change"
+    },
     "trialReason": {
       "withinNoise": "the change stayed within your rig's run-to-run noise",
       "conditionsUnstable": "conditions were too noisy to measure reliably — try again",
@@ -169,10 +182,22 @@
     "localWinTopPct": "Top {{top}}% of your verified wins",
     "localWinPercentile": "Percentile {{percentile}} of your verified wins (top {{topPct}}%)",
     "useCaseProfiles": {
-      "gaming": { "label": "Gaming", "blurb": "Frames measurements around in-game FPS and frametime steadiness." },
-      "streaming": { "label": "Streaming", "blurb": "Game plus encoder — watch for CPU headroom while you broadcast." },
-      "creation": { "label": "Creation", "blurb": "Editing and rendering — sustained CPU/GPU and RAM matter most here." },
-      "idle": { "label": "General", "blurb": "No particular workload assumed — the neutral default." }
+      "gaming": {
+        "label": "Gaming",
+        "blurb": "Frames measurements around in-game FPS and frametime steadiness."
+      },
+      "streaming": {
+        "label": "Streaming",
+        "blurb": "Game plus encoder — watch for CPU headroom while you broadcast."
+      },
+      "creation": {
+        "label": "Creation",
+        "blurb": "Editing and rendering — sustained CPU/GPU and RAM matter most here."
+      },
+      "idle": {
+        "label": "General",
+        "blurb": "No particular workload assumed — the neutral default."
+      }
     }
   },
   "hardwareGrid": {
@@ -295,7 +320,9 @@
     "thanksNoted": "Thanks — noted; we'd rather stay quiet than guess wrong.",
     "didThisHelpQuestion": "Did this point you the right way?",
     "yesButton": "Yes",
-    "noButton": "No"
+    "noButton": "No",
+    "selectedNote": "This is the one you came here to see.",
+    "selectedMissing": "The incident you opened isn't in this scan. Windows may have rotated its record out, or a source that recorded it needs admin to read."
   },
   "twoFutures": {
     "heading": "Two futures",

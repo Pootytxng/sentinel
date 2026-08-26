@@ -25,13 +25,14 @@ hard-false · `CASE_SIGNING_PUBKEY` is all zeros · `CASE_CATALOG_ENDPOINTS` **a
 `CASE_CATALOG_ORIGINS` are both empty. `refresh_case_catalog` is not registered as a command and
 nothing calls it. Arming is plan tasks 10–11 and is **owner territory**.
 
-- **Eleven worktrees besides `main`. Seven are spent; four carry commits that are not on main — do
-  NOT delete or hard-reset those four before checking them**: `feat/user-feedback-lab-recovery`
+- **Eleven worktrees besides `main`. Six are spent; five carry commits that are not on main — do
+  NOT delete or hard-reset those five before checking them**: `feat/user-feedback-lab-recovery`
   (49) · `feat/lab-49-parity-port` (6) · `lane/cleanup-train-2026-08-20` (5) ·
-  `lane/vision-pointer-guard-2026-08-24` (3). The Tier 1 worktree
-  `C:\Users\Kuya\code\sentinel-q9a` is now spent. Its branch landed on `main` and its remote ref
-  is pruned. Re-derive with `git worktree list` and `git rev-list --count origin/main..<branch>`; never
-  carry these numbers forward unchecked.
+  `lane/vision-pointer-guard-2026-08-24` (3) · `lane/care-discovery-2026-08-25` (2, this lane).
+  `C:\Users\Kuya\code\sentinel-q9a` is spent — its branch landed and its remote ref is pruned — and
+  `sentinel-local-collision-guard` was retired outright on 2026-08-25 once git confirmed #128 had
+  been on `main` since 2026-08-21. Re-derive with `git worktree list` and
+  `git rev-list --count origin/main..<branch>`; never carry these numbers forward unchecked.
 
 ## What the pre-merge review caught, and the guards that now hold it
 
