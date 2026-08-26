@@ -38,20 +38,49 @@ const PLAN = join("docs", "superpowers", "plans", "2026-07-30-single-entry-workf
 const isHistory = (rel) =>
   /(^|[\\/])docs[\\/]archive[\\/]|_ARCHIVE\.md$|_HISTORY\.md$/i.test(rel);
 
-/** Every doc this branch adds or changes — so a NEW doc cannot smuggle the claim back in. */
+/**
+ * Every doc this branch adds or changes — so a NEW doc cannot smuggle the claim back in.
+ *
+ * TWO sources, and the second was missing until 2026-08-26 (bug→guard). The committed diff against
+ * `origin/main` cannot see a doc you have only just written, so on a branch sitting exactly AT
+ * `origin/main` the corpus collapsed to SPEC + PLAN and this guard reported a cheerful green over a
+ * working tree full of unscanned edits. That is not a theoretical hole: a hand-run passed
+ * `docs/SESSION_HANDOFF.md` minutes before `.githooks/pre-push` failed the identical assertion on
+ * the same text, because the commit in between is what put the file into the corpus. A guard whose
+ * scope depends on whether you have typed `git commit` yet teaches the wrong lesson twice — it is
+ * green when you can still cheaply fix things, and red only once the fix costs a rewrite.
+ *
+ * So the working tree counts too: modified, staged and untracked docs are all scanned.
+ */
 function scannedDocs() {
   const files = new Set([SPEC, PLAN]);
-  try {
-    const changed = execFileSync("git", ["diff", "--name-only", "origin/main...HEAD", "--", "docs/"], {
-      cwd: ROOT,
-      encoding: "utf8",
-    });
-    for (const f of changed.split("\n").map((s) => s.trim()).filter(Boolean)) {
-      if (f.endsWith(".md")) files.add(f.replace(/\//g, "\\"));
+  const add = (rel) => {
+    if (rel.endsWith(".md")) files.add(rel.replace(/\//g, "\\"));
+  };
+  const git = (args) => {
+    try {
+      return execFileSync("git", args, { cwd: ROOT, encoding: "utf8" });
+    } catch {
+      /* no origin/main locally is not a reason to skip the documents we know about */
+      return "";
     }
-  } catch {
-    /* no origin/main locally is not a reason to skip the two documents we know about */
+  };
+
+  for (const f of git(["diff", "--name-only", "origin/main...HEAD", "--", "docs/"]).split("\n")) {
+    const rel = f.trim();
+    if (rel) add(rel);
   }
+  // Uncommitted work. `--porcelain` prefixes two status columns, and a rename reads `old -> new`;
+  // the arrow form is split so the file that EXISTS is the one scanned.
+  for (const line of git(["status", "--porcelain", "--", "docs/"]).split("\n")) {
+    const entry = line.slice(3).trim();
+    if (!entry) continue;
+    for (const part of entry.split(" -> ")) {
+      const rel = part.trim().replace(/^"|"$/g, "");
+      if (rel) add(rel);
+    }
+  }
+
   return [...files].filter((f) => existsSync(join(ROOT, f)) && !isHistory(f));
 }
 
@@ -103,6 +132,29 @@ describe("decision 7 — the docs must not imply a merge updates existing worktr
   it("scans the documents this train owns", () => {
     expect(docs).toContain(SPEC);
     expect(docs.length).toBeGreaterThan(0);
+  });
+
+  it("scans docs that are only dirty in the working tree, not just committed ones", () => {
+    // bug→guard, 2026-08-26. The corpus used to come from `git diff origin/main...HEAD` ALONE, so a
+    // branch sitting exactly at origin/main scanned nothing but SPEC and PLAN no matter how many
+    // docs were open and edited. The failure was silent and flattering: a hand-run reported a clean
+    // pass on docs/SESSION_HANDOFF.md, and the pre-push hook failed the identical assertion on
+    // byte-identical text minutes later, because committing is what put the file into the corpus.
+    //
+    // This asserts against live `git status` rather than a fixture, so it keeps biting as the tree
+    // changes and cannot rot into a tautology. On a genuinely clean tree it asserts nothing beyond
+    // the corpus still being non-empty — which is the honest reading, not a hole: there is nothing
+    // uncommitted to miss.
+    const dirty = execFileSync("git", ["status", "--porcelain", "--", "docs/"], { cwd: ROOT, encoding: "utf8" })
+      .split("\n")
+      .map((l) => l.slice(3).trim())
+      .filter((rel) => rel.endsWith(".md") && !isHistory(rel) && existsSync(join(ROOT, rel)))
+      .map((rel) => rel.replace(/\//g, "\\"));
+
+    for (const rel of dirty) {
+      expect(docs, `${rel} is edited and unscanned — the exact blind spot this guard was widened to close`).toContain(rel);
+    }
+    expect(docs.length).toBeGreaterThanOrEqual(dirty.length);
   });
 
   it("scans live documents and not the archives that merely record history", () => {

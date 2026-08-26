@@ -8,12 +8,13 @@
 
 **NOTHING IS MID-FLIGHT. `main` is clean and the last lane landed.** Compy Care **Tier 1** — signed
 case intelligence, built dark — merged 2026-08-26 as PR
-[#221](https://github.com/Pootytxng/sentinel/pull/221) against issue
-[#220](https://github.com/Pootytxng/sentinel/issues/220).
+[#221](https://github.com/Pootytxng/sentinel/pull/221). Issue
+[#220](https://github.com/Pootytxng/sentinel/issues/220) is CLOSED, with its
+close comment enumerating what is NOT closed rather than implying Tier 1 is finished.
 
 | | |
 |---|---|
-| `main` | `d83c6f04` — the Tier 1 merge commit |
+| `main` | `d83c6f04` is the Tier 1 merge; the tip is that plus the doc commits below it — check `git log --oneline -3` |
 | Plan | `docs/superpowers/plans/2026-08-09-outbound-case-intelligence-tier1.md` (11 tasks) |
 | Landed | **plan tasks 1–7 of 11**: schema · trust root · cache · matcher · pull path · wire contract · UI |
 | Gate | `pwsh scripts/verify-local.ps1` **PASS at `db02b6cb`** — 389/389 files, 5441 passed, Rust 1119 passed, clippy clean |
@@ -68,10 +69,13 @@ uncalled today) · `catalog_version` u64 vs JS `number` · the dead-code guard's
   offender created the second, and then this very file tripped it twice more. Reword, never loosen
   (precedent PR #166). Run `node scripts/run-vitest.mjs tools/entry/doc-truth.test.mjs` **alone**
   before pushing: seconds, versus four minutes inside `.githooks/pre-push`.
-  **UNEXPLAINED, so do not lean on a single green:** one such pre-push run reported 39/39 on a file
-  that failed the identical assertion in the hook minutes later, with no edit in between. The
-  behaviour did not reproduce afterwards — a true offender is caught both alone and batched — so
-  treat the hook, not the hand-run, as the verdict.
+  **That hand-run used to lie, and the reason is worth knowing:** the guard built its corpus from
+  `git diff origin/main...HEAD -- docs/` alone, so on a branch sitting exactly at `origin/main` it
+  scanned nothing but two spec files and reported a cheerful green over a working tree full of
+  unscanned edits. It passed this very file minutes before the hook failed the identical assertion
+  on byte-identical text — committing is what put the file in scope. Fixed 2026-08-26: `git status`
+  now feeds the corpus too, so uncommitted docs are scanned, pinned by a test that fails when the
+  working-tree half is removed.
 - **`scripts/process-mutex-guard.test.mjs` flakes under full parallelism.** It failed once at a head
   that then passed unchanged; the same test passes 6/6 standalone. Commit `4a8dae40` already records
   this suite as one that starves the pool it joins. Re-run it alone before believing it — and record

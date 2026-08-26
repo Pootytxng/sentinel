@@ -45,8 +45,8 @@
   ],
   "gateAnomaly": {
     "what": "Before that first push I hand-ran the same doc-truth guard batched with three sibling guards and it reported 39/39 PASS on the file the hook then failed, with no edit in between.",
-    "reproduction": "Did not reproduce. A deliberately reintroduced offender is caught both alone and batched, and the guard fails correctly on the pre-repair text when re-run now.",
-    "disposition": "Recorded as UNEXPLAINED rather than explained away. docs/SESSION_HANDOFF.md now tells the next session to treat the pre-push hook, not a hand-run, as the verdict. It changes nothing about this closure — the authorizing gate is the hook run at a25ff842 — but a guard that went green on failing content once is not something to leave unwritten."
+    "reproduction": "EXPLAINED after the closure, and fixed. scannedDocs() in tools/entry/doc-truth.test.mjs built its corpus from `git diff --name-only origin/main...HEAD -- docs/` alone. At the time of the hand-run, HEAD was exactly origin/main and the handoff edits were uncommitted, so the corpus collapsed to the two spec files and docs/SESSION_HANDOFF.md was never scanned. The green was vacuous, not wrong. The commit in between is what put the file in scope for the hook.",
+    "disposition": "Fixed rather than documented, per bug->guard: scannedDocs() now unions the committed diff with `git status --porcelain -- docs/`, so modified, staged and untracked docs are scanned. Pinned by a new test that asserts every dirty doc is in the corpus, falsified by deleting the working-tree half (it fails: 'docs\\\\SESSION_HANDOFF.md is edited and unscanned'). This changes nothing about the closure - the authorizing gate was the hook run at a25ff842, which scanned the file properly and passed - but a guard that is green only while a fix is still cheap teaches exactly the wrong lesson, and it had already taught it once."
   },
   "scopeProof": {
     "closes": "Tasks 1-7: schema, trust root, cache, matcher, pull path, incident wire contract, and the Black Box's KnownIssueBlock. All present on main after the merge.",
