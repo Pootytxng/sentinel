@@ -480,11 +480,19 @@ Two things here are new and must not be flattened back into the 2026-07-23 wordi
    facts, on two already-registered read-only commands, zero new backend. Stage tile retitled "Your rig"
    → "Your rig on the bench". PR pending against `main`.
 
-**Read together with NAV-1 finding 2 below:** parallel UI generations coexist per room (Home 4+,
-Monitor 4, Lab 5) and the pruning pass has never run. That is the leading mechanical suspect for
-"intimidating" — surfaces authored under different design generations, all reachable, none blessed.
-It is also the same work as **P2 "reversible generation pruning"** in `BACKLOG.md`, which is why the
-backend runway and this ask meet at the same next train.
+**Read together with NAV-1 finding 2 below — but that suspect is now CLEARED.** The reading was that
+parallel UI generations coexisting per room (Home 4+, Monitor 4, Lab 5) were the leading mechanical
+cause of "intimidating". **That pruning pass RAN on 2026-08-06**: 29 unreachable files / ~2,578 lines
+deleted (two Lab faces, three Optimize faces, `CompyHero`, `nav-flags.ts`, the `design/qpw`
+components, `Gallery`, a second `Sparkline`, vendored `MagicBento`), recurrence mechanised by
+`src/reachability-guard.test.ts` — see **P2** in `BACKLOG.md`. All four rooms have since had their
+restructure pass (Home 2026-08-06 · History + Live 2026-08-20 · Test 2026-08-21), so the structural
+suspects this row named are spent.
+
+**What is actually left under DIR-1 is the JOURNEY, not the furniture:** P2's remaining two items —
+the first-win action → rollback → proof journey (issue #49's Lab production-order step) and the
+Consumer/Technical/Support evidence exports. A user can now read every room; what he still cannot do
+is walk one change from press to proof without being taught. That is this directive's next train.
 
 ### PAL-1. The caption colour is too dim to read — ✅ SHIPPED 2026-08-11
 
