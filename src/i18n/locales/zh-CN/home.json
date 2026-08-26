@@ -44,7 +44,9 @@
     },
     "happening": {
       "eyebrow": "最近发生了什么？",
-      "hint": "选一个最贴切的描述，我们就能为你指明方向。"
+      "hint": "选一个最贴切的描述，我们就能为你指明方向。",
+      "eyebrowClear": "你想做什么？",
+      "hintClear": "这台电脑目前没有任何异常 — 大家通常从这里开始。"
     },
     "dense": {
       "model": "型号",
@@ -105,13 +107,14 @@
     },
     "verdict": {
       "attentionSub_one": "{{total}} 项检查中有 {{count}} 项表现良好。",
-      "attentionSub_other": "{{total}} 项检查中有 {{count}} 项表现良好。"
+      "attentionSub_other": "{{total}} 项检查中有 {{count}} 项表现良好。",
+      "attentionNext": "处理方式在「{{room}}」里。"
     }
   },
   "interview": {
     "q": {
       "start": {
-        "question": "你的电脑现在怎么了？",
+        "question": "Compy 可以帮你做什么？",
         "crash": "它崩溃、卡死，或者自己重启了",
         "crashHint": "游戏或 Windows 意外关闭。",
         "slow": "游戏感觉慢、卡顿或不流畅",
@@ -119,7 +122,19 @@
         "heat": "机器很烫，或者风扇很响",
         "changed": "我改了一些设置——有用吗？",
         "unsure": "我不确定——帮我整体看看",
-        "unsureHint": "感觉哪里不对劲，但说不上来。"
+        "unsureHint": "感觉哪里不对劲，但说不上来。",
+        "groupWrong": "出了问题",
+        "groupGoal": "一切正常 — 只是想更好一点",
+        "heatHint": "机箱发烫，或风扇一直不停。",
+        "changedHint": "你或 Compy 最近改过设置。",
+        "moreFps": "我想要更高的帧率",
+        "moreFpsHint": "腾出被其他程序占用的资源。",
+        "watchFps": "我想在游戏时看到帧率",
+        "watchFpsHint": "屏幕上的实时读数，结束后还有总结。",
+        "scores": "我想看看这台电脑的跑分",
+        "scoresHint": "一个可重复的测试，改动后还能再跑一次。",
+        "specs": "我想知道这台电脑用了什么硬件",
+        "specsHint": "Compy 能读到的每个部件，用大白话说清楚。"
       },
       "crash": {
         "question": "它什么时候发生？",
@@ -161,7 +176,10 @@
         "readSession": "回看你上一次的会话",
         "heat": "检查散热与风扇余量",
         "beforeAfter": "做一次前后对比",
-        "undo": "Compy 会先保存原设置，之后你可以在“已应用”里撤销其中任何一项。"
+        "undo": "Compy 会先保存原设置，之后你可以在“已应用”里撤销其中任何一项。",
+        "watchLive": "把帧率显示在屏幕上",
+        "seeScores": "打开跑分",
+        "seeParts": "看看我的硬件"
       },
       "sweep": {
         "sentence": "先从 Compy 已经能看到的东西说起。"
@@ -195,6 +213,18 @@
       },
       "didItHelp": {
         "sentence": "唯一诚实的答案，是在这台电脑上做一次前后对比，并对照噪声基准来评级。"
+      },
+      "wantFps": {
+        "sentence": "帧率通常是被游戏旁边运行的东西拿走的，而不是游戏本身。Compy 可以先交还它有把握的部分，其余的展示给你看。"
+      },
+      "wantMonitor": {
+        "sentence": "Compy 可以在你游戏时把帧率显示在屏幕上，并保留一份总结，让“感觉更顺了”变成你能核对的数字。"
+      },
+      "wantScores": {
+        "sentence": "跑分就是一次可重复的测试。它的价值在于对比 — 同一个测试在改动前后各跑一次，才知道改动是不是真的有用。"
+      },
+      "wantSpecs": {
+        "sentence": "Compy 从 Windows 和驱动里读取你的硬件，读不到的会直说读不到，而不是猜。"
       }
     },
     "ui": {
@@ -206,7 +236,8 @@
       "evidenceTitle": "Compy 实测到的",
       "noEvidence": "Compy 还没有实测过这一项。下面的按钮就是去测它的。",
       "applying": "正在应用…",
-      "stepAria": "问答进度"
+      "stepAria": "问答进度",
+      "doorClear": "让这台电脑更好一点"
     }
   },
   "homeHud": {

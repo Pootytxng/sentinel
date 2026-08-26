@@ -250,7 +250,12 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
     const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
     const door = c.querySelector<HTMLButtonElement>(".v2-verdict-action .hc-front-door")!;
     expect(door, "Home has no primary action").not.toBeNull();
-    expect(door.textContent).toBe(i18n.t("home.interview.ui.door"));
+    // THE LABEL IS EARNED (owner direction 2026-08-26). `props` mounts a healthy PC, and on a
+    // healthy PC "Help me with my PC" is Compy implying a problem it never measured. The
+    // detection-gated pair is pinned in full by home-console-front-door-gate.test.tsx; this line
+    // asserts the half this mount is in, so the two files fail together rather than one covering
+    // for the other.
+    expect(door.textContent).toBe(i18n.t("home.interview.ui.doorClear"));
     // Exactly one filled primary on the screen, or per Duolingo there are none.
     expect(c.querySelectorAll(".hc-front-door")).toHaveLength(1);
     // Closed on arrival: Home asks nothing until the user asks first.
@@ -351,7 +356,24 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
     // sub node exists again; what may never come back is the paragraph.
     const sub = c.querySelector(".v2-verdict-sub");
     expect(sub, "the comp's count line").not.toBeNull();
-    expect(sub!.textContent, "the count, not the check's prose").toBe("1 of 2 checks looks good.");
+    // THE ROUTE JOINED THE COUNT (owner ruling 2026-08-26), and the PARAGRAPH still may not.
+    // The DIR-1 walk found this state naming a problem with no way to act on it on screen; asked
+    // directly, the owner chose one short route line over both the paragraph and the status quo.
+    // `fixRoomLabel` defaults to "Lab" in isolation — App passes the live rail's label.
+    expect(sub!.textContent, "the count, then one route — never the check's prose").toBe(
+      "1 of 2 checks looks good. What to do about it is in Lab.",
+    );
+    // …and the route is a real one: it fires the same handler the Re-run band's button fires.
+    const seen: string[] = [];
+    const routed = mount({
+      ...props,
+      readiness: attn,
+      onSeeInFix: () => seen.push("fix"),
+    }).container;
+    act(() => {
+      routed.querySelector<HTMLButtonElement>(".hc-verdict-next")!.click();
+    });
+    expect(seen, "the route line is decoration, not a door").toEqual(["fix"]);
     // …so the paragraph is nowhere in the header. The named headline stays.
     expect(c.querySelector(".v2-verdict")!.textContent).not.toContain("turn it back on");
     expect(c.querySelector(".hc-verdict-line")!.textContent).toContain("Applied Compy changes");
@@ -1281,8 +1303,11 @@ describe("HomeConsole — the symptom cards and the rescue row match the comp", 
       expect(sub, "the card's description line is missing").not.toBeNull();
       expect(sub!.textContent!.length).toBeGreaterThan(0);
     }
+    // A HEALTHY PC GETS THE GOAL CARDS (owner direction 2026-08-26). `props` mounts with nothing
+    // flagged, so the symptom set is not earned here and the first card is the first GOAL answer.
+    // Both sets, and the switch between them, are pinned by home-console-front-door-gate.test.tsx.
     expect(rows[0].querySelector(".hc-happening-sub")!.textContent).toBe(
-      "A game or Windows closed unexpectedly.",
+      "Free up what your games are competing with.",
     );
   });
 

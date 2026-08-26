@@ -278,7 +278,11 @@ describe("the retired intake band stays retired (owner removed it on sight, 2026
     expect(btn, "the front door is missing").not.toBeNull();
     // A real button, not a div dressed as one (doorknob-guard's law, held here at the render).
     expect(btn!.tagName).toBe("BUTTON");
-    expect(btn!.textContent).toBe(i18n.t("home.interview.ui.door"));
+    // `renderHome` mounts a healthy PC, so the door wears its NOT-DETECTED label (owner direction
+    // 2026-08-26). What this test is actually about is unchanged: the door names what it does for
+    // the user and puts no question on Home. Which of the two labels it wears in which state is
+    // home-console-front-door-gate.test.tsx's job.
+    expect(btn!.textContent).toBe(i18n.t("home.interview.ui.doorClear"));
     // The question is not on the screen until the user asks for it.
     expect(c.textContent ?? "").not.toContain(Q.start.question);
     expect(document.querySelector(".hi-question")).toBeNull();

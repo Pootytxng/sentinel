@@ -5,6 +5,7 @@ import type { LabStationKey } from "./lab-guided-data";
 import { fastPathAppliedNote, type HomeIntakeRoom } from "./home-intake-data";
 import {
   INTERVIEW_ROOT,
+  groupChoices,
   interviewFinding,
   interviewQuestions,
   type InterviewFacts,
@@ -159,20 +160,31 @@ export function HomeInterview({
         {current.kind === "question" ? (
           <div className="hi-screen">
             <h3 className="hi-question">{questions[current.id].question}</h3>
-            <ul className="hi-answers">
-              {questions[current.id].choices.map((c) => (
-                <li key={c.id}>
-                  <button
-                    type="button"
-                    className="hi-answer"
-                    data-unsure={c.unsure ? "yes" : undefined}
-                    onClick={() => answer(c.next)}
-                  >
-                    {c.label}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            {/* GROUPED, not flat (owner direction 2026-08-26). The start screen now carries both
+                halves of why someone opens Compy — something is wrong, and nothing is wrong — and
+                nine answers in one column is the wall the interview exists to avoid. The grouping
+                is read from the taxonomy (`groupChoices`), never hand-listed here, so an answer
+                that changes halves moves on screen without this file being touched. Screens whose
+                answers carry no group render exactly as before: one unheaded list. */}
+            {groupChoices(questions[current.id].choices, t).map((g) => (
+              <div className="hi-answer-group" key={g.id}>
+                {g.heading && <h4 className="hi-answer-group-head">{g.heading}</h4>}
+                <ul className="hi-answers">
+                  {g.choices.map((c) => (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        className="hi-answer"
+                        data-unsure={c.unsure ? "yes" : undefined}
+                        onClick={() => answer(c.next)}
+                      >
+                        {c.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
         ) : (
           finding && (

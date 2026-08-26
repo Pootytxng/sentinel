@@ -36,6 +36,12 @@ export type InterviewQuestionId = "start" | "crash" | "slow";
 
 export type InterviewFindingId =
   | "sweep"
+  // The GOAL half (owner direction 2026-08-26). Everything above this line assumes something is
+  // wrong; these four assume nothing at all. See the note on `group` below for why they exist.
+  | "wantFps"
+  | "wantMonitor"
+  | "wantScores"
+  | "wantSpecs"
   | "crashInGame"
   | "crashAnytime"
   | "crashBoot"
@@ -54,6 +60,10 @@ export type InterviewFindingId =
  */
 export const INTERVIEW_FINDINGS: InterviewFindingId[] = [
   "sweep",
+  "wantFps",
+  "wantMonitor",
+  "wantScores",
+  "wantSpecs",
   "crashInGame",
   "crashAnytime",
   "crashBoot",
@@ -89,6 +99,27 @@ export type InterviewChoice = {
    * a surface shows as a CARD need one — the interview's own screens render the label alone.
    */
   hint?: string;
+  /**
+   * WHICH HALF OF THE FRONT DOOR THIS ANSWER BELONGS TO (owner direction 2026-08-26):
+   *
+   *   "wrong" — something is broken, slow, hot, or was changed. Every answer this tree had until
+   *             today, and the reason a distressed user opens Compy.
+   *   "goal"  — nothing is wrong and the user still wants something. "I want more FPS", "I want to
+   *             watch my FPS while I play", "I want to see my scores", "I want to know what is in
+   *             this PC."
+   *
+   * His words: *"the home page options all seem to only point towards some sort of issue which
+   * shouldnt be the only reason people are here in the first place"*, and: offering help should
+   * only lead *"if there an indicator that something was detected from your pc"*. Compy's second
+   * specialty is optimization, and a front door built only out of symptoms tells a user with a
+   * healthy PC that they are in the wrong place — or worse, implies a problem Compy never measured,
+   * which is the honest-measurement law failing in the other direction.
+   *
+   * Undefined = ungrouped, and exactly one answer is (the not-sure answer, which belongs to
+   * neither half and stays last). `home-interview-data.test.ts` pins that BOTH halves are
+   * non-empty, so a future trim cannot quietly return this screen to symptoms-only.
+   */
+  group?: "wrong" | "goal";
 };
 
 export type InterviewQuestion = {
@@ -112,15 +143,61 @@ export function interviewQuestions(t: TFunction): Record<InterviewQuestionId, In
           label: k("start.crash"),
           hint: k("start.crashHint"),
           next: { kind: "question", id: "crash" },
+          group: "wrong",
         },
         {
           id: "slow",
           label: k("start.slow"),
           hint: k("start.slowHint"),
           next: { kind: "question", id: "slow" },
+          group: "wrong",
         },
-        { id: "heat", label: k("start.heat"), next: { kind: "finding", id: "heat" } },
-        { id: "changed", label: k("start.changed"), next: { kind: "finding", id: "didItHelp" } },
+        {
+          id: "heat",
+          label: k("start.heat"),
+          hint: k("start.heatHint"),
+          next: { kind: "finding", id: "heat" },
+          group: "wrong",
+        },
+        {
+          id: "changed",
+          label: k("start.changed"),
+          hint: k("start.changedHint"),
+          next: { kind: "finding", id: "didItHelp" },
+          group: "wrong",
+        },
+        // The GOAL half. These are not milder symptoms — they are the reasons someone whose PC is
+        // working perfectly opens an optimizer, and until today this screen had none of them.
+        {
+          id: "moreFps",
+          label: k("start.moreFps"),
+          hint: k("start.moreFpsHint"),
+          next: { kind: "finding", id: "wantFps" },
+          group: "goal",
+        },
+        {
+          id: "watchFps",
+          label: k("start.watchFps"),
+          hint: k("start.watchFpsHint"),
+          next: { kind: "finding", id: "wantMonitor" },
+          group: "goal",
+        },
+        {
+          id: "scores",
+          label: k("start.scores"),
+          hint: k("start.scoresHint"),
+          next: { kind: "finding", id: "wantScores" },
+          group: "goal",
+        },
+        {
+          id: "specs",
+          label: k("start.specs"),
+          hint: k("start.specsHint"),
+          next: { kind: "finding", id: "wantSpecs" },
+          group: "goal",
+        },
+        // Ungrouped on purpose, and last: "I am not sure" is the answer for someone who cannot
+        // place themselves in either half, so filing it under one of them would be a small lie.
         {
           id: "unsure",
           label: k("start.unsure"),
@@ -165,6 +242,36 @@ export function interviewQuestions(t: TFunction): Record<InterviewQuestionId, In
       ],
     },
   };
+}
+
+/**
+ * The start screen's answers, split into the two halves a reader can actually scan (owner
+ * direction 2026-08-26). Nine answers in one flat list is the "menu of unfamiliar choices" the
+ * interview was built to replace; the same nine under two short headings is a structure, and
+ * DIR-1 names grouping as the sanctioned remedy for exactly this ("intimidation is a STRUCTURE
+ * defect — grouping, boxed templates, fewer words; NEVER a switch and never hiding").
+ *
+ * Order is preserved, empty groups drop out, and the ungrouped remainder (the not-sure answer)
+ * always comes last with no heading. Lives here rather than in the component because which half
+ * an answer belongs to is taxonomy, and the component that renders it is not the only one that
+ * reads it — Home's shortcut cards pick from the same halves.
+ */
+export type InterviewChoiceGroup = {
+  id: "wrong" | "goal" | "other";
+  /** Null for the ungrouped remainder — a heading over one answer is noise, not structure. */
+  heading: string | null;
+  choices: InterviewChoice[];
+};
+
+export function groupChoices(choices: InterviewChoice[], t: TFunction): InterviewChoiceGroup[] {
+  const pick = (g: InterviewChoice["group"] | undefined) =>
+    choices.filter((c) => c.group === g);
+  const groups: InterviewChoiceGroup[] = [
+    { id: "wrong", heading: t("home.interview.q.start.groupWrong"), choices: pick("wrong") },
+    { id: "goal", heading: t("home.interview.q.start.groupGoal"), choices: pick("goal") },
+    { id: "other", heading: null, choices: pick(undefined) },
+  ];
+  return groups.filter((g) => g.choices.length > 0);
 }
 
 // ── The live facts a finding is allowed to speak from ───────────────────────────────────────────
@@ -302,6 +409,45 @@ export function interviewFinding(
       direct = facts.readiness != null;
       sentence = k("sweep.sentence");
       action = fastPathOr(runCheck());
+      break;
+    }
+    // ── The GOAL findings (owner direction 2026-08-26) ──────────────────────────────────────────
+    // Law 2 is doing real work in this half. Nobody asking "I want more FPS" has reported a
+    // symptom, so there is nothing to be `direct` about unless Compy already holds the reading
+    // that answers them — which is exactly why the level chip is derived rather than written.
+    case "wantFps": {
+      stackLine();
+      readinessLine();
+      direct = facts.recsLoaded;
+      sentence = k("wantFps.sentence");
+      action = fastPathOr(station("diagnostics", "lab", k("act.diagnostics")));
+      break;
+    }
+    case "wantMonitor": {
+      // No session on record is the COMMON case here, and it must read as "not measured yet"
+      // rather than as a zero: the whole point of this answer is that the user has not measured
+      // anything and wants to start.
+      sessionCountLine();
+      direct = false;
+      sentence = k("wantMonitor.sentence");
+      action = roomDoor("play", k("act.watchLive"));
+      break;
+    }
+    case "wantScores": {
+      sessionCountLine();
+      sessionLine();
+      direct = facts.lastSession != null;
+      sentence = k("wantScores.sentence");
+      action = station("benchmark", "lab", k("act.seeScores"));
+      break;
+    }
+    case "wantSpecs": {
+      // Diagnostics' own whenLine is "You just want to know what's in this PC." — this answer and
+      // that station are the same sentence, which is what makes it the right door rather than a
+      // near-enough one. No evidence line: the parts list is not something Compy has "measured"
+      // in the sense law 2 means, so this stays honestly `unknown` and the action goes and reads it.
+      sentence = k("wantSpecs.sentence");
+      action = station("diagnostics", "lab", k("act.seeParts"));
       break;
     }
     case "crashInGame": {

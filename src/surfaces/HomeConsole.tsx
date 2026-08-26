@@ -114,7 +114,37 @@ type Props = {
    exist and cannot outlive one that is removed — the row simply stops rendering with it.
    Presentation lives here rather than in home-interview-data because a glyph is not part of
    the taxonomy: the interview's own screens draw no icons at all. */
-const HAPPENING_GLYPH: Record<string, string> = { crash: "burst", slow: "gauge", unsure: "help" };
+const HAPPENING_GLYPH: Record<string, string> = {
+  crash: "burst",
+  slow: "gauge",
+  unsure: "help",
+  // The goal half (owner direction 2026-08-26) — the cards Home shows when nothing was detected.
+  moreFps: "target",
+  watchFps: "pulse",
+  scores: "chart",
+  specs: "grid",
+};
+
+/**
+ * WHICH THREE SHORTCUTS HOME OFFERS, and it depends on whether Compy actually found anything.
+ *
+ * Owner direction 2026-08-26, his words: *"offering help should only be an option if there an
+ * indicator that something was detected from your pc that it would even inquire that"*, and
+ * *"the home page options all seem to only point towards some sort of 'issue' which shouldnt be
+ * the only reason people are here in the first place"*.
+ *
+ * So the symptom cards are EARNED, not permanent. With a flagged check or a recorded incident on
+ * screen, the three answers people arrive with lead. With nothing detected, leading with "it
+ * crashed or froze" asks a healthy PC's owner to pick a symptom they do not have — an implied
+ * finding Compy never measured, which is the honest-measurement law failing in the direction
+ * nobody guards for. In that state Home offers the four things Compy's OTHER specialty is for.
+ *
+ * Both sets are read out of the interview's own taxonomy by id, so a card can never carry wording
+ * Home invented, and an answer that stops existing takes its card with it rather than rendering a
+ * row that leads nowhere. Pinned by `home-console-front-door-gate.test.tsx`.
+ */
+const DETECTED_SHORTCUTS = ["crash", "slow", "unsure"] as const;
+const CLEAR_SHORTCUTS = ["moreFps", "watchFps", "scores"] as const;
 
 const fmtGB1 = (b: number) => (b / 1024 ** 3).toFixed(1);
 
@@ -677,7 +707,12 @@ export function HomeConsole({
   // cannot name it — and all five stay one click away behind the button, so nothing is removed. Any
   // id that stopped existing simply drops out rather than rendering a row that leads nowhere.
   const interviewRoot = interviewQuestions(t)[INTERVIEW_ROOT];
-  const quickSymptoms = ["crash", "slow", "unsure"]
+  // THE DETECTION GATE (owner direction 2026-08-26 — see DETECTED_SHORTCUTS above). Two sources,
+  // and both are things Compy MEASURED rather than inferred: a readiness check that flagged, or an
+  // incident the observer actually read out of Windows. Anything softer than that would be Compy
+  // implying a problem it has not found, which is the exact failure this gate exists to prevent.
+  const somethingDetected = posture.tone === "attention" || pendingCare != null;
+  const quickSymptoms = (somethingDetected ? DETECTED_SHORTCUTS : CLEAR_SHORTCUTS)
     .map((id) => interviewRoot.choices.find((c) => c.id === id))
     .filter((c): c is (typeof interviewRoot.choices)[number] => c != null);
   // The Care entry (issue #91, discovery contract): ALWAYS visible, independent of the interview
@@ -805,7 +840,24 @@ export function HomeConsole({
               {t("home.homeConsole.verdict.attentionSub", {
                 count: checksGood,
                 total: readiness!.checks.length,
-              })}
+              })}{" "}
+              {/* THE NEXT STEP, one line (owner ruling 2026-08-26). The DIR-1 first-timer walk
+                  found that in this state Home names a problem and shows no way to deal with it:
+                  the check's own "why + what to do" is computed into `posture.sub` and then
+                  dropped, because #180 §C bars the PARAGRAPH here. Asked directly, the owner chose
+                  a short route line over both the paragraph and the status quo.
+
+                  It is a route, not advice, and that is what makes it safe to print: it fires the
+                  SAME `onSeeInFix` the Re-run band's own button fires further down this page, and
+                  it names that button's room from the same `fixRoomLabel` prop. So the sentence
+                  cannot claim a destination the app does not have, and it cannot drift from the
+                  destination it names. The full explanation stays where §C put it.
+
+                  Deliberately a quiet inline link, not a second filled button: UX-1 decision 1
+                  gives this screen ONE primary, and a second one would mean none. */}
+              <button type="button" className="hc-verdict-next" onClick={onSeeInFix}>
+                {t("home.homeConsole.verdict.attentionNext", { room: fixRoomLabel })}
+              </button>
             </span>
           ) : undefined
         ) : dekRedundant ? undefined : (
@@ -832,7 +884,7 @@ export function HomeConsole({
               setInterviewOpen(true);
             }}
           >
-            {t("home.interview.ui.door")}
+            {somethingDetected ? t("home.interview.ui.door") : t("home.interview.ui.doorClear")}
           </button>
         ) : undefined
       }
@@ -1261,8 +1313,25 @@ export function HomeConsole({
                 either — it frames these as what has been HAPPENING, which is the user's own words
                 about their PC rather than a demand for a decision, and the ANSWERS below are still
                 the interview's verbatim. */}
-            <h2 className="hc-happening-q">{t("home.homeConsole.happening.eyebrow")}</h2>
-            <p className="hc-happening-hint">{t("home.homeConsole.happening.hint")}</p>
+            {/* The heading follows the gate too. "What's been happening?" is the right question
+                to ask someone whose PC just flagged something and the wrong one to ask someone
+                whose PC is fine — it presumes an event. With nothing detected the section asks
+                what they want to DO, which is the only honest framing left once Compy has
+                measured nothing wrong. */}
+            {/* Both keys are written as WHOLE literals inside t(), with the branch outside it.
+                `t(cond ? "a" : "b")` reads fine and is invisible to the affordance census, which
+                walks source for `t("…")` — a control whose key stops being a literal looks exactly
+                like a control that was deleted. */}
+            <h2 className="hc-happening-q">
+              {somethingDetected
+                ? t("home.homeConsole.happening.eyebrow")
+                : t("home.homeConsole.happening.eyebrowClear")}
+            </h2>
+            <p className="hc-happening-hint">
+              {somethingDetected
+                ? t("home.homeConsole.happening.hint")
+                : t("home.homeConsole.happening.hintClear")}
+            </p>
             <ul className="hc-happening-rows">
               {quickSymptoms.map((c) => (
                 <li key={c.id}>

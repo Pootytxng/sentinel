@@ -116,6 +116,29 @@
 :root[data-v2="on"] .hc-verdict-dek {
   color: inherit;
 }
+/* The attention state's one-line route (owner ruling 2026-08-26). It sits INSIDE the dek and
+   inherits its size on purpose: this is the same sentence continuing, not a new element competing
+   with the primary button below it. Accent + underline is the app's existing quiet-link idiom, so
+   it reads as pressable without borrowing any of the filled button's weight. */
+:root[data-v2="on"] .hc-verdict-next {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--v2-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+:root[data-v2="on"] .hc-verdict-next:hover {
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .hc-verdict-next:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
 /* THE ONE ACTION. The only filled button on this screen — everything else here is an outline
    (re-run), a card (care), a door (dock) or a toggle (view controls), so the Duolingo rule holds
    by weight rather than by deletion.

@@ -48,7 +48,9 @@
     },
     "happening": {
       "eyebrow": "What's been happening?",
-      "hint": "Pick what best describes it so we can point you in the right direction."
+      "hint": "Pick what best describes it so we can point you in the right direction.",
+      "eyebrowClear": "What do you want to do?",
+      "hintClear": "Nothing is flagged on this PC right now — here is where people usually start."
     },
     "dense": {
       "model": "model",
@@ -109,13 +111,14 @@
     },
     "verdict": {
       "attentionSub_one": "{{count}} of {{total}} checks looks good.",
-      "attentionSub_other": "{{count}} of {{total}} checks look good."
+      "attentionSub_other": "{{count}} of {{total}} checks look good.",
+      "attentionNext": "What to do about it is in {{room}}."
     }
   },
   "interview": {
     "q": {
       "start": {
-        "question": "What is your PC doing?",
+        "question": "What can Compy help with?",
         "crash": "It crashed, froze, or restarted on its own",
         "crashHint": "A game or Windows closed unexpectedly.",
         "slow": "Games feel slow, laggy, or choppy",
@@ -123,7 +126,19 @@
         "heat": "It runs hot, or the fans get loud",
         "changed": "I changed something — did it help?",
         "unsure": "I am not sure — just look it over",
-        "unsureHint": "Something feels off, but I'm not sure what."
+        "unsureHint": "Something feels off, but I'm not sure what.",
+        "groupWrong": "Something is wrong",
+        "groupGoal": "Nothing is wrong — I just want more out of it",
+        "heatHint": "Hot to the touch, or the fans never settle.",
+        "changedHint": "You or Compy changed a setting recently.",
+        "moreFps": "I want more FPS",
+        "moreFpsHint": "Free up what your games are competing with.",
+        "watchFps": "I want to watch my FPS while I play",
+        "watchFpsHint": "A live readout on screen, and a summary afterwards.",
+        "scores": "I want to see how my PC scores",
+        "scoresHint": "A repeatable test you can run again after any change.",
+        "specs": "I want to know what is in my PC",
+        "specsHint": "Every part Compy can read, in plain words."
       },
       "crash": {
         "question": "When does it happen?",
@@ -169,7 +184,10 @@
         "readSession": "Read back your last session",
         "heat": "Check heat and fan headroom",
         "beforeAfter": "Run a before-and-after",
-        "undo": "Compy saves the old setting first, so you can undo any of this later from Applied."
+        "undo": "Compy saves the old setting first, so you can undo any of this later from Applied.",
+        "watchLive": "Put my FPS on screen",
+        "seeScores": "Open the benchmark",
+        "seeParts": "Show me my parts"
       },
       "sweep": {
         "sentence": "Let us start with what Compy can already see about this PC."
@@ -203,6 +221,18 @@
       },
       "didItHelp": {
         "sentence": "The only honest answer is a before-and-after measured on this PC, graded against the noise floor."
+      },
+      "wantFps": {
+        "sentence": "Frames are usually taken by things running alongside your game, not by the game itself. Compy can hand back what it is sure about, and show you the rest."
+      },
+      "wantMonitor": {
+        "sentence": "Compy can put your frame rate on screen while you play and keep a summary of the run, so “it felt smoother” becomes a number you can check."
+      },
+      "wantScores": {
+        "sentence": "A benchmark is one repeatable run. Its value is comparison — the same run before and after a change tells you whether the change was real."
+      },
+      "wantSpecs": {
+        "sentence": "Compy reads your parts from Windows and the drivers, and says plainly what it could not read rather than guessing."
       }
     },
     "ui": {
@@ -214,7 +244,8 @@
       "evidenceTitle": "What Compy measured",
       "noEvidence": "Compy has not measured this yet. That is what the button below is for.",
       "applying": "Applying…",
-      "stepAria": "Interview progress"
+      "stepAria": "Interview progress",
+      "doorClear": "Get more out of my PC"
     }
   },
   "homeHud": {

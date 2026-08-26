@@ -62,6 +62,31 @@
   color: var(--v2-text);
   max-width: 26ch;
 }
+/* THE TWO HALVES OF THE FRONT DOOR (owner direction 2026-08-26). A heading over a short list is
+   the cheapest structure there is, and DIR-1 names grouping as the remedy for a screen that reads
+   as a wall. The group itself owns no border and no fill: the answers are already cards, and a box
+   around a box is the second frame the four-room direction keeps removing. Its whole job is to say
+   which question this handful of answers is answering.
+   Screens with one ungrouped list (`crash`, `slow`) render a single group with a null heading, so
+   nothing about them changes — the gap below collapses to the parent's own 14px. */
+:root[data-v2="on"] .hi-answer-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+:root[data-v2="on"] .hi-answer-group + .hi-answer-group {
+  margin-top: 6px;
+}
+:root[data-v2="on"] .hi-answer-group-head {
+  margin: 0;
+  font-family: var(--v2-font-sans);
+  /* The same eyebrow idiom Home already uses for `.hc-happening-q` — copied deliberately rather
+     than invented, so the two surfaces that show these answers label them identically. */
+  font: 600 var(--type-label) var(--v2-font-sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--v2-faint);
+}
 :root[data-v2="on"] .hi-answers {
   display: flex;
   flex-direction: column;
