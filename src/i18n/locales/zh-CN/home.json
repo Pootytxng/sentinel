@@ -392,6 +392,39 @@
       "rollbackFailed": "应用成功,但回滚未能完成:{{error}}。该更改仍然生效,你可以在「测试」的「已应用与历史记录」中手动撤销。"
     }
   },
+  "firstWin": {
+    "sectionAria": "你的第一项更改",
+    "heading": "你的第一项更改",
+    "headingLatest": "你最近的一项更改",
+    "introPre": "Compy 修改了",
+    "introTail": "，并记下了如何完全恢复原状。想看看它是否真的生效了吗？",
+    "introTailSet": "，设为{{value}}，并记下了如何完全恢复原状。想看看它是否真的生效了吗？",
+    "actions": {
+      "check": "再检查一次",
+      "checking": "正在查看…",
+      "undo": "恢复原状",
+      "undoing": "正在恢复…",
+      "gotIt": "知道了"
+    },
+    "verdict": {
+      "heldPre": "Compy 刚刚重新读取了你的电脑：",
+      "heldPost": "仍然保持着 Compy 设定的状态。这就是完整的闭环 —— 真实的更改，Compy 也能看到它确实生效了。",
+      "revertedPre": "Compy 刚刚重新读取了你的电脑，",
+      "revertedPost": "并没有保持 Compy 设定的状态。有其他东西把它改回去了。这不是故障，也不是你的错 —— 它只是没有留住。",
+      "unreadablePre": "Compy 现在无法重新读取",
+      "unreadablePost": "，所以它不会做任何断言。这项更改的记录仍在{{historyRoom}}里。"
+    },
+    "speedNote": "它会让游戏更快吗？只有实际游玩才能回答，Compy 不会猜测 —— 它会在{{testRoom}}里为你实测。",
+    "undone": {
+      "pre": "完成 ——",
+      "post": "已经完全恢复到原来的样子。",
+      "note": "Compy 做的每一项更改都有这个按钮，且每一项都列在{{historyRoom}}里。"
+    },
+    "errors": {
+      "checkFailed": "Compy 现在无法查看：{{error}}。你的电脑没有任何改动。",
+      "undoFailed": "没有完成：{{error}}。这项更改仍然开着，你可以在{{historyRoom}}里把它恢复原状。"
+    }
+  },
   "compyHero": {
     "sectionAria": "欢迎使用 Compy",
     "titlePre": "欢迎使用",

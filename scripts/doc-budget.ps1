@@ -122,7 +122,7 @@ $byteBudgets = @{
 # be able to move the number. Run it with either; scripts/doc-budget-guard.test.mjs pins this.
 $sectionByteBudgets = @{
   "docs/BACKLOG.md::NEXT UP" = 12544
-  "docs/BACKLOG.md::Conformance queue" = 28160
+  "docs/BACKLOG.md::Conformance queue" = 26624
   "docs/BACKLOG.md::HQ STEERING LOG" = 4608
 }
 

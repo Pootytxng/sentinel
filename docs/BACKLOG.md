@@ -419,50 +419,32 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
     `VulnerableDriver:WinNT/Winring0` — our installer would trip Windows Security itself. A Compy-signed driver stays
     policy-possible but costs an EV certificate, so ZERO-BUDGET LAW parks it until revenue exists.
 
-- [ ] **P1 stabilization:** ~~reproducible local supply-chain/release gate~~ **Q4 DELIVERED** (issue
-  [#35](https://github.com/Pootytxng/sentinel/issues/35)) — one command `powershell -NoProfile -File
-  scripts/verify-release.ps1`, 14 checks, PASS/FAIL/BLOCKED/PENDING, reachability-classified npm +
-  cargo audits with expiring acknowledgements, evidence pack JSON; see RELEASE_AUTONOMY.md → "The one
-  local command". §11 property/fuzz coverage for persistence parsing + bounded IPC inputs also DELIVERED
-  (issue [#37](https://github.com/Pootytxng/sentinel/issues/37)) — dependency-free fixed-seed generator,
-  9 properties over the ledger, session file, elevated-command guards, mutation allowlists, batch
-  receipts, and rollback-contract resolution. **Q5 BACKEND + POLICY DELIVERED 2026-08-04** — local-only
-  redacted support evidence: `src-tauri/src/support_evidence.rs` (bounded rotating JSONL at
-  `%APPDATA%\Compy\support\`, 400 records / ~250 KB, redaction at write *and* again at export, three
-  projections, preview-gated export), 17 cargo tests, `src/support-evidence-outbound-guard.test.ts`
-  turning the spec's "zero new outbound surface" acceptance line into a build-failing fact (proven
-  load-bearing by injecting a real `reqwest` call and watching it fail), and the `docs/PRIVACY.md`
-  disclosure + deletion consequences. **Q5 COMPLETE 2026-08-04** — the in-app preview/export UI
-  (`08ad3b1`, `src/surfaces/SupportEvidence.tsx`, 9 tests, en/zh-CN parity) took its visual
-  self-review on the installed `5ff6963` release build and PASSed 9/9; the first pass FAILed on a
-  real user-facing defect and its fix is now guarded both sides (see the cycle entry below). **Q7 DELIVERED 2026-08-05** (issue
-  [#73](https://github.com/Pootytxng/sentinel/issues/73)) — the accessibility sweep and the measured
-  baselines, both recorded against the installed `dc4d55e · release` build on the owner's desk.
-  A11y: the three `<Canvas>` mounts were checked in the live DOM, two were silent to a screen
-  reader, and `src/canvas-a11y-guard.test.ts` now forces every canvas to answer *named picture* or
-  *explicitly decorative* at its own call site. Perf: `scripts/q7-probe.mjs` wrote raw traces to
-  `docs/perf/raw/`, `docs/perf/q7-baseline.json` transcribes 14 metrics, and
-  `scripts/perf-budget-guard.test.mjs` re-derives every published number from those traces on each
-  `npm test` — so a hand-edited baseline fails even though CI can never re-run the probe. One bad
-  finding was on the record as an `open finding`, not a spec: **idle Compy cost ~50% of one core**
-  with nothing moving and nobody present, reproduced on two bare runs. **CLOSED 2026-08-06** by the
-  idle-cost teardown below — 50.165% → 23.348% of a core, re-measured on the shipped 0.9.13 build;
-  `src/shell-idle-guard.test.ts` carries the third idle axis (*is anyone interacting?*) and its
-  always-on record is now empty. *Still owner-blocked:* the lower-spec rig leg — every budget is proven on one fast
-  machine and none is a claim about a slow one. **Q6 DELIVERED 2026-08-04**
-  (issue [#65](https://github.com/Pootytxng/sentinel/issues/65), `9bf3bde`) — three stale live claims
-  retired: `GAMING_MODE_PLAN.md` reconciled against the QA record (8 rows mapped, 3 left unchecked as
-  *unproven, not failing*), the 2026-07-06 launch runway archived verbatim with its "no real UI gaps"
-  sweep claim, and "every branch has a verified disposition" made true rather than retired — all 20
-  origin branches dispositioned in `docs/BRANCH_DISPOSITIONS.md`, enforced by
-  `scripts/branch-disposition-audit.mjs`.
+- [ ] **P1 stabilization — Q4 · Q5 · Q6 · Q7 all DELIVERED; ONE leg still open.** The delivery
+  narrative for all four moved verbatim to [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) on
+  2026-08-26 for the section byte cap; nothing was deleted or re-worded. **Q4** issue
+  [#35](https://github.com/Pootytxng/sentinel/issues/35) (`scripts/verify-release.ps1`, 14 checks)
+  + [#37](https://github.com/Pootytxng/sentinel/issues/37) (property/fuzz) · **Q5**
+  `support_evidence.rs` + `SupportEvidence.tsx` (`08ad3b1`) · **Q6** issue
+  [#65](https://github.com/Pootytxng/sentinel/issues/65) (`9bf3bde`) · **Q7** issue
+  [#73](https://github.com/Pootytxng/sentinel/issues/73) (a11y sweep + `docs/perf/q7-baseline.json`,
+  idle cost 50.165% → 23.348% of a core, CLOSED 2026-08-06). Read them there before re-litigating
+  any of it. ***STILL OPEN, and owner-blocked:*** the **lower-spec rig leg** — every perf budget is
+  proven on one fast machine and none of them is a claim about a slow one.
 - [ ] **P2 product completion:** owner-accepted canonical Lab + reversible generation pruning →
   first-win action/rollback/proof journey → Consumer/Technical/Support evidence exports.
   **Generation pruning DONE 2026-08-06** — 29 unreachable files / ~2,578 lines deleted (two Lab faces,
   three Optimize faces, `CompyHero`, `nav-flags.ts`, the `design/qpw` components, `Gallery`, a second
   `Sparkline`, vendored `MagicBento`); recurrence mechanised by `src/reachability-guard.test.ts`.
-  Remaining under P2: the first-win journey and the evidence exports — the first-win journey is
-  issue #49's Lab production-order step (see Q0 above for the #14-verdict porting checklist).
+  **First-win journey DONE 2026-08-26** — `FirstWin` on Home follows through on the user's OWN first
+  live change (TrustMoment rehearses the loop on a demo setting while the ledger is empty; the two
+  gate on exact complements and can never co-render). Three presses, each doing the real thing:
+  *Check my PC again* re-reads `get_recommendations` and compares the ledger's `is_still_active`
+  against the machine's `currently_applied` · *Put it back* is the audited `rollback_change` ·
+  *Got it* dismisses for good. It states no speed result — no session has been played — and names
+  what proving one takes instead. Guards: `src/surfaces/FirstWin.test.tsx` (14, falsified),
+  `src/surfaces/first-win-data.test.ts` (9), six fixture states in `docs/ui-sweep/fixture/` pinned
+  by `src/fixture-parity-guard.test.ts`. Self-review PASS 2026-08-26.
+  Remaining under P2: the Consumer/Technical/Support evidence exports.
 - [ ] **LATER:** Intelligence Phase 4/5, vendor-awareness expansion, Receipts/crowd intelligence,
   remote rules, Pro/affiliate/B2B, and model-assisted explanation remain behind the blueprint's gates.
 

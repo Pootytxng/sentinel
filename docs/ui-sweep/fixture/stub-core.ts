@@ -410,11 +410,90 @@ const BLACKBOX_STATES: Record<string, { report: unknown }> = {
   },
 };
 
+// ── FirstWin: the follow-through after a user's OWN first live change (P2 / issue #49) ──────────
+// Unreachable in a shipped build without actually applying a Windows change and then pressing the
+// card's own buttons — which review may not do. Every state below is a different answer from the
+// MACHINE at check time, because that answer IS the subject: the card's whole job is to compare
+// what Compy remembers against what it just saw, and the three verdicts must be legible as three
+// different things at a glance rather than three shades of the same sentence.
+//
+// INVENTED, like everything else in this file. `applied_at` is fixed rather than relative so two
+// captures of the same state are byte-comparable.
+const fwChange = (over: Record<string, unknown> = {}) => ({
+  id: "fw-1",
+  rec_id: "game-mode",
+  rec_title: "Game Mode",
+  applied_at: "2026-08-26T01:12:00Z",
+  snapshot: null,
+  status: "applied",
+  is_still_active: true,
+  ...over,
+});
+
+// Shape matches `Recommendation` in src/types.ts. Only `id` and `currently_applied` are read by the
+// verification, but the rest is filled in honestly: a half-built rec would render differently if
+// this component ever grew a second reader.
+const fwRec = (currently_applied: boolean, id = "game-mode") => ({
+  id,
+  title: "Game Mode",
+  category: "system",
+  severity: "safe",
+  description: "Lets Windows prioritise the game you are playing.",
+  impact: "Fewer background interruptions while a game is in focus.",
+  downside: null,
+  applies_to: "Windows 10/11",
+  currently_applied,
+  provenance: "verified",
+});
+
+const FIRSTWIN_STATES: Record<
+  string,
+  {
+    changes: unknown[];
+    /** What `get_recommendations` answers WHEN THE USER PRESSES CHECK — the state's whole point. */
+    machine: unknown[];
+    readFails?: boolean;
+    undoFails?: boolean;
+  }
+> = {
+  // The happy path, start to finish: intro → held → put it back → undone. This is the one state
+  // that walks the entire journey the card exists to teach.
+  "firstwin-held": { changes: [fwChange()], machine: [fwRec(true)] },
+  // The change did NOT survive. The ledger still believes it is on; the machine disagrees, and the
+  // machine wins. Review has to judge whether this reads as a finding or as an accusation — and
+  // whether the absence of the undo button here reads as deliberate rather than as a missing button.
+  "firstwin-reverted": { changes: [fwChange()], machine: [fwRec(false)] },
+  // The setting is not in the read at all. Compy declines to answer either way; the risk being
+  // reviewed is that "no answer" gets styled like a verdict.
+  "firstwin-unreadable": { changes: [fwChange()], machine: [fwRec(true, "something-else")] },
+  // The read itself failed. Distinct from the state above on purpose: a scan that could not run is
+  // not evidence a change reverted, and the copy must not let the two blur.
+  "firstwin-check-failed": { changes: [fwChange()], machine: [], readFails: true },
+  // The undo failed. The card must say plainly that the change is STILL ON and where to undo it —
+  // the one error here that leaves the machine in a different state than the sentence implies.
+  "firstwin-undo-failed": { changes: [fwChange()], machine: [fwRec(true)], undoFails: true },
+  // Several live changes, and an entry that knows what it set the value TO. Heading flips to "Your
+  // latest change" and the intro sentence grows its "to X" clause — two copy branches that only
+  // appear together on a machine that has been used for a while.
+  "firstwin-latest": {
+    changes: [
+      fwChange({ id: "fw-0", rec_id: "visual-effects", applied_at: "2026-08-24T18:03:00Z" }),
+      fwChange({ id: "fw-2", rec_id: "mouse-accel-off", applied_at: "2026-08-25T09:41:00Z" }),
+      fwChange({ applied_label: "On" }),
+    ],
+    machine: [fwRec(true)],
+  },
+};
+
+/** The ledger rows main.tsx hands the card as props — null when the state is not a FirstWin one. */
+export const firstWinChanges = (): unknown[] | null => FIRSTWIN_STATES[current]?.changes ?? null;
+
 export const STATE_NAMES = [
   ...Object.keys(STATES),
   ...Object.keys(CPU_TEMP_STATES),
   ...Object.keys(RECEIPTS_STATES),
   ...Object.keys(BLACKBOX_STATES),
+  ...Object.keys(FIRSTWIN_STATES),
 ];
 
 /** Which surface a state name belongs to — main.tsx mounts the bench or the CPU panel on this. */
@@ -426,13 +505,19 @@ export const isReceiptsState = (name: string = current) => name in RECEIPTS_STAT
 /** And for the Black Box, which mounts in the Lab room like the bench does. */
 export const isBlackboxState = (name: string = current) => name in BLACKBOX_STATES;
 
+/** And for FirstWin, which mounts on Home — no room wrapper, same as the Settings tile. */
+export const isFirstWinState = (name: string = current) => name in FIRSTWIN_STATES;
+
 // The state is chosen by `?state=` on the URL so a capture run is a plain navigation — one page
 // load per shot, no leftover state from the previous one, and the URL in the address bar names the
 // state the screenshot shows.
 function initialState(): string {
   try {
     const q = new URLSearchParams(window.location.search).get("state");
-    if (q && (STATES[q] || CPU_TEMP_STATES[q] || RECEIPTS_STATES[q] || BLACKBOX_STATES[q])) {
+    if (
+      q &&
+      (STATES[q] || CPU_TEMP_STATES[q] || RECEIPTS_STATES[q] || BLACKBOX_STATES[q] || FIRSTWIN_STATES[q])
+    ) {
       return q;
     }
   } catch {
@@ -453,7 +538,13 @@ let receiptsConsent: ConsentState | null = RECEIPTS_STATES[current]
 
 export const getState = () => current;
 export function setState(name: string): boolean {
-  if (!STATES[name] && !CPU_TEMP_STATES[name] && !RECEIPTS_STATES[name] && !BLACKBOX_STATES[name]) {
+  if (
+    !STATES[name] &&
+    !CPU_TEMP_STATES[name] &&
+    !RECEIPTS_STATES[name] &&
+    !BLACKBOX_STATES[name] &&
+    !FIRSTWIN_STATES[name]
+  ) {
     return false;
   }
   current = name;
@@ -547,6 +638,29 @@ export function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<
         return Promise.reject(new Error("FIXTURE PREVIEW - no application is registered to open https"));
       }
       return Promise.resolve(null as T);
+    }
+  }
+  // Answered ahead of the bench lookup, same as the branches above. FirstWin's two commands are a
+  // READ and a ROLLBACK, and the rollback is the reason this branch is state-scoped rather than a
+  // global allowance: `rollback_change` reaches the mutation boundary in the real app, so it is
+  // answered ONLY for the states whose review requires it, and only here, where there is no backend
+  // beneath it to reach. The undone and undo-failed paints are otherwise unreachable, exactly like
+  // the opener's two branches above.
+  const firstwin = FIRSTWIN_STATES[current];
+  if (firstwin) {
+    if (cmd === "get_recommendations") {
+      // The refusal a user is most likely to meet, not invented error prose: a read that could not
+      // run. Reviewing a polished message the app cannot produce would prove nothing.
+      return firstwin.readFails
+        ? Promise.reject(new Error("The scan could not run just now."))
+        : Promise.resolve(structuredClone(firstwin.machine) as T);
+    }
+    if (cmd === "rollback_change") {
+      // eslint-disable-next-line no-console
+      console.log("FIXTURE PREVIEW - rollback_change:", args?.changeId, "(nothing was rolled back)");
+      return firstwin.undoFails
+        ? Promise.reject(new Error("Access is denied. (os error 5)"))
+        : Promise.resolve(null as T);
     }
   }
   const state = STATES[current];

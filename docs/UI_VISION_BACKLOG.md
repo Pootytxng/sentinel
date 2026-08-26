@@ -489,10 +489,14 @@ components, `Gallery`, a second `Sparkline`, vendored `MagicBento`), recurrence 
 restructure pass (Home 2026-08-06 · History + Live 2026-08-20 · Test 2026-08-21), so the structural
 suspects this row named are spent.
 
-**What is actually left under DIR-1 is the JOURNEY, not the furniture:** P2's remaining two items —
-the first-win action → rollback → proof journey (issue #49's Lab production-order step) and the
-Consumer/Technical/Support evidence exports. A user can now read every room; what he still cannot do
-is walk one change from press to proof without being taught. That is this directive's next train.
+**What is actually left under DIR-1 is the JOURNEY, not the furniture** — and half of it shipped.
+**The first-win action → rollback → proof journey landed 2026-08-26** as `FirstWin` on Home: a user
+who has just made their first real change is shown the change by its plain-English name, presses
+*Check my PC again* (Compy re-reads the machine and says whether it held), and presses *Put it back*
+if they want it gone. Press to proof to undo, without being taught. It claims no speed result and
+says so — the only honest proof at that moment is that the setting is really there.
+
+**Still open under DIR-1:** the Consumer/Technical/Support evidence exports (P2's remaining item).
 
 ### PAL-1. The caption colour is too dim to read — ✅ SHIPPED 2026-08-11
 

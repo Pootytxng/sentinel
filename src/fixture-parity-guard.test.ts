@@ -189,6 +189,54 @@ describe("fixture preview parity with the product entry", () => {
     expect(unanswered, "stub-core.ts must answer these or the Black Box states render an error").toEqual([]);
   });
 
+  it("answers every command FirstWin sends", () => {
+    // Same shape as the two checks above. FirstWin is worse than most if it goes unanswered: the
+    // stub's default branch REJECTS, and a rejected `get_recommendations` lands the card in its
+    // "could not look" error — which is one of the six states, so a reviewer would be looking at a
+    // real-seeming paint of the WRONG state with nothing on screen to tell them apart.
+    const card = read("src/surfaces/FirstWin.tsx");
+    const stub = read("docs/ui-sweep/fixture/stub-core.ts");
+    const asked = [...card.matchAll(/invoke(?:<[^>]*>)?\(\s*["']([\w.:|]+)["']/g)].map((m) => m[1]);
+    expect(asked, "found no invoke() in FirstWin.tsx — this guard went vacuous").toContain(
+      "get_recommendations",
+    );
+    const unanswered = [...new Set(asked)].filter((cmd) => !stub.includes(`"${cmd}"`)).sort();
+    expect(unanswered, "stub-core.ts must answer these or the FirstWin states render an error").toEqual([]);
+  });
+
+  it("keeps FirstWin's rollback answer SCOPED to its own states", () => {
+    // `rollback_change` reaches the mutation boundary in the real app. The stub answers it so the
+    // undone and undo-failed paints are reachable at all — but only inside the FirstWin branch,
+    // where there is no backend beneath it. Hoisting it above the state branches would hand every
+    // other state a silent mutation answer, which is the shape of the mistake, not a style nit.
+    const stub = read("docs/ui-sweep/fixture/stub-core.ts");
+    const branch = stub.indexOf("const firstwin = FIRSTWIN_STATES[current];");
+    expect(branch, "the FirstWin branch is gone — its states cannot be reviewed").toBeGreaterThan(-1);
+    const rollback = stub.indexOf('cmd === "rollback_change"');
+    expect(rollback, "stub-core.ts stopped answering rollback_change").toBeGreaterThan(-1);
+    expect(
+      rollback > branch,
+      "rollback_change is answered OUTSIDE the FirstWin branch — every other state now gets it too",
+    ).toBe(true);
+  });
+
+  it("keeps a FirstWin state for each verdict, plus both failures", () => {
+    // The six are not interchangeable, and the two error states least of all: a read that FAILED
+    // and a setting that could not be FOUND are different sentences about different things, and a
+    // review that only ever saw one of them cannot judge whether they read as different.
+    const stub = read("docs/ui-sweep/fixture/stub-core.ts");
+    for (const state of [
+      "firstwin-held",
+      "firstwin-reverted",
+      "firstwin-unreadable",
+      "firstwin-check-failed",
+      "firstwin-undo-failed",
+      "firstwin-latest",
+    ]) {
+      expect(stub, `the fixture lost the ${state} state`).toContain(`"${state}"`);
+    }
+  });
+
   it("keeps the opener stubbed, so the source button can be clicked in a review", () => {
     // The Tier 1 source button hands its URL to the OS browser through @tauri-apps/plugin-opener,
     // which reaches the backend as `plugin:opener|open_url`. That is not an invoke() in src/ — it

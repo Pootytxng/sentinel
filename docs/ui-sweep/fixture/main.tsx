@@ -55,6 +55,13 @@ import "../../../src/surfaces/hud-rooms.css";
 // :root values — a different palette from the real app, under a banner claiming fidelity.
 import "../../../src/surfaces/lab-v2.css";
 
+// The shell's own sheet, imported by ShellV2.tsx rather than by App.tsx's chain. FirstWin does NOT
+// render inside a room: App.tsx puts it directly in ShellV2's children, so its ancestry is
+// `.v2-content > .v2-content-wrap` and nothing else. That wrap is what caps the card's measured
+// width at 1160px and pads it 26/30 — the numbers a reviewer is judging line length against. A room
+// wrapper here would be the more familiar-looking mount and the wrong one.
+import "../../../src/design/shell-v2.css";
+
 // And the Monitor room's re-point, for the same reason and by the same mechanism. The CPU-temp
 // offer renders inside <section class="v2-room" data-room="play"> (MonitorV2.tsx:126), which is the
 // DECLARING element for the --ix-* family CpuTempOffer.css resolves its accent, text and border
@@ -79,10 +86,22 @@ import ReceiptsConsent from "../../../src/surfaces/ReceiptsConsent";
 // whether a user can tell Compy's own reading apart from somebody else's quoted write-up sitting
 // directly under it.
 import { BlackBox } from "../../../src/surfaces/BlackBox";
+// Home's first-win follow-through. Reaching its verdicts for real means applying a Windows change
+// and then pressing the card's own buttons; review may not do the first. The stub answers its read
+// and its rollback instead, so the pixels are the app's.
+import { FirstWin } from "../../../src/surfaces/FirstWin";
+import type { AppliedChange } from "../../../src/types";
 import { BentoGrid } from "../../../src/design/bento";
 // Same module instance the bench's aliased `@tauri-apps/api/core` import resolves to (both land on
 // this directory's stub-core.ts), so this reads the state the bench is actually rendering.
-import { getState, isBlackboxState, isCpuTempState, isReceiptsState } from "./stub-core";
+import {
+  firstWinChanges,
+  getState,
+  isBlackboxState,
+  isCpuTempState,
+  isFirstWinState,
+  isReceiptsState,
+} from "./stub-core";
 
 // ══ src/main.tsx's pre-paint dataset block, hand-replicated ════════════════════════════════════
 // The overlay branch is dropped on purpose: detecting it needs getCurrentWindow(). This page is
@@ -194,7 +213,9 @@ function FixtureBanner() {
             ? "nothing is started — every CPU number here is invented"
             : isBlackboxState()
               ? "case intelligence is HARD-FALSE in every build — nothing was downloaded, verified or matched"
-              : "Start / Conclude / Restore are blocked"}
+              : isFirstWinState()
+                ? "no change was applied and none can be rolled back — the ledger row below is invented"
+                : "Start / Conclude / Restore are blocked"}
       </span>
     </div>
   );
@@ -257,6 +278,20 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
           <BlackBox />
         </div>
       </section>
+    ) : isFirstWinState() ? (
+      // NOT a room, and that is the fidelity point. App.tsx renders FirstWin as a direct child of
+      // ShellV2 (App.tsx, beside TrustMoment in the Overview tab) — ABOVE <HomeRoom>, not inside it
+      // — so no `.v2-room` element is ever an ancestor and FirstWin.css resolves every token from
+      // :root. Wrapping it in a room here would look more like the app and measure less like it.
+      //
+      // The card is mounted ALONE: the rest of Home is chrome around it, and replicating the vitals
+      // would put invented hardware numbers on screen beside a trust surface. `onChanged` is the
+      // app's refresh, which has nothing to re-read here — there is no backend.
+      <div className="v2-content">
+        <div className="v2-content-wrap">
+          <FirstWin changes={(firstWinChanges() ?? []) as AppliedChange[]} onChanged={() => {}} />
+        </div>
+      </div>
     ) : (
       <section className="v2-room" data-room="lab">
         <div className="v2-room-body">

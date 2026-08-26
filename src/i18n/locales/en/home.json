@@ -410,6 +410,39 @@
       "rollbackFailed": "The apply worked but the rollback didn't finish: {{error}}. The change is still active and undoable in Test under \"Applied & history\"."
     }
   },
+  "firstWin": {
+    "sectionAria": "Your first change",
+    "heading": "Your first change",
+    "headingLatest": "Your latest change",
+    "introPre": "Compy changed",
+    "introTail": " on your PC, and wrote down exactly how to put it back. Want to see that it stuck?",
+    "introTailSet": " to {{value}} on your PC, and wrote down exactly how to put it back. Want to see that it stuck?",
+    "actions": {
+      "check": "Check my PC again",
+      "checking": "Looking…",
+      "undo": "Put it back",
+      "undoing": "Putting it back…",
+      "gotIt": "Got it"
+    },
+    "verdict": {
+      "heldPre": "Compy just read your PC again:",
+      "heldPost": "is still set the way Compy left it. That is the whole loop — a real change, and Compy can see it is really there.",
+      "revertedPre": "Compy just read your PC again, and",
+      "revertedPost": "is not set the way Compy left it. Something turned it back. Nothing is broken and you did nothing wrong — it just did not stay.",
+      "unreadablePre": "Compy could not read",
+      "unreadablePost": "back just now, so it will not tell you either way. The record of the change is still in {{historyRoom}}."
+    },
+    "speedNote": "Does it make your games faster? Only playing can answer that, and Compy will not guess — it measures it for you in {{testRoom}}.",
+    "undone": {
+      "pre": "Done —",
+      "post": "is back exactly the way it was.",
+      "note": "Every change Compy makes has that button, and every one of them is listed in {{historyRoom}}."
+    },
+    "errors": {
+      "checkFailed": "Compy could not look just now: {{error}}. Nothing on your PC was changed.",
+      "undoFailed": "That did not finish: {{error}}. The change is still on, and you can put it back from {{historyRoom}}."
+    }
+  },
   "compyHero": {
     "sectionAria": "Welcome to Compy",
     "titlePre": "Welcome to",

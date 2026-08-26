@@ -37,6 +37,7 @@ import { useReducedMotion } from "./design/use-motion";
 import { railFor, type HomeRailId } from "./design/homeRail";
 import { HomeRoom } from "./surfaces/HomeRoom";
 import { TrustMoment } from "./surfaces/TrustMoment";
+import { FirstWin } from "./surfaces/FirstWin";
 import { MonitorV2 } from "./surfaces/MonitorV2";
 import { BlackbookV2 } from "./surfaces/BlackbookV2";
 import { LabGround } from "./surfaces/LabGround";
@@ -1470,6 +1471,11 @@ function App() {
                 isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
                 onChanged={refresh}
               />
+              {/* The other half of that journey (P2 / issue #49): TrustMoment rehearses the loop on
+                  a demo setting while the ledger is EMPTY; FirstWin follows through on the user's
+                  own first live change. The two gate on exact complements (`changes.length === 0`
+                  vs at least one still-active entry), so they can never both be on screen. */}
+              <FirstWin changes={changes} onChanged={refresh} />
             <HomeRoom
               hw={hw}
               readiness={readiness}

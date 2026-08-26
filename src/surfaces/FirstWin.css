@@ -1,0 +1,88 @@
+/* FirstWin — the follow-through after a user's first real change (P2 / issue #49).
+   Deliberately the SAME panel register as TrustMoment: the two are one journey seen twice, and a
+   second visual language would read as a second feature. Tokens only; the accent marks the live
+   step, and no verdict here is an alarm — a change that did not hold is a finding, not a fault. */
+.first-win {
+  border: 1px solid var(--border-strong, var(--border));
+  background: var(--panel-2, transparent);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  font-size: var(--type-body);
+  color: var(--fg);
+}
+.fw-head {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.fw-body {
+  margin: 0 0 10px;
+  color: var(--muted, var(--fg));
+  max-width: 68ch;
+}
+.fw-body b {
+  color: var(--fg);
+}
+.fw-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.fw-btn {
+  font: inherit;
+  font-size: var(--type-label);
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong, var(--border));
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+.fw-btn-primary {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.fw-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.fw-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.fw-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.fw-line {
+  margin: 0;
+  color: var(--fg);
+  max-width: 68ch;
+}
+.fw-line b {
+  color: var(--fg);
+}
+/* Confirmed by a fresh read. Accent, not a success green — Compy proved the setting stuck, which is
+   a smaller claim than "this worked", and the colour should not say more than the sentence does. */
+.fw-line-held {
+  color: var(--accent);
+}
+/* Something turned it back. `attention`, never `danger`: nothing is broken, and the user did not
+   do anything wrong. */
+.fw-line-reverted {
+  color: var(--attention, var(--fg));
+}
+/* Could not be read. The unknown tone the sensor surfaces already use — never a verdict colour. */
+.fw-line-unreadable {
+  color: var(--muted, var(--fg));
+}
+.fw-note {
+  margin: 0;
+  color: var(--muted, var(--fg));
+  font-size: var(--type-label);
+  max-width: 68ch;
+}
+.fw-error {
+  color: var(--attention, var(--fg));
+}
