@@ -323,6 +323,40 @@ describe("Black Box — Tier 1 known-issue block", () => {
     expect(openUrlMock).toHaveBeenCalledWith(matchedCase().source_url);
   });
 
+  it("a browser that never opens says so and hands over the link, instead of looking like a dead button", async () => {
+    // The defect this pins: the rejection used to be swallowed, so on a machine with no registered
+    // browser handler the click did nothing at all — visually identical to a broken button, with no
+    // way left to reach the page. Rare, and rare is exactly why it needs a test rather than a
+    // reviewer noticing it.
+    openUrlMock.mockRejectedValue(new Error("no application is registered for https"));
+    reportMock.value = { incidents: [casedIncident()], skipped_sources: [] };
+    render(<BlackBox />);
+    scan();
+    await screen.findByText("Known issue on record");
+
+    fireEvent.click(screen.getByRole("button", { name: /open the write-up/i }));
+
+    // The recovery IS the URL, so it must be on screen — and it must be the catalog's own, not
+    // anything the station composed.
+    expect(await screen.findByText(matchedCase().source_url)).toBeInTheDocument();
+    expect(document.body.textContent || "").toMatch(/couldn't hand that to a browser/i);
+    // The button that cannot work is gone rather than left there to be clicked again, and it is
+    // still not an <a href> — the webview must never be able to follow this itself.
+    expect(screen.queryByRole("button", { name: /open the write-up/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("a browser that DOES open leaves no failure text — the fallback is not the default state", async () => {
+    reportMock.value = { incidents: [casedIncident()], skipped_sources: [] };
+    render(<BlackBox />);
+    scan();
+    await screen.findByText("Known issue on record");
+    fireEvent.click(screen.getByRole("button", { name: /open the write-up/i }));
+    await Promise.resolve();
+    expect(document.body.textContent || "").not.toMatch(/couldn't hand that to a browser/i);
+    expect(screen.queryByText(matchedCase().source_url)).not.toBeInTheDocument();
+  });
+
   it("still issues exactly one backend call — the match arrives with the scan, not from a second fetch", async () => {
     reportMock.value = { incidents: [casedIncident()], skipped_sources: [] };
     render(<BlackBox />);

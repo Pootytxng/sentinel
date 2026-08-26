@@ -272,6 +272,11 @@ function AssessmentBlock({ inc, allIncidents }: { inc: CrashIncident; allInciden
 function KnownIssueBlock({ m }: { m: CaseIntelligenceMatch }) {
   const { t } = useTranslation();
   const matched = m.level === "matched_known_issue";
+  // A failed `openUrl` used to be swallowed: the user clicked "Open the write-up" and nothing
+  // happened, which is exactly what a broken button looks like. Rare (it needs a machine with no
+  // registered browser handler), but the failure mode is the worst kind — the app looks broken and
+  // the user has no way to reach the page. The recovery is the URL itself, shown to be copied.
+  const [sourceUnopenable, setSourceUnopenable] = useState(false);
   return (
     <section className="bb-known" aria-label={t("gaming.blackBox.knownIssue.label")}>
       <div className="bb-known-head">
@@ -338,16 +343,21 @@ function KnownIssueBlock({ m }: { m: CaseIntelligenceMatch }) {
         {/* A button, not a link: the URL leaves the app only on a click, and it goes to the user's
             own browser rather than anywhere the webview could follow it. The URL is the catalog's
             own, already checked against the compiled origin allowlist during verification. */}
-        <button
-          className="bb-known-source-btn"
-          onClick={() => {
-            openUrl(m.source_url).catch(() => {
-              /* no browser to hand it to — nothing to recover, and nothing to claim */
-            });
-          }}
-        >
-          {t("gaming.blackBox.knownIssue.sourceButton")}
-        </button>
+        {sourceUnopenable ? (
+          <span className="bb-known-source-fallback">
+            {t("gaming.blackBox.knownIssue.sourceUnopenable")}{" "}
+            <span className="bb-known-source-url">{m.source_url}</span>
+          </span>
+        ) : (
+          <button
+            className="bb-known-source-btn"
+            onClick={() => {
+              openUrl(m.source_url).catch(() => setSourceUnopenable(true));
+            }}
+          >
+            {t("gaming.blackBox.knownIssue.sourceButton")}
+          </button>
+        )}
         <span className="bb-known-provenance">
           {t("gaming.blackBox.knownIssue.publishedOn", { date: m.source_updated_at })} ·{" "}
           {t("gaming.blackBox.knownIssue.catalogVersion", { version: m.catalog_version })}

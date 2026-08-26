@@ -493,6 +493,21 @@
   padding: 2px 12px;
   cursor: pointer;
 }
+/* The fallback for a click that could not reach a browser. Not an alert and not red: nothing has
+   gone wrong with the user's PC, the app simply could not hand off, and the whole content of the
+   remedy is the URL. Mono on the URL follows C-17 — it is a machine value, unlike the prose beside
+   it — and `user-select` is not decoration here: an unselectable URL is not a recovery. */
+.bb-known-source-fallback {
+  color: var(--ix-text-3);
+  font-size: var(--type-label);
+}
+.bb-known-source-url {
+  font-family: var(--ix-mono);
+  color: var(--ix-accent-text);
+  user-select: text;
+  -webkit-user-select: text;
+  overflow-wrap: anywhere;
+}
 .bb-known-provenance {
   color: var(--ix-text-3);
   font-size: var(--type-label);

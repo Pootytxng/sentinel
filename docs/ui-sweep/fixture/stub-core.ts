@@ -381,6 +381,16 @@ const BLACKBOX_STATES: Record<string, { report: unknown }> = {
       skipped_sources: [],
     },
   },
+  // The click that cannot reach a browser. Unreachable in a shipped build without a machine that
+  // has no registered https handler at all, which is why it needs a state rather than a reviewer's
+  // imagination: the failure is a SECOND paint (the button is replaced by the URL), and the thing
+  // review has to judge is whether that swap reads as an explanation or as something going wrong.
+  "tier1-source-unopenable": {
+    report: {
+      incidents: [bbIncident({ case_intelligence: CASE_MATCHED })],
+      skipped_sources: [],
+    },
+  },
   // The partial alone, on the incident that also carries Compy's own assessment: this is where a
   // user is most at risk of reading the quoted write-up as Compy's own verdict.
   "tier1-possible": {
@@ -529,6 +539,13 @@ export function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<
     if (cmd === "plugin:opener|open_url") {
       // eslint-disable-next-line no-console
       console.log("FIXTURE PREVIEW - open_url:", args?.url);
+      // One state refuses, because the refusal is the thing being reviewed. This is the shape the
+      // real plugin returns when Windows has no handler registered for https: a rejected promise,
+      // not a resolved null. Resolving here would render the success path under a state name that
+      // says otherwise — the exact class of quiet lie this fixture's parity guard exists to stop.
+      if (current === "tier1-source-unopenable") {
+        return Promise.reject(new Error("FIXTURE PREVIEW - no application is registered to open https"));
+      }
       return Promise.resolve(null as T);
     }
   }

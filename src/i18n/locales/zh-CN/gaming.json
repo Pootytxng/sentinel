@@ -303,6 +303,7 @@
       "stepsLabel": "这份记录建议的做法",
       "cautionLabel": "动手之前",
       "sourceButton": "打开原始记录",
+      "sourceUnopenable": "Compy 无法将它交给浏览器打开。链接在这里，可以复制：",
       "publishedOn": "发布于 {{date}}",
       "catalogVersion": "问题库 v{{version}}",
       "attribution": "以上是发布方的原话，不是 Compy 的判断。"

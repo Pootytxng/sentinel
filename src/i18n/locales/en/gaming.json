@@ -307,6 +307,7 @@
       "stepsLabel": "What the write-up suggests",
       "cautionLabel": "Before you try it",
       "sourceButton": "Open the write-up",
+      "sourceUnopenable": "Compy couldn't hand that to a browser. Here's the link to copy:",
       "publishedOn": "Published {{date}}",
       "catalogVersion": "Case list v{{version}}",
       "attribution": "These are the publisher's words, not Compy's."

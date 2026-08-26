@@ -880,11 +880,12 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   poll · no outbound surface · no `actions.rs` diff · dismiss deletes no Windows record. Full record,
   including the three findings an independent review caught before it landed and the guard each one
   bought: [BACKLOG_ARCHIVE.md](BACKLOG_ARCHIVE.md) ▸ *2026-08-26 — Tier 1 tasks 8–9*.
-- [ ] **Tier 1 nit: a failed `openUrl` is invisible** — `BlackBox.tsx` `KnownIssueBlock` swallows the
-  rejection deliberately (nothing to recover, nothing to claim), so if the OS has no browser handler
-  the user clicks "Open the write-up" and nothing happens, indistinguishable from a dead click. Rare
-  path; any visible failure state is new UI and owes its own self-review. Found by the #220 IPC
-  contract audit, 2026-08-25.
+- [x] **Tier 1 nit: a failed `openUrl` is invisible — CLOSED 2026-08-26.** A rejected open now
+  replaces the button with the URL itself, so the click explains instead of looking dead, and the
+  remedy (copy the link) is on screen. Self-review PASS 12/12 at 1500x980 and 760x900 over a new
+  `?state=tier1-source-unopenable` fixture state; still a `<span>`, never an `<a href>`, so #220's
+  "the webview can never follow this" decision is extended rather than reopened. **PHASE C's Tier 1
+  nit queue is now empty.**
 - [x] **Tier 1 nits, two of three CLOSED 2026-08-26** — `catalog_version` is now refused above
   `MAX_JS_EXACT_INT` in `case_intelligence.rs`, so the `u64`→`number` crossing is exact by
   construction rather than by the catalog author's restraint; and the orphan scan's crate corpus
