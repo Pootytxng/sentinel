@@ -488,12 +488,117 @@ const FIRSTWIN_STATES: Record<
 /** The ledger rows main.tsx hands the card as props — null when the state is not a FirstWin one. */
 export const firstWinChanges = (): unknown[] | null => FIRSTWIN_STATES[current]?.changes ?? null;
 
+// ── SESSION DEBRIEF (Live) — the three branches of DIR-1a earned framing ─────────────────────────
+// None of these can be reached on demand in the shipped app. Each needs a REAL recorded gaming
+// session whose 1%-low/avg ratio lands in a specific band, AND a readiness limiter that happens to
+// link to a recommendation the user has not applied. Waiting for that combination to occur is not
+// a review procedure, so the three are built here.
+//
+// The card decides two things from two different sources, and separating them is this fixture's
+// whole job:
+//   `problemMeasured` — ratio < 0.75, or a stutter insight — comes from THIS session's frames.
+//   `canArm`          — an open limiter linked to an unapplied rec — comes from the MACHINE.
+// A rig sits in any combination of the two, and before 2026-08-26 the smooth-session + open-limiter
+// corner shipped a card that graded the session "Smooth" and offered "the #1 fix" in one breath.
+
+/** A deterministic ~20-minute trace. Real captures fill `fps_series` with 10 s buckets of ~1 Hz
+ *  samples, so an empty one blanks the card's graph and a review would be judging a drawing the
+ *  shipped card never makes. No randomness — one URL, one picture, every run. */
+const debriefTrace = (base: number, swing: number): [number, number][] =>
+  Array.from({ length: 120 }, (_, i): [number, number] => [
+    i * 10,
+    Math.round((base + Math.sin(i / 3.7) * swing + Math.sin(i / 11) * (swing / 2)) * 10) / 10,
+  ]);
+
+const debriefSession = (over: Record<string, unknown> = {}) => ({
+  started_at: "2026-08-25T20:14:00Z",
+  duration_secs: 1200,
+  process_name: "eldenring.exe",
+  samples: 1187,
+  avg_fps: 162.4,
+  avg_frametime_ms: 6.16,
+  low1_fps_est: 142.1, // ratio 0.875 — inside the "smooth" band
+  peak_gpu_temp_c: 68,
+  peak_gpu_usage_pct: 94,
+  peak_ram_used_bytes: 12_600_000_000,
+  ram_total_bytes: 31_500_000_000,
+  compy_changes_active: 0,
+  stutter_insight: null,
+  fps_series: debriefTrace(162, 9),
+  hw_fingerprint: {
+    hash: "fixture",
+    gpu: "AMD Radeon RX 9070 XT",
+    gpu_driver: "25.8.1",
+    ram_gb: 29,
+    display: "2560x1440 @ 165Hz",
+  },
+  ...over,
+});
+
+// The payload priorities.rs emits for ONE readiness check sitting in `attention` — identical
+// whether the session being debriefed ran smooth or rough, which is the entire defect.
+const debriefLimiters = {
+  limiters: [
+    {
+      id: "power-plan",
+      title: "Power plan",
+      reason: "Windows is on Balanced.",
+      linked: "power-plan",
+      confidence: "medium",
+      status: "attention",
+    },
+  ],
+  already_fine: [],
+  not_worth_touching: [],
+  session_hint: null,
+  upgrade_path: null,
+};
+
+const debriefRec = {
+  id: "power-plan",
+  title: "Switch to the Ultimate Performance power plan",
+  category: "power",
+  severity: "safe",
+  description: "Stops Windows dropping the CPU's clocks between frames.",
+  impact: "Steadier frame pacing on a CPU that idles down mid-game.",
+  downside: null,
+  applies_to: "Windows 10/11",
+  currently_applied: false,
+  provenance: "verified",
+};
+
+const DEBRIEF_STATES: Record<string, { session: unknown; priorities: unknown; recs: unknown[] }> = {
+  // The corner the fix exists for: smooth session, open limiter. The offer STAYS — "I want more
+  // fps" is a legitimate reason to change something on a rig that just ran perfectly — but nothing
+  // may call it a fix, and the clean line drops its "Nothing worth changing" half rather than
+  // contradicting the button under it.
+  "debrief-smooth-offer": {
+    session: debriefSession(),
+    priorities: debriefLimiters,
+    recs: [debriefRec],
+  },
+  // Same rig, same limiter, worse frames (ratio 0.5). The direct wording is EARNED here. This is
+  // the control that proves the fix did not just soften every button in the product.
+  "debrief-rough-fix": {
+    session: debriefSession({ low1_fps_est: 81.2, fps_series: debriefTrace(158, 46) }),
+    priorities: debriefLimiters,
+    recs: [debriefRec],
+  },
+  // Smooth session, nothing open: the full clean sentence and no button at all — the state that
+  // shows what the shortened clean line is short OF.
+  "debrief-clean-none": { session: debriefSession(), priorities: null, recs: [] },
+};
+
+/** The props main.tsx hands the debrief card — null when the state is not a debrief one. */
+export const debriefProps = () => DEBRIEF_STATES[current] ?? null;
+
 export const STATE_NAMES = [
   ...Object.keys(STATES),
   ...Object.keys(CPU_TEMP_STATES),
   ...Object.keys(RECEIPTS_STATES),
   ...Object.keys(BLACKBOX_STATES),
   ...Object.keys(FIRSTWIN_STATES),
+  ...Object.keys(DEBRIEF_STATES),
 ];
 
 /** Which surface a state name belongs to — main.tsx mounts the bench or the CPU panel on this. */
@@ -508,6 +613,9 @@ export const isBlackboxState = (name: string = current) => name in BLACKBOX_STAT
 /** And for FirstWin, which mounts on Home — no room wrapper, same as the Settings tile. */
 export const isFirstWinState = (name: string = current) => name in FIRSTWIN_STATES;
 
+/** And for the session debrief, which mounts in the Live room inside `.play-debrief-wrap`. */
+export const isDebriefState = (name: string = current) => name in DEBRIEF_STATES;
+
 // The state is chosen by `?state=` on the URL so a capture run is a plain navigation — one page
 // load per shot, no leftover state from the previous one, and the URL in the address bar names the
 // state the screenshot shows.
@@ -516,7 +624,12 @@ function initialState(): string {
     const q = new URLSearchParams(window.location.search).get("state");
     if (
       q &&
-      (STATES[q] || CPU_TEMP_STATES[q] || RECEIPTS_STATES[q] || BLACKBOX_STATES[q] || FIRSTWIN_STATES[q])
+      (STATES[q] ||
+        CPU_TEMP_STATES[q] ||
+        RECEIPTS_STATES[q] ||
+        BLACKBOX_STATES[q] ||
+        FIRSTWIN_STATES[q] ||
+        DEBRIEF_STATES[q])
     ) {
       return q;
     }
@@ -543,7 +656,8 @@ export function setState(name: string): boolean {
     !CPU_TEMP_STATES[name] &&
     !RECEIPTS_STATES[name] &&
     !BLACKBOX_STATES[name] &&
-    !FIRSTWIN_STATES[name]
+    !FIRSTWIN_STATES[name] &&
+    !DEBRIEF_STATES[name]
   ) {
     return false;
   }
@@ -661,6 +775,32 @@ export function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<
       return firstwin.undoFails
         ? Promise.reject(new Error("Access is denied. (os error 5)"))
         : Promise.resolve(null as T);
+    }
+  }
+  const debrief = DEBRIEF_STATES[current];
+  if (debrief) {
+    // Two reads and two writes, answered ONLY inside this branch. `arm_comparison` and
+    // `dismiss_comparison` write Compy's own comparison record — no Windows setting is touched by
+    // either — but hoisting them above the state branches would still hand every other state a
+    // silent write answer, which is the shape of the mistake, not a style nit.
+    if (cmd === "get_latest_comparison" || cmd === "get_armed_comparison") {
+      // Nothing armed and nothing resolved: the card falls to its insight branch, which is the
+      // state a user is in the first time this offer is put to them.
+      return Promise.resolve(null as T);
+    }
+    if (cmd === "arm_comparison" || cmd === "dismiss_comparison") {
+      // eslint-disable-next-line no-console
+      console.log(`FIXTURE PREVIEW - ${cmd}: nothing was armed, and nothing was dismissed.`);
+      return Promise.resolve(null as T);
+    }
+    if (cmd === "what_changed_for_session") {
+      // The verbatim outcome intelligence.rs returns for exactly this data — one recorded session
+      // of this game, nothing earlier to compare it against. Not invented prose: the panel prints
+      // the reason, so a made-up sentence would put a string on screen the app cannot produce.
+      return Promise.resolve({
+        kind: "unavailable",
+        reason: "First recorded Elden Ring session — nothing earlier to compare against.",
+      } as T);
     }
   }
   const state = STATES[current];

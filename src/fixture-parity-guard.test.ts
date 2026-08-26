@@ -237,6 +237,77 @@ describe("fixture preview parity with the product entry", () => {
     }
   });
 
+  it("answers every command the session debrief sends", () => {
+    // Same shape as the checks above, with one addition the others do not need: the debrief card
+    // ALWAYS renders <WhatChangedPanel>, whose read is not an invoke() in SessionDebrief.tsx and so
+    // is invisible to a scan of that file alone. Its rejection is swallowed (`.catch(() => {})`),
+    // so an unanswered command there removes a whole panel SILENTLY — the reviewer sees a shorter
+    // card and has nothing on screen telling them a section is missing.
+    const card = read("src/surfaces/SessionDebrief.tsx");
+    const panel = read("src/surfaces/WhatChangedPanel.tsx");
+    const stub = read("docs/ui-sweep/fixture/stub-core.ts");
+    const asked = [...card.matchAll(/invoke(?:<[^>]*>)?\(\s*["']([\w.:|]+)["']/g)].map((m) => m[1]);
+    expect(asked, "found no invoke() in SessionDebrief.tsx — this guard went vacuous").toContain(
+      "arm_comparison",
+    );
+    expect(
+      panel,
+      "WhatChangedPanel stopped reading what_changed_for_session — re-derive what the card mounts",
+    ).toContain("what_changed_for_session");
+    const unanswered = [...new Set([...asked, "what_changed_for_session"])]
+      .filter((cmd) => !stub.includes(`"${cmd}"`))
+      .sort();
+    expect(unanswered, "stub-core.ts must answer these or the debrief states render short").toEqual([]);
+  });
+
+  it("keeps the debrief's WRITES scoped to its own states", () => {
+    // `arm_comparison` and `dismiss_comparison` write Compy's own comparison record. Neither
+    // touches a Windows setting, so this is a weaker hazard than FirstWin's rollback — but the
+    // failure shape is identical: hoisted above the state branches, every other fixture state
+    // silently gains a write answer, and a reviewer clicking through some unrelated preview would
+    // be told a comparison was armed. Same rule, same reason.
+    const stub = read("docs/ui-sweep/fixture/stub-core.ts");
+    const branch = stub.indexOf("const debrief = DEBRIEF_STATES[current];");
+    expect(branch, "the debrief branch is gone — its states cannot be reviewed").toBeGreaterThan(-1);
+    for (const cmd of ["arm_comparison", "dismiss_comparison"]) {
+      const at = stub.indexOf(`cmd === "${cmd}"`);
+      expect(at, `stub-core.ts stopped answering ${cmd}`).toBeGreaterThan(-1);
+      expect(
+        at > branch,
+        `${cmd} is answered OUTSIDE the debrief branch — every other state now gets it too`,
+      ).toBe(true);
+    }
+  });
+
+  it("keeps the three earned-framing states, and keeps their verdict bands APART", () => {
+    // DIR-1a on Live (2026-08-26). The card decides its wording from the 1%-low/avg ratio against
+    // 0.75 (SessionDebrief.tsx `problemMeasured`), so the smooth and rough states are only
+    // different states while their ratios straddle that line. Editing a number here — a plausible
+    // tidy-up, since the two sessions are otherwise identical — would collapse both previews onto
+    // the same branch, and a review comparing two screenshots of the SAME state would report that
+    // the framing is consistent. Asserted arithmetically for that reason, not by name.
+    const stub = read("docs/ui-sweep/fixture/stub-core.ts");
+    for (const state of ["debrief-smooth-offer", "debrief-rough-fix", "debrief-clean-none"]) {
+      expect(stub, `the fixture lost the ${state} state`).toContain(`"${state}"`);
+    }
+    const num = (re: RegExp, what: string) => {
+      const m = stub.match(re);
+      expect(m, `could not read ${what} out of the fixture`).not.toBeNull();
+      return Number(m![1]);
+    };
+    // Anchored to `debriefSession`. Unanchored, both matched the FIRST session literal anywhere in
+    // the stub — a bench state's, with a ratio of its own — and the check read a number no debrief
+    // preview uses. It failed loudly on the way in, which is the only reason it is written down.
+    const avg = num(/const debriefSession[\s\S]{0,600}?avg_fps:\s*([\d.]+)/, "the debrief session's avg_fps");
+    const smoothLow = num(
+      /const debriefSession[\s\S]{0,600}?low1_fps_est:\s*([\d.]+)/,
+      "the smooth session's 1% low",
+    );
+    const roughLow = num(/"debrief-rough-fix":[\s\S]{0,300}?low1_fps_est:\s*([\d.]+)/, "the rough session's 1% low");
+    expect(smoothLow / avg, "the smooth state stopped being smooth").toBeGreaterThanOrEqual(0.75);
+    expect(roughLow / avg, "the rough state stopped being rough").toBeLessThan(0.75);
+  });
+
   it("keeps the opener stubbed, so the source button can be clicked in a review", () => {
     // The Tier 1 source button hands its URL to the OS browser through @tauri-apps/plugin-opener,
     // which reaches the backend as `plugin:opener|open_url`. That is not an invoke() in src/ — it

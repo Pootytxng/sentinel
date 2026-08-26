@@ -69,6 +69,12 @@ import "../../../src/design/shell-v2.css";
 // accent from the shipped app, under a banner claiming fidelity.
 import "../../../src/surfaces/monitor-v2.css";
 
+// Play.css is imported by Play.tsx (line 32), which this page does not render — so the chain above
+// does not carry it, and it owns the ONE element between the room body and the debrief card:
+// `.play-debrief-wrap` (Play.css:311, padding 10px 2px 4px). Without it the card sits flush against
+// the room body and every gap a reviewer measures at its top edge is 10px wrong.
+import "../../../src/surfaces/Play.css";
+
 // i18next init (side-effect import) before first render, same as src/main.tsx. Tauri-free.
 import "../../../src/i18n";
 import { readLanguage } from "../../../src/i18n/language";
@@ -91,14 +97,25 @@ import { BlackBox } from "../../../src/surfaces/BlackBox";
 // and its rollback instead, so the pixels are the app's.
 import { FirstWin } from "../../../src/surfaces/FirstWin";
 import type { AppliedChange } from "../../../src/types";
+
+// The Live room's session debrief. Mounted for the same reason FirstWin is: its three offer
+// branches need a real recorded gaming session AND a specific machine state to appear, so the
+// shipped app cannot be put into any of them on demand. ConfirmProvider comes along because the
+// card calls useConfirm() for the replace-a-pending-comparison dialog — App.tsx wraps the whole
+// tree in one, so this is the app's ancestry, not scaffolding.
+import { SessionDebrief } from "../../../src/surfaces/SessionDebrief";
+import { ConfirmProvider } from "../../../src/design/ConfirmDialog";
+import type { Priorities, Recommendation, SessionSummary } from "../../../src/types";
 import { BentoGrid, BentoTile } from "../../../src/design/bento";
 // Same module instance the bench's aliased `@tauri-apps/api/core` import resolves to (both land on
 // this directory's stub-core.ts), so this reads the state the bench is actually rendering.
 import {
+  debriefProps,
   firstWinChanges,
   getState,
   isBlackboxState,
   isCpuTempState,
+  isDebriefState,
   isFirstWinState,
   isReceiptsState,
 } from "./stub-core";
@@ -215,7 +232,9 @@ function FixtureBanner() {
               ? "case intelligence is HARD-FALSE in every build — nothing was downloaded, verified or matched"
               : isFirstWinState()
                 ? "no change was applied and none can be rolled back — the ledger row below is invented"
-                : "Start / Conclude / Restore are blocked"}
+                : isDebriefState()
+                  ? "the session below was never played and the offer is inert — pressing it changes nothing"
+                  : "Start / Conclude / Restore are blocked"}
       </span>
     </div>
   );
@@ -290,6 +309,48 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
           <FirstWin changes={(firstWinChanges() ?? []) as AppliedChange[]} onChanged={() => {}} />
         </div>
       </div>
+    ) : isDebriefState() ? (
+      // The Live room, and the card's real ancestry inside it: App.tsx renders <MonitorV2>, which
+      // is a RoomShell with room="play" (MonitorV2.tsx:157) — so `.v2-room[data-room="play"]` is
+      // the declaring element for the --ix-* family the card's accents resolve from — and Play.tsx
+      // puts the card in `.play-debrief-wrap` (Play.tsx:488). The `.play-sessions > ul.play-list >
+      // li` chain between them is skipped deliberately: none of the three declares a box rule
+      // (`.play-list` is list-style:none, margin:0, padding:0), so replicating them would change
+      // nothing measurable and would require hand-faking the session door button's copy above the
+      // card — invented text beside a card whose whole subject is honest wording.
+      //
+      // `vendor` and `sessions` are OMITTED, which is a shape the card documents rather than one
+      // this page invented: absent → the tuning cluster and the session investigator do not render
+      // (SessionDebrief.tsx, the prop's own doc comment — "classic Sessions tab"). Supplying them
+      // would put a second invented session and a fabricated undervolt history on screen above the
+      // two sentences being reviewed.
+      <section className="v2-room" data-room="play">
+        <div className="v2-room-body">
+          <div className="play-debrief-wrap">
+            <ConfirmProvider>
+              <SessionDebrief
+                s={debriefProps()!.session as SessionSummary}
+                priorities={debriefProps()!.priorities as Priorities | null}
+                recs={debriefProps()!.recs as Recommendation[]}
+                apply={async (r) => {
+                  // eslint-disable-next-line no-console
+                  console.log("FIXTURE PREVIEW - apply:", r.id, "(nothing was applied)");
+                }}
+                busyId={null}
+                onExport={() => {
+                  // eslint-disable-next-line no-console
+                  console.log("FIXTURE PREVIEW - export: nothing was written");
+                }}
+                changes={[]}
+                rollback={async () => {
+                  // eslint-disable-next-line no-console
+                  console.log("FIXTURE PREVIEW - rollback: nothing was rolled back");
+                }}
+              />
+            </ConfirmProvider>
+          </div>
+        </div>
+      </section>
     ) : (
       <section className="v2-room" data-room="lab">
         <div className="v2-room-body">
