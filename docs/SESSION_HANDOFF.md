@@ -82,13 +82,15 @@ falsified before it was counted.
 
 **#222 and #128 are both closed, with receipts** — `.claude/work-control/2026-08-26-close-issue-{222,128}.json`,
 work-control gate PASS at `7764df4a`, three independent verification passes behind them (two returned
-FIX-BEFORE-CLOSE; the third CLEAN). Nothing is half-done. Pick one:
+FIX-BEFORE-CLOSE; the third CLEAN). **All three Tier 1 nits are closed too** (`b9a71258`, `f5f9e3ac`):
+`catalog_version` is bounded to what JavaScript represents exactly, the orphan scan's crate corpus
+walks subdirectories, and a failed `openUrl` now shows the URL instead of looking like a dead click
+(self-review PASS 12/12). PHASE C's nit queue is empty. Nothing is half-done. Pick one:
 
-1. **The three queued Tier 1 nits** in `docs/BACKLOG.md` PHASE C — all small, all real.
-2. **Q9b — Tier 3 in-app feedback + crash reports** (`docs/BACKLOG.md`, own module
+1. **Q9b — Tier 3 in-app feedback + crash reports** (`docs/BACKLOG.md`, own module
    `src-tauri/src/case_evidence_upload.rs`, never inside `support_evidence.rs`). Tier 3's gate applies
    in full: per-case consent, preview/redaction, named recipient, retention, deletion receipt.
-3. **The Instrument Bench Phase-1 build** —
+2. **The Instrument Bench Phase-1 build** —
    `docs/superpowers/plans/2026-07-09-lab-instrument-bench-p1.md`. The decided first UI target.
 
 **Do NOT touch** plan tasks 10–11 (independent security review + arming). Owner territory, filed in
