@@ -54,14 +54,7 @@
 [#213](https://github.com/Pootytxng/sentinel/issues/213) · [#211](https://github.com/Pootytxng/sentinel/issues/211).
 Three of the five are real and **two were not**, which is the finding worth keeping.
 
-- **A4 (raw Windows tooltip on the rail) and A5 (the titlebar printing "Compy" an inch from the
-  wordmark) — FIXED and installed** (`02be7adc`, live at `9c349ce6`). bug → guard:
-  [`../src/design/shell-native-tooltip-guard.test.tsx`](../src/design/shell-native-tooltip-guard.test.tsx)
-  fails any element whose `title` and visible text contain one another; `title` survives only on
-  icon-only controls. Negative-controlled 2/5.
-- **#211 (a room's `<h1>` was its name welded to a live measurement) — FIXED** (`0712dc68`,
-  `f223466a`); guard [`../src/design/heading-is-a-name-guard.test.tsx`](../src/design/heading-is-a-name-guard.test.tsx)
-  in three halves. Why three, and the room the caller half shipped blind to: [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md).
+- **A4/A5 (raw rail tooltip · the titlebar printing "Compy" beside the wordmark) and #211 (a room's `<h1>` welded to a live measurement) — all FIXED, rows moved verbatim to [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) 2026-08-26** (section cap). Their guards outlive them in the tree: `../src/design/shell-native-tooltip-guard.test.tsx` and `../src/design/heading-is-a-name-guard.test.tsx`.
 - **A2 and A3 were NOT defects.** A2's "orphan bracket" is
   [`../src/design/console/hud-frame.css`](../src/design/console/hud-frame.css) drawing all four
   corners symmetrically, default-on and working. A3's "clipped left edge" was the reviewing tool
@@ -141,14 +134,18 @@ so the next branch pushed to origin must archive that file's current sweep befor
 #160 landing on main (`bf1b56c8`, #158 closed with it) and the 2026-08-23 primary-checkout trap
 discharge, whose commit numbers are now stale. Both are history; re-derive that state, never quote it.
 
-**ALSO OPEN, not yet queued** (so none of it drops silently): #133 CARE capability rails tasks 4–7 ·
-#140 CPU temp (PawnIO/MSR — needs a Capability Exception record first) · #64 Q2b main-window caller
-checks · #54/#55 Project Doctor (Codex-claimed) · #49 Quiet Pit Wall (needs a visual self-review) ·
-the PHASE A–D rows
-below. **TYPE-1's mono residual is NOT among them — it was closed 2026-08-18/19** (`3eca4a9f` +
-`be4c81ec`): [`../src/design/mono-law-guard.test.ts`](../src/design/mono-law-guard.test.ts) censuses
-every mono rule behind a down-only ratchet, 0 violations. It sat listed as open here for four days
-after it shipped, which is the same false reading that the archived-marker guard was written for.
+**ALSO OPEN, not yet queued** (so none of it drops silently): **#64** Q2b main-window caller checks
+— open but DEFERRED BY DECISION, re-verified against its own trigger list 2026-08-25 and the reasons
+still hold · **#54/#55** Project Doctor, Codex-claimed against a worktree that no longer exists (a
+stale claim is an alarm, not a takeover) · the PHASE A–D rows below.
+
+**THREE of the four items this line used to name were already CLOSED** — checked against GitHub
+2026-08-26, not against how they read: **#133** CARE capability rails 4–7 (landed 2026-08-18),
+**#140** CPU temp via PawnIO/MSR (the NO-GO is recorded in #202 so it cannot be re-litigated), and
+**#49** the four-room direction (its comps were approved and every slice shipped). They are named
+here as CLOSED rather than deleted, because a bare deletion is how one of them comes back. This is
+the same false-open reading the TYPE-1 note below was written for; it cost four days there and
+three issues here.
 
 **THE MONEY STACK IS STALLED AT PHASE 2 AND NOTHING ABOVE MOVES IT.**
 [`RECEIPTS_DOCTRINE.md`](RECEIPTS_DOCTRINE.md) §4 puts the compy.gg one-pager + waitlist there,

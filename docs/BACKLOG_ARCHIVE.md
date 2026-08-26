@@ -7,6 +7,23 @@
 
 ---
 
+## 2026-08-26 - #213's two FIXED A-half rows, moved verbatim (NEXT UP byte cap)
+
+Moved out of docs/BACKLOG.md ▶ NEXT UP section ① to pay for the false-open correction above it.
+Both are closed records with their guards already in the tree - A4/A5 (`02be7adc`, live at
+`9c349ce6`) and #211 (`0712dc68`, `f223466a`). 769 bytes. Byte-for-byte, nothing re-worded.
+
+- **A4 (raw Windows tooltip on the rail) and A5 (the titlebar printing "Compy" an inch from the
+  wordmark) — FIXED and installed** (`02be7adc`, live at `9c349ce6`). bug → guard:
+  [`../src/design/shell-native-tooltip-guard.test.tsx`](../src/design/shell-native-tooltip-guard.test.tsx)
+  fails any element whose `title` and visible text contain one another; `title` survives only on
+  icon-only controls. Negative-controlled 2/5.
+- **#211 (a room's `<h1>` was its name welded to a live measurement) — FIXED** (`0712dc68`,
+  `f223466a`); guard [`../src/design/heading-is-a-name-guard.test.tsx`](../src/design/heading-is-a-name-guard.test.tsx)
+  in three halves. Why three, and the room the caller half shipped blind to: [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md).
+
+---
+
 ## Moved from NEXT UP 2026-08-25 - the 2026-08-22 state-of-queue block
 
 > **STATE OF THIS QUEUE, 2026-08-22 (updated after the owner's "do everything" turn).** Items 1 and
