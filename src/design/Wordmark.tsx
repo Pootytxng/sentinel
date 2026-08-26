@@ -6,9 +6,18 @@ import "./Wordmark.css";
 // pulse is trimmed to end at the C's mouth (648,512), and "ompy" is kerned tight (≈ -1px @ 19px,
 // scaled by em) so it reads as a single word. Reference: site/index.html header mark. Accent-driven
 // so it follows the active theme.
+// Owner ruling 2026-08-26 (issue #213 A1): below this size the pulse is not drawn. At rail size the
+// C's 104-unit stroke and the pulse's 58-unit stroke both land under ~2px, and the eye resolves an
+// enclosed mark inside a ring as one glyph — the mark read "©ompy", a copyright symbol in front of
+// the product's own name. The mark itself is APPROVED and untouched: this drops one flourish at the
+// sizes where it stops being legible, and every size at or above the threshold draws it in full.
+// The reading was his to rule on because the taste decree reserves the logo to the owner.
+const PULSE_MIN_SIZE = 24;
+
 export function Wordmark({ size = 19, className = "" }: { size?: number; className?: string }) {
   const w = (18 / 19) * size;
   const h = (21 / 19) * size;
+  const showPulse = size >= PULSE_MIN_SIZE;
   // Fidgeter's reward (shadow realm, Six Laws): triple-click the mark → the launch heartbeat redraws
   // once. Pure delight — nothing changes, nothing unlocks. `cmp-shadow` marks a DELIBERATE knobless
   // interaction: the sanctioned exception to the doorknob law (an egg must never wear a knob), so it
@@ -50,17 +59,23 @@ export function Wordmark({ size = 19, className = "" }: { size?: number; classNa
           strokeWidth="104"
           strokeLinecap="round"
         />
-        <polyline
-          key={beat}
-          className={beat > 0 ? "cmp-wordmark-pulse" : ""}
-          pathLength={1}
-          points="360,512 424,512 460,434 514,594 556,470 602,512 648,512"
-          fill="none"
-          stroke="var(--ix-accent-text, #7ff0d0)"
-          strokeWidth="58"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+        {/* Below PULSE_MIN_SIZE this is absent, not merely transparent — a sub-pixel stroke still
+            fattens the ring it sits inside, which is the whole mechanism behind the © reading. The
+            fidget egg keeps counting taps at any size; at rail size it simply has nothing to redraw,
+            and an egg with nothing to show is the correct silent failure for an egg. */}
+        {showPulse && (
+          <polyline
+            key={beat}
+            className={beat > 0 ? "cmp-wordmark-pulse" : ""}
+            pathLength={1}
+            points="360,512 424,512 460,434 514,594 556,470 602,512 648,512"
+            fill="none"
+            stroke="var(--ix-accent-text, #7ff0d0)"
+            strokeWidth="58"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
       </svg>
       <span className="cmp-wordmark-rest">ompy</span>
     </span>

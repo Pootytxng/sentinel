@@ -351,7 +351,6 @@
       "headline": "数据还不足以判断",
       "sub": "运行一次扫描以查看就绪状态。"
     },
-    "attentionMore": "{{label}} · 还有 {{count}} 项",
     "dialedInHeadline": "你可以开玩了",
     "dialedInSub": "所有就绪检测均已通过 · {{changeNote}}。",
     "changeNote_other": "{{count}} 项安全更改生效中,可随时回滚",

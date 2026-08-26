@@ -49,17 +49,44 @@ describe("deriveSystemPosture", () => {
     expect(p.headline).not.toMatch(VAGUE_COUNT);
   });
 
-  it("attention with several flagged checks leads with the first, counts the rest — never a bare number", () => {
+  // bug→guard (owner ruling 2026-08-26, issue #219): the headline used to append "· and N more".
+  // That tail was measured as what pushed the 40px verdict onto a third line, and it was the only
+  // part of the headline naming nothing. It is gone — the headline is the flagged check's label and
+  // stops there. This pins BOTH directions: the label must survive whole, and no count may return.
+  const COUNT_TAIL = /·|\band\b|\bmore\b|\b\d+\b/;
+
+  it("attention with several flagged checks names the first and stops — no '· and N more' tail", () => {
     const r = readiness([
       check("attention", "Monitor below max refresh"),
       check("attention", "GPU driver age"),
       check("attention", "Power profile"),
     ]);
     const p = deriveSystemPosture({ readiness: r, activeChanges: 0, monitoringAvailable: true });
+    // The count did not disappear from the product — it moved down a level. `attentionCount` and
+    // the full `reasons` list still carry every flagged check, and HomeConsole's sub prints the
+    // honest proportion beneath the verdict. Only the HEADLINE stopped counting.
     expect(p.attentionCount).toBe(3);
-    expect(p.headline).toContain("Monitor below max refresh");
-    expect(p.headline).toContain("2 more");
+    expect(p.reasons).toEqual(["Monitor below max refresh", "GPU driver age", "Power profile"]);
+    expect(p.headline).toBe("Monitor below max refresh");
+    expect(p.headline).not.toMatch(COUNT_TAIL);
     expect(p.headline).not.toMatch(VAGUE_COUNT);
+  });
+
+  it("a label that legitimately contains a number is not mangled by the no-count rule", () => {
+    // Falsification in the other direction: the rule is "append nothing", not "strip digits". A
+    // real catalog label like "2 startup apps slow your boot" must still render verbatim.
+    const r = readiness([
+      check("attention", "2 startup apps slow your boot"),
+      check("attention", "GPU driver age"),
+    ]);
+    const p = deriveSystemPosture({ readiness: r, activeChanges: 0, monitoringAvailable: true });
+    expect(p.headline).toBe("2 startup apps slow your boot");
+  });
+
+  it("no locale still ships the retired count-tail string", () => {
+    // The key is gone from en and zh-CN. If someone re-adds it, this fails before it can reach a
+    // headline again — a live translation string is a standing invitation to wire it back up.
+    expect(i18n.exists("home.posture.attentionMore")).toBe(false);
   });
 
   it("attention sub carries the flagged check's own detail — the fix travels with the name", () => {

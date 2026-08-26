@@ -54,13 +54,18 @@ export function deriveSystemPosture(
 
   if (n > 0) {
     // Name the specific thing — never a vague "N things need your attention" count. The
-    // owner's name-it-and-fix-it-inline law: a flag names WHAT it found. One flagged check ⇒
-    // the verdict IS that check, by name; several ⇒ lead with the first and honestly count the
-    // rest, so the headline still names a real thing instead of a bare number. (Regression fix
-    // 2026-07-17: the count phrasing had crept back onto Home's verdict strip — guard-pinned.)
+    // owner's name-it-and-fix-it-inline law: a flag names WHAT it found, so the verdict IS the
+    // flagged check, by name. (Regression fix 2026-07-17: the count phrasing had crept back onto
+    // Home's verdict strip — guard-pinned.)
+    //
+    // The headline carries NO "· and N more" tail (owner ruling 2026-08-26, issue #219). That
+    // tail was measured as the thing pushing the 40px verdict past two lines, and it was the only
+    // part of the headline that named nothing — a bare number appended to a real finding. Nothing
+    // is hidden by dropping it: the line directly beneath prints the honest proportion ("15 of 16
+    // checks look good", HomeConsole's attentionSub) and every remaining flagged check is listed in
+    // full in the body below. The count moved DOWN a level; it did not disappear.
     const top = attentionChecks[0];
-    const headline =
-      n === 1 ? top.label : t("home.posture.attentionMore", { label: top.label, count: n - 1 });
+    const headline = top.label;
     return {
       state: "attention",
       headline,

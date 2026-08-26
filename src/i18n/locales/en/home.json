@@ -367,7 +367,6 @@
       "headline": "Not enough to judge yet",
       "sub": "Run a scan to see your readiness."
     },
-    "attentionMore": "{{label}} · and {{count}} more",
     "dialedInHeadline": "You're ready to play",
     "dialedInSub": "All readiness checks pass · {{changeNote}}.",
     "changeNote_one": "{{count}} safe change active & reversible",

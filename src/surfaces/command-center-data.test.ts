@@ -85,15 +85,19 @@ describe("postureLine (real headline + priorities-driven sentence)", () => {
     expect(p.reassurance).toMatch(/without your say-so|say-so/i);
   });
 
-  it("attention with several flagged checks still leads with a real name, never a bare number", () => {
+  // Owner ruling 2026-08-26 (#219): the headline no longer appends "· and N more". This is the
+  // render-path half of the pin in system-posture.test.ts — that one proves the derivation, this
+  // one proves Home gets what the derivation produced. Both are needed: the finding that created
+  // the sibling test above was a passthrough silently substituting its own copy.
+  it("attention with several flagged checks names the first and stops — no count tail", () => {
     const p = postureLine(
       readiness([check("attention", "Monitor below max refresh"), check("attention", "GPU driver age")]),
       priorities(0),
       0,
     );
     expect(p.tone).toBe("attention");
-    expect(p.headline).toContain("Monitor below max refresh");
-    expect(p.headline).toContain("1 more");
+    expect(p.headline).toBe("Monitor below max refresh");
+    expect(p.headline).not.toMatch(/more|·/);
   });
 });
 
