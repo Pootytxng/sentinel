@@ -7,17 +7,16 @@
 
 ## Where the train is standing
 
-**`main` is clean and pushed; the desk build is `b21bc18b`, installed and live.** The **DIR-1
-first-timer walk** is CLOSED: its last two findings were the ones it could not decide alone (each
-collided with a decision the owner had already made), **he ruled on both on 2026-08-26**, and both
-rulings shipped — written down in `UI_VISION_BACKLOG.md` as DIR-1a and DIR-1b.
+**`main` is clean and pushed; the desk build is `1703be9f`, installed and live.** The **DIR-1
+first-timer walk** is CLOSED — its two owner rulings shipped in `b21bc18b` (DIR-1a/DIR-1b in
+`UI_VISION_BACKLOG.md`), and **NEXT UP ② closed 2026-08-26**, the last thing it left open.
 
 | | |
 |---|---|
-| Installed | `b21bc18b`, stamp byte-found in the installed exe, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
-| Shipped | the front door no longer assumes something is wrong · a flagged check now shows a next step |
-| Self-review | **PASS 12/12** at `b21bc18b`, quoted in the RELEASE_STATE owner-installed row |
-| Gate | `tsc` clean · 5630 frontend tests · doc-truth green · doc-budget ALL PASS |
+| Installed | `1703be9f`, stamp byte-found in the installed exe, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
+| Shipped | rule 5's "GPU sensor coverage" sentence reaches a screen for the first time · the dead `deepMonitoring` route is deleted |
+| Self-review | **PASS 12/12** at `1703be9f`, quoted in the RELEASE_STATE owner-installed row |
+| Gate | `tsc` clean · 5623 frontend tests · doc-truth 0 drift · doc-budget ALL PASS |
 
 ## The rule that came out of the walk — read this before touching Health
 
@@ -34,14 +33,15 @@ closed row** — every new Health affordance must answer *"is this framing earne
 **DIR-1b:** the attention state carries a one-line ROUTE to the room that acts on it (#180 §C
 untouched — the detail paragraph still does not render on Health).
 
-**Rooms are `Health · Live · History · Test`**, not Home/Monitor/Blackbook/Lab; the ids
-(`home`/`check`/`play`/`fix`/`learn`/`lab`) are persistence keys, never spoken. **Read the rail from
-`src/design/homeRail.ts`, never from a doc.**
+**Rooms are `Health · Live · History · Test`**, never the ids (`home`/`play`/`learn`/`lab` are
+persistence keys). **Read the rail from `src/design/homeRail.ts`, never from a doc.**
 
-**What the walk left undone:** `FpsPanel` is unreachable dead code and the "GPU sensor coverage"
-honesty line is stranded inside the same dead block — both are **NEXT UP ②**, that is the queue, not
-this file. And its finding #4 was partly WRONG (two of the Test room's four gauges already carry
-plain-English notes), so **an audit is not a work order** — verify each claim against the screen.
+**The lesson ② left behind: SOURCE-reachability is not USER-reachability.** The honesty line sat
+outside the gate the walk blamed; its whole component was dark one level up and **three guards
+stayed green** (vendor-honesty proved only "not wrapped in a condition"; the affordance census
+counted 80 unreachable strings as live; the mono census described CSS nothing rendered). When a
+guard certifies a surface, check a route reaches it. Finding #4 was also partly WRONG (two Test
+gauges already carry plain-English notes) — **an audit is not a work order.**
 
 ## Before you touch the UI — the fixture route, and the guards already covering copy
 
