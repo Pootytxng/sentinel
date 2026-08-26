@@ -25,8 +25,11 @@ issues, or compysupport@gmail.com.
 > is fixed to *off* in code, so a shipped build has no way to reach the network through it. Arming
 > that gate is a separate, owner-signed change that cannot land without this policy already
 > describing it — which, as of v0.6, it does. Even armed, sharing stays **opt-in and off by default**
-> (owner ruling 2026-08-24, issue #207). Tier 1 signed case intelligence is approved as
-> a dark design but has no module, endpoint or traffic today. Before any Capability Exception Gate outbound tier is armed, this policy
+> (owner ruling 2026-08-24, issue #207). Tier 1 signed case intelligence is **built but
+> unreachable**: as of 2026-08-25 its module exists in source behind three independent locks —
+> a gate fixed to *off*, an all-zero trust key, and an empty endpoint list — so it has
+> no endpoint, no key and no traffic today. Before any Capability Exception Gate outbound tier
+> is armed, this policy
 > and generated site copy must be updated in the SAME release with its exact endpoint, payload,
 > consent, retention/deletion and off-switch behavior; Tier 1 cannot authorize Tier 2 or 3.
 > `src/outbound-claim-guard.test.ts` enforces the current outbound claims.

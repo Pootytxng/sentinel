@@ -6,115 +6,96 @@
 
 ## Where the train is standing
 
-**Desk build `5a3b5e1c` (stamp-proved, `-VerifyRuntime`, 1 attempt) — #213 is CLOSED, B3 included.**
-`main` is green, nothing half-built, no lane mid-flight. Fleet is still v0.9.26 (`5e64074c`).
-Since the build: #195 §5 is discharged (`src/never-paywall-safety-guard.test.ts` — no file on the
-mutation/rollback/ledger path may reference the Pro gate, derived not listed), and RELEASE_STATE went
-41.8KB → 38.9KB by archiving the July release-repair rows, so the next desk build has room to log itself.
+**A LANE IS MID-FLIGHT AND UNPUSHED.** Compy Care **Tier 1**, built dark, issue
+[#220](https://github.com/Pootytxng/sentinel/issues/220).
 
-| Commit | What |
+| | |
 |---|---|
-| `4ec3749b` | **#213's B half was never blocked.** Three ledgers said it "needs the owner's ChatGPT mockups" — invented in `642d48d6`, never re-derived, and it handed his own complaint back to him. His four room comps were **approved 2026-08-23** and bundled. Retracted + guarded (`src/design/approved-comps-guard.test.ts`, which records the bundle path IN the test because prose is what failed). |
-| `4d65902e` | **B1 + B5 built, measured off the comps.** The titlebar was grounding on `--ix-base`, which the default violet theme tints (`rgb(12,10,20)` measured on the old binary) — the comps sample `#0a0c10`. The rail seam was drawing a bevel's light half with nothing under it. Both now token-only and pinned. |
-| `0fbabb93` | **B5 was a general rule, not one seam.** The comps draw EVERY plane boundary as two rows — highlight on the panel's edge, shadow on the ground outside it — and the app shipped only the light half everywhere. The titlebar/app and topbar/content seams now match (`.wc-bar::after`, `.v2-top` box-shadow). Guard written FIRST: `src/design/seam-bevel-guard.test.ts`, 12 tests, with the PIL samples in the header and a falsification case. |
-| `5a3b5e1c` | **B3 was RIGHT, and the rebuttal below was wrong twice.** `max-width: 20ch` computes to 716px against a **452px** column and never binds; `revertedTitle_one` renders at `--type-body`, not in a headline. Measured over CDP counting real line boxes: the comp's own headline draws 2 lines at 52px and so does everything to 31 chars — but the 34-char one **his machine was showing** drew 3, and the worst drew 4. `--type-hero` is comp-derived and untouched; past the break the headline steps down to `--type-verdict`. Guard: `src/design/headline-fit-guard.test.ts`, 12 tests, the 21-row measured table in the header. |
+| Worktree | `C:\Users\Kuya\code\sentinel-q9a` — **not** the main checkout |
+| Branch | `lane/care-tier1-2026-08-25`, cut off `origin/main` `59d13f29` |
+| Plan | `docs/superpowers/plans/2026-08-09-outbound-case-intelligence-tier1.md` (11 tasks) |
+| Committed | tasks 1–6, six commits, **nothing pushed** |
+| Working tree | **task 7 complete and reviewed, UNCOMMITTED** (17 files) |
 
-**The card edges were measured too and deliberately NOT changed** — implied alpha ~0.13 against
-0.32–0.43 at the plane seams, i.e. at the render's noise floor. The numbers are in the #213 comment
-rather than a second token guessed into existence.
+Commits, oldest last: `f025c63a` (pull path) · `04aa6e61` (matcher) · `2baf79e8` (cache) ·
+`5f9a40fc` (trust root) · `8b821a69` (schema) · `4a9b0bc0` (froze the pre-Tier-1 station).
 
-**B2 and B4 came back wrong and were NOT built.** B2 is the owner's own 2026-08-23 ruling
-(`--v2-cta: #2ed083`, sampled off the comps in `a83d4809`); **B4** likewise — the comp draws the nav
-numerals as bordered chips. **B3's rebuttal is retracted** (see the `5a3b5e1c` row): the ~16ch
-comp measure said nothing because the cap never binds, and `revertedTitle_one` is not a headline.
-**Two A-list items were wrong too:** A5's fix deviates from the comp (which prints "Compy" in both
-places on purpose), and A1's `©ompy` is in the approved comp, so it is the mark he signed off, not a
-regression that crept in.
+- **Eleven worktrees besides `main`. Six are spent; five carry commits that are not on main — do
+  NOT delete or hard-reset those five before checking them**: `lane/care-tier1-2026-08-25`
+  (this lane, 6 commits, never pushed) · `feat/user-feedback-lab-recovery` (49) ·
+  `feat/lab-49-parity-port` (6) · `lane/cleanup-train-2026-08-20` (5) ·
+  `lane/vision-pointer-guard-2026-08-24` (3). Re-derive with `git worktree list` and
+  `git rev-list --count origin/main..<branch>`; never carry these numbers forward unchecked.
 
-> **The lesson, and it has now cost two sessions: check the owner decision behind a surface before
-> "fixing" it.** #213 was filed by an agent audit the day AFTER he approved the comps. Acting on its
-> B half unread would have reverted his ruling. Memory: `guard-passing-is-not-owner-conformance`.
+**STILL DARK, three independent locks, none of them touched:** `case_intelligence_gate()` is
+hard-false · `CASE_SIGNING_PUBKEY` is all zeros · `CASE_CATALOG_ENDPOINTS` **and**
+`CASE_CATALOG_ORIGINS` are both empty. Arming is plan tasks 10–11 and is **owner territory**.
 
-## The comps are the spec — read this before any design work
+## Task 7 — what is sitting in the working tree
 
-Owner ruling 2026-08-23 (`a83d4809`): where a room's approved picture and your taste disagree, **the
-picture wins**, colours are SAMPLED (PIL) and never guessed, and *every* difference is a finding —
-judging whether one is justified is not the reviewer's job. The bundle path is pinned in
-`src/design/approved-comps-guard.test.ts`; that test SKIPS loudly off this machine rather than
-passing vacuously. **jsdom never loads these stylesheets**, so no rendering test can see a colour
-regression — only the picture can, and the picture costs a build + install + review round.
+`Incident.case_intelligence` is `skip_serializing_if = "Option::is_none"`, set **only** on
+`CaseMatchOutcome::Found`, so "no catalog" / "expired" / "nothing matched" all reach the UI
+identically — as nothing, and a dark build serializes byte-for-byte like the pre-Tier-1 station.
+`local_facts_from` reads the existing hardware snapshot (once per report, behind the gate) and
+leaves every unreadable fact `None`. The UI is `KnownIssueBlock` in `src/surfaces/BlackBox.tsx`:
+a dashed neutral card that must NOT look like `.bb-assess` (Compy's own accent-washed reading)
+sitting directly above it.
 
-## Q9a is closed and STAYS dark
+- **Self-review: PASS 12/12**, captured at 1500×980 on the fixture rig, not the app. Screenshots
+  were sent to the owner (before = `tier1-none`, after = `tier1-matched`).
+- **IPC contract audit: no blockers.** It also settled the load-bearing question — `opener:default`
+  grants `https://*` and Tauri unions scopes across granted permissions, so the source button's
+  capability is genuinely present, not missing.
+- **Fixture rig extended** — `docs/ui-sweep/fixture/{stub-core.ts,main.tsx}` gained three states:
+  `tier1-matched`, `tier1-possible`, `tier1-none` (the absent-field CONTROL). Serve with
+  `npx vite --config docs/ui-sweep/fixture/vite.config.mts`, then
+  `http://localhost:5199/docs/ui-sweep/fixture/index.html?state=tier1-matched` and **click
+  `.bb-scan`** — the station renders nothing until scanned.
+- **bug→guard, four added, all falsified.** Three in `src/fixture-parity-guard.test.ts`: the stub
+  must answer every command `BlackBox.tsx` sends · the opener must stay stubbed (asserted as the
+  QUOTED literal — a bare substring check passed against `open_url_GONE` and was tightened) ·
+  `tier1-none` must stay absent-field. One in `src/case-intelligence-outbound-guard.test.ts`: every
+  `EvidenceRequirement::key()` string must have a locale label in `en` and `zh-CN`, or an evidence
+  line renders as an empty `<li>` with no error anywhere.
+- Verified: `cargo test` 1118 passed / 0 failed / 24 ignored · `tsc --noEmit` clean · clippy clean ·
+  `verify-release-state.mjs` 31/31 citations, 0 drift.
 
-The consent UI PASSed self-review 12/12 via the fixture rig (the surface is unreachable in a build:
-`receipts_gate()` at `src-tauri/src/receipts.rs:23` is hard-false). **The owner has the before/after
-but has not ruled**, so it is reviewed, not approved. **Do NOT arm it.** Decisions already argued in
-the commit bodies — do not re-litigate: ① opt-in, default OFF, and it **stays** off after arming
-(owner ruling #207; #217's own success criterion says the opposite and is stale) ② no `ip_hash` on
-the receipt row, no CSP widening; `reqwest` carries **no** TLS feature, TLS arrives from
-`tauri-plugin-updater` ③ endpoint is `https://compy-bd6.pages.dev/api/usage` — `compy.gg` does not
-exist yet; the receiver is live, migrated and empty.
+## Doc truth — DONE in this lane, do not redo
 
-## The design vision is a separate train — do not fold it into a UI fix
+`RELEASE_STATE.md:56` marker and the Tier 1 row at `:132` now say built-dark/three-locks.
+`PRIVACY.md` no longer says Tier 1 "has no module" (it has one; it has no endpoint, key or
+traffic). `src/capability-exception-policy-guard.test.ts` had two markers amended with the reason
+recorded inline. `BACKLOG.md`'s Tier 1 row is `[BUILT-DARK]`, three follow-up nits were queued, and
+**60 closed PHASE A rows were archived verbatim** to
+`docs/archive/BACKLOG_PHASE_A_SHIPPED_2026-08-25.md` for the byte budget.
 
-- What `docs/UI_VISION_BACKLOG.md` still lists 🔴 OPEN is **DIR-1** (the standing intuitive-UI lens)
-  and **§G** (the site's mini demo, his call). The July motion stack (§A) **shipped**, and the
-  panoramic gallery he **deleted** — on 2026-08-25 he answered "no" to bringing it back. Read the
-  rows; never re-queue this file from a paraphrase.
+## THE NEXT STEP, exactly
 
-## Traps that cost real time
+1. Commit task 7. Message drafted at
+   `%LOCALAPPDATA%\Temp\claude\c--Users-Kuya-code-sentinel\27dfa021-…\scratchpad\msg7.txt`
+   (session-scoped — if gone, rewrite from this file and the plan):
+   `git add src-tauri/src/blackbox.rs src-tauri/src/case_intelligence.rs src/types.ts
+   src/surfaces/BlackBox.tsx src/surfaces/BlackBox.css src/surfaces/BlackBox.test.tsx src/i18n
+   src/mutation-boundary-guard.test.ts src/case-intelligence-outbound-guard.test.ts
+   src/fixture-parity-guard.test.ts src/design/mono-census.baseline.json docs/ui-sweep/fixture`
+   Then a separate `docs:` commit for RELEASE_STATE / PRIVACY / BACKLOG / the archive / this file /
+   the policy guard.
+2. `pwsh scripts/verify-local.ps1` → push `lane/care-tier1-2026-08-25` → PR against #220.
+3. Kill the vite server on port 5199 if it is still up.
 
-- **A rewrite of THIS file can break `src/ui-vision-status-guard.test.ts` rule D**, which counts the
-  pointer paragraphs citing the vision file as open and needs at least three across CLAUDE.md, this
-  file and the checklist. Dropping the vision section above turns the push red.
-- **The fixture rig can be silently dead.** `docs/ui-sweep/fixture/main.tsx` once imported a CSS file
-  deleted five weeks earlier; vite answered every request with a 500 and each state rendered blank.
-  **If a fixture state looks empty, check the vite response before the component.**
-- **The entry guard refuses writes with `FOLDER_UNCLAIMED` until the issue is BOTH labelled
-  `work-control` AND has its `Worktree / branch` board field set.** `adopt` says "adopted anyway"
-  when the label is missing and then `assert` still fails. Board cache
-  `%LOCALAPPDATA%\CompyEntry\board.json`, 10-min TTL. `Claim expires` / `Last verified` are **date**
-  fields: `gh project item-edit --date`, not `--text`.
-- **`launch-focus-guard` runtime tier is intermittent — NEW lane, needs an idle desk**
-  (`docs/BACKLOG.md`). 48/50 isolated; it fails only under full parallelism and names the runner's
-  own `node.exe`. **Do not silence it with a skip** — instrument the probe to record WHAT raises the
-  window; a raise 2.4s after launch is real while he games.
-- **A new script in `scripts/` or `.codex/hooks/` is red until `scripts/gate-residency-guard.test.mjs`
-  is told where it runs.**
-- **A new command needs FOUR things:** `#[tauri::command]`, registration in `lib.rs`, a name in
-  `build.rs` `APP_COMMANDS`, and an `allow-*` grant in `capabilities/default.json`.
-- **A new `src/design` component needs an a11y disposition** or `a11y-census-guard` fails.
-- **A fresh worktree needs `npm install`** — the pre-push gate `npm ci`s, so junctioning is forbidden.
-- **Merge with `gh pr merge --merge`, never `--delete-branch`** (it set `core.bare=true` repo-wide
-  once); prune the ref with `git push origin --delete <lane>`, which skips the gate.
-- **Bash heredocs eat one backslash level** — use quoted heredocs or the Write tool for TS/JS.
-- **Doc budgets run at the cap.** `RELEASE_STATE.md` is now 38.9/42KB (bought by archiving the July release rows), but `BACKLOG.md` 96.4/98KB, `::NEXT UP` 12.1/12.2KB and `::Conformance queue` 27.2/27.5KB have almost nothing left. Archive a finished block verbatim before adding one; **never raise a cap.**
+**OUT of this lane, deliberately:** plan tasks 8–9 (further UI — another writer may be live on UI
+surfaces) and 10–11 (independent security review + arming — owner territory).
 
-## Repo state a fresh session should know without re-deriving
+**Before any UI work:** the owner's design vision lives in `docs/UI_VISION_BACKLOG.md`, whose
+still-🔴 OPEN rows today are **DIR-1** (the standing intuitive-UI directive) and **§G** (the site).
+Read those two rows there; do not re-queue a row from a paraphrase of them.
 
-- **Eleven worktrees besides `main`; six are spent but FOUR still carry work that is not on main** —
-  `lane/cleanup-train-2026-08-20` (PR #163 closed superseded), `feat/user-feedback-lab-recovery`,
-  `feat/lab-49-parity-port`, `lane/vision-pointer-guard-2026-08-24`. Do not reset those. The nested
-  `.claude/worktrees/merge-prs-tauri-visibility-c5660e` is detached, dirty on `.codex/config.toml`,
-  and **cannot be removed** without `--force`, which stays owner-blocked. `sentinel-testrig` holds an
-  **ungated draft** receipt for the already-merged PR #194 — preserve it, never commit it as a receipt.
-- **The board carries stale rows.** #55/#54 are `Active`/`Review` on the Codex lane and point at
-  `sentinel-project-doctor`, **a worktree that no longer exists** — left alone, because a stale claim
-  is an alarm, not a takeover (WORK_CONTROL §5).
-- **#156 and #128 discharge on evidence, not on work.** #156's silent-install flake needs a
-  reproduction; #128's release-side mutex has never been held during a real publish. Four clean
-  desk ships are logged on both; neither discharges without a contended lock or a real reproduction.
-- **Release journals were never committable** (gitignored), so every past "9 of 9" rests on prose.
-  `release.ps1` now emits a receipt to `docs/release-receipts/` — **the next cut must commit it** ([`RELEASE_TRANSACTION.md`](RELEASE_TRANSACTION.md)).
+## Waiting on the owner — none of it blocks this lane
 
-## Waiting on the owner (all in `OWNER_ACTION_CHECKLIST.md`)
-
-1. **Register `compy.gg`** (~$50/yr, money). Everything downstream is blocked, including re-pointing
-   the endpoint constant off `compy-bd6.pages.dev`.
-2. **`B_shelter` (#128).** 1,100 lines of finished, verified collision-guard code, unpushed since
-   2026-08-18. One word: land it or retire it.
-3. **The Ko-fi URL** (B3a).
-4. **Rule on the Q9a consent screens** — he has the before/after; nothing ships on them until he does.
-5. **#219** — moving the "· and N more" count out of the headline edits his own #180 §C pick, so it
-   is filed with a recommendation instead of done. Whenever he wants: **#204** (Pro price shape).
-   **#213 A1 is answered** — the `©ompy` glyph is in his own approved comp, nothing to decide.
+- Register **`compy.gg`** (~$50/yr — money call). Blocks money-stack Phase 2 (the one-pager +
+  waitlist, `docs/RECEIPTS_DOCTRINE.md` §4), which has **not been started**.
+- Land or retire **`B_shelter`** (#128) — ~1,100 lines unpushed since 2026-08-18.
+- The **Ko-fi URL** (B3a).
+- Rule on the **Q9a consent screens** (built, reviewed, `receipts_gate()` still false).
+- **#219** and **#204** — Compy Pro price shape.
+- **#213's B half** — his ChatGPT room mockups. (A1, the `©ompy` wordmark, is already answered.)
