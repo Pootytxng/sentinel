@@ -8,6 +8,9 @@
 
 **Desk build `5a3b5e1c` (stamp-proved, `-VerifyRuntime`, 1 attempt) — #213 is CLOSED, B3 included.**
 `main` is green, nothing half-built, no lane mid-flight. Fleet is still v0.9.26 (`5e64074c`).
+Since the build: #195 §5 is discharged (`src/never-paywall-safety-guard.test.ts` — no file on the
+mutation/rollback/ledger path may reference the Pro gate, derived not listed), and RELEASE_STATE went
+41.8KB → 38.9KB by archiving the July release-repair rows, so the next desk build has room to log itself.
 
 | Commit | What |
 |---|---|
@@ -85,8 +88,7 @@ exist yet; the receiver is live, migrated and empty.
 - **Merge with `gh pr merge --merge`, never `--delete-branch`** (it set `core.bare=true` repo-wide
   once); prune the ref with `git push origin --delete <lane>`, which skips the gate.
 - **Bash heredocs eat one backslash level** — use quoted heredocs or the Write tool for TS/JS.
-- **Doc budgets are effectively full:** `RELEASE_STATE.md` 41.5/42KB, `BACKLOG.md::NEXT UP` 12.1/12.2KB. `SESSION_HANDOFF.md` 118/120 lines. Overflow is paid by archiving verbatim behind a pointer — **never by raising a cap.**
-  Archive a finished row verbatim before adding one; **never raise a cap to make room.**
+- **Doc budgets run at the cap.** `RELEASE_STATE.md` is now 38.9/42KB (bought by archiving the July release rows), but `BACKLOG.md` 96.4/98KB, `::NEXT UP` 12.1/12.2KB and `::Conformance queue` 27.2/27.5KB have almost nothing left. Archive a finished block verbatim before adding one; **never raise a cap.**
 
 ## Repo state a fresh session should know without re-deriving
 
@@ -100,11 +102,10 @@ exist yet; the receiver is live, migrated and empty.
   `sentinel-project-doctor`, **a worktree that no longer exists** — left alone, because a stale claim
   is an alarm, not a takeover (WORK_CONTROL §5).
 - **#156 and #128 discharge on evidence, not on work.** #156's silent-install flake needs a
-  reproduction; #128's release-side mutex has never been held during a real publish. Both collect
-  the next time a ship or a release runs — neither is a task to schedule.
-- **Release journals were never committable** (gitignored by construction), so every past "9 of 9"
-  claim rests on prose. `scripts/release.ps1` now emits a durable receipt to `docs/release-receipts/`:
-  **the next release cut must commit that file.** See [`RELEASE_TRANSACTION.md`](RELEASE_TRANSACTION.md).
+  reproduction; #128's release-side mutex has never been held during a real publish. Four clean
+  desk ships are logged on both; neither discharges without a contended lock or a real reproduction.
+- **Release journals were never committable** (gitignored), so every past "9 of 9" rests on prose.
+  `release.ps1` now emits a receipt to `docs/release-receipts/` — **the next cut must commit it** ([`RELEASE_TRANSACTION.md`](RELEASE_TRANSACTION.md)).
 
 ## Waiting on the owner (all in `OWNER_ACTION_CHECKLIST.md`)
 
@@ -114,5 +115,6 @@ exist yet; the receiver is live, migrated and empty.
    2026-08-18. One word: land it or retire it.
 3. **The Ko-fi URL** (B3a).
 4. **Rule on the Q9a consent screens** — he has the before/after; nothing ships on them until he does.
-5. Whenever he wants: **#204** (Pro price shape). **#213 A1 is answered** — the `©ompy` glyph is in
-   his own approved comp, so there is nothing to decide unless he wants it changed.
+5. **#219** — moving the "· and N more" count out of the headline edits his own #180 §C pick, so it
+   is filed with a recommendation instead of done. Whenever he wants: **#204** (Pro price shape).
+   **#213 A1 is answered** — the `©ompy` glyph is in his own approved comp, nothing to decide.
