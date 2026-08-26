@@ -2,21 +2,22 @@
 
 > Live pointer only. Gate truth: [`RELEASE_STATE.md`](RELEASE_STATE.md). Queue:
 > [`BACKLOG.md`](BACKLOG.md) ▶ NEXT UP. Owner asks: [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md).
-> Budget 120 lines — trim from the bottom, never grow past it. Replace this file, never append.
+> Budget 120 lines, and this file, `BRANCH_DISPOSITIONS.md` and `BACKLOG.md::Conformance queue` are
+> all AT cap — trim or archive before adding a line anywhere. Replace this file, never append.
 
 ## Where the train is standing
 
-**NOTHING IS MID-FLIGHT. `main` is clean and the last lane landed.** Compy Care **Tier 1 plan tasks
+**ONE THING IS MID-FLIGHT — the two issue closes under THE NEXT STEP.** Compy Care **Tier 1 plan tasks
 8–9** — crash-rescue discoverability and the persisted local incident observer — landed 2026-08-26 as
 PR [#223](https://github.com/Pootytxng/sentinel/pull/223) (`0e8f7835`). Tasks 1–7 landed before it as
 PR [#221](https://github.com/Pootytxng/sentinel/pull/221).
 
 | | |
 |---|---|
-| `main` | `0e8f7835` — check `git log --oneline -3` |
+| `main` | deliberately not pinned — run `git log --oneline -3` |
 | Plan | `docs/superpowers/plans/2026-08-09-outbound-case-intelligence-tier1.md` (11 tasks) |
 | Landed | **plan tasks 1–9 of 11**: schema · trust root · cache · matcher · pull path · wire contract · UI · discoverability · observer |
-| Gate | `pwsh scripts/verify-local.ps1` **PASS at `e02b24de`** — 391 files, 5553 passed, Rust 1155 passed, clippy clean |
+| Gate | `pwsh scripts/verify-local.ps1` **PASS at every pushed head this train** — 391 files, Rust 1155 passed, clippy clean |
 | Receipts | `.claude/work-control/2026-08-25-merge-pr-223.json` (+ `…-merge-pr-221.json`, `…-close-issue-220.json`) |
 
 **STILL DARK, three independent locks, none of them touched:** `case_intelligence_gate()` is
@@ -39,11 +40,8 @@ untouched.
   (the `claude/checklist-disk-item-c5660e` lineage). It hid for fifteen days because every audit
   here reads `origin` refs and a detached checkout has none; rule C of
   `scripts/handoff-worktree-truth.test.mjs` now fails the build if a checkout carries commits and
-  this bullet does not name it. `C:\Users\Kuya\code\sentinel-care89` was retired
-  outright on 2026-08-26 once #223 landed, and `sentinel-local-collision-guard` was retired on
-  2026-08-25 once git confirmed #128 had been on `main` since 2026-08-21. Re-derive with
-  `git worktree list` and `git rev-list --count origin/main..<branch>`; never carry these numbers
-  forward unchecked.
+  this bullet does not name it. Re-derive with `git worktree list` and
+  `git rev-list --count origin/main..<branch>`; never carry these numbers forward unchecked.
 
 ## What the pre-land review caught, and the guards that now hold it
 
@@ -83,7 +81,9 @@ falsified before it was counted.
 
 ## THE NEXT STEP, exactly
 
-Nothing is blocked and nothing is half-done. Pick one:
+**IN FLIGHT:** #222/#128 are NOT closed. Receipts sit uncommitted at
+`.claude/work-control/2026-08-26-close-issue-{222,128}.json`: rebind `currentHead` to the head you
+gate at, fill `independentReview`, close both naming what is NOT closed, push. Then pick one:
 
 1. **The three queued Tier 1 nits** in `docs/BACKLOG.md` PHASE C — all small, all real.
 2. **Q9b — Tier 3 in-app feedback + crash reports** (`docs/BACKLOG.md`, own module
@@ -110,9 +110,8 @@ blockers** — `compy.gg` registration, the Ko-fi URL and Compy Pro pricing all 
 - **Tier 1 arming** (§C) — signing-key custody, the catalog domain, and the arming itself, after an
   independent security review.
 
-**Three asks that used to sit here are gone, and were never really his:** #128 (`B_shelter`) landed on
-`main` on 2026-08-21 and is now closed, with `scripts/shelter-tag-guard.test.mjs` failing the build if
-a doc ever again calls landed work unpublished · **#213's B half** was retracted at source — he
-approved four room comps on 2026-08-23 and B1/B5 shipped, B3 was disproven, B2/B4 were never defects ·
-**the Q9a consent screens** are a taste call, which the 2026-08-07 decree makes the lane's to ship and
-his to veto on sight, not a ruling he owes.
+**Three asks that used to sit here were never really his:** #128 (`B_shelter`) landed on `main` on
+2026-08-21 — its issue closes with the in-flight receipt above, and `scripts/shelter-tag-guard.test.mjs`
+fails the build if a doc ever again calls landed work unpublished · **#213's B half** was retracted at
+source (B1/B5 shipped, B3 disproven, B2/B4 never defects) · **the Q9a consent screens** are a taste
+call the 2026-08-07 decree makes the lane's to ship and his to veto on sight, not a ruling he owes.

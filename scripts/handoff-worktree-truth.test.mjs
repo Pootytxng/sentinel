@@ -9,7 +9,7 @@
 // The number was never the defect. Carrying a claim about THIS MACHINE forward without re-deriving
 // it is, and prose cannot notice itself going stale.
 //
-// Two rules, and they fail in different environments on purpose:
+// Three rules, and they fail in different environments on purpose:
 //
 //   A. Portable. Every branch the handoff names as carrying work not on main must actually not be
 //      an ancestor of `origin/main`. This runs anywhere the remote ref is fetched, CI included, and
@@ -19,6 +19,12 @@
 //      worktree and nothing to compare against, so this SKIPS there rather than passing vacuously —
 //      and says so. That is not a hole worth closing: handoffs are written on the owner's desk,
 //      where the pre-push gate runs `npm test` against a repo that has eleven.
+//   C. Local only. Every checkout that CARRIES commits must be named, whether or not it has a
+//      branch. Added 2026-08-26 after a detached checkout holding four commits sat unnamed for
+//      fifteen days with A and B both green — A only judges branches the doc already names, and B
+//      only counts. Its own inert path is the one a review caught next: if `origin/main` cannot be
+//      resolved, every count throws at once, and reading that as "no carriers" would reproduce this
+//      exact defect one level down. An uncountable checkout is therefore a FAILURE, never a zero.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -103,12 +109,51 @@ const landedOnMain = (b) => {
  * and B only counts checkouts, which was right.
  */
 export function carriersMissingFromBullet(bullet, carriers) {
-  const text = bullet ?? "";
-  return carriers.filter((c) => c.commits > 0 && !text.includes(c.name)).map((c) => c.name);
+  // Code spans only. A bare substring test would let a checkout whose name is also an ordinary word
+  // be "named" by prose that never identifies it, which under-reports in the same silent direction
+  // as naming nothing at all. A path is credited by its last segment: the handoff writes the
+  // detached one as a full worktree path, and its identity is the segment, not the prefix.
+  const spans = [...(bullet ?? "").matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+  const tail = (span) => span.split(/[\\/]/).filter(Boolean).pop();
+  const named = (name) => spans.some((span) => span === name || tail(span) === name);
+  return carriers.filter((c) => c.commits > 0 && !named(c.name)).map((c) => c.name);
 }
 
-/** `git worktree list --porcelain` -> [{ name, commits }], counted against origin/main. */
-function liveCarriers(list, countAhead) {
+/**
+ * Checkouts whose distance from `origin/main` could not be measured at all. `null` is deliberately
+ * not `0`: an unfetched or unresolvable `origin/main` makes every count throw at once, and a
+ * `catch { return 0 }` would turn a total measurement failure into "nothing carries anything" —
+ * a green rule that never read the handoff. These fail the build instead.
+ */
+/**
+ * `countAhead` carrying the one semantic that matters: a count that could not be TAKEN is `null`,
+ * not `0`. Built from an injected runner so the total-failure path is falsifiable through the same
+ * seam the rule itself uses — a try/catch written inline in the test body could only ever be read,
+ * never exercised.
+ */
+export function countAheadVia(runner) {
+  return (committish) => {
+    try {
+      const raw = String(runner(committish)).trim();
+      const n = Number(raw);
+      return raw !== "" && Number.isFinite(n) ? n : null;
+    } catch {
+      return null;
+    }
+  };
+}
+
+export function unmeasuredCarriers(carriers) {
+  return carriers.filter((c) => c.commits === null).map((c) => c.name);
+}
+
+/**
+ * `git worktree list --porcelain` -> [{ name, commits }], counted against origin/main. Exported so
+ * the TOTAL-measurement-failure path can be falsified against the real porcelain of this machine
+ * rather than only against a stub: pass a countAhead that throws and every carrier must come back
+ * unmeasured, never zero.
+ */
+export function liveCarriers(list, countAhead) {
   return list
     .split(/\r?\n\s*\r?\n/)
     .map((block) => block.split(/\r?\n/).filter(Boolean))
@@ -121,7 +166,7 @@ function liveCarriers(list, countAhead) {
       const committish = branch ?? (headLine ? headLine.slice("HEAD ".length) : null);
       return {
         name: branch ?? path.split(/[\\/]/).filter(Boolean).pop(),
-        commits: committish ? countAhead(committish) : 0,
+        commits: committish ? countAhead(committish) : null,
       };
     })
     .filter((c) => c.name !== "main");
@@ -159,6 +204,19 @@ describe("the handoff tells the truth about the worktrees", () => {
     expect(carriersMissingFromBullet(bullet, [{ name: "ghost-c5660e", commits: 4 }])).toEqual(["ghost-c5660e"]);
     // A spent checkout is not owed a mention.
     expect(carriersMissingFromBullet(bullet, [{ name: "ghost-c5660e", commits: 0 }])).toEqual([]);
+    // A checkout named only in prose is NOT named: the matcher reads code spans, so a carrier whose
+    // name is also an ordinary word cannot be credited by a sentence that never identifies it.
+    expect(carriersMissingFromBullet("- **not on main** — the recovery checkout.", [{ name: "recovery", commits: 2 }])).toEqual(["recovery"]);
+    // A detached checkout is credited by the last segment of its quoted path.
+    expect(
+      carriersMissingFromBullet("- **not on main** — `.claude/worktrees/ghost-c5660e`, detached.", [{ name: "ghost-c5660e", commits: 4 }]),
+    ).toEqual([]);
+    // An uncountable checkout is a failure, never a zero — the inert path a review caught in rule C.
+    expect(unmeasuredCarriers([{ name: "lane/a", commits: 3 }, { name: "ghost", commits: null }])).toEqual(["ghost"]);
+    expect(unmeasuredCarriers([{ name: "lane/a", commits: 0 }])).toEqual([]);
+    expect(countAheadVia(() => "3")("HEAD")).toBe(3);
+    expect(countAheadVia(() => { throw new Error("unknown revision origin/main"); })("HEAD")).toBe(null);
+    expect(countAheadVia(() => "")("HEAD")).toBe(null);
   });
 
   it("A: every branch it calls unmerged is genuinely not on origin/main", () => {
@@ -193,17 +251,35 @@ describe("the handoff tells the truth about the worktrees", () => {
   });
 
   it("C: every checkout carrying commits is named — including one with no branch at all", () => {
-    const countAhead = (committish) => {
-      try {
-        return Number(git("rev-list", "--count", `origin/main..${committish}`));
-      } catch {
-        return 0;
-      }
-    };
-    const carriers = liveCarriers(git("worktree", "list", "--porcelain"), countAhead);
+    const list = git("worktree", "list", "--porcelain");
+    const live = list.split(/\r?\n/).filter((l) => l.startsWith("worktree ")).length;
+    if (live <= 1) {
+      // A one-checkout clone has nothing to compare, exactly as in rule B. Say so; do not pass quietly.
+      expect(live).toBe(1);
+      return;
+    }
+    const countAhead = countAheadVia((committish) => git("rev-list", "--count", `origin/main..${committish}`));
+    const carriers = liveCarriers(list, countAhead);
+    // The inert path, falsified LIVE rather than merely described: the same porcelain, counted by a
+    // runner that fails the way an unfetched origin/main fails, must come back unmeasured. The
+    // second line is the shape this rule shipped with and a review caught — every carrier reading
+    // as spent, so the rule names nothing and goes green without ever opening the handoff.
+    const blind = liveCarriers(list, countAheadVia(() => { throw new Error("unknown revision origin/main"); }));
+    expect(blind.length).toBeGreaterThan(0);
+    expect(unmeasuredCarriers(blind).length).toBe(blind.length);
+    expect(carriersMissingFromBullet("", blind)).toEqual([]);
+    // The inert path FIRST. If origin/main cannot be resolved, every count fails at once and a rule
+    // that read that as zero would go green without ever opening the handoff.
+    const unmeasured = unmeasuredCarriers(carriers);
+    expect(
+      unmeasured,
+      `rule C could not measure ${unmeasured.length} checkout(s) against origin/main: ${unmeasured.join(", ")}. ` +
+        `That is a broken measurement, not an empty result — fetch origin. Counting it as zero is how ` +
+        `this rule would grow the very blind spot it was added to close.`,
+    ).toEqual([]);
     if (!carriers.some((c) => c.commits > 0)) {
-      // Vacuous by construction on a clean machine. Say so rather than reporting a silent pass.
-      expect(carriers.length).toBeGreaterThanOrEqual(0);
+      // Genuinely nothing to name: every count succeeded and every one came back zero.
+      expect(carriers.length).toBeGreaterThan(0);
       return;
     }
     const missing = carriersMissingFromBullet(repoStateBullet(markdown), carriers);
