@@ -675,6 +675,342 @@ impl CaseCatalogManifest {
     }
 }
 
+// ─── Signing trust ─────────────────────────────────────────────────────────
+//
+// Plan task 3. Tier 1 downloads a document written by someone else, so the ONLY thing standing
+// between a CDN compromise and the crash station's text is this chain:
+//
+//   compiled public key  →  verifies a signature over  →  the context-prefixed canonical manifest
+//                        →  whose `catalog_sha256` must equal  →  SHA-256(catalog bytes)
+//                        →  which then parse strictly under the task-2 rules
+//
+// SHA-256 alone is not enough: whoever can replace the catalog can replace its checksum in the same
+// request. Only the signature is anchored in the binary.
+//
+// **Trust separation from `remote_rules.rs` is enforced three ways, not one.** A different key is
+// the weakest of them, because keys get reused by accident:
+//
+//  1. **Domain separation in the signed bytes.** Tier 1 signs `CASE_MANIFEST_SIGNING_CONTEXT` ++
+//     canonical JSON; remote rules sign the canonical JSON alone. Even if the same private key were
+//     used for both by mistake, a remote-rules signature cannot verify here and a Tier 1 signature
+//     cannot authorize privileged mutation policy there. This is the property that survives operator
+//     error, so it is the one worth having.
+//  2. **A distinct key newtype.** `CaseSigningKey` is not `[u8; 32]`, so handing this verifier the
+//     remote-rules key is a visible, greppable wrapping and never an implicit coercion.
+//  3. **Disjoint schemas.** A remote-rules manifest names `ruleset_version` / `rules_sha256`;
+//     `CaseCatalogManifest` is `deny_unknown_fields`, so it is refused as malformed regardless.
+//
+// **Verification order deviates from `remote_rules.rs` deliberately.** That module parses the
+// manifest into its typed struct and then checks the signature. This one checks the signature FIRST
+// and runs the strict parse and the task-2 domain validation only on bytes that are already proven
+// authentic. Nothing downstream of an unverified document should run, and the generic
+// `serde_json::Value` needed to rebuild the signed payload is the smallest possible amount of
+// reading to do before that proof exists.
+
+/// Tier 1's Ed25519 trust root. A newtype rather than a bare `[u8; 32]` so the remote-rules key
+/// cannot be passed to this verifier by a plain reference — see note 2 above.
+///
+/// The bytes are a PUBLIC key and are not secret; nothing is redacted here, because pretending a
+/// public key is a secret would be security theater. What is genuinely kept out of the record is the
+/// signature: `CaseTrustError` carries no signature bytes and no document content, so a failure can
+/// be logged without logging the artifact that failed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct CaseSigningKey([u8; 32]);
+
+impl CaseSigningKey {
+    pub(crate) const fn new(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
+    /// All-zeros is not a usable Ed25519 public key, so this is a compile-time "there is no trust
+    /// root yet" rather than a flag someone can flip in config.
+    fn is_placeholder(&self) -> bool {
+        self.0 == [0u8; 32]
+    }
+}
+
+/// THE production trust root, and it is deliberately the all-zeros placeholder. Shipping a
+/// development key would let anyone who reads the binary mint a catalog. The real key is generated
+/// offline and its private half NEVER enters this repo, `.env*` or CI; replacing this constant is
+/// part of the owner-signed arming commit (plan task 11), not of any build lane.
+const CASE_SIGNING_PUBKEY: CaseSigningKey = CaseSigningKey::new([0u8; 32]);
+
+/// The domain-separation prefix — Tier 1's own canonicalization version. Bump the trailing version
+/// whenever the canonical form changes, so old signatures stop verifying instead of quietly meaning
+/// something new.
+const CASE_MANIFEST_SIGNING_CONTEXT: &[u8] = b"compy.case-intelligence.manifest.v1\n";
+
+/// Manifests are a few hundred bytes; 4 KB is already generous.
+const CASE_MANIFEST_MAX_BYTES: usize = 4096;
+
+/// Transport cap on the catalog body. This is the OUTER bound and it binds before `MAX_ENTRIES`
+/// does: 512 entries each near their per-field maxima would be several megabytes, so a catalog that
+/// large is refused by bytes and never reaches the parser. That is the intended relationship — the
+/// byte cap protects memory and the entry cap protects meaning, and the cheaper one runs first.
+const CASE_CATALOG_MAX_BYTES: usize = 1024 * 1024;
+
+/// Why a catalog download was not trusted. Kept separate from `CaseCatalogError` because these are
+/// different questions: that type answers "is this document well formed", this one answers "did this
+/// document really come from us, unaltered, and is it still current". A caller that conflates them
+/// would report a tampered catalog as a typo.
+///
+/// No variant carries signature bytes, key bytes or document content — see `CaseSigningKey`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum CaseTrustError {
+    /// A document exceeded its transport cap. Checked before anything parses it.
+    Oversize { field: &'static str, found: usize, max: usize },
+    /// The manifest was not even JSON, so there was nothing to verify.
+    Malformed(String),
+    /// The manifest carried no `signature`, or it was not a string.
+    MissingSignature,
+    /// `signature` was not exactly 128 lowercase hex characters, or did not decode to a signature.
+    BadSignatureFormat,
+    /// The compiled trust root is still the all-zeros placeholder: Tier 1 has no key, so nothing can
+    /// be trusted. This is the state the shipped binary is in.
+    PlaceholderKey,
+    /// The signature did not verify over the context-prefixed canonical manifest bytes.
+    SignatureInvalid,
+    /// The catalog body's SHA-256 does not match the digest the signed manifest committed to.
+    DigestMismatch,
+    /// An older catalog was served in place of a newer one — the rollback attack.
+    CatalogVersionRollback { latest: u64, attempted: u64 },
+    /// `created_at` is in the future: a clock is wrong, or a document was published early.
+    NotYetValid,
+    /// `expires_at` has passed — the freeze attack, where a valid-but-stale document is replayed.
+    Expired,
+    /// This build is outside the manifest's `[min_app_version, max_app_version]` bracket.
+    AppVersionOutOfRange { current: String },
+    /// The document was authentic but did not satisfy the task-2 domain rules.
+    Schema(CaseCatalogError),
+}
+
+impl std::fmt::Display for CaseTrustError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Oversize { field, found, max } => {
+                write!(f, "{field} is {found} bytes, transport cap is {max}")
+            }
+            Self::Malformed(m) => write!(f, "manifest is not JSON: {m}"),
+            Self::MissingSignature => write!(f, "manifest carries no signature"),
+            Self::BadSignatureFormat => write!(f, "signature is not 128 lowercase hex characters"),
+            Self::PlaceholderKey => {
+                write!(f, "no case-intelligence trust root is compiled into this build")
+            }
+            Self::SignatureInvalid => write!(f, "signature does not verify against this build's key"),
+            Self::DigestMismatch => write!(f, "catalog does not match the digest the manifest signed"),
+            Self::CatalogVersionRollback { latest, attempted } => {
+                write!(f, "catalog_version {attempted} is older than the {latest} already seen")
+            }
+            Self::NotYetValid => write!(f, "manifest is not valid yet"),
+            Self::Expired => write!(f, "manifest has expired"),
+            Self::AppVersionOutOfRange { current } => {
+                write!(f, "app version {current} is outside the manifest's supported range")
+            }
+            Self::Schema(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+impl From<CaseCatalogError> for CaseTrustError {
+    fn from(e: CaseCatalogError) -> Self {
+        Self::Schema(e)
+    }
+}
+
+type T<X> = Result<X, CaseTrustError>;
+
+/// Everything the chain needs that is not the documents themselves. Bundled so the production entry
+/// point can build it from compiled constants and the clock while tests can build it from fixtures —
+/// the same code path either way, which is the point: a test must not be able to take a shortcut a
+/// download cannot.
+struct CaseTrustContext<'a> {
+    key: &'a CaseSigningKey,
+    catalog_origins: &'a [&'a str],
+    now: chrono::DateTime<chrono::Utc>,
+    app_version: &'a str,
+    last_seen_catalog_version: u64,
+}
+
+/// Decode lowercase hex. Deliberately NOT shared with `remote_rules.rs`, which has its own copy.
+/// Twenty lines of duplication is the cheaper mistake here: a shared crypto helper is a single place
+/// where one edit silently changes both trust domains at once, which is exactly the coupling §9.1
+/// tells Tier 1 not to have.
+fn hex_to_bytes(value: &str) -> Option<Vec<u8>> {
+    if !value.len().is_multiple_of(2) {
+        return None;
+    }
+    let mut out = Vec::with_capacity(value.len() / 2);
+    let bytes = value.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let nyb = |b: u8| match b {
+            b'0'..=b'9' => Some(b - b'0'),
+            b'a'..=b'f' => Some(b - b'a' + 10),
+            _ => None,
+        };
+        out.push((nyb(bytes[i])? << 4) | nyb(bytes[i + 1])?);
+        i += 2;
+    }
+    Some(out)
+}
+
+/// Rebuild the exact bytes the signer signed: the domain-separation context, then the canonical JSON
+/// of the manifest with `signature` removed. Returns those bytes alongside the signature hex it
+/// pulled out.
+///
+/// `serde_json` is not RFC 8785, but it is deterministic for a given `Value` (objects are
+/// `BTreeMap`-backed while `preserve_order` is off, which is the default and what this crate builds
+/// with), and the signer runs the same serializer. That equality IS the contract — if it ever stops
+/// holding, every signature stops verifying, which is the safe direction to fail in.
+fn canonical_signed_payload(raw_manifest: &[u8]) -> T<(Vec<u8>, String)> {
+    let mut value: serde_json::Value =
+        serde_json::from_slice(raw_manifest).map_err(|e| CaseTrustError::Malformed(e.to_string()))?;
+    let obj = value.as_object_mut().ok_or(CaseTrustError::MissingSignature)?;
+    let signature = match obj.remove("signature") {
+        Some(serde_json::Value::String(s)) => s,
+        _ => return Err(CaseTrustError::MissingSignature),
+    };
+    let mut payload = CASE_MANIFEST_SIGNING_CONTEXT.to_vec();
+    payload.extend_from_slice(
+        &serde_json::to_vec(&value).map_err(|e| CaseTrustError::Malformed(e.to_string()))?,
+    );
+    Ok((payload, signature))
+}
+
+/// Prove a manifest is authentic, then hold it to the task-2 domain rules.
+///
+/// Order: transport cap → rebuild the signed payload → signature format → Ed25519 verify → strict
+/// typed parse → `validate_with`. Only the last two steps read the document as a manifest, and they
+/// run only after the signature has already proven it is ours.
+fn verify_manifest_with(raw_manifest: &[u8], cx: &CaseTrustContext<'_>) -> T<CaseCatalogManifest> {
+    use ed25519_compact::{PublicKey, Signature};
+
+    if raw_manifest.len() > CASE_MANIFEST_MAX_BYTES {
+        return Err(CaseTrustError::Oversize {
+            field: "manifest",
+            found: raw_manifest.len(),
+            max: CASE_MANIFEST_MAX_BYTES,
+        });
+    }
+
+    let (payload, signature_hex) = canonical_signed_payload(raw_manifest)?;
+
+    // The same lowercase-hex rule the schema applies, enforced here too — the strict parse has not
+    // run yet at this point, and a signature is not something to be lenient about.
+    check_hex("signature", &signature_hex, SIGNATURE_HEX_CHARS)
+        .map_err(|_| CaseTrustError::BadSignatureFormat)?;
+    let signature_bytes = hex_to_bytes(&signature_hex).ok_or(CaseTrustError::BadSignatureFormat)?;
+    let signature =
+        Signature::from_slice(&signature_bytes).map_err(|_| CaseTrustError::BadSignatureFormat)?;
+    let public_key = PublicKey::from_slice(&cx.key.0).map_err(|_| CaseTrustError::PlaceholderKey)?;
+
+    public_key
+        .verify(&payload, &signature)
+        .map_err(|_| CaseTrustError::SignatureInvalid)?;
+
+    let manifest: CaseCatalogManifest = serde_json::from_slice(raw_manifest)
+        .map_err(|e| CaseTrustError::Schema(CaseCatalogError::Malformed(e.to_string())))?;
+    manifest.validate_with(cx.catalog_origins)?;
+    Ok(manifest)
+}
+
+/// The full chain over a fetched (manifest, catalog) pair.
+///
+/// Freshness is checked against `cx.now` rather than the clock directly so expiry and
+/// not-yet-valid are testable without a global, and so a future caller can verify a cached pair
+/// against the moment it was cached rather than the moment it is read.
+fn verify_chain_with(
+    raw_manifest: &[u8],
+    raw_catalog: &[u8],
+    cx: &CaseTrustContext<'_>,
+) -> T<(CaseCatalogManifest, CaseCatalog)> {
+    use sha2::{Digest, Sha256};
+
+    if raw_catalog.len() > CASE_CATALOG_MAX_BYTES {
+        return Err(CaseTrustError::Oversize {
+            field: "catalog",
+            found: raw_catalog.len(),
+            max: CASE_CATALOG_MAX_BYTES,
+        });
+    }
+
+    let manifest = verify_manifest_with(raw_manifest, cx)?;
+
+    // The digest binds the body to the signature. Compared as BYTES, not as hex strings: a string
+    // compare would be a second place for a spelling to disagree, and the schema's lowercase rule
+    // would be load-bearing for security instead of merely for tidiness.
+    let mut hasher = Sha256::new();
+    hasher.update(raw_catalog);
+    let computed = hasher.finalize();
+    let expected = hex_to_bytes(&manifest.catalog_sha256).ok_or(CaseTrustError::DigestMismatch)?;
+    if computed.as_slice() != expected.as_slice() {
+        return Err(CaseTrustError::DigestMismatch);
+    }
+
+    if manifest.catalog_version < cx.last_seen_catalog_version {
+        return Err(CaseTrustError::CatalogVersionRollback {
+            latest: cx.last_seen_catalog_version,
+            attempted: manifest.catalog_version,
+        });
+    }
+
+    // Both timestamps already parsed cleanly inside `validate_with`, so these cannot fail here; the
+    // `?` is kept rather than unwrapped because a future reordering must not turn into a panic.
+    let created = parse_time("created_at", &manifest.created_at)?;
+    let expires = parse_time("expires_at", &manifest.expires_at)?;
+    if created > cx.now {
+        return Err(CaseTrustError::NotYetValid);
+    }
+    if expires <= cx.now {
+        return Err(CaseTrustError::Expired);
+    }
+
+    let current = parse_version("app_version", cx.app_version)?;
+    let min = parse_version("min_app_version", &manifest.min_app_version)?;
+    let max = parse_version("max_app_version", &manifest.max_app_version)?;
+    if current < min || current > max {
+        return Err(CaseTrustError::AppVersionOutOfRange { current: cx.app_version.to_string() });
+    }
+
+    let catalog: CaseCatalog = parse_catalog(
+        std::str::from_utf8(raw_catalog)
+            .map_err(|e| CaseTrustError::Schema(CaseCatalogError::Malformed(e.to_string())))?,
+    )?;
+
+    // No manifest-vs-catalog schema cross-check, on purpose. Both `validate()` paths pin their
+    // document to the SAME compiled `CASE_SCHEMA_VERSION`, so agreement here is structural and a
+    // cross-check would be a branch no test could ever reach — and an unreachable branch in
+    // security code is where a bug goes to hide. Two tests pin the pinning instead. The day this
+    // build speaks more than one schema version, that is the day the cross-check earns its place.
+    Ok((manifest, catalog))
+}
+
+/// THE production entry point, and it cannot succeed in this build.
+///
+/// The placeholder-key guard runs before anything is read, so a shipped binary refuses a catalog
+/// without parsing it — and `CASE_CATALOG_ORIGINS` being empty would refuse it a second time even if
+/// a key were present. Two independent reasons, either of which alone keeps Tier 1 dark.
+pub(crate) fn verify_catalog_chain(
+    raw_manifest: &[u8],
+    raw_catalog: &[u8],
+    last_seen_catalog_version: u64,
+) -> T<(CaseCatalogManifest, CaseCatalog)> {
+    if CASE_SIGNING_PUBKEY.is_placeholder() {
+        return Err(CaseTrustError::PlaceholderKey);
+    }
+    verify_chain_with(
+        raw_manifest,
+        raw_catalog,
+        &CaseTrustContext {
+            key: &CASE_SIGNING_PUBKEY,
+            catalog_origins: CASE_CATALOG_ORIGINS,
+            now: chrono::Utc::now(),
+            app_version: env!("CARGO_PKG_VERSION"),
+            last_seen_catalog_version,
+        },
+    )
+}
+
 // ─── Tests ─────────────────────────────────────────────────────────────────
 //
 // Everything here is a schema test: given a document, is it accepted or refused, and for WHICH rule.
@@ -1268,5 +1604,526 @@ mod tests {
         assert!(wire.contains("matched_known_issue"));
         assert!(!wire.contains("confidence"), "a numeric confidence must never appear on the wire");
         assert!(!wire.contains("score"));
+    }
+
+    // ─── Trust chain (plan task 3) ─────────────────────────────────────────
+    //
+    // These are the SIGNING tests, and they are deliberately a separate module from the schema tests
+    // above: those ask "is this document well formed", these ask "did it really come from us". Every
+    // key here is generated inside the test — no key material, public or private, is committed.
+    //
+    // The one thing NOT tested here is redirect handling. A redirect is a property of the transport,
+    // not of a document, so it has nowhere to live until plan task 6 builds the pull path; it is
+    // listed there rather than faked here with a hand-written `Location` header.
+    mod verification {
+        use super::*;
+        use ed25519_compact::KeyPair;
+        use sha2::{Digest, Sha256};
+
+        fn hex_of(bytes: &[u8]) -> String {
+            const TABLE: &[u8; 16] = b"0123456789abcdef";
+            let mut out = String::with_capacity(bytes.len() * 2);
+            for &b in bytes {
+                out.push(TABLE[(b >> 4) as usize] as char);
+                out.push(TABLE[(b & 0x0f) as usize] as char);
+            }
+            out
+        }
+
+        fn sha256_hex(bytes: &[u8]) -> String {
+            let mut h = Sha256::new();
+            h.update(bytes);
+            hex_of(&h.finalize())
+        }
+
+        /// A catalog body, as the bytes that actually travel — the digest has to be taken over the
+        /// exact bytes, so the tests hold the serialized form rather than the `Value`.
+        fn catalog_bytes() -> Vec<u8> {
+            serde_json::to_vec(&base_catalog()).unwrap()
+        }
+
+        fn base_manifest_value(catalog: &[u8]) -> Value {
+            json!({
+                "schema_version": 1,
+                "catalog_version": 7,
+                "created_at": "2026-08-01T00:00:00Z",
+                "expires_at": "2026-12-01T00:00:00Z",
+                "min_app_version": "0.0.0",
+                "max_app_version": "99.0.0",
+                "catalog_sha256": sha256_hex(catalog),
+                "catalog_url": "https://cases.example.test/catalog.json",
+                "signature": ""
+            })
+        }
+
+        /// Sign a manifest the way the real signer must: over the Tier 1 context prefix followed by
+        /// the canonical JSON with `signature` removed.
+        fn sign(kp: &KeyPair, mut manifest: Value) -> Vec<u8> {
+            manifest["signature"] = Value::String(String::new());
+            let raw = serde_json::to_vec(&manifest).unwrap();
+            let (payload, _) = canonical_signed_payload(&raw).unwrap();
+            let sig = kp.sk.sign(&payload, None);
+            manifest["signature"] = Value::String(hex_of(&sig[..]));
+            serde_json::to_vec(&manifest).unwrap()
+        }
+
+        /// The default fixture: a correctly signed manifest over a valid catalog.
+        fn signed_pair(kp: &KeyPair) -> (Vec<u8>, Vec<u8>) {
+            let catalog = catalog_bytes();
+            let manifest = sign(kp, base_manifest_value(&catalog));
+            (manifest, catalog)
+        }
+
+        fn key_of(kp: &KeyPair) -> CaseSigningKey {
+            CaseSigningKey::new(*kp.pk)
+        }
+
+        /// A fixed instant inside the fixture's validity window, so expiry is a property of the
+        /// document under test and never of the day the suite happens to run.
+        fn at(instant: &str) -> chrono::DateTime<chrono::Utc> {
+            chrono::DateTime::parse_from_rfc3339(instant)
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        }
+
+        fn cx<'a>(key: &'a CaseSigningKey) -> CaseTrustContext<'a> {
+            CaseTrustContext {
+                key,
+                catalog_origins: TEST_CATALOG_ORIGINS,
+                now: at("2026-09-01T00:00:00Z"),
+                app_version: "1.0.0",
+                last_seen_catalog_version: 0,
+            }
+        }
+
+        fn refuse(manifest: &[u8], catalog: &[u8], cx: &CaseTrustContext<'_>) -> CaseTrustError {
+            verify_chain_with(manifest, catalog, cx).expect_err("should have been refused")
+        }
+
+        // ── The positive control ───────────────────────────────────────────
+
+        #[test]
+        fn a_correctly_signed_manifest_and_its_catalog_verify() {
+            let kp = KeyPair::generate();
+            let (manifest, catalog) = signed_pair(&kp);
+            let (m, c) = verify_chain_with(&manifest, &catalog, &cx(&key_of(&kp)))
+                .expect("the fixture must verify, or every rejection test below is vacuous");
+            assert_eq!(m.catalog_version, 7);
+            assert_eq!(c.schema_version, CASE_SCHEMA_VERSION);
+        }
+
+        // ── Trust separation from remote rules ─────────────────────────────
+
+        #[test]
+        fn a_signature_from_a_different_key_is_refused() {
+            let signer = KeyPair::generate();
+            let other = KeyPair::generate();
+            let (manifest, catalog) = signed_pair(&signer);
+            assert_eq!(
+                refuse(&manifest, &catalog, &cx(&key_of(&other))),
+                CaseTrustError::SignatureInvalid
+            );
+        }
+
+        /// THE domain-separation proof, and the reason a separate key is not the whole story. This
+        /// signs with the RIGHT key over the RIGHT canonical JSON — but without Tier 1's context
+        /// prefix, which is exactly the payload `remote_rules.rs` signs. It must not verify, so a key
+        /// accidentally shared between the two tiers still cannot carry a signature across.
+        #[test]
+        fn a_remote_rules_shaped_signature_over_the_same_json_does_not_verify_here() {
+            let kp = KeyPair::generate();
+            let catalog = catalog_bytes();
+            let mut manifest = base_manifest_value(&catalog);
+            manifest["signature"] = Value::String(String::new());
+            let raw = serde_json::to_vec(&manifest).unwrap();
+
+            // Sign the bare canonical bytes — no Tier 1 context. This is remote-rules' scheme.
+            let mut bare: Value = serde_json::from_slice(&raw).unwrap();
+            bare.as_object_mut().unwrap().remove("signature");
+            let sig = kp.sk.sign(serde_json::to_vec(&bare).unwrap(), None);
+            manifest["signature"] = Value::String(hex_of(&sig[..]));
+
+            let signed = serde_json::to_vec(&manifest).unwrap();
+            assert_eq!(
+                refuse(&signed, &catalog, &cx(&key_of(&kp))),
+                CaseTrustError::SignatureInvalid,
+                "a signature over the un-prefixed payload must not verify as a Tier 1 manifest"
+            );
+        }
+
+        /// The reverse direction of the same separation: a remote-rules manifest, signed perfectly
+        /// under Tier 1's own scheme, is still refused — its fields are not this schema's fields.
+        #[test]
+        fn a_remote_rules_manifest_is_refused_even_when_signed_with_the_case_key() {
+            let kp = KeyPair::generate();
+            let catalog = catalog_bytes();
+            let rules_manifest = json!({
+                "schema_version": 1,
+                "ruleset_version": 7,
+                "created_at": "2026-08-01T00:00:00Z",
+                "expires_at": "2026-12-01T00:00:00Z",
+                "min_app_version": "0.0.0",
+                "max_app_version": "99.0.0",
+                "rules_sha256": sha256_hex(&catalog),
+                "rules_url": "https://cases.example.test/rules.json",
+                "signature": ""
+            });
+            let signed = sign(&kp, rules_manifest);
+            assert!(
+                matches!(
+                    refuse(&signed, &catalog, &cx(&key_of(&kp))),
+                    CaseTrustError::Schema(CaseCatalogError::Malformed(_))
+                ),
+                "privileged rules policy must never deserialize as an advisory catalog manifest"
+            );
+        }
+
+        #[test]
+        fn the_signing_context_names_tier_1_and_its_own_canonicalization_version() {
+            let context = std::str::from_utf8(CASE_MANIFEST_SIGNING_CONTEXT).unwrap();
+            assert!(context.starts_with("compy.case-intelligence."));
+            assert!(context.contains(".v1"));
+            assert!(
+                !context.contains("rules"),
+                "the context must not name the privileged remote-rules domain"
+            );
+        }
+
+        // ── Tampering ──────────────────────────────────────────────────────
+
+        /// Every signed field, one at a time. A signature that survives an edit to any of these is a
+        /// signature that is not actually covering the document.
+        #[test]
+        fn altering_any_signed_field_invalidates_the_signature() {
+            let kp = KeyPair::generate();
+            let catalog = catalog_bytes();
+            let edits: Vec<(&str, Value)> = vec![
+                ("catalog_version", json!(8)),
+                ("expires_at", json!("2027-12-01T00:00:00Z")),
+                ("created_at", json!("2026-07-01T00:00:00Z")),
+                ("min_app_version", json!("0.0.1")),
+                ("max_app_version", json!("98.0.0")),
+                ("catalog_url", json!("https://cases.example.test/other.json")),
+                ("catalog_sha256", json!(HEX64)),
+                ("schema_version", json!(1)),
+            ];
+            for (field, replacement) in edits {
+                let signed = sign(&kp, base_manifest_value(&catalog));
+                let mut tampered: Value = serde_json::from_slice(&signed).unwrap();
+                if tampered[field] == replacement {
+                    continue; // a no-op edit proves nothing; only schema_version can hit this
+                }
+                tampered[field] = replacement;
+                let raw = serde_json::to_vec(&tampered).unwrap();
+                assert_eq!(
+                    refuse(&raw, &catalog, &cx(&key_of(&kp))),
+                    CaseTrustError::SignatureInvalid,
+                    "editing {field} after signing must break the signature"
+                );
+            }
+        }
+
+        /// A valid signature from a DIFFERENT document by the SAME signer. This is the attack a
+        /// naive "is this a well-formed signature by our key" check would wave through.
+        #[test]
+        fn a_valid_signature_lifted_from_another_manifest_is_refused() {
+            let kp = KeyPair::generate();
+            let catalog = catalog_bytes();
+
+            let mut older = base_manifest_value(&catalog);
+            older["catalog_version"] = json!(6);
+            let older_signed: Value = serde_json::from_slice(&sign(&kp, older)).unwrap();
+
+            let mut target: Value = serde_json::from_slice(&sign(&kp, base_manifest_value(&catalog))).unwrap();
+            target["signature"] = older_signed["signature"].clone();
+
+            assert_eq!(
+                refuse(&serde_json::to_vec(&target).unwrap(), &catalog, &cx(&key_of(&kp))),
+                CaseTrustError::SignatureInvalid
+            );
+        }
+
+        #[test]
+        fn a_signature_that_is_not_128_lowercase_hex_characters_is_refused() {
+            let kp = KeyPair::generate();
+            let catalog = catalog_bytes();
+            let good: Value = serde_json::from_slice(&sign(&kp, base_manifest_value(&catalog))).unwrap();
+            let real = good["signature"].as_str().unwrap().to_string();
+
+            let bad = vec![
+                ("empty", String::new()),
+                ("truncated", real[..126].to_string()),
+                ("overlong", format!("{real}00")),
+                ("uppercase", real.to_uppercase()),
+                ("non-hex", format!("{}zz", &real[..126])),
+                ("base64-ish", "not+a/hex=signature".to_string()),
+            ];
+            for (why, signature) in bad {
+                let mut m = good.clone();
+                m["signature"] = Value::String(signature);
+                assert_eq!(
+                    refuse(&serde_json::to_vec(&m).unwrap(), &catalog, &cx(&key_of(&kp))),
+                    CaseTrustError::BadSignatureFormat,
+                    "a {why} signature must be refused on format, before any curve work"
+                );
+            }
+        }
+
+        #[test]
+        fn a_manifest_with_no_signature_or_a_non_string_one_is_refused() {
+            let kp = KeyPair::generate();
+            let catalog = catalog_bytes();
+            let good: Value = serde_json::from_slice(&sign(&kp, base_manifest_value(&catalog))).unwrap();
+
+            let mut missing = good.clone();
+            missing.as_object_mut().unwrap().remove("signature");
+            assert_eq!(
+                refuse(&serde_json::to_vec(&missing).unwrap(), &catalog, &cx(&key_of(&kp))),
+                CaseTrustError::MissingSignature
+            );
+
+            let mut wrong_type = good.clone();
+            wrong_type["signature"] = json!(12345);
+            assert_eq!(
+                refuse(&serde_json::to_vec(&wrong_type).unwrap(), &catalog, &cx(&key_of(&kp))),
+                CaseTrustError::MissingSignature
+            );
+
+            assert!(matches!(
+                refuse(b"not json at all", &catalog, &cx(&key_of(&kp))),
+                CaseTrustError::Malformed(_)
+            ));
+        }
+
+        // ── The digest binding ─────────────────────────────────────────────
+
+        #[test]
+        fn a_catalog_body_that_does_not_match_the_signed_digest_is_refused() {
+            let kp = KeyPair::generate();
+            let (manifest, catalog) = signed_pair(&kp);
+            let mut swapped: Value = serde_json::from_slice(&catalog).unwrap();
+            swapped["entries"] = json!([]);
+            assert_eq!(
+                refuse(&manifest, &serde_json::to_vec(&swapped).unwrap(), &cx(&key_of(&kp))),
+                CaseTrustError::DigestMismatch,
+                "the signature is over the manifest; only the digest binds the body to it"
+            );
+        }
+
+        /// A perfectly signed manifest committing to a digest that is simply not this catalog's. The
+        /// signature is valid, so this is the check that has to catch it.
+        #[test]
+        fn a_signed_digest_for_a_different_catalog_is_refused() {
+            let kp = KeyPair::generate();
+            let catalog = catalog_bytes();
+            let mut m = base_manifest_value(&catalog);
+            m["catalog_sha256"] = json!(HEX64);
+            let signed = sign(&kp, m);
+            assert_eq!(
+                refuse(&signed, &catalog, &cx(&key_of(&kp))),
+                CaseTrustError::DigestMismatch
+            );
+        }
+
+        // ── Freshness and rollback ─────────────────────────────────────────
+
+        #[test]
+        fn an_expired_manifest_is_refused() {
+            let kp = KeyPair::generate();
+            let (manifest, catalog) = signed_pair(&kp);
+            let key = key_of(&kp);
+            let mut context = cx(&key);
+            context.now = at("2027-01-01T00:00:00Z");
+            assert_eq!(refuse(&manifest, &catalog, &context), CaseTrustError::Expired);
+        }
+
+        #[test]
+        fn a_manifest_that_is_not_valid_yet_is_refused() {
+            let kp = KeyPair::generate();
+            let (manifest, catalog) = signed_pair(&kp);
+            let key = key_of(&kp);
+            let mut context = cx(&key);
+            context.now = at("2026-07-01T00:00:00Z");
+            assert_eq!(refuse(&manifest, &catalog, &context), CaseTrustError::NotYetValid);
+        }
+
+        #[test]
+        fn an_older_catalog_version_is_refused_as_a_rollback() {
+            let kp = KeyPair::generate();
+            let (manifest, catalog) = signed_pair(&kp); // catalog_version 7
+            let key = key_of(&kp);
+            let mut context = cx(&key);
+            context.last_seen_catalog_version = 9;
+            assert_eq!(
+                refuse(&manifest, &catalog, &context),
+                CaseTrustError::CatalogVersionRollback { latest: 9, attempted: 7 }
+            );
+        }
+
+        /// Re-serving the version already held is normal, not an attack — a cache revalidation, a
+        /// second launch. Only going BACKWARDS is refused.
+        #[test]
+        fn the_same_catalog_version_is_still_accepted() {
+            let kp = KeyPair::generate();
+            let (manifest, catalog) = signed_pair(&kp);
+            let key = key_of(&kp);
+            let mut context = cx(&key);
+            context.last_seen_catalog_version = 7;
+            assert!(verify_chain_with(&manifest, &catalog, &context).is_ok());
+        }
+
+        #[test]
+        fn a_build_outside_the_manifests_app_version_bracket_is_refused() {
+            let kp = KeyPair::generate();
+            let catalog = catalog_bytes();
+            let mut m = base_manifest_value(&catalog);
+            m["min_app_version"] = json!("2.0.0");
+            m["max_app_version"] = json!("3.0.0");
+            let signed = sign(&kp, m);
+
+            for version in ["1.9.9", "3.0.1"] {
+                let key = key_of(&kp);
+                let mut context = cx(&key);
+                context.app_version = version;
+                assert_eq!(
+                    refuse(&signed, &catalog, &context),
+                    CaseTrustError::AppVersionOutOfRange { current: version.to_string() }
+                );
+            }
+
+            // And the boundaries are inclusive — a bracket that excludes its own endpoints would
+            // strand the exact builds it names.
+            for version in ["2.0.0", "2.5.1", "3.0.0"] {
+                let key = key_of(&kp);
+                let mut context = cx(&key);
+                context.app_version = version;
+                assert!(verify_chain_with(&signed, &catalog, &context).is_ok(), "{version}");
+            }
+        }
+
+        // ── Transport caps ─────────────────────────────────────────────────
+
+        #[test]
+        fn an_oversized_manifest_is_refused_before_anything_parses_it() {
+            let kp = KeyPair::generate();
+            let catalog = catalog_bytes();
+            let huge = vec![b'x'; CASE_MANIFEST_MAX_BYTES + 1];
+            assert_eq!(
+                refuse(&huge, &catalog, &cx(&key_of(&kp))),
+                CaseTrustError::Oversize {
+                    field: "manifest",
+                    found: CASE_MANIFEST_MAX_BYTES + 1,
+                    max: CASE_MANIFEST_MAX_BYTES,
+                },
+                "the cap must be a byte count, not a parse failure"
+            );
+        }
+
+        #[test]
+        fn an_oversized_catalog_is_refused_before_anything_parses_it() {
+            let kp = KeyPair::generate();
+            let (manifest, _) = signed_pair(&kp);
+            let huge = vec![b'x'; CASE_CATALOG_MAX_BYTES + 1];
+            assert_eq!(
+                refuse(&manifest, &huge, &cx(&key_of(&kp))),
+                CaseTrustError::Oversize {
+                    field: "catalog",
+                    found: CASE_CATALOG_MAX_BYTES + 1,
+                    max: CASE_CATALOG_MAX_BYTES,
+                },
+                "a multi-megabyte body must not be verified, hashed or parsed"
+            );
+        }
+
+        // ── The domain rules still apply to an authentic document ──────────
+
+        #[test]
+        fn an_authentic_manifest_with_an_unknown_schema_version_is_refused() {
+            let kp = KeyPair::generate();
+            let catalog = catalog_bytes();
+            let mut m = base_manifest_value(&catalog);
+            m["schema_version"] = json!(2);
+            let signed = sign(&kp, m);
+            assert_eq!(
+                refuse(&signed, &catalog, &cx(&key_of(&kp))),
+                CaseTrustError::Schema(CaseCatalogError::SchemaVersion { found: 2, expected: 1 })
+            );
+        }
+
+        /// The manifest and the catalog agree on their schema because BOTH are pinned to the same
+        /// compiled constant — there is no cross-check to get wrong, and no branch a test could not
+        /// reach. These two halves prove the pinning from both sides.
+        #[test]
+        fn manifest_and_catalog_are_each_pinned_to_the_compiled_schema_version() {
+            let kp = KeyPair::generate();
+            let mut body: Value = base_catalog();
+            body["schema_version"] = json!(2);
+            let catalog = serde_json::to_vec(&body).unwrap();
+            let signed = sign(&kp, base_manifest_value(&catalog));
+            assert_eq!(
+                refuse(&signed, &catalog, &cx(&key_of(&kp))),
+                CaseTrustError::Schema(CaseCatalogError::SchemaVersion { found: 2, expected: 1 }),
+                "an authentic, correctly-digested catalog is still refused if it speaks another schema"
+            );
+        }
+
+        #[test]
+        fn an_authentic_manifest_pointing_off_the_allowlist_is_refused() {
+            let kp = KeyPair::generate();
+            let catalog = catalog_bytes();
+            let mut m = base_manifest_value(&catalog);
+            m["catalog_url"] = json!("https://cases.example.test.evil.test/catalog.json");
+            let signed = sign(&kp, m);
+            assert!(
+                matches!(
+                    refuse(&signed, &catalog, &cx(&key_of(&kp))),
+                    CaseTrustError::Schema(CaseCatalogError::OriginNotAllowed { .. })
+                ),
+                "a valid signature does not grant a new download origin"
+            );
+        }
+
+        #[test]
+        fn an_authentic_catalog_carrying_unsafe_prose_is_still_refused() {
+            let kp = KeyPair::generate();
+            let mut body: Value = base_catalog();
+            body["entries"][0]["next_steps"][0]["detail"] =
+                json!("Open PowerShell and run reg add on the display key.");
+            let catalog = serde_json::to_vec(&body).unwrap();
+            let signed = sign(&kp, base_manifest_value(&catalog));
+            assert!(
+                matches!(
+                    refuse(&signed, &catalog, &cx(&key_of(&kp))),
+                    CaseTrustError::Schema(CaseCatalogError::UnsafeText { .. })
+                ),
+                "signing something does not make it safe to show — the schema rules still run"
+            );
+        }
+
+        // ── The darkness proof ─────────────────────────────────────────────
+
+        #[test]
+        fn the_compiled_trust_root_is_the_all_zeros_placeholder() {
+            assert!(
+                CASE_SIGNING_PUBKEY.is_placeholder(),
+                "a real Tier 1 public key may only be compiled in by the owner-signed arming commit"
+            );
+        }
+
+        /// The production entry point cannot succeed in this build no matter what it is handed, and
+        /// it refuses BEFORE reading anything. Two independent reasons hold it: no trust root, and an
+        /// empty `CASE_CATALOG_ORIGINS`. This test fails the moment either is quietly changed.
+        #[test]
+        fn the_production_entry_point_refuses_a_perfectly_valid_catalog() {
+            let kp = KeyPair::generate();
+            let (manifest, catalog) = signed_pair(&kp);
+            assert!(verify_chain_with(&manifest, &catalog, &cx(&key_of(&kp))).is_ok());
+            assert_eq!(
+                verify_catalog_chain(&manifest, &catalog, 0).expect_err("Tier 1 is dark"),
+                CaseTrustError::PlaceholderKey
+            );
+            assert!(CASE_CATALOG_ORIGINS.is_empty(), "the second, independent reason");
+            assert!(!case_intelligence_gate(), "and the gate above both of them");
+        }
     }
 }
