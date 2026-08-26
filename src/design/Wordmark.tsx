@@ -12,7 +12,14 @@ import "./Wordmark.css";
 // the product's own name. The mark itself is APPROVED and untouched: this drops one flourish at the
 // sizes where it stops being legible, and every size at or above the threshold draws it in full.
 // The reading was his to rule on because the taste decree reserves the logo to the owner.
-const PULSE_MIN_SIZE = 24;
+//
+// The NUMBER is mine, and it is measured rather than guessed. The ruling said "below about 24px";
+// a self-review capture of the mark at 16 / 19 / 20 / 22 / 24 with the live app's own token values
+// read: enclosed blob at 16 and 19 (the © risk), marginal at 20, "clearly a legible zigzag" by 22,
+// fully clean at 24. So the flourish is kept at 22 — Settings → About draws the mark at exactly
+// that size, and dropping a legible pulse there would have retired part of an approved mark for no
+// measured reason. The rail (16), the setup tour (19) and first-check (20) are all below it.
+const PULSE_MIN_SIZE = 22;
 
 export function Wordmark({ size = 19, className = "" }: { size?: number; className?: string }) {
   const w = (18 / 19) * size;
