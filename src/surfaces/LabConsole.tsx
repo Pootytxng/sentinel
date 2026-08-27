@@ -72,6 +72,19 @@ import "./lab-console.css";
  */
 const BENCH_CAMERA_DIST = 10.2;
 
+/* Round 4 (#224): containment alone was not the comp. At 10.2 the whole silhouette is inside the
+ * stage, but the default aim (target y 0.2, which centers the CASE) leaves the floor ring hugging
+ * the stage's bottom edge — ~0-5 px of air at 1500×980 where the comp draws ~45-50 px. Aiming the
+ * camera lower moves the composition UP in frame: bottom air grows, the top margin pays for it,
+ * and distance 10.2 (with everything measured above) is preserved.
+ *
+ * -0.45 is measured, not styled: ring-apex row-scan (5px-thick runs, so the grid's 1px lines don't
+ * count) puts the bottom air at 31 px of a 371-px stage at 1280×720, 46/561 at 1500×980, 60/732 at
+ * 1920×1080 — 8.2-8.4% everywhere (one aim, pinned 1.2 stage aspect), the comp's ~45-50/561 ≈ 8-9%.
+ * -0.35 measured 39/561, short of the comp band. Top air stays visible at every size (~15 px at
+ * 1280, ~28 px at 1500), nothing clips. */
+const BENCH_CAMERA_TARGET_Y = -0.45;
+
 // LabConsole — the Lab's face as THE OPS CONSOLE (spec 2026-07-09-lab-redesign-direction-proposal,
 // Phase 1, Task 4, owner-approved). Replaces the Instrument Bench bento (LabBench, deleted) with a
 // console room: a real 3D hologram center-stage, four corner arc gauges reading whatever this rig
@@ -515,6 +528,7 @@ export function LabConsole({
                   hw={hw}
                   chromeless
                   cameraDist={BENCH_CAMERA_DIST}
+                  cameraTargetY={BENCH_CAMERA_TARGET_Y}
                   onSelectedIdChange={(_id, what) => setSelectedRig(what)}
                 />
               </div>
@@ -846,6 +860,7 @@ export function LabConsole({
                   hw={hw}
                   chromeless
                   cameraDist={BENCH_CAMERA_DIST}
+                  cameraTargetY={BENCH_CAMERA_TARGET_Y}
                   onSelectedIdChange={(_id, what) => setSelectedRig(what)}
                 />
               </div>

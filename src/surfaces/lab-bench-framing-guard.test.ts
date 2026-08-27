@@ -82,6 +82,36 @@ describe("the bench frames its rig, and only its rig", () => {
     );
   });
 
+  it("aims the bench camera below the case so the floor ring keeps its bottom air", () => {
+    // Round 4 (2026-08-27 Codex REJECT of 2358a52d): containment was met but the ring sat 0-5 px
+    // off the stage's bottom edge at 1500×980 where the comp draws ~45-50 px. Distance stays 10.2;
+    // the AIM moves instead — target y below the case center rides the composition up in frame.
+    // -0.45 measured 46/561 px bottom air at 1500 (comp band), 31/371 at 1280, 60/732 at 1920 —
+    // 8.2-8.4% everywhere. Above -0.38 the air falls short of the comp band (-0.35 measured
+    // 39/561); below -0.6 the case top runs out of margin at 1280. Same pass-through discipline as
+    // cameraDist: optional prop, forwarded verbatim, default (0.2) stays in RigHologram so every
+    // other caller keeps the classic case-centered framing by construction.
+    const m = /const BENCH_CAMERA_TARGET_Y = (-[\d.]+);/.exec(CONSOLE);
+    expect(m, "the bench aim must be a named Test-room constant, not a number at a call site").not.toBeNull();
+    const ty = Number(m![1]);
+    expect(ty).toBeLessThan(-0.38);
+    expect(ty).toBeGreaterThan(-0.6);
+    // Both bench mounts, or the two render paths frame the ring differently.
+    const passes = CONSOLE.match(/cameraTargetY=\{BENCH_CAMERA_TARGET_Y\}/g) ?? [];
+    expect(passes.length, "every <RigViewer> in LabConsole must aim the same").toBe(
+      (CONSOLE.match(/<RigViewer/g) ?? []).length,
+    );
+    expect(VIEWER, "RigViewer must accept an optional cameraTargetY").toMatch(/cameraTargetY\?:\s*number/);
+    expect(VIEWER, "…and forward it verbatim to the hologram").toMatch(/cameraTargetY=\{cameraTargetY\}/);
+    expect(
+      /cameraTargetY\s*=\s*-?[\d.]/.test(VIEWER),
+      "RigViewer must NOT default cameraTargetY — the default belongs to RigHologram",
+    ).toBe(false);
+    expect(HOLOGRAM, "the hologram still owns the classic aim every other caller gets").toMatch(
+      /cameraTargetY\s*=\s*0\.2/,
+    );
+  });
+
   it("keeps the stage at the aspect that makes the framing window-independent", () => {
     // fitCameraDistance returns baseDist untouched at or above FIT_REF_ASPECT (1.2). Pinning the
     // stage to exactly 1.2 is what makes one measured constant true at 1280, 1500 and 1920 alike —
