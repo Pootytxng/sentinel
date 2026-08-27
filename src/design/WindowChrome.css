@@ -109,7 +109,7 @@
    It is a label, not a control: no title attr (A4 still stands), drag-region like the bar. */
 .wc-title {
   padding-left: 7px;
-  font-size: 13px;
+  font-size: var(--type-label); /* 13px — the caption is a label, and the scale is law (TYPE-1) */
   font-weight: 600;
   letter-spacing: 0.2px;
   color: var(--ix-text-1, #e8eaf0);
