@@ -58,15 +58,17 @@ export function WindowChrome() {
     <>
       <header className="wc-bar" data-tauri-drag-region>
         <div className="wc-left" data-tauri-drag-region>
-          {/* NO APP NAME HERE (#213 A5). This span read "Compy" in the system font, 40px above the
-              rail's designed <Wordmark> reading "Compy" again — the product introducing itself
-              twice, in two different hands, inside one glance. The designed mark is the one that
-              stays; a titlebar caption duplicating it is the one that goes. Nothing is lost: the
-              window is still named "Compy" to the OS (taskbar, Alt+Tab, `tauri.conf.json`'s window
-              title, which is what `grab.ps1` matches on), and the rail carries the brand on every
-              screen. The `common.windowChrome.title` key went with the span — a locale string kept
-              alive for a render that no longer exists is the next session's red herring.
-              Guard: shell-native-tooltip-guard.test.tsx. */}
+          {/* THE APP-NAME CAPTION IS BACK (#224 round 3, 2026-08-27) — and it was removed by #213
+              A5 (2026-08-24), so both rulings need naming honestly. A5 read the caption as the
+              product introducing itself twice (system font here, the rail's designed <Wordmark>
+              40px below) and removed it, guard and all. The owner's literal-parity instruction for
+              the approved Test comp — which draws "Compy" small beside the gear, wordmark and all —
+              is the LATER ruling and supersedes A5; the round-2 Codex review confirmed the
+              supersession explicitly rather than leaving it an open fork. The guard now pins the
+              caption's PRESENCE instead: shell-native-tooltip-guard.test.tsx. */}
+          <span className="wc-title" data-tauri-drag-region>
+            {t("common.windowChrome.title")}
+          </span>
           {/* Settings lives in the always-visible titlebar so it's reachable on every tab + every
               responsive layout (the rail gear vanished on non-Home tabs). Signals across the tree
               via a window event — App listens (it's the same bridge as compy:*-changed). */}

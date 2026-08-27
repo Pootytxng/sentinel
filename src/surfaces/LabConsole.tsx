@@ -49,24 +49,28 @@ import "./lab-console.css";
 /**
  * HOW CLOSE THE BENCH SITS TO ITS RIG.
  *
- * The hologram's own default is 9.5, chosen for the Live room's bay where the viewer draws its
- * control bar and caption around the model. The bench draws none of that: the rig gets the whole
- * upper panel, and at 9.5 the model floated in the middle of it — the emptiness around it was the
- * single loudest thing in the room, and "the rig is still smaller and less dominant than the
- * approved reference" is how the 2026-08-27 review put it.
+ * Round 2's 6.3 was derived by measuring the BRIGHT CORE (the lit motherboard cluster) against the
+ * comp, and the round-2 Codex review (2026-08-27) rejected exactly that yardstick: the comp's
+ * subject is the COMPLETE visible silhouette — the outer holo case shell plus the floor ring — and
+ * at 6.3 that silhouette overflowed the stage on all four edges. The core parity the old comment
+ * claimed was real, and beside the point.
  *
- * 6.3 was derived from that gap and then CHECKED against the approved image rather than trusted:
- * scanning both stages column by column and row by row for their bright ink, the rig's core spans
- * 56% of the stage's width and 54% of its height here, against 52% and 52% in the comp. That is
- * parity inside the measurement's own error — the stage carries a scanline overlay and a glow that
- * defeat any silhouette threshold, so a tighter number than "within a couple of percent" is not
- * available from the pixels, and the remaining call is the reviewer's eye.
+ * 10.2 is measured against the complete silhouette instead. In the approved comp the silhouette
+ * spans 54.5% of the stage's width and 88.5% of its height, fully contained, side margins ~150 px.
+ * Iterating distance on the live stage (6.3 → 9.0 → 9.4 → 10.2 at 1500×980): the case body clears
+ * the sides by 9.0, but the floor ring stays cropped at the stage's bottom edge through 9.4 —
+ * the framing centers on the case, so the ring is the last thing to come inside — and first sits
+ * fully in frame near 10.0. At 10.2 the ring spans ~53.5% of the stage's width (comp 54.5%), side
+ * margins match the comp within ~10 px, and every part of the silhouette is inside the stage at
+ * 1280×720, 1500×980 and 1920×1080 (verified per-resolution, not assumed). Note this lands ABOVE
+ * the hologram's 9.5 bay default: the bench's dominance comes from its 58.2% panel share, not from
+ * a closer camera — round 1's "pull the camera in" theory is retired by measurement.
  *
  * The bench stage is pinned to aspect 1.2, which is `FIT_REF_ASPECT` exactly, so
  * `fitCameraDistance` returns this untouched and the framing is identical at every window size. It
  * is a Test-room value passed through one optional prop — no other caller's framing moves.
  */
-const BENCH_CAMERA_DIST = 6.3;
+const BENCH_CAMERA_DIST = 10.2;
 
 // LabConsole — the Lab's face as THE OPS CONSOLE (spec 2026-07-09-lab-redesign-direction-proposal,
 // Phase 1, Task 4, owner-approved). Replaces the Instrument Bench bento (LabBench, deleted) with a

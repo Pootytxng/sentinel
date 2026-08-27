@@ -67,9 +67,14 @@ describe("the bench frames its rig, and only its rig", () => {
     const m = /const BENCH_CAMERA_DIST = ([\d.]+);/.exec(CONSOLE);
     expect(m, "the bench distance must be a named constant, not a number inlined at a call site").not.toBeNull();
     const dist = Number(m![1]);
-    // Closer than the bay's 9.5 (that is the whole finding), but not so close the case is cropped.
-    expect(dist).toBeLessThan(9.5);
-    expect(dist).toBeGreaterThan(4);
+    // Round 3 (2026-08-27) inverted round 1's premise: the bench distance is measured against the
+    // COMPLETE silhouette (holo case + floor ring), and containing it demands a camera FURTHER out
+    // than the bay's 9.5, not closer. Measured on the live stage: the floor ring — the last part of
+    // the silhouette to come inside, because the framing centers on the case — is still cropped at
+    // the stage's bottom edge at 9.4 and first sits fully in frame near 10.0; past ~11 the rig
+    // shrinks below the comp's 54.5%-of-stage-width parity. The band pins both failure modes.
+    expect(dist).toBeGreaterThan(9.8);
+    expect(dist).toBeLessThan(11);
     // Both bench mounts, or the two render paths disagree about how large the rig is.
     const passes = CONSOLE.match(/cameraDist=\{BENCH_CAMERA_DIST\}/g) ?? [];
     expect(passes.length, "every <RigViewer> in LabConsole must be framed the same").toBe(
