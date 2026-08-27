@@ -266,29 +266,32 @@
   overflow-y: auto;
   padding: 26px 30px;
 }
-/* THE CONTENT BOX (re-measured 2026-08-23, made proportional 2026-08-27). All four comps put
-   content between x=286 and x=1494 of 1550 -- a 1208px box, 1169 app px, which no 1120 cap can
-   produce. With this sheet's 30px gutters, 1160 lands the box at x=278..1438 on the owner's
+/* THE CONTENT BOX (re-measured 2026-08-23; made proportional 2026-08-27; RE-SCOPED to Test the
+   same day). All four comps put content between x=286 and x=1494 of 1550 -- a 1208px box, 1169
+   app px. With this sheet's 30px gutters, 1160 lands the box at x=278..1438 on the owner's
    1500-wide window against the comps' 277..1446.
 
-   A FIXED 1160 was the wrong reading of that measurement. What the comps hold constant is the
-   GUTTER as a share of the window -- 62 app px of air after the rail at 1500 -- and a fixed cap
-   turns that into 267 px of dead margin on each side of a 1920 desktop, which is where the owner
-   actually works. Measured on the installed build 2026-08-26 and rejected on sight: the room
-   became a centred island with a third of the display empty.
+   Round 2 of the #224 review made this cap proportional FOR EVERY ROOM, reasoning the geometry
+   fault was the shell's. That was the overreach the round-2 REJECT named: Live and History were
+   never reviewed at the wider box, and at 1920 both read visibly stretched and sparse. The
+   default therefore returns to the fixed 1160 those rooms actually shipped with -- their own
+   1920 treatment is a future decision that gets its own review, not a side effect of Test's.
 
-   94.5% is that same box expressed against the space the rail leaves (1160 of 1224 at 1500), so
-   1500 is unchanged to the pixel-ish and every wider window keeps the proportion instead of
-   stranding the room. The cap does not disappear -- it becomes 1760px of content, which a 1920
-   window never reaches, so the reason it existed (a 46ch sentence must not run the width of a
-   wall) still holds on displays large enough to threaten it.
+   Test alone keeps the proportional box (the rule below), because Test's 1920 geometry WAS
+   reviewed and its round-1 fixed-cap framing was rejected on sight: a centred island with ~267px
+   dead each side. 95.6% is the comps' own box expressed against the space the rail leaves (1160
+   of 1224 at 1500), so 1500 is unchanged to the pixel-ish and wider windows keep the proportion.
+   The 1760px ceiling survives because the reason the cap existed at all (a 46ch sentence must
+   not run the width of a wall) still holds on displays large enough to threaten it.
 
-   Shared across all four rooms deliberately: the geometry fault is the shell's, and fixing it in
-   the Test room alone would leave three rooms mismatched against comps drawn to the same grid.
-   Guarded by src/design/content-width-guard.test.ts; smoke-checked in all four rooms. */
+   Guarded by src/design/content-width-guard.test.ts (both the revert and the scoping);
+   smoke-checked in all four rooms. */
 :root[data-v2="on"] .v2-content-wrap {
-  max-width: min(95.6%, 1760px);
+  max-width: 1160px;
   margin: 0 auto;
+}
+:root[data-v2="on"] .v2-content-wrap:has(> .v2-room[data-room="lab"]) {
+  max-width: min(95.6%, 1760px);
 }
 
 /* ── RoomShell skin (rooms adopt it from V2-3 on) ── */
@@ -475,6 +478,19 @@
 :root[data-v2="on"] .v2-room[data-layout="split"][data-room="lab"] > .v2-verdict h1 {
   font-size: var(--type-hero);
   font-weight: var(--type-hero-weight);
+}
+/* TEST'S HEADLINE MEASURE — bug->guard for the Codex REJECT of candidate 16e28044 (2026-08-27),
+   correction 3. Test is the one room whose content box grows past 1160 (the :has() rule above),
+   and at 1920 its narrative column reaches ~634px — wide enough that "Test one change at a time"
+   ran as ONE line where the approved comp draws two ("Test one change" / "at a time"). The
+   generic 20ch cap above (~572px at 52px) never binds first. 16ch is measured off the comp's own
+   break: it holds "Test one change" (~390px at the hero size) and refuses "Test one change at"
+   (~470px), so the wrap point survives any column the wider box can hand the story. In ch so the
+   measure follows the headline-fit step-down instead of fighting it. At 1500 the column itself
+   (~460px) already forced this exact break, so nothing moves there.
+   Guard: src/design/content-width-guard.test.ts, "the Test headline keeps the comp's two lines". */
+:root[data-v2="on"] .v2-room[data-layout="split"][data-room="lab"] > .v2-verdict h1 {
+  max-width: 16ch;
 }
 /* #213 B3 -- what a 460px column can carry depends on the STRING, and the comp only ever showed
    the short one. Measured over CDP on the installed build (452px column, 52px/650, line-height

@@ -271,23 +271,24 @@ describe("comp fidelity — the shell geometry all four comps share", () => {
     ).toMatch(/\.v2-room-title \{[^}]*font-size: var\(--type-card\)/);
   });
 
-  it("the content box is the comps' box at 1500, and still a box on a wide display", () => {
+  it("the content box is the comps' box at 1500, and Test's alone scales on a wide display", () => {
     // All four comps put content between x=286 and x=1494 of 1550 — a 1208px box = 1169 app px,
     // re-measured 2026-08-27 off 04-test-approved.png's own panel border at 1161.
     //
-    // This was `max-width: 1160px` until the 2026-08-27 review failed 1920x1080 outright: a fixed
-    // cap reproduces the comps at the width they were drawn and strands every wider display in a
-    // centred island with ~267px of dead margin each side. What the comps actually hold constant
-    // is the gutter as a SHARE of what the rail leaves, so the cap is a percentage with a px
-    // ceiling behind it — the ceiling still being the reason the cap exists at all, that a 1920
-    // window may not stretch a 46-character sentence across 1600px.
+    // The 2026-08-27 review round 1 failed Test's 1920x1080 outright (fixed cap = centred island,
+    // ~267px dead margin each side), and round 2 rejected the fix's overreach: making the cap
+    // proportional for EVERY room shipped an unreviewed geometry change to Live and History, which
+    // read stretched and sparse at 1920. The settled shape is both at once — the DEFAULT is the
+    // fixed 1160 the reviewed rooms shipped with, and a Test-scoped `:has()` rule carries the
+    // proportional cap for the one room whose 1920 geometry was actually reviewed.
     //
-    // The arithmetic that this still lands the comps' box at 1500 and grows at 1920 lives in
-    // src/design/content-width-guard.test.ts, which resolves the rule the way the browser does.
-    // Here we only pin that it did not quietly go back to being a bare pixel width.
-    expect(body(shell, ':root[data-v2="on"] .v2-content-wrap')).toMatch(
-      /max-width:\s*min\([\d.]+%,\s*\d+px\)/,
-    );
+    // The arithmetic (lands the comps' box at 1500, grows at 1920, keeps a ceiling) lives in
+    // src/design/content-width-guard.test.ts, which resolves the rule the way the browser does
+    // and also pins the default/scoped split. Here we only pin that both halves exist.
+    expect(body(shell, ':root[data-v2="on"] .v2-content-wrap')).toMatch(/max-width:\s*1160px/);
+    expect(
+      body(shell, ':root[data-v2="on"] .v2-content-wrap:has(> .v2-room[data-room="lab"])'),
+    ).toMatch(/max-width:\s*min\([\d.]+%,\s*\d+px\)/);
   });
 
   it("the topbar is the comps' 50px", () => {
