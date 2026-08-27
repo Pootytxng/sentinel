@@ -102,8 +102,16 @@ describe("#225 — the split, the cards and the rules carry the comp's measured 
     );
     expect(row, "corner arc measures ~10 app px").toContain("border-radius: var(--v2-r)");
 
-    // The glyph is the only thing giving these rows weight; the comp draws it at ~28.
-    expect(homeConsoleTsx).toMatch(/HAPPENING_GLYPH\[c\.id\] \?\? "help"\} size=\{28\}/);
+    // The glyph is the only thing giving these rows weight. bug->guard for round 1's own miss:
+    // it compared the comp's DRAWN ink (~32 app px) against the app's svg BOX and set the box to
+    // 28, which draws 21x22. The box is 40 because that is what makes the MARK the comp's size;
+    // the derivation, both sides' measurements and the three probed sizes are at the render site.
+    expect(homeConsoleTsx).toMatch(/HAPPENING_GLYPH\[c\.id\] \?\? "help"\} size=\{40\}/);
+    // ...and the reason 40 is safe: nothing in the row is sized off the glyph, so it cannot grow
+    // the card. If a future change makes the icon the tallest child, this pin is the warning.
+    expect(row, "the row's height comes from its padding + text, never from the glyph").toContain(
+      "align-items: center",
+    );
 
     // The new surface step is a TOKEN, in the token sheet, or the no-slop law is a dead letter.
     expect(stripComments(tokensCss)).toContain("--v2-panel-card: #15191f");

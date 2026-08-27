@@ -1394,9 +1394,19 @@ export function HomeConsole({
                         rather than a blank, because an unlabelled card is worse than a
                         generic one. Both strings are still the interview's own words. */}
                     <span className="hc-happening-ico" aria-hidden="true">
-                      {/* 28, not 22 (#225): the approved comp's symptom glyphs measure ~28px and
-                          they are the only thing that gives these three rows their weight. */}
-                      <Icon name={HAPPENING_GLYPH[c.id] ?? "help"} size={28} />
+                      {/* 40, not 28 (#225 round 2). Round 1 read the comp's glyph at ~28 and set
+                          the BOX to 28 -- but this Icon's path does not fill its box: at size 28 it
+                          inks 21x22 app px, so the comp's glyph was drawn a third smaller than the
+                          picture. The number is now measured against the DRAWN mark on both sides.
+                          Comp (assets/approved/health.png, comp px / 1.0333): ink 34x33 comp px =
+                          32.9x31.9 app. Candidate, measured over CDP on the installed build by
+                          overriding the svg box and re-scanning the capture: 36 -> 26x30,
+                          40 -> 30x32, 42 -> 32x34. 40 lands the HEIGHT on the comp's 31.9 exactly
+                          and stays under it on width; the glyphs are not the same art (the comp's
+                          star has ten points and a filled centre, this one has eight and none), so
+                          the two axes cannot both land. Row height is unmoved at 76.8 -- the two
+                          text lines drive it and 40 + 28px of padding is 68. */}
+                      <Icon name={HAPPENING_GLYPH[c.id] ?? "help"} size={40} />
                     </span>
                     <span className="hc-happening-text">
                       <span className="hc-happening-label">{c.label}</span>
