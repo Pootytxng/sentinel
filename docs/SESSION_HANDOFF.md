@@ -104,7 +104,7 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
   not on main — do NOT delete or hard-reset those five unchecked**: `feat/user-feedback-lab-recovery`
   (49) · `feat/lab-49-parity-port` (6) · `lane/cleanup-train-2026-08-20` (5) ·
   `lane/vision-pointer-guard-2026-08-24` (3) · `claude/compy-visual-recovery-kit-6fd074` (#224
-  round-3 candidate awaiting independent review; count its commits live). A detached, branchless
+  Test room, round-4 `bf88150a` ACCEPTED by Codex 2026-08-27, unpushed; count its commits live). A detached, branchless
   one was retired 2026-08-26 under tag `preserve/checklist-disk-item-c5660e` (5 commits, none on
   `main`). Rule C of `scripts/handoff-worktree-truth.test.mjs` fails if a checkout carries commits
   this bullet does not name. Re-derive: `git worktree list`, `git rev-list --count origin/main..X`.
