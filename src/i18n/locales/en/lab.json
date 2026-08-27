@@ -124,7 +124,6 @@
     "unitPct": "±%",
     "unitReady": "ready",
     "unitOn": "on",
-    "unitRead": "read",
     "safeStackAllOn_one": "= all {{count}} applied",
     "safeStackAllOn_other": "= all {{count}} applied",
     "safeStackNone": "= nothing to apply on this rig",

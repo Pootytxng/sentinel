@@ -92,10 +92,13 @@ export function ArcGauge({
             the old 8px fit was fine print, the exact disease TYPE-1 cures. The ring only ever
             carries a SHORT unit (°C, %, fps, ms); anything longer moves BESIDE the label, never
             below the floor. Guarded in arc-gauge.test.tsx. */}
-        {!empty && unit.length <= 3 && <div className="ag-u">{unit}</div>}
+        {!empty && unit.length > 0 && unit.length <= 3 && <div className="ag-u">{unit}</div>}
       </div>
       <div className="ag-label">
         <span>{label}</span>
+        {/* An EMPTY unit is a caller saying "this number needs no unit" (Test's INSTRUMENTS READ,
+            whose label already ends in the word). It must render nothing at all -- not an empty
+            node in the ring, and not a blank line beside the label. */}
         {(empty || unit.length > 3) && (
           <span className="ag-u ag-u-side">{empty ? t("common.arcGauge.noReading") : unit}</span>
         )}

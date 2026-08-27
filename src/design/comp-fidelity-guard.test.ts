@@ -401,7 +401,10 @@ describe("comp fidelity — Test, matched against 04-test-approved.png", () => {
     // The comp draws a dotted hairline between each pair of cells and no gutter at all. It is the
     // difference between four loose numbers and one instrument with four faces. A `gap` here would
     // also push every rule half a gutter off its own centre line, so the cells carry the padding.
-    expect(body(lab, ':root[data-v2="on"] .lc-reading + .lc-reading')).toMatch(
+    // Measured off the comp 2026-08-26: the rule is INSET, not full-height -- a bright pixel every
+    // third row from y745 to y875 of a strip spanning y704..928. A border cannot be shortened, so
+    // the hairline moved to a pseudo-element; the fact being pinned is unchanged.
+    expect(body(lab, ':root[data-v2="on"] .lc-reading + .lc-reading::before')).toMatch(
       /border-left: 1px dotted var\(--v2-line\)/,
     );
     expect(body(lab, ':root[data-v2="on"] .lc-readings'), "a gutter would decentre the rules").toMatch(

@@ -481,10 +481,6 @@ export function LabConsole({
         hud ? (
           <section className="lc-bench" aria-label={t("lab.labConsole.bench.aria")}>
             <div className="lc-stage" data-motion={reduced ? "reduced" : "full"} ref={stageRef}>
-              <span className="lc-brk lc-brk-tl" />
-              <span className="lc-brk lc-brk-tr" />
-              <span className="lc-brk lc-brk-bl" />
-              <span className="lc-brk lc-brk-br" />
               <div className="lc-rig">
                 {/* chromeless — just the recognizable 3D hologram; the bench frames it, so the
                     viewer's own control bar / caption / "add a part" form stay hidden (that form
@@ -552,7 +548,10 @@ export function LabConsole({
                   label={t("lab.labConsole.instrumentsReadLabel")}
                   value={instrumentsRead}
                   max={Math.max(1, instrumentsTotal)}
-                  unit={t("lab.labConsole.unitRead")}
+                  /* NO UNIT. The label already ends in the word "read", so a "read" unit printed
+                     INSTRUMENTS READ / READ under the ring -- the duplication the owner caught.
+                     The note below still says how far through the bench this rig has gone. */
+                  unit=""
                   note={t("lab.labConsole.instrumentsReadNote", { read: instrumentsRead, total: instrumentsTotal })}
                 />
               </div>
@@ -734,10 +733,6 @@ export function LabConsole({
           </BentoTile>
           <BentoTile span="hero" title={t("lab.labConsole.tiles.stage")}>
             <div className="lc-stage" data-motion={reduced ? "reduced" : "full"} ref={stageRef}>
-              <span className="lc-brk lc-brk-tl" />
-              <span className="lc-brk lc-brk-tr" />
-              <span className="lc-brk lc-brk-bl" />
-              <span className="lc-brk lc-brk-br" />
               <div className="lc-corner lc-tl">
                 {/* Proven — the room's entire payoff: how many changes this bench has verified
                     before/after (awards ledger, Keep verdicts only). Full ring once N > 0. */}
@@ -796,7 +791,10 @@ export function LabConsole({
                   label={t("lab.labConsole.instrumentsReadLabel")}
                   value={instrumentsRead}
                   max={Math.max(1, instrumentsTotal)}
-                  unit={t("lab.labConsole.unitRead")}
+                  /* NO UNIT. The label already ends in the word "read", so a "read" unit printed
+                     INSTRUMENTS READ / READ under the ring -- the duplication the owner caught.
+                     The note below still says how far through the bench this rig has gone. */
+                  unit=""
                   note={t("lab.labConsole.instrumentsReadNote", { read: instrumentsRead, total: instrumentsTotal })}
                 />
               </div>
