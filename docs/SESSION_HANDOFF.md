@@ -99,15 +99,16 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **Eleven worktrees besides `main`; the eleventh (`test-design-visual-fixes-fec3ec`) is the
-  round-3 session's read-only checkout, zero own commits. Six spent; five carry commits
-  not on main — do NOT delete or hard-reset those five unchecked**: `feat/user-feedback-lab-recovery`
-  (49) · `feat/lab-49-parity-port` (6) · `lane/cleanup-train-2026-08-20` (5) ·
-  `lane/vision-pointer-guard-2026-08-24` (3) · `claude/compy-visual-recovery-kit-6fd074` (#224
-  round-3 candidate awaiting independent review; count its commits live). A detached, branchless
-  one was retired 2026-08-26 under tag `preserve/checklist-disk-item-c5660e` (5 commits, none on
-  `main`). Rule C of `scripts/handoff-worktree-truth.test.mjs` fails if a checkout carries commits
-  this bullet does not name. Re-derive: `git worktree list`, `git rev-list --count origin/main..X`.
+- **Thirteen worktrees besides `main`. Seven are spent or read-only (`test-design-visual-fixes-fec3ec`
+  and `health-lane-bootstrap-a2a8cc` both carry zero own commits); six carry commits not on main —
+  do NOT delete or hard-reset those six unchecked**: `feat/user-feedback-lab-recovery` (49) ·
+  `claude/compy-visual-recovery-kit-6fd074` (15, the #224 round-3 candidate awaiting independent
+  review) · `claude/compy-health-parity` (14, the #225 Health parity lane, candidate awaiting
+  independent review) · `feat/lab-49-parity-port` (6) · `lane/cleanup-train-2026-08-20` (5) ·
+  `lane/vision-pointer-guard-2026-08-24` (3). A detached, branchless one was retired 2026-08-26
+  under tag `preserve/checklist-disk-item-c5660e` (5 commits, none on `main`). Rule C of
+  `scripts/handoff-worktree-truth.test.mjs` fails if a checkout carries commits this bullet does not
+  name. Re-derive: `git worktree list`, `git rev-list --count origin/main..X`.
 
 ## Waiting on the owner — two arming gates, nothing else
 

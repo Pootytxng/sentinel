@@ -365,8 +365,8 @@
   min-height: var(--hc-stage-min);
   display: grid;
   /* stretch, not center: the rig must INHERIT the stage's resolved height instead of asking for one
-     of its own. The four corner brackets are absolutely positioned, so the rig is the only in-flow
-     item here, and it centres its own content anyway. */
+     of its own. Nothing else is in flow here since #225 took the corner brackets out, and the rig
+     centres its own content anyway. */
   place-items: stretch;
   padding: 20px;
 }
@@ -390,8 +390,8 @@
      carry existed for one reason: four always-present, z-index:2 corner ArcGauges pinned 22px from
      the stage edge, which a tall HardwareGrid could scroll its rows under mid-scroll (padding
      cannot help — a scroll container only protects its extremes). Those gauges are no longer on the
-     canvas, and the control row left with them, so nothing overlays this viewport any more except
-     the decorative corner brackets, which are 22px, pointer-events:none and outside the padding.
+     canvas, and the control row left with them, so nothing overlays this viewport any more at all —
+     the decorative corner brackets that were the last overlay went with #225.
      The bound used to be restated as a number — 460, then --hc-rig-h — and a restated number is a
      number that can drift. It is now simply the box this viewport is laid into, which the stage
      sizes; there is nothing left to keep in step (self-reviewer 2026-07-18; derivation 2026-07-23;
@@ -408,39 +408,11 @@
   font-size: var(--type-label);
 }
 
-/* Corner brackets — the HUD framing device, two 1px edges per corner. */
-:root[data-v2="on"] .hc-brk {
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  border-color: var(--ix-accent);
-  opacity: 0.55;
-  pointer-events: none;
-}
-:root[data-v2="on"] .hc-brk-tl {
-  top: 10px;
-  left: 10px;
-  border-top: 2px solid;
-  border-left: 2px solid;
-}
-:root[data-v2="on"] .hc-brk-tr {
-  top: 10px;
-  right: 10px;
-  border-top: 2px solid;
-  border-right: 2px solid;
-}
-:root[data-v2="on"] .hc-brk-bl {
-  bottom: 10px;
-  left: 10px;
-  border-bottom: 2px solid;
-  border-left: 2px solid;
-}
-:root[data-v2="on"] .hc-brk-br {
-  bottom: 10px;
-  right: 10px;
-  border-bottom: 2px solid;
-  border-right: 2px solid;
-}
+/* .hc-brk / .hc-brk-tl / -tr / -bl / -br — DELETED (#225). The four 22px HUD corner elbows on the
+   stage. The approved Health comp draws that stage as one uninterrupted surface, and the rejection
+   named added visual language as the fault, so the elbows went rather than being dimmed. They were
+   aria-hidden and pointer-events:none, so no behaviour, no data and no reading left with them.
+   The markup went in the same commit (HomeConsole.tsx); pinned by home-console-parity-225.test.tsx. */
 
 /* .hc-corner / .hc-tl / .hc-tr / .hc-bl / .hc-br — DELETED (issue #49). They pinned the four
    ArcGauges to the canvas corners. The approved direction says gauges may not cover rig content,
@@ -757,7 +729,15 @@
   display: flex;
   flex-direction: column;
   gap: var(--v2-pad-sm);
-  padding-top: var(--v2-pad);
+  /* THE RULE'S RHYTHM IS THE COMP'S (#225). The hairline itself was never missing -- this
+     border-top has always drawn it, and it computes to the comp's colour (--v2-line, 0.07 white,
+     lands on #1B1D21 over the page ground; the comp samples #1F2227). What was wrong is the air
+     around it: the rule sat flush against the button above it with 16px underneath, where the
+     comp gives it 36 comp px above (button edge y410 -> rule y446) and 33 below (rule -> the
+     label's box top, backing the cap-top at y483 out by its line-height leading). Divided by the
+     1.0333 comp:app scale that is 35 and 32. */
+  margin-top: 35px;
+  padding-top: 32px;
   border-top: 1px solid var(--v2-line);
 }
 :root[data-v2="on"] .hc-happening-q {
@@ -782,7 +762,9 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  /* 12, not 8 (#225): the comp's cards sit 12 comp px apart border-to-border (bottom border
+     y619 -> next top border y631, and again y709 -> y721) = 11.6 app px. */
+  gap: 12px;
 }
 /* THE COMP'S CARD (owner ruling 2026-08-23): glyph · title over one grey line · chevron.
    A three-column grid rather than flex with space-between, because the middle column is the
@@ -796,14 +778,26 @@
   gap: 14px;
   text-align: left;
   padding: 14px var(--v2-pad);
-  background: var(--v2-panel);
+  /* #225, both measured off the comp. FILL: the cards sample #15181F-#161920 against a #0C0E12
+     ground -- a step lighter than --v2-panel (#10131A), which is the panel token and made these
+     rows read as the same surface as the rig panel opposite them. --v2-panel-2 (#141824) is the
+     nearest token and it is the wrong hue: it carries a blue cast the comp's neutral grey does
+     not. So it is a third surface step in tokens-v2.css (--v2-panel-card), declared with its
+     measurement, rather than a literal here or a bend to a token four rooms read.
+     RADIUS: the corner arc reaches the card's left border 10 comp px below its top border
+     (y631 x298, y633 x293, y636 x290, flush by y641) = 9.7 app px, which is --v2-r, not the
+     --v2-r-sm these were carrying. */
+  background: var(--v2-panel-card);
   border: 1px solid var(--v2-line);
-  border-radius: var(--v2-r-sm);
+  border-radius: var(--v2-r);
   cursor: pointer;
   transition: background 0.12s ease, border-color 0.12s ease;
 }
+/* The hover lift follows the new card surface. --v2-panel-2 was the right lift over --v2-panel;
+   over --v2-panel-card it is not a lift at all -- #141824 is DARKER than #15191F on red and green
+   and only brighter on blue, so hovering would have shifted the hue instead of raising the card. */
 :root[data-v2="on"] .hc-happening-row:hover {
-  background: var(--v2-panel-2);
+  background: var(--v2-panel-card-hover);
   border-color: var(--v2-accent-line);
 }
 :root[data-v2="on"] .hc-happening-row:focus-visible {
@@ -1041,8 +1035,13 @@
 }
 :root[data-v2="on"] .hc-care {
   display: flex;
-  margin: var(--v2-pad) 0 0;
-  padding-top: var(--v2-pad);
+  /* The comp's air around the second hairline (#225), same method as .hc-happening above: the
+     last card's bottom border is at comp y799 and the rule at y829 (30 comp = 29 app), and the
+     row's text below it starts at y858, ~29 comp with the label's leading inside it (24 app to
+     the box top). This rule was also always drawn -- --v2-line over the ground is #1B1D21 and
+     the comp samples #1B1D23 -- it was 16/16 of air instead of 29/24. */
+  margin: 29px 0 0;
+  padding-top: 24px;
   background: transparent;
   border: 0;
   border-top: 1px solid var(--v2-line);

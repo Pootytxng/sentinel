@@ -6,6 +6,7 @@ import type {
   Recommendation,
   SessionSummary,
 } from "../types";
+import type { ReactNode } from "react";
 import type { HardwareInfo } from "../App";
 import { useHudFlag, useHomeConsoleFlag } from "../design/use-hud";
 import { HomeV2 } from "./HomeV2";
@@ -53,11 +54,22 @@ type Props = {
   onApplyBatch?: (
     recIds: string[],
   ) => Promise<{ applied: number; skipped: { title: string; reason: string }[] }>;
+  /** Console-only (#225): the latest-change follow-through (App's <FirstWin>), rendered BELOW both
+   *  columns instead of above the room. See the note at its call site in App.tsx. */
+  latestChange?: ReactNode;
 };
 
-export function HomeRoom(props: Props) {
+export function HomeRoom({ latestChange, ...props }: Props) {
   const homeConsole = useHomeConsoleFlag();
   const hud = useHudFlag();
-  if (homeConsole) return <HomeConsole {...props} />;
-  return hud ? <HomeHud {...props} /> : <HomeV2 {...props} />;
+  if (homeConsole) return <HomeConsole {...props} latestChange={latestChange} />;
+  // The two failsafe branches keep the pre-#225 placement by construction: neither renders
+  // RoomShell's `below` slot, and quietly dropping the node would delete the follow-through
+  // instead of demoting it. #225 is a claim about the APPROVED console composition only.
+  return (
+    <>
+      {latestChange}
+      {hud ? <HomeHud {...props} /> : <HomeV2 {...props} />}
+    </>
+  );
 }

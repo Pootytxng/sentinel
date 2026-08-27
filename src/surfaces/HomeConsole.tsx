@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -107,6 +108,11 @@ type Props = {
   onApplyBatch?: (
     recIds: string[],
   ) => Promise<{ applied: number; skipped: { title: string; reason: string }[] }>;
+  /** #225 finding 1 — the latest-change follow-through (App's <FirstWin>), which used to render
+   *  ABOVE the whole room and displaced the verdict and the rig by a measured 142px. It leads
+   *  `below` now: real, reachable, and subordinate to the verdict/action/rig composition the
+   *  approved comp puts in the first viewport. A node, so App keeps owning the ledger data. */
+  latestChange?: ReactNode;
 };
 
 /* WHICH PICTURE EACH SURFACED ANSWER WEARS (01-health-approved.png). Keyed by the
@@ -143,6 +149,28 @@ const HAPPENING_GLYPH: Record<string, string> = {
  * Home invented, and an answer that stops existing takes its card with it rather than rendering a
  * row that leads nowhere. Pinned by `home-console-front-door-gate.test.tsx`.
  */
+// ── HOW HEALTH'S STAGE FRAMES ITS RIG (#225 finding 3, "the rig is cropped") ──────────────────
+// The stage shipped at cameraDist 6.9 with the hologram's default aim (targetY 0.2), and at that
+// seat the rig does not fit its own frame: projecting the case box (4.15 x 5.35 x 2.55, centred)
+// and the floor ring (outer radius 2.7 at y=-2.75) through the 45deg vertical fov puts the case
+// top 2% ABOVE the frame and the ring's near edge 36% of a stage-height BELOW it. That is the
+// crop the owner saw, and it is why the case's near panel read as a slab: at 6.9 the camera is
+// inside the composition rather than looking at it.
+//
+// 10.1 / -0.48 is solved, not guessed: it is the (distance, aim) pair that puts 7.98% air above
+// the case and 7.97% below the ring, against the ~8.1% the approved comp draws on both edges
+// (ring apex comp y668, stage floor y713, stage height 553). It lands a hair from the value the
+// Test lane measured for its own bench (10.2 / -0.45) from a different comp -- two independent
+// derivations of the same "let the instrument breathe" framing.
+//
+// ONE PAIR COVERS ALL THREE REQUIRED VIEWPORTS, by construction rather than by luck: the fov is
+// VERTICAL, the stage's height is fixed (--hc-stage-max), and fitCameraDistance leaves the base
+// distance untouched at any aspect >= 1.2 -- Health's stage measures 1.30-1.40 at 1280, 1500 and
+// 1920. Only the horizontal margin changes with the viewport, and the widest projected point sits
+// at 0.49 of the half-width at the narrowest of the three. Pinned in home-console-parity-225.
+const HEALTH_CAMERA_DIST = 10.1;
+const HEALTH_CAMERA_TARGET_Y = -0.48;
+
 const DETECTED_SHORTCUTS = ["crash", "slow", "unsure"] as const;
 const CLEAR_SHORTCUTS = ["moreFps", "watchFps", "scores"] as const;
 
@@ -316,6 +344,7 @@ export function HomeConsole({
   pendingCare,
   onOpenCareIncident,
   onDismissCareIncident,
+  latestChange,
 }: Props) {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
@@ -914,11 +943,13 @@ export function HomeConsole({
             {/* The pointer glow and the annotation parallax are written on the PANEL now, not the
                 canvas: the chrome (and so the border-masked glow) belongs to the whole instrument.
                 `stageRef` stays on the canvas, because the reticle is the rig's, not the strip's. */}
+            {/* The four HUD corner brackets are GONE (#225). The approved Health comp draws the
+                stage as one uninterrupted surface — no bracket, no tick, nothing in the corners —
+                and four 22px accent elbows are exactly the "added visual language" the rejection
+                named. They were decorative (aria-hidden, pointer-events:none), so nothing real
+                left with them. Their CSS went too rather than being hidden: a hidden rule is a
+                rule every session still parses. Guard: home-console-parity-225.test.tsx. */}
             <div className="hc-stage" ref={stageRef}>
-              <span className="hc-brk hc-brk-tl" aria-hidden="true" />
-              <span className="hc-brk hc-brk-tr" aria-hidden="true" />
-              <span className="hc-brk hc-brk-bl" aria-hidden="true" />
-              <span className="hc-brk hc-brk-br" aria-hidden="true" />
               <div className="hc-rig">
                 {rig3d ? (
                   <Suspense
@@ -933,7 +964,8 @@ export function HomeConsole({
                       onSelect={onRigSelect}
                       onHover={setHoveredId}
                       manualParts={manualParts}
-                      cameraDist={6.9}
+                      cameraDist={HEALTH_CAMERA_DIST}
+                      cameraTargetY={HEALTH_CAMERA_TARGET_Y}
                     />
                   </Suspense>
                 ) : (
@@ -1154,6 +1186,11 @@ export function HomeConsole({
          who wants more arrives. Nothing here is new and nothing here was cut. */
       below={
         <div className="home-console" data-motion={reduced ? "reduced" : "full"}>
+        {/* THE LATEST CHANGE LEADS `below` (#225 finding 1). It is the first thing a reader who
+            scrolls past the fold meets, because "what did Compy just do to my PC?" outranks "what
+            did it check" — and it is BELOW the fold because the approved comp's first viewport is
+            the verdict, the one action and the rig. Reachable, subordinate, unmodified. */}
+        {latestChange}
         {/* The check line and its Re-run affordance, relocated out of the shell's `measured`
             slot (see the note above it). It leads `below` rather than trailing it: a reader
             who scrolls past the fold is asking "what did you actually check?", and this
@@ -1352,7 +1389,9 @@ export function HomeConsole({
                         rather than a blank, because an unlabelled card is worse than a
                         generic one. Both strings are still the interview's own words. */}
                     <span className="hc-happening-ico" aria-hidden="true">
-                      <Icon name={HAPPENING_GLYPH[c.id] ?? "help"} size={22} />
+                      {/* 28, not 22 (#225): the approved comp's symptom glyphs measure ~28px and
+                          they are the only thing that gives these three rows their weight. */}
+                      <Icon name={HAPPENING_GLYPH[c.id] ?? "help"} size={28} />
                     </span>
                     <span className="hc-happening-text">
                       <span className="hc-happening-label">{c.label}</span>

@@ -423,6 +423,28 @@
 :root[data-v2="on"] .v2-room[data-layout="split"][data-room="play"] {
   --v2-aside: min(830px, 69%);
 }
+/* HEALTH'S SPLIT IS ITS OWN THIRD FAMILY (#225, measured off 01-health-approved.png).
+   The comp's narrative column, its gutter and its evidence panel were read off pixel edges at a
+   1500x980 render (1550px wide, so comp px / 1.0333 = app px): the column's left border sits at
+   comp x=287 and its right at x=771, the panel spans x=824..1485. That is 469 / 50 / 641 app px
+   inside the same 1160px wrap the app already lays out — the wrap matches to the pixel, only the
+   split inside it was wrong. The default 56.5% + 48px gutter gave 457 / 48 / 655: the panel was
+   14px too wide and the story column paid for all of it. 641/1160 = 55.26%.
+   Keyed on data-room for the same reason the two rules above are, and sitting beside them so the
+   three families stay visible as three. Still one rule, still no media query — the % yields
+   before the px cap does, so 1280 and 1920 hold the comp's ratio rather than a second number.
+
+   THE 880 CAP IS THE TEST LANE'S LESSON, NOT A GUESS. The shared token caps at 680px, which never
+   bound while every room sat in a fixed 1160px box; once the shell scales the box to ~1544px at
+   1920 the cap bites and the split INVERTS — 55.26% wants 853px and 680 would leave the story
+   column 814, wider than the evidence panel, which is the opposite of every approved comp. Test
+   hit this exact defect on its bench (lab-bench-framing-guard.test.ts) and raised its own cap for
+   it. 880 clears Health's 853 at 1920 without binding, so the percentage governs at all three
+   required viewports. Health's cap is Health's: the shared token is untouched. */
+:root[data-v2="on"] .v2-room[data-layout="split"][data-room="home"] {
+  --v2-aside: min(880px, 55.26%);
+  column-gap: 50px;
+}
 /* THE HAIRLINE IS HISTORY'S ALONE. Live and History share the wide column above, but not this:
    02-live-approved.png draws a bordered, filled, rounded PANEL there (its x=672 vertical is that
    panel's own left edge), while 03-history-approved.png draws bare records on the page ground

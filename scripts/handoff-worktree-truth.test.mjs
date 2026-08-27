@@ -38,7 +38,12 @@ const HANDOFF = join("docs", "SESSION_HANDOFF.md");
 
 const git = (...args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
 
-const WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+// Spelled counts, to twenty. It stopped at twelve until 2026-08-27, when the machine reached
+// thirteen checkouts and rule B reported "states no worktree count" -- a FALSE diagnosis: the
+// doc stated one, in a word the map could not read, and the message sent the next reader looking
+// for a missing sentence instead of a stale number. A word list that silently returns null past
+// its own end is the defect, so the range is what got fixed.
+const WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20 };
 
 /**
  * The one bullet that describes THIS machine's checkouts. Both rules read from it rather than from
@@ -199,6 +204,9 @@ describe("the handoff tells the truth about the worktrees", () => {
     expect(statedWorktreeCount("- **Seven worktrees, all spent.** None is mid-flight;")).toBe(7);
     expect(statedWorktreeCount("- **Eleven worktrees besides `main`; six are spent**")).toBe(11);
     expect(statedWorktreeCount("- **11 worktrees** besides main")).toBe(11);
+    // Past the old end of the word list — the case that reported "no count stated" in 2026-08-27.
+    expect(statedWorktreeCount("- **Thirteen worktrees besides `main`**")).toBe(13);
+    expect(statedWorktreeCount("- **Twenty worktrees besides `main`**")).toBe(20);
     expect(statedWorktreeCount("No claim about checkouts here.")).toBe(null);
     expect(
       branchesClaimedUnmerged("- **A; six are spent but FOUR still carry work that is not on main** —\n  `lane/a` and `feat/b`."),
