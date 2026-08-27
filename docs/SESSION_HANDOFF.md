@@ -102,7 +102,7 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
 - **Ten worktrees besides `main`. Five are spent; five carry commits not on main — do NOT delete
   or hard-reset those five before checking them**: `feat/user-feedback-lab-recovery` (49) ·
   `feat/lab-49-parity-port` (6) · `lane/cleanup-train-2026-08-20` (5) ·
-  `lane/vision-pointer-guard-2026-08-24` (3) · `claude/compy-visual-recovery-kit-6fd074` (3 — the
+  `lane/vision-pointer-guard-2026-08-24` (3) · `claude/compy-visual-recovery-kit-6fd074` (7 — the
   #224 Test-room parity candidate, awaiting independent visual ACCEPT). An eleventh, detached and
   branchless (so `origin`-based audits miss it), was retired 2026-08-26 under tag
   `preserve/checklist-disk-item-c5660e` (5 commits, recoverable, none on `main`). Rule C of
