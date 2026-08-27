@@ -266,13 +266,28 @@
   overflow-y: auto;
   padding: 26px 30px;
 }
-/* THE CONTENT BOX (re-measured 2026-08-23). All four comps put content between x=286 and
-   x=1494 of 1550 -- a 1208px box, 1169 app px, which no 1120 cap can produce. With this sheet's
-   30px gutters, 1160 lands the box at x=278..1438 on the owner's 1500-wide window against the
-   comps' 277..1446. The cap still exists and still binds on a wide monitor: it is the reason a
-   1920 window does not stretch a 46ch sentence across 1600px. */
+/* THE CONTENT BOX (re-measured 2026-08-23, made proportional 2026-08-27). All four comps put
+   content between x=286 and x=1494 of 1550 -- a 1208px box, 1169 app px, which no 1120 cap can
+   produce. With this sheet's 30px gutters, 1160 lands the box at x=278..1438 on the owner's
+   1500-wide window against the comps' 277..1446.
+
+   A FIXED 1160 was the wrong reading of that measurement. What the comps hold constant is the
+   GUTTER as a share of the window -- 62 app px of air after the rail at 1500 -- and a fixed cap
+   turns that into 267 px of dead margin on each side of a 1920 desktop, which is where the owner
+   actually works. Measured on the installed build 2026-08-26 and rejected on sight: the room
+   became a centred island with a third of the display empty.
+
+   94.5% is that same box expressed against the space the rail leaves (1160 of 1224 at 1500), so
+   1500 is unchanged to the pixel-ish and every wider window keeps the proportion instead of
+   stranding the room. The cap does not disappear -- it becomes 1760px of content, which a 1920
+   window never reaches, so the reason it existed (a 46ch sentence must not run the width of a
+   wall) still holds on displays large enough to threaten it.
+
+   Shared across all four rooms deliberately: the geometry fault is the shell's, and fixing it in
+   the Test room alone would leave three rooms mismatched against comps drawn to the same grid.
+   Guarded by src/design/content-width-guard.test.ts; smoke-checked in all four rooms. */
 :root[data-v2="on"] .v2-content-wrap {
-  max-width: 1160px;
+  max-width: min(95.6%, 1760px);
   margin: 0 auto;
 }
 
@@ -474,6 +489,24 @@
 :root[data-v2="on"] .v2-room[data-layout="split"][data-room="lab"] > .v2-verdict h1:has([data-fit="tight"]) {
   font-size: var(--type-verdict);
   font-weight: var(--type-verdict-weight);
+}
+/* THE SAME STEP, TAKEN FOR A SHORT WINDOW INSTEAD OF A LONG HEADLINE — TEST ONLY.
+   bug->guard for the Codex REJECT of candidate 9bef1cc2 (2026-08-27), finding "1280x720 - major
+   acceptance failure": at 720 the Test room exposed about two of its six station rows.
+
+   The rest of that fit is air, and it lives with the room in src/surfaces/lab-console.css under
+   the same `@media (max-height: 880px)`. This one declaration cannot: the four approved rooms'
+   verdict type is measured off the comps HERE, and comp-fidelity-guard.test.ts fails the build if
+   any room sheet sizes it. So the room asks for the step the shell already owns, one step, onto
+   the token directly above - not a new size, and not a shrink past the scale.
+
+   Scoped to Test because Test is what was rejected; Health shares the selector above and its own
+   1280x720 composition was not reviewed. Guard: src/surfaces/lab-short-viewport-guard.test.ts. */
+@media (max-height: 880px) {
+  :root[data-v2="on"] .v2-room[data-layout="split"][data-room="lab"] > .v2-verdict h1 {
+    font-size: var(--type-verdict);
+    font-weight: var(--type-verdict-weight);
+  }
 }
 /* The narrow-column rooms set their headline looser: measured baseline-to-baseline is 52 app px
    on a 40px headline in 03-history-approved.png, where Health's 52px headline runs at 1.10. */

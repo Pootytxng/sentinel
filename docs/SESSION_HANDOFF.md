@@ -99,17 +99,15 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **Ten worktrees besides `main`. Five are spent; five carry commits that are not on main — do
-  NOT delete or hard-reset those five before checking them**: `feat/user-feedback-lab-recovery`
-  (49) · `feat/lab-49-parity-port` (6) · `lane/cleanup-train-2026-08-20` (5) ·
-  `lane/vision-pointer-guard-2026-08-24` (3) · `claude/compy-visual-recovery-kit-6fd074` (2 — the
-  #224 Test-room parity candidate, installed on the desk, awaiting independent visual ACCEPT). An
-  eleventh, detached with no branch name at all, hid for fifteen days because every audit here reads
-  `origin` refs and a branchless checkout has none; it
-  was retired 2026-08-26 under tag `preserve/checklist-disk-item-c5660e` (5 commits, recoverable,
-  none on `main`). Rule C of `scripts/handoff-worktree-truth.test.mjs` fails the build if a checkout
-  carries commits and this bullet does not name it. Re-derive with `git worktree list` +
-  `git rev-list --count origin/main..<branch>`; never carry the numbers forward unchecked.
+- **Ten worktrees besides `main`. Five are spent; five carry commits not on main — do NOT delete
+  or hard-reset those five before checking them**: `feat/user-feedback-lab-recovery` (49) ·
+  `feat/lab-49-parity-port` (6) · `lane/cleanup-train-2026-08-20` (5) ·
+  `lane/vision-pointer-guard-2026-08-24` (3) · `claude/compy-visual-recovery-kit-6fd074` (3 — the
+  #224 Test-room parity candidate, awaiting independent visual ACCEPT). An eleventh, detached and
+  branchless (so `origin`-based audits miss it), was retired 2026-08-26 under tag
+  `preserve/checklist-disk-item-c5660e` (5 commits, recoverable, none on `main`). Rule C of
+  `scripts/handoff-worktree-truth.test.mjs` fails the build if a checkout carries commits and this
+  bullet does not name it. Re-derive: `git worktree list`, `git rev-list --count origin/main..X`.
 
 ## Waiting on the owner — two arming gates, nothing else
 

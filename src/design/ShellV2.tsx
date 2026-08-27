@@ -103,6 +103,26 @@ export function ShellV2({
   // frame 2026-07-15, DEFAULT ON). "0" failsafe: neither mounts, and the stage-scoped reticle
   // instances (which self-defer while this is on) take back over — byte-identical shell.
   const hudFrame = useHudFrameFlag();
+  /**
+   * ...EXCEPT IN TEST, WHERE THE ROOM IS ALREADY THE INSTRUMENT.
+   *
+   * The frame's own doctrine is that it shows only what no other chrome shows, and Health already
+   * stands the rig segment down on exactly that ground. Test breaks it harder than Health did: the
+   * room's whole upper panel IS the 3D rig, named and annotated, so the bottom-right readout prints
+   * the processor and GPU a third time — and it does it inside a bench that draws its own edge, so
+   * the four viewport brackets read as a second frame competing with the first. The approved Test
+   * composition has neither (verified 2026-08-27 by cropping the comp's own bottom-right corner:
+   * empty), and the owner rejected the installed build for, among other things, "an unapproved
+   * competing layer".
+   *
+   * Standing it down as a CLASS, not just a mount, is the load-bearing half: `.v2-shell-hud` also
+   * reserves a 36px band at the foot of the scroll lane for the readout. A room with no readout
+   * that still gave up 36px would be paying rent on a tenant who moved out — and at 1280x720, that
+   * band is a station row.
+   *
+   * Room id "lab" is the tab labelled Test. Guard: hud-frame-room-standdown-guard.test.tsx.
+   */
+  const hudFrameHere = hudFrame && activeId !== "lab";
   // Command palette (compy_command_palette, DEFAULT ON). "0" failsafe: no topbar box, no Ctrl+K
   // binding, no overlay — the shell is byte-identical to the pre-palette tree.
   const paletteEnabled = useCommandPaletteFlag();
@@ -216,7 +236,7 @@ export function ShellV2({
 
   return (
     <V2NavContext.Provider value={nav}>
-      <div className={hudFrame ? "v2-shell v2-shell-hud" : "v2-shell"} ref={shellRef}>
+      <div className={hudFrameHere ? "v2-shell v2-shell-hud" : "v2-shell"} ref={shellRef}>
         <nav className="v2-rail" aria-label={t("common.shellV2.navAriaLabel")}>
           {/* NO VERSION NUMBER HERE. Build identifiers are developer furniture, and the navigation
               audit ruled they belong in Settings → About, not in consumer chrome on every screen
@@ -392,7 +412,7 @@ export function ShellV2({
             processor and GPU, and the 3D rig annotates them -- so it stands down there and the
             readout collapses to the clock. Room id "home" is the tab labelled Health.
             bug->guard, self-review round 2 (issue #49): hud-readout-no-duplicate-guard. */}
-        {hudFrame && <HudFrame rig={activeId === "home" ? null : (rig ?? null)} />}
+        {hudFrameHere && <HudFrame rig={activeId === "home" ? null : (rig ?? null)} />}
         {hudFrame && <ReticleCursor scopeRef={shellRef} appWide />}
         {paletteEnabled && (
           <CommandPalette

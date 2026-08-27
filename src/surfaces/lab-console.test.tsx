@@ -212,8 +212,9 @@ const renderConsole = (props = base) =>
 // THE BENCH READING SET, by position. The four gauges left the canvas CORNERS in issue #49
 // slice 6 (04-test-approved.png draws them as a strip under the hologram, and the handoff forbids
 // covering that canvas with click targets or diagrams), so `.lc-tl/.lc-tr/.lc-bl/.lc-br` are gone.
-// Index order is the same order those corners read in: Proven · Noise floor · Safe stack ·
-// Instruments read — and guard 1 below still pins exactly that.
+// Index order is the comp's own, re-set 2026-08-27 on the Codex REJECT: Proven · Noise floor ·
+// Instruments read · Safe stack — arc, numeral, numeral, arc, so the two rings bookend the strip.
+// Guard 1 below pins exactly that, and the rhythm itself is pinned in the rhythm guards at the foot of this file.
 // TWO handles on ONE door since slice 6: the comp's "Start with Optimize" primary and the
 // "Optimize · Start here" row in the station list both call the same setter, so a bare
 // /optimize/i role query now matches both. Tests about the LIST say so with this.
@@ -361,7 +362,7 @@ describe("LabConsole", () => {
   it("the safe-stack gauge shows the real remaining count when recs are loaded", () => {
     renderConsole();
     // Two unapplied safe recs in the fixture → the gauge reads "2 · measured", never NOT-YET.
-    const bl = reading(2);
+    const bl = reading(3);
     expect(bl.textContent).toContain("Safe stack");
     expect(bl.querySelector(".ag-v")!.textContent).toBe("2");
     expect(bl.querySelector(".ag-tag-ny")).toBeNull(); // NOT the NOT-YET tag
@@ -372,11 +373,11 @@ describe("LabConsole", () => {
   it("the safe-stack gauge reads 'N on · = all N applied' on a full ring once nothing is left to apply", () => {
     const applied = (recsFixture as Array<Record<string, unknown>>).map((r) => ({ ...r, currently_applied: true }));
     renderConsole({ ...base, fast: { ...fast, recs: applied as never[] } });
-    const bl = reading(2);
+    const bl = reading(3);
     expect(bl.querySelector(".ag-v")!.textContent).toBe("2");
     expect(bl.textContent).toContain("on");
     expect(bl.textContent).not.toContain("ready");
-    expect(bl.querySelector(".ag-note")!.textContent).toBe("= all 2 applied");
+    expect(bl.querySelector(".ag-note")!.textContent).toBe("all 2 applied");
     expect(bl.querySelector(".ag-tag-ny")).toBeNull();
     // The ring is full: dashoffset 0 (ArcGauge draws CIRC * (1 - frac)).
     const fill = bl.querySelector<SVGCircleElement>(".ag-fill")!;
@@ -411,7 +412,7 @@ describe("LabConsole", () => {
       ...base,
       fast: { ...fast, recs: null as unknown as LabFastPathProps["recs"] },
     });
-    const bl = reading(2);
+    const bl = reading(3);
     expect(bl.querySelector(".ag-tag-ny")).not.toBeNull(); // the NOT-YET tag is present
     expect(bl.querySelector(".ag-v")!.textContent).not.toBe("0"); // never a fabricated 0
   });
@@ -528,7 +529,7 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
     vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
   });
 
-  it("guard 1 — the four corners are exactly Proven · Noise floor · Safe stack · Instruments read, never Health's numbers", () => {
+  it("guard 1 — the four cells are exactly Proven · Noise floor · Instruments read · Safe stack, never Health's numbers", () => {
     renderConsole();
     const strip = document.querySelector(".lc-readings")!;
     // 04-test-approved.png prints READINESS, AVG FPS and 1% LOW in this strip. They are NOT
@@ -541,8 +542,8 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
     const readingLabel = (i: number) => reading(i).querySelector(".ag-label span")!.textContent;
     expect(readingLabel(0)).toBe("Proven");
     expect(readingLabel(1)).toBe("Noise floor");
-    expect(readingLabel(2)).toBe("Safe stack");
-    expect(readingLabel(3)).toBe("Instruments read");
+    expect(readingLabel(2)).toBe("Instruments read");
+    expect(readingLabel(3)).toBe("Safe stack");
     // ...and the strip sits UNDER the canvas, never over it. The handoff is explicit that the real
     // rig stays the focal surface and its canvas is not to be covered with click targets or
     // diagrams; four rings floating in its corners were doing exactly that.
@@ -594,7 +595,11 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
     const tl = reading(0);
     await waitFor(() => expect(tl.querySelector(".ag-v")!.textContent).toBe("3"));
     expect(tl.querySelector(".ag-tag-ny")).toBeNull();
-    expect(tl.querySelector(".ag-note")!.textContent).toBe("= verified before and after");
+    // The gloss line under this ring is GONE (Codex REJECT 2026-08-27: the strip carried a unit
+    // line AND a stamp AND an explanation under every cell, which is what made it denser and
+    // taller than the composition). One supporting line remains, and here it is the stamp.
+    expect(tl.querySelector(".ag-note")).toBeNull();
+    expect(tl.querySelector(".ag-tag")!.textContent).toBe("measured");
   });
 
   it("Noise floor reads get_trial_state's noise_floor_pct once a calibration has produced one", async () => {
@@ -620,5 +625,77 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
     const tr = reading(1);
     await waitFor(() => expect(tr.querySelector(".ag-v")!.textContent).toBe("4"));
     expect(tr.querySelector(".ag-tag-ny")).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// THE STRIP'S RHYTHM — bug→guard for the Codex REJECT of candidate 9bef1cc2 (2026-08-27).
+//
+// The rejected build drew the reading set as four heavy rings, each carrying a unit line AND a
+// MEASURED stamp AND an explanatory gloss. The approved composition draws arc · numeral · numeral ·
+// arc with exactly ONE supporting line under each. Both halves are structural, not cosmetic:
+//
+//   the arcs   an arc says "this reading sits somewhere on a scale you can see". True of a count out
+//              of a known total; false of a raw magnitude, where the ceiling is the caller's
+//              invention. Drawing an invented ceiling as a filled arc is a claim, so the variant is
+//              an honesty rule and belongs in a test rather than in a stylesheet comment.
+//   one line   the stamp and the note share one grid row. Two of them in one cell would overlap,
+//              silently, and the thing that would disappear under the other is a measurement.
+//
+// Neither guard may pass by the strip having been deleted, so each asserts its own population.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+describe("the bench reading set keeps the approved rhythm", () => {
+  const cells = () => Array.from(document.querySelectorAll(".lc-readings > .lc-reading"));
+
+  it("draws arc · numeral · numeral · arc — a ring only where a real scale exists", () => {
+    renderConsole();
+    const drawn = cells().map((c) => (c.querySelector("svg .ag-track") ? "arc" : "numeral"));
+    expect(drawn, "four cells, in the comp's own order").toEqual(["arc", "numeral", "numeral", "arc"]);
+    // The numerals are not arcs that failed to render: they say so on the element itself.
+    expect(cells()[1].querySelector(".arc-gauge")).toHaveClass("ag-as-numeral");
+    expect(cells()[2].querySelector(".arc-gauge")).toHaveClass("ag-as-numeral");
+    expect(cells()[0].querySelector(".arc-gauge")).toHaveClass("ag-as-ring");
+    expect(cells()[3].querySelector(".arc-gauge")).toHaveClass("ag-as-ring");
+  });
+
+  it("gives every cell at most ONE supporting line, in every data state", () => {
+    // Three states over the same strip: nothing probed (NOT-YET), recs with work left (a stamp),
+    // and the whole stack applied (a note). If stamp and note could ever coexist, one of these
+    // three is where it would happen.
+    const applied = (recsFixture as Array<Record<string, unknown>>).map((r) => ({
+      ...r,
+      currently_applied: true,
+    }));
+    const states: Array<[string, typeof base]> = [
+      ["nothing probed", { ...base, fast: { ...fast, recs: null as unknown as LabFastPathProps["recs"] } }],
+      ["work left", base],
+      ["all applied", { ...base, fast: { ...fast, recs: applied as never[] } }],
+    ];
+    for (const [name, props] of states) {
+      cleanup();
+      renderConsole(props);
+      const seen = cells();
+      expect(seen.length, `${name}: the strip must still be four cells`).toBe(4);
+      for (const [i, cell] of seen.entries()) {
+        const lines = cell.querySelectorAll(".ag-tag, .ag-grade, .ag-note").length;
+        expect(lines, `${name}: cell ${i} drew ${lines} supporting lines, and the row holds one`)
+          .toBeLessThanOrEqual(1);
+      }
+      // Anti-vacuous: at least one cell is actually saying something in each state.
+      expect(
+        seen.some((c) => c.querySelector(".ag-tag, .ag-grade, .ag-note")),
+        `${name}: no cell said anything at all — this guard would pass on an empty strip`,
+      ).toBe(true);
+    }
+  });
+
+  it("keeps the honest states the density fix was not allowed to cost", () => {
+    renderConsole();
+    // NOT-YET still reachable (unread probes), and the strip never invents a zero for them.
+    expect(reading(0).querySelector(".ag-tag-ny")).not.toBeNull();
+    expect(reading(1).querySelector(".ag-tag-ny")).not.toBeNull();
+    expect(reading(0).querySelector(".ag-v")!.textContent).not.toBe("0");
+    // NO READING is the empty-state unit word, and it survived the unit trim.
+    expect(document.querySelector(".lc-readings")!.textContent).toContain("no reading");
   });
 });

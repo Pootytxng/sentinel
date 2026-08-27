@@ -271,12 +271,23 @@ describe("comp fidelity — the shell geometry all four comps share", () => {
     ).toMatch(/\.v2-room-title \{[^}]*font-size: var\(--type-card\)/);
   });
 
-  it("the content box is the comps' 1169px, which the old 1120 cap could not produce", () => {
-    // All four comps put content between x=286 and x=1494 of 1550 — a 1208px box = 1169 app px.
-    // With this sheet's 30px gutters, a 1160 cap lands x=278..1438 on the owner's 1500-wide
-    // window against the comps' 277..1446. The cap still binds on a wide monitor, which is the
-    // reason it exists: a 1920 window may not stretch a 46-character sentence across 1600px.
-    expect(body(shell, ':root[data-v2="on"] .v2-content-wrap')).toMatch(/max-width:\s*1160px/);
+  it("the content box is the comps' box at 1500, and still a box on a wide display", () => {
+    // All four comps put content between x=286 and x=1494 of 1550 — a 1208px box = 1169 app px,
+    // re-measured 2026-08-27 off 04-test-approved.png's own panel border at 1161.
+    //
+    // This was `max-width: 1160px` until the 2026-08-27 review failed 1920x1080 outright: a fixed
+    // cap reproduces the comps at the width they were drawn and strands every wider display in a
+    // centred island with ~267px of dead margin each side. What the comps actually hold constant
+    // is the gutter as a SHARE of what the rail leaves, so the cap is a percentage with a px
+    // ceiling behind it — the ceiling still being the reason the cap exists at all, that a 1920
+    // window may not stretch a 46-character sentence across 1600px.
+    //
+    // The arithmetic that this still lands the comps' box at 1500 and grows at 1920 lives in
+    // src/design/content-width-guard.test.ts, which resolves the rule the way the browser does.
+    // Here we only pin that it did not quietly go back to being a bare pixel width.
+    expect(body(shell, ':root[data-v2="on"] .v2-content-wrap')).toMatch(
+      /max-width:\s*min\([\d.]+%,\s*\d+px\)/,
+    );
   });
 
   it("the topbar is the comps' 50px", () => {
