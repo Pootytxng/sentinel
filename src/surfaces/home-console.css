@@ -281,7 +281,7 @@
      size and would have to be cut. So the stage absorbs the whole viewport difference, between a
      floor and the approved comp's ceiling, continuously:
 
-       stage → the comp's 500px when the room allows it, never below 320px, and the whole
+       stage → the comp's 530px when the room allows it, never below 320px, and the whole
                 difference in between — with nothing else on the panel giving up a pixel.
 
      ROUND 9 DELETED THE CONSTANT THAT KEPT BEING WRONG. The stage used to be
@@ -293,9 +293,10 @@
      under-reserving clips a reading, which is an honest-measurement failure.
      So nothing here measures content any more. The PANEL is capped at the space the room actually
      has; the control row and the readout take exactly what they need (`flex: none` below); and the
-     stage is the only shrinkable child — it asks for the comp's 500px and gives ground, never below
+     stage is the only shrinkable child — it asks for the comp's 530px and gives ground, never below
      320px, when the panel runs out of room. The browser does the measuring, so it cannot go stale.
        --hc-chrome-top    72px  = 46px shell topbar + 26px .v2-content padding-top
+       --hc-comp-drop     48px  = the approved comp's own offset of this card below the row top
        --hc-hud-reserve   36px  = .v2-content's margin-bottom in the HUD shell (self-review round 2;
                                   hud-frame.css owns it, and hud-frame-clearance-guard.test.ts
                                   pins it — this must never be smaller than that value)
@@ -304,13 +305,26 @@
      translation, which is the whole point. Guard: home-console.test.tsx rejects any content-derived
      height constant here, and any `@media` in this file. */
   --hc-stage-min: 320px;
-  --hc-stage-max: 500px;
+  --hc-stage-max: 530px;
   --hc-chrome-top: 72px;
   --hc-hud-reserve: 36px;
   --hc-stage-slack: 14px;
+  /* --hc-comp-drop 48px = the approved comp starts this evidence card BELOW the narrative column's
+     top rather than flush with it, and #225's round-2 review named the exact landing: stage top
+     111 -> ~159 app px. Measured off assets/approved/health.png at 1500x980 (comp 1550x1015, so
+     comp px / 1.0333): the card's top border sits at comp y 160 = 154.8 app px and its bottom at
+     comp y 900 = 871.0. The app's own stage top was 111, so the drop is 48.
+     It is FIXED chrome in the same sense --hc-stage-max is: a bound read off the approved
+     composition, not a height measured off content, so no translation can move it. It is declared
+     ONCE and spent twice -- as the margin that does the dropping, and as a subtrahend in the cap
+     below, because a panel that starts 48px lower has 48px less lane to stand in. Restating it as
+     a second literal is exactly the drift rounds 3-9 paid for. */
+  --hc-comp-drop: 48px;
 
+  margin-top: var(--hc-comp-drop);
   max-height: calc(
-    100vh - var(--hc-chrome-top) - var(--hc-hud-reserve) - var(--hc-stage-slack)
+    100vh - var(--hc-chrome-top) - var(--hc-comp-drop) - var(--hc-hud-reserve) -
+      var(--hc-stage-slack)
   );
   /* A CEILING, NOT A FIT (self-review round 11). This bounds the panel to the lane's VISIBLE
      height; it does not promise the panel fits INSIDE the lane, because the panel starts below the
@@ -347,12 +361,16 @@
    content); they are in .hc-readout below, and NOT ONE of them was dropped. ── */
 :root[data-v2="on"] .hc-stage {
   position: relative;
-  /* 540 → 500 with the gauges and the control row off the glass. The VISIBLE rig grew even though
-     the box shrank: the old 540px box lost ~100px of usable height to the top and bottom gauge
-     reserve and another ~40px at the bottom to the floating control row, so the rig's real
-     clearance went from ~400px to the full 460px content box. Measured off the approved Health
-     comp, whose canvas is ~500 tall in a ~620 column. The .hc-stage-cards ceiling below is now
-     simply 100% of the box it is laid into, so it follows this value without restating it. */
+  /* 540 → 500 with the gauges and the control row off the glass, then 500 → 530 for #225 round 2.
+     The VISIBLE rig grew even though the box first shrank: the old 540px box lost ~100px of usable
+     height to the top and bottom gauge reserve and another ~40px at the bottom to the floating
+     control row, so the rig's real clearance went from ~400px to the full 460px content box.
+     The 530 is the approved comp's own stage, re-measured for round 2 rather than restated: on
+     assets/approved/health.png the evidence card's top border is comp y 160 and the rig's stage
+     ends at comp y ~712, which at 1550/1500 = 1.0333 is 154.8 → 689.0 app px. Round 1 shipped 500
+     and the independent review named the 30px as a material gap; it is item 6 of
+     REVIEW_HEALTH_CANDIDATE_6bf99c8c.md. The .hc-stage-cards ceiling below is simply 100% of the
+     box it is laid into, so it follows this value without restating it. */
   /* `height`, not only `min-height` — round 4's lesson, still load-bearing. The rig is an r3f
      <Canvas> that measures its PARENT and writes its own inline pixel size; a parent with only a
      floor is in turn sized by that canvas, and that circle has no bottom. Round 4 set a lower floor

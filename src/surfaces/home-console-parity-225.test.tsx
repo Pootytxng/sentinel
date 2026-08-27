@@ -5,6 +5,7 @@ import { join } from "path";
 import { ShellV2 } from "../design/ShellV2";
 import { railFor } from "../design/homeRail";
 import { HomeConsole } from "./HomeConsole";
+import { FIT_REF_ASPECT } from "./rig/camera-fit";
 import type { GameReadiness, Priorities } from "../types";
 import type { HardwareInfo } from "../App";
 
@@ -273,10 +274,29 @@ describe("#225 finding 3 — the rig sits inside its stage with the comp's air",
     silhouette.push([ringOuter * Math.cos(a), ringY, ringOuter * Math.sin(a)]);
   }
 
-  // Health's stage measures 1.30-1.40 wide-to-tall across the three required viewports; all three
-  // are above fitCameraDistance's 1.2 reference, so the distance -- and so the vertical framing --
-  // is the same at every one of them. The loop proves that rather than asserting it.
-  for (const aspect of [1.3, 1.35, 1.4]) {
+  // ROUND 2 RE-MEASURED THESE, and they moved: the stage grew 500 -> 530 (--hc-stage-max) to match
+  // the approved comp, which makes the canvas TALLER without making it wider, so every aspect fell.
+  // Measured on the installed build: 1.222 at 1500x980 and at 1920x1080 (canvas 599x490 -- identical
+  // at both, because the room's content wrap caps at 1160 and centres), and 1.720 at 1280x720, where
+  // the panel's ceiling binds and the stage gives ground to 335 (canvas 507.3x294.9).
+  //
+  // 1.222 is the FLOOR, not one sample of three: above 1160px of room width the wrap caps and the
+  // canvas stops growing, and above ~980px of height the stage is already at its 530 ceiling, so no
+  // larger window produces a narrower stage. That floor now clears fitCameraDistance's reference by
+  // 0.022 -- real, but thin enough that the next person to raise --hc-stage-max could cross it
+  // without noticing, and crossing it silently changes the vertical framing this whole describe
+  // block exists to pin. So the margin is asserted, not assumed.
+  const MEASURED_ASPECTS = [1.222, 1.5, 1.72];
+  it("the stage's narrowest measured aspect still clears fitCameraDistance's reference", () => {
+    expect(
+      Math.min(...MEASURED_ASPECTS),
+      "below FIT_REF_ASPECT the camera pulls back and the framing solved below stops holding -- " +
+        "if --hc-stage-max grew again, re-solve HEALTH_CAMERA_DIST/TARGET_Y rather than widening " +
+        "this band",
+    ).toBeGreaterThanOrEqual(FIT_REF_ASPECT);
+  });
+
+  for (const aspect of MEASURED_ASPECTS) {
     it(`contains the case and the floor ring at a ${aspect} stage, with ~8% air`, () => {
       const p = project(aspect);
       const ys = silhouette.map((q) => p(q).y);

@@ -1167,6 +1167,7 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
       "hc-stage-min": "the rig's usable floor",
       "hc-stage-max": "the approved comp's stage height",
       "hc-chrome-top": "46px shell topbar + 26px .v2-content padding-top",
+      "hc-comp-drop": "the approved comp's offset of this card below the row top",
       "hc-hud-reserve": "hud-frame.css's own band height",
       "hc-stage-slack": "margin above the lane's clip",
     };
@@ -1194,9 +1195,20 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     const cap = /max-height:\s*calc\(([\s\S]*?)\)\s*;/.exec(panel);
     expect(cap, ".hc-panel must cap itself at the viewport minus its chrome").not.toBeNull();
     expect(cap![1], "the cap must track the VIEWPORT, not a breakpoint").toContain("100vh");
-    for (const key of ["hc-chrome-top", "hc-hud-reserve", "hc-stage-slack"]) {
+    for (const key of ["hc-chrome-top", "hc-comp-drop", "hc-hud-reserve", "hc-stage-slack"]) {
       expect(cap![1], "--" + key + " must be part of the cap").toContain("var(--" + key + ")");
     }
+    // #225 round 2 dropped the panel --hc-comp-drop below the row top to match the approved comp.
+    // A drop that is NOT also subtracted from the cap is the same arithmetic defect rounds 3-9
+    // paid for, one level up: the panel would still believe it may fill the lane from the top, so
+    // at 1280x720 its bottom would land ~48px under the clip and a reading would go with it. The
+    // margin and the cap must therefore spend the SAME token -- pinned here so neither can drift
+    // from the other, and so the literal can never be restated as a second number.
+    expect(
+      panel,
+      "the drop must be applied as margin-top: var(--hc-comp-drop) -- a second literal here is " +
+        "how the cap and the offset stop agreeing",
+    ).toMatch(/margin-top:\s*var\(--hc-comp-drop\)\s*;/);
     expect(
       cap![1],
       "the cap may not subtract the stage's own bounds -- the stage is INSIDE the panel, and " +
@@ -1216,7 +1228,11 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     // and the fact that only the stage shrinks.
     const SHORT = 720;
     const capAt = (viewport: number) =>
-      viewport - px["hc-chrome-top"] - px["hc-hud-reserve"] - px["hc-stage-slack"];
+      viewport -
+      px["hc-chrome-top"] -
+      px["hc-comp-drop"] -
+      px["hc-hud-reserve"] -
+      px["hc-stage-slack"];
     expect(
       capAt(SHORT),
       "at 1280x720 the cap must still leave the rig its usable floor -- inflate the named chrome " +

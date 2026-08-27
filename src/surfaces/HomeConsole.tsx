@@ -165,9 +165,14 @@ const HAPPENING_GLYPH: Record<string, string> = {
 //
 // ONE PAIR COVERS ALL THREE REQUIRED VIEWPORTS, by construction rather than by luck: the fov is
 // VERTICAL, the stage's height is fixed (--hc-stage-max), and fitCameraDistance leaves the base
-// distance untouched at any aspect >= 1.2 -- Health's stage measures 1.30-1.40 at 1280, 1500 and
-// 1920. Only the horizontal margin changes with the viewport, and the widest projected point sits
-// at 0.49 of the half-width at the narrowest of the three. Pinned in home-console-parity-225.
+// distance untouched at any aspect >= 1.2. Only the horizontal margin changes with the viewport.
+// ROUND 2 MOVED THOSE ASPECTS and they are re-measured, not carried forward: --hc-stage-max grew
+// 500 -> 530 to match the approved comp, which makes the canvas taller without making it wider, so
+// Health's stage now measures 1.222 at both 1500x980 and 1920x1080 (canvas 599x490, identical at
+// both because the room's content wrap caps at 1160 and centres) and 1.720 at 1280x720, where the
+// panel's ceiling binds and the stage gives ground to 335. 1.222 is the FLOOR across every window
+// size, and it clears the 1.2 reference by 0.022 -- thin, so home-console-parity-225 asserts that
+// margin explicitly. Raising --hc-stage-max again means re-solving this pair, not widening a band.
 const HEALTH_CAMERA_DIST = 10.1;
 const HEALTH_CAMERA_TARGET_Y = -0.48;
 
