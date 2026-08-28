@@ -739,11 +739,20 @@ export function setRoomAccent(room: PickableRoom, hex: string | null): void {
 // app match). Persists an explicit pick for every room — so later per-room tweaks behave exactly
 // as before — applies once, notifies once. Same whitelist guarantee as setRoomAccent: a non-swatch
 // key is a full no-op (never a half-applied state).
-export function setAccentForAllRooms(hex: string): void {
-  if (!isSwatchHex(hex)) return;
-  const key = hex.trim().toLowerCase();
+//
+// `null` means "the source room is on its DEFAULT" and CLEARS every room's pick, which lands on the
+// same visible state — the whole app on the default accent — without persisting a value the
+// whitelist would reject on the next read. This path became load-bearing with the 2026-08-27
+// five-hybrid freeze: the default violet is deliberately not a selectable swatch, so an unpicked
+// room can no longer express "apply what I am showing" as a hex.
+export function setAccentForAllRooms(hex: string | null): void {
+  if (hex !== null && !isSwatchHex(hex)) return;
+  const key = hex?.trim().toLowerCase() ?? null;
   const accents = readRoomAccents();
-  for (const room of PICKABLE_ROOMS) accents[room] = key;
+  for (const room of PICKABLE_ROOMS) {
+    if (key === null) delete accents[room];
+    else accents[room] = key;
+  }
   try {
     localStorage.setItem(ROOM_ACCENTS_KEY, JSON.stringify(accents));
   } catch {

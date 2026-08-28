@@ -55,63 +55,54 @@ export function defaultRoomAccent(room: PickableRoom): string {
 
 // The curated swatch palette — SINGLE SOURCE OF TRUTH for both the picker UI and the persisted-value
 // whitelist (theme.ts only ever applies a value found here, so a tampered localStorage can't inject
-// an illegible colour). Re-curated 2026-07-16 on the owner's directive ("the 2 color shift options
-// are the favorite amongst the 15 so maybe make half of them some good 2 color shift options and the
-// remaining half all the standard color spectrum"): the deep singles (Slate/Plum/Wine — the last
-// swatches needing adaptive ink/text) retire, the singles half becomes a clean standard-spectrum
-// walk, and the duo half grows to seven. Each DUO pairs a bright PRIMARY (the accent proper: chrome,
-// buttons, text) with a SECONDARY that drives the room's dim/line washes (borders, hover washes,
-// glows), giving a genuine two-colour room without touching any foreground-legibility surface.
-// 8 spectrum singles + 7 duos = 15, grid 5×3.
+// an illegible colour).
+//
+// FROZEN TO FIVE HYBRIDS (owner ruling 2026-08-27). The picker offers exactly five two-colour
+// hybrids and nothing else: every single swatch retires, and so do the two duos the owner did not
+// name (Red / Blue, Amber / Wine). This is a deliberate temporary narrowing of the OFFER, not a new
+// theme system — no engine, no gradient layer, no animation was added, and the five that remain are
+// the same vetted pairs that already shipped, at the same hexes. The five app-wide Settings themes
+// (Midnight · Violet · Crimson · Emerald · Hearth) are a different system entirely and are untouched.
+//
+// THE DEFAULT IS NOT A SIXTH OPTION. `defaultRoomAccent()` still returns plain violet #a78bfa and
+// "Reset to default" still restores it — but the default is a fall-back state, not a selectable
+// swatch, so it deliberately does NOT appear in this array. (Violet / Teal happens to carry #a78bfa
+// as its PRIMARY; its key is the composite `#a78bfa+#3fd9c2`, so a defaulted room reads as "nothing
+// selected", never as a silent Violet / Teal pick.)
+//
+// A PICK STORED BEFORE THIS FREEZE that named a now-removed swatch is no longer whitelisted, so
+// readRoomAccents() drops it and the room falls back to the default — the same safe path a tampered
+// store has always taken. It can never become "another custom pick".
 //
 // THE LEGIBILITY LAW (non-negotiable — why this is a curated set, not a free hex field): the accent
-// is consumed in TWO foreground roles, each with its own contrast floor, so every swatch is vetted
-// against BOTH:
-//   (1) accent-as-FILL — the accent paints a button/pill and the accent-INK is read ON it. Two kinds:
-//       • BRIGHT (no `ink`) — high-luminance; legible under the DEFAULT dark ink `--v2-accent-ink #1a0a2e`.
-//       • DARK (`ink` set) — a deep tone that would FAIL under the dark ink, so it carries its OWN light
-//         ink; theme.ts (applyRoomAccents) emits that paired ink alongside the accent so the fill flips
-//         to light-on-dark and stays legible (adaptive ink — the "bright/dark mixed" ask).
-//   (2) accent-as-TEXT — the accent is read AS text/glyphs ON the dark room panel (Lab station labels,
-//       the Home dock's primary node, Blackbook's change tag, session meta, …). A BRIGHT swatch is
-//       already legible as text on the panel, but a DARK swatch renders ~2.5:1 — illegible. So each
-//       DARK swatch also carries a paired light, hue-CARRYING `text` tint; theme.ts emits it as
-//       `--ix-accent-text`/`--v2-accent-text` for dark picks, and the accent-as-text sites read that
-//       token (adaptive text — the dark-tone legibility fix, 2026-07-13). A BRIGHT swatch needs no
-//       `text` (its accent-text stays the raw accent, already legible).
-//   DUO swatches sidestep both floors by construction: the PRIMARY must be BRIGHT (guard-enforced —
-//   no ink/text pairing ever needed), and the SECONDARY only ever renders at wash alpha (14%/25%
-//   decorative borders/washes — never text, never a fill under ink), so it carries no contrast floor.
-// All invariants — every bright swatch/primary ≥4.5:1 vs #1a0a2e; every dark swatch's `ink`/`text`
-// legible AND load-bearing; duo primaries genuinely bright — are mechanized in room-accents.test.tsx.
-// The four room presets lead so a room's own identity hue is always one tap away.
+// is consumed in TWO foreground roles, each with its own contrast floor. DUO swatches clear BOTH by
+// construction, which is exactly why an all-duo palette is safe:
+//   (1) accent-as-FILL — the accent paints a button/pill and the accent-INK (`--v2-accent-ink`
+//       #1a0a2e) is read ON it. Every duo PRIMARY must be BRIGHT (≥4.5:1 vs that ink), so no duo
+//       ever needs the adaptive `ink` pairing.
+//   (2) accent-as-TEXT — the accent is read AS text/glyphs on the dark room panel. A bright primary
+//       is already legible there, so no duo needs the adaptive `text` pairing either.
+//   The SECONDARY only ever renders at wash alpha (14%/25% decorative borders/washes — never text,
+//   never a fill under ink), so it carries no contrast floor at all.
+// The `ink`/`text` fields below stay on the TYPE, dormant: theme.ts's adaptive-ink emission path is
+// still wired and guarded, so a dark swatch could return without re-deriving the mechanism. No
+// current swatch uses them.
+// All invariants — every primary genuinely bright, every option a duo, the exact five in order — are
+// mechanized in room-accents.test.tsx.
 export type AccentSwatch = {
   name: string;
-  hex: string; // the PRIMARY accent (chrome, buttons, accent-text)
+  hex: string; // the PRIMARY accent (chrome, buttons, accent-text) — must be BRIGHT
   hex2?: string; // DUO only: the SECONDARY driving the dim/line washes
-  ink?: string; // DARK only: paired light on-fill ink
-  text?: string; // DARK only: paired light accent-as-text tint
+  ink?: string; // DARK only (none today): paired light on-fill ink
+  text?: string; // DARK only (none today): paired light accent-as-text tint
 };
 
+// The five, in the owner's exact order. One row of five in the popover (`repeat(5, 1fr)`).
 export const ROOM_ACCENT_SWATCHES: AccentSwatch[] = [
-  // Row 1 — the four room presets lead + Sky (bright). The spectrum walk begins.
-  { name: "Violet", hex: "#a78bfa" }, // Home preset (~255°)
-  { name: "Teal", hex: "#3fd9c2" }, // Monitor preset (~172°)
-  { name: "Amber", hex: "#f0b878" }, // Blackbook preset (~33°)
-  { name: "Emerald", hex: "#27e08a" }, // Lab preset (~154°)
-  { name: "Sky", hex: "#46a8ff" }, // azure blue (~210°)
-  // Row 2 — the rest of the standard spectrum (all ≥4.5:1 vs the dark ink) + the first duos.
-  { name: "Red", hex: "#ff6b6b" }, // (~0°)
-  { name: "Yellow", hex: "#ffe14a" }, // (~53°)
-  { name: "Magenta", hex: "#f45cc6" }, // hot fuchsia (~318°)
   { name: "Cyan / Midnight", hex: "#35e0e8", hex2: "#3b2a7a" }, // cyan chrome over midnight-purple washes
-  { name: "Red / Blue", hex: "#ff6b6b", hex2: "#2f6bff" }, // red chrome over vivid-blue washes
-  // Row 3 — the rest of the duos (2026-07-16: the owner's favourites, grown to half the palette).
-  // Every PRIMARY reuses an already-vetted bright single; secondaries are wash-only (no floor).
   { name: "Lime / Cyan", hex: "#b6f24a", hex2: "#35e0e8" }, // lime chrome over cyan washes
   { name: "Violet / Teal", hex: "#a78bfa", hex2: "#3fd9c2" }, // the brand pair — violet chrome, teal washes
   { name: "Magenta / Violet", hex: "#f45cc6", hex2: "#6b2b9e" }, // synthwave — hot pink over deep purple
-  { name: "Amber / Wine", hex: "#f0b878", hex2: "#9e1f46" }, // ember — warm gold over deep crimson
   { name: "Sky / Emerald", hex: "#46a8ff", hex2: "#27e08a" }, // aurora — azure over emerald washes
 ];
 
