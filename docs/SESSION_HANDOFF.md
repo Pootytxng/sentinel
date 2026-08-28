@@ -99,15 +99,15 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **15 worktrees besides `main`; seven carry commits not on main — do NOT delete or hard-reset
-  those seven before checking them**: `feat/user-feedback-lab-recovery` (49) ·
-  `claude/compy-health-parity` (24) · `claude/compy-visual-recovery-kit-6fd074` (15) ·
-  `feat/lab-49-parity-port` (6) · `lane/cleanup-train-2026-08-20` (5) ·
-  `lane/vision-pointer-guard-2026-08-24` (3) · `claude/mission1-test-workspace` (2 — this
-  landing commit and its RELEASE_STATE sibling only; Mission 1's own work is ON main as #231).
-  The `.claude/worktrees/` pair still holds the unaccepted Test and Health candidates, preserved
-  on purpose and accepted by nobody, and `sentinel-mission0-accent-landing` is parked on the
-  trunk carrying zero. Re-derived 2026-08-28 against `origin/main` 2b359471, Mission 1's merge.
+- **15 worktrees besides `main`; six carry commits not on main — do NOT delete or hard-reset those
+  six before checking them**: `feat/user-feedback-lab-recovery` (49) · `claude/compy-health-parity`
+  (24) · `claude/compy-visual-recovery-kit-6fd074` (15) · `feat/lab-49-parity-port` (6) ·
+  `lane/cleanup-train-2026-08-20` (5) · `lane/vision-pointer-guard-2026-08-24` (3). The
+  `.claude/worktrees/` pair holds the unaccepted Test and Health candidates; the parked
+  `sentinel-mission0-accent-landing` and `sentinel-mission1-test-workspace` carry zero — all of
+  Mission 1 is ON main (#231, landing pair #233). **Tip-RELATIVE: no `origin/main` SHA is pinned;
+  pinning one is what went stale last time.** Each count is `git rev-list --count origin/main..<ref>`,
+  unmoved by a direct-main commit — re-derive it and `git worktree list` against the tip, not this.
 
 ## Waiting on the owner — two arming gates, nothing else
 
