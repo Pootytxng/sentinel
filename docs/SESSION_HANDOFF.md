@@ -103,11 +103,11 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
   those seven before checking them**: `feat/user-feedback-lab-recovery` (49) ·
   `claude/compy-health-parity` (24) · `claude/compy-visual-recovery-kit-6fd074` (15) ·
   `feat/lab-49-parity-port` (6) · `lane/cleanup-train-2026-08-20` (5) ·
-  `lane/vision-pointer-guard-2026-08-24` (3) · `claude/mission1-test-workspace` (1 — the lane
-  this very commit is made on). The `.claude/worktrees/` pair still holds the unaccepted Test
-  and Health candidates, preserved on purpose and accepted by nobody, and
-  `sentinel-mission0-accent-landing` is parked on the trunk carrying zero. Re-derived
-  2026-08-28 against `origin/main` bddf8f64, the base this Mission 1 lane was cut from.
+  `lane/vision-pointer-guard-2026-08-24` (3) · `claude/mission1-test-workspace` (2 — this
+  landing commit and its RELEASE_STATE sibling only; Mission 1's own work is ON main as #231).
+  The `.claude/worktrees/` pair still holds the unaccepted Test and Health candidates, preserved
+  on purpose and accepted by nobody, and `sentinel-mission0-accent-landing` is parked on the
+  trunk carrying zero. Re-derived 2026-08-28 against `origin/main` 2b359471, Mission 1's merge.
 
 ## Waiting on the owner — two arming gates, nothing else
 
