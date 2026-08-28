@@ -99,15 +99,15 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **Nine worktrees besides `main`. Five are spent; four carry commits that are not on main — do
-  NOT delete or hard-reset those four before checking them**: `feat/user-feedback-lab-recovery`
-  (49) · `feat/lab-49-parity-port` (6) · `lane/cleanup-train-2026-08-20` (5) ·
-  `lane/vision-pointer-guard-2026-08-24` (3). A tenth, detached with no branch name at all, hid for
-  fifteen days because every audit here reads `origin` refs and a branchless checkout has none; it
-  was retired 2026-08-26 under tag `preserve/checklist-disk-item-c5660e` (5 commits, recoverable,
-  none on `main`). Rule C of `scripts/handoff-worktree-truth.test.mjs` fails the build if a checkout
-  carries commits and this bullet does not name it. Re-derive with `git worktree list` +
-  `git rev-list --count origin/main..<branch>`; never carry the numbers forward unchecked.
+- **14 worktrees besides `main`; seven carry commits not on main — do NOT delete or hard-reset
+  those seven before checking them**: `feat/user-feedback-lab-recovery` (49) ·
+  `claude/compy-health-parity` (24) · `claude/compy-visual-recovery-kit-6fd074` (15) ·
+  `feat/lab-49-parity-port` (6) · `lane/cleanup-train-2026-08-20` (5) ·
+  `lane/vision-pointer-guard-2026-08-24` (3) · `claude/mission0-accent-landing` (1). Re-derived
+  2026-08-28 vs `origin/main` 5bf84051; the `.claude/worktrees/` pair holds the unaccepted Test
+  and Health candidates, preserved on purpose. A branchless checkout hid here 15 days, retired
+  2026-08-26 as tag `preserve/checklist-disk-item-c5660e` (5 commits, none on `main`). Rule C of
+  `scripts/handoff-worktree-truth.test.mjs` fails if a carrier is unnamed; re-derive, never carry.
 
 ## Waiting on the owner — two arming gates, nothing else
 
