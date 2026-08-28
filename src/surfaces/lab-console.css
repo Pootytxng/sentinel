@@ -392,3 +392,89 @@
   padding-top: var(--v2-gap);
   border-top: 1px solid var(--v2-line);
 }
+
+/* ---- THE SELECTED-STATION WORKSPACE (Mission 1, 2026-08-28) --------------------------------
+   Test in its selected state. There is almost nothing here on purpose: the room LEAVES the split
+   composition when a station opens (LabConsole withholds `aside`, so RoomShell never sets
+   data-layout="split"), which means `.v2-room-body` is already a full-width block inside the
+   shared 1160px content cap. No new breakpoint, no new width — the layout is the absence of the
+   aside, and these rules only dress the header it left behind.
+   Guarded by src/surfaces/lab-station-workspace.test.tsx. */
+
+/* The way out, above the heading. Quiet by design — it is the one control competing with the
+   station's own, and the station is what the reader came for. */
+:root[data-v2="on"] .lc-ws-bar {
+  margin-bottom: var(--v2-pad-sm);
+}
+:root[data-v2="on"] .lc-ws-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 4px 8px;
+  border: 1px solid var(--ix-glass-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ix-text-2);
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-label);
+  cursor: pointer;
+}
+:root[data-v2="on"] .lc-ws-back:hover {
+  color: var(--ix-text-1);
+  border-color: var(--ix-glass-top);
+}
+:root[data-v2="on"] .lc-ws-back:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
+}
+:root[data-v2="on"] .lc-ws-back-ic {
+  font-size: var(--type-card);
+  line-height: 1;
+}
+
+/* The header itself: the station's existing mark and its name, on one line inside the room's <h1>.
+   The name is printed HERE and nowhere else — the old <BentoTile title> that said it a second time
+   an inch lower is gone with the squeezed panel. */
+:root[data-v2="on"] .lc-ws-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+:root[data-v2="on"] .lc-ws-ic {
+  display: inline-grid;
+  place-items: center;
+  color: var(--v2-accent-text, var(--v2-accent));
+}
+/* The focus target the open effect moves to. It is programmatic focus on a heading, so it draws no
+   ring by itself — but a keyboard user who tabs back onto it must still see where they are. */
+:root[data-v2="on"] .lc-ws-title:focus {
+  outline: none;
+}
+:root[data-v2="on"] .lc-ws-title:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+/* The body. A hairline under the header is the whole frame: every station already draws its own
+   cards, and wrapping all of them in one more panel is the box-in-box this sheet has removed
+   twice before (the deleted .lab-card, and the stage's own frame). */
+:root[data-v2="on"] .lc-workspace {
+  margin-top: var(--v2-gap);
+  padding-top: var(--v2-gap);
+  border-top: 1px solid var(--v2-line);
+}
+
+/* THE FOCUS RING TEST'S DOCK ROWS COULD NOT PAINT (2026-08-28, Mission 1).
+   Backing out of a station workspace returns focus to the exact row that opened it. Measured on the
+   installed build, that row showed no ring at all: the global feedback floor draws
+   `outline: 2px solid var(--ix-accent); outline-offset: 2px` (doorknob.css:58) two pixels OUTSIDE
+   the border box, and `.dock-node` clips to that box with a corner-notch polygon (dock.css:45), so
+   the ring was drawn and immediately clipped away. A negative offset puts it inside the clip.
+   SCOPED TO TEST ON PURPOSE: `.dock-node` is shared with Health, which renders the same Dock and is
+   locked scope for this mission — fixing the shared rule would change a room this mission may not
+   touch. Health carries the same defect and needs its own decision. Guarded by
+   src/surfaces/lab-station-workspace.test.tsx. */
+:root[data-v2="on"] .v2-room[data-room="lab"] .dock-node:focus-visible {
+  outline-offset: -3px;
+}
