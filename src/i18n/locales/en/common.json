@@ -81,20 +81,10 @@
     "applyToAllTitle": "Make every room use this accent",
     "resetToDefault": "Reset to default",
     "swatchNames": {
-      "violet": "Violet",
-      "teal": "Teal",
-      "amber": "Amber",
-      "emerald": "Emerald",
-      "sky": "Sky",
-      "red": "Red",
-      "yellow": "Yellow",
-      "magenta": "Magenta",
       "cyanMidnight": "Cyan / Midnight",
-      "redBlue": "Red / Blue",
       "limeCyan": "Lime / Cyan",
       "violetTeal": "Violet / Teal",
       "magentaViolet": "Magenta / Violet",
-      "amberWine": "Amber / Wine",
       "skyEmerald": "Sky / Emerald"
     }
   },

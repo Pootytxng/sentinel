@@ -169,8 +169,8 @@ describe("room-accents: curated palette is legible + sound", () => {
       if (s.hex2) expect(s.hex2, `${s.name} hex2`).toMatch(/^#[0-9a-fA-F]{6}$/);
       if (s.ink) expect(s.ink, `${s.name} ink`).toMatch(/^#[0-9a-fA-F]{6}$/);
     }
-    // Distinctness is keyed on swatchKey (a duo may deliberately share its PRIMARY with a single —
-    // e.g. Red / Blue reuses Red's vetted primary — but no two swatches may be the same swatch).
+    // Distinctness is keyed on swatchKey (two duos may deliberately share a colour — Lime / Cyan's
+    // SECONDARY is Cyan / Midnight's PRIMARY — but no two swatches may be the same swatch).
     expect(new Set(ROOM_ACCENT_SWATCHES.map(swatchKey)).size).toBe(ROOM_ACCENT_SWATCHES.length);
   });
 
@@ -191,9 +191,45 @@ describe("room-accents: curated palette is legible + sound", () => {
     }
   });
 
-  it("no earth-tone darks remain (Rust/Olive/Pine pruned on the owner's 2026-07-13b directive)", () => {
+  it("every retired swatch is really gone — earth-tone darks, all singles, and the two unnamed duos", () => {
     const names = ROOM_ACCENT_SWATCHES.map((s) => s.name);
-    for (const gone of ["Rust", "Olive", "Pine"]) expect(names).not.toContain(gone);
+    // 2026-07-13b retired the earth-tone darks. 2026-08-27 (the five-hybrid freeze) retired every
+    // single swatch plus the two duos the owner did not name.
+    const gone = [
+      "Rust",
+      "Olive",
+      "Pine",
+      "Slate",
+      "Plum",
+      "Wine",
+      "Violet",
+      "Teal",
+      "Amber",
+      "Emerald",
+      "Sky",
+      "Red",
+      "Yellow",
+      "Magenta",
+      "Red / Blue",
+      "Amber / Wine",
+    ];
+    for (const name of gone) expect(names, `${name} must not be offered`).not.toContain(name);
+    // …and their persisted KEYS must no longer whitelist, so a stored pick naming one is rejected.
+    const retiredKeys = [
+      "#a78bfa",
+      "#3fd9c2",
+      "#f0b878",
+      "#27e08a",
+      "#46a8ff",
+      "#ff6b6b",
+      "#ffe14a",
+      "#f45cc6",
+      "#ff6b6b+#2f6bff",
+      "#f0b878+#9e1f46",
+    ];
+    for (const key of retiredKeys) {
+      expect(isSwatchHex(key), `${key} must no longer whitelist`).toBe(false);
+    }
   });
 
   it("swatchKey/splitSwatchKey round-trip singles (bare hex) and duos (primary+secondary)", () => {
@@ -215,15 +251,25 @@ describe("room-accents: curated palette is legible + sound", () => {
     expect(css).toContain(duo.hex2!.toLowerCase());
   });
 
-  it("the four room presets are all in the palette (a room's own hue is always pickable)", () => {
-    const hexes = new Set(ROOM_ACCENT_SWATCHES.map((s) => s.hex.toLowerCase()));
-    for (const preset of [HOME_ACCENT, ROOM_IDENTITY.play, ROOM_IDENTITY.learn, ROOM_IDENTITY.lab]) {
-      expect(hexes.has(preset.toLowerCase()), `${preset} missing from palette`).toBe(true);
+  // REPLACES "the four room presets are all in the palette". That assumption died with the
+  // 2026-08-27 five-hybrid freeze: the DEFAULT and the SELECTABLE palette are now deliberately
+  // separate. Pin the separation itself, so nothing quietly re-adds the default as a sixth option.
+  it("the DEFAULT accent is NOT a selectable swatch — default and palette are separate on purpose", () => {
+    const keys = new Set(ROOM_ACCENT_SWATCHES.map(swatchKey));
+    for (const room of PICKABLE_ROOMS) {
+      const def = defaultRoomAccent(room).toLowerCase();
+      expect(keys.has(def), `${room}'s default ${def} must not be a swatch key`).toBe(false);
+      expect(isSwatchHex(def), `${room}'s default ${def} must not whitelist as a pick`).toBe(false);
     }
+    // Violet / Teal carries the default violet as its PRIMARY, but its KEY is the composite — so a
+    // defaulted room reads as "nothing selected", never as a silent Violet / Teal pick.
+    const vt = ROOM_ACCENT_SWATCHES.find((x) => x.name === "Violet / Teal")!;
+    expect(vt.hex.toLowerCase()).toBe(HOME_ACCENT.toLowerCase());
+    expect(swatchKey(vt)).not.toBe(HOME_ACCENT.toLowerCase());
   });
 
   it("isSwatchHex whitelists only palette hexes (case-insensitive), rejects others", () => {
-    expect(isSwatchHex("#3FD9C2")).toBe(true);
+    expect(isSwatchHex("#35E0E8+#3B2A7A")).toBe(true);
     expect(isSwatchHex("#000000")).toBe(false);
     expect(isSwatchHex("not-a-hex")).toBe(false);
   });
@@ -251,8 +297,8 @@ describe("room-accents: persisted store round-trips + rejects junk", () => {
   });
 
   it("setRoomAccent persists a swatch and readRoomAccents returns it; null clears", () => {
-    setRoomAccent("play", "#46a8ff");
-    expect(readRoomAccents().play).toBe("#46a8ff");
+    setRoomAccent("play", "#46a8ff+#27e08a");
+    expect(readRoomAccents().play).toBe("#46a8ff+#27e08a");
     setRoomAccent("play", null);
     expect(readRoomAccents().play).toBeUndefined();
   });
@@ -261,25 +307,28 @@ describe("room-accents: persisted store round-trips + rejects junk", () => {
   // appearing under another room during rapid probing (unreproduced). Pin the underlying invariant so
   // it can never become real: writing/clearing ONE room's pick must leave every sibling room untouched.
   it("setRoomAccent writes ONLY the target room — sibling picks are never mutated", () => {
-    setRoomAccent("home", "#ffe14a"); // Yellow
-    setRoomAccent("learn", "#f45cc6"); // Magenta
-    setRoomAccent("play", "#f0b878+#9e1f46"); // Amber / Wine duo — must not disturb home/learn
+    setRoomAccent("home", "#b6f24a+#35e0e8"); // Lime / Cyan
+    setRoomAccent("learn", "#f45cc6+#6b2b9e"); // Magenta / Violet
+    setRoomAccent("play", "#46a8ff+#27e08a"); // Sky / Emerald — must not disturb home/learn
     let got = readRoomAccents();
-    expect(got.home).toBe("#ffe14a");
-    expect(got.learn).toBe("#f45cc6");
-    expect(got.play).toBe("#f0b878+#9e1f46");
+    expect(got.home).toBe("#b6f24a+#35e0e8");
+    expect(got.learn).toBe("#f45cc6+#6b2b9e");
+    expect(got.play).toBe("#46a8ff+#27e08a");
     setRoomAccent("play", null); // clearing one leaves the others intact
     got = readRoomAccents();
     expect(got.play).toBeUndefined();
-    expect(got.home).toBe("#ffe14a");
-    expect(got.learn).toBe("#f45cc6");
+    expect(got.home).toBe("#b6f24a+#35e0e8");
+    expect(got.learn).toBe("#f45cc6+#6b2b9e");
   });
 
   it("a non-swatch value (tampered store) is ignored — the legibility guarantee holds", () => {
-    localStorage.setItem("compy_room_accents", JSON.stringify({ play: "#000000", learn: "#f0b878" }));
+    localStorage.setItem(
+      "compy_room_accents",
+      JSON.stringify({ play: "#000000", learn: "#a78bfa+#3fd9c2" }),
+    );
     const got = readRoomAccents();
     expect(got.play).toBeUndefined(); // #000000 not a swatch → dropped
-    expect(got.learn).toBe("#f0b878"); // a real swatch → kept
+    expect(got.learn).toBe("#a78bfa+#3fd9c2"); // a real swatch → kept
   });
 
   it("setRoomAccent refuses to apply a non-swatch hex (treats it as a clear)", () => {
@@ -295,14 +344,15 @@ describe("room-accents: managed <style> is scoped + same-element (flag-off inert
   });
 
   it("applyRoomAccents emits a scoped rule with same-element --v2-accent + dim + line per pick", () => {
-    setRoomAccent("play", "#46a8ff"); // setRoomAccent calls applyRoomAccents
+    setRoomAccent("play", "#46a8ff+#27e08a"); // Sky / Emerald — setRoomAccent calls applyRoomAccents
     const css = document.getElementById("compy-room-accents")!.textContent!;
     // scoped under the flag → inert when off
     expect(css).toContain(':root[data-room-identity="on"] .v2-room[data-room="play"]{');
-    // all three tokens re-declared SAME element (the var()-declaring-element gotcha)
+    // all three tokens re-declared SAME element (the var()-declaring-element gotcha). Since the
+    // freeze every pick is a duo, so the washes derive from the SECONDARY, not the primary.
     expect(css).toContain("--v2-accent:#46a8ff;");
-    expect(css).toMatch(/--v2-accent-dim:color-mix\(in srgb, #46a8ff 14%/);
-    expect(css).toMatch(/--v2-accent-line:color-mix\(in srgb, #46a8ff 25%/);
+    expect(css).toMatch(/--v2-accent-dim:color-mix\(in srgb, #27e08a 14%/);
+    expect(css).toMatch(/--v2-accent-line:color-mix\(in srgb, #27e08a 25%/);
   });
 
   // Adaptive ink/text (owner 2026-07-13, "Option B"): a DARK pick emitted its paired light ink/text
@@ -360,8 +410,8 @@ describe("room-accents: managed <style> is scoped + same-element (flag-off inert
   });
 
   it("every generated rule header carries the [data-room-identity=\"on\"] scope", () => {
-    setRoomAccent("home", "#ff6b6b");
-    setRoomAccent("lab", "#ffe14a");
+    setRoomAccent("home", "#35e0e8+#3b2a7a");
+    setRoomAccent("lab", "#b6f24a+#35e0e8");
     const css = document.getElementById("compy-room-accents")!.textContent!;
     const headers = [...css.matchAll(/([^{}]+)\{/g)].map((m) => m[1].trim());
     expect(headers.length).toBeGreaterThan(0);
@@ -369,7 +419,7 @@ describe("room-accents: managed <style> is scoped + same-element (flag-off inert
   });
 
   it("removes the <style> entirely when no picks remain (unused feature = zero DOM)", () => {
-    setRoomAccent("play", "#46a8ff");
+    setRoomAccent("play", "#46a8ff+#27e08a");
     expect(document.getElementById("compy-room-accents")).not.toBeNull();
     setRoomAccent("play", null);
     expect(document.getElementById("compy-room-accents")).toBeNull();
@@ -413,14 +463,14 @@ describe("room-accents: picker interaction (pick → persist → reset)", () => 
     render(<RoomAccentPicker room={"play" as PickableRoom} roomLabel="Monitor" />);
     // open the popover
     fireEvent.click(screen.getByRole("button", { name: /Monitor accent color/ }));
-    // pick Sky
-    fireEvent.click(screen.getByRole("menuitemradio", { name: "Sky" }));
-    expect(readRoomAccents().play).toBe("#46a8ff");
-    // re-open → Sky is checked
+    // pick Sky / Emerald
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Sky / Emerald" }));
+    expect(readRoomAccents().play).toBe("#46a8ff+#27e08a");
+    // re-open → Sky / Emerald is checked
     fireEvent.click(screen.getByRole("button", { name: /Monitor accent color/ }));
-    expect(screen.getByRole("menuitemradio", { name: "Sky" }).getAttribute("aria-checked")).toBe(
-      "true",
-    );
+    expect(
+      screen.getByRole("menuitemradio", { name: "Sky / Emerald" }).getAttribute("aria-checked"),
+    ).toBe("true");
     // reset → cleared
     fireEvent.click(screen.getByRole("menuitem", { name: "Reset to default" }));
     expect(readRoomAccents().play).toBeUndefined();
@@ -471,32 +521,41 @@ describe("apply to all rooms", () => {
     localStorage.clear();
     const events = vi.fn();
     window.addEventListener("compy:room-identity-changed", events);
+    const cyanMidnight = swatchKey(ROOM_ACCENT_SWATCHES.find((s) => s.name === "Cyan / Midnight")!);
+    setRoomAccent("play", cyanMidnight); // the source room's pick is what gets stamped
+    events.mockClear();
     render(<RoomAccentPicker room="play" roomLabel="Monitor" />);
     fireEvent.click(screen.getByRole("button", { name: "Monitor accent color" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Apply to all rooms" }));
-    const teal = ROOM_IDENTITY.play.toLowerCase();
     const stored = readRoomAccents();
-    for (const room of PICKABLE_ROOMS) expect(stored[room]).toBe(teal);
+    for (const room of PICKABLE_ROOMS) expect(stored[room]).toBe(cyanMidnight);
     expect(events).toHaveBeenCalledTimes(1);
     // A later SINGLE-room pick moves only that room — apply-to-all is a one-shot, not a mode.
-    const amber = swatchKey(ROOM_ACCENT_SWATCHES.find((s) => s.name === "Amber")!);
-    setRoomAccent("learn", amber);
+    const limeCyan = swatchKey(ROOM_ACCENT_SWATCHES.find((s) => s.name === "Lime / Cyan")!);
+    setRoomAccent("learn", limeCyan);
     const after = readRoomAccents();
-    expect(after.learn).toBe(amber);
-    expect(after.home).toBe(teal);
-    expect(after.play).toBe(teal);
+    expect(after.learn).toBe(limeCyan);
+    expect(after.home).toBe(cyanMidnight);
+    expect(after.play).toBe(cyanMidnight);
     window.removeEventListener("compy:room-identity-changed", events);
     localStorage.clear();
   });
 
-  it("closes the popover on apply; a room with no explicit pick applies its DEFAULT accent everywhere", () => {
+  // Since the 2026-08-27 freeze the default violet is deliberately NOT a whitelisted swatch, so an
+  // unpicked room cannot express "apply what I am showing" as a hex. Apply-to-all from a defaulted
+  // room CLEARS every room instead — the same visible end state (the whole app on the default),
+  // reached honestly rather than by persisting a value the next read would reject.
+  it("closes the popover on apply; from a room with no pick it puts every room on the DEFAULT", () => {
     localStorage.clear();
+    setRoomAccent("lab", swatchKey(ROOM_ACCENT_SWATCHES[0])); // a stale pick elsewhere…
     render(<RoomAccentPicker room="home" roomLabel="Home" />);
     fireEvent.click(screen.getByRole("button", { name: "Home accent color" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Apply to all rooms" }));
     expect(screen.queryByRole("menu")).toBeNull();
     const stored = readRoomAccents();
-    for (const room of PICKABLE_ROOMS) expect(stored[room]).toBe(HOME_ACCENT.toLowerCase());
+    for (const room of PICKABLE_ROOMS) expect(stored[room]).toBeUndefined(); // …is cleared too
+    // and every room therefore resolves to its default accent
+    for (const room of PICKABLE_ROOMS) expect(defaultRoomAccent(room)).toBe(HOME_ACCENT);
     localStorage.clear();
   });
 });

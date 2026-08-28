@@ -7,25 +7,26 @@
 //
 // Rendered ONLY when the room-identity flag is on (ShellV2 gates it) — with the flag off the whole
 // feature is inert, so the topbar is byte-identical to today. Curated swatches only (no free hex),
-// so no pick can break the dark-ink-on-accent legibility law.
+// so no pick can break the dark-ink-on-accent legibility law. Every option is a DUO — the
+// room's plain-violet DEFAULT is a fall-back state restored by "reset", never a sixth swatch.
 //
 // KEYBOARD — the ARIA APG menu pattern (BACKLOG C-13 residual (b), issue #150). The popover has
 // declared `role="menu"` since it shipped, but carried none of the behaviour that role promises:
-// no roving tabindex, so all 17 items sat in the tab order and a keyboard user paid 17 stops to
-// cross the topbar; no arrow keys, so the role's own navigation contract was a claim the component
-// did not honour; and no focus restoration, so closing dropped focus onto <body> and lost the
+// no roving tabindex, so every item sat in the tab order and a keyboard user paid one stop per item
+// to cross the topbar; no arrow keys, so the role's own navigation contract was a claim the
+// component did not honour; and no focus restoration, so closing dropped focus onto <body> and lost the
 // user's place. axe cannot see any of this — it reads the roles, which were already correct — which
 // is why it survived the C-13 sweep that landed axe-core.
 //
 // WHY MENU AND NOT `Picker` (design/Picker.tsx). Picker is the select-only combobox and keeps DOM
 // focus on the trigger via aria-activedescendant, which is the stronger pattern where it applies:
 // there is no focus to restore, so the drop-focus bug cannot happen. It does not apply here. This
-// popover mixes a single-select set (15 menuitemradio swatches) with two COMMANDS (apply-to-all,
+// popover mixes a single-select set (the menuitemradio swatches) with two COMMANDS (apply-to-all,
 // reset), and a listbox may not contain commands — so menu is the correct contract and this
 // completes it. Picker's warning is still paid, deliberately: every close path below restores focus
 // to the trigger, because a menu, unlike a combobox, must take focus to work at all.
 //
-// Navigation is ONE LINEAR RING over all 17 items, not 2-D grid movement: the swatch grid's column
+// Navigation is ONE LINEAR RING over every item, not 2-D grid movement: the swatch grid's column
 // count comes from CSS, so JS cannot know it without measuring, and a guessed column count
 // navigates wrongly at the wrap. Up/Left step back, Down/Right step forward, both wrap, Home/End
 // jump to the ends. Disabled items are skipped (reset is disabled while the room has no pick).
@@ -43,24 +44,16 @@ import {
 import { readRoomAccents, setAccentForAllRooms, setRoomAccent } from "./theme";
 import "./room-accent-picker.css";
 
-// Swatch English `name` (room-identity.ts, NOT modified here) → stable camelCase i18n key, for the
-// swatch tooltip/aria-label ONLY. These 14 entries mirror ROOM_ACCENT_SWATCHES exactly, in order;
-// an unmapped future swatch just won't translate (`?? s.name` fallback below) rather than crash.
+// Swatch English `name` (room-identity.ts) → stable camelCase i18n key, for the swatch
+// tooltip/aria-label ONLY. These five entries mirror ROOM_ACCENT_SWATCHES exactly, in order; an
+// unmapped future swatch just won't translate (`?? s.name` fallback below) rather than crash.
+// Frozen to the owner's five hybrids on 2026-08-27 — the singles' keys and the two unnamed duos'
+// keys (redBlue, amberWine) went with them, here and in both locale files.
 const SWATCH_NAME_KEYS: Record<string, string> = {
-  "Violet": "violet",
-  "Teal": "teal",
-  "Amber": "amber",
-  "Emerald": "emerald",
-  "Sky": "sky",
-  "Red": "red",
-  "Yellow": "yellow",
-  "Magenta": "magenta",
   "Cyan / Midnight": "cyanMidnight",
-  "Red / Blue": "redBlue",
   "Lime / Cyan": "limeCyan",
   "Violet / Teal": "violetTeal",
   "Magenta / Violet": "magentaViolet",
-  "Amber / Wine": "amberWine",
   "Sky / Emerald": "skyEmerald",
 };
 
@@ -285,9 +278,13 @@ export function RoomAccentPicker({
             tabIndex={itemTabIndex(ROOM_ACCENT_SWATCHES.length)}
             className="v2-accent-all"
             title={t("common.roomAccentPicker.applyToAllTitle")}
+            // Carries this room's PICK, not its resolved `effective` accent. Since the freeze the
+            // plain-violet default is deliberately NOT a whitelisted swatch, so passing `effective`
+            // from an unpicked room would be rejected and apply-to-all would silently do nothing.
+            // `null` means "this room is on its default", and clearing every room reaches exactly
+            // the same visible state — the whole app on the default — honestly.
             onClick={() => {
-              setAccentForAllRooms(effective);
-              setPick(effective.toLowerCase());
+              setAccentForAllRooms(pick);
               closeMenu();
             }}
           >

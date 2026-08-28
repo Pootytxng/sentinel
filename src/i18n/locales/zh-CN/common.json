@@ -79,20 +79,10 @@
     "applyToAllTitle": "让每个房间都使用这个主题色",
     "resetToDefault": "恢复默认",
     "swatchNames": {
-      "violet": "紫罗兰",
-      "teal": "藏青色",
-      "amber": "琥珀色",
-      "emerald": "翡翠绿",
-      "sky": "天蓝色",
-      "red": "红色",
-      "yellow": "黄色",
-      "magenta": "洋红色",
       "cyanMidnight": "青色 / 午夜蓝",
-      "redBlue": "红色 / 蓝色",
       "limeCyan": "青柠绿 / 青色",
       "violetTeal": "紫罗兰 / 藏青色",
       "magentaViolet": "洋红色 / 紫罗兰",
-      "amberWine": "琥珀色 / 酒红色",
       "skyEmerald": "天蓝色 / 翡翠绿"
     }
   },
