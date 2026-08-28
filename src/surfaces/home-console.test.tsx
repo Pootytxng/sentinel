@@ -963,7 +963,17 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     // WORD, never the longest string. Sentence-length strings wrap, and a wrapped line only makes
     // the strip taller, which the panel now absorbs by shrinking the stage (see the fluid-
     // composition guard) instead of by clipping anything.
-    const CLIENT = 565; // .hc-readout clientWidth at 1280x720, the narrowest supported size
+    // ROUND 11 (#225, 2026-08-27) -- THIS CONSTANT WAS THE BUG. It said 565 and the strip is 547,
+    // so every budget below was checked against 18px that do not exist and the guard stayed green
+    // while the CPU-temp cell hung 10.7px off the strip's right edge, printing "CPU TEM". That is
+    // rounds 6-9's own root cause -- a number nobody re-measured -- moved onto the guard itself.
+    // Re-measured on the INSTALLED build 98653732 over CDP, Health room, OS window 1296x729 (the
+    // window chrome is 16x9, so that is the CLIENT 1280x720 this line names):
+    //   .hc-readout clientWidth 547, padding 16 each side => 515px content box.
+    // To re-take it: launch with the WebView2 debug port, go to Health, size the OS window to
+    // 1296x729, and read document.querySelector(".hc-readout").clientWidth. Do NOT copy a number
+    // from an OS window of 1280x720 -- that is a 1264px client, NARROWER than the supported floor.
+    const CLIENT = 547; // .hc-readout clientWidth at CLIENT 1280x720, the narrowest supported size
     const READS = [73, 73, 76, 76]; // widest UNBREAKABLE child of each reading cell, measured there
     const HAIRLINE = 1;
     const LABEL = 84; // "Readiness" at the 13px type floor -- one word, so it cannot wrap

@@ -691,21 +691,35 @@
    string. Long strings wrap, and wrapping is free because the panel's geometry measures itself
    (see --hc-stage-max above); it is no longer paid for out of a hand-written constant.
      readiness 150px = 56px ring + 10px .arc-gauge gap + 84px "Readiness" (one word, cannot wrap)
-     readings   88px = 76px value (mono + its MEASURED pill, never wraps) + 1px hairline + 6px pad
+     readings    80px = 73px value (mono + its MEASURED pill, never wraps) + 1px hairline + 6px pad
+                 83px for the two that carry a 76px value — the floor IS the derivation, per cell
    Sentence-length strings — the gauge's note, and the CPU cell's "no CPU temp — see below" offer
    line (#134/Q9c) — are NOT in these floors. They wrap, and a wrapped line simply makes the strip
    taller, which the panel now absorbs by shrinking the stage instead of by clipping anything.
-   Budget at 1280×720 (533px content box): 150 + 4×88 + 4×6px gap = 526 ≤ 533. At that size the
-   four readings take their floors and the readiness cell is guaranteed the 157px left over, which
-   still clears its own 150. Guarded in home-console.test.tsx.
-   Round 10 spent the 4px it could find (separator 8 → 6px, floor 85 → 88px) on the two longest
-   labels, "GPU TEMP" and "CPU TEMP", which were wrapping by a hair at 720p. That is COSMETIC only —
-   it is not what keeps the strip correct, because the next translation will wrap something anyway.
-   What keeps it correct is the shared row grid below. */
+   ROUND 11 (#225): THE BUDGET WAS BEING CHECKED AGAINST A STRIP 18px WIDER THAN THE REAL ONE. The
+   guard's CLIENT constant said .hc-readout is 565px at 1280×720; measured on the installed build it
+   is 547, so the true content box is 515px, not 533. The sum 150 + 4×88 + 4×6 = 526 therefore did
+   not fit and never had — the CPU-temp cell hung 10.7px past the strip's right edge and its label
+   printed as "CPU TEM". Green the whole time, because the number it was measured against was one
+   nobody had re-taken: rounds 6-9's own root cause, one axis over. This is NOT a regression from
+   #225's round-2 geometry — emulating the pre-round-2 constants leaves the same overflow.
+   The 20px is bought back where the guard says to buy it, from padding that carries no reading:
+   round 10's floors were 88px across, 5-8px ABOVE each cell's own derivation, and the floors are
+   now that derivation exactly. Budget at 1280×720 (515px content box): 150 + 80 + 80 + 83 + 83 +
+   4×6px gap = 500 ≤ 515, so 15px of real margin where there used to be a 11px deficit.
+   Nothing moves at the owner's 1500×980 or in the approved comp: at that width every track is
+   above its floor and sized by its fr share, so these floors do not bind and the strip renders
+   byte-identically. Only 720p changes.
+   What round 10 bought with those 5-8px was cosmetic — "GPU TEMP" and "CPU TEMP" not wrapping by a
+   hair at 720p. They may wrap again now, and that is harmless BY CONSTRUCTION: the shared row grid
+   below makes row 1 as tall as the tallest label, so every value still starts on the same line. A
+   wrapped label is not a defect; a reading hanging off the edge is. Guarded in home-console.test.tsx,
+   whose CLIENT constant now carries how and when it was measured. */
 :root[data-v2="on"] .hc-readout {
   --hc-readout-sep: 6px;
   display: grid;
-  grid-template-columns: minmax(150px, 2fr) repeat(4, minmax(88px, 1fr));
+  grid-template-columns: minmax(150px, 2fr) minmax(80px, 1fr) minmax(80px, 1fr)
+    minmax(83px, 1fr) minmax(83px, 1fr);
   /* THE FIVE CELLS SHARE THESE THREE ROWS (self-review round 10). Every reading is label · value ·
      attestation, and each cell used to size those three rows for ITSELF. At 1280×720 "GPU TEMP" and
      "CPU TEMP" wrap to two lines where "AVG FPS" and "1% LOW" do not, so their values sat 17px
