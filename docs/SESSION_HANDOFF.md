@@ -7,21 +7,21 @@
 
 ## Where the train is standing
 
-**Test #224 is ACCEPTED. Health #225 is at a round-2 review boundary. Neither lane is pushed.**
-`claude/compy-health-parity` carries the #225 Health candidate `98653732` — that is what is
-INSTALLED on the desk. `claude/compy-visual-recovery-kit-6fd074` carries #224's `bf88150a`, which
-**Codex independently ACCEPTED on 2026-08-27** — visuals only, explicitly **not a GO**: still
+**Test #224 is ACCEPTED. Health #225 is at a review boundary with a self-review PASS. Neither lane
+is pushed.** `claude/compy-health-parity` carries the #225 Health candidate `b4bf26bc` — that is
+what is INSTALLED on the desk. `claude/compy-visual-recovery-kit-6fd074` carries #224's `bf88150a`,
+which **Codex independently ACCEPTED on 2026-08-27** — visuals only, explicitly **not a GO**: still
 unpushed, #224 still open. `main` is clean at `5bf84051`. Do not push either lane, do not close
 #224/#225, and do not write in the other lane's tree.
 
 | | |
 |---|---|
-| Installed | `98653732`, runtime `get_build_stamp` → `98653732 · release · shell 0.9.26`, 1 attempt / 0 transient, one installer on the Desktop, SHA-256 `33418A2C…D847B` |
-| Health #225 round 2 | 4 files, **all Health-only**. `--hc-stage-max` 500→530px · one new `--hc-comp-drop: 48px` declared ONCE on `.hc-panel` and spent twice (`margin-top` **and** subtracted inside the `max-height` cap, so NO BREAKPOINT holds) · symptom glyph `size` 28→40 |
-| What round 2 answers | An independent verdict of ROUND 2 REQUIRED naming report items 6 and 7. Measured installed: stage **height 530** (comp 530.3), **top 159** (comp 158.7), bottom **689** (comp 689.0). At 1280x720 the cap binds at 550 and the stage lands at 334.9, above the 320 floor, with verdict / headline / primary action / stage all fully above the fold |
+| Installed | `b4bf26bc`, runtime `get_build_stamp` → `b4bf26bc · release · shell 0.9.26`, 1 attempt / 0 transient, one installer on the Desktop, SHA-256 `12B0E033…E0978` |
+| Health #225, the geometry | `--hc-stage-max` 500→530px · one new `--hc-comp-drop: 48px` declared ONCE on `.hc-panel` and spent twice (`margin-top` **and** subtracted inside the `max-height` cap, so NO BREAKPOINT holds) · symptom glyph `size` 28→40. Measured installed: stage **height 530** (comp 530.3), **top 159** (comp 158.7), bottom **689** (comp 689.0) |
+| The fix the self-review forced | `.hc-readout` was clipping the CPU-temp cell — "CPU TEM". **The defect was in the GUARD.** `home-console.test.tsx` held `CLIENT = 565` as the strip's width at 1280x720; it is **547**, so every budget was checked against 18px that do not exist and stayed green while five floors (526px) over-subscribed a 515px box. Floors are now each their own derivation (80/80/83/83, was 88 across): 500 ≤ 515. **Not a regression** — emulating the pre-round-2 constants over CDP leaves the same overflow, at a viewport where the panel does not scroll at all. Pre-existing, and now proven red-before-green |
 | Shared-room proof | Live **0** and History **0** differing fingerprint fields; Test 1 data-driven field (`.v2-room-below` height, a third value on the same build minutes later). Test's 37.6 % pixel diff is **reproduced by the same build against itself** (37.63 %) — `.v2-room::after`'s scanline phase follows the room's height (`hud-rooms.css:35`) |
-| Gate | `tsc` clean · **full vitest 405 files / 5677 passed / 5 skipped / 0 failed** · `verify-release-state` 31 citations, 31 ok, 0 drift · doc-budget ALL PASS |
-| Evidence | `…\GPT HQ\operations\compy-visual-recovery-kit\REVIEW_HEALTH_CANDIDATE_98653732.md` (round 1's report is amended, not overwritten), `assets/candidate-98653732/`, `assets/shared-regression/FINGERPRINT_DIFF.md` § Round 2. `GPT HQ` is outside this repo, so **the kit's own `CLAUDE.md` and hooks are INERT** for writes into it — a PostToolUse hook says so on every one |
+| Gate | `tsc` clean · **full vitest 405 files / 5677 passed / 5 skipped / 0 failed** · `verify-release-state` 31 citations, 31 ok, 0 drift · doc-budget ALL PASS · **self-review 12/12 PASS** |
+| Evidence | `…\GPT HQ\operations\compy-visual-recovery-kit\REVIEW_HEALTH_CANDIDATE_b4bf26bc.md`, `assets/candidate-b4bf26bc/`, `assets/shared-regression/`. Earlier rounds are amended, never overwritten. `GPT HQ` is outside this repo, so **the kit's own `CLAUDE.md` and hooks are INERT** for writes into it — a PostToolUse hook says so on every one |
 
 ## The two lenses every Health/room change must clear
 
@@ -43,8 +43,7 @@ History · Test`**, never the ids (`home`/`play`/`learn`/`lab` are keys); rail `
 `-check-failed`, `-undo-failed`, `-latest`) and three debrief ones (`debrief-smooth-offer`,
 `-rough-fix`, `-clean-none`). Serve on 5199 — `npx vite --config docs/ui-sweep/fixture/vite.config.mts`;
 a bare `/` drops your `?state=`. `src/fixture-parity-guard.test.ts` fails the build if the stub stops
-answering a command a card sends, **or if a WRITE is answered outside its own branch** — and it is how
-the self-reviewer reaches a state the shipped app cannot be put into on demand.
+answering a command a card sends, **or a WRITE outside its own branch** — how the self-reviewer reaches a state the shipped app cannot be put into on demand.
 
 - `src/data/jargon-guard.test.ts` covers the **Blackbook DATA corpus only**, NOT surface copy. A
   wayfinding fix in a SURFACE needs its own guard, or an extension of one: `jargon-term-gloss-`,
@@ -52,8 +51,11 @@ the self-reviewer reaches a state the shipped app cannot be put into on demand.
   `post-check-lab-route-`, `home-console-standard-readout-`, `heading-is-a-name-`,
   `home-console-front-door-` (`src/**/*guard*.test.*`).
 
-## Four gate traps this repo keeps paying for — do not pay again
+## Five gate traps this repo keeps paying for — do not pay again
 
+- **A GUARD'S OWN CONSTANT GOES STALE TOO.** `home-console.test.tsx` certified the readout's width
+  budget against a `CLIENT` nobody re-measured — green for rounds while a cell hung off the strip.
+  **A guard asserting a measured px value must carry HOW and WHEN it was taken**; the fixed one does.
 - **`tools/entry/doc-truth.test.mjs` decision 7** fails any live-doc SENTENCE pairing the word
   `merge` with the word `worktree` unless it also denies propagation. True sentences still fail, and
   `\b` matches across a hyphen, so **"pre-merge review" counts** — fixing the first offender creates
@@ -75,13 +77,11 @@ the self-reviewer reaches a state the shipped app cannot be put into on demand.
 
 ## THE NEXT STEP, exactly
 
-**Health #225 round 2 is at its review boundary — the next move is independent review or the
-OWNER'S EYE, not more code.** Show him `composites/compare-1500x980.png` in the kit and take his
-verdict. The round-2 report re-derives every remaining difference; what is left Health-scoped is
-**all live data or product truth**, including one deliberate non-fix to know before anyone
-"corrects" it: **the headline draws at 40px against the comp's ~52 because the live headline is 34
-characters and #213 B3's fit rule steps `--type-hero` down past `HERO_MAX_WEIGHT = 31`** — the
-comp's own is 31 and would draw at 52 here. Do not start Live or History until Health's verdict.
+**Health #225 is at its review boundary — the next move is independent review or the OWNER'S EYE,
+not more code.** Show him `composites/compare-1500x980.png` and take his verdict; the report
+re-derives every remaining difference, all of it live data or product truth. Known non-fix: the
+headline draws at 40px not ~52 whenever the live string passes `HERO_MAX_WEIGHT = 31` — #213 B3's
+fit rule working, and the string is machine state, so it differs run to run. Health's verdict first.
 
 Standing queue behind it: **the Consumer / Technical / Support evidence exports** (P2's last item) —
 `support_evidence.rs` + `SupportEvidence.tsx` exist, the two projections as SURFACES do not; DIR-1a applies first.
@@ -101,7 +101,7 @@ three independent locks (`case_intelligence_gate()` hard-false · `CASE_SIGNING_
 - **Thirteen worktrees besides `main`. Seven are spent or read-only (`test-design-visual-fixes-fec3ec`
   and `health-lane-bootstrap-a2a8cc` both carry zero own commits); six carry commits not on main —
   do NOT delete or hard-reset those six unchecked**: `feat/user-feedback-lab-recovery` (49) ·
-  `claude/compy-health-parity` (19, the #225 Health lane, round-2 candidate awaiting review) ·
+  `claude/compy-health-parity` (22, the #225 Health lane, candidate awaiting review) ·
   `claude/compy-visual-recovery-kit-6fd074` (15, the #224 Test lane, ACCEPTED, still unpushed) ·
   `feat/lab-49-parity-port` (6) · `lane/cleanup-train-2026-08-20` (5) ·
   `lane/vision-pointer-guard-2026-08-24` (3). A detached, branchless one was retired 2026-08-26
