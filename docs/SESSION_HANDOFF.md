@@ -103,8 +103,8 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
   those seven before checking them**: `feat/user-feedback-lab-recovery` (49) ·
   `claude/compy-health-parity` (24) · `claude/compy-visual-recovery-kit-6fd074` (15) ·
   `feat/lab-49-parity-port` (6) · `lane/cleanup-train-2026-08-20` (5) ·
-  `lane/vision-pointer-guard-2026-08-24` (3) · `claude/mission0-accent-landing` (1). Re-derived
-  2026-08-28 vs `origin/main` 5bf84051; the `.claude/worktrees/` pair holds the unaccepted Test
+  `lane/vision-pointer-guard-2026-08-24` (3) · `claude/mission0-release-state` (1). Re-derived
+  2026-08-28 vs `origin/main` 199d6de7; the `.claude/worktrees/` pair holds the unaccepted Test
   and Health candidates, preserved on purpose. A branchless checkout hid here 15 days, retired
   2026-08-26 as tag `preserve/checklist-disk-item-c5660e` (5 commits, none on `main`). Rule C of
   `scripts/handoff-worktree-truth.test.mjs` fails if a carrier is unnamed; re-derive, never carry.
