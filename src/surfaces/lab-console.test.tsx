@@ -224,11 +224,15 @@ const stationNode = (re: RegExp) =>
 
 const reading = (i: number) => document.querySelectorAll(".lc-readings > .lc-reading")[i]!;
 
-// The open station's NAME. Since the bento conversion it is the enclosing <BentoTile>'s title rather
-// than a hand-rolled .lc-detail-name — the panel head is the tile's, so the assertion reads it there.
+// The open station's NAME. Since Mission 1 (2026-08-28) a selected station REPLACES the overview
+// and its name IS the room's <h1> — the <BentoTile> that used to wrap the panel, and print the name
+// a second time an inch below the room's own headline, is the classic failsafe's shape now.
 const openStationName = () =>
-  document.querySelector(".lc-detail")?.closest(".v2-tile")?.querySelector(".v2-tile-title")
-    ?.textContent;
+  document.querySelector('.v2-room[data-room="lab"] > .v2-verdict h1 .lc-ws-title')?.textContent;
+
+// The way out of a workspace. There is no dock to click a second time while a station is open —
+// that is the point of the mode — so every "now close it" step goes through this control.
+const backToTest = () => document.querySelector<HTMLButtonElement>(".lc-ws-back")!;
 
 describe("LabConsole", () => {
   it("renders the recognizable rig hologram at center", () => {
@@ -277,15 +281,21 @@ describe("LabConsole", () => {
     expect(screen.getByRole("button", { name: /apply reviewed/i })).toBeInTheDocument();
   });
 
-  it("clicking a measure station opens exactly one detail; another swaps; same one closes", () => {
+  // REWORDED for Mission 1, same invariant: ONE station body at a time, and switching stations
+  // really does switch. What changed is the route — a selected station owns the room, so the list
+  // is not on screen to click a second station directly from; you come back and pick. The old
+  // "click the open station again to close it" toggle is still in `openFrom` and still covers the
+  // classic failsafe, where the dock and the panel do share a screen.
+  it("opens exactly one station body; coming back and picking another swaps it; back closes it", () => {
     renderConsole();
-    fireEvent.click(screen.getByRole("button", { name: /benchmark/i }));
+    fireEvent.click(stationNode(/benchmark/i));
     expect(document.querySelectorAll(".lc-detail")).toHaveLength(1);
     expect(openStationName()).toBe("Benchmark");
-    fireEvent.click(screen.getByRole("button", { name: /latency/i }));
+    fireEvent.click(backToTest());
+    fireEvent.click(stationNode(/latency/i));
     expect(document.querySelectorAll(".lc-detail")).toHaveLength(1);
     expect(openStationName()).toBe("Latency");
-    fireEvent.click(screen.getByRole("button", { name: /latency/i }));
+    fireEvent.click(backToTest());
     expect(document.querySelector(".lc-detail")).toBeNull();
   });
 
@@ -304,10 +314,28 @@ describe("LabConsole", () => {
   // `block: "nearest"` is load-bearing and pinned below: it is what keeps a hand click from
   // yanking the dock off screen when the panel is already visible. Falsified both ways -- dropping
   // the scroll fails the first two, and scrolling on close fails the third.
+  //
+  // Mission 1 moved the TARGET and nothing else. The station is no longer a panel below the dock;
+  // it is the room, and the thing that has to be on screen is the TOP of that room — the bar
+  // carrying "Back to Test", the only way out. (It was the heading for one build; that landed the
+  // Back control under the fixed chrome at 1280x720, and lab-station-workspace.test.tsx now pins
+  // the top instead.) So the filter accepts the workspace bar as well as the old panel id, which
+  // the classic failsafe still scrolls, and the guard falsifies exactly as before: drop the scroll
+  // and the first two fail, scroll on close and the third fails.
   const onDetail = (spy: { mock: { contexts: unknown[] } }) =>
-    spy.mock.contexts.filter((el) => (el as Element | undefined)?.id === "lab-console-detail");
+    spy.mock.contexts.filter((el) => {
+      const node = el as Element | undefined;
+      return node?.id === "lab-console-detail" || !!node?.classList?.contains("lc-ws-bar");
+    });
 
-  it("scrolls a hand-opened station into view, and only as far as it has to", () => {
+  // The ALIGNMENT is the half that flipped, and only because the thing it protected went away.
+  // "Nearest" existed so a hand click could not yank the dock off screen — the dock and the panel
+  // shared a screen. In the workspace the dock is unmounted, so there is nothing to preserve the
+  // reader's place in, and "nearest" actively hurt: it made the landing depend on where the reader
+  // had been standing, which put the Back control under the fixed chrome at 1280x720. "start" is
+  // one landing every time. The classic failsafe below still shares its screen with the dock and
+  // still gets "nearest" — the original invariant, kept where it still means something.
+  it("scrolls a hand-opened station into view, landing at the top of the workspace", () => {
     const spy = vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
     try {
       renderConsole();
@@ -315,7 +343,21 @@ describe("LabConsole", () => {
       expect(onDetail(spy).length, "the opened station was never scrolled into view").toBeGreaterThan(0);
       // `.at(-1)` is not in this project's lib target — index arithmetic instead.
       const last = spy.mock.calls[spy.mock.calls.length - 1];
-      expect(last?.[0], "a hand click must not yank the dock off screen").toEqual({ block: "nearest" });
+      expect(last?.[0], "the workspace must land at its own top, not wherever the reader was")
+        .toEqual({ block: "start" });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("the classic failsafe still scrolls only as far as it has to — its dock stays on screen", () => {
+    const spy = vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
+    try {
+      renderConsole({ ...base, hud: false });
+      fireEvent.click(screen.getByRole("button", { name: /benchmark/i }));
+      const last = spy.mock.calls[spy.mock.calls.length - 1];
+      expect(last?.[0], "a hand click must not yank the classic dock off screen")
+        .toEqual({ block: "nearest" });
     } finally {
       spy.mockRestore();
     }
@@ -334,15 +376,15 @@ describe("LabConsole", () => {
     }
   });
 
-  // `stationNode`, not a bare role query: with Benchmark OPEN, its own panel renders a second
-  // button matching /benchmark/i, and the query that works for the first click is ambiguous for the
-  // second. The dock helper always addresses the dock.
+  // Closing is the Back control since Mission 1 — with a station open the dock is not on screen,
+  // so there is no second click on its row to make. Focus DOES return to that row, and focus is
+  // deliberately not a scroll: `back.focus()` on the restored row, never a scrollIntoView.
   it("does not scroll when a station is CLOSED — the reader keeps their place", () => {
     renderConsole();
     fireEvent.click(stationNode(/benchmark/i));
     const spy = vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
     try {
-      fireEvent.click(stationNode(/benchmark/i));
+      fireEvent.click(backToTest());
       expect(document.querySelector(".lc-detail"), "the station did not close").toBeNull();
       // Nothing at all, not merely "not the detail panel": closing must not move the lane by way
       // of some other node either. A filtered assertion here let a scroll-the-dock-on-close
@@ -449,7 +491,10 @@ describe("LabConsole", () => {
     expect(note).not.toMatch(/only .*(changes?|change) anything/i); // round-1 false sole-mutator claim
     expect(note).not.toMatch(/undo/i); // undo lives on Fix's consent line (title-header law)
     expect(note).toMatch(/reversible|rolls? back|nothing.*permanent/i); // the true reassurance must stay
-    fireEvent.click(screen.getByRole("button", { name: /benchmark/i }));
+    // Back out and open a MEASURE station: the reassurance is Optimize's, and must not follow the
+    // reader to a station that applies nothing.
+    fireEvent.click(backToTest());
+    fireEvent.click(stationNode(/benchmark/i));
     expect(container.querySelector(".lc-detail-note")).toBeNull(); // measure stations: no note
   });
 

@@ -157,9 +157,11 @@ describe("LabGround OPS CONSOLE — LabConsole replaces the Instrument Bench ben
     )!;
     fireEvent.click(optimizeNode);
     expect(c.querySelector(".lc-detail")).not.toBeNull();
-    // The station's name is the enclosing <BentoTile>'s title since the bento conversion.
+    // The station's name is the ROOM's own heading since Mission 1 (2026-08-28) — a selected
+    // station replaces the overview instead of mounting as a tile inside it, so there is no tile
+    // title left to read, and no second copy of the name to disagree with this one.
     expect(
-      c.querySelector(".lc-detail")!.closest(".v2-tile")!.querySelector(".v2-tile-title")!.textContent,
+      c.querySelector('.v2-room[data-room="lab"] > .v2-verdict h1 .lc-ws-title')!.textContent,
     ).toBe("Optimize");
   });
 

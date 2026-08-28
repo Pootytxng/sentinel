@@ -272,15 +272,33 @@ export function LabConsole({
   // straight back to <BlackBox>, which fired an unrequested scan and re-marked a crash the user had
   // already walked away from. Every hand-driven station change now drops the selection: the
   // deep-link is a one-time delivery, not a mode the room stays in.
+  //
+  // WHICH CONTROL OPENED THIS STATION (Mission 1, 2026-08-28). A selected station now REPLACES the
+  // overview instead of mounting beside it, so the row or button the user pressed is unmounted
+  // while the workspace is up — "give focus back to the opener" cannot hold onto an element, only
+  // onto its identity. "primary" is the dominant Optimize action; a station key is that station's
+  // row in the list. `restoreRef` carries it across the close, because `openerRef` has to be clear
+  // by the time the overview is back.
+  const openerRef = useRef<"primary" | LabStationKey | null>(null);
+  const restoreRef = useRef<"primary" | LabStationKey | null>(null);
   const closeStation = () => {
+    restoreRef.current = openerRef.current;
+    openerRef.current = null;
     setOpenStation(null);
     setOpenIncidentId(null);
   };
-  const onDockOpen = (key: string) => {
-    const k = key as LabStationKey;
+  // ONE door, two handles, still ONE code path: the dominant action and the list row both land
+  // here and differ only in what they record as the opener.
+  const openFrom = (k: LabStationKey, opener: "primary" | LabStationKey) => {
     setOpenIncidentId(null);
-    setOpenStation((cur) => (cur === k ? null : k));
+    if (openStation === k) {
+      closeStation();
+      return;
+    }
+    openerRef.current = opener;
+    setOpenStation(k);
   };
+  const onDockOpen = (key: string) => openFrom(key as LabStationKey, key as LabStationKey);
   // Station deep-link (tester J 2026-07-22, Phase 5): "Take me to Test" from the first-check
   // verdict lands here and auto-opens the Optimize station (the door to the safe-tweak toggles)
   // instead of dropping the user on the dock to hunt for it. Race-free: the intent is written to
@@ -334,10 +352,51 @@ export function LabConsole({
   // the shared lane to its top in that same commit. This effect cannot fight it, because the mount
   // effect above only sets state — the panel does not exist until the NEXT commit, so this scroll
   // runs strictly after the reset rather than being erased by it.
+  //
+  // Mission 1 extends this into the workspace's focus contract, because the two are the same
+  // motion: the workspace heading is what has to be on screen AND what has to hold focus, so a
+  // keyboard user is standing inside the thing they just opened rather than at the top of a room
+  // that no longer exists. Scroll first, then focus with `preventScroll` — one movement, not two.
+  // Backing out is the mirror image: focus returns to the exact control that opened the station,
+  // found by identity because the element itself was unmounted while the workspace was up.
   const detailRef = useRef<HTMLDivElement>(null);
+  const wsTitleRef = useRef<HTMLSpanElement>(null);
+  const wsBarRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!openStation) return;
-    detailRef.current?.scrollIntoView({ block: "nearest" });
+    if (openStation) {
+      const head = wsTitleRef.current;
+      const top = wsBarRef.current;
+      if (head && top) {
+        // The scroller goes to its TOP, rather than the header asking to be scrolled "nearest".
+        // Nearest does the minimum scroll, which made the landing position depend on where the
+        // reader was standing -- measured at 0, 36 and 66 on the installed build, and at 66 the
+        // Back control was painted over by the fixed chrome (`.wc-bar` 34px at z-index 9000 +
+        // `.v2-top` 50px), unreachable by scrolling. The workspace REPLACES the room, so its top
+        // IS the content's top: one landing, always clear of the chrome. Guarded in
+        // lab-station-workspace.test.tsx.
+        const scroller = top.closest<HTMLElement>(".v2-content");
+        if (scroller) scroller.scrollTop = 0;
+        else top.scrollIntoView({ block: "start" });
+        head.focus({ preventScroll: true });
+        return;
+      }
+      // The classic (flag-off) failsafe has no workspace header — its panel still just scrolls.
+      detailRef.current?.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    const opener = restoreRef.current;
+    if (!opener) return;
+    restoreRef.current = null;
+    const room = document.querySelector<HTMLElement>('.v2-room[data-room="lab"]');
+    if (!room) return;
+    const back =
+      opener === "primary"
+        ? room.querySelector<HTMLElement>(".lc-start")
+        : Array.from(room.querySelectorAll<HTMLElement>(".dock-node")).find(
+            (b) => b.querySelector(".dock-nm")?.textContent === stations[opener].name,
+          );
+    back?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `stations` is a per-render lookup, not a trigger
   }, [openStation]);
 
   // The identical instrument bodies the classic Lab renders — one source for every layout. Optimize
@@ -419,9 +478,35 @@ export function LabConsole({
   // the installed build showed as the room's bottom-left alarm (intimidation pass 2026-08-21).
   const safeOn = (fast.recs ?? []).filter((r) => r.severity === "safe" && r.currently_applied).length;
 
+  // ── THE SELECTED STATION IS THE ROOM (Mission 1, 2026-08-28) ──────────────────────────────────
+  // Nothing is selected → the overview below is exactly what it always was. Something IS selected
+  // → Test stops being a story with a tool wedged into its narrow left column and becomes that
+  // tool's workspace: no rig stage, no bench readings, no station list, no manual-parts row, and
+  // above all NO `aside` — RoomShell derives `data-layout="split"` from `aside != null`, so
+  // withholding it is the whole mechanism that hands the body the room's full content width. That
+  // is deliberately the ONLY reason the shared shell needs no change for this.
+  //
+  // Guarded by src/surfaces/lab-station-workspace.test.tsx, which was written RED against the old
+  // squeezed composition first.
+  const ws = hud && openStation !== null ? stations[openStation] : null;
+
   return (
     <RoomShell
       room="lab"
+      /* The way out, above the heading, where a back control belongs — and the workspace's only
+         chrome besides the header itself. The overview has no notice, so this slot is free. */
+      notice={
+        ws ? (
+          <div className="lc-ws-bar" ref={wsBarRef}>
+            <button type="button" className="lc-ws-back" onClick={closeStation}>
+              <span className="lc-ws-back-ic" aria-hidden="true">
+                &lsaquo;
+              </span>
+              {t("lab.labConsole.backToRoom")}
+            </button>
+          </div>
+        ) : undefined
+      }
       /* THE NARRATIVE COLUMN (04-test-approved.png). Same grammar Health and Live already speak:
          a dotted eyebrow, one human sentence, one short explanation, one dominant action. The
          Instrument-HUD masthead is gone from this room as it went from Live and History -- the
@@ -430,7 +515,7 @@ export function LabConsole({
       /* Its own slot, not a passenger in `verdict` (#211): inside it the eyebrow rendered inside the
          <h1>. Same condition as the verdict below — the classic verdict draws no eyebrow at all. */
       eyebrow={
-        hud ? (
+        hud && !ws ? (
           <RoomEyebrow
             dot={ledState}
             label={t("lab.labConsole.narrative.eyebrow")}
@@ -438,21 +523,50 @@ export function LabConsole({
           />
         ) : undefined
       }
-      verdict={hud ? <span className="lc-headline">{t("lab.labConsole.narrative.headline")}</span> : classicVerdict}
-      sub={hud ? t("lab.labConsole.narrative.sub") : undefined}
+      /* In workspace mode the station's own name IS the room's one heading — printed here and
+         nowhere else, which is why the old <BentoTile title> around the body is gone. The mark is
+         the same `STATION_ICON` the list row draws, and it rides inside the heading line rather
+         than above it so the header stays one compact row. `.lc-ws-title` is the focus target the
+         effect above moves to on open; tabIndex -1 keeps it out of the tab ring. */
+      verdict={
+        ws ? (
+          <span className="lc-ws-head">
+            <span className="lc-ws-ic" aria-hidden="true">
+              {STATION_ICON[openStation!]}
+            </span>
+            <span className="lc-ws-title" ref={wsTitleRef} tabIndex={-1}>
+              {ws.name}
+            </span>
+          </span>
+        ) : hud ? (
+          <span className="lc-headline">{t("lab.labConsole.narrative.headline")}</span>
+        ) : (
+          classicVerdict
+        )
+      }
+      /* The station's EXISTING purpose sentence — its dockLine, the same string its list row
+         prints. Nothing new is written for this header, so nothing new can claim anything. */
+      sub={ws ? ws.dockLine : hud ? t("lab.labConsole.narrative.sub") : undefined}
       /* THE ONE DOMINANT ACTION. It opens the SAME Optimize station the list row below opens, by
          the same setter -- one door, two handles, never two code paths. The line under it is the
          comp's, and it is a positioning sentence, not a claim: it says when to pick this, and
          promises no result. */
       primaryAction={
-        hud ? (
+        hud && !ws ? (
           <>
+            {/* `aria-controls` / `aria-expanded` are GONE from this button, and their removal is
+                the honest half of Mission 1. They described a panel that opened beside this
+                control; the station now REPLACES the composition this control lives in, so the
+                button is never on screen at the same time as the thing it named — an
+                aria-expanded that can only ever read "false" pointing at an id that is only in the
+                DOM once the button has been unmounted. What replaces the relationship is the
+                workspace itself: focus moves into its heading on open and comes back here on
+                close (see the effect above). The classic failsafe still expands a panel in place
+                and still says so, on its own dock. */}
             <button
               type="button"
               className="lc-start v2-primary"
-              aria-controls="lab-console-detail"
-              aria-expanded={openStation === "optimize"}
-              onClick={() => onDockOpen("optimize")}
+              onClick={() => openFrom("optimize", "primary")}
             >
               {t("lab.labConsole.narrative.action")}
             </button>
@@ -478,7 +592,7 @@ export function LabConsole({
          Those three numbers are Health's verdict and stay there; this room answers what the BENCH
          can prove, not what the machine scores. */
       aside={
-        hud ? (
+        hud && !ws ? (
           <section className="lc-bench" aria-label={t("lab.labConsole.bench.aria")}>
             <div className="lc-stage" data-motion={reduced ? "reduced" : "full"} ref={stageRef}>
               <span className="lc-brk lc-brk-tl" />
@@ -624,9 +738,26 @@ export function LabConsole({
           </section>
         ) : undefined
       }
-      below={below}
+      /* The GPU-profile surface and the experiments bench are the OVERVIEW's full-width foot. With
+         a station open they are another room's worth of unrelated evidence under the tool the user
+         chose, so they stand down with the rest of the overview and come straight back on close. */
+      below={ws ? undefined : below}
     >
-      {hud ? (
+      {ws ? (
+        /* THE WORKSPACE. One child, the SAME station body the squeezed panel rendered — no fork of
+           Optimize, Diagnostics, Benchmark, Latency, Tuning or Black Box exists or ever should. It
+           keeps `#lab-console-detail` so the deep-link/scroll contract and anything pointing at
+           that id still resolve. No panel frame: every station body already draws its own cards,
+           and a box around all of them is the box-in-box this sheet has removed twice before. */
+        <div className="lc-workspace">
+          <div className="lc-detail" id="lab-console-detail" ref={detailRef}>
+            {openStation === "optimize" && (
+              <p className="lc-detail-note">{t("lab.labConsole.optimizeReassurance")}</p>
+            )}
+            {openStation === "optimize" ? <OptimizeStation {...fast} /> : stationBody(openStation!)}
+          </div>
+        </div>
+      ) : hud ? (
         <>
           {/* THE STATION LIST — every current station, in one grouped list, as the comp draws it:
               ruled document rows, not six equal buttons. Same <Dock>, same nodes, same
@@ -823,7 +954,11 @@ export function LabConsole({
           />
         </div>
       )}
-      {openStation && (
+      {/* THE CLASSIC (flag-off) DETAIL PANEL, and now only that. In the shipped composition the
+          station owns the room instead (`ws` above), so this squeezed-into-the-story-column tile
+          is the failsafe's shape alone — the branch that has to keep working when the new one does
+          not, unchanged from what it always was. */}
+      {!hud && openStation && (
         <BentoTile
           span="full"
           title={stations[openStation].name}
