@@ -1,0 +1,280 @@
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
+import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { readFileSync, readdirSync } from "fs";
+import { join } from "path";
+import { MonitorV2 } from "./MonitorV2";
+import type { SessionSummary } from "../types";
+
+// issue #236, second half — "improve first-viewport hierarchy so there is one clear primary
+// action", "demote/group secondary controls", "delete or hide nothing", "preserve tab order".
+//
+// WHAT THE INSTALLED 73b629ed BUILD MEASURED. On the Live face the room's narrative column is
+// ~312px wide (the evidence aside takes the rest), and nine to eleven controls sit above the fold
+// in it. Two of them competed with the room's one dominant action:
+//
+//   1. `.mc-ov { margin-left: auto }` stranded the overlay cluster at the far right edge of that
+//      narrow column, disconnected from the capture status it qualifies — the SAME defect family
+//      as the tab bar's push one row above (see monitor-bar-alignment-guard.test.tsx), in the same
+//      room, out of the same idiom.
+//   2. `.mc-cap` wore accent text on an accent border while `.mc-start` — the room's ONE dominant
+//      action — wears an accent FILL. Two accent-painted controls stacked in a ~312px column read
+//      as two calls to action, which is the thing the first-viewport contract forbids.
+//
+// So this suite pins three invariants, and none of them is a string match on the fix:
+//   A. no shipped rule strands the overlay cluster with an automatic left margin;
+//   B. at REST, exactly one control in the room's narrative column is painted with an accent
+//      background or border — the primary action. State classes (`-on`) and interaction states
+//      (:hover/:focus/:active) are excluded: feedback is not competition;
+//   C. the room's focusable controls, in DOM order, are exactly the ones that shipped — a census,
+//      so "demote and group" can never quietly become "delete or hide", and so the change cannot
+//      reorder Tab.
+
+vi.mock("./Play", async (importOriginal) => {
+  const orig = (await importOriginal()) as Record<string, unknown>;
+  return { ...orig, default: () => <div data-testid="play-face" /> };
+});
+vi.mock("./monitor/DeckScope", () => ({ DeckScope: () => <div data-testid="deck-scope" /> }));
+vi.mock("./monitor/SessionStack", () => ({ SessionStack: () => <div data-testid="session-stack" /> }));
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn((cmd: string) => {
+    if (cmd === "get_cpu_sensors")
+      return Promise.resolve({
+        usage_overall_pct: 34.2,
+        frequency_mhz: 5100,
+        ram_used_bytes: 14.2 * 1024 ** 3,
+        ram_total_bytes: 29.4 * 1024 ** 3,
+      });
+    if (cmd === "get_gpu_sensors")
+      return Promise.resolve([{ vendor: "amd", temperature_c: 62, utilization_gpu_pct: 97 }]);
+    if (cmd === "get_fps_status") return Promise.resolve({ active: false, status: "idle", sample: null });
+    return Promise.resolve(null);
+  }),
+}));
+
+beforeAll(() => {
+  class Obs {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return [];
+    }
+  }
+  (globalThis as Record<string, unknown>).ResizeObserver ??= Obs;
+  (globalThis as Record<string, unknown>).IntersectionObserver ??= Obs;
+});
+
+beforeEach(() => {
+  localStorage.setItem("compy_editorial", "0");
+  localStorage.setItem("compy_motion", "reduced");
+  document.documentElement.setAttribute("data-v2", "on");
+});
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+  document.documentElement.removeAttribute("data-v2");
+});
+
+const session = (): SessionSummary =>
+  ({
+    started_at: "2026-07-03T00:00:00Z",
+    duration_secs: 2520,
+    process_name: "valorant.exe",
+    samples: 3412,
+    avg_fps: 240.2,
+    avg_frametime_ms: 4.2,
+    low1_fps_est: 190.1,
+    peak_gpu_temp_c: 72,
+    peak_gpu_usage_pct: 98,
+    peak_ram_used_bytes: null,
+    ram_total_bytes: null,
+    compy_changes_active: 1,
+    stutter_events: [],
+  }) as SessionSummary;
+
+function mount() {
+  const props = {
+    active: true,
+    sessions: [session()],
+    sessionsSeenAt: "",
+    priorities: null,
+    recs: [],
+    apply: vi.fn(),
+    busyId: null,
+    onExport: vi.fn(),
+    changes: [],
+    rollback: vi.fn(),
+    vendor: "amd" as const,
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return render(<MonitorV2 {...(props as any)} />);
+}
+
+/** Every stylesheet under src/, recursively. */
+function sheets(dir = "src"): string[] {
+  return (readdirSync(dir, { recursive: true }) as string[])
+    .filter((p) => p.endsWith(".css"))
+    .map((p) => join(dir, p));
+}
+
+/** Every `selector { declarations }` rule the app ships, comments stripped. */
+function allRules(): { file: string; selector: string; body: string }[] {
+  const out: { file: string; selector: string; body: string }[] = [];
+  for (const file of sheets()) {
+    const css = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = m[1].trim();
+      if (!selector || selector.startsWith("@")) continue;
+      out.push({ file, selector, body: m[2] });
+    }
+  }
+  return out;
+}
+
+/** One selector list -> its individual selectors, splitting on TOP-LEVEL commas only.
+ *  `:is(a, b) .c` is ONE selector; a naive `.split(",")` shears it into two broken fragments,
+ *  and a guard that then skips what it cannot parse goes blind exactly where the app's most
+ *  complex selectors live (hud-rooms.css is full of them). */
+function split(list: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let buf = "";
+  for (const ch of list) {
+    if (ch === "(" || ch === "[") depth++;
+    else if (ch === ")" || ch === "]") depth--;
+    if (ch === "," && depth === 0) {
+      if (buf.trim()) out.push(buf.trim());
+      buf = "";
+      continue;
+    }
+    buf += ch;
+  }
+  if (buf.trim()) out.push(buf.trim());
+  return out;
+}
+
+/** `el.matches(sel)`, but an unparseable selector THROWS rather than reading as "no match" — a
+ *  guard that silently skips what it cannot parse is a guard that grows blind spots. */
+function hits(el: Element, sel: string): boolean {
+  try {
+    return el.matches(sel);
+  } catch (e) {
+    throw new Error(`unparseable selector: ${sel} (${String(e)})`);
+  }
+}
+
+/** Open the overlay cluster — its sub-controls only exist once the overlay is on, and the census
+ *  has to see the room at its BUSIEST, which is the state the hierarchy contract is about. */
+async function openOverlay(container: HTMLElement) {
+  const cap = container.querySelector(".mc-cap") as HTMLButtonElement;
+  expect(cap, "the overlay toggle must exist").not.toBeNull();
+  fireEvent.click(cap);
+  await waitFor(() => expect(container.querySelectorAll(".mc-ov-corner").length).toBe(4));
+}
+
+/** Focusable controls in the room's NARRATIVE column — the first viewport's left column. The
+ *  evidence aside and the below-the-fold deck are deliberately out: this contract is about what
+ *  competes with the primary action, and neither of those shares its column. */
+function narrativeControls(container: HTMLElement): HTMLElement[] {
+  return [
+    ...container.querySelectorAll<HTMLElement>('button, a[href], [role="tab"], input, select, textarea'),
+  ].filter((el) => !el.closest(".mc-evidence") && !el.closest(".mc-below"));
+}
+
+/** A stable, legible descriptor: what the control IS, not what it currently says. */
+const describeControl = (el: HTMLElement) =>
+  `${el.getAttribute("role") ?? el.tagName.toLowerCase()}.${(el.className || "-").split(" ")[0]}` +
+  `[${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 34)}]`;
+
+describe("Live room - first-viewport hierarchy (issue #236)", () => {
+  it("A: no shipped rule strands the overlay cluster at the column's far edge", async () => {
+    const { container } = mount();
+    await openOverlay(container);
+    const ov = container.querySelector(".mc-ov") as HTMLElement;
+
+    const offenders: string[] = [];
+    for (const rule of allRules()) {
+      const pushes =
+        /margin(?:-left|-inline-start)\s*:\s*auto/.test(rule.body) ||
+        /margin\s*:\s*[^;]*\bauto\b/.test(
+          rule.body.replace(/margin-(top|right|bottom|left|inline-start|inline-end)\s*:[^;]*;?/g, ""),
+        );
+      if (!pushes) continue;
+      for (const sel of split(rule.selector)) if (hits(ov, sel)) offenders.push(`${rule.file}: ${sel}`);
+    }
+    expect(
+      offenders,
+      "the overlay controls belong WITH the capture status they qualify, not pinned to the right " +
+        `edge of a narrow column. These rules strand them:\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("B: exactly one narrative-column control is accent-painted at rest - the primary action", async () => {
+    const { container } = mount();
+    await openOverlay(container);
+    const controls = narrativeControls(container);
+    expect(controls.length, "the room must render its controls").toBeGreaterThan(4);
+
+    // A resting paint only. `:hover`/`:focus`/`:active`/`:disabled` are interaction feedback and
+    // `-on` classes are STATE feedback (recording, overlay shown, corner chosen) - neither is a
+    // competing invitation, and forbidding them would forbid honest state.
+    const stateful = (sel: string) =>
+      /:(hover|focus|focus-visible|active|disabled)/.test(sel) || /-on\b/.test(sel);
+    const accent = /var\(\s*--(?:v2|ix)-accent[a-z-]*\s*\)/;
+    const painted = new Set<HTMLElement>();
+    const why = new Map<HTMLElement, string[]>();
+
+    for (const rule of allRules()) {
+      const paints = [
+        ...rule.body.matchAll(
+          /(?:^|;)\s*(background|background-color|border|border-color|border-[a-z]+(?:-color)?)\s*:\s*([^;]+)/g,
+        ),
+      ].some(([, , value]) => accent.test(value));
+      if (!paints) continue;
+      for (const sel of split(rule.selector)) {
+        if (stateful(sel)) continue;
+        for (const el of controls)
+          if (hits(el, sel)) {
+            painted.add(el);
+            why.set(el, [...(why.get(el) ?? []), `${rule.file}: ${sel}`]);
+          }
+      }
+    }
+
+    const names = [...painted].map((el) => `${describeControl(el)}\n    ${(why.get(el) ?? []).join("\n    ")}`);
+    expect(
+      names.length,
+      "ONE dominant action per room. These narrative-column controls are painted with an accent " +
+        `background or border at rest:\n  ${names.join("\n  ")}`,
+    ).toBe(1);
+    expect([...painted][0].className, "and it is the room's primary action").toContain("mc-start");
+  });
+
+  it("C: every control that shipped is still here, in the same Tab order", async () => {
+    const { container } = mount();
+    await openOverlay(container);
+    // Pinned from the installed 73b629ed build. Demoting and grouping may change how these LOOK;
+    // it may never change which of them exist, or the order Tab walks them.
+    expect(narrativeControls(container).map(describeControl)).toEqual([
+      "button.mc-start[Start capture]",
+      "tab.seg-btn[Live]",
+      "tab.seg-btn[Sessions]",
+      "button.kl-term[How capture works]",
+      "button.mc-cap[Overlay on]",
+      "button.mc-ov-corner[Overlay corner top left]",
+      "button.mc-ov-corner[Overlay corner top right]",
+      "button.mc-ov-corner[Overlay corner bottom left]",
+      "button.mc-ov-corner[Overlay corner bottom right]",
+      "button.mc-ov-seg[Min]",
+      "button.mc-ov-seg[Std]",
+      "button.mc-ov-seg[Full]",
+      "button.mc-ov-seg[Overlay background]",
+      "button.v2-quiet[▸Tuning presetsby-hand checklists ]",
+      "button.chip[Max Quality2]",
+      "button.chip[More FPS4]",
+      "button.chip[Lower Latency2]",
+      "button.v2-route-row[View all sessions in History›]",
+      "button.kl-term[Watched from outside your game]",
+    ]);
+  });
+});

@@ -149,17 +149,33 @@ function allRules(): { file: string; selector: string; body: string }[] {
 
 /** Every stylesheet under src/, recursively. */
 function sheets(dir = "src"): string[] {
-  const out: string[] = [];
-  for (const e of readdirSync(dir, { withFileTypes: true })) {
-    const p = join(dir, e.name);
-    if (e.isDirectory()) out.push(...sheets(p));
-    else if (e.name.endsWith(".css")) out.push(p);
-  }
-  return out;
+  return (readdirSync(dir, { recursive: true }) as string[])
+    .filter((p) => p.endsWith(".css"))
+    .map((p) => join(dir, p));
 }
 
-/** One selector list → its individual selectors. */
-const split = (selector: string) => selector.split(",").map((s) => s.trim()).filter(Boolean);
+
+/** One selector list -> its individual selectors, splitting on TOP-LEVEL commas only.
+ *  `:is(a, b) .c` is ONE selector; a naive `.split(",")` shears it into two broken fragments,
+ *  and a guard that then skips what it cannot parse goes blind exactly where the app's most
+ *  complex selectors live (hud-rooms.css is full of them). */
+function split(list: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let buf = "";
+  for (const ch of list) {
+    if (ch === "(" || ch === "[") depth++;
+    else if (ch === ")" || ch === "]") depth--;
+    if (ch === "," && depth === 0) {
+      if (buf.trim()) out.push(buf.trim());
+      buf = "";
+      continue;
+    }
+    buf += ch;
+  }
+  if (buf.trim()) out.push(buf.trim());
+  return out;
+}
 
 /** Rules that push their subject away from the left edge with an automatic start margin. */
 function pushingRules() {
