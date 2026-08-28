@@ -99,15 +99,15 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **14 worktrees besides `main`; seven carry commits not on main — do NOT delete or hard-reset
-  those seven before checking them**: `feat/user-feedback-lab-recovery` (49) ·
+- **14 worktrees besides `main`; six carry commits not on main — do NOT delete or hard-reset
+  those six before checking them**: `feat/user-feedback-lab-recovery` (49) ·
   `claude/compy-health-parity` (24) · `claude/compy-visual-recovery-kit-6fd074` (15) ·
   `feat/lab-49-parity-port` (6) · `lane/cleanup-train-2026-08-20` (5) ·
-  `lane/vision-pointer-guard-2026-08-24` (3) · `sentinel-mission0-accent-landing`, which carries
-  only `docs/mission0-carrier-truth` — this bullet's own edit, pruned the moment it lands, after
-  which that checkout parks on the trunk's tip carrying nothing. Mission 0 itself already landed.
-  Re-derived 2026-08-28 vs `origin/main` dd562737. The `.claude/worktrees/` pair still holds the
-  unaccepted Test and Health candidates, preserved on purpose — rule A fails on a landed lane.
+  `lane/vision-pointer-guard-2026-08-24` (3). The `.claude/worktrees/` pair still holds the
+  unaccepted Test and Health candidates — preserved on purpose, accepted by nobody. The 14th,
+  `sentinel-mission0-accent-landing`, is NOT a carrier: Mission 0 landed and it sits parked on the
+  trunk tip this bullet is committed onto, carrying zero. Re-derived 2026-08-28 against that same
+  tip, directly on `main` — a feature branch for this edit would itself have been the seventh.
 
 ## Waiting on the owner — two arming gates, nothing else
 
