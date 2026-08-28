@@ -7,7 +7,7 @@
 
 ## Where the train is standing
 
-**Test #224 is ACCEPTED. Health #225 is at a review boundary with a self-review PASS. Neither lane
+**Test #224 is ACCEPTED. Health #225 is REJECTED pending ONE owner decision (below). Neither lane
 is pushed.** `claude/compy-health-parity` carries the #225 Health candidate `b4bf26bc` — that is
 what is INSTALLED on the desk. `claude/compy-visual-recovery-kit-6fd074` carries #224's `bf88150a`,
 which **Codex independently ACCEPTED on 2026-08-27** — visuals only, explicitly **not a GO**: still
@@ -77,11 +77,11 @@ answering a command a card sends, **or a WRITE outside its own branch** — how 
 
 ## THE NEXT STEP, exactly
 
-**Health #225 is at its review boundary — the next move is independent review or the OWNER'S EYE,
-not more code.** Show him `composites/compare-1500x980.png` and take his verdict; the report
-re-derives every remaining difference, all of it live data or product truth. Known non-fix: the
-headline draws at 40px not ~52 whenever the live string passes `HERO_MAX_WEIGHT = 31` — #213 B3's
-fit rule working, and the string is machine state, so it differs run to run. Health's verdict first.
+**Health #225 is BLOCKED on one owner decision, not on code.** Round 3 was rejected for an
+incomplete difference list (colour state); fixed as report item (f) with native proof — no code
+changed, no rebuild. His desk runs theme `midnight` + Health accent Sky `#46a8ff`, both persisted
+PICKS, not defects. Ask: judge parity at Health's DEFAULT accent (recommended — the comp was shot
+there, `HOME_ACCENT #a78bfa`), or re-shoot the comp? **Never write his theme/accent to match.**
 
 Standing queue behind it: **the Consumer / Technical / Support evidence exports** (P2's last item) —
 `support_evidence.rs` + `SupportEvidence.tsx` exist, the two projections as SURFACES do not; DIR-1a applies first.
@@ -114,7 +114,7 @@ three independent locks (`case_intelligence_gate()` hard-false · `CASE_SIGNING_
 **Money items are ON HOLD by his standing rule (2026-08-25) and are deliberately NOT listed here as
 blockers** — `compy.gg`, Ko-fi and Pro pricing live in `docs/OWNER_ACTION_CHECKLIST.md` §B/§C.
 
-- **Health #225 needs his LOOK.** Test #224 has Codex's acceptance for its visuals; neither room
-  has his eye yet, and nothing design-side beyond those is parked on him.
+- **Health #225 needs his DECISION** (default accent vs re-shoot the comp) **and his LOOK.** Test
+  #224 has Codex's acceptance for its visuals; neither room has his eye yet.
 - **Receipts telemetry arming** (§C) and **Tier 1 arming** (§C) — signing-key custody, the catalog
   domain, and the arming itself, after an independent security review. Only the arming is his.
