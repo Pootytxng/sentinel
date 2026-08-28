@@ -4,15 +4,24 @@
 :root[data-v2="on"] .monitor-console { display: flex; flex-direction: column; gap: 16px; }
 
 :root[data-v2="on"] .mc-capture { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+/* The overlay switch is the SECONDARY control on this face, so it wears the same quiet chip
+   register as the sub-controls it leads — not the accent border it used to, which put a second
+   call to action directly under `.mc-start`'s accent fill in a ~312px column (issue #236). Its
+   wider padding keeps it reading as the group's lead. The ON state below is where the accent
+   belongs: state, not invitation — and it now lands against a quiet resting chip, so "the overlay
+   is showing" reads harder than it did. */
 :root[data-v2="on"] .mc-cap { font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .1em;
   text-transform: uppercase; padding: 6px 14px; cursor: pointer;
-  background: transparent; color: var(--ix-accent-text); border: 1px solid var(--ix-accent-text); }
-:root[data-v2="on"] .mc-cap:hover:not(:disabled) { background: var(--ix-accent); color: var(--ix-accent-ink); }
+  background: transparent; color: var(--ix-text-2); border: 1px solid var(--ix-glass-border); }
+:root[data-v2="on"] .mc-cap:hover:not(:disabled) { border-color: var(--ix-accent); color: var(--ix-text-1); }
 :root[data-v2="on"] .mc-cap:disabled { opacity: .6; cursor: default; }
 :root[data-v2="on"] .mc-cap-on { background: var(--ix-accent); color: var(--ix-accent-ink); }
 :root[data-v2="on"] .mc-cap-status { font-family: var(--ix-mono); font-size: var(--type-label);
   letter-spacing: .04em; color: var(--ix-text-2); font-variant-numeric: tabular-nums; }
-:root[data-v2="on"] .mc-ov { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+/* NO auto left margin (issue #236): the overlay controls qualify the capture status beside them,
+   and pinning them to the far edge of a narrow column read as controls belonging to nothing. They
+   wrap instead — nine chips do not fit one line at 1280 and must not be pushed out of the column. */
+:root[data-v2="on"] .mc-ov { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 :root[data-v2="on"] .mc-ov-corner { font-size: var(--type-label); line-height: 1; padding: 5px 8px; cursor: pointer;
   background: transparent; color: var(--ix-text-2); border: 1px solid var(--ix-glass-border); }
 :root[data-v2="on"] .mc-ov-corner:hover { border-color: var(--ix-accent); color: var(--ix-text-1); }
