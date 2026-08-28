@@ -70,15 +70,36 @@ describe("room accent menu: the tab order the roving tabindex exists to collapse
 });
 
 describe("room accent menu: arrow-key navigation the role promises", () => {
-  it("opens onto the CURRENT pick, not blindly onto the first swatch", () => {
+  // REWRITTEN for the 2026-08-27 five-hybrid freeze. This case used to derive the expected landing
+  // index from `defaultRoomAccent("fix")` and assert that index was >= 0 — i.e. it assumed the
+  // room's default hue was itself a selectable palette entry. That is exactly the assumption the
+  // freeze retired: default and palette are now separate on purpose. The BEHAVIOUR under test is
+  // unchanged and still pinned on both sides — land on the pick when there is one, on the first
+  // item when there is not.
+  it("with NO pick, opens onto the first item (the default is not a selectable swatch)", () => {
+    expect(
+      ROOM_ACCENT_SWATCHES.findIndex((s) => swatchKey(s) === defaultRoomAccent("fix").toLowerCase()),
+      "the default must not be in the palette — that separation is the point",
+    ).toBe(-1);
+
     const { container } = render(<RoomAccentPicker room="fix" roomLabel="Fix" />);
     const trigger = within(container).getAllByRole("button")[0];
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
 
-    const expected = ROOM_ACCENT_SWATCHES.findIndex(
-      (s) => swatchKey(s) === defaultRoomAccent("fix").toLowerCase(),
+    expect(focusedIndex(container)).toBe(0);
+  });
+
+  it("opens onto the CURRENT pick, not blindly onto the first swatch", () => {
+    const expected = ROOM_ACCENT_SWATCHES.length - 1; // the last hybrid — provably not index 0
+    localStorage.setItem(
+      "compy_room_accents",
+      JSON.stringify({ fix: swatchKey(ROOM_ACCENT_SWATCHES[expected]) }),
     );
-    expect(expected).toBeGreaterThanOrEqual(0);
+
+    const { container } = render(<RoomAccentPicker room="fix" roomLabel="Fix" />);
+    const trigger = within(container).getAllByRole("button")[0];
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+
     expect(focusedIndex(container)).toBe(expected);
   });
 
