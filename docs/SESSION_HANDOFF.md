@@ -100,14 +100,14 @@ read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
 - **16 worktrees besides `main`; seven carry commits not on main — do NOT delete or hard-reset those
-  seven before checking them**: `feat/user-feedback-lab-recovery` (49) · `claude/compy-health-parity`
-  (24) · `claude/compy-visual-recovery-kit-6fd074` (15) · `feat/lab-49-parity-port` (6) ·
-  `lane/cleanup-train-2026-08-20` (5) · `lane/vision-pointer-guard-2026-08-24` (3) ·
-  `claude/mission2-live-alignment` (2, LIVE — #236, the only writer now). The `.claude/worktrees/`
-  pair holds the unaccepted Test and Health candidates; parked `sentinel-mission0-accent-landing` and
+  seven before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
+  `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
+  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` ·
+  `claude/mission2-live-alignment` (LIVE — #236, the only writer now). The `.claude/worktrees/` pair
+  holds the unaccepted Test and Health candidates; parked `sentinel-mission0-accent-landing` and
   `sentinel-mission1-test-workspace` carry zero — all of Mission 1 is ON main (#231, pair #233).
-  **Tip-RELATIVE: no `origin/main` SHA is pinned; pinning one is what went stale last time.** Each
-  count is `git rev-list --count origin/main..<ref>` — re-derive it and `git worktree list`, not this.
+  **Neither a per-branch depth nor an `origin/main` SHA is pinned here, on purpose: both go stale on
+  the next commit.** Derive live — `git worktree list` + `git rev-list --count origin/main..<ref>`.
 
 ## Waiting on the owner — two arming gates, nothing else
 

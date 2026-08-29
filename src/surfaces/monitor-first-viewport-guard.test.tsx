@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vite
 import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { readFileSync, readdirSync } from "fs";
 import { join } from "path";
+import { leftMarginIsAuto } from "../test/css-margin";
 import { MonitorV2 } from "./MonitorV2";
 import type { SessionSummary } from "../types";
 
@@ -192,15 +193,13 @@ describe("Live room - first-viewport hierarchy (issue #236)", () => {
     await openOverlay(container);
     const ov = container.querySelector(".mc-ov") as HTMLElement;
 
+    // Shared, tested margin semantics - see `src/test/css-margin.ts` and its focused examples.
     const offenders: string[] = [];
     for (const rule of allRules()) {
-      const pushes =
-        /margin(?:-left|-inline-start)\s*:\s*auto/.test(rule.body) ||
-        /margin\s*:\s*[^;]*\bauto\b/.test(
-          rule.body.replace(/margin-(top|right|bottom|left|inline-start|inline-end)\s*:[^;]*;?/g, ""),
-        );
-      if (!pushes) continue;
-      for (const sel of split(rule.selector)) if (hits(ov, sel)) offenders.push(`${rule.file}: ${sel}`);
+      const push = leftMarginIsAuto(rule.body);
+      if (!push.auto) continue;
+      for (const sel of split(rule.selector))
+        if (hits(ov, sel)) offenders.push(`${rule.file}: ${sel} { ${push.source} }`);
     }
     expect(
       offenders,

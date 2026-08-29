@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vite
 import { render, cleanup, fireEvent, screen } from "@testing-library/react";
 import { readFileSync, readdirSync } from "fs";
 import { join } from "path";
+import { leftMarginIsAuto } from "../test/css-margin";
 import { MonitorV2 } from "./MonitorV2";
 import type { SessionSummary } from "../types";
 
@@ -177,13 +178,17 @@ function split(list: string): string[] {
   return out;
 }
 
-/** Rules that push their subject away from the left edge with an automatic start margin. */
+/** Rules that push their subject away from the left edge with an automatic start margin.
+ *
+ *  The margin reasoning itself lives in `src/test/css-margin.ts` and is proved by its own focused
+ *  examples. It used to be a regex here that read the WORD `auto` anywhere in a `margin` shorthand,
+ *  which reported `margin: auto 0` and `margin: 0 auto 0 0` — valid CSS that does not touch the left
+ *  margin — as pushes. A guard that fails correct CSS gets deleted, so the semantics are shared and
+ *  tested rather than re-guessed per guard. */
 function pushingRules() {
-  return allRules().filter(({ body }) =>
-    /margin(?:-left|-inline-start)\s*:\s*auto/.test(body) ||
-    // `margin: <top> auto` / `margin: <t> <r> <b> auto` also produce an auto LEFT margin.
-    /margin\s*:\s*[^;]*\bauto\b[^;]*;?/.test(body.replace(/margin-(top|right|bottom|left|inline-start|inline-end)\s*:[^;]*;?/g, "")),
-  );
+  return allRules()
+    .map((rule) => ({ ...rule, push: leftMarginIsAuto(rule.body) }))
+    .filter((rule) => rule.push.auto);
 }
 
 describe("Live room — the face switch sits on the content grid (issue #236)", () => {
@@ -214,7 +219,7 @@ describe("Live room — the face switch sits on the content grid (issue #236)", 
             throw new Error(`unparseable selector in monitor-v2.css: ${sel} (${String(e)})`);
           }
           if (hitsTablist || hitsBar)
-            offenders.push(`${rule.file}: ${sel}  →  ${hitsTablist ? "the tablist" : "the bar"}`);
+            offenders.push(`${rule.file}: ${sel} { ${rule.push.source} }  →  ${hitsTablist ? "the tablist" : "the bar"}`);
         }
       }
       expect(
