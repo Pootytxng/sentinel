@@ -82,9 +82,9 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 (#249) both landed**, in `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md`:
 Tier 3 never imports `receipts.rs` (§4); Stage 1 = pure payload/redaction/serializer code ONLY (no
 command, no HTTP, no send path — gate-refusal-first is Stage 4's); tombstones outlive the verified
-provider recovery horizon by ≥24h (today ≥31 days; active evidence stays max 30, RULED — do not
-re-ask). **Next: Q9b Stage 1 per the contract's Stage 1 row, after fresh live queue/ownership
-re-derivation** — never trust this sentence over the queue.
+provider recovery horizon by ≥24h (today ≥31 days; active evidence stays max 30, RULED — never
+re-ask). **Next: Q9b Stage 1 per that row, after fresh live queue/ownership re-derivation** —
+never trust this sentence over the queue.
 
 **The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
 (`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
@@ -107,8 +107,7 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
   the spent q9b pair's already has. `.claude/worktrees/` holds FIVE checkouts: the two carriers
   named above, this train's writer, plus a bootstrap and the spent q9b checkout at zero — as are
   parked `sentinel-mission0-accent-landing` and `sentinel-mission1-test-workspace` (Mission 1 is ON
-  main, #231/#233). **No depth or `origin/main` SHA is pinned here, on purpose.** Derive live —
-  `git worktree list` + `git rev-list --count origin/main..<ref>`.
+  main, #231/#233). **No depth or SHA is pinned here, on purpose.** Derive live — `git worktree list` + `git rev-list --count origin/main..<ref>`.
 
 ## Waiting on the owner — two arming gates, nothing else
 
