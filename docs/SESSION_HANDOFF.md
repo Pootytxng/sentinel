@@ -7,13 +7,13 @@
 
 ## Where the train is standing
 
-**`main` is clean and pushed at `9424f11c`; the desk build is still `1703be9f`** (no rebuild — the
-change since is copy on a card that needs a real measured session to appear). **DIR-1a has now walked
+**`main` is clean and pushed; the desk build is `090bc58b`** (rebuilt and silently reinstalled at
+the Mission 2 landing, #238; the three rows below are that earlier train's record). **DIR-1a walked
 Live · History · Test:** History and Test came back clean; Live's one real violation is fixed.
 
 | | |
 |---|---|
-| Installed | `1703be9f`, stamp byte-found in the installed exe, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
+| Installed | `090bc58b`, stamp byte-found in the installed exe and `73b629ed` byte-absent, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
 | Shipped | `1703be9f` rule 5's "GPU sensor coverage" sentence reaches a screen · `9c43015c` Live's debrief stops calling a change "the #1 fix" after a session it graded smooth · `9424f11c` three fixture states so those three outcomes can be LOOKED at |
 | Self-review | **PASS 12/12** at `9424f11c`, through the three new `?state=debrief-*` previews. `.debrief-clean` → `.debrief-cta` gap measured 10px (matches the rule written blind); CTA contrast 6.85:1 |
 | Gate | `tsc` clean · 5630 frontend tests · doc-truth 9 · doc-budget ALL PASS · pre-push local gate PASS |
@@ -103,11 +103,11 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
   seven before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
   `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
   `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` ·
-  `claude/mission2-live-alignment` (LIVE — #236, the only writer now). The `.claude/worktrees/` pair
-  holds the unaccepted Test and Health candidates; parked `sentinel-mission0-accent-landing` and
-  `sentinel-mission1-test-workspace` carry zero — all of Mission 1 is ON main (#231, pair #233).
-  **Neither a per-branch depth nor an `origin/main` SHA is pinned here, on purpose: both go stale on
-  the next commit.** Derive live — `git worktree list` + `git rev-list --count origin/main..<ref>`.
+  `claude/mission2-postmerge-reconcile` (LIVE — #239, the only writer now; Mission 2 itself landed as
+  #238 and its branch is pruned from origin). `.claude/worktrees/` holds FOUR checkouts, not a pair:
+  the two named above, plus a Test candidate and a bootstrap that both carry zero — as do parked
+  `sentinel-mission0-accent-landing` and `sentinel-mission1-test-workspace`, all of Mission 1 being
+  ON main (#231, pair #233). **No depth or `origin/main` SHA is pinned here, on purpose: both go stale on the next commit.** Derive live — `git worktree list` + `git rev-list --count origin/main..<ref>`.
 
 ## Waiting on the owner — two arming gates, nothing else
 
