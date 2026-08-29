@@ -338,8 +338,14 @@ describe("support evidence stays unreachable from the outbound tiers", () => {
     // any other test in this file. The separation checks below are now LIVE rather than vacuous, and
     // the row is flipped to today's truth rather than deleted — the day Tier 3 lands it must fire
     // again for the same reason.
+    //
+    // IT FIRED AGAIN (#252, 2026-08-29): Tier 3's Stage 1 module landed under its own contract
+    // (docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md) — pure payload and
+    // redaction code, built dark, no transport; the send path is Stage 4's, behind its own review.
+    // The Tier 3 separation checks below went live in the same commit, alongside the deeper §4
+    // battery in src/case-evidence-tier-separation-guard.test.ts.
     expect(existsSync(TIER1_MODULE), "Tier 1 is BUILT (dark) — the separation checks below are live").toBe(true);
-    expect(existsSync(TIER3_MODULE), "Tier 3 is not authorized by Tier 1 and has no module").toBe(false);
+    expect(existsSync(TIER3_MODULE), "Tier 3 Stage 1 is BUILT (dark, #252) — its separation checks below are live").toBe(true);
   });
 
   it("the evidence store never reaches a tier module", () => {
@@ -358,6 +364,17 @@ describe("support evidence stays unreachable from the outbound tiers", () => {
     const tier1 = readFileSync(TIER1_MODULE, "utf8");
     expect(referencesModule(tier1, "support_evidence"), "Tier 1 downloads public knowledge; it has no business reading the local evidence bundle").toBe(false);
     expect(mentionsEvidence(stripRustComments(tier1))).toBe(false);
+  });
+
+  it("Tier 3 never reaches the evidence store, and carries no transport at Stage 1", () => {
+    // Tier 3 is the one tier authorized to carry evidence off the machine — but "evidence" there
+    // means the payload the user assembles and previews case by case, never the local support
+    // evidence bundle, and the transport itself does not exist until Stage 4's reviewed diff.
+    if (!existsSync(TIER3_MODULE)) return;
+    const tier3 = readFileSync(TIER3_MODULE, "utf8");
+    expect(referencesModule(tier3, "support_evidence"), "Tier 3 assembles its payload from the incident + user input; it has no business reading the local evidence bundle").toBe(false);
+    expect(mentionsEvidence(stripRustComments(tier3))).toBe(false);
+    expect(detectRust(tier3), "Stage 1 is pure payload code — a transport shape here is Stage 4 arriving without its review").toEqual([]);
   });
 
   it("no frontend surface wires an evidence command to a tier command", () => {

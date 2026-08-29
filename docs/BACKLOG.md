@@ -343,19 +343,16 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
     the schema in this change (retention column + a ticket id the deletion receipt can quote); the
     database is empty on purpose. Residual: one `wrangler pages deploy` at ship time (B7).
     **Contract WRITTEN 2026-08-29 (#247):** `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md`
-    — 30-day retention ruled by the owner; build starts at its Stage 1, spec-first, still dark.
-  - [x] **Q9c — CPU temperature that feels native, with no driver.** *Shipped 2026-08-18 (PR pending):*
-    `src/surfaces/CpuTempOffer.tsx` replaces the dead-end sentence with an offer that detects what is
-    installed, starts it or links the download, and names HWiNFO's Shared Memory Support switch.
-    Self-review PASS round 3 (6 fixture states). *Background:*
-    `src-tauri/src/cpu_temp.rs` reads HWiNFO's `Global\HWiNFO_SENS_SM2` shared memory and the
-    LibreHardware/OpenHardware WMI namespaces, driver-free, and Monitor shows the value attributed to
-    its source. **The gap was purely UX** — with no sensor app running the user got one sentence telling
-    them to go run one, a dead end under the name-it-AND-fix-it-inline law. The third-party-driver route is
-    closed by Windows, not by us: every free option reads through WinRing0, which is on Microsoft's
-    vulnerable-driver blocklist (default-enforced since Win11 22H2) and flagged by Defender as
-    `VulnerableDriver:WinNT/Winring0` — our installer would trip Windows Security itself. A Compy-signed driver stays
-    policy-possible but costs an EV certificate, so ZERO-BUDGET LAW parks it until revenue exists.
+    — 30-day retention ruled by the owner. **Stage 1 LANDED 2026-08-29 (#252), still dark:** the §2
+    allowlist as a `deny_unknown_fields` struct, Tier 3's own redactor, pure producers, one
+    serializer, pure preview; `hw_class.rs` extracted tier-neutral (§4);
+    `case_evidence_gate()` hard-false, nothing calls it. Guards live:
+    `src/case-evidence-tier-separation-guard.test.ts` + the outbound guard's Tier 3 rows. Next
+    stage in sequence: Stage 2 (preview UI over the pure representation) — no command/HTTP/consent
+    until their own stages.
+  - [x] **Q9c — CPU temp that feels native, no driver: SHIPPED 2026-08-18** (`CpuTempOffer.tsx`,
+    self-review PASS). Full record moved verbatim to
+    [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) on 2026-08-29 (section byte cap).
 
 - [ ] **P1 stabilization — Q4 · Q5 · Q6 · Q7 all DELIVERED; ONE leg still open.** The delivery
   narrative for all four moved verbatim to [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) on

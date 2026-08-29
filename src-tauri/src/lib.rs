@@ -8,6 +8,7 @@ mod benchmark_verdict; // [A] verdict engine (bootstrap CI, Keep/Revert/Inconclu
 mod benchmark_scoreboard; // [B] scoreboard — WIRED (Score card + persisted ledger; Keep-only awards, firewalled). P4 cohort/network still unbuilt.
 mod benchmark_trial; // live trial runner — WIRED: calibration + tweak A-B trial (Drop-guarded rollback).
 mod capture; // Measurement Platform 2.0 — the capture-backend boundary + per-session CaptureCapabilities (additive, honesty-first; names/versions/bounds the existing ETW-DXGI frame capture, measures & mutates NOTHING new).
+mod case_evidence_upload; // Compy Care Tier 3 (Q9b, #252) — explicit per-case evidence upload, STAGE 1 ONLY: the §2 allowlist as a struct, pure producers/redaction, one serializer, pure preview. Built DARK — no command, no HTTP, no endpoint, no consent state; case_evidence_gate() is hard-false and nothing calls through it. Never imports receipts/support_evidence/case_intelligence/remote_rules (contract §4); guarded by src/case-evidence-tier-separation-guard.test.ts.
 mod case_intelligence; // Compy Care Tier 1 (Q8, #220) — the signed, pull-only PUBLIC ADVISORY catalog: strict domain types + parser behind a hard-false gate. DOWNLOAD-only, uploads no machine data ever; its own key/schema/origins/cache, separate from remote_rules (Tier 0 privileged policy) and receipts (Tier 2). No mutation, no regex, no causal claim.
 mod comparability; // Measurement Platform 2.0 (Task F) — the pure session-comparability gate: composes capture_capabilities + game_state + hw_fingerprint into an honest "how far can these two sessions be compared?" verdict (bands-only ceiling, never assumes unrecorded context matched). Additive metadata; blocks nothing, exposes limits.
 mod comparison; // M4 cross-session comparison engine (arm → finalize-delta → honest verdict).
@@ -28,6 +29,7 @@ mod gaming_session;
 mod gpu_profile; // Read-only GPU profile before/after delta core (advisory; NOT the gated apply/rollback). Wired to a command + the GpuProfile surface later.
 mod hardware;
 mod history;
+mod hw_class; // Tier-neutral pure hardware-class helpers (basename token / RAM bucket / GPU vendor token), extracted from receipts.rs per the Q9b Tier 3 contract §4 so Tier 2 and Tier 3 share exact vocabularies WITHOUT a tier import. Imports no tier module; guarded by src/case-evidence-tier-separation-guard.test.ts.
 mod incident_observer; // Compy Care Tier 1 (task 9, #222) — the PERSISTED local incident observer: remembers across launches which crashes this machine has already been told about, so one that happened while Compy was closed is surfaced once and never twice. Pure consumer of blackbox.rs; three event triggers and NO cadence, service, scheduled task or network. Writes only its own state file.
 mod hwchange; // Hardware-change detection (A5 "Re-Run Setup") — read-only fingerprint diff across launches.
 mod intelligence; // Intelligence Phase 1 — READ-ONLY event timeline + deterministic "What changed?" engine (bands-only confidence, zero mutation, zero network).
