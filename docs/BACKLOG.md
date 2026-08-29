@@ -349,7 +349,8 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
     `case_evidence_gate()` hard-false, nothing calls it. Guards live:
     `src/case-evidence-tier-separation-guard.test.ts` + the outbound guard's Tier 3 rows. Next
     stage in sequence: Stage 2 (preview UI over the pure representation) — no command/HTTP/consent
-    until their own stages.
+    until their own stages. **Stage 2 precondition (reviewer note, 2026-08-29):** a `security`-skill
+    pass over the Tier 3 redactor before any UI claims "redacted".
   - [x] **Q9c — CPU temp that feels native, no driver: SHIPPED 2026-08-18** (`CpuTempOffer.tsx`,
     self-review PASS). Full record moved verbatim to
     [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) on 2026-08-29 (section byte cap).
