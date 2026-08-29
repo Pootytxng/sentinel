@@ -99,7 +99,7 @@ Only what changes support's answer. Each individually removable; all closed-voca
 
 | Field | Source | Why needed | Req? | Remove | Redaction / bounds |
 |---|---|---|---|---|---|
-| `gpu_vendor` / `gpu_model` / `cpu_family` / `ram_gb_bucket` | the Tier 2 `hw_class` producers in `receipts.rs` (same functions, re-used read-only) | "does this reproduce on hardware like mine" | optional | yes (as one block) | Tier 2's exact closed vocabularies and token scrub — nothing new to review |
+| `gpu_vendor` / `gpu_model` / `cpu_family` / `ram_gb_bucket` | tier-neutral hardware-class helpers, per the §4 boundary rule — **never an import of `receipts.rs`** | "does this reproduce on hardware like mine" | optional | yes (as one block) | Tier 2's exact closed vocabularies and token scrub, held in alignment by extraction or parity tests (§4) — nothing new to review |
 | `windows_build` | existing local probe | OS-specific known issues | optional | yes | numeric build token ≤16 chars |
 | `gpu_driver_version` | existing local probe | driver-specific known issues | optional | yes | dotted-numeric token ≤32 chars |
 | `compy_version` | build constant | which app produced this payload | required | no | compiled-in semver string |
@@ -137,13 +137,22 @@ A client that sends any group-D field is refused (unknown-field rejection, §5).
 
 - Tier 3 lives in **`src-tauri/src/case_evidence_upload.rs`** — its own module, gate, schema
   version, payload types, and tests.
-- It must NOT live in, or import evidence from: `support_evidence.rs` (local-only, network-free),
-  `receipts.rs` (Tier 2), `case_intelligence.rs` (Tier 1), `remote_rules.rs` (privileged trust
-  domain), or any frontend/webview networking (no `fetch`, no CSP widening — a webview transport
-  would trigger issue #64 Q2b; Rust-side transport does not).
+- It must NOT live in, or import ANYTHING from: `support_evidence.rs` (local-only, network-free),
+  `receipts.rs` (Tier 2 — no consent, payload, sending, gate, or domain state, and not the
+  `hw_class` producers either), `case_intelligence.rs` (Tier 1), `remote_rules.rs` (privileged
+  trust domain), or any frontend/webview networking (no `fetch`, no CSP widening — a webview
+  transport would trigger issue #64 Q2b; Rust-side transport does not).
+- **Hardware-class alignment (the one §2C sharing rule):** if the existing Tier 2 hardware-class
+  transforms are small pure functions and extracting them is genuinely clean, Stage 1 may move
+  ONLY those neutral pure classification helpers into a tier-neutral module (importing no tier
+  module itself) used independently by Tier 2 and Tier 3; otherwise Tier 3 implements its own tiny
+  closed-vocabulary transforms with **parity tests** proving their outputs stay aligned with
+  Tier 2's vocabularies where §2C requires alignment. Either way, Tier 3 never depends on
+  `receipts.rs`.
 - Its gate `case_evidence_gate()` is **hard-false** — a compiled constant, not a setting — until
-  the separate owner arming decision (Stage 9). The send command refuses at the gate before it
-  refuses for any other reason, mirroring `send_decision`'s refusal order in `receipts.rs`.
+  the separate owner arming decision (Stage 9). When the dark send command exists (Stage 4, not
+  before), it refuses at the gate before it refuses for any other reason — the same refusal ORDER
+  as Tier 2's `send_decision`, adopted as a pattern, never as an import.
 - Transport reuses **the crate's one existing `reqwest`** exactly as declared (no TLS feature of
   its own — the declared-features invariant in `src/support-evidence-outbound-guard.test.ts` stays
   intact). No second HTTP/TLS stack may be added for this.
@@ -195,8 +204,9 @@ New Pages Function(s), same-origin on the site, patterned on `functions/api/usag
 
 - **Transaction behavior:** one D1 `batch` per submit, in order: ① prune `case_rate` past the
   window; ② prune `case_evidence` past `expires_at` (§9 — retention rides the write path);
-  ③ prune `case_tombstones` older than the provider's maximum recovery window (§7 — the tombstone
-  table is self-cleaning by the same mechanism, so it can never become a long-lived ledger);
+  ③ prune `case_tombstones` older than the tombstone retention period (§7: verified provider
+  recovery horizon + ≥24h margin — the tombstone table is self-cleaning by the same mechanism, so
+  it can never become a long-lived ledger);
   ④ insert the case guarded by the correlated rate count; ⑤ record the rate attempt. The delete
   endpoint's own batch runs the same three prunes. All-or-nothing.
 - **Errors to the client are generic:** `{ok:false}` + status. No internals, no field names, no
@@ -252,11 +262,16 @@ resurrect intentionally deleted Tier 3 evidence into normal support access. Befo
 database becomes normally accessible, the operator MUST reconcile it: delete every `case_evidence`
 row whose `ticket_id` appears in `case_tombstones`, and every row past `expires_at`. The tombstone
 table is exactly what makes this possible without keeping any copy of the evidence — it records
-that a deletion was honored, never what was deleted. Tombstones are pruned once older than the
-provider's maximum recovery window (30 days for D1 Time Travel) — mechanically, by the same
+that a deletion was honored, never what was deleted. **Tombstone retention must strictly exceed
+every recoverable pre-delete provider state:** before Stage 7 deployment, re-verify the actual D1
+storage backend and its current maximum point-in-time recovery horizon; tombstone retention = that
+verified horizon **+ a safety margin of at least 24 hours** (with today's 30-day D1 Time Travel
+maximum: at least 31 days). If the provider horizon changes, the deployment/runbook value changes
+with it. Tombstone retention does NOT extend active evidence retention (§9's 30-day maximum is
+untouched — tombstones carry no evidence to retain). Pruning is mechanical, by the same
 self-cleaning write path that prunes expired evidence (§5 batch step ③, on every submit AND every
-delete), so they cannot become a long-lived ledger either. This rule lands in the spec now and
-must be restated in the runbook that accompanies Stage 7 deployment.
+delete), so tombstones cannot become a long-lived ledger either. This rule lands in the spec now
+and must be restated in the runbook that accompanies Stage 7 deployment.
 
 ## 8. Local send receipt
 
@@ -331,10 +346,10 @@ reviewed (the owner's standing legal-review caveat in PRIVACY.md applies).
 | Stage | Scope | Proof boundary |
 |---|---|---|
 | 0 | **This contract** reviewed and accepted | independent read-only review (below) + owner acceptance |
-| 1 | Pure payload/redaction/schema code only (`case_evidence_upload.rs` types, serializer, redactor; no transport, no commands) | unit tests incl. §12 guards for allowlist + redaction |
+| 1 | **Pure code only**: payload/schema types, the exact §2 A–C allowlist, pure field producers/classifiers, redaction/sanitization, ONE canonical serializer, a pure preview-payload representation (feeds Stage 2 later), unit/adversarial tests + Stage-1-applicable structural guards. MUST NOT contain: a Tauri send command, HTTP/`reqwest` use, runtime endpoint constants, a network client, send/retry state, a background queue, a deletion endpoint/client, receiver code, migrations, UI, consent UI/state, or any send path. `case_evidence_gate()` may exist only as a hard-false constant nothing calls through | unit tests incl. §12 guards for allowlist + redaction |
 | 2 | Local preview/edit/consent UI (fixture-rig reachable; unreachable in shipped builds) | self-review law + fixture parity guard |
 | 3 | Receiver + migration, local/staged ONLY — **not public, not deployed** | `case-endpoint` tests green incl. retention/deletion controls |
-| 4 | Dark Rust send path behind hard-false `case_evidence_gate()` | gate-refusal-first test; tier-separation guards green |
+| 4 | Dark Rust send path + Tauri command behind hard-false `case_evidence_gate()` — **this stage, not Stage 1, is where gate-refusal-first behavior exists and is tested** | gate-refusal-first test; tier-separation guards green |
 | 5 | Deletion endpoint + local deletion-receipt behavior | §6/§7 tests incl. oracle/rate-limit controls |
 | 6 | Adversarial security/privacy review of the exact implementation | written verdict bound to the exact head |
 | 7 | **Owner-authorized** infrastructure deployment + staged proof (`wrangler pages deploy`, migration applied, runbook incl. §7 restore rule) | owner GO recorded; endpoint answers; store empty |
@@ -342,8 +357,9 @@ reviewed (the owner's standing legal-review caveat in PRIVACY.md applies).
 | 9 | **Separate owner arming decision, in a later release** | §10 disclosure inventory shipped in the same release; owner sign-off |
 
 No stage inherits authority to cross the next boundary. **Deployment (7) and arming (9) are never
-combined; implementation (1–5) and arming are never combined.** A green stage authorizes exactly
-nothing beyond itself.
+combined; implementation (1–5) and arming are never combined; Stage 1 and Stage 4 are never
+collapsed — pure payload code and a dark send command never land as one stage.** A green stage
+authorizes exactly nothing beyond itself.
 
 ## 12. Required guards — the red test that must land before each behavior counts
 
@@ -357,15 +373,15 @@ lands red-first with positive AND negative controls so an empty corpus can never
 | Client-side redaction | Rust adversarial tests (the `receipts.rs` pattern): path/username/hostname/serial/IP shapes cannot survive any string field; negative control: clean tokens pass |
 | Server-side rejection re-validates everything | `scripts/case-endpoint.test.mjs` (the `usage-endpoint.test.mjs` pattern): every vocabulary/token/length rule, unknown fields 400, oversize 413, wrong content type 415, wrong schema version 400; vocab sets pinned against the Rust producers |
 | Support Evidence stays network-free | existing `src/support-evidence-outbound-guard.test.ts` — untouched, still green; plus its tier-reachability block extended to name `case_evidence_upload.rs` |
-| Tier 1/2/3 consent separation | `src/case-evidence-tier-separation-guard.test.ts`: `case_evidence_upload.rs` imports none of `support_evidence`/`receipts`/`case_intelligence`/`remote_rules`; no consent value crosses modules; positive controls prove the detectors fire |
-| Tier 3 stays dark until explicit arming | gate pin: `case_evidence_gate()` is hard-false in source; send command's FIRST refusal is the gate (order-pinned like `send_decision`) |
+| Tier 1/2/3 consent separation | `src/case-evidence-tier-separation-guard.test.ts`: `case_evidence_upload.rs` imports none of `support_evidence`/`receipts`/`case_intelligence`/`remote_rules`; the only permitted sharing is the §4 tier-neutral pure classification module, which itself imports no tier module; no consent value crosses modules; positive controls prove the detectors fire |
+| Tier 3 stays dark until explicit arming | gate pin: `case_evidence_gate()` is hard-false in source (from whichever stage declares it); once the Stage 4 send command exists, its FIRST refusal is the gate (order-pinned like `send_decision` — a Stage 4 guard, not a Stage 1 one) |
 | No background queue / no automatic retry | same separation guard: no timer/spawn/queue/persisted-unsent-payload construct in the module; failed-send state machine test proves re-send requires a fresh consent |
 | No raw dumps | allowlist structure (no field can carry one) + endpoint size caps + a copy guard that consent copy never offers a dump |
 | No frontend networking | existing `src/q2b-deferral-tripwire.test.ts` + outbound guard's frontend scan — must stay green with the new module present |
 | Deletion secret cannot disclose a case | endpoint test: the delete route returns no payload data on any input, valid credentials included |
 | Ticket ID alone cannot delete | endpoint test: delete with valid ticket + wrong/absent secret refuses; refusal identical for unknown ticket (no oracle); failed attempts rate-limited |
 | Active evidence expires by 30 days | endpoint tests: inserted `expires_at` = received + 30d exactly; expired row invisible to lookup; next write's batch prunes it (both directions controlled) |
-| Tombstones cannot become a long-lived ledger | endpoint test: a tombstone older than the recovery window is pruned by the next submit's and the next delete's batch; a younger one survives (both controlled) |
+| Tombstones cannot become a long-lived ledger, yet outlive provider recovery | endpoint test: a tombstone older than the tombstone retention period (§7: verified recovery horizon + ≥24h margin) is pruned by the next submit's and the next delete's batch; one younger than the horizon survives (both controlled) |
 | Authenticated deletion removes active evidence immediately | endpoint test: row + verifier gone in the same transaction; tombstone written with no evidence columns |
 | Privacy text never claims Tier 3 is live while dark | `src/capability-exception-policy-guard.test.ts` corpus already pins PRIVACY.md's current-runtime language; extend its REQUIRED pins when the Tier 3 disclosure lands (Stage 9), with the retired-claim positive-control pattern |
 | Positive/negative controls throughout | every guard above includes at least one seeded-defect control, per the existing house pattern (`catches the shapes it was written for`) |

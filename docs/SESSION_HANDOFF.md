@@ -13,9 +13,9 @@ evidence exports and the Q9b contract are docs/UI-dark work; version debt, batch
 | | |
 |---|---|
 | Installed | `090bc58b`, stamp byte-found in the installed exe and `73b629ed` byte-absent, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
-| Shipped | `51372658` the Q9b Tier 3 case-evidence CONTRACT (#247) — spec-only, runtime untouched (see NEXT STEP) |
-| Self-review | not applicable — this train changed zero UI (docs + BACKLOG pointer only); the prior PASS 12/12 at `230c1445` stands |
-| Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · outbound guards green · pre-push local gate at push |
+| Shipped | the Q9b Tier 3 CONTRACT (#247, PR #248, landed) + its owner-directed Stage-0 correction (#249) — spec-only, runtime untouched (see NEXT STEP) |
+| Self-review | not applicable — docs-only trains, zero UI; the prior PASS 12/12 at `230c1445` stands |
+| Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · pre-push local gate at push |
 
 ## The rule that came out of the walk — read this before touching Health
 
@@ -80,12 +80,12 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 
 ## THE NEXT STEP, exactly
 
-**The Q9b Tier 3 CONTRACT landed 2026-08-29 (`51372658`, issue #247)** —
-`docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md`: field allowlist, per-case
-consent, ticket/deletion-secret split, owner-ruled 30-day retention, stages 0–9. Q9b's BUILD starts
-at its Stage 1 (pure payload/redaction code, still dark) once the contract review closes. **Next:
-that Stage 1, or the top unblocked `BACKLOG.md` ▶ NEXT UP item** — derive live, don't trust this
-sentence over the queue.
+**The Q9b Tier 3 CONTRACT (#247/#248) landed; the owner ACCEPTED it subject to Stage-0 correction
+#249**, now in `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md`: Tier 3
+never imports `receipts.rs` (§4); Stage 1 = pure payload/redaction/serializer code ONLY (no command, no HTTP, no send path — gate-refusal-first is Stage 4's); tombstones outlive the verified
+provider recovery horizon by ≥24h (today ≥31 days; active evidence stays max 30). **Stage 0 is
+accepted once #249 lands with its exact-head review PASS. Next: Q9b Stage 1 per the contract's
+Stage 1 row, after fresh live queue/ownership re-derivation** — never trust this sentence over the queue.
 
 **The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
 (`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
@@ -102,11 +102,11 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
 - **17 worktrees besides `main`; SIX carry commits not on main — do NOT delete or hard-reset those
   six before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
   `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
-  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24`. A seventh name here,
-  `claude/q9b-tier3-contract`, is only this train's own in-flight lane and is back to
-  zero the moment it lands — **a writing lane is never work to preserve**, and that is the one thing
-  a stale read of this bullet must not get wrong. `.claude/worktrees/` holds FIVE checkouts: the two named
-  above, the q9b lane, plus a Test candidate and a bootstrap that carry zero — as do parked
+  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24`. The q9b contract lane
+  `claude/q9b-tier3-contract` LANDED via #248 (remote ref pruned, local branch zero); its checkout
+  now hosts `claude/q9b-stage0-correction`, this train's own in-flight writing lane, itself back to
+  zero the moment it lands — **a writing lane is never work to preserve**. `.claude/worktrees/`
+  holds FIVE checkouts: the two named above, the correction lane, plus a Test candidate and a bootstrap that carry zero — as do parked
   `sentinel-mission0-accent-landing` and `sentinel-mission1-test-workspace`, all of Mission 1 being ON main (#231, pair #233). **No depth or `origin/main` SHA is pinned here, on purpose.** Derive live — `git worktree list` + `git rev-list --count origin/main..<ref>`.
 
 ## Waiting on the owner — two arming gates, nothing else
