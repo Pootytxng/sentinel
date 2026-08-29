@@ -14,6 +14,11 @@ export type ExportResult = {
   discord: string;
 };
 
+// Evidence-export tiers (P2): audience-shaped renders of the same local bundle. Passed to
+// `export_report` as `tier`; omitting it means "technical" (the full report, the pre-tier
+// behaviour). The Support projection is its own surface (SupportEvidence), not a tier here.
+export type ReportTier = "consumer" | "technical";
+
 // Q5 support evidence — mirrors src-tauri/src/support_evidence.rs. Those structs carry no
 // `rename_all`, so the wire fields are snake_case; only the two enums are renamed, and their
 // variants are lowercase words. The record is local-only: Compy has no way to upload it.
