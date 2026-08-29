@@ -3396,3 +3396,43 @@ in code, doc and comment, and pinned. `home.posture.attentionMore` is deleted fr
 **B4 joins B2 as approved design** — the comp draws the nav numerals as bordered chips. Two A-list
 items also came back wrong: **A5's fix deviates from the comp** (it prints "Compy" in both places on
 purpose) and **A1's `©ompy` is in the comp too**, so it is the mark he approved, not a regression.
+## C-13(b) — role="menu" keyboard contract (moved verbatim from BACKLOG.md Conformance queue, 2026-08-29 byte cap)
+
+  **(b) CLOSED 2026-08-20 — the `role="menu"` keyboard contract is honoured.** `RoomAccentPicker`
+  declared the role from the day it shipped and carried none of its behaviour: **all 17 items sat in
+  the tab order**, so crossing the topbar by keyboard cost 17 stops instead of one; no arrow keys, so
+  the role's navigation contract was a claim the component did not honour; and no focus restoration,
+  so closing dropped focus onto `<body>` and lost the user's place. Now: roving tabindex (exactly one
+  tabbable item), one linear ring over all 17 items with Up/Left · Down/Right · Home/End and wrap,
+  disabled items skipped, and every close path — Escape, Tab, pick, apply-to-all — returning focus to
+  the trigger. An outside click deliberately does NOT restore focus, so it cannot fight whatever was
+  just clicked. **Kept as a menu rather than ported to `Picker`** (the select-only combobox from
+  C-10): the popover mixes 15 `menuitemradio` swatches with two COMMANDS, and a `listbox` may not
+  contain commands — so this completes the correct contract instead of re-architecting a shipped
+  surface. Picker's recorded warning about focus-on-close is paid explicitly rather than dodged.
+  **Why axe never saw it, and why that generalises:** axe reads the accessibility TREE — roles, names,
+  required children — and every one of those was already correct here, so the 49-case C-13 sweep
+  passed the day the defect was filed. **A role is a promise about behaviour, and behaviour has to be
+  driven to be measured.** Guard: `src/design/room-accent-menu-keyboard.test.tsx` (16 tests) drives
+  real key events against a real mount and asserts real `document.activeElement`, and its last block
+  is a CLASS ratchet — any NEW `role="menu"` under `src/` fails until it carries arrow handling, a
+  roving tabindex and a `.focus()` restore. Falsified FIVE ways (18 tests), each control failing
+  exactly the tests it should and no others: the true pre-fix component (14/18 red), tabindex alone
+  removed (3), the arrow handler alone unwired (6), focus-restore alone dropped from Escape (1), and
+  disabled-skip-on-open alone removed (2). That last one is a hole found in THIS lane's own change
+  during diff review, not in the original: `End`/`ArrowUp` from the trigger opened onto the last
+  INDEX — "reset to default", disabled whenever the room has no pick — so focus landed nowhere and
+  the tab stop parked on an unfocusable item. Refs do not exist at open time, so the skip lives in
+  the focus effect, stepping backward.
+  **Shipped `5fab9e79` (PR [#172](https://github.com/Pootytxng/sentinel/pull/172)); the self-review it
+  owed is PAID 2026-08-20** on installed desk build `75849be1` — the first binary ever to carry it.
+  **Self-review VERDICT: PASS** (10/10 at 1500x980; the reviewer re-confirmed the stamp with its own
+  `get_build_stamp` probe before capturing anything). **What 16 mounted tests could not see:** the
+  roving-tabindex focus ring draws OUTSIDE the swatch fill (`outline: 2px solid rgb(179,102,255)`,
+  `outline-offset: 2px`), so it stays legible on a near-hue swatch (Violet) as well as a contrasting
+  one (Emerald) instead of vanishing into the very colour it marks — an invisible focus ring on a
+  roving tabindex is a keyboard trap the user cannot see. Disabled-skip and wrap were driven with REAL
+  CDP input events in both directions and landed on "Apply to all rooms", never the disabled "Reset to
+  default"; `Escape` put focus visibly back on the trigger. **Recorded for the next keyboard review:**
+  synthetic DOM dispatch fails Chromium's `:focus-visible` heuristic and would have FALSE-FAILED the
+  states item — real input events are required, not `dispatchEvent`.

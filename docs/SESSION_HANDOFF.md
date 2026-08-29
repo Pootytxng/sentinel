@@ -7,16 +7,15 @@
 
 ## Where the train is standing
 
-**`main` is clean and pushed; the desk build is `090bc58b`** (rebuilt and silently reinstalled at
-the Mission 2 landing, #238; the three rows below are that earlier train's record). **DIR-1a walked
-Live · History · Test:** History and Test came back clean; Live's one real violation is fixed.
+**`main` is clean and pushed; the desk build is `090bc58b`** (Mission 2 landing, #238 — the
+evidence-export train below is NOT yet in the desk build; version debt, batch the next cut).
 
 | | |
 |---|---|
 | Installed | `090bc58b`, stamp byte-found in the installed exe and `73b629ed` byte-absent, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
-| Shipped | `1703be9f` rule 5's "GPU sensor coverage" sentence reaches a screen · `9c43015c` Live's debrief stops calling a change "the #1 fix" after a session it graded smooth · `9424f11c` three fixture states so those three outcomes can be LOOKED at |
-| Self-review | **PASS 12/12** at `9424f11c`, through the three new `?state=debrief-*` previews. `.debrief-clean` → `.debrief-cta` gap measured 10px (matches the rule written blind); CTA contrast 6.85:1 |
-| Gate | `tsc` clean · 5630 frontend tests · doc-truth 9 · doc-budget ALL PASS · pre-push local gate PASS |
+| Shipped | `230c1445` the evidence-export tiers — P2's last item (see NEXT STEP below for what closed) |
+| Self-review | **PASS 12/12** at `230c1445` on the new tier row in Settings → Feedback & help; `.set-seg-on` contrast verified, zero new CSS |
+| Gate | `tsc` clean · 28 `export_tests` + 11 `FeedbackExport` tests · clippy clean · pre-push local gate at push |
 
 ## The rule that came out of the walk — read this before touching Health
 
@@ -36,12 +35,11 @@ untouched — the detail paragraph still does not render on Health).
 **Rooms are `Health · Live · History · Test`**, never the ids (`home`/`play`/`learn`/`lab` are
 persistence keys). **Read the rail from `src/design/homeRail.ts`, never from a doc.**
 
-**The lesson ② left behind: SOURCE-reachability is not USER-reachability.** The honesty line sat
-outside the gate the walk blamed; its whole component was dark one level up and **three guards
-stayed green** (vendor-honesty proved only "not wrapped in a condition"; the affordance census
-counted 80 unreachable strings as live; the mono census described CSS nothing rendered). When a
-guard certifies a surface, check a route reaches it. Finding #4 was also partly WRONG (two Test
-gauges already carry plain-English notes) — **an audit is not a work order.**
+**The lesson ② left behind: SOURCE-reachability is not USER-reachability.** A component can be dark
+one level up while **three guards stay green** (vendor-honesty proved only "not wrapped in a
+condition"; the affordance census counted 80 unreachable strings as live; the mono census described
+CSS nothing rendered). When a guard certifies a surface, check a route reaches it. Finding #4 was
+also partly WRONG (two Test gauges already carry notes) — **an audit is not a work order.**
 
 ## Before you touch the UI — the fixture route, and the guards already covering copy
 
@@ -82,10 +80,12 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 
 ## THE NEXT STEP, exactly
 
-**Build the Consumer / Technical / Support evidence exports** — P2's last item, and the last thing
-`UI_VISION_BACKLOG.md` still lists as open under DIR-1. The backend half exists
-(`src-tauri/src/support_evidence.rs`, `src/surfaces/SupportEvidence.tsx`); the Consumer and Technical
-projections as SURFACES do not. DIR-1a applies to them before they ship: earned framing, or none.
+**The evidence exports SHIPPED 2026-08-29 (`230c1445`), closing P2's last leg** — `export_report`
+grew a `tier` (Consumer = plain-English `build_consumer_report`, DIR-1a-earned flagging; Technical =
+the full markdown; Support = the existing Q5 bundle, not duplicated); the tier row lives in
+Settings → Feedback & help. **Next: take the top unblocked item in `BACKLOG.md` ▶ NEXT UP** — ①/②
+are closed, so that means ③ repo hygiene, the conformance queue, or `UI_VISION_BACKLOG.md` 🔴 rows;
+derive live, don't trust this sentence over the queue.
 
 **The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
 (`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
@@ -103,9 +103,9 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
   six before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
   `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
   `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24`. A seventh name here,
-  `claude/handoff-carrier-truth`, is only THIS doc's own in-flight commit and is back to zero the
-  moment it lands — **a writing lane is never work to preserve**, and that is the one thing a stale
-  read of this bullet must not get wrong. `.claude/worktrees/` holds FOUR checkouts: the two named
+  `claude/evidence-exports-scope-bb729e`, is only this train's own in-flight lane and is back to
+  zero the moment it lands — **a writing lane is never work to preserve**, and that is the one thing
+  a stale read of this bullet must not get wrong. `.claude/worktrees/` holds FOUR checkouts: the two named
   above, plus a Test candidate and a bootstrap that carry zero — as do parked
   `sentinel-mission0-accent-landing` and `sentinel-mission1-test-workspace`, all of Mission 1 being ON main (#231, pair #233). **No depth or `origin/main` SHA is pinned here, on purpose.** Derive live — `git worktree list` + `git rev-list --count origin/main..<ref>`.
 

@@ -49,7 +49,10 @@ $budgets = @{
 # a red gate is worse than shipping a working ratchet, and because bringing them down is a CONTENT
 # decision owned by whoever writes them, not a mechanical trim (bytes are content; re-wrapping a
 # long line does not remove any). The budget may only ever move DOWN. Lower each as its pass lands:
-#   docs/BACKLOG.md         84KB            RATCHETED DOWN FIVE TIMES: 142KB -> 122KB on 2026-08-18 when the
+#   docs/BACKLOG.md         79KB            (84KB -> 79KB on 2026-08-29 when the C-13(b) keyboard-contract
+#                                           record moved to BACKLOG_ARCHIVE.md and the six earlier collapses
+#                                           had left slack.) RATCHETED DOWN FIVE TIMES BEFORE THAT:
+#                                           142KB -> 122KB on 2026-08-18 when the
 #                                           2026-07-27a ... 2026-08-04a steering-log cycles moved to
 #                                           docs/archive/, then 122KB -> 114KB when 2026-08-04b ...
 #                                           2026-08-04g followed them, then 106KB -> 100KB on 2026-08-22
@@ -79,7 +82,7 @@ $budgets = @{
 #                                           check (5b)'s failure text tells whoever hits it.
 # (CLAUDE.md is handled by its own older guard - see the note under the table.)
 $byteBudgets = @{
-  "docs/BACKLOG.md" = 86016
+  "docs/BACKLOG.md" = 80896
   "docs/RELEASE_STATE.md" = 43008
   "docs/OWNER_ACTION_CHECKLIST.md" = 33792
   "src-tauri/CLAUDE.md" = 10240
@@ -135,7 +138,7 @@ $sectionByteBudgets = @{
   # plus the A2/A3 not-a-defect finding moved out verbatim, leaving one consolidated pointer.
   # 13320 -> 11775, banking 256 of the 1545 bytes freed.
   "docs/BACKLOG.md::NEXT UP" = 11776
-  "docs/BACKLOG.md::Conformance queue" = 26624
+  "docs/BACKLOG.md::Conformance queue" = 24064
   "docs/BACKLOG.md::HQ STEERING LOG" = 4608
 }
 

@@ -281,6 +281,8 @@ describe("MCP declaration guard: it fires on the shapes that were actually shipp
     // holds the pre-fix file, and `git ls-files` never lists it because this repo does not track it.
     const listed = [".mcp.json", ".claude/settings.json"];
     const found = discoverCandidates(repoRoot, () => listed);
-    expect(found.some((p) => p.includes("worktrees"))).toBe(false);
+    // Judge the path INSIDE the repo, not the absolute one — a checkout that itself lives under
+    // `.claude/worktrees/<name>/` would otherwise fail this on its own address.
+    expect(found.some((p) => relative(repoRoot, p).includes("worktrees"))).toBe(false);
   });
 });
