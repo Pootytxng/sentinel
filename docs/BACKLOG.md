@@ -342,6 +342,8 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
     anywhere in the design. The consent screen names it: *"Compy's own store on compy.gg"*. Define
     the schema in this change (retention column + a ticket id the deletion receipt can quote); the
     database is empty on purpose. Residual: one `wrangler pages deploy` at ship time (B7).
+    **Contract WRITTEN 2026-08-29 (#247):** `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md`
+    — 30-day retention ruled by the owner; build starts at its Stage 1, spec-first, still dark.
   - [x] **Q9c — CPU temperature that feels native, with no driver.** *Shipped 2026-08-18 (PR pending):*
     `src/surfaces/CpuTempOffer.tsx` replaces the dead-end sentence with an offer that detects what is
     installed, starts it or links the download, and names HWiNFO's Shared Memory Support switch.

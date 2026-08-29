@@ -8,14 +8,14 @@
 ## Where the train is standing
 
 **`main` is clean and pushed; the desk build is `090bc58b`** (Mission 2 landing, #238 — the
-evidence-export train below is NOT yet in the desk build; version debt, batch the next cut).
+evidence exports and the Q9b contract are docs/UI-dark work; version debt, batch the next cut).
 
 | | |
 |---|---|
 | Installed | `090bc58b`, stamp byte-found in the installed exe and `73b629ed` byte-absent, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
-| Shipped | `230c1445` the evidence-export tiers — P2's last item (see NEXT STEP below for what closed) |
-| Self-review | **PASS 12/12** at `230c1445` on the new tier row in Settings → Feedback & help; `.set-seg-on` contrast verified, zero new CSS |
-| Gate | `tsc` clean · 28 `export_tests` + 11 `FeedbackExport` tests · clippy clean · pre-push local gate at push |
+| Shipped | `51372658` the Q9b Tier 3 case-evidence CONTRACT (#247) — spec-only, runtime untouched (see NEXT STEP) |
+| Self-review | not applicable — this train changed zero UI (docs + BACKLOG pointer only); the prior PASS 12/12 at `230c1445` stands |
+| Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · outbound guards green · pre-push local gate at push |
 
 ## The rule that came out of the walk — read this before touching Health
 
@@ -80,12 +80,12 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 
 ## THE NEXT STEP, exactly
 
-**The evidence exports SHIPPED 2026-08-29 (`230c1445`), closing P2's last leg** — `export_report`
-grew a `tier` (Consumer = plain-English `build_consumer_report`, DIR-1a-earned flagging; Technical =
-the full markdown; Support = the existing Q5 bundle, not duplicated); the tier row lives in
-Settings → Feedback & help. **Next: take the top unblocked item in `BACKLOG.md` ▶ NEXT UP** — ①/②
-are closed, so that means ③ repo hygiene, the conformance queue, or `UI_VISION_BACKLOG.md` 🔴 rows;
-derive live, don't trust this sentence over the queue.
+**The Q9b Tier 3 CONTRACT landed 2026-08-29 (`51372658`, issue #247)** —
+`docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md`: field allowlist, per-case
+consent, ticket/deletion-secret split, owner-ruled 30-day retention, stages 0–9. Q9b's BUILD starts
+at its Stage 1 (pure payload/redaction code, still dark) once the contract review closes. **Next:
+that Stage 1, or the top unblocked `BACKLOG.md` ▶ NEXT UP item** — derive live, don't trust this
+sentence over the queue.
 
 **The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
 (`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
@@ -99,14 +99,14 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **16 worktrees besides `main`; SIX carry commits not on main — do NOT delete or hard-reset those
+- **17 worktrees besides `main`; SIX carry commits not on main — do NOT delete or hard-reset those
   six before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
   `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
   `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24`. A seventh name here,
-  `claude/evidence-exports-scope-bb729e`, is only this train's own in-flight lane and is back to
+  `claude/q9b-tier3-contract`, is only this train's own in-flight lane and is back to
   zero the moment it lands — **a writing lane is never work to preserve**, and that is the one thing
-  a stale read of this bullet must not get wrong. `.claude/worktrees/` holds FOUR checkouts: the two named
-  above, plus a Test candidate and a bootstrap that carry zero — as do parked
+  a stale read of this bullet must not get wrong. `.claude/worktrees/` holds FIVE checkouts: the two named
+  above, the q9b lane, plus a Test candidate and a bootstrap that carry zero — as do parked
   `sentinel-mission0-accent-landing` and `sentinel-mission1-test-workspace`, all of Mission 1 being ON main (#231, pair #233). **No depth or `origin/main` SHA is pinned here, on purpose.** Derive live — `git worktree list` + `git rev-list --count origin/main..<ref>`.
 
 ## Waiting on the owner — two arming gates, nothing else
