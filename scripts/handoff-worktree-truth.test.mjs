@@ -25,6 +25,17 @@
 //      only counts. Its own inert path is the one a review caught next: if `origin/main` cannot be
 //      resolved, every count throws at once, and reading that as "no carriers" would reproduce this
 //      exact defect one level down. An uncountable checkout is therefore a FAILURE, never a zero.
+//   D. Local only. Every branch the bullet names must CARRY — resolved from `refs/heads/`, never
+//      `origin/`. Added 2026-08-29 (#243) after the hole between A and C let the same lie land
+//      twice: this repo's landing procedure prunes the remote ref in the same window it lands the
+//      PR, so by the time anyone runs rule A the ref is gone and A skips the branch in silence,
+//      while C only asks that carriers be named — naming a branch that carries NOTHING violates
+//      neither. The local ref survives the remote prune, which is exactly the seam A loses. An
+//      unresolvable name and an unmeasurable one both FAIL, for rule C's reason: `catch { 0 }` is
+//      how a guard grows the blind spot it was built to close. Consequence the bullet now states:
+//      a landed lane's name must leave the bullet in the same train that lands it. Residual,
+//      deliberately out of scope here: a checkout named by PATH is judged by C (carriers must be
+//      named) but not by D — D reads branch-shaped code spans only, same extractor as A.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -48,7 +59,11 @@ const WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, ei
  * Rule A shouts if this bullet is ever reworded away, so scoping cannot make either rule inert.
  */
 export function repoStateBullet(markdown) {
-  return markdown.split(/\r?\n(?=- \*\*)/).find((b) => /not on main|NOT on main/.test(b)) ?? null;
+  // A heading ends the bullet. Without this the block ran from the bullet to the next `- **` line
+  // THROUGH any section in between, and rule D's fail-closed resolver then read a `docs/…` FILE
+  // path quoted in that trailing section as a branch that "does not resolve". Rules A and C only
+  // ever skipped such phantoms silently, which is how the over-reach stayed invisible until #243.
+  return markdown.split(/\r?\n(?=- \*\*|#{1,6} )/).find((b) => /not on main|NOT on main/.test(b)) ?? null;
 }
 
 /** "Eleven worktrees besides `main`" / "7 worktrees" — the count, however it is spelled. */
@@ -166,6 +181,31 @@ export function unmeasuredCarriers(carriers) {
 }
 
 /**
+ * Rule D's judgment, one branch at a time: a name the bullet presents as work must resolve to a
+ * LOCAL ref and carry at least one commit `origin/main` cannot reach. Everything else is a finding,
+ * each carrying its reason. Both collaborators are injected so every verdict — including the two
+ * fail-closed ones — is falsifiable through the same seam the live rule uses.
+ */
+export function staleNamedLanes(claimed, resolvesLocally, countAhead) {
+  return claimed.flatMap((b) => {
+    if (!resolvesLocally(b)) return [{ name: b, why: `refs/heads/${b} does not resolve — the name is not a lane on this machine` }];
+    const n = countAhead(`refs/heads/${b}`);
+    if (n === null) return [{ name: b, why: "its distance from origin/main could not be measured — broken measurement, not an empty result" }];
+    if (n === 0) return [{ name: b, why: "it carries zero commits origin/main cannot reach — the lane has landed" }];
+    return [];
+  });
+}
+
+const localRefExists = (b) => {
+  try {
+    git("rev-parse", "--verify", "--quiet", `refs/heads/${b}^{commit}`);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
  * `git worktree list --porcelain` -> [{ name, commits }], counted against origin/main. Exported so
  * the TOTAL-measurement-failure path can be falsified against the real porcelain of this machine
  * rather than only against a stub: pass a countAhead that throws and every carrier must come back
@@ -245,6 +285,31 @@ describe("the handoff tells the truth about the worktrees", () => {
     expect(countAheadVia(() => "3")("HEAD")).toBe(3);
     expect(countAheadVia(() => { throw new Error("unknown revision origin/main"); })("HEAD")).toBe(null);
     expect(countAheadVia(() => "")("HEAD")).toBe(null);
+    // Rule D, against stubs — every verdict proven to FIRE, so a green run can never mean the
+    // parser found nothing. A named local branch that carries zero is the #243 defect itself:
+    const stale = staleNamedLanes(["lane/a"], () => true, () => 0);
+    expect(stale.map((s) => s.name)).toEqual(["lane/a"]);
+    expect(stale[0].why).toMatch(/zero commits/);
+    // ...a named local branch that carries is legitimate (the in-flight writing lane's shape):
+    expect(staleNamedLanes(["lane/a"], () => true, () => 3)).toEqual([]);
+    // ...a name with no local ref FAILS rather than skips — rule A's silent seam, closed:
+    expect(staleNamedLanes(["lane/gone"], () => false, () => 3).map((s) => s.name)).toEqual(["lane/gone"]);
+    expect(staleNamedLanes(["lane/gone"], () => false, () => 3)[0].why).toMatch(/does not resolve/);
+    // ...and a measurement failure FAILS rather than reading as zero, through the same
+    // countAheadVia seam the live rule uses:
+    const blindCount = countAheadVia(() => { throw new Error("unknown revision origin/main"); });
+    expect(staleNamedLanes(["lane/a"], () => true, blindCount)[0].why).toMatch(/could not be measured/);
+    // Rule D judges branch-shaped code spans ONLY — a detached checkout is written as a path, which
+    // the shared extractor refuses (`.claude/...` is not a branch prefix), so a path-named carrier
+    // keeps flowing through rule C untouched:
+    expect(branchesClaimedUnmerged("- **not on main** — `.claude/worktrees/ghost-c5660e`, detached.")).toEqual([]);
+    // ...and a branch named in a changelog row OUTSIDE the repo-state bullet is not judged at all:
+    const historical = "| `a3f3a75b` | landed `lane/old-train` |\n\n- **One carries work that is not on main** — `lane/a`.";
+    expect(branchesClaimedUnmerged(historical)).toEqual(["lane/a"]);
+    // A heading ENDS the bullet: a `docs/…` file path quoted in the next section must not reach
+    // rule D as a "branch", where the fail-closed resolver would flag it as unresolvable.
+    const sectioned = "- **One carries work that is not on main** — `lane/a`.\n## Waiting on the owner\nsee `docs/OWNER_ACTION_CHECKLIST.md` §C.";
+    expect(branchesClaimedUnmerged(sectioned)).toEqual(["lane/a"]);
   });
 
   it("A: every branch it calls unmerged is genuinely not on origin/main", () => {
@@ -314,6 +379,27 @@ describe("the handoff tells the truth about the worktrees", () => {
     expect(
       missing,
       `${HANDOFF} does not name ${missing.length} checkout(s) that carry commits origin/main cannot reach: ${missing.join(", ")}. \nA detached checkout has no ref, so no origin-facing audit can see it — this bullet is the only place it can be recorded.`,
+    ).toEqual([]);
+  });
+
+  it("D: every branch the bullet names still carries — a landed lane's name must leave with it", () => {
+    const live = git("worktree", "list", "--porcelain").split(/\r?\n/).filter((l) => l.startsWith("worktree ")).length;
+    if (live <= 1) {
+      // A one-checkout clone has no local lanes to resolve, exactly as in B and C. Say so out loud.
+      expect(live).toBe(1);
+      return;
+    }
+    const claimed = branchesClaimedUnmerged(markdown);
+    // Not inert: rule A already insists the bullet names at least one branch; if that ever loosens,
+    // this rule must not go quietly green on an empty list.
+    expect(claimed.length, `${HANDOFF} names no branches in the repo-state bullet — rule D has nothing to judge.`).toBeGreaterThan(0);
+    const countAhead = countAheadVia((committish) => git("rev-list", "--count", `origin/main..${committish}`));
+    const found = staleNamedLanes(claimed, localRefExists, countAhead);
+    expect(
+      found,
+      `${HANDOFF} presents these as lanes to preserve, but on this machine they are not:\n` +
+        found.map((f) => `  - ${f.name}: ${f.why}`).join("\n") +
+        `\nA landed writing lane is never work to preserve — remove its name from the bullet in the same train that lands it.`,
     ).toEqual([]);
   });
 });
