@@ -98,16 +98,16 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **18 worktrees besides `main`; SEVEN carry commits not on main — do NOT delete or hard-reset
-  those seven before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity`
+- **18 worktrees besides `main`; SIX carry commits not on main — do NOT delete or hard-reset
+  those six before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity`
   · `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
-  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` ·
-  `claude/serene-torvalds-9e495e` (#254). Rule D (#243) FAILS this bullet for naming a zero-carry
-  branch — **a landed lane's name leaves this bullet in the train that lands it** (#252's just did).
-  `.claude/worktrees/` holds SIX checkouts: the three carriers named above plus three spent ones at
-  zero — as are parked `sentinel-mission0-accent-landing` and `sentinel-mission1-test-workspace`
-  (Mission 1 is ON main, #231/#233). **No depth or SHA is pinned here, on purpose.** Derive live —
-  `git worktree list` + `git rev-list --count origin/main..<ref>`.
+  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24`. Rule D (#243) FAILS
+  this bullet for naming a zero-carry branch — **a landed lane's name leaves this bullet in the
+  train that lands it**, as the #254 lane's just did — its spent checkout sits detached at
+  `.claude/worktrees/serene-torvalds-9e495e`, one of SIX in that dir: two carriers named above
+  plus four spent at zero — as are parked `sentinel-mission0-accent-landing` and
+  `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233). **No depth or SHA is pinned
+  here, on purpose.** Derive live — `git worktree list` + `git rev-list --count origin/main..<ref>`.
 
 ## Waiting on the owner — two arming gates, nothing else
 
