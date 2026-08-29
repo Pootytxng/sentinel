@@ -119,10 +119,19 @@ if (mode === "secrets" || mode === "secrets-fail") {
 if (mode === "child-hang") { setInterval(() => {}, 60000); }
 if (mode === "tree-hang") {
   const { spawn } = await import("node:child_process");
+  const { writeFileSync } = await import("node:fs");
+  // detached: true, deliberately (issue #254). A non-detached child rides libuv's job object, so
+  // merely killing the PARENT already cascades to it -- proven 2026-08-29 by no-opping
+  // Stop-NativeProcessTree and watching this suite stay green. A detached child dies only if the
+  // tree walk actually reaches it, which is the property under test.
   const child = spawn(process.execPath, [process.argv[1], "child-hang"], {
-    detached: false,
+    detached: true,
     stdio: "ignore",
   });
+  // The pid travels by FILE, not stdout: a surviving grandchild holds inherited duplicates of the
+  // wrapper's pipes, so on exactly the runs where tree-kill FAILED the stdout drain times out and a
+  // pid sent through it would be lost -- the regression would hang the harness instead of failing.
+  writeFileSync(rest[0], "CHILD_PID=" + child.pid);
   console.log("CHILD_PID=" + child.pid);
   setInterval(() => {}, 60000);
 }
@@ -209,10 +218,52 @@ if ($modes.ContainsKey($Scenario)) {
     Write-Output ("THREW=" + $_.Exception.Message)
   }
 } elseif ($Scenario -eq "timeout-tree-kill") {
-  $result = Invoke-NativeProcess -Command $NodeExe -ArgumentList @($FakeGh, "tree-hang") -TimeoutMs 2000
+  $pidFile = Join-Path ([IO.Path]::GetTempPath()) ("compy-treekill-" + [Guid]::NewGuid().ToString("N") + ".txt")
+  $result = Invoke-NativeProcess -Command $NodeExe -ArgumentList @($FakeGh, "tree-hang", $pidFile) -TimeoutMs 2000
   Write-Output ("TIMEDOUT=" + $result.TimedOut)
   Write-Output ("TERMINATION_ATTEMPTED=" + $result.TerminationAttempted)
-  Write-Output ("TREE_STDOUT=" + (($result.StdOut -replace "[\r\n]+", "|").Trim("|")))
+  # deflake (issue #254, 2026-08-29, failed the full-parallel pre-push gate twice): the death check
+  # lives HERE now, as an identity-checked poll, because the old test-side probe was wrong twice
+  # over. It slept a fixed 1s -- under gate-wide CPU contention the kill can land later -- and it
+  # probed with a bare pid (process.kill(pid, 0)), which under the gate's process churn can hit a
+  # RECYCLED pid: measured on this machine 2026-08-29, a freed pid was re-occupied within 3s in 4 of
+  # 12 trials. A dead child then read as alive. This poll cannot make that mistake: a process only
+  # counts as OUR child while its CommandLine still carries the unique fixture path AND the
+  # child-hang mode; anything else at that pid means our child is gone.
+  $childPid = 0
+  if (Test-Path -LiteralPath $pidFile) {
+    $rawPid = Get-Content -LiteralPath $pidFile -Raw -ErrorAction SilentlyContinue
+    if ($rawPid -match "CHILD_PID=(\\d+)") { $childPid = [int]$Matches[1] }
+    Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
+  }
+  Write-Output ("TREE_CHILD_PID=" + $childPid)
+  if ($childPid -le 0) {
+    # Under contention the 2s timeout can fire before the parent node process ever reached spawn.
+    # No descendant existed, so tree termination was never exercised: inconclusive, not a verdict.
+    Write-Output "TREE_CHILD_FATE=SPAWN_INCONCLUSIVE"
+  } else {
+    $fate = "ALIVE"
+    $probe = [Diagnostics.Stopwatch]::StartNew()
+    while ($probe.ElapsedMilliseconds -lt 20000) {
+      $live = $null
+      $queryOk = $true
+      try { $live = Get-CimInstance Win32_Process -Filter ("ProcessId=" + $childPid) -ErrorAction Stop } catch { $queryOk = $false }
+      if ($queryOk) {
+        if ($null -eq $live) { $fate = "DEAD"; break }
+        $cmd = [string]$live.CommandLine
+        if (($cmd -notlike ("*" + $FakeGh + "*")) -or ($cmd -notlike "*child-hang*")) { $fate = "PID_REUSED"; break }
+      }
+      # A CIM query failure does NOT read as death: fail closed toward ALIVE, never toward a pass.
+      Start-Sleep -Milliseconds 250
+    }
+    if ($fate -eq "ALIVE") {
+      # A regression must FAIL the assertion, not also leak an immortal node that keeps holding
+      # inherited pipe duplicates and hangs the suite. Killed DIRECTLY, never through the library
+      # under test -- when tree-kill is the thing that broke, it cannot be the cleanup either.
+      try { [System.Diagnostics.Process]::GetProcessById($childPid).Kill() } catch { }
+    }
+    Write-Output ("TREE_CHILD_FATE=" + $fate)
+  }
 } elseif ($Scenario -eq "checked-fails-closed") {
   try {
     Invoke-CheckedProcess "releases-repo tag lookup" $NodeExe @($FakeGh, "auth") -TimeoutMs 30000 | Out-Null
@@ -459,7 +510,10 @@ const run = (scenario) => {
       "-GhCmd", ghCmd,
       "-SpaceArg", spaceArg,
     ],
-    { encoding: "utf8", windowsHide: true },
+    // The 90s timeout is a hang backstop, not a budget (issue #254): a process that survives with
+    // inherited duplicates of this pipe would otherwise block spawnSync PAST the vitest timeout,
+    // which cannot interrupt sync code -- the gate would hang instead of going red.
+    { encoding: "utf8", windowsHide: true, timeout: 90000 },
   );
   const out = `${result.stdout ?? ""}${result.stderr ?? ""}`;
   // The whole point: the harness must reach its end. A NativeCommandError would abort it.
@@ -544,15 +598,26 @@ describe.runIf(windows)("native-process behaviour (bug->guard, both failed v0.9.
     expect(elapsed).toBeLessThan(30000);
   }, 60000);
 
-  it("attempts process-tree termination so timed-out descendants do not survive", async () => {
-    const { field } = run("timeout-tree-kill");
+  // deflake (issue #254): this test failed the full-parallel pre-push gate twice on 2026-08-29 by
+  // racing the kill -- a fixed 1s sleep, then ONE identity-blind process.kill(pid, 0) probe, which a
+  // recycled pid satisfies (measured: under churn a freed pid was re-occupied within 3s in 4 of 12
+  // trials, and a dead child then reads as alive). The verdict now comes from the harness's
+  // identity-checked bounded poll (the timeout-tree-kill branch above). SPAWN_INCONCLUSIVE means the
+  // 2s timeout beat the parent's spawn call, so no descendant ever existed to terminate -- rerun
+  // that, bounded. This is NOT the banned flake-hiding retry (vitest.config.ts): a real tree-kill
+  // regression reports ALIVE on every attempt, never SPAWN_INCONCLUSIVE, so retrying cannot mask it.
+  it("attempts process-tree termination so timed-out descendants do not survive", () => {
+    let attempt = run("timeout-tree-kill");
+    for (let retries = 0; attempt.field("TREE_CHILD_FATE") === "SPAWN_INCONCLUSIVE" && retries < 2; retries++) {
+      attempt = run("timeout-tree-kill");
+    }
+    const { field } = attempt;
     expect(field("TIMEDOUT")).toBe("True");
     expect(field("TERMINATION_ATTEMPTED")).toBe("True");
-    const childPid = Number(field("TREE_STDOUT").match(/CHILD_PID=(\d+)/)?.[1]);
-    expect(childPid).toBeGreaterThan(0);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    expect(() => process.kill(childPid, 0)).toThrow();
-  }, 60000);
+    expect(Number(field("TREE_CHILD_PID"))).toBeGreaterThan(0);
+    // DEAD and PID_REUSED both prove the descendant no longer exists; ALIVE is the regression.
+    expect(["DEAD", "PID_REUSED"]).toContain(field("TREE_CHILD_FATE"));
+  }, 120000);
 
   it("fails closed on an unexpected nonzero exit, carrying the child's stderr", () => {
     const { field } = run("checked-fails-closed");
@@ -818,4 +883,36 @@ describe.runIf(windows)("native-process behaviour (bug->guard, both failed v0.9.
     const { field } = run("missing-executable");
     expect(field("THREW")).toContain("was not found on PATH");
   }, 60000);
+});
+
+// bug->guard (issue #254): the tree-kill deflake is itself pinned. If the whole poll were removed
+// the main test would fail on a missing TREE_CHILD_FATE field -- but a PARTIAL revert (dropping
+// just the CommandLine identity check, the inconclusive verdict, or the leftover cleanup) would
+// bring the original full-parallel races straight back while every test stays green. Runs on every
+// platform: it asserts on the HARNESS source, not on live processes.
+describe("tree-kill death probe stays deterministic (issue #254)", () => {
+  it("keeps the identity-checked, bounded, fail-closed poll in the harness", () => {
+    // Identity: a pid only counts as our child while Win32_Process still shows OUR command line.
+    expect(HARNESS).toContain("Get-CimInstance Win32_Process");
+    expect(HARNESS).toMatch(/notlike[^\n]*child-hang/);
+    expect(HARNESS).toContain('$fate = "PID_REUSED"');
+    // Setup that never produced a descendant is inconclusive, not a verdict either way.
+    expect(HARNESS).toContain("TREE_CHILD_FATE=SPAWN_INCONCLUSIVE");
+    // A failed run must not leak the immortal child-hang node -- and the cleanup must not route
+    // through the library under test, whose tree-kill is exactly what a red run says is broken.
+    expect(HARNESS).toContain("GetProcessById($childPid).Kill()");
+    // Fail-closed polarity: a CIM error may never read as death.
+    expect(HARNESS).toContain("catch { $queryOk = $false }");
+  });
+
+  it("keeps the discriminating fixture and the pipe-proof pid transport", () => {
+    // A non-detached grandchild dies with its parent via libuv's job object, so the test would
+    // pass with tree termination entirely removed -- proven 2026-08-29 by no-opping
+    // Stop-NativeProcessTree under the old fixture and watching the suite stay green.
+    expect(FAKE_GH).toContain("detached: true");
+    // The pid travels by file: a surviving grandchild holds inherited pipe duplicates, so on
+    // exactly the runs where tree-kill failed, a pid sent through stdout would be lost.
+    expect(FAKE_GH).toMatch(/writeFileSync\(rest\[0\], "CHILD_PID="/);
+    expect(HARNESS).toContain("TREE_CHILD_PID=");
+  });
 });
