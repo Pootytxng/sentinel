@@ -184,22 +184,38 @@ fn replace_ignore_case(haystack: &str, needle: &str, mask: &str) -> String {
     if needle.is_empty() {
         return haystack.to_string();
     }
-    let lower_hay = haystack.to_lowercase();
-    let lower_needle = needle.to_lowercase();
-    // to_lowercase can change byte length (rare, non-ASCII); when it does, byte offsets from the
-    // lowered copy no longer map onto the original, so refuse rather than corrupt the string.
-    if lower_hay.len() != haystack.len() || lower_needle.len() != needle.len() {
-        return haystack.to_string();
+    // Char-accurate case-insensitive search. Lowercasing can change a character's byte length
+    // (İ, ẞ), so the lowered copy carries a byte-by-byte map back to the original offsets — an
+    // earlier draft bailed out on any length change, which let ONE such character anywhere in the
+    // comment disable identity masking for the whole message (review finding, 2026-08-29).
+    let needle_lower: String = needle.chars().flat_map(char::to_lowercase).collect();
+    let mut hay_lower = String::with_capacity(haystack.len());
+    let mut back: Vec<usize> = Vec::with_capacity(haystack.len() + 1);
+    for (orig_idx, c) in haystack.char_indices() {
+        for lc in c.to_lowercase() {
+            let start = hay_lower.len();
+            hay_lower.push(lc);
+            for _ in start..hay_lower.len() {
+                back.push(orig_idx);
+            }
+        }
     }
+    back.push(haystack.len());
+
     let mut out = String::with_capacity(haystack.len());
-    let mut cursor = 0;
-    while let Some(hit) = lower_hay[cursor..].find(&lower_needle) {
-        let at = cursor + hit;
-        out.push_str(&haystack[cursor..at]);
+    let mut low_cursor = 0usize;
+    let mut orig_cursor = 0usize;
+    while let Some(hit) = hay_lower[low_cursor..].find(&needle_lower) {
+        let low_at = low_cursor + hit;
+        let low_end = low_at + needle_lower.len();
+        let orig_at = back[low_at];
+        let orig_end = back[low_end].max(orig_at);
+        out.push_str(&haystack[orig_cursor..orig_at.max(orig_cursor)]);
         out.push_str(mask);
-        cursor = at + needle.len();
+        low_cursor = low_end;
+        orig_cursor = orig_end.max(orig_cursor);
     }
-    out.push_str(&haystack[cursor..]);
+    out.push_str(&haystack[orig_cursor..]);
     out
 }
 
@@ -270,6 +286,22 @@ fn path_root_len(chars: &[char], i: usize) -> Option<usize> {
             }
         }
     }
+    // Unix-style absolute roots (review finding, 2026-08-29) — a WSL/git-bash/dev-tool path pasted
+    // into a comment carries a username just as surely as a drive path does. A bare `/` only
+    // counts when the run holds a SECOND slash (`/home/x`), so a command switch like `/v` stays
+    // readable; `~/` counts on its own.
+    if chars[i] == '~' && i + 1 < chars.len() && chars[i + 1] == '/' {
+        return Some(2);
+    }
+    if chars[i] == '/' && i + 1 < chars.len() && !chars[i + 1].is_whitespace() && chars[i + 1] != '/' {
+        let mut k = i + 1;
+        while k < chars.len() && !chars[k].is_whitespace() {
+            if chars[k] == '/' {
+                return Some(1);
+            }
+            k += 1;
+        }
+    }
     None
 }
 
@@ -303,7 +335,30 @@ fn map_tokens(input: &str, mask: &str, matches: impl Fn(&str) -> bool) -> String
 }
 
 fn mask_ips(input: &str) -> String {
-    map_tokens(input, MASK_IP, |t| is_ipv4(t) || is_ipv6(t))
+    map_tokens(input, MASK_IP, looks_like_address)
+}
+
+/// An address pasted from an error dialog rarely arrives bare (review finding, 2026-08-29): it
+/// comes with a scheme, a port, a path, or RFC 3986 brackets. Peel those and test what is left;
+/// on a hit the WHOLE token is masked, which errs toward hiding more, never less.
+fn looks_like_address(token: &str) -> bool {
+    let mut t = token;
+    if let Some(pos) = t.find("://") {
+        t = &t[pos + 3..];
+    }
+    let t = t.trim_start_matches(['[', '(', '"', '\'']);
+    let t = t.split(['/', '?']).next().unwrap_or(t);
+    let host = t.split(']').next().unwrap_or(t);
+    if is_ipv4(host) || is_ipv6(host) {
+        return true;
+    }
+    // host:port — only meaningful for ipv4; an unbracketed ipv6 IS colons and is handled above.
+    if let Some((head, port)) = host.rsplit_once(':') {
+        if !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) && is_ipv4(head) {
+            return true;
+        }
+    }
+    false
 }
 
 fn is_ipv4(token: &str) -> bool {
@@ -347,7 +402,10 @@ fn clamp_bytes(value: &str, max_bytes: usize) -> String {
         return value.to_string();
     }
     const MARK: &str = "\u{2026}";
-    debug_assert!(max_bytes > MARK.len(), "a field budget must have room for the truncation mark");
+    if max_bytes <= MARK.len() {
+        // A budget with no room for the mark yields nothing rather than underflowing in release.
+        return String::new();
+    }
     let budget = max_bytes - MARK.len();
     let mut end = budget;
     while end > 0 && !value.is_char_boundary(end) {
@@ -364,6 +422,8 @@ fn clamp_bytes(value: &str, max_bytes: usize) -> String {
 /// class) plus the hardening the contract adds on top: no separators, no drive colon, no `@`, no
 /// control characters, ≤64 chars. A token that still carries an identity-shaped character after
 /// the basename pass is REFUSED, never edited — masking by surgery invites near-miss leaks.
+/// Length is the one axis that truncates instead: a shortened family still classifies honestly,
+/// where a token edited around an identity character would not.
 fn family_token(raw: &str) -> Option<String> {
     let t = sanitize_token(raw);
     if t.is_empty() || t.chars().any(|c| c.is_control() || c == '@' || c == ':' || c == '\\' || c == '/') {
@@ -773,6 +833,49 @@ mod tests {
         assert!(!out.to_lowercase().contains("kuya"), "username leaked: {out}");
         assert!(!out.to_lowercase().contains("desktop-ab12"), "hostname leaked: {out}");
         assert!(out.contains(MASK_USER) && out.contains(MASK_HOST));
+    }
+
+    #[test]
+    fn identity_literals_are_masked_even_beside_length_changing_unicode() {
+        // Review finding (2026-08-29): the old byte-parity bail-out meant ONE character whose
+        // lowercase form has a different byte length (İ, ẞ) disabled literal masking for the
+        // whole comment. Pinned: the literals mask, the unrelated Unicode survives.
+        let out = redact_comment_with("İstanbul crash, ẞ appeared, my name is KUYA on desktop-ab12", &test_literals());
+        assert!(!out.to_lowercase().contains("kuya"), "username leaked: {out}");
+        assert!(!out.to_lowercase().contains("desktop-ab12"), "hostname leaked: {out}");
+        assert!(out.contains("İstanbul") && out.contains('ẞ'), "unrelated text mangled: {out}");
+    }
+
+    #[test]
+    fn addresses_with_ports_schemes_and_brackets_cannot_survive() {
+        // Review finding (2026-08-29): addresses pasted from error dialogs arrive dressed.
+        // The URL fixture is assembled at runtime — the outbound guard scans this file's whole
+        // source (tests included) for URL literals, and a fixture must not be its one hit.
+        let url_shaped = format!("server at http{}192.168.1.44/status died", "://");
+        for hostile in [
+            "connected to 192.168.1.44:8080 and failed",
+            url_shaped.as_str(),
+            "node at [fe80::1ff:fe23:4567:890a]:8080 down",
+        ] {
+            let out = redact_comment_with(hostile, &test_literals());
+            assert!(!out.contains("192.168") && !out.contains("890a"), "address leaked: {out}");
+        }
+        // The clock/version negative controls still hold.
+        let clean = "restarted at 12:30:00, driver 24.10.1, ratio 24/7 uptime";
+        assert_eq!(redact_comment_with(clean, &test_literals()), clean);
+    }
+
+    #[test]
+    fn unix_style_absolute_paths_cannot_survive() {
+        // Review finding (2026-08-29): a WSL/dev-tool path carries a username the env-literal
+        // scrub cannot know about (someone ELSE's machine, a quoted log line).
+        let out = redact_comment_with("failed reading /home/otheruser/.ssh/id_rsa on the box", &test_literals());
+        assert!(out.contains(MASK_PATH) && !out.contains("otheruser"), "unix path leaked: {out}");
+        let out = redact_comment_with("my config is ~/compy/settings.json somehow", &test_literals());
+        assert!(out.contains(MASK_PATH) && !out.contains("settings.json"), "home path leaked: {out}");
+        // A lone command switch is not a path and stays readable.
+        let clean = "launched with /v and it worked";
+        assert_eq!(redact_comment_with(clean, &test_literals()), clean);
     }
 
     #[test]

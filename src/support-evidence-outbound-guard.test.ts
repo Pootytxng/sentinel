@@ -321,8 +321,14 @@ const PATH_LEAD = /(?:\bmod\s+|\buse\s+|crate::|super::)/;
 const NOT_WORD_CHAR = /(?![A-Za-z0-9_])/;
 
 function referencesModule(source: string, moduleStem: string): boolean {
-  const re = new RegExp(PATH_LEAD.source + moduleStem + NOT_WORD_CHAR.source);
-  return re.test(stripRustComments(source));
+  const body = stripRustComments(source);
+  const direct = new RegExp(PATH_LEAD.source + moduleStem + NOT_WORD_CHAR.source);
+  // A grouped import (`use crate::{case_intelligence::x, other::y};`) puts `{` or `,` between the
+  // lead and the stem, which the direct pattern waves through (review finding, 2026-08-29). `[^;]*`
+  // cannot cross a statement boundary, and the stem must sit right after `{`/`,` so prose inside a
+  // string stays a non-match. Same tightening as case-evidence-tier-separation-guard.test.ts.
+  const grouped = new RegExp(String.raw`\buse\s+[^;]*[{,]\s*` + moduleStem + NOT_WORD_CHAR.source);
+  return direct.test(body) || grouped.test(body);
 }
 
 describe("support evidence stays unreachable from the outbound tiers", () => {
@@ -394,6 +400,7 @@ describe("support evidence stays unreachable from the outbound tiers", () => {
 
   it("catches the shapes it was written for (positive controls)", () => {
     expect(referencesModule("use crate::case_intelligence::fetch;", "case_intelligence")).toBe(true);
+    expect(referencesModule("use crate::{blackbox::Incident, case_intelligence::fetch};", "case_intelligence")).toBe(true);
     expect(referencesModule("mod case_evidence_upload;", "case_evidence_upload")).toBe(true);
     expect(referencesModule("let x = super::case_intelligence::CATALOG;", "case_intelligence")).toBe(true);
     // Describing the ban is not the ban being broken.

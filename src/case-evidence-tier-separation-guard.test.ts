@@ -37,8 +37,14 @@ const PATH_LEAD = /(?:\bmod\s+|\buse\s+|crate::|super::)/;
 const NOT_WORD_CHAR = /(?![A-Za-z0-9_])/;
 
 function referencesModule(source: string, moduleStem: string): boolean {
-  const re = new RegExp(PATH_LEAD.source + moduleStem + NOT_WORD_CHAR.source);
-  return re.test(stripRustComments(source));
+  const body = stripRustComments(source);
+  const direct = new RegExp(PATH_LEAD.source + moduleStem + NOT_WORD_CHAR.source);
+  // A grouped import (`use crate::{receipts::x, other::y};`) puts `{` or `,` between the lead and
+  // the stem, which the direct pattern waves through (review finding, 2026-08-29). `[^;]*` cannot
+  // cross a statement boundary, and the stem must sit right after `{`/`,` so prose inside a string
+  // ("use the receipts tab") stays a non-match.
+  const grouped = new RegExp(String.raw`\buse\s+[^;]*[{,]\s*` + moduleStem + NOT_WORD_CHAR.source);
+  return direct.test(body) || grouped.test(body);
 }
 
 // Rust-side transports, same vocabulary as the outbound guard's — a Stage 1 module that can reach
@@ -162,6 +168,8 @@ describe("case-evidence tier separation: Tier 3 shares nothing with the other tr
 
   it("catches the shapes it was written for (positive controls)", () => {
     expect(referencesModule("use crate::receipts::build_receipt_payload;", "receipts")).toBe(true);
+    expect(referencesModule("use crate::{receipts::build_receipt_payload, hw_class::x};", "receipts")).toBe(true);
+    expect(referencesModule("use crate::{blackbox::Incident, hw_class::sanitize_token};", "receipts")).toBe(false);
     expect(referencesModule("mod support_evidence;", "support_evidence")).toBe(true);
     expect(referencesModule("let x = super::case_evidence_upload::CASE_SCHEMA_VERSION;", "case_evidence_upload")).toBe(true);
     // Describing the ban is not the ban being broken.
