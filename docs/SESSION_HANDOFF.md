@@ -99,15 +99,15 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **16 worktrees besides `main`; seven carry commits not on main — do NOT delete or hard-reset those
-  seven before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
+- **16 worktrees besides `main`; SIX carry commits not on main — do NOT delete or hard-reset those
+  six before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
   `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
-  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` ·
-  `claude/mission2-postmerge-reconcile` (LIVE — #239, the only writer now; Mission 2 itself landed as
-  #238 and its branch is pruned from origin). `.claude/worktrees/` holds FOUR checkouts, not a pair:
-  the two named above, plus a Test candidate and a bootstrap that both carry zero — as do parked
-  `sentinel-mission0-accent-landing` and `sentinel-mission1-test-workspace`, all of Mission 1 being
-  ON main (#231, pair #233). **No depth or `origin/main` SHA is pinned here, on purpose: both go stale on the next commit.** Derive live — `git worktree list` + `git rev-list --count origin/main..<ref>`.
+  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24`. A seventh name here,
+  `claude/handoff-carrier-truth`, is only THIS doc's own in-flight commit and is back to zero the
+  moment it lands — **a writing lane is never work to preserve**, and that is the one thing a stale
+  read of this bullet must not get wrong. `.claude/worktrees/` holds FOUR checkouts: the two named
+  above, plus a Test candidate and a bootstrap that carry zero — as do parked
+  `sentinel-mission0-accent-landing` and `sentinel-mission1-test-workspace`, all of Mission 1 being ON main (#231, pair #233). **No depth or `origin/main` SHA is pinned here, on purpose.** Derive live — `git worktree list` + `git rev-list --count origin/main..<ref>`.
 
 ## Waiting on the owner — two arming gates, nothing else
 
