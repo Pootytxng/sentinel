@@ -195,7 +195,10 @@ New Pages Function(s), same-origin on the site, patterned on `functions/api/usag
 
 - **Transaction behavior:** one D1 `batch` per submit, in order: ① prune `case_rate` past the
   window; ② prune `case_evidence` past `expires_at` (§9 — retention rides the write path);
-  ③ insert the case guarded by the correlated rate count; ④ record the rate attempt. All-or-nothing.
+  ③ prune `case_tombstones` older than the provider's maximum recovery window (§7 — the tombstone
+  table is self-cleaning by the same mechanism, so it can never become a long-lived ledger);
+  ④ insert the case guarded by the correlated rate count; ⑤ record the rate attempt. The delete
+  endpoint's own batch runs the same three prunes. All-or-nothing.
 - **Errors to the client are generic:** `{ok:false}` + status. No internals, no field names, no
   stack, nothing PII-bearing thrown or logged.
 - **Ticket identity is server-generated** (§6) and returned only in the success response, together
@@ -250,9 +253,10 @@ database becomes normally accessible, the operator MUST reconcile it: delete eve
 row whose `ticket_id` appears in `case_tombstones`, and every row past `expires_at`. The tombstone
 table is exactly what makes this possible without keeping any copy of the evidence — it records
 that a deletion was honored, never what was deleted. Tombstones are pruned once older than the
-provider's maximum recovery window (30 days for D1 Time Travel), so they cannot become a
-long-lived ledger either. This rule lands in the spec now and must be restated in the runbook
-that accompanies Stage 7 deployment.
+provider's maximum recovery window (30 days for D1 Time Travel) — mechanically, by the same
+self-cleaning write path that prunes expired evidence (§5 batch step ③, on every submit AND every
+delete), so they cannot become a long-lived ledger either. This rule lands in the spec now and
+must be restated in the runbook that accompanies Stage 7 deployment.
 
 ## 8. Local send receipt
 
@@ -361,6 +365,7 @@ lands red-first with positive AND negative controls so an empty corpus can never
 | Deletion secret cannot disclose a case | endpoint test: the delete route returns no payload data on any input, valid credentials included |
 | Ticket ID alone cannot delete | endpoint test: delete with valid ticket + wrong/absent secret refuses; refusal identical for unknown ticket (no oracle); failed attempts rate-limited |
 | Active evidence expires by 30 days | endpoint tests: inserted `expires_at` = received + 30d exactly; expired row invisible to lookup; next write's batch prunes it (both directions controlled) |
+| Tombstones cannot become a long-lived ledger | endpoint test: a tombstone older than the recovery window is pruned by the next submit's and the next delete's batch; a younger one survives (both controlled) |
 | Authenticated deletion removes active evidence immediately | endpoint test: row + verifier gone in the same transaction; tombstone written with no evidence columns |
 | Privacy text never claims Tier 3 is live while dark | `src/capability-exception-policy-guard.test.ts` corpus already pins PRIVACY.md's current-runtime language; extend its REQUIRED pins when the Tier 3 disclosure lands (Stage 9), with the retired-claim positive-control pattern |
 | Positive/negative controls throughout | every guard above includes at least one seeded-defect control, per the existing house pattern (`catches the shapes it was written for`) |
