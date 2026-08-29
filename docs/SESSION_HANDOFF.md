@@ -101,13 +101,13 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
 - **17 worktrees besides `main`; SIX carry commits not on main — do NOT delete or hard-reset those
   six before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
   `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
-  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24`. The #243 train writes
-  on `claude/guard-243-handoff-zero-carry`. Guard rule D (#243) now FAILS this bullet for naming a
-  zero-carry branch — **a landed lane's name leaves this bullet in the train that lands it**, as
-  the spent q9b pair's already has. `.claude/worktrees/` holds FIVE checkouts: the two carriers
-  named above, this train's writer, plus a bootstrap and the spent q9b checkout at zero — as are
-  parked `sentinel-mission0-accent-landing` and `sentinel-mission1-test-workspace` (Mission 1 is ON
-  main, #231/#233). **No depth or SHA is pinned here, on purpose.** Derive live — `git worktree list` + `git rev-list --count origin/main..<ref>`.
+  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24`. Guard rule D (#243,
+  landed) now FAILS this bullet for naming a zero-carry branch — **a landed lane's name leaves
+  this bullet in the train that lands it**, as the q9b pair's and the #243 writer's already have.
+  `.claude/worktrees/` holds FIVE checkouts: the two carriers named above plus three spent ones at
+  zero — as are parked `sentinel-mission0-accent-landing` and `sentinel-mission1-test-workspace`
+  (Mission 1 is ON main, #231/#233). **No depth or SHA is pinned here, on purpose.** Derive live —
+  `git worktree list` + `git rev-list --count origin/main..<ref>`.
 
 ## Waiting on the owner — two arming gates, nothing else
 
