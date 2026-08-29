@@ -251,7 +251,11 @@ if ($modes.ContainsKey($Scenario)) {
       if ($queryOk) {
         if ($null -eq $live) { $fate = "DEAD"; break }
         $cmd = [string]$live.CommandLine
-        if (($cmd -notlike ("*" + $FakeGh + "*")) -or ($cmd -notlike "*child-hang*")) { $fate = "PID_REUSED"; break }
+        # An EMPTY CommandLine is not evidence of reuse -- a live child whose command line a WMI
+        # hiccup failed to read would misread as PID_REUSED and pass falsely. Keep polling instead.
+        if (-not [string]::IsNullOrWhiteSpace($cmd)) {
+          if (($cmd -notlike ("*" + $FakeGh + "*")) -or ($cmd -notlike "*child-hang*")) { $fate = "PID_REUSED"; break }
+        }
       }
       # A CIM query failure does NOT read as death: fail closed toward ALIVE, never toward a pass.
       Start-Sleep -Milliseconds 250
@@ -896,6 +900,8 @@ describe("tree-kill death probe stays deterministic (issue #254)", () => {
     expect(HARNESS).toContain("Get-CimInstance Win32_Process");
     expect(HARNESS).toMatch(/notlike[^\n]*child-hang/);
     expect(HARNESS).toContain('$fate = "PID_REUSED"');
+    // ...and an unreadable command line proves nothing: only a READ line may classify as reuse.
+    expect(HARNESS).toContain("IsNullOrWhiteSpace($cmd)");
     // Setup that never produced a descendant is inconclusive, not a verdict either way.
     expect(HARNESS).toContain("TREE_CHILD_FATE=SPAWN_INCONCLUSIVE");
     // A failed run must not leak the immortal child-hang node -- and the cleanup must not route
