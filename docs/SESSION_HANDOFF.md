@@ -13,7 +13,7 @@ evidence exports and the Q9b contract are docs/UI-dark work; version debt, batch
 | | |
 |---|---|
 | Installed | `090bc58b`, stamp byte-found in the installed exe and `73b629ed` byte-absent, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
-| Shipped | the Q9b Tier 3 CONTRACT (#247, PR #248, landed) + its owner-directed Stage-0 correction (#249) — spec-only, runtime untouched (see NEXT STEP) |
+| Shipped | guard rule D (#243): the handoff can no longer name a zero-carry branch as work; before it, the Q9b Tier 3 contract (#247/#248) + Stage-0 correction (#249) — spec/guard-only, runtime untouched |
 | Self-review | not applicable — docs-only trains, zero UI; the prior PASS 12/12 at `230c1445` stands |
 | Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · pre-push local gate at push |
 
@@ -65,27 +65,26 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
   `\b` matches across a hyphen, so **"pre-merge review" counts** — fixing the first offender creates
   the second. Reword, never loosen (precedent PR #166). Run it **alone** before pushing
   (`node scripts/run-vitest.mjs tools/entry/doc-truth.test.mjs`): seconds versus four minutes in
-  `.githooks/pre-push`. Its corpus includes `git status`, so uncommitted docs are scanned too, and
-  its test COUNT is dynamic (9, 10, 11, 12 seen) — never cite a fixed number.
-- **`verify-release-state.mjs` cannot pass on an unpushed stamp.** `SOURCE-COMMIT-ORPHAN` fires
-  because `STATE:source_main_commit` is not yet an ancestor of `origin/main` — the row cannot be
-  written until the commit it names has landed. Push the code commit FIRST (stash the doc edit),
+  `.githooks/pre-push`. Its corpus includes `git status` (uncommitted docs are scanned too) and its
+  test COUNT is dynamic — never cite a fixed number.
+- **`verify-release-state.mjs` cannot pass on an unpushed stamp** — `SOURCE-COMMIT-ORPHAN` fires
+  until `STATE:source_main_commit` is an ancestor of `origin/main`: push the code commit FIRST,
   then write the RELEASE_STATE row and push that. Same shape as the disposition-row trap.
-- **A doc-budget FAIL is paid from the ARCHIVE, never from the cap** — oldest CLOSED row out
-  byte-for-byte, one collapsed pointer, then ratchet the cap DOWN. **A relocated row still owes its
-  links a re-point**: a relative path that resolved from `docs/` does not resolve from
-  `docs/archive/`, and `markdown-link-guard` catches it at the push, not at the move (`093f5600`).
-- **`git checkout <file>` on an uncommitted fix destroys it silently.** Copy the file to the
-  scratchpad and restore with `cp`, or commit first.
+- **A doc-budget FAIL is paid from the ARCHIVE, never from the cap** — oldest CLOSED row out,
+  pointer left, cap ratcheted DOWN. **A relocated row owes its links a re-point**: `docs/` relative
+  paths break from `docs/archive/`; `markdown-link-guard` catches it at the push (`093f5600`).
+- **`git checkout <file>` on an uncommitted fix destroys it silently** — copy it to the scratchpad
+  first, or commit.
 
 ## THE NEXT STEP, exactly
 
-**The Q9b Tier 3 CONTRACT (#247/#248) landed; the owner ACCEPTED it subject to Stage-0 correction
-#249**, now in `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md`: Tier 3
-never imports `receipts.rs` (§4); Stage 1 = pure payload/redaction/serializer code ONLY (no command, no HTTP, no send path — gate-refusal-first is Stage 4's); tombstones outlive the verified
-provider recovery horizon by ≥24h (today ≥31 days; active evidence stays max 30). **Stage 0 is
-accepted once #249 lands with its exact-head review PASS. Next: Q9b Stage 1 per the contract's
-Stage 1 row, after fresh live queue/ownership re-derivation** — never trust this sentence over the queue.
+**Q9b Stage 0 is ACCEPTED — the Tier 3 contract (#247/#248) and its owner-directed correction
+(#249) both landed**, in `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md`:
+Tier 3 never imports `receipts.rs` (§4); Stage 1 = pure payload/redaction/serializer code ONLY (no
+command, no HTTP, no send path — gate-refusal-first is Stage 4's); tombstones outlive the verified
+provider recovery horizon by ≥24h (today ≥31 days; active evidence stays max 30, RULED — do not
+re-ask). **Next: Q9b Stage 1 per the contract's Stage 1 row, after fresh live queue/ownership
+re-derivation** — never trust this sentence over the queue.
 
 **The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
 (`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
@@ -102,12 +101,14 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
 - **17 worktrees besides `main`; SIX carry commits not on main — do NOT delete or hard-reset those
   six before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
   `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
-  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24`. The q9b contract lane
-  `claude/q9b-tier3-contract` LANDED via #248 (remote ref pruned, local branch zero); its checkout
-  now hosts `claude/q9b-stage0-correction`, this train's own in-flight writing lane, itself back to
-  zero the moment it lands — **a writing lane is never work to preserve**. `.claude/worktrees/`
-  holds FIVE checkouts: the two named above, the correction lane, plus a Test candidate and a bootstrap that carry zero — as do parked
-  `sentinel-mission0-accent-landing` and `sentinel-mission1-test-workspace`, all of Mission 1 being ON main (#231, pair #233). **No depth or `origin/main` SHA is pinned here, on purpose.** Derive live — `git worktree list` + `git rev-list --count origin/main..<ref>`.
+  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24`. The #243 train writes
+  on `claude/guard-243-handoff-zero-carry`. Guard rule D (#243) now FAILS this bullet for naming a
+  zero-carry branch — **a landed lane's name leaves this bullet in the train that lands it**, as
+  the spent q9b pair's already has. `.claude/worktrees/` holds FIVE checkouts: the two carriers
+  named above, this train's writer, plus a bootstrap and the spent q9b checkout at zero — as are
+  parked `sentinel-mission0-accent-landing` and `sentinel-mission1-test-workspace` (Mission 1 is ON
+  main, #231/#233). **No depth or `origin/main` SHA is pinned here, on purpose.** Derive live —
+  `git worktree list` + `git rev-list --count origin/main..<ref>`.
 
 ## Waiting on the owner — two arming gates, nothing else
 
