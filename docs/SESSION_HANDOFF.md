@@ -98,13 +98,13 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **17 worktrees besides `main`; SEVEN carry commits not on main — do NOT delete or hard-reset
-  those seven before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity`
+- **17 worktrees besides `main`; SIX carry commits not on main — do NOT delete or hard-reset
+  those six before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity`
   · `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
-  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` ·
-  `claude/q9b-stage1-payload-core` (#252, in flight). Rule D (#243) FAILS this bullet for naming a
-  zero-carry branch — **a landed lane's name leaves this bullet in the train that lands it**.
-  `.claude/worktrees/` holds FIVE checkouts: the three carriers named above plus two spent ones at
+  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24`. Rule D (#243) FAILS
+  this bullet for naming a zero-carry branch — **a landed lane's name leaves this bullet in the
+  train that lands it**, as the Q9b Stage 1 writer's (#252) just did.
+  `.claude/worktrees/` holds FIVE checkouts: the two carriers named above plus three spent ones at
   zero — as are parked `sentinel-mission0-accent-landing` and `sentinel-mission1-test-workspace`
   (Mission 1 is ON main, #231/#233). **No depth or SHA is pinned here, on purpose.** Derive live —
   `git worktree list` + `git rev-list --count origin/main..<ref>`.
