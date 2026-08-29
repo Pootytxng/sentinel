@@ -208,45 +208,105 @@ describe("Live room - first-viewport hierarchy (issue #236)", () => {
     ).toEqual([]);
   });
 
-  it("B: exactly one narrative-column control is accent-painted at rest - the primary action", async () => {
+  // ---------------------------------------------------------------------------------------------
+  // B is a RAW-RULE TRIPWIRE, and the name matters. It reads the stylesheet text and asks which
+  // rules DECLARE an accent paint on a control the room renders. It does NOT compute anything: it
+  // cannot see specificity, cascade order across sheets, `color-mix` results, or what a pixel ends
+  // up being. It cannot tell you the room looks right. What it can do is fail the moment someone
+  // hands a second control the primary action's paint, which is the regression this contract is
+  // about, and it does that in 200ms on every run instead of once per installed review.
+  //
+  // The COMPUTED evidence is a separate artifact and always will be: the installed review of
+  // f7a151b0 measured `getComputedStyle` on every control here at 1280/1500/1920 in both overlay
+  // states. That is what proves the room reads correctly; this proves nobody has since reintroduced
+  // the shape that broke it. Do not let a green B stand in for looking at the app.
+  //
+  // Two assertions, because the app has two different accent vocabularies and only one of them is
+  // reserved:
+  //
+  //   B1  A saturated accent BACKGROUND FILL belongs to the primary action and nothing else — in
+  //       EVERY state. No exemption for `-on`, and that is the point: the first version of this
+  //       guard exempted every `-on` selector and so declared "exactly one accent-painted control"
+  //       while `.mc-cap-on` shipped the identical `--ix-accent` fill as `.mc-start`. The exemption
+  //       hid the busiest real state from the invariant it claimed to hold. Independent review
+  //       caught it; the fill is now `.mc-start`'s alone and this asserts it without escape.
+  //
+  //   B2  AT REST, no control is accent-painted by fill OR border except the primary action. Here
+  //       the state classes ARE excluded, and honestly so, because "at rest" is what the assertion
+  //       says: an accent OUTLINE is the app's state vocabulary (`.mc-ov-corner-on`, `.mc-ov-seg-on`
+  //       and now `.mc-cap-on` all use it), and forbidding it would forbid honest state. B2 is what
+  //       caught the resting `.mc-cap` accent border that shipped before this lane.
+  // ---------------------------------------------------------------------------------------------
+
+  /** Rules whose declarations paint with an accent token, keyed by which properties they paint. */
+  function accentRules(props: RegExp) {
+    const accent = /var\(\s*--(?:v2|ix)-accent[a-z-]*\s*\)/;
+    return allRules().filter((rule) =>
+      [...rule.body.matchAll(/(?:^|;)\s*([a-z-]+)\s*:\s*([^;]+)/g)].some(
+        ([, prop, value]) => props.test(prop) && accent.test(value),
+      ),
+    );
+  }
+
+  /** Which of `controls` each rule reaches, with the rule cited so a failure is actionable. */
+  function paintedBy(
+    controls: HTMLElement[],
+    rules: { file: string; selector: string }[],
+    skipSelector: (sel: string) => boolean,
+  ) {
+    const why = new Map<HTMLElement, string[]>();
+    for (const rule of rules)
+      for (const sel of split(rule.selector)) {
+        if (skipSelector(sel)) continue;
+        for (const el of controls)
+          if (hits(el, sel)) why.set(el, [...(why.get(el) ?? []), `${rule.file}: ${sel}`]);
+      }
+    return why;
+  }
+
+  const cite = (why: Map<HTMLElement, string[]>) =>
+    [...why.entries()].map(([el, rules]) => `${describeControl(el)}\n    ${rules.join("\n    ")}`).join("\n  ");
+
+  // An interaction pseudo-class is feedback on the element the pointer is already on. It is never a
+  // competing invitation, and it is excluded from both assertions.
+  const interaction = (sel: string) => /:(hover|focus|focus-visible|active|disabled)/.test(sel);
+
+  it("B1: the accent FILL belongs to the primary action alone - in every state, no exemptions", async () => {
     const { container } = mount();
     await openOverlay(container);
     const controls = narrativeControls(container);
     expect(controls.length, "the room must render its controls").toBeGreaterThan(4);
 
-    // A resting paint only. `:hover`/`:focus`/`:active`/`:disabled` are interaction feedback and
-    // `-on` classes are STATE feedback (recording, overlay shown, corner chosen) - neither is a
-    // competing invitation, and forbidding them would forbid honest state.
-    const stateful = (sel: string) =>
-      /:(hover|focus|focus-visible|active|disabled)/.test(sel) || /-on\b/.test(sel);
-    const accent = /var\(\s*--(?:v2|ix)-accent[a-z-]*\s*\)/;
-    const painted = new Set<HTMLElement>();
-    const why = new Map<HTMLElement, string[]>();
-
-    for (const rule of allRules()) {
-      const paints = [
-        ...rule.body.matchAll(
-          /(?:^|;)\s*(background|background-color|border|border-color|border-[a-z]+(?:-color)?)\s*:\s*([^;]+)/g,
-        ),
-      ].some(([, , value]) => accent.test(value));
-      if (!paints) continue;
-      for (const sel of split(rule.selector)) {
-        if (stateful(sel)) continue;
-        for (const el of controls)
-          if (hits(el, sel)) {
-            painted.add(el);
-            why.set(el, [...(why.get(el) ?? []), `${rule.file}: ${sel}`]);
-          }
-      }
-    }
-
-    const names = [...painted].map((el) => `${describeControl(el)}\n    ${(why.get(el) ?? []).join("\n    ")}`);
+    // `background` / `background-color` only. Borders and text are the state vocabulary; the FILL is
+    // what makes a control read as the thing to press, and it is reserved.
+    const why = paintedBy(controls, accentRules(/^background(-color)?$/), interaction);
     expect(
-      names.length,
-      "ONE dominant action per room. These narrative-column controls are painted with an accent " +
-        `background or border at rest:\n  ${names.join("\n  ")}`,
+      [...why.keys()].length,
+      "a saturated accent fill is the primary action's alone, in EVERY state. These controls also " +
+        `declare one:\n  ${cite(why)}`,
     ).toBe(1);
-    expect([...painted][0].className, "and it is the room's primary action").toContain("mc-start");
+    expect([...why.keys()][0].className, "and it is the room's primary action").toContain("mc-start");
+  });
+
+  it("B2: at REST, nothing but the primary action is accent-painted at all", async () => {
+    const { container } = mount();
+    await openOverlay(container);
+    const controls = narrativeControls(container);
+
+    // `-on` is excluded HERE and only here: this assertion is scoped to the resting frame, and an
+    // accent outline is how this app says "this is currently on". B1 above is what holds the states.
+    const resting = (sel: string) => interaction(sel) || /-on\b/.test(sel);
+    const why = paintedBy(
+      controls,
+      accentRules(/^(background(-color)?|border(-[a-z]+)?(-color)?)$/),
+      resting,
+    );
+    expect(
+      [...why.keys()].length,
+      "ONE dominant action per room. At rest these narrative-column controls are painted with an " +
+        `accent background or border:\n  ${cite(why)}`,
+    ).toBe(1);
+    expect([...why.keys()][0].className, "and it is the room's primary action").toContain("mc-start");
   });
 
   it("C: every control that shipped is still here, in the same Tab order", async () => {

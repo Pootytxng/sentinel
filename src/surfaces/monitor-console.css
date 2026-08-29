@@ -15,7 +15,17 @@
   background: transparent; color: var(--ix-text-2); border: 1px solid var(--ix-glass-border); }
 :root[data-v2="on"] .mc-cap:hover:not(:disabled) { border-color: var(--ix-accent); color: var(--ix-text-1); }
 :root[data-v2="on"] .mc-cap:disabled { opacity: .6; cursor: default; }
-:root[data-v2="on"] .mc-cap-on { background: var(--ix-accent); color: var(--ix-accent-ink); }
+/* ON is STATE, and state wears the accent as an outline + wash — never the saturated FILL, which
+   belongs to `.mc-start` alone. Measured on installed f7a151b0 (issue #236 review): with the overlay
+   on, `.mc-cap-on` carried the identical `--ix-accent` fill as `.mc-start` at 3751px^2 vs 7384px^2,
+   so the room showed two identical calls to action in a ~312px column and the "one dominant action"
+   claim held on size alone. This is the same register its own sub-chips already use
+   (`.mc-ov-corner-on`, `.mc-ov-seg-on`), so the overlay group now reads as one family of state. The
+   toggle stays legible as that group's lead on padding and position, not on spending the accent; ON
+   is already carried by three signals at once - accent border, accent text, and the label changing
+   from "Overlay" to "Overlay on". A wash was tried here first and the guard was right to refuse it:
+   an accent background is an accent background, and a percentage threshold is just a loophole. */
+:root[data-v2="on"] .mc-cap-on { border-color: var(--ix-accent-text); color: var(--ix-accent-text); }
 :root[data-v2="on"] .mc-cap-status { font-family: var(--ix-mono); font-size: var(--type-label);
   letter-spacing: .04em; color: var(--ix-text-2); font-variant-numeric: tabular-nums; }
 /* NO auto left margin (issue #236): the overlay controls qualify the capture status beside them,
