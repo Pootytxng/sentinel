@@ -172,44 +172,7 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   is really measured (`src/theme-contrast.test.ts`, `src/design/type-scale-guard.test.ts`).
   **Still open under this row:** (a) rank 2, the owner's Figma account + MCP server — his hands, see
   `docs/OWNER_ACTION_CHECKLIST.md`. That is now the ONLY thing holding C-13 open.
-  **(b) CLOSED 2026-08-20 — the `role="menu"` keyboard contract is honoured.** `RoomAccentPicker`
-  declared the role from the day it shipped and carried none of its behaviour: **all 17 items sat in
-  the tab order**, so crossing the topbar by keyboard cost 17 stops instead of one; no arrow keys, so
-  the role's navigation contract was a claim the component did not honour; and no focus restoration,
-  so closing dropped focus onto `<body>` and lost the user's place. Now: roving tabindex (exactly one
-  tabbable item), one linear ring over all 17 items with Up/Left · Down/Right · Home/End and wrap,
-  disabled items skipped, and every close path — Escape, Tab, pick, apply-to-all — returning focus to
-  the trigger. An outside click deliberately does NOT restore focus, so it cannot fight whatever was
-  just clicked. **Kept as a menu rather than ported to `Picker`** (the select-only combobox from
-  C-10): the popover mixes 15 `menuitemradio` swatches with two COMMANDS, and a `listbox` may not
-  contain commands — so this completes the correct contract instead of re-architecting a shipped
-  surface. Picker's recorded warning about focus-on-close is paid explicitly rather than dodged.
-  **Why axe never saw it, and why that generalises:** axe reads the accessibility TREE — roles, names,
-  required children — and every one of those was already correct here, so the 49-case C-13 sweep
-  passed the day the defect was filed. **A role is a promise about behaviour, and behaviour has to be
-  driven to be measured.** Guard: `src/design/room-accent-menu-keyboard.test.tsx` (16 tests) drives
-  real key events against a real mount and asserts real `document.activeElement`, and its last block
-  is a CLASS ratchet — any NEW `role="menu"` under `src/` fails until it carries arrow handling, a
-  roving tabindex and a `.focus()` restore. Falsified FIVE ways (18 tests), each control failing
-  exactly the tests it should and no others: the true pre-fix component (14/18 red), tabindex alone
-  removed (3), the arrow handler alone unwired (6), focus-restore alone dropped from Escape (1), and
-  disabled-skip-on-open alone removed (2). That last one is a hole found in THIS lane's own change
-  during diff review, not in the original: `End`/`ArrowUp` from the trigger opened onto the last
-  INDEX — "reset to default", disabled whenever the room has no pick — so focus landed nowhere and
-  the tab stop parked on an unfocusable item. Refs do not exist at open time, so the skip lives in
-  the focus effect, stepping backward.
-  **Shipped `5fab9e79` (PR [#172](https://github.com/Pootytxng/sentinel/pull/172)); the self-review it
-  owed is PAID 2026-08-20** on installed desk build `75849be1` — the first binary ever to carry it.
-  **Self-review VERDICT: PASS** (10/10 at 1500x980; the reviewer re-confirmed the stamp with its own
-  `get_build_stamp` probe before capturing anything). **What 16 mounted tests could not see:** the
-  roving-tabindex focus ring draws OUTSIDE the swatch fill (`outline: 2px solid rgb(179,102,255)`,
-  `outline-offset: 2px`), so it stays legible on a near-hue swatch (Violet) as well as a contrasting
-  one (Emerald) instead of vanishing into the very colour it marks — an invisible focus ring on a
-  roving tabindex is a keyboard trap the user cannot see. Disabled-skip and wrap were driven with REAL
-  CDP input events in both directions and landed on "Apply to all rooms", never the disabled "Reset to
-  default"; `Escape` put focus visibly back on the trigger. **Recorded for the next keyboard review:**
-  synthetic DOM dispatch fails Chromium's `:focus-visible` heuristic and would have FALSE-FAILED the
-  states item — real input events are required, not `dispatchEvent`.
+  **(b) CLOSED 2026-08-20 — the `role="menu"` keyboard contract is honoured; self-review PASS 2026-08-20.** Full record moved verbatim to [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-29, section byte cap). Guard: `src/design/room-accent-menu-keyboard.test.tsx`.
 - [ ] **`launch-focus-guard` RUNTIME tier is intermittent under the pre-push gate — NOT root-caused.**
   2026-08-18: the quiet-launch case rejected three consecutive pushes of the same tree
   (`Compy held the foreground for 33/55 samples (first at 2430ms)`), then PASSED the fourth with that
@@ -417,7 +380,14 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   what proving one takes instead. Guards: `src/surfaces/FirstWin.test.tsx` (14, falsified),
   `src/surfaces/first-win-data.test.ts` (9), six fixture states in `docs/ui-sweep/fixture/` pinned
   by `src/fixture-parity-guard.test.ts`. Self-review PASS 2026-08-26.
-  Remaining under P2: the Consumer/Technical/Support evidence exports.
+  **Evidence exports DONE 2026-08-29** — `export_report` takes a `tier`: Technical = the existing
+  full-detail markdown; Consumer = a new plain-English render of the same local bundle
+  (`build_consumer_report`, degrade-by-omission, flagging only what a check flagged, per DIR-1a);
+  Support = the existing Q5 incident bundle, deliberately not duplicated. Settings → Feedback & help
+  gained the saved-file tier choice (plain English default; email stays full-detail). Guards: 5 new
+  `export_tests` in `export.rs` + 3 tier tests in `FeedbackExport.test.tsx`. Self-review PASS
+  2026-08-29. **P2's listed legs are all closed; still open elsewhere, not under P2:** the
+  lower-spec-rig leg of P1 (owner-blocked) and the LATER lane below.
 - [ ] **LATER:** Intelligence Phase 4/5, vendor-awareness expansion, Receipts/crowd intelligence,
   remote rules, Pro/affiliate/B2B, and model-assisted explanation remain behind the blueprint's gates.
 
@@ -662,7 +632,11 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   collection with "Vitest failed to find the current suite" (seen once 2026-07-22 on the two
   `src/surfaces/setup/` files; both pass isolated AND on full-suite re-run). Not one of the three
   878a3a9 classes. If it recurs, investigate pool/maxWorkers; a single re-run is the current answer.
-- [ ] evidence-export tiers — audience-shaped renders of the SAME measured evidence pack (`export.rs`
+- [x] evidence-export tiers — **SHIPPED 2026-08-29 as P2's last leg (see P2 above); the 2026-07-17
+  SUBSUMED note below is superseded** — the 2026-08-26 P2 scoping pulled the Consumer/Technical
+  renders forward as presentation-only tiers over `export_report`, and Intelligence Phase 5 keeps
+  only the Upgrade-Advisor/Shop renders. Original row, point-in-time:
+  audience-shaped renders of the SAME measured evidence pack (`export.rs`
   today: `export_report` markdown/JSON + Discord block = the technical-ish default): add **Consumer**
   ("what changed, in plain English"), **Technical** (full probe/CI detail), and **Support** ("help me,
   here's my rig + ledger") render tiers over the one data source — presentation-only, no new probes, no

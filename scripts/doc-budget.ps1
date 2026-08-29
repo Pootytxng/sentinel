@@ -135,7 +135,7 @@ $sectionByteBudgets = @{
   # plus the A2/A3 not-a-defect finding moved out verbatim, leaving one consolidated pointer.
   # 13320 -> 11775, banking 256 of the 1545 bytes freed.
   "docs/BACKLOG.md::NEXT UP" = 11776
-  "docs/BACKLOG.md::Conformance queue" = 26624
+  "docs/BACKLOG.md::Conformance queue" = 24064
   "docs/BACKLOG.md::HQ STEERING LOG" = 4608
 }
 

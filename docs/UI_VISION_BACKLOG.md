@@ -564,7 +564,13 @@ one short route line, **he chose the route line**. It fires the same `onSeeInFix
 button fires and names that button's room from the same prop, so it cannot name a door the app does
 not have. §C is untouched: the paragraph still does not render here.
 
-**Still open under DIR-1:** the Consumer/Technical/Support evidence exports (P2's remaining item).
+**The evidence exports (P2's last item) ✅ SHIPPED 2026-08-29** — `export_report` grew a `tier`
+argument: **Technical** is the existing full-detail markdown, **Consumer** is a new plain-English
+render of the SAME local bundle (`build_consumer_report` in `export.rs` — degrade-by-omission, only
+machine-flagged checks may assert a problem, per DIR-1a), and **Support** stays the Q5 incident
+bundle (`SupportEvidence.tsx`), not duplicated. The saved file defaults to plain English via a
+segmented row in Settings → Feedback & help; "Email it to me" always sends full detail. DIR-1 itself
+stays open as the standing earned-framing lens — it is a lens, not a queue.
 
 ### PAL-1. The caption colour is too dim to read — ✅ SHIPPED 2026-08-11
 
