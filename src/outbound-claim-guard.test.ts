@@ -519,7 +519,9 @@ export function readOutboundSnapshot(): OutboundSnapshot {
         label: "Tier 3 (per-case evidence upload)",
         module: "src-tauri/src/case_evidence_upload.rs",
         built: caseUpload.built,
-        armed: rustGateLiteral(caseUpload.source, "case_evidence_upload_gate"),
+        // The contract's real gate name (§11) — the placeholder name this read carried before the
+        // module existed would have reported "not armed" for a fn it never found (#252, 2026-08-29).
+        armed: rustGateLiteral(caseUpload.source, "case_evidence_gate"),
         source: caseUpload.source,
       },
     ],
@@ -580,7 +582,11 @@ describe("outbound tier separation", () => {
     // and this row asserts both, so arming shows up here as a red test rather than as silence.
     expect(tierOf(snap, "tier1").built, "Tier 1 is built (dark)").toBe(true);
     expect(tierOf(snap, "tier1").armed, "Tier 1 must stay dark until the owner arms it").toBe(false);
-    expect(tierOf(snap, "tier3").built, "Tier 3 is not authorized by Tier 1").toBe(false);
+    // Stage 1 built dark on 2026-08-29 (#252): the pure payload half exists and
+    // `case_evidence_gate()` is hard-false with no caller. Tier 1's approval still authorizes
+    // nothing here — BUILT and ARMED stay separate facts for this tier too.
+    expect(tierOf(snap, "tier3").built, "Tier 3 Stage 1 is built (dark, #252)").toBe(true);
+    expect(tierOf(snap, "tier3").armed, "Tier 3 must stay dark until its own owner-signed arming").toBe(false);
   });
 
   it("Tier 1 fails the moment it grows an upload", () => {

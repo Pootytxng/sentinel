@@ -8,13 +8,14 @@
 ## Where the train is standing
 
 **`main` is clean and pushed; the desk build is `090bc58b`** (Mission 2 landing, #238 — the
-evidence exports and the Q9b contract are docs/UI-dark work; version debt, batch the next cut).
+evidence exports, the Q9b contract and the Q9b Stage 1 dark module are docs/UI-dark work; version
+debt, batch the next cut).
 
 | | |
 |---|---|
 | Installed | `090bc58b`, stamp byte-found in the installed exe and `73b629ed` byte-absent, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
-| Shipped | guard rule D (#243): the handoff can no longer name a zero-carry branch as work; before it, the Q9b Tier 3 contract (#247/#248) + Stage-0 correction (#249) — spec/guard-only, runtime untouched |
-| Self-review | not applicable — docs-only trains, zero UI; the prior PASS 12/12 at `230c1445` stands |
+| Shipped | Q9b Stage 1 (#252): `case_evidence_upload.rs` pure + dark (allowlist struct, own redactor, one serializer, preview; gate hard-false, uncalled) + tier-neutral `hw_class.rs` extraction; guards armed (`case-evidence-tier-separation-guard` + the outbound guard's Tier 3 rows). Before it: rule D (#243), the Q9b contract (#247/#248/#249) |
+| Self-review | not applicable — pure Rust + guards, zero UI; the prior PASS 12/12 at `230c1445` stands |
 | Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · pre-push local gate at push |
 
 ## The rule that came out of the walk — read this before touching Health
@@ -78,13 +79,12 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 
 ## THE NEXT STEP, exactly
 
-**Q9b Stage 0 is ACCEPTED — the Tier 3 contract (#247/#248) and its owner-directed correction
-(#249) both landed**, in `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md`:
-Tier 3 never imports `receipts.rs` (§4); Stage 1 = pure payload/redaction/serializer code ONLY (no
-command, no HTTP, no send path — gate-refusal-first is Stage 4's); tombstones outlive the verified
-provider recovery horizon by ≥24h (today ≥31 days; active evidence stays max 30, RULED — never
-re-ask). **Next: Q9b Stage 1 per that row, after fresh live queue/ownership re-derivation** —
-never trust this sentence over the queue.
+**Q9b Stage 1 LANDED (#252), still dark** — `case_evidence_upload.rs` is the §2 allowlist as a
+`deny_unknown_fields` struct + Tier 3's own redactor, one serializer, pure preview; `hw_class.rs`
+is the §4 tier-neutral extraction; `case_evidence_gate()` is hard-false with no caller. Contract:
+`docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` (30-day retention RULED —
+never re-ask). **Next: Q9b Stage 2 (preview UI over the pure representation) per the contract §11
+row, after fresh live queue/ownership re-derivation** — never trust this sentence over the queue.
 
 **The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
 (`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
@@ -98,13 +98,13 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **17 worktrees besides `main`; SIX carry commits not on main — do NOT delete or hard-reset those
-  six before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
-  `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
-  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24`. Guard rule D (#243,
-  landed) now FAILS this bullet for naming a zero-carry branch — **a landed lane's name leaves
-  this bullet in the train that lands it**, as the q9b pair's and the #243 writer's already have.
-  `.claude/worktrees/` holds FIVE checkouts: the two carriers named above plus three spent ones at
+- **17 worktrees besides `main`; SEVEN carry commits not on main — do NOT delete or hard-reset
+  those seven before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity`
+  · `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
+  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` ·
+  `claude/q9b-stage1-payload-core` (#252, in flight). Rule D (#243) FAILS this bullet for naming a
+  zero-carry branch — **a landed lane's name leaves this bullet in the train that lands it**.
+  `.claude/worktrees/` holds FIVE checkouts: the three carriers named above plus two spent ones at
   zero — as are parked `sentinel-mission0-accent-landing` and `sentinel-mission1-test-workspace`
   (Mission 1 is ON main, #231/#233). **No depth or SHA is pinned here, on purpose.** Derive live —
   `git worktree list` + `git rev-list --count origin/main..<ref>`.
