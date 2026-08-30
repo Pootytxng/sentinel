@@ -79,12 +79,12 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 
 ## THE NEXT STEP, exactly
 
-**Q9b Stage 2 is BLOCKED, not next.** The work order's security precondition ran against the Tier 3
-redactor and did NOT clear the "redacted" claim (verdict on #258 — an invisible character walks a
-username, IP or serial past every detector). Stage 2 stopped un-started; the repair runs in its own
-lane: **#259, `claude/q9b-redactor-repair-259` at `0a2ffc89`**, 11 guards proven by defect injection.
-**Land #259, then restart Stage 2 from the NEW origin/main** — contract §11 row in
-`docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` (30-day retention RULED).
+**Q9b Stage 2 is BLOCKED, not next.** Its security precondition did NOT clear the "redacted" claim
+(verdict on #258 — an invisible character walks a username, IP or serial past every detector), so
+Stage 2 stopped un-started and the repair runs in its own lane: **#259 / PR #260**,
+`claude/q9b-redactor-repair-259` — 13 guards, each proven by defect injection, independently reviewed
+(the review's own Unicode sweep found a 5th gap; fixed in-lane). **Merge #260, then restart Stage 2
+from the NEW origin/main** — contract §11, `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md`.
 
 **The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
 (`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
